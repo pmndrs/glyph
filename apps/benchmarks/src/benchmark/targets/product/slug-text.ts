@@ -1,4 +1,4 @@
-import type { LoadedFont } from '@pmndrs/glyph';
+import type { Font } from '@pmndrs/glyph';
 import type { slug } from '@pmndrs/glyph/three/slug';
 import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -24,7 +24,7 @@ interface SlugProductTargetResources {
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  readonly font: LoadedFont<typeof slug>;
+  readonly font: Font<typeof slug>;
   readonly lines: readonly Text<typeof slug>[];
   readonly configuration: SlugRasterConfiguration;
   readonly artifactBytes: number;
@@ -68,7 +68,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
   const canvas = document.createElement('canvas');
   const renderer = await createConfiguredRenderer({ canvas, width: WIDTH, height: HEIGHT, backend, dpr });
   let target: THREE.RenderTarget | undefined;
-  let font: LoadedFont<typeof slug> | undefined;
+  let font: Font<typeof slug> | undefined;
   const lines: Text<typeof slug>[] = [];
   try {
     const fontStarted = performance.now();
@@ -80,22 +80,21 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
     const resizeLine = new Text({
       text: BENCHMARK_IPSUM_CONFORMANCE_TEXT,
       font,
-      contentBox: { width: { mode: 'exact', size: 280 }, wrap: 'word' },
-      style: { fontSize: 18, lineHeight: 1.2 },
-      paint: { color: '#f2f5ff' },
+      constraints: { width: { mode: 'exact', size: 280 } },
+      layout: { wrap: 'word' },
+      style: { fontSize: 18, lineHeight: 1.2, color: '#f2f5ff' },
     });
     lines.push(resizeLine);
     resizeLine.position.set(18, -24, 0);
     scene.add(resizeLine);
     resizeLine.updateMatrixWorld(true);
-    resizeLine.set({ contentBox: { width: { mode: 'exact', size: 476 }, wrap: 'word' } });
+    resizeLine.set({ constraints: { width: { mode: 'exact', size: 476 } }, layout: { wrap: 'word' } });
     resizeLine.updateMatrixWorld(true);
 
     const smallLine = new Text({
       text: 'analytic 12 px  ffi  AV  0123456789',
       font,
-      style: { fontSize: 12 },
-      paint: { color: '#7dd3fc' },
+      style: { fontSize: 12, color: '#7dd3fc' },
     });
     lines.push(smallLine);
     smallLine.position.set(18, -142, 0);
@@ -104,8 +103,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
     const transformLine = new Text({
       text: 'TRANSFORM / SLUG',
       font,
-      style: { fontSize: 30 },
-      paint: { color: '#c4b5fd' },
+      style: { fontSize: 30, color: '#c4b5fd' },
     });
     lines.push(transformLine);
     transformLine.position.set(252, -194, 0);
@@ -116,8 +114,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
     const opacityLine = new Text({
       text: 'Fill  Opacity',
       font,
-      style: { fontSize: 26 },
-      paint: { color: '#f8fafc', opacity: 0.72 },
+      style: { fontSize: 26, color: '#f8fafc', opacity: 0.72 },
     });
     lines.push(opacityLine);
     opacityLine.position.set(18, -236, 0);
@@ -126,7 +123,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
     scene.updateMatrixWorld(true);
     for (const line of lines) assertCommitted(line);
 
-    const configuration = slugDataConfiguration(font.data);
+    const configuration = slugDataConfiguration(loaded.data);
     const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 1_000);
     camera.position.z = 500;
     camera.updateProjectionMatrix();
@@ -171,11 +168,11 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
   }
 }
 
-/** `Text` reports a failed synchronize through `error` rather than a rejected promise, so read it after each commit. */
+/** `Text` reports synchronization state explicitly, so read it after each commit. */
 function assertCommitted(line: Text<typeof slug>): void {
-  const error = line.error;
-  if (error !== undefined) throw error;
-  if (line.layout() === undefined) throw new Error('Slug product Text did not commit layout metrics');
+  const state = line.commitState();
+  if (state.status === 'failed') throw state.error;
+  if (state.status !== 'committed') throw new Error(`Slug product Text is ${state.status}, not committed`);
 }
 
 async function renderSlugText(resources: SlugProductTargetResources): Promise<TargetRunOutput> {

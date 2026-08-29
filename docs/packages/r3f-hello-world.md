@@ -5,7 +5,7 @@ description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Sl
 resource: ../../apps/r3f-hello-world
 workspace_package: '@pmndrs/glyph-r3f-hello-world'
 documentation_type: reference
-source_digest: 'sha256:5e0616b756d13c1828113c7850c85b170c0d2008fd8ee860fdda7fda6664d788'
+source_digest: 'sha256:c01a3edfa2ca508db5067f7b631b7a3b5ab33ae29eee2f28fbab7f3fd86e1e16'
 tags: [package, example, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -22,9 +22,9 @@ generated:
 # Package reference: `@pmndrs/glyph-r3f-hello-world`
 
 This private Vite application is the minimal product-shaped React Three Fiber example. One full-page canvas renders
-`Hello world` through the public `@pmndrs/glyph/react` `Text` component. The globe is an inline `TextSpan` bound directly
+`Hello world` through the public `@pmndrs/glyph/react` `Text` component. The globe is a nested inline `Text` bound directly
 to the matching subsetted Font Awesome raster rather than an automatically resolved font-stack fallback. Public
-`useFont.preload()` calls start both multi-raster asset requests before the scene suspends on the same cache entries.
+The three typed convenience hooks preload both assets before the scene suspends on those same per-technique cache entries.
 One `App` component owns the loaded fonts, technique state, three React `Activity` branches, and its in-canvas Slug
 controls. Each hidden branch pre-renders a standalone world `Text`; changing technique reveals the already committed
 Bitmap, MSDF, or Slug branch rather than initializing one after the click. The selected technique color appears on both
@@ -44,10 +44,10 @@ Each GLB embeds Bitmap, MSDF, and Slug raster resources for its subset. The pack
 CLI through `pnpm exec glyph bake`: direct input/output arguments select all three rasters, `--unicodes` delegates
 shaping-font subsetting to the package-owned baker Wasm, and `--check` rebakes into temporary storage before requiring
 byte-identical output.
-The example loads each GLB once with one typed raster tuple and receives exact Bitmap, MSDF, and Slug `LoadedFont` values;
-it does not repeat the input URL per technique. Vite emits the public shaper Wasm URL and a combined Inter/Font Awesome
-notice file. Three, React, and React Three Fiber remain ordinary workspace peers rather than part of the core package-size
-graph.
+The example requests exact Bitmap, MSDF, and Slug `Font` values through their typed wrappers. Its Vite and TypeScript
+configurations opt into workspace `source` exports, so edits to Glyph TypeScript modules hot reload without rebuilding the
+packages. Vite emits the public shaper Wasm URL and a combined Inter/Font Awesome notice file. Three, React, and React
+Three Fiber remain ordinary workspace peers rather than part of the core package-size graph.
 
 ## Commands
 

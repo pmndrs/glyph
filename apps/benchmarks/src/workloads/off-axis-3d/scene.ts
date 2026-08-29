@@ -28,7 +28,7 @@ const OFF_AXIS_WORD_COLORS = [
 export const OFF_AXIS_SPANS: readonly MutablePaintSpan[] = OFF_AXIS_WORD_COLORS.map(({ color, word }) => {
   const start = OFF_AXIS_TEXT.indexOf(word);
   if (start === -1) throw new Error(`off-axis callout is missing its ${word} color span`);
-  return { end: start + word.length, paint: { color: paintColor(color) }, start };
+  return { end: start + word.length, style: { color: paintColor(color) }, start };
 });
 const colorAt = createOklabColorCycle(OFF_AXIS_WORD_COLORS.map(({ color }) => color));
 
@@ -67,19 +67,17 @@ export function createOffAxis3dEntries(
     readonly viewportWidth: number;
   },
 ): readonly ComparisonWorkloadEntry[] {
-  const spans = OFF_AXIS_SPANS.map((span) => ({ ...span, paint: { ...span.paint } }));
+  const spans = OFF_AXIS_SPANS.map((span) => ({ ...span, style: { ...span.style } }));
   const text = new Text({
     font: context.font,
     rasterPixelRatio: context.dpr,
     text: OFF_AXIS_TEXT,
     spans,
-    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
-    paint: { color: paintColor(LIVE_TEXT_COLOR) },
-    contentBox: {
+    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT, color: paintColor(LIVE_TEXT_COLOR) },
+    constraints: {
       width: exactWidth(benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio, undefined, 2)),
-      wrap: 'word',
-      align: 'center',
     },
+    layout: { wrap: 'word', align: 'center' },
   });
   const node = new THREE.Group();
   node.add(text);
@@ -129,7 +127,7 @@ export function animateOffAxis3dEntries(
   }
   const colorPhase = (timestamp / 32_000) * animationRate(configuration.animationSpeed);
   for (let index = 0; index < entry.offAxisSpans.length; index += 1) {
-    entry.offAxisSpans[index]!.paint.color = paintColor(offAxisColorAt(index, colorPhase));
+    entry.offAxisSpans[index]!.style.color = paintColor(offAxisColorAt(index, colorPhase));
   }
   entry.text.set(entry.offAxisPaintUpdate);
 }

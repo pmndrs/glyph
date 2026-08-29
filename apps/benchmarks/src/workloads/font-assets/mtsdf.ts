@@ -1,4 +1,5 @@
 import { msdf as mtsdfTechnique } from '@pmndrs/glyph/three/msdf';
+import { MSDF_EM_SIZE, MSDF_PIXEL_RANGE } from '@pmndrs/glyph/raster/msdf';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-mtsdf.font.glb.gz?url';
 import dancingScriptCompressedFontUrl from '../../../fixtures/rendering/dancing-script-mtsdf.font.glb.gz?url';
@@ -12,12 +13,12 @@ import showcaseManifest from '../../../fixtures/rendering/showcase-mtsdf-fixture
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import { fetchAuthenticatedGzipAsset, preloadFontAssetUrls } from './authenticated-gzip';
 import type { AuthenticatedArtifactSize, BenchmarkFontAsset, BenchmarkFontAssetRequest } from './contracts';
+import { compiledMsdfData } from './compiled-data';
 import {
   createFontDeliveryMetrics,
   loadBakedFont,
   loadSourceFont,
   measuredRuntimeFontBake,
-  measuredRuntimeRaster,
   sourceUrlForFixture,
 } from './runtime';
 
@@ -27,6 +28,7 @@ export type MtsdfFontAsset = Extract<BenchmarkFontAsset, { readonly technique: '
 
 interface MtsdfFixtureManifest {
   readonly fontFixture: BenchmarkFontFixture;
+  readonly configuration: { readonly emSize: number; readonly pixelRange: number };
   readonly compressed: AuthenticatedArtifactSize;
   readonly uncompressed: AuthenticatedArtifactSize;
   readonly raster: { readonly runtimeTextureArray: { readonly basePaddedGpuBytes: number } };
@@ -68,17 +70,21 @@ export async function preloadMtsdfFontAssets(
 export async function loadMtsdfFontAsset(
   request: Extract<BenchmarkFontAssetRequest, { readonly technique: 'mtsdf' }>,
 ): Promise<MtsdfFontAsset> {
-  const { delivery, fixture, onProgress, registry, signal } = request;
+  const { delivery, fixture, library, onProgress, signal } = request;
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
   const manifest = fixtureManifests.get(fixture);
   if (manifest === undefined) throw new RangeError(`Unknown MTSDF font fixture: ${fixture}`);
+  const configuration = { ...manifest.configuration, planeUnitsPerEm: manifest.configuration.emSize };
   if (delivery === 'runtime') {
+    if (configuration.emSize !== MSDF_EM_SIZE || configuration.pixelRange !== MSDF_PIXEL_RANGE) {
+      throw new TypeError('runtime MTSDF fixture configuration must match the default bake request');
+    }
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { technique: measuredMtsdfTechnique(metrics, onProgress) },
+      raster: { technique: mtsdfTechnique },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
-      registry,
+      library,
       ...(signal === undefined ? {} : { signal }),
     });
     return {
@@ -87,6 +93,7 @@ export async function loadMtsdfFontAsset(
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
       loaded,
+      data: compiledMsdfData(loaded, configuration),
       metrics,
     };
   }
@@ -99,7 +106,7 @@ export async function loadMtsdfFontAsset(
   const loaded = await loadBakedFont({
     artifact,
     raster: { technique: mtsdfTechnique },
-    registry,
+    library,
     ...(signal === undefined ? {} : { signal }),
   });
   return {
@@ -108,18 +115,7 @@ export async function loadMtsdfFontAsset(
     atlasGpuBytes: manifest.raster.runtimeTextureArray.basePaddedGpuBytes,
     compressedBytes: manifest.compressed.bytes,
     loaded,
+    data: compiledMsdfData(loaded, configuration),
     metrics,
   };
-}
-
-/**
- * Clones the technique with an instrumented runtime baker. The Three adapter resolves a program by technique ID rather
- * than object identity, so the clone still renders while reporting the same raster delivery evidence.
- */
-function measuredMtsdfTechnique(
-  metrics: BenchmarkFontAsset['metrics'],
-  onProgress?: Extract<BenchmarkFontAssetRequest, { readonly technique: 'mtsdf' }>['onProgress'],
-): typeof mtsdfTechnique {
-  const runtimeBaker = measuredRuntimeRaster(mtsdfTechnique.runtimeBaker, metrics, onProgress);
-  return { ...mtsdfTechnique, ...(runtimeBaker === undefined ? {} : { runtimeBaker }) };
 }

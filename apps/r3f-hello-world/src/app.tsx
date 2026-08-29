@@ -1,5 +1,8 @@
-import { type LoadedFont } from '@pmndrs/glyph';
-import { Text, TextGroup, TextSpan, useFont } from '@pmndrs/glyph/react';
+import { type Font } from '@pmndrs/glyph';
+import { Text, TextGroup } from '@pmndrs/glyph/react';
+import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
+import { useMSDF } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
@@ -17,28 +20,31 @@ const TECHNIQUES = ['bitmap', 'msdf', 'slug'] as const;
 const COLORS = { bitmap: '#f59e0b', msdf: '#fb7185', slug: '#ff4dc4' } as const;
 
 // Multiple techniques can be baked into a single glb, or alternatively you can bake each technique into its own glb.
-const latinFontRequest = {
-  input: { baked: latinFontUrl },
-  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
-} as const;
+const latinFont = { baked: latinFontUrl } as const;
 
 // This icon font only bakes a few glyphs from the full Font Awesome set. You can bake any subset of glyphs into a glb.
-const iconFontRequest = {
-  input: { baked: iconFontUrl },
-  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
-} as const;
+const iconFont = { baked: iconFontUrl } as const;
+const bitmapOptions = { strikes: [32] } as const;
 
 // You can preload font assets to reduce loading waterfalls.
 // This is especially useful for fonts that are used in the initial scene.
-useFont.preload(latinFontRequest);
-useFont.preload(iconFontRequest);
+useBitmapFont.preload(latinFont, bitmapOptions);
+useMSDF.preload(latinFont);
+useSlug.preload(latinFont);
+useBitmapFont.preload(iconFont, bitmapOptions);
+useMSDF.preload(iconFont);
+useSlug.preload(iconFont);
 
 export function App() {
   const viewport = useThree((state) => state.viewport);
   const [activeTechnique, setActiveTechnique] = useState<Technique>('msdf');
 
-  const [bitmapLatin, msdfLatin, slugLatin] = useFont(latinFontRequest);
-  const [bitmapIcons, msdfIcons, slugIcons] = useFont(iconFontRequest);
+  const bitmapLatin = useBitmapFont(latinFont, bitmapOptions);
+  const msdfLatin = useMSDF(latinFont);
+  const slugLatin = useSlug(latinFont);
+  const bitmapIcons = useBitmapFont(iconFont, bitmapOptions);
+  const msdfIcons = useMSDF(iconFont);
+  const slugIcons = useSlug(iconFont);
 
   const fonts = [
     { font: bitmapLatin, icon: bitmapIcons, technique: 'bitmap' },
@@ -52,24 +58,20 @@ export function App() {
       <group name="world-text">
         {fonts.map(({ font, icon, technique }) => (
           <Activity key={technique} mode={activeTechnique === technique ? 'visible' : 'hidden'}>
-            {/* A TextSpan is an inline run: it inherits the paragraph's font, style, and paint unless it
+            {/* A nested Text is an inline run: it inherits the paragraph's font and text style unless it
                 overrides them, and carries no transform of its own because it is not an object in the scene. */}
             <Text
-              contentBox={{
-                align: 'center',
-                width: { mode: 'exact', size: viewport.width },
-                wrap: 'none',
-              }}
+              constraints={{ width: { mode: 'exact', size: viewport.width } }}
               font={font}
+              layout={{ align: 'center', wrap: 'none' }}
               name={`font-${technique}`}
-              paint={{ color: '#f4f7ff' }}
               position={[-viewport.width / 2, 32, 0]}
-              style={{ fontSize: 64, lineHeight: 1 }}
+              style={{ color: '#f4f7ff', fontSize: 64, lineHeight: 1 }}
             >
               Hello world{' '}
-              <TextSpan font={icon} paint={{ color: COLORS[technique] }}>
+              <Text font={icon} style={{ color: COLORS[technique] }}>
                 {WORLD_ICON}
-              </TextSpan>
+              </Text>
             </Text>
           </Activity>
         ))}
@@ -80,7 +82,7 @@ export function App() {
 
 interface ButtonGroupProps {
   active: Technique;
-  font: LoadedFont<typeof bitmap | typeof msdf | typeof slug>;
+  font: Font<typeof bitmap | typeof msdf | typeof slug>;
   onSelect: (technique: Technique) => void;
   gap?: number;
   padding?: number;
@@ -111,7 +113,7 @@ function ButtonGroup({ active, font, onSelect, gap = 128, padding = 48 }: Button
 
 interface ButtonProps {
   active: boolean;
-  font: LoadedFont<typeof bitmap | typeof msdf | typeof slug>;
+  font: Font<typeof bitmap | typeof msdf | typeof slug>;
   onClick: () => void;
   position: [number, number, number];
   technique: Technique;
@@ -154,15 +156,12 @@ function Button({ active, font, onClick, position, technique, height = 44, label
         />
       </mesh>
       <Text
-        contentBox={{
-          align: 'center',
-          width: { mode: 'exact', size: width },
-          wrap: 'none',
-        }}
+        constraints={{ width: { mode: 'exact', size: width } }}
         font={font}
-        paint={{ color }}
+        layout={{ align: 'center', wrap: 'none' }}
         position={[-width / 2, height / 2, 0]}
         style={{
+          color,
           fontSize: labelSize,
           letterSpacing: 0.8,
           lineHeight: height / labelSize,

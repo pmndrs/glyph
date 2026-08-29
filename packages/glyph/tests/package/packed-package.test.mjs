@@ -54,6 +54,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     'bin',
     'dist',
     'package.json',
+    'src',
   ]);
   assert.equal(
     await readFile(join(installedDirectory, 'LICENSE'), 'utf8'),
@@ -63,6 +64,11 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   const moduleSubpaths = Object.entries(manifest.exports)
     .filter(([, target]) => typeof target === 'object' && target !== null)
     .map(([subpath]) => (subpath === '.' ? '@pmndrs/glyph' : `@pmndrs/glyph${subpath.slice(1)}`));
+
+  for (const target of Object.values(manifest.exports)) {
+    if (typeof target !== 'object' || target === null) continue;
+    assert.ok(packedFiles.includes(target.source.slice(2)), `${target.source} must ship with its source condition`);
+  }
 
   for (const specifier of moduleSubpaths) {
     const resolved = import.meta.resolve(specifier, consumerEntry);
@@ -104,7 +110,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
 
   const runtimeHost = await readFile(join(installedDirectory, 'dist/runtime-bake.js'), 'utf8');
   const serialWorkerHost = await readFile(join(installedDirectory, 'dist/internal/serial-worker-host.js'), 'utf8');
-  assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\/runtime-bake-worker\.js["']/);
+  assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\.\/dist\/runtime-bake-worker\.js["']/);
   assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/);
   assert.match(serialWorkerHost, /type:\s*["']module["']/);
 

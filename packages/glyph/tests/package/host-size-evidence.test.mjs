@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { assertHostSizeEvidenceFresh } from '../../scripts/support/host-size-evidence.mjs';
 
-const budgets = { rawBytes: 68_000, optimizedBytes: 61_000, gzipBytes: 27_000, brotliBytes: 23_000 };
+const budgets = { rawBytes: 78_000, optimizedBytes: 71_000, gzipBytes: 31_000, brotliBytes: 26_000 };
 const recorded = evidence('darwin', 'arm64', 67_000, 'a'.repeat(64));
 
 test('requires exact size evidence freshness on the recorded host', () => {
@@ -31,7 +31,7 @@ function evidence(platform, architecture, rawBytes, optimizedSha256) {
     schemaVersion: 0,
     kind: 'test-size-evidence',
     toolchain: { rust: '1.97.1', binaryen: '129.0.0', target: 'wasm32-unknown-unknown' },
-    syntheticOutputFnv1a32: 'bfc76761',
+    syntheticOutputFnv1a32: '4f1de5a5',
     wasmImportCount: 0,
     measurementHost: { platform, architecture },
     rawBytes,

@@ -1,4 +1,4 @@
-import type { ParagraphLayout } from '@pmndrs/glyph';
+import type { GlyphLayout } from '@pmndrs/glyph';
 
 import amiriSourceUrl from '../../../../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf?url';
 import dancingScriptSourceUrl from '../../../../fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf?url';
@@ -43,7 +43,7 @@ export interface SourceOutlineReferenceOptions {
   readonly fontFixture: BenchmarkFontFixture;
   readonly fontSize: number;
   readonly direction: 'ltr' | 'rtl';
-  readonly layout: ParagraphLayout;
+  readonly layout: GlyphLayout;
   readonly originX: number;
   readonly originY: number;
   readonly text: string;

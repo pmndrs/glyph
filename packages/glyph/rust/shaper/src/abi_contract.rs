@@ -8,7 +8,7 @@ use crate::engine::frame::{
     BASELINE_TEXT_TOP, BLOCK_ALIGN_CENTER, BLOCK_ALIGN_END, BLOCK_ALIGN_START, DECORATION_DASHED,
     DECORATION_DOTTED, DECORATION_DOUBLE, DECORATION_FLAGS_MASK, DECORATION_LINE_THROUGH,
     DECORATION_NONE, DECORATION_OVERLINE, DECORATION_SKIP_INK, DECORATION_SOLID,
-    DECORATION_UNDERLINE, DECORATION_WAVY, DEFAULT_SESSION_TEXT_CAPACITY, EXCLUSION_WRAP_BOTH,
+    DECORATION_UNDERLINE, DECORATION_WAVY, DEFAULT_PLANNER_TEXT_CAPACITY, EXCLUSION_WRAP_BOTH,
     EXCLUSION_WRAP_INLINE_END, EXCLUSION_WRAP_INLINE_START, EXCLUSION_WRAP_LARGEST, LAST_LINE_AUTO,
     LAST_LINE_JUSTIFY, ORIENTATION_MIXED, ORIENTATION_SIDEWAYS, ORIENTATION_UPRIGHT, OVERFLOW_CLIP,
     OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT,
@@ -16,17 +16,19 @@ use crate::engine::frame::{
     SEMANTIC_F32_BLOCK_START, SEMANTIC_F32_FONT_SIZE, SEMANTIC_F32_FOREGROUND_ALPHA,
     SEMANTIC_F32_FOREGROUND_BLUE, SEMANTIC_F32_FOREGROUND_GREEN, SEMANTIC_F32_FOREGROUND_RED,
     SEMANTIC_F32_INLINE_EXTENT, SEMANTIC_F32_INLINE_ORIGIN, SEMANTIC_F32_INLINE_START,
-    SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_F32_RASTER_PIXEL_RATIO, SEMANTIC_U32_CLUSTER_ID,
-    SEMANTIC_U32_FLOW_THREAD_ID, SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_REGION_ID,
-    SEMANTIC_U32_STABLE_GLYPH_ID, SEMANTIC_U32_TRANSFORM_INDEX, SEMANTIC_VIEW_LAYOUT_INSPECTION,
-    SEMANTIC_VIEW_MASK, SEMANTIC_VIEW_MEASUREMENT, SHAPE_POLYGON, SHAPE_RECTANGLE,
-    STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION,
-    STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK, STYLE_FIELD_FOREGROUND,
-    STYLE_FIELD_LANGUAGE, STYLE_FIELD_LETTER_SPACING, STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK,
-    STYLE_FIELD_MATERIAL, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING,
-    STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
-    TEXT_MUTATION_REPLACE_UTF16, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD, WRITING_HORIZONTAL_TB,
-    WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
+    SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_F32_OUTLINE_WIDTH_EM, SEMANTIC_F32_RASTER_PIXEL_RATIO,
+    SEMANTIC_F32_SHADOW_OFFSET_X_EM, SEMANTIC_F32_SHADOW_OFFSET_Y_EM, SEMANTIC_U32_CLUSTER_ID,
+    SEMANTIC_U32_FLOW_THREAD_ID, SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_OUTLINE_RGBA,
+    SEMANTIC_U32_REGION_ID, SEMANTIC_U32_SHADOW_RGBA, SEMANTIC_U32_STABLE_GLYPH_ID,
+    SEMANTIC_U32_TRANSFORM_INDEX, SEMANTIC_VIEW_LAYOUT_INSPECTION, SEMANTIC_VIEW_MASK,
+    SEMANTIC_VIEW_MEASUREMENT, SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_FIELD_BASELINE_SHIFT,
+    STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION, STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE,
+    STYLE_FIELD_FONT_STACK, STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE,
+    STYLE_FIELD_LETTER_SPACING, STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK, STYLE_FIELD_MATERIAL,
+    STYLE_FIELD_OPACITY, STYLE_FIELD_OUTLINE, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_SHADOW,
+    STYLE_FIELD_WORD_SPACING, STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT,
+    TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD,
+    WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
 };
 use crate::engine::policy::{
     ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL,
@@ -192,7 +194,7 @@ struct PolicyOperationRecord {
 struct EngineUpdateRequestHeader {
     abi_version: u32,
     byte_length: u32,
-    session_id: u32,
+    planner_id: u32,
     expected_engine_revision: u32,
     consumed_plan_revision: u32,
     acknowledged_publication_generation: u32,
@@ -275,6 +277,12 @@ struct EngineStyleMutationRecord {
     decoration_flags: u32,
     decoration_thickness: f32,
     decoration_offset: f32,
+    opacity: f32,
+    outline_rgba: u32,
+    outline_width: f32,
+    shadow_rgba: u32,
+    shadow_offset_x: f32,
+    shadow_offset_y: f32,
     paragraph_id: u32,
 }
 
@@ -387,7 +395,7 @@ struct EngineResultHeader {
     byte_length: u32,
     status: u32,
     flags: u32,
-    session_id: u32,
+    planner_id: u32,
     engine_revision: u32,
     plan_revision: u32,
     required_base_revision: u32,
@@ -915,9 +923,9 @@ field_offset!(
     byte_length
 );
 field_offset!(
-    ENGINE_UPDATE_SESSION_ID,
+    ENGINE_UPDATE_PLANNER_ID,
     EngineUpdateRequestHeader,
-    session_id
+    planner_id
 );
 field_offset!(
     ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
@@ -1266,6 +1274,36 @@ field_offset!(
     decoration_offset
 );
 field_offset!(
+    ENGINE_STYLE_MUTATION_OPACITY,
+    EngineStyleMutationRecord,
+    opacity
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_OUTLINE_RGBA,
+    EngineStyleMutationRecord,
+    outline_rgba
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_OUTLINE_WIDTH,
+    EngineStyleMutationRecord,
+    outline_width
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_SHADOW_RGBA,
+    EngineStyleMutationRecord,
+    shadow_rgba
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_SHADOW_OFFSET_X,
+    EngineStyleMutationRecord,
+    shadow_offset_x
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_SHADOW_OFFSET_Y,
+    EngineStyleMutationRecord,
+    shadow_offset_y
+);
+field_offset!(
     ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
     EngineStyleMutationRecord,
     paragraph_id
@@ -1571,7 +1609,7 @@ field_offset!(ENGINE_RESULT_ABI_VERSION, EngineResultHeader, abi_version);
 field_offset!(ENGINE_RESULT_BYTE_LENGTH, EngineResultHeader, byte_length);
 field_offset!(ENGINE_RESULT_STATUS, EngineResultHeader, status);
 field_offset!(ENGINE_RESULT_FLAGS, EngineResultHeader, flags);
-field_offset!(ENGINE_RESULT_SESSION_ID, EngineResultHeader, session_id);
+field_offset!(ENGINE_RESULT_PLANNER_ID, EngineResultHeader, planner_id);
 field_offset!(
     ENGINE_RESULT_ENGINE_REVISION,
     EngineResultHeader,
@@ -1870,14 +1908,15 @@ pub fn json() -> String {
             "disposeFontStack": "pmndrs_glyph_engine_dispose_font_stack",
             "fontStackCount": "pmndrs_glyph_engine_font_stack_count",
             "registerFontBinding": "pmndrs_glyph_engine_register_font_binding",
+            "disposeFontBinding": "pmndrs_glyph_engine_dispose_font_binding",
             "fontBindingCount": "pmndrs_glyph_engine_font_binding_count",
             "registerPolicy": "pmndrs_glyph_engine_register_policy",
             "disposePolicy": "pmndrs_glyph_engine_dispose_policy",
             "policyCount": "pmndrs_glyph_engine_policy_count",
-            "createSession": "pmndrs_glyph_engine_create_session",
-            "reserveSession": "pmndrs_glyph_engine_reserve_session",
-            "disposeSession": "pmndrs_glyph_engine_dispose_session",
-            "sessionCount": "pmndrs_glyph_engine_session_count",
+            "createPlanner": "pmndrs_glyph_engine_create_planner",
+            "reservePlanner": "pmndrs_glyph_engine_reserve_planner",
+            "disposePlanner": "pmndrs_glyph_engine_dispose_planner",
+            "plannerCount": "pmndrs_glyph_engine_planner_count",
             "requestPointer": "pmndrs_glyph_engine_request_ptr",
             "requestCapacity": "pmndrs_glyph_engine_request_capacity",
             "textUpdate": "pmndrs_glyph_engine_update",
@@ -2019,7 +2058,7 @@ pub fn json() -> String {
                 "alignment": ENGINE_UPDATE_REQUEST_HEADER_ALIGNMENT,
                 "abiVersion": ENGINE_UPDATE_ABI_VERSION,
                 "byteLength": ENGINE_UPDATE_BYTE_LENGTH,
-                "sessionId": ENGINE_UPDATE_SESSION_ID,
+                "plannerId": ENGINE_UPDATE_PLANNER_ID,
                 "expectedEngineRevision": ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
                 "consumedPlanRevision": ENGINE_UPDATE_CONSUMED_PLAN_REVISION,
                 "acknowledgedPublicationGeneration": ENGINE_UPDATE_ACKNOWLEDGED_PUBLICATION_GENERATION,
@@ -2102,6 +2141,12 @@ pub fn json() -> String {
                 "decorationFlags": ENGINE_STYLE_MUTATION_DECORATION_FLAGS,
                 "decorationThickness": ENGINE_STYLE_MUTATION_DECORATION_THICKNESS,
                 "decorationOffset": ENGINE_STYLE_MUTATION_DECORATION_OFFSET,
+                "opacity": ENGINE_STYLE_MUTATION_OPACITY,
+                "outlineRgba": ENGINE_STYLE_MUTATION_OUTLINE_RGBA,
+                "outlineWidth": ENGINE_STYLE_MUTATION_OUTLINE_WIDTH,
+                "shadowRgba": ENGINE_STYLE_MUTATION_SHADOW_RGBA,
+                "shadowOffsetX": ENGINE_STYLE_MUTATION_SHADOW_OFFSET_X,
+                "shadowOffsetY": ENGINE_STYLE_MUTATION_SHADOW_OFFSET_Y,
                 "paragraphId": ENGINE_STYLE_MUTATION_PARAGRAPH_ID
             },
             "engineConstraint": {
@@ -2212,7 +2257,7 @@ pub fn json() -> String {
                 "byteLength": ENGINE_RESULT_BYTE_LENGTH,
                 "status": ENGINE_RESULT_STATUS,
                 "flags": ENGINE_RESULT_FLAGS,
-                "sessionId": ENGINE_RESULT_SESSION_ID,
+                "plannerId": ENGINE_RESULT_PLANNER_ID,
                 "engineRevision": ENGINE_RESULT_ENGINE_REVISION,
                 "planRevision": ENGINE_RESULT_PLAN_REVISION,
                 "requiredBaseRevision": ENGINE_RESULT_REQUIRED_BASE_REVISION,
@@ -2445,7 +2490,7 @@ pub fn json() -> String {
             }
         },
         "engine": {
-            "defaultSessionTextCapacity": DEFAULT_SESSION_TEXT_CAPACITY,
+            "defaultPlannerTextCapacity": DEFAULT_PLANNER_TEXT_CAPACITY,
             "frameFlags": {
                 "compositingIndependent": crate::engine::frame::FRAME_FLAG_COMPOSITING_INDEPENDENT
             },
@@ -2462,7 +2507,10 @@ pub fn json() -> String {
                 "foregroundGreen": SEMANTIC_F32_FOREGROUND_GREEN,
                 "foregroundBlue": SEMANTIC_F32_FOREGROUND_BLUE,
                 "foregroundAlpha": SEMANTIC_F32_FOREGROUND_ALPHA,
-                "inverseFontSize": SEMANTIC_F32_INVERSE_FONT_SIZE
+                "inverseFontSize": SEMANTIC_F32_INVERSE_FONT_SIZE,
+                "outlineWidthEm": SEMANTIC_F32_OUTLINE_WIDTH_EM,
+                "shadowOffsetXEm": SEMANTIC_F32_SHADOW_OFFSET_X_EM,
+                "shadowOffsetYEm": SEMANTIC_F32_SHADOW_OFFSET_Y_EM
             },
             "semanticU32Fields": {
                 "foregroundRgba": SEMANTIC_U32_FOREGROUND_RGBA,
@@ -2470,7 +2518,9 @@ pub fn json() -> String {
                 "regionId": SEMANTIC_U32_REGION_ID,
                 "flowThreadId": SEMANTIC_U32_FLOW_THREAD_ID,
                 "transformIndex": SEMANTIC_U32_TRANSFORM_INDEX,
-                "stableGlyphId": SEMANTIC_U32_STABLE_GLYPH_ID
+                "stableGlyphId": SEMANTIC_U32_STABLE_GLYPH_ID,
+                "outlineRgba": SEMANTIC_U32_OUTLINE_RGBA,
+                "shadowRgba": SEMANTIC_U32_SHADOW_RGBA
             },
             "paragraphMutationOpcodes": {
                 "upsert": PARAGRAPH_MUTATION_UPSERT,
@@ -2503,6 +2553,9 @@ pub fn json() -> String {
                 "direction": STYLE_FIELD_DIRECTION,
                 "foreground": STYLE_FIELD_FOREGROUND,
                 "decoration": STYLE_FIELD_DECORATION,
+                "opacity": STYLE_FIELD_OPACITY,
+                "outline": STYLE_FIELD_OUTLINE,
+                "shadow": STYLE_FIELD_SHADOW,
                 "all": STYLE_FIELD_MASK
             },
             "decorationStyles": {
@@ -2648,8 +2701,8 @@ pub fn json() -> String {
             "resultTooLarge": 7,
             "policyConflict": 8,
             "policyMissing": 9,
-            "sessionConflict": 10,
-            "sessionMissing": 11,
+            "plannerConflict": 10,
+            "plannerMissing": 11,
             "revisionConflict": 12,
             "fontStackMissing": 13,
             "fontInUse": 14,
@@ -2657,7 +2710,8 @@ pub fn json() -> String {
             "styleSplitsCluster": 16,
             "styleNestingInvalid": 17,
             "styleRootInvalid": 18,
-            "fontMetricsMissing": 19
+            "fontMetricsMissing": 19,
+            "registrationInUse": 20
         }
     })
     .to_string()

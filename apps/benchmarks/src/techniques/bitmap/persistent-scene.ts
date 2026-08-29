@@ -1,11 +1,12 @@
 import {
-  FontRegistry,
+  createFontLibrary,
+  type Constraints,
   type FontFeature,
-  type LoadedFont,
-  type ParagraphContentBox,
+  type Font,
+  type FontLibrary,
+  type ParagraphLayout,
   type ParagraphLayoutSummary,
-  type ParagraphStyle,
-  type RegisteredFont,
+  type TextStyle,
 } from '@pmndrs/glyph';
 import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/glyph/three/bitmap';
 import { Text } from '@pmndrs/glyph/three';
@@ -48,7 +49,7 @@ import {
   type GlyphOriginTransition,
   type ShapedTextIdentity,
 } from '../shared/glyph-origin-transition';
-import { registeredBitmapAtlas, type BitmapAtlasPageStats } from './metadata';
+import { bitmapAtlasConfiguration, type BitmapAtlasPageStats } from './metadata';
 
 export interface BitmapTextLiveStats {
   readonly technique: 'bitmap';
@@ -196,10 +197,11 @@ export interface BitmapTextPersistentScene extends PersistentRenderScene {
 
 /** The shaping and box inputs one committed generation of the live paragraph was built from. */
 interface BitmapTextState {
-  readonly font: LoadedFont<typeof bitmap>;
+  readonly font: Font<typeof bitmap>;
   readonly text: string;
-  readonly contentBox: ParagraphContentBox;
-  readonly style: ParagraphStyle;
+  readonly constraints: Constraints;
+  readonly layout: ParagraphLayout;
+  readonly style: TextStyle;
 }
 
 interface BitmapTextShaping {
@@ -246,17 +248,22 @@ function countMissingGlyphs(layout: ParagraphLayoutSummary): number {
   return layout.missingGlyphCount;
 }
 
-function bitmapContentBox(width: number, textAlign: 'start' | 'center'): ParagraphContentBox {
-  return { width: { mode: 'exact', size: width }, wrap: 'word', align: textAlign, overflow: 'visible' };
+function bitmapConstraints(width: number): Constraints {
+  return { width: { mode: 'exact', size: width } };
 }
 
-function bitmapStyle(fontSize: number, shaping: BitmapTextShaping): ParagraphStyle {
+function bitmapLayout(textAlign: 'start' | 'center'): ParagraphLayout {
+  return { wrap: 'word', align: textAlign, overflow: 'visible' };
+}
+
+function bitmapStyle(fontSize: number, shaping: BitmapTextShaping): TextStyle {
   return {
     fontSize,
     lineHeight: LIVE_TEXT_LINE_HEIGHT,
     language: shaping.language,
     direction: shaping.direction,
     features: shaping.features,
+    color: LIVE_TEXT_COLOR_CSS,
   };
 }
 
@@ -279,12 +286,11 @@ interface ActiveBitmapTextPersistentScene {
 }
 
 interface BitmapPersistentFontFixture {
-  readonly atlas: Awaited<ReturnType<typeof registeredBitmapAtlas>>;
-  /** The registry-scoped font the atlas metadata is read from; the controller keys ownership on it. */
-  readonly font: RegisteredFont;
+  readonly atlas: ReturnType<typeof bitmapAtlasConfiguration>;
+  readonly font: Font<typeof bitmap>;
   readonly fontLoadMs: number;
   readonly loaded: BitmapFontAsset;
-  readonly loadedFont: LoadedFont<typeof bitmap>;
+  readonly loadedFont: Font<typeof bitmap>;
 }
 
 export function createBitmapTextPersistentScene(options: BitmapTextPersistentSceneOptions): BitmapTextPersistentScene {
@@ -391,8 +397,8 @@ async function activateBitmapTextPersistentScene(
   const renderer = context.renderer as THREE.WebGPURenderer;
   const canvasSurface = createCanvasSurface(renderer, width, viewportHeight, gridVisible);
   const textUpdateTelemetry = createTextUpdateTelemetry();
-  const registry = new FontRegistry();
-  let loadedFont: LoadedFont<typeof bitmap> | undefined;
+  const library = createFontLibrary();
+  let loadedFont: Font<typeof bitmap> | undefined;
   let fontFixtureController: RetainedFontFixtureController<BitmapPersistentFontFixture> | undefined;
   let line: Text<typeof bitmap> | undefined;
   try {
@@ -402,7 +408,7 @@ async function activateBitmapTextPersistentScene(
       fixture: fontFixture,
       delivery,
       bitmapDensity: 'live',
-      registry,
+      library,
       signal: context.signal,
       ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
     });
@@ -414,15 +420,16 @@ async function activateBitmapTextPersistentScene(
     let committedState: BitmapTextState = {
       font: loadedFont,
       text,
-      contentBox: bitmapContentBox(layoutWidth, currentTextAlign),
+      constraints: bitmapConstraints(layoutWidth),
+      layout: bitmapLayout(currentTextAlign),
       style: bitmapStyle(fontSize, currentShaping),
     };
     line = new Text({
       font: committedState.font,
       text: committedState.text,
-      contentBox: committedState.contentBox,
+      constraints: committedState.constraints,
+      layout: committedState.layout,
       style: committedState.style,
-      paint: { color: LIVE_TEXT_COLOR_CSS },
       rasterPixelRatio: context.viewport.dpr,
     });
     const activeText = line;
@@ -432,11 +439,7 @@ async function activateBitmapTextPersistentScene(
     activeText.updateMatrixWorld(true);
     if (activeText.error !== undefined) throw activeText.error;
     const readyAt = performance.now();
-    const committedLayout = (): ParagraphLayoutSummary => {
-      const layout = activeText.layout();
-      if (layout === undefined) throw new Error('live bitmap Text lost its committed layout');
-      return layout;
-    };
+    const committedLayout = (): ParagraphLayoutSummary => activeText.measure();
     const initialLayout = committedLayout();
     if (expectedGlyphCount !== undefined) {
       const missing = countMissingGlyphs(initialLayout);
@@ -448,15 +451,14 @@ async function activateBitmapTextPersistentScene(
     }
     const textReadyMs = performance.now() - textStarted;
     updateBitmapDrawVisibility(activeText);
-    const atlas = await registeredBitmapAtlas(loadedAsset.loaded.font, 'live');
+    const atlas = bitmapAtlasConfiguration(loadedAsset.data);
     fontFixtureController = createRetainedFontFixtureController(
-      registry,
+      library,
       {
         fixture: fontFixture,
-        asset: { atlas, font: loadedAsset.loaded.font, fontLoadMs, loaded: loadedAsset, loadedFont },
+        asset: { atlas, font: loadedAsset.loaded, fontLoadMs, loaded: loadedAsset, loadedFont },
       },
-      // The loaded font owns the registered font, its decoded raster, and the runtime entry; releasing only the
-      // registered font would strand the raster this technique still holds.
+      // Dispose the application Font lease; live renderer bindings retain their own counted lease.
       { dispose: (asset) => asset.loadedFont.dispose() },
     );
     const activeFontFixture = fontFixtureController;
@@ -485,26 +487,20 @@ async function activateBitmapTextPersistentScene(
     };
     const initialPosition = targetLinePosition();
     activeText.position.set(initialPosition[0], initialPosition[1], 0);
-    /**
-     * Commits one generation of shaping inputs. A rejected generation is rolled back to the committed one so the
-     * failed candidate font is left unleased, which is what lets the fixture controller dispose it.
-     */
+    /** Commits one validated generation; `Text.set()` leaves desired state unchanged when it rejects. */
     const applyState = (next: BitmapTextState): void => {
-      activeText.set({ font: next.font, text: next.text, contentBox: next.contentBox, style: next.style });
+      activeText.set({
+        font: next.font,
+        text: next.text,
+        constraints: next.constraints,
+        layout: next.layout,
+        style: next.style,
+      });
       activeText.updateMatrixWorld(true);
       if (activeText.error !== undefined) throw activeText.error;
     };
     const commitState = (next: BitmapTextState): void => {
-      try {
-        applyState(next);
-      } catch (error) {
-        try {
-          applyState(committedState);
-        } catch {
-          // The rollback cannot improve on the original failure; report the failure the caller asked about.
-        }
-        throw error;
-      }
+      applyState(next);
       committedState = next;
     };
     let presentation: BitmapTextPresentation = {
@@ -558,7 +554,7 @@ async function activateBitmapTextPersistentScene(
     };
     const loadFixtureAsset = async (
       fixture: BenchmarkFontFixture,
-      fixtureRegistry: FontRegistry,
+      fixtureLibrary: FontLibrary,
     ): Promise<BitmapPersistentFontFixture> => {
       const fontStartedAt = performance.now();
       const loaded = await loadBitmapFontAsset({
@@ -566,15 +562,15 @@ async function activateBitmapTextPersistentScene(
         fixture,
         delivery,
         bitmapDensity: 'live',
-        registry: fixtureRegistry,
+        library: fixtureLibrary,
         signal: context.signal,
         ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
       });
       try {
-        const nextAtlas = await registeredBitmapAtlas(loaded.loaded.font, 'live');
+        const nextAtlas = bitmapAtlasConfiguration(loaded.data);
         return {
           atlas: nextAtlas,
-          font: loaded.loaded.font,
+          font: loaded.loaded,
           fontLoadMs: performance.now() - fontStartedAt,
           loaded,
           loadedFont: loaded.loaded,
@@ -623,7 +619,8 @@ async function activateBitmapTextPersistentScene(
         commitState({
           font: fixture.loadedFont,
           text: nextText,
-          contentBox: bitmapContentBox(targetContentWidth, targetTextAlign),
+          constraints: bitmapConstraints(targetContentWidth),
+          layout: bitmapLayout(targetTextAlign),
           style: bitmapStyle(targetFontSize, targetShaping),
         });
         const committedAt = performance.now();
@@ -708,7 +705,7 @@ async function activateBitmapTextPersistentScene(
         const currentFontFixture = activeFontFixture.current.asset;
         const layout = committedLayout();
         const strikePpem = selectBitmapStrikePpem(
-          currentFontFixture.loadedFont.data.strikes,
+          currentFontFixture.loaded.data.strikes,
           currentFontSize,
           viewport.dpr,
         );

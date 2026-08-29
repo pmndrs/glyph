@@ -14,7 +14,9 @@
   },
   "devDependencies": {
     "@types/node": "24.13.3",
+    "ai-cli-mcp": "2.22.0",
     "oxfmt": "0.35.0",
+    "ts-morph": "26.0.0",
     "typescript": "7.0.2"
   },
   "packageManager": "pnpm@11.15.1"

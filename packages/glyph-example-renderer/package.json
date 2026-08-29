@@ -8,23 +8,31 @@
   "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": {
+        "source": "./src/index.ts",
+        "default": "./dist/index.d.ts"
+      },
+      "source": "./src/index.ts",
       "import": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node ./scripts/build.mjs",
     "test": "pnpm build && vitest run",
     "check": "pnpm test && tsc -p tsconfig.json --noEmit && oxlint --deny-warnings . && oxfmt --check package.json src tests tsconfig.json tsconfig.build.json"
   },
   "dependencies": {
-    "@pmndrs/glyph": "workspace:*"
+    "@pmndrs/glyph": "workspace:*",
+    "@pmndrs/glyph-example-raster": "workspace:*",
+    "@webgpu/types": "0.1.71",
+    "typegpu": "0.12.3"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",
+    "unplugin-typegpu": "0.12.2",
     "vitest": "4.1.0"
   }
 }

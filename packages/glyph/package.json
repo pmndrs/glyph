@@ -15,79 +15,185 @@
     "LICENSE",
     "bin",
     "dist",
+    "src",
     "!dist/.tsbuildinfo",
     "!dist/internal/raster-baker-profile.d.ts",
     "!dist/internal/raster-baker-profile.js"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/raster/bitmap-technique.ts",
+    "./src/raster/msdf.ts",
+    "./src/raster/slug-technique.ts",
+    "./src/three/bitmap.ts",
+    "./src/three/msdf.ts",
+    "./src/three/slug.ts",
+    "./dist/raster/bitmap-technique.js",
+    "./dist/raster/msdf.js",
+    "./dist/raster/slug-technique.js",
+    "./dist/three/bitmap.js",
+    "./dist/three/msdf.js",
+    "./dist/three/slug.js"
+  ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": {
+        "source": "./src/index.ts",
+        "default": "./dist/index.d.ts"
+      },
+      "source": "./src/index.ts",
       "import": "./dist/index.js"
     },
     "./core": {
-      "types": "./dist/core.d.ts",
+      "types": {
+        "source": "./src/core.ts",
+        "default": "./dist/core.d.ts"
+      },
+      "source": "./src/core.ts",
       "import": "./dist/core.js"
     },
     "./tsl": {
-      "types": "./dist/tsl.d.ts",
+      "types": {
+        "source": "./src/tsl.ts",
+        "default": "./dist/tsl.d.ts"
+      },
+      "source": "./src/tsl.ts",
       "import": "./dist/tsl.js"
     },
     "./typegpu": {
-      "types": "./dist/typegpu.d.ts",
+      "types": {
+        "source": "./src/typegpu.ts",
+        "default": "./dist/typegpu.d.ts"
+      },
+      "source": "./src/typegpu.ts",
       "import": "./dist/typegpu.js"
     },
     "./three": {
-      "types": "./dist/three.d.ts",
+      "types": {
+        "source": "./src/three.ts",
+        "default": "./dist/three.d.ts"
+      },
+      "source": "./src/three.ts",
       "import": "./dist/three.js"
     },
     "./three/bitmap": {
-      "types": "./dist/three/bitmap.d.ts",
+      "types": {
+        "source": "./src/three/bitmap.ts",
+        "default": "./dist/three/bitmap.d.ts"
+      },
+      "source": "./src/three/bitmap.ts",
       "import": "./dist/three/bitmap.js"
     },
     "./three/msdf": {
-      "types": "./dist/three/msdf.d.ts",
+      "types": {
+        "source": "./src/three/msdf.ts",
+        "default": "./dist/three/msdf.d.ts"
+      },
+      "source": "./src/three/msdf.ts",
       "import": "./dist/three/msdf.js"
     },
     "./three/slug": {
-      "types": "./dist/three/slug.d.ts",
+      "types": {
+        "source": "./src/three/slug.ts",
+        "default": "./dist/three/slug.d.ts"
+      },
+      "source": "./src/three/slug.ts",
       "import": "./dist/three/slug.js"
     },
     "./react": {
-      "types": "./dist/react.d.ts",
+      "types": {
+        "source": "./src/react.ts",
+        "default": "./dist/react.d.ts"
+      },
+      "source": "./src/react.ts",
       "import": "./dist/react.js"
     },
+    "./react/bitmap": {
+      "types": {
+        "source": "./src/react/bitmap.ts",
+        "default": "./dist/react/bitmap.d.ts"
+      },
+      "source": "./src/react/bitmap.ts",
+      "import": "./dist/react/bitmap.js"
+    },
+    "./react/msdf": {
+      "types": {
+        "source": "./src/react/msdf.ts",
+        "default": "./dist/react/msdf.d.ts"
+      },
+      "source": "./src/react/msdf.ts",
+      "import": "./dist/react/msdf.js"
+    },
+    "./react/slug": {
+      "types": {
+        "source": "./src/react/slug.ts",
+        "default": "./dist/react/slug.d.ts"
+      },
+      "source": "./src/react/slug.ts",
+      "import": "./dist/react/slug.js"
+    },
     "./raster/bitmap": {
-      "types": "./dist/raster/bitmap-technique.d.ts",
+      "types": {
+        "source": "./src/raster/bitmap-technique.ts",
+        "default": "./dist/raster/bitmap-technique.d.ts"
+      },
+      "source": "./src/raster/bitmap-technique.ts",
       "import": "./dist/raster/bitmap-technique.js"
     },
     "./raster/msdf": {
-      "types": "./dist/raster/msdf.d.ts",
+      "types": {
+        "source": "./src/raster/msdf.ts",
+        "default": "./dist/raster/msdf.d.ts"
+      },
+      "source": "./src/raster/msdf.ts",
       "import": "./dist/raster/msdf.js"
     },
     "./raster/slug": {
-      "types": "./dist/raster/slug-technique.d.ts",
+      "types": {
+        "source": "./src/raster/slug-technique.ts",
+        "default": "./dist/raster/slug-technique.d.ts"
+      },
+      "source": "./src/raster/slug-technique.ts",
       "import": "./dist/raster/slug-technique.js"
     },
     "./bakers/bitmap": {
-      "types": "./dist/bakers/bitmap.d.ts",
+      "types": {
+        "source": "./src/bakers/bitmap.ts",
+        "default": "./dist/bakers/bitmap.d.ts"
+      },
+      "source": "./src/bakers/bitmap.ts",
       "import": "./dist/bakers/bitmap.js"
     },
     "./bakers/msdf": {
-      "types": "./dist/bakers/msdf.d.ts",
+      "types": {
+        "source": "./src/bakers/msdf.ts",
+        "default": "./dist/bakers/msdf.d.ts"
+      },
+      "source": "./src/bakers/msdf.ts",
       "import": "./dist/bakers/msdf.js"
     },
     "./bakers/slug": {
-      "types": "./dist/bakers/slug.d.ts",
+      "types": {
+        "source": "./src/bakers/slug.ts",
+        "default": "./dist/bakers/slug.d.ts"
+      },
+      "source": "./src/bakers/slug.ts",
       "import": "./dist/bakers/slug.js"
     },
     "./bake": {
-      "types": "./dist/node/bake.d.ts",
+      "types": {
+        "source": "./src/node/bake.ts",
+        "default": "./dist/node/bake.d.ts"
+      },
+      "source": "./src/node/bake.ts",
       "import": "./dist/node/bake.js"
     },
     "./runtime-bake": {
-      "types": "./dist/runtime-bake.d.ts",
+      "types": {
+        "source": "./src/runtime-bake.ts",
+        "default": "./dist/runtime-bake.d.ts"
+      },
+      "source": "./src/runtime-bake.ts",
       "import": "./dist/runtime-bake.js"
     },
     "./text-shaper.wasm": "./dist/text-shaper.wasm",
@@ -130,7 +236,8 @@
     "typegpu": "0.12.3",
     "typescript": "7.0.2",
     "unicode-property-value-aliases": "3.9.0",
-    "unplugin-typegpu": "0.12.2"
+    "unplugin-typegpu": "0.12.2",
+    "vite": "8.1.5"
   },
   "peerDependencies": {
     "@react-three/fiber": ">=10.0.0-alpha.3 <11",
@@ -143,6 +250,9 @@
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "three": {
       "optional": true
     },
     "typegpu": {

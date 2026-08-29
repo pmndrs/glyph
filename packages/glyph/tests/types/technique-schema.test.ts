@@ -1,13 +1,15 @@
 import {
   definePolicyBuffers,
+  defineTechniqueGeometryKind,
   defineTechniqueSchema,
-  multiplyF32,
+  f32,
   schemaFieldTable,
   schemaPolicyBuffers,
   techniqueProgram,
   type FontBindingFieldTable,
   type PolicyBuffer,
   type PolicyF32Value,
+  id,
 } from '../../dist/core.js';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 
@@ -18,28 +20,136 @@ const schema = defineTechniqueSchema({
   scope: 'glyph',
   binding: { f32: ['bearingX', 'size'] as const, u32: ['page'] as const },
   buffers: {
-    rect: { id: 1, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
-    page: { id: 2, scalar: 'u32', lanes: ['page'] },
+    rect: { id: id.buffer('type-schema/rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    page: { id: id.buffer('type-schema/page'), scalar: 'u32', lanes: ['page'] },
   } as const,
 });
 
-const p = techniqueProgram(schema);
+defineTechniqueSchema({
+  ...schema,
+  // @ts-expect-error Synthetic geometry cannot carry a renderer resource.
+  render: { geometry: { kind: 'synthetic-quad', resource: 'mesh' } },
+});
+
+defineTechniqueSchema({
+  technique: 'example.empty-resource',
+  scope: 'glyph',
+  binding: {},
+  buffers: {},
+  // @ts-expect-error Empty resource names cannot be retained and therefore cannot enter a schema.
+  resources: { '': { kind: 'buffer' } },
+});
+
+defineTechniqueSchema({
+  technique: 'example.invalid-supplied',
+  scope: 'glyph',
+  binding: {},
+  buffers: {},
+  // @ts-expect-error Supplied geometry requires a declared geometry resource and coordinates.
+  render: { geometry: { kind: 'quad' } },
+});
+
+defineTechniqueSchema({
+  technique: 'example.invalid-resource',
+  scope: 'glyph',
+  binding: {},
+  buffers: {},
+  // @ts-expect-error Reserved buffer resources cannot smuggle texture metadata through an open resource arm.
+  resources: { table: { kind: 'buffer', format: 'r8unorm' } },
+});
+
+defineTechniqueSchema({
+  technique: 'example.unbound-geometry',
+  scope: 'glyph',
+  binding: {},
+  buffers: {},
+  // @ts-expect-error Supplied geometry declares the exact vertex inputs its shader consumes.
+  resources: { mesh: { kind: 'geometry' } },
+});
+
+const suppliedSchema = defineTechniqueSchema({
+  technique: 'example.supplied-geometry',
+  scope: 'glyph',
+  binding: {},
+  buffers: {},
+  resources: {
+    mesh: {
+      kind: 'geometry',
+      attributes: [
+        { semantic: 'position', componentType: 'f32', components: 2 },
+        { semantic: 'uv', componentType: 'f32', components: 2 },
+      ],
+    },
+  },
+  render: { resource: 'mesh', geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
+});
+const positionComponents: 2 = suppliedSchema.resources.mesh.attributes[0].components;
+void positionComponents;
+
+const meshlet = defineTechniqueGeometryKind('meshlet');
+defineTechniqueSchema({
+  technique: 'example.custom-geometry',
+  scope: 'glyph',
+  binding: {},
+  buffers: {},
+  resources: suppliedSchema.resources,
+  render: { resource: 'mesh', geometry: { kind: 'custom', name: meshlet, resource: 'mesh', coordinates: 'em' } },
+});
+
+defineTechniqueSchema({
+  technique: 'example.unbranded-custom-geometry',
+  scope: 'glyph',
+  binding: {},
+  buffers: {},
+  resources: suppliedSchema.resources,
+  // @ts-expect-error Extension geometry names must pass through defineTechniqueGeometryKind.
+  render: { resource: 'mesh', geometry: { kind: 'custom', name: 'meshlet', resource: 'mesh', coordinates: 'em' } },
+});
+
+defineTechniqueSchema({
+  ...schema,
+  // @ts-expect-error glyphOrigin must name a declared f32 buffer with at least two lanes.
+  glyphOrigin: { buffer: 'page' },
+});
+
+const system = definePolicyBuffers({
+  stableGlyphId: { id: id.buffer('type-schema/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
+} as const);
+const p = techniqueProgram(schema, { system });
 const { fontSize } = p.semantics;
 const { bearingX, size, page } = p.binding;
-const scaled: PolicyF32Value = multiplyF32(size, fontSize);
-p.store(schema.buffers.rect, [multiplyF32(bearingX, fontSize), scaled, scaled, scaled]);
-p.store(schema.buffers.page, [page]);
-void p.compile();
+const scaled: PolicyF32Value = f32.mul(size, fontSize);
+void p.compile({ rect: [f32.mul(bearingX, fontSize), scaled, scaled, scaled], page: [page] });
+
+// @ts-expect-error Every declared buffer is required by the exact compile map.
+p.compile({ rect: [scaled, scaled, scaled, scaled] });
+
+p.compile({
+  // @ts-expect-error A declared four-lane buffer requires exactly four values.
+  rect: [scaled],
+  page: [page],
+});
+
+const foreignBuffers = definePolicyBuffers({
+  rect: { id: id.buffer('type-schema/foreign-rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+} as const);
+void foreignBuffers;
+// @ts-expect-error Policy buffer declarations reject arbitrary numeric IDs.
+definePolicyBuffers({ raw: { id: 1, scalar: 'u32', lanes: ['value'] } });
+p.compile({
+  rect: [scaled, scaled, scaled, scaled],
+  page: [page],
+  // @ts-expect-error A policy cannot compile an undeclared buffer.
+  foreign: [scaled],
+});
 
 // The id is data, not convention: consumers read it from the declaration.
 const rectId: number = schema.buffers.rect.id;
 void rectId;
 
-// System buffers use the same construct without a technique wrapper.
-const system = definePolicyBuffers({
-  stableGlyphId: { id: 14, scalar: 'u32', lanes: ['stableGlyphId'] },
-} as const);
-p.store(system.stableGlyphId, [p.semantics.stableGlyphId]);
+// System buffers use the same construct without entering the technique store map.
+const stableGlyphBufferId: number = system.stableGlyphId.id;
+void stableGlyphBufferId;
 
 // The first-party bitmap technique publishes its schema from its own subpath.
 const bitmapColorId: number = bitmapSchema.buffers.color.id;
@@ -54,8 +164,11 @@ const table: FontBindingFieldTable = schemaFieldTable(['bearingX', 'size'] as co
 });
 void table;
 
-// @ts-expect-error An f32 value cannot be stored into a u32 buffer.
-p.store(schema.buffers.page, [scaled]);
+p.compile({
+  rect: [scaled, scaled, scaled, scaled],
+  // @ts-expect-error An f32 value cannot be stored into a u32 buffer.
+  page: [scaled],
+});
 // @ts-expect-error Undeclared buffers do not exist on the schema.
 void schema.buffers.atlas;
 // @ts-expect-error Undeclared binding fields do not exist.

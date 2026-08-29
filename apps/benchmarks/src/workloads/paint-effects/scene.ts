@@ -72,12 +72,9 @@ export function createPaintEffectsEntries(
     rasterPixelRatio: context.dpr,
     text: PAINT_EFFECTS_TEXT,
     spans,
-    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
-    paint: { opacity: context.paintOpacity },
-    contentBox: {
-      width: exactWidth(benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio)),
-      wrap: 'word',
-    },
+    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT, opacity: context.paintOpacity },
+    constraints: { width: exactWidth(benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio)) },
+    layout: { wrap: 'word' },
   });
   return [
     {
@@ -99,7 +96,7 @@ export function createPaintSpans(
   outlineWidth?: number,
   shadowOffset?: readonly [number, number],
 ): MutablePaintSpan[] {
-  const spans = PAINT_WORD_RANGES.map((range) => ({ ...range, paint: { color: paintColor(0) } }));
+  const spans = PAINT_WORD_RANGES.map((range) => ({ ...range, style: { color: paintColor(0) } }));
   updatePaintSpans(spans, phase, amount, outlineWidth, shadowOffset);
   return spans;
 }
@@ -112,18 +109,18 @@ export function updatePaintSpans(
   shadowOffset?: readonly [number, number],
 ): void {
   for (let index = 0; index < spans.length; index += 1) {
-    const { paint } = spans[index]!;
+    const { style } = spans[index]!;
     const hue = paintWordHue(index, PAINT_WORD_RANGES.length, phase, amount);
-    paint.color = paintColor(hslColor(hue, 0.88, 0.53));
-    if (outlineWidth === undefined || outlineWidth === 0) delete paint.outline;
-    else if (paint.outline === undefined) paint.outline = { color: paintColor(0xffffff), width: outlineWidth };
-    else paint.outline.width = outlineWidth;
-    if (shadowOffset === undefined) delete paint.shadow;
-    else if (paint.shadow === undefined) {
-      paint.shadow = { color: paintColor(hslColor(hue, 0.68, 0.28)), offset: shadowOffset };
+    style.color = paintColor(hslColor(hue, 0.88, 0.53));
+    if (outlineWidth === undefined || outlineWidth === 0) delete style.outline;
+    else if (style.outline === undefined) style.outline = { color: paintColor(0xffffff), width: outlineWidth };
+    else style.outline.width = outlineWidth;
+    if (shadowOffset === undefined) delete style.shadow;
+    else if (style.shadow === undefined) {
+      style.shadow = { color: paintColor(hslColor(hue, 0.68, 0.28)), offset: shadowOffset };
     } else {
-      paint.shadow.color = paintColor(hslColor(hue, 0.68, 0.28));
-      paint.shadow.offset = shadowOffset;
+      style.shadow.color = paintColor(hslColor(hue, 0.68, 0.28));
+      style.shadow.offset = shadowOffset;
     }
   }
 }
@@ -194,7 +191,7 @@ export function applyPaintEffectsRetainedConfiguration(
       paintShadowOffset,
     );
     entry.text.set({
-      paint: { ...entry.text.paint, opacity: configuration.paintOpacity },
+      style: { ...entry.text.style, opacity: configuration.paintOpacity },
       text: PAINT_EFFECTS_TEXT,
       spans: entry.paintSpans,
     });

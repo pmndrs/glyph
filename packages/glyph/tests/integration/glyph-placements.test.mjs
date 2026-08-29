@@ -10,31 +10,30 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 
-import { createTextRuntime, FontRegistry, glyphFlags } from '@pmndrs/glyph';
+import { glyphFlags } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url);
-const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const dataUrl = (bytes) => `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 
-let runtime;
+let loader;
 let loaded;
 
 async function loadFont() {
   if (loaded !== undefined) return loaded;
-  runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
-  loaded = await runtime.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
+  loader = new FontLoader();
+  loaded = await loader.loadAsync({
+    input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
     raster: { technique: bitmap, options: { strikes: [16, 32] } },
   });
   return loaded;
 }
 
 after(() => {
-  runtime?.dispose();
-  runtime = undefined;
+  loaded?.dispose();
+  loader?.dispose();
+  loader = undefined;
   loaded = undefined;
 });
 
@@ -56,7 +55,8 @@ function unmount(mounted) {
 test('glyphs, words, and lines partition the paragraph without the caller deriving membership', async () => {
   const font = await loadFont();
   const mounted = mount(font, 'one two three', {
-    contentBox: { width: { mode: 'exact', size: 60 }, wrap: 'word' },
+    constraints: { width: { mode: 'exact', size: 60 } },
+    layout: { wrap: 'word' },
   });
   try {
     const placements = mounted.node.snapshotGlyphs();
@@ -95,7 +95,7 @@ test('advance and ink extents are different numbers, and each agrees with the en
   const mounted = mount(font, 'Wavy');
   try {
     const placements = mounted.node.snapshotGlyphs();
-    const summary = mounted.node.layout();
+    const summary = mounted.node.measure();
     const line = placements.lines[0];
 
     // The per-glyph advances must sum to the line advance the engine derived independently in f64.
@@ -184,7 +184,7 @@ test('a snapshot is internally consistent and restores without the caller sequen
   try {
     const placements = mounted.node.snapshotGlyphs();
     // The invariant the one real consumer used to hand-check over six public arrays.
-    assert.equal(placements.glyphs.length, mounted.node.layout().glyphCount);
+    assert.equal(placements.glyphs.length, mounted.node.measure().glyphCount);
     for (const [index, glyph] of placements.glyphs.entries()) assert.equal(glyph.index, index);
     assert.equal(placements.space, 'paragraph');
 
@@ -253,6 +253,49 @@ test('caret and selection resolve to clusters and stay inside the line box', asy
     assert.ok(partial[0].width > 0);
   } finally {
     unmount(mounted);
+  }
+});
+
+test('word and caret ranges preserve UTF-16 clusters and bidi direction', async () => {
+  const font = await loadFont();
+  const astralText = 'A😀';
+  const astral = mount(font, astralText);
+  const combining = mount(font, 'e\u0301');
+  const rtl = mount(font, 'אב', {
+    style: { fontSize: 16, direction: 'rtl' },
+    constraints: { width: { mode: 'exact', size: 100 } },
+  });
+  try {
+    const astralPlacements = astral.node.snapshotGlyphs();
+    assert.equal(astralPlacements.words[0].textEnd, astralText.length, 'a word end cannot split a surrogate pair');
+    assert.equal(
+      astralPlacements.selectionRects(2, 3).length,
+      1,
+      'a range inside an astral cluster still selects that cluster',
+    );
+
+    const combiningPlacements = combining.node.snapshotGlyphs();
+    assert.equal(combiningPlacements.words[0].textEnd, 2, 'a word end cannot split a combining cluster');
+
+    const ltrLine = astralPlacements.lines[0];
+    const first = ltrLine.glyphs[0];
+    const internal = astralPlacements.caretAt(first.x + first.advance, ltrLine.baseline);
+    assert.equal(internal.offset, 1);
+    assert.equal(internal.leading, true, 'an internal boundary is the leading edge of the next cluster');
+
+    const rtlPlacements = rtl.node.snapshotGlyphs();
+    const rtlLine = rtlPlacements.lines[0];
+    assert.ok(rtlLine.glyphs.every((glyph) => (glyph.bidiLevel & 1) === 1));
+    const logicalStart = rtlPlacements.caretAt(1000, rtlLine.baseline);
+    const logicalEnd = rtlPlacements.caretAt(-1000, rtlLine.baseline);
+    assert.equal(logicalStart.offset, 0, 'RTL logical start is the visually right edge');
+    assert.equal(logicalStart.leading, true);
+    assert.equal(logicalEnd.offset, 'אב'.length, 'RTL logical end is the visually left edge');
+    assert.equal(logicalEnd.leading, false);
+  } finally {
+    unmount(astral);
+    unmount(combining);
+    unmount(rtl);
   }
 });
 

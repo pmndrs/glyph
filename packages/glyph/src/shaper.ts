@@ -6,8 +6,14 @@ import { FontRegistry } from './loader.js';
 
 export type TextShaperWasmSource = BufferSource | WebAssembly.Module;
 
+/** @internal Minimal registry contract required by the Wasm shaper. */
+export interface RuntimeShaperFontRegistry {
+  getByHandle(handle: FontHandle): RegisteredFont | undefined;
+  _onFontDispose(listener: (font: RegisteredFont) => void): () => void;
+}
+
 export interface RuntimeShaperOptions {
-  readonly registry?: FontRegistry;
+  readonly registry?: RuntimeShaperFontRegistry;
   readonly wasm?: TextShaperWasmSource;
 }
 
@@ -19,7 +25,7 @@ export interface RuntimeShaperMemoryReport {
 }
 
 export interface RuntimeShaper {
-  readonly registry: FontRegistry;
+  readonly registry: RuntimeShaperFontRegistry;
   registerFont(font: RegisteredFont): void;
   disposeFont(font: RegisteredFont): void;
   memoryReport(): RuntimeShaperMemoryReport;
@@ -58,23 +64,25 @@ interface ShaperExports {
     pointer: number,
     length: number,
   ) => number;
+  readonly disposeFontBinding: (bindingHandle: number) => number;
+  readonly fontBindingCount: () => number;
   readonly registerFontStack: (handle: number, pointer: number, count: number) => number;
   readonly disposeFontStack: (handle: number) => number;
   readonly registerPolicy: (handle: number, pointer: number, length: number) => number;
   readonly disposePolicy: (handle: number) => number;
-  readonly createSession: (
+  readonly createPlanner: (
     handle: number,
     requestCapacity: number,
     resultCapacity: number,
     textCapacity: number,
   ) => number;
-  readonly reserveSession: (
+  readonly reservePlanner: (
     handle: number,
     requestCapacity: number,
     resultCapacity: number,
     textCapacity: number,
   ) => number;
-  readonly disposeSession: (handle: number) => number;
+  readonly disposePlanner: (handle: number) => number;
   readonly requestPointer: (handle: number) => number;
   readonly requestCapacity: (handle: number) => number;
   readonly textUpdate: (handle: number, pointer: number, length: number) => number;
@@ -94,13 +102,13 @@ export async function createRuntimeShaper(options: RuntimeShaperOptions = {}): P
 }
 
 class RuntimeShaperImpl implements RuntimeShaper {
-  readonly registry: FontRegistry;
+  readonly registry: RuntimeShaperFontRegistry;
   readonly #exports: ShaperExports;
   readonly #registered = new Map<FontHandle, RegisteredFont | undefined>();
   readonly #unsubscribe: () => void;
   #disposed = false;
 
-  constructor(registry: FontRegistry, module: ShaperModule) {
+  constructor(registry: RuntimeShaperFontRegistry, module: ShaperModule) {
     this.registry = registry;
     this.#exports = module.exports;
     this.#unsubscribe = registry._onFontDispose((font) => this.#disposeHandle(font.handle));
@@ -193,9 +201,10 @@ class RuntimeShaperImpl implements RuntimeShaper {
   }
 
   #disposeHandle(handle: FontHandle): void {
-    if (!this.#registered.delete(handle)) return;
+    if (!this.#registered.has(handle)) return;
     const status = this.#exports.disposeFont(handle);
     if (status !== 0 && status !== 5) throw shaperStatusError(status, 'dispose font');
+    this.#registered.delete(handle);
   }
 
   #assertActive(): void {
@@ -204,7 +213,13 @@ class RuntimeShaperImpl implements RuntimeShaper {
 }
 
 async function fetchDefaultWasm(): Promise<ArrayBuffer> {
-  const response = await fetch(new URL('./text-shaper.wasm', import.meta.url));
+  const url = new URL('../dist/text-shaper.wasm', import.meta.url);
+  if (url.protocol === 'file:' && typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function') {
+    const fileSystem = process.getBuiltinModule('node:fs') as typeof import('node:fs');
+    const bytes = fileSystem.readFileSync(url);
+    return Uint8Array.from(bytes).buffer;
+  }
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`text shaper Wasm request failed with HTTP ${response.status}`);
   }
@@ -229,13 +244,15 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       retainedFontBytes: exportedFunction(instance, functions.retainedFontBytes),
       planCount: exportedFunction(instance, functions.planCount),
       registerFontBinding: exportedFunction(instance, functions.registerFontBinding),
+      disposeFontBinding: exportedFunction(instance, functions.disposeFontBinding),
+      fontBindingCount: exportedFunction(instance, functions.fontBindingCount),
       registerFontStack: exportedFunction(instance, functions.registerFontStack),
       disposeFontStack: exportedFunction(instance, functions.disposeFontStack),
       registerPolicy: exportedFunction(instance, functions.registerPolicy),
       disposePolicy: exportedFunction(instance, functions.disposePolicy),
-      createSession: exportedFunction(instance, functions.createSession),
-      reserveSession: exportedFunction(instance, functions.reserveSession),
-      disposeSession: exportedFunction(instance, functions.disposeSession),
+      createPlanner: exportedFunction(instance, functions.createPlanner),
+      reservePlanner: exportedFunction(instance, functions.reservePlanner),
+      disposePlanner: exportedFunction(instance, functions.disposePlanner),
       requestPointer: exportedFunction(instance, functions.requestPointer),
       requestCapacity: exportedFunction(instance, functions.requestCapacity),
       textUpdate: exportedFunction(instance, functions.textUpdate),

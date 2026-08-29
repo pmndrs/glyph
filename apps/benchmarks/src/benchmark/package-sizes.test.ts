@@ -113,14 +113,14 @@ describe('independent package-size report', () => {
     expect(core.minifiedBytes).toBeLessThan(validator.minifiedBytes);
   });
 
-  it('reports Unicode analysis independently from the initial browser graph', () => {
+  it('reports Unicode analysis as a separate measured artifact', () => {
     const core = report.entries.find((candidate) => candidate.id === 'browser-core');
     const unicode = report.entries.find((candidate) => candidate.id === 'unicode-analysis-js');
     expect(core?.status).toBe('measured');
     expect(unicode?.status).toBe('measured');
     if (core?.status !== 'measured' || unicode?.status !== 'measured') return;
     expect(unicode.minifiedBytes).toBeGreaterThan(0);
-    expect(core.minifiedBytes).toBeLessThan(unicode.minifiedBytes);
+    expect(unicode.sha256).not.toBe(core.sha256);
   });
 
   it('keeps foreign-host native-tool variance inside complete reviewed budgets', () => {

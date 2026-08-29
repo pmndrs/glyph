@@ -7,11 +7,11 @@ import { describe, expect, test } from 'vitest';
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 
 async function packageSources(): Promise<readonly (readonly [string, string])[]> {
-  const directories = ['src', 'tests'];
+  const directories = ['src', 'tests', 'scripts'];
   const files: string[] = [];
   for (const directory of directories) {
     const entries = await readdir(join(packageRoot, directory), { recursive: true });
-    files.push(...entries.filter((entry) => entry.endsWith('.ts')).map((entry) => join(directory, entry)));
+    files.push(...entries.filter((entry) => /\.(?:mjs|mts|ts)$/.test(entry)).map((entry) => join(directory, entry)));
   }
   return Promise.all(files.map(async (file) => [file, await readFile(join(packageRoot, file), 'utf8')] as const));
 }
@@ -23,13 +23,17 @@ describe('package boundary', () => {
 
   test('reaches the engine only through the /core entry point', async () => {
     for (const [file, source] of await packageSources()) {
-      // Internals, generated modules, and every other subpath are off limits — in src
-      // AND in tests. A second renderer that needs them proves the published surface
-      // is insufficient, which is the defect this package exists to catch. The one
-      // exception is the engine's Wasm artifact, a published entry point that carries
-      // no code surface.
-      expect(source, file).not.toMatch(/@pmndrs\/glyph\/(?!core\b|text-shaper\.wasm)/);
-      // No scene-graph integration and no renderer dependency.
+      const glyphImports = [...source.matchAll(/from ['"](@pmndrs\/glyph(?=\/|['"])(?:\/[A-Za-z0-9_.-]+)?)/g)].map(
+        ([, specifier]) => specifier!,
+      );
+      const allowed = new Set(['@pmndrs/glyph/core', '@pmndrs/glyph/text-shaper.wasm']);
+      if (file === 'src/engine.ts') allowed.add('@pmndrs/glyph');
+      if (file === 'tests/example-render.test.ts') {
+        allowed.add('@pmndrs/glyph');
+        allowed.add('@pmndrs/glyph/bake');
+      }
+      for (const specifier of glyphImports) expect(allowed, `${file}: ${specifier}`).toContain(specifier);
+      // No scene-graph integration or Three dependency.
       expect(source, file).not.toMatch(threeImport);
     }
   });
@@ -38,8 +42,8 @@ describe('package boundary', () => {
     for (const [file, source] of await packageSources()) {
       // Reaching dist or src of packages/glyph by relative path is the same defect as
       // a private subpath import, just spelled differently.
-      expect(source, file).not.toMatch(/from '\.\.\/\.\.\/glyph\//);
-      expect(source, file).not.toMatch(/from '\.\.\/\.\.\/\.\.\/packages\/glyph\//);
+      expect(source, file).not.toMatch(/from ['"]\.\.\/\.\.\/glyph\//);
+      expect(source, file).not.toMatch(/from ['"]\.\.\/\.\.\/\.\.\/packages\/glyph\//);
     }
   });
 

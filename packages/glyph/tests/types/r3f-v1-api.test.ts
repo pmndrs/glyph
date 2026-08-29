@@ -1,39 +1,60 @@
 import { createElement, type ReactElement } from 'react';
 
-import type { FontStack, LoadedFont } from '../../src/index.js';
-import { Text, TextGroup, TextSpan, useFont } from '../../src/react.js';
-import type { R3fTextChild, R3fTextProps, R3fTextSpanProps } from '../../src/react.js';
+import { type Font, type FontStack } from '../../src/index.js';
+import * as ReactApi from '../../src/react.js';
+import { Text, TextGroup, useFont } from '../../src/react.js';
+import { useBitmapFont } from '../../src/react/bitmap.js';
+import { useMSDF } from '../../src/react/msdf.js';
+import { useSlug } from '../../src/react/slug.js';
+import type { R3fTextChild, R3fTextProps } from '../../src/react.js';
 import type { ThreeTextMaterial } from '../../src/three.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
 import { msdf } from '../../src/raster/msdf.js';
 import { slug } from '../../src/raster/slug-technique.js';
 
-declare const bitmapFont: LoadedFont<typeof bitmap>;
-declare const mtsdfFont: LoadedFont<typeof msdf>;
-declare const slugFont: LoadedFont<typeof slug>;
+declare const bitmapFont: Font<typeof bitmap>;
+declare const mtsdfFont: Font<typeof msdf>;
+declare const slugFont: Font<typeof slug>;
 declare const selectedStack: FontStack<typeof bitmap> | FontStack<typeof msdf> | FontStack<typeof slug>;
 declare const material: ThreeTextMaterial;
 
-const inline = createElement(TextSpan, { paint: { color: '#ff00ff' } }, 'span');
+const inline = createElement(Text, { style: { color: '#ff00ff' } }, 'span');
 const label = createElement(Text<typeof bitmap>, { font: bitmapFont, material, pixelSnapping: true }, 'Typed ', inline);
 const labels = createElement(TextGroup, { compositing: 'independent', material, pixelSnapping: true }, label);
 const selected = createElement(Text, { font: selectedStack }, 'Selected at runtime');
 
 function FontConsumer(): null {
-  const loaded: LoadedFont<typeof bitmap> = useFont({
-    input: { baked: '/fonts/Inter.font.glb' },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const loaded: Font<typeof bitmap> = useFont({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] });
+  useBitmapFont({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Font<typeof bitmap>;
+  useMSDF({ baked: '/fonts/Inter.font.glb' }) satisfies Font<typeof msdf>;
+  useMSDF({ baked: '/fonts/Inter.font.glb' }, { emSize: 64, pixelRange: 8 }) satisfies Font<typeof msdf>;
+  useSlug({ baked: '/fonts/Inter.font.glb' }) satisfies Font<typeof slug>;
   void loaded;
-  const [loadedBitmap, loadedMsdf, loadedSlug] = useFont({
-    input: { baked: '/fonts/Inter.font.glb' },
-    rasters: [{ technique: bitmap, options: { strikes: [16] } }, { technique: msdf }, { technique: slug }],
-  });
-  loadedBitmap satisfies LoadedFont<typeof bitmap>;
-  loadedMsdf satisfies LoadedFont<typeof msdf>;
-  loadedSlug satisfies LoadedFont<typeof slug>;
+  // @ts-expect-error Bitmap declares required technique options.
+  useFont({ baked: '/fonts/Inter.font.glb' }, bitmap);
+  // @ts-expect-error Slug declares no technique options.
+  useFont({ baked: '/fonts/Inter.font.glb' }, slug, {});
   return null;
 }
+
+const consumer = createElement(FontConsumer);
+const preloaded: void = useFont.preload({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] });
+useFont.clear({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] });
+useFont.preload({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] }) satisfies void;
+useFont.clear({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] });
+useBitmapFont.preload({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies void;
+useBitmapFont.clear({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] });
+useMSDF.preload({ baked: '/fonts/Inter.font.glb' }) satisfies void;
+useMSDF.clear({ baked: '/fonts/Inter.font.glb' });
+useSlug.preload({ baked: '/fonts/Inter.font.glb' }) satisfies void;
+useSlug.clear({ baked: '/fonts/Inter.font.glb' });
+
+// @ts-expect-error React uses R3F's shared loader cache; no hook factory is public.
+void ReactApi.createUseFont;
+// @ts-expect-error React needs no Glyph-specific provider.
+void ReactApi.GlyphProvider;
+// @ts-expect-error Nested Text is the public inline-run syntax.
+void ReactApi.TextSpan;
 
 // @ts-expect-error The selected font technique must match the Text technique.
 createElement(Text<typeof bitmap>, { font: mtsdfFont }, 'wrong technique');
@@ -41,33 +62,14 @@ createElement(Text<typeof bitmap>, { font: mtsdfFont }, 'wrong technique');
 // @ts-expect-error An outer Text font must be a loaded font selection.
 createElement(Text, { font: 42 }, 'invalid font');
 
-// A span is a styled run, not an object in the scene, so every box-level prop is a type error on it
-// rather than a prop the flattener accepts and discards.
-// @ts-expect-error A TextSpan has no transform: it is not an object in the scene.
-createElement(TextSpan, { font: bitmapFont, position: [0, 0, 0] }, 'inline');
-
-// @ts-expect-error A TextSpan has no content box; the paragraph owns it.
-createElement(TextSpan, { font: bitmapFont, contentBox: { wrap: 'none' } }, 'inline');
-
-// @ts-expect-error A TextSpan is never mounted, so a ref to it could never fire.
-createElement(TextSpan, { font: bitmapFont, ref: () => {} }, 'inline');
-
-// @ts-expect-error A TextSpan has no error boundary; failures surface on the paragraph.
-createElement(TextSpan, { font: bitmapFont, onError: () => {} }, 'inline');
-
-// @ts-expect-error Capacity and pixel snapping belong to the standalone paragraph.
-createElement(TextSpan, { font: bitmapFont, capacity: { size: 8 }, pixelSnapping: true }, 'inline');
-
-// A Text element is a paragraph, not a run, so it is not a legal inline child. The check is stated
-// against the child type directly: `createElement`'s variadic children parameter is typed
-// `ReactNode` by React itself and would accept any element regardless of what the component says.
+// The same Text component is a paragraph at the root and an inline run when nested.
+// JSX erases element identity, so box-only nested props are rejected by the runtime flattener.
 declare const paragraphElement: ReactElement<R3fTextProps<typeof bitmap>>;
-declare const spanElement: ReactElement<R3fTextSpanProps<typeof bitmap>>;
-spanElement satisfies R3fTextChild<typeof bitmap>;
-// @ts-expect-error Inline children are TextSpan elements, not Text paragraphs.
 paragraphElement satisfies R3fTextChild<typeof bitmap>;
 
 void labels;
 void selected;
 void slugFont;
 void FontConsumer;
+void consumer;
+void preloaded;

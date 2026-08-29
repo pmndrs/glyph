@@ -6,7 +6,7 @@ import type { RuntimeRasterBakerModule } from '../raster.js';
 const msdfRuntimeBaker: RuntimeRasterBakerModule<typeof MSDF_KIND, MsdfBakerOptions> = createRasterBakeWorkerHost({
   kind: MSDF_KIND,
   name: 'pmndrs-glyph-mtsdf-baker',
-  workerUrl: new URL('./msdf-worker.js', import.meta.url),
+  workerUrl: new URL('../../dist/runtime-bakers/msdf-worker.js', import.meta.url),
 });
 
 export default msdfRuntimeBaker;

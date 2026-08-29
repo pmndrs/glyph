@@ -4,35 +4,75 @@ import test from 'node:test';
 
 import * as THREE from 'three/webgpu';
 
-import { createTextRuntime } from '@pmndrs/glyph';
-import { Paragraph } from '@pmndrs/glyph/core';
+import { createParagraph, defineRasterResourceId, defineRasterTechnique, txt } from '@pmndrs/glyph';
+import { defineTechniqueSchema, registerRasterPlanProgram, techniqueProgram } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { Text } from '@pmndrs/glyph/three';
+import { FontLoader, Text } from '@pmndrs/glyph/three';
+
+import {
+  createImmutableFontLease,
+  createImmutableFontVariant,
+  immutableFontVariantIdentity,
+} from '../../dist/loaded-font.js';
+import { paragraphMeasurementServiceReport } from '../../dist/paragraph.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 
 const TEXT = 'The quick brown fox jumps over the lazy dog';
+const PORTABLE_RESOURCE = defineRasterResourceId('test.paragraph.portable-resource');
+const portableTechnique = defineRasterTechnique({
+  id: 'test.paragraph.portable-technique',
+  kind: 'test',
+  extension: 'TEST_paragraph_portable',
+  version: 0,
+  textEffects: [],
+  descriptor: () => ({}),
+  async decode() {
+    return {};
+  },
+  dispose() {},
+});
+const portableSchema = defineTechniqueSchema({
+  technique: portableTechnique.id,
+  scope: 'glyph',
+  binding: {},
+  buffers: {},
+  resources: { payload: { kind: 'buffer' } },
+  render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
+});
+let portableCompileCalls = 0;
+registerRasterPlanProgram({
+  technique: portableTechnique,
+  schema: portableSchema,
+  policyBody(system) {
+    const program = techniqueProgram(portableSchema, { system });
+    return program.compile({});
+  },
+  compileFont(compiler) {
+    portableCompileCalls += 1;
+    compiler.retain('payload', PORTABLE_RESOURCE, {
+      kind: 'buffer',
+      bytes: new Uint8Array([1, 2, 3, 4]),
+      stride: 4,
+    });
+    return compiler.compile({ strikes: [0], resource: () => PORTABLE_RESOURCE });
+  },
+});
 
 async function bootstrap() {
-  const runtime = await createTextRuntime({
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
+    input: { baked: { bytes: await readFile(fontUrl) } },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
   return {
-    runtime,
+    loader,
     font,
     async [Symbol.asyncDispose]() {
       font.dispose();
-      runtime.dispose();
+      loader.dispose();
     },
   };
-}
-
-function dataUrl(bytes) {
-  return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 }
 
 const CONSTRAINTS = [
@@ -47,19 +87,19 @@ const CONSTRAINTS = [
  * byte-identical to the same value obtained through the Three.js Text scene-graph commit,
  * which was the only measurement route before this API existed.
  */
-test('Paragraph.layout agrees byte-for-byte with the Three.js Text layout route', async () => {
+test('Paragraph.measure agrees byte-for-byte with the Three.js Text measurement route', async () => {
   await using boot = await bootstrap();
   const scene = new THREE.Scene();
-  const text = new Text({ font: boot.font, text: TEXT, style: { fontSize: 16 }, contentBox: {} });
+  const text = new Text({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
   scene.add(text);
   try {
-    const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+    const paragraph = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
     for (const constraints of CONSTRAINTS) {
-      const result = paragraph.layout(constraints);
-      text.contentBox = constraints ?? {};
+      const result = paragraph.measure(constraints);
+      text.constraints = constraints ?? {};
       scene.updateMatrixWorld(true);
       if (text.error !== undefined) throw text.error;
-      const expected = text.layout();
+      const expected = text.measure();
       assert.ok(expected !== undefined, 'the Text route must publish a committed measurement');
       assert.deepEqual(projectMeasurement(result), projectMeasurement(expected));
     }
@@ -73,10 +113,10 @@ test('glyphs() positioned columns agree byte-for-byte with the Three.js Text ins
   await using boot = await bootstrap();
   const scene = new THREE.Scene();
   const box = { width: { mode: 'exact', size: 300 }, height: { mode: 'at-most', size: 200 } };
-  const text = new Text({ font: boot.font, text: TEXT, style: { fontSize: 16 }, contentBox: box });
+  const text = new Text({ font: boot.font, text: TEXT, style: { fontSize: 16 }, constraints: box });
   scene.add(text);
   try {
-    const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+    const paragraph = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
     const result = paragraph.glyphs(box);
     scene.updateMatrixWorld(true);
     if (text.error !== undefined) throw text.error;
@@ -89,11 +129,85 @@ test('glyphs() positioned columns agree byte-for-byte with the Three.js Text ins
   }
 });
 
+test('unconstrained alignment resolves against intrinsic line width', async () => {
+  await using boot = await bootstrap();
+  const text = 'short\nvery very long';
+  const start = await createParagraph({
+    font: boot.font,
+    text,
+    style: { fontSize: 16 },
+    layout: { align: 'start', wrap: 'none' },
+  });
+  const center = await createParagraph({
+    font: boot.font,
+    text,
+    style: { fontSize: 16 },
+    layout: { align: 'center', wrap: 'none' },
+  });
+  const end = await createParagraph({
+    font: boot.font,
+    text,
+    style: { fontSize: 16 },
+    layout: { align: 'end', wrap: 'none' },
+  });
+  try {
+    const startLayout = start.glyphs();
+    const centerLayout = center.glyphs();
+    const endLayout = end.glyphs();
+    const firstGlyph = startLayout.lineGlyphStarts[0];
+    const firstLineAdvance = startLayout.lineAdvances[0];
+    const intrinsicWidth = startLayout.contentWidth;
+    assert.equal(startLayout.lineCount, 2);
+    assert.ok(firstGlyph !== undefined && firstLineAdvance !== undefined);
+    assert.equal(centerLayout.x[firstGlyph], (intrinsicWidth - firstLineAdvance) / 2);
+    assert.equal(endLayout.x[firstGlyph], intrinsicWidth - firstLineAdvance);
+    assert.ok(Array.from(centerLayout.x).every((value) => value >= 0 && value <= intrinsicWidth));
+    assert.ok(Array.from(endLayout.x).every((value) => value >= 0 && value <= intrinsicWidth));
+  } finally {
+    start.dispose();
+    center.dispose();
+    end.dispose();
+  }
+});
+
+test('Paragraphs share one service host and compile a third-party font binding once', async () => {
+  await using boot = await bootstrap();
+  const bitmapVariant = immutableFontVariantIdentity(boot.font);
+  const font = createImmutableFontLease(
+    createImmutableFontVariant({
+      backing: bitmapVariant.backing,
+      technique: portableTechnique,
+      raster: { dispose() {} },
+      data: {},
+    }),
+  );
+  const callsBefore = portableCompileCalls;
+  await assert.rejects(
+    createParagraph({
+      font,
+      text: 'unsupported effect',
+      style: { outline: { color: '#ffffff', width: 1 } },
+    }),
+    /test\.paragraph\.portable-technique.*outline/,
+  );
+  const first = await createParagraph({ font, text: 'portable', style: { fontSize: 16 } });
+  const second = await createParagraph({ font, text: 'shared resources', style: { fontSize: 16 } });
+  try {
+    assert.ok(first.measure().glyphCount > 0);
+    assert.ok(second.measure().glyphCount > 0);
+    assert.equal(portableCompileCalls, callsBefore + 1);
+  } finally {
+    first.dispose();
+    second.dispose();
+    font.dispose();
+  }
+});
+
 test('intrinsic widths ride one measurement and match independent content oracles', async () => {
   await using boot = await bootstrap();
-  const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+  const paragraph = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
   try {
-    const metrics = paragraph.layout({ width: { mode: 'exact', size: 500 } });
+    const metrics = paragraph.measure({ width: { mode: 'exact', size: 500 } });
     assert.ok(metrics.minContentWidth > 0);
     assert.ok(metrics.minContentWidth <= metrics.maxContentWidth);
 
@@ -102,8 +216,8 @@ test('intrinsic widths ride one measurement and match independent content oracle
     // agree within flow-rounding tolerance rather than bit-exactly.
     let widestWord = 0;
     for (const word of TEXT.split(' ')) {
-      const probe = new Paragraph({ font: boot.font, text: word, style: { fontSize: 16 } });
-      const probeResult = probe.layout();
+      const probe = await createParagraph({ font: boot.font, text: word, style: { fontSize: 16 } });
+      const probeResult = probe.measure();
       widestWord = Math.max(widestWord, probeResult.contentWidth);
       probe.dispose();
     }
@@ -113,8 +227,8 @@ test('intrinsic widths ride one measurement and match independent content oracle
     );
 
     // Oracle for maximum content: the unconstrained single-line extent.
-    const whole = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
-    const wholeResult = whole.layout();
+    const whole = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+    const wholeResult = whole.measure();
     assert.ok(
       Math.abs(metrics.maxContentWidth - wholeResult.contentWidth) < 0.5,
       `${metrics.maxContentWidth} should equal the unconstrained extent ${wholeResult.contentWidth}`,
@@ -125,28 +239,60 @@ test('intrinsic widths ride one measurement and match independent content oracle
   }
 });
 
+test('multi-line paragraph baseline metrics decompose around the first baseline', async () => {
+  await using boot = await bootstrap();
+  const paragraph = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+  try {
+    const metrics = paragraph.measure({ width: { mode: 'exact', size: 120 } });
+    assert.ok(metrics.lineCount > 1, 'the fixture must wrap to distinguish first and last baselines');
+    assert.equal(metrics.ascent, metrics.firstBaseline);
+    assert.ok(Math.abs(metrics.ascent + metrics.descent - metrics.lineHeight) < 1e-6);
+    assert.equal(metrics.lineHeight, metrics.contentHeight);
+    assert.ok(metrics.lastBaseline > metrics.firstBaseline);
+  } finally {
+    paragraph.dispose();
+  }
+});
+
 test('repeated probes answer from cache and leave authored state untouched', async () => {
   await using boot = await bootstrap();
-  const paragraph = new Paragraph({
+  const paragraph = await createParagraph({
     font: boot.font,
     text: TEXT,
     style: { fontSize: 16 },
-    policy: { overflow: 'clip' },
+    layout: { overflow: 'clip' },
   });
   try {
-    const first = paragraph.layout({ width: { mode: 'at-most', size: 360 } });
-    const repeat = paragraph.layout({ width: { mode: 'at-most', size: 360 } });
+    const first = paragraph.measure({ width: { mode: 'at-most', size: 360 } });
+    const repeat = paragraph.measure({ width: { mode: 'at-most', size: 360 } });
     assert.equal(repeat, first, 'equal inputs must answer with the identical cached object');
     assert.equal(paragraph.text, TEXT);
-    assert.deepEqual(paragraph.policy, { overflow: 'clip' });
+    assert.deepEqual(paragraph.layout, { overflow: 'clip' });
 
-    const other = paragraph.layout({ width: { mode: 'exact', size: 200 } });
+    const other = paragraph.measure({ width: { mode: 'exact', size: 200 } });
     assert.ok(other.lineCount > first.lineCount, 'a narrower probe wraps into more lines');
 
     // Authored state survives every probe; a fresh query at the original constraints still
     // answers identically to before the narrower one ran.
-    const afterProbe = paragraph.layout({ width: { mode: 'at-most', size: 360 } });
+    const afterProbe = paragraph.measure({ width: { mode: 'at-most', size: 360 } });
     assert.deepEqual(projectMeasurement(afterProbe), projectMeasurement(first));
+  } finally {
+    paragraph.dispose();
+  }
+});
+
+test('constraint caches retain only the three normal layout negotiation modes', async () => {
+  await using boot = await bootstrap();
+  const paragraph = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+  try {
+    const firstConstraints = { width: { mode: 'exact', size: 180 } };
+    const first = paragraph.measure(firstConstraints);
+    paragraph.measure({ width: { mode: 'at-most', size: 240 } });
+    paragraph.measure({ width: { mode: 'exact', size: 300 } });
+    paragraph.measure();
+    const recomputed = paragraph.measure(firstConstraints);
+    assert.notEqual(recomputed, first, 'a fourth distinct constraint evicts the least-recently-used answer');
+    assert.deepEqual(projectMeasurement(recomputed), projectMeasurement(first));
   } finally {
     paragraph.dispose();
   }
@@ -154,13 +300,13 @@ test('repeated probes answer from cache and leave authored state untouched', asy
 
 test('layoutRevision advances exactly when positioned output differs', async () => {
   await using boot = await bootstrap();
-  const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+  const paragraph = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
   try {
     assert.equal(paragraph.layoutRevision, 0, 'nothing queried yet');
 
     // The measurement lane is paragraph-scoped and synchronous: a flexbox host probing
     // widths dozens of times per layout pass must never move the revision.
-    const probe = paragraph.layout({ width: { mode: 'at-most', size: 600 } });
+    const probe = paragraph.measure({ width: { mode: 'at-most', size: 600 } });
     assert.ok(probe.contentWidth > 0);
     assert.equal(paragraph.layoutRevision, 0, 'reading sizes must not produce positioned output');
 
@@ -170,7 +316,7 @@ test('layoutRevision advances exactly when positioned output differs', async () 
     const wideProjection = projectLayout(wide);
 
     // Asking again at the same constraints is the cached object, so nothing moves.
-    assert.equal(paragraph.glyphs({ width: { mode: 'at-most', size: 600 } }), wide);
+    assert.deepEqual(projectLayout(paragraph.glyphs({ width: { mode: 'at-most', size: 600 } })), wideProjection);
     assert.equal(paragraph.layoutRevision, 1, 'a cached answer must not advance the revision');
 
     // A wider at-most box that fits the same lines produces identical positioned output.
@@ -182,6 +328,10 @@ test('layoutRevision advances exactly when positioned output differs', async () 
     const narrow = paragraph.glyphs({ width: { mode: 'exact', size: 140 } });
     assert.equal(paragraph.layoutRevision, 2, 'changed positioned output advances by exactly one');
     assert.ok(narrow.lineCount > wide.lineCount, 'a narrower box wraps into more lines');
+
+    // Returning to a previously cached answer is still a positioned-output transition.
+    assert.deepEqual(projectLayout(paragraph.glyphs({ width: { mode: 'at-most', size: 600 } })), wideProjection);
+    assert.equal(paragraph.layoutRevision, 3, 'switching back to cached output advances the revision');
   } finally {
     paragraph.dispose();
   }
@@ -189,25 +339,86 @@ test('layoutRevision advances exactly when positioned output differs', async () 
 
 test('update invalidates cached measurements, and meaningless input throws where it was written', async () => {
   await using boot = await bootstrap();
-  const paragraph = new Paragraph({ font: boot.font, text: 'Hello', style: { fontSize: 16 } });
+  const paragraph = await createParagraph({ font: boot.font, text: 'Hello', style: { fontSize: 16 } });
   try {
-    const before = paragraph.layout({ width: { mode: 'exact', size: 400 } });
+    const before = paragraph.measure({ width: { mode: 'exact', size: 400 } });
     paragraph.update({ text: `${TEXT}, now much longer than before` });
-    const after = paragraph.layout({ width: { mode: 'exact', size: 400 } });
+    const after = paragraph.measure({ width: { mode: 'exact', size: 400 } });
     assert.notDeepEqual(projectMeasurement(after), projectMeasurement(before));
     assert.ok(after.glyphCount > before.glyphCount);
 
     // Boundary violations are caller arithmetic errors: they throw from the call site
     // rather than resolving as a failed measurement outcome.
-    assert.throws(() => paragraph.layout({ width: { mode: 'exact', size: -1 } }), RangeError);
-    assert.throws(() => paragraph.layout({ width: { mode: 'at-most', size: Number.NaN } }), RangeError);
+    assert.throws(() => paragraph.measure({ width: { mode: 'exact', size: -1 } }), RangeError);
+    assert.throws(() => paragraph.measure({ width: { mode: 'at-most', size: Number.NaN } }), RangeError);
+    assert.throws(() => paragraph.update({ style: { fontSize: 0 } }), /fontSize must be positive/);
+    assert.equal(
+      paragraph.text,
+      `${TEXT}, now much longer than before`,
+      'a rejected style update preserves desired state',
+    );
 
     // Disposed paragraphs stop answering entirely.
     paragraph.dispose();
-    assert.throws(() => paragraph.layout(), /disposed/);
+    assert.throws(() => paragraph.measure(), /disposed/);
   } finally {
     paragraph.dispose();
   }
+});
+
+test('positioned arrays are caller-owned and cannot corrupt the cached answer', async () => {
+  await using boot = await bootstrap();
+  const paragraph = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+  try {
+    const first = paragraph.glyphs({ width: { mode: 'exact', size: 300 } });
+    const expected = projectLayout(first);
+    first.x.fill(-12345);
+    first.glyphIds.fill(0);
+    const second = paragraph.glyphs({ width: { mode: 'exact', size: 300 } });
+    assert.notEqual(second, first);
+    assert.deepEqual(projectLayout(second), expected);
+  } finally {
+    paragraph.dispose();
+  }
+});
+
+test('formatted paragraph text is the only authority for its spans', async () => {
+  await using boot = await bootstrap();
+  const formatted = txt`formatted`;
+  await assert.rejects(
+    createParagraph({ font: boot.font, text: formatted, spans: [] }),
+    /formatted paragraph text owns its spans/,
+  );
+  const paragraph = await createParagraph({ font: boot.font, text: 'plain' });
+  try {
+    assert.throws(() => paragraph.update({ text: formatted, spans: [] }), /formatted paragraph text owns its spans/);
+    assert.equal(paragraph.text, 'plain', 'a rejected update leaves desired state unchanged');
+  } finally {
+    paragraph.dispose();
+  }
+});
+
+test('shared Paragraph stacks retain disposed font bindings until their final lease ends', async () => {
+  await using boot = await bootstrap();
+  const first = await createParagraph({ font: boot.font, text: 'first paragraph' });
+  const second = await createParagraph({ font: boot.font, text: 'second paragraph' });
+  first.measure();
+  second.measure();
+  assert.deepEqual(paragraphMeasurementServiceReport(), { active: true, paragraphs: 2 });
+
+  const warn = console.warn;
+  console.warn = () => undefined;
+  try {
+    boot.font.dispose();
+  } finally {
+    console.warn = warn;
+  }
+  assert.ok(first.measure().glyphCount > 0, 'live paragraphs keep the disposed Font backing valid');
+  first.dispose();
+  assert.deepEqual(paragraphMeasurementServiceReport(), { active: true, paragraphs: 1 });
+  assert.ok(second.measure().glyphCount > 0);
+  second.dispose();
+  assert.deepEqual(paragraphMeasurementServiceReport(), { active: false, paragraphs: 0 });
 });
 
 function projectMeasurement(measurement) {
@@ -218,6 +429,11 @@ function projectMeasurement(measurement) {
     contentHeight: measurement.contentHeight,
     firstBaseline: measurement.firstBaseline,
     lastBaseline: measurement.lastBaseline,
+    ascent: measurement.ascent,
+    descent: measurement.descent,
+    lineHeight: measurement.lineHeight,
+    minContentWidth: measurement.minContentWidth,
+    maxContentWidth: measurement.maxContentWidth,
     overflowed: measurement.overflowed,
     glyphCount: measurement.glyphCount,
     lineCount: measurement.lineCount,
@@ -228,20 +444,20 @@ function projectMeasurement(measurement) {
 test('authored nested state is snapshotted, so later caller mutation cannot change shaping input', async () => {
   await using boot = await bootstrap();
   const features = [{ tag: 'liga', value: 1 }];
-  const paragraph = new Paragraph({
+  const paragraph = await createParagraph({
     font: boot.font,
     text: TEXT,
     style: { fontSize: 16, features },
     policy: { justify: { threshold: 0.5 } },
   });
   try {
-    const before = projectMeasurement(paragraph.layout({}));
+    const before = projectMeasurement(paragraph.measure({}));
     // The caller still owns the array it passed in and may legitimately reuse it. Mutating it must
     // not reach the shaping input this paragraph was keyed on; a one-level freeze shared the array
     // and its records, so this edit changed the engine input while the cache kept answering stale.
     features[0].value = 0;
     features.push({ tag: 'kern', value: 0 });
-    const after = projectMeasurement(paragraph.layout({}));
+    const after = projectMeasurement(paragraph.measure({}));
     assert.deepEqual(after, before);
   } finally {
     paragraph.dispose();
@@ -255,9 +471,15 @@ function projectLayout(layout) {
     glyphFontSlots: Array.from(layout.glyphFontSlots),
     glyphIds: Array.from(layout.glyphIds),
     clusters: Array.from(layout.clusters),
+    glyphBidiLevels: Array.from(layout.glyphBidiLevels),
     glyphFontSizes: Array.from(layout.glyphFontSizes),
     x: Array.from(layout.x),
     y: Array.from(layout.y),
+    glyphAdvances: Array.from(layout.glyphAdvances),
+    glyphInkX: Array.from(layout.glyphInkX),
+    glyphInkY: Array.from(layout.glyphInkY),
+    glyphInkWidths: Array.from(layout.glyphInkWidths),
+    glyphInkHeights: Array.from(layout.glyphInkHeights),
     glyphFlags: Array.from(layout.glyphFlags),
     lineTextStarts: Array.from(layout.lineTextStarts),
     lineTextEnds: Array.from(layout.lineTextEnds),
@@ -274,9 +496,9 @@ test('measurement is complete and available before anything is rendered', async 
   // full metric set with no scene, no renderer, no world matrix, and no committed frame -- because
   // at that point none of those exist yet.
   await using boot = await bootstrap();
-  const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+  const paragraph = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
   try {
-    const m = paragraph.layout({ width: { mode: 'at-most', size: 420 } });
+    const m = paragraph.measure({ width: { mode: 'at-most', size: 420 } });
 
     // Everything alignment and centring need, in one synchronous call.
     for (const field of [

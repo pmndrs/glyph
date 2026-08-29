@@ -1,4 +1,4 @@
-import { type SlugData } from '@pmndrs/glyph/raster/slug';
+import type { SlugCpuReferenceData } from '../../benchmark/low-level/raster/slug-cpu-reference';
 
 /**
  * Renderer-neutral Slug page allocation. Every byte figure counts decoded resource bytes the technique retains, not
@@ -18,7 +18,7 @@ export interface SlugRasterConfiguration {
 }
 
 /** Reports the stable allocation configuration of the Slug resource a font load already decoded. */
-export function slugDataConfiguration(data: SlugData): SlugRasterConfiguration {
+export function slugDataConfiguration(data: SlugCpuReferenceData): SlugRasterConfiguration {
   let curveTexelCount = 0;
   let curveBytes = 0;
   let headerCount = 0;

@@ -20,7 +20,7 @@ export type RasterCoverage = {
   readonly glyphIds?: readonly number[];
 };
 
-/** A shaped layout references font-local glyphs omitted from its bounded raster artifact. */
+/** A shaped measure references font-local glyphs omitted from its bounded raster artifact. */
 export class RasterCoverageError extends Error {
   readonly rasterKind: string;
   readonly missingGlyphIds: readonly number[];

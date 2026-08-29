@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import type { MsdfOptions } from '../internal/msdf-contract.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -243,6 +244,7 @@ interface DirectBakeArguments {
   readonly fontFaceIndex: number;
   readonly bitmapStrikes?: readonly [number, ...number[]];
   readonly msdf: boolean;
+  readonly msdfOptions?: MsdfOptions;
   readonly slug: boolean;
   readonly unicodeRanges?: readonly UnicodeRange[];
   readonly check: boolean;
@@ -259,6 +261,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   let fontFaceIndexSet = false;
   let bitmapStrikes: readonly [number, ...number[]] | undefined;
   let msdf = false;
+  let msdfOptions: MsdfOptions | undefined;
   let slug = false;
   let unicodeRanges: readonly UnicodeRange[] | undefined;
   let check = false;
@@ -290,7 +293,15 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
       if (bitmapStrikes !== undefined) throw new TypeError('--bitmap may be provided only once');
       bitmapStrikes = bitmapStrikeList(valueAfter(argv, ++index, argument));
     } else if (argument === '--msdf') {
+      if (msdf) throw new TypeError('--msdf may be provided only once');
       msdf = true;
+      // The settings are optional and follow the flag, the way --bitmap's
+      // strike list does. Anything beginning with a dash is the next flag, so a
+      // bare --msdf keeps meaning "the defaults".
+      const next = argv[index + 1];
+      if (next !== undefined && !next.startsWith('-')) {
+        msdfOptions = parseMsdfOptions(argv[++index]!);
+      }
     } else if (argument === '--slug') {
       slug = true;
     } else if (argument === '--unicodes') {
@@ -333,6 +344,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
             fontFaceIndex,
             ...(bitmapStrikes === undefined ? {} : { bitmapStrikes }),
             msdf,
+            ...(msdfOptions === undefined ? {} : { msdfOptions }),
             slug,
             ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
             check,
@@ -413,13 +425,44 @@ async function directRasterPlans(options: DirectBakeArguments): Promise<RasterBa
   }
   if (options.msdf) {
     const { msdfBaker } = await import('../bakers/msdf.js');
-    rasters.push({ baker: msdfBaker, packaging, options: undefined });
+    rasters.push({ baker: msdfBaker, packaging, options: options.msdfOptions });
   }
   if (options.slug) {
     const { slugBaker } = await import('../bakers/slug.js');
     rasters.push({ baker: slugBaker, packaging, options: undefined });
   }
   return rasters;
+}
+
+/**
+ * `em-size=32,pixel-range=6` — the technique's own settings, in the technique's
+ * own terms.
+ *
+ * Atlas cost scales with the square of the em size, so a face set at small sizes
+ * pays several times over for the default of 64 and has no way to say so.
+ */
+function parseMsdfOptions(value: string): MsdfOptions {
+  const options: { emSize?: number; pixelRange?: number } = {};
+  for (const entry of value.split(',')) {
+    const separator = entry.indexOf('=');
+    if (separator < 1) {
+      throw new TypeError(`--msdf settings must be key=value pairs: ${entry}`);
+    }
+    const key = entry.slice(0, separator).trim();
+    const raw = entry.slice(separator + 1).trim();
+    if (key === 'em-size') options.emSize = positiveInteger(raw, 'em-size');
+    else if (key === 'pixel-range') options.pixelRange = positiveInteger(raw, 'pixel-range');
+    else throw new TypeError(`Unknown --msdf setting: ${key}`);
+  }
+  return options;
+}
+
+function positiveInteger(value: string, label: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new TypeError(`--msdf ${label} must be a positive integer: ${value}`);
+  }
+  return parsed;
 }
 
 function valueAfter(argv: readonly string[], index: number, option: string): string {
@@ -505,7 +548,9 @@ Direct font options:
 
 Raster options:
   --bitmap <ppem,...>    Embed Bitmap at positive integer ppem strikes (example: 16,32)
-  --msdf                 Embed the default MSDF raster
+  --msdf [settings]      Embed the MSDF raster, optionally configured
+                        Settings: em-size (default 64), pixel-range (default 8)
+                        Example: --msdf em-size=32,pixel-range=6
   --slug                 Embed the default Slug raster
                         With none selected, emit a shaping-only GLB
 
@@ -523,6 +568,7 @@ Output options:
 Examples:
   glyph bake --input Inter-Regular.ttf --output inter.font.glb --bitmap 16,32 --msdf --slug
   glyph bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --msdf
+  glyph bake --input Inter-Regular.ttf --output inter-small.font.glb --msdf em-size=32
   glyph bake --project-root . --output-root public/generated
   glyph bake --input Inter-Regular.ttf --output inter.font.glb --msdf --check
 

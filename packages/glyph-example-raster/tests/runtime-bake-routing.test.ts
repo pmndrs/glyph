@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createTextRuntime, type RuntimeFontBakeRequest } from '@pmndrs/glyph';
+import { loadFont, type RuntimeFontBakeRequest } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { workerRasterKinds } from '@pmndrs/glyph/runtime-bake';
 import { afterEach, test } from 'vitest';
@@ -11,8 +11,6 @@ import { afterEach, test } from 'vitest';
 import { glyphExample } from '../src/index.js';
 
 const fixtureDirectory = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
-const shaperWasmUrl = new URL('../../glyph/dist/text-shaper.wasm', import.meta.url);
-
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
   while (cleanups.length > 0) await cleanups.pop()?.();
@@ -38,8 +36,6 @@ test('the example technique bakes host-side while the Worker plan stays first-pa
   });
   const artifact = await readFile(stubOutput);
 
-  const runtime = await createTextRuntime({ wasm: await readFile(shaperWasmUrl) });
-  cleanups.push(async () => runtime.dispose());
   const requests: RuntimeFontBakeRequest[] = [];
   const runtimeBake = async (request: RuntimeFontBakeRequest) => {
     for (const raster of request.rasters ?? []) {
@@ -51,13 +47,13 @@ test('the example technique bakes host-side while the Worker plan stays first-pa
     return new Uint8Array(artifact.buffer.slice(artifact.byteOffset, artifact.byteOffset + artifact.byteLength));
   };
 
-  const [example] = await runtime.loadFont({
-    input: {
+  const [example] = await loadFont(
+    {
       source: `data:font/ttf;base64,${source.toString('base64')}`,
       runtimeBake,
     },
-    rasters: [{ technique: glyphExample, options: { paletteSeed: 17, inset: 0.1 } }],
-  });
+    [{ technique: glyphExample, options: { paletteSeed: 17, inset: 0.1 } }],
+  );
 
   assert.equal(requests.length, 1, 'the source load bakes its core through the Worker path once');
   assert.deepEqual(
@@ -66,6 +62,6 @@ test('the example technique bakes host-side while the Worker plan stays first-pa
     'the Worker plan carries no external kinds',
   );
   assert.equal(example.technique, glyphExample);
-  assert.ok(example.data, 'the external raster decodes from its host-baked artifact');
+  assert.ok(example.glyphCount > 0, 'the external raster decodes from its host-baked artifact');
   example.dispose();
 });

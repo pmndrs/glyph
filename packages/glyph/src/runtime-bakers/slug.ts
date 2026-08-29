@@ -6,7 +6,7 @@ import type { RuntimeRasterBakerModule } from '../raster.js';
 const slugRuntimeBaker: RuntimeRasterBakerModule<typeof SLUG_KIND, SlugBakerOptions> = createRasterBakeWorkerHost({
   kind: SLUG_KIND,
   name: 'pmndrs-glyph-slug-baker',
-  workerUrl: new URL('./slug-worker.js', import.meta.url),
+  workerUrl: new URL('../../dist/runtime-bakers/slug-worker.js', import.meta.url),
 });
 
 export default slugRuntimeBaker;

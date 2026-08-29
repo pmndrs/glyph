@@ -96,7 +96,7 @@ flowchart LR
   Yoga --> ContentBox["resolved content-box signals"]
   ContentBox --> Glyphs["Paragraph.glyphs"]
   Paragraph --> Glyphs
-  Glyphs --> Batches["selected raster stageBatch transaction"]
+  Glyphs --> Batches["renderer policy and render plan"]
   Batches --> uikitRoot["uikit render groups"]
 ```
 
@@ -104,24 +104,24 @@ There is no `YogaAdapter` in `@pmndrs/glyph`, no Preact signal type in its API, 
 
 ## Minimum core API
 
-The paragraph surface ships on `@pmndrs/glyph/core`:
+The paragraph surface ships from the root because applications and layout hosts encounter it:
 
 ```ts
-import { Paragraph } from '@pmndrs/glyph/core';
+import { createParagraph } from '@pmndrs/glyph';
 
-const paragraph = new Paragraph({ font, text, style?, paint?, policy? });
+const paragraph = await createParagraph({ font, text, style?, layout? });
 
-paragraph.layout(constraints?): ParagraphMetrics;
-paragraph.glyphs(constraints?): ParagraphLayoutInspection;
+paragraph.measure(constraints?): ParagraphMetrics;
+paragraph.glyphs(constraints?): GlyphLayoutInspection;
 paragraph.update(input: ParagraphUpdate): void;
 paragraph.dispose(): void;
 ```
 
-`Paragraph` owns one engine session on its runtime's shaper. `measure` and `layout` are synchronous, need no scene, renderer, or committed frame, and leave authored state untouched, so they are safe to call from inside a Yoga layout pass.
+`createParagraph()` asynchronously acquires the private measurement service. Its returned Paragraph then answers `measure()` and `glyphs()` synchronously, needs no scene, renderer, or committed frame, and leaves authored state untouched, so it is safe to call from inside a Yoga layout pass.
 
-Per-call constraints are split from stable policy. `ParagraphConstraints` carries only the axes (`width`, `height`) that a host varies while probing one node; wrap, alignment, `maxLines`, overflow, justification bounds, columns, and indents live in the paragraph's `policy` and change only through `update()`. A host probe never re-states the whole flow configuration.
+Per-call constraints are split from stable paragraph layout. `Constraints` carries only the axes (`width`, `height`) that a host varies while probing one node; wrap, alignment, `maxLines`, overflow, justification bounds, columns, and indents live in the paragraph's `layout` and change only through `update()`. A host probe never re-states the whole flow configuration.
 
-`measure` returns `{ ok: true, metrics }` where `metrics` adds intrinsic `minContentWidth`/`maxContentWidth` to the box size, content extents, baselines, and overflow -- derived in the same measurement pass, with no per-glyph arrays materialized. Engine rejection returns `{ ok: false, error }` carrying the raw engine status; boundary violations such as negative sizes throw at the call site as caller arithmetic errors. `layout` additionally materializes the positioned arrays and returns `layoutRevision`: a monotonic paragraph-scoped counter that advances exactly when positioned output changes (box extents, baselines, overflow flag, glyph/line counts, every per-glyph record in order, every per-line record in order; stable glyph ids excluded), decided by a 96-bit digest so equal output never advances it. A host gates readback with `paragraph.layoutRevision !== lastSeenRevision` instead of copying arrays to compare them.
+`measure()` returns `ParagraphMetrics`, adding intrinsic `minContentWidth`/`maxContentWidth` to box size, content extents, baselines, and overflow in the same measurement pass without per-glyph arrays. Invalid constraints and engine failures throw from the query that supplied them. `glyphs()` materializes caller-owned positioned arrays. `layoutRevision` is a monotonic paragraph-scoped counter that advances when positioned output changes, so a host gates readback with `paragraph.layoutRevision !== lastSeenRevision` instead of copying arrays to compare them.
 
 This separation matters for Yoga and other retained layout engines: they may measure a leaf repeatedly before resolving its final dimensions. Measurement must not allocate or copy the complete render output each time.
 
@@ -134,7 +134,7 @@ Measurements return f32-rounded extents. At knife-edge widths, re-laying-out at 
 The stable pattern for a Yoga measure callback:
 
 ```ts
-const measured = paragraph.layout(constraints);
+const measured = paragraph.measure(constraints);
 return {
   width: Math.ceil(measured.width * pointScale) / pointScale,
   height: Math.ceil(measured.height * pointScale) / pointScale,
@@ -145,8 +145,8 @@ Rounding up (never to-nearest) guarantees the committed box is at least as wide 
 
 ## The paragraph-scoped measure fast path (11.17)
 
-Repeated measurement is no longer a full frame transaction. When the only pending change on a `Text` is geometry (a
-`contentBox` update — exactly the Yoga measure-callback shape), `layout()` routes to the engine's
+Repeated measurement is no longer a full frame transaction. When the only pending change on a `Text` is constraints
+(exactly the Yoga measure-callback shape), `measure()` routes to the engine's
 paragraph-scoped synchronous query: validation and speculative preparation run for that paragraph alone, the answer is
 copied from the inactive result slot, and no publication flip, revision advance, or renderer-fence acknowledgment
 happens. The engine retains the speculative work as one transaction — sequential measures at different constraints
@@ -171,17 +171,16 @@ const customLayouting = computed(() => {
   const paragraph = paragraphSignal.value;
   if (paragraph == null) return undefined;
 
-  const natural = paragraph.layout();
+  const natural = paragraph.measure();
   return {
-    minWidth: natural.metrics.minContentWidth,
-    minHeight: natural.metrics.height,
+    minWidth: natural.minContentWidth,
+    minHeight: natural.height,
     measure(width, widthMode, height, heightMode) {
-      const result = paragraph.layout({
+      const result = paragraph.measure({
         width: mapAxis(width, widthMode),
         height: mapAxis(height, heightMode),
       });
-      if (!result.ok) throw result.error;
-      return { width: result.metrics.width, height: result.metrics.height };
+      return { width: result.width, height: result.height };
     },
   };
 });
@@ -189,7 +188,7 @@ const customLayouting = computed(() => {
 
 One measurement now answers everything: intrinsic `minContentWidth` rides the natural pass (the engine scans the cluster arena with the breaker's own wrap decisions), so uikit's old second full measure at zero width is gone. The exact normalization belongs to the uikit adapter because its current minimum-size behavior and point-scale rounding are uikit policies, not font-system invariants.
 
-After Yoga updates uikit's existing size, padding, and border signals, a computed signal calls `paragraph.layout` with the final content width and height and gates readback on `layoutRevision`. This is the reactive equivalent of a final commit; uikit does not need a new imperative lifecycle.
+After Yoga updates uikit's existing size, padding, and border signals, a computed signal calls `paragraph.glyphs()` with the final content width and height and gates readback on `layoutRevision`. This is the reactive equivalent of a final positioned query; uikit does not need a new imperative lifecycle.
 
 The adapter must preserve these existing behaviors:
 
@@ -198,8 +197,8 @@ The adapter must preserve these existing behaviors:
 - uikit retains its point-scale rounding at the Yoga boundary;
 - padding and border are removed before paragraph measurement and layout;
 - paragraph positions are translated into uikit's centered local coordinate system only after layout;
-- text or shaping-policy changes update the paragraph and dirty the Yoga node;
-- paint, raster uniforms, transforms, and clipping do not invalidate paragraph measurement.
+- text, style, or paragraph-layout changes update the paragraph and dirty the Yoga node;
+- renderer materials, raster uniforms, transforms, and clipping remain outside paragraph measurement.
 
 Core supports both axes even though current uikit text measurement primarily branches on the width mode. uikit can adopt height constraints without changing the paragraph API.
 
@@ -211,7 +210,7 @@ Create a prepared paragraph beside the existing glyph layout. Feed it the same t
 
 ### 2. Replace measurement
 
-Use `Paragraph.layout` to populate the existing `CustomLayouting` object. Keep `FlexNode`, Yoga, point-scale rounding, size signals, and the old renderer unchanged. Differences become explicit compatibility decisions rather than hidden renderer changes.
+Use `Paragraph.measure` to populate the existing `CustomLayouting` object. Keep `FlexNode`, Yoga, point-scale rounding, size signals, and the old renderer unchanged. Differences become explicit compatibility decisions rather than hidden renderer changes.
 
 ### 3. Replace positioned layout and rendering
 
@@ -219,7 +218,7 @@ Compute `Paragraph.glyphs` from the resolved content-box signals and send it to 
 
 ### 4. Replace interaction queries
 
-Current selection code indexes one layout entry per JavaScript character. Replace it with cluster-aware hit-test, caret, and selection helpers built over `ParagraphLayout`. These interaction helpers are adjacent to the minimal layout contract and may be delivered as a separate core utility surface; uikit must not reconstruct character boundaries from glyph IDs.
+Current selection code indexes one layout entry per JavaScript character. Replace it with cluster-aware hit-test, caret, and selection helpers built over `GlyphLayoutInspection`. These interaction helpers are adjacent to the minimal layout contract and may be delivered as a separate root utility surface; uikit must not reconstruct character boundaries from glyph IDs.
 
 ### 5. Remove the legacy text subsystem
 
@@ -227,18 +226,18 @@ Delete the BMFont-specific `Font`, wrappers, positioned character entries, and M
 
 ## Paragraph-boundary fixture status
 
-The repository carries a current-uikit-shaped fixture at the paragraph boundary, and it runs on the real framework-neutral `Paragraph` from `@pmndrs/glyph/core` -- no scene graph and no adapter. It deliberately implements only the reviewed `CustomLayouting → FlexNode/Yoga modes → resolved size/padding/border signals → positioned layout` contract; it does not pretend to be the production uikit adapter.
+The repository carries a current-uikit-shaped fixture at the paragraph boundary, and it runs on the real framework-neutral root `createParagraph()`/`Paragraph` API -- no scene graph and no renderer adapter. It deliberately implements only the reviewed `CustomLayouting → FlexNode/Yoga modes → resolved size/padding/border signals → positioned layout` contract; it does not pretend to be the production uikit adapter.
 
-| Paragraph-boundary proof                        | Status | Evidence                                                                                                                                            |
-| ----------------------------------------------- | :----: | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Intrinsic measurement and first baseline        |   ✅   | Exact `minWidth` (published intrinsic width), `minHeight`, and first-baseline values come from one natural measurement of a prepared Inter paragraph. |
-| Yoga mode translation                           |   ✅   | `Undefined`, `AtMost`, and `Exactly` cover ignored `NaN`, finite nonnegative constraints, and the definite-two-axis no-measure path.                |
+| Paragraph-boundary proof                        | Status | Evidence                                                                                                                                                      |
+| ----------------------------------------------- | :----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Intrinsic measurement and first baseline        |   ✅   | Exact `minWidth` (published intrinsic width), `minHeight`, and first-baseline values come from one natural measurement of a prepared Inter paragraph.         |
+| Yoga mode translation                           |   ✅   | `Undefined`, `AtMost`, and `Exactly` cover ignored `NaN`, finite nonnegative constraints, and the definite-two-axis no-measure path.                          |
 | Allocation-light repeated measurement           |   ✅   | Twenty-four constrained probes reuse the engine's retained speculative transaction (shaping fingerprint match) and never materialize positioned glyph arrays. |
-| Final content-box layout                        |   ✅   | Padding and border are removed from the resolved outer box before one final layout; host translation produces the exact centered-coordinate golden. |
-| Point-scale rounding and invalidation ownership |   ✅   | Upward rounding remains in the host fixture; text/shaping changes dirty measurement while paint/raster changes do not.                              |
-| Real-product execution                          |   ✅   | Vitest, Chromium 149, and the WebGPU-active Vitexec lane validate the same generated contract and portable hash.                                    |
+| Final content-box layout                        |   ✅   | Padding and border are removed from the resolved outer box before one final layout; host translation produces the exact centered-coordinate golden.           |
+| Point-scale rounding and invalidation ownership |   ✅   | Upward rounding remains in the host fixture; text/shaping changes dirty measurement while paint/raster changes do not.                                        |
+| Real-product execution                          |   ✅   | Vitest, Chromium 149, and the WebGPU-active Vitexec lane validate the same generated contract and portable hash.                                              |
 
-The fixture previously satisfied this contract through a hand-written adapter that mutated `Text.contentBox` and forced a scene-graph commit per probe; while it did, it proved the adapter rather than the contract. Regenerating the retained bidi contract through the real `Paragraph` produced byte-identical values everywhere except `customLayouting.minWidth`, which intentionally changed semantics: it is now the published single-pass intrinsic width instead of a degenerate zero-width flow extent.
+The fixture previously satisfied this contract through a hand-written adapter that mutated Three `Text` constraints and forced a scene-graph commit per probe; while it did, it proved the adapter rather than the contract. Regenerating the retained bidi contract through the real `Paragraph` produced byte-identical values everywhere except `customLayouting.minWidth`, which intentionally changed semantics: it is now the published single-pass intrinsic width instead of a degenerate zero-width flow extent.
 
 Renderer batching, clipping integration, React reconciliation, and cluster-aware interaction remain later integration gates. Closing this paragraph boundary does not claim those production-uikit migration stages are complete.
 
@@ -252,7 +251,7 @@ The integration fixture must exercise the actual uikit seam rather than a generi
 - a resolved content box different from a candidate measurement;
 - padding, border, point-scale rounding, and centered-coordinate translation;
 - signal invalidation after text and shaping changes;
-- no layout invalidation after paint or raster-only changes;
+- no layout invalidation after renderer-material or raster-only changes;
 - old/new metric comparison during the shadow phase;
 - final bitmap, MSDF, and Slug batches from the same paragraph result;
 - cluster-aware caret, selection, and pointer tests before removing the old query path.

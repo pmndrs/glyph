@@ -35,11 +35,14 @@ const bitmap16 = { technique: bitmap, options: { strikes: [16] } };
 const fonts = createFontCache({ inter: { file: 'inter-bitmap-16.font.glb', raster: bitmap16 } });
 after(() => fonts.dispose());
 
-const box = { width: { mode: 'exact', size: 220 }, wrap: 'word' };
+const constraints = { width: { mode: 'exact', size: 220 } };
+const layout = { wrap: 'word' };
 const paint = { color: '#ffffff' };
 const latin = { fontSize: 6, lineHeight: 1 };
-const styled = (start, end) => ({ start, end, paint: { color: '#ff2f00' } });
-const authored = (text, spans = []) => ({ properties: { contentBox: box, paint, spans, style: latin, text } });
+const styled = (start, end) => ({ start, end, style: { color: '#ff2f00' } });
+const authored = (text, spans = []) => ({
+  properties: { constraints, layout, spans, style: [latin, paint], text },
+});
 
 /** Mount one paragraph, run the body against its node, and always tear the scene down. */
 async function withParagraph(text, spans, body) {
@@ -82,6 +85,27 @@ test('a range no caller can have meant throws where the caller wrote it', { time
   }
 });
 
+test('invalid authored properties reject atomically while unknown properties are ignored', { timeout }, async () => {
+  const font = await fonts.load('inter');
+  assert.throws(() => new Text({ font, text: 'invalid', style: { fontSize: Number.NaN } }), /fontSize must be finite/);
+  assert.throws(
+    () => new Text({ font, text: 'invalid', constraints: { width: { mode: 'exact', size: -1 } } }),
+    /width size must be nonnegative/,
+  );
+
+  const mounted = mount(font, [authored('stable')]);
+  const node = mounted.nodes[0];
+  try {
+    assert.throws(() => node.set({ style: { fontSize: 0 } }), /fontSize must be positive/);
+    assert.equal(node.style.fontSize, latin.fontSize, 'a rejected property update must leave desired state unchanged');
+    node.set({ style: { ...latin, futureProperty: 1 } });
+    mounted.scene.updateMatrixWorld(true);
+    assert.equal(node.error, undefined, 'unknown style properties must be ignored by the runtime boundary');
+  } finally {
+    unmount(mounted);
+  }
+});
+
 test('a collapsed span is kept and a cluster boundary still resolves in silence', { timeout }, async () => {
   // The two invariants `set()` does NOT throw for, asserted here so the new validation cannot grow
   // to cover them. A collapsed span states nothing but still occupies its index, and a boundary
@@ -109,7 +133,14 @@ test('a partial overlap throws where the caller wrote it', { timeout }, async ()
   const font = await fonts.load('inter');
   assert.throws(
     () =>
-      new Text({ font, contentBox: box, paint, style: latin, text: 'abcdefgh', spans: [styled(0, 4), styled(2, 6)] }),
+      new Text({
+        font,
+        constraints,
+        layout,
+        style: [latin, paint],
+        text: 'abcdefgh',
+        spans: [styled(0, 4), styled(2, 6)],
+      }),
     (error) =>
       error instanceof RangeError &&
       /span 1 \[2, 6\) partially overlaps span 0/.test(error.message) &&
@@ -122,7 +153,7 @@ test('an unpaired surrogate throws where the caller wrote it', { timeout }, asyn
   // handed to the engine deliberately; the offset is what a caller can act on.
   const font = await fonts.load('inter');
   assert.throws(
-    () => new Text({ font, contentBox: box, paint, style: latin, text: 'ab\ud800cd' }),
+    () => new Text({ font, constraints, layout, style: [latin, paint], text: 'ab\ud800cd' }),
     (error) => error instanceof RangeError && /text offset 2 is an unpaired high surrogate/.test(error.message),
   );
 });
@@ -135,22 +166,16 @@ test('a malformed feature range throws naming the span and the feature', { timeo
     () =>
       new Text({
         font,
-        contentBox: box,
-        paint,
-        style: latin,
+        constraints,
+        layout,
+        style: [latin, paint],
         text: 'abcdefgh',
         spans: [{ start: 0, end: 4, style: { features: [{ tag: 'liga', value: 1, start: 3, end: 1 }] } }],
       }),
-    (error) => error instanceof RangeError && /span 0 feature 0 \(liga\) is inverted/.test(error.message),
+    (error) =>
+      error instanceof RangeError && /Text span 0 style feature 0 end must not precede start/.test(error.message),
   );
 });
-
-// The two latch tests that stood here drove the latch through that same overlap, which is the only
-// way a caller could ever produce a frame rejection. With the boundary closed there is no public
-// path to one, so the latch can no longer be exercised from a `Text` at all -- which is the whole
-// point of closing it. The latch is retained as containment for a defect in this package: it stops
-// an invalid frame recompiling and failing silently at frame rate behind the last good picture.
-// Its remaining coverage is the Rust-side tests that produce each status directly.
 
 test(
   'a fixed budget that cannot hold the content keeps the last revision and does not break the frame',
@@ -163,32 +188,40 @@ test(
     const scene = new THREE.Scene();
     const node = new Text({
       font,
-      contentBox: box,
-      paint,
-      style: latin,
+      constraints,
+      layout,
+      style: [latin, paint],
       text: 'abc',
       capacity: { size: 8, policy: 'fixed' },
     });
     scene.add(node);
     try {
       scene.updateMatrixWorld(true);
-      const settled = node.layout();
-      assert.ok(settled !== undefined, 'the paragraph inside the budget must commit');
+      const settled = node.measure();
+      assert.equal(settled.glyphCount, 3);
+      const settledDraw = node.children.find((child) => child.isMesh);
+      assert.ok(settledDraw, 'the paragraph inside the budget must publish a draw');
+      assert.equal(settledDraw.geometry.instanceCount, 3);
 
-      // Past the budget: no throw, and the committed layout is still the one that fit.
+      // Past the budget: measurement still answers for desired local state, while rendering keeps
+      // the accepted draw and reports that the desired revision remains pending.
       node.set({ text: 'abcdefghijklmnopqrstuvwxyz' });
       assert.doesNotThrow(() => scene.updateMatrixWorld(true), 'a fixed budget must not break the traversal');
-      assert.deepEqual(node.layout(), settled, 'the last complete revision must stay visible');
+      const desired = node.measure();
+      assert.equal(desired.glyphCount, 26, 'measurement must not substitute stale accepted content');
+      assert.equal(settledDraw.geometry.instanceCount, 3, 'the last complete draw must stay visible');
+      assert.deepEqual(node.commitState(), { status: 'pending' });
       assert.equal(node.error, undefined, 'honouring the declared budget is not an error');
 
       // Repeated frames stay quiet and stay correct.
       for (let frame = 0; frame < 4; frame += 1) scene.updateMatrixWorld(true);
-      assert.deepEqual(node.layout(), settled);
+      assert.equal(node.measure().glyphCount, 26);
+      assert.equal(settledDraw.geometry.instanceCount, 3);
 
       // Self-healing: the comparison is recomputed, never latched.
       node.set({ text: 'ab' });
       scene.updateMatrixWorld(true);
-      const recovered = node.layout();
+      const recovered = node.measure();
       assert.ok(recovered !== undefined && recovered.glyphCount === 2, 'content back inside the budget must commit');
     } finally {
       node.dispose();

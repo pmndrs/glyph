@@ -1,14 +1,4 @@
-import {
-  addF32,
-  constantF32,
-  constantU32,
-  multiplyF32,
-  policyProgram,
-  subtractF32,
-  u32ToF32,
-  type PolicyF32Value,
-  type PolicyU32Value,
-} from '../../dist/core.js';
+import { f32, policyProgram, u32, type PolicyF32Value, type PolicyU32Value, id } from '../../dist/core.js';
 
 // A program declares its named inputs once; every later reference is a handle,
 // never a number.
@@ -21,13 +11,13 @@ const p = policyProgram({
 const { inlineOrigin, blockOrigin, fontSize, color, transformIndex, stableGlyphId } = p.semantics;
 const { bearingX, bearingY, width, height, page } = p.binding;
 
-const left: PolicyF32Value = addF32(inlineOrigin, multiplyF32(bearingX, fontSize));
-const top: PolicyF32Value = subtractF32(blockOrigin, multiplyF32(bearingY, fontSize));
-p.storeF32(1, [left, top, multiplyF32(width, fontSize), multiplyF32(height, fontSize)]);
-p.storeF32(2, [color.red, color.green, color.blue, color.alpha]);
-p.storeF32(3, [u32ToF32(page), constantF32(0), constantF32(0), constantF32(0)]);
-p.storeU32(14, [stableGlyphId]);
-p.storeU32(15, [transformIndex]);
+const left: PolicyF32Value = f32.add(inlineOrigin, f32.mul(bearingX, fontSize));
+const top: PolicyF32Value = f32.sub(blockOrigin, f32.mul(bearingY, fontSize));
+p.storeF32(id.buffer('type-test/rect'), [left, top, f32.mul(width, fontSize), f32.mul(height, fontSize)]);
+p.storeF32(id.buffer('type-test/color'), [color.red, color.green, color.blue, color.alpha]);
+p.storeF32(id.buffer('type-test/page-f32'), [u32.toF32(page), f32.const(0), f32.const(0), f32.const(0)]);
+p.storeU32(id.buffer('type-test/stable-glyph'), [stableGlyphId]);
+p.storeU32(id.buffer('type-test/transform-index'), [transformIndex]);
 
 const compiled = p.compile();
 void compiled.inputs;
@@ -39,9 +29,13 @@ void u32Count;
 
 declare const u32Value: PolicyU32Value;
 // @ts-expect-error A u32 value cannot feed f32 arithmetic without an explicit conversion.
-addF32(inlineOrigin, u32Value);
+f32.add(inlineOrigin, u32Value);
 // @ts-expect-error An f32 value cannot be stored into a u32 buffer lane.
-p.storeU32(14, [left]);
+p.storeU32(id.buffer('type-test/wrong-scalar'), [left]);
+// @ts-expect-error Buffer stores reject arbitrary numeric IDs at typecheck.
+p.storeF32(1, [left]);
+// @ts-expect-error ID domains cannot be interchanged.
+p.storeF32(id.planner('type-test/planner'), [left]);
 // @ts-expect-error Binding names are declared, not invented at use sites.
 void p.binding.kerning;
-void constantU32;
+void u32.const;

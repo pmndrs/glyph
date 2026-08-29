@@ -11,14 +11,17 @@ okf_version: '0.2'
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
 - [Merged v0 runtime and bake API](planning/api-shapes.md) — superseded migration fixture; it describes the merged v0 surface that the Rust render-plan cutover deleted.
 - [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
-- [Core text API](planning/core-api.md) — authoritative API for ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, fixed-capacity failure, synchronized updates, and renderer-ready glyph batches.
+- [Core text API](planning/core-api.md) — authoritative application and integration API for fonts, measurement, engines, backends, render planners, and renderer targets.
+- [Font and engine ownership plan](planning/font-runtime-ownership.md) — accepted migration that separates immutable font assets from engine registration and binds backends, render planners, targets, leases, and renderer acceptance to explicit lifetimes.
 - [Rust layout engine contract](planning/rust-layout-engine.md) — authoritative engine ABI, render-plan policy, and publication boundary for custom renderers.
 - [Engine integration contract](planning/engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
 - [Raster technique and engine resource API](planning/raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
 - [TypeGPU-first shader authority](planning/typegpu-first-shader-authority.md) — exploratory TypeGPU-first shader/program architecture, Three and gpucat bridge limits, fallback authority models, and proof gates.
 - [Renderer integration guide](guides/renderer-integration.md) — the working path for a custom engine: declare a
-  technique schema, author and register a render policy, drive a session, consume all seven plan tables, and
+  technique schema, author and register a render policy, drive a render planner, consume all seven plan tables, and
   implement the retention and patch protocols.
+- [Technique implementation report](guides/technique-implementation-report.md) — worked portable plan, policy, raster,
+  and baker examples with ownership maps and the end-to-end draw flow.
 - [Merged v0 raster and baker plugin guide](planning/raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
 - [External gpucat integration fitness plan](planning/gpucat-integration.md) — source-validated proof plan for consuming the target v1 core without private imports or core changes.
 
@@ -34,6 +37,7 @@ okf_version: '0.2'
 
 ## Verification and evidence
 
+- [Engineering reports](reports/index.md) — durable HTML implementation, ownership, review, and benchmark reports.
 - [Workspace package catalog](packages/index.md) — enforced package roles, boundaries, status, and source-freshness digests.
 - [Portable font baker implementation evidence](planning/font-baker-implementation.md) — package-owned Rust/Wasm/TypeScript core evidence.
 - [Wasm allocator experiment](planning/font-baker-allocator.md) — evidence plan for the ABI-private Wasm allocator choice.
@@ -46,6 +50,8 @@ okf_version: '0.2'
 ## Research and governance
 
 - [Engineering house style](engineering/code-style.md) — canonical Rust, TypeScript, React, boundary, testing, and maintenance conventions.
+- [Agent router operations](guides/agent-router.md) — setup, model routing, resumable review and implementation recipes,
+  CLI fallback, and bounded trace handling for the pinned external-agent server.
 - [Shaping compilation research](planning/shaping-compilation-research.md) — static shaping, semantic bytecode, per-font specialization, MLIR, and WebGPU hypotheses and gates.
 - [Bitmap hinting research](planning/bitmap-hinting-research.md) — hinted grayscale strikes and four-phase coverage packing without distance fields or LCD rendering.
 - [MTSDF generation research](planning/mtsdf-generation-research.md) — primary literature, open implementations and licenses, repository ownership, and scalar/SIMD evidence gates.

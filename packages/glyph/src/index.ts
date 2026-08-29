@@ -23,17 +23,19 @@ export { defineRasterBaker, rasterBake } from './bake.js';
 export type {
   AnyFontToken,
   BakedFontSource,
+  Font,
+  FontBytesInput,
   FontInput,
   FontInputOf,
   FontMetrics,
+  RasterDecodeFont,
   FontRasterTechniqueOf,
   FontSourceOverride,
   FontToken,
-  RegisteredFont,
 } from './font.js';
 export { defineFont } from './font.js';
 
-export type { FontHandle, FontKey, FontSlot, LocalGlyphId, RasterHandle, RasterKey, Sha256Hex } from './identity.js';
+export type { FontSlot, LocalGlyphId, RasterKey, Sha256Hex } from './identity.js';
 
 export { glyphFlags } from './layout.js';
 export type {
@@ -41,15 +43,16 @@ export type {
   FontSlotRecord,
   LayoutBox,
   ParagraphIntrinsicWidths,
-  ParagraphLayout,
-  ParagraphLayoutInspection,
+  GlyphLayout,
+  GlyphLayoutInspection,
   ParagraphLayoutSummary,
   ParagraphLineMetrics,
   ParagraphMeasurement,
   ParagraphMetrics,
 } from './layout.js';
 
-export type { ParagraphLayoutPolicy, ParagraphConstraints } from './text-properties.js';
+export type { ParagraphOptions, ParagraphUpdate } from './paragraph.js';
+export { createParagraph, Paragraph } from './paragraph.js';
 
 export type {
   GlyphAdoption,
@@ -66,32 +69,34 @@ export type {
 export type {
   FontLoadDiagnostic,
   FontLoadOptions,
-  FontLoaderOptions,
-  FontRegistryOptions,
-  RasterAttachOptions,
+  FontLibrary,
+  FontLibraryOptions,
+  FontRasterInputs,
+  Fonts,
+  LoadFontInput,
   RuntimeFontBake,
   RuntimeFontBakeRequest,
 } from './loader.js';
-export { FontLoader, FontLoadError, FontRegistry } from './loader.js';
+export { createFontLibrary, FontLoadError, loadFont } from './loader.js';
 
-export type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
+export type { FontSelection, FontStack } from './loaded-font.js';
 export { createFontStack } from './loaded-font.js';
 
 export type {
+  AxisConstraint,
+  ColorInput,
   GlyphBufferCapacity,
-  ParagraphAxisConstraint,
+  LinearRgbaInput,
   ParagraphBaseProperties,
-  ParagraphContentBox,
   ParagraphContentProperties,
   ParagraphProperties,
-  ParagraphStyle,
+  PropertyList,
   TextDecorationStyle,
 } from './text-properties.js';
+export { Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
 
 export type {
-  ColorInput,
   FormattedText,
-  GlyphPaintInput,
   ParagraphSpan,
   SpanFormat,
   SpanStyle,
@@ -109,18 +114,12 @@ export type {
   JsonValue,
   RasterKind,
   RasterKindOf,
-  RasterLoadOptions,
   RasterReference,
-  RasterResolver,
-  RasterResolverContext,
-  RasterResourceResolver,
-  RasterResourceResolverContext,
+  RasterDecodeArtifact,
   RasterResourceSource,
   RasterOptionsArgument,
-  RasterSelection,
   RasterSource,
   StaticNumberTuple,
-  RegisteredRaster,
   RuntimeRasterBakeRequest,
   RuntimeRasterBakerLoader,
   RuntimeRasterBakerModule,
@@ -138,21 +137,10 @@ export type {
   RasterTechniqueInput,
   RasterTechniqueRequest,
   RasterTechniqueTypesOf,
+  RasterTextEffect,
 } from './raster-technique.js';
 export { defineRasterResourceId, defineRasterTechnique } from './raster-technique.js';
 
 export type { RasterCoverage, RasterUnicodeRange } from './raster-coverage.js';
 
 export type { FontFeature, ResolvedFontFeature } from './font-feature.js';
-
-export type {
-  LoadedFontInput,
-  LoadedFontRasterRequests,
-  LoadedFontRequest,
-  LoadedFontTechniques,
-  LoadedFonts,
-  LoadedFontsRequest,
-  TextRuntime,
-  TextRuntimeOptions,
-} from './text-runtime.js';
-export { createTextRuntime } from './text-runtime.js';

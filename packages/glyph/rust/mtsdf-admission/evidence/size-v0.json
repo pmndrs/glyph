@@ -12,15 +12,15 @@
     "binaryen": "129.0.0",
     "target": "wasm32-unknown-unknown"
   },
-  "syntheticOutputFnv1a32": "bfc76761",
+  "syntheticOutputFnv1a32": "4f1de5a5",
   "wasmImportCount": 0,
   "measurementHost": {
     "platform": "darwin",
     "architecture": "arm64"
   },
-  "rawBytes": 67526,
-  "optimizedBytes": 60563,
-  "gzipBytes": 26493,
-  "brotliBytes": 22533,
-  "optimizedSha256": "8678a575e5be1b998e287f86645a0e64f54bca4c7145dcb872811b301aa731be"
+  "rawBytes": 76729,
+  "optimizedBytes": 69731,
+  "gzipBytes": 30131,
+  "brotliBytes": 25327,
+  "optimizedSha256": "a129c56a46bf728563b4ff601903ba6acafa463693712a0b839d7b24d4c6a2b9"
 }

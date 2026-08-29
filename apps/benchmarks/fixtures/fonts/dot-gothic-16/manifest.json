@@ -1,7 +1,7 @@
 {
   "schemaVersion": 0,
   "id": "dot-gothic-16-japanese-showcase-v0",
-  "purpose": "Bounded Japanese raster fixture for the Milestone 7 showcase; not the pan-CJK shaping oracle",
+  "purpose": "Complete 9,362-glyph pixel-style raster stress face, bounded relative to pan-CJK; not the pan-CJK shaping oracle",
   "source": {
     "family": "DotGothic16",
     "style": "Regular",

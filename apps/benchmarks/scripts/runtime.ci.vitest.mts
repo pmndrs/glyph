@@ -7,6 +7,7 @@ const timeout = 20 * 60 * 1_000;
 describe.sequential('runtime repository gates', () => {
   gate('core package', () => pnpm(['--filter', '@pmndrs/glyph', 'check']));
   gate('glyph example package', () => pnpm(['--filter', '@pmndrs/glyph-example-raster', 'check']));
+  gate('example renderer package', () => pnpm(['--filter', '@pmndrs/glyph-example-renderer', 'check']));
   gate('benchmark application types', () => runPnpm(['exec', 'tsc', '-p', 'tsconfig.json', '--noEmit']));
   gate('benchmark scripts types', () => runPnpm(['exec', 'tsc', '-p', 'tsconfig.scripts.json', '--noEmit']));
   gate('package-size contract', () => runNodeScript('scripts/measure-package-sizes.mts', ['--check']));

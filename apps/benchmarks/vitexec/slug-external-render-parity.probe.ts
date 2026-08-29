@@ -24,6 +24,7 @@ if (!Array.isArray(artifacts) || artifacts.length !== 5) {
 }
 const canonicalExpectedUrls = expectedUrls.map((url) => new URL(url, location.href).href).sort();
 const cases: Array<Record<string, unknown>> = [];
+const nativeFetch = globalThis.fetch.bind(globalThis);
 
 for (const backend of ['webgpu', 'webgl2'] as const) {
   console.log('slug-external-render-parity-start', backend);
@@ -31,7 +32,7 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
   const observedFetch: typeof fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
     fetchedUrls.push(new URL(url, location.href).href);
-    return fetch(input, init);
+    return nativeFetch(input, init);
   };
   const capture = await captureSlugExternalRenderParity({
     backend,

@@ -31,11 +31,26 @@ describe.sequential('static repository gates', () => {
       'tsconfig.build.json',
     ]),
   );
+  gate('example renderer formatting', () =>
+    pnpmAt('../../packages/glyph-example-renderer', [
+      'exec',
+      'oxfmt',
+      '--check',
+      'package.json',
+      'src',
+      'tests',
+      'tsconfig.json',
+      'tsconfig.build.json',
+    ]),
+  );
   gate('benchmark formatting', () => runPnpm(['exec', 'oxfmt', '--check', '.']));
   gate('React Three Fiber example formatting', () => pnpmAt('../r3f-hello-world', ['exec', 'oxfmt', '--check', '.']));
   gate('core lint', () => pnpm(['--filter', '@pmndrs/glyph', 'exec', 'oxlint', '--deny-warnings', '.']));
   gate('glyph example lint', () =>
     pnpm(['--filter', '@pmndrs/glyph-example-raster', 'exec', 'oxlint', '--deny-warnings', '.']),
+  );
+  gate('example renderer lint', () =>
+    pnpm(['--filter', '@pmndrs/glyph-example-renderer', 'exec', 'oxlint', '--deny-warnings', '.']),
   );
   gate('benchmark lint', () => runPnpm(['exec', 'oxlint', '--deny-warnings', '.']));
   gate('React Three Fiber example lint', () =>

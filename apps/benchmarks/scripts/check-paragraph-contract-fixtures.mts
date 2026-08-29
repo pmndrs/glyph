@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
-import { FontRegistry } from '@pmndrs/glyph';
+import { validateFontArtifact } from '../../../packages/glyph/dist/font-baker/validator.js';
 
 const args = process.argv.slice(2);
 if (args.length !== 0) throw new Error('usage: check-paragraph-contract-fixtures.mts');
@@ -44,13 +44,8 @@ async function authenticateShaping(
   label: string,
 ): Promise<void> {
   const expected = string(metadata.shapingHash, `${label} shapingHash`);
-  const registry = new FontRegistry();
-  const font = await registry.registerAsset(await readFile(url));
-  try {
-    assertEqual(font.shapingHash, expected, `${label} registered shaping hash`);
-  } finally {
-    font.dispose();
-  }
+  const font = await validateFontArtifact(await readFile(url));
+  assertEqual(font.shapingHash, expected, `${label} shaping hash`);
 }
 
 async function authenticateOracles(

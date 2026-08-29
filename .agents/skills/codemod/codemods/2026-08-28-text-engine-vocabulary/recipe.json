@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-28-text-engine-vocabulary",
+  "created": "2026-08-28",
+  "package": "@pmndrs/glyph",
+  "from": "canary with GlyphEngine ownership and TextEngine-prefixed plan records",
+  "to": "canary at or after the public core vocabulary correction",
+  "summary": "Distinguish render planners, emitted render plans, and Glyph engine status types.",
+  "instructions": "./instructions.md",
+  "transform": "./transform.mjs",
+  "changes": [
+    { "kind": "method-rename", "from": "backend.createRetainedPlan", "to": "backend.createPlanner", "automatic": true },
+    { "kind": "symbol-rename", "from": "SynchronousRetainedPlan", "to": "RenderPlanner", "automatic": true },
+    { "kind": "symbol-rename", "from": "AsyncRetainedPlan", "to": "AsyncRenderPlanner", "automatic": true },
+    { "kind": "symbol-rename", "from": "RetainedPlanFor", "to": "RenderPlannerFor", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextPlanTarget", "to": "RenderPlanTarget", "automatic": true },
+    { "kind": "symbol-rename", "from": "RetainedPlanOptions", "to": "RenderPlannerOptions", "automatic": true },
+    {
+      "kind": "symbol-rename",
+      "from": "RetainedPlanPublishOptions",
+      "to": "RenderPlannerPublishOptions",
+      "automatic": true
+    },
+    {
+      "kind": "symbol-rename",
+      "from": "RetainedPlanDisposedError",
+      "to": "RenderPlannerDisposedError",
+      "automatic": true
+    },
+    { "kind": "symbol-rename", "from": "RetainedPlanHandle", "to": "PlannerHandle", "automatic": true },
+    { "kind": "method-rename", "from": "id.retainedPlan", "to": "id.planner", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineRenderPlanReader", "to": "RenderPlanReader", "automatic": true },
+    { "kind": "symbol-rename", "from": "BorrowedTextEngineRenderPlan", "to": "BorrowedRenderPlan", "automatic": true },
+    { "kind": "symbol-rename", "from": "OwnedTextEngineRenderPlan", "to": "OwnedRenderPlan", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineRenderPlanView", "to": "RenderPlanView", "automatic": true },
+    { "kind": "symbol-rename", "from": "readTextEngineBuffer", "to": "readRenderPlanBuffer", "automatic": true },
+    { "kind": "symbol-rename", "from": "readTextEngineDraw", "to": "readRenderPlanDraw", "automatic": true },
+    { "kind": "symbol-rename", "from": "readTextEnginePatch", "to": "readRenderPlanPatch", "automatic": true },
+    { "kind": "symbol-rename", "from": "readTextEnginePrimitive", "to": "readRenderPlanPrimitive", "automatic": true },
+    { "kind": "symbol-rename", "from": "readTextEngineResource", "to": "readRenderPlanResource", "automatic": true },
+    {
+      "kind": "symbol-rename",
+      "from": "readTextEngineRetirement",
+      "to": "readRenderPlanRetirement",
+      "automatic": true
+    },
+    { "kind": "symbol-rename", "from": "TextEngineStatusError", "to": "GlyphEngineStatusError", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineStatusCode", "to": "GlyphEngineStatusCode", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineStatusDetails", "to": "GlyphEngineStatusDetails", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineFault", "to": "GlyphEngineFault", "automatic": true },
+    {
+      "kind": "symbol-rename",
+      "from": "textEngineStatusErrorDetails",
+      "to": "glyphEngineStatusErrorDetails",
+      "automatic": true
+    },
+    {
+      "kind": "symbol-rename",
+      "from": "TextEngineBackpressureError",
+      "to": "RenderPlannerBackpressureError",
+      "automatic": true
+    },
+    {
+      "kind": "symbol-rename",
+      "from": "TextEngineTransportCapacityError",
+      "to": "PlanTransportCapacityError",
+      "automatic": true
+    },
+    { "kind": "symbol-rename", "from": "TextEngineTransportError", "to": "PlanTransportError", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineLimits", "to": "RenderPlannerLimits", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineSpan", "to": "RetainedTextSpan", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineFormattedText", "to": "RetainedFormattedText", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineTextInput", "to": "RetainedTextInput", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineRegionInput", "to": "RetainedTextRegionInput", "automatic": true },
+    {
+      "kind": "symbol-rename",
+      "from": "TextEngineExclusionInput",
+      "to": "RetainedTextExclusionInput",
+      "automatic": true
+    },
+    {
+      "kind": "symbol-rename",
+      "from": "TextEngineFlowRegionInput",
+      "to": "RetainedTextFlowRegionInput",
+      "automatic": true
+    },
+    { "kind": "symbol-rename", "from": "TextEngineFlowInput", "to": "RetainedTextFlowInput", "automatic": true },
+    {
+      "kind": "symbol-rename",
+      "from": "TextEngineInlineObjectInput",
+      "to": "RetainedTextInlineObjectInput",
+      "automatic": true
+    },
+    {
+      "kind": "symbol-rename",
+      "from": "TextEngine*Record / TextEngine*Patch",
+      "to": "RenderPlan*Record / RenderPlan*Patch",
+      "automatic": true
+    },
+    {
+      "kind": "internal-rename",
+      "from": "TextEngine frame/compiler vocabulary",
+      "to": "Planner frame/compiler vocabulary",
+      "automatic": true
+    },
+    { "kind": "internal-rename", "from": "sessionMemory benchmark local", "to": "plannerMemory", "automatic": true },
+    {
+      "kind": "value-rename",
+      "from": "retained-plan-conflict / retained-plan-missing",
+      "to": "planner-conflict / planner-missing",
+      "automatic": false
+    },
+    {
+      "kind": "file-move",
+      "from": "packages/glyph/src/core/retained-plan.ts",
+      "to": "packages/glyph/src/core/render-planner.ts",
+      "automatic": true
+    },
+    {
+      "kind": "abi-rename",
+      "from": "retainedPlan / retained_plan owner fields and functions",
+      "to": "planner owner fields and functions",
+      "automatic": false
+    }
+  ],
+  "verification": [
+    "mise exec -- node .agents/skills/codemod/codemods/2026-08-28-text-engine-vocabulary/test.mjs",
+    "mise exec -- pnpm exec tsc -p packages/glyph/tsconfig.json --noEmit",
+    "mise exec -- pnpm exec tsc -p packages/glyph/tsconfig.types.json --noEmit"
+  ]
+}

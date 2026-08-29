@@ -17,12 +17,12 @@ import type {
   BenchmarkFontAsset,
   BenchmarkFontAssetRequest,
 } from './contracts';
+import { compiledSlugData } from './compiled-data';
 import {
   createFontDeliveryMetrics,
   loadBakedFont,
   loadSourceFont,
   measuredRuntimeFontBake,
-  measuredRuntimeRaster,
   sourceUrlForFixture,
 } from './runtime';
 
@@ -68,15 +68,15 @@ export async function preloadSlugFontAssets(
 export async function loadSlugFontAsset(
   request: Extract<BenchmarkFontAssetRequest, { readonly technique: 'slug' }>,
 ): Promise<SlugFontAsset> {
-  const { delivery, fixture, onProgress, registry, signal } = request;
+  const { delivery, fixture, library, onProgress, signal } = request;
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
   if (delivery === 'runtime') {
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { technique: measuredSlugTechnique(metrics, onProgress) },
+      raster: { technique: slugTechnique },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
-      registry,
+      library,
       ...(signal === undefined ? {} : { signal }),
     });
     return {
@@ -85,6 +85,7 @@ export async function loadSlugFontAsset(
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
       loaded,
+      data: compiledSlugData(loaded),
       metrics,
     };
   }
@@ -93,7 +94,7 @@ export async function loadSlugFontAsset(
   const loaded = await loadBakedFont({
     artifact,
     raster: { technique: slugTechnique },
-    registry,
+    library,
     ...(signal === undefined ? {} : { signal }),
   });
   return {
@@ -102,20 +103,9 @@ export async function loadSlugFontAsset(
     atlasGpuBytes: 0,
     compressedBytes: source.compressed.bytes,
     loaded,
+    data: compiledSlugData(loaded),
     metrics,
   };
-}
-
-/**
- * Clones the technique with an instrumented runtime baker. The Three adapter resolves a program by technique ID rather
- * than object identity, so the clone still renders while reporting the same raster delivery evidence.
- */
-function measuredSlugTechnique(
-  metrics: BenchmarkFontAsset['metrics'],
-  onProgress?: Extract<BenchmarkFontAssetRequest, { readonly technique: 'slug' }>['onProgress'],
-): typeof slugTechnique {
-  const runtimeBaker = measuredRuntimeRaster(slugTechnique.runtimeBaker, metrics, onProgress);
-  return { ...slugTechnique, ...(runtimeBaker === undefined ? {} : { runtimeBaker }) };
 }
 
 function fixtureManifestSource(fixture: BenchmarkFontFixture): BakedSlugArtifactSource {

@@ -1,4 +1,4 @@
-import { FontRegistry, type LoadedFont } from '@pmndrs/glyph';
+import type { Font } from '@pmndrs/glyph';
 import { type bitmap, type BitmapData } from '@pmndrs/glyph/three/bitmap';
 import * as THREE from 'three/webgpu';
 
@@ -38,7 +38,7 @@ export interface BitmapFiniteScene {
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  readonly font: LoadedFont<typeof bitmap>;
+  readonly font: Font<typeof bitmap>;
   readonly line: BitmapConformanceLine;
   readonly reference: BitmapData;
   readonly referencePixels: Uint8Array;
@@ -91,7 +91,7 @@ export async function createBitmapFiniteScene({
   const renderer = borrowedRenderer ?? ownedRenderer!;
   const rendererViewport = readRendererViewportState(renderer as THREE.WebGPURenderer);
   let target: THREE.RenderTarget | undefined;
-  let font: LoadedFont<typeof bitmap> | undefined;
+  let font: Font<typeof bitmap> | undefined;
   let line: BitmapConformanceLine | undefined;
   try {
     const loadedFont = await loadBitmapFontAsset({
@@ -99,7 +99,6 @@ export async function createBitmapFiniteScene({
       fixture: fontFixture,
       delivery,
       bitmapDensity: 'conformance',
-      registry: new FontRegistry(),
       ...(signal === undefined ? {} : { signal }),
     });
     font = loadedFont.loaded;
@@ -107,6 +106,7 @@ export async function createBitmapFiniteScene({
     line = createBitmapConformanceLine(
       scene,
       font,
+      loadedFont.data,
       conformanceText(),
       BITMAP_FONT_SIZE / dpr,
       rendererViewport.pixelRatio,
@@ -139,7 +139,7 @@ export async function createBitmapFiniteScene({
       renderer.render(scene, camera);
       return performance.now() - firstDrawStarted;
     });
-    const reference = font.data;
+    const reference = loadedFont.data;
     const referencePixels = composeBitmapReference(line, reference, dpr, BITMAP_FINITE_WIDTH, BITMAP_FINITE_HEIGHT);
     return {
       backend,

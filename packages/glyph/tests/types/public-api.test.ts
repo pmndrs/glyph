@@ -1,24 +1,25 @@
 import {
+  createFontLibrary,
   defineFont,
   defineRasterBaker,
   defineRasterTechnique,
-  FontLoader,
-  FontRegistry,
+  loadFont,
   rasterBake,
   type AnyRasterTechnique,
   type FontInputOf,
+  type Font,
+  type FontBytesInput,
   type FontRasterTechniqueOf,
   type RasterBakeDescriptorOf,
   type RasterBakeRequest,
   type RasterCoverage,
   type RasterDataOf,
-  type RasterKey,
+  type RasterDecodeArtifact,
+  type RasterDecodeFont,
   type RasterKindOf,
   type RasterOptionsOf,
   type RasterResourceSource,
   type RasterSource,
-  type RegisteredFont,
-  type RegisteredRaster,
   type Sha256Hex,
 } from '../../src/index.js';
 
@@ -40,15 +41,6 @@ const externalRasterResource: RasterResourceSource = {
 };
 void externalRasterResource;
 
-const fontRegistry = new FontRegistry({ maxArtifactBytes: 64 * 1024 * 1024 });
-const fontLoader = new FontLoader({
-  registry: fontRegistry,
-  baseUrl: 'https://assets.example/app/',
-  development: false,
-});
-const registeredPromise: Promise<RegisteredFont> = fontLoader.load('/fonts/Inter.ttf');
-void registeredPromise;
-
 interface MsdfResource {
   readonly texture: unknown;
 }
@@ -58,6 +50,7 @@ const msdf = defineRasterTechnique({
   kind: 'msdf',
   extension: 'PMNDRS_font_distance_field',
   version: 0,
+  textEffects: ['outline', 'shadow'],
   descriptor() {
     return { encoding: 'mtsdf' } as const;
   },
@@ -75,6 +68,7 @@ const configurable = defineRasterTechnique({
   kind: 'studio.configurable-raster',
   extension: 'STUDIO_font_configurable',
   version: 0,
+  textEffects: [],
   descriptor(options: { readonly quality: 'low' | 'high' }) {
     return { quality: options.quality };
   },
@@ -88,18 +82,38 @@ type _ConfigurableOptions = Expect<Equal<RasterOptionsOf<typeof configurable>, {
 const acceptsExternal: AnyRasterTechnique = configurable;
 void acceptsExternal;
 
-declare const font: RegisteredFont;
-declare const slugArtifact: RegisteredRaster<'slug'>;
+declare const decodeFont: RasterDecodeFont;
+declare const slugArtifact: RasterDecodeArtifact<'slug'>;
 void slugArtifact.extensionData;
 const slugBytes: Uint8Array = slugArtifact.view(0);
 void slugBytes;
+// @ts-expect-error Technique decoders receive metadata, not mutable registry handles.
+void decodeFont.handle;
+// @ts-expect-error Technique decoders do not own registered raster disposal.
+slugArtifact.dispose();
 
 // @ts-expect-error An MSDF decoder cannot consume a Slug artifact.
-msdf.decode(font, slugArtifact);
+msdf.decode(decodeFont, slugArtifact);
 
 const titleFont = defineFont('/fonts/Inter-Regular.ttf', msdf);
 type _TitleInput = Expect<Equal<FontInputOf<typeof titleFont>, '/fonts/Inter-Regular.ttf'>>;
 type _TitleRaster = Expect<Equal<FontRasterTechniqueOf<typeof titleFont>, typeof msdf>>;
+const loadedTitle: Promise<Font<typeof msdf>> = loadFont(titleFont);
+void loadedTitle;
+
+const library = createFontLibrary({ maximumEntries: 8 });
+const cachedTitle: Promise<Font<typeof msdf>> = library.loadFont(titleFont);
+void cachedTitle;
+library.clear(titleFont);
+library.dispose();
+
+declare const fontBytes: Uint8Array<ArrayBuffer>;
+const copiedBytes: FontBytesInput = { bytes: fontBytes };
+const transferredBytes: FontBytesInput = { bytes: fontBytes, ownership: 'transfer' };
+void copiedBytes;
+void transferredBytes;
+// @ts-expect-error Byte input is explicit; a bare typed array is not a font location.
+loadFont({ baked: fontBytes }, msdf);
 
 const configuredFont = defineFont('/fonts/Inter-Regular.ttf', {
   technique: configurable,
@@ -138,21 +152,6 @@ void defineFont(sourceUrl, msdf);
 defineFont({}, msdf);
 // @ts-expect-error An optional forbidden source cannot be supplied as undefined.
 defineFont({ baked: '/fonts/Inter.font.glb', source: undefined }, msdf);
-
-declare const rasterKey: RasterKey;
-void font.loadRaster({ rasterKey, kind: 'msdf' });
-void font.loadRaster(
-  { rasterKey, kind: 'msdf' },
-  {
-    async resolveResource({ source }) {
-      return source.uri === 'page.ktx2' ? new Uint8Array(source.byteLength) : undefined;
-    },
-  },
-);
-declare const registeredRaster: RegisteredRaster;
-void registeredRaster.resource(externalRasterResource);
-// @ts-expect-error A kind is not a stable raster selection when options can differ.
-font.loadRaster({ kind: 'msdf' });
 
 const msdfBaker = defineRasterBaker({
   kind: 'msdf',

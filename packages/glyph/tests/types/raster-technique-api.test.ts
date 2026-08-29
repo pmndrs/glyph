@@ -26,6 +26,7 @@ const technique = defineRasterTechnique({
   kind: 'test-msdf',
   extension: 'TEST_font_mtsdf',
   version: 0,
+  textEffects: [],
   descriptor(options: { readonly quality: 'small' | 'large' }) {
     return { quality: options.quality } as const;
   },
@@ -53,11 +54,25 @@ void erased;
 type _ErasedDataIsUnknown = Expect<Equal<RasterDataOf<AnyRasterTechnique>, unknown>>;
 type _ErasedDataIsNotAny = Expect<Equal<IsAny<RasterDataOf<AnyRasterTechnique>>, false>>;
 
+// @ts-expect-error Every technique must state its supported text effects.
+defineRasterTechnique({
+  id: 'test.missing-effects',
+  kind: 'test-missing-effects',
+  extension: 'TEST_missing_effects',
+  version: 0,
+  descriptor: () => ({}),
+  async decode() {
+    return {};
+  },
+  dispose() {},
+});
+
 defineRasterTechnique({
   id: 'test.invalid-descriptor',
   kind: 'test-invalid',
   extension: 'TEST_invalid',
   version: 0,
+  textEffects: [],
   // @ts-expect-error Technique descriptors must remain JSON values.
   descriptor() {
     return { invalid: () => undefined };

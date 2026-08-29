@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { msdfBaker } from '@pmndrs/glyph/bakers/msdf';
+import { MSDF_EM_SIZE, MSDF_PIXEL_RANGE } from '@pmndrs/glyph/raster/msdf';
 
 import { exactBaseTextureArrayBytes } from '../src/benchmark/texture-memory.ts';
 
@@ -107,7 +108,7 @@ try {
       fontFixture: fixture.fontFixture,
       file: fixture.output,
       transport: 'gzip',
-      configuration: { emSize: 64, pixelRange: 8 },
+      configuration: { emSize: MSDF_EM_SIZE, pixelRange: MSDF_PIXEL_RANGE },
       uncompressed: { bytes: baked.byteLength, sha256: sha256(baked) },
       compressed: { bytes: compressed.byteLength, sha256: sha256(compressed) },
       raster: {

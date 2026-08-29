@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-example-renderer'
-description: Proves the published core engine surface is sufficient for a second renderer by driving it without Three.js.
+description: Proves the published core engine surface through a real TypeGPU/WebGPU backend without Three.js.
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:4e5b76958b653abbcc70246739a3d52a8d4c11cc181ec805510668fc79d705a8'
+source_digest: 'sha256:5e8f8b978b0ee3c1304ba4c612bb26b0a4f756016bb058255c038a3790aa2648'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -16,53 +16,78 @@ sources:
     title: Retention-protocol frame driver
   - id: policy
     resource: ../../packages/glyph-example-renderer/src/policy.ts
-    title: Host-authored technique schema and render policy
+    title: Backend-authored system lanes and render policy
   - id: plan-reader
     resource: ../../packages/glyph-example-renderer/src/plan-reader.ts
     title: Retained-publication reader and draw decoder
   - id: draw-list
     resource: ../../packages/glyph-example-renderer/src/draw-list.ts
-    title: Device-neutral draw list owned by the host
+    title: Device-neutral draw list owned by the backend
   - id: device
     resource: ../../packages/glyph-example-renderer/src/device.ts
-    title: GPU seam a TypeGPU backend implements
+    title: Deterministic renderer validation oracle
+  - id: webgpu-device
+    resource: ../../packages/glyph-example-renderer/src/webgpu-device.ts
+    title: Concrete TypeGPU/WebGPU renderer device
+  - id: build-script
+    resource: ../../packages/glyph-example-renderer/scripts/build.mjs
+    title: TypeGPU metadata build
   - id: boundary-tests
     resource: ../../packages/glyph-example-renderer/tests/package-boundary.test.ts
     title: Published-entry-point boundary proof
-  - id: engine-tests
+  - id: retention-tests
     resource: ../../packages/glyph-example-renderer/tests/example-engine.test.ts
-    title: Real-frame retention protocol proof
-  - id: reader-tests
-    resource: ../../packages/glyph-example-renderer/tests/plan-reader.test.ts
-    title: Publication-lifetime, patch-range, and decode proof
+    title: Retention protocol and capacity-growth proof
+  - id: acceptance-tests
+    resource: ../../packages/glyph-example-renderer/tests/example-render.test.ts
+    title: Real font, resource, geometry, and non-empty draw acceptance
 generated:
-  by: anthropic/claude-opus-5
-  at: '2026-08-23T09:15:00Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-28T20:20:47Z'
 ---
 
 # Package reference: `@pmndrs/glyph-example-renderer`
 
-Status: Active consumer proof. It drives real engine frames through the item 11 retention protocol;
-shaping fonts remain unreachable from `/core` (audit item 12), so text frames are out of reach by design.
+Status: Active external-engine proof. It drives a real immutable font through the public planner and render-plan contract,
+portable raster registration, resource realization, and concrete TypeGPU/WebGPU submission without Three.js.
 
-This private workspace package is a consumer proof for `@pmndrs/glyph/core`, the way
-`@pmndrs/glyph-example-raster` is a consumer proof for the raster and baker boundary. It imports the
-published core entry point and nothing else — no `internal/`, no `generated/`, no `/three`, and no
-renderer dependency of its own — so a second renderer that cannot be written against the published
-surface turns the build red instead of turning into a planning argument. The boundary test scans every
-file under `src/` *and* `tests/`, and rejects any `@pmndrs/glyph` subpath except `/core` and the
-published Wasm artifact.
+The package is a standing consumer proof. Source imports only published root assets, `/core`, and the example raster's
+public main and `/typegpu` subpaths—never `internal/`, `generated/`, `/three`, or Three itself. Its policy supplies its own
+system lane, semantic capability set, allocation mode, transform mode, and program namespace while reusing the technique's
+portable policy body. Capability wire IDs are automatic; stable author-owned identities are branded numeric hashes.
+The package root exposes a custom `source` condition for opted-in workspace tools; default consumers still resolve its
+built ESM and declarations.
 
-It authors its own technique schema and render policy with `/core`'s compilers (`src/policy.ts`), then
-runs the retention protocol on every frame in `ExampleTextEngine.render`: update for the borrow,
-`assertLive` before decoding, `retain` for one contiguous host-owned copy that acknowledges the
-generation, and decoded views over owned bytes only — dirty patch ranges and retirements included.
-`readDrawList` demands the branded `RetainedTextEnginePublication`, so passing a live-but-doomed borrow
-is a compile error. The tests drive a real `TextEngineHost` over the published Wasm artifact: retained
-plans survive three frames plus capacity growth, stale borrows throw
-`TextEnginePublicationExpiredError`, a backwards acknowledgement is refused at the wire as a revision
-conflict, and registering a font stack without a shaping font fails cleanly with `fontMissing` — the
-recorded evidence for audit item 12.
+`ExampleTextEngine` receives a `GlyphEngine`, creates its backend through `glyphEngine.createBackend()`, installs its policy,
+binds immutable fonts/stacks, opens one synchronous `RenderPlanner`, and exposes `createText()`, `update()`, `publish()`,
+and disposal. The render planner owns every paragraph/style/flow identity and one `PlanTarget`; callers do not author raw IDs,
+revisions, acknowledgments, request bytes, or ABI numbers. `measure()` and `glyphs()` remain available on the retained core
+text when an integration needs current desired metrics or positioned glyphs before publication.
+
+The plan target consumes the borrowed A/B publication synchronously. `plan-reader.ts` decodes resources, buffers, patches,
+primitives, draws, and retirements through semantic `/core` readers and copies only borrowed patch/table bytes that its
+accepted draw list retains. Resource records resolve through `candidate.acquirePayload()`, producing counted leases over
+validated portable geometry and companion resources. The target indexes accepted plan-resource generations by branded
+numeric handle, releases a payload lease after its last accepted plan reference retires, and never substitutes stale
+payloads after failure. Target disposal releases any leases and device-cache realizations that remain live without
+claiming ownership of the caller's device.
+
+`RecordingExampleRendererDevice` is the deterministic CPU oracle. It validates complete candidate state against the
+selected technique, program, variant, named buffers, geometry, resource and storage generations, patch ranges, primitive
+spans, order, and exact retirements before one commit changes accepted state. Rejected candidates discard staging and
+leave accepted state untouched.
+
+`TypeGpuExampleRendererDevice` is the concrete backend. It realizes GLB-like position, UV, and index accessors; creates
+TypeGPU/WebGPU vertex, index, and instance buffers; builds the selected pipeline; encodes an indexed instanced pass; and
+submits to an offscreen `rgba8unorm` target. Validation acceptance is awaited without stalling every frame on queue
+completion. Empty idle deltas produce no submission, while accepted removal clears the target. Device replacement drops
+physical realizations, asks the render planner for a complete checkpoint, reacquires portable resources, and redraws
+without an authored text mutation.
+
+The acceptance fixture bakes Inter, loads it through root `loadFont()`, creates a core `GlyphEngine`, binds the external
+technique, publishes initial and updated retained text, and asserts non-empty draws, required named buffers and geometry,
+changed visible pixels, idle submission suppression, failure atomicity, checkpoint behavior, exact retirement, and
+disposal. A separate async-target fixture transfers and returns the same one-copy plan buffer under backpressure.
 
 See [Example renderer](../planning/example-renderer.md) for why the package exists and how it divides
-work with the planned `@pmndrs/glyph/typegpu` shader subpath.
+work with the technique-owned `/typegpu` shader subpath.

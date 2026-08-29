@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-28-font-load-arguments",
+  "created": "2026-08-28",
+  "package": "@pmndrs/glyph",
+  "from": "canary before font load argument simplification",
+  "to": "canary at or after font load argument simplification",
+  "summary": "Replace portable font request wrappers with input and raster arguments.",
+  "instructions": "./instructions.md",
+  "transform": "./transform.mjs",
+  "changes": [
+    {
+      "kind": "call-rewrite",
+      "from": "loadFont({ input, raster }, options?)",
+      "to": "loadFont(input, raster, options?)",
+      "automatic": true
+    },
+    {
+      "kind": "call-rewrite",
+      "from": "loadFont({ input, rasters }, options?)",
+      "to": "loadFont(input, rasters, options?)",
+      "automatic": true
+    },
+    {
+      "kind": "call-rewrite",
+      "from": "library.clear({ input, rasterOrRasters })",
+      "to": "library.clear(input, rasterOrRasters)",
+      "automatic": true
+    },
+    {
+      "kind": "remove",
+      "from": "FontRequest, MultiRasterFontRequest, FontRasterRequests",
+      "to": "positional arguments and FontRasterInputs",
+      "automatic": false
+    },
+    {
+      "kind": "symbol-rename",
+      "from": "ThreeLoadedFontRequest",
+      "to": "ThreeFontLoadRequest",
+      "automatic": true
+    },
+    {
+      "kind": "manual",
+      "from": "renderer adapter request objects",
+      "to": "adapter-owned request types where the host framework requires one object",
+      "automatic": false
+    }
+  ],
+  "verification": [
+    "mise exec -- node .agents/skills/codemod/codemods/2026-08-28-font-load-arguments/test.mjs",
+    "mise exec -- pnpm exec tsc -p packages/glyph/tsconfig.json --noEmit"
+  ]
+}

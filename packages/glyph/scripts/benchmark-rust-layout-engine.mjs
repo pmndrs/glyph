@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "glyph:rust-layout-benchmark",
   "summary": "Measures the complete retained Rust text_update path with real font data and render-plan publication.",
-  "requirements": "Built @pmndrs/glyph and @pmndrs/glyph/bake packages. Accepts --glyphs, --reps, --warmup, --corpus (latin|cjk), --allocation, --wasm, and --json.",
+  "requirements": "Built @pmndrs/glyph and @pmndrs/glyph/bake packages. Accepts --glyphs, --reps, --warmup, --case, --technique, --corpus, --allocation, --wasm, --json, and --samples.",
   "writes": "stdout and the optional JSON report path"
 } */
 import { createHash } from 'node:crypto';
@@ -22,7 +22,7 @@ import { copyIntoAllocation, engineFrameUpdateBytes } from '../tests/support/eng
 import { techniqueProof } from './support/render-technique-proof.mjs';
 
 const options = parseArguments(process.argv.slice(2));
-const sessionId = 1;
+const plannerId = 1;
 const policyHandle = 1;
 const fontHandle = 1;
 const fontStackHandle = 1;
@@ -64,7 +64,7 @@ const initial = updateBytes({
   style: baseStyle,
   geometry: baseGeometry,
 });
-let sessionMemory;
+let plannerMemory;
 
 console.log(
   `technique=${options.technique} corpus=${options.corpus} allocation=${options.allocation} output=${technique.outputBytesPerGlyph} bytes/glyph · memory bytes: instantiate=${memoryAtInstantiation}, initialize=${memoryAfterInitialize}, registered=${memoryAfterRegistration}`,
@@ -75,6 +75,8 @@ const rawSampleRows = [];
 const cases = [
   'cold',
   'no-op',
+  'publish-measurement',
+  'publish-inspection',
   'font-size',
   'column-resize',
   'measure-query',
@@ -120,20 +122,20 @@ function measureCold() {
   const plans = [];
   let glyphs = 0;
   for (let index = 0; index < options.warmup + options.repetitions; index += 1) {
-    createSession(initial.byteLength);
+    createPlanner(initial.byteLength);
     const result = execute(initial, true);
     glyphs = result.glyphCount;
     if (index >= options.warmup) {
       samples.push(result.durationMs);
       plans.push(result);
     }
-    requireStatus(fn.disposeSession(sessionId), 'dispose cold session');
+    requireStatus(fn.disposePlanner(plannerId), 'dispose cold planner');
   }
   return summarize('cold', glyphs, samples, plans);
 }
 
 function measureWarm(name) {
-  createSession(initial.byteLength);
+  createPlanner(initial.byteLength);
   let state = execute(initial, true);
   const liveGlyphCount = state.glyphCount;
   const localizedText = [...utf16];
@@ -150,7 +152,16 @@ function measureWarm(name) {
       acknowledgedPublicationGeneration: state.publicationGeneration,
     };
     let bytes;
-    if (name === 'font-size') {
+    if (name === 'publish-measurement' || name === 'publish-inspection') {
+      bytes = updateBytes({ ...common, geometry: baseGeometry });
+      new DataView(bytes.buffer).setUint32(
+        abi.layouts.engineUpdateRequest.semanticViewMask,
+        name === 'publish-measurement'
+          ? abi.engine.semanticViewMasks.measurement
+          : abi.engine.semanticViewMasks.layoutInspection,
+        true,
+      );
+    } else if (name === 'font-size') {
       bytes = updateBytes({
         ...common,
         style: { ...baseStyle, fontSize: 12 + index * 0.5 },
@@ -213,24 +224,24 @@ function measureWarm(name) {
       plans.push(state);
     }
   }
-  requireStatus(fn.disposeSession(sessionId), `dispose ${name} session`);
+  requireStatus(fn.disposePlanner(plannerId), `dispose ${name} planner`);
   return summarize(name, liveGlyphCount, samples, plans);
 }
 
-function createSession(requestCapacity) {
+function createPlanner(requestCapacity) {
   const beforeBytes = memory.buffer.byteLength;
   requireStatus(
-    fn.createSession(sessionId, requestCapacity, outputCapacity, utf16.length + 1),
-    'create benchmark session',
+    fn.createPlanner(plannerId, requestCapacity, outputCapacity, utf16.length + 1),
+    'create benchmark planner',
   );
-  if (sessionMemory === undefined) {
-    sessionMemory = { beforeBytes, afterBytes: memory.buffer.byteLength };
+  if (plannerMemory === undefined) {
+    plannerMemory = { beforeBytes, afterBytes: memory.buffer.byteLength };
   }
 }
 
 function execute(bytes, allowGrowth = false, operation = 'text_update', measureParagraphId) {
-  const requestPointer = fn.requestPointer(sessionId);
-  if (requestPointer === 0 || fn.requestCapacity(sessionId) < bytes.byteLength) {
+  const requestPointer = fn.requestPointer(plannerId);
+  if (requestPointer === 0 || fn.requestCapacity(plannerId) < bytes.byteLength) {
     throw new Error('benchmark request exceeds its pre-reserved arena');
   }
   const buffer = memory.buffer;
@@ -239,8 +250,8 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
   new Uint8Array(buffer, requestPointer, bytes.byteLength).set(bytes);
   const resultPointer =
     measureParagraphId === undefined
-      ? fn.textUpdate(sessionId, requestPointer, bytes.byteLength)
-      : fn.measureParagraph(sessionId, requestPointer, bytes.byteLength, measureParagraphId);
+      ? fn.textUpdate(plannerId, requestPointer, bytes.byteLength)
+      : fn.measureParagraph(plannerId, requestPointer, bytes.byteLength, measureParagraphId);
   const durationMs = performance.now() - started;
   if (memory.buffer !== buffer && !allowGrowth) {
     throw new Error(`measured text_update grew Wasm memory from ${bufferBytes} to ${memory.buffer.byteLength} bytes`);
@@ -292,7 +303,7 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
 
 function updateBytes(fields) {
   return engineFrameUpdateBytes(abi, {
-    sessionId,
+    plannerId,
     policyHandle,
     fontStackHandle,
     limits,
@@ -383,11 +394,11 @@ function printReport(caseReports) {
     `\ncomplete Rust text_update + ${options.technique} render plan · ${caseReports[0]?.glyphs ?? 0} renderable instances (${options.glyphs} fixture target) · ${options.warmup} warmup · ${options.repetitions} measured`,
   );
   console.log(
-    `${'case'.padEnd(16)}${'instances'.padStart(9)}${'median'.padStart(11)}${'p95'.padStart(11)}${'min'.padStart(11)}${'rsd'.padStart(9)}${'patches'.padStart(9)}${'writes'.padStart(11)}`,
+    `${'case'.padEnd(22)}${'instances'.padStart(9)}${'median'.padStart(11)}${'p95'.padStart(11)}${'min'.padStart(11)}${'rsd'.padStart(9)}${'patches'.padStart(9)}${'writes'.padStart(11)}`,
   );
   for (const report of caseReports) {
     console.log(
-      `${report.name.padEnd(16)}${String(report.glyphs).padStart(9)}${`${report.medianMs.toFixed(3)}ms`.padStart(11)}${`${report.p95Ms.toFixed(3)}ms`.padStart(11)}${`${report.minMs.toFixed(3)}ms`.padStart(11)}${`${report.rsdPercent.toFixed(1)}%`.padStart(9)}${String(report.patchCount).padStart(9)}${formatBytes(report.writeBytes).padStart(11)}`,
+      `${report.name.padEnd(22)}${String(report.glyphs).padStart(9)}${`${report.medianMs.toFixed(3)}ms`.padStart(11)}${`${report.p95Ms.toFixed(3)}ms`.padStart(11)}${`${report.minMs.toFixed(3)}ms`.padStart(11)}${`${report.rsdPercent.toFixed(1)}%`.padStart(9)}${String(report.patchCount).padStart(9)}${formatBytes(report.writeBytes).padStart(11)}`,
     );
   }
   console.log('column-resize is the existing layout-width case: one fully active column is reflowed end to end.');
@@ -395,9 +406,14 @@ function printReport(caseReports) {
     'measure-query answers the same alternating widths through the paragraph-scoped synchronous measure: no gather, plan, or publication.',
   );
   console.log(
+    'publish-measurement and publish-inspection isolate semantic-sidecar overhead against the otherwise identical no-op publication.',
+  );
+  console.log(
     'suffix-edit matches the TypeScript text benchmark; localized-edit replaces one code unit; localized-splice alternates one middle insertion/deletion.',
   );
-  console.log(`Wasm memory after retained high-water mark: ${(memory.buffer.byteLength / 1024 / 1024).toFixed(2)} MiB`);
+  console.log(
+    `Wasm linear-memory high-water (not live heap): ${(memory.buffer.byteLength / 1024 / 1024).toFixed(2)} MiB`,
+  );
 }
 
 function formatBytes(value) {
@@ -443,6 +459,8 @@ function parseArguments(arguments_) {
       ![
         'cold',
         'no-op',
+        'publish-measurement',
+        'publish-inspection',
         'font-size',
         'column-resize',
         'measure-query',

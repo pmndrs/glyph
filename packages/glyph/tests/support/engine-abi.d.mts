@@ -1,5 +1,5 @@
 export interface EngineUpdateFields {
-  readonly sessionId: number;
+  readonly plannerId: number;
   readonly policyHandle: number;
   readonly expectedEngineRevision: number;
   readonly consumedPlanRevision: number;
@@ -16,7 +16,7 @@ export function renderPolicyBytes(abi: object): Uint8Array;
 export function kernelPolicyBytes(abi: object): Uint8Array;
 export function engineUpdateBytes(abi: object, fields: EngineUpdateFields): Uint8Array;
 export interface EngineFrameUpdateFields {
-  readonly sessionId: number;
+  readonly plannerId: number;
   readonly policyHandle: number;
   readonly fontStackHandle: number;
   readonly expectedEngineRevision?: number;

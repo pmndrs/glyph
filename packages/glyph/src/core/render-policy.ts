@@ -1,8 +1,255 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
 
 const MAX_U32 = 0xffff_ffff;
 
+// Engine-side policy limits mirrored from rust/shaper/src/engine/policy.rs.
+const MAX_POLICY_CAPABILITY_SETS = 8;
+const MAX_POLICY_PROGRAMS = 32;
+const MAX_BUFFERS_PER_POLICY_PROGRAM = 16;
+const MAX_OPERATIONS_PER_POLICY_PROGRAM = 128;
+const MAX_POLICY_REGISTERS = 32;
+const MAX_POLICY_VECTOR_WIDTH = 4;
+const MAX_POLICY_ALIGNMENT = 256;
+const MAX_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS = 10_000;
+// Wire register types from the shaper's straight-line operation validator.
+const REGISTER_UNINITIALIZED = 0;
+const REGISTER_F32 = 1;
+const REGISTER_U32 = 2;
+
 const encoder = new TextEncoder();
+interface NamedGlyphId {
+  readonly canonical: string;
+  permanent: boolean;
+  scopeCount: number;
+}
+
+const namedIds = new Map<string, NamedGlyphId>();
+
+const glyphIdKinds = new Set([
+  'generic',
+  'buffer',
+  'policy',
+  'font-binding',
+  'font-stack',
+  'planner',
+  'material',
+  'paragraph',
+  'style',
+  'flow-thread',
+  'region',
+  'exclusion',
+  'inline-object',
+  'resource',
+] as const);
+
+export type GlyphIdKind =
+  | 'generic'
+  | 'buffer'
+  | 'policy'
+  | 'font-binding'
+  | 'font-stack'
+  | 'planner'
+  | 'material'
+  | 'paragraph'
+  | 'style'
+  | 'flow-thread'
+  | 'region'
+  | 'exclusion'
+  | 'inline-object'
+  | 'resource';
+declare const glyphIdBrand: unique symbol;
+
+/** A deterministic, domain-branded wire identity. Buffer IDs occupy the non-reserved u16 range; others are u32. */
+export type GlyphId<Kind extends GlyphIdKind = GlyphIdKind> = number & { readonly [glyphIdBrand]: Kind };
+/** A deterministic domainless identity. Prefer a domain method on `id` when a protocol field has one. */
+export type Id = GlyphId<'generic'>;
+export type PolicyBufferId = GlyphId<'buffer'>;
+export type PolicyHandle = GlyphId<'policy'>;
+export type FontBindingHandle = GlyphId<'font-binding'>;
+export type FontStackHandle = GlyphId<'font-stack'>;
+export type PlannerHandle = GlyphId<'planner'>;
+/** Host-local material identity carried by a render plan. */
+export type MaterialHandle = GlyphId<'material'>;
+export type ParagraphId = GlyphId<'paragraph'>;
+export type StyleId = GlyphId<'style'>;
+export type FlowThreadId = GlyphId<'flow-thread'>;
+export type RegionId = GlyphId<'region'>;
+export type ExclusionId = GlyphId<'exclusion'>;
+export type InlineObjectId = GlyphId<'inline-object'>;
+/** Host-local resource identity carried by inline objects and renderer callbacks. */
+export type ResourceHandle = GlyphId<'resource'>;
+/** @internal Backend-scoped identity minting with explicit wire domains. */
+export interface BackendIdFactory {
+  <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind>;
+  buffer(name: string): PolicyBufferId;
+  policy(name: string): PolicyHandle;
+  fontBinding(name: string): FontBindingHandle;
+  fontStack(name: string): FontStackHandle;
+  planner(name: string): PlannerHandle;
+  material(name: string): MaterialHandle;
+  paragraph(name: string): ParagraphId;
+  style(name: string): StyleId;
+  flowThread(name: string): FlowThreadId;
+  region(name: string): RegionId;
+  exclusion(name: string): ExclusionId;
+  inlineObject(name: string): InlineObjectId;
+  resourceHandle(name: string): ResourceHandle;
+}
+
+/** @internal Runtime-owned ID provenance released with its host. */
+export class GlyphIdScope {
+  readonly #keys = new Set<string>();
+  #disposed = false;
+
+  id<const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> {
+    if (this.#disposed) throw new Error('glyph ID scope has been disposed');
+    const derived = deriveGlyphId(kind, name);
+    const registered = registerGlyphId(derived, false);
+    if (!this.#keys.has(derived.key)) {
+      this.#keys.add(derived.key);
+      registered.scopeCount += 1;
+    }
+    return derived.value;
+  }
+
+  /** Retain provenance for a registration even when another scope minted its handle. */
+  retain<const Kind extends GlyphIdKind>(value: unknown, kind: Kind, label: string): boolean {
+    if (this.#disposed) throw new Error('glyph ID scope has been disposed');
+    const handle = assertGlyphId(value, kind, label);
+    const key = `${kind}:${handle}`;
+    if (this.#keys.has(key)) return false;
+    const registered = namedIds.get(key);
+    if (registered === undefined) throw new Error('glyph ID provenance disappeared during retention');
+    this.#keys.add(key);
+    registered.scopeCount += 1;
+    return true;
+  }
+
+  release<const Kind extends GlyphIdKind>(value: GlyphId<Kind>, kind: Kind): void {
+    const key = `${kind}:${value}`;
+    if (!this.#keys.delete(key)) return;
+    const registered = namedIds.get(key);
+    if (registered === undefined || registered.scopeCount === 0) {
+      throw new Error('glyph ID scope lost an owned registration');
+    }
+    registered.scopeCount -= 1;
+    if (!registered.permanent && registered.scopeCount === 0) namedIds.delete(key);
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    let failure: unknown;
+    for (const key of this.#keys) {
+      const registered = namedIds.get(key);
+      if (registered === undefined || registered.scopeCount === 0) {
+        failure ??= new Error('glyph ID scope lost an owned registration');
+        continue;
+      }
+      registered.scopeCount -= 1;
+      if (!registered.permanent && registered.scopeCount === 0) namedIds.delete(key);
+    }
+    this.#keys.clear();
+    if (failure !== undefined) throw failure;
+  }
+}
+
+/** @internal Bind the method-based ID vocabulary to one backend-owned provenance scope. */
+export function createBackendIdFactory(scope: GlyphIdScope, assertActive: () => void): BackendIdFactory {
+  const mint = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
+    assertActive();
+    return scope.id(kind, name);
+  };
+  return Object.freeze(
+    Object.assign(mint, {
+      buffer: (name: string) => mint('buffer', name),
+      policy: (name: string) => mint('policy', name),
+      fontBinding: (name: string) => mint('font-binding', name),
+      fontStack: (name: string) => mint('font-stack', name),
+      planner: (name: string) => mint('planner', name),
+      material: (name: string) => mint('material', name),
+      paragraph: (name: string) => mint('paragraph', name),
+      style: (name: string) => mint('style', name),
+      flowThread: (name: string) => mint('flow-thread', name),
+      region: (name: string) => mint('region', name),
+      exclusion: (name: string) => mint('exclusion', name),
+      inlineObject: (name: string) => mint('inline-object', name),
+      resourceHandle: (name: string) => mint('resource', name),
+    }),
+  );
+}
+
+/** @internal Reject values that did not come from this module instance's ID utility. */
+export function assertGlyphId<const Kind extends GlyphIdKind>(
+  value: unknown,
+  kind: Kind,
+  label: string,
+): GlyphId<Kind> {
+  if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > MAX_U32) {
+    throw new TypeError(`${label} must come from ${glyphIdFactoryLabel(kind)} or a backend-managed ID`);
+  }
+  if (!namedIds.has(`${kind}:${value as number}`)) {
+    throw new TypeError(`${label} must come from ${glyphIdFactoryLabel(kind)} or a backend-managed ID`);
+  }
+  return value as GlyphId<Kind>;
+}
+
+function glyphIdFactoryLabel(kind: GlyphIdKind): string {
+  if (kind === 'generic') return 'id(name)';
+  const method = glyphIdMethods[kind];
+  return `id.${method}(name)`;
+}
+
+const glyphIdMethods = {
+  buffer: 'buffer',
+  policy: 'policy',
+  'font-binding': 'fontBinding',
+  'font-stack': 'fontStack',
+  planner: 'planner',
+  material: 'material',
+  paragraph: 'paragraph',
+  style: 'style',
+  'flow-thread': 'flowThread',
+  region: 'region',
+  exclusion: 'exclusion',
+  'inline-object': 'inlineObject',
+  resource: 'resourceHandle',
+} as const satisfies Partial<Record<GlyphIdKind, string>>;
+
+interface DerivedGlyphId<Kind extends GlyphIdKind> {
+  readonly canonical: string;
+  readonly key: string;
+  readonly value: GlyphId<Kind>;
+}
+
+function deriveGlyphId<const Kind extends GlyphIdKind>(kind: Kind, name: string): DerivedGlyphId<Kind> {
+  if (typeof kind !== 'string' || !glyphIdKinds.has(kind)) {
+    throw new TypeError('glyph ID kind is not supported');
+  }
+  if (typeof name !== 'string' || name.length === 0) throw new TypeError('glyph ID name must be a nonempty string');
+  const canonical = JSON.stringify(['glyph-id-v1', kind, name]);
+  const hash = renderWireId(canonical);
+  const value = (kind === 'buffer' ? (hash % 0xfffe) + 1 : hash) as GlyphId<Kind>;
+  return { canonical, key: `${kind}:${value}`, value };
+}
+
+function registerGlyphId(derived: DerivedGlyphId<GlyphIdKind>, permanent: boolean): NamedGlyphId {
+  const registered = namedIds.get(derived.key);
+  if (registered !== undefined) {
+    if (registered.canonical !== derived.canonical) {
+      throw new TypeError(`glyph ID collision between ${registered.canonical} and ${derived.canonical}`);
+    }
+    if (permanent) registered.permanent = true;
+    return registered;
+  }
+  const created = { canonical: derived.canonical, permanent, scopeCount: 0 };
+  namedIds.set(derived.key, created);
+  return created;
+}
+
+// Reused bit-level scratch for finite-constant checks; module scope avoids per-op allocation.
+const f32Scratch = new DataView(new ArrayBuffer(4));
 
 export type PolicyInputScope = keyof typeof textShaperAbi.policy.inputScopes;
 
@@ -11,9 +258,13 @@ export interface PolicyInput {
   readonly field: number;
 }
 
+/** Scalar representation of one policy output buffer. */
+export type PolicyScalarType = 'f32' | 'u32' | 'u16';
+
+/** One physical output buffer declared by a renderer policy program. */
 export interface PolicyBuffer {
-  readonly id: number;
-  readonly scalar: number;
+  readonly id: PolicyBufferId;
+  readonly scalar: PolicyScalarType;
   readonly vectorWidth: number;
   readonly alignment?: number;
   readonly stride?: number;
@@ -21,6 +272,7 @@ export interface PolicyBuffer {
   readonly capacityClass?: number;
 }
 
+/** Compiled straight-line operation emitted by the policy DSL. */
 export interface PolicyOperation {
   readonly opcode: number;
   readonly target?: number;
@@ -31,12 +283,14 @@ export interface PolicyOperation {
   readonly immediate2?: number;
 }
 
+/** One renderer-owned executable policy assembled from a portable technique body. */
 export interface PolicyProgram {
-  readonly techniqueId: number;
-  readonly programId: number;
+  readonly techniqueId: RenderTechniqueId;
+  readonly programId: RenderProgramId;
   /** Plan primitive kind this program's records publish as; glyph when omitted. */
-  readonly primitiveKind?: number;
-  readonly capabilitySetId?: number;
+  readonly primitiveKind?: 'glyph' | 'decoration';
+  /** Capability profile this program targets; omitted programs apply to every profile. */
+  readonly capabilitySet?: PolicyCapabilitySet;
   readonly resourceKindMask?: number;
   readonly semanticViewMask?: number;
   readonly storageKeyMask?: number;
@@ -52,9 +306,19 @@ export interface PolicyProgram {
   readonly operations: readonly PolicyOperation[];
 }
 
+/** A renderer feature the policy compiler may target. */
+export type PolicyCapability =
+  | 'storage-buffers'
+  | 'indirect-draws'
+  | 'alias-vec2'
+  | 'alias-vec4'
+  | 'ordered-direct'
+  | 'stable-indirect';
+
+/** Renderer limits and named GPU features available to one policy profile. */
 export interface PolicyCapabilitySet {
-  readonly id: number;
-  readonly flags: number;
+  /** Semantic capabilities lowered to wire flags only by `compileRenderPolicy()`. */
+  readonly capabilities: readonly PolicyCapability[];
   readonly maxBufferBytes: number;
   readonly updateAlignment: number;
   readonly coalesceGapBytes: number;
@@ -66,48 +330,220 @@ export interface PolicyCapabilitySet {
   readonly wholeBufferThresholdBasisPoints: number;
 }
 
+/** Complete renderer-owned policy installed into one text-engine host. */
 export interface PolicyDescriptor {
   readonly capabilitySets: readonly PolicyCapabilitySet[];
   readonly programs: readonly PolicyProgram[];
 }
 
+declare const policyCapabilitySetSelectionBrand: unique symbol;
+
+/** Opaque selection of one capability profile from a specific policy descriptor. */
+export interface PolicyCapabilitySetSelection {
+  readonly [policyCapabilitySetSelectionBrand]: true;
+}
+
+interface CapabilitySetSelectionRecord {
+  readonly id: number;
+  readonly policyHandle: PolicyHandle;
+}
+
+const capabilitySetSelections = new WeakMap<object, CapabilitySetSelectionRecord>();
+
+/** Select a declared capability profile without exposing its order-dependent wire ordinal. */
+export function selectPolicyCapabilitySet(
+  policyHandle: PolicyHandle,
+  descriptor: PolicyDescriptor,
+  selected: PolicyCapabilitySet,
+): PolicyCapabilitySetSelection {
+  assertGlyphId(policyHandle, 'policy', 'capability-set policy handle');
+  assertPolicyDescriptorShape(descriptor);
+  if (descriptor.capabilitySets.length === 0 || descriptor.capabilitySets.length > MAX_POLICY_CAPABILITY_SETS) {
+    throw new RangeError(`policy needs one to ${MAX_POLICY_CAPABILITY_SETS} capability sets`);
+  }
+  const selectedKey = capabilitySetKey(normalizePolicyCapabilitySet(selected, 'selected policy capability set'));
+  let selectedId: number | undefined;
+  const seen = new Set<string>();
+  for (const [index, capabilitySet] of descriptor.capabilitySets.entries()) {
+    const key = capabilitySetKey(normalizePolicyCapabilitySet(capabilitySet, `policy capability set ${index}`));
+    if (seen.has(key)) throw new TypeError('policy repeats an equivalent capability set');
+    seen.add(key);
+    if (key === selectedKey) selectedId = index + 1;
+  }
+  if (selectedId === undefined) throw new TypeError('selected capability set is not declared by the policy');
+  const selection = Object.freeze({}) as PolicyCapabilitySetSelection;
+  capabilitySetSelections.set(selection, Object.freeze({ id: selectedId, policyHandle }));
+  return selection;
+}
+
+/** @internal Resolve only selections created by `selectPolicyCapabilitySet`. */
+export function policyCapabilitySetSelectionId(selection: unknown, policyHandle: PolicyHandle): number {
+  if (typeof selection !== 'object' || selection === null) {
+    throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
+  }
+  const selected = capabilitySetSelections.get(selection);
+  if (selected === undefined) throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
+  if (selected.policyHandle !== policyHandle) {
+    throw new TypeError('frame capabilitySet belongs to a different policy handle');
+  }
+  return selected.id;
+}
+
+declare const techniqueWireIdBrand: unique symbol;
+declare const programWireIdBrand: unique symbol;
+declare const resourceWireIdBrand: unique symbol;
+
+export type RenderTechniqueId = number & { readonly [techniqueWireIdBrand]: true };
+export type RenderProgramId = number & { readonly [programWireIdBrand]: true };
+export type RenderResourceId = number & { readonly [resourceWireIdBrand]: true };
+
 /** Deterministic UTF-8 FNV-1a mapping used by both policy and font-binding compilers. */
-export function renderWireId(id: string): number {
-  if (typeof id !== 'string' || id.length === 0) throw new TypeError('render identity must be a nonempty string');
+function renderWireId(identity: string): number {
+  if (typeof identity !== 'string' || identity.length === 0) {
+    throw new TypeError('render identity must be a nonempty string');
+  }
   let hash = 0x811c_9dc5;
-  for (const byte of encoder.encode(id)) hash = Math.imul(hash ^ byte, 0x0100_0193) >>> 0;
+  for (const byte of encoder.encode(identity)) hash = Math.imul(hash ^ byte, 0x0100_0193) >>> 0;
   if (hash === 0) throw new RangeError('raster technique ID hashes to the reserved zero wire identity');
   return hash;
 }
 
-/** Runtime-scoped collision proof for every string identity lowered into the shared u32 wire namespace. */
-export class RenderWireIdentityRegistry {
+/** Collision-checked render identities used while assembling policy programs and font bindings. */
+export interface RenderIdFactory {
+  /** Derive the stable wire identity of one portable raster technique. */
+  technique(technique: AnyRasterTechnique | string): RenderTechniqueId;
+  /** Derive one renderer program identity, optionally naming a variant. */
+  program(technique: AnyRasterTechnique | string, namespace: string, variant?: string): RenderProgramId;
+  /** Derive the wire identity of one authored baked-resource key. */
+  resource(resource: RasterResourceId): RenderResourceId;
+}
+
+const renderIdFactories = new WeakSet<object>();
+
+/** @internal Runtime-scoped collision proof for identities lowered into the shared u32 render namespace. */
+export class RenderIdScope implements RenderIdFactory {
   readonly #strings = new Map<number, string>();
 
-  resolve(id: string): number {
-    const wireId = renderWireId(id);
+  constructor() {
+    renderIdFactories.add(this);
+  }
+
+  idFor(identity: string): number {
+    const wireId = renderWireId(identity);
     const collision = this.#strings.get(wireId);
-    if (collision !== undefined && collision !== id) {
-      throw new TypeError(`render wire identity collision between "${collision}" and "${id}"`);
+    if (collision !== undefined && collision !== identity) {
+      throw new TypeError(`render wire identity collision between "${collision}" and "${identity}"`);
     }
-    this.#strings.set(wireId, id);
+    this.#strings.set(wireId, identity);
     return wireId;
+  }
+
+  technique(technique: AnyRasterTechnique | string): RenderTechniqueId {
+    return this.idFor(rasterTechniqueIdentity(technique)) as RenderTechniqueId;
+  }
+
+  program(technique: AnyRasterTechnique | string, namespace: string, variant = 'default'): RenderProgramId {
+    return this.idFor(programWireKey(technique, namespace, variant)) as RenderProgramId;
+  }
+
+  resource(resource: RasterResourceId): RenderResourceId {
+    return this.idFor(resource) as RenderResourceId;
   }
 }
 
-export interface TechniqueWireIds {
-  readonly bitmap: number;
-  readonly msdf: number;
-  readonly slug: number;
-  readonly decoration: number;
+/** @internal Reject render-ID providers not created or supplied by this module instance. */
+export function assertRenderIdFactory(value: unknown, label: string): RenderIdFactory {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null || !renderIdFactories.has(value)) {
+    throw new TypeError(`${label} must be the id utility or a backend-supplied RenderIdFactory`);
+  }
+  return value as RenderIdFactory;
 }
 
-export const techniqueWireIds: TechniqueWireIds = Object.freeze({
-  bitmap: renderWireId('pmndrs.bitmap'),
-  msdf: renderWireId('pmndrs.msdf'),
-  slug: renderWireId('pmndrs.slug'),
-  decoration: renderWireId('pmndrs.decoration'),
-});
+/** Callable authored-ID utility with a distinct method for every protocol domain. */
+export interface IdFactory extends RenderIdFactory {
+  /** Derive a domainless identity when no protocol-specific brand applies. */
+  (name: string): Id;
+  /** Derive an authored policy-buffer identity. */
+  buffer(name: string): PolicyBufferId;
+  /** Derive an authored render-policy identity. */
+  policy(name: string): PolicyHandle;
+  /** Derive an authored font-binding identity. */
+  fontBinding(name: string): FontBindingHandle;
+  /** Derive an authored font-stack identity. */
+  fontStack(name: string): FontStackHandle;
+  /** Derive an authored render-planner identity. */
+  planner(name: string): PlannerHandle;
+  /** Derive an authored renderer-material identity. */
+  material(name: string): MaterialHandle;
+  /** Derive an authored paragraph identity. */
+  paragraph(name: string): ParagraphId;
+  /** Derive an authored paragraph-style identity. */
+  style(name: string): StyleId;
+  /** Derive an authored flow-thread identity. */
+  flowThread(name: string): FlowThreadId;
+  /** Derive an authored layout-region identity. */
+  region(name: string): RegionId;
+  /** Derive an authored exclusion identity. */
+  exclusion(name: string): ExclusionId;
+  /** Derive an authored inline-object identity. */
+  inlineObject(name: string): InlineObjectId;
+  /** Derive a live backend resource handle; baked resource keys use `id.resource`. */
+  resourceHandle(name: string): ResourceHandle;
+}
+
+const permanentRenderIds = new RenderIdScope();
+const permanentGlyphId = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
+  const derived = deriveGlyphId(kind, name);
+  registerGlyphId(derived, true);
+  return derived.value;
+};
+const authoredId = Object.assign(
+  function domainlessId(name: string): Id {
+    if (arguments.length !== 1) throw new TypeError('id(name) accepts exactly one stable name');
+    return permanentGlyphId('generic', name);
+  },
+  {
+    buffer: (name: string) => permanentGlyphId('buffer', name),
+    policy: (name: string) => permanentGlyphId('policy', name),
+    fontBinding: (name: string) => permanentGlyphId('font-binding', name),
+    fontStack: (name: string) => permanentGlyphId('font-stack', name),
+    planner: (name: string) => permanentGlyphId('planner', name),
+    material: (name: string) => permanentGlyphId('material', name),
+    paragraph: (name: string) => permanentGlyphId('paragraph', name),
+    style: (name: string) => permanentGlyphId('style', name),
+    flowThread: (name: string) => permanentGlyphId('flow-thread', name),
+    region: (name: string) => permanentGlyphId('region', name),
+    exclusion: (name: string) => permanentGlyphId('exclusion', name),
+    inlineObject: (name: string) => permanentGlyphId('inline-object', name),
+    resourceHandle: (name: string) => permanentGlyphId('resource', name),
+    technique: (technique: AnyRasterTechnique | string) => permanentRenderIds.technique(technique),
+    program: (technique: AnyRasterTechnique | string, namespace: string, variant = 'default') =>
+      permanentRenderIds.program(technique, namespace, variant),
+    resource: (resource: RasterResourceId) => permanentRenderIds.resource(resource),
+  },
+) as IdFactory;
+renderIdFactories.add(authoredId);
+
+/** Derive a collision-checked, branded numeric ID from a stable authored name. */
+export const id: IdFactory = Object.freeze(authoredId);
+
+function programWireKey(technique: AnyRasterTechnique | string, namespace: string, variant: string): string {
+  if (typeof namespace !== 'string' || namespace.length === 0) {
+    throw new TypeError('render program namespace must be a nonempty string');
+  }
+  if (typeof variant !== 'string' || variant.length === 0) {
+    throw new TypeError('render program variant must be a nonempty string');
+  }
+  return JSON.stringify(['glyph-program-v1', rasterTechniqueIdentity(technique), namespace, variant]);
+}
+
+function rasterTechniqueIdentity(technique: AnyRasterTechnique | string): string {
+  const identity = typeof technique === 'string' ? technique : technique?.id;
+  if (typeof identity !== 'string' || identity.length === 0) {
+    throw new TypeError('render technique identity must be a nonempty string');
+  }
+  return identity;
+}
 
 export type PolicyTransformMode = 'direct' | 'indexed';
 export type PolicyAllocationMode = 'ordered' | 'stable';
@@ -127,8 +563,8 @@ export interface ProgramContext {
   ) => void;
   readonly constantF32: (target: number, value: number) => void;
   readonly constantU32: (target: number, value: number) => void;
-  readonly storeF32: (buffer: number, lane: number, register: number) => void;
-  readonly storeU32: (buffer: number, lane: number, register: number) => void;
+  readonly storeF32: (buffer: PolicyBufferId, lane: number, register: number) => void;
+  readonly storeU32: (buffer: PolicyBufferId, lane: number, register: number) => void;
 }
 
 export function programContext(
@@ -203,22 +639,70 @@ export interface ProgramBody {
 }
 
 export function createProgram(
-  techniqueId: number,
-  programId: number,
+  wireTechniqueId: RenderTechniqueId,
+  wireProgramId: RenderProgramId,
   context: ProgramBody,
   buffers: readonly PolicyBuffer[],
   transformMode: PolicyTransformMode,
   allocationMode: PolicyAllocationMode,
 ): PolicyProgram {
+  nonzeroU32(wireTechniqueId, 'policy technique id');
+  nonzeroU32(wireProgramId, 'policy program id');
+  if (!isNonArrayObject(context)) throw new TypeError('policy program body needs an object');
+  if (!Array.isArray(context.inputs) || !Array.isArray(context.operations)) {
+    throw new TypeError('policy program body needs input and operation arrays');
+  }
+  if (!Array.isArray(buffers)) throw new TypeError('policy program buffers need an array');
+  if (transformMode !== 'direct' && transformMode !== 'indexed') {
+    throw new TypeError('policy transform mode must be "direct" or "indexed"');
+  }
+  if (allocationMode !== 'ordered' && allocationMode !== 'stable') {
+    throw new TypeError('policy allocation mode must be "ordered" or "stable"');
+  }
+  const inputs = Object.freeze(
+    context.inputs.map((input, index) => {
+      if (!isNonArrayObject(input)) throw new TypeError(`policy program input ${index} needs an object`);
+      return Object.freeze({ scope: input.scope, field: input.field });
+    }),
+  );
+  const operations = Object.freeze(
+    context.operations.map((operation, index) => {
+      if (!isNonArrayObject(operation)) throw new TypeError(`policy program operation ${index} needs an object`);
+      return Object.freeze({
+        opcode: operation.opcode,
+        ...(operation.target === undefined ? {} : { target: operation.target }),
+        ...(operation.operand0 === undefined ? {} : { operand0: operation.operand0 }),
+        ...(operation.operand1 === undefined ? {} : { operand1: operation.operand1 }),
+        ...(operation.immediate0 === undefined ? {} : { immediate0: operation.immediate0 }),
+        ...(operation.immediate1 === undefined ? {} : { immediate1: operation.immediate1 }),
+        ...(operation.immediate2 === undefined ? {} : { immediate2: operation.immediate2 }),
+      });
+    }),
+  );
+  const bufferSnapshots = Object.freeze(
+    buffers.map((buffer, index) => {
+      if (!isNonArrayObject(buffer)) throw new TypeError(`policy program buffer ${index} needs an object`);
+      const source = buffer as unknown as PolicyBuffer;
+      return Object.freeze({
+        id: source.id,
+        scalar: source.scalar,
+        vectorWidth: source.vectorWidth,
+        ...(source.alignment === undefined ? {} : { alignment: source.alignment }),
+        ...(source.stride === undefined ? {} : { stride: source.stride }),
+        ...(source.usage === undefined ? {} : { usage: source.usage }),
+        ...(source.capacityClass === undefined ? {} : { capacityClass: source.capacityClass }),
+      });
+    }),
+  );
   const batch = textShaperAbi.policy.batchFields;
-  return {
-    techniqueId,
-    programId,
+  return Object.freeze({
+    techniqueId: wireTechniqueId,
+    programId: wireProgramId,
     f32InputCount: context.f32InputCount,
     u32InputCount: context.u32InputCount,
-    inputs: context.inputs,
-    buffers,
-    operations: context.operations,
+    inputs,
+    buffers: bufferSnapshots,
+    operations,
     allocationStrategy:
       allocationMode === 'stable'
         ? textShaperAbi.policy.allocationStrategies.stableIndirect
@@ -233,35 +717,20 @@ export function createProgram(
       batch.depth |
       batch.order |
       (transformMode === 'direct' ? batch.transform : 0),
-  };
+  });
 }
 
 export function stores(
-  write: (buffer: number, lane: number, register: number) => void,
-  groups: readonly (readonly [number, readonly number[]])[],
+  write: (buffer: PolicyBufferId, lane: number, register: number) => void,
+  groups: readonly (readonly [PolicyBufferId, readonly number[]])[],
 ): void {
   for (const [buffer, registers] of groups) {
     for (const [lane, register] of registers.entries()) write(buffer, lane, register);
   }
 }
 
-export function floatBuffers(widths: readonly number[]): PolicyBuffer[] {
-  return widths.map((vectorWidth, index) => ({
-    id: index + 1,
-    scalar: textShaperAbi.policy.scalarTypes.f32,
-    vectorWidth,
-  }));
-}
-
-export function u32Buffers(widths: readonly number[], firstId: number): PolicyBuffer[] {
-  return widths.map((vectorWidth, index) => ({
-    id: firstId + index,
-    scalar: textShaperAbi.policy.scalarTypes.u32,
-    vectorWidth,
-  }));
-}
-
 export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
+  assertPolicyDescriptorShape(descriptor);
   const request = textShaperAbi.layouts.policyRequest;
   const capability = textShaperAbi.layouts.policyCapabilitySet;
   const programLayout = textShaperAbi.layouts.policyProgram;
@@ -269,17 +738,126 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   const operationLayout = textShaperAbi.layouts.policyOperation;
   const inputLayout = textShaperAbi.layouts.policyInput;
   const programs = descriptor.programs;
+
+  // Call-boundary preflight mirroring the shaper's validate_policy: every serialized
+  // value and engine semantic rule is proven before the output allocation exists.
+  if (descriptor.capabilitySets.length === 0) {
+    throw new RangeError('policy declares no capability sets');
+  }
+  if (descriptor.capabilitySets.length > MAX_POLICY_CAPABILITY_SETS) {
+    throw new RangeError(`policy declares more than ${MAX_POLICY_CAPABILITY_SETS} capability sets`);
+  }
+  const capabilitySets = descriptor.capabilitySets.map((set, index) =>
+    normalizePolicyCapabilitySet(set, `policy capability set ${index}`),
+  );
+  const capabilityIds = new Map<string, number>();
+  for (const [index, set] of capabilitySets.entries()) {
+    const key = capabilitySetKey(set);
+    if (capabilityIds.has(key)) throw new TypeError('policy repeats an equivalent capability set');
+    capabilityIds.set(key, index + 1);
+  }
+
+  if (programs.length === 0) throw new RangeError('policy declares no programs');
+  if (programs.length > MAX_POLICY_PROGRAMS) {
+    throw new RangeError(`policy declares more than ${MAX_POLICY_PROGRAMS} programs`);
+  }
+  const programIds = new Set<number>();
+  const variants = new Set<string>();
+  const programCapabilityIds: number[] = [];
+  for (const program of programs) {
+    nonzeroU32(program.techniqueId, 'policy technique id');
+    nonzeroU32(program.programId, 'policy program id');
+    const programLabel = `policy program ${program.programId}`;
+    // Numeric domains first so the semantic rules below never judge unproven values.
+    if (program.resourceKindMask !== undefined) u32(program.resourceKindMask, `${programLabel} resourceKindMask`);
+    if (program.semanticViewMask !== undefined) u32(program.semanticViewMask, `${programLabel} semanticViewMask`);
+    if (program.storageKeyMask !== undefined) u32(program.storageKeyMask, `${programLabel} storageKeyMask`);
+    if (program.drawKeyMask !== undefined) u32(program.drawKeyMask, `${programLabel} drawKeyMask`);
+    if (program.paintCapabilities !== undefined) {
+      u32(program.paintCapabilities, `${programLabel} paintCapabilities`);
+    }
+    if (program.compositingCapabilities !== undefined) {
+      u32(program.compositingCapabilities, `${programLabel} compositingCapabilities`);
+    }
+    if (program.allocationStrategy !== undefined) {
+      u16(program.allocationStrategy, `${programLabel} allocationStrategy`);
+    }
+    if (program.primitiveKind !== undefined)
+      policyPrimitiveKind(program.primitiveKind, `${programLabel} primitiveKind`);
+    const variant = u16(program.variant ?? 0, 'policy program variant');
+    u8(program.f32InputCount, `${programLabel} f32 input count`);
+    u8(program.u32InputCount, `${programLabel} u32 input count`);
+
+    u16(program.buffers.length, `${programLabel} buffer count`);
+    const bufferIds = new Set<number>();
+    for (const [index, buffer] of program.buffers.entries()) {
+      const bufferLabel = `policy program ${program.programId} buffer ${index}`;
+      const bufferId = u16(assertGlyphId(buffer.id, 'buffer', `${bufferLabel} id`), `${bufferLabel} id`);
+      if (bufferIds.has(bufferId)) throw new TypeError(`policy repeats buffer id ${bufferId} within a program`);
+      bufferIds.add(bufferId);
+      policyScalarType(buffer.scalar, `${bufferLabel} scalar`);
+      u8(buffer.vectorWidth, `${bufferLabel} vectorWidth`);
+      if (buffer.alignment !== undefined) u16(buffer.alignment, `${bufferLabel} alignment`);
+      if (buffer.stride !== undefined) u16(buffer.stride, `${bufferLabel} stride`);
+      if (buffer.usage !== undefined) u32(buffer.usage, `${bufferLabel} usage`);
+      if (buffer.capacityClass !== undefined) u16(buffer.capacityClass, `${bufferLabel} capacityClass`);
+    }
+
+    u16(program.operations.length, `${programLabel} operation count`);
+    for (const [index, operation] of program.operations.entries()) {
+      const operationLabel = `policy program ${program.programId} operation ${index}`;
+      u8(operation.opcode, `${operationLabel} opcode`);
+      if (operation.target !== undefined) u8(operation.target, `${operationLabel} target`);
+      if (operation.operand0 !== undefined) u8(operation.operand0, `${operationLabel} operand0`);
+      if (operation.operand1 !== undefined) u8(operation.operand1, `${operationLabel} operand1`);
+      if (operation.immediate0 !== undefined) u32(operation.immediate0, `${operationLabel} immediate0`);
+      if (operation.immediate1 !== undefined) u32(operation.immediate1, `${operationLabel} immediate1`);
+      if (operation.immediate2 !== undefined) u32(operation.immediate2, `${operationLabel} immediate2`);
+    }
+
+    u16(program.inputs.length, `${programLabel} input count`);
+    for (const [index, input] of program.inputs.entries()) {
+      const inputLabel = `policy program ${program.programId} input ${index}`;
+      // Object.hasOwn keeps inherited keys like "toString" out of the ABI table lookup.
+      if (!(typeof input.scope === 'string' && Object.hasOwn(textShaperAbi.policy.inputScopes, input.scope))) {
+        throw new TypeError(`${inputLabel} scope ${JSON.stringify(input.scope)} is not a policy input scope`);
+      }
+      u8(input.field, `${inputLabel} field`);
+    }
+
+    // Semantic rules, judged only after every numeric domain above held.
+    const effectiveCapabilitySetId = resolveCapabilitySetId(program.capabilitySet, capabilityIds, programLabel);
+    programCapabilityIds.push(effectiveCapabilitySetId);
+    preflightProgramSemantics(program, capabilitySets, effectiveCapabilitySetId);
+    if (programIds.has(program.programId)) throw new TypeError(`policy repeats program id ${program.programId}`);
+    programIds.add(program.programId);
+    const key = `${effectiveCapabilitySetId}:${program.techniqueId}:${variant}`;
+    if (variants.has(key)) throw new TypeError('policy repeats a technique, capability set, and program variant');
+    variants.add(key);
+  }
+
+  // Every declared capability set must be reachable by some program; a wildcard
+  // (unset) program reference covers all of them.
+  for (const [index] of capabilitySets.entries()) {
+    const wireId = index + 1;
+    const referenced = programCapabilityIds.some((capabilityId) => capabilityId === 0 || capabilityId === wireId);
+    if (!referenced) {
+      throw new TypeError(`policy capability set ${index} is declared but referenced by no program`);
+    }
+  }
+
   const bufferCount = sum(programs, (program) => program.buffers.length);
   const operationCount = sum(programs, (program) => program.operations.length);
   const inputCount = sum(programs, (program) => program.inputs.length);
-  const capabilitiesOffset = align(request.size, capability.alignment);
+  const capabilitiesOffset = align(request.size, capability.alignment, 'policy capability sets');
   const programsOffset = align(
     checkedAdd(
       capabilitiesOffset,
-      checkedProduct(capability.size, descriptor.capabilitySets.length, 'policy capabilities'),
+      checkedProduct(capability.size, capabilitySets.length, 'policy capabilities'),
       'policy programs',
     ),
     programLayout.alignment,
+    'policy programs',
   );
   const buffersOffset = align(
     checkedAdd(
@@ -288,10 +866,12 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
       'policy buffers',
     ),
     bufferLayout.alignment,
+    'policy buffers',
   );
   const operationsOffset = align(
     checkedAdd(buffersOffset, checkedProduct(bufferLayout.size, bufferCount, 'policy buffers'), 'policy operations'),
     operationLayout.alignment,
+    'policy operations',
   );
   const inputsOffset = align(
     checkedAdd(
@@ -300,17 +880,40 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
       'policy inputs',
     ),
     inputLayout.alignment,
+    'policy inputs',
   );
   const byteLength = checkedAdd(
     inputsOffset,
     checkedProduct(inputLayout.size, inputCount, 'policy inputs'),
     'policy bytes',
   );
+
+  interface PlannedProgram {
+    readonly value: PolicyProgram;
+    readonly capabilitySetId: number;
+    readonly bufferStart: number;
+    readonly operationStart: number;
+    readonly inputStart: number;
+  }
+
+  // Per-program record starts accumulate across programs; each step is proven to
+  // stay inside the u32 domain even though its total was already bounded above.
+  let bufferStart = 0;
+  let operationStart = 0;
+  let inputStart = 0;
+  const plans: PlannedProgram[] = programs.map((value, index) => {
+    const plan = { value, capabilitySetId: programCapabilityIds[index]!, bufferStart, operationStart, inputStart };
+    bufferStart = checkedAdd(bufferStart, value.buffers.length, 'policy buffer start');
+    operationStart = checkedAdd(operationStart, value.operations.length, 'policy operation start');
+    inputStart = checkedAdd(inputStart, value.inputs.length, 'policy input start');
+    return plan;
+  });
+
   const bytes = new Uint8Array(byteLength);
   const view = new DataView(bytes.buffer);
   view.setUint32(request.byteLength, bytes.byteLength, true);
   view.setUint32(request.capabilitySetsOffset, capabilitiesOffset, true);
-  view.setUint32(request.capabilitySetCount, descriptor.capabilitySets.length, true);
+  view.setUint32(request.capabilitySetCount, capabilitySets.length, true);
   view.setUint32(request.programsOffset, programsOffset, true);
   view.setUint32(request.programCount, programs.length, true);
   view.setUint32(request.buffersOffset, buffersOffset, true);
@@ -320,10 +923,10 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   view.setUint32(request.inputsOffset, inputsOffset, true);
   view.setUint32(request.inputCount, inputCount, true);
 
-  for (const [index, value] of descriptor.capabilitySets.entries()) {
+  for (const [index, value] of capabilitySets.entries()) {
     const offset = capabilitiesOffset + index * capability.size;
-    view.setUint32(offset + capability.id, value.id, true);
-    view.setUint32(offset + capability.flags, value.flags, true);
+    view.setUint32(offset + capability.id, index + 1, true);
+    view.setUint32(offset + capability.flags, policyCapabilityFlags(value), true);
     view.setUint32(offset + capability.maxBufferBytes, value.maxBufferBytes, true);
     view.setUint32(offset + capability.updateAlignment, value.updateAlignment, true);
     view.setUint32(offset + capability.coalesceGapBytes, value.coalesceGapBytes, true);
@@ -335,22 +938,20 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     view.setUint16(offset + capability.wholeBufferThresholdBasisPoints, value.wholeBufferThresholdBasisPoints, true);
   }
 
-  let bufferStart = 0;
-  let operationStart = 0;
-  let inputStart = 0;
-  for (const [index, value] of programs.entries()) {
+  for (const [index, planned] of plans.entries()) {
+    const value = planned.value;
     const offset = programsOffset + index * programLayout.size;
     view.setUint32(offset + programLayout.techniqueId, value.techniqueId, true);
     view.setUint32(offset + programLayout.programId, value.programId, true);
-    view.setUint32(offset + programLayout.capabilitySetId, value.capabilitySetId ?? 0, true);
+    view.setUint32(offset + programLayout.capabilitySetId, planned.capabilitySetId, true);
     view.setUint32(offset + programLayout.resourceKindMask, value.resourceKindMask ?? 1, true);
     view.setUint32(offset + programLayout.semanticViewMask, value.semanticViewMask ?? 0, true);
     view.setUint32(offset + programLayout.storageKeyMask, value.storageKeyMask ?? 0, true);
     view.setUint32(offset + programLayout.drawKeyMask, value.drawKeyMask ?? 0, true);
     view.setUint32(offset + programLayout.paintCapabilities, value.paintCapabilities ?? 0, true);
     view.setUint32(offset + programLayout.compositingCapabilities, value.compositingCapabilities ?? 0, true);
-    view.setUint32(offset + programLayout.bufferStart, bufferStart, true);
-    view.setUint32(offset + programLayout.operationStart, operationStart, true);
+    view.setUint32(offset + programLayout.bufferStart, planned.bufferStart, true);
+    view.setUint32(offset + programLayout.operationStart, planned.operationStart, true);
     view.setUint16(offset + programLayout.variant, value.variant ?? 0, true);
     view.setUint16(offset + programLayout.bufferCount, value.buffers.length, true);
     view.setUint16(offset + programLayout.operationCount, value.operations.length, true);
@@ -361,16 +962,13 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     );
     view.setUint16(
       offset + programLayout.primitiveKind,
-      value.primitiveKind ?? textShaperAbi.engine.primitiveKinds.glyph,
+      policyPrimitiveKind(value.primitiveKind ?? 'glyph', `policy program ${value.programId} primitiveKind`),
       true,
     );
     view.setUint8(offset + programLayout.f32InputCount, value.f32InputCount);
     view.setUint8(offset + programLayout.u32InputCount, value.u32InputCount);
-    view.setUint32(offset + programLayout.inputStart, inputStart, true);
+    view.setUint32(offset + programLayout.inputStart, planned.inputStart, true);
     view.setUint16(offset + programLayout.inputCount, value.inputs.length, true);
-    bufferStart += value.buffers.length;
-    operationStart += value.operations.length;
-    inputStart += value.inputs.length;
   }
 
   let bufferIndex = 0;
@@ -379,9 +977,9 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   for (const value of programs) {
     for (const buffer of value.buffers) {
       const offset = buffersOffset + bufferIndex * bufferLayout.size;
-      const scalarBytes = buffer.scalar === textShaperAbi.policy.scalarTypes.u16 ? 2 : 4;
+      const scalarBytes = buffer.scalar === 'u16' ? 2 : 4;
       view.setUint16(offset + bufferLayout.id, buffer.id, true);
-      view.setUint8(offset + bufferLayout.scalar, buffer.scalar);
+      view.setUint8(offset + bufferLayout.scalar, policyScalarType(buffer.scalar, `policy buffer ${buffer.id} scalar`));
       view.setUint8(offset + bufferLayout.vectorWidth, buffer.vectorWidth);
       view.setUint16(offset + bufferLayout.alignment, buffer.alignment ?? scalarBytes, true);
       view.setUint16(offset + bufferLayout.stride, buffer.stride ?? scalarBytes * buffer.vectorWidth, true);
@@ -414,12 +1012,427 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   return bytes;
 }
 
+function assertPolicyDescriptorShape(value: unknown): asserts value is PolicyDescriptor {
+  if (!isNonArrayObject(value)) throw new TypeError('policy descriptor needs an object');
+  if (!Array.isArray(value.capabilitySets)) throw new TypeError('policy descriptor capabilitySets needs an array');
+  if (!Array.isArray(value.programs)) throw new TypeError('policy descriptor programs needs an array');
+  for (const [index, set] of value.capabilitySets.entries()) {
+    if (!isNonArrayObject(set)) throw new TypeError(`policy capability set ${index} needs an object`);
+  }
+  for (const [programIndex, program] of value.programs.entries()) {
+    if (!isNonArrayObject(program)) throw new TypeError(`policy program ${programIndex} needs an object`);
+    const inputs = program.inputs;
+    const buffers = program.buffers;
+    const operations = program.operations;
+    if (!Array.isArray(inputs)) throw new TypeError(`policy program ${programIndex} inputs needs an array`);
+    if (!Array.isArray(buffers)) throw new TypeError(`policy program ${programIndex} buffers needs an array`);
+    if (!Array.isArray(operations)) throw new TypeError(`policy program ${programIndex} operations needs an array`);
+    for (const [index, input] of inputs.entries()) {
+      if (!isNonArrayObject(input))
+        throw new TypeError(`policy program ${programIndex} input ${index} needs an object`);
+    }
+    for (const [index, buffer] of buffers.entries()) {
+      if (!isNonArrayObject(buffer)) {
+        throw new TypeError(`policy program ${programIndex} buffer ${index} needs an object`);
+      }
+    }
+    for (const [index, operation] of operations.entries()) {
+      if (!isNonArrayObject(operation)) {
+        throw new TypeError(`policy program ${programIndex} operation ${index} needs an object`);
+      }
+    }
+  }
+}
+
+function nonzeroU32(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 1 || value > 0xffff_ffff)
+    throw new RangeError(`${label} needs a nonzero u32`);
+  return value;
+}
+
+/** @internal Validate and snapshot one host capability set before invoking technique code. */
+export function normalizePolicyCapabilitySet(value: unknown, label = 'policy capability set'): PolicyCapabilitySet {
+  if (!isNonArrayObject(value)) throw new TypeError(`${label} needs an object`);
+  const sourceCapabilities = value.capabilities;
+  if (!Array.isArray(sourceCapabilities)) throw new TypeError(`${label} capabilities needs an array`);
+  const capabilities = sourceCapabilities.map((capability, index) =>
+    policyCapability(capability, `${label} capability ${index}`),
+  );
+  if (new Set(capabilities).size !== capabilities.length) throw new TypeError(`${label} repeats a capability`);
+  const snapshot: PolicyCapabilitySet = Object.freeze({
+    capabilities: Object.freeze(capabilities),
+    maxBufferBytes: value.maxBufferBytes,
+    updateAlignment: value.updateAlignment,
+    coalesceGapBytes: value.coalesceGapBytes,
+    rangeCallPenaltyBytes: value.rangeCallPenaltyBytes,
+    maxBuffersPerDraw: value.maxBuffersPerDraw,
+    maxResourcesPerDraw: value.maxResourcesPerDraw,
+    maxIndirectDraws: value.maxIndirectDraws,
+    fragmentationBudget: value.fragmentationBudget,
+    wholeBufferThresholdBasisPoints: value.wholeBufferThresholdBasisPoints,
+  }) as PolicyCapabilitySet;
+  preflightCapabilitySet(snapshot, label);
+  return snapshot;
+}
+
+/** Capability-set contract mirrored from validate_capability_sets. */
+function preflightCapabilitySet(set: PolicyCapabilitySet, label: string): void {
+  u32(set.maxBufferBytes, `${label} maxBufferBytes`);
+  u32(set.updateAlignment, `${label} updateAlignment`);
+  u32(set.coalesceGapBytes, `${label} coalesceGapBytes`);
+  u32(set.rangeCallPenaltyBytes, `${label} rangeCallPenaltyBytes`);
+  u16(set.maxBuffersPerDraw, `${label} maxBuffersPerDraw`);
+  u16(set.maxResourcesPerDraw, `${label} maxResourcesPerDraw`);
+  u16(set.maxIndirectDraws, `${label} maxIndirectDraws`);
+  u16(set.fragmentationBudget, `${label} fragmentationBudget`);
+  u16(set.wholeBufferThresholdBasisPoints, `${label} wholeBufferThresholdBasisPoints`);
+
+  if (!set.capabilities.includes('ordered-direct') && !set.capabilities.includes('stable-indirect')) {
+    throw new RangeError(`${label} supports no allocation strategy`);
+  }
+  if (
+    set.maxBufferBytes === 0 ||
+    set.maxBuffersPerDraw === 0 ||
+    set.maxBuffersPerDraw > MAX_BUFFERS_PER_POLICY_PROGRAM ||
+    set.maxResourcesPerDraw === 0 ||
+    set.fragmentationBudget === 0
+  ) {
+    throw new RangeError(
+      `${label} limits need nonzero capacity within ${MAX_BUFFERS_PER_POLICY_PROGRAM} buffers per draw`,
+    );
+  }
+  if (!isPowerOfTwo(set.updateAlignment) || set.updateAlignment > MAX_POLICY_ALIGNMENT) {
+    throw new RangeError(`${label} updateAlignment needs a power of two up to ${MAX_POLICY_ALIGNMENT}`);
+  }
+  if (
+    set.coalesceGapBytes > set.maxBufferBytes ||
+    set.rangeCallPenaltyBytes > set.maxBufferBytes ||
+    set.wholeBufferThresholdBasisPoints < 1 ||
+    set.wholeBufferThresholdBasisPoints > MAX_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS
+  ) {
+    throw new RangeError(`${label} upload cost model exceeds its own buffer budget`);
+  }
+  if (set.capabilities.includes('indirect-draws') !== set.maxIndirectDraws > 0) {
+    throw new RangeError(`${label} must pair the indirect-draw flag with its indirect draw limit`);
+  }
+}
+
+/** Program-level contract mirrored from validate_policy's per-program checks. */
+function preflightProgramSemantics(
+  program: PolicyProgram,
+  capabilitySets: readonly PolicyCapabilitySet[],
+  effectiveCapabilitySetId: number,
+): void {
+  const label = `policy program ${program.programId}`;
+  const { batchFields, allocationStrategies } = textShaperAbi.policy;
+  const primitiveKind = program.primitiveKind ?? 'glyph';
+  policyPrimitiveKind(primitiveKind, `${label} primitiveKind`);
+  // Decoration programs draw without raster resources; every other kind must accept some.
+  if ((program.resourceKindMask ?? 1) === 0 && primitiveKind !== 'decoration') {
+    throw new RangeError(`${label} accepts no resource kinds but does not publish decoration records`);
+  }
+
+  const allBatchFields =
+    batchFields.technique |
+    batchFields.resource |
+    batchFields.program |
+    batchFields.material |
+    batchFields.clip |
+    batchFields.depth |
+    batchFields.order |
+    batchFields.transform;
+  const storageKeyFields = allBatchFields & ~(batchFields.order | batchFields.transform);
+  const requiredStorageKeys = batchFields.technique | batchFields.resource | batchFields.program;
+  const requiredDrawKeys = requiredStorageKeys | batchFields.order;
+  const storageKeyMask = program.storageKeyMask ?? 0;
+  const drawKeyMask = program.drawKeyMask ?? 0;
+  if (
+    (storageKeyMask & ~storageKeyFields) !== 0 ||
+    (storageKeyMask & requiredStorageKeys) !== requiredStorageKeys ||
+    (drawKeyMask & ~allBatchFields) !== 0 ||
+    (drawKeyMask & requiredDrawKeys) !== requiredDrawKeys
+  ) {
+    throw new RangeError(`${label} storage/draw key masks miss a required batch field or use an unknown one`);
+  }
+
+  const strategy = program.allocationStrategy ?? allocationStrategies.orderedDirect;
+  if (strategy !== allocationStrategies.orderedDirect && strategy !== allocationStrategies.stableIndirect) {
+    throw new RangeError(`${label} allocationStrategy is not a known strategy`);
+  }
+  const requiredCapability: PolicyCapability =
+    strategy === allocationStrategies.orderedDirect ? 'ordered-direct' : 'stable-indirect';
+
+  preflightProgramBody(program);
+
+  for (const [index, set] of capabilitySets.entries()) {
+    if (
+      (effectiveCapabilitySetId === 0 || effectiveCapabilitySetId === index + 1) &&
+      !set.capabilities.includes(requiredCapability)
+    ) {
+      throw new RangeError(`policy capability set ${index} lacks the allocation support ${label} needs`);
+    }
+  }
+}
+
+function resolveCapabilitySetId(
+  capabilitySet: PolicyCapabilitySet | undefined,
+  capabilityIds: ReadonlyMap<string, number>,
+  programLabel: string,
+): number {
+  if (capabilitySet === undefined) return 0;
+  const normalized = normalizePolicyCapabilitySet(capabilitySet, `${programLabel} capability set`);
+  const capabilityId = capabilityIds.get(capabilitySetKey(normalized));
+  if (capabilityId === undefined) throw new TypeError(`${programLabel} references an undeclared capability set`);
+  return capabilityId;
+}
+
+function capabilitySetKey(set: PolicyCapabilitySet): string {
+  return [
+    [...set.capabilities].sort().join(','),
+    set.maxBufferBytes,
+    set.updateAlignment,
+    set.coalesceGapBytes,
+    set.rangeCallPenaltyBytes,
+    set.maxBuffersPerDraw,
+    set.maxResourcesPerDraw,
+    set.maxIndirectDraws,
+    set.fragmentationBudget,
+    set.wholeBufferThresholdBasisPoints,
+  ].join(':');
+}
+
+/** Buffer schemas, exact input counts, and the straight-line operation graph from validate_program. */
+function preflightProgramBody(program: PolicyProgram): void {
+  const label = `policy program ${program.programId}`;
+  if (program.f32InputCount > MAX_POLICY_REGISTERS || program.u32InputCount > MAX_POLICY_REGISTERS) {
+    throw new RangeError(`${label} input counts exceed the ${MAX_POLICY_REGISTERS}-slot register file`);
+  }
+  if (program.inputs.length !== program.f32InputCount + program.u32InputCount) {
+    throw new TypeError(`${label} input table length must equal its declared f32 and u32 input counts`);
+  }
+
+  if (program.buffers.length === 0) throw new RangeError(`${label} declares no buffers`);
+  if (program.buffers.length > MAX_BUFFERS_PER_POLICY_PROGRAM) {
+    throw new RangeError(`${label} declares more than ${MAX_BUFFERS_PER_POLICY_PROGRAM} buffers`);
+  }
+  const { bufferUsage } = textShaperAbi.policy;
+  const knownUsages = bufferUsage.vertex | bufferUsage.storage | bufferUsage.copyDst;
+  const byteWidths: Readonly<Record<PolicyScalarType, number>> = { f32: 4, u32: 4, u16: 2 };
+  for (const [index, buffer] of program.buffers.entries()) {
+    const bufferLabel = `${label} buffer ${index}`;
+    policyScalarType(buffer.scalar, `${bufferLabel} scalar`);
+    const byteWidth = byteWidths[buffer.scalar];
+    if (buffer.id === 0) throw new TypeError(`${bufferLabel} uses the reserved zero id`);
+    if (buffer.vectorWidth < 1 || buffer.vectorWidth > MAX_POLICY_VECTOR_WIDTH) {
+      throw new RangeError(`${bufferLabel} vectorWidth needs 1..${MAX_POLICY_VECTOR_WIDTH}`);
+    }
+    const alignment = buffer.alignment ?? byteWidth;
+    if (!isPowerOfTwo(alignment) || alignment > MAX_POLICY_ALIGNMENT) {
+      throw new RangeError(`${bufferLabel} alignment needs a power of two up to ${MAX_POLICY_ALIGNMENT}`);
+    }
+    const stride = buffer.stride ?? byteWidth * buffer.vectorWidth;
+    if (stride < byteWidth * buffer.vectorWidth || stride % alignment !== 0) {
+      throw new RangeError(`${bufferLabel} stride fits every lane and is a multiple of its alignment`);
+    }
+    const usage = buffer.usage ?? bufferUsage.storage | bufferUsage.copyDst;
+    if (usage === 0 || (usage & ~knownUsages) !== 0 || (usage & bufferUsage.copyDst) === 0) {
+      throw new RangeError(`${bufferLabel} usage needs copyDst and only known usage bits`);
+    }
+    if ((buffer.capacityClass ?? 1) === 0) throw new RangeError(`${bufferLabel} capacityClass needs a nonzero class`);
+  }
+
+  if (program.operations.length === 0) throw new RangeError(`${label} declares no operations`);
+  if (program.operations.length > MAX_OPERATIONS_PER_POLICY_PROGRAM) {
+    throw new RangeError(`${label} declares more than ${MAX_OPERATIONS_PER_POLICY_PROGRAM} operations`);
+  }
+
+  const registers = new Uint8Array(MAX_POLICY_REGISTERS);
+  const storedLanes = new Map<number, number>();
+  for (const [index, operation] of program.operations.entries()) {
+    preflightOperation(operation, index, program, registers, storedLanes);
+  }
+  for (const buffer of program.buffers) {
+    if ((storedLanes.get(buffer.id) ?? 0) !== (1 << buffer.vectorWidth) - 1) {
+      throw new TypeError(`${label} leaves buffer ${buffer.id} lanes unwritten`);
+    }
+  }
+}
+
+function preflightOperation(
+  operation: PolicyOperation,
+  index: number,
+  program: PolicyProgram,
+  registers: Uint8Array,
+  storedLanes: Map<number, number>,
+): void {
+  const label = `policy program ${program.programId} operation ${index}`;
+  const { opcodes } = textShaperAbi.policy;
+  switch (operation.opcode) {
+    case opcodes.loadF32:
+      if ((operation.operand0 ?? 0) >= program.f32InputCount) {
+        throw new RangeError(`${label} loads an f32 input beyond the declared count`);
+      }
+      initializeRegister(registers, operation.target ?? 0, REGISTER_F32, label);
+      return;
+    case opcodes.loadU32:
+      if ((operation.operand0 ?? 0) >= program.u32InputCount) {
+        throw new RangeError(`${label} loads a u32 input beyond the declared count`);
+      }
+      initializeRegister(registers, operation.target ?? 0, REGISTER_U32, label);
+      return;
+    case opcodes.constantF32: {
+      f32Scratch.setUint32(0, operation.immediate0 ?? 0, true);
+      if (!Number.isFinite(f32Scratch.getFloat32(0, true))) {
+        throw new RangeError(`${label} constant is not a finite f32`);
+      }
+      initializeRegister(registers, operation.target ?? 0, REGISTER_F32, label);
+      return;
+    }
+    case opcodes.constantU32:
+      initializeRegister(registers, operation.target ?? 0, REGISTER_U32, label);
+      return;
+    case opcodes.addF32:
+    case opcodes.subtractF32:
+    case opcodes.multiplyF32:
+      requireRegister(registers, operation.operand0 ?? 0, REGISTER_F32, label);
+      requireRegister(registers, operation.operand1 ?? 0, REGISTER_F32, label);
+      initializeRegister(registers, operation.target ?? 0, REGISTER_F32, label);
+      return;
+    case opcodes.lessThanF32:
+      requireRegister(registers, operation.operand0 ?? 0, REGISTER_F32, label);
+      requireRegister(registers, operation.operand1 ?? 0, REGISTER_F32, label);
+      initializeRegister(registers, operation.target ?? 0, REGISTER_U32, label);
+      return;
+    case opcodes.selectF32:
+      requireRegister(registers, operation.operand0 ?? 0, REGISTER_U32, label);
+      requireRegister(registers, operation.operand1 ?? 0, REGISTER_F32, label);
+      requireRegister(registers, operation.immediate0 ?? 0, REGISTER_F32, label);
+      initializeRegister(registers, operation.target ?? 0, REGISTER_F32, label);
+      return;
+    case opcodes.convertU32ToF32:
+      requireRegister(registers, operation.operand0 ?? 0, REGISTER_U32, label);
+      initializeRegister(registers, operation.target ?? 0, REGISTER_F32, label);
+      return;
+    case opcodes.storeF32:
+    case opcodes.storeU32:
+    case opcodes.storeU16: {
+      const sourceType = operation.opcode === opcodes.storeF32 ? REGISTER_F32 : REGISTER_U32;
+      requireRegister(registers, operation.operand0 ?? 0, sourceType, label);
+      validateStore(operation, index, program, storedLanes);
+      return;
+    }
+    default:
+      throw new RangeError(`${label} opcode ${operation.opcode} is not a known policy opcode`);
+  }
+}
+
+function validateStore(
+  operation: PolicyOperation,
+  index: number,
+  program: PolicyProgram,
+  storedLanes: Map<number, number>,
+): void {
+  const label = `policy program ${program.programId} operation ${index}`;
+  const { opcodes } = textShaperAbi.policy;
+  const bufferId = operation.immediate0 ?? 0;
+  const schema = program.buffers.find((candidate) => candidate.id === bufferId);
+  if (schema === undefined) throw new TypeError(`${label} stores into undeclared buffer ${bufferId}`);
+  const expectedScalar: PolicyScalarType =
+    operation.opcode === opcodes.storeF32 ? 'f32' : operation.opcode === opcodes.storeU32 ? 'u32' : 'u16';
+  if (schema.scalar !== expectedScalar) {
+    throw new TypeError(`${label} stores ${expectedScalar} lanes into a ${schema.scalar} buffer`);
+  }
+  const lane = operation.operand1 ?? 0;
+  if (lane >= schema.vectorWidth) throw new RangeError(`${label} lane exceeds the buffer width`);
+  const mask = 1 << lane;
+  if (((storedLanes.get(bufferId) ?? 0) & mask) !== 0) {
+    throw new TypeError(`${label} writes buffer ${bufferId} lane ${lane} twice`);
+  }
+  storedLanes.set(bufferId, (storedLanes.get(bufferId) ?? 0) | mask);
+}
+
+function policyCapability(value: unknown, label: string): PolicyCapability {
+  if (
+    value !== 'storage-buffers' &&
+    value !== 'indirect-draws' &&
+    value !== 'alias-vec2' &&
+    value !== 'alias-vec4' &&
+    value !== 'ordered-direct' &&
+    value !== 'stable-indirect'
+  ) {
+    throw new TypeError(`${label} is not a known policy capability`);
+  }
+  return value;
+}
+
+function policyCapabilityFlags(set: PolicyCapabilitySet): number {
+  const flags = textShaperAbi.policy.capabilityFlags;
+  const values: Readonly<Record<PolicyCapability, number>> = {
+    'storage-buffers': flags.storageBuffers,
+    'indirect-draws': flags.indirectDraws,
+    'alias-vec2': flags.aliasVec2,
+    'alias-vec4': flags.aliasVec4,
+    'ordered-direct': flags.orderedDirect,
+    'stable-indirect': flags.stableIndirect,
+  };
+  return set.capabilities.reduce((combined, capability) => combined | values[capability], 0);
+}
+
+function policyScalarType(value: unknown, label: string): number {
+  const scalarTypes = textShaperAbi.policy.scalarTypes;
+  if (value === 'f32') return scalarTypes.f32;
+  if (value === 'u32') return scalarTypes.u32;
+  if (value === 'u16') return scalarTypes.u16;
+  throw new TypeError(`${label} is not f32, u32, or u16`);
+}
+
+function policyPrimitiveKind(value: unknown, label: string): number {
+  if (value === 'glyph') return textShaperAbi.engine.primitiveKinds.glyph;
+  if (value === 'decoration') return textShaperAbi.engine.primitiveKinds.decoration;
+  throw new TypeError(`${label} is not glyph or decoration`);
+}
+
+function initializeRegister(registers: Uint8Array, target: number, type: number, label: string): void {
+  if (target >= MAX_POLICY_REGISTERS) throw new RangeError(`${label} targets a register beyond the register file`);
+  registers[target] = type;
+}
+
+function requireRegister(registers: Uint8Array, source: number, type: number, label: string): void {
+  if (source >= MAX_POLICY_REGISTERS) throw new RangeError(`${label} reads a register beyond the register file`);
+  const actual = registers[source];
+  if (actual === REGISTER_UNINITIALIZED) throw new TypeError(`${label} reads register ${source} before it is written`);
+  if (actual !== type) throw new TypeError(`${label} register ${source} holds the other wire type`);
+}
+
+function isPowerOfTwo(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0 && (value & (value - 1)) === 0;
+}
+
+function u32(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0 || value > MAX_U32) throw new RangeError(`${label} needs a u32`);
+  return value;
+}
+
+function u16(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff) throw new RangeError(`${label} needs a u16`);
+  return value;
+}
+
+function u8(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xff) throw new RangeError(`${label} needs a u8`);
+  return value;
+}
+
 function sum<T>(values: readonly T[], measure: (value: T) => number): number {
   return values.reduce((total, value) => checkedAdd(total, measure(value), 'policy record count'), 0);
 }
 
-function align(value: number, alignment: number): number {
-  return Math.ceil(value / alignment) * alignment;
+function align(value: number, alignment: number, label: string): number {
+  if (!Number.isSafeInteger(alignment) || alignment < 1)
+    throw new RangeError(`${label} needs a positive integer alignment`);
+  const aligned = Math.ceil(value / alignment) * alignment;
+  if (!Number.isSafeInteger(aligned) || aligned > MAX_U32) throw new RangeError(`${label} offset exceeds u32`);
+  return aligned;
 }
 
 function checkedAdd(left: number, right: number, label: string): number {
@@ -439,4 +1452,8 @@ function f32Bits(value: number): number {
   const view = new DataView(bytes);
   view.setFloat32(0, value, true);
   return view.getUint32(0, true);
+}
+
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

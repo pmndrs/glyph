@@ -11,9 +11,15 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
+      ai-cli-mcp:
+        specifier: 2.22.0
+        version: 2.22.0
       oxfmt:
         specifier: 0.35.0
         version: 0.35.0
+      ts-morph:
+        specifier: 26.0.0
+        version: 26.0.0
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -32,6 +38,9 @@ importers:
       '@pmndrs/glyph-example-raster':
         specifier: workspace:*
         version: link:../../packages/glyph-example-raster
+      '@pmndrs/glyph-example-renderer':
+        specifier: workspace:*
+        version: link:../../packages/glyph-example-renderer
       '@react-three/fiber':
         specifier: 10.0.0-alpha.3
         version: 10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
@@ -117,6 +126,9 @@ importers:
       tailwindcss:
         specifier: 4.2.1
         version: 4.2.1
+      unplugin-typegpu:
+        specifier: 0.12.2
+        version: 0.12.2(rolldown@1.1.5)(typegpu@0.12.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
       vite:
         specifier: 8.1.5
         version: 8.1.5(@types/node@24.13.3)(jiti@2.7.0)
@@ -254,15 +266,15 @@ importers:
       unplugin-typegpu:
         specifier: 0.12.2
         version: 0.12.2(rolldown@1.1.5)(typegpu@0.12.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
+      vite:
+        specifier: 8.1.5
+        version: 8.1.5(@types/node@24.13.3)(jiti@2.7.0)
 
   packages/glyph-example-raster:
     dependencies:
       '@pmndrs/glyph':
         specifier: workspace:*
         version: link:../glyph
-      three:
-        specifier: 0.185.1
-        version: 0.185.1
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -276,6 +288,15 @@ importers:
       oxlint:
         specifier: 1.75.0
         version: 1.75.0
+      three:
+        specifier: 0.185.1
+        version: 0.185.1
+      typegpu:
+        specifier: 0.12.3
+        version: 0.12.3
+      unplugin-typegpu:
+        specifier: 0.12.2
+        version: 0.12.2(rolldown@1.1.5)(typegpu@0.12.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
       vitest:
         specifier: 4.1.0
         version: 4.1.0(@types/node@24.13.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
@@ -285,6 +306,15 @@ importers:
       '@pmndrs/glyph':
         specifier: workspace:*
         version: link:../glyph
+      '@pmndrs/glyph-example-raster':
+        specifier: workspace:*
+        version: link:../glyph-example-raster
+      '@webgpu/types':
+        specifier: 0.1.71
+        version: 0.1.71
+      typegpu:
+        specifier: 0.12.3
+        version: 0.12.3
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -295,6 +325,9 @@ importers:
       oxlint:
         specifier: 1.75.0
         version: 1.75.0
+      unplugin-typegpu:
+        specifier: 0.12.2
+        version: 0.12.2(rolldown@1.1.5)(typegpu@0.12.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
       vitest:
         specifier: 4.1.0
         version: 4.1.0(@types/node@24.13.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
@@ -1415,6 +1448,11 @@ packages:
   acorn@8.17.0:
     resolution: {integrity: sha512-xRQbDb9BnwDafYNn6Vwl839DYVjqXYb1XVGtWAZ1kcDc6iwAL4hg3B1dZlRiuENFeO2H53gFG3in621AdERVAg==}
     engines: {node: '>=0.4.0'}
+    hasBin: true
+
+  ai-cli-mcp@2.22.0:
+    resolution: {integrity: sha512-KzlzzsJVSNicaHMB1ez3EAoaCqfd7kVV+TpUb5xC0okhWu0UZ8XGKF3m86rdKeMXT2/40tdEhgO8UJP/6wCE7g==}
+    engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
   ajv-formats@2.1.1:
@@ -4170,6 +4208,14 @@ snapshots:
       acorn: 8.17.0
 
   acorn@8.17.0: {}
+
+  ai-cli-mcp@2.22.0:
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.30.0(zod@3.25.76)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
 
   ajv-formats@2.1.1(ajv@8.20.0):
     optionalDependencies:

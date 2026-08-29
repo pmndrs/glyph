@@ -24,7 +24,10 @@ pub(crate) const STYLE_FIELD_RASTER_PIXEL_RATIO: u32 = 1 << 9;
 pub(crate) const STYLE_FIELD_DIRECTION: u32 = 1 << 10;
 pub(crate) const STYLE_FIELD_FOREGROUND: u32 = 1 << 11;
 pub(crate) const STYLE_FIELD_DECORATION: u32 = 1 << 12;
-pub(crate) const STYLE_FIELD_MASK: u32 = (1 << 13) - 1;
+pub(crate) const STYLE_FIELD_OPACITY: u32 = 1 << 13;
+pub(crate) const STYLE_FIELD_OUTLINE: u32 = 1 << 14;
+pub(crate) const STYLE_FIELD_SHADOW: u32 = 1 << 15;
+pub(crate) const STYLE_FIELD_MASK: u32 = (1 << 16) - 1;
 pub(crate) const DECORATION_NONE: u8 = 0;
 pub(crate) const DECORATION_SOLID: u8 = 1;
 pub(crate) const DECORATION_DOUBLE: u8 = 2;
@@ -70,7 +73,7 @@ pub(crate) const BASELINE_ALPHABETIC: u8 = 1;
 pub(crate) const BASELINE_TEXT_TOP: u8 = 2;
 pub(crate) const BASELINE_MIDDLE: u8 = 3;
 pub(crate) const BASELINE_TEXT_BOTTOM: u8 = 4;
-pub(crate) const DEFAULT_SESSION_TEXT_CAPACITY: u32 = 1024;
+pub(crate) const DEFAULT_PLANNER_TEXT_CAPACITY: u32 = 1024;
 pub(crate) const SEMANTIC_F32_INLINE_START: u8 = 0;
 pub(crate) const SEMANTIC_F32_BLOCK_START: u8 = 1;
 pub(crate) const SEMANTIC_F32_INLINE_EXTENT: u8 = 2;
@@ -84,18 +87,23 @@ pub(crate) const SEMANTIC_F32_FOREGROUND_GREEN: u8 = 9;
 pub(crate) const SEMANTIC_F32_FOREGROUND_BLUE: u8 = 10;
 pub(crate) const SEMANTIC_F32_FOREGROUND_ALPHA: u8 = 11;
 pub(crate) const SEMANTIC_F32_INVERSE_FONT_SIZE: u8 = 12;
+pub(crate) const SEMANTIC_F32_OUTLINE_WIDTH_EM: u8 = 13;
+pub(crate) const SEMANTIC_F32_SHADOW_OFFSET_X_EM: u8 = 14;
+pub(crate) const SEMANTIC_F32_SHADOW_OFFSET_Y_EM: u8 = 15;
 pub(crate) const SEMANTIC_U32_FOREGROUND_RGBA: u8 = 0;
 pub(crate) const SEMANTIC_U32_CLUSTER_ID: u8 = 1;
 pub(crate) const SEMANTIC_U32_REGION_ID: u8 = 2;
 pub(crate) const SEMANTIC_U32_FLOW_THREAD_ID: u8 = 3;
 pub(crate) const SEMANTIC_U32_TRANSFORM_INDEX: u8 = 4;
 pub(crate) const SEMANTIC_U32_STABLE_GLYPH_ID: u8 = 5;
+pub(crate) const SEMANTIC_U32_OUTLINE_RGBA: u8 = 6;
+pub(crate) const SEMANTIC_U32_SHADOW_RGBA: u8 = 7;
 pub(crate) const PARAGRAPH_MUTATION_UPSERT: u8 = 1;
 pub(crate) const PARAGRAPH_MUTATION_REMOVE: u8 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct UpdateRequest<'a> {
-    pub session_id: u32,
+    pub planner_id: u32,
     pub expected_engine_revision: u32,
     pub consumed_plan_revision: u32,
     pub acknowledged_publication_generation: u32,
@@ -136,16 +144,16 @@ impl UpdateLimits {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct SessionRevision {
+pub(crate) struct PlannerRevision {
     pub engine: u32,
     pub plan: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct PreparedUpdate {
-    pub(super) session_id: u32,
-    pub(super) previous: SessionRevision,
-    pub(super) next: SessionRevision,
+    pub(super) planner_id: u32,
+    pub(super) previous: PlannerRevision,
+    pub(super) next: PlannerRevision,
     pub(super) required_base_revision: u32,
     pub(super) checkpoint: bool,
     pub(super) policy_handle: u32,
@@ -154,25 +162,25 @@ pub(crate) struct PreparedUpdate {
 }
 
 impl PreparedUpdate {
-    pub(crate) fn session_id(self) -> u32 {
-        self.session_id
+    pub(crate) fn planner_id(self) -> u32 {
+        self.planner_id
     }
 }
 
 /// Witness of a paragraph-scoped speculative measurement: semantic records for the
-/// queried paragraph are ready to stage while committed session state, revisions, and
+/// queried paragraph are ready to stage while committed planner state, revisions, and
 /// identity counters remain untouched. The prepared pending state stays retained as
-/// the session's speculative transaction; it cannot be committed through this witness.
+/// the retained plan's speculative transaction; it cannot be committed through this witness.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MeasuredParagraph {
-    pub(super) session_id: u32,
-    pub(super) revision: SessionRevision,
+    pub(super) planner_id: u32,
+    pub(super) revision: PlannerRevision,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct CommittedUpdate {
-    pub session_id: u32,
-    pub revision: SessionRevision,
+    pub planner_id: u32,
+    pub revision: PlannerRevision,
     pub required_base_revision: u32,
     pub checkpoint: bool,
 }

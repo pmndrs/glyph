@@ -1,4 +1,4 @@
-import { defineRasterResourceId, type ParagraphLayout } from '@pmndrs/glyph';
+import { defineRasterResourceId, type GlyphLayout } from '@pmndrs/glyph';
 import type { MsdfData as MtsdfData } from '@pmndrs/glyph/raster/msdf';
 import { describe, expect, it } from 'vitest';
 
@@ -176,8 +176,8 @@ function writeRecord(
 }
 
 function specimenLayout(
-  overrides: Partial<Pick<ParagraphLayout, 'glyphIds' | 'glyphFontSlots' | 'glyphFontSizes' | 'x' | 'y'>> = {},
-): ParagraphLayout {
+  overrides: Partial<Pick<GlyphLayout, 'glyphIds' | 'glyphFontSlots' | 'glyphFontSizes' | 'x' | 'y'>> = {},
+): GlyphLayout {
   return {
     width: 4,
     height: 4,
@@ -203,6 +203,7 @@ function specimenLayout(
     glyphInkWidths: new Float32Array(overrides.glyphIds?.length ?? 1),
     glyphInkHeights: new Float32Array(overrides.glyphIds?.length ?? 1),
     glyphFlags: new Uint16Array(overrides.glyphIds?.length ?? 1),
+    glyphBidiLevels: new Uint8Array(overrides.glyphIds?.length ?? 1),
     lineTextStarts: new Uint32Array([0]),
     lineTextEnds: new Uint32Array([1]),
     lineGlyphStarts: new Uint32Array([0]),

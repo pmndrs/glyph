@@ -1,4 +1,4 @@
-import type { AnyRasterTechnique, LoadedFont, ParagraphLayoutSummary } from '@pmndrs/glyph';
+import type { AnyRasterTechnique, Font, ParagraphLayoutSummary } from '@pmndrs/glyph';
 import { TextGroup, type Text } from '@pmndrs/glyph/three';
 import type * as THREE from 'three/webgpu';
 
@@ -7,7 +7,7 @@ import type * as THREE from 'three/webgpu';
  * hands every scene the same erased identity, so a single `ComparisonWorkloadDefinition` can serve Bitmap, MTSDF, and
  * Slug without threading a type parameter through the registry.
  */
-export type WorkloadFont = LoadedFont<AnyRasterTechnique>;
+export type WorkloadFont = Font<AnyRasterTechnique>;
 export type WorkloadText = Text<AnyRasterTechnique>;
 export type WorkloadTextGroup = TextGroup;
 
@@ -17,11 +17,11 @@ export interface MutableSpanPaint {
   shadow?: { color: string; offset: readonly [number, number] };
 }
 
-/** One retained span whose paint the animation rewrites in place before republishing the whole span list. */
+/** One retained span whose visual style the animation rewrites before republishing the whole span list. */
 export interface MutablePaintSpan {
   readonly start: number;
   readonly end: number;
-  readonly paint: MutableSpanPaint;
+  readonly style: MutableSpanPaint;
 }
 
 /** The retained `{ text, spans }` payload an animated workload republishes through `Text.set`. */
@@ -85,12 +85,10 @@ export function publishWorkloadTexts(root: THREE.Object3D, entries: readonly Com
 
 /** Explicitly queries the aggregate metrics committed by the Rust Text lifecycle before scene positioning. */
 export function committedTextMetrics(text: WorkloadText): ParagraphLayoutSummary {
-  const metrics = text.layout();
-  if (metrics === undefined) throw new Error('workload Text lost its committed layout metrics');
-  return metrics;
+  return text.measure();
 }
 
-/** Target-v1 paint takes CSS colors, while the comparison palettes stay authored as 24-bit hex. */
+/** Text style colors use CSS strings, while the comparison palettes stay authored as 24-bit hex. */
 export function paintColor(value: number): string {
   if (!Number.isInteger(value) || value < 0 || value > 0xff_ff_ff) {
     throw new RangeError('workload paint color must be a 24-bit integer');

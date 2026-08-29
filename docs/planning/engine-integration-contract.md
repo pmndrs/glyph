@@ -564,6 +564,9 @@ storage. The engine target realizes those bindings as textures, buffers, bind gr
 
 ## Failure contract
 
+> This section records the superseded attachment API. The current render-plan executor follows D-279: validate and prepare
+> a complete candidate, commit once, and retry an unpublished accepted publication without rollback or input churn.
+
 ```ts
 type CoreMutationRejection = 'invalid-paragraph-input' | 'font-outside-group' | 'mixed-technique-font-stack';
 

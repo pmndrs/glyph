@@ -1,4 +1,4 @@
-import type { ParagraphLayout } from '../layout.js';
+import type { GlyphLayout } from '../layout.js';
 import type { JsonValue } from '../raster.js';
 import { normalizeRasterCoverage, RasterCoverageError, type RasterCoverage } from '../raster-coverage.js';
 import { canonicalJson } from './raster-identity.js';
@@ -44,7 +44,7 @@ export function decodeRasterCoverage(
 }
 
 export function assertRasterCoverage(
-  layout: ParagraphLayout,
+  layout: GlyphLayout,
   fontSlot: number,
   coverage: Uint8Array | undefined,
   rasterKind: string,

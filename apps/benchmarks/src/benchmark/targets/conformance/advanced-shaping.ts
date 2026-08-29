@@ -1,6 +1,6 @@
-import type { LoadedFont, LoadedFontRequest } from '@pmndrs/glyph';
+import type { Font, RasterTechniqueInput } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, Text, type ParagraphStyle } from '@pmndrs/glyph/three';
+import { FontLoader, Text, type TextStyle } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import amiriBitmapFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
@@ -20,7 +20,7 @@ type BitmapTechnique = typeof bitmap;
 const VIEWPORT_WIDTH = 800;
 const FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
-const bitmapRaster: LoadedFontRequest<BitmapTechnique>['raster'] = {
+const bitmapRaster: RasterTechniqueInput<BitmapTechnique> = {
   technique: bitmap,
   options: { strikes: [16] },
 };
@@ -36,7 +36,7 @@ type AdvancedShapingConformanceState =
   | {
       readonly kind: 'ready';
       readonly loader: FontLoader;
-      readonly fonts: ReadonlyMap<AdvancedShapingFontFixture, LoadedFont<BitmapTechnique>>;
+      readonly fonts: ReadonlyMap<AdvancedShapingFontFixture, Font<BitmapTechnique>>;
     };
 
 export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
@@ -50,10 +50,10 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
     status: () => 'ready',
     load: async (_controls, context) => {
       if (state.kind === 'ready') return;
-      // A loading manager this target owns keeps its text runtime, and the fonts registered in it, isolated from the
+      // A loading manager this target owns keeps its text engine, and the fonts registered in it, isolated from the
       // shared manager every other benchmark surface loads through.
       const loader = new FontLoader(new THREE.LoadingManager());
-      const fonts = new Map<AdvancedShapingFontFixture, LoadedFont<BitmapTechnique>>();
+      const fonts = new Map<AdvancedShapingFontFixture, Font<BitmapTechnique>>();
       try {
         const fixtures = [...new Set(ADVANCED_SHAPING_CASES.map((definition) => definition.fontFixture))];
         const results = await Promise.allSettled(
@@ -102,7 +102,7 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
         let text: Text<BitmapTechnique> | undefined;
         try {
           for (const frame of caseFrames) {
-            const style: ParagraphStyle = {
+            const style: TextStyle = {
               fontSize: FONT_SIZE,
               language: definition.language,
               direction: definition.direction,
@@ -112,7 +112,7 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
             };
             const properties = {
               text: frame.text,
-              contentBox: {
+              constraints: {
                 width: {
                   mode: 'exact',
                   size: Math.max(120, (VIEWPORT_WIDTH * frame.widthPermille) / 1000),

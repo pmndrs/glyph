@@ -96,8 +96,9 @@ export function createZoomTextEntries(context: WorkloadTextFactoryContext): read
         lineHeight: LIVE_TEXT_LINE_HEIGHT,
         language: phrase.language,
         direction: 'ltr',
+        color: paintColor(LIVE_TEXT_COLOR),
+        opacity,
       },
-      paint: { color: paintColor(LIVE_TEXT_COLOR), opacity },
     });
     const node = new THREE.Group();
     node.add(text);
@@ -208,7 +209,7 @@ function setZoomTextOpacity(entry: ComparisonWorkloadEntry, opacity: number): vo
   if (Math.abs((entry.zoomOpacity ?? -1) - opacity) < 0.002) return;
   entry.zoomOpacity = opacity;
   // `set` replaces a property group wholesale, so the retained colour has to travel with the new opacity.
-  entry.text.set({ paint: { ...entry.text.paint, opacity } });
+  entry.text.set({ style: { ...entry.text.style, opacity } });
 }
 
 function animationRate(animationSpeed: number): number {

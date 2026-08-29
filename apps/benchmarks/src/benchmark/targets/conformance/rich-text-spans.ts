@@ -1,5 +1,6 @@
-import type { LoadedFont, LoadedFontRequest, ParagraphLayout } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import type { Font, GlyphLayout, RasterTechniqueInput } from '@pmndrs/glyph';
+import { id as hashId } from '@pmndrs/glyph/core';
+import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -17,6 +18,7 @@ import {
   type RichTextCompanionFonts,
 } from '../../../workloads/rich-text/scene';
 import type { BenchmarkTarget } from '../../contracts';
+import { policyAttributeName, requiredPolicyAttribute } from '../three-policy-buffer-evidence';
 
 type BitmapTechnique = typeof bitmap;
 
@@ -30,13 +32,16 @@ type BitmapTechnique = typeof bitmap;
 const CONTENT_WIDTH = 700;
 const BODY_FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
+const BITMAP_COLOR_ATTRIBUTE = policyAttributeName(bitmapSchema.buffers.color.id);
+const DECORATION_RECT_ATTRIBUTE = policyAttributeName(hashId.buffer('glyph-three/decoration/rect'));
+const DECORATION_PACKED_ATTRIBUTE = policyAttributeName(hashId.buffer('glyph-three/decoration/packed'));
 // Decoration gather convention (D-248): buffer 2 packs [color, flags | style << 8] per instance. The bit values are
 // the shaper ABI's `engine.decorationFlags` / `engine.decorationStyles`, pinned here because a silent renumbering
 // must fail this lane rather than shift what the probe counts.
 const DECORATION_UNDERLINE_FLAG = 0b0001;
 const DECORATION_LINE_THROUGH_FLAG = 0b0100;
 const DECORATION_SOLID_STYLE = 1;
-const bitmapRaster: LoadedFontRequest<BitmapTechnique>['raster'] = {
+const bitmapRaster: RasterTechniqueInput<BitmapTechnique> = {
   technique: bitmap,
   options: { strikes: [16] },
 };
@@ -87,7 +92,7 @@ type RichTextSpansState =
   | {
       readonly kind: 'ready';
       readonly loader: FontLoader;
-      readonly body: LoadedFont<BitmapTechnique>;
+      readonly body: Font<BitmapTechnique>;
       readonly companions: RichTextCompanionFonts;
     };
 
@@ -102,10 +107,10 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
     status: () => 'ready',
     load: async (_controls, context) => {
       if (state.kind === 'ready') return;
-      // A loading manager this target owns keeps its text runtime, and the fonts registered in it, isolated from the
+      // A loading manager this target owns keeps its text engine, and the fonts registered in it, isolated from the
       // shared manager every other benchmark surface loads through.
       const loader = new FontLoader(new THREE.LoadingManager());
-      const loaded: LoadedFont<BitmapTechnique>[] = [];
+      const loaded: Font<BitmapTechnique>[] = [];
       try {
         const [body, foreign, emphasis] = await Promise.all(
           [interBitmapFontUrl, devanagariBitmapFontUrl, sourceSerifBitmapFontUrl].map(async (url) => {
@@ -125,11 +130,11 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
         // underline and strikeout values the artifact bakes from `post` and `OS/2`, so a
         // regression in the bake or decode path fails this lane before any renderer work.
         for (const loadedFont of [body, foreign, emphasis]) {
-          const { underlinePosition, underlineThickness, strikeoutPosition, strikeoutSize } = loadedFont.font.metrics;
+          const { underlinePosition, underlineThickness, strikeoutPosition, strikeoutSize } = loadedFont.metrics;
           const values = [underlinePosition, underlineThickness, strikeoutPosition, strikeoutSize];
           if (!values.every(Number.isFinite) || underlineThickness <= 0 || strikeoutSize <= 0) {
             throw new Error(
-              `baked decoration metrics are missing or degenerate for ${loadedFont.font.key}: ` +
+              `baked decoration metrics are missing or degenerate for ${loadedFont.technique.id}: ` +
                 `underline ${underlinePosition}/${underlineThickness}, strikeout ${strikeoutPosition}/${strikeoutSize}`,
             );
           }
@@ -296,7 +301,7 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
 
 function measureCase(
   group: TextGroup,
-  body: LoadedFont<BitmapTechnique>,
+  body: Font<BitmapTechnique>,
   companions: RichTextCompanionFonts,
   caseId: RichTextCaseId,
 ): CaseEvidence {
@@ -317,9 +322,9 @@ function measureCase(
   const text = new Text({
     font: body,
     text: literal,
-    style: { fontSize: BODY_FONT_SIZE, lineHeight: 1.25 },
-    paint: { color: '#ffffff' },
-    contentBox: { width: { mode: 'exact', size: CONTENT_WIDTH }, wrap: 'word' },
+    style: { fontSize: BODY_FONT_SIZE, lineHeight: 1.25, color: '#ffffff' },
+    layout: { wrap: 'word' },
+    constraints: { width: { mode: 'exact', size: CONTENT_WIDTH } },
   });
   try {
     group.add(text);
@@ -349,7 +354,7 @@ function measureCase(
  * raster resource rather than by paragraph position, so the result is the paragraph's multiset of resolved colours and
  * not a per-cluster mapping — which is why the paint evidence is expressed as counts and differences between cases.
  */
-function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEvidence {
+function readEvidence(text: THREE.Object3D, layout: GlyphLayout): CaseEvidence {
   const colors: string[] = [];
   let drawCount = 0;
   let renderedGlyphCount = 0;
@@ -358,10 +363,10 @@ function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEviden
   text.traverse((child) => {
     if (!(child instanceof THREE.Mesh) || !(child.geometry instanceof THREE.InstancedBufferGeometry)) return;
     if (child.userData.pmndrsGlyphPrimitiveKind === 'decoration') {
-      const rect = child.geometry.getAttribute('_pmndrsGlyph_1');
-      const packed = child.geometry.getAttribute('_pmndrsGlyph_2');
+      const rect = requiredPolicyAttribute(child.geometry, DECORATION_RECT_ATTRIBUTE, 'decoration rect evidence');
+      const packed = requiredPolicyAttribute(child.geometry, DECORATION_PACKED_ATTRIBUTE, 'decoration packed evidence');
       if (!(rect?.array instanceof Float32Array) || !(packed?.array instanceof Uint32Array)) {
-        throw new Error('decoration draw is missing its rect lane 1 or packed color/flags lane 2');
+        throw new Error('decoration draw is missing its rect or packed color/flags buffer');
       }
       const start = (child.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
       for (let instance = 0; instance < child.geometry.instanceCount; instance += 1) {
@@ -375,8 +380,7 @@ function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEviden
       return;
     }
     drawCount += 1;
-    const attribute = child.geometry.getAttribute('_pmndrsGlyph_5');
-    if (attribute === undefined) throw new Error('Bitmap draw is missing command-buffer color lane 5');
+    const attribute = requiredPolicyAttribute(child.geometry, BITMAP_COLOR_ATTRIBUTE, 'Bitmap color evidence');
     const start = (child.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
     const count = child.geometry.instanceCount;
     renderedGlyphCount += count;

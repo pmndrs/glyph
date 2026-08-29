@@ -45,7 +45,7 @@ tree-shaking boundaries; and states the proof obligations that keep the contract
 
 ## The sin, measured
 
-Where "Bitmap" lives today — six sites, four of which repeat schema knowledge the others cannot see:
+Where "Bitmap" lived before this work — six sites, four of which repeated schema knowledge the others could not see:
 
 ```mermaid
 flowchart TB
@@ -61,7 +61,7 @@ flowchart TB
   subgraph three ["@pmndrs/glyph/three"]
     policy["render-policy.ts\nBITMAP_COLOR = 5\n(ids = declared here)"]
     exec["engine-plan-target.ts\nbyPolicyId.get(1)\n(ids = known again, by hand)"]
-    material["material wiring\n_pmndrsGlyph_5 → color node\n(ids = known a third time)"]
+    material["material wiring\nprivate Three key → color node\n(ids = known a third time)"]
   end
   subgraph bakers ["@pmndrs/glyph/bakers/bitmap"]
     baker["baker + validator\n(artifact schema)"]
@@ -84,8 +84,8 @@ The rule this plan adopts: **you can reason about the software path by path, and
 point.** A subpath owns its concepts, exports its contracts, and consumes other subpaths only through their public
 entries — enforced by lint (D-249) and measured by per-subpath size entries.
 
-| subpath                   | owns                                                                   | must never know                           |
-| ------------------------- | ---------------------------------------------------------------------- | ----------------------------------------- |
+| subpath                    | owns                                                                   | must never know                           |
+| -------------------------- | ---------------------------------------------------------------------- | ----------------------------------------- |
 | `@pmndrs/glyph`            | fonts, text, styles, runtime                                           | GPUs, shaders, plans                      |
 | `@pmndrs/glyph/core`       | engine host, frame wire, plan view, policy authoring, binding compiler | any renderer, any shader language         |
 | `@pmndrs/glyph/raster/<t>` | **the technique declaration** (this plan's construct)                  | Three, TSL node graphs                    |
@@ -102,6 +102,8 @@ the meeting point of what the technique's programs produce and what its shaders 
 
 ```ts
 // @pmndrs/glyph/raster/bitmap — the ONLY place bitmap's shape is stated.
+import { defineTechniqueSchema, id } from '@pmndrs/glyph/core';
+
 export const bitmapSchema = defineTechniqueSchema({
   technique: 'pmndrs.bitmap',
   scope: 'strike',
@@ -110,12 +112,12 @@ export const bitmapSchema = defineTechniqueSchema({
     u32: ['page'],
   },
   buffers: {
-    origin: { id: 1, scalar: 'f32', lanes: ['inlineOrigin', 'blockOrigin'] },
-    size: { id: 2, scalar: 'f32', lanes: ['width', 'height'] },
-    uvOrigin: { id: 3, scalar: 'f32', lanes: ['u', 'v'] },
-    uvSize: { id: 4, scalar: 'f32', lanes: ['uSpan', 'vSpan'] },
-    color: { id: 5, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
-    page: { id: 6, scalar: 'u32', lanes: ['page'] },
+    origin: { id: id.buffer('pmndrs.bitmap/origin'), scalar: 'f32', lanes: ['inlineOrigin', 'blockOrigin'] },
+    size: { id: id.buffer('pmndrs.bitmap/size'), scalar: 'f32', lanes: ['width', 'height'] },
+    uvOrigin: { id: id.buffer('pmndrs.bitmap/uv-origin'), scalar: 'f32', lanes: ['u', 'v'] },
+    uvSize: { id: id.buffer('pmndrs.bitmap/uv-size'), scalar: 'f32', lanes: ['uSpan', 'vSpan'] },
+    color: { id: id.buffer('pmndrs.bitmap/color'), scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+    page: { id: id.buffer('pmndrs.bitmap/page'), scalar: 'u32', lanes: ['page'] },
   },
   resources: { atlas: { kind: 'texture-array', format: 'r8unorm' } },
 });

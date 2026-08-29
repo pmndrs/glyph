@@ -61,10 +61,43 @@ type ThreeTextMaterialContext =
       readonly shader: ThreeSlugShaderOutput;
       readonly position: Node<'vec3'>;
       createDefaultMaterial(): THREE.NodeMaterial;
+    }
+  | {
+      readonly technique: AnyRasterTechnique;
+      readonly outputs: ReadonlyMap<string, Node>;
+      readonly position: Node<'vec3'>;
+      createDefaultMaterial(): THREE.NodeMaterial;
     };
 
 interface ThreeTextMaterial {
   create(context: ThreeTextMaterialContext): THREE.NodeMaterial;
+}
+
+interface ThreePlanProgramMaterialContext {
+  readonly technique: AnyRasterTechnique;
+  readonly schema: TechniqueSchema;
+  readonly variantId: string;
+  readonly language: string;
+  readonly namedBuffers: ReadonlyMap<string, ThreePlanProgramBuffer>;
+  readonly namedResources: ReadonlyMap<string, PortableResource>;
+  readonly outputTypes: Readonly<Record<string, string>>;
+  readonly resourceName: string;
+  readonly instance: Node<'uint'>;
+  readonly materialId: number;
+  readonly material: ThreeTextMaterial | undefined;
+  transformPosition(position: Node<'vec3'>): Node<'vec3'>;
+}
+
+interface ThreeRasterPlanVariant {
+  readonly id: string;
+  readonly language: string;
+  readonly geometry: TechniqueGeometryDeclaration;
+  createMaterial(context: ThreePlanProgramMaterialContext): THREE.NodeMaterial;
+}
+
+interface ThreeRasterPlanProgram {
+  readonly technique: AnyRasterTechnique;
+  readonly variant: ThreeRasterPlanVariant;
 }
 
 declare function defineTextMaterial(
@@ -87,7 +120,9 @@ interface TextSpan {
 `position` is the exact renderer-local position after policy-selected transform indirection. This is distinct from the
 canonical shader's paragraph-local position and prevents a custom material from accidentally bypassing indexed
 transforms. The discriminant narrows the exact Bitmap, MSDF, or Slug shader output without a universal union record in
-Rust or Wasm.
+Rust or Wasm. Third-party techniques use the generic plan-program context above: buffers and retained resources are
+addressed by the names declared in the portable schema, while Three owns material caching, geometry realization, and
+resource lifetime.
 
 ```ts
 const etched = defineTextMaterial(({ technique, shader, position }) => {
@@ -134,12 +169,12 @@ changes material identity and schedules render-plan recompilation.
 
 ## Construction, caching, and lifetime
 
-Factories run only when the Three adapter needs a compatible material/resource realization: first use, a new material
+Factories run only when the Three integration needs a compatible material/resource realization: first use, a new material
 ID, an incompatible resource binding, or a retired realization. They never run in Rust, per glyph, or merely because a
-frame was requested. The adapter retains a bounded cache keyed by technique, material ID, program, and resource-binding
+frame was requested. The integration retains a bounded cache keyed by technique, material ID, program, and resource-binding
 compatibility.
 
-The adapter owns and disposes every material returned by a factory. A factory must return a fresh unowned material for
+The integration owns and disposes every material returned by a factory. A factory must return a fresh unowned material for
 each invocation; returning a material already owned by another scene object is rejected. Removing a material ID from the
 live plan retires it only after the renderer-safe publication/fence boundary. Disposing a material definition still
 referenced by a live batch, text, or span is an integration lifecycle error.
@@ -154,7 +189,7 @@ bounded distance-based implementation; Slug remains fill-only until a separately
 Material identity is always independent from shaping/layout and is policy-selectable at the two rendering boundaries.
 Adjacent glyph spans with the same draw key form one draw span. Different material IDs may reference the same physical
 buffers at different record ranges, or a storage key containing material may partition those records. Rust ordered-plan
-tests prove both outcomes rather than leaving the adapter to reinterpret the published plan.
+tests prove both outcomes rather than leaving the integration to reinterpret the published plan.
 
 ## Rejected effects layer
 

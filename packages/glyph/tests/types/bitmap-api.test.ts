@@ -1,4 +1,4 @@
-import type { RasterKey, RegisteredFont, RegisteredRaster } from '@pmndrs/glyph';
+import type { RasterDecodeArtifact, RasterDecodeFont } from '@pmndrs/glyph';
 import {
   bitmap,
   bitmapDescriptor,
@@ -15,16 +15,10 @@ void fromTuple;
 
 const configured: BitmapOptions<typeof tuple> = { strikes: tuple };
 void bitmapRasterKey(configured);
-declare const font: RegisteredFont;
-declare const raster: RegisteredRaster<'bitmap'>;
+declare const font: RasterDecodeFont;
+declare const raster: RasterDecodeArtifact<'bitmap'>;
 const bitmapData: Promise<BitmapData> = bitmap.decode(font, raster);
 void bitmapData;
-declare const rasterKey: RasterKey;
-const loadedBitmap: Promise<RegisteredRaster<'bitmap'>> = font.loadRaster({
-  rasterKey,
-  kind: 'bitmap',
-});
-void loadedBitmap;
 
 declare const dynamicStrike: number;
 declare const dynamicStrikes: number[];

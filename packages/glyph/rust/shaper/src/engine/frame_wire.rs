@@ -18,10 +18,10 @@ use crate::{
         ENGINE_UPDATE_MAX_LINES, ENGINE_UPDATE_MAX_OUTPUT_BYTES, ENGINE_UPDATE_MAX_PARAGRAPHS,
         ENGINE_UPDATE_MAX_REGIONS, ENGINE_UPDATE_MAX_SLOTS_PER_BAND,
         ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT, ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET,
-        ENGINE_UPDATE_POLICY_HANDLE, ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH,
-        ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET, ENGINE_UPDATE_REGION_COUNT,
-        ENGINE_UPDATE_REGIONS_OFFSET, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
-        ENGINE_UPDATE_SEMANTIC_VIEW_MASK, ENGINE_UPDATE_SESSION_ID,
+        ENGINE_UPDATE_PLANNER_ID, ENGINE_UPDATE_POLICY_HANDLE,
+        ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH, ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET,
+        ENGINE_UPDATE_REGION_COUNT, ENGINE_UPDATE_REGIONS_OFFSET,
+        ENGINE_UPDATE_REQUEST_HEADER_SIZE, ENGINE_UPDATE_SEMANTIC_VIEW_MASK,
         ENGINE_UPDATE_STYLE_MUTATION_COUNT, ENGINE_UPDATE_STYLE_MUTATIONS_OFFSET,
         ENGINE_UPDATE_TEXT_MUTATION_COUNT, ENGINE_UPDATE_TEXT_MUTATIONS_OFFSET,
     },
@@ -36,11 +36,11 @@ const MAX_DECLARED_OUTPUT_BYTES: u32 = 64 * 1024 * 1024;
 
 pub(crate) fn parse_update_request(
     bytes: &[u8],
-    session_id: u32,
+    planner_id: u32,
 ) -> Result<UpdateRequest<'_>, u32> {
     if bytes.len() < ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
         || read_u32(bytes, ENGINE_UPDATE_ABI_VERSION)? != ABI_VERSION
-        || read_u32(bytes, ENGINE_UPDATE_SESSION_ID)? != session_id
+        || read_u32(bytes, ENGINE_UPDATE_PLANNER_ID)? != planner_id
         || read_u32(bytes, ENGINE_UPDATE_BYTE_LENGTH)?
             != u32::try_from(bytes.len()).map_err(|_| STATUS_INVALID_REQUEST)?
     {
@@ -137,7 +137,7 @@ pub(crate) fn parse_update_request(
         return Err(STATUS_INVALID_REQUEST);
     }
     Ok(UpdateRequest {
-        session_id,
+        planner_id,
         expected_engine_revision: read_u32(bytes, ENGINE_UPDATE_EXPECTED_ENGINE_REVISION)?,
         consumed_plan_revision: read_u32(bytes, ENGINE_UPDATE_CONSUMED_PLAN_REVISION)?,
         acknowledged_publication_generation: read_u32(
@@ -175,7 +175,7 @@ mod tests {
     fn accepts_only_the_canonical_empty_stage_one_transaction() {
         let bytes = request();
         let parsed = parse_update_request(&bytes, 4).unwrap();
-        assert_eq!(parsed.session_id, 4);
+        assert_eq!(parsed.planner_id, 4);
         assert_eq!(parsed.policy_handle, 9);
 
         let mut independent = bytes.clone();
@@ -242,7 +242,7 @@ mod tests {
             ENGINE_UPDATE_BYTE_LENGTH,
             ENGINE_UPDATE_REQUEST_HEADER_SIZE,
         );
-        write_u32(&mut bytes, ENGINE_UPDATE_SESSION_ID, 4);
+        write_u32(&mut bytes, ENGINE_UPDATE_PLANNER_ID, 4);
         write_u32(&mut bytes, ENGINE_UPDATE_POLICY_HANDLE, 9);
         write_u32(&mut bytes, ENGINE_UPDATE_CAPABILITY_SET, 1);
         for offset in [

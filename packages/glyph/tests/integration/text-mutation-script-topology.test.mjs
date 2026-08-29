@@ -83,14 +83,11 @@ const fonts = createFontCache(FIXTURES);
 after(() => fonts.dispose());
 
 /** Wide enough for the long corpora to wrap rather than clip every case into the same overflow. */
-const wrappingBox = { width: { mode: 'exact', size: 220 }, wrap: 'word' };
+const wrappingFlow = { constraints: { width: { mode: 'exact', size: 220 } }, layout: { wrap: 'word' } };
 /** The product-shaped box from the reported regression: centered, single line, clipped. */
-const clippedBox = {
-  align: 'center',
-  maxLines: 1,
-  overflow: 'clip',
-  width: { mode: 'exact', size: 220 },
-  wrap: 'none',
+const clippedFlow = {
+  constraints: { width: { mode: 'exact', size: 220 } },
+  layout: { align: 'center', maxLines: 1, overflow: 'clip', wrap: 'none' },
 };
 const paint = { color: '#ffffff' };
 
@@ -107,20 +104,22 @@ const paint = { color: '#ffffff' };
  * with the same text always carry identical authored style -- the comparison stays a test of the
  * incremental path, not of two different documents.
  */
-function paragraph(shaping, text, { box = wrappingBox, position, rasterPixelRatio, styled = false } = {}) {
+function paragraph(shaping, text, { flow = wrappingFlow, position, rasterPixelRatio, styled = false } = {}) {
   return {
     position,
     properties: {
-      contentBox: box,
-      paint,
+      ...flow,
       spans: styled ? spansFor(text) : [],
-      style: {
-        fontSize: 6,
-        lineHeight: 1,
-        direction: shaping.direction,
-        language: shaping.language,
-        ...(text.length === 0 || shaping.features === undefined ? {} : { features: shaping.features }),
-      },
+      style: [
+        {
+          fontSize: 6,
+          lineHeight: 1,
+          direction: shaping.direction,
+          language: shaping.language,
+          ...(text.length === 0 || shaping.features === undefined ? {} : { features: shaping.features }),
+        },
+        paint,
+      ],
       text,
       ...(rasterPixelRatio === undefined ? {} : { rasterPixelRatio }),
     },
@@ -147,8 +146,8 @@ function spansFor(text) {
   const second = snap(first + 1);
   if (first === 0 || second <= first || second >= text.length) return [];
   return [
-    { start: 0, end: first, paint: { color: '#ff2f00' }, style: { fontSize: 9, lineHeight: 1 } },
-    { start: first, end: second, paint: { color: '#0040ff' }, style: { fontSize: 4, lineHeight: 1 } },
+    { start: 0, end: first, style: { ...{ fontSize: 9, lineHeight: 1 }, ...{ color: '#ff2f00' } } },
+    { start: first, end: second, style: { ...{ fontSize: 4, lineHeight: 1 }, ...{ color: '#0040ff' } } },
   ];
 }
 
@@ -345,8 +344,8 @@ for (const shaping of CASES) {
         try {
           assertShaped(ligated, `${where} ligature precondition`);
           assertShaped(plain, `${where} ligature precondition`);
-          const ligatedGlyphs = ligated.nodes[0].layout().glyphCount;
-          const plainGlyphs = plain.nodes[0].layout().glyphCount;
+          const ligatedGlyphs = ligated.nodes[0].measure().glyphCount;
+          const plainGlyphs = plain.nodes[0].measure().glyphCount;
           assert.ok(
             ligatedGlyphs < text.length,
             `${where}: ${JSON.stringify(text)} shaped ${ligatedGlyphs} glyphs for ${text.length} scalars, so no ligature absorbed a cluster`,
@@ -396,7 +395,7 @@ for (const shaping of CASES) {
         // a clipped single line drops the glyphs past the box, so the record run also grows and
         // shrinks under the edit rather than only shifting.
         const font = await fonts.load(fixture);
-        const authored = (text) => [paragraph(shaping, text, { box: clippedBox })];
+        const authored = (text) => [paragraph(shaping, text, { flow: clippedFlow })];
         const mounted = mount(font, authored(from));
         try {
           for (const [step, text] of [to, from, to, from, to].entries()) {

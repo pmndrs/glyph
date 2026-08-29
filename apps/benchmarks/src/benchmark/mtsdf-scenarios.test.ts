@@ -18,8 +18,6 @@ const sceneMeasurement: BenchmarkMeasurement = {
     drawCount: 4,
     changedPixels: 14_818,
     distinctRgbColors: 2_800,
-    artifactBytes: 39_347_792,
-    compressedArtifactBytes: 6_798_458,
     renderTargetGpuBytes: 512 * 320 * 4,
     fontLoadMs: 1,
     firstDrawMs: 1,
