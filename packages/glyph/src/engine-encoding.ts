@@ -1,6 +1,6 @@
-import type { GlyphPaintInput, ParagraphSpan } from './formatted-text.js';
+import type { ParagraphSpan } from './formatted-text.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
-import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
+import type { AxisConstraint, Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
 import type {
   PlannerConstraint,
   PlannerDecoration,
@@ -18,27 +18,30 @@ import type { BackendIdFactory, ParagraphId, StyleId } from './core/render-polic
  * another in what the engine is asked to flow.
  */
 
-export function normalizedColumns(contentBox: ParagraphContentBox | undefined): {
+export function normalizedColumns(
+  layout: ParagraphLayout | undefined,
+  constraints: Constraints | undefined,
+): {
   count: number;
   gap: number;
 } {
-  const columns = contentBox?.columns;
+  const columns = layout?.columns;
   if (columns === undefined) return { count: 1, gap: 0 };
   const gap = columns.gap ?? 0;
   if (!Number.isSafeInteger(columns.count) || columns.count < 1 || columns.count > 16) {
-    throw new RangeError('contentBox columns count must be an integer between 1 and 16');
+    throw new RangeError('layout columns count must be an integer between 1 and 16');
   }
   if (!Number.isFinite(gap) || gap < 0) {
-    throw new RangeError('contentBox columns gap must be a nonnegative finite number');
+    throw new RangeError('layout columns gap must be a nonnegative finite number');
   }
-  if (columns.count > 1 && contentBox?.width?.mode !== 'exact') {
-    throw new TypeError('contentBox columns require an exact width to derive the column measure');
+  if (columns.count > 1 && constraints?.width?.mode !== 'exact') {
+    throw new TypeError('layout columns require an exact width constraint to derive the column measure');
   }
   // Ordered columns fill without balancing, so the column height is the only
   // signal that advances flow into the next region: unbounded height would
   // keep every line in the first column forever.
-  if (columns.count > 1 && contentBox?.height === undefined) {
-    throw new TypeError('contentBox columns require a bounded height to fill columns in order');
+  if (columns.count > 1 && constraints?.height === undefined) {
+    throw new TypeError('layout columns require a bounded height constraint to fill columns in order');
   }
   return { count: columns.count, gap };
 }
@@ -48,19 +51,20 @@ export function compileEngineGeometry(
   paragraphId: ParagraphId,
   transformIndex: number,
   geometryRevision: number,
-  contentBox: ParagraphContentBox | undefined,
+  layout: ParagraphLayout | undefined,
+  constraints: Constraints | undefined,
   regionStart: number,
   textLength: number,
 ): { readonly constraint: PlannerConstraint; readonly regions: readonly PlannerRegion[] } {
-  const width = axis(contentBox?.width);
-  const height = axis(contentBox?.height);
-  const columns = normalizedColumns(contentBox);
+  const width = axis(constraints?.width);
+  const height = axis(constraints?.height);
+  const columns = normalizedColumns(layout, constraints);
   const inlineEnd = width.mode === 'unconstrained' ? 0x01_00_00_00 : width.size;
   const blockEnd = height.mode === 'unconstrained' ? 0x01_00_00_00 : height.size;
-  const maxLines = contentBox?.maxLines ?? Math.max(1, textLength);
+  const maxLines = layout?.maxLines ?? Math.max(1, textLength);
   const columnWidth = (inlineEnd - columns.gap * (columns.count - 1)) / columns.count;
   if (columns.count > 1 && columnWidth <= 0) {
-    throw new RangeError('contentBox columns and gap leave no positive column measure');
+    throw new RangeError('layout columns and gap leave no positive column measure');
   }
   return {
     constraint: {
@@ -79,15 +83,15 @@ export function compileEngineGeometry(
       resumeRegion: 0,
       widthMode: width.mode,
       heightMode: height.mode,
-      wrap: contentBox?.wrap ?? 'word',
-      align: contentBox?.align ?? 'start',
-      overflow: contentBox?.overflow ?? 'visible',
+      wrap: layout?.wrap ?? 'word',
+      align: layout?.align ?? 'start',
+      overflow: layout?.overflow ?? 'visible',
       blockAlign: 'start',
-      ...(contentBox?.firstLineIndent === undefined ? {} : { firstLineIndent: contentBox.firstLineIndent }),
-      ...(contentBox?.spaceBefore === undefined ? {} : { spaceBefore: contentBox.spaceBefore }),
-      ...(contentBox?.spaceAfter === undefined ? {} : { spaceAfter: contentBox.spaceAfter }),
-      ...(contentBox?.justify === undefined ? {} : { justify: contentBox.justify }),
-      ...(contentBox?.lastLine === undefined ? {} : { lastLine: contentBox.lastLine }),
+      ...(layout?.firstLineIndent === undefined ? {} : { firstLineIndent: layout.firstLineIndent }),
+      ...(layout?.spaceBefore === undefined ? {} : { spaceBefore: layout.spaceBefore }),
+      ...(layout?.spaceAfter === undefined ? {} : { spaceAfter: layout.spaceAfter }),
+      ...(layout?.justify === undefined ? {} : { justify: layout.justify }),
+      ...(layout?.lastLine === undefined ? {} : { lastLine: layout.lastLine }),
     },
     regions: Array.from({ length: columns.count }, (_, column) => {
       const inlineStart = column * (columnWidth + columns.gap);
@@ -119,7 +123,7 @@ export function engineStyleId(id: BackendIdFactory, paragraphId: ParagraphId, in
   return id.style(`paragraph/${paragraphId}/style/${index}`);
 }
 
-export function axis(value: ParagraphContentBox['width'] | undefined): {
+export function axis(value: AxisConstraint | undefined): {
   readonly mode: 'unconstrained' | 'at-most' | 'exact';
   readonly size: number;
 } {
@@ -150,8 +154,7 @@ export function engineLimits(
 }
 
 export function engineStyleValue(
-  style: ParagraphStyle,
-  paint: GlyphPaintInput | undefined,
+  style: TextStyle,
   start: number,
   end: number,
   base: PlannerStyleValue,
@@ -174,21 +177,18 @@ export function engineStyleValue(
             end: feature.end ?? end,
           })),
         }),
-    ...(paint === undefined ? {} : { foregroundRgba: packedForeground(paint) }),
-    ...(style.decoration === undefined ? {} : { decoration: engineDecoration(style.decoration, paint) }),
+    foregroundRgba: packedForeground(style),
+    ...(style.decoration === undefined ? {} : { decoration: engineDecoration(style.decoration, style) }),
   };
 }
 
-function engineDecoration(
-  decoration: NonNullable<ParagraphStyle['decoration']>,
-  paint: GlyphPaintInput | undefined,
-): PlannerDecoration {
+function engineDecoration(decoration: NonNullable<TextStyle['decoration']>, style: TextStyle): PlannerDecoration {
   if (decoration.style !== undefined && decoration.style !== 'solid') {
     throw new TypeError(`'${decoration.style}' decoration lines are not implemented yet; only 'solid' is supported`);
   }
   return {
     style: decoration.style ?? 'solid',
-    rgba: packedForeground(decoration.color === undefined ? (paint ?? {}) : { color: decoration.color }),
+    rgba: packedForeground(decoration.color === undefined ? style : { color: decoration.color }),
     ...(decoration.underline === undefined ? {} : { underline: decoration.underline }),
     ...(decoration.overline === undefined ? {} : { overline: decoration.overline }),
     ...(decoration.lineThrough === undefined ? {} : { lineThrough: decoration.lineThrough }),
@@ -217,12 +217,12 @@ export function styledSpans<Span extends ParagraphSpan<AnyRasterTechnique>>(
   return spans === undefined ? [] : spans.filter((span) => span.start !== span.end);
 }
 
-export function packedForeground(paint: GlyphPaintInput): number {
-  const opacity = paint.opacity ?? 1;
+export function packedForeground(style: TextStyle): number {
+  const opacity = style.opacity ?? 1;
   if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
     throw new RangeError('opacity must be in [0, 1]');
   }
-  const input = paint.color ?? '#ffffff';
+  const input = style.color ?? '#ffffff';
   const rgba = typeof input === 'string' ? parseHexColorBytes(input) : linearColorBytes(input);
   const alpha = Math.round(rgba[3] * opacity);
   return (rgba[0] | (rgba[1] << 8) | (rgba[2] << 16) | (alpha << 24)) >>> 0;

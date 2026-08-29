@@ -1,4 +1,4 @@
-import type { Font, ParagraphLayout } from '@pmndrs/glyph';
+import type { Font, GlyphLayout } from '@pmndrs/glyph';
 import type { msdf as mtsdf, MsdfData } from '@pmndrs/glyph/three/msdf';
 import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -200,11 +200,11 @@ async function createFlatMtsdfConformanceResources(options: {
     line = new Text({
       text: conformanceText(),
       font,
-      contentBox: { width: { mode: 'exact', size: 476 }, wrap: 'word' },
+      constraints: { width: { mode: 'exact', size: 476 } },
+      layout: { wrap: 'word' },
       // Match the baked 64 px/em base level in device pixels. Deep minification
       // is exercised separately with the same authored field and derivative AA.
-      style: { fontSize: 64 / dpr, lineHeight: 1.2 },
-      paint: { color: '#ffffff' },
+      style: { fontSize: 64 / dpr, lineHeight: 1.2, color: '#ffffff' },
       rasterPixelRatio: dpr,
     });
     signal?.throwIfAborted();
@@ -304,7 +304,7 @@ async function disposeFlatMtsdfConformanceResources(resources: FlatMtsdfConforma
   if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);
 }
 
-function committedLayout(line: Text<typeof mtsdf>): ParagraphLayout {
+function committedLayout(line: Text<typeof mtsdf>): GlyphLayout {
   const layout = line.glyphs();
   if (layout === undefined) throw new Error('MTSDF conformance Text lost its committed layout');
   return layout;

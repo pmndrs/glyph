@@ -1,10 +1,10 @@
 import type {
   AnyRasterTechnique,
-  ParagraphAxisConstraint,
-  ParagraphConstraints,
-  ParagraphLayoutInspection,
-  ParagraphLayoutPolicy,
+  AxisConstraint,
+  Constraints,
+  GlyphLayoutInspection,
   Paragraph,
+  ParagraphLayout,
   ParagraphUpdate,
 } from '@pmndrs/glyph';
 
@@ -17,16 +17,16 @@ type Size = readonly [width: number, height: number];
 /**
  * The current-uikit-shaped fixture over the real framework-neutral `Paragraph`.
  *
- * The host varies only axis constraints per probe -- stable flow policy lives in the
+ * The host varies only axis constraints per probe -- stable paragraph layout lives in the
  * paragraph and changes through `update()` -- exactly the split a retained layout engine
  * needs. Measurement never materializes positioned arrays; the final resolved content box
  * is the only call that does.
  */
 export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
   paragraph: Paragraph<Technique>,
-  policy: ParagraphLayoutPolicy = {},
+  layout: ParagraphLayout = {},
 ) {
-  let currentPolicy: ParagraphLayoutPolicy = { ...policy };
+  let currentLayout: ParagraphLayout = { ...layout };
   let dirtyCount = 1;
   let paintRevision = 0;
   let rasterRevision = 0;
@@ -34,7 +34,7 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
 
   function customLayouting() {
     calls.measure += 1;
-    const natural = paragraph.layout();
+    const natural = paragraph.measure();
     return {
       // Intrinsic widths ride the natural measurement itself: no second query at zero width.
       minWidth: natural.minContentWidth,
@@ -42,7 +42,7 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
       firstBaseline: natural.firstBaseline,
       measure(width: number, widthMode: YogaMeasureModeValue, height: number, heightMode: YogaMeasureModeValue) {
         calls.measure += 1;
-        const metrics = paragraph.layout({
+        const metrics = paragraph.measure({
           width: mapYogaAxis(width, widthMode, 'width'),
           height: mapYogaAxis(height, heightMode, 'height'),
         });
@@ -65,8 +65,8 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
     get rasterRevision() {
       return rasterRevision;
     },
-    get policy(): ParagraphLayoutPolicy {
-      return currentPolicy;
+    get layout(): ParagraphLayout {
+      return currentLayout;
     },
     get paragraph(): Paragraph<Technique> {
       return paragraph;
@@ -88,7 +88,7 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
       border: Inset,
     ): {
       readonly contentBox: { readonly width: number; readonly height: number };
-      readonly layout: ParagraphLayoutInspection;
+      readonly layout: GlyphLayoutInspection;
       readonly centeredX: Float32Array;
       readonly centeredY: Float32Array;
     } {
@@ -104,7 +104,7 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
         'height',
       );
       calls.layout += 1;
-      const constraints: ParagraphConstraints = {
+      const constraints: Constraints = {
         width: { mode: 'exact', size: contentWidth },
         height: { mode: 'exact', size: contentHeight },
       };
@@ -122,9 +122,9 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
       paragraph.update(input);
       dirtyCount += 1;
     },
-    updateShapingPolicy(policyUpdate: ParagraphLayoutPolicy) {
-      currentPolicy = { ...currentPolicy, ...policyUpdate };
-      paragraph.update({ policy: currentPolicy });
+    updateParagraphLayout(layoutUpdate: ParagraphLayout) {
+      currentLayout = { ...currentLayout, ...layoutUpdate };
+      paragraph.update({ layout: currentLayout });
       dirtyCount += 1;
     },
     updatePaint() {
@@ -136,7 +136,7 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
   };
 }
 
-function mapYogaAxis(value: number, mode: YogaMeasureModeValue, name: string): ParagraphAxisConstraint {
+function mapYogaAxis(value: number, mode: YogaMeasureModeValue, name: string): AxisConstraint {
   if (mode === YogaMeasureMode.Undefined) return { mode: 'unconstrained' };
   const size = validYogaSize(value, name);
   if (mode === YogaMeasureMode.AtMost) return { mode: 'at-most', size };

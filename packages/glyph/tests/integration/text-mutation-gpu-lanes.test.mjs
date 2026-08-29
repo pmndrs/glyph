@@ -38,15 +38,15 @@ import {
 } from '../support/text-mutation-lanes.mjs';
 
 /** The product-shaped box from the reported regression: centered, single line, clipped. */
-const contentBox = {
+const layout = {
   align: 'center',
   maxLines: 1,
   overflow: 'clip',
-  width: { mode: 'exact', size: 96 },
   wrap: 'none',
 };
+const constraints = { width: { mode: 'exact', size: 96 } };
 /** Wide enough that mixed span sizes stay inside the line instead of clipping into it. */
-const wideContentBox = { ...contentBox, width: { mode: 'exact', size: 320 } };
+const wideConstraints = { width: { mode: 'exact', size: 320 } };
 const style = { fontSize: 6, lineHeight: 1 };
 const paint = { color: '#ffffff' };
 
@@ -66,14 +66,14 @@ after(() => fonts.dispose());
  * with the same text always carry identical authored style -- the comparison stays a test of the
  * incremental path, not of two different documents.
  */
-function paragraph(text, { box = contentBox, position, rasterPixelRatio, styled = false } = {}) {
+function paragraph(text, { bounds = constraints, position, rasterPixelRatio, styled = false } = {}) {
   return {
     position,
     properties: {
-      contentBox: box,
-      paint,
+      constraints: bounds,
+      layout,
       spans: styled ? spansFor(text) : [],
-      style,
+      style: { ...style, ...paint },
       text,
       ...(rasterPixelRatio === undefined ? {} : { rasterPixelRatio }),
     },
@@ -85,8 +85,8 @@ function spansFor(text) {
   if (text.length < 3) return [];
   const third = Math.floor(text.length / 3);
   return [
-    { start: 0, end: third, paint: { color: '#ff2f00' }, style: { fontSize: 9, lineHeight: 1 } },
-    { start: third, end: third * 2, paint: { color: '#0040ff' }, style: { fontSize: 4, lineHeight: 1 } },
+    { start: 0, end: third, style: { ...{ fontSize: 9, lineHeight: 1 }, ...{ color: '#ff2f00' } } },
+    { start: third, end: third * 2, style: { ...{ fontSize: 4, lineHeight: 1 }, ...{ color: '#0040ff' } } },
   ];
 }
 
@@ -123,7 +123,7 @@ const EDIT_CLASSES = [
 function styledScene(texts) {
   return texts.map((text, index) =>
     paragraph(text, {
-      box: wideContentBox,
+      bounds: wideConstraints,
       position: [index * 24, index * -12, index * 3],
       rasterPixelRatio: 1 + index,
       styled: true,

@@ -83,7 +83,7 @@ const planner: RenderPlanner = backend.createPlanner({
 });
 const retainedText = planner.createText({ font: stackBinding, text: 'hello' });
 retainedText.update({ text: 'world' });
-const retainedMeasurement = retainedText.layout();
+const retainedMeasurement = retainedText.measure();
 const retainedInspection = retainedText.glyphs();
 void retainedMeasurement;
 void retainedInspection;

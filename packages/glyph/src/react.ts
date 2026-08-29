@@ -13,11 +13,17 @@ import {
   type Ref,
 } from 'react';
 
-import { type GlyphPaintInput, resolveRangesToClusters } from './formatted-text.js';
+import { resolveRangesToClusters } from './formatted-text.js';
 import type { Font } from './font.js';
 import { immutableFontRequestKey, type LoadFontInput } from './loader.js';
 import { cloneImmutableFont, type FontSelection, type FontStack } from './loaded-font.js';
-import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
+import {
+  mergePropertyList,
+  type Constraints,
+  type ParagraphLayout,
+  type PropertyList,
+  type TextStyle,
+} from './text-properties.js';
 import type { AnyRasterTechnique, RasterOptionsOf } from './raster-technique.js';
 import {
   FontLoader as ThreeFontLoader,
@@ -57,9 +63,12 @@ type FontSelectionTechnique<Selection> =
 export type R3fTextProps<Technique extends AnyRasterTechnique> = Object3DProps & {
   readonly font?: R3fFontSelection<Technique>;
   readonly children?: R3fTextChild<Technique>;
-  readonly contentBox?: ParagraphContentBox;
-  readonly style?: ParagraphStyle;
-  readonly paint?: GlyphPaintInput;
+  /** Text shaping and presentation properties inherited by nested Text spans. */
+  readonly style?: PropertyList<TextStyle>;
+  /** Paragraph flow properties; nested Text spans cannot set this property. */
+  readonly layout?: PropertyList<ParagraphLayout>;
+  /** Bounds imposed on this root Text paragraph. */
+  readonly constraints?: PropertyList<Constraints>;
   readonly rasterPixelRatio?: number;
   readonly material?: ThreeTextMaterial;
   readonly capacity?: StandaloneTextProperties<Technique>['capacity'];
@@ -82,8 +91,7 @@ interface FlattenedText<Technique extends AnyRasterTechnique> {
 
 interface InlineProperties<Technique extends AnyRasterTechnique> {
   readonly font?: FontSelection<Technique>;
-  readonly style?: ParagraphStyle;
-  readonly paint?: GlyphPaintInput;
+  readonly style?: TextStyle;
   readonly material?: ThreeTextMaterial;
 }
 
@@ -485,21 +493,19 @@ function inlineProperties<Technique extends AnyRasterTechnique>(
   properties: R3fTextProps<Technique>,
   inherited: InlineProperties<Technique>,
 ): InlineProperties<Technique> {
+  const statedStyle = mergePropertyList(properties.style, 'nested Text style');
+  const style =
+    Object.keys(statedStyle).length === 0 ? inherited.style : Object.freeze({ ...inherited.style, ...statedStyle });
   return Object.freeze({
     ...((properties.font ?? inherited.font) === undefined ? {} : { font: properties.font ?? inherited.font }),
-    ...(properties.style === undefined && inherited.style === undefined
-      ? {}
-      : { style: Object.freeze({ ...inherited.style, ...properties.style }) }),
-    ...(properties.paint === undefined && inherited.paint === undefined
-      ? {}
-      : { paint: Object.freeze({ ...inherited.paint, ...properties.paint }) }),
+    ...(style === undefined ? {} : { style }),
     ...((properties.material ?? inherited.material) === undefined
       ? {}
       : { material: properties.material ?? inherited.material }),
   });
 }
 
-const INLINE_TEXT_PROPERTIES = new Set(['children', 'font', 'material', 'paint', 'style']);
+const INLINE_TEXT_PROPERTIES = new Set(['children', 'font', 'material', 'style']);
 
 function assertInlineTextProperties<Technique extends AnyRasterTechnique>(properties: R3fTextProps<Technique>): void {
   for (const key of Object.keys(properties)) {
@@ -515,9 +521,9 @@ function textProperties<Technique extends AnyRasterTechnique>(
     ...(properties.font === undefined ? {} : { font: properties.font }),
     text: flattened.text,
     spans: flattened.spans,
-    ...(properties.contentBox === undefined ? {} : { contentBox: properties.contentBox }),
     ...(properties.style === undefined ? {} : { style: properties.style }),
-    ...(properties.paint === undefined ? {} : { paint: properties.paint }),
+    ...(properties.layout === undefined ? {} : { layout: properties.layout }),
+    ...(properties.constraints === undefined ? {} : { constraints: properties.constraints }),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
     ...(properties.capacity === undefined ? {} : { capacity: properties.capacity }),
@@ -530,9 +536,9 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
   for (const key of [
     'font',
     'children',
-    'contentBox',
     'style',
-    'paint',
+    'layout',
+    'constraints',
     'rasterPixelRatio',
     'material',
     'capacity',
@@ -572,9 +578,9 @@ function sameDesiredText<Technique extends AnyRasterTechnique>(
     left.text !== right.text ||
     left.rasterPixelRatio !== right.rasterPixelRatio ||
     left.material !== right.material ||
-    !sameSnapshot(left.contentBox, right.contentBox) ||
     !sameSnapshot(left.style, right.style) ||
-    !sameSnapshot(left.paint, right.paint)
+    !sameSnapshot(left.layout, right.layout) ||
+    !sameSnapshot(left.constraints, right.constraints)
   )
     return false;
   const leftSpans = left.spans ?? [];
@@ -588,8 +594,7 @@ function sameDesiredText<Technique extends AnyRasterTechnique>(
       span.end === other.end &&
       span.font === other.font &&
       span.material === other.material &&
-      sameSnapshot(span.style, other.style) &&
-      sameSnapshot(span.paint, other.paint)
+      sameSnapshot(span.style, other.style)
     );
   });
 }

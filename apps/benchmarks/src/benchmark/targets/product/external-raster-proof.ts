@@ -132,8 +132,7 @@ async function createResources(
     text = new Text({
       text: INITIAL_TEXT,
       font,
-      style: { fontSize: 48 },
-      paint: { color: '#ffffff' },
+      style: { fontSize: 48, color: '#ffffff' },
     });
     const scene = new THREE.Scene();
     const coverGroup = new THREE.Group();

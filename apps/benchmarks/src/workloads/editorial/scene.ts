@@ -85,10 +85,9 @@ export function createEditorialEntries(
     font: context.font,
     rasterPixelRatio: context.dpr,
     text: EDITORIAL_TEXT[0],
-    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
-    paint: { color: paintColor(LIVE_TEXT_COLOR) },
-    contentBox: {
-      width: exactWidth(width),
+    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT, color: paintColor(LIVE_TEXT_COLOR) },
+    constraints: { width: exactWidth(width) },
+    layout: {
       wrap: 'word',
       align: 'justify',
       spaceAfter: context.fontSize * 0.8,
@@ -103,11 +102,13 @@ export function createEditorialEntries(
       fontSize: context.fontSize,
       lineHeight: LIVE_TEXT_LINE_HEIGHT,
       wordSpacing: context.fontSize * 0.05,
+      color: paintColor(LIVE_TEXT_COLOR),
     },
-    paint: { color: paintColor(LIVE_TEXT_COLOR) },
-    contentBox: {
+    constraints: {
       width: exactWidth(width),
       height: { mode: 'exact', size: editorialBodyHeight(context.fontSize) },
+    },
+    layout: {
       columns: { count: 2, gap: context.fontSize },
       wrap: 'word',
       align: 'justify',
@@ -141,7 +142,7 @@ export function animateEditorialEntries(
   try {
     for (const entry of entries) {
       entry.lastWidth = width;
-      entry.text.set({ contentBox: { ...entry.text.contentBox, width: exactWidth(width) } });
+      entry.text.set({ constraints: { ...entry.text.constraints, width: exactWidth(width) } });
     }
     publishWorkloadTexts(scene, entries);
     layoutEditorialEntries(entries, viewportWidth, viewportHeight);

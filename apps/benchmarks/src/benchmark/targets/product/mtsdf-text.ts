@@ -78,22 +78,21 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
     const resizeLine = new Text({
       text: BENCHMARK_IPSUM_CONFORMANCE_TEXT,
       font,
-      contentBox: { width: { mode: 'exact', size: 280 }, wrap: 'word' },
-      style: { fontSize: 18, lineHeight: 1.2 },
-      paint: { color: '#f2f5ff' },
+      constraints: { width: { mode: 'exact', size: 280 } },
+      layout: { wrap: 'word' },
+      style: { fontSize: 18, lineHeight: 1.2, color: '#f2f5ff' },
     });
     lines.push(resizeLine);
     scene.add(resizeLine);
     // Commit the narrow box before widening it so the frame proves a re-layout rather than a first layout.
     resizeLine.updateMatrixWorld(true);
-    resizeLine.set({ contentBox: { width: { mode: 'exact', size: 476 }, wrap: 'word' } });
+    resizeLine.set({ constraints: { width: { mode: 'exact', size: 476 } }, layout: { wrap: 'word' } });
     resizeLine.position.set(18, -24, 0);
 
     const mipLine = new Text({
       text: 'mip 12 px  ffi  AV  0123456789',
       font,
-      style: { fontSize: 12 },
-      paint: { color: '#7dd3fc' },
+      style: { fontSize: 12, color: '#7dd3fc' },
     });
     lines.push(mipLine);
     mipLine.position.set(18, -142, 0);
@@ -102,8 +101,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
     const transformLine = new Text({
       text: 'TRANSFORM / MTSDF',
       font,
-      style: { fontSize: 30 },
-      paint: { color: '#c4b5fd' },
+      style: { fontSize: 30, color: '#c4b5fd' },
     });
     lines.push(transformLine);
     transformLine.position.set(252, -194, 0);
@@ -114,8 +112,8 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
     const effectsLine = new Text({
       text: 'Fill  Outline  Shadow',
       font,
-      style: { fontSize: 26 },
-      paint: {
+      style: {
+        fontSize: 26,
         color: '#f8fafc',
         opacity: 0.92,
         outline: { color: '#22d3ee', width: 1.5 },

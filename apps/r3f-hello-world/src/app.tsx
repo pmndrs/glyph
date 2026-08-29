@@ -58,22 +58,18 @@ export function App() {
       <group name="world-text">
         {fonts.map(({ font, icon, technique }) => (
           <Activity key={technique} mode={activeTechnique === technique ? 'visible' : 'hidden'}>
-            {/* A nested Text is an inline run: it inherits the paragraph's font, style, and paint unless it
+            {/* A nested Text is an inline run: it inherits the paragraph's font and text style unless it
                 overrides them, and carries no transform of its own because it is not an object in the scene. */}
             <Text
-              contentBox={{
-                align: 'center',
-                width: { mode: 'exact', size: viewport.width },
-                wrap: 'none',
-              }}
+              constraints={{ width: { mode: 'exact', size: viewport.width } }}
               font={font}
+              layout={{ align: 'center', wrap: 'none' }}
               name={`font-${technique}`}
-              paint={{ color: '#f4f7ff' }}
               position={[-viewport.width / 2, 32, 0]}
-              style={{ fontSize: 64, lineHeight: 1 }}
+              style={{ color: '#f4f7ff', fontSize: 64, lineHeight: 1 }}
             >
               Hello world{' '}
-              <Text font={icon} paint={{ color: COLORS[technique] }}>
+              <Text font={icon} style={{ color: COLORS[technique] }}>
                 {WORLD_ICON}
               </Text>
             </Text>
@@ -160,15 +156,12 @@ function Button({ active, font, onClick, position, technique, height = 44, label
         />
       </mesh>
       <Text
-        contentBox={{
-          align: 'center',
-          width: { mode: 'exact', size: width },
-          wrap: 'none',
-        }}
+        constraints={{ width: { mode: 'exact', size: width } }}
         font={font}
-        paint={{ color }}
+        layout={{ align: 'center', wrap: 'none' }}
         position={[-width / 2, height / 2, 0]}
         style={{
+          color,
           fontSize: labelSize,
           letterSpacing: 0.8,
           lineHeight: height / labelSize,

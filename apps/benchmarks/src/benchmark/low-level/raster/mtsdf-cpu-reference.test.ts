@@ -1,4 +1,4 @@
-import { defineRasterResourceId, type ParagraphLayout } from '@pmndrs/glyph';
+import { defineRasterResourceId, type GlyphLayout } from '@pmndrs/glyph';
 import type { MsdfData as MtsdfData } from '@pmndrs/glyph/raster/msdf';
 import { describe, expect, it } from 'vitest';
 
@@ -176,8 +176,8 @@ function writeRecord(
 }
 
 function specimenLayout(
-  overrides: Partial<Pick<ParagraphLayout, 'glyphIds' | 'glyphFontSlots' | 'glyphFontSizes' | 'x' | 'y'>> = {},
-): ParagraphLayout {
+  overrides: Partial<Pick<GlyphLayout, 'glyphIds' | 'glyphFontSlots' | 'glyphFontSizes' | 'x' | 'y'>> = {},
+): GlyphLayout {
   return {
     width: 4,
     height: 4,

@@ -1,4 +1,4 @@
-import type { Font, ParagraphLayout } from '@pmndrs/glyph';
+import type { Font, GlyphLayout } from '@pmndrs/glyph';
 import { slug } from '@pmndrs/glyph/three/slug';
 import { FontLoader, Text, type TextSpan } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -614,14 +614,15 @@ async function createFlatSlugConformanceResources({
       font,
       rasterPixelRatio: dpr,
       // An exact width is what centre and end alignment measure against; `at-most` would collapse them onto the start.
-      contentBox: { width: { mode: 'exact', size: sceneOptions?.layoutWidth ?? 476 }, wrap: 'word', align: 'start' },
+      constraints: { width: { mode: 'exact', size: sceneOptions?.layoutWidth ?? 476 } },
+      layout: { wrap: 'word', align: 'start' },
       style: {
         fontSize: sceneOptions?.fontSize ?? 64 / dpr,
         lineHeight: 1.2,
         language: specimen.language,
         direction: specimen.direction,
+        color: '#ffffff',
       },
-      paint: { color: '#ffffff' },
     });
     line.position.set(sceneOptions?.originX ?? 18, sceneOptions?.originY ?? -18, 0);
     const scene = new THREE.Scene();
@@ -973,7 +974,7 @@ function pixelHasInk(bytes: Uint8Array, pixelIndex: number): boolean {
 }
 
 /** Every layout read doubles as the commit check, because `Text` reports a failed synchronize through `error`. */
-function committedLayout(line: Text<typeof slug>): ParagraphLayout {
+function committedLayout(line: Text<typeof slug>): GlyphLayout {
   const error = line.error;
   if (error !== undefined) throw error;
   const layout = line.glyphs();

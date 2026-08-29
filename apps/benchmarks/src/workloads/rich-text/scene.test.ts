@@ -52,7 +52,7 @@ describe('rich text composition', () => {
     ]);
   });
 
-  it('carries shaping data rather than paint alone on the spans that must reach the shaper', () => {
+  it('carries shaping data alongside presentation on spans that must reach the shaper', () => {
     const literal = richTextLiteral(companionFonts, richTextComposition(BODY));
     const [properNoun, tracked, emphasis, face, foreign, accent, nested, tint] = literal.spans;
 
@@ -62,13 +62,18 @@ describe('rich text composition', () => {
     expect(emphasis?.style).toEqual({ decoration: { underline: true }, fontSize: BODY * 1.9 });
     expect(face?.font).toBe(companionFonts.emphasis);
     expect(foreign?.font).toBe(companionFonts.foreign);
-    expect(accent?.paint).toEqual({ color: RICH_TEXT_ACCENT_COLOR });
-    expect(accent?.style).toEqual({ decoration: { lineThrough: true }, fontSize: BODY * 1.25 });
-    // The nested span states a size and no paint, so it must inherit the enclosing paint rather than restate it.
+    expect(accent?.style).toEqual({
+      color: RICH_TEXT_ACCENT_COLOR,
+      decoration: { lineThrough: true },
+      fontSize: BODY * 1.25,
+    });
+    // The nested span states only a size, so it inherits the enclosing color rather than restating it.
     expect(nested?.style).toEqual({ fontSize: BODY * 0.78 });
-    expect(nested?.paint).toBeUndefined();
     expect(nested?.font).toBeUndefined();
-    expect(tint?.paint).toEqual({ color: richTextComposition(BODY).tintColor });
+    expect(tint?.style).toEqual({
+      color: richTextComposition(BODY).tintColor,
+      decoration: { lineThrough: true },
+    });
     expect(tint?.font).toBeUndefined();
   });
 

@@ -43,15 +43,14 @@ export type {
   FontSlotRecord,
   LayoutBox,
   ParagraphIntrinsicWidths,
-  ParagraphLayout,
-  ParagraphLayoutInspection,
+  GlyphLayout,
+  GlyphLayoutInspection,
   ParagraphLayoutSummary,
   ParagraphLineMetrics,
   ParagraphMeasurement,
   ParagraphMetrics,
 } from './layout.js';
 
-export type { ParagraphLayoutPolicy, ParagraphConstraints } from './text-properties.js';
 export type { ParagraphOptions, ParagraphUpdate } from './paragraph.js';
 export { createParagraph, Paragraph } from './paragraph.js';
 
@@ -84,20 +83,21 @@ export type { FontSelection, FontStack } from './loaded-font.js';
 export { createFontStack } from './loaded-font.js';
 
 export type {
+  AxisConstraint,
+  ColorInput,
+  Constraints,
   GlyphBufferCapacity,
-  ParagraphAxisConstraint,
+  LinearRgbaInput,
   ParagraphBaseProperties,
-  ParagraphContentBox,
   ParagraphContentProperties,
   ParagraphProperties,
-  ParagraphStyle,
+  PropertyList,
   TextDecorationStyle,
 } from './text-properties.js';
+export { ParagraphLayout, TextStyle } from './text-properties.js';
 
 export type {
-  ColorInput,
   FormattedText,
-  GlyphPaintInput,
   ParagraphSpan,
   SpanFormat,
   SpanStyle,

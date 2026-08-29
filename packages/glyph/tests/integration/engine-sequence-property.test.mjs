@@ -171,9 +171,9 @@ class Subject {
     this.node = new Text({
       font: this.fonts[this.fontKey],
       text: this.text,
-      style: this.style(),
-      paint: { color: this.color },
-      contentBox: { width: { mode: 'exact', size: this.width }, wrap: 'word' },
+      style: { ...this.style(), ...{ color: this.color } },
+      constraints: { width: { mode: 'exact', size: this.width } },
+      layout: { wrap: 'word' },
     });
     group.add(this.node);
     this.attached = true;
@@ -183,9 +183,9 @@ class Subject {
     if (this.node === undefined) return;
     this.node.font = this.fonts[this.fontKey];
     this.node.text = this.text;
-    this.node.style = this.style();
-    this.node.paint = { color: this.color };
-    this.node.contentBox = { width: { mode: 'exact', size: this.width }, wrap: 'word' };
+    this.node.style = [this.style(), { color: this.color }];
+    this.node.constraints = { width: { mode: 'exact', size: this.width } };
+    this.node.layout = { wrap: 'word' };
   }
 }
 
@@ -260,12 +260,12 @@ function checkSubject(subject, context) {
   const { node } = subject;
   assert.equal(node.error, undefined, `${context}: paragraph reported ${String(node.error?.message)}`);
 
-  const measured = node.layout();
+  const measured = node.measure();
   assert.notEqual(measured, undefined, `${context}: committed layout metrics went missing`);
 
   // Re-measuring without an intervening mutation must answer identically. A retained
   // query that disagrees with itself is the observable form of desynchronized state.
-  const again = node.layout();
+  const again = node.measure();
   assert.equal(summarize(again), summarize(measured), `${context}: repeated measurement disagreed with itself`);
 
   // Dual derivation: the per-glyph inspection lane and the line-level measurement lane
@@ -337,7 +337,7 @@ async function runSequence({ seed, steps, paragraphs, fonts }) {
         for (const [candidateIndex, candidate] of subjects.entries()) {
           if (!candidate.attached || candidate.node === undefined) continue;
           try {
-            candidate.node.layout();
+            candidate.node.measure();
           } catch (error) {
             error.message = `p${candidateIndex} measurement: ${error.message}`;
             throw error;
@@ -388,7 +388,8 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
       font: fonts.inter,
       text: '',
       style: { fontSize: 20, lineHeight: 1.25 },
-      contentBox: { width: { mode: 'exact', size: 400 }, wrap: 'word' },
+      constraints: { width: { mode: 'exact', size: 400 } },
+      layout: { wrap: 'word' },
     });
     group.add(node);
     return node;
@@ -408,7 +409,8 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
           ...(shapingCase.features.length === 0 ? {} : { features: shapingCase.features }),
         };
         node.text = '';
-        node.contentBox = { width: { mode: 'exact', size: 600 - index * 7 }, wrap: 'word' };
+        node.constraints = { width: { mode: 'exact', size: 600 - index * 7 } };
+        node.layout = { wrap: 'word' };
       }
       scene.updateMatrixWorld(true);
 
@@ -416,12 +418,9 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
         const content = units.slice(0, tick).join('');
         for (const [index, node] of nodes.entries()) {
           node.text = content;
-          node.contentBox = {
-            width: { mode: 'exact', size: 240 + ((tick * 37 + index * 11) % 420) },
-            wrap: 'word',
-          };
+          node.constraints = { width: { mode: 'exact', size: 240 + ((tick * 37 + index * 11) % 420) } };
         }
-        for (const node of nodes) node.layout();
+        for (const node of nodes) node.measure();
         scene.updateMatrixWorld(true);
         for (const [index, node] of nodes.entries()) {
           assert.equal(
@@ -429,7 +428,7 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
             undefined,
             `${shapingCase.id} tick ${tick} p${index}: ${String(node.error?.message)}`,
           );
-          const metrics = node.layout();
+          const metrics = node.measure();
           assert.equal(
             metrics.missingGlyphCount,
             0,
@@ -457,7 +456,8 @@ test('font and loader teardown is total while Text retains the renderer domain',
       font: fonts.inter,
       text: 'retained',
       style: { fontSize: 20, lineHeight: 1.25 },
-      contentBox: { width: { mode: 'exact', size: 400 }, wrap: 'word' },
+      constraints: { width: { mode: 'exact', size: 400 } },
+      layout: { wrap: 'word' },
     });
     texts.push(text);
     group.add(text);
@@ -469,7 +469,7 @@ test('font and loader teardown is total while Text retains the renderer domain',
     loaded.dispose();
     assert.ok(Object.values(fonts).every((font) => font.disposed));
     assert.equal(threeEngineDomainReport().active, true, 'live Text leases keep the renderer domain valid');
-    for (const text of texts) assert.ok(text.layout().glyphCount > 0);
+    for (const text of texts) assert.ok(text.measure().glyphCount > 0);
     group.dispose();
     group.dispose();
   } finally {
@@ -491,7 +491,8 @@ test('renderer leases may dispose before their user font and loader handles', as
       font: fonts.inter,
       text: 'deferred',
       style: { fontSize: 20, lineHeight: 1.25 },
-      contentBox: { width: { mode: 'exact', size: 400 }, wrap: 'word' },
+      constraints: { width: { mode: 'exact', size: 400 } },
+      layout: { wrap: 'word' },
     });
     group.add(node);
     return node;

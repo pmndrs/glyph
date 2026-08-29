@@ -17,11 +17,11 @@ export interface MutableSpanPaint {
   shadow?: { color: string; offset: readonly [number, number] };
 }
 
-/** One retained span whose paint the animation rewrites in place before republishing the whole span list. */
+/** One retained span whose visual style the animation rewrites before republishing the whole span list. */
 export interface MutablePaintSpan {
   readonly start: number;
   readonly end: number;
-  readonly paint: MutableSpanPaint;
+  readonly style: MutableSpanPaint;
 }
 
 /** The retained `{ text, spans }` payload an animated workload republishes through `Text.set`. */
@@ -85,10 +85,10 @@ export function publishWorkloadTexts(root: THREE.Object3D, entries: readonly Com
 
 /** Explicitly queries the aggregate metrics committed by the Rust Text lifecycle before scene positioning. */
 export function committedTextMetrics(text: WorkloadText): ParagraphLayoutSummary {
-  return text.layout();
+  return text.measure();
 }
 
-/** Target-v1 paint takes CSS colors, while the comparison palettes stay authored as 24-bit hex. */
+/** Text style colors use CSS strings, while the comparison palettes stay authored as 24-bit hex. */
 export function paintColor(value: number): string {
   if (!Number.isInteger(value) || value < 0 || value > 0xff_ff_ff) {
     throw new RangeError('workload paint color must be a 24-bit integer');

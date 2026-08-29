@@ -64,8 +64,7 @@ async function render(): Promise<TargetV1ComposeResult> {
     canonicalText = new Text({
       font: canonicalFont,
       text: 'Target v1 Bitmap',
-      style: { fontSize: 28 },
-      paint: { color: '#ffffff' },
+      style: { fontSize: 28, color: '#ffffff' },
     });
     canonicalText.position.set(-112, 24, 0);
     scene.add(canonicalText);
@@ -78,8 +77,7 @@ async function render(): Promise<TargetV1ComposeResult> {
     composedText = new Text({
       font: canonicalFont,
       text: 'Target v1 Bitmap',
-      style: { fontSize: 28 },
-      paint: { color: '#ffffff' },
+      style: { fontSize: 28, color: '#ffffff' },
       material: composedMaterial,
     });
     composedText.position.set(-112, 24, 0);
@@ -90,7 +88,7 @@ async function render(): Promise<TargetV1ComposeResult> {
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
       drawCount: composedText.children.filter((child) => child instanceof THREE.Mesh).length,
-      glyphCount: composedText.layout().glyphCount,
+      glyphCount: composedText.measure().glyphCount,
       litPixels: composed.lit,
       redPixels: composed.red,
       greenPixels: composed.green,

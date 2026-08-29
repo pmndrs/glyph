@@ -52,7 +52,7 @@ async function render(): Promise<TargetV1SlugResult> {
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-128, 128, 64, -64, 0.1, 10);
     camera.position.z = 1;
-    text = new Text({ font, text: 'Target v1 Slug', style: { fontSize: 28 }, paint: { color: '#ffffff' } });
+    text = new Text({ font, text: 'Target v1 Slug', style: { fontSize: 28, color: '#ffffff' } });
     text.position.set(-112, 24, 0);
     scene.add(text);
     renderer.setRenderTarget(target);
@@ -71,7 +71,7 @@ async function render(): Promise<TargetV1SlugResult> {
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
       drawCount: text.children.filter((child) => child instanceof THREE.Mesh).length,
-      glyphCount: text.layout().glyphCount,
+      glyphCount: text.measure().glyphCount,
       litPixels,
       retainedDraw: retainedDraw === firstDraw,
       retainedStorage: retainedDraw?.geometry.getAttribute('_pmndrsGlyph_geometry') === firstStorage,

@@ -6,9 +6,9 @@ import type { Node, Texture } from 'three/webgpu';
  * program packs them — the first-party target interleaves them into seven `vec4` storage buffers — stays its own choice.
  */
 export interface TslMsdfInstanceNodes {
-  /** Paragraph-local glyph origin, in layout units, with y measured downward. */
+  /** Paragraph-local glyph origin, with y measured downward. */
   readonly origin: Node<'vec2'>;
-  /** Glyph quad extent in layout units. */
+  /** Glyph quad extent in paragraph-local units. */
   readonly size: Node<'vec2'>;
   /** Upper-left atlas coordinate of the glyph's distance rectangle. */
   readonly uvOrigin: Node<'vec2'>;

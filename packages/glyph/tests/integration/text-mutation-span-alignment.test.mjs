@@ -73,12 +73,15 @@ const CONJUNCT = 'क्ष';
 /** Hangul L + V + T jamo: one syllable cluster under GB6-GB8. */
 const JAMO = '각';
 
-const box = { width: { mode: 'exact', size: 220 }, wrap: 'word' };
+const constraints = { width: { mode: 'exact', size: 220 } };
+const layout = { wrap: 'word' };
 const paint = { color: '#ffffff' };
 const latin = { fontSize: 6, lineHeight: 1 };
 
-const styled = (start, end) => ({ start, end, paint: { color: '#ff2f00' } });
-const authored = (text, spans = []) => ({ properties: { contentBox: box, paint, spans, style: latin, text } });
+const styled = (start, end) => ({ start, end, style: { color: '#ff2f00' } });
+const authored = (text, spans = []) => ({
+  properties: { constraints, layout, spans, style: [latin, paint], text },
+});
 
 const offsets = (node) => node.spans.map((entry) => [entry.start, entry.end]);
 const clusters = (text) => [...findGraphemeBoundaries(text)];
@@ -137,7 +140,7 @@ test('alignSpansToClusters returns its argument by identity when nothing moves',
     resolved.map((entry) => [entry.start, entry.end]),
     [[0, 2]],
   );
-  assert.equal(resolved[0].paint, split[0].paint, 'resolution must carry every other property through');
+  assert.equal(resolved[0].style, split[0].style, 'resolution must carry every other property through');
 });
 
 test('an out-of-range boundary is left alone rather than clamped into a plausible style', () => {
@@ -186,7 +189,7 @@ test('an authored empty span states nothing and never reaches the engine', { tim
       [0, 2],
     ]);
     assert.equal(node.error, undefined, `an empty span must not fail the frame: ${String(node.error?.message)}`);
-    assert.equal(node.layout().glyphCount, 3);
+    assert.equal(node.measure().glyphCount, 3);
   });
 });
 
@@ -249,7 +252,7 @@ test('an update that changes neither text nor spans re-resolves nothing', { time
   await withParagraph(`a${ACUTE}bc`, [styled(0, 1)], (node, mounted) => {
     const resolved = node.spans;
     assert.deepEqual(offsets(node), [[0, 2]], 'the authored boundary must have been resolved once');
-    node.set({ paint: { color: '#00ff2f' } });
+    node.set({ style: { color: '#00ff2f' } });
     node.set({ style: { fontSize: 7, lineHeight: 1 } });
     mounted.scene.updateMatrixWorld(true);
     assert.equal(node.spans, resolved, 'an unrelated update must reuse the resolved span list');
@@ -431,7 +434,7 @@ test('a txt fragment opening with a combining mark compiles onto its base cluste
   );
 
   const font = await fonts.load('inter');
-  const mounted = mount(font, [{ properties: { contentBox: box, paint, style: latin, text: literal } }]);
+  const mounted = mount(font, [{ properties: { constraints, layout, style: [latin, paint], text: literal } }]);
   try {
     const node = mounted.nodes[0];
     mounted.scene.updateMatrixWorld(true);
@@ -523,13 +526,13 @@ test('a nested React Text whose flattened span splits a cluster mounts and publi
       R3fText,
       {
         font,
-        style: latin,
-        contentBox: box,
-        paint,
+        style: [latin, paint],
+        constraints,
+        layout,
         onError: (error) => void errors.push(error),
         ref: (node) => void (node !== undefined && nodes.push(node)),
       },
-      createElement(R3fText, { paint: { color: '#ff2f00' } }, 'a'),
+      createElement(R3fText, { style: { color: '#ff2f00' } }, 'a'),
       `${ACUTE}bc`,
     ),
   );
@@ -563,14 +566,14 @@ test('a nested React Text opening with a combining mark compiles onto its base c
       R3fText,
       {
         font,
-        style: latin,
-        contentBox: box,
-        paint,
+        style: [latin, paint],
+        constraints,
+        layout,
         onError: (error) => void errors.push(error),
         ref: (node) => void (node !== undefined && nodes.push(node)),
       },
       'a',
-      createElement(R3fText, { paint: { color: '#ff2f00' } }, `${ACUTE}b`),
+      createElement(R3fText, { style: { color: '#ff2f00' } }, `${ACUTE}b`),
     ),
   );
   try {
@@ -595,7 +598,7 @@ test('a nested React Text rejects box-only props before constructing a paragraph
       create(
         createElement(
           R3fText,
-          { font, style: latin, contentBox: box },
+          { font, style: latin, constraints, layout },
           createElement(R3fText, { position: [1, 2, 3] }, 'invalid inline box'),
         ),
       ),

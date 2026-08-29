@@ -55,7 +55,8 @@ function unmount(mounted) {
 test('glyphs, words, and lines partition the paragraph without the caller deriving membership', async () => {
   const font = await loadFont();
   const mounted = mount(font, 'one two three', {
-    contentBox: { width: { mode: 'exact', size: 60 }, wrap: 'word' },
+    constraints: { width: { mode: 'exact', size: 60 } },
+    layout: { wrap: 'word' },
   });
   try {
     const placements = mounted.node.snapshotGlyphs();
@@ -94,7 +95,7 @@ test('advance and ink extents are different numbers, and each agrees with the en
   const mounted = mount(font, 'Wavy');
   try {
     const placements = mounted.node.snapshotGlyphs();
-    const summary = mounted.node.layout();
+    const summary = mounted.node.measure();
     const line = placements.lines[0];
 
     // The per-glyph advances must sum to the line advance the engine derived independently in f64.
@@ -183,7 +184,7 @@ test('a snapshot is internally consistent and restores without the caller sequen
   try {
     const placements = mounted.node.snapshotGlyphs();
     // The invariant the one real consumer used to hand-check over six public arrays.
-    assert.equal(placements.glyphs.length, mounted.node.layout().glyphCount);
+    assert.equal(placements.glyphs.length, mounted.node.measure().glyphCount);
     for (const [index, glyph] of placements.glyphs.entries()) assert.equal(glyph.index, index);
     assert.equal(placements.space, 'paragraph');
 
@@ -262,7 +263,7 @@ test('word and caret ranges preserve UTF-16 clusters and bidi direction', async 
   const combining = mount(font, 'e\u0301');
   const rtl = mount(font, 'אב', {
     style: { fontSize: 16, direction: 'rtl' },
-    contentBox: { width: { mode: 'exact', size: 100 } },
+    constraints: { width: { mode: 'exact', size: 100 } },
   });
   try {
     const astralPlacements = astral.node.snapshotGlyphs();

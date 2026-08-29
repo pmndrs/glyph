@@ -49,8 +49,9 @@ export function createBenchmarkParagraph(
   const paragraph = new Text({
     font: fixture.loaded,
     text,
-    contentBox: { width: { mode: 'exact', size: width }, wrap: 'word' },
     style: { fontSize: 24 },
+    layout: { wrap: 'word' },
+    constraints: { width: { mode: 'exact', size: width } },
   });
   group.add(paragraph);
   return { group, paragraph };

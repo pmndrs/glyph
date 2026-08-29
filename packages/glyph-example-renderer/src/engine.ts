@@ -1,4 +1,4 @@
-import type { AnyRasterTechnique, ColorInput, Font, FontStack, GlyphPaintInput } from '@pmndrs/glyph';
+import type { AnyRasterTechnique, ColorInput, Font, FontStack } from '@pmndrs/glyph';
 import {
   type BackendFontBinding,
   type BackendFontStackBinding,
@@ -409,22 +409,20 @@ function normalizeTextOptions(options: ExampleTextOptions): NormalizedExampleTex
 }
 
 function coreTextOptions(state: NormalizedExampleTextOptions) {
-  const paint: GlyphPaintInput | undefined =
-    state.color === undefined && state.opacity === undefined
-      ? undefined
-      : {
-          ...(state.color === undefined ? {} : { color: state.color }),
-          ...(state.opacity === undefined ? {} : { opacity: state.opacity }),
-        };
   return {
     font: state.font,
     text: state.text,
-    style: { fontSize: state.fontSize },
-    ...(paint === undefined ? {} : { paint }),
+    style: {
+      fontSize: state.fontSize,
+      ...(state.color === undefined ? {} : { color: state.color }),
+      ...(state.opacity === undefined ? {} : { opacity: state.opacity }),
+    },
     rasterPixelRatio: state.rasterPixelRatio,
-    contentBox: {
+    constraints: {
       width: { mode: 'at-most' as const, size: state.width },
       height: { mode: 'at-most' as const, size: state.height },
+    },
+    layout: {
       maxLines: EXAMPLE_LIMITS.maxLines,
     },
   };

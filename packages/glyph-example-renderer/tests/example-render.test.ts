@@ -242,7 +242,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         font: flowFont,
         text: 'a',
         style: { fontSize: 32 },
-        contentBox: { width: mutableWidth },
+        constraints: { width: mutableWidth },
         flow: { regions: [{ region: mutableRegion }] },
       });
       expect(() => flowPlanner.createText({ font: flowFont, text: 'duplicate', order: 0 })).toThrow(
@@ -253,17 +253,18 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       );
       expect(() =>
         flowText.update({
-          contentBox: { width: { mode: 'at-most', size: 512 }, firstLineIndent: -1 },
+          constraints: { width: { mode: 'at-most', size: 512 } },
+          layout: { firstLineIndent: -1 },
         }),
       ).toThrow(/indent and spacing must be nonnegative/);
       flowTransform.dispose();
       mutableWidth.size = Number.NaN;
       mutableRegion.inlineEnd = Number.NaN;
-      expect(flowText.layout().glyphCount).toBe(1);
+      expect(flowText.measure().glyphCount).toBe(1);
       expect(flowText.glyphs().glyphCount).toBe(1);
       expect(flowTargetAcceptances).toBe(0);
       flowText.update({ text: 'abcd' });
-      expect(flowText.layout().glyphCount).toBe(4);
+      expect(flowText.measure().glyphCount).toBe(4);
       expect(flowText.glyphs().glyphCount).toBe(4);
       expect(flowTargetAcceptances).toBe(0);
       expect(flowPlanner.publish()).toEqual({ accepted: true });
@@ -278,14 +279,14 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       flowText.update({ text: 'abcde' });
       expect(flowPlanner.publish({ semanticViews: 'measurement' })).toEqual({ accepted: true });
       const queriesAfterMeasuredPublish = paragraphQueries;
-      expect(flowText.layout().glyphCount).toBe(5);
+      expect(flowText.measure().glyphCount).toBe(5);
       expect(paragraphQueries).toBe(queriesAfterMeasuredPublish);
       expect(flowText.glyphs().glyphCount).toBe(5);
       expect(paragraphQueries).toBe(queriesAfterMeasuredPublish + 1);
       flowText.update({ text: 'abcdef' });
       expect(flowPlanner.publish({ semanticViews: 'layout-inspection' })).toEqual({ accepted: true });
       const queriesAfterInspectedPublish = paragraphQueries;
-      expect(flowText.layout().glyphCount).toBe(6);
+      expect(flowText.measure().glyphCount).toBe(6);
       expect(flowText.glyphs().glyphCount).toBe(6);
       expect(paragraphQueries).toBe(queriesAfterInspectedPublish);
       expect(flowTargetAcceptances).toBe(3);
@@ -319,15 +320,15 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       });
       styleBudgetProbe.dispose();
       flowText.dispose();
-      expect(() => flowText.layout()).toThrow('disposed');
+      expect(() => flowText.measure()).toThrow('disposed');
       const plannerOwnedText = flowPlanner.createText({ font: flowFont, text: 'plan-owned' });
-      expect(plannerOwnedText.layout().glyphCount).toBeGreaterThan(0);
+      expect(plannerOwnedText.measure().glyphCount).toBeGreaterThan(0);
       expect(() => flowPlanner.createText({ font: flowFont, text: 'too-many-pending' })).toThrow(
         /pending paragraph mutations exceed limits.maxParagraphs/,
       );
       flowPlanner.dispose();
       expect(plannerOwnedText.disposed).toBe(true);
-      expect(() => plannerOwnedText.layout()).toThrow('disposed');
+      expect(() => plannerOwnedText.measure()).toThrow('disposed');
 
       let returnedBuffer: ArrayBuffer | undefined;
       let reusedBuffers = 0;

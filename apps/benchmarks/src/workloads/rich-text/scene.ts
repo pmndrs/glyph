@@ -27,9 +27,9 @@ import {
  *   fallback, and must move that range to another font slot;
  * - `foreign` selects a third face for a range the body face cannot shape at all, which is fallback, and must resolve
  *   without `.notdef`;
- * - `accent` states paint and size together while `nested` sits inside it stating only a size, so the inner range must
- *   inherit the enclosing face and the enclosing paint while overriding the enclosing size;
- * - `tint` states only paint, so it must leave the shaped result identical.
+ * - `accent` states color and size together while `nested` sits inside it stating only a size, so the inner range must
+ *   inherit the enclosing face and color while overriding the enclosing size;
+ * - `tint` states only color, so it must leave the shaped result identical.
  *
  * Small caps need a face that carries an `smcp` table. Of the repository fixtures only Source Serif 4 does, so the
  * proper-noun span names it explicitly rather than depending on whichever face the harness has selected.
@@ -246,7 +246,7 @@ export function richTextCompanionFonts(companions: readonly WorkloadFont[]): Ric
 }
 
 /**
- * Bitmap rejects outline and shadow and Slug V0 omits them, so the composed paint only reaches for them on MTSDF —
+ * Bitmap rejects outline and shadow and Slug V0 omits them, so the composed style only reaches for them on MTSDF —
  * the same technique gate the paint-effects lane already encodes.
  */
 function richTextParagraphPaint(
@@ -302,9 +302,9 @@ export function createRichTextEntries(
       font: context.font,
       rasterPixelRatio: context.dpr,
       text: literal,
-      style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
-      paint,
-      contentBox: { width, wrap: 'word' },
+      style: [{ fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT }, paint],
+      constraints: { width },
+      layout: { wrap: 'word' },
     });
     return { animationPhase: index, node: text, role: 'primary', sourceText: literal.text, text };
   });
@@ -384,8 +384,7 @@ export function applyRichTextRetainedConfiguration(
     entry.sourceText = literal.text;
     entry.text.set({
       text: literal,
-      style: { fontSize: configuration.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
-      paint,
+      style: [{ fontSize: configuration.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT }, paint],
     });
   }
 }

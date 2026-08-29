@@ -34,8 +34,9 @@ function measureBatch(count: number) {
       new Text({
         font: fixture.loaded,
         text: `alpha ${index}`,
-        contentBox: { width: { mode: 'exact', size: 160 }, wrap: 'word' },
         style: { fontSize: 16 },
+        layout: { wrap: 'word' },
+        constraints: { width: { mode: 'exact', size: 160 } },
       }),
   );
   group.add(...texts);

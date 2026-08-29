@@ -65,7 +65,8 @@ test('mounting and unmounting a React Text returns every paragraph lease', async
         {
           font,
           style: { fontSize: 20, lineHeight: 1.25 },
-          contentBox: { width: { mode: 'exact', size: 300 }, wrap: 'word' },
+          constraints: { width: { mode: 'exact', size: 300 } },
+          layout: { wrap: 'word' },
         },
         'leased',
       ),
@@ -98,7 +99,8 @@ test('StrictMode remount cycles balance their paragraph leases', async () => {
             {
               font,
               style: { fontSize: 20, lineHeight: 1.25 },
-              contentBox: { width: { mode: 'exact', size: 300 }, wrap: 'word' },
+              constraints: { width: { mode: 'exact', size: 300 } },
+              layout: { wrap: 'word' },
             },
             `cycle ${cycle}`,
           ),
@@ -124,7 +126,8 @@ test('user font and loader handles may dispose before React releases its Text le
       {
         font,
         style: { fontSize: 20, lineHeight: 1.25 },
-        contentBox: { width: { mode: 'exact', size: 300 }, wrap: 'word' },
+        constraints: { width: { mode: 'exact', size: 300 } },
+        layout: { wrap: 'word' },
       },
       'still mounted',
     ),
@@ -272,7 +275,8 @@ function HookFontText({ name, observed, request }) {
       font,
       name,
       style: { fontSize: 20, lineHeight: 1.25 },
-      contentBox: { width: { mode: 'exact', size: 300 }, wrap: 'word' },
+      constraints: { width: { mode: 'exact', size: 300 } },
+      layout: { wrap: 'word' },
     },
     name,
   );

@@ -1,13 +1,13 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
-import { createParagraph, type ParagraphStyle } from '@pmndrs/glyph';
+import { createParagraph, type TextStyle } from '@pmndrs/glyph';
 
 import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts';
 import { createUikitLayoutFixture, YogaMeasureMode } from '../src/benchmark/uikit-layout-fixture.ts';
 import {
   createContractText,
   createParagraphContractRuntime,
-  policyOnly,
+  layoutOnly,
   preserveEquivalentLegacyNumbers,
   type LegacyConstraints,
 } from './support/paragraph-contract-runtime.mts';
@@ -37,7 +37,7 @@ try {
     lineHeight: 1.25,
     direction: 'auto',
     language: 'ar',
-  } as const satisfies ParagraphStyle;
+  } as const satisfies TextStyle;
   const bidiConstraints = {
     width: { mode: 'exactly', size: 300 },
     wrap: 'word',
@@ -67,7 +67,7 @@ try {
     lineHeight: 1.25,
     direction: 'ltr',
     language: 'en',
-  } as const satisfies ParagraphStyle;
+  } as const satisfies TextStyle;
   const policyInputs = {
     start: { width: { mode: 'exactly', size: 180 }, align: 'start' },
     center: { width: { mode: 'exactly', size: 180 }, align: 'center' },
@@ -100,17 +100,17 @@ try {
   const uikitInput = {
     text: 'office AVATAR café — ffi, kerning, marks, and wrapping.',
     style: { fontSize: 31, lineHeight: 1.23, direction: 'ltr', language: 'en' },
-  } as const satisfies { readonly text: string; readonly style: ParagraphStyle };
+  } as const satisfies { readonly text: string; readonly style: TextStyle };
   const uikitPolicy = { wrap: 'word', overflow: 'clip' } as const satisfies LegacyConstraints;
-  const uikitPolicyOnly = policyOnly(uikitPolicy);
+  const uikitLayout = layoutOnly(uikitPolicy);
   const uikitParagraph = await createParagraph({
     font: inter.font,
     text: uikitInput.text,
     style: uikitInput.style,
-    policy: uikitPolicyOnly,
+    layout: uikitLayout,
   });
   try {
-    const uikitFixture = createUikitLayoutFixture(uikitParagraph, uikitPolicyOnly);
+    const uikitFixture = createUikitLayoutFixture(uikitParagraph, uikitLayout);
     const customLayouting = uikitFixture.customLayouting();
     const natural = customLayouting.measure(
       Number.NaN,

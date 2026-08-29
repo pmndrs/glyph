@@ -1,13 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-import {
-  alignSpansToClusters,
-  type FormattedText,
-  type GlyphPaintInput,
-  type ParagraphSpan,
-  type TextInput,
-} from '../formatted-text.js';
-import type { FontFeature } from '../font-feature.js';
+import { alignSpansToClusters, type FormattedText, type ParagraphSpan, type TextInput } from '../formatted-text.js';
 import {
   createGlyphPlacements,
   type GlyphApplication,
@@ -15,9 +8,9 @@ import {
   type GlyphPlacements,
 } from '../glyph-placement.js';
 import {
-  copyParagraphLayoutInspection,
+  copyGlyphLayoutInspection,
   type LayoutBox,
-  type ParagraphLayoutInspection,
+  type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
 } from '../layout.js';
 import type { FontSelection } from '../loaded-font.js';
@@ -25,8 +18,17 @@ import type { AnyRasterTechnique } from '../raster-technique.js';
 import type {
   GlyphBufferCapacity,
   ParagraphBaseProperties,
-  ParagraphContentBox,
-  ParagraphStyle,
+  Constraints,
+  ParagraphLayout,
+  PropertyList,
+  TextStyle,
+} from '../text-properties.js';
+import {
+  assertConstraints,
+  assertParagraphLayout,
+  assertTextStyle,
+  assertTextStyleFeatureRanges,
+  mergePropertyList,
 } from '../text-properties.js';
 import { normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type {
@@ -110,9 +112,9 @@ interface DesiredTextState<Technique extends AnyRasterTechnique> {
   readonly font: FontSelection<Technique>;
   readonly text: string;
   readonly spans: readonly TextSpan<Technique>[];
-  readonly contentBox: ParagraphContentBox;
-  readonly style: ParagraphStyle;
-  readonly paint: GlyphPaintInput;
+  readonly style: TextStyle;
+  readonly layout: ParagraphLayout;
+  readonly constraints: Constraints;
   readonly rasterPixelRatio?: number;
   readonly material?: ThreeTextMaterial;
 }
@@ -139,7 +141,7 @@ let reconciler!: TextReconciler;
 
 interface TextGroupReconciler {
   measurement(group: TextGroup, text: Text<AnyRasterTechnique>): ParagraphLayoutSummary;
-  inspection(group: TextGroup, text: Text<AnyRasterTechnique>): ParagraphLayoutInspection;
+  inspection(group: TextGroup, text: Text<AnyRasterTechnique>): GlyphLayoutInspection;
 }
 
 let groupReconciler!: TextGroupReconciler;
@@ -237,23 +239,25 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   set spans(value: readonly TextSpan<Technique>[]) {
     this.set({ spans: value });
   }
-  get contentBox(): ParagraphContentBox {
-    return this.#desired.contentBox;
-  }
-  set contentBox(value: ParagraphContentBox) {
-    this.set({ contentBox: value });
-  }
-  get style(): ParagraphStyle {
+  /** Text shaping and presentation properties inherited by inline spans. */
+  get style(): TextStyle {
     return this.#desired.style;
   }
-  set style(value: ParagraphStyle) {
+  set style(value: PropertyList<TextStyle>) {
     this.set({ style: value });
   }
-  get paint(): GlyphPaintInput {
-    return this.#desired.paint;
+  /** Paragraph flow properties such as wrapping, alignment, and line limits. */
+  get layout(): ParagraphLayout {
+    return this.#desired.layout;
   }
-  set paint(value: GlyphPaintInput) {
-    this.set({ paint: value });
+  set layout(value: PropertyList<ParagraphLayout>) {
+    this.set({ layout: value });
+  }
+  get constraints(): Constraints {
+    return this.#desired.constraints;
+  }
+  set constraints(value: PropertyList<Constraints>) {
+    this.set({ constraints: value });
   }
   get rasterPixelRatio(): number {
     return this.#desired.rasterPixelRatio ?? 1;
@@ -310,9 +314,9 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
 
   /**
    * Measure current desired text without scene attachment or matrix traversal.
-   * A cache miss may synchronously incur font and layout lookup work in the text engine.
+   * A cache miss may synchronously incur font and measure lookup work in the text engine.
    */
-  layout(): ParagraphLayoutSummary {
+  measure(): ParagraphLayoutSummary {
     this.#assertActive();
     const text = eraseTextTechnique(this);
     const boundary = nearestTextGroup(this);
@@ -328,7 +332,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
    * Return caller-owned positioned glyph and line columns without requiring a rendered frame.
    * A cache miss may synchronously incur glyph lookup and positioning work; every call copies the columns.
    */
-  glyphs(): ParagraphLayoutInspection {
+  glyphs(): GlyphLayoutInspection {
     this.#assertActive();
     const text = eraseTextTechnique(this);
     const boundary = nearestTextGroup(this);
@@ -595,7 +599,7 @@ export class TextGroup extends THREE.Object3D {
     return this.#binding.measurement(text);
   }
 
-  #inspection(text: Text<AnyRasterTechnique>): ParagraphLayoutInspection {
+  #inspection(text: Text<AnyRasterTechnique>): GlyphLayoutInspection {
     this.#assertActive();
     const texts = collectTextDescendants(this, this.#texts);
     if (!texts.includes(text)) throw new Error('Text must remain attached to its TextGroup for inspection');
@@ -621,7 +625,7 @@ interface BoundTextEntry {
 
 interface CanonicalInspection {
   readonly revision: number;
-  readonly value: ParagraphLayoutInspection;
+  readonly value: GlyphLayoutInspection;
 }
 
 class ThreeTextBatchBinding {
@@ -631,7 +635,7 @@ class ThreeTextBatchBinding {
   readonly #planner: RenderPlanner;
   readonly #target: ThreeTextRenderPlanExecutor;
   readonly #entries = new Map<Text<AnyRasterTechnique>, BoundTextEntry>();
-  readonly #placementLayouts = new WeakMap<GlyphPlacements, ParagraphLayoutInspection>();
+  readonly #placementLayouts = new WeakMap<GlyphPlacements, GlyphLayoutInspection>();
   readonly #inspections = new Map<Text<AnyRasterTechnique>, CanonicalInspection>();
   #capacity: GlyphBufferCapacity;
   #pendingPublication = false;
@@ -754,12 +758,12 @@ class ThreeTextBatchBinding {
     this.reconcile(this.#group === undefined ? [text] : collectTextDescendants(this.#group, []));
     const entry = this.#entries.get(text);
     if (entry === undefined) throw new Error('Text is not retained by this batch');
-    const measurement = entry.handle.layout();
+    const measurement = entry.handle.measure();
     reconciler.publishMeasurement(text, measurement);
     return measurement;
   }
 
-  inspection(text: Text<AnyRasterTechnique>): ParagraphLayoutInspection {
+  inspection(text: Text<AnyRasterTechnique>): GlyphLayoutInspection {
     this.#assertActive();
     this.#coordinator.assertFrameUpdateAllowed();
     this.reconcile(this.#group === undefined ? [text] : collectTextDescendants(this.#group, []));
@@ -775,7 +779,7 @@ class ThreeTextBatchBinding {
     if (layout === undefined) return undefined;
     const drawn = this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y);
     const placements = createGlyphPlacements(
-      copyParagraphLayoutInspection(layout),
+      copyGlyphLayoutInspection(layout),
       text.text,
       drawn.drawnX,
       drawn.drawnY,
@@ -840,7 +844,7 @@ class ThreeTextBatchBinding {
     for (const [text, entry] of this.#entries) {
       entry.committedRevision = entry.stagedRevision;
       reconciler.markCommitted(text);
-      reconciler.publishMeasurement(text, entry.handle.layout());
+      reconciler.publishMeasurement(text, entry.handle.measure());
     }
     this.#target.syncTransforms(undefined, worldMatricesCurrent);
   }
@@ -923,7 +927,7 @@ class ThreeTextBatchBinding {
     this.#pendingPublication = true;
   }
 
-  #canonicalInspection(text: Text<AnyRasterTechnique>): ParagraphLayoutInspection | undefined {
+  #canonicalInspection(text: Text<AnyRasterTechnique>): GlyphLayoutInspection | undefined {
     const entry = this.#entries.get(text);
     if (
       entry === undefined ||
@@ -964,7 +968,6 @@ function coreTextOptions(
       ...(font === undefined ? {} : { font }),
       ...(material === undefined ? {} : { material }),
       ...(span.style === undefined ? {} : { style: span.style }),
-      ...(span.paint === undefined ? {} : { paint: span.paint }),
     });
   });
   const text: RetainedFormattedText = Object.freeze({ text: desired.text, spans: Object.freeze(spans) });
@@ -975,9 +978,9 @@ function coreTextOptions(
     order,
     ...(rootMaterial === undefined ? {} : { material: rootMaterial }),
     ...(desired.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: desired.rasterPixelRatio }),
-    contentBox: desired.contentBox,
     style: desired.style,
-    paint: desired.paint,
+    layout: desired.layout,
+    constraints: desired.constraints,
   };
 }
 
@@ -1026,11 +1029,18 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
   if (typeof properties !== 'object' || properties === null || Array.isArray(properties)) {
     throw new TypeError('Text properties are required');
   }
-  normalizedColumns(properties.contentBox);
+  const style = mergePropertyList(properties.style, 'Text style');
+  const layout = mergePropertyList(properties.layout, 'Text layout');
+  const constraints = mergePropertyList(properties.constraints, 'Text constraints');
+  assertTextStyle(style, 'Text style');
+  assertParagraphLayout(layout, 'Text layout');
+  assertConstraints(constraints, 'Text constraints');
+  normalizedColumns(layout, constraints);
   const formatted = typeof properties.text === 'string' ? undefined : properties.text;
   if (formatted !== undefined && !isFormattedText(formatted)) throw new TypeError('Text content is invalid');
   const text = formatted?.text ?? (properties.text as string);
   if (typeof text !== 'string') throw new TypeError('Text content must be a string or formatted text');
+  assertTextStyleFeatureRanges(style, 0, text.length, 'Text style');
   const stated = (formatted?.spans as readonly TextSpan<Technique>[] | undefined) ?? properties.spans ?? [];
   if (!Array.isArray(stated)) throw new TypeError('Text spans must be an array');
   const resolved =
@@ -1047,9 +1057,9 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
     font: properties.font,
     text,
     spans,
-    contentBox: Object.freeze({ ...(properties.contentBox ?? {}) }),
-    style: Object.freeze({ ...(properties.style ?? {}) }),
-    paint: Object.freeze({ ...(properties.paint ?? {}) }),
+    style: Object.freeze(style),
+    layout: Object.freeze(layout),
+    constraints: Object.freeze(constraints),
     ...(rasterPixelRatio === undefined ? {} : { rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
   });
@@ -1075,17 +1085,13 @@ function assertSpanRanges<Technique extends AnyRasterTechnique>(
       throw new TypeError(`Text span ${index} must be an object`);
     }
     assertRange(`span ${index}`, span.start, span.end, text.length);
-    assertFeatureRanges(`span ${index}`, span.style?.features, text.length);
+    if (span.style !== undefined) {
+      assertTextStyle(span.style, `Text span ${index} style`);
+      assertTextStyleFeatureRanges(span.style, span.start, span.end, `Text span ${index} style`);
+    }
   }
   assertSpansNest(spans);
   return spans;
-}
-
-function assertFeatureRanges(subject: string, features: readonly FontFeature[] | undefined, length: number): void {
-  for (const [position, feature] of (features ?? []).entries()) {
-    if (feature.start === undefined && feature.end === undefined) continue;
-    assertRange(`${subject} feature ${position} (${feature.tag})`, feature.start ?? 0, feature.end ?? length, length);
-  }
 }
 
 function assertRange(subject: string, start: number, end: number, length: number): void {

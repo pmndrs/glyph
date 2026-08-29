@@ -1,13 +1,23 @@
-import { alignSpansToClusters, type GlyphPaintInput } from '../formatted-text.js';
+import { alignSpansToClusters } from '../formatted-text.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import { copyGlyphLayoutInspection, type GlyphLayoutInspection, type ParagraphLayoutSummary } from '../layout.js';
 import {
-  copyParagraphLayoutInspection,
-  type ParagraphLayoutInspection,
-  type ParagraphLayoutSummary,
-} from '../layout.js';
-import type { ParagraphContentBox, ParagraphStyle } from '../text-properties.js';
+  assertConstraints,
+  assertParagraphLayout,
+  assertTextStyle,
+  assertTextStyleFeatureRanges,
+  type Constraints,
+  type ParagraphLayout,
+  type TextStyle,
+} from '../text-properties.js';
 import { createExactFrameBufferPool, type ExactFrameBufferPool } from '../internal/frame-transfer-pool.js';
-import { compileEngineGeometry, engineStyleId, engineStyleValue, minimalTextMutation } from '../engine-encoding.js';
+import {
+  compileEngineGeometry,
+  engineStyleId,
+  engineStyleValue,
+  minimalTextMutation,
+  normalizedColumns,
+} from '../engine-encoding.js';
 import {
   compileValidatedPlannerFrameUpdate,
   MAX_TEXT_ENGINE_OUTPUT_BYTES,
@@ -188,8 +198,8 @@ export interface RetainedTextSpan {
   readonly end: number;
   readonly font?: BackendFontStackBinding;
   readonly material?: BackendMaterialBinding;
-  readonly style?: ParagraphStyle;
-  readonly paint?: GlyphPaintInput;
+  /** Text shaping and presentation overrides for this inline span. */
+  readonly style?: TextStyle;
 }
 
 /** Styled text accepted by a retained text instance. */
@@ -243,9 +253,12 @@ export interface RetainedTextOptions {
   readonly transform?: BackendTransformBinding;
   readonly order?: number;
   readonly rasterPixelRatio?: number;
-  readonly contentBox?: ParagraphContentBox;
-  readonly style?: ParagraphStyle;
-  readonly paint?: GlyphPaintInput;
+  /** Text shaping and presentation properties inherited by inline spans. */
+  readonly style?: TextStyle;
+  /** Paragraph flow properties such as wrapping, alignment, and line limits. */
+  readonly layout?: ParagraphLayout;
+  /** Bounds imposed on the measured and rendered paragraph. */
+  readonly constraints?: Constraints;
   readonly flow?: RetainedTextFlowInput;
   readonly inlineObjects?: readonly RetainedTextInlineObjectInput[];
 }
@@ -259,10 +272,10 @@ export type RetainedTextUpdate = Partial<Omit<RetainedTextOptions, 'font'>> & {
 export interface RetainedText {
   readonly disposed: boolean;
   update(update: RetainedTextUpdate): void;
-  /** Returns aggregate metrics; a cache miss may synchronously incur font and layout lookup work. */
-  layout(): ParagraphLayoutSummary;
+  /** Returns aggregate metrics; a cache miss may synchronously incur font and measure lookup work. */
+  measure(): ParagraphLayoutSummary;
   /** Returns caller-owned columns; a cache miss may synchronously incur glyph lookup and positioning work. */
-  glyphs(): ParagraphLayoutInspection;
+  glyphs(): GlyphLayoutInspection;
   dispose(): void;
 }
 
@@ -344,8 +357,7 @@ interface ResolvedSpan {
   readonly end: number;
   readonly font: ReturnType<GlyphBackend['_retainFontStackBinding']> | undefined;
   readonly material: BackendOpaqueBindingLease | undefined;
-  readonly style: ParagraphStyle | undefined;
-  readonly paint: GlyphPaintInput | undefined;
+  readonly style: TextStyle | undefined;
 }
 
 interface ResolvedTextOptions {
@@ -375,7 +387,7 @@ interface RetainedTextState {
   desiredReleased: boolean;
   committed: ResolvedTextOptions | undefined;
   measurement: ParagraphLayoutSummary | undefined;
-  inspection: ParagraphLayoutInspection | undefined;
+  inspection: GlyphLayoutInspection | undefined;
 }
 
 interface RetainedTextMetrics {
@@ -609,11 +621,11 @@ class RenderPlannerImpl {
   }
 
   /** @internal */
-  _inspectText(state: RetainedTextState): ParagraphLayoutInspection {
+  _inspectText(state: RetainedTextState): GlyphLayoutInspection {
     this.#assertTextQueryable(state);
     const cached = state.inspection;
-    if (cached !== undefined) return copyParagraphLayoutInspection(cached);
-    return copyParagraphLayoutInspection(this.#queryText(state, true));
+    if (cached !== undefined) return copyGlyphLayoutInspection(cached);
+    return copyGlyphLayoutInspection(this.#queryText(state, true));
   }
 
   /** @internal */
@@ -805,8 +817,8 @@ class RenderPlannerImpl {
   }
 
   #queryText(state: RetainedTextState, inspection: false): ParagraphLayoutSummary;
-  #queryText(state: RetainedTextState, inspection: true): ParagraphLayoutInspection;
-  #queryText(state: RetainedTextState, inspection: boolean): ParagraphLayoutSummary | ParagraphLayoutInspection {
+  #queryText(state: RetainedTextState, inspection: true): GlyphLayoutInspection;
+  #queryText(state: RetainedTextState, inspection: boolean): ParagraphLayoutSummary | GlyphLayoutInspection {
     this.#assertTextQueryable(state);
     this.#ensureTextCapacity();
     const styles = compileStyles(this.#backend, state);
@@ -1261,11 +1273,11 @@ class RetainedTextImpl implements RetainedText {
     this.#planner._updateText(this.#state, update);
   }
 
-  layout(): ParagraphLayoutSummary {
+  measure(): ParagraphLayoutSummary {
     return this.#planner._layoutText(this.#state);
   }
 
-  glyphs(): ParagraphLayoutInspection {
+  glyphs(): GlyphLayoutInspection {
     return this.#planner._inspectText(this.#state);
   }
 
@@ -1405,6 +1417,14 @@ function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, o
   if (!isNonArrayObject(value)) throw new TypeError('text engine text options must be an object');
   validateTextScalarOptions(value, ordinal);
   const formattedText = normalizeTextInput(value.text);
+  const style = value.style ?? {};
+  const layout = value.layout ?? {};
+  const constraints = value.constraints ?? {};
+  assertTextStyle(style, 'text style');
+  assertTextStyleFeatureRanges(style, 0, formattedText.text.length, 'text style');
+  assertParagraphLayout(layout, 'text layout');
+  assertConstraints(constraints, 'text constraints');
+  normalizedColumns(layout, constraints);
   const font = backend._retainFontStackBinding(value.font);
   const leases: Array<{ dispose(): void }> = [font];
   try {
@@ -1417,6 +1437,10 @@ function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, o
     leases.push(transform);
     if (createdTransform) transformBinding.dispose();
     const spans = formattedText.spans.map((span) => {
+      if (span.style !== undefined) {
+        assertTextStyle(span.style, `text span style [${span.start}, ${span.end})`);
+        assertTextStyleFeatureRanges(span.style, span.start, span.end, `text span style [${span.start}, ${span.end})`);
+      }
       const spanFont = span.font === undefined ? undefined : backend._retainFontStackBinding(span.font);
       if (spanFont !== undefined) leases.push(spanFont);
       const spanMaterial =
@@ -1428,7 +1452,6 @@ function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, o
         font: spanFont,
         material: spanMaterial,
         style: span.style,
-        paint: span.paint,
       });
     });
     const flowTransforms: BackendOpaqueBindingLease[] = [];
@@ -1499,10 +1522,7 @@ function normalizeTextInput(value: unknown): RetainedFormattedText {
       ...(span.material === undefined ? {} : { material: span.material as BackendMaterialBinding }),
       ...(span.style === undefined
         ? {}
-        : { style: cloneAuthoredData(span.style as ParagraphStyle, `text span ${index} style`) }),
-      ...(span.paint === undefined
-        ? {}
-        : { paint: cloneAuthoredData(span.paint as GlyphPaintInput, `text span ${index} paint`) }),
+        : { style: cloneAuthoredData(span.style as TextStyle, `text span ${index} style`) }),
     });
   });
   return Object.freeze({ text, spans: Object.freeze(alignSpansToClusters(text, spans)) });
@@ -1539,7 +1559,6 @@ function snapshotTextOptions(
           ...(span.font === undefined ? {} : { font: span.font.binding }),
           ...(span.material === undefined ? {} : { material: span.material.binding as BackendMaterialBinding }),
           ...(span.style === undefined ? {} : { style: span.style }),
-          ...(span.paint === undefined ? {} : { paint: span.paint }),
         }),
       ),
     ),
@@ -1633,7 +1652,7 @@ function compileStyles(backend: GlyphBackend, state: RetainedTextState): readonl
     start: 0,
     end: desired.text.length,
     root: true,
-    value: engineStyleValue(source.style ?? {}, source.paint, 0, desired.text.length, {
+    value: engineStyleValue(source.style ?? {}, 0, desired.text.length, {
       fontStackHandle: desired.font.handle as never,
       fontSize: source.style?.fontSize ?? 16,
       rasterPixelRatio: source.rasterPixelRatio ?? 1,
@@ -1651,7 +1670,7 @@ function compileStyles(backend: GlyphBackend, state: RetainedTextState): readonl
         cascadeOrder: index + 1,
         start: span.start,
         end: span.end,
-        value: engineStyleValue(span.style ?? {}, span.paint, span.start, span.end, {
+        value: engineStyleValue(span.style ?? {}, span.start, span.end, {
           ...(span.font === undefined ? {} : { fontStackHandle: span.font.handle as never }),
           ...(span.material === undefined ? {} : { materialId: span.material.handle as MaterialHandle }),
         }),
@@ -1670,7 +1689,7 @@ function retainedTextMetrics(desired: ResolvedTextOptions, ordinal: number): Ret
   return {
     order: desired.source.order ?? ordinal - 1,
     styleCount,
-    regionCount: flow?.regions.length ?? desired.source.contentBox?.columns?.count ?? 1,
+    regionCount: flow?.regions.length ?? desired.source.layout?.columns?.count ?? 1,
     exclusionCount: flow?.regions.reduce((sum, region) => sum + (region.exclusions?.length ?? 0), 0) ?? 0,
     inlineObjectCount: desired.source.inlineObjects?.length ?? 0,
   };
@@ -1696,7 +1715,8 @@ function compileGeometry(
     state.paragraphId,
     state.desired.transform.handle,
     revision,
-    state.desired.source.contentBox,
+    state.desired.source.layout,
+    state.desired.source.constraints,
     regionStart,
     state.desired.text.length,
   );

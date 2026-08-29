@@ -101,7 +101,7 @@ interface MutableStats {
 }
 
 /**
- * Owns the asynchronous copy boundary for raw frame bytes. The pool never decodes the compiler-defined Wasm layout.
+ * Owns the asynchronous copy boundary for raw frame bytes. The pool never decodes the compiler-defined Wasm measure.
  * A successful `send` must transfer (and therefore detach) the supplied buffer before it returns.
  */
 export function createFrameTransferPool(limits: FrameTransferPoolLimits): FrameTransferPool {

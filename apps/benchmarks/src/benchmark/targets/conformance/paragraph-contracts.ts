@@ -1,11 +1,11 @@
 import {
   createParagraph,
+  type Constraints,
   type Font,
   type Paragraph,
-  type ParagraphContentBox,
-  type ParagraphLayoutInspection,
-  type ParagraphLayoutPolicy,
-  type ParagraphStyle,
+  type ParagraphLayout,
+  type GlyphLayoutInspection,
+  type TextStyle,
 } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
@@ -46,7 +46,7 @@ interface LayoutGolden {
 
 interface ParagraphFixture {
   readonly text: string;
-  readonly style: ParagraphStyle;
+  readonly style: TextStyle;
   readonly constraints: LegacyConstraints;
   readonly layout: LayoutGolden;
 }
@@ -55,13 +55,13 @@ interface BidiContract {
   readonly bidi: Readonly<Record<string, ParagraphFixture>>;
   readonly policies: {
     readonly text: string;
-    readonly style: ParagraphStyle;
+    readonly style: TextStyle;
     readonly cases: Readonly<
       Record<string, { readonly constraints: LegacyConstraints; readonly layout: LayoutGolden }>
     >;
   };
   readonly uikit: {
-    readonly input: { readonly text: string; readonly style: ParagraphStyle };
+    readonly input: { readonly text: string; readonly style: TextStyle };
     readonly policy: LegacyConstraints;
     readonly customLayouting: Readonly<Record<string, unknown>>;
     readonly measurements: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
@@ -84,7 +84,7 @@ interface CjkContract {
       string,
       {
         readonly text: string;
-        readonly style: ParagraphStyle;
+        readonly style: TextStyle;
         readonly layouts: Readonly<Record<string, LayoutGolden>>;
       }
     >
@@ -169,12 +169,18 @@ async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, s
     id: string,
     font: BitmapFont,
     text: string,
-    style: ParagraphStyle,
+    style: TextStyle,
     constraints: LegacyConstraints,
     golden: LayoutGolden,
     full: boolean,
   ) => {
-    const value = new Text({ font, text, style, contentBox: contentBox(constraints) });
+    const value = new Text({
+      font,
+      text,
+      style,
+      layout: layoutOnly(constraints),
+      constraints: constraintsOnly(constraints),
+    });
     texts.push(value);
     expected.push({ id, golden, full });
     group.add(value);
@@ -223,9 +229,9 @@ async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, s
       font: state.inter,
       text: bidiContract.uikit.input.text,
       style: bidiContract.uikit.input.style,
-      policy: policy(bidiContract.uikit.policy),
+      layout: layoutOnly(bidiContract.uikit.policy),
     });
-    const uikit = createUikitLayoutFixture(uikitParagraph, policy(bidiContract.uikit.policy));
+    const uikit = createUikitLayoutFixture(uikitParagraph, layoutOnly(bidiContract.uikit.policy));
     const custom = uikit.customLayouting();
     assertObject(
       'uikit.customLayouting',
@@ -263,7 +269,7 @@ async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, s
     );
     assertArray('uikit.centeredX', resolved.centeredX, bidiContract.uikit.resolved.centeredX);
     assertArray('uikit.centeredY', resolved.centeredY, bidiContract.uikit.resolved.centeredY);
-    layouts.push(resolved.layout as ParagraphLayoutInspection);
+    layouts.push(resolved.layout as GlyphLayoutInspection);
 
     return {
       bytes: layouts.reduce((total, layout) => total + paragraphLayoutBytes(layout), 0),
@@ -283,7 +289,7 @@ async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, s
   }
 }
 
-function policy(value: LegacyConstraints): ParagraphLayoutPolicy {
+function layoutOnly(value: LegacyConstraints): ParagraphLayout {
   return {
     ...(value.maxLines === undefined ? {} : { maxLines: value.maxLines }),
     ...(value.wrap === undefined ? {} : { wrap: value.wrap }),
@@ -292,14 +298,10 @@ function policy(value: LegacyConstraints): ParagraphLayoutPolicy {
   };
 }
 
-function contentBox(value: LegacyConstraints): ParagraphContentBox {
+function constraintsOnly(value: LegacyConstraints): Constraints {
   return {
     ...(value.width === undefined ? {} : { width: axis(value.width) }),
     ...(value.height === undefined ? {} : { height: axis(value.height) }),
-    ...(value.maxLines === undefined ? {} : { maxLines: value.maxLines }),
-    ...(value.wrap === undefined ? {} : { wrap: value.wrap }),
-    ...(value.align === undefined ? {} : { align: value.align }),
-    ...(value.overflow === undefined ? {} : { overflow: value.overflow }),
   };
 }
 

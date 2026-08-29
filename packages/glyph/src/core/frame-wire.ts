@@ -108,7 +108,7 @@ export interface PlannerConstraint {
   readonly align: 'start' | 'center' | 'end' | 'justify';
   readonly overflow: 'visible' | 'clip' | 'ellipsis';
   readonly blockAlign: 'start' | 'center' | 'end';
-  /** Extra inline offset for the paragraph's first line, in layout units. */
+  /** Extra inline offset for the paragraph's first line, in paragraph-local units. */
   readonly firstLineIndent?: number;
   /** Block-axis space inserted before the paragraph's first line. */
   readonly spaceBefore?: number;
@@ -260,7 +260,7 @@ export function validatePlannerFrameRecords(records: PlannerFrameRecords, limits
   );
 }
 
-/** Serialize mutations and constraints only; shaping, layout, planning, and packing remain Rust-owned. */
+/** Serialize mutations and constraints only; shaping, measure, planning, and packing remain Rust-owned. */
 export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array {
   validatePlannerFrameUpdate(frame);
   return compileValidatedPlannerFrameUpdate(frame);

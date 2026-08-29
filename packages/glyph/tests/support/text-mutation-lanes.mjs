@@ -132,7 +132,7 @@ export function lanes(mounted) {
   const relative = new THREE.Matrix4();
   const paragraphs = mounted.nodes.map((node) => {
     const layout = node.glyphs();
-    const measured = node.layout();
+    const measured = node.measure();
     relative.multiplyMatrices(rootInverse, node.matrixWorld);
     return {
       glyphCount: measured?.glyphCount,
@@ -276,7 +276,7 @@ function identityPositions(scene, draw, where) {
 export function assertShaped(mounted, context, { minimumGlyphs = 1 } = {}) {
   for (const [index, node] of mounted.nodes.entries()) {
     assert.equal(node.error, undefined, `${context}: paragraph ${index} reported ${String(node.error?.message)}`);
-    const measured = node.layout();
+    const measured = node.measure();
     assert.notEqual(measured, undefined, `${context}: paragraph ${index} lost its committed layout metrics`);
     assert.equal(measured.missingGlyphCount, 0, `${context}: paragraph ${index} produced .notdef glyphs`);
     assert.ok(

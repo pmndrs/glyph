@@ -1,10 +1,11 @@
 import {
   createFontLibrary,
+  type Constraints,
   type FontFeature,
   type Font,
-  type ParagraphContentBox,
+  type ParagraphLayout,
   type ParagraphLayoutSummary,
-  type ParagraphStyle,
+  type TextStyle,
 } from '@pmndrs/glyph';
 import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
 import { Text } from '@pmndrs/glyph/three';
@@ -167,8 +168,9 @@ interface MtsdfTextState {
   readonly font: Font<typeof mtsdf>;
   /** The shaped-run inputs this generation committed, kept beside the style so a rollback restores both together. */
   readonly identity: ShapedTextIdentity;
-  readonly contentBox: ParagraphContentBox;
-  readonly style: ParagraphStyle;
+  readonly constraints: Constraints;
+  readonly layout: ParagraphLayout;
+  readonly style: TextStyle;
   readonly rasterPixelRatio: number;
 }
 
@@ -227,21 +229,9 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
     return activation;
   };
 
-  /**
-   * Commits one generation of shaping inputs. A rejected generation is rolled back to the committed one so the failed
-   * candidate font is left unleased, which is what lets the fixture controller dispose it.
-   */
+  /** Commits one validated generation; `Text.set()` leaves desired state unchanged when it rejects. */
   const commitState = (resources: MtsdfPersistentActivation, next: MtsdfTextState): void => {
-    try {
-      applyState(resources.line, next);
-    } catch (error) {
-      try {
-        applyState(resources.line, resources.state);
-      } catch {
-        // The rollback cannot improve on the original failure; report the failure the caller asked about.
-      }
-      throw error;
-    }
+    applyState(resources.line, next);
     resources.state = next;
   };
 
@@ -295,7 +285,8 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       const before = originsToInterpolate(resources, resources.state.identity);
       commitState(resources, {
         ...resources.state,
-        contentBox: mtsdfContentBox(nextContentWidth, textAlign),
+        constraints: mtsdfConstraints(nextContentWidth),
+        layout: mtsdfLayout(textAlign),
         rasterPixelRatio: viewport.dpr,
       });
       if (disposed || activation !== resources || revision !== updateRevision) return;
@@ -367,16 +358,17 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         const state: MtsdfTextState = {
           font: loadedFont,
           identity,
-          contentBox: mtsdfContentBox(benchmarkContentWidth(context.viewport.width, layoutWidthRatio), textAlign),
+          constraints: mtsdfConstraints(benchmarkContentWidth(context.viewport.width, layoutWidthRatio)),
+          layout: mtsdfLayout(textAlign),
           style: mtsdfStyle(fontSize, identity),
           rasterPixelRatio: context.viewport.dpr,
         };
         line = new Text({
           font: state.font,
           text: state.identity.text,
-          contentBox: state.contentBox,
+          constraints: state.constraints,
+          layout: state.layout,
           style: state.style,
-          paint: { color: LIVE_TEXT_COLOR_CSS },
           rasterPixelRatio: state.rasterPixelRatio,
         });
         const activeLine = line;
@@ -545,7 +537,8 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         commitState(resources, {
           font: fontFixture.loadedFont,
           identity,
-          contentBox: mtsdfContentBox(nextContentWidth, next.textAlign),
+          constraints: mtsdfConstraints(nextContentWidth),
+          layout: mtsdfLayout(next.textAlign),
           style: mtsdfStyle(nextFontSize, identity),
           rasterPixelRatio: resources.viewport.dpr,
         });
@@ -590,7 +583,8 @@ function applyState(line: Text<typeof mtsdf>, next: MtsdfTextState): void {
   line.set({
     font: next.font,
     text: next.identity.text,
-    contentBox: next.contentBox,
+    constraints: next.constraints,
+    layout: next.layout,
     style: next.style,
     rasterPixelRatio: next.rasterPixelRatio,
   });
@@ -625,20 +619,25 @@ function advancePresentation(
   }
 }
 
-function mtsdfContentBox(width: number, align: 'start' | 'center'): ParagraphContentBox {
-  return { width: { mode: 'exact', size: width }, wrap: 'word', align, overflow: 'visible' };
+function mtsdfConstraints(width: number): Constraints {
+  return { width: { mode: 'exact', size: width } };
+}
+
+function mtsdfLayout(align: 'start' | 'center'): ParagraphLayout {
+  return { wrap: 'word', align, overflow: 'visible' };
 }
 
 function mtsdfStyle(
   fontSize: number,
   shaping: { readonly language: string; readonly direction: 'ltr' | 'rtl'; readonly features: readonly FontFeature[] },
-): ParagraphStyle {
+): TextStyle {
   return {
     fontSize,
     lineHeight: LIVE_TEXT_LINE_HEIGHT,
     language: shaping.language,
     direction: shaping.direction,
     features: shaping.features,
+    color: LIVE_TEXT_COLOR_CSS,
   };
 }
 
@@ -673,7 +672,7 @@ function positionLiveLine(
 }
 
 function committedLayout(line: Text<typeof mtsdf>): ParagraphLayoutSummary {
-  return line.layout();
+  return line.measure();
 }
 
 function missingGlyphCount(layout: ParagraphLayoutSummary): number {

@@ -1,4 +1,4 @@
-import type { Font, ParagraphLayout, RasterTechniqueInput } from '@pmndrs/glyph';
+import type { Font, GlyphLayout, RasterTechniqueInput } from '@pmndrs/glyph';
 import { id as hashId } from '@pmndrs/glyph/core';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
@@ -322,9 +322,9 @@ function measureCase(
   const text = new Text({
     font: body,
     text: literal,
-    style: { fontSize: BODY_FONT_SIZE, lineHeight: 1.25 },
-    paint: { color: '#ffffff' },
-    contentBox: { width: { mode: 'exact', size: CONTENT_WIDTH }, wrap: 'word' },
+    style: { fontSize: BODY_FONT_SIZE, lineHeight: 1.25, color: '#ffffff' },
+    layout: { wrap: 'word' },
+    constraints: { width: { mode: 'exact', size: CONTENT_WIDTH } },
   });
   try {
     group.add(text);
@@ -354,7 +354,7 @@ function measureCase(
  * raster resource rather than by paragraph position, so the result is the paragraph's multiset of resolved colours and
  * not a per-cluster mapping — which is why the paint evidence is expressed as counts and differences between cases.
  */
-function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEvidence {
+function readEvidence(text: THREE.Object3D, layout: GlyphLayout): CaseEvidence {
   const colors: string[] = [];
   let drawCount = 0;
   let renderedGlyphCount = 0;

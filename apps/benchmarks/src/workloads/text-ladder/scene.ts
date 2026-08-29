@@ -74,8 +74,8 @@ export function createTextLadderEntries(
         lineHeight: LIVE_TEXT_LINE_HEIGHT,
         language: specimen.language,
         direction: specimen.direction,
+        color: paintColor(LIVE_TEXT_COLOR),
       },
-      paint: { color: paintColor(LIVE_TEXT_COLOR) },
     });
     return { node: text, role: 'primary', sourceText, text };
   });

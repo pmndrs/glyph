@@ -18,7 +18,7 @@ declare const slugFont: Font<typeof slug>;
 declare const selectedStack: FontStack<typeof bitmap> | FontStack<typeof msdf> | FontStack<typeof slug>;
 declare const material: ThreeTextMaterial;
 
-const inline = createElement(Text, { paint: { color: '#ff00ff' } }, 'span');
+const inline = createElement(Text, { style: { color: '#ff00ff' } }, 'span');
 const label = createElement(Text<typeof bitmap>, { font: bitmapFont, material, pixelSnapping: true }, 'Typed ', inline);
 const labels = createElement(TextGroup, { compositing: 'independent', material, pixelSnapping: true }, label);
 const selected = createElement(Text, { font: selectedStack }, 'Selected at runtime');

@@ -1,6 +1,7 @@
-export type { FormattedText, GlyphPaintInput, TextInput } from './formatted-text.js';
+export type { FormattedText, TextInput } from './formatted-text.js';
 export type { FontSelection } from './loaded-font.js';
-export type { GlyphBufferCapacity, ParagraphContentBox, ParagraphStyle } from './text-properties.js';
+export type { Constraints, GlyphBufferCapacity, PropertyList } from './text-properties.js';
+export { ParagraphLayout, TextStyle } from './text-properties.js';
 export { FontLoader } from './three/font-loader.js';
 export { defineTextMaterial } from './three/material.js';
 export type { ThreeTextGenericMaterialContext, ThreeTextMaterial, ThreeTextMaterialContext } from './three/material.js';
@@ -24,7 +25,7 @@ export type {
   TextSpan,
   TextUpdate,
 } from './three/text.js';
-// `layout()`, `glyphs()`, and `snapshotGlyphs()` return these, so a `/three` importer
+// `measure()`, `glyphs()`, and `snapshotGlyphs()` return these, so a `/three` importer
 // has to be able to name them without reaching for a second subpath.
-export type { LayoutBox, ParagraphLayoutInspection, ParagraphLayoutSummary } from './layout.js';
+export type { LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary } from './layout.js';
 export type { GlyphApplication, GlyphCaret, GlyphPlacements } from './glyph-placement.js';

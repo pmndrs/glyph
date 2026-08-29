@@ -2,10 +2,10 @@ import { createRoot, flushSync, type RootStore } from '@react-three/fiber/webgpu
 import React, { createRef, StrictMode } from 'react';
 import * as THREE from 'three/webgpu';
 
-import { type ParagraphLayout } from '@pmndrs/glyph';
+import { type Constraints, type GlyphLayout } from '@pmndrs/glyph';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
 import { Text, useFont } from '@pmndrs/glyph/react';
-import type { ParagraphContentBox, Text as CoreText } from '@pmndrs/glyph/three';
+import type { Text as CoreText } from '@pmndrs/glyph/three';
 
 import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-layout-v0.json' with { type: 'json' };
 import bitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
@@ -29,10 +29,10 @@ const TEXT_SUFFIX = ' café — ffi, kerning, marks, and wrapping.';
 const NARROW_WIDTH = 360;
 const BITMAP_COLOR_ATTRIBUTE = policyAttributeName(bitmapSchema.buffers.color.id);
 /**
- * Target v1 merges a Text update into the state it already holds, so dropping the content box would keep the previous
- * constraint instead of restoring the natural measurement. The unconstrained axis has to be stated.
+ * Target v1 merges a Text update into the state it already holds, so omitting constraints would keep the previous
+ * width instead of restoring natural measurement. The unconstrained axis has to be stated.
  */
-const NATURAL_CONTENT_BOX: ParagraphContentBox = { width: { mode: 'unconstrained' } };
+const NATURAL_CONSTRAINTS: Constraints = { width: { mode: 'unconstrained' } };
 const fontInput = { baked: bitmapFontUrl } as const;
 const fontOptions = { strikes: [16] } as const;
 
@@ -250,16 +250,16 @@ function CommittedText({
         fontSize: canonicalParagraphLayout.style.fontSize,
         lineHeight: canonicalParagraphLayout.style.lineHeight,
       },
-      contentBox: width === undefined ? NATURAL_CONTENT_BOX : exactContentBox(width),
+      constraints: width === undefined ? NATURAL_CONSTRAINTS : exactConstraints(width),
     },
     TEXT_PREFIX,
-    React.createElement(BitmapInlineText, { paint: { color: accent } }, TEXT_ACCENT),
+    React.createElement(BitmapInlineText, { style: { color: accent } }, TEXT_ACCENT),
     TEXT_SUFFIX,
   );
 }
 
 /** The oracle pins the narrow measurement to an exact box rather than an upper bound. */
-function exactContentBox(size: number): ParagraphContentBox {
+function exactConstraints(size: number): Constraints {
   return { width: { mode: 'exact', size } };
 }
 
@@ -283,7 +283,7 @@ function orderedFloat32Bits(bits: number): number {
   return (bits & 0x8000_0000) === 0 ? (bits ^ 0x8000_0000) >>> 0 : ~bits >>> 0;
 }
 
-function hashWithOracleLineOrigins(layout: ParagraphLayout, oracleBaselines: readonly number[]): string | undefined {
+function hashWithOracleLineOrigins(layout: GlyphLayout, oracleBaselines: readonly number[]): string | undefined {
   if (layout.lineBaselines.length !== oracleBaselines.length) return undefined;
   const y = layout.y.slice();
   const lineBaselines = layout.lineBaselines.slice();
@@ -304,7 +304,7 @@ function hashWithOracleLineOrigins(layout: ParagraphLayout, oracleBaselines: rea
   return hashParagraphLayout({ ...layout, y, lineBaselines });
 }
 
-function assertOracleLayout(layout: ParagraphLayout, state: 'natural' | 'narrow'): void {
+function assertOracleLayout(layout: GlyphLayout, state: 'natural' | 'narrow'): void {
   const oracle = canonicalParagraphLayout.goldens[state];
   const hash = hashParagraphLayout(layout);
   const compatibleHash = hashWithOracleLineOrigins(layout, oracle.layout.lineBaselines);
@@ -330,7 +330,7 @@ function requiredCoreText(reference: React.RefObject<BitmapTextObject | null>): 
   return reference.current;
 }
 
-function requiredLayout(core: BitmapTextObject): ParagraphLayout {
+function requiredLayout(core: BitmapTextObject): GlyphLayout {
   const layout = core.glyphs();
   if (layout === undefined) throw new Error('React Text layout inspection is unavailable');
   return layout;

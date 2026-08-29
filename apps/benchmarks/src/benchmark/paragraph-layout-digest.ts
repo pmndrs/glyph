@@ -1,7 +1,7 @@
-import type { ParagraphLayout } from '@pmndrs/glyph';
+import type { GlyphLayout } from '@pmndrs/glyph';
 
 type PortableParagraphLayout = Pick<
-  ParagraphLayout,
+  GlyphLayout,
   | 'glyphFontSlots'
   | 'glyphIds'
   | 'clusters'
@@ -25,7 +25,7 @@ interface ParagraphPolicyHashContract {
   readonly uikit: { readonly resolved: { readonly layout: { readonly hash: string } } };
 }
 
-export function paragraphLayoutContract(layout: ParagraphLayout, full = true) {
+export function paragraphLayoutContract(layout: GlyphLayout, full = true) {
   const contract: Record<string, unknown> = {
     measurement: {
       width: layout.width,
@@ -83,7 +83,7 @@ export function hashParagraphLayouts(layouts: readonly PortableParagraphLayout[]
   return layouts.map(hashParagraphLayout).join(':');
 }
 
-export function paragraphLayoutBytes(layout: ParagraphLayout): number {
+export function paragraphLayoutBytes(layout: GlyphLayout): number {
   return [layout.fontHandles, ...portableLayoutArrays(layout)].reduce((sum, values) => sum + values.byteLength, 0);
 }
 

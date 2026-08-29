@@ -1,10 +1,10 @@
-import type { LayoutBox, ParagraphLayoutInspection } from './layout.js';
+import type { LayoutBox, GlyphLayoutInspection } from './layout.js';
 
 /**
  * The one coordinate space every position and box in a `GlyphPlacements` snapshot is expressed in:
- * paragraph-local layout units, origin at the paragraph box's top-left corner, positive X right and
+ * paragraph-local units, origin at the paragraph box's top-left corner, positive X right and
  * positive Y down. It is the space the engine positioned the glyphs in and the space
- * `ParagraphLayout` reports.
+ * `GlyphLayout` reports.
  *
  * It is a stated field rather than a convention because the surface this replaces did not have one.
  * `snapshotGlyphOrigins` returned a `Float32Array` seeded from shaped space and then overwritten
@@ -147,7 +147,7 @@ export interface GlyphApplication {
  * The cycle is explicit: **snapshot, manipulate, restore.** `Text.snapshotGlyphs()` produces one,
  * assignments to `GlyphPlacement.x`/`y` (or `GlyphRun.translate`) manipulate it,
  * `Text.applyGlyphs(placements)` writes it to the retained GPU buffer without a reshape or a CPU
- * re-upload, and `Text.restoreGlyphs()` hands authority back to the layout. Restore is a step of the
+ * re-upload, and `Text.restoreGlyphs()` hands authority back to the measure. Restore is a step of the
  * cycle rather than a call discovered by observing corruption.
  *
  * Every array here is internally consistent by construction. There are no parallel columns for a
@@ -163,7 +163,7 @@ export interface GlyphPlacements {
    * identities, so the layout rides along and the write compares it rather than trusting the caller
    * to have noticed.
    */
-  readonly layout: ParagraphLayoutInspection;
+  readonly layout: GlyphLayoutInspection;
   readonly glyphs: readonly GlyphPlacement[];
   /** Runs of non-whitespace glyphs, split at every line boundary. See `wordsOf` for the exact rule. */
   readonly words: readonly GlyphRun[];
@@ -174,7 +174,7 @@ export interface GlyphPlacements {
    *
    * The ordinary case is a glyph the font gives no outline for — a space is in here for almost every
    * paragraph — because the render plan carries no record for something it never draws. Those
-   * glyphs still exist in the layout, still hold their place in the advance, and still belong to a
+   * glyphs still exist in the measure, still hold their place in the advance, and still belong to a
    * word and a line; they simply cannot be moved independently of the glyphs around them.
    *
    * It is reported rather than hidden because the previous surface substituted a shaped-space value
@@ -256,7 +256,7 @@ interface MutableGlyph extends GlyphPlacement {
  * state its own completeness instead of leaving a hole the reader cannot see.
  */
 export function createGlyphPlacements(
-  layout: ParagraphLayoutInspection,
+  layout: GlyphLayoutInspection,
   text: string,
   displayedX: Float32Array,
   displayedY: Float32Array,
@@ -361,7 +361,7 @@ export function createGlyphPlacements(
 }
 
 function glyphPlacement(
-  layout: ParagraphLayoutInspection,
+  layout: GlyphLayoutInspection,
   index: number,
   key: GlyphKey,
   cluster: number,
@@ -458,7 +458,7 @@ interface WordSpan {
   readonly textEnd: number;
 }
 
-function clusterEndsOf(layout: ParagraphLayoutInspection, textLength: number): ReadonlyMap<number, number> {
+function clusterEndsOf(layout: GlyphLayoutInspection, textLength: number): ReadonlyMap<number, number> {
   const boundaries = new Set<number>([0, textLength]);
   for (const cluster of layout.clusters) boundaries.add(cluster);
   for (const line of layout.lines) {
@@ -483,7 +483,7 @@ function clusterEndsOf(layout: ParagraphLayoutInspection, textLength: number): R
  * visual reading order across the paragraph.
  */
 function wordsOf(
-  layout: ParagraphLayoutInspection,
+  layout: GlyphLayoutInspection,
   text: string,
   lineOfGlyph: Uint32Array,
   wordOfGlyph: Int32Array,

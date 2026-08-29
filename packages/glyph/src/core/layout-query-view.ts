@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { LayoutBox, ParagraphLayoutInspection, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
+import type { LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
 import type { PlanPublication } from './backend.js';
 
 /**
@@ -53,7 +53,7 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
       // two are derived from one number instead of two that could disagree.
       const ascent = view.f32(line + recordLayout.ascent);
       // A measurement-only query leaves the line's glyph span zeroed; it is only meaningful
-      // alongside the per-glyph columns, which the layout reader validates before publishing.
+      // alongside the per-glyph columns, which the measure reader validates before publishing.
       const lineGlyphStart = view.u32(line + recordLayout.itemStart);
       lines.push(
         Object.freeze({
@@ -102,13 +102,13 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
 }
 
 /** Copies one explicitly requested retained layout out of borrowed Wasm publication memory. */
-export function readPlannerLayouts(publication: PlanPublication): ReadonlyMap<number, ParagraphLayoutInspection> {
+export function readPlannerLayouts(publication: PlanPublication): ReadonlyMap<number, GlyphLayoutInspection> {
   const view = new SemanticViewReader(publication);
   const table = view.table();
   const recordLayout = textShaperAbi.layouts.engineSemanticView;
   const kinds = textShaperAbi.engine.semanticKinds;
   const measurements = readPlannerMeasurements(publication);
-  const layouts = new Map<number, ParagraphLayoutInspection>();
+  const layouts = new Map<number, GlyphLayoutInspection>();
   for (let index = 0; index < table.count; index += 1) {
     const summary = view.record(table, index);
     if (view.u16(summary + recordLayout.kind) !== kinds.paragraphMeasurement) continue;
@@ -201,7 +201,7 @@ export function readPlannerLayouts(publication: PlanPublication): ReadonlyMap<nu
     }
 
     // `glyphCount` and `lineCount` are the published authorities for indexing these columns
-    // (`ParagraphLayout`). This reader is their only producer, so the guarantee is checked here
+    // (`GlyphLayout`). This reader is their only producer, so the guarantee is checked here
     // once rather than re-asserted by every consumer — which is exactly what the one real consumer
     // of the previous shape had to hand-write over six of these arrays.
     assertColumnLengths(glyphCount, [

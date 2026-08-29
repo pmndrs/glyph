@@ -1278,8 +1278,7 @@ export function applyRetainedTextWidths(texts: readonly WorkloadText[], widths: 
 }
 
 /**
- * `set` replaces a property group wholesale, so a width or size change has to carry the rest of its group forward:
- * dropping `wrap` would unwrap a paragraph, and dropping `align` would collapse a centred lane onto its start edge.
+ * `set` replaces a property group wholesale, so each update carries forward the unaffected style or constraints.
  */
 function applyRetainedTextLayout(
   texts: readonly WorkloadText[],
@@ -1293,7 +1292,7 @@ function applyRetainedTextLayout(
   for (const [index, text] of texts.entries()) {
     text.set({
       ...(fontSize === undefined ? {} : { style: { ...text.style, fontSize } }),
-      ...(widths === undefined ? {} : { contentBox: { ...text.contentBox, width: exactWidth(widths[index]!) } }),
+      ...(widths === undefined ? {} : { constraints: { ...text.constraints, width: exactWidth(widths[index]!) } }),
     });
   }
 }

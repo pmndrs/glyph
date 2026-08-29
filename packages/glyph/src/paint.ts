@@ -5,18 +5,18 @@ export interface ResolvedPaint {
   readonly color: LinearRgba;
   readonly outline?: {
     readonly color: LinearRgba;
-    /** Paragraph-local layout units. */
+    /** Paragraph-local units. */
     readonly width: number;
   };
   readonly shadow?: {
     readonly color: LinearRgba;
-    /** Paragraph-local layout units: positive X is right and positive Y is down. */
+    /** Paragraph-local units: positive X is right and positive Y is down. */
     readonly offset: readonly [x: number, y: number];
   };
 }
 
 /**
- * Core-owned paint attribution parallel to a ParagraphLayout's glyph arrays.
+ * Core-owned paint attribution parallel to a GlyphLayout's glyph arrays.
  * Raster modules own how these resolved values enter their instance buffers.
  */
 export interface GlyphPaint {

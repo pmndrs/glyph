@@ -286,7 +286,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
    *
    * The retained lane is NOT in glyph-origin space, and which space it is in is the technique's own
    * business: Slug and MSDF pack the ink box's top-left corner, and Bitmap stores the origin plus the
-   * baked strike's raster bearing, which is a third space that no layout value can reconstruct. What
+   * baked strike's raster bearing, which is a third space that no measure value can reconstruct. What
    * every technique does share is that `targetX`/`targetY` is that same lane's value with the glyph
    * at rest — the position the layout put it. So the displacement from rest, `value - target`, is in
    * glyph-origin space for all of them, and adding it to the shaped origin converts without the
@@ -378,7 +378,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     markOriginRanges(touched);
   }
 
-  /** Upload changed scene transforms without crossing into Wasm or invalidating text layout. */
+  /** Upload changed scene transforms without crossing into Wasm or invalidating text measure. */
   syncTransforms(transformIds: Iterable<number> = this.#transforms.keys(), worldMatricesCurrent = false): number {
     for (const [index, draw] of this.#draws.entries()) {
       draw.renderOrder = this.#owner.renderOrderBase + index;

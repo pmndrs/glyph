@@ -181,7 +181,7 @@ test('records-sourced Three geometry renders and retains topology across text up
       transform: renderer.transform,
       text: '12345',
       style: { fontSize: 16 },
-      contentBox: { width: { mode: 'at-most', size: 256 }, height: { mode: 'at-most', size: 64 } },
+      constraints: { width: { mode: 'at-most', size: 256 }, height: { mode: 'at-most', size: 64 } },
     });
 
     assert.deepEqual(renderer.planner.publish(), { accepted: true });
@@ -307,8 +307,16 @@ test('an async target must return the same unmodified transferred publication', 
     textCapacity: 64,
   });
   const binding = coordinator.bindFontStack(font);
+  assert.throws(
+    () => planner.createText({ font: binding, text: 'invalid', style: { fontSize: 0 } }),
+    /fontSize must be positive/,
+  );
   const text = planner.createText({ font: binding, text: 'abc', style: { fontSize: 16 } });
   try {
+    assert.throws(
+      () => text.update({ constraints: { width: { mode: 'exact', size: -1 } } }),
+      /width size must be nonnegative/,
+    );
     assert.deepEqual(await planner.publish(), { accepted: true });
     growEngineDuringAcceptance = true;
     text.update({ text: 'abcz' });

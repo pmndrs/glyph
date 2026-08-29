@@ -103,13 +103,13 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
   const counter = createBenchmarkParagraph(font, text, 600);
   counter.group.updateMatrixWorld(true);
   if (counter.group.error !== undefined) throw counter.group.error;
-  const calibratedGlyphs = counter.paragraph.layout().glyphCount;
+  const calibratedGlyphs = counter.paragraph.measure().glyphCount;
   disposeBenchmarkParagraph(counter);
   const warm = name === 'cold' ? undefined : createBenchmarkParagraph(font, text, 600);
   if (warm !== undefined) {
     warm.group.updateMatrixWorld(true);
     if (warm.group.error !== undefined) throw warm.group.error;
-    if (name === 'measure-cached') warm.paragraph.layout();
+    if (name === 'measure-cached') warm.paragraph.measure();
     else if (name === 'inspect-cached') warm.paragraph.glyphs();
   }
 
@@ -125,10 +125,10 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
     const heapBefore = process.memoryUsage().heapUsed;
     const updated = created ?? warm!;
     const profile = profileUpdate(() => {
-      if (name === 'measure-cached' || name === 'measure-dirty') updated.paragraph.layout();
+      if (name === 'measure-cached' || name === 'measure-dirty') updated.paragraph.measure();
       else if (name === 'inspect-cached' || name === 'inspect-dirty') updated.paragraph.glyphs();
       else if (name === 'measure-then-publish') {
-        updated.paragraph.layout();
+        updated.paragraph.measure();
         updated.group.updateMatrixWorld(true);
       } else if (name === 'inspect-then-publish') {
         updated.paragraph.glyphs();
@@ -190,7 +190,7 @@ function applyChange(name: CaseName, paragraph: ParagraphHandle, repetition: num
     name === 'inspect-dirty' ||
     name === 'inspect-then-publish'
   ) {
-    paragraph.contentBox = { width: { mode: 'exact', size: 420 + repetition * 7 }, wrap: 'word' };
+    paragraph.constraints = { width: { mode: 'exact', size: 420 + repetition * 7 } };
   } else paragraph.text = `${text.slice(0, text.length - repetition)}`;
 }
 

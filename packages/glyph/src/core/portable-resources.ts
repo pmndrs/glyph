@@ -1,7 +1,7 @@
 /**
  * The constrained portable resource vocabulary a compiled font may retain.
  *
- * A payload is immutable data — bytes plus the typed layout a renderer needs to
+ * A payload is immutable data — bytes plus the typed measure a renderer needs to
  * realize it — never a GPU object, shader-language node, or renderer callback.
  * The union is deliberately small: it describes only what the shipped techniques
  * actually retain, not a universal GPU object model. A mismatched texture size,
@@ -108,7 +108,7 @@ export interface PortableDrawRange {
   readonly count: number;
 }
 
-/** Immutable byte payload with an optional fixed-width record layout. */
+/** Immutable byte payload with an optional fixed-width record measure. */
 export interface PortableBufferPayload {
   readonly kind: 'buffer';
   readonly bytes: Uint8Array;

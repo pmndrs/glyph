@@ -1,4 +1,4 @@
-import { defineRasterResourceId, type ParagraphLayout } from '@pmndrs/glyph';
+import { defineRasterResourceId, type GlyphLayout } from '@pmndrs/glyph';
 import type { SlugPageData } from '@pmndrs/glyph/raster/slug';
 import { describe, expect, it } from 'vitest';
 
@@ -136,8 +136,8 @@ function half(value: number): number {
 }
 
 function specimenLayout(
-  overrides: Partial<Pick<ParagraphLayout, 'glyphIds' | 'glyphFontSlots' | 'glyphFontSizes' | 'x' | 'y'>> = {},
-): ParagraphLayout {
+  overrides: Partial<Pick<GlyphLayout, 'glyphIds' | 'glyphFontSlots' | 'glyphFontSizes' | 'x' | 'y'>> = {},
+): GlyphLayout {
   const glyphCount = overrides.glyphIds?.length ?? 1;
   return {
     width: 4,

@@ -56,12 +56,9 @@ export function createParagraphStressEntries(
     font: context.font,
     rasterPixelRatio: context.dpr,
     text: sourceText,
-    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
-    paint: { color: paintColor(LIVE_TEXT_COLOR) },
-    contentBox: {
-      width: exactWidth(benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio)),
-      wrap: 'word',
-    },
+    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT, color: paintColor(LIVE_TEXT_COLOR) },
+    constraints: { width: exactWidth(benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio)) },
+    layout: { wrap: 'word' },
   });
   return [{ node: text, role: 'primary', sourceText, text }];
 }

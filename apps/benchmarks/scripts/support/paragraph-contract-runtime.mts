@@ -1,11 +1,11 @@
 import { readFile } from 'node:fs/promises';
 
 import {
+  type Constraints,
   type Font,
-  type ParagraphContentBox,
-  type ParagraphLayoutInspection,
-  type ParagraphLayoutPolicy,
-  type ParagraphStyle,
+  type GlyphLayoutInspection,
+  type ParagraphLayout,
+  type TextStyle,
 } from '@pmndrs/glyph';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
@@ -57,15 +57,15 @@ export async function createParagraphContractRuntime() {
   };
 }
 
-export function createContractText(font: ContractFont, text: string, style: ParagraphStyle) {
+export function createContractText(font: ContractFont, text: string, style: TextStyle) {
   const group = new TextGroup({ capacity: { size: Math.max(1_024, text.length * 4), policy: 'grow' } });
   const value = new Text({ font, text, style });
   group.add(value);
   return {
     group,
     text: value,
-    inspect(constraints: LegacyConstraints): ParagraphLayoutInspection {
-      value.contentBox = contentBox(constraints);
+    inspect(constraints: LegacyConstraints): GlyphLayoutInspection {
+      value.set({ layout: layoutOnly(constraints), constraints: constraintsOnly(constraints) });
       group.updateMatrixWorld(true);
       if (group.error !== undefined) throw group.error;
       const layout = value.glyphs();
@@ -79,18 +79,14 @@ export function createContractText(font: ContractFont, text: string, style: Para
   };
 }
 
-export function contentBox(value: LegacyConstraints): ParagraphContentBox {
+export function constraintsOnly(value: LegacyConstraints): Constraints {
   return {
     ...(value.width === undefined ? {} : { width: axis(value.width) }),
     ...(value.height === undefined ? {} : { height: axis(value.height) }),
-    ...(value.maxLines === undefined ? {} : { maxLines: value.maxLines }),
-    ...(value.wrap === undefined ? {} : { wrap: value.wrap }),
-    ...(value.align === undefined ? {} : { align: value.align }),
-    ...(value.overflow === undefined ? {} : { overflow: value.overflow }),
   };
 }
 
-export function policyOnly(value: LegacyConstraints): ParagraphLayoutPolicy {
+export function layoutOnly(value: LegacyConstraints): ParagraphLayout {
   return {
     ...(value.maxLines === undefined ? {} : { maxLines: value.maxLines }),
     ...(value.wrap === undefined ? {} : { wrap: value.wrap }),

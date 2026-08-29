@@ -1,6 +1,6 @@
 import type { Font, RasterTechniqueInput } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, Text, type ParagraphStyle } from '@pmndrs/glyph/three';
+import { FontLoader, Text, type TextStyle } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import amiriBitmapFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
@@ -102,7 +102,7 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
         let text: Text<BitmapTechnique> | undefined;
         try {
           for (const frame of caseFrames) {
-            const style: ParagraphStyle = {
+            const style: TextStyle = {
               fontSize: FONT_SIZE,
               language: definition.language,
               direction: definition.direction,
@@ -112,7 +112,7 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
             };
             const properties = {
               text: frame.text,
-              contentBox: {
+              constraints: {
                 width: {
                   mode: 'exact',
                   size: Math.max(120, (VIEWPORT_WIDTH * frame.widthPermille) / 1000),

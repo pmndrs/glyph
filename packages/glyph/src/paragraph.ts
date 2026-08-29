@@ -1,19 +1,21 @@
-import {
-  alignSpansToClusters,
-  type FormattedText,
-  type GlyphPaintInput,
-  type ParagraphSpan,
-} from './formatted-text.js';
+import { alignSpansToClusters, type FormattedText, type ParagraphSpan } from './formatted-text.js';
 import type { Font } from './font.js';
 import { createFontStack, immutableFontSelectionFonts, type FontSelection, type FontStack } from './loaded-font.js';
-import { copyParagraphLayoutInspection, type ParagraphLayoutInspection, type ParagraphMetrics } from './layout.js';
+import { copyGlyphLayoutInspection, type GlyphLayoutInspection, type ParagraphMetrics } from './layout.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
 import type {
-  ParagraphContentBox,
   ParagraphContentProperties,
-  ParagraphConstraints,
-  ParagraphLayoutPolicy,
-  ParagraphStyle,
+  Constraints,
+  ParagraphLayout,
+  PropertyList,
+  TextStyle,
+} from './text-properties.js';
+import {
+  assertConstraints,
+  assertParagraphLayout,
+  assertTextStyle,
+  assertTextStyleFeatureRanges,
+  mergePropertyList,
 } from './text-properties.js';
 import { normalizedColumns, replacedContent } from './engine-encoding.js';
 import { createGlyphEngine, type GlyphEngine } from './glyph-engine.js';
@@ -38,7 +40,7 @@ const PLAN_REQUEST_BYTES = 64 * 1024;
 const PLAN_RESULT_BYTES = 256 * 1024;
 const PLAN_TEXT_UNITS = 256;
 const MEASUREMENT_PROGRAM_NAMESPACE = 'paragraph-measurement';
-/** Unconstrained, at-most, and exact probes cover the normal layout negotiation cycle. */
+/** Unconstrained, at-most, and exact probes cover the normal measure negotiation cycle. */
 const MAX_CACHED_PARAGRAPH_CONSTRAINTS = 3;
 const MEASUREMENT_STABLE_GLYPH_BUFFER_ID = id.buffer('glyph-paragraph/stable-glyph');
 
@@ -71,11 +73,11 @@ const measurementCapabilities: PolicyCapabilitySet = Object.freeze({
 
 interface ParagraphBaseOptions<Technique extends AnyRasterTechnique> {
   readonly font: FontSelection<Technique>;
-  readonly style?: ParagraphStyle;
-  readonly paint?: GlyphPaintInput;
+  /** Text shaping and presentation properties inherited by inline spans. */
+  readonly style?: PropertyList<TextStyle>;
   readonly rasterPixelRatio?: number;
-  /** Stable flow policy; width and height remain per-query inputs. */
-  readonly policy?: ParagraphLayoutPolicy;
+  /** Paragraph flow properties; width and height remain per-query inputs. */
+  readonly layout?: PropertyList<ParagraphLayout>;
 }
 
 export type ParagraphOptions<Technique extends AnyRasterTechnique> = ParagraphBaseOptions<Technique> &
@@ -92,10 +94,9 @@ interface ResolvedParagraphState<Technique extends AnyRasterTechnique> {
   readonly font: FontSelection<Technique>;
   readonly text: string;
   readonly spans: readonly ParagraphSpan<Technique>[];
-  readonly style: ParagraphStyle;
-  readonly paint: GlyphPaintInput;
+  readonly style: TextStyle;
   readonly rasterPixelRatio?: number;
-  readonly policy: ParagraphLayoutPolicy;
+  readonly layout: ParagraphLayout;
 }
 
 interface MeasurementServiceLease {
@@ -115,9 +116,9 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
   #engine: ParagraphEngine;
   readonly #serviceLease: MeasurementServiceLease;
   readonly #measurements = new Map<string, ParagraphMetrics>();
-  readonly #layouts = new Map<string, ParagraphLayoutInspection>();
+  readonly #layouts = new Map<string, GlyphLayoutInspection>();
   #engineConstraintKey: string | undefined;
-  #engineBox: ParagraphContentBox;
+  #engineConstraints: Constraints = {};
   #lastLayoutDigest: string | undefined;
   #layoutRevision = 0;
   #disposed = false;
@@ -130,7 +131,6 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
     this.#desired = desired;
     this.#serviceLease = serviceLease;
     this.#engine = engine;
-    this.#engineBox = flowBox(desired.policy, undefined, undefined);
   }
 
   /** @internal The root factory owns asynchronous engine acquisition. */
@@ -151,14 +151,13 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
   get spans(): readonly ParagraphSpan<Technique>[] {
     return this.#desired.spans;
   }
-  get style(): ParagraphStyle {
+  /** Text shaping and presentation properties inherited by inline spans. */
+  get style(): TextStyle {
     return this.#desired.style;
   }
-  get paint(): GlyphPaintInput {
-    return this.#desired.paint;
-  }
-  get policy(): ParagraphLayoutPolicy {
-    return this.#desired.policy;
+  /** Paragraph flow properties such as wrapping, alignment, and line limits. */
+  get layout(): ParagraphLayout {
+    return this.#desired.layout;
   }
   get layoutRevision(): number {
     return this.#layoutRevision;
@@ -169,16 +168,16 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
 
   /**
    * Measure current desired text without a renderer, scene, matrix, or publication.
-   * A cache miss may synchronously incur font and layout lookup work in the text engine.
+   * A cache miss may synchronously incur font and measure lookup work in the text engine.
    */
-  layout(constraints?: ParagraphConstraints): ParagraphMetrics {
+  measure(constraints?: Constraints): ParagraphMetrics {
     this.#assertActive();
     const resolved = resolveConstraints(constraints);
     const key = axisKey(resolved);
     const cached = readParagraphQueryCache(this.#measurements, key);
     if (cached !== undefined) return cached;
     this.#selectConstraints(key, resolved);
-    const measured = this.#engine.text.layout();
+    const measured = this.#engine.text.measure();
     writeParagraphQueryCache(this.#measurements, key, measured);
     return measured;
   }
@@ -187,7 +186,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
    * Return caller-owned positioned glyph and line columns for current desired text.
    * A cache miss may synchronously incur glyph lookup and positioning work; every call copies the columns.
    */
-  glyphs(constraints?: ParagraphConstraints): ParagraphLayoutInspection {
+  glyphs(constraints?: Constraints): GlyphLayoutInspection {
     this.#assertActive();
     const resolved = resolveConstraints(constraints);
     const key = axisKey(resolved);
@@ -202,7 +201,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
       this.#lastLayoutDigest = digest;
       this.#layoutRevision += 1;
     }
-    return copyParagraphLayoutInspection(inspection);
+    return copyGlyphLayoutInspection(inspection);
   }
 
   /** Replace desired authored state; malformed input rejects before state changes. */
@@ -214,17 +213,15 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
       { ...this.#desired, ...normalizedUpdate } as ParagraphOptions<Technique>,
       this.#desired,
     );
-    const nextBox = flowBox(next.policy, this.#engineBox.width, this.#engineBox.height);
     if (sameTechniqueSet(this.#desired, next)) {
-      this.#engine.update(next, nextBox);
+      this.#engine.update(next, this.#engineConstraints);
     } else {
-      const replacement = new ParagraphEngine(this.#serviceLease.backend, next, nextBox);
+      const replacement = new ParagraphEngine(this.#serviceLease.backend, next, this.#engineConstraints);
       const previous = this.#engine;
       this.#engine = replacement;
       previous.dispose();
     }
     this.#desired = next;
-    this.#engineBox = nextBox;
     this.#measurements.clear();
     this.#layouts.clear();
   }
@@ -252,13 +249,12 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
     this.dispose();
   }
 
-  #selectConstraints(key: string, constraints: ResolvedConstraints): void {
+  #selectConstraints(key: string, constraints: Constraints): void {
     if (this.#engineConstraintKey === key) return;
-    const box = flowBox(this.#desired.policy, constraints.width, constraints.height);
-    normalizedColumns(box);
-    this.#engine.update(this.#desired, box);
+    normalizedColumns(this.#desired.layout, constraints);
+    this.#engine.update(this.#desired, constraints);
     this.#engineConstraintKey = key;
-    this.#engineBox = box;
+    this.#engineConstraints = constraints;
   }
 
   #assertActive(): void {
@@ -288,11 +284,11 @@ export async function createParagraph<Technique extends AnyRasterTechnique>(
 ): Promise<Paragraph<Technique>> {
   if (options === undefined) throw new TypeError('paragraph options are required');
   const desired = normalizeParagraphState(options);
-  const box = flowBox(desired.policy, undefined, undefined);
-  normalizedColumns(box);
+  const constraints = resolveConstraints(undefined);
+  normalizedColumns(desired.layout, constraints);
   const serviceLease = await acquireMeasurementService();
   try {
-    const engine = new ParagraphEngine(serviceLease.backend, desired, box);
+    const engine = new ParagraphEngine(serviceLease.backend, desired, constraints);
     return Paragraph._create(desired, serviceLease, engine);
   } catch (error) {
     serviceLease.release();
@@ -311,7 +307,7 @@ class ParagraphEngine {
   >();
   #disposed = false;
 
-  constructor(backend: GlyphBackend, desired: ResolvedParagraphState<AnyRasterTechnique>, box: ParagraphContentBox) {
+  constructor(backend: GlyphBackend, desired: ResolvedParagraphState<AnyRasterTechnique>, constraints: Constraints) {
     let policy: BackendPolicy | undefined;
     let planner: MeasurementPlanner | undefined;
     let text: RetainedText | undefined;
@@ -324,7 +320,7 @@ class ParagraphEngine {
         resultCapacity: PLAN_RESULT_BYTES,
         textCapacity: Math.max(PLAN_TEXT_UNITS, desired.text.length + 1),
       });
-      text = createEngineText(backend, planner, desired, box, this.#singleFontStacks);
+      text = createEngineText(backend, planner, desired, constraints, this.#singleFontStacks);
     } catch (error) {
       let teardownFailure: Readonly<{ error: unknown }> | undefined;
       try {
@@ -348,11 +344,11 @@ class ParagraphEngine {
     this.text = text;
   }
 
-  update(desired: ResolvedParagraphState<AnyRasterTechnique>, box: ParagraphContentBox): void {
+  update(desired: ResolvedParagraphState<AnyRasterTechnique>, constraints: Constraints): void {
     this.#assertActive();
     const bindings: BackendFontStackBinding[] = [];
     try {
-      this.text.update(engineTextOptions(this.backend, desired, box, bindings, this.#singleFontStacks));
+      this.text.update(engineTextOptions(this.backend, desired, constraints, bindings, this.#singleFontStacks));
     } finally {
       disposeBindings(bindings);
     }
@@ -381,12 +377,12 @@ function createEngineText(
   backend: GlyphBackend,
   planner: MeasurementPlanner,
   desired: ResolvedParagraphState<AnyRasterTechnique>,
-  box: ParagraphContentBox,
+  constraints: Constraints,
   singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
 ): RetainedText {
   const bindings: BackendFontStackBinding[] = [];
   try {
-    return planner.createText(engineTextOptions(backend, desired, box, bindings, singleFontStacks));
+    return planner.createText(engineTextOptions(backend, desired, constraints, bindings, singleFontStacks));
   } finally {
     disposeBindings(bindings);
   }
@@ -395,7 +391,7 @@ function createEngineText(
 function engineTextOptions(
   backend: GlyphBackend,
   desired: ResolvedParagraphState<AnyRasterTechnique>,
-  box: ParagraphContentBox,
+  constraints: Constraints,
   bindings: BackendFontStackBinding[],
   singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
 ): RetainedTextOptions {
@@ -405,14 +401,13 @@ function engineTextOptions(
     end: span.end,
     ...(span.font === undefined ? {} : { font: bindSelection(backend, span.font, bindings, singleFontStacks) }),
     ...(span.style === undefined ? {} : { style: span.style }),
-    ...(span.paint === undefined ? {} : { paint: span.paint }),
   }));
   return {
     font,
     text: spans.length === 0 ? desired.text : { text: desired.text, spans },
-    contentBox: box,
     style: desired.style,
-    paint: desired.paint,
+    layout: desired.layout,
+    constraints,
     ...(desired.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: desired.rasterPixelRatio }),
   };
 }
@@ -512,48 +507,24 @@ function sameTechniqueSet(
   return leftIds.length === rightIds.length && leftIds.every((value, index) => value === rightIds[index]);
 }
 
-interface ResolvedConstraints {
-  readonly width: ParagraphConstraints['width'];
-  readonly height: ParagraphConstraints['height'];
-}
-
-function resolveConstraints(constraints: ParagraphConstraints | undefined): ResolvedConstraints {
+function resolveConstraints(constraints: Constraints | undefined): Constraints {
+  if (constraints !== undefined) assertConstraints(constraints, 'paragraph constraints');
   const width = constraints?.width;
   const height = constraints?.height;
-  validateAxis(width, 'width');
-  validateAxis(height, 'height');
-  return { width, height };
-}
-
-function validateAxis(value: ParagraphConstraints['width'], name: string): void {
-  if (value === undefined || value.mode === 'unconstrained') return;
-  if (!Number.isFinite(value.size) || value.size < 0) {
-    throw new RangeError(`paragraph ${name} constraint must be finite and nonnegative`);
-  }
-}
-
-function axisKey(constraints: ResolvedConstraints): string {
-  const key = (value: ParagraphConstraints['width']): string =>
-    value === undefined || value.mode === 'unconstrained' ? 'u' : `${value.mode}:${value.size}`;
-  return `${key(constraints.width)}|${key(constraints.height)}`;
-}
-
-function flowBox(
-  policy: ParagraphLayoutPolicy,
-  width: ParagraphConstraints['width'],
-  height: ParagraphConstraints['height'],
-): ParagraphContentBox {
   return {
-    ...policy,
     ...(width === undefined ? {} : { width }),
     ...(height === undefined ? {} : { height }),
   };
 }
 
+function axisKey(constraints: Constraints): string {
+  const key = (value: Constraints['width']): string =>
+    value === undefined || value.mode === 'unconstrained' ? 'u' : `${value.mode}:${value.size}`;
+  return `${key(constraints.width)}|${key(constraints.height)}`;
+}
+
 function hasParagraphChange<Technique extends AnyRasterTechnique>(update: ParagraphUpdate<Technique>): boolean {
-  return ['font', 'text', 'spans', 'style', 'paint', 'rasterPixelRatio', 'policy'].some((key) =>
-    Object.hasOwn(update, key),
-  );
+  return ['font', 'text', 'spans', 'style', 'rasterPixelRatio', 'layout'].some((key) => Object.hasOwn(update, key));
 }
 
 function frozenDeep<Value>(value: Value): Value {
@@ -583,14 +554,30 @@ function normalizeParagraphState<Technique extends AnyRasterTechnique>(
   const spans =
     resolved === previous?.spans ? previous.spans : Object.freeze(resolved.map((span) => frozenDeep({ ...span })));
   immutableFontSelectionFonts(properties.font);
-  for (const span of spans) if (span.font !== undefined) immutableFontSelectionFonts(span.font);
+  for (const [index, span] of spans.entries()) {
+    if (span.font !== undefined) immutableFontSelectionFonts(span.font);
+    if (span.style !== undefined) {
+      assertTextStyle(span.style, `paragraph span ${index} style`);
+      assertTextStyleFeatureRanges(span.style, span.start, span.end, `paragraph span ${index} style`);
+    }
+  }
+  const style = mergePropertyList(properties.style, 'paragraph style');
+  const layout = mergePropertyList(properties.layout, 'paragraph layout');
+  assertTextStyle(style, 'paragraph style');
+  assertTextStyleFeatureRanges(style, 0, text.length, 'paragraph style');
+  assertParagraphLayout(layout, 'paragraph layout');
+  if (
+    properties.rasterPixelRatio !== undefined &&
+    (!Number.isFinite(properties.rasterPixelRatio) || properties.rasterPixelRatio <= 0)
+  ) {
+    throw new RangeError('paragraph rasterPixelRatio must be positive and finite');
+  }
   return Object.freeze({
     font: properties.font,
     text,
     spans,
-    style: frozenDeep({ ...(properties.style ?? {}) }),
-    paint: frozenDeep({ ...(properties.paint ?? {}) }),
-    policy: frozenDeep({ ...(properties.policy ?? {}) }),
+    style: frozenDeep(style),
+    layout: frozenDeep(layout),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
   });
 }
@@ -650,7 +637,7 @@ function releaseMeasurementService(service: MeasurementService, promise: Promise
   service.glyphEngine.dispose();
 }
 
-function layoutDigest(layout: ParagraphLayoutInspection): string {
+function layoutDigest(layout: GlyphLayoutInspection): string {
   const lanes = [0x811c_9dc5, 0x0100_0193, 0x9dc5_811c];
   const mixByte = (byte: number): void => {
     for (const [index, seed] of lanes.entries()) {

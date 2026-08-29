@@ -1,4 +1,4 @@
-import type { ParagraphLayout } from '@pmndrs/glyph';
+import type { GlyphLayout } from '@pmndrs/glyph';
 import type { SlugPageData } from '@pmndrs/glyph/raster/slug';
 
 const ABSENT_PAGE = 0xffff;
@@ -75,7 +75,7 @@ export interface FlatSlugCpuReferenceOptions {
  */
 export function renderFlatSlugCpuReference(
   data: SlugCpuReferenceData,
-  layout: ParagraphLayout,
+  layout: GlyphLayout,
   options: FlatSlugCpuReferenceOptions,
 ): SlugCpuReference {
   const width = positiveInteger(options.width, 'Slug CPU reference width');
@@ -389,7 +389,7 @@ function clampedBandIndex(value: number, count: number): number {
   return Math.trunc(Math.min(count - 1, Math.max(0, value)));
 }
 
-function assertLayoutArrays(layout: ParagraphLayout): void {
+function assertLayoutArrays(layout: GlyphLayout): void {
   const count = layout.glyphIds.length;
   if (
     layout.glyphFontSlots.length !== count ||

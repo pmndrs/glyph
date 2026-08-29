@@ -1,28 +1,18 @@
 import { type ClusterAlignableRange, resolveRangesToClusters } from './internal/graphemes.js';
 import { statedProperties } from './internal/span-cascade.js';
 import type { FontSelection } from './loaded-font.js';
-import type { ParagraphStyle } from './text-properties.js';
+import { assertTextStyle, type TextStyle } from './text-properties.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
 
 declare const textLiteralTechnique: unique symbol;
 declare const textSpanFragmentTechnique: unique symbol;
 
-export type LinearRgbaInput = readonly [number, number, number, number];
-export type ColorInput = string | LinearRgbaInput;
-
-export interface GlyphPaintInput {
-  readonly color?: ColorInput;
-  readonly opacity?: number;
-  readonly outline?: { readonly color: ColorInput; readonly width: number };
-  readonly shadow?: { readonly color: ColorInput; readonly offset: readonly [number, number] };
-}
-
 export interface ParagraphSpan<Technique extends AnyRasterTechnique> {
   readonly start: number;
   readonly end: number;
   readonly font?: FontSelection<Technique>;
-  readonly style?: ParagraphStyle;
-  readonly paint?: GlyphPaintInput;
+  /** Text shaping and presentation overrides for this inline span. */
+  readonly style?: TextStyle;
 }
 
 export interface TextLiteral<Technique extends AnyRasterTechnique = never> {
@@ -90,7 +80,7 @@ export function alignSpansToClusters<Span extends ClusterAlignableRange>(
 
 export type FormattedText<Technique extends AnyRasterTechnique> = TextLiteral<Technique> | TextLiteral<never>;
 export type TextInput<Technique extends AnyRasterTechnique> = string | FormattedText<Technique>;
-export type SpanStyle = Readonly<ParagraphStyle & GlyphPaintInput>;
+export type SpanStyle = Readonly<TextStyle>;
 export type SpanFormat<Technique extends AnyRasterTechnique> = FontSelection<Technique> | SpanStyle;
 
 type TextTemplateValue<Technique extends AnyRasterTechnique> =
@@ -196,25 +186,21 @@ function normalizeFormats<Technique extends AnyRasterTechnique>(
   formats: readonly (FontSelection<Technique> | SpanStyle)[],
 ): Omit<ParagraphSpan<Technique>, 'start' | 'end'> {
   let font: FontSelection<Technique> | undefined;
-  let style: ParagraphStyle | undefined;
-  let paint: GlyphPaintInput | undefined;
+  let style: TextStyle | undefined;
   // A span states only what it changes. A group the format does not touch stays
   // absent so the cascade inherits it, instead of arriving as an empty object
   // that would reset the range to the default shaping style or glyph colour.
   for (const format of formats) {
     if (isFontSelection(format)) font = format;
     else {
-      const { color, opacity, outline, shadow, ...layout } = format;
-      const styled = statedProperties<ParagraphStyle>(layout);
+      const styled = statedProperties<TextStyle>(format);
       if (Object.keys(styled).length !== 0) style = Object.freeze({ ...(style ?? {}), ...styled });
-      const painted = statedProperties<GlyphPaintInput>({ color, opacity, outline, shadow });
-      if (Object.keys(painted).length !== 0) paint = Object.freeze({ ...(paint ?? {}), ...painted });
     }
   }
+  if (style !== undefined) assertTextStyle(style, 'span style');
   return Object.freeze({
     ...(font === undefined ? {} : { font }),
     ...(style === undefined ? {} : { style }),
-    ...(paint === undefined ? {} : { paint }),
   });
 }
 

@@ -229,7 +229,7 @@ export interface TechniqueSchemaDeclaration<
   /**
    * Opt-in glyph-origin metadata: names the declared f32 buffer whose first two
    * lanes carry the glyph's position. Renderers that augment glyph origins
-   * (animation retargeting) consult this instead of assuming a layout;
+   * (animation retargeting) consult this instead of assuming a measure;
    * techniques without it are never augmented.
    *
    * The lanes are deliberately NOT required to be in any particular space. All

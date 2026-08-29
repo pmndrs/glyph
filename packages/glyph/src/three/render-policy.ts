@@ -4,7 +4,6 @@ import {
   createRasterPolicyProgram,
   definePolicyBuffers,
   defineTechniqueSchema,
-  id,
   schemaPolicyBuffers,
   techniqueProgram,
   type PolicyAllocationMode,
@@ -19,6 +18,7 @@ import {
   type RenderTechniqueId,
   type AnyTechniqueSchema,
   type TechniqueSchema,
+  id,
 } from '../core.js';
 import { bitmapPlanProgram } from '../raster/bitmap-technique.js';
 import { msdfPlanProgram } from '../raster/msdf.js';

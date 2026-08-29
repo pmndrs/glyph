@@ -9,9 +9,9 @@ const modelViewProjection = TSL.modelViewProjection as Node<'vec4'>;
  * program addresses it — storage buffers, instanced attributes, or a texture — stays the program's own choice.
  */
 export interface TslBitmapInstanceNodes {
-  /** Paragraph-local glyph origin, in layout units, with y measured downward. */
+  /** Paragraph-local glyph origin, with y measured downward. */
   readonly origin: Node<'vec2'>;
-  /** Glyph quad extent in layout units. */
+  /** Glyph quad extent in paragraph-local units. */
   readonly size: Node<'vec2'>;
   /** Upper-left atlas coordinate of the glyph's coverage rectangle. */
   readonly uvOrigin: Node<'vec2'>;
@@ -84,7 +84,7 @@ export function bitmapShader(
 }
 
 /**
- * Rounds the projected quad to whole physical pixels. Snapping in clip space rather than in layout units keeps the
+ * Rounds the projected quad to whole physical pixels. Snapping in clip space rather than paragraph space keeps the
  * paragraph transform, camera, and device pixel ratio out of the technique: whatever chain produced the clip position,
  * its device-space landing is what has to sit on the grid the atlas was baked for.
  */
