@@ -734,8 +734,7 @@ function validateRecordRelationships(
     if (constraints.length > limits.maxRegions || regions.length > limits.maxRegions) {
       throw new RangeError('frame regions exceed the planner limit');
     }
-    if (exclusions.length > limits.maxExclusions)
-      throw new RangeError('frame exclusions exceed the planner limit');
+    if (exclusions.length > limits.maxExclusions) throw new RangeError('frame exclusions exceed the planner limit');
     if (inlineObjects.length > limits.maxInlineObjects) {
       throw new RangeError('frame inline objects exceed the planner limit');
     }

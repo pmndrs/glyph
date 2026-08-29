@@ -103,7 +103,7 @@ export class ExampleTextEngine {
     return this.#backend.bindFontStack(stack);
   }
 
-  /** Opens the engine's single retained example plan. */
+  /** Opens the example engine's single render planner. */
   openPlanner(): RenderPlanner {
     this.#assertActive();
     if (this.#planner !== undefined) throw new Error('example engine already has an open render planner');
@@ -122,7 +122,7 @@ export class ExampleTextEngine {
     return this.#planner;
   }
 
-  /** Creates one retained text instance in the open plan. */
+  /** Creates one retained text instance in the open planner. */
   createText(options: ExampleTextOptions): ExampleText {
     const planner = this.#requirePlanner();
     return new ExampleText(planner, () => this.publish(), options);
@@ -142,7 +142,7 @@ export class ExampleTextEngine {
     this.#target.replaceDevice(device);
   }
 
-  /** Disposes the backend, plan, target, and retained payload leases. */
+  /** Disposes the backend, planner, target, and retained payload leases. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;

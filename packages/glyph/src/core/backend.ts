@@ -946,9 +946,7 @@ export class GlyphBackend {
   #assertFrameOwnership(plannerHandle: PlannerHandle, request: Uint8Array): void {
     const references = frameRegistrationReferences(request);
     if (references.plannerHandle !== plannerHandle) {
-      throw new TypeError(
-        `text update belongs to planner ${references.plannerHandle}, not ${plannerHandle}`,
-      );
+      throw new TypeError(`text update belongs to planner ${references.plannerHandle}, not ${plannerHandle}`);
     }
     if (this.#owners.policies.get(references.policyHandle) !== this) {
       throw new TypeError(`render policy ${references.policyHandle} is not owned by this glyph backend`);

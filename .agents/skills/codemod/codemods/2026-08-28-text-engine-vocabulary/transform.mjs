@@ -17,7 +17,12 @@ const DECLARATION_RENAMES = [
   ['/packages/glyph/src/core/retained-plan.ts', 'type', 'TextEngineTextInput', 'RetainedTextInput'],
   ['/packages/glyph/src/core/retained-plan.ts', 'type', 'TextEngineRegionInput', 'RetainedTextRegionInput'],
   ['/packages/glyph/src/core/retained-plan.ts', 'type', 'TextEngineExclusionInput', 'RetainedTextExclusionInput'],
-  ['/packages/glyph/src/core/retained-plan.ts', 'interface', 'TextEngineFlowRegionInput', 'RetainedTextFlowRegionInput'],
+  [
+    '/packages/glyph/src/core/retained-plan.ts',
+    'interface',
+    'TextEngineFlowRegionInput',
+    'RetainedTextFlowRegionInput',
+  ],
   ['/packages/glyph/src/core/retained-plan.ts', 'interface', 'TextEngineFlowInput', 'RetainedTextFlowInput'],
   ['/packages/glyph/src/core/retained-plan.ts', 'type', 'TextEngineInlineObjectInput', 'RetainedTextInlineObjectInput'],
   ['/packages/glyph/src/core/retained-plan.ts', 'interface', 'TextEngineLimits', 'RenderPlannerLimits'],
@@ -36,8 +41,18 @@ const DECLARATION_RENAMES = [
   ['/packages/glyph/src/core/retained-plan.ts', 'interface', 'MeasurementPlan', 'MeasurementPlanner'],
   ['/packages/glyph/src/core/retained-plan.ts', 'interface', 'MeasurementPlanOptions', 'MeasurementPlannerOptions'],
   ['/packages/glyph/src/core/retained-plan.ts', 'class', 'RetainedPlanDisposedError', 'RenderPlannerDisposedError'],
-  ['/packages/glyph/src/core/retained-plan.ts', 'class', 'TextEngineBackpressureError', 'RenderPlannerBackpressureError'],
-  ['/packages/glyph/src/core/retained-plan.ts', 'class', 'TextEngineTransportCapacityError', 'PlanTransportCapacityError'],
+  [
+    '/packages/glyph/src/core/retained-plan.ts',
+    'class',
+    'TextEngineBackpressureError',
+    'RenderPlannerBackpressureError',
+  ],
+  [
+    '/packages/glyph/src/core/retained-plan.ts',
+    'class',
+    'TextEngineTransportCapacityError',
+    'PlanTransportCapacityError',
+  ],
   ['/packages/glyph/src/core/retained-plan.ts', 'class', 'TextEngineTransportError', 'PlanTransportError'],
   ['/packages/glyph/src/core/retained-plan.ts', 'class', 'RetainedPlanImpl', 'RenderPlannerImpl'],
   ['/packages/glyph/src/core/retained-plan.ts', 'function', 'createRetainedPlanImpl', 'createRenderPlanner'],
@@ -74,7 +89,12 @@ const DECLARATION_RENAMES = [
   ['/packages/glyph/src/core/plan-view.ts', 'function', 'readTextEnginePrimitive', 'readRenderPlanPrimitive'],
   ['/packages/glyph/src/core/plan-view.ts', 'function', 'readTextEngineDraw', 'readRenderPlanDraw'],
   ['/packages/glyph/src/core/plan-view.ts', 'function', 'readTextEngineRetirement', 'readRenderPlanRetirement'],
-  ['/packages/glyph/src/core/layout-query-view.ts', 'function', 'readTextEngineMeasurements', 'readPlannerMeasurements'],
+  [
+    '/packages/glyph/src/core/layout-query-view.ts',
+    'function',
+    'readTextEngineMeasurements',
+    'readPlannerMeasurements',
+  ],
   ['/packages/glyph/src/core/layout-query-view.ts', 'function', 'readTextEngineLayouts', 'readPlannerLayouts'],
   ['/packages/glyph/src/core/frame-wire.ts', 'interface', 'TextEngineFrameLimits', 'PlannerFrameLimits'],
   ['/packages/glyph/src/core/frame-wire.ts', 'type', 'TextEngineParagraphMutation', 'PlannerParagraphMutation'],
@@ -90,7 +110,12 @@ const DECLARATION_RENAMES = [
   ['/packages/glyph/src/core/frame-wire.ts', 'interface', 'TextEngineInlineObject', 'PlannerInlineObject'],
   ['/packages/glyph/src/core/frame-wire.ts', 'interface', 'TextEngineFrameUpdate', 'PlannerFrameUpdate'],
   ['/packages/glyph/src/core/frame-wire.ts', 'type', 'TextEngineFrameRecords', 'PlannerFrameRecords'],
-  ['/packages/glyph/src/core/frame-wire.ts', 'function', 'validateTextEngineFrameRecords', 'validatePlannerFrameRecords'],
+  [
+    '/packages/glyph/src/core/frame-wire.ts',
+    'function',
+    'validateTextEngineFrameRecords',
+    'validatePlannerFrameRecords',
+  ],
   ['/packages/glyph/src/core/frame-wire.ts', 'function', 'compileTextEngineFrameUpdate', 'compilePlannerFrameUpdate'],
   [
     '/packages/glyph/src/core/frame-wire.ts',
@@ -102,9 +127,7 @@ const DECLARATION_RENAMES = [
   ['/packages/glyph/src/core/render-policy.ts', 'type', 'RetainedPlanHandle', 'PlannerHandle'],
 ];
 
-const DECLARATION_IDENTIFIER_RENAMES = new Map(
-  DECLARATION_RENAMES.map(([, , before, after]) => [before, after]),
-);
+const DECLARATION_IDENTIFIER_RENAMES = new Map(DECLARATION_RENAMES.map(([, , before, after]) => [before, after]));
 
 export function transform({ project, renameSymbol, tsMorph }) {
   const protectedSources = new Map();
@@ -134,6 +157,10 @@ export function transform({ project, renameSymbol, tsMorph }) {
     const method = policy?.getInterface(owner)?.getMethod('retainedPlan');
     if (method !== undefined) renameSymbol(method, 'planner');
   }
+
+  const benchmark = sourceBySuffix(project, '/packages/glyph/scripts/benchmark-rust-layout-engine.mjs');
+  const sessionMemory = benchmark?.getVariableDeclaration('sessionMemory');
+  if (sessionMemory !== undefined) renameSymbol(sessionMemory, 'plannerMemory');
 
   renamePlannerProperties(project, tsMorph);
   renamePlannerDomainStrings(project, tsMorph);

@@ -9,6 +9,8 @@ const root = await mkdtemp(path.join(tmpdir(), 'glyph-planner-vocabulary-'));
 try {
   const core = path.join(root, 'packages/glyph/src/core');
   await mkdir(core, { recursive: true });
+  const scripts = path.join(root, 'packages/glyph/scripts');
+  await mkdir(scripts, { recursive: true });
   await mkdir(path.join(root, 'app'), { recursive: true });
   await writeFile(
     path.join(root, 'tsconfig.json'),
@@ -21,7 +23,7 @@ try {
         baseUrl: '.',
         paths: { '@pmndrs/glyph/core': ['packages/glyph/src/core.ts'] },
       },
-      include: ['packages/**/*.ts', 'app/**/*.ts', 'app/**/*.mjs'],
+      include: ['packages/**/*.ts', 'packages/**/*.mjs', 'app/**/*.ts', 'app/**/*.mjs'],
     }),
   );
   await writeFile(
@@ -32,10 +34,10 @@ try {
       'export class TextEngineStatusError extends Error {}',
       'export interface TextEngineStatusDetails { readonly fault: TextEngineFault }',
       'export function textEngineStatusErrorDetails(_: TextEngineStatusError): TextEngineStatusDetails {',
-      "  return { fault: { paragraphId: 0 } };",
+      '  return { fault: { paragraphId: 0 } };',
       '}',
       'export class GlyphBackend {',
-      '  createRetainedPlan(): import(\'./retained-plan.js\').SynchronousRetainedPlan { throw new Error(); }',
+      "  createRetainedPlan(): import('./retained-plan.js').SynchronousRetainedPlan { throw new Error(); }",
       '}',
       '',
     ].join('\n'),
@@ -90,6 +92,10 @@ try {
     ].join('\n'),
   );
   await writeFile(path.join(core, 'layout-query-view.ts'), 'export function readTextEngineLayouts(): void {}\n');
+  await writeFile(
+    path.join(scripts, 'benchmark-rust-layout-engine.mjs'),
+    'let sessionMemory;\nexport function saveMemory(value) { sessionMemory = value; return sessionMemory; }\n',
+  );
   await writeFile(
     path.join(root, 'packages/glyph/src/core.ts'),
     [
@@ -154,6 +160,9 @@ try {
   assert.match(policy, /'planner'/);
   const backend = await readFile(path.join(core, 'backend.ts'), 'utf8');
   assert.match(backend, /\.\/render-planner\.js/);
+  const benchmark = await readFile(path.join(scripts, 'benchmark-rust-layout-engine.mjs'), 'utf8');
+  assert.match(benchmark, /plannerMemory/);
+  assert.doesNotMatch(benchmark, /sessionMemory/);
   await readFile(path.join(core, 'render-planner.ts'), 'utf8');
   const repeated = await runCodemod({
     codemod: recipe,

@@ -39,10 +39,7 @@ test('frame compiler rejects raw and cross-domain numeric identities before allo
     },
   };
   assert.throws(() => compilePlannerFrameUpdate({ ...valid, plannerId: 1 }), /must come from id\.planner/);
-  assert.throws(
-    () => compilePlannerFrameUpdate({ ...valid, plannerId: POLICY_ID }),
-    /must come from id\.planner/,
-  );
+  assert.throws(() => compilePlannerFrameUpdate({ ...valid, plannerId: POLICY_ID }), /must come from id\.planner/);
   assert.throws(
     () => compilePlannerFrameUpdate({ ...valid, capabilitySet: 1 }),
     /must come from selectPolicyCapabilitySet/,

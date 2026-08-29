@@ -64,7 +64,7 @@ const initial = updateBytes({
   style: baseStyle,
   geometry: baseGeometry,
 });
-let sessionMemory;
+let plannerMemory;
 
 console.log(
   `technique=${options.technique} corpus=${options.corpus} allocation=${options.allocation} output=${technique.outputBytesPerGlyph} bytes/glyph · memory bytes: instantiate=${memoryAtInstantiation}, initialize=${memoryAfterInitialize}, registered=${memoryAfterRegistration}`,
@@ -129,7 +129,7 @@ function measureCold() {
       samples.push(result.durationMs);
       plans.push(result);
     }
-    requireStatus(fn.disposePlanner(plannerId), 'dispose cold retainedPlan');
+    requireStatus(fn.disposePlanner(plannerId), 'dispose cold planner');
   }
   return summarize('cold', glyphs, samples, plans);
 }
@@ -224,7 +224,7 @@ function measureWarm(name) {
       plans.push(state);
     }
   }
-  requireStatus(fn.disposePlanner(plannerId), `dispose ${name} retainedPlan`);
+  requireStatus(fn.disposePlanner(plannerId), `dispose ${name} planner`);
   return summarize(name, liveGlyphCount, samples, plans);
 }
 
@@ -232,10 +232,10 @@ function createPlanner(requestCapacity) {
   const beforeBytes = memory.buffer.byteLength;
   requireStatus(
     fn.createPlanner(plannerId, requestCapacity, outputCapacity, utf16.length + 1),
-    'create benchmark retainedPlan',
+    'create benchmark planner',
   );
-  if (sessionMemory === undefined) {
-    sessionMemory = { beforeBytes, afterBytes: memory.buffer.byteLength };
+  if (plannerMemory === undefined) {
+    plannerMemory = { beforeBytes, afterBytes: memory.buffer.byteLength };
   }
 }
 

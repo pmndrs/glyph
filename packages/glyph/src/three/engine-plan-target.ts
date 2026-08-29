@@ -1587,11 +1587,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     return this.#preparation?.transformGeneration ?? this.#transformGeneration;
   }
 
-  #applyRetirementsToCandidate(
-    plan: RenderPlanReader,
-    table: RenderPlanTable,
-    context: PreparationContext,
-  ): void {
+  #applyRetirementsToCandidate(plan: RenderPlanReader, table: RenderPlanTable, context: PreparationContext): void {
     for (let index = 0; index < table.count; index += 1) {
       const retirement = readRenderPlanRetirement(plan, table, index);
       const { id, generation } = retirement;

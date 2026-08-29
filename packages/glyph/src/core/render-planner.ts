@@ -255,7 +255,7 @@ export type RetainedTextUpdate = Partial<Omit<RetainedTextOptions, 'font'>> & {
   readonly font?: BackendFontStackBinding;
 };
 
-/** One plan-owned retained text instance. */
+/** One planner-owned retained text instance. */
 export interface RetainedText {
   readonly disposed: boolean;
   update(update: RetainedTextUpdate): void;
@@ -402,7 +402,10 @@ export function createRenderPlanner<Target extends RenderPlanTarget>(
 }
 
 /** @internal Construct a query planner without a renderer acceptance target. */
-export function createMeasurementPlanner(backend: GlyphBackend, options: MeasurementPlannerOptions): MeasurementPlanner {
+export function createMeasurementPlanner(
+  backend: GlyphBackend,
+  options: MeasurementPlannerOptions,
+): MeasurementPlanner {
   return new RenderPlannerImpl(backend, options, true);
 }
 

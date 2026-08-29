@@ -207,14 +207,10 @@ test('variable-size transfers use exact buckets and evict the least-recently-ret
   });
 
   let replacement40;
-  const publication40 = pool.transfer(
-    new Uint8Array(40),
-    { plannerId: 7, planRevision: 5 },
-    (message, transfer) => {
-      replacement40 = message.buffer;
-      structuredClone(message, { transfer });
-    },
-  );
+  const publication40 = pool.transfer(new Uint8Array(40), { plannerId: 7, planRevision: 5 }, (message, transfer) => {
+    replacement40 = message.buffer;
+    structuredClone(message, { transfer });
+  });
   assert.equal(publication40.ok, true);
   assert.notEqual(replacement40, returnedByLength.get(40));
 
@@ -292,10 +288,7 @@ test('public call inputs and worker returns are validated before ownership chang
   );
   const detachedBytes = new Uint8Array(1);
   structuredClone(detachedBytes.buffer, { transfer: [detachedBytes.buffer] });
-  assert.throws(
-    () => pool.transfer(detachedBytes, { plannerId: 1, planRevision: 0 }, () => {}),
-    /attached Uint8Array/,
-  );
+  assert.throws(() => pool.transfer(detachedBytes, { plannerId: 1, planRevision: 0 }, () => {}), /attached Uint8Array/);
 
   const publication = transferToRoot(pool, new Uint8Array(8), 1);
   assert.equal(isFrameTransferPublication({ ...publication, byteLength: 7 }), false);
@@ -350,14 +343,10 @@ test('sender failures preserve the one-copy result variants and account for deta
   assert.match(String(missingTransfer.error), /without detaching/);
 
   let detachedPublication;
-  const detachedFailure = pool.transfer(
-    new Uint8Array(16),
-    { plannerId: 1, planRevision: 3 },
-    (message, transfer) => {
-      detachedPublication = structuredClone(message, { transfer });
-      throw thrown;
-    },
-  );
+  const detachedFailure = pool.transfer(new Uint8Array(16), { plannerId: 1, planRevision: 3 }, (message, transfer) => {
+    detachedPublication = structuredClone(message, { transfer });
+    throw thrown;
+  });
   assert.deepEqual(detachedFailure, { ok: false, reason: 'transfer-failed', error: thrown });
   assert.equal(pool.stats().detachedTransferFailures, 1);
   assert.equal(pool.stats().outstandingTransfers, 1);
