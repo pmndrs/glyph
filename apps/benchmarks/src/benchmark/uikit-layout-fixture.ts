@@ -108,14 +108,14 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
         width: { mode: 'exact', size: contentWidth },
         height: { mode: 'exact', size: contentHeight },
       };
-      const layout = paragraph.glyphs(constraints);
+      const inspection = paragraph.glyphs(constraints);
       const contentLeft = -outerWidth / 2 + borderLeft + paddingLeft;
       const contentTop = outerHeight / 2 - borderTop - paddingTop;
       return {
         contentBox: { width: contentWidth, height: contentHeight },
-        layout,
-        centeredX: Float32Array.from(layout.x, (value) => value + contentLeft),
-        centeredY: Float32Array.from(layout.y, (value) => contentTop - value),
+        layout: inspection,
+        centeredX: Float32Array.from(inspection.x, (value) => value + contentLeft),
+        centeredY: Float32Array.from(inspection.y, (value) => contentTop - value),
       };
     },
     updateParagraph(input: ParagraphUpdate<Technique>) {
