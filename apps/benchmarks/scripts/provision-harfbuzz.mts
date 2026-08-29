@@ -78,6 +78,7 @@ try {
       throw new Error(`built ${utility} did not identify itself as HarfBuzz ${version}`);
     }
   }
+  await rm(cacheDirectory, { recursive: true, force: true });
   await rename(stagingDirectory, cacheDirectory);
 } finally {
   await rm(stagingDirectory, { recursive: true, force: true });
