@@ -6,7 +6,7 @@ okf_version: '0.2'
 
 ## Start here
 
-- [Project README](../README.md) — product overview, API preview, implementation order, and local setup.
+- [Project README](../README.md) — product overview, first-render quickstarts, API preview, and local setup.
 - [Project brief](planning/project-brief.md) — product outcome, scope, non-goals, and success criteria.
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
 - [Merged v0 runtime and bake API](planning/api-shapes.md) — superseded migration fixture; it describes the merged v0 surface that the Rust render-plan cutover deleted.
