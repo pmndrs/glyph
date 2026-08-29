@@ -117,7 +117,7 @@ async function runDirectProfile(profileCase, source) {
   );
   const samples = [];
   const descriptor = contract.msdfDescriptor(optionsForCase(profileCase));
-  const rasterKey = await contract.msdfDescriptorRasterKey(descriptor);
+  const rasterKey = contract.msdfDescriptorRasterKey(descriptor);
   const sourceFingerprint = fingerprint.fingerprint128(source, fingerprint.fingerprintDomain.source);
   const shapingFingerprint = fingerprint.fingerprint128(source, fingerprint.fingerprintDomain.shaping);
   const directAbi = {
@@ -196,7 +196,7 @@ async function runWorkerChild(profileCase) {
   const sourceFingerprint = fingerprint.fingerprint128(source, fingerprint.fingerprintDomain.source);
   const shapingFingerprint = fingerprint.fingerprint128(source, fingerprint.fingerprintDomain.shaping);
   const options = optionsForCase(profileCase);
-  const rasterKey = await contract.msdfRasterKey(options);
+  const rasterKey = contract.msdfRasterKey(options);
   const rssBeforeBytes = process.memoryUsage.rss();
   const started = performance.now();
   let completeAt;

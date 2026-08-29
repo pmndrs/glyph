@@ -21,7 +21,7 @@ test('canonicalizes bitmap strikes and owns its compatibility versions', async (
   assert.equal(BITMAP_GENERATOR_VERSION, '0.0.0');
   assert.equal(MAX_BITMAP_PPEM, 1022);
   assert.deepEqual(bitmapDescriptor({ strikes: [MAX_BITMAP_PPEM] }).strikes, [MAX_BITMAP_PPEM]);
-  assert.equal(await bitmapRasterKey({ strikes: [32, 16] }), await bitmapRasterKey({ strikes: [16, 32] }));
+  assert.equal(bitmapRasterKey({ strikes: [32, 16] }), bitmapRasterKey({ strikes: [16, 32] }));
 });
 
 test('rejects every invalid runtime strike form', () => {

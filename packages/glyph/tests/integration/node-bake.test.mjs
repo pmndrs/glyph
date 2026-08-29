@@ -109,7 +109,7 @@ test('bakeFont preserves bounded raster options through the Node composition pat
   const core = await validateFontArtifact(bytes);
   const descriptor = bitmapDescriptor(options);
   const validated = await validateBitmapArtifact(bytes, {
-    rasterKey: await bitmapRasterKey(options),
+    rasterKey: bitmapRasterKey(options),
     shapingFingerprint: core.shapingFingerprint,
     glyphCount: core.glyphCount,
     glyphIdWidth: 16,

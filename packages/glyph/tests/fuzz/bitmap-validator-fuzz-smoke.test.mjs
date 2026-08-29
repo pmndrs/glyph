@@ -17,7 +17,7 @@ test('fixed-seed bitmap artifact mutations fail safely and deterministically', a
     readFile(new URL('../../dist/bitmap-baker.wasm', import.meta.url)),
   ]);
   const descriptor = bitmapDescriptor({ strikes: [16] });
-  const rasterKey = await bitmapRasterKey({ strikes: [16] });
+  const rasterKey = bitmapRasterKey({ strikes: [16] });
   const baker = bitmapBakerFromCore(await createBitmapBaker(wasm));
   const artifact = (
     await baker.bake({

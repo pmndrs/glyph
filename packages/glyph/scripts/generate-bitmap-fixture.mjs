@@ -19,7 +19,7 @@ const renderingFixtureUrl = new URL(
 const glyphCount = 2937;
 const options = { strikes: [16] };
 const descriptor = bitmapDescriptor(options);
-const rasterKey = await bitmapRasterKey(options);
+const rasterKey = bitmapRasterKey(options);
 const [source, wasm, fontWasm] = await Promise.all([
   readFile(sourceUrl),
   readFile(wasmUrl),

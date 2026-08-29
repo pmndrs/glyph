@@ -16,7 +16,7 @@ let context;
 let embedded;
 
 before(async () => {
-  rasterKey = await slugDescriptorRasterKey();
+  rasterKey = slugDescriptorRasterKey();
   context = {
     rasterKey,
     shapingFingerprint,

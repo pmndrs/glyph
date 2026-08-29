@@ -28,7 +28,7 @@ before(async () => {
   ]);
   sourceBytes = source;
   golden = JSON.parse(goldenBytes);
-  rasterKey = await bitmapRasterKey({ strikes: [16] });
+  rasterKey = bitmapRasterKey({ strikes: [16] });
   const baker = bitmapBakerFromCore(await createBitmapBaker(wasm));
   const font = {
     source,
