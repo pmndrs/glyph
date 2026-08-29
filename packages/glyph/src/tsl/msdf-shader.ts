@@ -2,8 +2,8 @@ import * as TSL from 'three/tsl';
 import type { Node, Texture } from 'three/webgpu';
 
 /**
- * One glyph instance's canonical MSDF fields, already resolved to nodes. Core owns what each field means; how a
- * program packs them — the first-party target interleaves them into seven `vec4` storage buffers — stays its own choice.
+ * One glyph instance's canonical MSDF fields, already resolved to nodes. Core owns what each field means; the target
+ * owns their physical buffer packing.
  */
 export interface TslMsdfInstanceNodes {
   /** Paragraph-local glyph origin, with y measured downward. */
@@ -126,8 +126,8 @@ function screenPixelRange(
   atlasV: Node<'float'>,
   resources: TslMsdfShaderResources,
 ): Node<'float'> {
-  const screenTexelsU = TSL.float(1).div(TSL.max(TSL.fwidth(atlasU), 1e-6));
-  const screenTexelsV = TSL.float(1).div(TSL.max(TSL.fwidth(atlasV), 1e-6));
+  const screenTexelsU = TSL.inverseSqrt(TSL.max(TSL.dFdx(atlasU).pow2().add(TSL.dFdy(atlasU).pow2()), 1e-12));
+  const screenTexelsV = TSL.inverseSqrt(TSL.max(TSL.dFdx(atlasV).pow2().add(TSL.dFdy(atlasV).pow2()), 1e-12));
   return TSL.max(
     TSL.float(0.5).mul(
       TSL.float(resources.pixelRange / resources.atlasWidth)

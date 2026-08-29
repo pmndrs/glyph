@@ -109,16 +109,44 @@ impl Edge {
     pub(crate) fn direction_at_start(self) -> Point {
         match self {
             Self::Line { points, .. } => points[1] - points[0],
-            Self::Quadratic { points, .. } => (points[1] - points[0]) * 2.0,
-            Self::Cubic { points, .. } => (points[1] - points[0]) * 3.0,
+            Self::Quadratic { points, .. } => {
+                let tangent = points[1] - points[0];
+                if tangent == Point::ZERO {
+                    points[2] - points[0]
+                } else {
+                    tangent
+                }
+            }
+            Self::Cubic { points, .. } => {
+                let tangent = points[1] - points[0];
+                if tangent == Point::ZERO {
+                    points[2] - points[0]
+                } else {
+                    tangent
+                }
+            }
         }
     }
 
     pub(crate) fn direction_at_end(self) -> Point {
         match self {
             Self::Line { points, .. } => points[1] - points[0],
-            Self::Quadratic { points, .. } => (points[2] - points[1]) * 2.0,
-            Self::Cubic { points, .. } => (points[3] - points[2]) * 3.0,
+            Self::Quadratic { points, .. } => {
+                let tangent = points[2] - points[1];
+                if tangent == Point::ZERO {
+                    points[2] - points[0]
+                } else {
+                    tangent
+                }
+            }
+            Self::Cubic { points, .. } => {
+                let tangent = points[3] - points[2];
+                if tangent == Point::ZERO {
+                    points[3] - points[1]
+                } else {
+                    tangent
+                }
+            }
         }
     }
 
@@ -375,6 +403,7 @@ pub(crate) struct LineSoa {
     pub(crate) y1: Vec<f32>,
     pub(crate) color: Vec<u8>,
     pub(crate) contour: Vec<u32>,
+    pub(crate) context: Vec<EdgeContext>,
 }
 
 #[derive(Default)]
@@ -387,6 +416,7 @@ pub(crate) struct QuadraticSoa {
     pub(crate) y1: Vec<f32>,
     pub(crate) color: Vec<u8>,
     pub(crate) contour: Vec<u32>,
+    pub(crate) context: Vec<EdgeContext>,
 }
 
 #[derive(Default)]
@@ -401,6 +431,15 @@ pub(crate) struct CubicSoa {
     pub(crate) y1: Vec<f32>,
     pub(crate) color: Vec<u8>,
     pub(crate) contour: Vec<u32>,
+    pub(crate) context: Vec<EdgeContext>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct EdgeContext {
+    pub(crate) start_domain_direction: Point,
+    pub(crate) start_direction: Point,
+    pub(crate) end_direction: Point,
+    pub(crate) end_domain_direction: Point,
 }
 
 #[derive(Default)]
@@ -439,16 +478,30 @@ impl EdgeSoa {
                 .push(contour_winding(&edges[contour.clone()]));
             let contour_index =
                 u32::try_from(contour_index).map_err(|_| BuildFailure::EdgeLimit)?;
-            for edge in &edges[contour.clone()] {
+            let contour_edges = &edges[contour.clone()];
+            for (edge_index, edge) in contour_edges.iter().enumerate() {
+                let previous =
+                    contour_edges[(edge_index + contour_edges.len() - 1) % contour_edges.len()];
+                let next = contour_edges[(edge_index + 1) % contour_edges.len()];
+                let previous_direction = previous.direction_at_end().normalized();
+                let start_direction = edge.direction_at_start().normalized();
+                let end_direction = edge.direction_at_end().normalized();
+                let next_direction = next.direction_at_start().normalized();
+                let context = EdgeContext {
+                    start_domain_direction: (previous_direction + start_direction).normalized(),
+                    start_direction,
+                    end_direction,
+                    end_domain_direction: (end_direction + next_direction).normalized(),
+                };
                 match *edge {
                     Edge::Line { points, color } => {
-                        self.lines.push(points, color, contour_index);
+                        self.lines.push(points, color, contour_index, context);
                     }
                     Edge::Quadratic { points, color } => {
-                        self.quadratics.push(points, color, contour_index);
+                        self.quadratics.push(points, color, contour_index, context);
                     }
                     Edge::Cubic { points, color } => {
-                        self.cubics.push(points, color, contour_index);
+                        self.cubics.push(points, color, contour_index, context);
                     }
                 }
             }
@@ -511,12 +564,14 @@ macro_rules! soa_methods {
                 $(self.$field.clear();)+
                 self.color.clear();
                 self.contour.clear();
+                self.context.clear();
             }
 
             fn reserve(&mut self, additional: usize) -> Result<(), BuildFailure> {
                 $(self.$field.try_reserve(additional).map_err(|_| BuildFailure::Allocation)?;)+
                 self.color.try_reserve(additional).map_err(|_| BuildFailure::Allocation)?;
                 self.contour.try_reserve(additional).map_err(|_| BuildFailure::Allocation)?;
+                self.context.try_reserve(additional).map_err(|_| BuildFailure::Allocation)?;
                 Ok(())
             }
         }
@@ -528,18 +583,19 @@ soa_methods!(QuadraticSoa, [x0, y0, cx, cy, x1, y1]);
 soa_methods!(CubicSoa, [x0, y0, cx0, cy0, cx1, cy1, x1, y1]);
 
 impl LineSoa {
-    fn push(&mut self, points: [Point; 2], color: u8, contour: u32) {
+    fn push(&mut self, points: [Point; 2], color: u8, contour: u32, context: EdgeContext) {
         self.x0.push(points[0].x);
         self.y0.push(points[0].y);
         self.x1.push(points[1].x);
         self.y1.push(points[1].y);
         self.color.push(color);
         self.contour.push(contour);
+        self.context.push(context);
     }
 }
 
 impl QuadraticSoa {
-    fn push(&mut self, points: [Point; 3], color: u8, contour: u32) {
+    fn push(&mut self, points: [Point; 3], color: u8, contour: u32, context: EdgeContext) {
         self.x0.push(points[0].x);
         self.y0.push(points[0].y);
         self.cx.push(points[1].x);
@@ -548,11 +604,12 @@ impl QuadraticSoa {
         self.y1.push(points[2].y);
         self.color.push(color);
         self.contour.push(contour);
+        self.context.push(context);
     }
 }
 
 impl CubicSoa {
-    fn push(&mut self, points: [Point; 4], color: u8, contour: u32) {
+    fn push(&mut self, points: [Point; 4], color: u8, contour: u32, context: EdgeContext) {
         self.x0.push(points[0].x);
         self.y0.push(points[0].y);
         self.cx0.push(points[1].x);
@@ -563,6 +620,7 @@ impl CubicSoa {
         self.y1.push(points[3].y);
         self.color.push(color);
         self.contour.push(contour);
+        self.context.push(context);
     }
 }
 
