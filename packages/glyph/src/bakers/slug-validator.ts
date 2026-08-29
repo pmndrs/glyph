@@ -273,7 +273,7 @@ async function validateContext(context: SlugArtifactValidationContext): Promise<
   ) {
     fail('SLUG_DESCRIPTOR', 'descriptor does not match the fixed Slug generator', '/descriptor');
   }
-  if (context.rasterKey !== (await slugDescriptorRasterKey())) {
+  if (context.rasterKey !== slugDescriptorRasterKey()) {
     fail('RASTER_KEY', 'expected raster key does not match the fixed descriptor', '/rasterKey');
   }
   if (!isFingerprint(context.shapingFingerprint)) {

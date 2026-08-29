@@ -175,7 +175,7 @@ async function validateBitmapSemantics(
   if (canonicalJson(context.descriptor) !== canonicalJson(expectedDescriptor)) {
     fail('BITMAP_DESCRIPTOR', 'descriptor is not in canonical bitmap form', '/descriptor');
   }
-  const expectedKey = await bitmapDescriptorRasterKey(expectedDescriptor);
+  const expectedKey = bitmapDescriptorRasterKey(expectedDescriptor);
   if (context.rasterKey !== expectedKey) {
     fail('RASTER_KEY', 'expected raster key does not match the canonical descriptor', '/rasterKey');
   }

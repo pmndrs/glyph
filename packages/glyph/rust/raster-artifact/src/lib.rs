@@ -85,18 +85,46 @@ fn murmur3_x86_128(bytes: &[u8], seed: u32) -> [u32; 4] {
         let mut k2 = read_u32(block, 4);
         let mut k3 = read_u32(block, 8);
         let mut k4 = read_u32(block, 12);
-        k1 = k1.wrapping_mul(0x239b_961b).rotate_left(15).wrapping_mul(0xab0e_9789);
+        k1 = k1
+            .wrapping_mul(0x239b_961b)
+            .rotate_left(15)
+            .wrapping_mul(0xab0e_9789);
         h1 ^= k1;
-        h1 = h1.rotate_left(19).wrapping_add(h2).wrapping_mul(5).wrapping_add(0x561c_cd1b);
-        k2 = k2.wrapping_mul(0xab0e_9789).rotate_left(16).wrapping_mul(0x38b3_4ae5);
+        h1 = h1
+            .rotate_left(19)
+            .wrapping_add(h2)
+            .wrapping_mul(5)
+            .wrapping_add(0x561c_cd1b);
+        k2 = k2
+            .wrapping_mul(0xab0e_9789)
+            .rotate_left(16)
+            .wrapping_mul(0x38b3_4ae5);
         h2 ^= k2;
-        h2 = h2.rotate_left(17).wrapping_add(h3).wrapping_mul(5).wrapping_add(0x0bca_a747);
-        k3 = k3.wrapping_mul(0x38b3_4ae5).rotate_left(17).wrapping_mul(0xa1e3_8b93);
+        h2 = h2
+            .rotate_left(17)
+            .wrapping_add(h3)
+            .wrapping_mul(5)
+            .wrapping_add(0x0bca_a747);
+        k3 = k3
+            .wrapping_mul(0x38b3_4ae5)
+            .rotate_left(17)
+            .wrapping_mul(0xa1e3_8b93);
         h3 ^= k3;
-        h3 = h3.rotate_left(15).wrapping_add(h4).wrapping_mul(5).wrapping_add(0x96cd_1c35);
-        k4 = k4.wrapping_mul(0xa1e3_8b93).rotate_left(18).wrapping_mul(0x239b_961b);
+        h3 = h3
+            .rotate_left(15)
+            .wrapping_add(h4)
+            .wrapping_mul(5)
+            .wrapping_add(0x96cd_1c35);
+        k4 = k4
+            .wrapping_mul(0xa1e3_8b93)
+            .rotate_left(18)
+            .wrapping_mul(0x239b_961b);
         h4 ^= k4;
-        h4 = h4.rotate_left(13).wrapping_add(h1).wrapping_mul(5).wrapping_add(0x32ac_3b17);
+        h4 = h4
+            .rotate_left(13)
+            .wrapping_add(h1)
+            .wrapping_mul(5)
+            .wrapping_add(0x32ac_3b17);
     }
 
     let tail = chunks.remainder();
@@ -104,32 +132,66 @@ fn murmur3_x86_128(bytes: &[u8], seed: u32) -> [u32; 4] {
     let mut k2 = 0_u32;
     let mut k3 = 0_u32;
     let mut k4 = 0_u32;
-    if tail.len() >= 15 { k4 ^= u32::from(tail[14]) << 16; }
-    if tail.len() >= 14 { k4 ^= u32::from(tail[13]) << 8; }
+    if tail.len() >= 15 {
+        k4 ^= u32::from(tail[14]) << 16;
+    }
+    if tail.len() >= 14 {
+        k4 ^= u32::from(tail[13]) << 8;
+    }
     if tail.len() >= 13 {
         k4 ^= u32::from(tail[12]);
-        h4 ^= k4.wrapping_mul(0xa1e3_8b93).rotate_left(18).wrapping_mul(0x239b_961b);
+        h4 ^= k4
+            .wrapping_mul(0xa1e3_8b93)
+            .rotate_left(18)
+            .wrapping_mul(0x239b_961b);
     }
-    if tail.len() >= 12 { k3 ^= u32::from(tail[11]) << 24; }
-    if tail.len() >= 11 { k3 ^= u32::from(tail[10]) << 16; }
-    if tail.len() >= 10 { k3 ^= u32::from(tail[9]) << 8; }
+    if tail.len() >= 12 {
+        k3 ^= u32::from(tail[11]) << 24;
+    }
+    if tail.len() >= 11 {
+        k3 ^= u32::from(tail[10]) << 16;
+    }
+    if tail.len() >= 10 {
+        k3 ^= u32::from(tail[9]) << 8;
+    }
     if tail.len() >= 9 {
         k3 ^= u32::from(tail[8]);
-        h3 ^= k3.wrapping_mul(0x38b3_4ae5).rotate_left(17).wrapping_mul(0xa1e3_8b93);
+        h3 ^= k3
+            .wrapping_mul(0x38b3_4ae5)
+            .rotate_left(17)
+            .wrapping_mul(0xa1e3_8b93);
     }
-    if tail.len() >= 8 { k2 ^= u32::from(tail[7]) << 24; }
-    if tail.len() >= 7 { k2 ^= u32::from(tail[6]) << 16; }
-    if tail.len() >= 6 { k2 ^= u32::from(tail[5]) << 8; }
+    if tail.len() >= 8 {
+        k2 ^= u32::from(tail[7]) << 24;
+    }
+    if tail.len() >= 7 {
+        k2 ^= u32::from(tail[6]) << 16;
+    }
+    if tail.len() >= 6 {
+        k2 ^= u32::from(tail[5]) << 8;
+    }
     if tail.len() >= 5 {
         k2 ^= u32::from(tail[4]);
-        h2 ^= k2.wrapping_mul(0xab0e_9789).rotate_left(16).wrapping_mul(0x38b3_4ae5);
+        h2 ^= k2
+            .wrapping_mul(0xab0e_9789)
+            .rotate_left(16)
+            .wrapping_mul(0x38b3_4ae5);
     }
-    if tail.len() >= 4 { k1 ^= u32::from(tail[3]) << 24; }
-    if tail.len() >= 3 { k1 ^= u32::from(tail[2]) << 16; }
-    if tail.len() >= 2 { k1 ^= u32::from(tail[1]) << 8; }
+    if tail.len() >= 4 {
+        k1 ^= u32::from(tail[3]) << 24;
+    }
+    if tail.len() >= 3 {
+        k1 ^= u32::from(tail[2]) << 16;
+    }
+    if tail.len() >= 2 {
+        k1 ^= u32::from(tail[1]) << 8;
+    }
     if !tail.is_empty() {
         k1 ^= u32::from(tail[0]);
-        h1 ^= k1.wrapping_mul(0x239b_961b).rotate_left(15).wrapping_mul(0xab0e_9789);
+        h1 ^= k1
+            .wrapping_mul(0x239b_961b)
+            .rotate_left(15)
+            .wrapping_mul(0xab0e_9789);
     }
 
     let length = bytes.len() as u32;
@@ -169,17 +231,6 @@ fn finalize(mut value: u32) -> u32 {
     value ^ (value >> 16)
 }
 
-#[cfg(test)]
-mod fingerprint_tests {
-    use super::*;
-
-    #[test]
-    fn fingerprint_vectors_are_stable() {
-        assert_eq!(fingerprint128(b"", 0), "00000000000000000000000000000000");
-        assert_eq!(fingerprint128(b"foo", 0), "251b7c576525b6606525b6606525b660");
-    }
-}
-
 pub(crate) fn zeroed_bytes(byte_length: usize) -> Result<std::vec::Vec<u8>, RasterArtifactError> {
     let mut bytes = std::vec::Vec::new();
     bytes
@@ -187,4 +238,18 @@ pub(crate) fn zeroed_bytes(byte_length: usize) -> Result<std::vec::Vec<u8>, Rast
         .map_err(|_| RasterArtifactError::Allocation)?;
     bytes.resize(byte_length, 0);
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod fingerprint_tests {
+    use super::*;
+
+    #[test]
+    fn fingerprint_vectors_are_stable() {
+        assert_eq!(fingerprint128(b"", 0), "00000000000000000000000000000000");
+        assert_eq!(
+            fingerprint128(b"foo", 0),
+            "251b7c576525b6606525b6606525b660"
+        );
+    }
 }

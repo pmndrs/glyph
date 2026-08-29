@@ -121,7 +121,7 @@ export function msdfDescriptorRasterKey(descriptor: MsdfDescriptor = defaultDesc
 }
 
 /** Derive the MTSDF raster key shared by discovery, bakers, and runtimes. */
-export async function msdfRasterKey(options?: MsdfOptions): Promise<RasterKey> {
+export function msdfRasterKey(options?: MsdfOptions): RasterKey {
   return msdfDescriptorRasterKey(msdfDescriptor(options));
 }
 

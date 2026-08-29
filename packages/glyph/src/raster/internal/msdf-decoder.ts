@@ -54,11 +54,11 @@ export async function decodeMsdfData(font: RasterDecodeFont, raster: RasterDecod
   const coverage = decodeRasterCoverage(extension, font.glyphCount, (view) => raster.view(view), 'MSDF');
   if (
     raster.rasterKey !==
-    (await msdfRasterKey({
+    msdfRasterKey({
       emSize,
       pixelRange,
       ...(coverage === undefined ? {} : { coverage: coverage.descriptor }),
-    }))
+    })
   ) {
     throw new TypeError('MSDF raster key does not match its generation descriptor');
   }

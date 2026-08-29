@@ -157,7 +157,7 @@ async function validateMsdfSemantics(
   if (canonicalJson(context.descriptor) !== canonicalJson(canonicalDescriptor)) {
     fail('MTSDF_DESCRIPTOR', 'descriptor is not in canonical MTSDF form', '/descriptor');
   }
-  const expectedKey = await msdfDescriptorRasterKey(context.descriptor);
+  const expectedKey = msdfDescriptorRasterKey(context.descriptor);
   if (context.rasterKey !== expectedKey) {
     fail('RASTER_KEY', 'expected raster key does not match the MTSDF descriptor', '/rasterKey');
   }

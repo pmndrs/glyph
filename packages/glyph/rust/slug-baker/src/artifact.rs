@@ -360,7 +360,10 @@ mod tests {
         };
         let first = bake_slug(INTER, request()).unwrap();
         let second = bake_slug(INTER, request()).unwrap();
-        assert_eq!(first.artifacts[0].fingerprint, second.artifacts[0].fingerprint);
+        assert_eq!(
+            first.artifacts[0].fingerprint,
+            second.artifacts[0].fingerprint
+        );
         assert_eq!(first.report.metadata_bytes, 2937 * 40);
     }
 
