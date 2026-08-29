@@ -54,7 +54,7 @@ flowchart LR
   Font -->|bindFontStack| Backend
   Backend -->|createPlanner| RenderPlanner[RenderPlanner]
   RenderPlanner -->|createText / update| Text[RetainedText]
-  Text -->|layout / glyphs| Query[Current desired layout]
+  Text -->|measure / glyphs| Query[Current desired layout]
   RenderPlanner -->|publish| Candidate[Plan candidate]
   Candidate -->|acquirePayload| Portable[Portable resources]
   Candidate -->|semantic readers| Records[Buffers / patches / primitives / draws]
@@ -298,7 +298,7 @@ const title = planner.createText({
   font: stack,
   text: 'Hello',
   style: { fontSize: 48 },
-  contentBox: { width: { mode: 'at-most', size: 800 } },
+  constraints: { width: { mode: 'at-most', size: 800 } },
 });
 ```
 
@@ -312,15 +312,15 @@ Text mutation records desired state and stays cheap until a query or publication
 ```ts
 title.update({ text: 'Hello, Glyph' });
 
-const metrics = title.layout();
+const metrics = title.measure();
 const positioned = title.glyphs();
 
 const result = planner.publish({ semanticViews: 'measurement' });
 if (!result.accepted) reportRendererError(result.error);
 ```
 
-`layout()` returns aggregate dimensions, intrinsic widths, line metrics, baselines, and glyph count. A cache miss may
-synchronously incur font and layout lookup work. `glyphs()` returns caller-owned positioned columns and ink boxes; a cache
+`measure()` returns aggregate dimensions, intrinsic widths, line metrics, baselines, and glyph count. A cache miss may
+synchronously incur font and measure lookup work. `glyphs()` returns caller-owned positioned columns and ink boxes; a cache
 miss may synchronously incur glyph lookup and positioning, and every call copies its columns. Neither query publishes a
 draw. Both canonical constraint caches are bounded three-entry LRUs. `publish()` shapes current desired state, compiles a
 plan, calls the target, and advances acceptance only after the target commits.

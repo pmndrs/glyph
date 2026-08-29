@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:357a071012a443bf06b74a0ebf65375479cf34894ebb08aa6bb92724266d9e21'
+source_digest: 'sha256:d4993d87fd5fa654b013c232368422505a428db0768674531bf9629e67fa7c5a'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -249,11 +249,11 @@ The three live technique scenes moved to target-v1 next. `techniques/{bitmap,mts
 standalone `Text` — an implicit batch of one, deliberately left off `TextGroup` so the single-paragraph adapter path stays
 exercised and their `drawCount` stays directly comparable with merged v0 — from the `LoadedFont` that
 `workloads/font-assets` already produced, commit it by parenting and forcing `updateMatrixWorld`, and read `error` plus
-explicit `layout()` or `glyphs()` results instead of awaiting readiness. Flat merged-v0 properties become nested `contentBox`, `style`, and `paint`, with
-the paragraph measure expressed as an exact width constraint and the live colour as `#ffffff`, which resolves through the
-same transfer function as the numeric constant it replaces. Because a rejected generation would otherwise leave the failed
-candidate font leased and undisposable, each scene commits through one apply-or-roll-back step that restores the previously
-committed inputs before rethrowing.
+explicit `measure()` or `glyphs()` results instead of awaiting readiness. Flat merged-v0 properties become `style`,
+`layout`, and `constraints`; the paragraph measure uses an exact width constraint and the live colour is `#ffffff`, which
+resolves through the same transfer function as the numeric constant it replaces. Desired-state validation is atomic at
+`Text.set()`: a rejected update leaves current desired state untouched, while renderer failures surface without restoring
+stale authored inputs.
 
 Their presentation transitions are now owned by the application. Merged v0 exported `captureBitmapGlyphPositions` and
 `createBitmapGlyphPositionTransition`, which packaged glyph identity matching and interpolation together for Bitmap only.

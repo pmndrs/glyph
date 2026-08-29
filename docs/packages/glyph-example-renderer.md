@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:f4edd4d5dd31d33cd4005fd3bd20d3193d140f557dec5555af424e0741dfb511'
+source_digest: 'sha256:c2525dc7ed26f4846a5ead3d7b8e321ec1af6de7fa79088af2d999fed33da298'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -61,7 +61,7 @@ built ESM and declarations.
 `ExampleTextEngine` receives a `GlyphEngine`, creates its backend through `glyphEngine.createBackend()`, installs its policy,
 binds immutable fonts/stacks, opens one synchronous `RenderPlanner`, and exposes `createText()`, `update()`, `publish()`,
 and disposal. The render planner owns every paragraph/style/flow identity and one `PlanTarget`; callers do not author raw IDs,
-revisions, acknowledgments, request bytes, or ABI numbers. `layout()` and `glyphs()` remain available on the retained core
+revisions, acknowledgments, request bytes, or ABI numbers. `measure()` and `glyphs()` remain available on the retained core
 text when an integration needs current desired metrics or positioned glyphs before publication.
 
 The plan target consumes the borrowed A/B publication synchronously. `plan-reader.ts` decodes resources, buffers, patches,

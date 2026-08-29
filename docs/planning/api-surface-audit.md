@@ -97,11 +97,11 @@ F2. **Stop the per-frame rejection loop.** The first proposed fix was a rejectio
 
 F3. **Validate `spans` at `set()`, not at `synchronize()`.** The array carries four invariants enforced at three different times by three different policies: cluster alignment is silently repaired at `set()`, inverted ranges are forwarded and rejected every frame, collapsed ranges are silently dropped at `synchronize()`, and disjoint-or-nested is not enforced at all. Inverted and out-of-range spans are caller arithmetic errors and should throw from `set()` where the stack points at the caller, as `normalizedColumns` and `normalizeCapacity` already do. Cluster resolution stays silent — it is correct and matches CSSOM View.
 F4. **Report partial application in the origin lane.** `setGlyphOriginOverrides` and `snapshotGlyphOrigins` both `continue` past a stable id with no record, so an animation frame writing two hundred origins may apply forty with no error and no count. `snapshotGlyphOrigins` additionally seeds `displayed` from the caller's shaped-space fallback, returning one `Float32Array` holding two coordinate spaces with nothing marking the boundary.
-F5. **Guarantee the parallel-array invariant.** The one real consumer hand-wrote `assertParallelGlyphIdentity` over six public arrays. Construct `ParagraphLayoutInspection` behind a factory that cannot produce a ragged one, or make `glyphCount` the single authority and document every array as sliced to it.
+F5. **Guarantee the parallel-array invariant.** The one real consumer hand-wrote `assertParallelGlyphIdentity` over six public arrays. Construct `GlyphLayoutInspection` behind a factory that cannot produce a ragged one, or make `glyphCount` the single authority and document every array as sliced to it.
 F6. **Make late `registerThreeRasterPlanProgram` an error. Resolved.** The registry is module-global and each Three coordinator snapshots it once at creation. Registration after a live snapshot now throws immediately and names the technique and snapshot count; weak snapshot references do not let an abandoned coordinator poison future registration.
 F7. **Export the `glyphFlags` bit names or drop the field.** Sixteen bits whose meaning lives only in a planning document, which a consumer would have to find and then hardcode indices from.
-F8. **Split the React inline props type.** `R3fTextChild` is typed as the full outer props, but `flattenText` honours only `font`, `style`, `paint`, `material`, and `children`. `contentBox`, `capacity`, `pixelSnapping`, `rasterPixelRatio`, `onError`, `ref`, and every `Object3D` prop are silently discarded, and a `ref` on a nested `Text` never fires. Flutter's split of `RichText` (box-level) from `TextSpan` (inline-level) is the precedent.
-F9. **Re-export `ParagraphLayoutSummary` and `ParagraphLayoutInspection` from `/three`.** `Text.layout()` and `Text.glyphs()` return types a `/three` importer cannot name.
+F8. **Split the React inline props type. Resolved at runtime.** Nested `Text` compiles only `font`, `style`, `material`, and `children`; box-level `layout`, `constraints`, capacity, renderer, and `Object3D` props reject at the nested boundary instead of disappearing silently. JSX cannot enforce every recursive child distinction statically.
+F9. **Re-export `ParagraphLayoutSummary` and `GlyphLayoutInspection` from `/three`. Resolved.** `Text.measure()` and `Text.glyphs()` now return types a `/three` importer can name.
 
 F10. **Give `RasterTechnique` behaviour, the way `RasterBakerModule` already has it.** The bake and raster sides are dependent twins across the artifact boundary, and only one of them got this pass.
 
@@ -156,12 +156,12 @@ failure-isolation constraints.
 
 ## Reshape
 
-| Surface                                                     | Resolution                                                                                                                                                                                                                                                             |         State          | Precedent                                   |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------: | ------------------------------------------- |
-| `Text.layout()` previously required a committed scene frame | An attached `Text.layout()` now measures current desired local state synchronously before the first frame, without matrix traversal, renderer realization, plan publication, or revision advancement. Detached measurement belongs to `Paragraph.layout(constraints)`. |        ✅ D-282        | Flutter `TextPainter.layout()` then `.size` |
-| `Text.error` / `onError` was the only signal                | `commitState()` distinguishes `unbound`, `pending`, `committed`, and `failed`.                                                                                                                                                                                         |        ✅ D-272        | troika `onSync`                             |
-| No anchoring                                                | Add `anchorX`/`anchorY` as a separate Three positioning feature. It must not alter renderer-neutral paragraph measurement or force semantic inspection on every render.                                                                                                |           ⬜           | troika and drei                             |
-| No glyph extents                                            | Paragraph and line summaries now publish advance and ink extents; positioned glyph output carries advances and ink boxes; Three exposes cluster-aware `caretAt()` and `selectionRects()`.                                                                              | ✅ D-274 through D-276 | Skia, Flutter, troika, DOM                  |
+| Surface                                                      | Resolution                                                                                                                                                                                                                                                                                            |         State          | Precedent                                   |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------: | ------------------------------------------- |
+| `Text.measure()` previously required a committed scene frame | `Text.measure()` now measures current desired local state synchronously before the first frame, without matrix traversal, renderer realization, plan publication, or revision advancement. A detached `Text` uses its implicit planner; a renderer-free caller uses `Paragraph.measure(constraints)`. |        ✅ D-282        | Flutter `TextPainter.layout()` then `.size` |
+| `Text.error` / `onError` was the only signal                 | `commitState()` distinguishes `unbound`, `pending`, `committed`, and `failed`.                                                                                                                                                                                                                        |        ✅ D-272        | troika `onSync`                             |
+| No anchoring                                                 | Add `anchorX`/`anchorY` as a separate Three positioning feature. It must not alter renderer-neutral paragraph measurement or force semantic inspection on every render.                                                                                                                               |           ⬜           | troika and drei                             |
+| No glyph extents                                             | Paragraph and line summaries now publish advance and ink extents; positioned glyph output carries advances and ink boxes; Three exposes cluster-aware `caretAt()` and `selectionRects()`.                                                                                                             | ✅ D-274 through D-276 | Skia, Flutter, troika, DOM                  |
 
 ## Goal and current state
 
@@ -217,7 +217,7 @@ checkpoint. Unchanged frames do no engine or realization retry work.
 
     Bitmap shipped first, end to end: typed schemas and vertex/fragment stages under `src/typegpu/`, the `./typegpu` subpath export, `typegpu` as an optional peer, and build-time embedding of the shader metadata so the published functions resolve without consumer-side tooling. Parity is pinned against the TSL realization's actual generated WGSL — extracted device-free at test time, not translated by eye — which surfaced two facts the port reproduces exactly: coverage pages are read as clamped nearest texels through `textureLoad` (data textures never filter), and pixel snapping multiplies reciprocals in the emitter's own order. MSDF, Slug, and decoration remain.
 
-Two findings that originally de-risked the list are now implemented. `Paragraph` and pre-frame `Text.layout()` both use the paragraph-scoped synchronous measurement call, while the publication ownership protocol gives an external renderer an owned copy when it must cross another engine call or an asynchronous device boundary. The render plan remains the integration surface: `clipId`, `depthKey`, `orderToken`, `materialId`, `transformId`, named buffers, named resources, geometry, patches, and retirements are data an engine maps to its renderer.
+Two findings that originally de-risked the list are now implemented. `Paragraph` and pre-frame `Text.measure()` both use the paragraph-scoped synchronous measurement call, while the publication ownership protocol gives an external renderer an owned copy when it must cross another engine call or an asynchronous device boundary. The render plan remains the integration surface: `clipId`, `depthKey`, `orderToken`, `materialId`, `transformId`, named buffers, named resources, geometry, patches, and retirements are data an engine maps to its renderer.
 
 Corrections this document has already absorbed, recorded so they are not re-derived: `/core` has consumers and stays published; paragraph and line ascent/descent now ship beside first/last baselines; `Paragraph.layoutRevision` is paragraph-scoped while engine and plan revisions remain publication-scoped; `stageBatch` from D-118 was never implemented and was superseded by the retained render-plan contract; `FontLoadError` and `createFontStack` were wrongly listed for deletion; the uikit shadow-adapter stage is not downstream of this cleanup; root `createParagraph()` initializes renderer-free measurement because applications encounter Paragraph; and "minimum-content width from a zero-width measurement" was wrong as an implementation recipe -- a literal zero-width flow is degenerate, so intrinsic widths are scanned from the cluster arena in the same measurement pass.
 
@@ -233,7 +233,7 @@ What is still worth deciding before release is whether every entry point should 
 
 The repository has many benchmarks and does not trust them. The complaint is subtle drift: numbers move between runs for reasons unrelated to the change under test, so nobody can say whether a change helped or hurt. A cleanup this size is worth little if its cost cannot be measured.
 
-Performance benchmarking moves onto **pmndrs/labs**, which exists to benchmark in environments that are not fully stable. The scope is the core API rather than the renderer: shaping and line breaking through `Paragraph.layout`, positioned-column materialization through `Paragraph.glyphs`, the frame-wire compile, the render-plan read, the retention handoff, and font binding. Each path needs a stated unit of work and a stated regression threshold.
+Performance benchmarking moves onto **pmndrs/labs**, which exists to benchmark in environments that are not fully stable. The scope is the core API rather than the renderer: shaping and line breaking through `Paragraph.measure`, positioned-column materialization through `Paragraph.glyphs`, the frame-wire compile, the render-plan read, the retention handoff, and font binding. Each path needs a stated unit of work and a stated regression threshold.
 
 The plan is `docs/planning/benchmark-trust.md`. It must answer how a run establishes that a difference is real rather than noise, what the baseline is and how it updates without laundering a regression into the record, how it survives shared CI runners, which existing benchmarks are replaced or deleted, and what it cannot tell us.
 
@@ -241,38 +241,37 @@ The plan is `docs/planning/benchmark-trust.md`. It must answer how a run establi
 
 The production report was accurate: positioning was hard because the package computed geometry it did not publish and made a Three caller traverse the scene before measurement existed. The data and timing gaps are now closed without making matrices part of local layout.
 
-| Need                           | Current API                                                                                                                                                                                                                                                                            |  State   |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------: |
-| Paragraph and line baselines   | `ParagraphMeasurement` and each `ParagraphLineMetrics` publish `ascent`, `descent`, and `lineHeight`, with `ascent + descent === lineHeight`. `firstBaseline` and `lastBaseline` remain box-relative.                                                                                  |    ✅    |
-| Advance versus visible extent  | `contentWidth`/`contentHeight` are advance extents for layout hosts. `inkBounds` is the outline union for visual positioning. The names prevent silently substituting one for the other.                                                                                               |    ✅    |
-| Per-glyph geometry             | `Paragraph.glyphs()` returns caller-owned, internally consistent columns with shaped advances, glyph ink boxes, and resolved bidi levels. Three's `snapshotGlyphs()`, `caretAt()`, and `selectionRects()` use that same engine geometry and preserve logical cluster boundaries.       |    ✅    |
-| Detached measurement           | `await createParagraph(...)` initializes renderer-free measurement once; later `layout(constraints)` calls are synchronous, scene-free, and leave authored state unchanged. `glyphs(constraints)` is a separate positioned query so a sizing probe does not allocate per-glyph arrays. |    ✅    |
-| Attached pre-frame measurement | After `group.add(text)` or any other scene attachment, `text.layout()` measures current desired state immediately. It does not call `updateMatrixWorld()`, publish a render plan, realize materials/resources, or change `commitState()` from `pending`.                               | ✅ D-282 |
-| Positive render state          | `text.commitState()` returns `unbound`, `pending`, `committed`, or `failed`; callers no longer infer success from the absence of `error`.                                                                                                                                              |    ✅    |
-| Common Three anchoring         | `anchorX`/`anchorY` remains separate work. It belongs to Three placement, not renderer-neutral paragraph measurement.                                                                                                                                                                  |    ⬜    |
+| Need                          | Current API                                                                                                                                                                                                                                                                             |  State   |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------: |
+| Paragraph and line baselines  | `ParagraphMeasurement` and each `ParagraphLineMetrics` publish `ascent`, `descent`, and `lineHeight`, with `ascent + descent === lineHeight`. `firstBaseline` and `lastBaseline` remain box-relative.                                                                                   |    ✅    |
+| Advance versus visible extent | `contentWidth`/`contentHeight` are advance extents for layout hosts. `inkBounds` is the outline union for visual positioning. The names prevent silently substituting one for the other.                                                                                                |    ✅    |
+| Per-glyph geometry            | `Paragraph.glyphs()` returns caller-owned, internally consistent columns with shaped advances, glyph ink boxes, and resolved bidi levels. Three's `snapshotGlyphs()`, `caretAt()`, and `selectionRects()` use that same engine geometry and preserve logical cluster boundaries.        |    ✅    |
+| Detached measurement          | `await createParagraph(...)` initializes renderer-free measurement once; later `measure(constraints)` calls are synchronous, scene-free, and leave authored state unchanged. `glyphs(constraints)` is a separate positioned query so a sizing probe does not allocate per-glyph arrays. |    ✅    |
+| Pre-frame `Text` measurement  | `text.measure()` measures current desired state immediately, attached or detached. It does not call `updateMatrixWorld()`, publish a render plan, realize materials/resources, or change `commitState()` from `pending`.                                                                | ✅ D-282 |
+| Positive render state         | `text.commitState()` returns `unbound`, `pending`, `committed`, or `failed`; callers no longer infer success from the absence of `error`.                                                                                                                                               |    ✅    |
+| Common Three anchoring        | `anchorX`/`anchorY` remains separate work. It belongs to Three placement, not renderer-neutral paragraph measurement.                                                                                                                                                                   |    ⬜    |
 
 The intended orders are now explicit:
 
 ```ts
 // Layout host: no scene or renderer.
-const paragraph = await createParagraph({ font, text, style, policy });
-const metrics = paragraph.layout({ width: { mode: 'at-most', size: availableWidth } });
+const paragraph = await createParagraph({ font, text, style, layout });
+const metrics = paragraph.measure({ width: { mode: 'at-most', size: availableWidth } });
 const positioned = paragraph.glyphs({ width: { mode: 'exact', size: resolvedWidth } });
 
-// Three: attach to establish planner ownership, then measure before frame one.
-const text = new Text({ font, text: 'Measured before render', style, contentBox });
-group.add(text);
-const desiredMetrics = text.layout();
+// Three: measure before frame one; attachment is optional.
+const text = new Text({ font, text: 'Measured before render', style, layout, constraints });
+const desiredMetrics = text.measure();
 // renderer.render(scene, camera) later publishes and realizes the draw plan.
 ```
 
-Late binding remains intentional. Construction and `set()` validate and record desired state without shaping. The call that needs an answer performs the work: `Paragraph.layout()` for a renderer-free host, attached `Text.layout()` for Three pre-frame metrics, or normal renderer traversal when no early measurement is requested. The speculative measurement transaction can be adopted by the next frame; measurement does not become a hidden render.
+Late binding remains intentional. Construction and `set()` validate and record desired state without shaping. The call that needs an answer performs the work: `Paragraph.measure()` for a renderer-free host, `Text.measure()` for Three pre-frame metrics, or normal renderer traversal when no early measurement is requested. The speculative measurement transaction can be adopted by the next frame; measurement does not become a hidden render.
 
 ### Third-party layout hosts: uikit and Yoga
 
 The same gap decides whether `pmndrs/glyph` can be the text solution for pmndrs/uikit. [uikit integration](uikit-integration.md) specifies the contract; this section records what is actually shipped against it.
 
-The package-side measurement contract now exists. `ParagraphAxisConstraint` maps directly to Yoga's `Undefined`, `AtMost`, and `Exactly`; a `Paragraph` owns stable flow policy while `layout(constraints)` and `glyphs(constraints)` accept only the two axis probes. A host resolves CSS percentages, minimums, maximums, padding, and inheritance before this boundary, because those belong to its box tree rather than to one text paragraph.
+The package-side measurement contract now exists. `AxisConstraint` maps directly to Yoga's `Undefined`, `AtMost`, and `Exactly`; a `Paragraph` owns stable flow layout while `measure(constraints)` and `glyphs(constraints)` accept only the two axis probes. A host resolves CSS percentages, minimums, maximums, padding, and inheritance before this boundary, because those belong to its box tree rather than to one text paragraph.
 
 ```ts
 import { createParagraph } from '@pmndrs/glyph';
@@ -281,10 +280,10 @@ const paragraph = await createParagraph({
   font, // already-loaded Font or FontStack
   text,
   style: { direction: inheritedDirection, fontSize: 16 },
-  policy: { wrap: 'word', align: 'start', overflow: 'visible' },
+  layout: { wrap: 'word', align: 'start', overflow: 'visible' },
 });
 
-const metrics = paragraph.layout({
+const metrics = paragraph.measure({
   width:
     yogaWidthMode === Yoga.MeasureMode.Undefined
       ? { mode: 'unconstrained' }
@@ -300,9 +299,9 @@ The old hazards are gone at this boundary:
 
 | Previous hazard                                      | Current contract                                                                                                                                                                                                          |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Yoga measurement traversed a Three scene             | `Paragraph.layout()` has no scene or renderer dependency.                                                                                                                                                                 |
-| A speculative probe mutated authored state           | Constraints are call arguments; authored content and stable policy change only through `update()`.                                                                                                                        |
-| Measurement allocated positioned glyph columns       | `layout()` returns allocation-light metrics; `glyphs()` is the explicit positioned query.                                                                                                                                 |
+| Yoga measurement traversed a Three scene             | `Paragraph.measure()` has no scene or renderer dependency.                                                                                                                                                                |
+| A speculative probe mutated authored state           | Constraints are call arguments; authored content and stable paragraph layout change only through `update()`.                                                                                                              |
+| Measurement allocated positioned glyph columns       | `measure()` returns allocation-light metrics; `glyphs()` is the explicit positioned query.                                                                                                                                |
 | Errors arrived later on `TextGroup.error`            | Invalid constraints and impossible policy combinations throw from the call that supplied them.                                                                                                                            |
 | Results borrowed mutable Wasm memory                 | Readers copy out of Wasm; canonical positioned results remain private; every public positioned result receives fresh typed-array columns. A later engine call or caller mutation cannot detach or corrupt another answer. |
 | Every host had to derive intrinsic widths separately | `minContentWidth` and `maxContentWidth` ride the same measurement result.                                                                                                                                                 |
@@ -358,10 +357,10 @@ const needsReadback = node.hasNewLayout() || paragraph.layoutRevision !== lastSe
 
 Additional requirements, from adversarial review of this plan:
 
-18. Define the font-readiness state machine. **Narrowed:** `Paragraph` construction requires a loaded font selection, so `layout()` has no pending or fallback-metrics result. If a future API admits unresolved fonts, it needs a new explicit state machine rather than changing this synchronous contract silently.
-19. Specify layout purity precisely rather than asserting it. **Landed:** authored changes invalidate caches; constraints form the per-query key; equal measurement queries return the identical immutable host-owned object; positioned queries return fresh caller-owned columns backed by a private canonical cache; different paragraphs own independent sessions; queries are synchronous, do not call back into the host, and copy result memory out of Wasm.
+18. Define the font-readiness state machine. **Narrowed:** `Paragraph` construction requires a loaded font selection, so `measure()` has no pending or fallback-metrics result. If a future API admits unresolved fonts, it needs a new explicit state machine rather than changing this synchronous contract silently.
+19. Specify measurement purity precisely rather than asserting it. **Landed:** authored changes invalidate caches; constraints form the per-query key; equal measurement queries return the identical immutable host-owned object; positioned queries return fresh caller-owned columns backed by a private canonical cache; different paragraphs own independent planners; queries are synchronous, do not call back into the host, and copy result memory out of Wasm.
 20. Complete the constraint model. **Open documentation:** percentages, min/max, padding, and definite-versus-indefinite box resolution belong to the host before it supplies `unconstrained`, `at-most`, or `exact`.
-21. Specify direction inheritance. **Open documentation:** the host resolves its inherited direction into `ParagraphStyle.direction`; the package must state the `start`/`end` convention under RTL beside that boundary.
+21. Specify direction inheritance. **Open documentation:** the host resolves its inherited direction into `TextStyle.direction`; the package must state the `start`/`end` convention under RTL beside that boundary.
 22. Specify the baseline contract, not just the metrics. **Partly landed:** box-relative baselines and line ascent/descent are explicit; empty-paragraph and host padding/border conventions still need a uikit-facing statement.
 23. Pin down the revision primitive. **Landed:** revision identity belongs to the `Paragraph` object, starts at zero, advances whenever the selected positioned output differs by a 96-bit digest, includes every renderer- and interaction-visible field, and excludes stable renderer IDs that do not alter the answer.
 

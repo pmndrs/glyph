@@ -387,7 +387,7 @@ const planner = backend.createPlanner({
 const text = planner.createText({ font: stack, text: 'Portable', style: { fontSize: 64 } });
 
 text.update({ text: 'Portable renderer' });
-const metrics = text.layout();
+const metrics = text.measure();
 const glyphs = text.glyphs();
 const acceptance = planner.publish();
 ```

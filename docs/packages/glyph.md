@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:e2b61fb1df5f56045bc6ff1b907ef80cd20d2815baf198918cc37dcc7a275742'
+source_digest: 'sha256:0477ef52b62439e58a8e0024c9809dc744386e1dd96876716a4b0d2221c2c0fd'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -205,9 +205,9 @@ is an engine defect and never enters this recovery path (D-285).
 
 `registerThreeRasterPlanProgram` refuses a technique registered after a runtime has read the registry (D-271), naming the
 technique instead of applying to nothing. Snapshot tracking uses weak registry references, so an abandoned runtime cannot
-keep its identity registry alive or permanently poison later registration after collection. `/three` also re-exports `ParagraphLayoutSummary`, `ParagraphLayoutInspection`,
-`ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a `/three` importer can name what
-`Text.layout()`, `Text.glyphs()`, and `ParagraphStyle.features` give it.
+keep its identity registry alive or permanently poison later registration after collection. `/three` also re-exports
+`ParagraphLayoutSummary`, `GlyphLayoutInspection`, `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a
+`/three` importer can name what `Text.measure()`, `Text.glyphs()`, and `TextStyle.features` give it.
 
 One baked GLB may expose several raster techniques without repeating its input identity. Root
 `loadFont(input, rasters, options?)` accepts a nonempty raster tuple and returns a position-preserving tuple of `Font`
@@ -357,7 +357,7 @@ selected font binding—not a `Text` technique selector—carries the renderer p
 
 Publication emits no semantic readback by default. A renderer that needs current local bounds requests the measurement
 sidecar on the same update; core copies it into the retained text cache before target acceptance, so plan publication and
-bounds cost one Wasm hop. Every semantic mutation invalidates that cache immediately. `Text.layout()` then answers from
+bounds cost one Wasm hop. Every semantic mutation invalidates that cache immediately. `Text.measure()` then answers from
 the cache or explicitly measures current desired state, while `Text.glyphs()` similarly requests the positioned
 inspection lane. Neither query traverses matrices, realizes renderer resources, flips publication slots, or burns a
 revision.
@@ -459,7 +459,7 @@ The foundation currently has:
   later cursor-convergence regressions;
 - the package JavaScript/integration gate passing through the single-path public exports;
 - exact retained Amiri bidi, policy, ellipsis, clipping, UIKit-layout, and CJK contracts exercised by the browser
-  `paragraph-contracts` target through public `FontLoader`, `Text`, `TextGroup`, `layout()`, and `glyphs()`;
+  `paragraph-contracts` target through public `FontLoader`, `Text`, `TextGroup`, `measure()`, and `glyphs()`;
 - 32/32 pixel-exact public Bitmap WebGL2 frames against the independent CPU oracle, including resize and clipping, with
   zero differing channel bytes and pinned SHA-256 `a47930d3…15e893`;
 - source-font SHA-256, registered shaping hashes, and HarfRust/HarfBuzz oracle identities authenticated independently of

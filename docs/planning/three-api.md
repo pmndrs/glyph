@@ -1,7 +1,7 @@
 ---
 type: API Specification
 title: Three.js text API
-description: Reference for loading fonts, batching Text objects, querying committed Rust layout, and defining Three.js materials.
+description: Reference for loading fonts, batching Text objects, querying current Rust layout, and defining Three.js materials.
 documentation_type: reference
 tags: [api, threejs, fonts, text, batching, materials, layout]
 status: stable
@@ -64,8 +64,8 @@ const font = await loader.loadAsync({
 ```
 
 `FontLoader` extends `THREE.Loader`, participates in its `LoadingManager`, and accepts an optional `AbortSignal` on the
-request. Loaders sharing a manager share one text runtime. Disposing a loader releases its runtime only after every font
-loaded through that domain has also been disposed.
+request. Loaders sharing a manager share one Glyph engine domain. Disposing a loader releases its lease; loaded fonts
+retain the backing they still need until their own disposal.
 
 Source-font loading requires a caller-supplied runtime baker:
 
@@ -81,23 +81,19 @@ No runtime baker is pulled into the default Three bundle.
 const label = new Text({
   font,
   text: 'Hello world',
-  style: { fontSize: 32, lineHeight: 1.2, language: 'en' },
-  contentBox: {
-    width: { mode: 'at-most', size: 420 },
-    wrap: 'word',
-    overflow: 'clip',
-  },
-  paint: { color: '#ffffff' },
+  style: { fontSize: 32, lineHeight: 1.2, language: 'en', color: '#ffffff' },
+  layout: { wrap: 'word', overflow: 'clip' },
+  constraints: { width: { mode: 'at-most', size: 420 } },
 });
 
 scene.add(label);
 ```
 
-A standalone `Text` owns an implicit batch of one. It binds lazily after attachment, on either an explicit `layout()`
-query or ordinary scene traversal; construction does not shape or allocate renderer buffers.
+A standalone `Text` owns an implicit batch of one. It binds lazily on an explicit `measure()`/`glyphs()` query or
+ordinary scene traversal; construction does not shape or allocate renderer buffers. A query may run while detached.
 
 `Text` accepts either a plain string with explicit `spans`, or a formatted value built with `txt` and `span`. Span values
-may override font selection, shaping style, paint, and material.
+may override font selection, text style, and material.
 
 ## Batch text
 
@@ -127,7 +123,7 @@ Capacity policy controls the instance arena:
 | `fixed` | Keep the last accepted draw while desired text exceeds the declared pre-shape slot budget. |
 
 `fixed` uses UTF-16 text length as a conservative pre-shape slot bound. Exceeding it is a requested renderer policy, not
-an engine failure: traversal leaves the last complete draw live, `commitState()` stays `pending`, and `layout()` still
+an engine failure: traversal leaves the last complete draw live, `commitState()` stays `pending`, and `measure()` still
 reports the desired paragraph. Shortening the text or increasing capacity is checked again on the next traversal, so
 recovery does not depend on a latch or unrelated input churn (D-282).
 
@@ -138,11 +134,11 @@ policy. `setCapacity()` changes the retained capacity policy without changing te
 
 ```ts
 label.text = 'Updated';
-label.style = { ...label.style, fontSize: 36 };
-label.contentBox = { width: { mode: 'exact', size: 500 }, wrap: 'word' };
-label.paint = { color: '#ffd166' };
+label.style = { ...label.style, fontSize: 36, color: '#ffd166' };
+label.layout = { wrap: 'word' };
+label.constraints = { width: { mode: 'exact', size: 500 } };
 
-label.set({ text: 'Final value', paint: { color: '#ffffff' } });
+label.set({ text: 'Final value', style: { color: '#ffffff' } });
 ```
 
 Setters change desired state. The nearest `TextGroup` applies all pending descendant changes together on its next
@@ -150,7 +146,7 @@ Setters change desired state. The nearest `TextGroup` applies all pending descen
 changes update the transform buffer and do not reshape or recompose text.
 
 One group traversal performs at most one mutating `pmndrs_glyph_engine_update` transaction for that group's pending
-values. An earlier `layout()` query uses the non-publishing paragraph measurement call and retains a speculative batch
+values. An earlier `measure()` query uses the non-publishing paragraph measurement call and retains a speculative batch
 candidate; the traversal adopts matching work rather than repeating it.
 
 Editor-style changes go through the same assignment. `label.text = next` states the string the paragraph now holds, and
@@ -187,9 +183,10 @@ offsets.
 **Offsets you author** reach it through the `spans` array, the one surface that carries raw numbers:
 
 ```ts
-const label = new Text({ font, text: 'abc', spans: [{ start: 0, end: 1, paint }] });
+const accent = { color: '#ff0000' };
+const label = new Text({ font, text: 'abc', spans: [{ start: 0, end: 1, style: accent }] });
 label.set({ text: 'ábc', spans: label.spans }); // 'a' and the mark are now one cluster spanning [0, 2)
-label.spans; // [{ start: 0, end: 2, paint }] -- the mark joined the style of its base
+label.spans; // [{ start: 0, end: 2, style: accent }] -- the mark joined the style of its base
 ```
 
 **Boundaries the tree compilers derive** reach it at the concatenation join that created them. `txt`/`span` and nested
@@ -235,27 +232,26 @@ scene traversal. A renderer-side failure leaves the last accepted draw state liv
 traversals do not retry it. Assigning new material or other renderer-relevant state requests a checkpoint from the last
 accepted plan revision; malformed engine output remains a defect rather than a supported recovery state (D-285).
 
-## Measure desired layout and inspect committed glyphs
+## Measure desired layout and inspect positioned glyphs
 
 ```ts
-const summary = label.layout();
+const summary = label.measure();
 const glyphs = label.glyphs();
 ```
 
-`layout()` synchronously requests an allocation-light `ParagraphLayoutSummary` for current desired state. The `Text`
-must be attached directly or beneath a `TextGroup`, because scene ancestry supplies the batch and session owner; use the
-renderer-neutral `Paragraph` API for detached measurement. The call does not traverse matrices, realize materials or GPU
-resources, publish draws, or change `commitState()` from `pending` to `committed`.
+`measure()` synchronously requests an allocation-light `ParagraphLayoutSummary` for current desired state. A detached
+`Text` uses its implicit standalone planner; a `Text` beneath a `TextGroup` uses that group's planner. The call does not
+traverse matrices, realize materials or GPU resources, publish draws, or change `commitState()` from `pending` to
+`committed`. Use the renderer-neutral `Paragraph` API when no Three object should exist.
 
-Sequential `layout()` calls in one group extend a full desired-lifecycle speculative transaction. Each query applies
+Sequential `measure()` calls in one group extend a full desired-lifecycle speculative transaction. Each query applies
 semantic mutations only for its paragraph; the first render traversal publishes the complete batch once and adopts the
 prepared work. Repeating an unchanged measurement returns the retained result object without another Wasm crossing.
 
-`glyphs()` is intentionally different: it inspects committed positioned output and copies per-line and per-glyph arrays.
-If semantic state is pending, that query takes the full renderer synchronization path first. Ordinary rendering never
-materializes either semantic view merely to draw. If renderer realization rejects the current update, `glyphs()`,
-`snapshotGlyphs()`, caret lookup, and selection lookup return `undefined` until explicit renderer-relevant invalidation
-successfully realizes a checkpoint; inspection never retries the rejected unchanged frame.
+`glyphs()` is intentionally different: it positions current desired text and copies per-line and per-glyph arrays. It
+still does not publish or realize renderer resources. Ordinary rendering never materializes either semantic view merely
+to draw. `snapshotGlyphs()`, caret lookup, and selection lookup remain renderer-accepted-state APIs and may return
+`undefined` while desired state is pending or a renderer candidate was rejected.
 
 The complete field semantics are defined by the [core layout-query reference](core-api.md#layout-query-values).
 

@@ -2,78 +2,75 @@
 
 Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for every Canvas.
 
-`@pmndrs/glyph` shapes and lays out text in Rust/Wasm, then publishes a retained render plan for the active renderer. The maintained Three.js integration supports Bitmap, MSDF, and Slug through WebGPU and Three's WebGL fallback.
-
-## Where to import from
-
-The root is the vocabulary of text — fonts, authoring, layout and measurement types, technique definition — and
-every consumer speaks it. `@pmndrs/glyph/three` and `@pmndrs/glyph/react` are integrations, and they publish only
-their own surface. `@pmndrs/glyph/core` is for implementing an integration: the render policy, the render plan, the
-frame wire and its handoff. It is additive to the root rather than parallel to it, so a custom renderer imports both.
-The [renderer integration guide](docs/guides/renderer-integration.md) walks that path end to end: declaring a
-technique schema, authoring and registering a policy, driving a retained plan, reading all seven plan tables, and
-implementing the retention and patch protocols.
-
-The repository's `glyph-example-raster` and `glyph-example-renderer` packages are the external-consumer proof of that
-boundary. The raster package publishes renderer-neutral data plus explicit `/typegpu` and `/tsl` shader artifacts; the
-renderer package consumes `/core` and `/typegpu` without Three.js and realizes named resources plus synthetic or
-supplied geometry through a real TypeGPU/WebGPU submission that produces changing pixels. Three-specific material and
-registration code belongs in `@pmndrs/glyph/three` or in the consumer's Three integration, never in the portable raster
-entrypoint. Importing a technique root registers only its
-portable plan; shader subpaths carry no renderer registration, so each engine or application explicitly selects the
-variant it supports.
-
-The rule, if you are deciding where something belongs: **a type an application can encounter lives at the root; a
-thing only an integrator constructs lives in `/core`.** That is why `Paragraph`, `Font`, and their measurement types
-are at the root, while engine, backend, retained-plan, policy, and plan-target construction stays in `/core`.
+`@pmndrs/glyph` retains authored text, shapes and lays it out in Rust/Wasm, then publishes a transient render plan for the active renderer. The maintained Three.js integration supports Bitmap, MSDF, and Slug through WebGPU and Three's WebGL fallback.
 
 ## Render text with React Three Fiber
 
 ```tsx
-import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
-import { msdf } from '@pmndrs/glyph/three/msdf';
-
-const interFont = { baked: '/fonts/Inter.font.glb' } as const;
-
-useFont.preload(interFont, msdf);
-
-function Labels() {
-  const inter = useFont(interFont, msdf);
-
-  return (
-    <TextGroup compositing="independent">
-      <Text
-        font={inter}
-        contentBox={{ width: { mode: 'at-most', size: 480 }, wrap: 'word' }}
-        style={{ fontSize: 32, lineHeight: 1.2 }}
-        paint={{ color: '#f4f7ff' }}
-      >
-        Hello <Text paint={{ color: '#70d6ff' }}>world</Text>
-      </Text>
-    </TextGroup>
-  );
-}
-```
-
-For a built-in technique, typed convenience hooks use the same R3F loader cache as generic `useFont`:
-
-```tsx
+import { Text, TextGroup } from '@pmndrs/glyph/react';
 import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
 import { useMSDF } from '@pmndrs/glyph/react/msdf';
 import { useSlug } from '@pmndrs/glyph/react/slug';
 
-function Fonts() {
-  const bitmap = useBitmapFont({ baked: '/fonts/inter.font.glb' }, { strikes: [16, 32] });
-  const msdf = useMSDF({ baked: '/fonts/inter.font.glb' });
-  const slug = useSlug({ baked: '/fonts/inter.font.glb' });
-}
+const VT323 = '/fonts/VT323.font.glb';
+const INTER = '/fonts/Inter.font.glb';
+const LOVERS_QUARREL = '/fonts/LoversQuarrel.font.glb';
 
-useBitmapFont.preload({ baked: '/fonts/inter.font.glb' }, { strikes: [16, 32] });
-useMSDF.preload({ baked: '/fonts/inter.font.glb' });
-useSlug.preload({ baked: '/fonts/inter.font.glb' });
+useMSDF.preload(INTER);
+
+function Labels() {
+  const inter = useMSDF(INTER);
+  const loversQuarrel = useSlug(LOVERS_QUARREL);
+  const vt323 = useBitmapFont(VT323, { strikes: [8, 16] });
+
+  return (
+    <>
+      <Text
+        font={loversQuarrel}
+        style={{ fontSize: 32, color: '#f7f7f7' }}
+        layout={{ align: 'center' }}
+        constraints={{ width: { mode: 'exact', size: 480 } }}
+        position={[0, -4, 0]}
+      >
+        Lorem <Text style={{ color: '#f70000' }}>Ipsum</Text>
+      </Text>
+      <TextGroup>
+        <Text
+          font={inter}
+          style={{ fontSize: 32, color: '#f7f7f7' }}
+          layout={{ align: 'center' }}
+          constraints={{ width: { mode: 'exact', size: 480 } }}
+          position={[0, -1, 0]}
+        >
+          Eos tempor iusto mollit reprehenderit dolor cillum.
+        </Text>
+        <Text
+          font={inter}
+          style={{ fontSize: 32, color: '#f7f7f7' }}
+          layout={{ align: 'center' }}
+          constraints={{ width: { mode: 'exact', size: 480 } }}
+          position={[0, -1, 0]}
+        >
+          Irure accusamus voluptate est cupidatat eu commodo.
+        </Text>
+      </TextGroup>
+      <Text
+        font={vt323}
+        style={{ fontSize: 8, color: '#f7f7f7' }}
+        layout={{ wrap: 'word' }}
+        constraints={{ width: { mode: 'at-most', size: 480 } }}
+        position={[0, 0, 0]}
+      >
+        lorem ipsum dolor sit amet consectetur adipiscing elit eiusmod anim vel proident nam sint quo laborum ut eu amet
+        quis placeat qui reprehenderit in ad est accusamus et cupiditate fugiat voluptas ipsum et lorem nulla aut animi
+        et aut reprehenderit harum commodo quas et pariatur sit omnis ad harum aute
+      </Text>
+    </>
+  );
+}
 ```
 
-An outer `Text` is a retained paragraph and a Three `Object3D`. A nested `Text` is an inline run: it inherits the surrounding font, style, paint, and material unless it overrides them, and creates no scene object. The runtime rejects box-level props on nested text because JSX does not preserve enough generic element identity for TypeScript to enforce that distinction at every composition boundary. Runs may not always land in the same draw if they cannot be batched with their parent.
+An outer `Text` is a retained paragraph and a Three `Object3D`. A nested `Text` is an inline run: it inherits the surrounding font, text style, and material unless it overrides them, and creates no scene object. The React integration rejects box-level props on nested text because JSX does not preserve enough generic element identity for TypeScript to enforce that distinction at every composition boundary. Runs may not always land in the same draw if they cannot be batched with their parent.
 
 `TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text semantics and lazily owns an implicit batch of one.
 
@@ -97,20 +94,20 @@ const labels = new TextGroup({ compositing: 'independent' });
 const label = new Text({
   font: inter,
   text: txt`Hello ${accent`world`}`,
-  contentBox: { width: { mode: 'at-most', size: 480 }, wrap: 'word' },
-  style: { fontSize: 32, lineHeight: 1.2 },
-  paint: { color: '#f4f7ff' },
+  style: { fontSize: 32, lineHeight: 1.2, color: '#f4f7ff' },
+  layout: { wrap: 'word' },
+  constraints: { width: { mode: 'at-most', size: 480 } },
 });
 
 labels.add(label);
 scene.add(labels);
 ```
 
-Three uses `txt` and `span` where React uses nested `Text`. A span may override its font selection, shaping style, paint, or material without manually maintaining UTF-16 ranges.
+Three uses `txt` and `span` where React uses nested `Text`. A span may override its font selection or text style without manually maintaining UTF-16 ranges; the Three `spans` form also accepts a material override.
 
 Add a `Text` directly to the scene when it does not need to share a batch. The nearest `TextGroup` applies all pending descendant changes together during Three's normal scene traversal.
 
-A content box may also declare `columns: { count, gap }` to flow one paragraph through side-by-side ordered columns. Columns fill in order without balancing, so the last column may run short, and an exact `width` is required.
+Paragraph layout may also declare `columns: { count, gap }` to flow one paragraph through side-by-side ordered columns. Columns fill in order without balancing, so the last column may run short, and an exact width constraint is required.
 
 Setters update the desired state, mutating the text or style property will not mark the label as dirty:
 
@@ -122,31 +119,30 @@ label.position.x += 1;
 
 Assigning `text` queues the narrowest UTF-16 edit between the previous string and the new one, so an editor sends one
 narrow update per keystroke without describing the edit itself.
-After a `Text` has scene ancestry, `layout()` synchronously measures its current desired state without traversing
-matrices, realizing renderer resources, or publishing a draw. `glyphs()` explicitly requests the committed line and
+`measure()` synchronously measures current desired state without traversing matrices, realizing renderer resources, or
+publishing a draw. `glyphs()` explicitly requests the current positioned line and
 glyph details.
 
 ## Measure before you render
 
-An attached `Text` can be measured before its first rendered frame. Attachment supplies batch ownership; measurement
-does not require `scene.updateMatrixWorld()` and does not create renderer resources:
+A `Text` can be measured before its first rendered frame, whether or not it has scene ancestry. Measurement does not
+require `scene.updateMatrixWorld()` and does not create renderer resources:
 
 ```ts
 scene.add(label);
-const measuredLabel = label.layout();
+const measuredLabel = label.measure();
 label.position.x = -measuredLabel.contentWidth / 2;
 renderer.render(scene, camera);
 ```
 
-When no scene ownership should exist yet, use `Paragraph`. It measures synchronously with no scene, renderer, world
-matrix, or committed frame — which is also what a flexbox engine needs from inside its measure callback. Calling
-`Text.layout()` while the text is detached throws and points to this API.
+Use `Paragraph` when no Three object should exist. It measures synchronously with no scene, renderer, world matrix, or
+committed frame—which is also what a flexbox engine needs from inside its measure callback.
 
 ```ts
 import { createParagraph, txt } from '@pmndrs/glyph';
 
-const paragraph = await createParagraph({ font: inter, text: txt`Hello world`, policy: { wrap: 'word' } });
-const measured = paragraph.layout({ width: { mode: 'at-most', size: 360 } });
+const paragraph = await createParagraph({ font: inter, text: txt`Hello world`, layout: { wrap: 'word' } });
+const measured = paragraph.measure({ width: { mode: 'at-most', size: 360 } });
 
 measured.contentWidth; // advance extent
 measured.firstBaseline; // from the box top edge
@@ -157,11 +153,11 @@ measured.minContentWidth; // longest unbreakable run, from the same pass
 Every value is paragraph-local: the origin is the box's top-left corner, positive X is right, positive Y is down.
 Scale and placement are yours to apply afterwards.
 
-`layout()` returns sizes, baselines, counts, and intrinsic widths without per-glyph array copies. A cache miss may
+`measure()` returns sizes, baselines, counts, and intrinsic widths without per-glyph array copies. A cache miss may
 synchronously incur font and layout lookup work. When you need positioned output (`x`, `y`, `glyphIds`, ink boxes),
 call `glyphs()`; its cache miss may synchronously incur glyph lookup and positioning, and every call returns
 caller-owned column copies. Both canonical caches are three-entry LRUs covering the normal unconstrained, at-most, and
-exact negotiation cycle. A host that probes sizes alone never pays for arrays it never touches. A query answers or throws:
+exact negotiation cycle. A caller that probes sizes alone never pays for arrays it never touches. A query answers or throws:
 a constraint that is not finite and nonnegative throws from the call, naming the axis.
 
 ## Font Stacks - fallback fonts for missing glyphs
@@ -224,7 +220,7 @@ const material = defineTextMaterial((context) => {
 const custom = new Text({ font: inter, text: 'Custom material', material });
 ```
 
-Call `dispose()` when a `Text`, `TextGroup`, loaded font, or loader will not be reused. Disposing a group releases its retained plan and renderer resources but does not dispose descendant `Text` objects, which may move to another live group.
+Call `dispose()` when a `Text`, `TextGroup`, loaded font, or loader will not be reused. Disposing a group releases its render planner and renderer resources but does not dispose descendant `Text` objects, which may move to another live group.
 
 ## Bake fonts
 
@@ -257,82 +253,68 @@ Fonts without authored glyph names still report exact glyph IDs.
 
 Every Three primitive above uses the same renderer-neutral lifecycle. The application loads immutable fonts from the root
 package. An integration creates one Glyph engine, creates a backend through that engine, installs its renderer policy,
-binds fonts, and creates a retained plan with a target. None is a canvas or GPU device; the target connects one retained
-plan's publications to renderer-owned resources and submission.
+binds fonts, and creates a render planner with a target. None is a canvas or GPU device; the target connects one planner's
+transient render plans to renderer-owned resources and submission.
 
-The complete public sequence is:
+The external example packages exercise that lifecycle against a real TypeGPU/WebGPU device. This is the same public
+sequence used by the hardware renderer lab:
 
 ```ts
 import { createFontStack, loadFont } from '@pmndrs/glyph';
-import { msdf } from '@pmndrs/glyph/raster/msdf';
-import {
-  createGlyphEngine,
-  readTextEngineDraw,
-  readTextEnginePatch,
-  type PlanCandidate,
-  type PlanTarget,
-} from '@pmndrs/glyph/core';
+import { createGlyphEngine } from '@pmndrs/glyph/core';
+import { glyphExample } from '@pmndrs/glyph-example-raster';
+import { ExampleTextEngine, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
 
-// Integration lifetime: one Wasm shaping domain, then one renderer backend.
+const adapter = await navigator.gpu.requestAdapter();
+if (adapter === null) throw new Error('WebGPU is unavailable');
+const gpuDevice = await adapter.requestDevice();
+
 const glyphEngine = await createGlyphEngine();
-const backend = glyphEngine.createBackend({ integration: 'my-renderer' });
-const policy = backend.installPolicy(myRendererPolicy);
-
-// Application assets are renderer-neutral and may outlive this engine.
-const inter = await loadFont({ baked: '/fonts/Inter.font.glb' }, msdf);
-const font = backend.bindFontStack(createFontStack(inter));
-
-const target: PlanTarget = {
-  delivery: 'borrowed',
-  accept(candidate: PlanCandidate) {
-    // This callback is synchronous: decode, stage, and commit before it returns.
-    const patches = candidate.plan.table('patches');
-    for (let index = 0; index < patches.count; index += 1) {
-      myRenderer.stagePatch(readTextEnginePatch(candidate.plan, patches, index));
-    }
-    const draws = candidate.plan.table('draws');
-    for (let index = 0; index < draws.count; index += 1) {
-      myRenderer.stageDraw(readTextEngineDraw(candidate.plan, draws, index));
-    }
-    return myRenderer.commit(candidate) ? { accepted: true } : { accepted: false, error: myRenderer.error };
-  },
-  dispose() {
-    myRenderer.disposeTarget();
-  },
-};
-
-// Retained-plan lifetime: desired text, one revision stream, and one target.
-const retainedPlan = backend.createRetainedPlan({
-  policy,
-  target: () => target,
-  limits,
-  requestCapacity: 64 * 1024,
-  resultCapacity: 256 * 1024,
-  textCapacity: 16 * 1024,
-});
-const title = retainedPlan.createText({
-  font,
-  text: 'Hello',
-  style: { fontSize: 48 },
-  contentBox: { width: { mode: 'at-most', size: 800 } },
+const device = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
+const renderer = new ExampleTextEngine(glyphEngine, device);
+const font = await loadFont(
+  { baked: '/fonts/Inter.font.glb' },
+  { technique: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
+);
+const stack = renderer.bindFontStack(createFontStack(font));
+renderer.openPlanner();
+const title = renderer.createText({
+  font: stack,
+  text: 'Portable TypeGPU',
+  fontSize: 64,
+  width: 768,
+  height: 192,
 });
 
-// Queries are explicit. A cache miss can synchronously perform layout or glyph lookup.
-const metrics = title.layout();
-const positionedGlyphs = title.glyphs();
+const initial = title.publish();
+const initialPixels = await device.readPixels();
+if (initial.draws.length === 0 || initialPixels.every((byte) => byte === 0)) {
+  throw new Error('the renderer produced no visible draw');
+}
 
-// Mutations stay cheap until a query or publication needs current shaped state.
-title.update({ text: 'Hello, Glyph' });
-const acceptance = retainedPlan.publish();
-if (!acceptance.accepted) throw acceptance.error;
+title.update({ text: 'Updated WebGPU', color: '#ff40a0' });
+title.publish();
+
+title.dispose();
+stack.dispose();
+renderer.dispose();
+font.dispose();
+device.dispose();
+glyphEngine.dispose();
+gpuDevice.destroy();
 ```
 
-The semantic record readers are the public decoding surface; raw ABI offsets are package-private. `PlanTarget` is the
-normal zero-copy path because CPU-side GPU encoding is synchronous. Use `AsyncPlanTarget` only when the candidate crosses
-an asynchronous boundary such as a Worker; it receives one self-owned copy and must return that same transfer buffer.
-`backend.dispose()` closes its retained plans and bindings, while `glyphEngine.dispose()` first closes every backend and then releases
-Wasm. See the [renderer integration guide](docs/guides/renderer-integration.md) for resource realization, checkpoints,
-retirements, async transfer, and complete topology diagrams.
+`ExampleTextEngine` is intentionally an external integration rather than privileged Glyph code. Its implementation uses
+only the public `/core` sequence: `glyphEngine.createBackend()`, `backend.installPolicy()`, font binding,
+`backend.createPlanner()`, `planner.createText()`, and `planner.publish()`. Its synchronous `PlanTarget` acquires portable
+payload leases, stages resource and submission transactions, commits them, and releases retired resources. The semantic
+record readers are its public decoding surface; raw ABI offsets are package-private.
+
+`PlanTarget` is the normal zero-copy path because CPU-side GPU encoding is synchronous. Use `AsyncPlanTarget` only when
+the candidate crosses an asynchronous boundary such as a Worker; it receives one self-owned copy and must return that
+same transfer buffer. See the [renderer integration guide](docs/guides/renderer-integration.md) and the
+[`glyph-example-renderer` source](packages/glyph-example-renderer/src/engine.ts) for the complete target, resource,
+checkpoint, retirement, and device-replacement implementation.
 
 ## Render policy and render plan
 
@@ -384,7 +366,7 @@ The policy declares:
 
 Its small forward-only packing program is the only bytecode in this design. Rust validates it before use and executes it over the semantic records, including SIMD lanes where available. It cannot branch backward, allocate, call JavaScript, or change shaping and layout.
 
-The resulting render plan is fixed-record data. A retained display-list and resource transaction, not executable bytecode and not a GPU-specific command stream. It contains:
+The resulting render plan is fixed-record data: a transient revisioned display-list and resource transaction, not executable bytecode and not a GPU-specific command stream. It contains:
 
 - identity and revision requirements;
 - resource and physical-buffer lifetimes;
@@ -398,15 +380,15 @@ No GPU is required to shape, lay out, execute the policy, or produce this plan. 
 
 A renderer integration has five responsibilities:
 
-1. Compose and register one host policy and capability set before the first text update.
+1. Compose and install one backend policy and capability set before the first text update.
 2. Resolve each loaded font's portable plan and compile its binding/resources into the policy's cold table.
 3. Apply plan resource and buffer operations, then upload the declared patch ranges.
 4. Realize materials and submit draw packets without re-shaping, re-sorting, or reconstructing layout.
-5. Acknowledge completed publication generations before the planner reuses retired storage.
+5. Return transactional acceptance only after CPU consumption and renderer commit have completed.
 
 Three is the maintained reference executor. Bitmap, MSDF, and Slug register portable plans and compiled resources through the same `/core` contract as external techniques; Three retains only their shader/material and GPU realization. A custom Three technique registers its portable plan in `/core`, then selects one compatible `{ technique, variant }` through `registerThreeRasterPlanProgram`; Three assembles the host policy, and only the shader/material realization half uses `threePolicyAbi`.
 
-The renderer-neutral host, frame wire, policy authoring toolkit, and plan view publish as `@pmndrs/glyph/core`, and the technique shaders as `@pmndrs/glyph/tsl` and `@pmndrs/glyph/typegpu` — the [Core API](#core-api) section shows the four moves. A new engine integration should start from the [renderer integration guide](docs/guides/renderer-integration.md), which walks all five responsibilities above with working code, then use the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as reference material.
+The renderer-neutral engine and backend contracts, frame wire, policy authoring toolkit, and plan view publish as `@pmndrs/glyph/core`, and the technique shaders as `@pmndrs/glyph/tsl` and `@pmndrs/glyph/typegpu` — the [Core API](#core-api) section shows the four moves. A new engine integration should start from the [renderer integration guide](docs/guides/renderer-integration.md), which walks all five responsibilities above with working code, then use the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as reference material.
 
 ## Technique shaders on their own
 

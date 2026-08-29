@@ -68,19 +68,19 @@ const paragraph = await createParagraph({
   font: body,
   text: 'Measure before rendering',
   style: { fontSize: 32 },
-  policy: { wrap: 'word' },
+  layout: { wrap: 'word' },
 });
 
-const metrics = paragraph.layout({
+const metrics = paragraph.measure({
   width: { mode: 'at-most', size: 480 },
 });
 const positioned = paragraph.glyphs({
-  width: { mode: 'exactly', size: metrics.contentWidth },
+  width: { mode: 'exact', size: metrics.contentWidth },
 });</code></pre>
 
-<code>createParagraph()</code> asynchronously acquires a private per-realm measurement engine. Once returned, <code>layout()</code>, <code>glyphs()</code>, and <code>update()</code> are synchronous.
+<code>createParagraph()</code> asynchronously acquires a private per-realm measurement engine. Once returned, <code>measure()</code>, <code>glyphs()</code>, and <code>update()</code> are synchronous.
 
-- <code>layout()</code> returns aggregate dimensions, intrinsic widths, line metrics, baselines, and glyph count. A cache miss may synchronously incur font and layout lookup work.
+- <code>measure()</code> returns aggregate dimensions, intrinsic widths, line metrics, baselines, and glyph count. A cache miss may synchronously incur font and measure lookup work.
 - <code>glyphs()</code> returns caller-owned positioned glyph and line columns plus ink boxes. A cache miss may synchronously incur glyph lookup and positioning; every call copies the returned columns.
 - neither query publishes a renderer plan, creates GPU resources, needs a scene matrix, or changes renderer acceptance;
 - invalid constraints throw at the call that supplied them.
@@ -144,18 +144,18 @@ const title = planner.createText({
   font: stack,
   text: 'Hello',
   style: { fontSize: 48 },
-  contentBox: { width: { mode: 'at-most', size: 800 } },
+  constraints: { width: { mode: 'at-most', size: 800 } },
 });
 
 title.update({ text: 'Hello, Glyph' });
-const metrics = title.layout();
+const metrics = title.measure();
 const positioned = title.glyphs();
 const acceptance = planner.publish();
 if (!acceptance.accepted) reportRendererError(acceptance.error);</code></pre>
 
-<code>update()</code> validates and records desired state. Shaping is deferred until <code>layout()</code>, <code>glyphs()</code>, or <code>publish()</code> needs a current answer. <code>publish()</code> compiles a candidate, calls the target, and advances the accepted revision and retirement fence only after target commit.
+<code>update()</code> validates and records desired state. Shaping is deferred until <code>measure()</code>, <code>glyphs()</code>, or <code>publish()</code> needs a current answer. <code>publish()</code> compiles a candidate, calls the target, and advances the accepted revision and retirement fence only after target commit.
 
-<code>layout()</code> and <code>glyphs()</code> are synchronous, on-demand queries over current desired state. A cache miss may incur font/layout or glyph-positioning lookup work; <code>glyphs()</code> returns copied caller-owned columns. Neither query publishes a renderer plan.
+<code>measure()</code> and <code>glyphs()</code> are synchronous, on-demand queries over current desired state. A cache miss may incur font/measure or glyph-positioning lookup work; <code>glyphs()</code> returns copied caller-owned columns. Neither query publishes a renderer plan.
 
 Use another render planner for an independently accepted scene, viewport, render target, or worker. Render planners may share their backend's policies and font bindings but never share revision cursors.
 

@@ -242,6 +242,7 @@
 
       <nav>
         <a href="#flow">Complete flow</a>
+        <a href="#authoring">Text authoring</a>
         <a href="#ownership">Ownership</a>
         <a href="#migration">Canary migration</a>
         <a href="#integration">Integration API</a>
@@ -288,7 +289,7 @@
             <path d="M340 116 V182" class="edge dashed" />
 
             <rect x="685" y="292" width="170" height="72" class="box core" />
-            <text x="702" y="320" class="title">layout() / glyphs()</text>
+            <text x="702" y="320" class="title">measure() / glyphs()</text>
             <text x="702" y="341" class="minor">on-demand cached query</text>
             <path d="M770 254 V292" class="edge" />
 
@@ -318,10 +319,91 @@
           </svg>
         </div>
         <p class="callout">
-          <strong>Mutation is lazy.</strong> <code>update()</code> changes desired state. <code>layout()</code> and
+          <strong>Mutation is lazy.</strong> <code>update()</code> changes desired state. <code>measure()</code> and
           <code>glyphs()</code> synchronously pay shaping/lookup cost only on a cache miss.
           <code>publish()</code> compiles the planner's desired text and does not advance its accepted revision until
           the target commits.
+        </p>
+      </section>
+
+      <section id="authoring">
+        <h2>Text authoring: properties versus actions</h2>
+        <div class="grid">
+          <div class="card">
+            <h3><code>style</code> · <code>TextStyle</code></h3>
+            <p>
+              Inherited text shaping and presentation: size, spacing, language, direction, features, decoration, and
+              colour.
+            </p>
+          </div>
+          <div class="card">
+            <h3><code>layout</code> · <code>ParagraphLayout</code></h3>
+            <p>
+              Stable paragraph flow: wrapping, alignment, overflow, line limits, indentation, justification, and
+              columns.
+            </p>
+          </div>
+          <div class="card">
+            <h3><code>constraints</code> · <code>Constraints</code></h3>
+            <p>Parent-imposed width and height. Each axis is unconstrained, at-most, or exact.</p>
+          </div>
+        </div>
+        <pre><code>import { loadFont, ParagraphLayout, TextStyle, type Constraints } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+
+const font = await loadFont({ baked: '/fonts/Inter.font.glb' }, msdf);
+
+const styles = TextStyle.create({
+  body: { fontSize: 32, color: '#f4f7ff' },
+  muted: { opacity: 0.6 },
+});
+const layouts = ParagraphLayout.create({
+  prose: { wrap: 'word', align: 'start' },
+});
+const constraints = {
+  width: { mode: 'at-most', size: 480 },
+} satisfies Constraints;
+const disabled = false;
+
+const text = new Text({
+  font,
+  text: 'Current desired text',
+  style: [styles.body, disabled &amp;&amp; styles.muted],
+  layout: layouts.prose,
+  constraints,
+});
+
+const metrics = text.measure(); // aggregate; no draw publication
+const glyphs = text.glyphs();   // positioned caller-owned columns</code></pre>
+        <p>
+          Property lists resolve left-to-right and ignore false, null, and undefined entries. TypeScript catches invalid
+          authored values; public calls validate known runtime values before changing state. Unknown object keys are
+          ignored for JavaScript and decoded-data compatibility.
+        </p>
+        <h3>React font loading</h3>
+        <pre><code>import { Text, useFont } from '@pmndrs/glyph/react';
+import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
+import { useMSDF } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
+
+useMSDF.preload('/fonts/Inter.font.glb');
+
+function Label() {
+  const inter = useMSDF('/fonts/Inter.font.glb');
+  return &lt;Text font={inter} style={styles.body}&gt;Hello&lt;/Text&gt;;
+}
+
+// Third-party techniques use the same shared R3F loader cache.
+function CustomLabel() {
+  const custom = useFont('/fonts/Custom.font.glb', customTechnique, customOptions);
+  return &lt;Text font={custom}&gt;Custom&lt;/Text&gt;;
+}</code></pre>
+        <p>
+          <code>useBitmapFont</code>, <code>useMSDF</code>, and <code>useSlug</code> are typed wrappers over generic
+          <code>useFont</code>; each carries matching <code>.preload()</code> and <code>.clear()</code>. Nested
+          <code>&lt;Text&gt;</code> is the inline-span API—there is no public React <code>TextSpan</code> or
+          <code>createUseFont</code>.
         </p>
       </section>
 
@@ -383,15 +465,15 @@
         <p>
           The dated ts-morph codemod is for renderer and technique implementors as well as this monorepo. It was
           dogfooded across the custom example renderer, benchmark consumers, and Three adapter; the example raster
-          package had no affected planner call sites. Run it without <code>--write</code> first and inspect the exact
-          file list, then apply it to the same project only after the dry run is correct.
+          package had no affected planner call sites. One aggregate command verifies or applies every archived migration
+          in lexical order.
         </p>
-        <pre><code>mise exec -- node .agents/skills/codemod/scripts/run-codemod.mjs \
-  --codemod .agents/skills/codemod/codemods/2026-08-28-text-engine-vocabulary \
+        <pre><code>mise exec -- node .agents/skills/codemod/scripts/run-all-codemods.mjs \
   --project path/to/tsconfig.json \
-  --target path/to/project
+  --target path/to/project \
+  --check
 
-# Repeat with --write after reviewing the dry-run inventory.</code></pre>
+# Repeat with --write after reviewing the inventory.</code></pre>
         <p>
           The transform distinguishes the long-lived <code>RenderPlanner</code> from each transient
           <code>RenderPlan</code>, migrates plan readers and status types, and preserves unrelated application strings.
@@ -488,7 +570,8 @@ const title = planner.createText({
   font: stack,
   text: 'Hello',
   style: { fontSize: 48 },
-  contentBox: { width: { mode: 'at-most', size: 800 } },
+  layout: { wrap: 'word' },
+  constraints: { width: { mode: 'at-most', size: 800 } },
 });</code></pre>
           </div>
         </div>
@@ -499,13 +582,13 @@ const title = planner.createText({
             <h3>Update, query on demand, then publish</h3>
             <pre><code>title.update({ text: 'Hello, Glyph' });
 
-const metrics = title.layout();
+const metrics = title.measure();
 const positioned = title.glyphs();
 
 const result = planner.publish({ semanticViews: 'measurement' });
 if (!result.accepted) reportRendererError(result.error);</code></pre>
             <p>
-              <code>layout()</code> returns aggregate metrics. <code>glyphs()</code> returns caller-owned positioned
+              <code>measure()</code> returns aggregate metrics. <code>glyphs()</code> returns caller-owned positioned
               columns and ink boxes. Both may synchronously incur lookup work on a cache miss;
               <code>glyphs()</code> also copies its returned columns. Their canonical constraint caches are bounded
               three-entry LRUs. Neither publishes a draw.
