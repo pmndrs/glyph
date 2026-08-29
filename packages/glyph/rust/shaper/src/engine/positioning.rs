@@ -1884,6 +1884,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: 0,
             };
             let clusters = ClusterArena::default();
@@ -2122,6 +2123,7 @@ mod tests {
             },
             slot_start: 0.0,
             slot_end: 17.0,
+            flexible_end: false,
             boundary_index: NO_BOUNDARY,
         };
         (text, clusters, line, fragment)
@@ -2289,6 +2291,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -2423,6 +2426,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -2645,6 +2649,7 @@ mod tests {
                     },
                     slot_start: 0.0,
                     slot_end: 20.0,
+                    flexible_end: false,
                     boundary_index: 0,
                 },
                 FlowFragment {
@@ -2659,6 +2664,7 @@ mod tests {
                     },
                     slot_start: 0.0,
                     slot_end: 20.0,
+                    flexible_end: false,
                     boundary_index: NO_BOUNDARY,
                 },
             ],
@@ -2798,6 +2804,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()

@@ -581,6 +581,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -642,6 +643,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -745,6 +747,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 6.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -811,6 +814,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 140.64,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -928,6 +932,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -1014,6 +1019,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
