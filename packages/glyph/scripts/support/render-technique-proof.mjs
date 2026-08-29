@@ -48,6 +48,9 @@ function mtsdfProof(abi, raster, allocation) {
       if (page === ABSENT_PAGE) return 0;
       return view.getUint16(record + 14, true) / binding.height;
     }),
+    field(raster.glyphCount, () => extension.planeUnitsPerEm / binding.width),
+    field(raster.glyphCount, () => extension.planeUnitsPerEm / binding.height),
+    field(raster.glyphCount, () => extension.planeUnitsPerEm / extension.pixelRange),
   );
   return proof(abi, mtsdfProgram(abi), allocation, {
     glyphCount: raster.glyphCount,
@@ -148,27 +151,91 @@ function bitmapProgram(abi, glyphScope) {
 }
 
 function mtsdfProgram(abi) {
-  const context = programContext(abi, 'glyph', 10, 1);
-  const { operations: ops, loadF32, loadU32, binary, constantF32, storeF32 } = context;
-  loadF32(17);
-  loadU32(17, 0);
-  binary('multiplyF32', 18, 7, 2);
-  binary('addF32', 19, 0, 18);
-  binary('multiplyF32', 20, 8, 2);
-  binary('subtractF32', 21, 1, 20);
-  binary('multiplyF32', 22, 9, 2);
-  binary('multiplyF32', 23, 10, 2);
-  ops.push({ opcode: abi.policy.opcodes.convertU32ToF32, target: 24, operand0: 17 });
-  constantF32(25, 0);
-  stores(storeF32, [
-    [1, [19, 21, 22, 23]],
-    [2, [11, 12, 13, 14]],
-    [3, [11, 12, 15, 16]],
-    [4, [3, 4, 5, 6]],
-    [5, [25, 25, 25, 25]],
-    [6, [25, 25, 25, 25]],
-    [7, [25, 25, 25, 24]],
-  ]);
+  const semantic = abi.engine.semanticF32Fields;
+  const semanticFields = [
+    semantic.inlineOrigin,
+    semantic.blockOrigin,
+    semantic.fontSize,
+    semantic.foregroundRed,
+    semantic.foregroundGreen,
+    semantic.foregroundBlue,
+    semantic.foregroundAlpha,
+    semantic.outlineRed,
+    semantic.outlineGreen,
+    semantic.outlineBlue,
+    semantic.outlineAlpha,
+    semantic.outlineWidth,
+    semantic.shadowRed,
+    semantic.shadowGreen,
+    semantic.shadowBlue,
+    semantic.shadowAlpha,
+    semantic.shadowOffsetX,
+    semantic.shadowOffsetY,
+    semantic.inverseFontSize,
+  ];
+  const operations = [];
+  const loadF32 = (target, field) => operations.push({ opcode: abi.policy.opcodes.loadF32, target, operand0: field });
+  const loadU32 = (target, field) => operations.push({ opcode: abi.policy.opcodes.loadU32, target, operand0: field });
+  const binary = (name, target, left, right) =>
+    operations.push({ opcode: abi.policy.opcodes[name], target, operand0: left, operand1: right });
+  const storeF32 = (buffer, lane, register) =>
+    operations.push({ opcode: abi.policy.opcodes.storeF32, operand0: register, operand1: lane, immediate0: buffer });
+  const copyF32 = (buffer, lane, field) => {
+    loadF32(0, field);
+    storeF32(buffer, lane, 0);
+  };
+  const scaled = (buffer, lane, left, right) => {
+    loadF32(0, left);
+    loadF32(1, right);
+    binary('multiplyF32', 2, 0, 1);
+    storeF32(buffer, lane, 2);
+  };
+  const transformed = (buffer, lane, origin, extent, operation) => {
+    loadF32(0, origin);
+    loadF32(1, extent);
+    loadF32(2, 2);
+    binary('multiplyF32', 3, 1, 2);
+    binary(operation, 4, 0, 3);
+    storeF32(buffer, lane, 4);
+  };
+
+  transformed(1, 0, 0, 19, 'addF32');
+  transformed(1, 1, 1, 20, 'subtractF32');
+  scaled(1, 2, 21, 2);
+  scaled(1, 3, 22, 2);
+  for (let lane = 0; lane < 4; lane += 1) copyF32(2, lane, 23 + lane);
+  copyF32(3, 0, 23);
+  copyF32(3, 1, 24);
+  copyF32(3, 2, 27);
+  copyF32(3, 3, 28);
+  for (let lane = 0; lane < 4; lane += 1) copyF32(4, lane, 3 + lane);
+  for (let lane = 0; lane < 4; lane += 1) copyF32(5, lane, 7 + lane);
+  for (let lane = 0; lane < 4; lane += 1) copyF32(6, lane, 12 + lane);
+  for (const [lane, value, scale] of [
+    [0, 16, 29],
+    [1, 17, 30],
+    [2, 11, 31],
+  ]) {
+    loadF32(0, value);
+    loadF32(1, 18);
+    binary('multiplyF32', 2, 0, 1);
+    loadF32(3, scale);
+    binary('multiplyF32', 4, 2, 3);
+    storeF32(7, lane, 4);
+  }
+  loadU32(0, 0);
+  operations.push({ opcode: abi.policy.opcodes.convertU32ToF32, target: 1, operand0: 0 });
+  storeF32(7, 3, 1);
+  const context = {
+    inputs: [
+      ...semanticFields.map((field) => ({ scope: 'semantic', field })),
+      ...Array.from({ length: 13 }, (_, field) => ({ scope: 'glyph', field })),
+      { scope: 'glyph', field: 0 },
+    ],
+    operations,
+    f32InputCount: 32,
+    u32InputCount: 1,
+  };
   return program(context, floatBuffers(abi, [4, 4, 4, 4, 4, 4, 4]));
 }
 
