@@ -17,13 +17,8 @@ import { resolveRangesToClusters } from './formatted-text.js';
 import type { Font } from './font.js';
 import { immutableFontRequestKey, type LoadFontInput } from './loader.js';
 import { cloneImmutableFont, type FontSelection, type FontStack } from './loaded-font.js';
-import {
-  mergePropertyList,
-  type Constraints,
-  type ParagraphLayout,
-  type PropertyList,
-  type TextStyle,
-} from './text-properties.js';
+import { mergePropertyList } from './internal/property-list.js';
+import { type Constraints, type ParagraphLayout, type PropertyList, type TextStyle } from './text-properties.js';
 import type { AnyRasterTechnique, RasterOptionsOf } from './raster-technique.js';
 import {
   FontLoader as ThreeFontLoader,

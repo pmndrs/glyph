@@ -15,6 +15,7 @@ import {
 } from '../layout.js';
 import { immutableFontSelectionFonts, type FontSelection } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
+import { mergePropertyList } from '../internal/property-list.js';
 import type {
   GlyphBufferCapacity,
   ParagraphBaseProperties,
@@ -28,7 +29,6 @@ import {
   assertParagraphLayout,
   assertTextStyle,
   assertTextStyleFeatureRanges,
-  mergePropertyList,
 } from '../text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type {

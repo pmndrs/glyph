@@ -4,9 +4,6 @@ import { mergePropertyList } from './internal/property-list.js';
 import type { FontSelection } from './loaded-font.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
 
-/** @internal Shared property-list resolver for package adapters. */
-export { mergePropertyList };
-
 export interface GlyphBufferCapacity {
   readonly size: number;
   /**
