@@ -1,7 +1,7 @@
 export type { FormattedText, TextInput } from './formatted-text.js';
 export type { FontSelection } from './loaded-font.js';
-export type { Constraints, GlyphBufferCapacity, PropertyList } from './text-properties.js';
-export { ParagraphLayout, TextStyle } from './text-properties.js';
+export type { GlyphBufferCapacity, PropertyList } from './text-properties.js';
+export { Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
 export { FontLoader } from './three/font-loader.js';
 export { defineTextMaterial } from './three/material.js';
 export type { ThreeTextGenericMaterialContext, ThreeTextMaterial, ThreeTextMaterialContext } from './three/material.js';

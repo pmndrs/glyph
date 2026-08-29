@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
-import { createFontLibrary, createFontStack, loadFont } from '@pmndrs/glyph';
+import { Constraints, createFontLibrary, createFontStack, loadFont, ParagraphLayout, TextStyle } from '@pmndrs/glyph';
 import { GlyphBackend } from '@pmndrs/glyph/core';
 import { PlanTransport } from '../../dist/core/backend.js';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
@@ -39,6 +39,19 @@ const MULTI_TECHNIQUE_MSDF = Object.freeze({
   atlasHeight: 514,
 });
 const glyphAttribute = (bufferId) => `_pmndrsGlyph_${bufferId}`;
+
+test('text property registries validate and freeze reusable rules', () => {
+  for (const [registry, rules] of [
+    [TextStyle, { body: { fontSize: 16 } }],
+    [ParagraphLayout, { centered: { align: 'center' } }],
+    [Constraints, { card: { width: { mode: 'at-most', size: 320 } } }],
+  ]) {
+    const created = registry.create(rules);
+    assert.ok(Object.isFrozen(created));
+    assert.ok(Object.isFrozen(Object.values(created)[0]));
+  }
+  assert.throws(() => Constraints.create({ broken: { width: { mode: 'exact', size: Number.NaN } } }), /size/);
+});
 
 test('one portable request returns typed resources for every declared technique', async () => {
   const [bitmapFont, msdfFont, slugFont] = await loadFont({ baked: { bytes: await readFile(multiTechniqueFontUrl) } }, [

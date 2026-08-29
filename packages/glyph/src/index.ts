@@ -85,7 +85,6 @@ export { createFontStack } from './loaded-font.js';
 export type {
   AxisConstraint,
   ColorInput,
-  Constraints,
   GlyphBufferCapacity,
   LinearRgbaInput,
   ParagraphBaseProperties,
@@ -94,7 +93,7 @@ export type {
   PropertyList,
   TextDecorationStyle,
 } from './text-properties.js';
-export { ParagraphLayout, TextStyle } from './text-properties.js';
+export { Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
 
 export type {
   FormattedText,

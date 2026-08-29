@@ -138,6 +138,9 @@ export const ParagraphLayout: PropertyRegistry<ParagraphLayout> = createProperty
   assertParagraphLayout,
 );
 
+/** Creates named constraint objects for composition through the `constraints` property. */
+export const Constraints: PropertyRegistry<Constraints> = createPropertyRegistry('Constraints', assertConstraints);
+
 function createPropertyRegistry<Value extends object>(
   label: string,
   validate: (value: Value, label: string) => void,
