@@ -125,22 +125,22 @@ export const packageSizeBudgets = {
   // Shared Three technique graphs use one reviewed cross-host ceiling.
   // Shader subpaths remain outside these runtime graphs.
   'bitmap-runtime-js': {
-    rawBytes: 581_000,
-    minifiedBytes: 365_500,
-    gzipBytes: 95_500,
-    brotliBytes: 80_000,
+    rawBytes: 430_000,
+    minifiedBytes: 267_000,
+    gzipBytes: 72_500,
+    brotliBytes: 60_500,
   },
   'mtsdf-runtime-js': {
-    rawBytes: 581_000,
-    minifiedBytes: 365_500,
-    gzipBytes: 95_500,
-    brotliBytes: 80_000,
+    rawBytes: 430_000,
+    minifiedBytes: 267_000,
+    gzipBytes: 72_500,
+    brotliBytes: 60_500,
   },
   'slug-runtime-js': {
-    rawBytes: 581_000,
-    minifiedBytes: 365_500,
-    gzipBytes: 95_500,
-    brotliBytes: 80_000,
+    rawBytes: 430_000,
+    minifiedBytes: 267_000,
+    gzipBytes: 72_500,
+    brotliBytes: 60_500,
   },
   'bitmap-baker-wasm': {
     rawBytes: 626_000,

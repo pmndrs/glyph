@@ -327,8 +327,9 @@ if (!result.accepted) reportRendererError(result.error);
 `measure()` returns aggregate dimensions, intrinsic widths, line metrics, baselines, and glyph count. A cache miss may
 synchronously incur font and measure lookup work. `glyphs()` returns caller-owned positioned columns and ink boxes; a cache
 miss may synchronously incur glyph lookup and positioning, and every call copies its columns. Neither query publishes a
-draw. Both canonical constraint caches are bounded three-entry LRUs. `publish()` shapes current desired state, compiles a
-plan, calls the target, and advances acceptance only after the target commits.
+draw. Retained text caches one measurement and inspection for its current desired state; renderer-free `Paragraph`
+constraint queries use bounded three-entry LRUs. `publish()` shapes current desired state, compiles a plan, calls the target,
+and advances acceptance only after the target commits.
 
 Ask `publish({ semanticViews: 'measurement' })` to cache aggregate metrics in the publication, or
 `'layout-inspection'`/`'all'` when the renderer needs positioned inspection after acceptance. Do not request those views

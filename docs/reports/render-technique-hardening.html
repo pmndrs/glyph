@@ -825,11 +825,15 @@ const recovered = planner.publish();</code></pre>
 
       <section id="evidence">
         <h2>Verification and deliberate follow-up</h2>
-        <p class="status">Local package, root, renderer, live, size, and performance gates: green. Final external review and remote CI: pending.</p>
+        <p class="status">
+          Local package, root, renderer, live, size, and performance gates: green. Final external review: complete.
+          Remote CI: green on the reviewed head; current-head confirmation pending for the accepted review corrections.
+        </p>
         <ul>
           <li>
-            929 Glyph package tests passed in the latest package run, including cache behavior, branded plan identities, root/Three measurement
-            parity, caller-owned glyph columns, first-frame bounds, render-plan ownership, and React lifecycle.
+            929 Glyph package tests passed in the latest package run, including cache behavior, branded plan identities,
+            root/Three measurement parity, caller-owned glyph columns, first-frame bounds, render-plan ownership, and
+            React lifecycle.
           </li>
           <li>
             The focused Rust, baker, artifact, mutation, type, renderer, and Unicode 17 conformance lanes pass. The
@@ -857,10 +861,10 @@ const recovered = planner.publish();</code></pre>
             mutating text. Median submission was 0.140 ms for TypeGPU and 0.125 ms for the generic Three path.
           </li>
           <li>
-            The hardware WebGPU presentation sweep held 120 FPS with zero slow frames across all 27 Bitmap, MTSDF,
-            and Slug workload cells. CPU submission medians stayed between 0.205 and 0.585 ms; measured GPU work stayed
-            between 0.577 and 1.979 ms. WebGPU and WebGL2 live-update probes made every text, font-size, and width change
-            visible within one or two frames with no idle submissions.
+            The hardware WebGPU presentation sweep held 120 FPS with zero slow frames across all 27 Bitmap, MTSDF, and
+            Slug workload cells. CPU submission medians stayed between 0.205 and 0.585 ms; measured GPU work stayed
+            between 0.577 and 1.979 ms. WebGPU and WebGL2 live-update probes made every text, font-size, and width
+            change visible within one or two frames with no idle submissions.
           </li>
           <li>
             A same-machine run against checkpoint <code>689958d3</code> found no Rust planner regression. Current cold,
@@ -875,8 +879,8 @@ const recovered = planner.publish();</code></pre>
           <li>
             A same-build semantic-sidecar isolation over one 21,805-glyph paragraph measured 0.002 ms for an unchanged
             publication, 0.174 ms for aggregate measurement, and 0.582 ms for full glyph inspection. Three requests
-            aggregate measurement only when text has a pending publication; default custom-renderer publication and
-            idle Three synchronization do not pay that cost.
+            aggregate measurement only when text has a pending publication; default custom-renderer publication and idle
+            Three synchronization do not pay that cost.
           </li>
           <li>
             The corrected MTSDF edge selector matches native msdfgen across ordinary, acute, overlapping,
@@ -909,10 +913,9 @@ const recovered = planner.publish();</code></pre>
             73,453 / 61,214 for the browser root, and 712,007 / 115,862 / 95,598 for Three. Against the prior evidence,
             core shrank by 445 raw bytes, the browser root moved by +54 raw / +1 gzip, and Three by +348 raw / +44 gzip.
             The complete shaper and planner Wasm is 1,173,078 raw / 457,524 gzip / 360,900 Brotli bytes after compact
-            effect lanes and exact selected-resource provenance.
-            The optional corrected MTSDF baker is 556,619 raw / 218,279 gzip / 171,376 Brotli bytes, +8,698 raw / +4,034
-            gzip. Its fresh zero-import feature-minimal admission module is 69,731 optimized / 30,131 gzip / 25,327
-            Brotli bytes; the reviewed size gate passes.
+            effect lanes and exact selected-resource provenance. The optional corrected MTSDF baker is 556,619 raw /
+            218,279 gzip / 171,376 Brotli bytes, +8,698 raw / +4,034 gzip. Its fresh zero-import feature-minimal
+            admission module is 69,731 optimized / 30,131 gzip / 25,327 Brotli bytes; the reviewed size gate passes.
           </li>
           <li>
             Deterministic bake verification covers every checked Bitmap, MTSDF, Slug, and paragraph fixture. Slug
@@ -920,22 +923,30 @@ const recovered = planner.publish();</code></pre>
             <code>@pmndrs/glyph</code>; their GLB binary payloads remained byte-identical. HarfBuzz 13.0.0 provisioning
             now replaces an incomplete cache only after all three authenticated utilities have been assembled.
           </li>
+          <li>
+            The final Opus High pass found no shipped runtime, ownership, renderer-neutrality, malformed-plan,
+            transport, Rust lifecycle, MTSDF, or codemod defect. Its three validated evidence findings tightened every
+            built-in technique graph back to a 430,000 raw / 267,000 minified / 72,500 gzip / 60,500 Brotli ceiling,
+            removed one empty type-test placeholder, and corrected the retained-text query-cache description. Two
+            proposed findings were rejected against existing executable proof: Unicode exclusion is a module-membership
+            gate, and the portable plus Three compatibility imports pass a tree-shaken registration smoke test.
+          </li>
         </ul>
         <p>
-          <strong>Review:</strong> the prior Opus High pass closed the malformed Slug oracle, MTSDF configuration,
-          semantic lane-name, and uncounted-view findings. One final Opus High pass over the settled API and
-          documentation remains before merge readiness is claimed.
+          <strong>Review:</strong> Opus High session <code>bbad9adc-4350-46a7-a885-3f49c1a950ce</code> completed its
+          final read-only pass over <code>89f9ef46</code>. Every reported item was checked directly against source
+          before the three evidence corrections above were accepted.
         </p>
         <p>
           <strong>Merge identity:</strong> draft <a href="https://github.com/pmndrs/glyph/pull/120">PR #120</a> on
           <code>feat/render-technique-portability</code>, based directly on <code>feat/plan-retention</code> / PR #110.
-          The branch is not merged; the latest local commits still need their final <code>gh stack</code> submission.
+          The single-branch stack is submitted through <code>gh stack</code> and remains deliberately unmerged.
         </p>
         <p>
-          <strong>Remote evidence:</strong> the prior GitHub
-          <a href="https://github.com/pmndrs/glyph/actions/runs/33172838781">CI run 33172838781</a> passed Static
-          checks, the complete Check gauntlet, and the package-size comparison at <code>689958d3</code>. It does not
-          cover the final local commits; a fresh green run is required.
+          <strong>Remote evidence:</strong> GitHub
+          <a href="https://github.com/pmndrs/glyph/actions/runs/33245505129">CI run 33245505129</a> passed Static
+          checks, the complete Check gauntlet, and the package-size comparison at <code>89f9ef46</code>. The final
+          accepted review corrections still require the same current-head checks before merge readiness is claimed.
         </p>
         <p>
           <strong>Deliberate Three follow-up:</strong> compatible font-stack runs inside one text and renderer-private
@@ -945,10 +956,11 @@ const recovered = planner.publish();</code></pre>
         </p>
         <p>
           <strong>Deliberate MTSDF quality follow-up:</strong> the default 64 px/em tier remains intended for ordinary
-          text. At the lab's 1,024 CSS px and 2× DPR endpoint, one atlas texel spans about 32 device pixels; no shader can
-          reconstruct curve detail absent from that grid. The existing descriptor can author 128 or 256 px/em assets,
-          but automatic projected-size tier selection and its roughly fourfold atlas-area cost per doubling remain a
-          separately measured resource-policy decision. Slug remains the analytic option for effectively unbounded zoom.
+          text. At the lab's 1,024 CSS px and 2× DPR endpoint, one atlas texel spans about 32 device pixels; no shader
+          can reconstruct curve detail absent from that grid. The existing descriptor can author 128 or 256 px/em
+          assets, but automatic projected-size tier selection and its roughly fourfold atlas-area cost per doubling
+          remain a separately measured resource-policy decision. Slug remains the analytic option for effectively
+          unbounded zoom.
         </p>
       </section>
 
