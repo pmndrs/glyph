@@ -826,8 +826,8 @@ const recovered = planner.publish();</code></pre>
       <section id="evidence">
         <h2>Verification and deliberate follow-up</h2>
         <p class="status">
-          Local package, root, renderer, live, size, and performance gates: green. Final external review: complete.
-          Remote CI: green on the reviewed head; current-head confirmation pending for the accepted review corrections.
+          Local package, root, renderer, live, size, and performance gates: green. Final external review: complete. PR
+          #120 requires green current-head CI; the linked PR check status is authoritative.
         </p>
         <ul>
           <li>
@@ -945,8 +945,9 @@ const recovered = planner.publish();</code></pre>
         <p>
           <strong>Remote evidence:</strong> GitHub
           <a href="https://github.com/pmndrs/glyph/actions/runs/33245505129">CI run 33245505129</a> passed Static
-          checks, the complete Check gauntlet, and the package-size comparison at <code>89f9ef46</code>. The final
-          accepted review corrections still require the same current-head checks before merge readiness is claimed.
+          checks, the complete Check gauntlet, and the package-size comparison at <code>89f9ef46</code>. The
+          <a href="https://github.com/pmndrs/glyph/pull/120/checks">PR #120 checks</a> are the durable authority for the
+          submitted head; merge readiness requires all three lanes to remain green there.
         </p>
         <p>
           <strong>Deliberate Three follow-up:</strong> compatible font-stack runs inside one text and renderer-private
