@@ -997,7 +997,7 @@ test('Text.layout measures attached first-frame state without traversing matrice
   assert.equal(
     instrumented.latestUpdateFlags & textShaperAbi.engine.resultFlags.checkpoint,
     textShaperAbi.engine.resultFlags.checkpoint,
-    "the retainedPlan's first render plan is necessarily its initial checkpoint",
+    "the planner's first render plan is necessarily its initial checkpoint",
   );
   assert.equal(instrumented.measureCrossings, 2, 'publication must not repeat the host measurement query');
   assert.equal(first.commitState().status, 'committed');
@@ -1248,7 +1248,7 @@ test('TextGroup grows aggregate glyph storage without reserving one aggregate-si
 
 /**
  * Roadmap 11.17 layer 4: layout under a geometry-only change routes to the
- * paragraph-scoped synchronous engine query — no full retainedPlan updates, no
+ * paragraph-scoped synchronous engine query — no full planner updates, no
  * publication flips, no revision burn — and the following ordinary frame adopts the
  * speculative work without a checkpoint rebuild.
  */

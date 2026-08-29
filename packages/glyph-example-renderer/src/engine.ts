@@ -8,7 +8,7 @@ import {
   type PlanTargetControl,
   type RenderPlanResourceId,
   type ResourceHandle,
-  type SynchronousRetainedPlan,
+  type RenderPlanner,
   type RetainedText,
   type GlyphEngine,
 } from '@pmndrs/glyph/core';
@@ -58,7 +58,7 @@ export class ExampleTextEngine {
   readonly #backend;
   readonly #policy: BackendPolicy;
   readonly #target: ExamplePlanTarget;
-  #retainedPlan: SynchronousRetainedPlan | undefined;
+  #planner: RenderPlanner | undefined;
   #disposed = false;
 
   constructor(glyphEngine: GlyphEngine, device?: ExampleRendererDevice) {
@@ -104,10 +104,10 @@ export class ExampleTextEngine {
   }
 
   /** Opens the engine's single retained example plan. */
-  openRetainedPlan(): SynchronousRetainedPlan {
+  openPlanner(): RenderPlanner {
     this.#assertActive();
-    if (this.#retainedPlan !== undefined) throw new Error('example engine already has an open retained plan');
-    this.#retainedPlan = this.#backend.createRetainedPlan({
+    if (this.#planner !== undefined) throw new Error('example engine already has an open render planner');
+    this.#planner = this.#backend.createPlanner({
       policy: this.#policy,
       capabilitySet: exampleCapabilitySet,
       target: (control) => {
@@ -119,18 +119,18 @@ export class ExampleTextEngine {
       resultCapacity: 256 * 1024,
       textCapacity: 16 * 1024,
     });
-    return this.#retainedPlan;
+    return this.#planner;
   }
 
   /** Creates one retained text instance in the open plan. */
   createText(options: ExampleTextOptions): ExampleText {
-    const retainedPlan = this.#requireRetainedPlan();
-    return new ExampleText(retainedPlan, () => this.publish(), options);
+    const planner = this.#requirePlanner();
+    return new ExampleText(planner, () => this.publish(), options);
   }
 
   /** Publishes current desired state and returns the accepted decoded draw list. */
   publish(): ExampleDrawList {
-    const result = this.#requireRetainedPlan().publish();
+    const result = this.#requirePlanner().publish();
     if (!result.accepted) throw result.error;
     return this.#target.lastDrawList;
   }
@@ -147,12 +147,12 @@ export class ExampleTextEngine {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#backend.dispose();
-    this.#retainedPlan = undefined;
+    this.#planner = undefined;
   }
 
-  #requireRetainedPlan(): SynchronousRetainedPlan {
+  #requirePlanner(): RenderPlanner {
     this.#assertActive();
-    return this.#retainedPlan ?? this.openRetainedPlan();
+    return this.#planner ?? this.openPlanner();
   }
 
   #assertActive(): void {
@@ -167,10 +167,10 @@ export class ExampleText {
   #state: NormalizedExampleTextOptions;
   #disposed = false;
 
-  constructor(retainedPlan: SynchronousRetainedPlan, publish: () => ExampleDrawList, options: ExampleTextOptions) {
+  constructor(planner: RenderPlanner, publish: () => ExampleDrawList, options: ExampleTextOptions) {
     this.#publish = publish;
     this.#state = normalizeTextOptions(options);
-    this.#text = retainedPlan.createText(coreTextOptions(this.#state));
+    this.#text = planner.createText(coreTextOptions(this.#state));
   }
 
   /** Current desired text content. */
@@ -233,7 +233,7 @@ class ExamplePlanTarget implements PlanTarget {
   }
 
   attachControl(control: PlanTargetControl): void {
-    if (this.#control !== undefined) throw new Error('example plan target already has retained-plan control');
+    if (this.#control !== undefined) throw new Error('example plan target already has planner control');
     this.#control = control;
   }
 

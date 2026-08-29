@@ -11,19 +11,19 @@ use crate::{
         ENGINE_RESULT_FAULT_PARAGRAPH_ID, ENGINE_RESULT_FAULT_STYLE_ID, ENGINE_RESULT_FLAGS,
         ENGINE_RESULT_HEADER_ALIGNMENT, ENGINE_RESULT_HEADER_SIZE, ENGINE_RESULT_OUTPUT_SLOT,
         ENGINE_RESULT_PATCH_COUNT, ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_PLAN_REVISION,
-        ENGINE_RESULT_POLICY_FINGERPRINT_HIGH, ENGINE_RESULT_POLICY_FINGERPRINT_LOW,
-        ENGINE_RESULT_POLICY_HANDLE, ENGINE_RESULT_PRIMITIVE_COUNT,
-        ENGINE_RESULT_PRIMITIVES_OFFSET, ENGINE_RESULT_PUBLICATION_GENERATION,
-        ENGINE_RESULT_REQUEST_CAPACITY, ENGINE_RESULT_REQUIRED_BASE_REVISION,
-        ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY, ENGINE_RESULT_REQUIRED_RESULT_CAPACITY,
-        ENGINE_RESULT_RESOURCE_COUNT, ENGINE_RESULT_RESOURCES_OFFSET,
-        ENGINE_RESULT_RESULT_CAPACITY, ENGINE_RESULT_RETAINED_PLAN_ID,
+        ENGINE_RESULT_PLANNER_ID, ENGINE_RESULT_POLICY_FINGERPRINT_HIGH,
+        ENGINE_RESULT_POLICY_FINGERPRINT_LOW, ENGINE_RESULT_POLICY_HANDLE,
+        ENGINE_RESULT_PRIMITIVE_COUNT, ENGINE_RESULT_PRIMITIVES_OFFSET,
+        ENGINE_RESULT_PUBLICATION_GENERATION, ENGINE_RESULT_REQUEST_CAPACITY,
+        ENGINE_RESULT_REQUIRED_BASE_REVISION, ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY,
+        ENGINE_RESULT_REQUIRED_RESULT_CAPACITY, ENGINE_RESULT_RESOURCE_COUNT,
+        ENGINE_RESULT_RESOURCES_OFFSET, ENGINE_RESULT_RESULT_CAPACITY,
         ENGINE_RESULT_RETIREMENT_COUNT, ENGINE_RESULT_RETIREMENTS_OFFSET,
         ENGINE_RESULT_SEMANTICS_COUNT, ENGINE_RESULT_SEMANTICS_OFFSET, ENGINE_RESULT_STATUS,
         ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     },
     engine::{
-        frame::{CommittedUpdate, RESULT_FLAG_CHECKPOINT, RetainedPlanRevision},
+        frame::{CommittedUpdate, PlannerRevision, RESULT_FLAG_CHECKPOINT},
         render_plan::RenderPlanView,
         render_plan_wire::{EncodedPlanLayout, encode_publication, encode_query},
         semantic_view::SemanticRecord,
@@ -144,7 +144,7 @@ impl FrameTransport {
                 } else {
                     0
                 },
-                retained_plan_id: commit.retained_plan_id,
+                planner_id: commit.planner_id,
                 revision: commit.revision,
                 required_base_revision: commit.required_base_revision,
                 publication_generation: generation,
@@ -168,8 +168,8 @@ impl FrameTransport {
     /// alternation stay untouched.
     pub fn stage_query(
         &mut self,
-        retained_plan_id: u32,
-        revision: RetainedPlanRevision,
+        planner_id: u32,
+        revision: PlannerRevision,
         semantic_views: &[SemanticRecord],
     ) -> Result<usize, u32> {
         let slot = self.inactive_slot();
@@ -180,7 +180,7 @@ impl FrameTransport {
                 status: 0,
                 fault: FrameFault::default(),
                 flags: 0,
-                retained_plan_id,
+                planner_id,
                 revision,
                 required_base_revision: revision.plan,
                 publication_generation: self.publication_generation,
@@ -197,8 +197,8 @@ impl FrameTransport {
 
     pub fn publish_failure(
         &mut self,
-        retained_plan_id: u32,
-        revision: RetainedPlanRevision,
+        planner_id: u32,
+        revision: PlannerRevision,
         status: u32,
         fault: FrameFault,
         required_request_capacity: u32,
@@ -211,7 +211,7 @@ impl FrameTransport {
                 status,
                 fault,
                 flags: 0,
-                retained_plan_id,
+                planner_id,
                 revision,
                 required_base_revision: revision.plan,
                 publication_generation: self.publication_generation,
@@ -242,11 +242,7 @@ impl FrameTransport {
         write_u32(bytes, ENGINE_RESULT_BYTE_LENGTH, values.layout.byte_length);
         write_u32(bytes, ENGINE_RESULT_STATUS, values.status);
         write_u32(bytes, ENGINE_RESULT_FLAGS, values.flags);
-        write_u32(
-            bytes,
-            ENGINE_RESULT_RETAINED_PLAN_ID,
-            values.retained_plan_id,
-        );
+        write_u32(bytes, ENGINE_RESULT_PLANNER_ID, values.planner_id);
         write_u32(bytes, ENGINE_RESULT_ENGINE_REVISION, values.revision.engine);
         write_u32(bytes, ENGINE_RESULT_PLAN_REVISION, values.revision.plan);
         write_u32(
@@ -346,8 +342,8 @@ struct HeaderValues {
     /// Identifiers the status names, all zero for a success and for a status that names none.
     fault: FrameFault,
     flags: u32,
-    retained_plan_id: u32,
-    revision: RetainedPlanRevision,
+    planner_id: u32,
+    revision: PlannerRevision,
     required_base_revision: u32,
     publication_generation: u32,
     required_request_capacity: u32,
@@ -492,7 +488,7 @@ mod tests {
 
         let failure = transport.publish_failure(
             3,
-            RetainedPlanRevision { engine: 1, plan: 1 },
+            PlannerRevision { engine: 1, plan: 1 },
             STATUS_INVALID_REQUEST,
             FrameFault::default(),
             512,
@@ -561,8 +557,8 @@ mod tests {
 
     fn commit(revision: u32) -> CommittedUpdate {
         CommittedUpdate {
-            retained_plan_id: 3,
-            revision: RetainedPlanRevision {
+            planner_id: 3,
+            revision: PlannerRevision {
                 engine: revision,
                 plan: revision,
             },

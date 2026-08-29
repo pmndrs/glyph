@@ -1,21 +1,21 @@
 import {
-  type TextEngineBufferRecord,
-  type TextEngineDrawRecord,
-  type TextEnginePatchRecord,
-  type TextEnginePrimitiveRecord,
-  type TextEngineResourceRecord,
-  type TextEngineRetirementRecord,
+  type RenderPlanBufferRecord,
+  type RenderPlanDrawRecord,
+  type RenderPlanPatchRecord,
+  type RenderPlanPrimitiveRecord,
+  type RenderPlanResourceRecord,
+  type RenderPlanRetirementRecord,
 } from '@pmndrs/glyph/core';
 
 import type { ExampleTableSnapshot } from './snapshot.js';
 
 /** One portable resource lifecycle row decoded from a render plan. */
-export type ExampleResourceRecord = TextEngineResourceRecord;
+export type ExampleResourceRecord = RenderPlanResourceRecord;
 /** One renderer-neutral geometry row decoded from a render plan. */
-export type ExamplePrimitiveRecord = TextEnginePrimitiveRecord;
+export type ExamplePrimitiveRecord = RenderPlanPrimitiveRecord;
 
 /** One draw the engine wants issued, decoded from the plan's `draws` table. */
-export type ExampleDraw = TextEngineDrawRecord;
+export type ExampleDraw = RenderPlanDrawRecord;
 
 /**
  * One decoded frame, safe to hold after target acceptance. Borrowed byte fields are copied
@@ -27,15 +27,15 @@ export interface ExampleDrawList {
   readonly publicationGeneration: number;
   readonly draws: readonly ExampleDraw[];
   readonly resourceRecords: readonly ExampleResourceRecord[];
-  readonly bufferRecords: readonly TextEngineBufferRecord[];
+  readonly bufferRecords: readonly RenderPlanBufferRecord[];
   readonly primitiveRecords: readonly ExamplePrimitiveRecord[];
   /** Dirty ranges: what changed on which renderer buffer, not whole arrays. */
-  readonly patches: readonly TextEnginePatchRecord[];
+  readonly patches: readonly RenderPlanPatchRecord[];
   /**
    * Storage to release, each naming `(kind, id, generation)` and the acknowledged
    * publication generation that makes release safe.
    */
-  readonly retirements: readonly TextEngineRetirementRecord[];
+  readonly retirements: readonly RenderPlanRetirementRecord[];
   readonly resources: ExampleTableSnapshot;
   readonly buffers: ExampleTableSnapshot;
   readonly primitives: ExampleTableSnapshot;

@@ -15,17 +15,17 @@ import {
   type PortableResourceGroupPayload,
   type PortableTextureArrayPayload,
   type PortableTexturePayload,
-  readTextEngineBuffer,
-  readTextEngineDraw,
-  readTextEnginePatch,
-  readTextEnginePrimitive,
-  readTextEngineResource,
-  readTextEngineRetirement,
+  readRenderPlanBuffer,
+  readRenderPlanDraw,
+  readRenderPlanPatch,
+  readRenderPlanPrimitive,
+  readRenderPlanResource,
+  readRenderPlanRetirement,
   type RenderPlanTable,
-  type TextEngineDrawRecord,
-  type TextEnginePrimitiveRecord,
-  type TextEngineRenderPlanReader,
-  type TextEngineScalarType,
+  type RenderPlanDrawRecord,
+  type RenderPlanPrimitiveRecord,
+  type RenderPlanReader,
+  type RenderPlanScalarType,
 } from '../core.js';
 import { bitmap } from '../raster/bitmap-technique.js';
 import { msdf } from '../raster/msdf.js';
@@ -51,7 +51,7 @@ interface RetainedBuffer {
   readonly programId: number;
   readonly policyBufferId: ThreeBufferBindingId;
   readonly threeAttributeName: ThreePolicyAttributeName;
-  readonly scalarType: TextEngineScalarType;
+  readonly scalarType: RenderPlanScalarType;
   readonly vectorWidth: number;
   readonly capacityRecords: number;
   readonly array: ScalarArray;
@@ -605,13 +605,13 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
 
   #readResources(
     candidate: PlanCandidate,
-    plan: TextEngineRenderPlanReader,
+    plan: RenderPlanReader,
     table: RenderPlanTable,
     context: PreparationContext,
   ): void {
     const resources = context.resources;
     for (let index = 0; index < table.count; index += 1) {
-      const record = readTextEngineResource(plan, table, index);
+      const record = readRenderPlanResource(plan, table, index);
       const { id, generation, techniqueId, resourceKind, referenceId } = record;
       if (id === 0 || generation === 0 || referenceId === 0) {
         throw new Error('text-engine resources require nonzero identities and generations');
@@ -673,9 +673,9 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     }
   }
 
-  #readBuffers(plan: TextEngineRenderPlanReader, table: RenderPlanTable, buffers: Map<number, RetainedBuffer>): void {
+  #readBuffers(plan: RenderPlanReader, table: RenderPlanTable, buffers: Map<number, RetainedBuffer>): void {
     for (let index = 0; index < table.count; index += 1) {
-      const record = readTextEngineBuffer(plan, table, index);
+      const record = readRenderPlanBuffer(plan, table, index);
       const { id, generation, scalarType, vectorWidth, capacityRecords, byteLength, programId } = record;
       const existing = buffers.get(id);
       if (id === 0 || generation === 0 || programId === 0) {
@@ -729,7 +729,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   }
 
   #stageBufferMutations(
-    plan: TextEngineRenderPlanReader,
+    plan: RenderPlanReader,
     table: RenderPlanTable,
     buffers: ReadonlyMap<number, RetainedBuffer>,
   ): StagedBufferMutations {
@@ -768,7 +768,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     }
 
     for (let index = 0; index < table.count; index += 1) {
-      const patch = readTextEnginePatch(plan, table, index);
+      const patch = readRenderPlanPatch(plan, table, index);
       const buffer = retainedBuffer(buffers, patch.bufferId, patch.bufferGeneration);
       const { destinationOffset, byteLength } = patch;
 
@@ -813,7 +813,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   }
 
   #prepareDraws(
-    plan: TextEngineRenderPlanReader,
+    plan: RenderPlanReader,
     draws: RenderPlanTable,
     primitives: RenderPlanTable,
     buffers: RenderPlanTable,
@@ -846,12 +846,12 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
 
     try {
       for (let index = 0; index < draws.count; index += 1) {
-        const draw = readTextEngineDraw(plan, draws, index);
+        const draw = readRenderPlanDraw(plan, draws, index);
         if (draw.primitiveCount !== 1) {
           throw new Error('first-party Three plan target requires one primitive span per draw');
         }
 
-        const primitive = readTextEnginePrimitive(plan, primitives, draw.primitiveStart);
+        const primitive = readRenderPlanPrimitive(plan, primitives, draw.primitiveStart);
         const { programId, programVariant } = draw;
         if (primitive.programId !== programId || primitive.programVariant !== programVariant) {
           throw new Error('draw and primitive disagree about their renderer program');
@@ -862,7 +862,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
 
         const byPolicyId = new Map<ThreeBufferBindingId, RetainedBuffer>();
         for (let bufferIndex = draw.bufferStart; bufferIndex < draw.bufferStart + draw.bufferCount; bufferIndex += 1) {
-          const record = readTextEngineBuffer(plan, buffers, bufferIndex);
+          const record = readRenderPlanBuffer(plan, buffers, bufferIndex);
           const buffer = this.#buffer(record.id, record.generation);
           if (record.programId !== programId || buffer.programId !== programId) {
             throw new Error('draw contains a buffer owned by a different renderer program');
@@ -885,7 +885,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
         if (decoration && (primitiveResourceId !== 0 || primitiveResourceGeneration !== 0)) {
           throw new Error('decoration primitive unexpectedly references a resource');
         }
-        const resourceRecord = decoration ? undefined : readTextEngineResource(plan, resources, resourceStart);
+        const resourceRecord = decoration ? undefined : readRenderPlanResource(plan, resources, resourceStart);
         const resource =
           resourceRecord === undefined ? undefined : this.#resourcesForPreparation().get(resourceRecord.id);
         if (!decoration && resource === undefined) {
@@ -897,7 +897,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
             throw new Error('primitive and draw disagree about their primary resource');
           }
           for (let resourceIndex = resourceStart; resourceIndex < resourceStart + resourceCount; resourceIndex += 1) {
-            const row = readTextEngineResource(plan, resources, resourceIndex);
+            const row = readRenderPlanResource(plan, resources, resourceIndex);
             const retained = context.resources.get(row.id);
             if (
               retained === undefined ||
@@ -1068,9 +1068,9 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     return { kind: 'indexed', indices };
   }
 
-  #collectTransformIndices(plan: TextEngineRenderPlanReader, draws: RenderPlanTable): Set<number> {
+  #collectTransformIndices(plan: RenderPlanReader, draws: RenderPlanTable): Set<number> {
     for (let drawIndex = 0; drawIndex < draws.count; drawIndex += 1) {
-      if (readTextEngineDraw(plan, draws, drawIndex).transformId === 0) {
+      if (readRenderPlanDraw(plan, draws, drawIndex).transformId === 0) {
         return new Set(this.#preparation?.transforms.keys());
       }
     }
@@ -1588,12 +1588,12 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   }
 
   #applyRetirementsToCandidate(
-    plan: TextEngineRenderPlanReader,
+    plan: RenderPlanReader,
     table: RenderPlanTable,
     context: PreparationContext,
   ): void {
     for (let index = 0; index < table.count; index += 1) {
-      const retirement = readTextEngineRetirement(plan, table, index);
+      const retirement = readRenderPlanRetirement(plan, table, index);
       const { id, generation } = retirement;
       if (retirement.kind === 'buffer') {
         for (const [key, realization] of context.materials) {
@@ -1818,8 +1818,8 @@ function bufferBindingOrder(binding: ThreeBufferBindingId): number {
 }
 
 function recordAddressing(
-  draw: TextEngineDrawRecord,
-  primitive: TextEnginePrimitiveRecord,
+  draw: RenderPlanDrawRecord,
+  primitive: RenderPlanPrimitiveRecord,
   buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
 ): RecordAddressing {
   const { indirectBufferId } = draw;
@@ -1992,7 +1992,7 @@ function f32BufferMember(group: PortableResourceGroupPayload, name: string, labe
   return value;
 }
 
-function scalarArray(scalarType: TextEngineScalarType, byteLength: number): ScalarArray {
+function scalarArray(scalarType: RenderPlanScalarType, byteLength: number): ScalarArray {
   if (scalarType === 'f32' || scalarType === 'u32') {
     if (byteLength % 4 !== 0) throw new RangeError('f32/u32 text-engine buffers require four-byte alignment');
     return scalarType === 'f32' ? new Float32Array(byteLength / 4) : new Uint32Array(byteLength / 4);

@@ -1,12 +1,10 @@
 import {
-  assertRenderIdFactory,
   compileRenderPolicy,
   createProgram,
   createRasterPolicyProgram,
   definePolicyBuffers,
   defineTechniqueSchema,
   id,
-  RenderIdScope,
   schemaPolicyBuffers,
   techniqueProgram,
   type PolicyAllocationMode,
@@ -22,6 +20,7 @@ import {
   type AnyTechniqueSchema,
   type TechniqueSchema,
 } from '../core.js';
+import { assertRenderIdFactory, RenderIdScope } from '../core/render-policy.js';
 import { bitmapPlanProgram } from '../raster/bitmap-technique.js';
 import { msdfPlanProgram } from '../raster/msdf.js';
 import { slugPlanProgram } from '../raster/slug-technique.js';

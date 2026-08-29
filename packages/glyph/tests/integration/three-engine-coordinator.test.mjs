@@ -8,9 +8,9 @@ import {
   defineTechniqueSchema,
   registerRasterPlanProgram,
   techniqueProgram,
-  TextEngineBackpressureError,
-  RetainedPlanDisposedError,
-  TextEngineTransportError,
+  RenderPlannerBackpressureError,
+  RenderPlannerDisposedError,
+  PlanTransportError,
   id,
 } from '../../dist/core.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
@@ -126,7 +126,7 @@ async function rendererHarness() {
   drawRoot.add(object);
   const transform = coordinator.bindTransform(object);
   let target;
-  const retainedPlan = coordinator.backend.createRetainedPlan({
+  const planner = coordinator.backend.createPlanner({
     policy: coordinator.policy,
     capabilitySet: coordinator.capabilitySet,
     target: () => {
@@ -147,10 +147,10 @@ async function rendererHarness() {
     glyphEngine,
     coordinator,
     transform,
-    retainedPlan,
+    planner,
     target,
     dispose() {
-      retainedPlan.dispose();
+      planner.dispose();
       transform.dispose();
       coordinator.dispose();
       glyphEngine.dispose();
@@ -176,7 +176,7 @@ test('records-sourced Three geometry renders and retains topology across text up
   try {
     assert.throws(() => renderer.coordinator.bindFontStack(invalidFont), /vertex input "position" needs f32x3/u);
     binding = renderer.coordinator.bindFontStack(font);
-    text = renderer.retainedPlan.createText({
+    text = renderer.planner.createText({
       font: binding,
       transform: renderer.transform,
       text: '12345',
@@ -184,7 +184,7 @@ test('records-sourced Three geometry renders and retains topology across text up
       contentBox: { width: { mode: 'at-most', size: 256 }, height: { mode: 'at-most', size: 64 } },
     });
 
-    assert.deepEqual(renderer.retainedPlan.publish(), { accepted: true });
+    assert.deepEqual(renderer.planner.publish(), { accepted: true });
     assert.equal(renderer.target.draws.length, 1);
     const retainedDraw = renderer.target.draws[0];
     assert.equal(retainedDraw.geometry.instanceCount, 5);
@@ -193,7 +193,7 @@ test('records-sourced Three geometry renders and retains topology across text up
     assert.deepEqual([...retainedDraw.geometry.getAttribute('uv').array], [0, 0, 1, 0, 1, 1, 0, 1]);
 
     text.update({ text: '12' });
-    assert.deepEqual(renderer.retainedPlan.publish(), { accepted: true });
+    assert.deepEqual(renderer.planner.publish(), { accepted: true });
     assert.equal(renderer.target.draws[0], retainedDraw);
     assert.equal(retainedDraw.geometry.instanceCount, 2);
   } finally {
@@ -267,7 +267,7 @@ test('an async target must return the same unmodified transferred publication', 
       const workerBytes = structuredClone(candidate.bytes, { transfer: [candidate.bytes.buffer] });
       if (growEngineDuringAcceptance) {
         growEngineDuringAcceptance = false;
-        const sibling = coordinator.backend.createRetainedPlan({
+        const sibling = coordinator.backend.createPlanner({
           policy: coordinator.policy,
           capabilitySet: coordinator.capabilitySet,
           target: () => ({
@@ -297,7 +297,7 @@ test('an async target must return the same unmodified transferred publication', 
     },
     dispose() {},
   };
-  const retainedPlan = coordinator.backend.createRetainedPlan({
+  const planner = coordinator.backend.createPlanner({
     policy: coordinator.policy,
     capabilitySet: coordinator.capabilitySet,
     target: () => target,
@@ -307,34 +307,34 @@ test('an async target must return the same unmodified transferred publication', 
     textCapacity: 64,
   });
   const binding = coordinator.bindFontStack(font);
-  const text = retainedPlan.createText({ font: binding, text: 'abc', style: { fontSize: 16 } });
+  const text = planner.createText({ font: binding, text: 'abc', style: { fontSize: 16 } });
   try {
-    assert.deepEqual(await retainedPlan.publish(), { accepted: true });
+    assert.deepEqual(await planner.publish(), { accepted: true });
     growEngineDuringAcceptance = true;
     text.update({ text: 'abcz' });
-    assert.deepEqual(await retainedPlan.publish(), { accepted: true });
+    assert.deepEqual(await planner.publish(), { accepted: true });
     holdReturn = true;
     text.update({ text: 'abcd' });
-    const pending = retainedPlan.publish();
-    assert.throws(() => retainedPlan.publish(), TextEngineBackpressureError);
-    assert.throws(() => text.update({ text: 'blocked' }), TextEngineBackpressureError);
+    const pending = planner.publish();
+    assert.throws(() => planner.publish(), RenderPlannerBackpressureError);
+    assert.throws(() => text.update({ text: 'blocked' }), RenderPlannerBackpressureError);
     holdReturn = false;
     releaseReturn();
     assert.deepEqual(await pending, { accepted: true });
     corruptReturn = true;
     text.update({ text: 'abcde' });
-    await assert.rejects(() => retainedPlan.publish(), TextEngineTransportError);
+    await assert.rejects(() => planner.publish(), PlanTransportError);
     corruptReturn = false;
     holdReturn = true;
     text.update({ text: 'abcdef' });
-    const aborted = retainedPlan.publish();
-    retainedPlan.dispose();
-    await assert.rejects(aborted, RetainedPlanDisposedError);
+    const aborted = planner.publish();
+    planner.dispose();
+    await assert.rejects(aborted, RenderPlannerDisposedError);
     releaseReturn();
-    assert.throws(() => retainedPlan.publish(), RetainedPlanDisposedError);
+    assert.throws(() => planner.publish(), RenderPlannerDisposedError);
   } finally {
     text.dispose();
-    retainedPlan.dispose();
+    planner.dispose();
     binding.dispose();
     coordinator.dispose();
     glyphEngine.dispose();

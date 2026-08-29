@@ -15,7 +15,7 @@ export interface FrameTransferPublication {
   readonly type: typeof FRAME_PUBLICATION_TYPE;
   readonly protocolVersion: typeof FRAME_TRANSFER_PROTOCOL_VERSION;
   readonly transferId: number;
-  readonly retainedPlanId: number;
+  readonly plannerId: number;
   readonly planRevision: number;
   readonly byteLength: number;
   readonly capacity: number;
@@ -58,7 +58,7 @@ export type FrameReturnResult =
 export interface FrameTransferPool {
   transfer(
     bytes: Uint8Array,
-    publication: Readonly<{ retainedPlanId: number; planRevision: number }>,
+    publication: Readonly<{ plannerId: number; planRevision: number }>,
     send: (message: FrameTransferPublication, transfer: readonly Transferable[]) => void,
   ): FrameTransferResult;
   acceptReturn(message: unknown): FrameReturnResult;
@@ -153,7 +153,7 @@ export function createFrameTransferPool(limits: FrameTransferPoolLimits): FrameT
         type: FRAME_PUBLICATION_TYPE,
         protocolVersion: FRAME_TRANSFER_PROTOCOL_VERSION,
         transferId,
-        retainedPlanId: publication.retainedPlanId,
+        plannerId: publication.plannerId,
         planRevision: publication.planRevision,
         byteLength: bytes.byteLength,
         capacity: buffer.byteLength,
@@ -321,7 +321,7 @@ export function isFrameTransferPublication(value: unknown): value is FrameTransf
   if (!isNonArrayObject(value) || value.type !== FRAME_PUBLICATION_TYPE || value.protocolVersion !== 0) return false;
   return (
     positiveU32(value.transferId) &&
-    positiveU32(value.retainedPlanId) &&
+    positiveU32(value.plannerId) &&
     nonnegativeU32(value.planRevision) &&
     positiveU32(value.byteLength) &&
     positiveU32(value.capacity) &&
@@ -371,9 +371,9 @@ function assertTransferBytes(value: unknown): asserts value is Uint8Array {
 
 function assertPublicationMetadata(
   value: unknown,
-): asserts value is Readonly<{ retainedPlanId: number; planRevision: number }> {
+): asserts value is Readonly<{ plannerId: number; planRevision: number }> {
   if (!isNonArrayObject(value)) throw new TypeError('publication metadata must be an object');
-  if (!positiveU32(value.retainedPlanId)) throw new RangeError('retainedPlanId must be a positive u32');
+  if (!positiveU32(value.plannerId)) throw new RangeError('plannerId must be a positive u32');
   if (!nonnegativeU32(value.planRevision)) throw new RangeError('planRevision must be a u32');
 }
 

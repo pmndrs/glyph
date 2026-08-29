@@ -10,8 +10,8 @@ import {
   createGlyphEngine,
   compileFontBinding,
   GlyphBackend,
-  TextEngineRenderPlanView,
-  TextEngineStatusError,
+  RenderPlanView,
+  GlyphEngineStatusError,
   type AnyTechniqueSchema,
   type CompiledRasterFont,
   type RasterPlanProgram,
@@ -27,15 +27,15 @@ import {
   type RenderPlanSemanticId,
   type RenderPlanTransformId,
   type ResourceHandle,
-  type SynchronousRetainedPlan,
+  type RenderPlanner,
   id,
 } from '@pmndrs/glyph/core';
 import { bitmapPlanProgram } from '@pmndrs/glyph/raster/bitmap';
 // @ts-expect-error Dynamic engine plan IDs are package-managed implementation state.
-import type { RetainedPlanHandle as PublicRetainedPlanHandle } from '@pmndrs/glyph/core';
-void (undefined as unknown as PublicRetainedPlanHandle);
+import type { PlannerHandle as PublicPlannerHandle } from '@pmndrs/glyph/core';
+void (undefined as unknown as PublicPlannerHandle);
 // @ts-expect-error Raw frame compilation is package-managed implementation state.
-import { compileTextEngineFrameUpdate as publicCompileTextEngineFrameUpdate } from '@pmndrs/glyph/core';
+import { compilePlannerFrameUpdate as publicCompileTextEngineFrameUpdate } from '@pmndrs/glyph/core';
 void publicCompileTextEngineFrameUpdate;
 // @ts-expect-error Raw Wasm publications are package-managed implementation state.
 import type { PlanPublication as PublicTextEnginePublication } from '@pmndrs/glyph/core';
@@ -64,7 +64,7 @@ const target: PlanTarget = {
   },
   dispose() {},
 };
-const retainedPlan: SynchronousRetainedPlan = backend.createRetainedPlan({
+const planner: RenderPlanner = backend.createPlanner({
   policy: installedPolicy,
   target: () => target,
   limits: {
@@ -81,23 +81,23 @@ const retainedPlan: SynchronousRetainedPlan = backend.createRetainedPlan({
   resultCapacity: 128 * 1024,
   textCapacity: 1024,
 });
-const retainedText = retainedPlan.createText({ font: stackBinding, text: 'hello' });
+const retainedText = planner.createText({ font: stackBinding, text: 'hello' });
 retainedText.update({ text: 'world' });
 const retainedMeasurement = retainedText.layout();
 const retainedInspection = retainedText.glyphs();
 void retainedMeasurement;
 void retainedInspection;
-retainedPlan.createText({
+planner.createText({
   font: stackBinding,
   text: 'material',
   material: materialBinding,
   transform: transformBinding,
 });
 // @ts-expect-error Resource identities cannot be authored where a material identity is required.
-retainedPlan.createText({ font: stackBinding, text: 'resource-as-material', material: resourceBinding });
+planner.createText({ font: stackBinding, text: 'resource-as-material', material: resourceBinding });
 // @ts-expect-error Material identities cannot be authored where a transform identity is required.
-retainedPlan.createText({ font: stackBinding, text: 'material-as-transform', transform: materialBinding });
-retainedPlan.createText({
+planner.createText({ font: stackBinding, text: 'material-as-transform', transform: materialBinding });
+planner.createText({
   font: stackBinding,
   text: 'inline',
   inlineObjects: [
@@ -116,7 +116,7 @@ retainedPlan.createText({
     },
   ],
 });
-retainedPlan.createText({
+planner.createText({
   font: stackBinding,
   text: 'invalid-inline',
   inlineObjects: [
@@ -136,18 +136,18 @@ retainedPlan.createText({
     },
   ],
 });
-const acceptance = retainedPlan.publish();
+const acceptance = planner.publish();
 void acceptance;
 // @ts-expect-error Policy parameters have no registered schema and are not an accepted publish input.
-retainedPlan.publish({ policyParameters: new Uint8Array() });
+planner.publish({ policyParameters: new Uint8Array() });
 
 // @ts-expect-error Retained plans expose no raw update protocol.
-retainedPlan.update(new Uint8Array());
+planner.update(new Uint8Array());
 // @ts-expect-error Retained plans expose no caller-authored acceptance cursor.
-void retainedPlan.acknowledgedGeneration;
+void planner.acknowledgedGeneration;
 
 declare const transferredBytes: Uint8Array<ArrayBuffer>;
-const plan = new TextEngineRenderPlanView().bindBytes(transferredBytes);
+const plan = new RenderPlanView().bindBytes(transferredBytes);
 const draws = plan.table('draws');
 void plan.record(draws, 0);
 
@@ -202,7 +202,7 @@ exactCompiledRasterView.f32('missing', 0);
 // @ts-expect-error Scalar domains stay distinct even when both fields exist.
 exactCompiledRasterView.u32('bearingX', 0);
 
-declare const status: TextEngineStatusError;
+declare const status: GlyphEngineStatusError;
 const code: number = status.status;
 void code;
 

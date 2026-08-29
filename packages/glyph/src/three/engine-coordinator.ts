@@ -14,7 +14,7 @@ import {
   type PolicyCapabilitySet,
   type PortableResource,
   type RenderIdFactory,
-  type TextEngineBufferBinding,
+  type RenderPlanBufferBinding,
   type GlyphBackend,
 } from '../core.js';
 import { threeRenderPolicyDescriptor, type ThreeTransformMode } from './render-policy.js';
@@ -200,7 +200,7 @@ export class ThreeTextEngineCoordinator {
   }
 
   /** Resolve a decoded wire value through the exact policy program that declared it. */
-  resolveBufferBindingId(programId: number, binding: TextEngineBufferBinding): PolicyBufferId | 'order' {
+  resolveBufferBindingId(programId: number, binding: RenderPlanBufferBinding): PolicyBufferId | 'order' {
     if (binding.kind === 'order') return 'order';
     const bufferId = this.#policyBufferIds.get(programId)?.get(binding.id);
     if (bufferId === undefined) {

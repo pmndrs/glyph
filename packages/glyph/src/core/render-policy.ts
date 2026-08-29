@@ -32,7 +32,7 @@ const glyphIdKinds = new Set([
   'policy',
   'font-binding',
   'font-stack',
-  'retained-plan',
+  'planner',
   'material',
   'paragraph',
   'style',
@@ -49,7 +49,7 @@ export type GlyphIdKind =
   | 'policy'
   | 'font-binding'
   | 'font-stack'
-  | 'retained-plan'
+  | 'planner'
   | 'material'
   | 'paragraph'
   | 'style'
@@ -68,7 +68,7 @@ export type PolicyBufferId = GlyphId<'buffer'>;
 export type PolicyHandle = GlyphId<'policy'>;
 export type FontBindingHandle = GlyphId<'font-binding'>;
 export type FontStackHandle = GlyphId<'font-stack'>;
-export type RetainedPlanHandle = GlyphId<'retained-plan'>;
+export type PlannerHandle = GlyphId<'planner'>;
 /** Host-local material identity carried by a render plan. */
 export type MaterialHandle = GlyphId<'material'>;
 export type ParagraphId = GlyphId<'paragraph'>;
@@ -86,7 +86,7 @@ export interface BackendIdFactory {
   policy(name: string): PolicyHandle;
   fontBinding(name: string): FontBindingHandle;
   fontStack(name: string): FontStackHandle;
-  retainedPlan(name: string): RetainedPlanHandle;
+  planner(name: string): PlannerHandle;
   material(name: string): MaterialHandle;
   paragraph(name: string): ParagraphId;
   style(name: string): StyleId;
@@ -167,7 +167,7 @@ export function createBackendIdFactory(scope: GlyphIdScope, assertActive: () => 
       policy: (name: string) => mint('policy', name),
       fontBinding: (name: string) => mint('font-binding', name),
       fontStack: (name: string) => mint('font-stack', name),
-      retainedPlan: (name: string) => mint('retained-plan', name),
+      planner: (name: string) => mint('planner', name),
       material: (name: string) => mint('material', name),
       paragraph: (name: string) => mint('paragraph', name),
       style: (name: string) => mint('style', name),
@@ -206,7 +206,7 @@ const glyphIdMethods = {
   policy: 'policy',
   'font-binding': 'fontBinding',
   'font-stack': 'fontStack',
-  'retained-plan': 'retainedPlan',
+  planner: 'planner',
   material: 'material',
   paragraph: 'paragraph',
   style: 'style',
@@ -471,8 +471,8 @@ export interface IdFactory extends RenderIdFactory {
   fontBinding(name: string): FontBindingHandle;
   /** Derive an authored font-stack identity. */
   fontStack(name: string): FontStackHandle;
-  /** Derive an authored retained-plan identity. */
-  retainedPlan(name: string): RetainedPlanHandle;
+  /** Derive an authored render-planner identity. */
+  planner(name: string): PlannerHandle;
   /** Derive an authored renderer-material identity. */
   material(name: string): MaterialHandle;
   /** Derive an authored paragraph identity. */
@@ -507,7 +507,7 @@ const authoredId = Object.assign(
     policy: (name: string) => permanentGlyphId('policy', name),
     fontBinding: (name: string) => permanentGlyphId('font-binding', name),
     fontStack: (name: string) => permanentGlyphId('font-stack', name),
-    retainedPlan: (name: string) => permanentGlyphId('retained-plan', name),
+    planner: (name: string) => permanentGlyphId('planner', name),
     material: (name: string) => permanentGlyphId('material', name),
     paragraph: (name: string) => permanentGlyphId('paragraph', name),
     style: (name: string) => permanentGlyphId('style', name),

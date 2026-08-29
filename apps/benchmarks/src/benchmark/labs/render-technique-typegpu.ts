@@ -48,7 +48,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
     );
     const binding = engine.bindFont(font);
     const stack = engine.bindFontStack(createFontStack(font));
-    engine.openRetainedPlan();
+    engine.openPlanner();
     const text = engine.createText({
       font: stack,
       text: 'Portable TypeGPU',

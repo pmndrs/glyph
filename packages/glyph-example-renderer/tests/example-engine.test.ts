@@ -1,12 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 
-import {
-  createGlyphEngine,
-  type PlanTarget,
-  type SynchronousRetainedPlan,
-  type TextEngineRenderPlanReader,
-} from '@pmndrs/glyph/core';
+import { createGlyphEngine, type PlanTarget, type RenderPlanner, type RenderPlanReader } from '@pmndrs/glyph/core';
 import { describe, expect, test } from 'vitest';
 
 import { ExampleTextEngine } from '../src/engine.js';
@@ -57,14 +52,14 @@ describe('a retained engine driven through the published core surface', () => {
     const glyphEngine = await createGlyphEngine({ wasm: await wasmBytes() });
     const backend = glyphEngine.createBackend({ integration: 'glyph-example-renderer-test/borrow' });
     const policy = backend.installPolicy(exampleRenderPolicyDescriptor);
-    let retainedReader: TextEngineRenderPlanReader | undefined;
-    let sibling: SynchronousRetainedPlan;
+    let retainedReader: RenderPlanReader | undefined;
+    let sibling: RenderPlanner;
     const siblingTarget: PlanTarget = {
       delivery: 'borrowed',
       accept: () => ({ accepted: true }),
       dispose() {},
     };
-    sibling = backend.createRetainedPlan({
+    sibling = backend.createPlanner({
       policy,
       target: () => siblingTarget,
       limits: LIMITS,
@@ -79,24 +74,24 @@ describe('a retained engine driven through the published core surface', () => {
       },
       dispose() {},
     };
-    const retainedPlan = backend.createRetainedPlan({
+    const planner = backend.createPlanner({
       policy,
       target: () => target,
       limits: LIMITS,
       ...CAPACITIES,
     });
     try {
-      expect(retainedPlan.publish()).toEqual({ accepted: true });
+      expect(planner.publish()).toEqual({ accepted: true });
       expect(() => retainedReader!.table('draws')).toThrow(/expired/);
     } finally {
       backend.dispose();
       glyphEngine.dispose();
     }
-    expect(retainedPlan.disposed).toBe(true);
+    expect(planner.disposed).toBe(true);
     expect(sibling.disposed).toBe(true);
   });
 
-  test('claims one target for exactly one retained plan and cascades disposal', async () => {
+  test('claims one target for exactly one render planner and cascades disposal', async () => {
     const glyphEngine = await createGlyphEngine({ wasm: await wasmBytes() });
     const backend = glyphEngine.createBackend({ integration: 'glyph-example-renderer-test/ownership' });
     const policy = backend.installPolicy(exampleRenderPolicyDescriptor);
@@ -108,14 +103,14 @@ describe('a retained engine driven through the published core surface', () => {
         disposals += 1;
       },
     };
-    const retainedPlan = backend.createRetainedPlan({
+    const planner = backend.createPlanner({
       policy,
       target: () => target,
       limits: LIMITS,
       ...CAPACITIES,
     });
     expect(() =>
-      backend.createRetainedPlan({
+      backend.createPlanner({
         policy,
         target: () => target,
         limits: LIMITS,
@@ -124,7 +119,7 @@ describe('a retained engine driven through the published core surface', () => {
     ).toThrow(/already attached/);
     expect(disposals).toBe(0);
     backend.dispose();
-    expect(retainedPlan.disposed).toBe(true);
+    expect(planner.disposed).toBe(true);
     expect(disposals).toBe(1);
     glyphEngine.dispose();
   });
@@ -140,7 +135,7 @@ describe('a retained engine driven through the published core surface', () => {
       dispose() {},
     };
     const create = (maxOutputBytes: number) =>
-      backend.createRetainedPlan({
+      backend.createPlanner({
         policy,
         target: () => {
           targetConstructions += 1;

@@ -11,7 +11,7 @@ import type {
   RegionId,
   ResourceHandle,
   StyleId,
-  RetainedPlanHandle,
+  PlannerHandle,
 } from './render-policy.js';
 import { assertGlyphId, policyCapabilitySetSelectionId } from './render-policy.js';
 
@@ -19,7 +19,7 @@ const MAX_U32 = 0xffff_ffff;
 export const MAX_TEXT_ENGINE_OUTPUT_BYTES: number = 64 * 1024 * 1024;
 const encoder = new TextEncoder();
 
-export interface TextEngineFrameLimits {
+export interface PlannerFrameLimits {
   readonly maxParagraphs: number;
   readonly maxClusters: number;
   readonly maxLines: number;
@@ -30,25 +30,25 @@ export interface TextEngineFrameLimits {
   readonly maxOutputBytes: number;
 }
 
-export type TextEngineParagraphMutation =
+export type PlannerParagraphMutation =
   | { readonly opcode: 'upsert'; readonly paragraphId: ParagraphId; readonly order: number }
   | { readonly opcode: 'remove'; readonly paragraphId: ParagraphId };
 
-export interface TextEngineTextMutation {
+export interface PlannerTextMutation {
   readonly paragraphId: ParagraphId;
   readonly start: number;
   readonly deleteCount: number;
   readonly insert: string;
 }
 
-export interface TextEngineFeature {
+export interface PlannerFeature {
   readonly tag: string;
   readonly value: number;
   readonly start: number;
   readonly end: number;
 }
 
-export interface TextEngineDecoration {
+export interface PlannerDecoration {
   readonly style: 'none' | 'solid' | 'double' | 'dotted' | 'dashed' | 'wavy';
   readonly rgba: number;
   readonly underline?: boolean;
@@ -59,11 +59,11 @@ export interface TextEngineDecoration {
   readonly offset: number;
 }
 
-export interface TextEngineStyleValue {
+export interface PlannerStyleValue {
   readonly fontStackHandle?: FontStackHandle;
   readonly materialId?: MaterialHandle;
   readonly language?: string;
-  readonly features?: readonly TextEngineFeature[];
+  readonly features?: readonly PlannerFeature[];
   readonly fontSize?: number;
   readonly lineHeight?: number;
   readonly letterSpacing?: number;
@@ -72,10 +72,10 @@ export interface TextEngineStyleValue {
   readonly rasterPixelRatio?: number;
   readonly direction?: 'auto' | 'ltr' | 'rtl';
   readonly foregroundRgba?: number;
-  readonly decoration?: TextEngineDecoration;
+  readonly decoration?: PlannerDecoration;
 }
 
-export type TextEngineStyleMutation =
+export type PlannerStyleMutation =
   | { readonly opcode: 'remove'; readonly paragraphId: ParagraphId; readonly styleId: StyleId }
   | {
       readonly opcode: 'upsert';
@@ -85,10 +85,10 @@ export type TextEngineStyleMutation =
       readonly start: number;
       readonly end: number;
       readonly root?: boolean;
-      readonly value: TextEngineStyleValue;
+      readonly value: PlannerStyleValue;
     };
 
-export interface TextEngineConstraint {
+export interface PlannerConstraint {
   readonly paragraphId: ParagraphId;
   readonly flowThreadId: FlowThreadId;
   readonly geometryRevision: number;
@@ -129,18 +129,18 @@ export interface TextEngineConstraint {
   readonly lastLine?: 'auto' | 'justify';
 }
 
-export interface TextEngineFlowVertex {
+export interface PlannerFlowVertex {
   readonly inline: number;
   readonly block: number;
 }
 
-export interface TextEngineRegion {
+export interface PlannerRegion {
   readonly id: RegionId;
   readonly geometryRevision: number;
   /** Stable compact slot in the renderer-owned region transform table. */
   readonly transformIndex: number;
   readonly shape: 'rectangle' | 'polygon';
-  readonly vertices?: readonly TextEngineFlowVertex[];
+  readonly vertices?: readonly PlannerFlowVertex[];
   readonly exclusionStart: number;
   readonly exclusionCount: number;
   readonly writingMode: 'horizontal-tb' | 'vertical-rl' | 'vertical-lr';
@@ -155,12 +155,12 @@ export interface TextEngineRegion {
   readonly clipBlockEnd: number;
 }
 
-export interface TextEngineExclusion {
+export interface PlannerExclusion {
   readonly id: ExclusionId;
   readonly regionId: RegionId;
   readonly geometryRevision: number;
   readonly shape: 'rectangle' | 'polygon';
-  readonly vertices?: readonly TextEngineFlowVertex[];
+  readonly vertices?: readonly PlannerFlowVertex[];
   readonly wrapSide: 'both' | 'inline-start' | 'inline-end' | 'largest';
   readonly inlineStart: number;
   readonly blockStart: number;
@@ -170,7 +170,7 @@ export interface TextEngineExclusion {
   readonly marginBlock: number;
 }
 
-export interface TextEngineInlineObject {
+export interface PlannerInlineObject {
   readonly paragraphId: ParagraphId;
   readonly id: InlineObjectId;
   readonly contentRevision: number;
@@ -188,8 +188,8 @@ export interface TextEngineInlineObject {
   readonly baselineAlignment: 'alphabetic' | 'text-top' | 'middle' | 'text-bottom';
 }
 
-export interface TextEngineFrameUpdate {
-  readonly retainedPlanId: RetainedPlanHandle;
+export interface PlannerFrameUpdate {
+  readonly plannerId: PlannerHandle;
   readonly policyHandle: PolicyHandle;
   /** Opaque multi-profile selection; omit it to use the policy's first profile. */
   readonly capabilitySet?: PolicyCapabilitySetSelection;
@@ -198,23 +198,23 @@ export interface TextEngineFrameUpdate {
   readonly acknowledgedPublicationGeneration: number;
   readonly semanticViewMask?: number;
   readonly compositingIndependent?: boolean;
-  readonly limits: TextEngineFrameLimits;
-  readonly paragraphMutations?: readonly TextEngineParagraphMutation[];
-  readonly textMutations?: readonly TextEngineTextMutation[];
-  readonly styleMutations?: readonly TextEngineStyleMutation[];
-  readonly constraints?: readonly TextEngineConstraint[];
-  readonly regions?: readonly TextEngineRegion[];
-  readonly exclusions?: readonly TextEngineExclusion[];
-  readonly inlineObjects?: readonly TextEngineInlineObject[];
+  readonly limits: PlannerFrameLimits;
+  readonly paragraphMutations?: readonly PlannerParagraphMutation[];
+  readonly textMutations?: readonly PlannerTextMutation[];
+  readonly styleMutations?: readonly PlannerStyleMutation[];
+  readonly constraints?: readonly PlannerConstraint[];
+  readonly regions?: readonly PlannerRegion[];
+  readonly exclusions?: readonly PlannerExclusion[];
+  readonly inlineObjects?: readonly PlannerInlineObject[];
 }
 
-export type TextEngineFrameRecords = Pick<
-  TextEngineFrameUpdate,
+export type PlannerFrameRecords = Pick<
+  PlannerFrameUpdate,
   'paragraphMutations' | 'textMutations' | 'styleMutations' | 'constraints' | 'regions' | 'exclusions' | 'inlineObjects'
 >;
 
 /** Validate authored records without serializing a trial frame. */
-export function validateTextEngineFrameRecords(records: TextEngineFrameRecords, limits?: TextEngineFrameLimits): void {
+export function validatePlannerFrameRecords(records: PlannerFrameRecords, limits?: PlannerFrameLimits): void {
   const paragraphMutations = records.paragraphMutations ?? [];
   const textMutations = records.textMutations ?? [];
   const styleMutations = records.styleMutations ?? [];
@@ -261,13 +261,13 @@ export function validateTextEngineFrameRecords(records: TextEngineFrameRecords, 
 }
 
 /** Serialize mutations and constraints only; shaping, layout, planning, and packing remain Rust-owned. */
-export function compileTextEngineFrameUpdate(frame: TextEngineFrameUpdate): Uint8Array {
-  validateTextEngineFrameUpdate(frame);
-  return compileValidatedTextEngineFrameUpdate(frame);
+export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array {
+  validatePlannerFrameUpdate(frame);
+  return compileValidatedPlannerFrameUpdate(frame);
 }
 
 /** @internal Serialize an already validated package-owned frame. */
-export function compileValidatedTextEngineFrameUpdate(frame: TextEngineFrameUpdate): Uint8Array {
+export function compileValidatedPlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array {
   const abi = textShaperAbi;
   const request = abi.layouts.engineUpdateRequest;
   const paragraphMutations = frame.paragraphMutations ?? [];
@@ -277,7 +277,7 @@ export function compileValidatedTextEngineFrameUpdate(frame: TextEngineFrameUpda
   const regions = frame.regions ?? [];
   const exclusions = frame.exclusions ?? [];
   const inlineObjects = frame.inlineObjects ?? [];
-  assertGlyphId(frame.retainedPlanId, 'retained-plan', 'frame retainedPlanId');
+  assertGlyphId(frame.plannerId, 'planner', 'frame plannerId');
   assertGlyphId(frame.policyHandle, 'policy', 'frame policyHandle');
   if (frame.capabilitySet !== undefined) {
     policyCapabilitySetSelectionId(frame.capabilitySet, frame.policyHandle);
@@ -362,10 +362,10 @@ export function compileValidatedTextEngineFrameUpdate(frame: TextEngineFrameUpda
   return bytes;
 }
 
-function validateTextEngineFrameUpdate(frame: TextEngineFrameUpdate): void {
+function validatePlannerFrameUpdate(frame: PlannerFrameUpdate): void {
   if (!isNonArrayObject(frame)) throw new TypeError('text engine frame must be an object');
   if (Object.hasOwn(frame, 'policyParameters')) throw new TypeError('frame policyParameters are not supported');
-  assertGlyphId(frame.retainedPlanId, 'retained-plan', 'frame retainedPlanId');
+  assertGlyphId(frame.plannerId, 'planner', 'frame plannerId');
   assertGlyphId(frame.policyHandle, 'policy', 'frame policyHandle');
   if (frame.capabilitySet !== undefined) policyCapabilitySetSelectionId(frame.capabilitySet, frame.policyHandle);
   for (const [label, value] of [
@@ -394,10 +394,10 @@ function validateTextEngineFrameUpdate(frame: TextEngineFrameUpdate): void {
       throw new TypeError(`frame ${name} must be an array`);
     }
   }
-  validateTextEngineFrameRecords(frame, frame.limits);
+  validatePlannerFrameRecords(frame, frame.limits);
 }
 
-function validateFrameLimits(limits: TextEngineFrameLimits): void {
+function validateFrameLimits(limits: PlannerFrameLimits): void {
   if (!isNonArrayObject(limits)) throw new TypeError('text engine frame limits must be an object');
   for (const label of [
     'maxParagraphs',
@@ -422,13 +422,13 @@ function validateFrameLimits(limits: TextEngineFrameLimits): void {
 }
 
 function assertFrameRecordIds(
-  paragraphMutations: readonly TextEngineParagraphMutation[],
-  textMutations: readonly TextEngineTextMutation[],
-  styleMutations: readonly TextEngineStyleMutation[],
-  constraints: readonly TextEngineConstraint[],
-  regions: readonly TextEngineRegion[],
-  exclusions: readonly TextEngineExclusion[],
-  inlineObjects: readonly TextEngineInlineObject[],
+  paragraphMutations: readonly PlannerParagraphMutation[],
+  textMutations: readonly PlannerTextMutation[],
+  styleMutations: readonly PlannerStyleMutation[],
+  constraints: readonly PlannerConstraint[],
+  regions: readonly PlannerRegion[],
+  exclusions: readonly PlannerExclusion[],
+  inlineObjects: readonly PlannerInlineObject[],
 ): void {
   for (const mutation of paragraphMutations) {
     assertGlyphId(mutation.paragraphId, 'paragraph', 'paragraph mutation paragraphId');
@@ -465,7 +465,7 @@ function assertFrameRecordIds(
   }
 }
 
-function validateStyleMutation(mutation: TextEngineStyleMutation): void {
+function validateStyleMutation(mutation: PlannerStyleMutation): void {
   if (mutation.opcode === 'remove') return;
   if (mutation.opcode !== 'upsert') throw new TypeError('style mutation opcode is invalid');
   u32(mutation.cascadeOrder, 'style cascade order');
@@ -542,7 +542,7 @@ function validateStyleMutation(mutation: TextEngineStyleMutation): void {
   }
 }
 
-function validateConstraint(value: TextEngineConstraint, limits: TextEngineFrameLimits | undefined): void {
+function validateConstraint(value: PlannerConstraint, limits: PlannerFrameLimits | undefined): void {
   for (const [field, number] of [
     ['geometryRevision', value.geometryRevision],
     ['maxLines', value.maxLines],
@@ -576,7 +576,7 @@ function validateConstraint(value: TextEngineConstraint, limits: TextEngineFrame
     throw new RangeError('constraint viewport start must not exceed its end');
   }
   if (limits !== undefined && value.maxLines > limits.maxLines) {
-    throw new RangeError('constraint maxLines exceeds the retained-plan limit');
+    throw new RangeError('constraint maxLines exceeds the planner limit');
   }
   if (value.resumeRegion > value.regionCount) {
     throw new RangeError('constraint resumeRegion exceeds its selected regions');
@@ -603,7 +603,7 @@ function validateConstraint(value: TextEngineConstraint, limits: TextEngineFrame
   }
 }
 
-function validateRegion(value: TextEngineRegion): void {
+function validateRegion(value: PlannerRegion): void {
   u32(value.geometryRevision, 'region geometry revision');
   u32(value.transformIndex, 'region transform index');
   if (value.transformIndex === 0) throw new RangeError('region transform index must be positive');
@@ -621,7 +621,7 @@ function validateRegion(value: TextEngineRegion): void {
   validateShape(value.shape, value.vertices ?? [], bounds, value.inlineStart === value.inlineEnd);
 }
 
-function validateExclusion(value: TextEngineExclusion): void {
+function validateExclusion(value: PlannerExclusion): void {
   u32(value.geometryRevision, 'exclusion geometry revision');
   u16(value.vertices?.length ?? 0, 'exclusion vertex count');
   enumValue(textShaperAbi.engine.flowShapeKinds, value.shape, 'exclusion shape');
@@ -636,7 +636,7 @@ function validateExclusion(value: TextEngineExclusion): void {
 }
 
 function validateBounds(
-  value: TextEngineRegion | TextEngineExclusion,
+  value: PlannerRegion | PlannerExclusion,
   allowEmptyInline: boolean,
 ): readonly [number, number, number, number] {
   for (const field of ['inlineStart', 'blockStart', 'inlineEnd', 'blockEnd'] as const) {
@@ -651,7 +651,7 @@ function validateBounds(
   return [value.inlineStart, value.blockStart, value.inlineEnd, value.blockEnd];
 }
 
-function validateClipBounds(value: TextEngineRegion): readonly [number, number, number, number] {
+function validateClipBounds(value: PlannerRegion): readonly [number, number, number, number] {
   const clip = [value.clipInlineStart, value.clipBlockStart, value.clipInlineEnd, value.clipBlockEnd] as const;
   for (const number of clip) finite(number, 'region clip bound');
   if (clip[0] > clip[2] || clip[1] >= clip[3]) throw new RangeError('region clip is empty or inverted');
@@ -659,8 +659,8 @@ function validateClipBounds(value: TextEngineRegion): readonly [number, number, 
 }
 
 function validateShape(
-  shape: TextEngineRegion['shape'],
-  vertices: readonly TextEngineFlowVertex[],
+  shape: PlannerRegion['shape'],
+  vertices: readonly PlannerFlowVertex[],
   bounds: readonly [number, number, number, number],
   emptyInline: boolean,
 ): void {
@@ -685,7 +685,7 @@ function validateShape(
   }
 }
 
-function validateInlineObject(value: TextEngineInlineObject): void {
+function validateInlineObject(value: PlannerInlineObject): void {
   for (const [field, number] of [
     ['id', value.id],
     ['contentRevision', value.contentRevision],
@@ -715,29 +715,29 @@ function validateInlineObject(value: TextEngineInlineObject): void {
 }
 
 function validateRecordRelationships(
-  paragraphMutations: readonly TextEngineParagraphMutation[],
-  textMutations: readonly TextEngineTextMutation[],
-  styleMutations: readonly TextEngineStyleMutation[],
-  constraints: readonly TextEngineConstraint[],
-  regions: readonly TextEngineRegion[],
-  exclusions: readonly TextEngineExclusion[],
-  inlineObjects: readonly TextEngineInlineObject[],
-  limits: TextEngineFrameLimits | undefined,
+  paragraphMutations: readonly PlannerParagraphMutation[],
+  textMutations: readonly PlannerTextMutation[],
+  styleMutations: readonly PlannerStyleMutation[],
+  constraints: readonly PlannerConstraint[],
+  regions: readonly PlannerRegion[],
+  exclusions: readonly PlannerExclusion[],
+  inlineObjects: readonly PlannerInlineObject[],
+  limits: PlannerFrameLimits | undefined,
 ): void {
   if (limits !== undefined) {
     if (paragraphMutations.length > limits.maxParagraphs) {
-      throw new RangeError('frame paragraph mutations exceed the retained-plan limit');
+      throw new RangeError('frame paragraph mutations exceed the planner limit');
     }
     if (textMutations.length > limits.maxClusters || styleMutations.length > limits.maxClusters) {
-      throw new RangeError('frame semantic mutations exceed the retained-plan limit');
+      throw new RangeError('frame semantic mutations exceed the planner limit');
     }
     if (constraints.length > limits.maxRegions || regions.length > limits.maxRegions) {
-      throw new RangeError('frame regions exceed the retained-plan limit');
+      throw new RangeError('frame regions exceed the planner limit');
     }
     if (exclusions.length > limits.maxExclusions)
-      throw new RangeError('frame exclusions exceed the retained-plan limit');
+      throw new RangeError('frame exclusions exceed the planner limit');
     if (inlineObjects.length > limits.maxInlineObjects) {
-      throw new RangeError('frame inline objects exceed the retained-plan limit');
+      throw new RangeError('frame inline objects exceed the planner limit');
     }
   }
   if (
@@ -798,7 +798,7 @@ interface HeaderOffsets {
   readonly inlineObjectOffset: number;
 }
 
-function writeHeader(view: DataView, frame: TextEngineFrameUpdate, byteLength: number, offsets: HeaderOffsets): void {
+function writeHeader(view: DataView, frame: PlannerFrameUpdate, byteLength: number, offsets: HeaderOffsets): void {
   const layout = textShaperAbi.layouts.engineUpdateRequest;
   const limits = frame.limits;
   optionalBoolean(frame.compositingIndependent, 'frame compositingIndependent');
@@ -810,7 +810,7 @@ function writeHeader(view: DataView, frame: TextEngineFrameUpdate, byteLength: n
   for (const [field, value] of [
     ['abiVersion', textShaperAbi.version],
     ['byteLength', byteLength],
-    ['retainedPlanId', frame.retainedPlanId],
+    ['plannerId', frame.plannerId],
     ['expectedEngineRevision', frame.expectedEngineRevision],
     ['consumedPlanRevision', frame.consumedPlanRevision],
     ['acknowledgedPublicationGeneration', frame.acknowledgedPublicationGeneration],
@@ -852,7 +852,7 @@ function writeHeader(view: DataView, frame: TextEngineFrameUpdate, byteLength: n
 function writeParagraphMutations(
   view: DataView,
   tableOffset: number,
-  mutations: readonly TextEngineParagraphMutation[],
+  mutations: readonly PlannerParagraphMutation[],
 ): void {
   const layout = textShaperAbi.layouts.engineParagraphMutation;
   const opcodes = textShaperAbi.engine.paragraphMutationOpcodes;
@@ -869,7 +869,7 @@ function writeParagraphMutations(
 function writeTextMutations(
   view: DataView,
   tableOffset: number,
-  mutations: readonly TextEngineTextMutation[],
+  mutations: readonly PlannerTextMutation[],
   payloadOffsets: readonly number[],
 ): void {
   const layout = textShaperAbi.layouts.engineTextMutation;
@@ -893,7 +893,7 @@ function writeStyleMutations(
   view: DataView,
   bytes: Uint8Array,
   tableOffset: number,
-  mutations: readonly TextEngineStyleMutation[],
+  mutations: readonly PlannerStyleMutation[],
   languages: readonly Uint8Array[],
   languageOffsets: readonly number[],
   featureOffsets: readonly number[],
@@ -955,7 +955,7 @@ function writeStyleMutations(
   }
 }
 
-function writeFeatures(view: DataView, tableOffset: number, features: readonly TextEngineFeature[]): void {
+function writeFeatures(view: DataView, tableOffset: number, features: readonly PlannerFeature[]): void {
   const layout = textShaperAbi.layouts.feature;
   for (const [index, feature] of features.entries()) {
     const offset = tableOffset + index * layout.size;
@@ -967,7 +967,7 @@ function writeFeatures(view: DataView, tableOffset: number, features: readonly T
   }
 }
 
-function writeDecoration(view: DataView, offset: number, decoration: TextEngineDecoration | undefined): void {
+function writeDecoration(view: DataView, offset: number, decoration: PlannerDecoration | undefined): void {
   if (decoration === undefined) return;
   const layout = textShaperAbi.layouts.engineStyleMutation;
   const styles = textShaperAbi.engine.decorationStyles;
@@ -990,7 +990,7 @@ function writeDecoration(view: DataView, offset: number, decoration: TextEngineD
   view.setFloat32(offset + layout.decorationOffset, finite(decoration.offset, 'decoration offset'), true);
 }
 
-function writeConstraints(view: DataView, tableOffset: number, constraints: readonly TextEngineConstraint[]): void {
+function writeConstraints(view: DataView, tableOffset: number, constraints: readonly PlannerConstraint[]): void {
   const layout = textShaperAbi.layouts.engineConstraint;
   const engine = textShaperAbi.engine;
   for (const [index, value] of constraints.entries()) {
@@ -1045,7 +1045,7 @@ function writeConstraints(view: DataView, tableOffset: number, constraints: read
 function writeRegions(
   view: DataView,
   tableOffset: number,
-  regions: readonly TextEngineRegion[],
+  regions: readonly PlannerRegion[],
   vertexOffsets: readonly number[],
 ): void {
   const layout = textShaperAbi.layouts.engineRegion;
@@ -1069,7 +1069,7 @@ function writeRegions(
 function writeExclusions(
   view: DataView,
   tableOffset: number,
-  exclusions: readonly TextEngineExclusion[],
+  exclusions: readonly PlannerExclusion[],
   vertexOffsets: readonly number[],
 ): void {
   const layout = textShaperAbi.layouts.engineExclusion;
@@ -1096,7 +1096,7 @@ function writeBounds(
   view: DataView,
   offset: number,
   layout: Record<string, number>,
-  value: TextEngineRegion | TextEngineExclusion,
+  value: PlannerRegion | PlannerExclusion,
 ): void {
   for (const field of ['inlineStart', 'blockStart', 'inlineEnd', 'blockEnd'] as const) {
     view.setFloat32(offset + layout[field]!, finite(value[field], field), true);
@@ -1109,7 +1109,7 @@ function writeBounds(
   }
 }
 
-function writeVertices(view: DataView, tableOffset: number, vertices: readonly TextEngineFlowVertex[]): void {
+function writeVertices(view: DataView, tableOffset: number, vertices: readonly PlannerFlowVertex[]): void {
   const layout = textShaperAbi.layouts.engineFlowVertex;
   for (const [index, vertex] of vertices.entries()) {
     const offset = tableOffset + index * layout.size;
@@ -1118,7 +1118,7 @@ function writeVertices(view: DataView, tableOffset: number, vertices: readonly T
   }
 }
 
-function writeInlineObjects(view: DataView, tableOffset: number, objects: readonly TextEngineInlineObject[]): void {
+function writeInlineObjects(view: DataView, tableOffset: number, objects: readonly PlannerInlineObject[]): void {
   const layout = textShaperAbi.layouts.engineInlineObject;
   for (const [index, value] of objects.entries()) {
     const offset = tableOffset + index * layout.size;
@@ -1160,20 +1160,20 @@ function optionalF32(view: DataView, offset: number, value: number | undefined, 
   if (value !== undefined) view.setFloat32(offset, finite(value, label), true);
 }
 
-function direction(value: TextEngineStyleValue['direction']): number {
+function direction(value: PlannerStyleValue['direction']): number {
   if (value === undefined || value === 'auto') return 0;
   if (value === 'ltr') return 1;
   if (value === 'rtl') return 2;
   throw new TypeError('style direction is invalid');
 }
 
-function axisMode(value: TextEngineConstraint['widthMode']): number {
+function axisMode(value: PlannerConstraint['widthMode']): number {
   const modes = textShaperAbi.engine.axisModes;
   if (value === 'at-most') return modes.atMost;
   return enumValue(modes, value, 'constraint axis mode');
 }
 
-function writingMode(value: TextEngineRegion['writingMode']): number {
+function writingMode(value: PlannerRegion['writingMode']): number {
   const modes = textShaperAbi.engine.writingModes;
   if (value === 'horizontal-tb') return modes.horizontalTb;
   if (value === 'vertical-rl') return modes.verticalRl;
@@ -1181,18 +1181,18 @@ function writingMode(value: TextEngineRegion['writingMode']): number {
   throw new TypeError('region writingMode is invalid');
 }
 
-function textOrientation(value: TextEngineRegion['textOrientation']): number {
+function textOrientation(value: PlannerRegion['textOrientation']): number {
   return enumValue(textShaperAbi.engine.textOrientations, value, 'region textOrientation');
 }
 
-function exclusionWrap(value: TextEngineExclusion['wrapSide']): number {
+function exclusionWrap(value: PlannerExclusion['wrapSide']): number {
   const sides = textShaperAbi.engine.exclusionWrapSides;
   if (value === 'inline-start') return sides.inlineStart;
   if (value === 'inline-end') return sides.inlineEnd;
   return enumValue(sides, value, 'exclusion wrapSide');
 }
 
-function inlineBaseline(value: TextEngineInlineObject['baselineAlignment']): number {
+function inlineBaseline(value: PlannerInlineObject['baselineAlignment']): number {
   const baselines = textShaperAbi.engine.inlineObjectBaselines;
   if (value === 'text-top') return baselines.textTop;
   if (value === 'text-bottom') return baselines.textBottom;
@@ -1209,7 +1209,7 @@ function optionalBoolean(value: boolean | undefined, label: string): void {
   if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`${label} must be a boolean`);
 }
 
-function validateAxis(mode: TextEngineConstraint['widthMode'], value: number, label: string): void {
+function validateAxis(mode: PlannerConstraint['widthMode'], value: number, label: string): void {
   if ((mode === 'unconstrained' && value !== 0) || (mode !== 'unconstrained' && value < 0)) {
     throw new RangeError(`${label} is incompatible with its axis mode`);
   }

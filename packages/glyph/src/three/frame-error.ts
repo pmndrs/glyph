@@ -1,8 +1,8 @@
 import {
-  TextEngineStatusError,
-  textEngineStatusErrorDetails,
-  type TextEngineFault,
-  type TextEngineStatusCode,
+  GlyphEngineStatusError,
+  glyphEngineStatusErrorDetails,
+  type GlyphEngineFault,
+  type GlyphEngineStatusCode,
 } from '../core.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { Text, TextSpan } from './text.js';
@@ -38,7 +38,7 @@ export type TextFrameRejection<Technique extends AnyRasterTechnique = AnyRasterT
   | Readonly<{ cause: 'font-stack-missing'; subject: TextFrameSubject<Technique> }>
   /** A font in the laid-out text has no registered metrics. */
   | Readonly<{ cause: 'font-metrics-missing'; subject: TextFrameSubject<Technique> }>
-  /** The frame did not fit the retained-plan arenas even after the backend grew them. */
+  /** The frame did not fit the planner arenas even after the backend grew them. */
   | Readonly<{ cause: 'capacity'; requiredRequestBytes: number; requiredResultBytes: number }>
   /** Any status the engine does not classify as caller-actionable. */
   | Readonly<{ cause: 'engine' }>;
@@ -62,9 +62,9 @@ export class TextFrameError extends Error {
 }
 
 /** Resolves an engine fault onto authored objects. `paragraphs` maps the engine's paragraph handle. */
-export type TextFrameSubjectResolver = (fault: TextEngineFault) => TextFrameSubject;
+export type TextFrameSubjectResolver = (fault: GlyphEngineFault) => TextFrameSubject;
 
-const CAUSE_BY_CODE: ReadonlyMap<TextEngineStatusCode, TextFrameRejection['cause']> = new Map([
+const CAUSE_BY_CODE: ReadonlyMap<GlyphEngineStatusCode, TextFrameRejection['cause']> = new Map([
   ['style-range-invalid', 'span-range' as const],
   ['style-splits-cluster', 'cluster-boundary' as const],
   ['style-nesting-invalid', 'span-overlap' as const],
@@ -81,8 +81,8 @@ const CAUSE_BY_CODE: ReadonlyMap<TextEngineStatusCode, TextFrameRejection['cause
  * are not engine statuses pass through untouched, because they already name their own cause.
  */
 export function textFrameError(error: unknown, resolve: TextFrameSubjectResolver): unknown {
-  if (!(error instanceof TextEngineStatusError)) return error;
-  const details = textEngineStatusErrorDetails(error);
+  if (!(error instanceof GlyphEngineStatusError)) return error;
+  const details = glyphEngineStatusErrorDetails(error);
   const cause = CAUSE_BY_CODE.get(error.code) ?? 'engine';
   const rejection: TextFrameRejection =
     cause === 'capacity'
@@ -97,10 +97,10 @@ export function textFrameError(error: unknown, resolve: TextFrameSubjectResolver
   return new TextFrameError(rejection, error.status, rejectionMessage(rejection, error), { cause: error });
 }
 
-function rejectionMessage(rejection: TextFrameRejection, error: TextEngineStatusError): string {
+function rejectionMessage(rejection: TextFrameRejection, error: GlyphEngineStatusError): string {
   if (rejection.cause === 'capacity') {
     return (
-      `text frame exceeded the retained-plan arenas (required request=${rejection.requiredRequestBytes},` +
+      `text frame exceeded the planner arenas (required request=${rejection.requiredRequestBytes},` +
       ` result=${rejection.requiredResultBytes}): ${error.message}`
     );
   }

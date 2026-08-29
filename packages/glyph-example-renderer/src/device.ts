@@ -13,11 +13,11 @@ import {
   type TechniqueGeometryDeclaration,
   type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
-  type TextEngineBufferRecord,
-  type TextEngineBufferBinding,
-  type TextEnginePatchRecord,
-  type TextEngineRetirementRecord,
-  type TextEngineScalarType,
+  type RenderPlanBufferRecord,
+  type RenderPlanBufferBinding,
+  type RenderPlanPatchRecord,
+  type RenderPlanRetirementRecord,
+  type RenderPlanScalarType,
   id,
 } from '@pmndrs/glyph/core';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
@@ -340,9 +340,9 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
 
   /** Applies validated buffer records and patches to the recording state. */
   applyBufferPlan(
-    buffers: readonly TextEngineBufferRecord[],
-    patches: readonly TextEnginePatchRecord[],
-    retirements: readonly TextEngineRetirementRecord[],
+    buffers: readonly RenderPlanBufferRecord[],
+    patches: readonly RenderPlanPatchRecord[],
+    retirements: readonly RenderPlanRetirementRecord[],
   ): void {
     this.#assertMutable('apply a buffer plan');
     if (!Array.isArray(buffers) || !Array.isArray(patches) || !Array.isArray(retirements)) {
@@ -446,7 +446,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   }
 
   #bufferBindings(
-    records: readonly TextEngineBufferRecord[],
+    records: readonly RenderPlanBufferRecord[],
     primitive: ExamplePrimitiveRecord,
     state: ExampleBufferState,
   ): ReadonlyMap<string, Uint8Array> {
@@ -644,8 +644,8 @@ interface RetainedExampleBuffer {
   readonly id: RenderPlanBufferId;
   readonly generation: number;
   readonly programId: number;
-  readonly binding: TextEngineBufferBinding;
-  readonly scalarType: TextEngineScalarType;
+  readonly binding: RenderPlanBufferBinding;
+  readonly scalarType: RenderPlanScalarType;
   readonly vectorWidth: number;
   readonly capacityRecords: number;
   readonly bytes: Uint8Array;
@@ -762,7 +762,7 @@ function absorbResourceEntry(state: ExampleResourceState, entry: ExampleResource
   if (entry.geometry !== undefined) state.geometriesByName.set(entry.name, entry.geometry);
 }
 
-function retireResourceState(state: ExampleResourceState, retirement: TextEngineRetirementRecord): boolean {
+function retireResourceState(state: ExampleResourceState, retirement: RenderPlanRetirementRecord): boolean {
   assertObject(retirement, 'resource retirement');
   if (retirement.kind !== 'resource') return false;
   const id = positiveInteger(retirement.id, 'retired resource id') as ResourceHandle;
@@ -792,7 +792,7 @@ function preparePlanResourceState(
   resources: ExampleResourceState,
   source: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>,
   records: readonly ExampleResourceRecord[],
-  retirements: readonly TextEngineRetirementRecord[],
+  retirements: readonly RenderPlanRetirementRecord[],
 ): ExamplePlanResourceState {
   const retained = new Map(source);
   const seen = new Set<RenderPlanResourceId>();
@@ -895,9 +895,9 @@ function prepareBufferState(
   shader: ExampleRendererShader,
   programWireId: RenderProgramId,
   source: ReadonlyMap<string, RetainedExampleBuffer>,
-  buffers: readonly TextEngineBufferRecord[],
-  patches: readonly TextEnginePatchRecord[],
-  retirements: readonly TextEngineRetirementRecord[],
+  buffers: readonly RenderPlanBufferRecord[],
+  patches: readonly RenderPlanPatchRecord[],
+  retirements: readonly RenderPlanRetirementRecord[],
 ): ExampleBufferState {
   if (!Array.isArray(buffers) || !Array.isArray(patches) || !Array.isArray(retirements)) {
     throw new TypeError('example renderer buffer plans require arrays');
@@ -920,7 +920,7 @@ function prepareBufferState(
   return { retained, activeById, activeByName };
 }
 
-function currentBuffer(state: ExampleBufferState, record: TextEngineBufferRecord): RetainedExampleBuffer {
+function currentBuffer(state: ExampleBufferState, record: RenderPlanBufferRecord): RetainedExampleBuffer {
   assertObject(record, 'draw buffer record');
   const id = positiveInteger(record.id, 'draw buffer id') as RenderPlanBufferId;
   const generation = positiveInteger(record.generation, 'draw buffer generation');
@@ -948,7 +948,7 @@ function cloneRetainedBuffers(source: ReadonlyMap<string, RetainedExampleBuffer>
 function retainBufferRecord(
   retained: Map<string, RetainedExampleBuffer>,
   active: Map<RenderPlanBufferId, string>,
-  record: TextEngineBufferRecord,
+  record: RenderPlanBufferRecord,
   programWireId: RenderProgramId,
 ): void {
   assertObject(record, 'buffer record');
@@ -1004,7 +1004,7 @@ function retainBufferRecord(
 function applyBufferPatch(
   retained: Map<string, RetainedExampleBuffer>,
   active: ReadonlyMap<RenderPlanBufferId, string>,
-  patch: TextEnginePatchRecord,
+  patch: RenderPlanPatchRecord,
 ): void {
   assertObject(patch, 'buffer patch');
   const id = positiveInteger(patch.bufferId, 'patch buffer id') as RenderPlanBufferId;
@@ -1067,7 +1067,7 @@ function applyBufferPatch(
 function retireBuffer(
   retained: Map<string, RetainedExampleBuffer>,
   active: Map<RenderPlanBufferId, string>,
-  retirement: TextEngineRetirementRecord,
+  retirement: RenderPlanRetirementRecord,
 ): void {
   assertObject(retirement, 'retirement');
   if (retirement.kind !== 'buffer') return;
@@ -1078,7 +1078,7 @@ function retireBuffer(
   if (active.get(id) === key) active.delete(id);
 }
 
-function validateRetirement(retirement: TextEngineRetirementRecord): void {
+function validateRetirement(retirement: RenderPlanRetirementRecord): void {
   assertObject(retirement, 'retirement');
   if (
     retirement.kind !== 'resource' &&
@@ -1095,12 +1095,12 @@ function validateRetirement(retirement: TextEngineRetirementRecord): void {
   nonnegativeInteger(retirement.byteLength, 'retirement byte length');
 }
 
-function declaredBufferName(shader: ExampleRendererShader, binding: TextEngineBufferBinding): string | undefined {
+function declaredBufferName(shader: ExampleRendererShader, binding: RenderPlanBufferBinding): string | undefined {
   if (binding.kind === 'order') return undefined;
   return Object.entries(shader.variant.buffers).find(([, buffer]) => buffer.id === binding.id)?.[0];
 }
 
-function validateBufferBinding(binding: TextEngineBufferBinding): TextEngineBufferBinding {
+function validateBufferBinding(binding: RenderPlanBufferBinding): RenderPlanBufferBinding {
   if (binding?.kind === 'order') return binding;
   if (binding?.kind === 'policy') {
     positiveInteger(binding.id, 'policy buffer id');
@@ -1109,7 +1109,7 @@ function validateBufferBinding(binding: TextEngineBufferBinding): TextEngineBuff
   throw new TypeError('example renderer buffer has an invalid binding');
 }
 
-function sameBufferBinding(left: TextEngineBufferBinding, right: TextEngineBufferBinding): boolean {
+function sameBufferBinding(left: RenderPlanBufferBinding, right: RenderPlanBufferBinding): boolean {
   return left.kind === right.kind && (left.kind === 'order' || (right.kind === 'policy' && left.id === right.id));
 }
 
@@ -1319,7 +1319,7 @@ function recordSpan<Record>(
   return records.slice(first, end);
 }
 
-function shaderScalarType(scalar: ExampleRendererShaderBuffer['scalar']): TextEngineScalarType {
+function shaderScalarType(scalar: ExampleRendererShaderBuffer['scalar']): RenderPlanScalarType {
   return scalar;
 }
 

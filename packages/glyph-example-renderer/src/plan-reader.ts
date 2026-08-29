@@ -1,13 +1,13 @@
 import {
-  readTextEngineBuffer,
-  readTextEngineDraw,
-  readTextEnginePatch,
-  readTextEnginePrimitive,
-  readTextEngineResource,
-  readTextEngineRetirement,
+  readRenderPlanBuffer,
+  readRenderPlanDraw,
+  readRenderPlanPatch,
+  readRenderPlanPrimitive,
+  readRenderPlanResource,
+  readRenderPlanRetirement,
   type AsyncPlanCandidate,
   type PlanCandidate,
-  type TextEngineRenderPlanReader,
+  type RenderPlanReader,
 } from '@pmndrs/glyph/core';
 
 import type { ExampleDrawList } from './draw-list.js';
@@ -19,40 +19,40 @@ export function readCandidate(candidate: PlanCandidate | AsyncPlanCandidate): Ex
 }
 
 function readPlan(
-  view: TextEngineRenderPlanReader,
+  view: RenderPlanReader,
   publication: Readonly<{ engineRevision: number; planRevision: number; publicationGeneration: number }>,
   copyRetainedBytes: boolean,
 ): ExampleDrawList {
   const draws = view.table('draws');
-  const decoded: ReturnType<typeof readTextEngineDraw>[] = [];
-  for (let index = 0; index < draws.count; index += 1) decoded.push(readTextEngineDraw(view, draws, index));
+  const decoded: ReturnType<typeof readRenderPlanDraw>[] = [];
+  for (let index = 0; index < draws.count; index += 1) decoded.push(readRenderPlanDraw(view, draws, index));
   const resources = view.table('resources');
-  const resourceRecords: ReturnType<typeof readTextEngineResource>[] = [];
+  const resourceRecords: ReturnType<typeof readRenderPlanResource>[] = [];
   for (let index = 0; index < resources.count; index += 1) {
-    resourceRecords.push(readTextEngineResource(view, resources, index));
+    resourceRecords.push(readRenderPlanResource(view, resources, index));
   }
   const buffers = view.table('buffers');
-  const bufferRecords: ReturnType<typeof readTextEngineBuffer>[] = [];
+  const bufferRecords: ReturnType<typeof readRenderPlanBuffer>[] = [];
   for (let index = 0; index < buffers.count; index += 1) {
-    bufferRecords.push(readTextEngineBuffer(view, buffers, index));
+    bufferRecords.push(readRenderPlanBuffer(view, buffers, index));
   }
   const primitives = view.table('primitives');
-  const primitiveRecords: ReturnType<typeof readTextEnginePrimitive>[] = [];
+  const primitiveRecords: ReturnType<typeof readRenderPlanPrimitive>[] = [];
   for (let index = 0; index < primitives.count; index += 1) {
-    primitiveRecords.push(readTextEnginePrimitive(view, primitives, index));
+    primitiveRecords.push(readRenderPlanPrimitive(view, primitives, index));
   }
   const patches = view.table('patches');
-  const patchRecords: ReturnType<typeof readTextEnginePatch>[] = [];
+  const patchRecords: ReturnType<typeof readRenderPlanPatch>[] = [];
   for (let index = 0; index < patches.count; index += 1) {
-    const patch = readTextEnginePatch(view, patches, index);
+    const patch = readRenderPlanPatch(view, patches, index);
     patchRecords.push(
       copyRetainedBytes && patch.kind === 'write' ? { ...patch, payload: patch.payload.slice() } : patch,
     );
   }
   const retirements = view.table('retirements');
-  const retirementRecords: ReturnType<typeof readTextEngineRetirement>[] = [];
+  const retirementRecords: ReturnType<typeof readRenderPlanRetirement>[] = [];
   for (let index = 0; index < retirements.count; index += 1) {
-    retirementRecords.push(readTextEngineRetirement(view, retirements, index));
+    retirementRecords.push(readRenderPlanRetirement(view, retirements, index));
   }
   return {
     engineRevision: publication.engineRevision,
@@ -73,7 +73,7 @@ function readPlan(
 
 /** Own borrowed bytes that escape target acceptance; preserve existing ownership otherwise. */
 function snapshot(
-  view: TextEngineRenderPlanReader,
+  view: RenderPlanReader,
   name: 'resources' | 'buffers' | 'primitives' | 'diagnostics',
   copy: boolean,
 ): ExampleTableSnapshot {

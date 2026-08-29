@@ -6,7 +6,7 @@
  *   update, a synchronous paragraph measurement, even a failed attempt that reserves capacity —
  *   and when the transport is disposed. Slot arithmetic means some bytes physically survive
  *   longer; the protocol deliberately does not ask hosts to track that.
- * - **Expiry is cheap and loud.** `retainedPlan.isExpired(publication)` is two integer compares.
+ * - **Expiry is cheap and loud.** `planner.isExpired(publication)` is two integer compares.
  *   `transport.copyPublication(publication)` performs the throwing check before copying, so a stale
  *   view cannot silently feed garbage across an ownership boundary.
  * - **Ownership is one contiguous copy.** `transport.copyPublication(publication)` copies the whole
@@ -19,7 +19,7 @@
  *   is not device acceptance; a transactional renderer advances only after submission commits.
  * - **Dirty ranges, not whole arrays.** The `patches` table names buffer deltas by
  *   `(bufferId, bufferGeneration)` with destination offsets and payload ranges; a host applies
- *   those instead of re-uploading whole arrays. `readTextEnginePatch` surfaces them decoded.
+ *   those instead of re-uploading whole arrays. `readRenderPlanPatch` surfaces them decoded.
  * - **Identity survives updates by construction.** Paragraph ids are caller-chosen handles,
  *   durable until removal. Glyph identity is the policy's stable-glyph-id lane, which survives
  *   reflow within a paragraph's lifetime. Engine storage is keyed by `(id, generation)`:

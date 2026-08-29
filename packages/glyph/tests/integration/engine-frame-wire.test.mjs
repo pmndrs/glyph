@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compileTextEngineFrameUpdate, validateTextEngineFrameRecords } from '../../dist/core/frame-wire.js';
+import { compilePlannerFrameUpdate, validatePlannerFrameRecords } from '../../dist/core/frame-wire.js';
 import { selectPolicyCapabilitySet, id } from '../../dist/core/render-policy.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
-const RETAINED_PLAN_ID = id.retainedPlan('engine-frame-wire/retainedPlan');
+const PLANNER_ID = id.planner('engine-frame-wire/planner');
 const POLICY_ID = id.policy('engine-frame-wire/policy');
 const OTHER_POLICY_ID = id.policy('engine-frame-wire/other-policy');
 const FONT_STACK_ID = id.fontStack('engine-frame-wire/font-stack');
@@ -22,7 +22,7 @@ const RESOURCE_ID = id.resourceHandle('engine-frame-wire/resource');
 
 test('frame compiler rejects raw and cross-domain numeric identities before allocation', () => {
   const valid = {
-    retainedPlanId: RETAINED_PLAN_ID,
+    plannerId: PLANNER_ID,
     policyHandle: POLICY_ID,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
@@ -38,13 +38,13 @@ test('frame compiler rejects raw and cross-domain numeric identities before allo
       maxOutputBytes: 1024,
     },
   };
-  assert.throws(() => compileTextEngineFrameUpdate({ ...valid, retainedPlanId: 1 }), /must come from id\.retainedPlan/);
+  assert.throws(() => compilePlannerFrameUpdate({ ...valid, plannerId: 1 }), /must come from id\.planner/);
   assert.throws(
-    () => compileTextEngineFrameUpdate({ ...valid, retainedPlanId: POLICY_ID }),
-    /must come from id\.retainedPlan/,
+    () => compilePlannerFrameUpdate({ ...valid, plannerId: POLICY_ID }),
+    /must come from id\.planner/,
   );
   assert.throws(
-    () => compileTextEngineFrameUpdate({ ...valid, capabilitySet: 1 }),
+    () => compilePlannerFrameUpdate({ ...valid, capabilitySet: 1 }),
     /must come from selectPolicyCapabilitySet/,
   );
   const capability = {
@@ -65,12 +65,12 @@ test('frame compiler rejects raw and cross-domain numeric identities before allo
     capability,
   );
   assert.throws(
-    () => compileTextEngineFrameUpdate({ ...valid, capabilitySet: selection }),
+    () => compilePlannerFrameUpdate({ ...valid, capabilitySet: selection }),
     /belongs to a different policy handle/,
   );
   assert.throws(
     () =>
-      compileTextEngineFrameUpdate({
+      compilePlannerFrameUpdate({
         ...valid,
         paragraphMutations: [{ opcode: 'remove', paragraphId: 1 }],
       }),
@@ -89,10 +89,10 @@ test('record validation rejects malformed runtime values without serializing a f
     root: true,
     value: { fontStackHandle: FONT_STACK_ID, direction: 'sideways' },
   };
-  assert.throws(() => validateTextEngineFrameRecords({ styleMutations: [style] }), /direction is invalid/);
+  assert.throws(() => validatePlannerFrameRecords({ styleMutations: [style] }), /direction is invalid/);
   assert.throws(
     () =>
-      validateTextEngineFrameRecords({
+      validatePlannerFrameRecords({
         paragraphMutations: [
           { opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 0 },
           { opcode: 'upsert', paragraphId: OTHER_PARAGRAPH_ID, order: 0 },
@@ -102,8 +102,8 @@ test('record validation rejects malformed runtime values without serializing a f
   );
   assert.throws(
     () =>
-      compileTextEngineFrameUpdate({
-        retainedPlanId: RETAINED_PLAN_ID,
+      compilePlannerFrameUpdate({
+        plannerId: PLANNER_ID,
         policyHandle: POLICY_ID,
         expectedEngineRevision: 0,
         consumedPlanRevision: 0,
@@ -124,8 +124,8 @@ test('record validation rejects malformed runtime values without serializing a f
   );
   assert.throws(
     () =>
-      compileTextEngineFrameUpdate({
-        retainedPlanId: RETAINED_PLAN_ID,
+      compilePlannerFrameUpdate({
+        plannerId: PLANNER_ID,
         policyHandle: POLICY_ID,
         expectedEngineRevision: 0,
         consumedPlanRevision: 0,
@@ -146,8 +146,8 @@ test('record validation rejects malformed runtime values without serializing a f
   );
   assert.throws(
     () =>
-      compileTextEngineFrameUpdate({
-        retainedPlanId: RETAINED_PLAN_ID,
+      compilePlannerFrameUpdate({
+        plannerId: PLANNER_ID,
         policyHandle: POLICY_ID,
         expectedEngineRevision: 0,
         consumedPlanRevision: 0,
@@ -174,7 +174,7 @@ test('production frame compiler preserves the established benchmark request byte
   const units = Array.from({ length: text.length }, (_, index) => text.charCodeAt(index));
   const limits = { maxClusters: 8, maxLines: 8, maxOutputBytes: 65_536 };
   const expected = engineFrameUpdateBytes(abi, {
-    retainedPlanId: RETAINED_PLAN_ID,
+    plannerId: PLANNER_ID,
     policyHandle: POLICY_ID,
     fontStackHandle: FONT_STACK_ID,
     paragraphId: PARAGRAPH_ID,
@@ -187,8 +187,8 @@ test('production frame compiler preserves the established benchmark request byte
     geometry: { width: 320, height: 180, maxLines: 8, revision: 9 },
     limits,
   });
-  const actual = compileTextEngineFrameUpdate({
-    retainedPlanId: RETAINED_PLAN_ID,
+  const actual = compilePlannerFrameUpdate({
+    plannerId: PLANNER_ID,
     policyHandle: POLICY_ID,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
@@ -264,8 +264,8 @@ test('production frame compiler preserves the established benchmark request byte
 
 test('production frame compiler carries full style, polygon, exclusion, and inline-object payloads', async () => {
   const abi = textShaperAbi;
-  const bytes = compileTextEngineFrameUpdate({
-    retainedPlanId: RETAINED_PLAN_ID,
+  const bytes = compilePlannerFrameUpdate({
+    plannerId: PLANNER_ID,
     policyHandle: POLICY_ID,
     expectedEngineRevision: 3,
     consumedPlanRevision: 4,
@@ -460,8 +460,8 @@ test('style payloads stay in per-record order when several paragraphs carry lang
     },
   });
   const paragraphIds = Array.from({ length: 4 }, (_, index) => id.paragraph(`engine-frame-wire/paragraph/${index}`));
-  const bytes = compileTextEngineFrameUpdate({
-    retainedPlanId: RETAINED_PLAN_ID,
+  const bytes = compilePlannerFrameUpdate({
+    plannerId: PLANNER_ID,
     policyHandle: POLICY_ID,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
@@ -532,8 +532,8 @@ test('production frame compiler encodes typography controls and their defaults',
     ...typography,
   });
   const compile = (typography) =>
-    compileTextEngineFrameUpdate({
-      retainedPlanId: RETAINED_PLAN_ID,
+    compilePlannerFrameUpdate({
+      plannerId: PLANNER_ID,
       policyHandle: POLICY_ID,
       expectedEngineRevision: 0,
       consumedPlanRevision: 0,

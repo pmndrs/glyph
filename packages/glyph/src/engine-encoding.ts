@@ -2,11 +2,11 @@ import type { GlyphPaintInput, ParagraphSpan } from './formatted-text.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
 import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
 import type {
-  TextEngineConstraint,
-  TextEngineDecoration,
-  TextEngineFrameLimits,
-  TextEngineRegion,
-  TextEngineStyleValue,
+  PlannerConstraint,
+  PlannerDecoration,
+  PlannerFrameLimits,
+  PlannerRegion,
+  PlannerStyleValue,
 } from './core/frame-wire.js';
 import type { BackendIdFactory, ParagraphId, StyleId } from './core/render-policy.js';
 
@@ -51,7 +51,7 @@ export function compileEngineGeometry(
   contentBox: ParagraphContentBox | undefined,
   regionStart: number,
   textLength: number,
-): { readonly constraint: TextEngineConstraint; readonly regions: readonly TextEngineRegion[] } {
+): { readonly constraint: PlannerConstraint; readonly regions: readonly PlannerRegion[] } {
   const width = axis(contentBox?.width);
   const height = axis(contentBox?.height);
   const columns = normalizedColumns(contentBox);
@@ -134,7 +134,7 @@ export function engineLimits(
   regionCount: number,
   maxOutputBytes: number,
   mutationRecordCount = 0,
-): TextEngineFrameLimits {
+): PlannerFrameLimits {
   return {
     maxParagraphs: Math.max(1, paragraphCount),
     maxClusters: Math.max(1, textLength * 2, mutationRecordCount),
@@ -154,8 +154,8 @@ export function engineStyleValue(
   paint: GlyphPaintInput | undefined,
   start: number,
   end: number,
-  base: TextEngineStyleValue,
-): TextEngineStyleValue {
+  base: PlannerStyleValue,
+): PlannerStyleValue {
   return {
     ...base,
     ...(style.fontSize === undefined ? {} : { fontSize: style.fontSize }),
@@ -182,7 +182,7 @@ export function engineStyleValue(
 function engineDecoration(
   decoration: NonNullable<ParagraphStyle['decoration']>,
   paint: GlyphPaintInput | undefined,
-): TextEngineDecoration {
+): PlannerDecoration {
   if (decoration.style !== undefined && decoration.style !== 'solid') {
     throw new TypeError(`'${decoration.style}' decoration lines are not implemented yet; only 'solid' is supported`);
   }

@@ -63,13 +63,13 @@ const tableLayouts = {
 } as const;
 
 /** Reusable zero-copy reader over one validated Rust render-plan publication. */
-export class TextEngineRenderPlanView {
+export class RenderPlanView {
   #memoryBuffer: ArrayBufferLike | undefined;
   #view: DataView | undefined;
   #baseOffset = 0;
   #byteLength = 0;
 
-  /** @internal Raw Wasm publications are consumed only by the retained plan. */
+  /** @internal Raw Wasm publications are consumed only by the render planner. */
   bind(publication: PlanPublication): this {
     const bytes = publication.bytes;
     if (bytes.buffer !== publication.memoryBuffer) {
@@ -242,15 +242,15 @@ export type RenderPlanSemanticId = number & { readonly [renderPlanIdentityBrand]
 export type RenderPlanTransformId = number & { readonly [renderPlanIdentityBrand]: 'transform' };
 
 /** Scalar storage type declared for one renderer buffer. */
-export type TextEngineScalarType = 'f32' | 'u32' | 'u16';
+export type RenderPlanScalarType = 'f32' | 'u32' | 'u16';
 /** Semantic role of one plan primitive. */
-export type TextEnginePrimitiveKind = 'glyph' | 'decoration' | 'inline-object' | 'clip' | 'policy';
+export type RenderPlanPrimitiveKind = 'glyph' | 'decoration' | 'inline-object' | 'clip' | 'policy';
 /** Lifecycle action for one portable resource record. */
-export type TextEngineResourceAction = 'create' | 'update' | 'retain';
+export type RenderPlanResourceAction = 'create' | 'update' | 'retain';
 /** Storage class released by one retirement record. */
-export type TextEngineRetirementKind = 'resource' | 'buffer' | 'slot-range' | 'output-bytes';
+export type RenderPlanRetirementKind = 'resource' | 'buffer' | 'slot-range' | 'output-bytes';
 
-interface TextEnginePatchBase {
+interface RenderPlanPatchBase {
   readonly bufferId: RenderPlanBufferId;
   /** Storage is keyed by `(id, generation)`: a changed generation is new storage. */
   readonly bufferGeneration: number;
@@ -259,12 +259,12 @@ interface TextEnginePatchBase {
 }
 
 /** Ensures retained renderer storage has at least the declared generation and size. */
-export interface TextEngineAllocatePatch extends TextEnginePatchBase {
+export interface RenderPlanAllocatePatch extends RenderPlanPatchBase {
   readonly kind: 'allocate-or-resize';
 }
 
 /** Writes publication bytes into retained renderer storage. */
-export interface TextEngineWritePatch extends TextEnginePatchBase {
+export interface RenderPlanWritePatch extends RenderPlanPatchBase {
   readonly kind: 'write';
   /**
    * Borrowed view of the payload region for `write` patches. It expires with the
@@ -274,63 +274,63 @@ export interface TextEngineWritePatch extends TextEnginePatchBase {
 }
 
 /** Fills a retained renderer-storage byte range with one value. */
-export interface TextEngineFillPatch extends TextEnginePatchBase {
+export interface RenderPlanFillPatch extends RenderPlanPatchBase {
   readonly kind: 'fill';
   readonly fillValue: number;
 }
 
 /** Copies bytes between retained renderer buffers. */
-export interface TextEngineCopyPatch extends TextEnginePatchBase {
+export interface RenderPlanCopyPatch extends RenderPlanPatchBase {
   readonly kind: 'copy';
   readonly sourceBufferId: RenderPlanBufferId;
   readonly sourceOffset: number;
 }
 
 /** Retires one retained renderer buffer generation. */
-export interface TextEngineRetirePatch extends TextEnginePatchBase {
+export interface RenderPlanRetirePatch extends RenderPlanPatchBase {
   readonly kind: 'retire';
 }
 
 /** One decoded dirty-range operation on retained renderer storage. */
-export type TextEnginePatchRecord =
-  | TextEngineAllocatePatch
-  | TextEngineWritePatch
-  | TextEngineFillPatch
-  | TextEngineCopyPatch
-  | TextEngineRetirePatch;
+export type RenderPlanPatchRecord =
+  | RenderPlanAllocatePatch
+  | RenderPlanWritePatch
+  | RenderPlanFillPatch
+  | RenderPlanCopyPatch
+  | RenderPlanRetirePatch;
 
 /** One decoded row of the plan's `resources` table: an atlas or texture the host realizes. */
-export interface TextEngineResourceRecord {
+export interface RenderPlanResourceRecord {
   readonly id: RenderPlanResourceId;
   readonly generation: number;
   readonly techniqueId: RenderTechniqueId;
   readonly resourceKind: number;
   readonly referenceId: ResourceHandle | 0;
-  readonly action: TextEngineResourceAction;
+  readonly action: RenderPlanResourceAction;
 }
 
 /** A policy-buffer slot or engine-owned ordering lane associated with renderer storage. */
-export type TextEngineBufferBinding = Readonly<{ kind: 'policy'; id: PolicyBufferId }> | Readonly<{ kind: 'order' }>;
+export type RenderPlanBufferBinding = Readonly<{ kind: 'policy'; id: PolicyBufferId }> | Readonly<{ kind: 'order' }>;
 
 /** One decoded row of the plan's `buffers` table: engine-owned storage the policy publishes into. */
-export interface TextEngineBufferRecord {
+export interface RenderPlanBufferRecord {
   readonly id: RenderPlanBufferId;
   readonly generation: number;
   readonly programId: RenderProgramId;
-  readonly scalarType: TextEngineScalarType;
+  readonly scalarType: RenderPlanScalarType;
   readonly vectorWidth: number;
   readonly capacityRecords: number;
   readonly byteLength: number;
-  readonly binding: TextEngineBufferBinding;
+  readonly binding: RenderPlanBufferBinding;
 }
 
 /** One decoded row of the plan's `primitives` table. */
-export interface TextEnginePrimitiveRecord {
+export interface RenderPlanPrimitiveRecord {
   readonly id: RenderPlanPrimitiveId;
   readonly techniqueId: RenderTechniqueId;
   readonly programId: RenderProgramId;
   readonly programVariant: number;
-  readonly kind: TextEnginePrimitiveKind;
+  readonly kind: RenderPlanPrimitiveKind;
   readonly recordCount: number;
   readonly recordIndex: number;
   readonly resourceId: RenderPlanResourceId | 0;
@@ -346,7 +346,7 @@ export interface TextEnginePrimitiveRecord {
 }
 
 /** One decoded row of the plan's `draws` table. */
-export interface TextEngineDrawRecord {
+export interface RenderPlanDrawRecord {
   readonly id: RenderPlanDrawId;
   readonly programId: RenderProgramId;
   readonly programVariant: number;
@@ -372,8 +372,8 @@ export interface TextEngineDrawRecord {
  * generation passes `afterPublicationGeneration`, so a host that acknowledges late
  * keeps retired GPU memory alive and one that never acknowledges leaks it.
  */
-export interface TextEngineRetirementRecord {
-  readonly kind: TextEngineRetirementKind;
+export interface RenderPlanRetirementRecord {
+  readonly kind: RenderPlanRetirementKind;
   readonly id: RenderPlanResourceId | RenderPlanBufferId | number;
   readonly generation: number;
   readonly afterPublicationGeneration: number;
@@ -389,11 +389,11 @@ const drawLayout = textShaperAbi.layouts.engineDraw;
 const retirementLayout = textShaperAbi.layouts.engineRetirement;
 
 /** Decodes and validates one dirty-range patch. */
-export function readTextEnginePatch(
+export function readRenderPlanPatch(
   view: RenderPlanReader,
   table: RenderPlanTable,
   index: number,
-): TextEnginePatchRecord {
+): RenderPlanPatchRecord {
   const record = view.record(table, index);
   const byteLength = view.u32(record + patchLayout.byteLength);
   const opcode = view.u16(record + patchLayout.opcode);
@@ -428,11 +428,11 @@ export function readTextEnginePatch(
 }
 
 /** Decodes and validates one portable resource record. */
-export function readTextEngineResource(
+export function readRenderPlanResource(
   view: RenderPlanReader,
   table: RenderPlanTable,
   index: number,
-): TextEngineResourceRecord {
+): RenderPlanResourceRecord {
   const record = view.record(table, index);
   const action = enumName(textShaperAbi.engine.resourceActions, view.u16(record + resourceLayout.action));
   if (action === undefined) throw new RangeError('text-engine resource has an unsupported action');
@@ -447,11 +447,11 @@ export function readTextEngineResource(
 }
 
 /** Decodes and validates one renderer buffer declaration. */
-export function readTextEngineBuffer(
+export function readRenderPlanBuffer(
   view: RenderPlanReader,
   table: RenderPlanTable,
   index: number,
-): TextEngineBufferRecord {
+): RenderPlanBufferRecord {
   const record = view.record(table, index);
   const scalarType = enumName(textShaperAbi.policy.scalarTypes, view.u8(record + bufferLayout.scalarType));
   if (scalarType === undefined) throw new RangeError('text-engine buffer has an unsupported scalar type');
@@ -472,11 +472,11 @@ export function readTextEngineBuffer(
 }
 
 /** Decodes and validates one primitive span. */
-export function readTextEnginePrimitive(
+export function readRenderPlanPrimitive(
   view: RenderPlanReader,
   table: RenderPlanTable,
   index: number,
-): TextEnginePrimitiveRecord {
+): RenderPlanPrimitiveRecord {
   const record = view.record(table, index);
   const kind = enumName(textShaperAbi.engine.primitiveKinds, view.u16(record + primitiveLayout.kind));
   if (kind === undefined) throw new RangeError('text-engine primitive has an unsupported kind');
@@ -502,11 +502,11 @@ export function readTextEnginePrimitive(
 }
 
 /** Decodes and validates one ordered draw record. */
-export function readTextEngineDraw(
+export function readRenderPlanDraw(
   view: RenderPlanReader,
   table: RenderPlanTable,
   index: number,
-): TextEngineDrawRecord {
+): RenderPlanDrawRecord {
   const record = view.record(table, index);
   return {
     id: nonzero(view.u32(record + drawLayout.id), 'draw') as RenderPlanDrawId,
@@ -530,11 +530,11 @@ export function readTextEngineDraw(
 }
 
 /** Decodes and validates one exact-generation retirement record. */
-export function readTextEngineRetirement(
+export function readRenderPlanRetirement(
   view: RenderPlanReader,
   table: RenderPlanTable,
   index: number,
-): TextEngineRetirementRecord {
+): RenderPlanRetirementRecord {
   const record = view.record(table, index);
   const kind = enumName(textShaperAbi.engine.retirementKinds, view.u16(record + retirementLayout.kind));
   if (kind === undefined) throw new RangeError('text-engine retirement has an unsupported kind');

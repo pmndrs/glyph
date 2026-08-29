@@ -19,31 +19,31 @@ import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const TEST_POLICY_HANDLE = id.policy('test.text-engine-backend/default');
-const TEST_RETAINED_PLAN_HANDLE = id.retainedPlan('test.text-engine-backend/default');
+const TEST_PLANNER_HANDLE = id.planner('test.text-engine-backend/default');
 const THREE_POLICY_HANDLE = id.policy('test.text-engine-backend/three');
 
 test('a glyph engine owns every backend it creates', async () => {
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(wasmUrl) });
   assert.throws(() => glyphEngine.createBackend({ integration: '' }), /nonempty string/u);
   const backend = glyphEngine.createBackend({ integration: 'test.glyphEngine-owner' });
-  const retainedPlanHandle = backend.id('retained-plan', 'test.glyphEngine-owner/transport');
+  const plannerHandle = backend.id('planner', 'test.glyphEngine-owner/transport');
   const policyHandle = backend.id('policy', 'test.glyphEngine-owner/policy');
   backend.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));
   const request = engineUpdateBytes(textShaperAbi, {
-    retainedPlanId: retainedPlanHandle,
+    plannerId: plannerHandle,
     policyHandle,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
   });
   const transport = backend._createPlanTransport({
-    handle: retainedPlanHandle,
+    handle: plannerHandle,
     requestCapacity: request.byteLength,
     resultCapacity: textShaperAbi.layouts.engineResult.size,
   });
 
   assert.equal(backend.integration, 'test.glyphEngine-owner');
   glyphEngine.dispose();
-  assert.throws(() => backend.id('retained-plan', 'test.glyphEngine-owner/stale'), /disposed/u);
+  assert.throws(() => backend.id('planner', 'test.glyphEngine-owner/stale'), /disposed/u);
   assert.throws(() => transport.update(request), /disposed/u);
 });
 
@@ -53,16 +53,16 @@ test('a glyph backend publishes borrowed A/B plans through the engine shaper', a
   const shaper = await createRuntimeShaper({ wasm });
   const backend = new GlyphBackend(shaper);
   const policyHandle = TEST_POLICY_HANDLE;
-  const retainedPlanId = TEST_RETAINED_PLAN_HANDLE;
+  const plannerId = TEST_PLANNER_HANDLE;
   backend.registerPolicy(policyHandle, renderPolicyBytes(abi));
   const firstRequest = engineUpdateBytes(abi, {
-    retainedPlanId,
+    plannerId,
     policyHandle,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
   });
   const transport = backend._createPlanTransport({
-    handle: retainedPlanId,
+    handle: plannerId,
     requestCapacity: firstRequest.byteLength,
     resultCapacity: abi.layouts.engineResult.size,
   });
@@ -79,7 +79,7 @@ test('a glyph backend publishes borrowed A/B plans through the engine shaper', a
 
   const second = transport.update(
     engineUpdateBytes(abi, {
-      retainedPlanId,
+      plannerId,
       policyHandle,
       expectedEngineRevision: first.engineRevision,
       consumedPlanRevision: first.planRevision,
@@ -101,11 +101,11 @@ test('a glyph backend publishes borrowed A/B plans through the engine shaper', a
 test('backend-scoped ID provenance expires with its owning backend', async () => {
   const shaper = await createRuntimeShaper({ wasm: await readFile(wasmUrl) });
   const backend = new GlyphBackend(shaper);
-  const handle = backend.id('retained-plan', 'test.text-engine-backend/scoped-transport');
-  assert.equal(assertGlyphId(handle, 'retained-plan', 'transport handle'), handle);
+  const handle = backend.id('planner', 'test.text-engine-backend/scoped-transport');
+  assert.equal(assertGlyphId(handle, 'planner', 'transport handle'), handle);
   backend.dispose();
-  assert.throws(() => assertGlyphId(handle, 'retained-plan', 'transport handle'), /must come from id/);
-  assert.throws(() => backend.id('retained-plan', 'test.text-engine-backend/after-dispose'), /disposed/);
+  assert.throws(() => assertGlyphId(handle, 'planner', 'transport handle'), /must come from id/);
+  assert.throws(() => backend.id('planner', 'test.text-engine-backend/after-dispose'), /disposed/);
   shaper.dispose();
 });
 
@@ -144,10 +144,10 @@ test('font bindings cannot be disposed while an owned stack still references the
     assert.throws(() => shaper.disposeFont(font), /retained by a registered font stack/u);
     assert.equal(shaper.memoryReport().fontCount, 1, 'a refused disposal must keep the shaper registration owned');
     const policyHandle = backend.id('policy', 'test.text-engine-backend/lifecycle-policy');
-    const retainedPlanHandle = backend.id('retained-plan', 'test.text-engine-backend/lifecycle-transport');
+    const plannerHandle = backend.id('planner', 'test.text-engine-backend/lifecycle-transport');
     backend.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));
     const request = engineFrameUpdateBytes(textShaperAbi, {
-      retainedPlanId: retainedPlanHandle,
+      plannerId: plannerHandle,
       policyHandle,
       fontStackHandle: stackHandle,
       textMutation: { start: 0, deleteCount: 0, insert: [0x41] },
@@ -156,7 +156,7 @@ test('font bindings cannot be disposed while an owned stack still references the
       limits: { maxClusters: 16, maxLines: 4, maxOutputBytes: 128 * 1024 },
     });
     const transport = backend._createPlanTransport({
-      handle: retainedPlanHandle,
+      handle: plannerHandle,
       requestCapacity: request.byteLength,
       resultCapacity: 128 * 1024,
     });

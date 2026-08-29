@@ -9,16 +9,16 @@ import type { ParagraphContentBox, ParagraphStyle } from '../text-properties.js'
 import { createExactFrameBufferPool, type ExactFrameBufferPool } from '../internal/frame-transfer-pool.js';
 import { compileEngineGeometry, engineStyleId, engineStyleValue, minimalTextMutation } from '../engine-encoding.js';
 import {
-  compileValidatedTextEngineFrameUpdate,
+  compileValidatedPlannerFrameUpdate,
   MAX_TEXT_ENGINE_OUTPUT_BYTES,
-  type TextEngineConstraint,
-  type TextEngineExclusion,
-  type TextEngineFrameLimits,
-  type TextEngineInlineObject,
-  type TextEngineParagraphMutation,
-  type TextEngineRegion,
-  type TextEngineStyleMutation,
-  validateTextEngineFrameRecords,
+  type PlannerConstraint,
+  type PlannerExclusion,
+  type PlannerFrameLimits,
+  type PlannerInlineObject,
+  type PlannerParagraphMutation,
+  type PlannerRegion,
+  type PlannerStyleMutation,
+  validatePlannerFrameRecords,
 } from './frame-wire.js';
 import type {
   BackendFontStackBinding,
@@ -32,12 +32,12 @@ import type {
   PlanTransport,
 } from './backend.js';
 import {
-  TextEngineRenderPlanView,
-  readTextEngineResource,
+  RenderPlanView,
+  readRenderPlanResource,
   type RenderPlanTable,
   type RenderPlanTransformId,
 } from './plan-view.js';
-import { readTextEngineLayouts, readTextEngineMeasurements } from './layout-query-view.js';
+import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
 import type { PortableResource } from './portable-resources.js';
 import {
   selectPolicyCapabilitySet,
@@ -73,7 +73,7 @@ export type RenderPlanTableName =
   | 'diagnostics';
 
 /** Bounds-checked scalar and byte access over one validated render plan. */
-export interface TextEngineRenderPlanReader {
+export interface RenderPlanReader {
   table(name: RenderPlanTableName): RenderPlanTable;
   record(table: RenderPlanTable, index: number): number;
   u8(offset: number): number;
@@ -84,12 +84,12 @@ export interface TextEngineRenderPlanReader {
 }
 
 /** A synchronous view into engine-owned A/B memory. */
-export interface BorrowedTextEngineRenderPlan extends TextEngineRenderPlanReader {
+export interface BorrowedRenderPlan extends RenderPlanReader {
   readonly delivery: 'borrowed';
 }
 
 /** A self-owned render-plan view that may cross an asynchronous boundary. */
-export interface OwnedTextEngineRenderPlan extends TextEngineRenderPlanReader {
+export interface OwnedRenderPlan extends RenderPlanReader {
   readonly delivery: 'owned';
 }
 
@@ -125,7 +125,7 @@ export interface ResolvedPlanTransform {
 /** A synchronous candidate whose borrowed plan must be consumed during `accept`. */
 export interface PlanCandidate {
   readonly origin: PlanOrigin;
-  readonly plan: BorrowedTextEngineRenderPlan;
+  readonly plan: BorrowedRenderPlan;
   readonly engineRevision: number;
   readonly planRevision: number;
   readonly publicationGeneration: number;
@@ -140,7 +140,7 @@ export interface PlanCandidate {
 /** A self-owned candidate suitable for a worker or deferred renderer. */
 export interface AsyncPlanCandidate {
   readonly origin: PlanOrigin;
-  readonly plan: OwnedTextEngineRenderPlan;
+  readonly plan: OwnedRenderPlan;
   readonly engineRevision: number;
   readonly planRevision: number;
   readonly publicationGeneration: number;
@@ -180,10 +180,10 @@ export interface AsyncPlanTarget {
 }
 
 /** Either supported plan-delivery contract. */
-export type TextPlanTarget = PlanTarget | AsyncPlanTarget;
+export type RenderPlanTarget = PlanTarget | AsyncPlanTarget;
 
 /** One formatted-text span using backend-bound renderer and font values. */
-export interface TextEngineSpan {
+export interface RetainedTextSpan {
   readonly start: number;
   readonly end: number;
   readonly font?: BackendFontStackBinding;
@@ -193,52 +193,52 @@ export interface TextEngineSpan {
 }
 
 /** Styled text accepted by a retained text instance. */
-export interface TextEngineFormattedText {
+export interface RetainedFormattedText {
   readonly text: string;
-  readonly spans: readonly TextEngineSpan[];
+  readonly spans: readonly RetainedTextSpan[];
 }
 
 /** Plain or formatted input accepted by a retained text instance. */
-export type TextEngineTextInput = string | TextEngineFormattedText;
+export type RetainedTextInput = string | RetainedFormattedText;
 
 /** A flow region whose transform is already bound to the backend. */
-export type TextEngineRegionInput = Omit<
-  TextEngineRegion,
+export type RetainedTextRegionInput = Omit<
+  PlannerRegion,
   'id' | 'geometryRevision' | 'transformIndex' | 'exclusionStart' | 'exclusionCount'
 > & {
   readonly transform: BackendTransformBinding;
 };
 
 /** An exclusion authored relative to its containing flow region. */
-export type TextEngineExclusionInput = Omit<TextEngineExclusion, 'id' | 'regionId' | 'geometryRevision'>;
+export type RetainedTextExclusionInput = Omit<PlannerExclusion, 'id' | 'regionId' | 'geometryRevision'>;
 
 /** One flow region and its exclusions. */
-export interface TextEngineFlowRegionInput {
-  readonly region: TextEngineRegionInput;
-  readonly exclusions?: readonly TextEngineExclusionInput[];
+export interface RetainedTextFlowRegionInput {
+  readonly region: RetainedTextRegionInput;
+  readonly exclusions?: readonly RetainedTextExclusionInput[];
 }
 
 /** Ordered regions through which one retained text instance flows. */
-export interface TextEngineFlowInput {
-  readonly regions: readonly TextEngineFlowRegionInput[];
+export interface RetainedTextFlowInput {
+  readonly regions: readonly RetainedTextFlowRegionInput[];
 }
 
 /** Inline-object input using backend-bound material and resource values. */
-export type TextEngineInlineObjectInput = Omit<
-  TextEngineInlineObject,
+export type RetainedTextInlineObjectInput = Omit<
+  PlannerInlineObject,
   'paragraphId' | 'id' | 'contentRevision' | 'materialId' | 'resourceId' | 'resourceGeneration'
 > & {
   readonly material: BackendMaterialBinding;
   readonly resource: BackendResourceBinding;
 };
 
-/** Fixed safety and capacity limits for one retained plan. */
-export interface TextEngineLimits extends TextEngineFrameLimits {}
+/** Fixed safety and capacity limits for one render planner. */
+export interface RenderPlannerLimits extends PlannerFrameLimits {}
 
 /** Initial desired state for one retained text instance. */
 export interface RetainedTextOptions {
   readonly font: BackendFontStackBinding;
-  readonly text: TextEngineTextInput;
+  readonly text: RetainedTextInput;
   readonly material?: BackendMaterialBinding;
   readonly transform?: BackendTransformBinding;
   readonly order?: number;
@@ -246,8 +246,8 @@ export interface RetainedTextOptions {
   readonly contentBox?: ParagraphContentBox;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
-  readonly flow?: TextEngineFlowInput;
-  readonly inlineObjects?: readonly TextEngineInlineObjectInput[];
+  readonly flow?: RetainedTextFlowInput;
+  readonly inlineObjects?: readonly RetainedTextInlineObjectInput[];
 }
 
 /** Partial desired-state replacement for one retained text instance. */
@@ -267,77 +267,77 @@ export interface RetainedText {
 }
 
 /** Optional semantic views to cache while compiling the next publication. */
-export interface RetainedPlanPublishOptions {
+export interface RenderPlannerPublishOptions {
   readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection' | 'all';
   readonly compositing?: 'ordered' | 'independent';
 }
 
-interface RetainedPlanBase {
+interface RenderPlannerBase {
   readonly disposed: boolean;
-  /** Creates one retained text instance in this plan. */
+  /** Creates one retained text instance in this planner. */
   createText(options: RetainedTextOptions): RetainedText;
-  /** Disposes every retained text instance and releases this plan. */
+  /** Disposes every retained text instance and releases this planner. */
   dispose(): void;
 }
 
-/** A synchronous retained plan selected from a synchronous target. */
-export interface SynchronousRetainedPlan extends RetainedPlanBase {
+/** A synchronous producer of transient render plans for a synchronous target. */
+export interface RenderPlanner extends RenderPlannerBase {
   /** Compiles and synchronously offers current desired state to the plan target. */
-  publish(options?: RetainedPlanPublishOptions): PlanAcceptance;
+  publish(options?: RenderPlannerPublishOptions): PlanAcceptance;
 }
 
-/** An asynchronous retained plan selected from an asynchronous target. */
-export interface AsyncRetainedPlan extends RetainedPlanBase {
+/** An asynchronous producer of owned render plans for an asynchronous target. */
+export interface AsyncRenderPlanner extends RenderPlannerBase {
   /** Copies, transfers, and asynchronously offers current desired state to the plan target. */
-  publish(options?: RetainedPlanPublishOptions): Promise<PlanAcceptance>;
+  publish(options?: RenderPlannerPublishOptions): Promise<PlanAcceptance>;
 }
 
-/** Resolves the plan surface from its target's delivery contract. */
-export type RetainedPlanFor<Target extends TextPlanTarget> = Target extends AsyncPlanTarget
-  ? AsyncRetainedPlan
-  : SynchronousRetainedPlan;
+/** Resolves the planner surface from its target's delivery contract. */
+export type RenderPlannerFor<Target extends RenderPlanTarget> = Target extends AsyncPlanTarget
+  ? AsyncRenderPlanner
+  : RenderPlanner;
 
-/** Construction options for one retained text batch and render target. */
-export interface RetainedPlanOptions<Target extends TextPlanTarget> {
+/** Construction options for one retained-text planner and render target. */
+export interface RenderPlannerOptions<Target extends RenderPlanTarget> {
   readonly policy: BackendPolicy;
   readonly capabilitySet?: PolicyCapabilitySet;
   readonly target: (control: PlanTargetControl) => Target;
-  readonly limits: TextEngineLimits;
+  readonly limits: RenderPlannerLimits;
   readonly requestCapacity: number;
   readonly resultCapacity: number;
   readonly textCapacity: number;
 }
 
-/** @internal A retained plan that can query authored text but cannot publish a render plan. */
-export interface MeasurementPlan {
+/** @internal A planner that can query authored text but cannot publish a render plan. */
+export interface MeasurementPlanner {
   readonly disposed: boolean;
   createText(options: RetainedTextOptions): RetainedText;
   dispose(): void;
 }
 
-/** @internal Renderer-free plan construction used by the root Paragraph service. */
-export interface MeasurementPlanOptions {
+/** @internal Renderer-free planner construction used by the root Paragraph service. */
+export interface MeasurementPlannerOptions {
   readonly policy: BackendPolicy;
-  readonly limits: TextEngineLimits;
+  readonly limits: RenderPlannerLimits;
   readonly requestCapacity: number;
   readonly resultCapacity: number;
   readonly textCapacity: number;
 }
 
-/** Thrown when a retained plan is used after disposal. */
-export class RetainedPlanDisposedError extends Error {
+/** Thrown when a render planner is used after disposal. */
+export class RenderPlannerDisposedError extends Error {
   constructor() {
-    super('retained plan has been disposed');
-    this.name = 'RetainedPlanDisposedError';
+    super('render planner has been disposed');
+    this.name = 'RenderPlannerDisposedError';
   }
 }
 
 /** Thrown when a pending asynchronous acceptance prevents another plan call. */
-export class TextEngineBackpressureError extends Error {}
+export class RenderPlannerBackpressureError extends Error {}
 /** Thrown when fixed transport capacity cannot encode the requested work. */
-export class TextEngineTransportCapacityError extends Error {}
+export class PlanTransportCapacityError extends Error {}
 /** Thrown when an asynchronous target violates the transfer contract. */
-export class TextEngineTransportError extends Error {}
+export class PlanTransportError extends Error {}
 
 interface ResolvedSpan {
   readonly start: number;
@@ -391,31 +391,31 @@ interface PendingPublication {
   readonly checkpointGeneration: number;
 }
 
-const textStates = new WeakMap<object, Readonly<{ retainedPlan: RetainedPlanImpl; state: RetainedTextState }>>();
+const textStates = new WeakMap<object, Readonly<{ planner: RenderPlannerImpl; state: RetainedTextState }>>();
 
 /** @internal Constructed only after GlyphBackend validates backend ownership. */
-export function createRetainedPlanImpl<Target extends TextPlanTarget>(
+export function createRenderPlanner<Target extends RenderPlanTarget>(
   backend: GlyphBackend,
-  options: RetainedPlanOptions<Target>,
-): RetainedPlanFor<Target> {
-  return new RetainedPlanImpl(backend, options) as RetainedPlanFor<Target>;
+  options: RenderPlannerOptions<Target>,
+): RenderPlannerFor<Target> {
+  return new RenderPlannerImpl(backend, options) as RenderPlannerFor<Target>;
 }
 
-/** @internal Construct a retained query plan without a renderer acceptance target. */
-export function createMeasurementPlan(backend: GlyphBackend, options: MeasurementPlanOptions): MeasurementPlan {
-  return new RetainedPlanImpl(backend, options, true);
+/** @internal Construct a query planner without a renderer acceptance target. */
+export function createMeasurementPlanner(backend: GlyphBackend, options: MeasurementPlannerOptions): MeasurementPlanner {
+  return new RenderPlannerImpl(backend, options, true);
 }
 
-class RetainedPlanImpl {
+class RenderPlannerImpl {
   readonly #backend: GlyphBackend;
   readonly #transport: PlanTransport;
   readonly #policy: ReturnType<GlyphBackend['_retainInstalledPolicy']>;
   readonly #capabilitySet: ReturnType<typeof selectPolicyCapabilitySet> | undefined;
-  readonly #target: TextPlanTarget | undefined;
+  readonly #target: RenderPlanTarget | undefined;
   readonly #control: TargetControlState | undefined;
   readonly #targetController = new AbortController();
   readonly #origin = Object.freeze({}) as PlanOrigin;
-  readonly #limits: TextEngineLimits;
+  readonly #limits: RenderPlannerLimits;
   readonly #texts = new Set<RetainedTextState>();
   readonly #removed = new Set<RetainedTextState>();
   readonly #measured = new Map<RetainedTextState, ResolvedTextOptions>();
@@ -442,18 +442,18 @@ class RetainedPlanImpl {
 
   constructor(
     backend: GlyphBackend,
-    options: RetainedPlanOptions<TextPlanTarget> | MeasurementPlanOptions,
+    options: RenderPlannerOptions<RenderPlanTarget> | MeasurementPlannerOptions,
     measurementOnly = false,
   ) {
     this.#backend = backend;
     if (measurementOnly) assertMeasurementPlanOptions(options);
-    else assertRetainedPlanOptions(options);
+    else assertRenderPlannerOptions(options);
     this.#limits = snapshotLimits(options.limits);
     this.#textCapacity = options.textCapacity;
     const policy = backend._retainInstalledPolicy(options.policy);
     if (measurementOnly) {
       try {
-        const handle = backend._allocateRetainedPlanHandle();
+        const handle = backend._allocatePlannerHandle();
         this.#transport = backend._createPlanTransport({
           handle,
           requestCapacity: options.requestCapacity,
@@ -471,8 +471,8 @@ class RetainedPlanImpl {
         throw error;
       }
     }
-    const renderOptions = options as RetainedPlanOptions<TextPlanTarget>;
-    let target: TextPlanTarget | undefined;
+    const renderOptions = options as RenderPlannerOptions<RenderPlanTarget>;
+    let target: RenderPlanTarget | undefined;
     let claimed = false;
     const control = new TargetControlState(() => {
       this.#assertActive();
@@ -485,10 +485,10 @@ class RetainedPlanImpl {
           : selectPolicyCapabilitySet(policy.handle, policy.descriptor, renderOptions.capabilitySet);
       target = renderOptions.target(control);
       assertTarget(target, this.#limits.maxOutputBytes);
-      if (claimedTargets.has(target)) throw new TypeError('plan target is already attached to another retained plan');
+      if (claimedTargets.has(target)) throw new TypeError('plan target is already attached to another render planner');
       claimedTargets.add(target);
       claimed = true;
-      const handle = backend._allocateRetainedPlanHandle();
+      const handle = backend._allocatePlannerHandle();
       this.#transport = backend._createPlanTransport({
         handle,
         requestCapacity: options.requestCapacity,
@@ -514,7 +514,7 @@ class RetainedPlanImpl {
         try {
           target!.dispose();
         } catch (disposeError) {
-          throw combinedFailure(error, disposeError, 'retained-plan construction and target disposal both failed');
+          throw combinedFailure(error, disposeError, 'render-planner construction and target disposal both failed');
         }
       }
       throw error;
@@ -554,7 +554,7 @@ class RetainedPlanImpl {
       throw error;
     }
     const text = new RetainedTextImpl(this, state);
-    textStates.set(text, { retainedPlan: this, state });
+    textStates.set(text, { planner: this, state });
     this.#addLiveState(state);
     this.#texts.add(state);
     this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
@@ -562,9 +562,9 @@ class RetainedPlanImpl {
     return text;
   }
 
-  publish(options?: RetainedPlanPublishOptions): PlanAcceptance | Promise<PlanAcceptance> {
+  publish(options?: RenderPlannerPublishOptions): PlanAcceptance | Promise<PlanAcceptance> {
     this.#assertMutable();
-    if (this.#target === undefined) throw new Error('measurement-only retained plans cannot publish render plans');
+    if (this.#target === undefined) throw new Error('measurement-only planners cannot publish render plans');
     const normalized = normalizePublishOptions(options);
     return this.#target.delivery === 'borrowed' ? this.#publishBorrowed(normalized) : this.#publishOwned(normalized);
   }
@@ -635,7 +635,7 @@ class RetainedPlanImpl {
     if (this.#disposed) return;
     this.#backend._assertEngineMutationAllowed();
     this.#disposed = true;
-    this.#targetController.abort(new RetainedPlanDisposedError());
+    this.#targetController.abort(new RenderPlannerDisposedError());
     this.#control?.dispose();
     let failure: unknown;
     const attempt = (dispose: () => void): void => {
@@ -667,7 +667,7 @@ class RetainedPlanImpl {
     this.#pendingStyleCount = 0;
     attempt(() => this.#policy.dispose());
     this.#returnedBuffers?.clear();
-    this.#backend._detachRetainedPlan(this);
+    this.#backend._detachPlanner(this);
     if (failure !== undefined) throw failure;
   }
 
@@ -695,7 +695,7 @@ class RetainedPlanImpl {
     const { publication } = pending;
     const publicationByteLength = publication.bytes.byteLength;
     const bytes = this.#copyPlan(publication.bytes);
-    const plan = new TextEngineRenderPlanView().bindBytes(bytes);
+    const plan = new RenderPlanView().bindBytes(bytes);
     const payloadLeases = this.#resolvePlanPayloads(plan);
     const candidate: AsyncPlanCandidate = Object.freeze({
       origin: this.#origin,
@@ -734,7 +734,7 @@ class RetainedPlanImpl {
       const accepted = assertAsyncAcceptance(result, publication, publicationByteLength);
       if (accepted.returnedBytes !== undefined) {
         if (bytes.buffer.byteLength !== 0 && accepted.returnedBytes.buffer !== bytes.buffer) {
-          throw new TextEngineTransportError('async target copied the plan instead of transferring it');
+          throw new PlanTransportError('async target copied the plan instead of transferring it');
         }
         this.#returnPlanBuffer(accepted.returnedBytes);
         allocationSettled = true;
@@ -784,7 +784,7 @@ class RetainedPlanImpl {
   #cacheSemanticViews(publication: PlanPublication, semanticViewMask: number): void {
     const masks = textShaperAbi.engine.semanticViewMasks;
     if ((semanticViewMask & masks.layoutInspection) !== 0) {
-      const layouts = readTextEngineLayouts(publication);
+      const layouts = readPlannerLayouts(publication);
       for (const state of this.#texts) {
         const layout = layouts.get(state.paragraphId);
         if (layout === undefined) continue;
@@ -794,7 +794,7 @@ class RetainedPlanImpl {
       return;
     }
     if ((semanticViewMask & masks.measurement) === 0) return;
-    const measurements = readTextEngineMeasurements(publication);
+    const measurements = readPlannerMeasurements(publication);
     for (const state of this.#texts) {
       const measurement = measurements.get(state.paragraphId);
       if (measurement !== undefined) state.measurement = measurement;
@@ -807,7 +807,7 @@ class RetainedPlanImpl {
     this.#assertTextQueryable(state);
     this.#ensureTextCapacity();
     const styles = compileStyles(this.#backend, state);
-    const styleMutations: TextEngineStyleMutation[] = [...styles];
+    const styleMutations: PlannerStyleMutation[] = [...styles];
     for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
       styleMutations.push({
         opcode: 'remove',
@@ -817,8 +817,8 @@ class RetainedPlanImpl {
     }
     const geometry = compileGeometry(this.#backend, state, 0, 0);
     const textChanged = !state.published || state.publishedText !== state.desired.text;
-    const request = compileValidatedTextEngineFrameUpdate({
-      retainedPlanId: this.#transport.handle,
+    const request = compileValidatedPlannerFrameUpdate({
+      plannerId: this.#transport.handle,
       policyHandle: this.#policy.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
@@ -847,14 +847,14 @@ class RetainedPlanImpl {
     });
     const publication = this.#transport.measureParagraph(request, state.paragraphId);
     if (inspection) {
-      const layout = readTextEngineLayouts(publication).get(state.paragraphId);
+      const layout = readPlannerLayouts(publication).get(state.paragraphId);
       if (layout === undefined) throw new Error('text engine returned no layout inspection for retained text');
       this.#adoptMeasuredBindings(state);
       state.measurement = layout;
       state.inspection = layout;
       return layout;
     }
-    const measurement = readTextEngineMeasurements(publication).get(state.paragraphId);
+    const measurement = readPlannerMeasurements(publication).get(state.paragraphId);
     if (measurement === undefined) throw new Error('text engine returned no measurement for retained text');
     this.#adoptMeasuredBindings(state);
     state.measurement = measurement;
@@ -877,11 +877,11 @@ class RetainedPlanImpl {
       const mutation = minimalTextMutation(state.publishedText, state.desired.text);
       return mutation === undefined ? [] : [{ paragraphId: state.paragraphId, ...mutation }];
     });
-    const styleMutations: TextEngineStyleMutation[] = [];
-    const constraints: TextEngineConstraint[] = [];
-    const regions: TextEngineRegion[] = [];
-    const exclusions: TextEngineExclusion[] = [];
-    const inlineObjects: TextEngineInlineObject[] = [];
+    const styleMutations: PlannerStyleMutation[] = [];
+    const constraints: PlannerConstraint[] = [];
+    const regions: PlannerRegion[] = [];
+    const exclusions: PlannerExclusion[] = [];
+    const inlineObjects: PlannerInlineObject[] = [];
     for (const state of this.#texts) {
       if (state.removed || !state.dirty) continue;
       const styles = compileStyles(this.#backend, state);
@@ -899,8 +899,8 @@ class RetainedPlanImpl {
       exclusions.push(...geometry.exclusions);
       inlineObjects.push(...compileInlineObjects(this.#backend, state));
     }
-    return compileValidatedTextEngineFrameUpdate({
-      retainedPlanId: this.#transport.handle,
+    return compileValidatedPlannerFrameUpdate({
+      plannerId: this.#transport.handle,
       policyHandle: this.#policy.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
@@ -923,7 +923,7 @@ class RetainedPlanImpl {
     const styles = compileStyles(this.#backend, state);
     const geometry = compileGeometry(this.#backend, state, 0, 0);
     const inlineObjects = compileInlineObjects(this.#backend, state);
-    validateTextEngineFrameRecords(
+    validatePlannerFrameRecords(
       {
         paragraphMutations: [
           {
@@ -1106,7 +1106,7 @@ class RetainedPlanImpl {
     });
   }
 
-  #resolvePlanPayloads(plan: TextEngineRenderPlanView): readonly Readonly<{
+  #resolvePlanPayloads(plan: RenderPlanView): readonly Readonly<{
     referenceId: number;
     lease: PortablePayloadLease;
   }>[] {
@@ -1115,7 +1115,7 @@ class RetainedPlanImpl {
     const seen = new Set<number>();
     try {
       for (let index = 0; index < table.count; index += 1) {
-        const referenceId = readTextEngineResource(plan, table, index).referenceId;
+        const referenceId = readRenderPlanResource(plan, table, index).referenceId;
         if (referenceId === 0 || seen.has(referenceId)) continue;
         seen.add(referenceId);
         leases.push({ referenceId, lease: this.#portablePayload(referenceId as ResourceHandle) });
@@ -1148,7 +1148,7 @@ class RetainedPlanImpl {
     }));
   }
 
-  #measurementParagraphMutations(): TextEngineParagraphMutation[] {
+  #measurementParagraphMutations(): PlannerParagraphMutation[] {
     return [
       ...[...this.#removed]
         .filter((state) => state.published)
@@ -1195,7 +1195,7 @@ class RetainedPlanImpl {
 
   #copyPlan(source: Uint8Array): Uint8Array<ArrayBuffer> {
     if (source.byteLength > (this.#target as AsyncPlanTarget).maximumPlanBytes) {
-      throw new TextEngineTransportCapacityError('render plan exceeds the target transfer limit');
+      throw new PlanTransportCapacityError('render plan exceeds the target transfer limit');
     }
     const buffer = this.#returnedBuffers!.acquire(source.byteLength);
     const bytes = new Uint8Array(buffer);
@@ -1205,7 +1205,7 @@ class RetainedPlanImpl {
 
   #returnPlanBuffer(bytes: Uint8Array<ArrayBuffer>): void {
     if (!(bytes instanceof Uint8Array) || bytes.byteOffset !== 0 || bytes.byteLength !== bytes.buffer.byteLength) {
-      throw new TextEngineTransportError('async target returned a non-full-span plan buffer');
+      throw new PlanTransportError('async target returned a non-full-span plan buffer');
     }
     this.#returnedBuffers!.release(bytes.buffer);
   }
@@ -1218,7 +1218,7 @@ class RetainedPlanImpl {
 
   #assertMutable(): void {
     this.#assertActive();
-    if (this.#pending) throw new TextEngineBackpressureError('an asynchronous plan acceptance is already pending');
+    if (this.#pending) throw new RenderPlannerBackpressureError('an asynchronous plan acceptance is already pending');
   }
 
   #assertTextQueryable(state: RetainedTextState): void {
@@ -1237,16 +1237,16 @@ class RetainedPlanImpl {
   }
 
   #assertActive(): void {
-    if (this.#disposed) throw new RetainedPlanDisposedError();
+    if (this.#disposed) throw new RenderPlannerDisposedError();
   }
 }
 
 class RetainedTextImpl implements RetainedText {
-  readonly #retainedPlan: RetainedPlanImpl;
+  readonly #planner: RenderPlannerImpl;
   readonly #state: RetainedTextState;
 
-  constructor(retainedPlan: RetainedPlanImpl, state: RetainedTextState) {
-    this.#retainedPlan = retainedPlan;
+  constructor(planner: RenderPlannerImpl, state: RetainedTextState) {
+    this.#planner = planner;
     this.#state = state;
   }
 
@@ -1255,30 +1255,30 @@ class RetainedTextImpl implements RetainedText {
   }
 
   update(update: RetainedTextUpdate): void {
-    this.#retainedPlan._updateText(this.#state, update);
+    this.#planner._updateText(this.#state, update);
   }
 
   layout(): ParagraphLayoutSummary {
-    return this.#retainedPlan._layoutText(this.#state);
+    return this.#planner._layoutText(this.#state);
   }
 
   glyphs(): ParagraphLayoutInspection {
-    return this.#retainedPlan._inspectText(this.#state);
+    return this.#planner._inspectText(this.#state);
   }
 
   dispose(): void {
-    this.#retainedPlan._disposeText(this.#state);
+    this.#planner._disposeText(this.#state);
   }
 }
 
 class BorrowedPlanLease {
   readonly publication: PlanPublication;
-  readonly reader: BorrowedTextEngineRenderPlan;
+  readonly reader: BorrowedRenderPlan;
   #active = true;
 
   constructor(publication: PlanPublication, transport: PlanTransport) {
     this.publication = publication;
-    const view = new TextEngineRenderPlanView().bind(publication);
+    const view = new RenderPlanView().bind(publication);
     this.reader = new GuardedPlanReader('borrowed', view, () => this.assertActive());
     this.#transport = transport;
   }
@@ -1296,12 +1296,12 @@ class BorrowedPlanLease {
   }
 }
 
-class GuardedPlanReader implements BorrowedTextEngineRenderPlan {
+class GuardedPlanReader implements BorrowedRenderPlan {
   readonly delivery = 'borrowed' as const;
-  readonly #view: TextEngineRenderPlanView;
+  readonly #view: RenderPlanView;
   readonly #assertActive: () => void;
 
-  constructor(_delivery: 'borrowed', view: TextEngineRenderPlanView, assertActive: () => void) {
+  constructor(_delivery: 'borrowed', view: RenderPlanView, assertActive: () => void) {
     this.#view = view;
     this.#assertActive = assertActive;
   }
@@ -1336,10 +1336,10 @@ class GuardedPlanReader implements BorrowedTextEngineRenderPlan {
   }
 }
 
-class OwnedPlanReader implements OwnedTextEngineRenderPlan {
+class OwnedPlanReader implements OwnedRenderPlan {
   readonly delivery = 'owned' as const;
-  readonly #view: TextEngineRenderPlanView;
-  constructor(view: TextEngineRenderPlanView) {
+  readonly #view: RenderPlanView;
+  constructor(view: RenderPlanView) {
     this.#view = view;
   }
   table(name: RenderPlanTableName): RenderPlanTable {
@@ -1370,7 +1370,7 @@ interface NormalizedPublishOptions {
   readonly compositingIndependent: boolean;
 }
 
-function normalizePublishOptions(value: RetainedPlanPublishOptions | undefined): NormalizedPublishOptions {
+function normalizePublishOptions(value: RenderPlannerPublishOptions | undefined): NormalizedPublishOptions {
   if (value !== undefined && !isNonArrayObject(value)) throw new TypeError('publish options must be an object');
   if (value !== undefined && Object.hasOwn(value, 'policyParameters')) {
     throw new TypeError('publish policyParameters are not supported');
@@ -1471,7 +1471,7 @@ function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, o
   }
 }
 
-function normalizeTextInput(value: unknown): TextEngineFormattedText {
+function normalizeTextInput(value: unknown): RetainedFormattedText {
   if (typeof value === 'string') return Object.freeze({ text: value, spans: Object.freeze([]) });
   if (!isNonArrayObject(value) || typeof value.text !== 'string' || !Array.isArray(value.spans)) {
     throw new TypeError('text must be a string or formatted text value');
@@ -1507,7 +1507,7 @@ function normalizeTextInput(value: unknown): TextEngineFormattedText {
 
 function snapshotTextOptions(
   value: RetainedTextOptions,
-  input: TextEngineFormattedText,
+  input: RetainedFormattedText,
   font: ReturnType<GlyphBackend['_retainFontStackBinding']>,
   material: BackendOpaqueBindingLease | undefined,
   transform: BackendOpaqueBindingLease,
@@ -1619,10 +1619,10 @@ function validateTextScalarOptions(value: RetainedTextOptions, ordinal: number):
   uint32(ordinal, 'text ordinal');
 }
 
-function compileStyles(backend: GlyphBackend, state: RetainedTextState): readonly TextEngineStyleMutation[] {
+function compileStyles(backend: GlyphBackend, state: RetainedTextState): readonly PlannerStyleMutation[] {
   const desired = state.desired;
   const source = desired.source;
-  const root: TextEngineStyleMutation = {
+  const root: PlannerStyleMutation = {
     opcode: 'upsert',
     paragraphId: state.paragraphId,
     styleId: engineStyleId(backend.id, state.paragraphId, 1),
@@ -1683,9 +1683,9 @@ function compileGeometry(
   regionStart: number,
   exclusionStart: number,
 ): Readonly<{
-  constraint: TextEngineConstraint;
-  regions: readonly TextEngineRegion[];
-  exclusions: readonly TextEngineExclusion[];
+  constraint: PlannerConstraint;
+  regions: readonly PlannerRegion[];
+  exclusions: readonly PlannerExclusion[];
 }> {
   const revision = state.geometryRevision + 1;
   const ordinary = compileEngineGeometry(
@@ -1699,8 +1699,8 @@ function compileGeometry(
   );
   const flow = state.desired.source.flow;
   if (flow === undefined) return { ...ordinary, exclusions: [] };
-  const regions: TextEngineRegion[] = [];
-  const exclusions: TextEngineExclusion[] = [];
+  const regions: PlannerRegion[] = [];
+  const exclusions: PlannerExclusion[] = [];
   for (const [regionIndex, input] of flow.regions.entries()) {
     const transform = state.desired.flowTransforms[regionIndex]!;
     const firstExclusion = exclusionStart + exclusions.length;
@@ -1729,7 +1729,7 @@ function compileGeometry(
   };
 }
 
-function compileInlineObjects(backend: GlyphBackend, state: RetainedTextState): readonly TextEngineInlineObject[] {
+function compileInlineObjects(backend: GlyphBackend, state: RetainedTextState): readonly PlannerInlineObject[] {
   return (state.desired.source.inlineObjects ?? []).map((object, index) => ({
     ...object,
     paragraphId: state.paragraphId,
@@ -1788,25 +1788,25 @@ function releaseResolvedText(value: ResolvedTextOptions): void {
   if (failure !== undefined) throw failure;
 }
 
-function assertRetainedPlanOptions(value: unknown): asserts value is RetainedPlanOptions<TextPlanTarget> {
-  if (!isNonArrayObject(value)) throw new TypeError('retained plan options must be an object');
-  if (typeof value.target !== 'function') throw new TypeError('retained plan target must be a factory');
-  assertRetainedPlanCapacities(value);
+function assertRenderPlannerOptions(value: unknown): asserts value is RenderPlannerOptions<RenderPlanTarget> {
+  if (!isNonArrayObject(value)) throw new TypeError('render planner options must be an object');
+  if (typeof value.target !== 'function') throw new TypeError('render planner target must be a factory');
+  assertRenderPlannerCapacities(value);
 }
 
-function assertMeasurementPlanOptions(value: unknown): asserts value is MeasurementPlanOptions {
+function assertMeasurementPlanOptions(value: unknown): asserts value is MeasurementPlannerOptions {
   if (!isNonArrayObject(value)) throw new TypeError('measurement plan options must be an object');
-  assertRetainedPlanCapacities(value);
+  assertRenderPlannerCapacities(value);
 }
 
-function assertRetainedPlanCapacities(value: Record<PropertyKey, unknown>): void {
+function assertRenderPlannerCapacities(value: Record<PropertyKey, unknown>): void {
   positiveU32(value.requestCapacity, 'requestCapacity');
   positiveU32(value.resultCapacity, 'resultCapacity');
   positiveU32(value.textCapacity, 'textCapacity');
   snapshotLimits(value.limits);
 }
 
-function snapshotLimits(value: unknown): TextEngineLimits {
+function snapshotLimits(value: unknown): RenderPlannerLimits {
   if (!isNonArrayObject(value)) throw new TypeError('text engine limits must be an object');
   const snapshot = Object.freeze({
     maxParagraphs: value.maxParagraphs,
@@ -1817,7 +1817,7 @@ function snapshotLimits(value: unknown): TextEngineLimits {
     maxInlineObjects: value.maxInlineObjects,
     maxSlotsPerBand: value.maxSlotsPerBand,
     maxOutputBytes: value.maxOutputBytes,
-  }) as TextEngineLimits;
+  }) as RenderPlannerLimits;
   for (const [name, limit] of Object.entries(snapshot)) positiveU32(limit, name);
   if (snapshot.maxOutputBytes < textShaperAbi.layouts.engineResult.size) {
     throw new RangeError('maxOutputBytes cannot hold a text engine result header');
@@ -1828,7 +1828,7 @@ function snapshotLimits(value: unknown): TextEngineLimits {
   return snapshot;
 }
 
-function assertTarget(value: unknown, minimumPlanBytes: number): asserts value is TextPlanTarget {
+function assertTarget(value: unknown, minimumPlanBytes: number): asserts value is RenderPlanTarget {
   if (!isNonArrayObject(value)) throw new TypeError('plan target factory must return an object');
   if (value.delivery !== 'borrowed' && value.delivery !== 'owned')
     throw new TypeError('plan target delivery is invalid');
@@ -1852,7 +1852,7 @@ class TargetControlState implements PlanTargetControl {
   }
 
   requestCheckpoint(): void {
-    if (!this.#active) throw new RetainedPlanDisposedError();
+    if (!this.#active) throw new RenderPlannerDisposedError();
     this.#request();
   }
 
@@ -1885,13 +1885,13 @@ function assertAsyncAcceptance(
       returnedBytes.byteLength !== publicationByteLength ||
       returnedBytes.buffer.byteLength !== publicationByteLength
     ) {
-      throw new TextEngineTransportError('async target returned the wrong plan buffer');
+      throw new PlanTransportError('async target returned the wrong plan buffer');
     }
-    let returnedPlan: TextEngineRenderPlanView;
+    let returnedPlan: RenderPlanView;
     try {
-      returnedPlan = new TextEngineRenderPlanView().bindBytes(returnedBytes as Uint8Array<ArrayBuffer>);
+      returnedPlan = new RenderPlanView().bindBytes(returnedBytes as Uint8Array<ArrayBuffer>);
     } catch (cause) {
-      throw new TextEngineTransportError('async target returned malformed plan bytes', { cause });
+      throw new PlanTransportError('async target returned malformed plan bytes', { cause });
     }
     const layout = textShaperAbi.layouts.engineResult;
     if (
@@ -1899,11 +1899,11 @@ function assertAsyncAcceptance(
       returnedPlan.u32(layout.planRevision) !== publication.planRevision ||
       returnedPlan.u32(layout.publicationGeneration) !== publication.publicationGeneration
     ) {
-      throw new TextEngineTransportError('async target returned bytes for a different publication');
+      throw new PlanTransportError('async target returned bytes for a different publication');
     }
   }
   if (accepted.accepted && returnedBytes === undefined) {
-    throw new TextEngineTransportError('accepted async plan did not return its transfer buffer');
+    throw new PlanTransportError('accepted async plan did not return its transfer buffer');
   }
   return accepted.accepted
     ? { accepted: true, returnedBytes: returnedBytes as Uint8Array<ArrayBuffer> }
@@ -1920,7 +1920,7 @@ async function abortableTargetAcceptance(
 ): Promise<AsyncPlanTargetResult> {
   if (!(promise instanceof Promise)) throw new TypeError('owned plan target accept() must return a Promise');
   return new Promise((resolve, reject) => {
-    const abort = (): void => reject(signal.reason ?? new RetainedPlanDisposedError());
+    const abort = (): void => reject(signal.reason ?? new RenderPlannerDisposedError());
     if (signal.aborted) return abort();
     signal.addEventListener('abort', abort, { once: true });
     promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));

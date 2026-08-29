@@ -5,8 +5,8 @@ import {
   type PolicyDescriptor,
   id,
 } from '../../src/core/render-policy.js';
-import { compileTextEngineFrameUpdate, type TextEngineFrameUpdate } from '../../src/core/frame-wire.js';
-import type { ParagraphId, RetainedPlanHandle } from '../../src/core/render-policy.js';
+import { compilePlannerFrameUpdate, type PlannerFrameUpdate } from '../../src/core/frame-wire.js';
+import type { ParagraphId, PlannerHandle } from '../../src/core/render-policy.js';
 import { textShaperAbi } from '../../src/generated/text-shaper-abi.js';
 import { defineRasterResourceId } from '../../src/raster-technique.js';
 
@@ -52,16 +52,16 @@ createProgram(1, program, body, buffers, 'direct', 'ordered');
 createProgram(program, technique, body, buffers, 'direct', 'ordered');
 // @ts-expect-error Resource identities cannot stand in for technique identities.
 createProgram(resource, program, body, buffers, 'direct', 'ordered');
-// @ts-expect-error Policy buffer IDs cannot stand in for retained-plan handles.
-const retainedPlan: RetainedPlanHandle = buffer;
-void retainedPlan;
+// @ts-expect-error Policy buffer IDs cannot stand in for planner handles.
+const planner: PlannerHandle = buffer;
+void planner;
 
 const paragraph = id.paragraph('vendor.example/body');
 const style = id.style('vendor.example/body/root');
 const flowThread = id.flowThread('vendor.example/article');
 const region = id.region('vendor.example/page/1');
-const frame: TextEngineFrameUpdate = {
-  retainedPlanId: id.retainedPlan('vendor.example/scene'),
+const frame: PlannerFrameUpdate = {
+  plannerId: id.planner('vendor.example/scene'),
   policyHandle: id.policy('vendor.example/render'),
   expectedEngineRevision: 0,
   consumedPlanRevision: 0,
@@ -133,11 +133,11 @@ const frame: TextEngineFrameUpdate = {
     },
   ],
 };
-compileTextEngineFrameUpdate(frame);
+compilePlannerFrameUpdate(frame);
 
 declare const descriptor: PolicyDescriptor;
 declare const capabilities: PolicyCapabilitySet;
-compileTextEngineFrameUpdate({
+compilePlannerFrameUpdate({
   ...frame,
   capabilitySet: selectPolicyCapabilitySet(frame.policyHandle, descriptor, capabilities),
 });
@@ -156,9 +156,9 @@ const oldIdArguments: Parameters<typeof id> = ['paragraph', 'vendor.example/body
 void oldIdArguments;
 // @ts-expect-error ID names are strings, never caller-authored numbers.
 id.buffer(20);
-// @ts-expect-error Frame retained-plan IDs require the retained-plan brand.
-compileTextEngineFrameUpdate({ ...frame, retainedPlanId: 1 });
+// @ts-expect-error Frame planner IDs require the planner brand.
+compilePlannerFrameUpdate({ ...frame, plannerId: 1 });
 // @ts-expect-error Frame paragraph IDs require the paragraph brand.
-compileTextEngineFrameUpdate({ ...frame, paragraphMutations: [{ opcode: 'remove', paragraphId: 1 }] });
+compilePlannerFrameUpdate({ ...frame, paragraphMutations: [{ opcode: 'remove', paragraphId: 1 }] });
 // @ts-expect-error Capability profiles are selected from their descriptor, never by authored ordinal.
-compileTextEngineFrameUpdate({ ...frame, capabilitySet: 1 });
+compilePlannerFrameUpdate({ ...frame, capabilitySet: 1 });

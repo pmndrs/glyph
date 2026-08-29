@@ -15,10 +15,10 @@ import {
   type RenderPlanPrimitiveId,
   type RenderPlanResourceId,
   type ResourceHandle,
-  type TextEngineBufferRecord,
-  type TextEnginePatchRecord,
-  type TextEngineRetirementKind,
-  type TextEngineRetirementRecord,
+  type RenderPlanBufferRecord,
+  type RenderPlanPatchRecord,
+  type RenderPlanRetirementKind,
+  type RenderPlanRetirementRecord,
   type PlanTarget,
   type PlanTargetControl,
   id as glyphId,
@@ -212,7 +212,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         },
         dispose() {},
       };
-      const flowRetainedPlan = flowBackend.createRetainedPlan({
+      const flowPlanner = flowBackend.createPlanner({
         policy: flowPolicy,
         target: (control) => {
           flowControl = control;
@@ -238,17 +238,17 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         clipInlineEnd: 512,
         clipBlockEnd: 256,
       };
-      const flowText = flowRetainedPlan.createText({
+      const flowText = flowPlanner.createText({
         font: flowFont,
         text: 'a',
         style: { fontSize: 32 },
         contentBox: { width: mutableWidth },
         flow: { regions: [{ region: mutableRegion }] },
       });
-      expect(() => flowRetainedPlan.createText({ font: flowFont, text: 'duplicate', order: 0 })).toThrow(
+      expect(() => flowPlanner.createText({ font: flowFont, text: 'duplicate', order: 0 })).toThrow(
         /order 0 is already in use/,
       );
-      expect(() => flowRetainedPlan.createText({ font: flowFont, text: 'invalid', style: { fontSize: 0 } })).toThrow(
+      expect(() => flowPlanner.createText({ font: flowFont, text: 'invalid', style: { fontSize: 0 } })).toThrow(
         /font size must be positive/,
       );
       expect(() =>
@@ -266,36 +266,36 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(flowText.layout().glyphCount).toBe(4);
       expect(flowText.glyphs().glyphCount).toBe(4);
       expect(flowTargetAcceptances).toBe(0);
-      expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
+      expect(flowPlanner.publish()).toEqual({ accepted: true });
       expect(flowTargetAcceptances).toBe(1);
-      const orderedText = flowRetainedPlan.createText({ font: flowFont, text: 'ordered', order: 1 });
+      const orderedText = flowPlanner.createText({ font: flowFont, text: 'ordered', order: 1 });
       expect(() => orderedText.update({ order: 0 })).toThrow(/order 0 is already in use/);
       orderedText.update({ text: 'still-valid' });
       orderedText.dispose();
-      const publishUnchecked = flowRetainedPlan.publish.bind(flowRetainedPlan) as (options: unknown) => unknown;
+      const publishUnchecked = flowPlanner.publish.bind(flowPlanner) as (options: unknown) => unknown;
       expect(() => publishUnchecked({ policyParameters: new Uint8Array() })).toThrow(/not supported/);
       expect(flowTargetAcceptances).toBe(1);
       flowText.update({ text: 'abcde' });
-      expect(flowRetainedPlan.publish({ semanticViews: 'measurement' })).toEqual({ accepted: true });
+      expect(flowPlanner.publish({ semanticViews: 'measurement' })).toEqual({ accepted: true });
       const queriesAfterMeasuredPublish = paragraphQueries;
       expect(flowText.layout().glyphCount).toBe(5);
       expect(paragraphQueries).toBe(queriesAfterMeasuredPublish);
       expect(flowText.glyphs().glyphCount).toBe(5);
       expect(paragraphQueries).toBe(queriesAfterMeasuredPublish + 1);
       flowText.update({ text: 'abcdef' });
-      expect(flowRetainedPlan.publish({ semanticViews: 'layout-inspection' })).toEqual({ accepted: true });
+      expect(flowPlanner.publish({ semanticViews: 'layout-inspection' })).toEqual({ accepted: true });
       const queriesAfterInspectedPublish = paragraphQueries;
       expect(flowText.layout().glyphCount).toBe(6);
       expect(flowText.glyphs().glyphCount).toBe(6);
       expect(paragraphQueries).toBe(queriesAfterInspectedPublish);
       expect(flowTargetAcceptances).toBe(3);
       flowControl!.requestCheckpoint();
-      expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
+      expect(flowPlanner.publish()).toEqual({ accepted: true });
       expect(flowCheckpoints.at(-1)).toBe(true);
       requestCheckpointDuringAcceptance = true;
       flowText.update({ text: 'abcdefg' });
-      expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
-      expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
+      expect(flowPlanner.publish()).toEqual({ accepted: true });
+      expect(flowPlanner.publish()).toEqual({ accepted: true });
       expect(flowCheckpoints.at(-1)).toBe(true);
       const expandedStyles = {
         text: 'abc',
@@ -308,11 +308,11 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       // A stale-ledger regression leaked three styles per cycle and exhausted the 64-entry budget here.
       for (let index = 0; index < 21; index += 1) {
         flowText.update({ text: expandedStyles });
-        expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
+        expect(flowPlanner.publish()).toEqual({ accepted: true });
         flowText.update({ text: 'abc' });
-        expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
+        expect(flowPlanner.publish()).toEqual({ accepted: true });
       }
-      const styleBudgetProbe = flowRetainedPlan.createText({
+      const styleBudgetProbe = flowPlanner.createText({
         font: flowFont,
         text: { text: 'x', spans: [{ start: 0, end: 1, style: { fontSize: 24 } }] },
         order: 1,
@@ -320,14 +320,14 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       styleBudgetProbe.dispose();
       flowText.dispose();
       expect(() => flowText.layout()).toThrow('disposed');
-      const retainedPlanOwnedText = flowRetainedPlan.createText({ font: flowFont, text: 'plan-owned' });
-      expect(retainedPlanOwnedText.layout().glyphCount).toBeGreaterThan(0);
-      expect(() => flowRetainedPlan.createText({ font: flowFont, text: 'too-many-pending' })).toThrow(
+      const plannerOwnedText = flowPlanner.createText({ font: flowFont, text: 'plan-owned' });
+      expect(plannerOwnedText.layout().glyphCount).toBeGreaterThan(0);
+      expect(() => flowPlanner.createText({ font: flowFont, text: 'too-many-pending' })).toThrow(
         /pending paragraph mutations exceed limits.maxParagraphs/,
       );
-      flowRetainedPlan.dispose();
-      expect(retainedPlanOwnedText.disposed).toBe(true);
-      expect(() => retainedPlanOwnedText.layout()).toThrow('disposed');
+      flowPlanner.dispose();
+      expect(plannerOwnedText.disposed).toBe(true);
+      expect(() => plannerOwnedText.layout()).toThrow('disposed');
 
       let returnedBuffer: ArrayBuffer | undefined;
       let reusedBuffers = 0;
@@ -343,7 +343,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         },
         dispose() {},
       };
-      const asyncRetainedPlan = flowBackend.createRetainedPlan({
+      const asyncPlanner = flowBackend.createPlanner({
         policy: flowPolicy,
         target: () => asyncTarget,
         limits: flowLimits,
@@ -351,17 +351,17 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         resultCapacity: flowLimits.maxOutputBytes,
         textCapacity: 1024,
       });
-      const asyncText = asyncRetainedPlan.createText({
+      const asyncText = asyncPlanner.createText({
         font: flowFont,
         text: { text: 'abc', spans: [{ start: 1, end: 1, style: { fontSize: 12 } }] },
       });
-      expect(await asyncRetainedPlan.publish()).toEqual({ accepted: true });
+      expect(await asyncPlanner.publish()).toEqual({ accepted: true });
       asyncText.update({ text: 'def' });
-      expect(await asyncRetainedPlan.publish()).toEqual({ accepted: true });
+      expect(await asyncPlanner.publish()).toEqual({ accepted: true });
       asyncText.update({ text: 'ghi' });
-      expect(await asyncRetainedPlan.publish()).toEqual({ accepted: true });
+      expect(await asyncPlanner.publish()).toEqual({ accepted: true });
       expect(reusedBuffers).toBe(1);
-      asyncRetainedPlan.dispose();
+      asyncPlanner.dispose();
       flowBackend.dispose();
 
       const foreignFont = Object.create(font) as typeof font;
@@ -712,7 +712,7 @@ test('applies generation-aware write, fill, copy, and retirement patches transac
   expect(() =>
     device.applyBufferPlan([{ ...first, programId: glyphId.program('foreign-program', 'example-renderer') }], [], []),
   ).toThrow('belongs to a different renderer program');
-  expect(() => device.applyBufferPlan([], [], [retirement('invalid' as TextEngineRetirementKind, 1, 1)])).toThrow(
+  expect(() => device.applyBufferPlan([], [], [retirement('invalid' as RenderPlanRetirementKind, 1, 1)])).toThrow(
     'unsupported text-engine retirement kind',
   );
   expect(() => device.applyBufferPlan([{ ...first, capacityRecords: 3 }], [], [])).toThrow(
@@ -794,7 +794,7 @@ function portableGeometry(marker: number) {
   return { ...glyphExampleIndexedQuadGeometry, bytes };
 }
 
-function bindShaderContract(device: RecordingExampleRendererDevice): readonly TextEngineBufferRecord[] {
+function bindShaderContract(device: RecordingExampleRendererDevice): readonly RenderPlanBufferRecord[] {
   const selectedProgramId = glyphId.program(
     device.shader.variant.techniqueId,
     device.shader.programNamespace,
@@ -824,7 +824,7 @@ function bindShaderContract(device: RecordingExampleRendererDevice): readonly Te
   return records;
 }
 
-function bufferRecord(id: number, generation: number, byteLength: number, buffer: number): TextEngineBufferRecord {
+function bufferRecord(id: number, generation: number, byteLength: number, buffer: number): RenderPlanBufferRecord {
   return {
     id: planBufferId(id),
     generation,
@@ -842,13 +842,13 @@ function bufferRecord(id: number, generation: number, byteLength: number, buffer
 }
 
 function patch(
-  kind: TextEnginePatchRecord['kind'],
+  kind: RenderPlanPatchRecord['kind'],
   bufferId: number,
   bufferGeneration: number,
   destinationOffset: number,
   byteLength: number,
   overrides: Record<string, unknown> = {},
-): TextEnginePatchRecord {
+): RenderPlanPatchRecord {
   const base = {
     bufferId: planBufferId(bufferId),
     bufferGeneration,
@@ -870,6 +870,6 @@ function bufferSnapshot(buffers: ReadonlyMap<number, Uint8Array>): readonly (rea
   return [...buffers].sort(([left], [right]) => left - right).map(([id, bytes]) => [id, Array.from(bytes)] as const);
 }
 
-function retirement(kind: TextEngineRetirementKind, id: number, generation: number): TextEngineRetirementRecord {
+function retirement(kind: RenderPlanRetirementKind, id: number, generation: number): RenderPlanRetirementRecord {
   return { kind, id, generation, afterPublicationGeneration: 1, byteOffset: 0, byteLength: 0 };
 }

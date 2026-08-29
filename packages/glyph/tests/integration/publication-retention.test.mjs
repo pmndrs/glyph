@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 
 import test from 'node:test';
 
-import { GlyphBackend, TextEngineRenderPlanView, id } from '../../dist/core.js';
+import { GlyphBackend, RenderPlanView, id } from '../../dist/core.js';
 import { assertOwnedPlanPublication, PlanPublicationExpiredError } from '../../dist/core/retention.js';
-import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
+import { compilePlannerFrameUpdate } from '../../dist/core/frame-wire.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
@@ -26,8 +26,8 @@ const LIMITS = {
 
 /** One real engine frame with renderer acceptance carried explicitly on the wire. */
 function frameRequest(transport, latest, accepted) {
-  return compileTextEngineFrameUpdate({
-    retainedPlanId: transport.handle,
+  return compilePlannerFrameUpdate({
+    plannerId: transport.handle,
     policyHandle: POLICY_HANDLE,
     expectedEngineRevision: latest.engineRevision,
     consumedPlanRevision: accepted.planRevision,
@@ -42,7 +42,7 @@ async function drivenTransport() {
   const backend = new GlyphBackend(shaper);
   backend.registerPolicy(POLICY_HANDLE, threeRenderPolicyBytes());
   const transport = backend._createPlanTransport({
-    handle: id.retainedPlan('publication-retention/transport'),
+    handle: id.planner('publication-retention/transport'),
     requestCapacity: 4096,
     resultCapacity: 128 * 1024,
   });
@@ -83,7 +83,7 @@ test('a borrowed publication expires at the next call, and an owned copy survive
     /was not copied/u,
     'structured cloning cannot transfer same-realm runtime provenance',
   );
-  const transferredView = new TextEngineRenderPlanView();
+  const transferredView = new RenderPlanView();
   assert.doesNotThrow(
     () => transferredView.bindBytes(transferred.bytes),
     'the receiving realm can validate and read the transferred self-owned bytes',
@@ -94,7 +94,7 @@ test('a borrowed publication expires at the next call, and an owned copy survive
     'the boundary rejects a different typed-array element width',
   );
   assert.throws(
-    () => new TextEngineRenderPlanView().bindBytes(transferred.bytes.subarray(0, 8)),
+    () => new RenderPlanView().bindBytes(transferred.bytes.subarray(0, 8)),
     /complete standalone ArrayBuffer/u,
     'cross-realm bytes are validated at the worker-facing call',
   );
@@ -103,7 +103,7 @@ test('a borrowed publication expires at the next call, and an owned copy survive
   assert.throws(() => transferredView.bindBytes(abiMismatch), /unsupported ABI version/u);
   assert.deepEqual(
     transferredView.table('draws'),
-    new TextEngineRenderPlanView().bindBytes(transferred.bytes).table('draws'),
+    new RenderPlanView().bindBytes(transferred.bytes).table('draws'),
     'a rejected bind must leave the reader on its prior valid publication',
   );
   const failedResult = transferred.bytes.slice();
@@ -184,8 +184,8 @@ test('the engine verifies acceptance: a generation that goes backwards is a conf
   const second = publish();
   assert.equal(second.publicationGeneration, 2);
   // ...so replaying an older one is a revision conflict, proving the wire field is load-bearing.
-  const replayed = compileTextEngineFrameUpdate({
-    retainedPlanId: transport.handle,
+  const replayed = compilePlannerFrameUpdate({
+    plannerId: transport.handle,
     policyHandle: POLICY_HANDLE,
     expectedEngineRevision: second.engineRevision,
     consumedPlanRevision: second.planRevision,

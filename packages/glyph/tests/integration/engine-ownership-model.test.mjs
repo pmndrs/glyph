@@ -17,7 +17,7 @@ test('one Wasm engine rejects double ownership and cross-backend policy resoluti
   const sharedPolicy = id.policy('engine-ownership/shared-policy');
   const firstPolicy = first.id('policy', 'engine-ownership/first-policy');
   const secondPolicy = second.id('policy', 'engine-ownership/second-policy');
-  const retainedPlanHandle = first.id('retained-plan', 'engine-ownership/first-transport');
+  const plannerHandle = first.id('planner', 'engine-ownership/first-transport');
   try {
     first.registerPolicy(sharedPolicy, renderPolicyBytes(textShaperAbi));
     assert.throws(
@@ -27,20 +27,20 @@ test('one Wasm engine rejects double ownership and cross-backend policy resoluti
     first.registerPolicy(firstPolicy, renderPolicyBytes(textShaperAbi));
     second.registerPolicy(secondPolicy, renderPolicyBytes(textShaperAbi));
     const transport = first._createPlanTransport({
-      handle: retainedPlanHandle,
+      handle: plannerHandle,
       requestCapacity: 4096,
       resultCapacity: 4096,
     });
     const accepted = transport.update(
       engineUpdateBytes(textShaperAbi, {
-        retainedPlanId: retainedPlanHandle,
+        plannerId: plannerHandle,
         policyHandle: firstPolicy,
         expectedEngineRevision: 0,
         consumedPlanRevision: 0,
       }),
     );
     const foreign = engineUpdateBytes(textShaperAbi, {
-      retainedPlanId: retainedPlanHandle,
+      plannerId: plannerHandle,
       policyHandle: secondPolicy,
       expectedEngineRevision: accepted.engineRevision,
       consumedPlanRevision: accepted.planRevision,
@@ -63,19 +63,19 @@ test('registration retains a scoped ID independently of the scope that minted it
   const minter = new GlyphBackend(shaper);
   const owner = new GlyphBackend(shaper);
   const policyHandle = minter.id('policy', 'engine-ownership/adopted-policy');
-  const retainedPlanHandle = owner.id('retained-plan', 'engine-ownership/adopted-transport');
+  const plannerHandle = owner.id('planner', 'engine-ownership/adopted-transport');
   try {
     owner.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));
     minter.dispose();
     assert.equal(assertGlyphId(policyHandle, 'policy', 'policy handle'), policyHandle);
     const request = engineUpdateBytes(textShaperAbi, {
-      retainedPlanId: retainedPlanHandle,
+      plannerId: plannerHandle,
       policyHandle,
       expectedEngineRevision: 0,
       consumedPlanRevision: 0,
     });
     const transport = owner._createPlanTransport({
-      handle: retainedPlanHandle,
+      handle: plannerHandle,
       requestCapacity: request.byteLength,
       resultCapacity: textShaperAbi.layouts.engineResult.size,
     });

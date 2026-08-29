@@ -98,7 +98,7 @@ const limits = {
 
 function transferToRoot(pool, bytes, planRevision, expectedPooledBuffer) {
   let rootPublication;
-  const result = pool.transfer(bytes, { retainedPlanId: 7, planRevision }, (message, transfer) => {
+  const result = pool.transfer(bytes, { plannerId: 7, planRevision }, (message, transfer) => {
     assert.deepEqual(transfer, [message.buffer]);
     if (expectedPooledBuffer !== undefined) assert.equal(message.buffer, expectedPooledBuffer);
     rootPublication = structuredClone(message, { transfer });
@@ -209,7 +209,7 @@ test('variable-size transfers use exact buckets and evict the least-recently-ret
   let replacement40;
   const publication40 = pool.transfer(
     new Uint8Array(40),
-    { retainedPlanId: 7, planRevision: 5 },
+    { plannerId: 7, planRevision: 5 },
     (message, transfer) => {
       replacement40 = message.buffer;
       structuredClone(message, { transfer });
@@ -240,17 +240,17 @@ test('buffer, outstanding, and pooled bounds produce call-bound results without 
   });
   const neverSend = () => assert.fail('rejected transfer must not call its sender');
 
-  assert.deepEqual(pool.transfer(new Uint8Array(11), { retainedPlanId: 1, planRevision: 0 }, neverSend), {
+  assert.deepEqual(pool.transfer(new Uint8Array(11), { plannerId: 1, planRevision: 0 }, neverSend), {
     ok: false,
     reason: 'oversized',
   });
   transferToRoot(pool, new Uint8Array(6), 1);
-  assert.deepEqual(pool.transfer(new Uint8Array(5), { retainedPlanId: 1, planRevision: 2 }, neverSend), {
+  assert.deepEqual(pool.transfer(new Uint8Array(5), { plannerId: 1, planRevision: 2 }, neverSend), {
     ok: false,
     reason: 'backpressure',
   });
   transferToRoot(pool, new Uint8Array(4), 3);
-  assert.deepEqual(pool.transfer(new Uint8Array(1), { retainedPlanId: 1, planRevision: 4 }, neverSend), {
+  assert.deepEqual(pool.transfer(new Uint8Array(1), { plannerId: 1, planRevision: 4 }, neverSend), {
     ok: false,
     reason: 'backpressure',
   });
@@ -276,24 +276,24 @@ test('public call inputs and worker returns are validated before ownership chang
   const mutableLimits = { ...limits };
   const pool = createFrameTransferPool(mutableLimits);
   mutableLimits.maximumBufferBytes = 0;
-  assert.throws(() => pool.transfer(null, { retainedPlanId: 1, planRevision: 0 }, () => {}), /attached Uint8Array/);
+  assert.throws(() => pool.transfer(null, { plannerId: 1, planRevision: 0 }, () => {}), /attached Uint8Array/);
   assert.throws(
-    () => pool.transfer(new Uint8Array(), { retainedPlanId: 1, planRevision: 0 }, () => {}),
+    () => pool.transfer(new Uint8Array(), { plannerId: 1, planRevision: 0 }, () => {}),
     /must not be empty/,
   );
   assert.throws(() => pool.transfer(new Uint8Array(1), null, () => {}), /metadata must be an object/);
   assert.throws(
-    () => pool.transfer(new Uint8Array(1), { retainedPlanId: 0, planRevision: 0 }, () => {}),
-    /retainedPlanId must be a positive u32/,
+    () => pool.transfer(new Uint8Array(1), { plannerId: 0, planRevision: 0 }, () => {}),
+    /plannerId must be a positive u32/,
   );
   assert.throws(
-    () => pool.transfer(new Uint8Array(1), { retainedPlanId: 1, planRevision: 0 }, null),
+    () => pool.transfer(new Uint8Array(1), { plannerId: 1, planRevision: 0 }, null),
     /send must be a function/,
   );
   const detachedBytes = new Uint8Array(1);
   structuredClone(detachedBytes.buffer, { transfer: [detachedBytes.buffer] });
   assert.throws(
-    () => pool.transfer(detachedBytes, { retainedPlanId: 1, planRevision: 0 }, () => {}),
+    () => pool.transfer(detachedBytes, { plannerId: 1, planRevision: 0 }, () => {}),
     /attached Uint8Array/,
   );
 
@@ -339,12 +339,12 @@ test('public call inputs and worker returns are validated before ownership chang
 test('sender failures preserve the one-copy result variants and account for detached ownership', () => {
   const pool = createFrameTransferPool(limits);
   const thrown = new Error('postMessage failed');
-  const failure = pool.transfer(new Uint8Array(16), { retainedPlanId: 1, planRevision: 1 }, () => {
+  const failure = pool.transfer(new Uint8Array(16), { plannerId: 1, planRevision: 1 }, () => {
     throw thrown;
   });
   assert.deepEqual(failure, { ok: false, reason: 'transfer-failed', error: thrown });
 
-  const missingTransfer = pool.transfer(new Uint8Array(16), { retainedPlanId: 1, planRevision: 2 }, () => {});
+  const missingTransfer = pool.transfer(new Uint8Array(16), { plannerId: 1, planRevision: 2 }, () => {});
   assert.equal(missingTransfer.ok, false);
   assert.equal(missingTransfer.reason, 'transfer-failed');
   assert.match(String(missingTransfer.error), /without detaching/);
@@ -352,7 +352,7 @@ test('sender failures preserve the one-copy result variants and account for deta
   let detachedPublication;
   const detachedFailure = pool.transfer(
     new Uint8Array(16),
-    { retainedPlanId: 1, planRevision: 3 },
+    { plannerId: 1, planRevision: 3 },
     (message, transfer) => {
       detachedPublication = structuredClone(message, { transfer });
       throw thrown;

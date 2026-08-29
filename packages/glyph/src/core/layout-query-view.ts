@@ -20,7 +20,7 @@ function inkBoundsOf(view: SemanticViewReader, record: number, measured: boolean
 }
 
 /** Reads an explicitly requested semantic sidecar. Rendering never calls this reader. */
-export function readTextEngineMeasurements(publication: PlanPublication): ReadonlyMap<number, ParagraphLayoutSummary> {
+export function readPlannerMeasurements(publication: PlanPublication): ReadonlyMap<number, ParagraphLayoutSummary> {
   const view = new SemanticViewReader(publication);
   const table = view.table();
   const recordLayout = textShaperAbi.layouts.engineSemanticView;
@@ -102,12 +102,12 @@ export function readTextEngineMeasurements(publication: PlanPublication): Readon
 }
 
 /** Copies one explicitly requested retained layout out of borrowed Wasm publication memory. */
-export function readTextEngineLayouts(publication: PlanPublication): ReadonlyMap<number, ParagraphLayoutInspection> {
+export function readPlannerLayouts(publication: PlanPublication): ReadonlyMap<number, ParagraphLayoutInspection> {
   const view = new SemanticViewReader(publication);
   const table = view.table();
   const recordLayout = textShaperAbi.layouts.engineSemanticView;
   const kinds = textShaperAbi.engine.semanticKinds;
-  const measurements = readTextEngineMeasurements(publication);
+  const measurements = readPlannerMeasurements(publication);
   const layouts = new Map<number, ParagraphLayoutInspection>();
   for (let index = 0; index < table.count; index += 1) {
     const summary = view.record(table, index);

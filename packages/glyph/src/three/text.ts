@@ -32,8 +32,8 @@ import { normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type {
   BackendFontStackBinding,
   BackendTransformBinding,
-  SynchronousRetainedPlan,
-  TextEngineFormattedText,
+  RenderPlanner,
+  RetainedFormattedText,
   RetainedText,
   RetainedTextOptions,
 } from '../core.js';
@@ -628,7 +628,7 @@ class ThreeTextBatchBinding {
   readonly #coordinator: ThreeTextEngineCoordinator;
   readonly #domain: ThreeEngineDomainLease;
   readonly #group: TextGroup | undefined;
-  readonly #retainedPlan: SynchronousRetainedPlan;
+  readonly #planner: RenderPlanner;
   readonly #target: ThreeTextRenderPlanExecutor;
   readonly #entries = new Map<Text<AnyRasterTechnique>, BoundTextEntry>();
   readonly #placementLayouts = new WeakMap<GlyphPlacements, ParagraphLayoutInspection>();
@@ -655,7 +655,7 @@ class ThreeTextBatchBinding {
     };
     let target: ThreeTextRenderPlanExecutor | undefined;
     try {
-      this.#retainedPlan = this.#coordinator.backend.createRetainedPlan({
+      this.#planner = this.#coordinator.backend.createPlanner({
         policy: this.#coordinator.policy,
         capabilitySet: this.#coordinator.capabilitySet,
         target: () => {
@@ -667,7 +667,7 @@ class ThreeTextBatchBinding {
         resultCapacity: PLAN_RESULT_BYTES,
         textCapacity: MIN_PLAN_TEXT_UNITS,
       });
-      if (target === undefined) throw new Error('Three retained plan did not construct its plan target');
+      if (target === undefined) throw new Error('Three render planner did not construct its plan target');
       this.#target = target;
     } catch (error) {
       this.#domain.dispose();
@@ -826,7 +826,7 @@ class ThreeTextBatchBinding {
       this.#target.syncTransforms(undefined, worldMatricesCurrent);
       return;
     }
-    const result = this.#retainedPlan.publish({
+    const result = this.#planner.publish({
       semanticViews: 'measurement',
       compositing: this.#group?.compositing ?? 'ordered',
     });
@@ -866,7 +866,7 @@ class ThreeTextBatchBinding {
     }
     this.#entries.clear();
     try {
-      this.#retainedPlan.dispose();
+      this.#planner.dispose();
     } catch (error) {
       failure ??= error;
     }
@@ -899,7 +899,7 @@ class ThreeTextBatchBinding {
       );
       if (previous === undefined) {
         const transform = options.transform!;
-        const handle = this.#retainedPlan.createText(options);
+        const handle = this.#planner.createText(options);
         this.#entries.set(text, {
           handle,
           transform,
@@ -967,7 +967,7 @@ function coreTextOptions(
       ...(span.paint === undefined ? {} : { paint: span.paint }),
     });
   });
-  const text: TextEngineFormattedText = Object.freeze({ text: desired.text, spans: Object.freeze(spans) });
+  const text: RetainedFormattedText = Object.freeze({ text: desired.text, spans: Object.freeze(spans) });
   return {
     font: bindings.root,
     text,

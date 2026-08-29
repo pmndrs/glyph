@@ -24,11 +24,11 @@ import {
   type RasterPlanProgram,
 } from './core/raster-plan-program.js';
 import {
-  createMeasurementPlan,
-  type MeasurementPlan,
+  createMeasurementPlanner,
+  type MeasurementPlanner,
   type RetainedText,
   type RetainedTextOptions,
-} from './core/retained-plan.js';
+} from './core/render-planner.js';
 import { type PolicyCapabilitySet, type PolicyDescriptor, type RenderIdFactory, id } from './core/render-policy.js';
 import { definePolicyBuffers, type AnyTechniqueSchema } from './core/technique-schema.js';
 
@@ -303,7 +303,7 @@ export async function createParagraph<Technique extends AnyRasterTechnique>(
 class ParagraphEngine {
   readonly backend: GlyphBackend;
   readonly policy: BackendPolicy;
-  readonly retainedPlan: MeasurementPlan;
+  readonly planner: MeasurementPlanner;
   readonly text: RetainedText;
   readonly #singleFontStacks = new WeakMap<
     Font<AnyRasterTechnique>,
@@ -313,23 +313,23 @@ class ParagraphEngine {
 
   constructor(backend: GlyphBackend, desired: ResolvedParagraphState<AnyRasterTechnique>, box: ParagraphContentBox) {
     let policy: BackendPolicy | undefined;
-    let retainedPlan: MeasurementPlan | undefined;
+    let planner: MeasurementPlanner | undefined;
     let text: RetainedText | undefined;
     try {
       policy = backend.installPolicy((identities) => measurementPolicyDescriptor(identities, desired));
-      retainedPlan = createMeasurementPlan(backend, {
+      planner = createMeasurementPlanner(backend, {
         policy,
         limits: measurementLimits(),
         requestCapacity: PLAN_REQUEST_BYTES,
         resultCapacity: PLAN_RESULT_BYTES,
         textCapacity: Math.max(PLAN_TEXT_UNITS, desired.text.length + 1),
       });
-      text = createEngineText(backend, retainedPlan, desired, box, this.#singleFontStacks);
+      text = createEngineText(backend, planner, desired, box, this.#singleFontStacks);
     } catch (error) {
       let teardownFailure: Readonly<{ error: unknown }> | undefined;
       try {
         text?.dispose();
-        retainedPlan?.dispose();
+        planner?.dispose();
         policy?.dispose();
       } catch (disposeError) {
         teardownFailure = { error: disposeError };
@@ -344,7 +344,7 @@ class ParagraphEngine {
     }
     this.backend = backend;
     this.policy = policy;
-    this.retainedPlan = retainedPlan;
+    this.planner = planner;
     this.text = text;
   }
 
@@ -362,7 +362,7 @@ class ParagraphEngine {
     if (this.#disposed) return;
     this.#disposed = true;
     let failure: unknown;
-    for (const dispose of [() => this.text.dispose(), () => this.retainedPlan.dispose(), () => this.policy.dispose()]) {
+    for (const dispose of [() => this.text.dispose(), () => this.planner.dispose(), () => this.policy.dispose()]) {
       try {
         dispose();
       } catch (error) {
@@ -379,14 +379,14 @@ class ParagraphEngine {
 
 function createEngineText(
   backend: GlyphBackend,
-  retainedPlan: MeasurementPlan,
+  planner: MeasurementPlanner,
   desired: ResolvedParagraphState<AnyRasterTechnique>,
   box: ParagraphContentBox,
   singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
 ): RetainedText {
   const bindings: BackendFontStackBinding[] = [];
   try {
-    return retainedPlan.createText(engineTextOptions(backend, desired, box, bindings, singleFontStacks));
+    return planner.createText(engineTextOptions(backend, desired, box, bindings, singleFontStacks));
   } finally {
     disposeBindings(bindings);
   }

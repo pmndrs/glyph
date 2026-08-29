@@ -70,19 +70,19 @@ interface ShaperExports {
   readonly disposeFontStack: (handle: number) => number;
   readonly registerPolicy: (handle: number, pointer: number, length: number) => number;
   readonly disposePolicy: (handle: number) => number;
-  readonly createRetainedPlan: (
+  readonly createPlanner: (
     handle: number,
     requestCapacity: number,
     resultCapacity: number,
     textCapacity: number,
   ) => number;
-  readonly reserveRetainedPlan: (
+  readonly reservePlanner: (
     handle: number,
     requestCapacity: number,
     resultCapacity: number,
     textCapacity: number,
   ) => number;
-  readonly disposeRetainedPlan: (handle: number) => number;
+  readonly disposePlanner: (handle: number) => number;
   readonly requestPointer: (handle: number) => number;
   readonly requestCapacity: (handle: number) => number;
   readonly textUpdate: (handle: number, pointer: number, length: number) => number;
@@ -250,9 +250,9 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       disposeFontStack: exportedFunction(instance, functions.disposeFontStack),
       registerPolicy: exportedFunction(instance, functions.registerPolicy),
       disposePolicy: exportedFunction(instance, functions.disposePolicy),
-      createRetainedPlan: exportedFunction(instance, functions.createRetainedPlan),
-      reserveRetainedPlan: exportedFunction(instance, functions.reserveRetainedPlan),
-      disposeRetainedPlan: exportedFunction(instance, functions.disposeRetainedPlan),
+      createPlanner: exportedFunction(instance, functions.createPlanner),
+      reservePlanner: exportedFunction(instance, functions.reservePlanner),
+      disposePlanner: exportedFunction(instance, functions.disposePlanner),
       requestPointer: exportedFunction(instance, functions.requestPointer),
       requestCapacity: exportedFunction(instance, functions.requestCapacity),
       textUpdate: exportedFunction(instance, functions.textUpdate),

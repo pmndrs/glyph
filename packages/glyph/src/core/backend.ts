@@ -7,11 +7,11 @@ import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import { compileRasterFont, resolveRasterPlanProgram, type CompiledRasterFont } from './raster-plan-program.js';
 import { portableResourceIdentity, type PortableResource } from './portable-resources.js';
 import {
-  createRetainedPlanImpl,
-  type RetainedPlanFor,
-  type RetainedPlanOptions,
-  type TextPlanTarget,
-} from './retained-plan.js';
+  createRenderPlanner,
+  type RenderPlannerFor,
+  type RenderPlannerOptions,
+  type RenderPlanTarget,
+} from './render-planner.js';
 import { markOwnedPlanPublication, PlanPublicationExpiredError, type OwnedPlanPublication } from './retention.js';
 import {
   assertGlyphId,
@@ -27,14 +27,14 @@ import {
   type PolicyHandle,
   type RenderIdFactory,
   type StyleId,
-  type RetainedPlanHandle,
+  type PlannerHandle,
 } from './render-policy.js';
 
 const MAX_U32 = 0xffff_ffff;
 
-/** @internal Raw wire transport construction used only by the retained-plan implementation. */
+/** @internal Raw wire transport construction used only by the render-planner implementation. */
 interface PlanTransportOptions {
-  readonly handle: RetainedPlanHandle;
+  readonly handle: PlannerHandle;
   readonly requestCapacity: number;
   readonly resultCapacity: number;
   readonly textCapacity?: number;
@@ -141,21 +141,21 @@ export interface PlanPublication {
  *
  * Both are the identifiers the request used, so a backend maps them to what it authored.
  * Zero means the status names none: an engine-internal invariant, a capacity watermark, or a
- * retained-plan-level conflict attributes nothing.
+ * planner-level conflict attributes nothing.
  */
 /** Request identities used by an integration to map a rejected frame back to authored state. */
-export interface TextEngineFault {
+export interface GlyphEngineFault {
   readonly paragraphId: ParagraphId | 0;
   readonly styleId: StyleId | 0;
 }
 
-const NO_FAULT: TextEngineFault = Object.freeze({ paragraphId: 0, styleId: 0 });
+const NO_FAULT: GlyphEngineFault = Object.freeze({ paragraphId: 0, styleId: 0 });
 
 interface EngineRegistrationOwners {
   readonly policies: Map<number, GlyphBackend>;
   readonly fontBindings: Map<number, GlyphBackend>;
   readonly fontStacks: Map<number, GlyphBackend>;
-  readonly retainedPlans: Map<number, GlyphBackend>;
+  readonly planners: Map<number, GlyphBackend>;
 }
 
 const registrationOwners = new WeakMap<object, EngineRegistrationOwners>();
@@ -167,15 +167,15 @@ function ownersFor(exports: object): EngineRegistrationOwners {
       policies: new Map(),
       fontBindings: new Map(),
       fontStacks: new Map(),
-      retainedPlans: new Map(),
+      planners: new Map(),
     };
     registrationOwners.set(exports, owners);
   }
   return owners;
 }
 
-/** Stable semantic classification of a text-engine status. */
-export type TextEngineStatusCode =
+/** Stable semantic classification of a glyph-engine status. */
+export type GlyphEngineStatusCode =
   | 'invalid-handle'
   | 'invalid-font'
   | 'invalid-extents'
@@ -185,8 +185,8 @@ export type TextEngineStatusCode =
   | 'result-too-large'
   | 'policy-conflict'
   | 'policy-missing'
-  | 'retained-plan-conflict'
-  | 'retained-plan-missing'
+  | 'planner-conflict'
+  | 'planner-missing'
   | 'revision-conflict'
   | 'font-stack-missing'
   | 'font-in-use'
@@ -198,7 +198,7 @@ export type TextEngineStatusCode =
   | 'registration-in-use'
   | 'unknown';
 
-const TEXT_ENGINE_STATUS_CODES: ReadonlyMap<number, TextEngineStatusCode> = new Map<number, TextEngineStatusCode>([
+const GLYPH_ENGINE_STATUS_CODES: ReadonlyMap<number, GlyphEngineStatusCode> = new Map<number, GlyphEngineStatusCode>([
   [textShaperAbi.status.invalidHandle, 'invalid-handle'],
   [textShaperAbi.status.invalidFont, 'invalid-font'],
   [textShaperAbi.status.invalidExtents, 'invalid-extents'],
@@ -208,8 +208,8 @@ const TEXT_ENGINE_STATUS_CODES: ReadonlyMap<number, TextEngineStatusCode> = new 
   [textShaperAbi.status.resultTooLarge, 'result-too-large'],
   [textShaperAbi.status.policyConflict, 'policy-conflict'],
   [textShaperAbi.status.policyMissing, 'policy-missing'],
-  [textShaperAbi.status.retainedPlanConflict, 'retained-plan-conflict'],
-  [textShaperAbi.status.retainedPlanMissing, 'retained-plan-missing'],
+  [textShaperAbi.status.plannerConflict, 'planner-conflict'],
+  [textShaperAbi.status.plannerMissing, 'planner-missing'],
   [textShaperAbi.status.revisionConflict, 'revision-conflict'],
   [textShaperAbi.status.fontStackMissing, 'font-stack-missing'],
   [textShaperAbi.status.fontInUse, 'font-in-use'],
@@ -222,35 +222,35 @@ const TEXT_ENGINE_STATUS_CODES: ReadonlyMap<number, TextEngineStatusCode> = new 
 ]);
 
 /** A synchronous engine call rejected with a stable code and its raw diagnostic status. */
-export class TextEngineStatusError extends Error {
-  readonly code: TextEngineStatusCode;
+export class GlyphEngineStatusError extends Error {
+  readonly code: GlyphEngineStatusCode;
   readonly status: number;
 
   constructor(operation: string, status: number) {
-    super(`${operation} failed with text-engine status ${status}`);
-    this.name = 'TextEngineStatusError';
-    this.code = textEngineStatusCode(status);
+    super(`${operation} failed with glyph-engine status ${status}`);
+    this.name = 'GlyphEngineStatusError';
+    this.code = glyphEngineStatusCode(status);
     this.status = status;
   }
 }
 
-function textEngineStatusCode(status: number): TextEngineStatusCode {
-  return TEXT_ENGINE_STATUS_CODES.get(status) ?? 'unknown';
+function glyphEngineStatusCode(status: number): GlyphEngineStatusCode {
+  return GLYPH_ENGINE_STATUS_CODES.get(status) ?? 'unknown';
 }
 
-/** Stable diagnostic details associated with a {@link TextEngineStatusError}. */
-export interface TextEngineStatusDetails {
+/** Stable diagnostic details associated with a {@link GlyphEngineStatusError}. */
+export interface GlyphEngineStatusDetails {
   readonly requiredRequestCapacity: number;
   readonly requiredResultCapacity: number;
-  readonly fault: TextEngineFault;
+  readonly fault: GlyphEngineFault;
 }
 
-const textEngineStatusDetails = new WeakMap<TextEngineStatusError, TextEngineStatusDetails>();
+const glyphEngineStatusDetails = new WeakMap<GlyphEngineStatusError, GlyphEngineStatusDetails>();
 
 /** Reads semantic diagnostic details retained on an engine status error. */
-export function textEngineStatusErrorDetails(error: TextEngineStatusError): TextEngineStatusDetails {
+export function glyphEngineStatusErrorDetails(error: GlyphEngineStatusError): GlyphEngineStatusDetails {
   return (
-    textEngineStatusDetails.get(error) ?? {
+    glyphEngineStatusDetails.get(error) ?? {
       requiredRequestCapacity: 0,
       requiredResultCapacity: 0,
       fault: NO_FAULT,
@@ -263,20 +263,20 @@ function engineStatusError(
   status: number,
   requiredRequestCapacity = 0,
   requiredResultCapacity = 0,
-  fault: TextEngineFault = NO_FAULT,
-): TextEngineStatusError {
-  const error = new TextEngineStatusError(operation, status);
+  fault: GlyphEngineFault = NO_FAULT,
+): GlyphEngineStatusError {
+  const error = new GlyphEngineStatusError(operation, status);
   error.message +=
     (fault.paragraphId === 0 ? '' : ` (paragraph ${fault.paragraphId}`) +
     (fault.paragraphId === 0 ? '' : fault.styleId === 0 ? ')' : `, style ${fault.styleId})`) +
     (requiredRequestCapacity === 0 && requiredResultCapacity === 0
       ? ''
       : ` (required request=${requiredRequestCapacity}, result=${requiredResultCapacity})`);
-  textEngineStatusDetails.set(error, { requiredRequestCapacity, requiredResultCapacity, fault });
+  glyphEngineStatusDetails.set(error, { requiredRequestCapacity, requiredResultCapacity, fault });
   return error;
 }
 
-function headerFault(header: DataView): TextEngineFault {
+function headerFault(header: DataView): GlyphEngineFault {
   const layout = textShaperAbi.layouts.engineResult;
   const paragraphId = header.getUint32(layout.faultParagraphId, true);
   const styleId = header.getUint32(layout.faultStyleId, true);
@@ -347,7 +347,7 @@ const backendOpaqueBindings = new WeakMap<
   Readonly<{ backend: GlyphBackend; state: RetainedBackendOpaqueBinding }>
 >();
 
-/** Owns one renderer integration's policies, bindings, retained plans, and transport. */
+/** Owns one renderer integration's policies, bindings, render planners, and transports. */
 export class GlyphBackend {
   readonly integration: string;
   readonly #identityNamespace: string;
@@ -355,7 +355,7 @@ export class GlyphBackend {
   readonly #ids = new GlyphIdScope();
   readonly #exports;
   readonly #owners: EngineRegistrationOwners;
-  readonly #retainedPlans = new Set<{ dispose(): void }>();
+  readonly #planners = new Set<{ dispose(): void }>();
   readonly #transports = new Set<PlanTransport>();
   readonly #policies = new Set<PolicyHandle>();
   readonly #fontStacks = new Map<FontStackHandle, readonly FontBindingHandle[]>();
@@ -383,7 +383,7 @@ export class GlyphBackend {
   #nextResourceOrdinal = 1;
   #nextTransformOrdinal = 1;
   readonly #freeTransformOrdinals: number[] = [];
-  #nextRetainedPlanOrdinal = 1;
+  #nextPlannerOrdinal = 1;
   #disposed = false;
 
   /** @internal Backends are owned and normally created by GlyphEngine. */
@@ -820,32 +820,32 @@ export class GlyphBackend {
     this.#ids.release(handle, 'policy');
   }
 
-  /** Creates a retained plan whose delivery mode is selected by its target. */
-  createRetainedPlan<Target extends TextPlanTarget>(options: RetainedPlanOptions<Target>): RetainedPlanFor<Target> {
-    const retainedPlan = createRetainedPlanImpl(this, options);
-    this.#retainedPlans.add(retainedPlan);
-    return retainedPlan;
+  /** Creates a render planner whose delivery mode is selected by its target. */
+  createPlanner<Target extends RenderPlanTarget>(options: RenderPlannerOptions<Target>): RenderPlannerFor<Target> {
+    const planner = createRenderPlanner(this, options);
+    this.#planners.add(planner);
+    return planner;
   }
 
   /** @internal */
-  _detachRetainedPlan(retainedPlan: { dispose(): void }): void {
-    this.#retainedPlans.delete(retainedPlan);
+  _detachPlanner(planner: { dispose(): void }): void {
+    this.#planners.delete(planner);
   }
 
   /** @internal */
   _createPlanTransport(options: PlanTransportOptions): PlanTransport {
     this.#assertActive();
-    const handle = assertGlyphId(options.handle, 'retained-plan', 'retained-plan handle');
+    const handle = assertGlyphId(options.handle, 'planner', 'planner handle');
     const requestCapacity = uint32(options.requestCapacity, 'request capacity');
     const resultCapacity = uint32(options.resultCapacity, 'result capacity');
     const textCapacity = uint32(options.textCapacity ?? 0, 'text capacity');
-    const adopted = this.#ids.retain(handle, 'retained-plan', 'retained-plan handle');
+    const adopted = this.#ids.retain(handle, 'planner', 'planner handle');
     let claimed = false;
     try {
-      claimed = this.#claim(this.#owners.retainedPlans, handle, 'retained plan');
+      claimed = this.#claim(this.#owners.planners, handle, 'render planner');
       requireStatus(
-        this.#exports.createRetainedPlan(handle, requestCapacity, resultCapacity, textCapacity),
-        'create retained plan',
+        this.#exports.createPlanner(handle, requestCapacity, resultCapacity, textCapacity),
+        'create render planner',
       );
       const transport = new PlanTransport(
         this.#exports,
@@ -857,28 +857,28 @@ export class GlyphBackend {
         () => this.#assertEngineAvailable?.(),
         () => {
           this.#transports.delete(transport);
-          this.#releaseClaim(this.#owners.retainedPlans, handle);
-          this.#ids.release(handle, 'retained-plan');
+          this.#releaseClaim(this.#owners.planners, handle);
+          this.#ids.release(handle, 'planner');
         },
       );
       this.#transports.add(transport);
       return transport;
     } catch (error) {
-      this.#rollbackClaim(this.#owners.retainedPlans, handle, claimed);
-      if (adopted) this.#ids.release(handle, 'retained-plan');
+      this.#rollbackClaim(this.#owners.planners, handle, claimed);
+      if (adopted) this.#ids.release(handle, 'planner');
       throw error;
     }
   }
 
   /** @internal */
-  _allocateRetainedPlanHandle(): RetainedPlanHandle {
+  _allocatePlannerHandle(): PlannerHandle {
     this.#assertActive();
-    const ordinal = this.#nextRetainedPlanOrdinal;
+    const ordinal = this.#nextPlannerOrdinal;
     if (!Number.isSafeInteger(ordinal) || ordinal <= 0 || ordinal > MAX_U32) {
-      throw new RangeError('retained-plan handles are exhausted');
+      throw new RangeError('planner handles are exhausted');
     }
-    this.#nextRetainedPlanOrdinal = ordinal + 1;
-    return this.id('retained-plan', `${this.#identityNamespace}/retained-plan/${ordinal}`);
+    this.#nextPlannerOrdinal = ordinal + 1;
+    return this.id('planner', `${this.#identityNamespace}/planner/${ordinal}`);
   }
 
   /** @internal */
@@ -892,7 +892,7 @@ export class GlyphBackend {
     this.#assertActive();
   }
 
-  /** Disposes this backend and every policy, binding, retained plan, and transport it owns. */
+  /** Disposes this backend and every policy, binding, planner, and transport it owns. */
   dispose(): void {
     if (this.#disposed) return;
     this.#assertEngineAvailable?.();
@@ -904,7 +904,7 @@ export class GlyphBackend {
         failure ??= error;
       }
     };
-    for (const retainedPlan of [...this.#retainedPlans]) attempt(() => retainedPlan.dispose());
+    for (const planner of [...this.#planners]) attempt(() => planner.dispose());
     for (const transport of [...this.#transports]) attempt(() => transport.dispose());
     for (const binding of [...this.#opaqueBindings]) attempt(() => this.#forceDisposeOpaqueBinding(binding));
     const retainedStackHandles = new Set([...this.#liveRetainedFontStacks].map((stack) => stack.handle));
@@ -943,11 +943,11 @@ export class GlyphBackend {
     if (failure !== undefined) throw failure;
   }
 
-  #assertFrameOwnership(retainedPlanHandle: RetainedPlanHandle, request: Uint8Array): void {
+  #assertFrameOwnership(plannerHandle: PlannerHandle, request: Uint8Array): void {
     const references = frameRegistrationReferences(request);
-    if (references.retainedPlanHandle !== retainedPlanHandle) {
+    if (references.plannerHandle !== plannerHandle) {
       throw new TypeError(
-        `text update belongs to retained plan ${references.retainedPlanHandle}, not ${retainedPlanHandle}`,
+        `text update belongs to planner ${references.plannerHandle}, not ${plannerHandle}`,
       );
     }
     if (this.#owners.policies.get(references.policyHandle) !== this) {
@@ -1354,10 +1354,10 @@ function snapshotPolicyDescriptor(descriptor: PolicyDescriptor): PolicyDescripto
   }
 }
 
-/** @internal Owns one retained plan's direct Wasm request/result exchange. */
+/** @internal Owns one planner's direct Wasm request/result exchange. */
 export class PlanTransport {
   readonly #exports;
-  readonly #handle: RetainedPlanHandle;
+  readonly #handle: PlannerHandle;
   readonly #onDispose: () => void;
   readonly #assertRequestOwnership: (request: Uint8Array) => void;
   readonly #assertEngineAvailable: () => void;
@@ -1373,10 +1373,10 @@ export class PlanTransport {
   readonly #owned = new WeakSet<PlanPublication>();
   #latestGeneration = 0;
 
-  /** @internal Plan transports are created by the retained-plan implementation. */
+  /** @internal Plan transports are created by the render-planner implementation. */
   constructor(
     exports: ReturnType<typeof runtimeShaperEngineExports>,
-    handle: RetainedPlanHandle,
+    handle: PlannerHandle,
     requestCapacity: number,
     resultCapacity: number,
     textCapacity: number,
@@ -1394,7 +1394,7 @@ export class PlanTransport {
     this.#onDispose = onDispose;
   }
 
-  get handle(): RetainedPlanHandle {
+  get handle(): PlannerHandle {
     return this.#handle;
   }
 
@@ -1452,8 +1452,8 @@ export class PlanTransport {
     textCapacity = uint32(textCapacity, 'text capacity');
     this.#invalidate();
     requireStatus(
-      this.#exports.reserveRetainedPlan(this.#handle, requestCapacity, resultCapacity, textCapacity),
-      'reserve retained plan',
+      this.#exports.reservePlanner(this.#handle, requestCapacity, resultCapacity, textCapacity),
+      'reserve render planner',
     );
     this.#requestCapacity = Math.max(this.#requestCapacity, requestCapacity);
     this.#resultCapacity = Math.max(this.#resultCapacity, resultCapacity);
@@ -1481,7 +1481,7 @@ export class PlanTransport {
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
       if (requestPointer === 0)
-        throw engineStatusError('resolve text request arena', textShaperAbi.status.retainedPlanMissing);
+        throw engineStatusError('resolve text request arena', textShaperAbi.status.plannerMissing);
       const pinnedMemoryBuffer = this.#exports.memory.buffer;
       new Uint8Array(pinnedMemoryBuffer, requestPointer, requestLength).set(request);
       const resultPointer = this.#exports.textUpdate(this.#handle, requestPointer, requestLength);
@@ -1541,7 +1541,7 @@ export class PlanTransport {
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
       if (requestPointer === 0)
-        throw engineStatusError('resolve text request arena', textShaperAbi.status.retainedPlanMissing);
+        throw engineStatusError('resolve text request arena', textShaperAbi.status.plannerMissing);
       new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
       const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
       const memoryBuffer = this.#exports.memory.buffer;
@@ -1613,7 +1613,7 @@ export class PlanTransport {
   dispose(): void {
     if (this.#disposed) return;
     this.#assertEngineAvailable();
-    requireStatus(this.#exports.disposeRetainedPlan(this.#handle), 'dispose retained plan');
+    requireStatus(this.#exports.disposePlanner(this.#handle), 'dispose render planner');
     this.#invalidate();
     this.#disposed = true;
     this.#onDispose();
@@ -1626,7 +1626,7 @@ export class PlanTransport {
 }
 
 interface FrameRegistrationReferences {
-  readonly retainedPlanHandle: number;
+  readonly plannerHandle: number;
   readonly policyHandle: number;
   readonly fontStackHandles: ReadonlySet<number>;
 }
@@ -1658,7 +1658,7 @@ function frameRegistrationReferences(bytes: Uint8Array): FrameRegistrationRefere
     }
   }
   return {
-    retainedPlanHandle: uint32Handle(view.getUint32(request.retainedPlanId, true), 'frame retained-plan handle'),
+    plannerHandle: uint32Handle(view.getUint32(request.plannerId, true), 'frame planner handle'),
     policyHandle: uint32Handle(view.getUint32(request.policyHandle, true), 'frame policy handle'),
     fontStackHandles,
   };

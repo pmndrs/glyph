@@ -3,13 +3,13 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     STATUS_FONT_IN_USE, STATUS_FONT_STACK_MISSING, STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST,
-    STATUS_OK, STATUS_POLICY_CONFLICT, STATUS_POLICY_MISSING, STATUS_REGISTRATION_IN_USE,
-    STATUS_RESULT_TOO_LARGE, STATUS_RETAINED_PLAN_CONFLICT, STATUS_RETAINED_PLAN_MISSING,
+    STATUS_OK, STATUS_PLANNER_CONFLICT, STATUS_PLANNER_MISSING, STATUS_POLICY_CONFLICT,
+    STATUS_POLICY_MISSING, STATUS_REGISTRATION_IN_USE, STATUS_RESULT_TOO_LARGE,
     STATUS_REVISION_CONFLICT, ShaperRegistry,
     engine::{
         EngineError, FrameFault, TextEngine,
         font_binding_wire::parse_font_binding,
-        frame::RetainedPlanRevision,
+        frame::PlannerRevision,
         frame_wire::parse_update_request,
         render_plan_wire::{publication_layout, query_layout},
         transport::FrameTransport,
@@ -254,7 +254,7 @@ pub extern "C" fn pmndrs_glyph_engine_policy_count() -> u32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_engine_create_retained_plan(
+pub extern "C" fn pmndrs_glyph_engine_create_planner(
     handle: u32,
     request_capacity: u32,
     result_capacity: u32,
@@ -265,25 +265,22 @@ pub extern "C" fn pmndrs_glyph_engine_create_retained_plan(
             return STATUS_INVALID_HANDLE;
         }
         if state.frames.contains_key(&handle) {
-            return STATUS_RETAINED_PLAN_CONFLICT;
+            return STATUS_PLANNER_CONFLICT;
         }
         let transport = match FrameTransport::new(request_capacity, result_capacity) {
             Ok(transport) => transport,
             Err(status) => return status,
         };
-        if let Err(error) = state.engine.create_retained_plan(handle) {
+        if let Err(error) = state.engine.create_planner(handle) {
             return engine_status(error);
         }
         let text_capacity = if text_capacity == 0 {
-            crate::engine::frame::DEFAULT_RETAINED_PLAN_TEXT_CAPACITY
+            crate::engine::frame::DEFAULT_PLANNER_TEXT_CAPACITY
         } else {
             text_capacity
         };
-        if let Err(error) = state
-            .engine
-            .reserve_retained_plan_text(handle, text_capacity)
-        {
-            let _ = state.engine.dispose_retained_plan(handle);
+        if let Err(error) = state.engine.reserve_planner_text(handle, text_capacity) {
+            let _ = state.engine.dispose_planner(handle);
             return engine_status(error);
         }
         state.frames.insert(handle, transport);
@@ -292,7 +289,7 @@ pub extern "C" fn pmndrs_glyph_engine_create_retained_plan(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_engine_reserve_retained_plan(
+pub extern "C" fn pmndrs_glyph_engine_reserve_planner(
     handle: u32,
     request_capacity: u32,
     result_capacity: u32,
@@ -300,15 +297,13 @@ pub extern "C" fn pmndrs_glyph_engine_reserve_retained_plan(
 ) -> u32 {
     with_state(|state| {
         let Some(transport) = state.frames.get_mut(&handle) else {
-            return STATUS_RETAINED_PLAN_MISSING;
+            return STATUS_PLANNER_MISSING;
         };
         if let Err(status) = transport.reserve(request_capacity, result_capacity) {
             return status;
         }
         if text_capacity != 0
-            && let Err(error) = state
-                .engine
-                .reserve_retained_plan_text(handle, text_capacity)
+            && let Err(error) = state.engine.reserve_planner_text(handle, text_capacity)
         {
             return engine_status(error);
         }
@@ -317,12 +312,12 @@ pub extern "C" fn pmndrs_glyph_engine_reserve_retained_plan(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_engine_dispose_retained_plan(handle: u32) -> u32 {
+pub extern "C" fn pmndrs_glyph_engine_dispose_planner(handle: u32) -> u32 {
     with_state(|state| {
         if !state.frames.contains_key(&handle) {
-            return STATUS_RETAINED_PLAN_MISSING;
+            return STATUS_PLANNER_MISSING;
         }
-        if let Err(error) = state.engine.dispose_retained_plan(handle) {
+        if let Err(error) = state.engine.dispose_planner(handle) {
             return engine_status(error);
         }
         state.frames.remove(&handle);
@@ -331,8 +326,8 @@ pub extern "C" fn pmndrs_glyph_engine_dispose_retained_plan(handle: u32) -> u32 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_engine_retained_plan_count() -> u32 {
-    with_state(|state| state.engine.retained_plan_count())
+pub extern "C" fn pmndrs_glyph_engine_planner_count() -> u32 {
+    with_state(|state| state.engine.planner_count())
 }
 
 #[unsafe(no_mangle)]
@@ -512,54 +507,40 @@ pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_policy(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_engine_update(
-    retained_plan_id: u32,
+    planner_id: u32,
     request_offset: u32,
     request_len: u32,
 ) -> u32 {
     with_state(|state| {
-        let revision = match state.engine.retained_plan_revision(retained_plan_id) {
+        let revision = match state.engine.planner_revision(planner_id) {
             Ok(revision) => revision,
             Err(_) => return 0,
         };
         let request = {
-            let Some(transport) = state.frames.get(&retained_plan_id) else {
+            let Some(transport) = state.frames.get(&planner_id) else {
                 return 0;
             };
             let bytes = match transport.request_at(request_offset as usize, request_len) {
                 Ok(bytes) => bytes,
                 Err(status) => {
-                    return publish_failure(
-                        state,
-                        retained_plan_id,
-                        revision,
-                        status,
-                        request_len,
-                        0,
-                    );
+                    return publish_failure(state, planner_id, revision, status, request_len, 0);
                 }
             };
-            match parse_update_request(bytes, retained_plan_id) {
+            match parse_update_request(bytes, planner_id) {
                 Ok(request) => request,
                 Err(status) => {
-                    return publish_failure(state, retained_plan_id, revision, status, 0, 0);
+                    return publish_failure(state, planner_id, revision, status, 0, 0);
                 }
             }
         };
         let publication_generation = match state
             .frames
-            .get(&retained_plan_id)
+            .get(&planner_id)
             .and_then(|transport| transport.next_publication_generation().ok())
         {
             Some(generation) => generation,
             None => {
-                return publish_failure(
-                    state,
-                    retained_plan_id,
-                    revision,
-                    STATUS_RESULT_TOO_LARGE,
-                    0,
-                    0,
-                );
+                return publish_failure(state, planner_id, revision, STATUS_RESULT_TOO_LARGE, 0, 0);
             }
         };
         let prepared = match state.engine.prepare_update_with_shaper(
@@ -569,7 +550,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
         ) {
             Ok(prepared) => prepared,
             Err(error) => {
-                return publish_engine_failure(state, retained_plan_id, revision, error);
+                return publish_engine_failure(state, planner_id, revision, error);
             }
         };
         let plan = match state.engine.prepared_plan(prepared) {
@@ -625,7 +606,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
                 required_output,
             );
         }
-        let Some(transport) = state.frames.get(&retained_plan_id) else {
+        let Some(transport) = state.frames.get(&planner_id) else {
             let _ = state.engine.abort_update(prepared);
             return 0;
         };
@@ -642,7 +623,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
         }
         let staged = match state
             .frames
-            .get_mut(&retained_plan_id)
+            .get_mut(&planner_id)
             .and_then(|transport| transport.stage_publication(plan, semantic_views).ok())
         {
             Some(staged) => staged,
@@ -672,7 +653,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
                 );
             }
         };
-        let Some(transport) = state.frames.get_mut(&retained_plan_id) else {
+        let Some(transport) = state.frames.get_mut(&planner_id) else {
             return 0;
         };
         debug_assert_eq!(
@@ -685,37 +666,30 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
-    retained_plan_id: u32,
+    planner_id: u32,
     request_offset: u32,
     request_len: u32,
     paragraph_id: u32,
 ) -> u32 {
     with_state(|state| {
-        let revision = match state.engine.retained_plan_revision(retained_plan_id) {
+        let revision = match state.engine.planner_revision(planner_id) {
             Ok(revision) => revision,
             Err(_) => return 0,
         };
         let request = {
-            let Some(transport) = state.frames.get(&retained_plan_id) else {
+            let Some(transport) = state.frames.get(&planner_id) else {
                 return 0;
             };
             let bytes = match transport.request_at(request_offset as usize, request_len) {
                 Ok(bytes) => bytes,
                 Err(status) => {
-                    return publish_failure(
-                        state,
-                        retained_plan_id,
-                        revision,
-                        status,
-                        request_len,
-                        0,
-                    );
+                    return publish_failure(state, planner_id, revision, status, request_len, 0);
                 }
             };
-            match parse_update_request(bytes, retained_plan_id) {
+            match parse_update_request(bytes, planner_id) {
                 Ok(request) => request,
                 Err(status) => {
-                    return publish_failure(state, retained_plan_id, revision, status, 0, 0);
+                    return publish_failure(state, planner_id, revision, status, 0, 0);
                 }
             }
         };
@@ -726,7 +700,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
         ) {
             Ok(measured) => measured,
             Err(error) => {
-                return publish_engine_failure(state, retained_plan_id, revision, error);
+                return publish_engine_failure(state, planner_id, revision, error);
             }
         };
         let staged = match state.engine.measured_semantic_views(measured) {
@@ -738,11 +712,11 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
                 )),
                 Ok(layout) => state
                     .frames
-                    .get_mut(&retained_plan_id)
-                    .ok_or(STATUS_RETAINED_PLAN_MISSING)
+                    .get_mut(&planner_id)
+                    .ok_or(STATUS_PLANNER_MISSING)
                     .and_then(|transport| {
                         transport.ensure_publish_capacity(layout.byte_length)?;
-                        transport.stage_query(retained_plan_id, revision, semantic_views)
+                        transport.stage_query(planner_id, revision, semantic_views)
                     })
                     .map_err(|status| (status, FrameFault::default(), layout.byte_length)),
                 Err(status) => Err((status, FrameFault::default(), 0)),
@@ -758,7 +732,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
                 let _ = state.engine.abort_measure(measured);
                 publish_attributed_failure(
                     state,
-                    retained_plan_id,
+                    planner_id,
                     revision,
                     status,
                     fault,
@@ -862,8 +836,8 @@ fn engine_status(error: EngineError) -> u32 {
         EngineError::FontStackMissing | EngineError::StyleFontStackMissing(_) => {
             STATUS_FONT_STACK_MISSING
         }
-        EngineError::RetainedPlanConflict => STATUS_RETAINED_PLAN_CONFLICT,
-        EngineError::RetainedPlanMissing => STATUS_RETAINED_PLAN_MISSING,
+        EngineError::PlannerConflict => STATUS_PLANNER_CONFLICT,
+        EngineError::PlannerMissing => STATUS_PLANNER_MISSING,
         EngineError::RevisionConflict => STATUS_REVISION_CONFLICT,
         EngineError::RevisionExhausted => STATUS_RESULT_TOO_LARGE,
         EngineError::InvalidRequest => STATUS_INVALID_REQUEST,
@@ -880,17 +854,17 @@ fn engine_status(error: EngineError) -> u32 {
 fn publish_prepared_failure(
     state: &mut WasmState,
     prepared: crate::engine::frame::PreparedUpdate,
-    revision: RetainedPlanRevision,
+    revision: PlannerRevision,
     status: u32,
     fault: FrameFault,
     required_request_capacity: u32,
     required_result_capacity: u32,
 ) -> u32 {
-    let retained_plan_id = prepared.retained_plan_id();
+    let planner_id = prepared.planner_id();
     let _ = state.engine.abort_update(prepared);
     publish_attributed_failure(
         state,
-        retained_plan_id,
+        planner_id,
         revision,
         status,
         fault,
@@ -901,15 +875,15 @@ fn publish_prepared_failure(
 
 fn publish_failure(
     state: &mut WasmState,
-    retained_plan_id: u32,
-    revision: RetainedPlanRevision,
+    planner_id: u32,
+    revision: PlannerRevision,
     status: u32,
     required_request_capacity: u32,
     required_result_capacity: u32,
 ) -> u32 {
     publish_attributed_failure(
         state,
-        retained_plan_id,
+        planner_id,
         revision,
         status,
         FrameFault::default(),
@@ -922,13 +896,13 @@ fn publish_failure(
 /// cause out of the header instead of inferring it from a bare status number.
 fn publish_engine_failure(
     state: &mut WasmState,
-    retained_plan_id: u32,
-    revision: RetainedPlanRevision,
+    planner_id: u32,
+    revision: PlannerRevision,
     error: EngineError,
 ) -> u32 {
     publish_attributed_failure(
         state,
-        retained_plan_id,
+        planner_id,
         revision,
         engine_status(error),
         error.fault(),
@@ -939,8 +913,8 @@ fn publish_engine_failure(
 
 fn publish_attributed_failure(
     state: &mut WasmState,
-    retained_plan_id: u32,
-    revision: RetainedPlanRevision,
+    planner_id: u32,
+    revision: PlannerRevision,
     status: u32,
     fault: FrameFault,
     required_request_capacity: u32,
@@ -948,10 +922,10 @@ fn publish_attributed_failure(
 ) -> u32 {
     state
         .frames
-        .get_mut(&retained_plan_id)
+        .get_mut(&planner_id)
         .and_then(|transport| {
             u32::try_from(transport.publish_failure(
-                retained_plan_id,
+                planner_id,
                 revision,
                 status,
                 fault,

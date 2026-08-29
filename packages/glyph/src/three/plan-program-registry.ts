@@ -12,14 +12,14 @@ import {
   type TechniqueGeometryDeclaration,
   type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
-  type TextEngineScalarType,
+  type RenderPlanScalarType,
 } from '../core.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { ThreeTextMaterial } from './material.js';
 import { threePolicyCapabilitySet, threeSystemBuffers } from './render-policy.js';
 
 export interface ThreePlanProgramBuffer {
-  readonly scalarType: TextEngineScalarType;
+  readonly scalarType: RenderPlanScalarType;
   readonly vectorWidth: number;
   readonly attribute: StorageInstancedBufferAttribute;
 }
