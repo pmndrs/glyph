@@ -18,6 +18,12 @@ export async function runCodemod({ codemod, project: projectPath, target, write 
   }
 
   const project = new tsMorph.Project({ tsConfigFilePath: tsconfig, skipAddingFilesFromTsConfig: false });
+  for (const glob of migration.metadata.additionalGlobs ?? []) {
+    if (typeof glob !== 'string' || path.isAbsolute(glob) || glob.includes('..')) {
+      throw new TypeError('codemod additionalGlobs must stay inside the target');
+    }
+    project.addSourceFilesAtPaths(path.join(targetRoot, glob));
+  }
   const before = snapshot(project);
   await migration.transform({ project, renameSymbol: createSymbolRenamer(project), targetRoot, tsMorph });
   const after = snapshot(project);

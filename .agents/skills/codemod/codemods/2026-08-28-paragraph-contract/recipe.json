@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-28-paragraph-contract",
+  "created": "2026-08-28",
+  "package": "@pmndrs/glyph",
+  "from": "canary with ParagraphContentBox, ParagraphStyle, ParagraphLayoutPolicy, and authored paint",
+  "to": "canary at or after the reusable paragraph contract",
+  "summary": "Adopt reusable TextStyle, ParagraphLayout, and Constraints objects and fold authored paint into TextStyle.",
+  "instructions": "./instructions.md",
+  "transform": "./transform.mjs",
+  "changes": [
+    { "kind": "symbol-rename", "from": "ParagraphStyle", "to": "TextStyle", "automatic": true },
+    {
+      "kind": "symbol-rename",
+      "from": "ParagraphLayoutPolicy",
+      "to": "ParagraphLayout",
+      "automatic": true
+    },
+    { "kind": "symbol-rename", "from": "ParagraphConstraints", "to": "Constraints", "automatic": true },
+    { "kind": "symbol-rename", "from": "ParagraphAxisConstraint", "to": "AxisConstraint", "automatic": true },
+    { "kind": "symbol-rename", "from": "ParagraphLayout", "to": "GlyphLayout", "automatic": false },
+    {
+      "kind": "symbol-rename",
+      "from": "ParagraphLayoutInspection",
+      "to": "GlyphLayoutInspection",
+      "automatic": true
+    },
+    {
+      "kind": "symbol-rename",
+      "from": "copyParagraphLayoutInspection",
+      "to": "copyGlyphLayoutInspection",
+      "automatic": true
+    },
+    { "kind": "method-rename", "from": "Paragraph.layout", "to": "Paragraph.measure", "automatic": true },
+    { "kind": "method-rename", "from": "RetainedText.layout", "to": "RetainedText.measure", "automatic": true },
+    { "kind": "method-rename", "from": "Text.layout", "to": "Text.measure", "automatic": true },
+    { "kind": "property-rewrite", "from": "policy", "to": "layout", "automatic": false },
+    {
+      "kind": "property-rewrite",
+      "from": "contentBox",
+      "to": "layout plus constraints",
+      "automatic": false
+    },
+    { "kind": "property-rewrite", "from": "paint", "to": "style", "automatic": false },
+    { "kind": "remove", "from": "ParagraphContentBox and GlyphPaintInput", "to": "none", "automatic": false }
+  ],
+  "verification": [
+    "mise exec -- node .agents/skills/codemod/codemods/2026-08-28-paragraph-contract/test.mjs",
+    "mise exec -- pnpm exec tsc -p packages/glyph/tsconfig.json --noEmit",
+    "mise exec -- pnpm exec tsc -p packages/glyph/tsconfig.types.json --noEmit",
+    "mise exec -- pnpm exec tsc -p apps/benchmarks/tsconfig.json --noEmit",
+    "mise exec -- pnpm exec tsc -p apps/benchmarks/tsconfig.scripts.json --noEmit"
+  ]
+}

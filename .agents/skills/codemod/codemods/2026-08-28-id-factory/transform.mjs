@@ -369,6 +369,20 @@ function ensureIdImport(declarations, local, sourceFile) {
       namedImports: [],
     });
   }
+  const idImports = live.flatMap((declaration) =>
+    declaration
+      .getNamedImports()
+      .filter((specifier) => specifier.getName() === 'id')
+      .map((specifier) => ({ declaration, specifier })),
+  );
+  const expectedLocal = local === 'id' ? undefined : local;
+  if (
+    idImports.length === 1 &&
+    idImports[0].declaration === target &&
+    idImports[0].specifier.getAliasNode()?.getText() === expectedLocal
+  ) {
+    return;
+  }
   for (const declaration of live) {
     for (const specifier of declaration.getNamedImports()) {
       if (specifier.getName() === 'id') specifier.remove();

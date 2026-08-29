@@ -24,6 +24,15 @@ List archived recipes without loading their instructions:
 mise exec -- node .agents/skills/codemod/scripts/list-codemods.mjs
 ```
 
+Verify that every archived migration is already applied, or apply the complete archive in lexical order:
+
+```bash
+mise exec -- node .agents/skills/codemod/scripts/run-all-codemods.mjs \
+  --project path/to/tsconfig.json --target path/to/project --check
+mise exec -- node .agents/skills/codemod/scripts/run-all-codemods.mjs \
+  --project path/to/tsconfig.json --target path/to/project --write
+```
+
 ## Apply safely
 
 1. Resolve the exact target root and tsconfig. Never target a broad home, workspace parent, dependency store, or

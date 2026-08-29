@@ -45,6 +45,16 @@ try {
     '',
   ].join('\n');
   await writeFile(path.join(root, 'app/internal.ts'), internalFactory);
+  const alreadyCurrent = [
+    'import {',
+    '  type RenderIdFactory,',
+    '  id,',
+    "} from '@pmndrs/glyph/core';",
+    'const ids: RenderIdFactory = id;',
+    'void ids;',
+    '',
+  ].join('\n');
+  await writeFile(path.join(root, 'app/already-current.ts'), alreadyCurrent);
   await writeFile(
     path.join(root, 'app/glyph.d.ts'),
     [
@@ -118,6 +128,7 @@ try {
   assert.match(output, /id as glyphId/);
   assert.doesNotMatch(output, /programId|resourceId|techniqueId|RenderWireIdentityRegistry/);
   assert.equal(await readFile(path.join(root, 'app/internal.ts'), 'utf8'), internalFactory);
+  assert.equal(await readFile(path.join(root, 'app/already-current.ts'), 'utf8'), alreadyCurrent);
   const typeOnlyOutput = await readFile(path.join(root, 'app/type-only.ts'), 'utf8');
   assert.match(typeOnlyOutput, /import \{[^}]*id[^}]*\} from '@pmndrs\/glyph\/core';/);
   assert.match(typeOnlyOutput, /import type \{ Font \} from '@pmndrs\/glyph';/);
