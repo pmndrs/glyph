@@ -8,9 +8,6 @@ coverage/
 apps/benchmarks/.cache/
 packages/glyph/.cache/
 
-# Adversarial review cache
-.cache/claude-review/
-
 # Claude sync on SessionStart hook
 **/CLAUDE.md
 !/CLAUDE.md

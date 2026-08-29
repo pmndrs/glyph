@@ -3,7 +3,6 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const CLAUDE_IMPORT = '@AGENTS.md';
-const CLAUDE_SKILL_IGNORES = new Set(['claude-review']);
 const SKIPPED_DIRECTORIES = new Set(['.git', '.claude', 'coverage', 'dist', 'node_modules', 'target']);
 
 export type SyncResult = {
@@ -127,7 +126,7 @@ async function verifyRootClaudeFile(projectRoot: string): Promise<void> {
 async function directSkillDirectories(skillRoot: string): Promise<string[]> {
   const skills = [];
   for await (const entry of await opendir(skillRoot)) {
-    if (!entry.isDirectory() || entry.isSymbolicLink() || CLAUDE_SKILL_IGNORES.has(entry.name)) continue;
+    if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
     const skillPath = join(skillRoot, entry.name);
     if ((await pathKind(join(skillPath, 'SKILL.md'))) === 'file') skills.push(skillPath);
   }
