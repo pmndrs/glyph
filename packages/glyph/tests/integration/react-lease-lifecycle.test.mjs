@@ -21,7 +21,6 @@ import { StrictMode, createElement } from 'react';
 
 import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import '../support/browser-globals.mjs';
 
 import { Text } from '@pmndrs/glyph/react';
 
