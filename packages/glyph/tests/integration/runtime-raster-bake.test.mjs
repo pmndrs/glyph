@@ -315,14 +315,14 @@ test('Node and serial Worker entry produce identical bounded Bitmap and MSDF art
       normalize: normalizeBitmapOptions,
       options: { strikes: [16], coverage: { glyphIds: [43, 44] } },
       descriptor: bitmapDescriptor({ strikes: [16], coverage: { glyphIds: [43, 44] } }),
-      rasterKey: await bitmapRasterKey({ strikes: [16], coverage: { glyphIds: [43, 44] } }),
+      rasterKey: bitmapRasterKey({ strikes: [16], coverage: { glyphIds: [43, 44] } }),
     },
     {
       baker: msdfBaker,
       normalize: normalizeMsdfOptions,
       options: { coverage: { glyphIds: [43, 44] } },
       descriptor: msdfDescriptor({ coverage: { glyphIds: [43, 44] } }),
-      rasterKey: await msdfRasterKey({ coverage: { glyphIds: [43, 44] } }),
+      rasterKey: msdfRasterKey({ coverage: { glyphIds: [43, 44] } }),
     },
   ]) {
     const direct = await fixture.baker.bake({

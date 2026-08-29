@@ -68,7 +68,7 @@ test('ships one generated progress import and bundles its artifact contract in T
 test('bakes canonical Inter through the public direct-memory shim', async () => {
   const { source, sourceFingerprint, core } = await setup();
   const descriptor = msdfDescriptor();
-  const rasterKey = await msdfDescriptorRasterKey();
+  const rasterKey = msdfDescriptorRasterKey();
   const progress = [];
   assert.equal(rasterKey, 'c51a74581f4288c40c308436ca120d67');
   const result = await msdfBakerFromCore(core).bake({
@@ -132,7 +132,7 @@ test('bakes and validates fingerprinted 32 px/em quality policies', async () => 
   const reports = [];
   for (const pixelRange of [4, 6]) {
     const descriptor = msdfDescriptor({ emSize: 32, pixelRange });
-    const rasterKey = await msdfDescriptorRasterKey(descriptor);
+    const rasterKey = msdfDescriptorRasterKey(descriptor);
     const result = await msdfBakerFromCore(core).bake({
       font: {
         source: new Uint8Array(source),
@@ -196,7 +196,7 @@ test('bakes and validates fingerprinted 32 px/em quality policies', async () => 
 test('bakes bounded coverage with deterministic progress and a validated selection bitset', async () => {
   const { source, sourceFingerprint, core } = await setup();
   const descriptor = msdfDescriptor({ coverage: { glyphIds: [43, 44] } });
-  const rasterKey = await msdfDescriptorRasterKey(descriptor);
+  const rasterKey = msdfDescriptorRasterKey(descriptor);
   const progress = [];
   const result = await msdfBakerFromCore(core).bake({
     font: { source, sourceFingerprint, fontFaceIndex: 0, glyphCount: 2937, shapingFingerprint },

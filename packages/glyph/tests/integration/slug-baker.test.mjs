@@ -52,7 +52,7 @@ test('ships the generated generic direct/segmented Slug ABI', async () => {
 test('bakes and validates exact external and embedded Inter Slug resources', async () => {
   const { source, sourceFingerprint, core } = await setup();
   const descriptor = slugDescriptor();
-  const rasterKey = await slugDescriptorRasterKey();
+  const rasterKey = slugDescriptorRasterKey();
   const progress = [];
   const baker = slugBakerFromCore(core);
   const input = (pages) => ({

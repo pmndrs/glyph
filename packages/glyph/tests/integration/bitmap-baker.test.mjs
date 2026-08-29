@@ -30,7 +30,7 @@ async function setup() {
 async function bake(core, source, pages) {
   const options = { strikes: [16] };
   const descriptor = bitmapDescriptor(options);
-  const rasterKey = await bitmapRasterKey(options);
+  const rasterKey = bitmapRasterKey(options);
   return bitmapBakerFromCore(core).bake({
     font: {
       source,
@@ -72,7 +72,7 @@ test('bakes canonical Inter deterministically through the public direct-memory s
   const descriptor = bitmapDescriptor(options);
   const first = await bitmapBakerFromCore(core).bake({
     font: { source, sourceFingerprint, fontFaceIndex: 0, glyphCount: 2937, shapingFingerprint },
-    rasterKey: await bitmapRasterKey(options),
+    rasterKey: bitmapRasterKey(options),
     packaging: { artifact: 'external', pages: 'embedded' },
     descriptor,
     onProgress: (event) => progress.push([event.completed, event.total]),
@@ -126,7 +126,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   const { source, core } = await setup();
   const options = { strikes: [16], coverage: { glyphIds: [43, 44] } };
   const descriptor = bitmapDescriptor(options);
-  const rasterKey = await bitmapRasterKey(options);
+  const rasterKey = bitmapRasterKey(options);
   const progress = [];
   const result = await bitmapBakerFromCore(core).bake({
     font: { source, sourceFingerprint, fontFaceIndex: 0, glyphCount: 2937, shapingFingerprint },
@@ -187,7 +187,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
 test('rejects mismatched shaping context and honors pre-bake cancellation', async () => {
   const { source, core } = await setup();
   const descriptor = bitmapDescriptor({ strikes: [16] });
-  const rasterKey = await bitmapRasterKey({ strikes: [16] });
+  const rasterKey = bitmapRasterKey({ strikes: [16] });
   const baker = bitmapBakerFromCore(core);
 
   await assert.rejects(

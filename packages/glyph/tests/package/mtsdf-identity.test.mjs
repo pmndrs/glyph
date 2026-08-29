@@ -22,10 +22,10 @@ test('derives canonical MSDF fingerprints for default and custom quality', async
     generatorVersion: '0.0.0',
     pixelRange: 4,
   });
-  assert.equal(await msdfDescriptorRasterKey(legacy), 'c51a74581f4288c40c308436ca120d67');
-  assert.equal(await msdfDescriptorRasterKey(rangeFour), '18a97f4dfdbf96aade7117a9fbfa0b85');
-  assert.equal(await msdfDescriptorRasterKey(rangeSix), 'd36b09cea1bfb26bcc16d3e34dc876e8');
-  assert.equal(await msdfRasterKey({ emSize: 32, pixelRange: 4 }), await msdfDescriptorRasterKey(rangeFour));
+  assert.equal(msdfDescriptorRasterKey(legacy), 'c51a74581f4288c40c308436ca120d67');
+  assert.equal(msdfDescriptorRasterKey(rangeFour), '18a97f4dfdbf96aade7117a9fbfa0b85');
+  assert.equal(msdfDescriptorRasterKey(rangeSix), 'd36b09cea1bfb26bcc16d3e34dc876e8');
+  assert.equal(msdfRasterKey({ emSize: 32, pixelRange: 4 }), msdfDescriptorRasterKey(rangeFour));
 });
 
 test('validates MSDF quality options at the package boundary', () => {

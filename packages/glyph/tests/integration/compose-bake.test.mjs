@@ -31,7 +31,7 @@ before(async () => {
   core = fontBaker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } });
   const coreValidation = await validateFontArtifact(core.artifacts[0].bytes);
   const descriptor = bitmapDescriptor({ strikes: [16] });
-  const rasterKey = await bitmapRasterKey({ strikes: [16] });
+  const rasterKey = bitmapRasterKey({ strikes: [16] });
   context = {
     rasterKey,
     shapingFingerprint: coreValidation.shapingFingerprint,
