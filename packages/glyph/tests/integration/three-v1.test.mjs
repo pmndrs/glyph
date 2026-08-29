@@ -32,12 +32,6 @@ const iconSlugFontUrl = new URL(
   import.meta.url,
 );
 const multiTechniqueFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
-const MULTI_TECHNIQUE_MSDF = Object.freeze({
-  planeUnitsPerEm: 64,
-  pixelRange: 8,
-  atlasWidth: 1003,
-  atlasHeight: 514,
-});
 const glyphAttribute = (bufferId) => `_pmndrsGlyph_${bufferId}`;
 
 test('text property registries validate and freeze reusable rules', () => {

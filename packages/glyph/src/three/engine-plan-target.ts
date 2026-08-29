@@ -32,7 +32,6 @@ import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug-technique.js';
 
 import { bitmapShader, decorationShader, msdfShader, slugShader, type TslSlugPageResources } from '../tsl.js';
-import { unpackSrgbRgba } from '../tsl/packed-color.js';
 import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engine-coordinator.js';
 import type { ThreeTextMaterial, ThreeTextMaterialContext } from './material.js';
 import { assertThreeGeometryPayload, type ThreePlanProgramBuffer } from './plan-program-registry.js';
@@ -1320,8 +1319,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
         uvSize: uvRect.zw,
         uvBounds: field(part.uvBounds),
         fillColor: field(part.color),
-        outlineColor: unpackSrgbRgba(effectColor.x),
-        shadowColor: unpackSrgbRgba(effectColor.y),
+        effectColor,
         shadowOffset: page.xy.mul(TSL.vec2(effectScale[0], effectScale[1])),
         outlineWidth: page.z.mul(effectScale[2]),
         pageIndex: page.w,
