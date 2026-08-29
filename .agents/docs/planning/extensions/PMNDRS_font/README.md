@@ -92,7 +92,7 @@ This extension does not define text strings, paragraph layout, line breaking, ra
           "version": 0,
           "source": {
             "type": "external",
-            "uri": "mtsdf-11111111111111111111111111111111-22222222222222222222222222222222-33333333333333333333333333333333.glb",
+            "uri": "msdf-11111111111111111111111111111111-22222222222222222222222222222222-33333333333333333333333333333333.glb",
             "artifactFingerprint": "33333333333333333333333333333333"
           }
         },

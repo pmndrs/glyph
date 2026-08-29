@@ -6,8 +6,8 @@ use pmndrs_glyph_raster_artifact::{
 use serde_json::{Value, json};
 
 use crate::{
-    error::BitmapBakeError,
     artifact_fingerprint,
+    error::BitmapBakeError,
     model::{BITMAP_EXTENSION, BITMAP_GENERATOR_LABEL, PagePackaging},
     rasterize::RasterizedStrike,
 };

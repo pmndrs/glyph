@@ -61,8 +61,11 @@ pub fn bake_bitmap(
         pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
     ) != request.source_fingerprint
     {
-        return Err(BitmapBakeError::new(InvalidIdentity, "source fingerprint does not match the supplied font")
-            .at("/sourceFingerprint"));
+        return Err(BitmapBakeError::new(
+            InvalidIdentity,
+            "source fingerprint does not match the supplied font",
+        )
+        .at("/sourceFingerprint"));
     }
 
     let coverage = rasterize::resolve_coverage(

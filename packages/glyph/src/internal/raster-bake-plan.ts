@@ -60,7 +60,7 @@ export async function resolveRasterBakePlan<Kind extends string, Options, Descri
   readonly options: Options;
 }): Promise<ResolvedRasterBakePlan> {
   const descriptor = plan.baker.descriptor(plan.options);
-  const rasterKey = await deriveRasterKey({
+  const rasterKey = deriveRasterKey({
     descriptor,
     extension: plan.baker.extension,
     kind: plan.baker.kind,

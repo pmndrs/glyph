@@ -68,7 +68,8 @@ pub(crate) fn build_mtsdf_glb(
             &ktx2,
             pmndrs_glyph_raster_artifact::ARTIFACT_FINGERPRINT_V0,
         );
-        let id = format!("msdf-{shaping_fingerprint}-{raster_key}-p{page_index}-{fingerprint}.ktx2");
+        let id =
+            format!("msdf-{shaping_fingerprint}-{raster_key}-p{page_index}-{fingerprint}.ktx2");
         let source = match page_packaging {
             PagePackaging::Embedded => {
                 let view = append_buffer_view(&mut binary, &mut buffer_views, &ktx2)?;

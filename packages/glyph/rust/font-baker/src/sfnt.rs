@@ -325,7 +325,11 @@ fn encode_bounds(bounds: [f32; 4]) -> Result<[i16; 4], BakeError> {
     ])
 }
 
-fn shaping_fingerprint(sfnt: &[u8], extents: &[u8], availability: &[u8]) -> Result<String, BakeError> {
+fn shaping_fingerprint(
+    sfnt: &[u8],
+    extents: &[u8],
+    availability: &[u8],
+) -> Result<String, BakeError> {
     let mut bytes = b"PMNDRS_font\0v0\0".to_vec();
     for value in [sfnt, extents, availability] {
         bytes.extend_from_slice(
