@@ -34,6 +34,12 @@
       "automatic": true
     },
     {
+      "kind": "property-rewrite",
+      "from": "inline TextSpan paint",
+      "to": "nested Text style",
+      "automatic": true
+    },
+    {
       "kind": "call-rewrite",
       "from": "useBitmapFont/useMSDF/useSlug.preload(library, input, options)",
       "to": "useBitmapFont/useMSDF/useSlug.preload(input, options)",

@@ -26,7 +26,8 @@ try {
       'const font = hook(request);',
       'useBitmapFont.preload(library, input, options);',
       'useMSDF.preload(input, options);',
-      'const run = <Text><TextSpan paint={paint}>hello</TextSpan></Text>;',
+      'const run = <Text><TextSpan paint={paint}>hello</TextSpan><TextSpan style={style} paint={paint}>world</TextSpan><TextSpan style={style} /></Text>;',
+      'const unrelated = <Text paint={paint}>root</Text>;',
       "const protocol = 'TextSpan';",
       '',
     ].join('\n'),
@@ -45,7 +46,10 @@ try {
   assert.match(output, /useFont\(input, technique, options\)/);
   assert.match(output, /useBitmapFont\.preload\(input, options\)/);
   assert.match(output, /useMSDF\.preload\(input, options\)/);
-  assert.match(output, /<Text paint=\{paint\}>hello<\/Text>/);
+  assert.match(output, /<Text style=\{paint\}>hello<\/Text>/);
+  assert.match(output, /<Text style=\{\[style, paint\]\}>world<\/Text>/);
+  assert.match(output, /<Text style=\{style\} \/>/);
+  assert.match(output, /<Text paint=\{paint\}>root<\/Text>/);
   assert.match(output, /'TextSpan'/);
   assert.doesNotMatch(output, /createUseFont/);
   const repeated = await runCodemod({

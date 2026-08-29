@@ -20,7 +20,7 @@ export function transform({ project, renameSymbol, tsMorph }) {
     }
 
     replaceImportedType(sourceFile, imports, 'BoundUseFont', 'UseFont');
-    replaceTextSpan(sourceFile, imports);
+    replaceTextSpan(sourceFile, imports, tsMorph);
     renameInlineTextAliases(sourceFile, renameSymbol, tsMorph);
     rewriteFontCalls(sourceFile, boundHooks, tsMorph);
     removeUnusedImports(sourceFile, imports, ['createUseFont', 'GlyphProvider'], tsMorph);
@@ -47,19 +47,46 @@ function replaceImportedType(_sourceFile, imports, from, to) {
   }
 }
 
-function replaceTextSpan(sourceFile, imports) {
+function replaceTextSpan(sourceFile, imports, tsMorph) {
   const textImport = imports.flatMap((entry) => entry.getNamedImports()).find((entry) => entry.getName() === 'Text');
   const textName = textImport?.getAliasNode()?.getText() ?? 'Text';
   for (const declaration of imports) {
     const span = declaration.getNamedImports().find((entry) => entry.getName() === 'TextSpan');
     if (span === undefined) continue;
     const local = span.getAliasNode()?.getText() ?? span.getName();
+    migrateInlinePaint(sourceFile, local, tsMorph);
     for (const reference of span.getNameNode().findReferencesAsNodes()) reference.replaceWithText(textName);
     span.remove();
     if (textImport === undefined) declaration.addNamedImport({ name: 'Text' });
-    void local;
   }
-  void sourceFile;
+}
+
+function migrateInlinePaint(sourceFile, spanName, tsMorph) {
+  const elements = [
+    ...sourceFile.getDescendantsOfKind(tsMorph.SyntaxKind.JsxOpeningElement),
+    ...sourceFile.getDescendantsOfKind(tsMorph.SyntaxKind.JsxSelfClosingElement),
+  ].filter((element) => element.getTagNameNode().getText() === spanName);
+  for (const element of elements) {
+    const attributes = element.getAttributes().filter(tsMorph.Node.isJsxAttribute);
+    const paint = attributes.find((attribute) => attribute.getNameNode().getText() === 'paint');
+    if (paint === undefined) continue;
+    const style = attributes.find((attribute) => attribute.getNameNode().getText() === 'style');
+    if (style === undefined) {
+      paint.getNameNode().replaceWithText('style');
+      continue;
+    }
+    const styleValue = jsxAttributeValue(style, tsMorph);
+    const paintValue = jsxAttributeValue(paint, tsMorph);
+    style.replaceWithText(`style={[${styleValue}, ${paintValue}]}`);
+    paint.remove();
+  }
+}
+
+function jsxAttributeValue(attribute, tsMorph) {
+  const initializer = attribute.getInitializer();
+  if (initializer === undefined) return 'true';
+  if (!tsMorph.Node.isJsxExpression(initializer)) return initializer.getText();
+  return initializer.getExpression()?.getText() ?? 'undefined';
 }
 
 function rewriteFontCalls(sourceFile, boundHooks, tsMorph) {

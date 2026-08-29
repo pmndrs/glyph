@@ -15,8 +15,10 @@ const font = useFont(input, technique, options);
 `preload()` and `clear()` use the same arguments as the hook and no longer accept a `FontLibrary`. Preload is an R3F
 warm-up operation and returns `void`; the hook suspends on the cached promise when it has not resolved yet.
 
-Use nested `Text` for inline runs. A nested element may carry only `font`, `style`, `paint`, `material`, and children;
+Use nested `Text` for inline runs. A nested element may carry only `font`, `style`, `material`, and children;
 the adapter throws synchronously if a box, transform, ref, capacity, or error prop reaches the flattener.
+The transform moves an old inline `paint` prop into `style`; when both existed, it emits `style={[style, paint]}` so
+the old paint-after-style cascade is preserved.
 
 The automatic transform handles singular object requests and direct convenience calls. It deliberately leaves
 multi-raster `useFont({ rasters: [...] })` calls for an agent: choose the techniques the component actually renders and
