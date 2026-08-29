@@ -302,43 +302,33 @@ async function measureFontAsset(
 async function measureAdmittedMsdfGenerator(): Promise<MeasuredEntry> {
   const evidence = JSON.parse(
     await readFile(
-      new URL('../../../packages/glyph/rust/mtsdf-admission/evidence/simd-v0.json', import.meta.url),
+      new URL('../../../packages/glyph/rust/mtsdf-admission/evidence/size-v0.json', import.meta.url),
       'utf8',
     ),
   ) as {
-    readonly decision?: { readonly selected?: string };
-    readonly variants?: Readonly<
-      Record<
-        string,
-        {
-          readonly optimizedBytes?: number;
-          readonly optimizedSha256?: string;
-          readonly gzipBytes?: number;
-          readonly brotliBytes?: number;
-        }
-      >
-    >;
+    readonly optimizedBytes?: number;
+    readonly optimizedSha256?: string;
+    readonly gzipBytes?: number;
+    readonly brotliBytes?: number;
   };
-  const scalar = evidence.variants?.scalar;
   if (
-    evidence.decision?.selected !== 'scalar' ||
-    scalar?.optimizedBytes === undefined ||
-    scalar.optimizedSha256 === undefined ||
-    scalar.gzipBytes === undefined ||
-    scalar.brotliBytes === undefined
+    evidence.optimizedBytes === undefined ||
+    evidence.optimizedSha256 === undefined ||
+    evidence.gzipBytes === undefined ||
+    evidence.brotliBytes === undefined
   ) {
-    throw new Error('admitted scalar MSDF generator size evidence is incomplete');
+    throw new Error('admitted MSDF generator size evidence is incomplete');
   }
   return {
     id: 'mtsdf-generator-wasm',
     label: 'MSDF admitted generator kernel',
     status: 'measured',
     format: 'wasm',
-    sha256: scalar.optimizedSha256,
-    rawBytes: scalar.optimizedBytes,
-    minifiedBytes: scalar.optimizedBytes,
-    gzipBytes: scalar.gzipBytes,
-    brotliBytes: scalar.brotliBytes,
+    sha256: evidence.optimizedSha256,
+    rawBytes: evidence.optimizedBytes,
+    minifiedBytes: evidence.optimizedBytes,
+    gzipBytes: evidence.gzipBytes,
+    brotliBytes: evidence.brotliBytes,
   };
 }
 

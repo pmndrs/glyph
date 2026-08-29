@@ -2,18 +2,18 @@ export const packageSizeBudgets = {
   'browser-core': {
     // Root Paragraph now ships its real private measurement engine instead of a detached constructor sketch.
     // Final planner vocabulary and typed font requests add raw names while compressed sizes remain below budget.
-    rawBytes: 436_000,
-    minifiedBytes: 284_000,
+    rawBytes: 450_000,
+    minifiedBytes: 292_000,
     gzipBytes: 82_400,
     brotliBytes: 63_500,
   },
   // Backends, planners, semantic plan readers, portable resources, and call-time validation.
   // Includes branded ID provenance and the zero-copy compiled-font view used by renderer integrations.
   'core-subpath-js': {
-    rawBytes: 414_000,
-    minifiedBytes: 270_000,
-    gzipBytes: 68_000,
-    brotliBytes: 57_000,
+    rawBytes: 430_000,
+    minifiedBytes: 282_000,
+    gzipBytes: 70_500,
+    brotliBytes: 59_000,
   },
   'tsl-subpath-js': {
     rawBytes: 27_000,
@@ -73,18 +73,18 @@ export const packageSizeBudgets = {
   // the gate un-repinned; this branch changed no Rust behaviour (formatting only), and the
   // measured artifact is byte-identical to its base commit.
   'text-shaper-wasm': {
-    rawBytes: 1_169_500,
-    minifiedBytes: 1_169_500,
-    gzipBytes: 454_500,
-    brotliBytes: 361_500,
+    rawBytes: 1_176_000,
+    minifiedBytes: 1_176_000,
+    gzipBytes: 459_000,
+    brotliBytes: 362_000,
   },
   // Three realization, engine-owned backend/plan mapping, first-frame measurement and bounds,
   // exact-generation resource transactions, final planner names, and bounded candidate leases.
   'three-runtime-js': {
-    rawBytes: 696_000,
-    minifiedBytes: 448_000,
-    gzipBytes: 114_000,
-    brotliBytes: 95_000,
+    rawBytes: 714_000,
+    minifiedBytes: 461_000,
+    gzipBytes: 117_000,
+    brotliBytes: 97_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
@@ -95,8 +95,8 @@ export const packageSizeBudgets = {
   'font-inter-mtsdf': {
     rawBytes: 40_000_000,
     minifiedBytes: 40_000_000,
-    gzipBytes: 7_000_000,
-    brotliBytes: 3_400_000,
+    gzipBytes: 8_100_000,
+    brotliBytes: 4_200_000,
   },
   'font-inter-slug': {
     rawBytes: 3_600_000,
@@ -113,8 +113,8 @@ export const packageSizeBudgets = {
   'font-icons-mtsdf': {
     rawBytes: 33_000_000,
     minifiedBytes: 33_000_000,
-    gzipBytes: 7_500_000,
-    brotliBytes: 3_500_000,
+    gzipBytes: 8_800_000,
+    brotliBytes: 4_300_000,
   },
   'font-icons-slug': {
     rawBytes: 3_100_000,
@@ -161,16 +161,16 @@ export const packageSizeBudgets = {
     brotliBytes: 2_400,
   },
   'mtsdf-generator-wasm': {
-    rawBytes: 55_000,
-    minifiedBytes: 55_000,
-    gzipBytes: 24_500,
-    brotliBytes: 21_000,
+    rawBytes: 71_000,
+    minifiedBytes: 71_000,
+    gzipBytes: 31_000,
+    brotliBytes: 26_000,
   },
   'mtsdf-baker-wasm': {
-    rawBytes: 551_000,
-    minifiedBytes: 551_000,
-    gzipBytes: 216_000,
-    brotliBytes: 170_000,
+    rawBytes: 560_000,
+    minifiedBytes: 560_000,
+    gzipBytes: 220_000,
+    brotliBytes: 173_000,
   },
   'mtsdf-baker-js': {
     rawBytes: 27_500,

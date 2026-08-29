@@ -87,11 +87,11 @@
       "label": "Inter font · MTSDF",
       "status": "measured",
       "format": "font-asset",
-      "sha256": "7606c033f472ca64427ddec491277bdbbd7b826afd71585f77fac6dd6222f4b4",
-      "rawBytes": 39347792,
-      "minifiedBytes": 39347792,
-      "gzipBytes": 6798458,
-      "brotliBytes": 3240453
+      "sha256": "691df5c60449fb04d9a11b66bc377ee243fcada09efb95a053dbb9f2aae2dcd0",
+      "rawBytes": 39347796,
+      "minifiedBytes": 39347796,
+      "gzipBytes": 8007071,
+      "brotliBytes": 4105831
     },
     {
       "id": "font-inter-slug",
@@ -120,11 +120,11 @@
       "label": "Font Awesome icons · MTSDF",
       "status": "measured",
       "format": "font-asset",
-      "sha256": "8b0b652a9612f00e0be4b753a129b3f81abf0fbe4f5f6abfb2be2e32e979c7b9",
-      "rawBytes": 32580980,
-      "minifiedBytes": 32580980,
-      "gzipBytes": 7227921,
-      "brotliBytes": 3323894
+      "sha256": "074df64f568f4d87029f704d4d1a15e0ac83d6e6db72936cd83df22da837c329",
+      "rawBytes": 32580984,
+      "minifiedBytes": 32580984,
+      "gzipBytes": 8705885,
+      "brotliBytes": 4229811
     },
     {
       "id": "font-icons-slug",
@@ -241,11 +241,11 @@
       "label": "MSDF admitted generator kernel",
       "status": "measured",
       "format": "wasm",
-      "sha256": "f2bf6ac11a7c1ac235bf03c3759aa44998a3a3464cc7f4ef6b067bf0b87ce43a",
-      "rawBytes": 52633,
-      "minifiedBytes": 52633,
-      "gzipBytes": 23115,
-      "brotliBytes": 19660
+      "sha256": "a129c56a46bf728563b4ff601903ba6acafa463693712a0b839d7b24d4c6a2b9",
+      "rawBytes": 69731,
+      "minifiedBytes": 69731,
+      "gzipBytes": 30131,
+      "brotliBytes": 25327
     },
     {
       "id": "mtsdf-baker-wasm",
