@@ -1,15 +1,16 @@
 export const packageSizeBudgets = {
   'browser-core': {
     // Root Paragraph now ships its real private measurement engine instead of a detached constructor sketch.
-    rawBytes: 430_000,
+    // Final planner vocabulary and typed font requests add raw names while compressed sizes remain below budget.
+    rawBytes: 436_000,
     minifiedBytes: 284_000,
     gzipBytes: 82_400,
     brotliBytes: 63_500,
   },
-  // Hosts, retained sessions, semantic plan readers, portable resources, and call-time validation.
-  // Includes the zero-copy compiled-font view used by CPU renderer integrations.
+  // Backends, planners, semantic plan readers, portable resources, and call-time validation.
+  // Includes branded ID provenance and the zero-copy compiled-font view used by renderer integrations.
   'core-subpath-js': {
-    rawBytes: 412_000,
+    rawBytes: 414_000,
     minifiedBytes: 270_000,
     gzipBytes: 68_000,
     brotliBytes: 57_000,
@@ -78,9 +79,9 @@ export const packageSizeBudgets = {
     brotliBytes: 361_500,
   },
   // Three realization, engine-owned backend/plan mapping, first-frame measurement and bounds,
-  // exact-generation resource transactions, and bounded candidate leases.
+  // exact-generation resource transactions, final planner names, and bounded candidate leases.
   'three-runtime-js': {
-    rawBytes: 690_000,
+    rawBytes: 696_000,
     minifiedBytes: 448_000,
     gzipBytes: 114_000,
     brotliBytes: 95_000,
