@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:270d57e90f42dfba0d1f951ca51011c0de500799af474549eaf80dc178c55882'
+source_digest: 'sha256:f4edd4d5dd31d33cd4005fd3bd20d3193d140f557dec5555af424e0741dfb511'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -48,7 +48,7 @@ generated:
 
 # Package reference: `@pmndrs/glyph-example-renderer`
 
-Status: Active external-engine proof. It drives a real immutable font through the retained public `/core` contract,
+Status: Active external-engine proof. It drives a real immutable font through the public planner and render-plan contract,
 portable raster registration, resource realization, and concrete TypeGPU/WebGPU submission without Three.js.
 
 The package is a standing consumer proof. Source imports only published root assets, `/core`, and the example raster's
@@ -59,8 +59,8 @@ The package root exposes a custom `source` condition for opted-in workspace tool
 built ESM and declarations.
 
 `ExampleTextEngine` receives a `GlyphEngine`, creates its backend through `glyphEngine.createBackend()`, installs its policy,
-binds immutable fonts/stacks, opens one synchronous `RetainedPlan`, and exposes `createText()`, `update()`, `publish()`,
-and disposal. The retained plan owns every paragraph/style/flow identity and one `PlanTarget`; callers do not author raw IDs,
+binds immutable fonts/stacks, opens one synchronous `RenderPlanner`, and exposes `createText()`, `update()`, `publish()`,
+and disposal. The render planner owns every paragraph/style/flow identity and one `PlanTarget`; callers do not author raw IDs,
 revisions, acknowledgments, request bytes, or ABI numbers. `layout()` and `glyphs()` remain available on the retained core
 text when an integration needs current desired metrics or positioned glyphs before publication.
 
@@ -81,7 +81,7 @@ leave accepted state untouched.
 TypeGPU/WebGPU vertex, index, and instance buffers; builds the selected pipeline; encodes an indexed instanced pass; and
 submits to an offscreen `rgba8unorm` target. Validation acceptance is awaited without stalling every frame on queue
 completion. Empty idle deltas produce no submission, while accepted removal clears the target. Device replacement drops
-physical realizations, asks the retained plan for a complete checkpoint, reacquires portable resources, and redraws
+physical realizations, asks the render planner for a complete checkpoint, reacquires portable resources, and redraws
 without an authored text mutation.
 
 The acceptance fixture bakes Inter, loads it through root `loadFont()`, creates a core `GlyphEngine`, binds the external

@@ -1,7 +1,7 @@
 ---
 type: How-to guide
 title: Integrate a renderer with Glyph
-description: Builds a renderer integration from immutable fonts through a Glyph engine, backend, retained plan, resource realization, plan acceptance, and disposal.
+description: Builds a renderer integration from immutable fonts through a Glyph engine, backend, render planner, resource realization, plan acceptance, and disposal.
 tags: [renderer, core, policy, render-plan, retention, wasm]
 sources:
   - id: engine-call-contract
@@ -19,15 +19,15 @@ sources:
   - id: core-entry
     resource: ../../packages/glyph/src/core.ts
     title: Renderer-neutral core entry point
-  - id: retained-plan
-    resource: ../../packages/glyph/src/core/retained-plan.ts
-    title: Retained-plan and target contracts
+  - id: render-planner
+    resource: ../../packages/glyph/src/core/render-planner.ts
+    title: Planner and render-plan target contracts
   - id: plan-view
     resource: ../../packages/glyph/src/core/plan-view.ts
     title: Semantic render-plan readers
   - id: ownership-plan
     resource: ../planning/font-runtime-ownership.md
-    title: Font, engine, backend, retained-plan, and target ownership
+    title: Font, engine, backend, render-planner, and target ownership
 generated:
   by: openai-codex/gpt-5.6
   at: '2026-08-28T20:10:29Z'
@@ -52,20 +52,20 @@ flowchart LR
   Engine -->|createBackend| Backend[GlyphBackend]
   Backend -->|installPolicy| Policy[BackendPolicy]
   Font -->|bindFontStack| Backend
-  Backend -->|createRetainedPlan| RetainedPlan[RetainedPlan]
-  RetainedPlan -->|createText / update| Text[RetainedText]
+  Backend -->|createPlanner| RenderPlanner[RenderPlanner]
+  RenderPlanner -->|createText / update| Text[RetainedText]
   Text -->|layout / glyphs| Query[Current desired layout]
-  RetainedPlan -->|publish| Candidate[Plan candidate]
+  RenderPlanner -->|publish| Candidate[Plan candidate]
   Candidate -->|acquirePayload| Portable[Portable resources]
   Candidate -->|semantic readers| Records[Buffers / patches / primitives / draws]
   Portable --> Device[Renderer device or context]
   Records --> Device
   Device -->|transactional commit| Surface[Canvas / texture / pass]
-  Surface -->|accepted| RetainedPlan
+  Surface -->|accepted| RenderPlanner
 ```
 
-The ownership hierarchy is `GlyphEngine → GlyphBackend → RetainedPlan → RetainedText`. The renderer hierarchy
-is separate: device/context → target → resources/pipelines/submissions. A target joins those hierarchies for one retained plan.
+The ownership hierarchy is `GlyphEngine → GlyphBackend → RenderPlanner → RetainedText`. The renderer hierarchy
+is separate: device/context → target → resources/pipelines/submissions. A target joins those hierarchies for one render planner.
 
 ## 1. Load immutable application assets
 
@@ -99,7 +99,7 @@ const backend = glyphEngine.createBackend({ integration: 'studio.webgpu-text' })
 
 The engine owns its Wasm shaper, deduplicated engine-local font registrations, all child backends, and the engine-wide
 borrow gate. The backend owns one integration's policy installations, font and stack bindings, renderer bindings,
-retained plans, and collision-checked wire identities. A backend cannot rebind to another engine.
+render planners, and collision-checked wire identities. A backend cannot rebind to another engine.
 
 Use another engine when work needs independent Wasm memory, worker isolation, or independent teardown. Multiple backends
 in one engine are valid when separate integrations share shaping registrations but need separate policies and lifetimes.
@@ -188,12 +188,12 @@ the CPU has copied plan payloads into renderer-owned buffers.
 
 ```ts
 import {
-  readTextEngineBuffer,
-  readTextEngineDraw,
-  readTextEnginePatch,
-  readTextEnginePrimitive,
-  readTextEngineResource,
-  readTextEngineRetirement,
+  readRenderPlanBuffer,
+  readRenderPlanDraw,
+  readRenderPlanPatch,
+  readRenderPlanPrimitive,
+  readRenderPlanResource,
+  readRenderPlanRetirement,
   type PlanCandidate,
   type PlanTarget,
   type PlanTargetControl,
@@ -209,7 +209,7 @@ const target: PlanTarget = {
     try {
       const resources = candidate.plan.table('resources');
       for (let index = 0; index < resources.count; index += 1) {
-        const record = readTextEngineResource(candidate.plan, resources, index);
+        const record = readRenderPlanResource(candidate.plan, resources, index);
         staged.stageResource(record, () => {
           if (record.referenceId === 0) throw new TypeError('resource record omitted its portable payload reference');
           return candidate.acquirePayload(record.referenceId);
@@ -218,27 +218,27 @@ const target: PlanTarget = {
 
       const buffers = candidate.plan.table('buffers');
       for (let index = 0; index < buffers.count; index += 1) {
-        staged.stageBuffer(readTextEngineBuffer(candidate.plan, buffers, index));
+        staged.stageBuffer(readRenderPlanBuffer(candidate.plan, buffers, index));
       }
 
       const patches = candidate.plan.table('patches');
       for (let index = 0; index < patches.count; index += 1) {
-        staged.stagePatch(readTextEnginePatch(candidate.plan, patches, index));
+        staged.stagePatch(readRenderPlanPatch(candidate.plan, patches, index));
       }
 
       const primitives = candidate.plan.table('primitives');
       for (let index = 0; index < primitives.count; index += 1) {
-        staged.stagePrimitive(readTextEnginePrimitive(candidate.plan, primitives, index));
+        staged.stagePrimitive(readRenderPlanPrimitive(candidate.plan, primitives, index));
       }
 
       const draws = candidate.plan.table('draws');
       for (let index = 0; index < draws.count; index += 1) {
-        staged.stageDraw(readTextEngineDraw(candidate.plan, draws, index));
+        staged.stageDraw(readRenderPlanDraw(candidate.plan, draws, index));
       }
 
       const retirements = candidate.plan.table('retirements');
       for (let index = 0; index < retirements.count; index += 1) {
-        staged.stageRetirement(readTextEngineRetirement(candidate.plan, retirements, index));
+        staged.stageRetirement(readRenderPlanRetirement(candidate.plan, retirements, index));
       }
 
       staged.commit();
@@ -265,9 +265,9 @@ They demonstrate the required invariant: validation may allocate candidate state
 successful commit. A failed candidate is reported; the renderer never substitutes stale resources or retries an invalid
 plan.
 
-## 6. Create a retained plan and text
+## 6. Create a render planner and text
 
-One retained plan owns desired text, one policy selection, one plan target, and one acceptance frontier.
+One render planner owns desired text, one policy selection, one plan target, and one acceptance frontier.
 
 ```ts
 const limits = {
@@ -281,7 +281,7 @@ const limits = {
   maxOutputBytes: 16 * 1024 * 1024,
 } as const;
 
-const retainedPlan = backend.createRetainedPlan({
+const planner = backend.createPlanner({
   policy,
   capabilitySet,
   target: (planControl) => {
@@ -294,7 +294,7 @@ const retainedPlan = backend.createRetainedPlan({
   textCapacity: 16 * 1024,
 });
 
-const title = retainedPlan.createText({
+const title = planner.createText({
   font: stack,
   text: 'Hello',
   style: { fontSize: 48 },
@@ -302,8 +302,8 @@ const title = retainedPlan.createText({
 });
 ```
 
-Use separate retained plans for independently accepted scenes, viewports, render targets, or workers. Multiple retained
-plans may share one backend and font bindings. They do not share revision cursors or accepted plan state.
+Use separate render planners for independently accepted scenes, viewports, render targets, or workers. Multiple planners
+may share one backend and font bindings. They do not share revision cursors or accepted plan state.
 
 ## 7. Query, mutate, and publish
 
@@ -315,7 +315,7 @@ title.update({ text: 'Hello, Glyph' });
 const metrics = title.layout();
 const positioned = title.glyphs();
 
-const result = retainedPlan.publish({ semanticViews: 'measurement' });
+const result = planner.publish({ semanticViews: 'measurement' });
 if (!result.accepted) reportRendererError(result.error);
 ```
 
@@ -343,14 +343,14 @@ Every plan has seven tables:
 | `retirements` | Release exact resource or buffer generations after the acceptance fence.   |
 | `diagnostics` | Optional engine telemetry; unknown values do not define renderer behavior. |
 
-Use `readTextEngineResource()`, `readTextEngineBuffer()`, `readTextEnginePatch()`,
-`readTextEnginePrimitive()`, `readTextEngineDraw()`, and `readTextEngineRetirement()`. They return semantic discriminated
+Use `readRenderPlanResource()`, `readRenderPlanBuffer()`, `readRenderPlanPatch()`,
+`readRenderPlanPrimitive()`, `readRenderPlanDraw()`, and `readRenderPlanRetirement()`. They return semantic discriminated
 unions and branded numeric identities. Integrations do not read generated offsets or interpret raw enum numbers.
 
 ## 9. Cross an asynchronous boundary
 
 Use `AsyncPlanTarget` only when the renderer cannot finish CPU consumption in the synchronous callback, most commonly a
-Worker. The retained plan makes exactly one standalone copy and transfers ownership through the candidate.
+Worker. The render planner makes exactly one standalone copy and transfers ownership through the candidate.
 
 ```ts
 import type { AsyncPlanTarget } from '@pmndrs/glyph/core';
@@ -370,11 +370,11 @@ const workerTarget: AsyncPlanTarget = {
 };
 ```
 
-The worker treats bytes as untrusted and calls `new TextEngineRenderPlanView().bindBytes(bytes)`. It must return the same
+The worker treats bytes as untrusted and calls `new RenderPlanView().bindBytes(bytes)`. It must return the same
 full-span `ArrayBuffer`, unmodified, so the bounded exact-size pool can reuse it. While acceptance is pending, another
-retained-plan call throws `TextEngineBackpressureError`. This is one copy for ownership, not a second compatibility path.
+render-planner call throws `RenderPlannerBackpressureError`. This is one copy for ownership, not a second compatibility path.
 
-## 10. Connect backends and retained plans to canvases
+## 10. Connect backends and render planners to canvases
 
 Core deliberately does not own `GPUDevice`, WebGL context, canvas, render pass, or texture. Map topology according to the
 renderer:
@@ -382,8 +382,8 @@ renderer:
 ```mermaid
 flowchart TD
   Engine[GlyphEngine] --> Backend[GlyphBackend]
-  Backend --> PlanA[Retained plan A]
-  Backend --> PlanB[Retained plan B]
+  Backend --> PlanA[Render planner A]
+  Backend --> PlanB[Render planner B]
   PlanA --> TargetA[Plan target A]
   PlanB --> TargetB[Plan target B]
   TargetA --> Device[Renderer-owned device/context]
@@ -392,18 +392,18 @@ flowchart TD
   Device --> CanvasB[Canvas / texture B]
 ```
 
-- WebGPU may use one `GPUDevice` for several canvas contexts or offscreen textures. Retained plans can share a renderer-owned
+- WebGPU may use one `GPUDevice` for several canvas contexts or offscreen textures. Render planners can share a renderer-owned
   device pool while keeping independent targets and acceptance frontiers.
 - WebGL resources belong to one context. Use one renderer resource pool per context; separate canvases normally mean
-  separate contexts and targets even when retained plans share one backend.
-- Onscreen and OffscreenCanvas in separate threads need separate engine/backend/retained-plan domains unless all engine calls stay
+  separate contexts and targets even when render planners share one backend.
+- Onscreen and OffscreenCanvas in separate threads need separate engine/backend/render-planner domains unless all engine calls stay
   on one side and plans use the asynchronous transfer contract.
-- Synchronous and asynchronous retained plans may coexist under one backend. The engine-wide borrow gate prevents a sibling call
+- Synchronous and asynchronous render planners may coexist under one backend. The engine-wide borrow gate prevents a sibling call
   from invalidating an active borrowed publication.
 
 On device loss or a full renderer rebuild, discard that device's physical realizations and call
-`control.requestCheckpoint()` for every retained plan attached to the physical resource pool. The next publication for each
-retained plan is complete rather than delta-based, so the target can reacquire portable payloads and rebuild buffers and
+`control.requestCheckpoint()` for every render planner attached to the physical resource pool. The next publication for each
+render planner is complete rather than delta-based, so the target can reacquire portable payloads and rebuild buffers and
 geometry without an authored text mutation. The example integration packages this sequence as
 `engine.replaceDevice(nextDevice)`. A target must not request a checkpoint merely because it rejected malformed data;
 malformed plans are engine defects.
@@ -414,7 +414,7 @@ Explicit disposal is deterministic and idempotent:
 
 ```ts
 title.dispose();
-retainedPlan.dispose();
+planner.dispose();
 stack.dispose();
 policy.dispose();
 backend.dispose();
@@ -422,8 +422,8 @@ glyphEngine.dispose();
 font.dispose();
 ```
 
-You may rely on owner cascade instead: retained-plan disposal closes its text and target; backend disposal closes retained
-plans and backend bindings; engine disposal closes backends before Wasm. The immutable root font is intentionally separate
+You may rely on owner cascade instead: render-planner disposal closes its text and target; backend disposal closes render
+planners and backend bindings; engine disposal closes backends before Wasm. The immutable root font is intentionally separate
 and may be disposed after every engine binding ends. Renderer GPU objects remain the target/device's responsibility.
 
 ## Verify the integration

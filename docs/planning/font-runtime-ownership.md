@@ -1,6 +1,6 @@
 ---
 type: Implementation Plan
-title: Font, GlyphEngine, backend, retained-plan, and render-target ownership
+title: Font, GlyphEngine, backend, render-planner, and render-target ownership
 description: Ownership correction that separates portable font assets from engine registration and makes renderer acceptance lifetimes explicit.
 tags: [fonts, engine, renderer, ownership, lifecycle, memory, disposal]
 status: draft
@@ -43,10 +43,10 @@ generated:
   at: '2026-08-28T20:10:29Z'
 ---
 
-# Font, GlyphEngine, backend, retained-plan, and render-target ownership
+# Font, GlyphEngine, backend, render-planner, and render-target ownership
 
-This plan separates an immutable font asset from the mutable engine, backend, retained plan, and GPU registrations that consume
-it. It also makes the one relationship the renderer protocol already depends on explicit: one retained plan advances one
+This plan separates an immutable font asset from the mutable engine, backend, render planner, and GPU registrations that consume
+it. It also makes the one relationship the renderer protocol already depends on explicit: one render planner advances one
 acceptance frontier. The implementation must preserve the renderer-neutral policy and plan, the borrowed A/B publication
 path, the owned worker path, and call-time validation.
 
@@ -92,7 +92,7 @@ flowchart LR
     H[GlyphBackend\none integration owner]
     RB[EngineFontBinding\nprivate shaping registration]
     HB[BackendFontBinding\nportable policy/resources]
-    S[RetainedPlan\none retained batch]
+    S[RenderPlanner\none desired-text set]
     R -->|owns and disposes| H
     R -->|deduplicates| RB
     H -->|owns| HB
@@ -118,20 +118,20 @@ The arrows define lifetime direction:
 
 - a `Font` does not own a Glyph engine and can outlive or bind across engines;
 - a Glyph engine owns every backend created through `glyphEngine.createBackend()`, so engine disposal closes backends and
-  retained plans before Wasm;
+  render planners before Wasm;
 - a backend is permanently attached to one engine and cannot rebind;
-- a retained plan is permanently attached to one backend, one policy, and one abstract target;
+- a render planner is permanently attached to one backend, one policy, and one abstract target;
 - Canvas, WebGPU, Three.js, render passes, and GPU resources remain renderer-owned;
-- a renderer may pool one immutable realization across retained plans using the same authenticated payload and renderer
+- a renderer may pool one immutable realization across render planners using the same authenticated payload and renderer
   resource domain.
 
 ### Backend, target, and device are different boundaries
 
-`GlyphBackend` and `TextPlanTarget` are `/core` integrator concepts. A GPU device is not:
+`GlyphBackend` and `RenderPlanTarget` are `/core` integrator concepts. A GPU device is not:
 
-- the backend owns one engine attachment, portable policy registrations, portable font-binding leases, IDs, and retained plans;
+- the backend owns one engine attachment, portable policy registrations, portable font-binding leases, IDs, and render planners;
   it owns no Canvas, `GPUDevice`, `GPUCanvasContext`, WebGL context, texture, buffer, bind group, material, or pipeline;
-- the target is a renderer-implemented acceptance callback owned by one retained plan; it tells core whether one candidate was
+- the target is a renderer-implemented acceptance callback owned by one render planner; it tells core whether one candidate was
   actually committed so core can advance retention safely;
 - a renderer-private realization pool owns physical resources and keys them by its own resource domain plus authenticated
   payload identity and variant. Core never constructs, stores, or names that pool or device.
@@ -140,12 +140,12 @@ The backend's “font binding” is therefore an engine binding, not a GPU bind 
 portable resource resolver. Each target asks its renderer pool to realize those payloads for the target's device/context.
 Two targets may share the backend binding while sharing or duplicating physical resources according to their renderer domain.
 
-| Renderer topology                                   | Backend and retained-plan shape                                                                | Physical resource rule                                                                                                                          |
+| Renderer topology                                   | Backend and render-planner shape                                                               | Physical resource rule                                                                                                                          |
 | --------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Two canvases configured with one WebGPU `GPUDevice` | One backend; normally one retained plan per independently advancing canvas                     | One renderer pool may share buffers, textures, samplers, bind groups, and pipelines; each canvas supplies its own current presentation texture. |
+| Two canvases configured with one WebGPU `GPUDevice` | One backend; normally one render planner per independently advancing canvas                    | One renderer pool may share buffers, textures, samplers, bind groups, and pipelines; each canvas supplies its own current presentation texture. |
 | Two canvases using different WebGPU devices         | One backend remains valid when they share a portable policy ABI; use independent plans/targets | Separate realization pools; no GPU object crosses devices.                                                                                      |
 | Two WebGL canvases/contexts                         | One backend is still valid when policy ownership is shared                                     | Separate context-local realization pools; WebGL objects do not cross contexts.                                                                  |
-| One canvas switching device/context                 | Keep or replace the retained plan according to acceptance ownership                            | Discard the old physical pool and checkpoint that retained plan against the replacement.                                                        |
+| One canvas switching device/context                 | Keep or replace the render planner according to acceptance ownership                           | Discard the old physical pool and checkpoint that render planner against the replacement.                                                       |
 
 A canvas alone is not the backend boundary. Create another backend when renderer integration, policy ownership, plugin trust,
 or teardown must be independent. Creating one backend per canvas is valid, but duplicates backend registrations and is not
@@ -173,8 +173,8 @@ The minimum resident representation is:
   authenticated external raster artifact the selected technique actually resolves;
 - one shaping copy per live engine that has bound the font, because distinct Wasm memories cannot share ordinary linear
   memory;
-- one renderer realization per `(GPUDevice, authenticated payload identity, variant)`, shared by retained plans through leases;
-- no font-payload copy for a backend, retained plan, canvas, or render pass.
+- one renderer realization per `(GPUDevice, authenticated payload identity, variant)`, shared by render planners through leases;
+- no font-payload copy for a backend, render planner, canvas, or render pass.
 
 `loadFont({ baked: URL }, technique)` may adopt the `ArrayBuffer` returned by its fetch because Glyph owns that response body.
 Caller-supplied bytes need an explicit ownership mode:
@@ -192,7 +192,7 @@ per-resource copies. Root application APIs do not expose a mutable view into the
 leases expose borrowed upload bytes only to the trusted integrator that owns that lease; mutating them is a contract
 violation, and the package revalidates their authenticated identity at every realm boundary.
 
-## Proposed API shape
+## Implemented API shape
 
 ### Application surface
 
@@ -369,23 +369,23 @@ when that name appears in its own public signatures; it does not mirror the root
 | Entry                                            | Target contents                                                                                                                                                                                                                        | Migration disposition                                                                                                                                                                |
 | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `@pmndrs/glyph`                                  | `Font`, `FontStack`, `loadFont`, `FontLibrary`, `createFontStack`, `txt`, `span`, formatted-text, paint, layout/measurement, font-feature, raster-technique, raster-resource, and baker contracts plus errors an application can catch | Canonical home. Keep a useful barrel; replace engine-bound loader/registry vocabulary with immutable Font/library vocabulary.                                                        |
-| `@pmndrs/glyph/core`                             | `createGlyphEngine`, `GlyphEngine`, `GlyphBackend`, target/retained plan types, policy authoring, portable compilation, plan readers, and integrator-only errors                                                                       | Engine-driving surface. It imports root types but does not re-export them. Raw frame mutation/acknowledgment compilers and application-invisible dynamic IDs become package-private. |
+| `@pmndrs/glyph/core`                             | `createGlyphEngine`, `GlyphEngine`, `GlyphBackend`, target/render planner types, policy authoring, portable compilation, plan readers, and integrator-only errors                                                                      | Engine-driving surface. It imports root types but does not re-export them. Raw frame mutation/acknowledgment compilers and application-invisible dynamic IDs become package-private. |
 | `@pmndrs/glyph/three` and `/react`               | Three/R3F objects, materials, loaders, hooks, props, and integration errors                                                                                                                                                            | Re-export only root names actually present in those signatures, such as `Font`/`FontStack` where needed. Root remains their canonical home.                                          |
 | raster, shader, baker, and runtime-bake subpaths | technique-owned side effects, shader-language modules, baker modules, and explicit runtime-bake tooling                                                                                                                                | Remain explicit tree-shakable capability entries; they do not become alternate homes for root application vocabulary.                                                                |
 
 The current and target entry groups have these explicit dispositions:
 
-| API group                                                                                                                                          | Disposition                                                                                                   | Reason                                                                                                                                                                                                                                     |
-| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Font`, `FontStack`, `FontMetrics`, `FontInput`, `FontToken`, `defineFont`, `loadFont`, `createFontStack`, `FontLibrary`, and load errors/options  | Keep or replace in place at root                                                                              | These are portable assets, declarative bake inputs, and failures an application encounters. `defineFont` remains the static baker anchor.                                                                                                  |
-| Root `txt`, `span`, formatted text, paint, paragraph properties, measurements, layouts, placements, and carets                                     | Keep at root                                                                                                  | Applications author or receive these values without implementing a renderer.                                                                                                                                                               |
-| Current `/core` `Paragraph`, `ParagraphOptions`, and `ParagraphUpdate`                                                                             | Move their application-facing forms to root and add async `createParagraph`; make direct construction private | Detached measurement is application vocabulary even though its engine retained plan remains private.                                                                                                                                       |
-| raster-technique, raster-resource, coverage, feature, and baker contracts                                                                          | Keep at root or their existing explicit capability subpath                                                    | Technique and baker providers author them; they are renderer neutral. Shader-language implementations remain explicit subpaths.                                                                                                            |
-| `FontRegistry`, `RegisteredFont`, `RegisteredRaster`, `LoadedFont`, engine-bound `FontLoader`, and their mutable handles/options                   | Withdraw or replace                                                                                           | They expose mutable registration internals rather than portable application assets.                                                                                                                                                        |
-| `GlyphEngine`, `createGlyphEngine`, backend/retained plan/plan/policy types, policy/wire IDs, and portable realization readers                     | Move or remain in `/core`                                                                                     | Only an integration constructs or drives them. Root types may appear in their signatures, but `/core` does not re-export the root barrel.                                                                                                  |
-| `textShaperAbi`, raw frame compilers, raw shaper constructors, and dynamic registration layouts                                                    | Withdraw from JavaScript declarations                                                                         | Renderer integrations consume retained backend/retained plan and plan-reader contracts. Alternate-language bindings implement the versioned ABI from its generated schema and Rust contract rather than depending on JavaScript internals. |
-| `/core` `acquireFontSelectionForRuntime`, `assertFontSelectionForRuntime`, `concreteFonts`, `observeLoadedFontDispose`, and `releaseFontSelection` | Withdraw from declarations and make any surviving mechanics package-private                                   | They expose the engine-bound `LoadedFont` model being removed and are not integrator contracts.                                                                                                                                            |
-| `FontHandle`, `RasterHandle`, `FontKey`, and `RasterKey`                                                                                           | Withdraw unless a surviving root output still exposes one                                                     | Dynamic registration identity is package-managed. Output identities such as `FontSlot` or `LocalGlyphId` remain root only when an application-visible layout type names them.                                                              |
+| API group                                                                                                                                          | Disposition                                                                                                   | Reason                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Font`, `FontStack`, `FontMetrics`, `FontInput`, `FontToken`, `defineFont`, `loadFont`, `createFontStack`, `FontLibrary`, and load errors/options  | Keep or replace in place at root                                                                              | These are portable assets, declarative bake inputs, and failures an application encounters. `defineFont` remains the static baker anchor.                                                                                                   |
+| Root `txt`, `span`, formatted text, paint, paragraph properties, measurements, layouts, placements, and carets                                     | Keep at root                                                                                                  | Applications author or receive these values without implementing a renderer.                                                                                                                                                                |
+| Current `/core` `Paragraph`, `ParagraphOptions`, and `ParagraphUpdate`                                                                             | Move their application-facing forms to root and add async `createParagraph`; make direct construction private | Detached measurement is application vocabulary even though its engine render planner remains private.                                                                                                                                       |
+| raster-technique, raster-resource, coverage, feature, and baker contracts                                                                          | Keep at root or their existing explicit capability subpath                                                    | Technique and baker providers author them; they are renderer neutral. Shader-language implementations remain explicit subpaths.                                                                                                             |
+| `FontRegistry`, `RegisteredFont`, `RegisteredRaster`, `LoadedFont`, engine-bound `FontLoader`, and their mutable handles/options                   | Withdraw or replace                                                                                           | They expose mutable registration internals rather than portable application assets.                                                                                                                                                         |
+| `GlyphEngine`, `createGlyphEngine`, backend/render planner/plan/policy types, policy/wire IDs, and portable realization readers                    | Move or remain in `/core`                                                                                     | Only an integration constructs or drives them. Root types may appear in their signatures, but `/core` does not re-export the root barrel.                                                                                                   |
+| `textShaperAbi`, raw frame compilers, raw shaper constructors, and dynamic registration layouts                                                    | Withdraw from JavaScript declarations                                                                         | Renderer integrations consume retained backend/render planner and plan-reader contracts. Alternate-language bindings implement the versioned ABI from its generated schema and Rust contract rather than depending on JavaScript internals. |
+| `/core` `acquireFontSelectionForRuntime`, `assertFontSelectionForRuntime`, `concreteFonts`, `observeLoadedFontDispose`, and `releaseFontSelection` | Withdraw from declarations and make any surviving mechanics package-private                                   | They expose the engine-bound `LoadedFont` model being removed and are not integrator contracts.                                                                                                                                             |
+| `FontHandle`, `RasterHandle`, `FontKey`, and `RasterKey`                                                                                           | Withdraw unless a surviving root output still exposes one                                                     | Dynamic registration identity is package-managed. Output identities such as `FontSlot` or `LocalGlyphId` remain root only when an application-visible layout type names them.                                                               |
 
 The packed declaration test is the authority: root and `/core` export-name sets are disjoint, and an integration may
 re-export a root name only when its own declaration signatures reference that name. This preserves convenient barrel
@@ -401,7 +401,7 @@ only because it was historically present.
 Root `Paragraph` remains renderer-independent, but a ready synchronous paragraph cannot be constructed before its Wasm
 measurement engine exists. Replace the public constructor with async `createParagraph(options)`. The factory acquires a
 package-private, per-realm measurement service and returns a ready `Paragraph`; its measurement and layout methods remain
-synchronous. The service uses the same engine/backend machinery internally, owns a target-less measurement retained plan that
+synchronous. The service uses the same engine/backend machinery internally, owns a target-less measurement render planner that
 cannot publish, and releases its font binding and service lease when the Paragraph disposes. The final Paragraph in a
 realm releases the measurement engine; a later `createParagraph()` may initialize another one. `loadFont()` itself stays
 engine-independent, and neither `GlyphEngine` nor a measurement target enters the root signature.
@@ -410,29 +410,29 @@ engine-independent, and neither `GlyphEngine` nor a measurement target enters th
 
 #### Approved lifecycle vocabulary migration
 
-The public lifecycle is `createGlyphEngine() → GlyphEngine → createBackend() → GlyphBackend → createRetainedPlan() →
-RetainedPlan → createText() → RetainedText`. The first two owners use the package vocabulary; the lower two describe the
-retained text lifecycle. A retained plan is not a draw batch or typographic run: one publication may contain many resource,
+The public lifecycle is `createGlyphEngine() → GlyphEngine → createBackend() → GlyphBackend → createPlanner() →
+RenderPlanner → createText() → RetainedText`. The first two owners use the package vocabulary; the lower two describe the
+retained text lifecycle. A render planner is not a draw batch or typographic run: one publication may contain many resource,
 storage, primitive, and draw batches.
 
 | Final name               | Contract                                                                                                          |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | `GlyphEngine`            | Owns one Wasm shaping/layout domain, engine-local font registrations, child backends, and the borrowed-plan gate. |
-| `GlyphBackend`           | Owns one renderer integration's policy, font and renderer bindings, IDs, and retained plans.                      |
-| `RetainedPlan`           | Owns desired text, one target, capacities, revisions, publications, and one acceptance frontier.                  |
-| `RetainedText`           | Owns one mutable desired text instance inside a retained plan.                                                    |
-| `PlanTransport`          | Package-private request/result arena owner used by the retained-plan implementation and direct ABI tests.         |
-| policy authoring `scope` | Tracks DSL value provenance; it is not a retained plan and never enters the wire protocol.                        |
+| `GlyphBackend`           | Owns one renderer integration's policy, font and renderer bindings, IDs, and render planners.                     |
+| `RenderPlanner`          | Owns desired text, one target, capacities, revisions, publications, and one acceptance frontier.                  |
+| `RetainedText`           | Owns one mutable desired text instance inside a render planner.                                                   |
+| `PlanTransport`          | Package-private request/result arena owner used by the render-planner implementation and direct ABI tests.        |
+| policy authoring `scope` | Tracks DSL value provenance; it is not a render planner and never enters the wire protocol.                       |
 
-The pre-alpha Rust/Wasm ABI changes in the same commit. Export keys use `createRetainedPlan`, `reserveRetainedPlan`,
-`disposeRetainedPlan`, and `retainedPlanCount`; frame fields use `retainedPlanId`; status names use
-`retainedPlanConflict` and `retainedPlanMissing`; the default capacity is `defaultRetainedPlanTextCapacity`. The Rust ABI
+The pre-alpha Rust/Wasm ABI changes in the same commit. Export keys use `createPlanner`, `reservePlanner`,
+`disposePlanner`, and `plannerCount`; frame fields use `plannerId`; status names use
+`plannerConflict` and `plannerMissing`; the default capacity is `defaultPlannerTextCapacity`. The Rust ABI
 contract generates the TypeScript declaration, so no session-named compatibility aliases survive.
 
-TypeScript and TSX use the dated symbol-aware `ts-morph` migration in
-`.agents/skills/codemod/codemods/2026-08-28-text-engine-lifecycle/`. It is the authoritative old-to-new map and includes
-exact wire-contract string rewrites. JavaScript direct-ABI harnesses are migrated separately and compiled artifacts are
-regenerated, never edited.
+TypeScript, TSX, MTS, JavaScript, and MJS use the dated symbol-aware `ts-morph` migration in
+`.agents/skills/codemod/codemods/2026-08-28-text-engine-vocabulary/`. It is the authoritative old-to-new map. It rewrites
+wire-contract identifiers at proven call sites while leaving unrelated persisted strings unchanged; the two old JavaScript
+status-code strings are listed as explicit manual migrations. Generated ABI artifacts are regenerated, never edited.
 
 The implementation also creates a repository-local codemod skill and a dated canary migration archive. Each archived
 codemod is the authoritative migration recipe: it records removed or renamed exports, methods, types, and import paths;
@@ -441,7 +441,7 @@ verification gates. The agent applies the automatic transforms and uses the same
 judgment. Later canary changes add another ordered codemod instead of rewriting history. Public migration prose is rendered
 from or links to those recipes rather than copying a second rename table that can drift.
 
-#### Queued ID authoring follow-up
+#### Branded ID authoring
 
 After the lifecycle migration, the numeric ID API becomes one callable namespace:
 
@@ -457,7 +457,7 @@ const resourceWireId = id.resource(atlasResource);
 no optional domain argument. Standalone `techniqueId`, `programId`, and `resourceId` exports are removed. Every lowering
 records canonical provenance and rejects collisions in the shared rendering domain used by all backends that can feed one
 target/device. Backends do not salt portable IDs: equal semantic identities remain equal across backends, while different
-identities that collide cannot be installed together. Backend-generated policy, binding, stack, retained-plan, material,
+identities that collide cannot be installed together. Backend-generated policy, binding, stack, render-planner, material,
 and transform handles remain automatic and absent from ordinary user input.
 
 #### Font-request simplification
@@ -494,10 +494,10 @@ const backend = glyphEngine.createBackend({
   integration: 'my-webgpu-renderer',
 });
 
-const rendererPolicy = {
+const rendererPolicy: BackendPolicyFactory = (ids) => ({
   capabilitySets: [rendererCapabilities],
-  programs: rendererPrograms,
-} satisfies PolicyDescriptor;
+  programs: createRendererPrograms(ids),
+});
 const policy = backend.installPolicy(rendererPolicy);
 const stackBinding = backend.bindFontStack(ui);
 ```
@@ -527,10 +527,10 @@ An integration that eagerly creates or reuses its renderer-owned font resource s
 `allocateFont…` is reserved for a lower-level operation that always creates fresh storage. Lazy per-plan pools need no
 font-level method at all. No public `realizeFont()` name is introduced.
 
-The target-bound public retained plan does not expose `update(request)` and never accepts a caller-authored plan, policy,
-revision, or acknowledgment field. It exposes `retainedPlan.createText()`, `text.update()`, `text.dispose()`, and
-`retainedPlan.publish()`. Core allocates every paragraph/style/flow/region ID, validates
-each option at the call that receives it, coalesces desired mutations, inserts the retained plan/policy/cursor fields, and
+The target-bound public render planner does not expose `update(request)` and never accepts a caller-authored plan, policy,
+revision, or acknowledgment field. It exposes `planner.createText()`, `text.update()`, `text.dispose()`, and
+`planner.publish()`. Core allocates every paragraph/style/flow/region ID, validates
+each option at the call that receives it, coalesces desired mutations, inserts the render planner/policy/cursor fields, and
 compiles the one wire update internally. Three and the neutral example wrap these exact handles rather than compiling a
 second request shape. The old raw frame compiler remains package-internal test/fuzz infrastructure; alternate language
 bindings implement the documented ABI rather than preserving a second JavaScript ownership model.
@@ -545,21 +545,21 @@ the integration's private transform object. Async candidates pre-resolve those b
 maps them to its renderer-defined transport keys just as it builds the payload manifest. A backend stack binding similarly
 replaces every font/stack number. The implementation
 must expose every currently supported authored frame field through these ID-free retained inputs before privatizing
-`compileTextEngineFrameUpdate`; no feature may disappear into an unreachable ABI field.
+`compilePlannerFrameUpdate`; no feature may disappear into an unreachable ABI field.
 
-Policy installation takes the complete renderer-owned `PolicyDescriptor`, not one `PolicyProgram`. RetainedPlan creation
+Policy installation takes the complete renderer-owned `PolicyDescriptor`, not one `PolicyProgram`. RenderPlanner creation
 receives the selected descriptor-owned `PolicyCapabilitySet` object and validated maximum limits; the backend verifies set
 membership and creates the D-281 owner-bound wire selection internally. `publish()` maps named semantic-view and
 compositing options to internal masks and derives exact per-frame counts from retained state. Callers never author a
 capability ID, raw semantic mask, frame revision, or acknowledgment.
 
-### Retained-plan and target surface
+### Planner and target surface
 
-One retained plan owns desired text and exactly one acceptance target. The private measurement-only exception
+One render planner owns desired text and exactly one acceptance target. The private measurement-only exception
 is defined below. A target is abstract protocol behavior, not a Canvas or GPU object:
 
 ```ts
-type TextPlanTarget = PlanTarget | AsyncPlanTarget;
+type RenderPlanTarget = PlanTarget | AsyncPlanTarget;
 
 declare const planOriginBrand: unique symbol;
 interface PlanOrigin {
@@ -591,7 +591,7 @@ interface ResolvedPlanTransform {
   readonly binding: BackendTransformBinding;
 }
 
-interface TextEngineRenderPlanReader {
+interface RenderPlanReader {
   table(name: RenderPlanTableName): RenderPlanTable;
   record(table: RenderPlanTable, index: number): number;
   u8(offset: number): number;
@@ -601,24 +601,24 @@ interface TextEngineRenderPlanReader {
   bytes(offset: number, byteLength: number): Uint8Array;
 }
 
-interface BorrowedTextEngineRenderPlan extends TextEngineRenderPlanReader {
+interface BorrowedRenderPlan extends RenderPlanReader {
   readonly delivery: 'borrowed';
 }
 
-interface OwnedTextEngineRenderPlan extends TextEngineRenderPlanReader {
+interface OwnedRenderPlan extends RenderPlanReader {
   readonly delivery: 'owned';
 }
 
 interface PlanCandidate {
   readonly origin: PlanOrigin;
-  readonly plan: BorrowedTextEngineRenderPlan;
+  readonly plan: BorrowedRenderPlan;
   acquirePayload(referenceId: ResourceHandle): PortablePayloadLease;
   resolveTransform(transformIndex: number): BackendTransformBinding;
 }
 
 interface AsyncPlanCandidate {
   readonly origin: PlanOrigin;
-  readonly plan: OwnedTextEngineRenderPlan;
+  readonly plan: OwnedRenderPlan;
   readonly bytes: Uint8Array<ArrayBuffer>;
   readonly payloads: readonly ResolvedPlanPayload[];
   readonly transforms: readonly ResolvedPlanTransform[];
@@ -672,33 +672,33 @@ interface BackendPolicy {
   dispose(): void;
 }
 
-type TextEngineRegionInput = Omit<
-  TextEngineRegion,
+type RetainedTextRegionInput = Omit<
+  PlannerRegion,
   'id' | 'geometryRevision' | 'transformIndex' | 'exclusionStart' | 'exclusionCount'
 > & {
   readonly transform: BackendTransformBinding;
 };
 
-type TextEngineExclusionInput = Omit<TextEngineExclusion, 'id' | 'regionId' | 'geometryRevision'>;
+type RetainedTextExclusionInput = Omit<PlannerExclusion, 'id' | 'regionId' | 'geometryRevision'>;
 
-interface TextEngineFlowRegionInput {
-  readonly region: TextEngineRegionInput;
-  readonly exclusions?: readonly TextEngineExclusionInput[];
+interface RetainedTextFlowRegionInput {
+  readonly region: RetainedTextRegionInput;
+  readonly exclusions?: readonly RetainedTextExclusionInput[];
 }
 
-interface TextEngineFlowInput {
-  readonly regions: readonly TextEngineFlowRegionInput[];
+interface RetainedTextFlowInput {
+  readonly regions: readonly RetainedTextFlowRegionInput[];
 }
 
-type TextEngineInlineObjectInput = Omit<
-  TextEngineInlineObject,
+type RetainedTextInlineObjectInput = Omit<
+  PlannerInlineObject,
   'paragraphId' | 'id' | 'contentRevision' | 'materialId' | 'resourceId' | 'resourceGeneration'
 > & {
   readonly material: BackendMaterialBinding;
   readonly resource: BackendResourceBinding;
 };
 
-interface TextEngineLimits {
+interface RenderPlannerLimits {
   readonly maxParagraphs: number;
   readonly maxClusters: number;
   readonly maxLines: number;
@@ -717,8 +717,8 @@ interface RetainedTextOptions {
   readonly contentBox?: ParagraphContentBox;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
-  readonly flow?: TextEngineFlowInput;
-  readonly inlineObjects?: readonly TextEngineInlineObjectInput[];
+  readonly flow?: RetainedTextFlowInput;
+  readonly inlineObjects?: readonly RetainedTextInlineObjectInput[];
 }
 
 type RetainedTextUpdate = Partial<Omit<RetainedTextOptions, 'font'>> & {
@@ -741,45 +741,45 @@ interface RetainedText {
   dispose(): void;
 }
 
-interface RetainedPlanPublishOptions {
+interface RenderPlannerPublishOptions {
   readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection' | 'all';
   readonly compositing?: 'ordered' | 'independent';
 }
 
-interface SynchronousRetainedPlan {
+interface RenderPlanner {
   createText(options: RetainedTextOptions): RetainedText;
-  publish(options?: RetainedPlanPublishOptions): PlanAcceptance;
+  publish(options?: RenderPlannerPublishOptions): PlanAcceptance;
   dispose(): void;
 }
 
-interface AsyncRetainedPlan {
+interface AsyncRenderPlanner {
   createText(options: RetainedTextOptions): RetainedText;
-  publish(options?: RetainedPlanPublishOptions): Promise<PlanAcceptance>;
+  publish(options?: RenderPlannerPublishOptions): Promise<PlanAcceptance>;
   dispose(): void;
 }
 
-type RetainedPlanFor<Target extends TextPlanTarget> = Target extends AsyncPlanTarget
-  ? AsyncRetainedPlan
-  : SynchronousRetainedPlan;
+type RenderPlannerFor<Target extends RenderPlanTarget> = Target extends AsyncPlanTarget
+  ? AsyncRenderPlanner
+  : RenderPlanner;
 
-interface RetainedPlanOptions<Target extends TextPlanTarget> {
+interface RenderPlannerOptions<Target extends RenderPlanTarget> {
   readonly policy: BackendPolicy;
   readonly capabilitySet?: PolicyCapabilitySet;
   readonly target: (control: PlanTargetControl) => Target;
-  readonly limits: TextEngineLimits;
+  readonly limits: RenderPlannerLimits;
   readonly requestCapacity: number;
   readonly resultCapacity: number;
   readonly textCapacity: number;
 }
 
 interface GlyphBackend {
-  installPolicy(descriptor: PolicyDescriptor): BackendPolicy;
+  installPolicy(factory: BackendPolicyFactory): BackendPolicy;
   bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): BackendFontBinding<Technique>;
   bindFontStack<Technique extends AnyRasterTechnique>(stack: FontStack<Technique>): BackendFontStackBinding;
   createMaterialBinding(): BackendMaterialBinding;
   createResourceBinding(): BackendResourceBinding;
   createTransformBinding(): BackendTransformBinding;
-  createRetainedPlan<Target extends TextPlanTarget>(options: RetainedPlanOptions<Target>): RetainedPlanFor<Target>;
+  createPlanner<Target extends RenderPlanTarget>(options: RenderPlannerOptions<Target>): RenderPlannerFor<Target>;
   dispose(): void;
 }
 
@@ -794,12 +794,12 @@ interface GlyphBackendOptions {
   readonly integration: string;
 }
 
-declare class RetainedPlanDisposedError extends Error {}
-declare class TextEngineBackpressureError extends Error {}
-declare class TextEngineTransportCapacityError extends Error {}
-declare class TextEngineTransportError extends Error {}
+declare class RenderPlannerDisposedError extends Error {}
+declare class RenderPlannerBackpressureError extends Error {}
+declare class PlanTransportCapacityError extends Error {}
+declare class PlanTransportError extends Error {}
 
-const retainedPlan = backend.createRetainedPlan({
+const planner = backend.createPlanner({
   policy,
   capabilitySet: rendererCapabilities,
   target: (control) =>
@@ -813,7 +813,7 @@ const retainedPlan = backend.createRetainedPlan({
   textCapacity: PLAN_TEXT_BYTES,
 });
 
-const title = retainedPlan.createText({
+const title = planner.createText({
   font: stackBinding,
   text: txt`Hello ${span({ paint: '#f80' })`Glyph`}`,
   contentBox: { width: 480 },
@@ -821,10 +821,10 @@ const title = retainedPlan.createText({
 title.update({ contentBox: { width: 360 } });
 const metrics = title.layout();
 const positionedGlyphs = title.glyphs();
-retainedPlan.publish();
+planner.publish();
 
 title.dispose();
-retainedPlan.dispose();
+planner.dispose();
 stackBinding.dispose();
 policy.dispose();
 backend.dispose();
@@ -849,36 +849,36 @@ geometry-only mismatch reuses the matching semantic prefix before recomputing fl
 `semanticViews: 'none'`; sidecar overhead is measured separately from both no-op publication and paragraph-scoped early
 measurement.
 
-In this example, `renderer` already owns its surface and physical device/context. Neither enters `createRetainedPlan()` or any
+In this example, `renderer` already owns its surface and physical device/context. Neither enters `createPlanner()` or any
 other core signature.
 
-The retained plan constructs one opaque `PlanTargetControl` and passes it to the target factory. This resolves the lifecycle
+The render planner constructs one opaque `PlanTargetControl` and passes it to the target factory. This resolves the lifecycle
 cycle without a raw setter or manual registration: the renderer's device pool retains controls for its attached live
-targets, calls `control.requestCheckpoint()` on loss, and releases the control when the target/retained plan disposes. A target
-factory is invoked exactly once, and a returned target cannot attach to another retained plan.
+targets, calls `control.requestCheckpoint()` on loss, and releases the control when the target/render planner disposes. A target
+factory is invoked exactly once, and a returned target cannot attach to another render planner.
 
 The backend validates its active state, policy, and capacities before invoking the factory. If the factory throws, it
 invalidates the new control before rethrowing. It then validates the returned target object and its literal `delivery`
-value at engine before allocating a Wasm retained plan. A private `WeakSet` claims each new target before allocation and records
-it forever. Returning an already claimed target throws without disposing it, because it belongs to the first retained plan. Any
+value at engine before allocating a Wasm render planner. A private `WeakSet` claims each new target before allocation and records
+it forever. Returning an already claimed target throws without disposing it, because it belongs to the first render planner. Any
 later validation or Wasm-allocation failure invalidates the new control and disposes the newly claimed target exactly once
 before rethrowing. Type inference maps the factory's delivery discriminant to the
-only valid synchronous or asynchronous retained plan return type; callers do not select that type independently, and engine
+only valid synchronous or asynchronous render planner return type; callers do not select that type independently, and engine
 validation prevents an `any` cast or widened discriminant from selecting the wrong call path.
 
-An `AsyncPlanTarget` reports the exact transfer-pool ceiling as `maximumPlanBytes`. `createRetainedPlan()` requires it to be a
+An `AsyncPlanTarget` reports the exact transfer-pool ceiling as `maximumPlanBytes`. `createPlanner()` requires it to be a
 positive safe integer at least as large as `limits.maxOutputBytes`; otherwise it disposes the newly claimed target and
 throws before Wasm allocation. Result-capacity growth can therefore never produce a valid plan that the attached target
 is permanently unable to transfer.
 
-Every target has an idempotent `dispose()`. RetainedPlan disposal aborts pending acceptance, calls `target.dispose()` so the
-renderer detaches the control from its pool, invalidates the control, and then releases retained plan state. A later
+Every target has an idempotent `dispose()`. RenderPlanner disposal aborts pending acceptance, calls `target.dispose()` so the
+renderer detaches the control from its pool, invalidates the control, and then releases render planner state. A later
 `requestCheckpoint()` throws; that call-time failure identifies a renderer pool that violated the detach contract and is
 not converted into a recoverable render result. Device-loss fan-out iterates a stable control snapshot, records a stale
 control defect, continues signaling every live sibling, then reports the integration defect after fan-out; one bad entry
-cannot strand unrelated retained plans.
+cannot strand unrelated render planners.
 
-RetainedPlan capacities are validated initial reservations, not permanent public identities. Request growth happens before the
+RenderPlanner capacities are validated initial reservations, not permanent public identities. Request growth happens before the
 Wasm call. If the engine returns its non-publishing `resultTooLarge` capacity header, core may reserve the exact reported
 size and execute that same authored transaction once more; no plan, revision, acceptance cursor, or renderer state existed
 to retry. A second sizing failure is an engine defect and throws. This bounded arena negotiation is distinct from retrying
@@ -888,7 +888,7 @@ an unchanged renderer rejection, which remains forbidden. Public `reserve()` and
 returns and before any backend call can grow the shared Wasm memory. GPU execution may complete later; renderer acceptance is
 the synchronous CPU transaction that publishes renderer state after submission. `AsyncPlanTarget` is only for a genuinely
 deferred boundary such as a worker round trip. It receives one package-created copy and returns a Promise. The engine
-coordinates one Wasm-memory-wide borrow gate across every attached backend, because a call through any sibling backend/retained plan
+coordinates one Wasm-memory-wide borrow gate across every attached backend, because a call through any sibling backend/render planner
 can grow memory and expire every view into the old buffer. Re-entering any call on that engine from a `PlanTarget`
 callback throws before crossing into Wasm.
 
@@ -896,18 +896,18 @@ For WebGPU, acceptance is not delayed on `popErrorScope()`: the target completes
 uses already-ready shader/pipeline implementations, creates or updates resources, submits commands, and atomically swaps
 its CPU-visible live state before returning. `device.lost`, uncaptured validation errors, or an asynchronously reported
 scope error are renderer/device faults after submission; the renderer marks that resource domain lost, keeps unrelated
-retained plans correct, rebuilds, and requests a checkpoint. They cannot retroactively turn a returned acceptance into a
+render planners correct, rebuilds, and requests a checkpoint. They cannot retroactively turn a returned acceptance into a
 rejection. The neutral example's current awaited error-scope path must migrate to this rule and test both synchronous
 rejection-before-commit and asynchronous device-fault recovery.
 
 `PlanCandidate.plan` is a package-created lease-bound read-only facade over the current Wasm A/B result slot and expires
 when `accept()` returns. It exposes no `bind()`/`bindBytes()` mutator. Every later read through a retained facade throws
-`TextEnginePublicationExpiredError`; expiry is not merely prose and cannot silently read a newer slot. The reusable
-`TextEngineRenderPlanView` remains available for an integrator to bind independently owned boundary bytes, but it is not
+`PlanPublicationExpiredError`; expiry is not merely prose and cannot silently read a newer slot. The reusable
+`RenderPlanView` remains available for an integrator to bind independently owned boundary bytes, but it is not
 the object passed as a borrowed candidate.
 `AsyncPlanCandidate.bytes` is one package-created, full-span, non-shared `ArrayBuffer` view; its `plan` is bound to those
 same owned bytes. The async target may transfer `bytes.buffer`, which detaches both views in the source realm until the
-buffer returns. Before calling the target, the retained plan walks the copied plan and resolves every referenced portable payload
+buffer returns. Before calling the target, the render planner walks the copied plan and resolves every referenced portable payload
 into `payloads`; no resolver callback survives the yield. No public constructor allows a caller to forge either candidate
 mode.
 
@@ -919,7 +919,7 @@ returned allocation whose `byteLength` equals the next publication length. Backp
 limits remain; oversized allocations are rejected. Thus the candidate view always spans its complete backing, repeated stable-size frames still
 reuse allocations, and no helper can silently copy an oversized subview. The target must pass that buffer in the `postMessage`
 transfer list; structured-cloning it or copying it again is a contract violation. The receiving endpoint transfers the same
-allocation back. A successful result requires `returnedBytes`; the retained plan validates its full-span backing and original
+allocation back. A successful result requires `returnedBytes`; the render planner validates its full-span backing and original
 publication identity, consumes the acceptance, and may recycle the allocation for a later async copy. A rejected result
 returns the allocation when the endpoint still owns it; worker termination may lose that transport allocation without
 affecting Wasm storage or the previous acceptance fence.
@@ -932,20 +932,20 @@ allocations than an exact-size fresh-buffer baseline. A worker microbenchmark re
 and hit-rate evidence separately from shaping/render-plan benchmarks.
 
 `acquirePayload()` returns an independent disposable backing lease owned by the synchronous target. It transfers that
-lease into its realization pool or disposes it before returning. For async delivery, the retained plan acquires and privately
+lease into its realization pool or disposes it before returning. For async delivery, the render planner acquires and privately
 holds source-realm leases, exposes only their identity/payload borrows in `AsyncPlanCandidate.payloads`, and releases them
 when the transaction settles or aborts; the receiving realm acquires its own cache lease after digest validation. No
 candidate-scoped resolver closure or source lease survives a worker yield accidentally.
 
-A retained plan permits at most one asynchronous publication/acceptance transaction in flight. A second update while an
+A render planner permits at most one asynchronous publication/acceptance transaction in flight. A second update while an
 `AsyncPlanTarget` is pending throws at that call. Ordinary `PlanTarget` acceptance completes within `publish()`.
-Independent retained plans may progress concurrently, subject to the renderer's own device-pool synchronization.
+Independent render planners may progress concurrently, subject to the renderer's own device-pool synchronization.
 
 Transfer-pool outcomes are call-bound and never retried automatically. Bounded shared-pool backpressure returns
-`{ accepted: false, error: TextEngineBackpressureError }` with the cursor unchanged; the caller may publish the still-dirty
+`{ accepted: false, error: RenderPlannerBackpressureError }` with the cursor unchanged; the caller may publish the still-dirty
 desired state later. An exact-size publication above the configured maximum rejects `publish()` with
-`TextEngineTransportCapacityError` before the target is called. Sender failure, failure to detach, malformed return, and
-lost correlation reject `publish()` with `TextEngineTransportError`; they invalidate that transaction and leave the prior
+`PlanTransportCapacityError` before the target is called. Sender failure, failure to detach, malformed return, and
+lost correlation reject `publish()` with `PlanTransportError`; they invalidate that transaction and leave the prior
 cursor authoritative. A detached buffer may be lost, but no hidden retry or second copy occurs.
 
 The target answers one of two call-bound results:
@@ -960,7 +960,7 @@ acceptance cursor unchanged. Recoverable renderer transitions such as device rep
 result; they throw as an implementation defect at the decoding call.
 
 Checkpoint requests advance a private target-control generation rather than marking authored text dirty. The next
-publication presents a zero consumed-plan cursor, causing Rust to publish its complete retained plan without manufacturing
+publication presents a zero consumed-plan cursor, causing Rust to publish its complete render planner without manufacturing
 paragraph/style mutations or exceeding authoring limits. Acceptance satisfies only the generation captured before target
 delivery, so a device-loss request raised during `accept()` survives for the following publication.
 
@@ -971,7 +971,7 @@ metadata, and either dedicated payload-transfer bytes or a renderer-defined fetc
 backing is never placed in a transfer list: on a receiving-cache miss the source copies only that payload range into a
 standalone transfer buffer, then transfers the copy. This payload copy is distinct from the exactly-one plan copy and is
 required only when the other realm cannot reuse or fetch authenticated content. The receiving endpoint validates the plan
-with `TextEngineRenderPlanView.bindBytes()` and validates every supplied payload against that manifest before realization.
+with `RenderPlanView.bindBytes()` and validates every supplied payload against that manifest before realization.
 A cache hit may omit payload bytes only when the receiving endpoint already holds the same authenticated digest and
 descriptor.
 
@@ -981,28 +981,28 @@ compact wire `referenceId`. The package creates and validates identities in each
 transferred copies of the same artifact share a receiving-realm device realization without treating equal backend-local
 numbers as equal resources. After commit or rejection, the receiving endpoint transfers the plan buffer back with the
 transaction token and result. The source endpoint correlates that return to its one pending candidate, reclaims or recycles
-the returned buffer, and resolves `accept()`. Only an accepted result advances the retained plan's private cursor and makes older
+the returned buffer, and resolves `accept()`. Only an accepted result advances the render planner's private cursor and makes older
 engine storage eligible for retirement. Same-realm ownership provenance is not serialized.
 
-Disposing a retained plan aborts an in-flight async target signal, invalidates that transaction, settles the public `publish()`
-promise with `RetainedPlanDisposedError` from a core-owned abort race, and ignores every late answer. Correct worker
+Disposing a render planner aborts an in-flight async target signal, invalidates that transaction, settles the public `publish()`
+promise with `RenderPlannerDisposedError` from a core-owned abort race, and ignores every late answer. Correct worker
 targets also settle rejection from deterministic `error`, `messageerror`, and worker-exit events; no timer or retry is a
 correctness mechanism. A target that otherwise never settles is an integration bug, but disposal is always a bounded
-escape that does not depend on target cooperation. A late `{ accepted: true }` can never advance a disposed retained plan's
+escape that does not depend on target cooperation. A late `{ accepted: true }` can never advance a disposed render planner's
 cursor. If the worker terminates without returning the buffer, the transport copy is lost but no engine or renderer
 acceptance fence advances; the previous accepted publication remains authoritative.
 
 The worker transport has one explicit ownership state machine:
 
-| State              | Buffer owner                                | Permitted action                                                                                                        |
-| ------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| candidate created  | source `AsyncPlanTarget`                    | build the manifest from resolved payloads, install abort/response correlation, then transfer                            |
-| request in flight  | receiving endpoint                          | validate bytes and manifest, realize resources, prepare and commit renderer state                                       |
-| response in flight | source endpoint after transfer completes    | validate the transaction/result envelope and recover the returned buffer                                                |
-| settled accepted   | retained plan async-copy pool               | return the buffer and `{ accepted: true }`; retained plan validates both, then advances its cursor and retirement fence |
-| settled rejected   | retained plan async-copy pool when returned | return `{ accepted: false, error }` and the buffer when available; retained plan keeps its previous cursor              |
+| State              | Buffer owner                                 | Permitted action                                                                                                         |
+| ------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| candidate created  | source `AsyncPlanTarget`                     | build the manifest from resolved payloads, install abort/response correlation, then transfer                             |
+| request in flight  | receiving endpoint                           | validate bytes and manifest, realize resources, prepare and commit renderer state                                        |
+| response in flight | source endpoint after transfer completes     | validate the transaction/result envelope and recover the returned buffer                                                 |
+| settled accepted   | render planner async-copy pool               | return the buffer and `{ accepted: true }`; render planner validates both, then advances its cursor and retirement fence |
+| settled rejected   | render planner async-copy pool when returned | return `{ accepted: false, error }` and the buffer when available; render planner keeps its previous cursor              |
 
-The transaction token is renderer-private correlation state created inside the target; it is not a retained plan ID, wire ID,
+The transaction token is renderer-private correlation state created inside the target; it is not a render planner ID, wire ID,
 or acknowledgment supplied by the application. A malformed response throws as an integration defect. Worker termination,
 device loss, or an explicit renderer rejection settles as not accepted and leaves the previous renderer publication live.
 Portable resource payloads are separate from the plan transport: an endpoint must never detach the canonical Font backing.
@@ -1014,34 +1014,34 @@ for a missing payload.
 ```mermaid
 sequenceDiagram
   participant App
-  participant RetainedPlan
+  participant RenderPlanner
   participant Wasm as Engine/Wasm
   participant Target
   participant Device as Renderer device
 
-  App->>RetainedPlan: createText / updateText / removeText
-  App->>RetainedPlan: publish()
-  RetainedPlan->>Wasm: validated mutations + last accepted cursor
-  Wasm-->>RetainedPlan: borrowed A/B publication
-  RetainedPlan->>Target: borrowed callback or owned copy
+  App->>RenderPlanner: createText / updateText / removeText
+  App->>RenderPlanner: publish()
+  RenderPlanner->>Wasm: validated mutations + last accepted cursor
+  Wasm-->>RenderPlanner: borrowed A/B publication
+  RenderPlanner->>Target: borrowed callback or owned copy
   Target->>Device: prepare resources, buffers, geometry, draws
   Device-->>Target: commit succeeds or rejects
   alt committed
-    Target-->>RetainedPlan: accepted
-    RetainedPlan->>RetainedPlan: advance opaque acceptance cursor
+    Target-->>RenderPlanner: accepted
+    RenderPlanner->>RenderPlanner: advance opaque acceptance cursor
   else rejected
-    Target-->>RetainedPlan: renderer error
-    RetainedPlan->>RetainedPlan: retain prior accepted cursor
+    Target-->>RenderPlanner: renderer error
+    RenderPlanner->>RenderPlanner: retain prior accepted cursor
   end
 ```
 
-Text creation and mutation are part of the retained-plan lifecycle, not incidental render work. The common integration
+Text creation and mutation are part of the render-planner lifecycle, not incidental render work. The common integration
 owns stable text handles and offers operations such as `createText()`, `text.update()`, and `text.dispose()`. Those calls
-update desired state. The next retained plan publication emits only changed paragraph, text, style, constraint, flow, and region
+update desired state. The next render planner publication emits only changed paragraph, text, style, constraint, flow, and region
 sections. Removing a text emits its paragraph removal before recycling any internal ID.
 
 `text.layout()` and `text.glyphs()` synchronously answer from the current desired state, including mutations not yet
-published. They require only the engine, backend bindings, policy, and authored text inputs already retained by the retained plan.
+published. They require only the engine, backend bindings, policy, and authored text inputs already retained by the render planner.
 They never call the plan target, realize renderer resources, inspect a Canvas/device, traverse a scene, or read a world
 matrix. The query does not commit desired state or advance the render-plan acceptance cursor; the next `publish()` still
 submits the same authored mutation. `layout()` returns allocation-light metrics, while `glyphs()` explicitly pays for and
@@ -1050,12 +1050,12 @@ scene attachment and matrices affect later placement only.
 
 ### Measurement-only Paragraph path
 
-The exactly-one-target rule applies to render retained plans. A retained text in such a retained plan may synchronously query its
+The exactly-one-target rule applies to render planners. A retained text in such a render planner may synchronously query its
 current desired layout without invoking that target. Root `createParagraph()` uses a separate package-private
-measurement retained plan that has no target, no acceptance cursor, no draw publication, and only the synchronous
-`measureParagraph` query. It is not exported from `/core`, cannot be converted into a render retained plan, and shares the same
+measurement planner that has no target, no acceptance cursor, no draw publication, and only the synchronous
+`measureParagraph` query. It is not exported from `/core`, cannot be converted into a render planner, and shares the same
 validated retained text-input implementation so Paragraph does not regain the raw frame compiler. Three may query
-measurement through its ordinary render retained plan before publishing, but the query does not advance its plan revision or
+measurement through its ordinary render planner before publishing, but the query does not advance its plan revision or
 acceptance frontier.
 
 ```mermaid
@@ -1067,7 +1067,7 @@ sequenceDiagram
 
   App->>Factory: await createParagraph({ font, text, ... })
   Factory->>Service: acquire realm service + bind Font
-  Service->>Wasm: create target-less measurement retained plan
+  Service->>Wasm: create target-less measurement planner
   Factory-->>App: ready Paragraph
   App->>Service: paragraph.measure/layout(constraints)
   Service->>Wasm: validated retained update + measureParagraph
@@ -1080,14 +1080,14 @@ sequenceDiagram
 
 ### One application, one canvas
 
-Use one engine, one renderer backend, and one retained plan when all text shares one ordering and acceptance frontier. The renderer
+Use one engine, one renderer backend, and one render planner when all text shares one ordering and acceptance frontier. The renderer
 owns one device pool and one target for the canvas.
 
 ```mermaid
 flowchart LR
   F[Font assets] --> R[Engine]
   R --> H[Backend]
-  H --> S[RetainedPlan]
+  H --> S[RenderPlanner]
   S --> T[Plan target]
   T --> D[GPU device pool]
   D --> C[Canvas]
@@ -1095,30 +1095,30 @@ flowchart LR
 
 ### Two independent canvases on one page
 
-Share the engine, backend, font bindings, and device pool when compatible. Use one retained plan per independently advancing
+Share the engine, backend, font bindings, and device pool when compatible. Use one render planner per independently advancing
 canvas so each has its own revisions, retirements, and acceptance cursor.
 
 ```mermaid
 flowchart LR
   R[Engine] --> H[Backend]
-  H --> S1[RetainedPlan A] --> T1[Target A] --> D[Shared GPUDevice pool]
-  H --> S2[RetainedPlan B] --> T2[Target B] --> D
+  H --> S1[RenderPlanner A] --> T1[Target A] --> D[Shared GPUDevice pool]
+  H --> S2[RenderPlanner B] --> T2[Target B] --> D
   D --> C1[Canvas A]
   D --> C2[Canvas B]
 ```
 
 ### Mirrored canvases that must advance together
 
-One renderer-owned composite target may fan a retained plan publication into several surfaces. It accepts only after every
+One renderer-owned composite target may fan a render planner publication into several surfaces. It accepts only after every
 surface prepares successfully. Commit is all-or-nothing at the target contract: no member mutates accepted state until
 every member is prepared. If a backend failure occurs after any physical commit, the whole group becomes lost, rejects the
 candidate, rebuilds every member, and calls its `PlanTargetControl.requestCheckpoint()` before accepting another publication. A boolean
 acceptance is therefore sufficient because partial acceptance is not a representable state. If either surface may advance
-alone, replace the group with separate retained plans.
+alone, replace the group with separate render planners.
 
 ```mermaid
 flowchart LR
-  S[One retained plan] --> T[Lockstep target/barrier]
+  S[One render planner] --> T[Lockstep target/barrier]
   T --> C1[Canvas A]
   T --> C2[Canvas B]
   C1 --> A[Accept only when both commit]
@@ -1127,7 +1127,7 @@ flowchart LR
 
 ### Onscreen and transferred OffscreenCanvas
 
-When the `OffscreenCanvas`, engine, backend, retained plan, and renderer all live in one worker, use the ordinary borrowed path
+When the `OffscreenCanvas`, engine, backend, render planner, and renderer all live in one worker, use the ordinary borrowed path
 inside that worker. Application messages carry authored text state, not plan bytes. When shaping stays in a worker but the
 renderer stays on the main thread, use an owned target and transfer the publication buffer; the main thread validates
 with `bindBytes()`.
@@ -1135,26 +1135,26 @@ with `bindBytes()`.
 ```mermaid
 flowchart LR
   UI[Main-thread authored state] -->|messages| WR[Worker engine]
-  WR --> WH[Worker backend] --> WS[Worker retained plan]
+  WR --> WH[Worker backend] --> WS[Worker render planner]
   WS --> WT[Worker borrowed target] --> OC[Transferred OffscreenCanvas]
 ```
 
 ```mermaid
 flowchart LR
-  WR[Worker engine + retained plan] -->|owned transferable bytes| MT[Main-thread target]
+  WR[Worker engine + render planner] -->|owned transferable bytes| MT[Main-thread target]
   MT -->|bindBytes + realize| C[Onscreen Canvas]
 ```
 
 ### Independent onscreen and offscreen products
 
-Use separate retained plans. They may share one engine only when they live in the same JavaScript realm. A worker requires its
+Use separate render planners. They may share one engine only when they live in the same JavaScript realm. A worker requires its
 own engine and therefore its own Wasm shaping copy; the portable `Font` backing can be transferred or loaded independently,
 but engine registrations and backend tokens never cross realms.
 
 ### Several renderer integrations
 
 Use one backend per integration or policy ownership boundary. Two backends can share one engine shaping registration through
-the engine-private binding cache, while each owns its own policy, portable binding, and retained plans. Targets and renderer
+the engine-private binding cache, while each owns its own policy, portable binding, and render planners. Targets and renderer
 pools—not backends—own physical resources. A second canvas alone does not require another backend, though separate policy or
 teardown ownership may justify one.
 
@@ -1177,36 +1177,36 @@ hooks.
 
 ### Device-loss fan-out
 
-A device realization pool tracks every target/retained plan attached to that device. On loss it stops accepting candidates,
+A device realization pool tracks every target/render planner attached to that device. On loss it stops accepting candidates,
 aborts pending target transactions, rebuilds physical state, resumes in checkpoint-required mode, and calls
-`control.requestCheckpoint()` exactly once for each attached live target/retained plan. Each target then blocks only its own
-retained plan's deltas until that retained plan has supplied and the target has accepted its complete checkpoint; an idle sibling
-retained plan cannot block an active one. Portable payload leases survive; physical GPU objects do not.
+`control.requestCheckpoint()` exactly once for each attached live target/render planner. Each target then blocks only its own
+render planner's deltas until that render planner has supplied and the target has accepted its complete checkpoint; an idle sibling
+render planner cannot block an active one. Portable payload leases survive; physical GPU objects do not.
 
 ## Cardinality and rules
 
-| Relationship                               | Allowed cardinality    | Rule                                                                                                    |
-| ------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------- |
-| `Font` → engine                            | many-to-many over time | Each live engine binding holds an independent lease and one Wasm registration.                          |
-| engine → backend                           | one-to-many            | Engine owns and cascades disposal; backend cannot rebind.                                               |
-| backend → retained plan                    | one-to-many            | RetainedPlan cannot move between backends.                                                              |
-| backend → policy                           | one-to-many            | RetainedPlan chooses one policy at construction.                                                        |
-| render retained plan → target              | exactly one            | Target defines the one acceptance frontier.                                                             |
-| private measurement retained plan → target | zero                   | It cannot publish draws or acknowledgments and exists only behind root `createParagraph()`.             |
-| target → surface                           | one or lockstep-many   | Independent surfaces require independent retained plans.                                                |
-| renderer resource domain → realization     | one pool per domain    | Pool by package-supplied payload identity and variant; wire reference IDs are never cross-backend keys. |
-| engine → JavaScript realm                  | exactly one            | Engine/Wasm memory and borrowed views do not cross realms.                                              |
+| Relationship                           | Allowed cardinality    | Rule                                                                                                    |
+| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| `Font` → engine                        | many-to-many over time | Each live engine binding holds an independent lease and one Wasm registration.                          |
+| engine → backend                       | one-to-many            | Engine owns and cascades disposal; backend cannot rebind.                                               |
+| backend → render planner               | one-to-many            | RenderPlanner cannot move between backends.                                                             |
+| backend → policy                       | one-to-many            | RenderPlanner chooses one policy at construction.                                                       |
+| render planner → target                | exactly one            | Target defines the one acceptance frontier.                                                             |
+| private measurement planner → target   | zero                   | It cannot publish draws or acknowledgments and exists only behind root `createParagraph()`.             |
+| target → surface                       | one or lockstep-many   | Independent surfaces require independent render planners.                                               |
+| renderer resource domain → realization | one pool per domain    | Pool by package-supplied payload identity and variant; wire reference IDs are never cross-backend keys. |
+| engine → JavaScript realm              | exactly one            | Engine/Wasm memory and borrowed views do not cross realms.                                              |
 
 Use another engine for another realm, Wasm build, hard memory/failure boundary, or independent teardown. Use another backend
-for another renderer integration, policy ownership domain, or plugin trust boundary. Use another retained plan for another
-retained text batch, ordering domain, capacity budget, update schedule, or acceptance frontier.
+for another renderer integration, policy ownership domain, or plugin trust boundary. Use another render planner for another
+desired-text set, ordering domain, capacity budget, update schedule, or acceptance frontier.
 
 ## Deterministic disposal without finalizers
 
 Every resource-owning public handle implements idempotent `dispose()` and, where language support permits,
 `Symbol.dispose`. Correctness never depends on garbage collection.
 
-Do not add finalizers to engine, backend, binding, stack, retained plan, publication, GPU, or Font wrappers. Their owner graph
+Do not add finalizers to engine, backend, binding, stack, render planner, publication, GPU, or Font wrappers. Their owner graph
 already supplies deterministic teardown, and a nondeterministic callback cannot improve dependency ordering.
 
 An unused Font needs no special callback: when the application drops its final reference, the wrapper and canonical
@@ -1225,19 +1225,19 @@ its explicit leases are released.
 
 ### Repository work map
 
-| Area                                 | Primary implementation owners                                                                                                                                 | Required outcome                                                                                                                                                                                                                        |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| immutable Font and loading           | `packages/glyph/src/loader.ts`, `loaded-font.ts`, `glyph-engine.ts`, and internal registered-font/cache modules                                               | Replace engine-bound `LoadedFont` with one canonical root `Font` backing, explicit library leases, and engine-independent loading.                                                                                                      |
-| declarative bake discovery           | `packages/glyph/src/font.ts`, `packages/glyph/src/discovery.ts`, `packages/glyph/src/node/bake.ts`, bake fixtures, and package exports                        | Preserve `defineFont`/`FontToken` as the statically discoverable root contract; reuse the existing `FontInput` name and prove source discovery after migration.                                                                         |
-| engine and backend ownership         | `packages/glyph/src/glyph-engine.ts`, `core/backend.ts`, `core/retention.ts`, and `core/plan-view.ts`                                                         | Engine-owned backend factory, hidden registrations, target-bound retained plans, engine-wide borrow gate, and unforgeable candidate modes.                                                                                              |
-| retained engine and ABI              | `packages/glyph/rust/shaper/src/engine`, generated ABI, TypeScript frame/compiler internals, and `internal/frame-transfer-pool.ts`                            | Keep the numeric wire format and A/B publication; add retained text handles, privatize caller-authored retained plan/acknowledgment inputs, and adapt the existing bounded transfer/return pool rather than creating a second protocol. |
-| renderer-free measurement            | `packages/glyph/src/paragraph.ts` and a package-private per-realm measurement service                                                                         | Replace sync construction with async `createParagraph`, keep later queries synchronous, and use a target-less non-publishing retained plan without exposing engine ownership at root.                                                   |
-| Three reference integration          | `packages/glyph/src/three/engine-coordinator.ts`, `engine-plan-target.ts`, `font-loader.ts`, and `text.ts`                                                    | Consume public root plus `/core`, keep `PlanTarget` zero-copy, pool immutable resources per WebGPU device or WebGL context, and batch compatible font-stack members without reordering.                                                 |
-| React integration                    | `packages/glyph/src/react.ts`                                                                                                                                 | Replace module-global loader/promise ownership with provider or application `FontLibrary` leases and prove StrictMode lifecycle safety.                                                                                                 |
-| external renderer proof              | `packages/glyph-example-renderer/src` and its tests                                                                                                           | Keep TypeGPU/WebGPU device ownership external, implement ordinary zero-copy `PlanTarget`, and add a real worker-backed `AsyncPlanTarget` round trip.                                                                                    |
-| applications, labs, and size entries | every consumer under `apps/`, including module-scope `useFont.preload`, benchmark labs, conformance targets, proof routes, and `apps/benchmarks/size-entries` | Migrate all call sites in the same atomic package change; preserve module-scope preload through an explicit library-bound contract, replace withdrawn export anchors, and keep root checks plus comparable size graphs reachable.       |
-| package cleanup                      | package manifests, exports, boundary tests, and obsolete example adapters                                                                                     | Remove engine-bound and renderer-leaking compatibility surfaces; permit Three only in `glyph-example-raster`'s explicit `/tsl` implementation subpath and never in its neutral entry or in `glyph-example-renderer`.                    |
-| docs and evidence                    | README, package concepts, renderer guide, this plan, HTML report, benchmark workflows, and size evidence                                                      | Make current APIs, ownership graphs, worker transfer, performance, and deferred work agree at the final source head.                                                                                                                    |
+| Area                                 | Primary implementation owners                                                                                                                                 | Required outcome                                                                                                                                                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| immutable Font and loading           | `packages/glyph/src/loader.ts`, `loaded-font.ts`, `glyph-engine.ts`, and internal registered-font/cache modules                                               | Replace engine-bound `LoadedFont` with one canonical root `Font` backing, explicit library leases, and engine-independent loading.                                                                                                       |
+| declarative bake discovery           | `packages/glyph/src/font.ts`, `packages/glyph/src/discovery.ts`, `packages/glyph/src/node/bake.ts`, bake fixtures, and package exports                        | Preserve `defineFont`/`FontToken` as the statically discoverable root contract; reuse the existing `FontInput` name and prove source discovery after migration.                                                                          |
+| engine and backend ownership         | `packages/glyph/src/glyph-engine.ts`, `core/backend.ts`, `core/retention.ts`, and `core/plan-view.ts`                                                         | Engine-owned backend factory, hidden registrations, target-bound render planners, engine-wide borrow gate, and unforgeable candidate modes.                                                                                              |
+| retained engine and ABI              | `packages/glyph/rust/shaper/src/engine`, generated ABI, TypeScript frame/compiler internals, and `internal/frame-transfer-pool.ts`                            | Keep the numeric wire format and A/B publication; add retained text handles, privatize caller-authored render planner/acknowledgment inputs, and adapt the existing bounded transfer/return pool rather than creating a second protocol. |
+| renderer-free measurement            | `packages/glyph/src/paragraph.ts` and a package-private per-realm measurement service                                                                         | Replace sync construction with async `createParagraph`, keep later queries synchronous, and use a target-less non-publishing render planner without exposing engine ownership at root.                                                   |
+| Three reference integration          | `packages/glyph/src/three/engine-coordinator.ts`, `engine-plan-target.ts`, `font-loader.ts`, and `text.ts`                                                    | Consume public root plus `/core`, keep `PlanTarget` zero-copy, pool immutable resources per WebGPU device or WebGL context, and batch compatible font-stack members without reordering.                                                  |
+| React integration                    | `packages/glyph/src/react.ts`                                                                                                                                 | Replace module-global loader/promise ownership with provider or application `FontLibrary` leases and prove StrictMode lifecycle safety.                                                                                                  |
+| external renderer proof              | `packages/glyph-example-renderer/src` and its tests                                                                                                           | Keep TypeGPU/WebGPU device ownership external, implement ordinary zero-copy `PlanTarget`, and add a real worker-backed `AsyncPlanTarget` round trip.                                                                                     |
+| applications, labs, and size entries | every consumer under `apps/`, including module-scope `useFont.preload`, benchmark labs, conformance targets, proof routes, and `apps/benchmarks/size-entries` | Migrate all call sites in the same atomic package change; preserve module-scope preload through an explicit library-bound contract, replace withdrawn export anchors, and keep root checks plus comparable size graphs reachable.        |
+| package cleanup                      | package manifests, exports, boundary tests, and obsolete example adapters                                                                                     | Remove engine-bound and renderer-leaking compatibility surfaces; permit Three only in `glyph-example-raster`'s explicit `/tsl` implementation subpath and never in its neutral entry or in `glyph-example-renderer`.                     |
+| docs and evidence                    | README, package concepts, renderer guide, this plan, HTML report, benchmark workflows, and size evidence                                                      | Make current APIs, ownership graphs, worker transfer, performance, and deferred work agree at the final source head.                                                                                                                     |
 
 Each step is one coherent commit and remains green before the next.
 
@@ -1254,14 +1254,14 @@ Each step is one coherent commit and remains green before the next.
    either owner dies.
 4. **Add backend binding leases.** Implement idempotent underlying `bindFont`/`bindFontStack`, independent caller leases,
    hidden dynamic IDs, exact technique/policy validation, and engine/backend/device reference chains.
-5. **Bind retained plans to policy and target.** Move policy selection and one abstract target into render-retained plan construction;
-   add core-owned retained text handles, opaque acceptance cursors, delivery-specific retained plan methods, engine validation
+5. **Bind render planners to policy and target.** Move policy selection and one abstract target into render-render planner construction;
+   add core-owned retained text handles, opaque acceptance cursors, delivery-specific render planner methods, engine validation
    of delivery, lease-bound borrowed readers, failure-path target disposal, the engine-wide borrowed-view gate,
-   pending-acceptance cancellation, the existing bounded transferable-buffer return machinery, retained plan-owned checkpoint
-   control, and per-device retained plan fan-out.
+   pending-acceptance cancellation, the existing bounded transferable-buffer return machinery, render planner-owned checkpoint
+   control, and per-device render planner fan-out.
 6. **Preserve renderer-free measurement.** Make retained text synchronously answer current desired metrics and positioned
    glyphs before publication without invoking its target, Canvas/device, scene, or matrix. Add async root
-   `createParagraph()`, a private per-realm measurement service, and a target-less retained plan that can only measure. Reuse the
+   `createParagraph()`, a private per-realm measurement service, and a target-less render planner that can only measure. Reuse the
    retained authored-input path and release the service/engine at the final Paragraph lease.
 7. **Migrate every maintained consumer.** Make Paragraph, Three, React, the example renderer, and every `apps/` consumer
    consume only the public
@@ -1270,7 +1270,7 @@ Each step is one coherent commit and remains green before the next.
    uses a real font and real WebGPU/TypeGPU resource realization.
 8. **Prove cache reachability.** Add deterministic cache/lease counters showing that no strong package-global root retains
    an unused Font, and that explicit disposal releases reachable-but-unused backing; reject finalizers everywhere.
-9. **Remove compatibility cruft.** Delete engine-bound `LoadedFont`, raw `textRuntimeShaper`, public raw retained plan updates,
+9. **Remove compatibility cruft.** Delete engine-bound `LoadedFont`, raw `textRuntimeShaper`, public raw render planner updates,
    caller-authored acceptance fields, external mutable registry ownership, numeric IDs from convenience APIs, stale docs,
    and temporary adapters in one breaking migration.
 
@@ -1283,24 +1283,24 @@ Each step is one coherent commit and remains green before the next.
   technique type without introducing a second `FontInput` declaration;
 - baked byte input requires `{ baked: { bytes, ownership } }`, source bytes require the source discriminant, and a bare
   byte object is not assignable;
-- the root declaration contains the reviewed renderer-neutral barrel and excludes engine, backend, retained plan, mutable registry,
+- the root declaration contains the reviewed renderer-neutral barrel and excludes engine, backend, render planner, mutable registry,
   engine-bound loaded-font, and application-invisible engine-handle names;
 - an optional root `FontLibrary` owns only explicit cache leases and cannot dispose a returned live Font;
 - a Font handle carries exactly one technique type, while a multi-raster load returns a position-preserving typed tuple;
 - root exports no engine or backend construction API; `/core` creates a backend only through a package-created live engine;
-- a backend installs one complete multi-program `PolicyDescriptor`; a render retained plan requires that BackendPolicy, one
+- a backend installs one complete multi-program `PolicyDescriptor`; a render planner requires that BackendPolicy, one
   descriptor-member capability set, validated limits, and one target;
-- a render retained plan exposes retained `createText`/`update`/`dispose` input handles but no raw retained plan, policy, numeric-ID,
+- a render planner exposes retained `createText`/`update`/`dispose` input handles but no raw planner, policy, numeric-ID,
   revision, acknowledgment, or frame-byte fields;
 - retained text exposes synchronous `layout()` and `glyphs()` over current desired state without exposing a target,
   renderer, scene, matrix, or publication cursor;
-- root `createParagraph()` returns a ready Paragraph without exposing `/core`; no public target-less retained plan is nameable;
-- every target is idempotently disposable, and its factory delivery discriminant infers the matching retained plan return type;
+- root `createParagraph()` returns a ready Paragraph without exposing `/core`; no public target-less render planner is nameable;
+- every target is idempotently disposable, and its factory delivery discriminant infers the matching render planner return type;
 - `PlanTarget` publishes synchronously from the borrowed A/B slot, while only `AsyncPlanTarget` copies and returns a Promise;
 - `AsyncPlanCandidate` exposes a full-span `Uint8Array<ArrayBuffer>` while `PlanCandidate` exposes no transferable bytes;
 - `AsyncPlanCandidate` contains every resolved payload referenced by its copied plan and exposes no deferred resolver;
-- a target, policy, font binding, stack, acceptance cursor, or retained plan from another owner is not assignable;
-- a target-bound retained plan exposes no raw update accepting caller-authored revisions or acknowledgments;
+- a target, policy, font binding, stack, acceptance cursor, or render planner from another owner is not assignable;
+- a target-bound render planner exposes no raw update accepting caller-authored revisions or acknowledgments;
 - retained text options include `order` and `rasterPixelRatio`; advanced regions, exclusions, and inline objects cannot
   accept IDs/revisions/indices or raw material/resource numbers;
 - renderer-owned region transforms use an opaque BackendTransformBinding that targets can resolve; a raw transform-table
@@ -1320,27 +1320,27 @@ Each step is one coherent commit and remains green before the next.
 - the final backend-binding lease immediately disposes the engine's Wasm registration even while the engine stays live;
 - a font marked disposed rejects a new binding but remains valid through every existing lease;
 - binding a Font whose technique is unsupported by the backend policy throws at `bindFont` before registration or allocation;
-- engine disposal closes retained plans and backends before Wasm, while font assets remain reusable;
+- engine disposal closes render planners and backends before Wasm, while font assets remain reusable;
 - backend disposal cannot invalidate another backend's binding to the same font;
-- retained plans cannot cross backends, targets, policies, acceptance cursors, or storage namespaces;
-- no call through a sibling retained plan or sibling backend can re-enter Wasm while a borrowed target callback is active;
+- render planners cannot cross backends, targets, policies, acceptance cursors, or storage namespaces;
+- no call through a sibling render planner or sibling backend can re-enter Wasm while a borrowed target callback is active;
 - a second update while one async-target acceptance is pending throws without crossing into Wasm;
-- disposing a retained plan aborts its pending target transaction and ignores a late accepted answer;
+- disposing a render planner aborts its pending target transaction and ignores a late accepted answer;
 - an async worker target transfers one package-created plan buffer out and back, then resolves acceptance; worker
   termination before the return leaves the cursor unchanged and requires no borrowed-memory recovery;
 - the worker transfer detaches the source buffer, performs no structured-clone or second plan copy, returns the same
-  publication identity on success, and lets the retained plan reuse or release the returned allocation;
+  publication identity on success, and lets the render planner reuse or release the returned allocation;
 - the bounded pool reuses only an exact-length returned buffer; non-bucket publication sizes remain full-span and never
   route through a subview-copy helper;
 - exact-size pooling obeys deterministic least-recently-returned eviction and bounded allocation/hit/discard counters for
   stable and variable publication traces;
-- returning one target object from two retained plan factories throws before the second Wasm retained plan allocation;
+- returning one target object from two render planner factories throws before the second Wasm render planner allocation;
 - a factory throw invalidates its control; a newly returned target is claimed before Wasm allocation and disposed exactly
-  once if later construction fails, while a reused target is rejected without disposing the first retained plan's live target;
-- an `any`-cast target whose engine `delivery` or `accept()` shape contradicts the inferred retained plan type throws before
+  once if later construction fails, while a reused target is rejected without disposing the first render planner's live target;
+- an `any`-cast target whose engine `delivery` or `accept()` shape contradicts the inferred render planner type throws before
   Wasm allocation;
 - async target creation rejects a non-safe or insufficient `maximumPlanBytes` before Wasm allocation;
-- disposing a retained plan disposes its target exactly once, removes its checkpoint control from the device pool, and does not
+- disposing a render planner disposes its target exactly once, removes its checkpoint control from the device pool, and does not
   interrupt loss fan-out to a live sibling;
 - an owned publication survives later calls and worker transfer but is revalidated in the receiving realm;
 - every read through a retained borrowed-plan facade throws after `accept()` returns, after memory growth, and after
@@ -1349,12 +1349,12 @@ Each step is one coherent commit and remains green before the next.
   retirement; receiving-realm caches own independent leases;
 - a worker transport resolves every referenced payload before transfer, validates its digest/descriptor manifest in the
   receiving realm, never detaches canonical Font backing, and never treats a wire `referenceId` as a cross-realm identity;
-- two independent canvases cannot acknowledge through one retained plan; a lockstep composite target cannot advance past its
+- two independent canvases cannot acknowledge through one render planner; a lockstep composite target cannot advance past its
   slowest member;
 - a lockstep target prepares every member before any commit; a post-prepare partial backend failure marks the group lost;
 - device loss discards physical realizations, preserves portable payload leases, and requests exactly one checkpoint from
-  every retained plan attached to the pool; each retained plan independently resumes after its own checkpoint commits;
-- an active retained plan completes replacement-device recovery while an attached idle sibling publishes nothing;
+  every render planner attached to the pool; each render planner independently resumes after its own checkpoint commits;
+- an active render planner completes replacement-device recovery while an attached idle sibling publishes nothing;
 - equal numeric resource references from different backends cannot alias in a shared pool, while an identical
   package-authenticated payload may share one realization;
 - concurrent top-level loads coalesce while pending and retain no settled global entry;
@@ -1363,12 +1363,12 @@ Each step is one coherent commit and remains green before the next.
 - transfer input rejects a subview and `SharedArrayBuffer` before detaching anything;
 - worker payload transfer never detaches canonical Font backing; cache misses use one exact-range standalone payload copy,
   while cache hits and authenticated fetch keys transfer no payload bytes;
-- worker `error`, `messageerror`, exit, and retained plan disposal deterministically settle pending publication without a retry
-  or timer; late success cannot advance a disposed retained plan;
+- worker `error`, `messageerror`, exit, and render planner disposal deterministically settle pending publication without a retry
+  or timer; late success cannot advance a disposed render planner;
 - transfer backpressure returns a typed rejection with the cursor unchanged; oversize and transfer/correlation defects
   reject the publish call, and none retries automatically;
 - synchronous WebGPU acceptance does not await an error scope; a later device/validation fault enters the documented lost
-  path and requests a checkpoint without corrupting an unrelated retained plan;
+  path and requests a checkpoint without corrupting an unrelated render planner;
 - root Paragraph creation, measurement, disposal, and service recreation prove the target-less path; measurement never
   advances a render plan revision or acceptance cursor;
 - retained text measures before its first publication and immediately after mutation; neither query calls the target or
@@ -1387,12 +1387,12 @@ Each step is one coherent commit and remains green before the next.
 ### Memory, performance, and package gates
 
 - a large embedded GLB retains one canonical backing; buffer-view access does not allocate payload-sized copies;
-- one font bound by many retained plans adds no shaping or immutable payload copy;
+- one font bound by many render planners adds no shaping or immutable payload copy;
 - one font bound by two engines adds exactly one Wasm shaping registration per engine;
 - binding and releasing hundreds of fonts against one long-lived engine returns Wasm registration and backing counters to
   baseline without disposing that engine;
-- one font used by many retained plans on one device realizes each immutable payload once;
-- disposed engine/backend/retained plan churn returns registrations, caches, and device leases to baseline;
+- one font used by many render planners on one device realizes each immutable payload once;
+- disposed engine/backend/render planner churn returns registrations, caches, and device leases to baseline;
 - hot unchanged and incremental shaping/render-plan benchmarks remain within the existing noise envelope;
 - worker-transfer microbenchmarks record copy/transfer/return time, allocations, pool hits, and bounded pooled bytes for
   stable-size and variable-size publication traces;
@@ -1409,14 +1409,14 @@ Each step is one coherent commit and remains green before the next.
 
 Before merge:
 
-- `README.md` shows the application path without engine/backend/retained plan concepts and routes integrators to `/core`, the only
+- `README.md` shows the application path without engine/backend/render planner concepts and routes integrators to `/core`, the only
   entry that exports `createGlyphEngine`, `GlyphEngine`, or `GlyphBackend`;
 - the root API reference groups every surviving export by application, technique-provider, or shared authoring purpose and
   integrations document whether callers may import the canonical root name or the signature-required convenience re-export;
 - `core-api.md` becomes the exact implemented reference rather than preserving this proposed shape;
 - `renderer-integration.md` shows one complete current API flow for single canvas, independent canvases, lockstep targets,
   and worker transfer;
-- the Three and example-renderer package concepts map their renderer objects to engine, backend, retained plan, target, and device
+- the Three and example-renderer package concepts map their renderer objects to engine, backend, render planner, target, and device
   lifetimes;
 - the HTML implementation report uses the same ownership graph and clearly labels current versus proposed calls;
 - all canonical source digests, docs checks, focused tests, repository checks, benchmarks, size gates, and CI checks pass.

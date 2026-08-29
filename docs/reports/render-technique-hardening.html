@@ -236,13 +236,14 @@
       <h1>From immutable font to accepted GPU draw</h1>
       <p class="lede">
         This is the current renderer-neutral contract. A Glyph engine owns shaping memory, a backend owns one renderer
-        integration, a retained plan owns desired text and one acceptance frontier, and a plan target joins that core
+        integration, a render planner owns desired text and one acceptance frontier, and a plan target joins that core
         hierarchy to a renderer device or context.
       </p>
 
       <nav>
         <a href="#flow">Complete flow</a>
         <a href="#ownership">Ownership</a>
+        <a href="#migration">Canary migration</a>
         <a href="#integration">Integration API</a>
         <a href="#resources">Resources</a>
         <a href="#technique">Technique API</a>
@@ -274,9 +275,9 @@
             <text x="42" y="231" class="minor">Wasm + font registry + backends</text>
             <rect x="245" y="182" width="190" height="72" class="box core" />
             <text x="262" y="210" class="title">GlyphBackend</text>
-            <text x="262" y="231" class="minor">policy + bindings + retained plans</text>
+            <text x="262" y="231" class="minor">policy + bindings + render planners</text>
             <rect x="465" y="182" width="190" height="72" class="box core" />
-            <text x="482" y="210" class="title">RetainedPlan</text>
+            <text x="482" y="210" class="title">RenderPlanner</text>
             <text x="482" y="231" class="minor">text + target + revisions</text>
             <rect x="685" y="182" width="170" height="72" class="box core" />
             <text x="702" y="210" class="title">Text instances</text>
@@ -319,8 +320,8 @@
         <p class="callout">
           <strong>Mutation is lazy.</strong> <code>update()</code> changes desired state. <code>layout()</code> and
           <code>glyphs()</code> synchronously pay shaping/lookup cost only on a cache miss.
-          <code>publish()</code> performs the retained batch update and does not advance its accepted revision until the
-          target commits.
+          <code>publish()</code> compiles the planner's desired text and does not advance its accepted revision until
+          the target commits.
         </p>
       </section>
 
@@ -352,19 +353,19 @@
               <tr>
                 <td><code>GlyphBackend</code></td>
                 <td><code>glyphEngine.createBackend()</code></td>
-                <td>One integration’s policy, bindings, identities, and retained plans</td>
+                <td>One integration’s policy, bindings, identities, and render planners</td>
                 <td>Renderer policy, physical device domain, or integration lifetime differs</td>
               </tr>
               <tr>
-                <td><code>RetainedPlan</code></td>
-                <td><code>backend.createRetainedPlan()</code></td>
+                <td><code>RenderPlanner</code></td>
+                <td><code>backend.createPlanner()</code></td>
                 <td>Desired text, target, capacity budget, and one acceptance frontier</td>
                 <td>Scene, viewport, target, worker, or independent commit boundary differs</td>
               </tr>
               <tr>
                 <td><code>RetainedText</code></td>
-                <td><code>retainedPlan.createText()</code></td>
-                <td>One desired text state inside the retained plan</td>
+                <td><code>planner.createText()</code></td>
+                <td>One desired text state inside the render planner</td>
                 <td>Application text instances differ</td>
               </tr>
             </tbody>
@@ -374,6 +375,28 @@
           A Glyph engine permanently owns its backends; a disposed engine disposes them first. A backend cannot rebind.
           Fonts are different: they are immutable application assets and may bind into several engines or backends.
           Bindings are backend-local, counted leases.
+        </p>
+      </section>
+
+      <section id="migration">
+        <h2>Canary implementor migration</h2>
+        <p>
+          The dated ts-morph codemod is for renderer and technique implementors as well as this monorepo. It was
+          dogfooded across the custom example renderer, benchmark consumers, and Three adapter; the example raster
+          package had no affected planner call sites. Run it without <code>--write</code> first and inspect the exact
+          file list, then apply it to the same project only after the dry run is correct.
+        </p>
+        <pre><code>mise exec -- node .agents/skills/codemod/scripts/run-codemod.mjs \
+  --codemod .agents/skills/codemod/codemods/2026-08-28-text-engine-vocabulary \
+  --project path/to/tsconfig.json \
+  --target path/to/project
+
+# Repeat with --write after reviewing the dry-run inventory.</code></pre>
+        <p>
+          The transform distinguishes the long-lived <code>RenderPlanner</code> from each transient
+          <code>RenderPlan</code>, migrates plan readers and status types, and preserves unrelated application strings.
+          Its adjacent <code>instructions.md</code> records the two protocol status strings and Rust/Wasm ABI names that
+          require deliberate review rather than blind text replacement.
         </p>
       </section>
 
@@ -387,10 +410,10 @@
             <pre><code>import { createFontStack, loadFont } from '@pmndrs/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 
-const font = await loadFont({
-  input: { baked: '/fonts/Inter.font.glb' },
-  raster: { technique: glyphExample, options: { paletteSeed: 7 } },
-});
+const font = await loadFont(
+  { baked: '/fonts/Inter.font.glb' },
+  { technique: glyphExample, options: { paletteSeed: 7 } },
+);
 const fontStack = createFontStack(font);</code></pre>
             <p>Loading validates immutable CPU data. It does not create a Glyph engine or GPU object.</p>
           </div>
@@ -450,8 +473,8 @@ const target = {
         <div class="step">
           <b>4</b>
           <div>
-            <h3>Create a retained plan and text</h3>
-            <pre><code>const retainedPlan = backend.createRetainedPlan({
+            <h3>Create a render planner and text</h3>
+            <pre><code>const planner = backend.createPlanner({
   policy,
   capabilitySet,
   target: () =&gt; target,
@@ -461,7 +484,7 @@ const target = {
   textCapacity: 16 * 1024,
 });
 
-const title = retainedPlan.createText({
+const title = planner.createText({
   font: stack,
   text: 'Hello',
   style: { fontSize: 48 },
@@ -479,7 +502,7 @@ const title = retainedPlan.createText({
 const metrics = title.layout();
 const positioned = title.glyphs();
 
-const result = retainedPlan.publish({ semanticViews: 'measurement' });
+const result = planner.publish({ semanticViews: 'measurement' });
 if (!result.accepted) reportRendererError(result.error);</code></pre>
             <p>
               <code>layout()</code> returns aggregate metrics. <code>glyphs()</code> returns caller-owned positioned
@@ -495,7 +518,7 @@ if (!result.accepted) reportRendererError(result.error);</code></pre>
           <div>
             <h3>Dispose from leaf to root</h3>
             <pre><code>title.dispose();
-retainedPlan.dispose();
+planner.dispose();
 stack.dispose();
 policy.dispose();
 backend.dispose();
@@ -545,14 +568,14 @@ font.dispose();</code></pre>
               </tr>
               <tr>
                 <td><code>retirements</code></td>
-                <td>Release exact resource or buffer generations after the acknowledged fence.</td>
+                <td>Release exact resource or buffer generations after the accepted publication fence.</td>
               </tr>
             </tbody>
           </table>
         </div>
         <pre><code>const resources = candidate.plan.table('resources');
 for (let i = 0; i &lt; resources.count; i += 1) {
-  const record = readTextEngineResource(candidate.plan, resources, i);
+  const record = readRenderPlanResource(candidate.plan, resources, i);
   if (record.referenceId === 0) throw new TypeError('missing payload reference');
 
   const lease = candidate.acquirePayload(record.referenceId);
@@ -574,13 +597,13 @@ for (let i = 0; i &lt; resources.count; i += 1) {
           Worker. It receives one owned transferable copy and must return the same buffer identity when done. The normal
           same-thread GPU path uses <code>PlanTarget</code> and makes no extra plan copy.
         </p>
-        <pre><code>// The target captured PlanTargetControl when the retained plan was created.
+        <pre><code>// The target captured PlanTargetControl when the render planner was created.
 oldDevice.dispose();
 const nextDevice = new TypeGpuExampleRendererDevice({ device: nextGpuDevice, width, height });
 engine.replaceDevice(nextDevice);
 
 // No authored mutation is required: this publication is a complete checkpoint.
-const recovered = text.publish();</code></pre>
+const recovered = planner.publish();</code></pre>
         <p>
           Device replacement clears only renderer-owned physical state. The immutable font and portable payload remain
           reusable; the checkpoint re-declares current resources, buffers, primitives, and draws so the new device can
@@ -668,21 +691,22 @@ const recovered = text.publish();</code></pre>
           <div class="card">
             <h3>One WebGL canvas</h3>
             <p>
-              Usually one Glyph engine → one backend → one or more retained plans → one WebGL context. A second canvas
+              Usually one Glyph engine → one backend → one or more render planners → one WebGL context. A second canvas
               means another non-sharing WebGL context and normally another backend/device cache.
             </p>
           </div>
           <div class="card">
             <h3>Two WebGPU canvases</h3>
             <p>
-              One <code>GPUDevice</code> may configure both canvas contexts. One backend may serve retained plans for both
-              when policy and device cache domain are shared; each plan keeps its own target and acceptance frontier.
+              One <code>GPUDevice</code> may configure both canvas contexts. One backend may serve render planners for
+              both when policy and device cache domain are shared; each planner keeps its own target and acceptance
+              frontier.
             </p>
           </div>
           <div class="card">
             <h3>Onscreen + Offscreen WebGPU</h3>
             <p>
-              A shared device can serve both contexts. Use separate retained plans; use an async target only where plan
+              A shared device can serve both contexts. Use separate render planners; use an async target only where plan
               consumption crosses the Worker boundary.
             </p>
           </div>
@@ -696,8 +720,8 @@ const recovered = text.publish();</code></pre>
           <div class="card">
             <h3>Sync and async together</h3>
             <p>
-              Yes. Separate retained plans under one backend may use borrowed synchronous and owned asynchronous targets.
-              The engine-wide borrow gate prevents reentry while a synchronous candidate is active.
+              Yes. Separate render planners under one backend may use borrowed synchronous and owned asynchronous
+              targets. The engine-wide borrow gate prevents reentry while a synchronous candidate is active.
             </p>
           </div>
           <div class="card">
@@ -712,11 +736,11 @@ const recovered = text.publish();</code></pre>
 
       <section id="evidence">
         <h2>Verification and deliberate follow-up</h2>
-        <p class="status">Current package gate: green.</p>
+        <p class="status">Local implementation gates: green. Final documentation review and remote CI: pending.</p>
         <ul>
           <li>
-            916 Glyph package tests passed, including cache behavior, branded plan identities, root/Three measurement parity,
-            caller-owned glyph columns, first-frame bounds, render-plan ownership, and React lifecycle.
+            924 Glyph package tests passed, including cache behavior, branded plan identities, root/Three measurement
+            parity, caller-owned glyph columns, first-frame bounds, render-plan ownership, and React lifecycle.
           </li>
           <li>225 shaper tests plus Unicode 17 bidi and line-break conformance passed.</li>
           <li>
@@ -734,21 +758,21 @@ const recovered = text.publish();</code></pre>
           <li>
             Hardware TypeGPU/WebGPU and Three labs each produced a non-empty draw before and after retained updates;
             TypeGPU also recovered one draw and 6,588 visible pixels after replacing the destroyed WebGPU device without
-            mutating text. Median submission was 0.150 ms for TypeGPU and 0.130 ms for the generic Three path.
+            mutating text. Median submission was 0.140 ms for TypeGPU and 0.130 ms for the generic Three path.
           </li>
           <li>
-            Rust retained-layout benchmarks found no CPU regression against the authenticated baseline; changed cases
-            ranged from noise-level +0.5% to 68% faster. Package-size checks passed.
+            A same-machine run against checkpoint <code>689958d3</code> found no Rust planner regression. Current cold,
+            font-size, column-resize, and measurement-query medians were 2.6%, 8.9%, 17.9%, and 14.8% faster; suffix and
+            localized-splice were within 0.4% while the small localized-edit case remained high-variance.
           </li>
           <li>
-            The retained multi-text benchmark scales linearly after replacing aggregate rescans with call-time checked
-            counters. At 64/128/256/512 texts, median publication changed from 2.57/5.61/12.45/34.38 ms before the fix
-            to 2.43/4.48/8.13/15.46 ms at this head; the 512-text case is 55% faster and falls from 67.15 to 30.19 µs
-            per text.
+            The retained multi-text benchmark remains linear. Its three current 512-text medians span 16.46–17.91 ms
+            around the checkpoint's 17.20 ms, so this harness demonstrates no regression but is too noisy to claim a
+            speedup.
           </li>
           <li>
             A shrinking-style regression now proves incremental mutation counters retire their old published delta;
-            repeated four-style-to-one-style commits no longer consume the retained plan's future style budget.
+            repeated four-style-to-one-style commits no longer consume the render planner's future style budget.
           </li>
           <li>
             Benchmark CPU oracles now consume the exact registered technique through a validated compiled-font view;
@@ -761,32 +785,32 @@ const recovered = text.publish();</code></pre>
             negative coverage.
           </li>
           <li>
-            The semantic Slug names add 80 raw / 64 minified bytes to each graph that embeds the technique. Three is
-            686,713 raw / 111,433 gzip / 92,326 Brotli bytes; core and shader subpaths are byte-identical, and every
-            reviewed ceiling passes.
+            Current measured sizes are 412,225 raw / 66,933 gzip / 56,133 Brotli bytes for <code>/core</code>, 433,705 /
+            71,121 / 59,455 for the browser root, and 693,110 / 112,374 / 93,145 for Three. Compressed ceilings are
+            unchanged and every reviewed size gate passes.
           </li>
         </ul>
         <p>
-          <strong>Review:</strong> resumable Opus High review closed the malformed Slug oracle, MTSDF configuration,
-          semantic lane-name, and uncounted-view findings. It reported no actionable blocker; the sole optional negative
-          control it named was added at <code>689958d3</code>.
+          <strong>Review:</strong> the prior Opus High pass closed the malformed Slug oracle, MTSDF configuration,
+          semantic lane-name, and uncounted-view findings. One final Opus High pass over the settled API and
+          documentation remains before merge readiness is claimed.
         </p>
         <p>
           <strong>Merge identity:</strong> draft <a href="https://github.com/pmndrs/glyph/pull/120">PR #120</a> on
           <code>feat/render-technique-portability</code>, based directly on <code>feat/plan-retention</code> / PR #110.
-          The branch is submitted with <code>gh stack</code> and is not merged.
+          The branch is not merged; the latest local commits still need their final <code>gh stack</code> submission.
         </p>
         <p>
-          <strong>Remote evidence:</strong> GitHub
+          <strong>Remote evidence:</strong> the prior GitHub
           <a href="https://github.com/pmndrs/glyph/actions/runs/33172838781">CI run 33172838781</a> passed Static
-          checks, the complete Check gauntlet, and the package-size comparison against #110 at code head
-          <code>689958d3</code>.
+          checks, the complete Check gauntlet, and the package-size comparison at <code>689958d3</code>. It does not
+          cover the final local commits; a fresh green run is required.
         </p>
         <p>
           <strong>Deliberate Three follow-up:</strong> compatible font-stack runs inside one text and renderer-private
-          GPU realizations across retained plans can share more physical storage. Core now supplies counted immutable payload
-          leases and per-device realization identities; implementing that sharing remains Three-owned and must preserve
-          paragraph and visual order. No implicit core batch, scene, canvas, or device abstraction is needed.
+          GPU realizations across render planners can share more physical storage. Core now supplies counted immutable
+          payload leases and per-device realization identities; implementing that sharing remains Three-owned and must
+          preserve paragraph and visual order. No implicit core batch, scene, canvas, or device abstraction is needed.
         </p>
       </section>
 

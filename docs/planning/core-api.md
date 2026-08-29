@@ -1,7 +1,7 @@
 ---
 type: API Specification
 title: Core text API
-description: Current root application vocabulary and renderer-neutral engine, backend, retained plan, policy, plan-target, and semantic record contracts.
+description: Current root application vocabulary and renderer-neutral engine, backend, render planner, policy, plan-target, and semantic record contracts.
 documentation_type: reference
 tags: [api, fonts, shaping, paragraphs, layout, rendering, ownership]
 status: stable
@@ -11,7 +11,7 @@ sources:
     title: Accepted architectural decisions
   - id: ownership
     resource: font-runtime-ownership.md
-    title: Font, engine, backend, retained plan, and target ownership
+    title: Font, engine, backend, render planner, and target ownership
   - id: root-entry
     resource: ../../packages/glyph/src/index.ts
     title: Root application entry point
@@ -24,9 +24,9 @@ sources:
   - id: backend
     resource: ../../packages/glyph/src/core/backend.ts
     title: Current backend lifecycle
-  - id: retained-plan
-    resource: ../../packages/glyph/src/core/retained-plan.ts
-    title: Current retained plan and target lifecycle
+  - id: render-planner
+    resource: ../../packages/glyph/src/core/render-planner.ts
+    title: Current render planner and target lifecycle
   - id: guide
     resource: ../guides/renderer-integration.md
     title: Renderer integration guide
@@ -40,7 +40,7 @@ generated:
 Glyph has two additive public surfaces:
 
 - <code>@pmndrs/glyph</code> is application vocabulary: immutable fonts, font stacks, formatted text, Paragraph, layout values, technique definition, loading, and baking;
-- <code>@pmndrs/glyph/core</code> is integration machinery: engine, backend, policy, bindings, retained plans, plan targets, portable resource contracts, and semantic plan readers.
+- <code>@pmndrs/glyph/core</code> is integration machinery: engine, backend, policy, bindings, render planners, plan targets, portable resource contracts, and semantic plan readers.
 
 Three and React are integrations over those surfaces. Canvas, scene, GPU device, material, pipeline, and render pass remain renderer-owned.
 
@@ -96,7 +96,7 @@ const backend = engine.createBackend({
 
 <code>GlyphEngine</code> owns one Wasm shaping domain, its engine-local font registrations, an engine-wide borrowed-plan gate, and every backend it creates. <code>engine.dispose()</code> disposes child backends before releasing Wasm. A backend cannot detach or rebind.
 
-<code>GlyphBackend</code> owns one integration's installed policies, font and stack bindings, renderer-owned material/resource/transform identities, retained plans, and collision-checked wire identities.
+<code>GlyphBackend</code> owns one integration's installed policies, font and stack bindings, renderer-owned material/resource/transform identities, render planners, and collision-checked wire identities.
 
 Several backends may share one engine when their policy or device lifetimes differ but shared Wasm registration is useful. Use separate engines for worker, memory, or teardown isolation.
 
@@ -126,11 +126,11 @@ Policy authors use semantic capability/scalar names and branded hash helpers. Th
 
 Integrators that need a CPU oracle or allocation diagnostics may call <code>compileRasterFont()</code> followed by <code>readCompiledRasterFont()</code>. The read-only view resolves schema field names, strikes, selected resources, and portable payloads directly from the authenticated compiled binding. It does not expose the technique's internal decoded <code>Font.data</code>, perform another decode, or copy the binding's scalar value tables.
 
-## Retained plan and retained text
+## Render planner and retained text
 
-One retained plan owns one retained batch, target, policy selection, capacity budget, and acceptance frontier:
+One render planner owns one desired-text set, target, policy selection, capacity budget, and acceptance frontier:
 
-<pre><code>const retainedPlan = backend.createRetainedPlan({
+<pre><code>const planner = backend.createPlanner({
   policy,
   capabilitySet,
   target: () =&gt; target,
@@ -140,7 +140,7 @@ One retained plan owns one retained batch, target, policy selection, capacity bu
   textCapacity: 16 * 1024,
 });
 
-const title = retainedPlan.createText({
+const title = planner.createText({
   font: stack,
   text: 'Hello',
   style: { fontSize: 48 },
@@ -150,14 +150,14 @@ const title = retainedPlan.createText({
 title.update({ text: 'Hello, Glyph' });
 const metrics = title.layout();
 const positioned = title.glyphs();
-const acceptance = retainedPlan.publish();
+const acceptance = planner.publish();
 if (!acceptance.accepted) reportRendererError(acceptance.error);</code></pre>
 
 <code>update()</code> validates and records desired state. Shaping is deferred until <code>layout()</code>, <code>glyphs()</code>, or <code>publish()</code> needs a current answer. <code>publish()</code> compiles a candidate, calls the target, and advances the accepted revision and retirement fence only after target commit.
 
 <code>layout()</code> and <code>glyphs()</code> are synchronous, on-demand queries over current desired state. A cache miss may incur font/layout or glyph-positioning lookup work; <code>glyphs()</code> returns copied caller-owned columns. Neither query publishes a renderer plan.
 
-Use another retained plan for an independently accepted scene, viewport, render target, or worker. Retained plans may share their backend's policies and font bindings but never share revision cursors.
+Use another render planner for an independently accepted scene, viewport, render target, or worker. Render planners may share their backend's policies and font bindings but never share revision cursors.
 
 ## PlanTarget: normal borrowed delivery
 
@@ -188,24 +188,24 @@ Acceptance is transactional. A rejected candidate releases provisional objects, 
 
 ## AsyncPlanTarget: actual asynchronous boundaries
 
-Use <code>AsyncPlanTarget</code> only when CPU consumption crosses an asynchronous boundary, usually a Worker. The retained plan makes exactly one full-span standalone copy after checking the target's declared maximum. The sender transfers that allocation without another clone; the result returns the same buffer identity for bounded pool reuse.
+Use <code>AsyncPlanTarget</code> only when CPU consumption crosses an asynchronous boundary, usually a Worker. The render planner makes exactly one full-span standalone copy after checking the target's declared maximum. The sender transfers that allocation without another clone; the result returns the same buffer identity for bounded pool reuse.
 
-Referenced payloads and transforms cross with validated manifests. Canonical font backing is never detached. The receiver treats transferred plan bytes as untrusted and binds them through <code>TextEngineRenderPlanView.bindBytes()</code>.
+Referenced payloads and transforms cross with validated manifests. Canonical font backing is never detached. The receiver treats transferred plan bytes as untrusted and binds them through <code>RenderPlanView.bindBytes()</code>.
 
-Synchronous and asynchronous retained plans may coexist under one backend. The engine-wide borrow gate prevents any backend from re-entering shared Wasm while a synchronous candidate is active.
+Synchronous and asynchronous render planners may coexist under one backend. The engine-wide borrow gate prevents any backend from re-entering shared Wasm while a synchronous candidate is active.
 
 ## Semantic render-plan surface
 
-<code>TextEngineRenderPlanView</code> validates publication framing. Integrations consume records through semantic readers:
+<code>RenderPlanView</code> validates publication framing. Integrations consume records through semantic readers:
 
 | Table       | Reader                                  | Meaning                                                       |
 | ----------- | --------------------------------------- | ------------------------------------------------------------- |
-| resources   | <code>readTextEngineResource()</code>   | Create, update, or retain a portable resource realization.    |
-| buffers     | <code>readTextEngineBuffer()</code>     | Declare renderer storage and semantic policy binding.         |
-| patches     | <code>readTextEnginePatch()</code>      | Allocate/resize, write, fill, copy, or retire byte ranges.    |
-| primitives  | <code>readTextEnginePrimitive()</code>  | Map record spans to technique, resource, geometry, and order. |
-| draws       | <code>readTextEngineDraw()</code>       | Submit ordered program/material/transform spans.              |
-| retirements | <code>readTextEngineRetirement()</code> | Release exact generations after the acknowledged fence.       |
+| resources   | <code>readRenderPlanResource()</code>   | Create, update, or retain a portable resource realization.    |
+| buffers     | <code>readRenderPlanBuffer()</code>     | Declare renderer storage and semantic policy binding.         |
+| patches     | <code>readRenderPlanPatch()</code>      | Allocate/resize, write, fill, copy, or retire byte ranges.    |
+| primitives  | <code>readRenderPlanPrimitive()</code>  | Map record spans to technique, resource, geometry, and order. |
+| draws       | <code>readRenderPlanDraw()</code>       | Submit ordered program/material/transform spans.              |
+| retirements | <code>readRenderPlanRetirement()</code> | Release exact generations after the acknowledged fence.       |
 | diagnostics | table access only                       | Optional telemetry; it does not define renderer behavior.     |
 
 Readers return semantic discriminated unions and branded numeric identities. Raw shaper ABI layouts, offsets, enum ordinals, and internal handles are package-private.
@@ -221,18 +221,18 @@ A valid emitted plan that contradicts its own metadata is an engine defect, not 
 Dispose leaf objects when their lifetime ends:
 
 <pre><code>title.dispose();
-retainedPlan.dispose();
+planner.dispose();
 stack.dispose();
 policy.dispose();
 backend.dispose();
 engine.dispose();
 inter.dispose();</code></pre>
 
-Parent disposal cascades as a safety net. Explicit disposal remains the correctness mechanism; finalization is not used to guess ordering among engine, backend, device, retained plan, and resource lifetimes.
+Parent disposal cascades as a safety net. Explicit disposal remains the correctness mechanism; finalization is not used to guess ordering among engine, backend, device, render planner, and resource lifetimes.
 
 ## Related current documentation
 
 - [Integrate a renderer with Glyph](../guides/renderer-integration.md)
 - [Portable raster-technique implementation report](../guides/technique-implementation-report.md)
-- [Font, engine, backend, retained plan, and render-target ownership](font-runtime-ownership.md)
+- [Font, engine, backend, render planner, and render-target ownership](font-runtime-ownership.md)
 - [Current Glyph package reference](../packages/glyph.md)

@@ -368,28 +368,28 @@ await bakeFont({
 
 ## 8. Integrate and render
 
-The full callable engine/backend/retained-plan/target sequence is in
+The full callable engine/backend/render-planner/target sequence is in
 [Integrate a renderer with Glyph](renderer-integration.md). In abbreviated form:
 
 ```ts
-const font = await loadFont({ baked: bakedUrl }, exampleTechnique);
+const font = await loadFont({ baked: bakedUrl }, { technique: exampleTechnique, options: exampleOptions });
 const glyphEngine = await createGlyphEngine();
 const backend = glyphEngine.createBackend({ integration: 'studio.renderer' });
 const policy = backend.installPolicy(policyFactory);
 const stack = backend.bindFontStack(createFontStack(font));
-const retainedPlan = backend.createRetainedPlan({
+const planner = backend.createPlanner({
   policy,
   target: () => planTarget,
   capabilitySet,
   limits,
   ...capacities,
 });
-const text = retainedPlan.createText({ font: stack, text: 'Portable', style: { fontSize: 64 } });
+const text = planner.createText({ font: stack, text: 'Portable', style: { fontSize: 64 } });
 
 text.update({ text: 'Portable renderer' });
 const metrics = text.layout();
 const glyphs = text.glyphs();
-const acceptance = retainedPlan.publish();
+const acceptance = planner.publish();
 ```
 
 `layout()` may incur font/layout lookup on a cache miss. `glyphs()` may incur glyph lookup/positioning on a cache miss and
@@ -401,13 +401,13 @@ realizes primitives, submits draws, and reports one atomic acceptance.
 
 ```mermaid
 sequenceDiagram
-  participant RetainedPlan
+  participant RenderPlanner
   participant Target
   participant Plan
   participant Backend
   participant Device
 
-  RetainedPlan->>Target: accept(candidate)
+  RenderPlanner->>Target: accept(candidate)
   Target->>Plan: read resources/buffers/patches/primitives/draws
   Target->>Backend: candidate.acquirePayload(referenceId)
   Backend-->>Target: counted portable payload lease
@@ -415,8 +415,8 @@ sequenceDiagram
   Target->>Device: encode patches and draws
   Target->>Device: commit candidate
   Device-->>Target: committed
-  Target-->>RetainedPlan: accepted: true
-  RetainedPlan->>RetainedPlan: advance plan and publication fences
+  Target-->>RenderPlanner: accepted: true
+  RenderPlanner->>RenderPlanner: advance plan and publication fences
 ```
 
 Resources are not “just put in a map.” The map is a renderer-owned cache keyed by the plan's numeric `(id, generation)`.

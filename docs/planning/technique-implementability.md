@@ -128,7 +128,7 @@ renderer package
 
 The compiled font owns immutable portable payloads; it does not own their GPU lifetime. A renderer realizes those
 payloads in a device-scoped pool keyed by the plan's stable resource identity and leases the same texture, buffer, or
-geometry to compatible retained plans. `GlyphBackend` owns Wasm registrations and `RetainedPlan` owns one revisioned
+geometry to compatible render planners. `GlyphBackend` owns Wasm registrations and `RenderPlanner` owns one revisioned
 plan lifetime; neither is a scene, device, pass, or implicit global batch. This lets a TypeGPU, TSL, WGSL, or GLSL backend
 reuse the same portable plan without moving renderer concepts into `/core`.
 
