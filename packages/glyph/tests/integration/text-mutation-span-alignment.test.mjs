@@ -38,7 +38,6 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 import { createElement } from 'react';
 
-import '../support/browser-globals.mjs';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { txt } from '@pmndrs/glyph';
 import { alignSpansToClusters } from '../../dist/formatted-text.js';

@@ -24,7 +24,6 @@
 import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 
-import '../support/browser-globals.mjs';
 import * as THREE from 'three/webgpu';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { Text } from '@pmndrs/glyph/three';
