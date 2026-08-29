@@ -13,7 +13,6 @@ import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { slug } from '@pmndrs/glyph/raster/slug';
 import { defineThreeConfig, ThreeConfig } from '@pmndrs/glyph/three';
-import '../support/browser-globals.mjs';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const bytes = await readFile(fontUrl);

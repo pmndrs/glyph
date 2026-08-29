@@ -5,7 +5,6 @@ import { Worker } from 'node:worker_threads';
 
 import { glyph } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
-import '../support/browser-globals.mjs';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const bytes = await readFile(fontUrl);
