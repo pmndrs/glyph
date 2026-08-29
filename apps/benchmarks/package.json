@@ -45,6 +45,7 @@
     "oxlint": "1.75.0",
     "playwright": "1.61.1",
     "tailwindcss": "4.2.1",
+    "unplugin-typegpu": "0.12.2",
     "vite": "8.1.5",
     "vitest": "4.1.0",
     "vitexec": "0.1.17"

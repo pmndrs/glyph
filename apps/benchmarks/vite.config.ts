@@ -2,6 +2,7 @@ import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
+import typegpu from 'unplugin-typegpu/vite';
 import { defaultClientConditions, defineConfig } from 'vite';
 
 import { fontNotices } from './scripts/font-notices.mts';
@@ -19,6 +20,7 @@ export default defineConfig({
     conditions: ['source', ...defaultClientConditions],
   },
   plugins: [
+    typegpu(),
     react(),
     babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
