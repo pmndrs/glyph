@@ -348,7 +348,7 @@
             <p>Parent-imposed width and height. Each axis is unconstrained, at-most, or exact.</p>
           </div>
         </div>
-        <pre><code>import { loadFont, ParagraphLayout, TextStyle, type Constraints } from '@pmndrs/glyph';
+        <pre><code>import { Constraints, loadFont, ParagraphLayout, TextStyle } from '@pmndrs/glyph';
 import { Text } from '@pmndrs/glyph/three';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 
@@ -361,9 +361,9 @@ const styles = TextStyle.create({
 const layouts = ParagraphLayout.create({
   prose: { wrap: 'word', align: 'start' },
 });
-const constraints = {
-  width: { mode: 'at-most', size: 480 },
-} satisfies Constraints;
+const constraints = Constraints.create({
+  prose: { width: { mode: 'at-most', size: 480 } },
+});
 const disabled = false;
 
 const text = new Text({
@@ -371,7 +371,7 @@ const text = new Text({
   text: 'Current desired text',
   style: [styles.body, disabled &amp;&amp; styles.muted],
   layout: layouts.prose,
-  constraints,
+  constraints: constraints.prose,
 });
 
 const metrics = text.measure(); // aggregate; no draw publication
@@ -592,6 +592,12 @@ if (!result.accepted) reportRendererError(result.error);</code></pre>
               columns and ink boxes. Both may synchronously incur lookup work on a cache miss;
               <code>glyphs()</code> also copies its returned columns. Their canonical constraint caches are bounded
               three-entry LRUs. Neither publishes a draw.
+            </p>
+            <p>
+              Publication defaults to <code>semanticViews: 'none'</code>. Ask for <code>'measurement'</code> only when
+              accepted plans must refresh aggregate bounds in the same frame; ask for
+              <code>'layout-inspection'</code> or <code>'all'</code> only when the renderer needs positioned glyph
+              columns.
             </p>
           </div>
         </div>
@@ -819,16 +825,16 @@ const recovered = planner.publish();</code></pre>
 
       <section id="evidence">
         <h2>Verification and deliberate follow-up</h2>
-        <p class="status">Local implementation gates: green. Final documentation review and remote CI: pending.</p>
+        <p class="status">Focused implementation and performance gates: green. Final root gauntlet, review, and remote CI: pending.</p>
         <ul>
           <li>
-            924 Glyph package tests passed, including cache behavior, branded plan identities, root/Three measurement
+            929 Glyph package tests passed in the latest package run, including cache behavior, branded plan identities, root/Three measurement
             parity, caller-owned glyph columns, first-frame bounds, render-plan ownership, and React lifecycle.
           </li>
-          <li>225 shaper tests plus Unicode 17 bidi and line-break conformance passed.</li>
           <li>
-            All baker, artifact, mutation-fuzz, type, lint, format, and Rust checks in
-            <code>@pmndrs/glyph check</code> passed.
+            The focused Rust, baker, artifact, mutation, type, renderer, and Unicode 17 conformance lanes pass. The
+            complete package gauntlet exposed only two intentionally changed byte identities; both were independently
+            verified and re-pinned before their focused rerun passed.
           </li>
           <li>
             The external example renderer has deterministic recording-device tests and a concrete TypeGPU/WebGPU
@@ -854,6 +860,24 @@ const recovered = planner.publish();</code></pre>
             speedup.
           </li>
           <li>
+            A same-build semantic-sidecar isolation over one 21,805-glyph paragraph measured 0.002 ms for an unchanged
+            publication, 0.174 ms for aggregate measurement, and 0.582 ms for full glyph inspection. Three requests
+            aggregate measurement only when text has a pending publication; default custom-renderer publication and
+            idle Three synchronization do not pay that cost.
+          </li>
+          <li>
+            The corrected MTSDF edge selector matches native msdfgen across ordinary, acute, overlapping,
+            self-intersecting, quadratic, cubic, and complex-counter oracles with zero coverage mismatches. Moving
+            normalized corner vectors from each pixel-edge visit to per-edge preprocessing reduced the initial 22%
+            warm-generation regression to 3.9% (48.79 ms versus 46.97 ms); this code runs only in optional baking.
+          </li>
+          <li>
+            All eight checked-in MTSDF font assets were rebaked. Atlas dimensions and GPU residency are unchanged, but
+            corrected channel data is less compressible: Inter gzip grows from 6,798,458 to 8,007,071 bytes and Font
+            Awesome from 7,227,921 to 8,705,885. This is an explicit baked-asset transfer tradeoff, not runtime code or
+            frame cost.
+          </li>
+          <li>
             A shrinking-style regression now proves incremental mutation counters retire their old published delta;
             repeated four-style-to-one-style commits no longer consume the render planner's future style budget.
           </li>
@@ -868,9 +892,14 @@ const recovered = planner.publish();</code></pre>
             negative coverage.
           </li>
           <li>
-            Current measured sizes are 412,225 raw / 66,933 gzip / 56,133 Brotli bytes for <code>/core</code>, 433,705 /
-            71,121 / 59,455 for the browser root, and 693,110 / 112,374 / 93,145 for Three. Compressed ceilings are
-            unchanged and every reviewed size gate passes.
+            Current measured sizes are 427,771 raw / 69,579 gzip / 58,310 Brotli bytes for <code>/core</code>, 447,734 /
+            73,453 / 61,214 for the browser root, and 711,999 / 115,866 / 95,612 for Three. Against the prior evidence,
+            core shrank by 445 raw bytes, the browser root moved by +54 raw / +1 gzip, and Three by +348 raw / +44 gzip.
+            The complete shaper and planner Wasm is 1,173,078 raw / 457,524 gzip / 360,900 Brotli bytes after compact
+            effect lanes and exact selected-resource provenance.
+            The optional corrected MTSDF baker is 556,619 raw / 218,279 gzip / 171,376 Brotli bytes, +8,698 raw / +4,034
+            gzip. Its fresh zero-import feature-minimal admission module is 69,731 optimized / 30,131 gzip / 25,327
+            Brotli bytes; the reviewed size gate passes.
           </li>
         </ul>
         <p>
@@ -894,6 +923,13 @@ const recovered = planner.publish();</code></pre>
           GPU realizations across render planners can share more physical storage. Core now supplies counted immutable
           payload leases and per-device realization identities; implementing that sharing remains Three-owned and must
           preserve paragraph and visual order. No implicit core batch, scene, canvas, or device abstraction is needed.
+        </p>
+        <p>
+          <strong>Deliberate MTSDF quality follow-up:</strong> the default 64 px/em tier remains intended for ordinary
+          text. At the lab's 1,024 CSS px and 2× DPR endpoint, one atlas texel spans about 32 device pixels; no shader can
+          reconstruct curve detail absent from that grid. The existing descriptor can author 128 or 256 px/em assets,
+          but automatic projected-size tier selection and its roughly fourfold atlas-area cost per doubling remain a
+          separately measured resource-policy decision. Slug remains the analytic option for effectively unbounded zoom.
         </p>
       </section>
 

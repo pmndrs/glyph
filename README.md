@@ -316,6 +316,11 @@ same transfer buffer. See the [renderer integration guide](docs/guides/renderer-
 [`glyph-example-renderer` source](packages/glyph-example-renderer/src/engine.ts) for the complete target, resource,
 checkpoint, retirement, and device-replacement implementation.
 
+`publish()` emits no measurement or glyph-inspection sidecar unless requested. Three requests aggregate measurements
+when changed text is published so current bounds are available in the same frame; it does not request per-glyph layout
+inspection. Custom renderers should request `semanticViews: 'measurement'` only when they need the same cache behavior,
+and reserve `'layout-inspection'` or `'all'` for consumers that need positioned glyph columns.
+
 ## Render policy and render plan
 
 The public text API describes typography. A renderer policy describes how that semantic result becomes physical instance records and compatible draws. It is registered once as validated numeric data, not called as JavaScript during layout or packing.

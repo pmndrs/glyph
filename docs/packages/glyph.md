@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:8c7c8da3a11ee15252a2676cf6117f5c5a9f9005a03be3973361779f222fcaa9'
+source_digest: 'sha256:e66c104dc96855de80c1f3b4a0f30db1034e7ef41c0ff2766fd3274112e07f58'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -368,6 +368,12 @@ the cache or explicitly measures current desired state, while `Text.glyphs()` si
 inspection lane. Neither query traverses matrices, realizes renderer resources, flips publication slots, or burns a
 revision.
 
+A same-build isolation over one 21,805-glyph paragraph measured 0.002 ms for an unchanged publication, 0.174 ms for the
+aggregate measurement sidecar, and 0.582 ms for full glyph inspection. Three requests only aggregate measurement and
+only while it has changed text to publish; an idle synchronization does not enter the engine. Default renderer-neutral
+publication therefore pays no semantic-sidecar cost, while renderers that need same-frame bounds pay the explicit
+per-publication cost instead of making a second Wasm query.
+
 An explicit query before first render carries the desired paragraph lifecycle and applies text, style, and geometry
 mutations only for the queried paragraph. Sequential queries extend one speculative batch candidate. The next ordinary
 publication adopts matching prepared work and publishes the batch once instead of shaping twice; a geometry-only mismatch
@@ -542,8 +548,12 @@ that detached upload view before invalidating its texture. A focused integration
 proves exact canonical/upload equality with untouched padding. The complete 48-cell presentation matrix keeps every
 Bitmap, MTSDF, and Slug workload visible on WebGPU and forced WebGL2; this is the deliberate one-copy WebGL2 fallback,
 not another renderer-side layout or packing path.
-The corrected complete MTSDF baker remains 552,025 raw / 215,030 gzip / 168,758 Brotli bytes; the earlier 52 KiB
-observation was a kernel-only test artifact that reused the distributable Cargo target directory.
+The corrected complete MTSDF baker is 556,619 raw / 218,279 gzip / 171,376 Brotli bytes. A fresh isolated build of the
+zero-import feature-minimal admission module is 69,731 optimized / 30,131 gzip / 25,327 Brotli bytes; release evidence
+reads that fresh-build record rather than the superseded SIMD-experiment snapshot.
+Correcting channel selection changes pixel identities without changing atlas dimensions or GPU residency, but the new
+channel data is less compressible: canonical Inter moves from 6,798,458 to 8,007,071 gzip bytes and Font Awesome from
+7,227,921 to 8,705,885. These are baked-asset transfer costs, not default package or per-frame renderer costs.
 
 The public Three benchmark now supports an outside-only mode that leaves the internal phase collector disabled and wraps
 one `updateMatrixWorld()` call with a host timer. An eight-warmup/31-sample run over 25,515 positioned glyphs measured
