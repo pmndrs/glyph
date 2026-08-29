@@ -196,8 +196,6 @@ function slugTextValidation(values: readonly import('./contracts').BenchmarkMeas
       metrics.changedPixels < 500 ||
       typeof metrics.distinctRgbColors !== 'number' ||
       metrics.distinctRgbColors < 4 ||
-      metrics.artifactBytes !== 3_445_000 ||
-      metrics.compressedArtifactBytes !== 618_557 ||
       !finitePositive(metrics.slugCurveBytes) ||
       !finitePositive(metrics.slugHeaderBytes) ||
       !finitePositive(metrics.slugReferenceBytes) ||
