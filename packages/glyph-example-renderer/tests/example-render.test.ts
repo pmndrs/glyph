@@ -249,14 +249,14 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         /order 0 is already in use/,
       );
       expect(() => flowPlanner.createText({ font: flowFont, text: 'invalid', style: { fontSize: 0 } })).toThrow(
-        /font size must be positive/,
+        /text style fontSize must be positive/,
       );
       expect(() =>
         flowText.update({
           constraints: { width: { mode: 'at-most', size: 512 } },
           layout: { firstLineIndent: -1 },
         }),
-      ).toThrow(/indent and spacing must be nonnegative/);
+      ).toThrow(/text layout firstLineIndent must be nonnegative/);
       flowTransform.dispose();
       mutableWidth.size = Number.NaN;
       mutableRegion.inlineEnd = Number.NaN;
