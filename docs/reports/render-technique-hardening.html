@@ -825,7 +825,7 @@ const recovered = planner.publish();</code></pre>
 
       <section id="evidence">
         <h2>Verification and deliberate follow-up</h2>
-        <p class="status">Package, renderer, live, size, and performance gates: green. Final root gauntlet, review, and remote CI: pending.</p>
+        <p class="status">Local package, root, renderer, live, size, and performance gates: green. Final external review and remote CI: pending.</p>
         <ul>
           <li>
             929 Glyph package tests passed in the latest package run, including cache behavior, branded plan identities, root/Three measurement
@@ -843,6 +843,13 @@ const recovered = planner.publish();</code></pre>
           <li>
             The example packages pass 13 raster and 12 renderer tests. The benchmark app passes 113 unit tests, its full
             headless browser matrix, production build, formatting, typecheck, and package-size freshness gate.
+          </li>
+          <li>
+            The final root <code>pnpm check</code> passes across every package and application, including 929 Glyph
+            tests, the Rust/Wasm and Unicode suites, deterministic R3F bakes, its production build and live browser
+            check, repository formatting, and OKF validation. All six dated ts-morph migrations report no remaining
+            changes across Glyph, both example packages, benchmarks, and the R3F application; all eight codemod harness
+            and archive tests pass.
           </li>
           <li>
             Hardware TypeGPU/WebGPU and Three labs each produced a non-empty draw before and after retained updates;
