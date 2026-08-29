@@ -48,9 +48,6 @@ function mtsdfProof(abi, raster, allocation) {
       if (page === ABSENT_PAGE) return 0;
       return view.getUint16(record + 14, true) / binding.height;
     }),
-    field(raster.glyphCount, () => extension.planeUnitsPerEm / binding.width),
-    field(raster.glyphCount, () => extension.planeUnitsPerEm / binding.height),
-    field(raster.glyphCount, () => extension.planeUnitsPerEm / extension.pixelRange),
   );
   return proof(abi, mtsdfProgram(abi), allocation, {
     glyphCount: raster.glyphCount,
@@ -152,6 +149,7 @@ function bitmapProgram(abi, glyphScope) {
 
 function mtsdfProgram(abi) {
   const semantic = abi.engine.semanticF32Fields;
+  const semanticU32 = abi.engine.semanticU32Fields;
   const semanticFields = [
     semantic.inlineOrigin,
     semantic.blockOrigin,
@@ -160,18 +158,9 @@ function mtsdfProgram(abi) {
     semantic.foregroundGreen,
     semantic.foregroundBlue,
     semantic.foregroundAlpha,
-    semantic.outlineRed,
-    semantic.outlineGreen,
-    semantic.outlineBlue,
-    semantic.outlineAlpha,
-    semantic.outlineWidth,
-    semantic.shadowRed,
-    semantic.shadowGreen,
-    semantic.shadowBlue,
-    semantic.shadowAlpha,
-    semantic.shadowOffsetX,
-    semantic.shadowOffsetY,
-    semantic.inverseFontSize,
+    semantic.outlineWidthEm,
+    semantic.shadowOffsetXEm,
+    semantic.shadowOffsetYEm,
   ];
   const operations = [];
   const loadF32 = (target, inputField) =>
@@ -182,6 +171,8 @@ function mtsdfProgram(abi) {
     operations.push({ opcode: abi.policy.opcodes[name], target, operand0: left, operand1: right });
   const storeF32 = (buffer, lane, register) =>
     operations.push({ opcode: abi.policy.opcodes.storeF32, operand0: register, operand1: lane, immediate0: buffer });
+  const storeU32 = (buffer, lane, register) =>
+    operations.push({ opcode: abi.policy.opcodes.storeU32, operand0: register, operand1: lane, immediate0: buffer });
   const copyF32 = (buffer, lane, inputField) => {
     loadF32(0, inputField);
     storeF32(buffer, lane, 0);
@@ -201,44 +192,43 @@ function mtsdfProgram(abi) {
     storeF32(buffer, lane, 4);
   };
 
-  transformed(1, 0, 0, 19, 'addF32');
-  transformed(1, 1, 1, 20, 'subtractF32');
-  scaled(1, 2, 21, 2);
-  scaled(1, 3, 22, 2);
-  for (let lane = 0; lane < 4; lane += 1) copyF32(2, lane, 23 + lane);
-  copyF32(3, 0, 23);
-  copyF32(3, 1, 24);
-  copyF32(3, 2, 27);
-  copyF32(3, 3, 28);
+  transformed(1, 0, 0, 10, 'addF32');
+  transformed(1, 1, 1, 11, 'subtractF32');
+  scaled(1, 2, 12, 2);
+  scaled(1, 3, 13, 2);
+  for (let lane = 0; lane < 4; lane += 1) copyF32(2, lane, 14 + lane);
+  copyF32(3, 0, 14);
+  copyF32(3, 1, 15);
+  copyF32(3, 2, 18);
+  copyF32(3, 3, 19);
   for (let lane = 0; lane < 4; lane += 1) copyF32(4, lane, 3 + lane);
-  for (let lane = 0; lane < 4; lane += 1) copyF32(5, lane, 7 + lane);
-  for (let lane = 0; lane < 4; lane += 1) copyF32(6, lane, 12 + lane);
-  for (const [lane, value, scale] of [
-    [0, 16, 29],
-    [1, 17, 30],
-    [2, 11, 31],
-  ]) {
-    loadF32(0, value);
-    loadF32(1, 18);
-    binary('multiplyF32', 2, 0, 1);
-    loadF32(3, scale);
-    binary('multiplyF32', 4, 2, 3);
-    storeF32(7, lane, 4);
-  }
   loadU32(0, 0);
+  storeU32(5, 0, 0);
+  loadU32(0, 1);
+  storeU32(5, 1, 0);
+  copyF32(6, 0, 8);
+  copyF32(6, 1, 9);
+  copyF32(6, 2, 7);
+  loadU32(0, 2);
   operations.push({ opcode: abi.policy.opcodes.convertU32ToF32, target: 1, operand0: 0 });
-  storeF32(7, 3, 1);
+  storeF32(6, 3, 1);
   const context = {
     inputs: [
       ...semanticFields.map((inputField) => ({ scope: 'semantic', field: inputField })),
-      ...Array.from({ length: 13 }, (_, fieldIndex) => ({ scope: 'glyph', field: fieldIndex })),
+      ...Array.from({ length: 10 }, (_, fieldIndex) => ({ scope: 'glyph', field: fieldIndex })),
+      { scope: 'semantic', field: semanticU32.outlineRgba },
+      { scope: 'semantic', field: semanticU32.shadowRgba },
       { scope: 'glyph', field: 0 },
     ],
     operations,
-    f32InputCount: 32,
-    u32InputCount: 1,
+    f32InputCount: 20,
+    u32InputCount: 3,
   };
-  return program(context, floatBuffers(abi, [4, 4, 4, 4, 4, 4, 4]));
+  return program(context, [
+    ...floatBuffers(abi, [4, 4, 4, 4]),
+    ...uintBuffers(abi, [2], 5),
+    { id: 6, scalar: abi.policy.scalarTypes.f32, vectorWidth: 4 },
+  ]);
 }
 
 function slugProgram(abi) {

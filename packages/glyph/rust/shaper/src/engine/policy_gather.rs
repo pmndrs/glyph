@@ -7,21 +7,17 @@ use super::{
     frame::{
         SEMANTIC_F32_BLOCK_ORIGIN, SEMANTIC_F32_FOREGROUND_ALPHA, SEMANTIC_F32_FOREGROUND_BLUE,
         SEMANTIC_F32_FOREGROUND_GREEN, SEMANTIC_F32_FOREGROUND_RED, SEMANTIC_F32_INLINE_ORIGIN,
-        SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_F32_OUTLINE_ALPHA, SEMANTIC_F32_OUTLINE_BLUE,
-        SEMANTIC_F32_OUTLINE_GREEN, SEMANTIC_F32_OUTLINE_RED, SEMANTIC_F32_OUTLINE_WIDTH,
-        SEMANTIC_F32_SHADOW_ALPHA, SEMANTIC_F32_SHADOW_BLUE, SEMANTIC_F32_SHADOW_GREEN,
-        SEMANTIC_F32_SHADOW_OFFSET_X, SEMANTIC_F32_SHADOW_OFFSET_Y, SEMANTIC_F32_SHADOW_RED,
-        SEMANTIC_U32_CLUSTER_ID, SEMANTIC_U32_FOREGROUND_RGBA,
+        SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_F32_OUTLINE_WIDTH_EM,
+        SEMANTIC_F32_SHADOW_OFFSET_X_EM, SEMANTIC_F32_SHADOW_OFFSET_Y_EM, SEMANTIC_U32_CLUSTER_ID,
+        SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_OUTLINE_RGBA, SEMANTIC_U32_SHADOW_RGBA,
     },
     plan_input::{PlanGlyph, PlanInput},
     policy::{CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedPolicy},
-    positioning::{ALL_SEMANTIC_CHANGES, SemanticGlyph},
+    positioning::{
+        ALL_SEMANTIC_CHANGES, SEMANTIC_F32_BASE_FIELD_COUNT, SEMANTIC_F32_FIELD_COUNT,
+        SEMANTIC_U32_BASE_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT, SemanticGlyph,
+    },
 };
-
-// `fontSize` and `rasterPixelRatio` can select a different baked resource.
-// A replacement batch must therefore receive every input stream once even when
-// the policy dependency mask would omit unchanged fields from an in-place patch.
-const RESOURCE_SELECTION_CHANGES: u16 = (1 << 4) | (1 << 5);
 
 // Exact Float32 results of the IEC 61966-2-1 sRGB transfer for every byte value.
 // Foreground colors stay one compact u32 per glyph while policy output reproduces
@@ -140,7 +136,30 @@ impl DecorationPass {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct GatherSource {
     stable_id: u32,
-    selected: bool,
+    selection: u32,
+}
+
+impl GatherSource {
+    fn new(stable_id: u32, selected: Option<SelectedGlyphBinding>) -> Self {
+        Self {
+            stable_id,
+            selection: selected.map_or(u32::MAX, selection_key),
+        }
+    }
+
+    fn selected(self) -> bool {
+        self.selection != u32::MAX
+    }
+
+    fn same_selection(self, selected: SelectedGlyphBinding) -> bool {
+        self.selection == selection_key(selected)
+    }
+}
+
+fn selection_key(selected: SelectedGlyphBinding) -> u32 {
+    debug_assert!(u16::try_from(selected.strike).is_ok());
+    debug_assert!(u16::try_from(selected.resource).is_ok());
+    (selected.strike << 16) | selected.resource
 }
 
 #[derive(Default)]
@@ -285,7 +304,7 @@ impl PolicyGatherWorkspace {
                     self.retained_source_cursor = source_cursor - 1;
                     return Ok(RetainedGather::RebuildFrom(glyph_index));
                 }
-                if previous_source.selected {
+                if previous_source.selected() {
                     let Some(previous) = self.glyphs.get(cursor) else {
                         self.retained_cursor = cursor;
                         self.retained_source_cursor = source_cursor - 1;
@@ -314,7 +333,7 @@ impl PolicyGatherWorkspace {
             };
             let selected =
                 binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio);
-            if selected.is_some() != previous_source.selected {
+            if selected.is_some() != previous_source.selected() {
                 self.retained_cursor = cursor;
                 self.retained_source_cursor = source_cursor - 1;
                 return Ok(RetainedGather::RebuildFrom(glyph_index));
@@ -322,7 +341,7 @@ impl PolicyGatherWorkspace {
             let Some(selected) = selected else {
                 // A changed identity that renders nothing still owns this source position next
                 // frame, and the row is what the next retained walk pairs against.
-                self.sources[source_index].stable_id = glyph.stable_id;
+                self.sources[source_index] = GatherSource::new(glyph.stable_id, None);
                 continue;
             };
             let technique = binding.technique();
@@ -366,7 +385,7 @@ impl PolicyGatherWorkspace {
                 self.retained_source_cursor = source_cursor - 1;
                 return Ok(RetainedGather::RebuildFrom(glyph_index));
             }
-            let selection_changed = change_mask & RESOURCE_SELECTION_CHANGES != 0;
+            let selection_changed = !previous_source.same_selection(selected);
             let (f32_inputs, u32_inputs) = policy
                 .input_masks_for_changes(
                     capability_set,
@@ -391,7 +410,7 @@ impl PolicyGatherWorkspace {
             // A substitution retained in place keeps the slot and takes a new identity, so the
             // source row has to follow it. Leaving the displaced identity here would make the next
             // frame's pairing read a glyph this frame already replaced.
-            self.sources[source_index].stable_id = glyph.stable_id;
+            self.sources[source_index] = GatherSource::new(glyph.stable_id, Some(selected));
             cursor += 1;
         }
         self.retained_cursor = cursor;
@@ -475,10 +494,7 @@ impl PolicyGatherWorkspace {
                 // A glyph that selects no raster still occupies a source row. The retained walk
                 // pairs source rows against emitted records, so omitting the row would shift every
                 // later pairing -- which is the defect this lane exists to prevent.
-                self.sources.push(GatherSource {
-                    stable_id: glyph.stable_id,
-                    selected: false,
-                });
+                self.sources.push(GatherSource::new(glyph.stable_id, None));
                 continue;
             };
             let technique = binding.technique();
@@ -510,10 +526,8 @@ impl PolicyGatherWorkspace {
                 u32::MAX,
             )?;
             let planned = plan_glyph(input, glyph_index, glyph, binding, selected)?;
-            self.sources.push(GatherSource {
-                stable_id: glyph.stable_id,
-                selected: true,
-            });
+            self.sources
+                .push(GatherSource::new(glyph.stable_id, Some(selected)));
             self.glyphs.push(planned);
             self.semantic_change_masks.push(
                 input
@@ -833,8 +847,10 @@ impl GatheredPlanInput<'_> {
 }
 
 fn validate_semantic_shape(input: LayoutPlanInput<'_>) -> Result<(), GatherError> {
-    if (!input.semantic_change_masks.is_empty()
-        && input.semantic_change_masks.len() != input.glyphs.len())
+    if input.semantic_f32.len() > SEMANTIC_F32_FIELD_COUNT
+        || input.semantic_u32.len() > SEMANTIC_U32_FIELD_COUNT
+        || (!input.semantic_change_masks.is_empty()
+            && input.semantic_change_masks.len() != input.glyphs.len())
         || (!input.semantic_glyphs.is_empty()
             && input.glyphs.iter().any(|glyph| {
                 usize::try_from(glyph.semantic_glyph_index)
@@ -842,13 +858,15 @@ fn validate_semantic_shape(input: LayoutPlanInput<'_>) -> Result<(), GatherError
                     .and_then(|index| input.semantic_glyphs.get(index))
                     .is_none_or(|semantic| semantic.stable_id != glyph.stable_id)
             }))
-        || input.semantic_f32.iter().any(|field| {
-            field.len() != input.glyphs.len() || field.iter().any(|value| !value.is_finite())
+        || input.semantic_f32.iter().enumerate().any(|(index, field)| {
+            (field.len() != input.glyphs.len()
+                && !(index >= SEMANTIC_F32_BASE_FIELD_COUNT && field.is_empty()))
+                || field.iter().any(|value| !value.is_finite())
         })
-        || input
-            .semantic_u32
-            .iter()
-            .any(|field| field.len() != input.glyphs.len())
+        || input.semantic_u32.iter().enumerate().any(|(index, field)| {
+            field.len() != input.glyphs.len()
+                && !(index >= SEMANTIC_U32_BASE_FIELD_COUNT && field.is_empty())
+        })
     {
         return Err(GatherError::InvalidSemanticShape);
     }
@@ -973,54 +991,53 @@ fn derived_semantic_f32(
             .ok_or(GatherError::SourceFieldMissing)?;
         return Ok(Some(1.0 / font_size));
     }
-    let semantic = || {
-        input
-            .glyphs
-            .get(glyph_index)
-            .and_then(|glyph| usize::try_from(glyph.semantic_glyph_index).ok())
-            .and_then(|index| input.semantic_glyphs.get(index))
-            .copied()
-            .ok_or(GatherError::SourceFieldMissing)
-    };
-    if field == SEMANTIC_F32_OUTLINE_WIDTH {
-        return Ok(Some(semantic()?.outline_width));
+    if field == SEMANTIC_F32_OUTLINE_WIDTH_EM {
+        return optional_semantic_f32(input, 6, glyph_index).map(Some);
     }
-    if field == SEMANTIC_F32_SHADOW_OFFSET_X {
-        return Ok(Some(semantic()?.shadow_offset_x));
+    if field == SEMANTIC_F32_SHADOW_OFFSET_X_EM {
+        return optional_semantic_f32(input, 7, glyph_index).map(Some);
     }
-    if field == SEMANTIC_F32_SHADOW_OFFSET_Y {
-        return Ok(Some(semantic()?.shadow_offset_y));
+    if field == SEMANTIC_F32_SHADOW_OFFSET_Y_EM {
+        return optional_semantic_f32(input, 8, glyph_index).map(Some);
     }
-    let (packed, shift, srgb) = match field {
-        SEMANTIC_F32_FOREGROUND_RED => (None, 0, true),
-        SEMANTIC_F32_FOREGROUND_GREEN => (None, 8, true),
-        SEMANTIC_F32_FOREGROUND_BLUE => (None, 16, true),
-        SEMANTIC_F32_FOREGROUND_ALPHA => (None, 24, false),
-        SEMANTIC_F32_OUTLINE_RED => (Some(semantic()?.outline_rgba), 0, true),
-        SEMANTIC_F32_OUTLINE_GREEN => (Some(semantic()?.outline_rgba), 8, true),
-        SEMANTIC_F32_OUTLINE_BLUE => (Some(semantic()?.outline_rgba), 16, true),
-        SEMANTIC_F32_OUTLINE_ALPHA => (Some(semantic()?.outline_rgba), 24, false),
-        SEMANTIC_F32_SHADOW_RED => (Some(semantic()?.shadow_rgba), 0, true),
-        SEMANTIC_F32_SHADOW_GREEN => (Some(semantic()?.shadow_rgba), 8, true),
-        SEMANTIC_F32_SHADOW_BLUE => (Some(semantic()?.shadow_rgba), 16, true),
-        SEMANTIC_F32_SHADOW_ALPHA => (Some(semantic()?.shadow_rgba), 24, false),
+    let (shift, srgb) = match field {
+        SEMANTIC_F32_FOREGROUND_RED => (0, true),
+        SEMANTIC_F32_FOREGROUND_GREEN => (8, true),
+        SEMANTIC_F32_FOREGROUND_BLUE => (16, true),
+        SEMANTIC_F32_FOREGROUND_ALPHA => (24, false),
         _ => return Ok(None),
     };
-    let packed = match packed {
-        Some(packed) => packed,
-        None => input
-            .semantic_u32
-            .get(usize::from(SEMANTIC_U32_FOREGROUND_RGBA))
-            .and_then(|values| values.get(glyph_index))
-            .copied()
-            .ok_or(GatherError::SourceFieldMissing)?,
-    };
+    let packed = input
+        .semantic_u32
+        .get(usize::from(SEMANTIC_U32_FOREGROUND_RGBA))
+        .and_then(|values| values.get(glyph_index))
+        .copied()
+        .ok_or(GatherError::SourceFieldMissing)?;
     let channel = (packed >> shift) & 0xff;
     Ok(Some(if srgb {
         f32::from_bits(SRGB8_TO_LINEAR_BITS[channel as usize])
     } else {
         (f64::from(channel) / 255.0) as f32
     }))
+}
+
+fn optional_semantic_f32(
+    input: LayoutPlanInput<'_>,
+    field: usize,
+    glyph_index: usize,
+) -> Result<f32, GatherError> {
+    let values = input
+        .semantic_f32
+        .get(field)
+        .ok_or(GatherError::SourceFieldMissing)?;
+    if values.is_empty() {
+        Ok(0.0)
+    } else {
+        values
+            .get(glyph_index)
+            .copied()
+            .ok_or(GatherError::SourceFieldMissing)
+    }
 }
 
 fn source_u32(
@@ -1033,10 +1050,17 @@ fn source_u32(
 ) -> Result<u32, GatherError> {
     let (table, row) = match scope {
         InputScope::Semantic => {
-            return input
+            let values = input
                 .semantic_u32
                 .get(usize::from(field))
-                .and_then(|values| values.get(glyph_index))
+                .ok_or(GatherError::SourceFieldMissing)?;
+            if values.is_empty()
+                && (field == SEMANTIC_U32_OUTLINE_RGBA || field == SEMANTIC_U32_SHADOW_RGBA)
+            {
+                return Ok(0);
+            }
+            return values
+                .get(glyph_index)
                 .copied()
                 .ok_or(GatherError::SourceFieldMissing);
         }
@@ -1165,6 +1189,63 @@ mod tests {
         assert_eq!(
             derived_semantic_f32(SEMANTIC_F32_BLOCK_ORIGIN, input, 0),
             Ok(Some(-3.25))
+        );
+    }
+
+    #[test]
+    fn semantic_shape_accepts_only_the_declared_optional_field_suffix() {
+        let glyphs = [layout_glyph(1, 0)];
+        let f32_value = [1.0];
+        let u32_value = [1];
+        let semantic_f32 = [
+            f32_value.as_slice(),
+            f32_value.as_slice(),
+            f32_value.as_slice(),
+            f32_value.as_slice(),
+            f32_value.as_slice(),
+            f32_value.as_slice(),
+            &[],
+            &[],
+            &[],
+        ];
+        let semantic_u32 = [
+            u32_value.as_slice(),
+            u32_value.as_slice(),
+            u32_value.as_slice(),
+            u32_value.as_slice(),
+            u32_value.as_slice(),
+            u32_value.as_slice(),
+            &[],
+            &[],
+        ];
+        let input = LayoutPlanInput {
+            transform_id: 1,
+            glyphs: &glyphs,
+            semantic_glyphs: &[],
+            semantic_change_masks: &[],
+            semantic_f32: &semantic_f32,
+            semantic_u32: &semantic_u32,
+        };
+        assert_eq!(validate_semantic_shape(input), Ok(()));
+
+        let mut extra_f32 = semantic_f32.to_vec();
+        extra_f32.push(&[]);
+        assert_eq!(
+            validate_semantic_shape(LayoutPlanInput {
+                semantic_f32: &extra_f32,
+                ..input
+            }),
+            Err(GatherError::InvalidSemanticShape)
+        );
+
+        let mut extra_u32 = semantic_u32.to_vec();
+        extra_u32.push(&[]);
+        assert_eq!(
+            validate_semantic_shape(LayoutPlanInput {
+                semantic_u32: &extra_u32,
+                ..input
+            }),
+            Err(GatherError::InvalidSemanticShape)
         );
     }
 
@@ -1471,12 +1552,32 @@ mod tests {
     }
 
     #[test]
-    fn font_selection_changes_retain_inputs_needed_to_initialize_a_new_resource_batch() {
-        let binding = binding();
+    fn retained_gather_refreshes_binding_inputs_only_when_the_selected_strike_changes() {
+        let binding = FontRenderBinding::new(
+            TechniqueId(7),
+            2,
+            2,
+            vec![FontStrike { ppem: 16 }, FontStrike { ppem: 32 }],
+            vec![FontResource {
+                id: 71,
+                generation: 3,
+                kind: 2,
+                reference: 901,
+            }],
+            vec![0, 0, 0, 0],
+            FieldTable::new(2, 1, vec![1.0, 2.0]).unwrap(),
+            FieldTable::new(2, 1, vec![11, 12]).unwrap(),
+            FieldTable::new(4, 1, vec![3.0, 4.0, 30.0, 40.0]).unwrap(),
+            FieldTable::new(4, 1, vec![13, 14, 130, 140]).unwrap(),
+            FieldTable::new(1, 1, vec![5.0]).unwrap(),
+            FieldTable::new(1, 1, vec![15]).unwrap(),
+        )
+        .unwrap();
         let policy = policy();
-        let glyphs = [layout_glyph(1, 0), layout_glyph(2, 1)];
-        let semantic_x = [10.0, 20.0];
-        let semantic_kind = [100, 200];
+        let mut glyph = layout_glyph(1, 0);
+        glyph.font_size = 8.0;
+        let semantic_x = [10.0];
+        let semantic_kind = [100];
         let mut workspace = PolicyGatherWorkspace::default();
         workspace
             .gather(
@@ -1484,12 +1585,9 @@ mod tests {
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
-                    glyphs: &glyphs,
+                    glyphs: &[glyph],
                     semantic_glyphs: &[],
-                    semantic_change_masks: &[
-                        RESOURCE_SELECTION_CHANGES,
-                        RESOURCE_SELECTION_CHANGES,
-                    ],
+                    semantic_change_masks: &[],
                     semantic_f32: &[&semantic_x],
                     semantic_u32: &[&semantic_kind],
                 },
@@ -1497,10 +1595,31 @@ mod tests {
             )
             .unwrap();
 
+        glyph.font_size = 16.0;
+        glyph.content_revision = 2;
+        assert!(workspace.begin_retained(&policy, 1).unwrap());
+        assert_eq!(
+            workspace
+                .append_retained(
+                    &policy,
+                    CAPABILITY,
+                    LayoutPlanInput {
+                        transform_id: 1,
+                        glyphs: &[glyph],
+                        semantic_glyphs: &[],
+                        semantic_change_masks: &[1 << 4],
+                        semantic_f32: &[&semantic_x],
+                        semantic_u32: &[&semantic_kind],
+                    },
+                    |_| Some(&binding),
+                )
+                .unwrap(),
+            RetainedGather::Complete
+        );
         let gathered = workspace.view();
         let input = gathered.plan_input();
-        assert_eq!(input.f32_fields[0], semantic_x);
-        assert_eq!(input.u32_fields[0], semantic_kind);
+        assert_eq!(input.f32_fields[2], [30.0]);
+        assert_eq!(input.u32_fields[2], [130]);
     }
 
     #[test]

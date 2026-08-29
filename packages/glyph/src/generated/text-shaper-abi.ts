@@ -123,18 +123,10 @@ export const textShaperAbi = {
       "inlineOrigin": 6,
       "inlineStart": 0,
       "inverseFontSize": 12,
-      "outlineAlpha": 16,
-      "outlineBlue": 15,
-      "outlineGreen": 14,
-      "outlineRed": 13,
-      "outlineWidth": 17,
+      "outlineWidthEm": 13,
       "rasterPixelRatio": 5,
-      "shadowAlpha": 21,
-      "shadowBlue": 20,
-      "shadowGreen": 19,
-      "shadowOffsetX": 22,
-      "shadowOffsetY": 23,
-      "shadowRed": 18
+      "shadowOffsetXEm": 14,
+      "shadowOffsetYEm": 15
     },
     "semanticKinds": {
       "caret": 5,
@@ -151,7 +143,9 @@ export const textShaperAbi = {
       "clusterId": 1,
       "flowThreadId": 3,
       "foregroundRgba": 0,
+      "outlineRgba": 6,
       "regionId": 2,
+      "shadowRgba": 7,
       "stableGlyphId": 5,
       "transformIndex": 4
     },

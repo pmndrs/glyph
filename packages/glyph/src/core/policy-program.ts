@@ -182,12 +182,12 @@ export interface PolicyProgramSemantics {
   readonly blockOrigin: PolicyF32Value;
   readonly fontSize: PolicyF32Value;
   readonly color: PolicyColorChannels;
-  readonly outline: Readonly<{ readonly color: PolicyColorChannels; readonly width: PolicyF32Value }> | undefined;
+  readonly outline: Readonly<{ readonly color: PolicyU32Value; readonly widthEm: PolicyF32Value }> | undefined;
   readonly shadow:
     | Readonly<{
-        readonly color: PolicyColorChannels;
-        readonly offsetX: PolicyF32Value;
-        readonly offsetY: PolicyF32Value;
+        readonly color: PolicyU32Value;
+        readonly offsetXEm: PolicyF32Value;
+        readonly offsetYEm: PolicyF32Value;
       }>
     | undefined;
   readonly inverseFontSize: PolicyF32Value | undefined;
@@ -431,18 +431,18 @@ export function policyProgram<
   const hasShadow = textEffects.includes('shadow');
   const f32InputCount =
     7 +
-    (hasOutline ? 5 : 0) +
-    (hasShadow ? 6 : 0) +
+    (hasOutline ? 1 : 0) +
+    (hasShadow ? 2 : 0) +
     (options.inverseFontSize === true ? 1 : 0) +
     bindingF32Names.length;
-  const u32InputCount = 2 + bindingU32Names.length;
+  const u32InputCount = 2 + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0) + bindingU32Names.length;
   if (f32InputCount > MAX_REGISTERS || u32InputCount > MAX_REGISTERS) {
     throw new RangeError(`policy input fields exceed the ${MAX_REGISTERS}-slot register file`);
   }
 
   // The input table mirrors the canonical order the engine validated all along:
-  // seven semantic f32 fields, optional inverseFontSize, then the binding's f32
-  // fields; transformIndex and stableGlyphId, then the binding's u32 fields.
+  // Semantic geometry and paint precede binding fields; system identities precede
+  // packed effect colors and binding u32 fields.
   const inputs: PolicyInput[] = [
     { scope: 'semantic', field: semanticF32.inlineOrigin },
     { scope: 'semantic', field: semanticF32.blockOrigin },
@@ -451,29 +451,19 @@ export function policyProgram<
     { scope: 'semantic', field: semanticF32.foregroundGreen },
     { scope: 'semantic', field: semanticF32.foregroundBlue },
     { scope: 'semantic', field: semanticF32.foregroundAlpha },
-    ...(hasOutline
-      ? [
-          { scope: 'semantic' as const, field: semanticF32.outlineRed },
-          { scope: 'semantic' as const, field: semanticF32.outlineGreen },
-          { scope: 'semantic' as const, field: semanticF32.outlineBlue },
-          { scope: 'semantic' as const, field: semanticF32.outlineAlpha },
-          { scope: 'semantic' as const, field: semanticF32.outlineWidth },
-        ]
-      : []),
+    ...(hasOutline ? [{ scope: 'semantic' as const, field: semanticF32.outlineWidthEm }] : []),
     ...(hasShadow
       ? [
-          { scope: 'semantic' as const, field: semanticF32.shadowRed },
-          { scope: 'semantic' as const, field: semanticF32.shadowGreen },
-          { scope: 'semantic' as const, field: semanticF32.shadowBlue },
-          { scope: 'semantic' as const, field: semanticF32.shadowAlpha },
-          { scope: 'semantic' as const, field: semanticF32.shadowOffsetX },
-          { scope: 'semantic' as const, field: semanticF32.shadowOffsetY },
+          { scope: 'semantic' as const, field: semanticF32.shadowOffsetXEm },
+          { scope: 'semantic' as const, field: semanticF32.shadowOffsetYEm },
         ]
       : []),
     ...(options.inverseFontSize === true ? [{ scope: 'semantic' as const, field: semanticF32.inverseFontSize }] : []),
     ...bindingF32Names.map((_, field) => ({ scope: options.scope, field })),
     { scope: 'semantic', field: semanticU32.transformIndex },
     { scope: 'semantic', field: semanticU32.stableGlyphId },
+    ...(hasOutline ? [{ scope: 'semantic' as const, field: semanticU32.outlineRgba }] : []),
+    ...(hasShadow ? [{ scope: 'semantic' as const, field: semanticU32.shadowRgba }] : []),
     ...bindingU32Names.map((_, field) => ({ scope: options.scope, field })),
   ];
   const authoringScope = {};
@@ -492,25 +482,15 @@ export function policyProgram<
     },
     outline: hasOutline
       ? {
-          color: {
-            red: loadF32('outline.color.red'),
-            green: loadF32('outline.color.green'),
-            blue: loadF32('outline.color.blue'),
-            alpha: loadF32('outline.color.alpha'),
-          },
-          width: loadF32('outline.width'),
+          color: u32Value({ kind: 'loadU32', input: 2, label: 'outline.color', authoringScope }),
+          widthEm: loadF32('outline.widthEm'),
         }
       : undefined,
     shadow: hasShadow
       ? {
-          color: {
-            red: loadF32('shadow.color.red'),
-            green: loadF32('shadow.color.green'),
-            blue: loadF32('shadow.color.blue'),
-            alpha: loadF32('shadow.color.alpha'),
-          },
-          offsetX: loadF32('shadow.offsetX'),
-          offsetY: loadF32('shadow.offsetY'),
+          color: u32Value({ kind: 'loadU32', input: hasOutline ? 3 : 2, label: 'shadow.color', authoringScope }),
+          offsetXEm: loadF32('shadow.offsetXEm'),
+          offsetYEm: loadF32('shadow.offsetYEm'),
         }
       : undefined,
     inverseFontSize: options.inverseFontSize === true ? loadF32('inverseFontSize') : undefined,
@@ -519,8 +499,9 @@ export function policyProgram<
   };
   const binding: Record<string, PolicyF32Value | PolicyU32Value> = {};
   for (const name of bindingF32Names) binding[name] = loadF32(name);
+  const bindingU32Offset = 2 + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0);
   for (const [index, name] of bindingU32Names.entries()) {
-    binding[name] = u32Value({ kind: 'loadU32', input: 2 + index, label: name, authoringScope });
+    binding[name] = u32Value({ kind: 'loadU32', input: bindingU32Offset + index, label: name, authoringScope });
   }
 
   const stores: StoreRecord[] = [];

@@ -62,70 +62,68 @@ function withMsdfTextEffects(program) {
   if (program.metadata.techniqueId !== id.technique('pmndrs.msdf')) return program;
   const semantic = textShaperAbi.policy.inputScopes.semantic;
   const binding = textShaperAbi.policy.inputScopes.glyph;
-  const fields = textShaperAbi.engine.semanticF32Fields;
-  const effectFields = [
-    fields.outlineRed,
-    fields.outlineGreen,
-    fields.outlineBlue,
-    fields.outlineAlpha,
-    fields.outlineWidth,
-    fields.shadowRed,
-    fields.shadowGreen,
-    fields.shadowBlue,
-    fields.shadowAlpha,
-    fields.shadowOffsetX,
-    fields.shadowOffsetY,
-  ];
-  const stores = { ...program.stores };
-  for (const [lane, field] of [
-    [0, fields.outlineRed],
-    [1, fields.outlineGreen],
-    [2, fields.outlineBlue],
-    [3, fields.outlineAlpha],
-  ]) {
-    stores[`storeF32:buffer4:lane${lane}`] = `f32(${semantic}:${field})`;
-  }
-  for (const [lane, field] of [
-    [0, fields.shadowRed],
-    [1, fields.shadowGreen],
-    [2, fields.shadowBlue],
-    [3, fields.shadowAlpha],
-  ]) {
-    stores[`storeF32:buffer5:lane${lane}`] = `f32(${semantic}:${field})`;
-  }
-  stores['storeF32:buffer6:lane0'] = multiply(
-    multiply(`f32(${semantic}:${fields.shadowOffsetX})`, `f32(${semantic}:${fields.inverseFontSize})`),
-    `f32(${binding}:10)`,
-  );
-  stores['storeF32:buffer6:lane1'] = multiply(
-    multiply(`f32(${semantic}:${fields.shadowOffsetY})`, `f32(${semantic}:${fields.inverseFontSize})`),
-    `f32(${binding}:11)`,
-  );
-  stores['storeF32:buffer6:lane2'] = multiply(
-    multiply(`f32(${semantic}:${fields.outlineWidth})`, `f32(${semantic}:${fields.inverseFontSize})`),
-    `f32(${binding}:12)`,
-  );
-  const previousF32Count = program.metadata.f32InputCount;
+  const f32 = textShaperAbi.engine.semanticF32Fields;
+  const u32 = textShaperAbi.engine.semanticU32Fields;
+  const systemBufferCount = program.buffers.length - 7;
+  const f32x4 = '0104040010000600000001000000';
+  const u32x2 = '0202040008000600000001000000';
+  const stores = {
+    'storeF32:buffer0:lane0': `addF32(f32(${semantic}:${f32.inlineOrigin}), multiplyF32(f32(${semantic}:${f32.fontSize}), f32(${binding}:0)))`,
+    'storeF32:buffer0:lane1': `subtractF32(f32(${semantic}:${f32.blockOrigin}), multiplyF32(f32(${semantic}:${f32.fontSize}), f32(${binding}:1)))`,
+    'storeF32:buffer0:lane2': `multiplyF32(f32(${semantic}:${f32.fontSize}), f32(${binding}:2))`,
+    'storeF32:buffer0:lane3': `multiplyF32(f32(${semantic}:${f32.fontSize}), f32(${binding}:3))`,
+    'storeF32:buffer1:lane0': `f32(${binding}:4)`,
+    'storeF32:buffer1:lane1': `f32(${binding}:5)`,
+    'storeF32:buffer1:lane2': `f32(${binding}:6)`,
+    'storeF32:buffer1:lane3': `f32(${binding}:7)`,
+    'storeF32:buffer2:lane0': `f32(${binding}:4)`,
+    'storeF32:buffer2:lane1': `f32(${binding}:5)`,
+    'storeF32:buffer2:lane2': `f32(${binding}:8)`,
+    'storeF32:buffer2:lane3': `f32(${binding}:9)`,
+    'storeF32:buffer3:lane0': `f32(${semantic}:${f32.foregroundRed})`,
+    'storeF32:buffer3:lane1': `f32(${semantic}:${f32.foregroundGreen})`,
+    'storeF32:buffer3:lane2': `f32(${semantic}:${f32.foregroundBlue})`,
+    'storeF32:buffer3:lane3': `f32(${semantic}:${f32.foregroundAlpha})`,
+    'storeF32:buffer5:lane0': `f32(${semantic}:${f32.shadowOffsetXEm})`,
+    'storeF32:buffer5:lane1': `f32(${semantic}:${f32.shadowOffsetYEm})`,
+    'storeF32:buffer5:lane2': `f32(${semantic}:${f32.outlineWidthEm})`,
+    'storeF32:buffer5:lane3': `u32ToF32(u32(${binding}:0))`,
+    'storeU32:buffer4:lane0': `u32(${semantic}:${u32.outlineRgba})`,
+    'storeU32:buffer4:lane1': `u32(${semantic}:${u32.shadowRgba})`,
+    'storeU32:buffer6:lane0': `u32(${semantic}:${u32.stableGlyphId})`,
+    ...(systemBufferCount === 2 ? { 'storeU32:buffer7:lane0': `u32(${semantic}:${u32.transformIndex})` } : {}),
+  };
   return {
     ...program,
-    metadata: { ...program.metadata, f32InputCount: previousF32Count + effectFields.length + 4 },
+    metadata: {
+      ...program.metadata,
+      variant: (6 + systemBufferCount) << 16,
+      f32InputCount: 20,
+      u32InputCount: 5,
+    },
     inputs: [
-      ...program.inputs.slice(0, 7),
-      ...effectFields.map((field) => ({ scope: semantic, field })),
-      { scope: semantic, field: fields.inverseFontSize },
-      ...program.inputs.slice(7, previousF32Count),
-      { scope: binding, field: 10 },
-      { scope: binding, field: 11 },
-      { scope: binding, field: 12 },
-      ...program.inputs.slice(previousF32Count),
+      ...[
+        f32.inlineOrigin,
+        f32.blockOrigin,
+        f32.fontSize,
+        f32.foregroundRed,
+        f32.foregroundGreen,
+        f32.foregroundBlue,
+        f32.foregroundAlpha,
+        f32.outlineWidthEm,
+        f32.shadowOffsetXEm,
+        f32.shadowOffsetYEm,
+      ].map((field) => ({ scope: semantic, field })),
+      ...Array.from({ length: 10 }, (_, field) => ({ scope: binding, field })),
+      ...[u32.transformIndex, u32.stableGlyphId, u32.outlineRgba, u32.shadowRgba].map((field) => ({
+        scope: semantic,
+        field,
+      })),
+      { scope: binding, field: 0 },
     ],
+    buffers: [f32x4, f32x4, f32x4, f32x4, u32x2, f32x4, ...program.buffers.slice(-systemBufferCount)],
     stores,
   };
-}
-
-function multiply(left, right) {
-  if (right < left) [left, right] = [right, left];
-  return `multiplyF32(${left}, ${right})`;
 }
 
 function decodePolicy(bytes) {

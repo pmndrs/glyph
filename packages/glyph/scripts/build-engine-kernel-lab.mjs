@@ -1,3 +1,9 @@
+/* @workflow {
+  "name": "glyph:kernel-lab-build",
+  "summary": "Build scalar, auto-vectorized, and explicit SIMD Wasm artifacts for the retained-engine kernel lab.",
+  "requirements": "Pinned Rust and Binaryen toolchains through mise.",
+  "writes": "packages/glyph/rust/shaper/target/kernel-lab"
+} */
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';

@@ -32,6 +32,7 @@ import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug-technique.js';
 
 import { bitmapShader, decorationShader, msdfShader, slugShader, type TslSlugPageResources } from '../tsl.js';
+import { unpackSrgbRgba } from '../tsl/packed-color.js';
 import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engine-coordinator.js';
 import type { ThreeTextMaterial, ThreeTextMaterialContext } from './material.js';
 import { assertThreeGeometryPayload, type ThreePlanProgramBuffer } from './plan-program-registry.js';
@@ -1289,8 +1290,9 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     const atlas = resourceGroup(resource.resolved, 'atlas', 'MSDF');
     const data = textureArrayMember(atlas, 'texture', 'rgba8unorm', 'MSDF');
     const pixelRange = f32BufferMember(atlas, 'pixelRange', 'MSDF');
+    const effectScale = f32x3BufferMember(atlas, 'effectScale', 'MSDF');
     const part = schemaDrawBuffers(msdfSchema, buffers, 'MSDF');
-    const required = [part.rect, part.uvRect, part.uvBounds, part.color, part.effectA, part.effectB, part.page];
+    const required = [part.rect, part.uvRect, part.uvBounds, part.color, part.effectColor, part.page];
     const key = `msdf:${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
       .join(
@@ -1307,6 +1309,9 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     const rect = field(part.rect);
     const uvRect = field(part.uvRect);
     const page = field(part.page);
+    const effectColor = TSL.storage(part.effectColor.attribute, 'uvec2', part.effectColor.attribute.count)
+      .setPBO(true)
+      .element(instance);
     const shader = msdfShader(
       {
         origin: rect.xy,
@@ -1315,10 +1320,10 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
         uvSize: uvRect.zw,
         uvBounds: field(part.uvBounds),
         fillColor: field(part.color),
-        outlineColor: field(part.effectA),
-        shadowColor: field(part.effectB),
-        shadowOffset: page.xy,
-        outlineWidth: page.z,
+        outlineColor: unpackSrgbRgba(effectColor.x),
+        shadowColor: unpackSrgbRgba(effectColor.y),
+        shadowOffset: page.xy.mul(TSL.vec2(effectScale[0], effectScale[1])),
+        outlineWidth: page.z.mul(effectScale[2]),
         pageIndex: page.w,
       },
       {
@@ -1985,6 +1990,21 @@ function f32BufferMember(group: PortableResourceGroupPayload, name: string, labe
   }
   const value = new DataView(payload.bytes.buffer, payload.bytes.byteOffset, 4).getFloat32(0, true);
   if (!Number.isFinite(value)) throw new TypeError(`${label} resource group member "${name}" needs a finite f32`);
+  return value;
+}
+
+function f32x3BufferMember(
+  group: PortableResourceGroupPayload,
+  name: string,
+  label: string,
+): readonly [number, number, number] {
+  const payload = group.members[name];
+  if (payload?.kind !== 'buffer' || payload.stride !== 12 || payload.bytes.byteLength !== 12) {
+    throw new TypeError(`${label} resource group needs one f32x3 buffer member "${name}"`);
+  }
+  const view = new DataView(payload.bytes.buffer, payload.bytes.byteOffset, 12);
+  const value = [view.getFloat32(0, true), view.getFloat32(4, true), view.getFloat32(8, true)] as const;
+  if (!value.every(Number.isFinite)) throw new TypeError(`${label} resource group member "${name}" needs finite f32s`);
   return value;
 }
 

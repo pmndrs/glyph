@@ -88,27 +88,29 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
     assert.equal(label.error, undefined);
     const draw = group.children.find((child) => child.isMesh);
     assert.ok(draw, 'MSDF effect text must publish a draw');
-    const outline = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.effectA.id)).array;
-    const shadow = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.effectB.id)).array;
+    const effects = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.effectColor.id)).array;
     const page = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.page.id)).array;
     const color = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.color.id)).array;
     assert.deepEqual([...color.slice(0, 3)], [0, 1, 0], 'a typography-only span must inherit foreground');
-    assert.deepEqual([...outline.slice(0, 3)], [1, 0, 0]);
-    assert.ok(Math.abs(outline[3] - 64 / 255) < 1e-6, 'outline alpha must include text opacity');
-    assert.deepEqual([...shadow.slice(0, 3)], [0, 0, 1]);
-    assert.ok(Math.abs(shadow[3] - 64 / 255) < 1e-6, 'shadow alpha must include text opacity');
+    assert.deepEqual([...effects.slice(0, 2)], [0x400000ff, 0x40ff0000]);
     const effectFontSize = 24;
-    const expectedEffects = [
-      (3 * MULTI_TECHNIQUE_MSDF.planeUnitsPerEm) / (effectFontSize * MULTI_TECHNIQUE_MSDF.atlasWidth),
-      (4 * MULTI_TECHNIQUE_MSDF.planeUnitsPerEm) / (effectFontSize * MULTI_TECHNIQUE_MSDF.atlasHeight),
-      (2 * MULTI_TECHNIQUE_MSDF.planeUnitsPerEm) / (effectFontSize * MULTI_TECHNIQUE_MSDF.pixelRange),
-    ];
+    const expectedEffects = [3 / effectFontSize, 4 / effectFontSize, 2 / effectFontSize];
     for (let lane = 0; lane < expectedEffects.length; lane += 1) {
       assert.ok(
         Math.abs(page[lane] - expectedEffects[lane]) < 1e-6,
-        `MSDF effect lane ${lane} must convert paragraph units through the fixture's font binding`,
+        `MSDF effect lane ${lane} must retain its em-relative value`,
       );
     }
+    label.style = {
+      ...effectStyle,
+      outline: { color: '#00ffff80', width: 2 },
+    };
+    scene.updateMatrixWorld(true);
+    assert.deepEqual(
+      [...effects.slice(0, 2)],
+      [0x40ffff00, 0x40ff0000],
+      'a retained color-only edit must rewrite the packed effect buffer',
+    );
   } finally {
     group.dispose();
     label.dispose();

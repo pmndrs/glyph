@@ -208,8 +208,7 @@ const MSDF_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/rect');
 const MSDF_UV_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/uv-rect');
 const MSDF_UV_BOUNDS_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/uv-bounds');
 const MSDF_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/color');
-const MSDF_EFFECT_A_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/effect-a');
-const MSDF_EFFECT_B_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/effect-b');
+const MSDF_EFFECT_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/effect-color');
 const MSDF_PAGE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/page');
 
 /**
@@ -237,15 +236,10 @@ export const msdfSchema: TechniqueSchema<
       readonly scalar: 'f32';
       readonly lanes: readonly ['red', 'green', 'blue', 'alpha'];
     };
-    readonly effectA: {
-      readonly id: typeof MSDF_EFFECT_A_BUFFER_ID;
-      readonly scalar: 'f32';
-      readonly lanes: readonly ['x', 'y', 'z', 'w'];
-    };
-    readonly effectB: {
-      readonly id: typeof MSDF_EFFECT_B_BUFFER_ID;
-      readonly scalar: 'f32';
-      readonly lanes: readonly ['x', 'y', 'z', 'w'];
+    readonly effectColor: {
+      readonly id: typeof MSDF_EFFECT_COLOR_BUFFER_ID;
+      readonly scalar: 'u32';
+      readonly lanes: readonly ['outline', 'shadow'];
     };
     readonly page: {
       readonly id: typeof MSDF_PAGE_BUFFER_ID;
@@ -265,9 +259,6 @@ export const msdfSchema: TechniqueSchema<
       'uvSizeY',
       'uvMaxX',
       'uvMaxY',
-      'shadowScaleX',
-      'shadowScaleY',
-      'outlineScale',
     ];
     readonly u32: readonly ['page'];
   },
@@ -277,6 +268,7 @@ export const msdfSchema: TechniqueSchema<
       readonly members: {
         readonly texture: { readonly kind: 'texture-array'; readonly format: 'rgba8unorm' };
         readonly pixelRange: { readonly kind: 'buffer' };
+        readonly effectScale: { readonly kind: 'buffer' };
       };
     };
   },
@@ -297,9 +289,6 @@ export const msdfSchema: TechniqueSchema<
       'uvSizeY',
       'uvMaxX',
       'uvMaxY',
-      'shadowScaleX',
-      'shadowScaleY',
-      'outlineScale',
     ],
     u32: ['page'],
   },
@@ -308,8 +297,7 @@ export const msdfSchema: TechniqueSchema<
     uvRect: { id: MSDF_UV_RECT_BUFFER_ID, scalar: 'f32', lanes: ['u0', 'v0', 'uSpan', 'vSpan'] },
     uvBounds: { id: MSDF_UV_BOUNDS_BUFFER_ID, scalar: 'f32', lanes: ['u0', 'v0', 'uMax', 'vMax'] },
     color: { id: MSDF_COLOR_BUFFER_ID, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
-    effectA: { id: MSDF_EFFECT_A_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y', 'z', 'w'] },
-    effectB: { id: MSDF_EFFECT_B_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y', 'z', 'w'] },
+    effectColor: { id: MSDF_EFFECT_COLOR_BUFFER_ID, scalar: 'u32', lanes: ['outline', 'shadow'] },
     page: { id: MSDF_PAGE_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y', 'z', 'page'] },
   },
   resources: {
@@ -318,6 +306,7 @@ export const msdfSchema: TechniqueSchema<
       members: {
         texture: { kind: 'texture-array', format: 'rgba8unorm' },
         pixelRange: { kind: 'buffer' },
+        effectScale: { kind: 'buffer' },
       },
     },
   },
@@ -328,29 +317,13 @@ export const msdfPlanProgram: RasterPlanProgram<typeof msdf, typeof msdfSchema> 
   technique: msdf,
   schema: msdfSchema,
   policyBody(system) {
-    const p = techniqueProgram(msdfSchema, { inverseFontSize: true, textEffects: msdf.textEffects, system });
-    const { inlineOrigin, blockOrigin, fontSize, color, outline, shadow, inverseFontSize } = p.semantics;
-    if (outline === undefined || shadow === undefined || inverseFontSize === undefined) {
+    const p = techniqueProgram(msdfSchema, { textEffects: msdf.textEffects, system });
+    const { inlineOrigin, blockOrigin, fontSize, color, outline, shadow } = p.semantics;
+    if (outline === undefined || shadow === undefined) {
       throw new Error('MSDF text effects are not configured');
     }
-    const {
-      bearingX,
-      bearingY,
-      width,
-      height,
-      uvOriginX,
-      uvOriginY,
-      uvSizeX,
-      uvSizeY,
-      uvMaxX,
-      uvMaxY,
-      shadowScaleX,
-      shadowScaleY,
-      outlineScale,
-      page,
-    } = p.binding;
-    const effectValue = (value: typeof outline.width, scale: typeof outlineScale) =>
-      f32.mul(f32.mul(value, inverseFontSize), scale);
+    const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, uvMaxX, uvMaxY, page } =
+      p.binding;
     return p.compile({
       rect: [
         f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
@@ -361,14 +334,8 @@ export const msdfPlanProgram: RasterPlanProgram<typeof msdf, typeof msdfSchema> 
       uvRect: [uvOriginX, uvOriginY, uvSizeX, uvSizeY],
       uvBounds: [uvOriginX, uvOriginY, uvMaxX, uvMaxY],
       color: [color.red, color.green, color.blue, color.alpha],
-      effectA: [outline.color.red, outline.color.green, outline.color.blue, outline.color.alpha],
-      effectB: [shadow.color.red, shadow.color.green, shadow.color.blue, shadow.color.alpha],
-      page: [
-        effectValue(shadow.offsetX, shadowScaleX),
-        effectValue(shadow.offsetY, shadowScaleY),
-        effectValue(outline.width, outlineScale),
-        u32.toF32(page),
-      ],
+      effectColor: [outline.color, shadow.color],
+      page: [shadow.offsetXEm, shadow.offsetYEm, outline.widthEm, u32.toF32(page)],
     });
   },
   compileFont(compiler) {
@@ -379,6 +346,15 @@ export const msdfPlanProgram: RasterPlanProgram<typeof msdf, typeof msdfSchema> 
       members: {
         texture: msdfAtlas(data),
         pixelRange: { kind: 'buffer', bytes: portableF32(data.pixelRange), stride: 4 },
+        effectScale: {
+          kind: 'buffer',
+          bytes: portableF32x3(
+            data.planeUnitsPerEm / data.binding.width,
+            data.planeUnitsPerEm / data.binding.height,
+            data.planeUnitsPerEm / data.pixelRange,
+          ),
+          stride: 12,
+        },
       },
     });
     const record = (row: number) => row * RECORD_STRIDE;
@@ -406,9 +382,6 @@ export const msdfPlanProgram: RasterPlanProgram<typeof msdf, typeof msdfSchema> 
         uvSizeY: (row) => span(row, 10, 14, 'height'),
         uvMaxX: (row) => atlas(row, 12, 'width'),
         uvMaxY: (row) => atlas(row, 14, 'height'),
-        shadowScaleX: () => data.planeUnitsPerEm / data.binding.width,
-        shadowScaleY: () => data.planeUnitsPerEm / data.binding.height,
-        outlineScale: () => data.planeUnitsPerEm / data.pixelRange,
       },
       u32: { page },
     });
@@ -438,5 +411,14 @@ function msdfAtlas(data: MsdfData) {
 function portableF32(value: number): Uint8Array {
   const bytes = new Uint8Array(4);
   new DataView(bytes.buffer).setFloat32(0, value, true);
+  return bytes;
+}
+
+function portableF32x3(x: number, y: number, z: number): Uint8Array {
+  const bytes = new Uint8Array(12);
+  const view = new DataView(bytes.buffer);
+  view.setFloat32(0, x, true);
+  view.setFloat32(4, y, true);
+  view.setFloat32(8, z, true);
   return bytes;
 }

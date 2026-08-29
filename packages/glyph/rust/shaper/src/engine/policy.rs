@@ -985,16 +985,19 @@ fn f32_input_dependency(source: InputSource) -> u16 {
         0..=7 => 1 << source.field,
         8..=11 => 1 << 8,
         12 => 1 << 4,
-        13..=23 => super::positioning::SEMANTIC_EFFECTS_CHANGE,
+        13..=15 => super::positioning::SEMANTIC_EFFECTS_CHANGE,
         _ => 0,
     }
 }
 
 fn u32_input_dependency(source: InputSource) -> u16 {
-    if source.scope == InputScope::Semantic && source.field < 6 {
-        1 << (8 + source.field)
-    } else {
-        0
+    if source.scope != InputScope::Semantic {
+        return 0;
+    }
+    match source.field {
+        0..=5 => 1 << (8 + source.field),
+        6..=7 => super::positioning::SEMANTIC_EFFECTS_CHANGE,
+        _ => 0,
     }
 }
 
@@ -1958,6 +1961,17 @@ mod tests {
             policy.buffer_dependency_masks(CAPABILITY, BITMAP, 0),
             Some([0b11].as_slice())
         );
+    }
+
+    #[test]
+    fn effect_inputs_follow_the_effect_change_bit() {
+        let effect = super::super::positioning::SEMANTIC_EFFECTS_CHANGE;
+        assert_eq!(f32_input_dependency(InputSource::semantic(13)), effect);
+        assert_eq!(f32_input_dependency(InputSource::semantic(15)), effect);
+        assert_eq!(f32_input_dependency(InputSource::semantic(16)), 0);
+        assert_eq!(u32_input_dependency(InputSource::semantic(6)), effect);
+        assert_eq!(u32_input_dependency(InputSource::semantic(7)), effect);
+        assert_eq!(u32_input_dependency(InputSource::semantic(8)), 0);
     }
 
     #[test]
