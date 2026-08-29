@@ -54,6 +54,7 @@ const planProgram = (techniqueIdentity, declaration = {}) => {
       kind: 'test',
       extension: 'TEST_raster',
       version: 0,
+      textEffects: [],
       descriptor: () => ({}),
       async decode() {
         return {};
@@ -294,6 +295,7 @@ test('engine construction rejects a portable body compiled for different system 
     kind: 'test',
     extension: 'TEST_raster',
     version: 0,
+    textEffects: [],
     descriptor: () => ({}),
     async decode() {
       return {};

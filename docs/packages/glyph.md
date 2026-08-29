@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:0477ef52b62439e58a8e0024c9809dc744386e1dd96876716a4b0d2221c2c0fd'
+source_digest: 'sha256:98acc51e8f0b9822c23eb9f7509359e002afa52c923a4440ef0b482899ce52ea'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -352,6 +352,12 @@ unregistered technique fails at the policy boundary instead of producing an unsu
 A public compiled-Wasm integration loads Bitmap Inter plus Slug Font Awesome, shapes one paragraph through that ordered
 fallback stack, and observes two Rust-planned draws with exact Bitmap `vec2` and Slug `vec4` physical records. The
 selected font binding—not a `Text` technique selector—carries the renderer program and resource.
+
+Techniques explicitly declare the text effects their portable policy and shader implement. MSDF supports outline and
+shadow; Bitmap and Slug currently support neither. Three, `Paragraph`, and direct `/core` planner entry points validate
+the selected font techniques at the call that accepts a style, so an unsupported effect cannot become a malformed or
+silently degraded render plan. The semantic ABI carries effect color, width, offset, and inherited opacity only for
+technique programs that opt in.
 
 ## Semantic queries
 

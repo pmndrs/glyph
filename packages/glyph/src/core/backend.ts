@@ -569,9 +569,12 @@ export class GlyphBackend {
   }
 
   /** @internal */
-  _retainFontStackBinding(
-    binding: BackendFontStackBinding,
-  ): Readonly<{ handle: FontStackHandle; binding: BackendFontStackBinding; dispose(): void }> {
+  _retainFontStackBinding(binding: BackendFontStackBinding): Readonly<{
+    handle: FontStackHandle;
+    binding: BackendFontStackBinding;
+    techniques: readonly AnyRasterTechnique[];
+    dispose(): void;
+  }> {
     this.#assertActive();
     const entry = backendFontStacks.get(binding as object);
     if (entry === undefined || entry.backend !== this || entry.state.disposed || binding.disposed) {
@@ -583,6 +586,7 @@ export class GlyphBackend {
     return Object.freeze({
       handle: entry.state.handle,
       binding: retained,
+      techniques: Object.freeze(entry.state.bindings.map((fontBinding) => fontBinding.technique)),
       dispose: () => retained.dispose(),
     });
   }

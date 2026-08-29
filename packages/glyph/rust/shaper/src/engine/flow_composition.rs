@@ -344,18 +344,16 @@ impl FlowLayoutArena {
                     self.append_retained_line(previous, suffix)?;
                 }
                 let previous_flexible_end = previous.flexible_inline_end(old_line.flow_thread_id);
-                let next_flexible_end = if flexible_for_flow_thread(
-                    geometry,
-                    old_line.flow_thread_id,
-                )? {
-                    self.resolve_flexible_inline_end(
-                        old_line.flow_thread_id,
-                        indent_for_flow_thread(geometry, old_line.flow_thread_id)?,
-                        inline_limit_for_flow_thread(geometry, old_line.flow_thread_id)?,
-                    )?
-                } else {
-                    None
-                };
+                let next_flexible_end =
+                    if flexible_for_flow_thread(geometry, old_line.flow_thread_id)? {
+                        self.resolve_flexible_inline_end(
+                            old_line.flow_thread_id,
+                            indent_for_flow_thread(geometry, old_line.flow_thread_id)?,
+                            inline_limit_for_flow_thread(geometry, old_line.flow_thread_id)?,
+                        )?
+                    } else {
+                        None
+                    };
                 self.recomposed_lines = if previous_flexible_end.map(f64::to_bits)
                     != next_flexible_end.map(f64::to_bits)
                 {
@@ -558,8 +556,8 @@ impl FlowLayoutArena {
             .copied()
             .filter(|line| line.flow_thread_id == flow_thread_id)
         {
-            let start = usize::try_from(line.fragment_start)
-                .map_err(|_| EngineError::InvalidRequest)?;
+            let start =
+                usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
             let end = start
                 .checked_add(usize::from(line.fragment_count))
                 .ok_or(EngineError::InvalidRequest)?;

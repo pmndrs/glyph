@@ -17,7 +17,7 @@ import {
   assertTextStyleFeatureRanges,
   mergePropertyList,
 } from './text-properties.js';
-import { normalizedColumns, replacedContent } from './engine-encoding.js';
+import { assertTextEffectsSupported, normalizedColumns, replacedContent } from './engine-encoding.js';
 import { createGlyphEngine, type GlyphEngine } from './glyph-engine.js';
 import type { BackendFontStackBinding, BackendPolicy, GlyphBackend } from './core/backend.js';
 import {
@@ -566,6 +566,25 @@ function normalizeParagraphState<Technique extends AnyRasterTechnique>(
   assertTextStyle(style, 'paragraph style');
   assertTextStyleFeatureRanges(style, 0, text.length, 'paragraph style');
   assertParagraphLayout(layout, 'paragraph layout');
+  const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.technique);
+  assertTextEffectsSupported(
+    style,
+    [
+      ...rootTechniques,
+      ...spans.flatMap((span) =>
+        span.font === undefined ? [] : immutableFontSelectionFonts(span.font).map((font) => font.technique),
+      ),
+    ],
+    'paragraph style',
+  );
+  for (const [index, span] of spans.entries()) {
+    if (span.style === undefined) continue;
+    assertTextEffectsSupported(
+      span.style,
+      span.font === undefined ? rootTechniques : immutableFontSelectionFonts(span.font).map((font) => font.technique),
+      `paragraph span ${index} style`,
+    );
+  }
   if (
     properties.rasterPixelRatio !== undefined &&
     (!Number.isFinite(properties.rasterPixelRatio) || properties.rasterPixelRatio <= 0)

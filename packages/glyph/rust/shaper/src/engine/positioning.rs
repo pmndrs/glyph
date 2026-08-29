@@ -18,8 +18,8 @@ use super::{
 pub(crate) const SEMANTIC_F32_FIELD_COUNT: usize = 6;
 pub(crate) const SEMANTIC_F32_CHANGE_FIELD_COUNT: usize = 8;
 pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 6;
-pub(crate) const ALL_SEMANTIC_CHANGES: u16 =
-    (1 << (SEMANTIC_F32_CHANGE_FIELD_COUNT + SEMANTIC_U32_FIELD_COUNT)) - 1;
+pub(crate) const SEMANTIC_EFFECTS_CHANGE: u16 = 1 << 14;
+pub(crate) const ALL_SEMANTIC_CHANGES: u16 = (1 << 15) - 1;
 
 const BIDI_BN: u8 = 9;
 const BIDI_B: u8 = 10;
@@ -56,6 +56,11 @@ pub(crate) struct SemanticGlyph {
     pub ink_block_start: f32,
     pub ink_inline_extent: f32,
     pub ink_block_extent: f32,
+    pub outline_rgba: u32,
+    pub outline_width: f32,
+    pub shadow_rgba: u32,
+    pub shadow_offset_x: f32,
+    pub shadow_offset_y: f32,
 }
 
 /// The ink box the render record and the semantic record must agree on, derived once per glyph.
@@ -652,6 +657,11 @@ impl PositionedGlyphArena {
                     ink_block_start: finite_f32(ink.block_start)?,
                     ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
                     ink_block_extent: nonnegative_f32(ink.block_extent)?,
+                    outline_rgba: apply_opacity(style.outline_rgba, style.opacity),
+                    outline_width: style.outline_width,
+                    shadow_rgba: apply_opacity(style.shadow_rgba, style.opacity),
+                    shadow_offset_x: style.shadow_offset_x,
+                    shadow_offset_y: style.shadow_offset_y,
                 });
                 if outline.is_some() {
                     let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
@@ -674,7 +684,7 @@ impl PositionedGlyphArena {
                             inline_extent: nonnegative_f32(ink.inline_extent)?,
                             block_extent: nonnegative_f32(ink.block_extent)?,
                         },
-                        style.foreground_rgba,
+                        apply_opacity(style.foreground_rgba, style.opacity),
                         clusters.stable_ids[cluster],
                         line.region_id,
                         line.flow_thread_id,
@@ -1028,6 +1038,11 @@ impl PositionedGlyphArena {
                 ink_block_start: finite_f32(ink.block_start)?,
                 ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
                 ink_block_extent: nonnegative_f32(ink.block_extent)?,
+                outline_rgba: apply_opacity(style.outline_rgba, style.opacity),
+                outline_width: style.outline_width,
+                shadow_rgba: apply_opacity(style.shadow_rgba, style.opacity),
+                shadow_offset_x: style.shadow_offset_x,
+                shadow_offset_y: style.shadow_offset_y,
             });
             if outline.is_some() {
                 let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
@@ -1050,7 +1065,7 @@ impl PositionedGlyphArena {
                         inline_extent: nonnegative_f32(ink.inline_extent)?,
                         block_extent: nonnegative_f32(ink.block_extent)?,
                     },
-                    style.foreground_rgba,
+                    apply_opacity(style.foreground_rgba, style.opacity),
                     semantic_id,
                     line.region_id,
                     line.flow_thread_id,
@@ -1266,8 +1281,24 @@ impl PositionedGlyphArena {
                 mask |= 1 << (SEMANTIC_F32_CHANGE_FIELD_COUNT + field);
             }
         }
+        if next_semantic.outline_rgba != previous_semantic.outline_rgba
+            || next_semantic.outline_width.to_bits() != previous_semantic.outline_width.to_bits()
+            || next_semantic.shadow_rgba != previous_semantic.shadow_rgba
+            || next_semantic.shadow_offset_x.to_bits()
+                != previous_semantic.shadow_offset_x.to_bits()
+            || next_semantic.shadow_offset_y.to_bits()
+                != previous_semantic.shadow_offset_y.to_bits()
+        {
+            mask |= SEMANTIC_EFFECTS_CHANGE;
+        }
         mask
     }
+}
+
+fn apply_opacity(rgba: u32, opacity: f32) -> u32 {
+    let alpha = ((rgba >> 24) & 0xff) as f32;
+    let resolved = (alpha * opacity + 0.5) as u32;
+    (rgba & 0x00ff_ffff) | (resolved << 24)
 }
 
 fn line_span_start(starts: &[u32], line: usize) -> Result<usize, EngineError> {

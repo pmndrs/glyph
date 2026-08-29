@@ -61,10 +61,8 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
       abi.layouts.engineExclusion.size,
       abi.layouts.engineInlineObject.size,
     ],
-    // Constraint records grew 56 -> 84 for the typography tier: first-line indent,
-    // paragraph space before/after, word-space ratio bounds, letter-space
-    // expansion, and the last-line policy byte.
-    [24, 92, 84, 8, 60, 48, 60],
+    // Style records carry renderer-neutral paint effects; constraint records carry typography.
+    [24, 116, 84, 8, 60, 48, 60],
   );
   assert.equal(abi.layouts.engineInlineObject.alignment, 4);
   assert.equal(abi.layouts.engineInlineObject.baselineAlignment, 52);
@@ -88,7 +86,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     skipInk: 8,
     underline: 1,
   });
-  assert.equal(abi.engine.styleFields.all, 8191);
+  assert.equal(abi.engine.styleFields.all, 65535);
   assert.equal(abi.layouts.engineStyleMutation.cascadeOrder, 8);
   assert.equal(abi.layouts.engineStyleMutation.rasterPixelRatio, 64);
   assert.deepEqual(abi.engine.flowShapeKinds, { polygon: 2, rectangle: 1 });
@@ -115,7 +113,18 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     inlineOrigin: 6,
     inlineStart: 0,
     inverseFontSize: 12,
+    outlineAlpha: 16,
+    outlineBlue: 15,
+    outlineGreen: 14,
+    outlineRed: 13,
+    outlineWidth: 17,
     rasterPixelRatio: 5,
+    shadowAlpha: 21,
+    shadowBlue: 20,
+    shadowGreen: 19,
+    shadowOffsetX: 22,
+    shadowOffsetY: 23,
+    shadowRed: 18,
   });
   assert.deepEqual(abi.engine.semanticU32Fields, {
     clusterId: 1,

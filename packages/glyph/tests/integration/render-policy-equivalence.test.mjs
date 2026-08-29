@@ -36,7 +36,8 @@ test('the Three render policy is semantically identical to the hand-numbered fix
       const current = decodePolicy(threeRenderPolicyBytes(undefined, transform, [], allocation));
       assert.equal(current.programs.length, fixture.programs.length, `${key}: program count`);
       assert.deepEqual(current.capabilitySets, fixture.capabilitySets, `${key}: capability sets`);
-      for (const [index, expected] of fixture.programs.entries()) {
+      for (const [index, historical] of fixture.programs.entries()) {
+        const expected = withMsdfTextEffects(historical);
         const actual = current.programs[index];
         const expectedProgramId = THREE_PROGRAM_IDS.get(expected.metadata.techniqueId);
         assert.notEqual(expectedProgramId, undefined, `${key}: program ${index} technique identity`);
@@ -56,6 +57,76 @@ test('the Three render policy is semantically identical to the hand-numbered fix
     }
   }
 });
+
+function withMsdfTextEffects(program) {
+  if (program.metadata.techniqueId !== id.technique('pmndrs.msdf')) return program;
+  const semantic = textShaperAbi.policy.inputScopes.semantic;
+  const binding = textShaperAbi.policy.inputScopes.glyph;
+  const fields = textShaperAbi.engine.semanticF32Fields;
+  const effectFields = [
+    fields.outlineRed,
+    fields.outlineGreen,
+    fields.outlineBlue,
+    fields.outlineAlpha,
+    fields.outlineWidth,
+    fields.shadowRed,
+    fields.shadowGreen,
+    fields.shadowBlue,
+    fields.shadowAlpha,
+    fields.shadowOffsetX,
+    fields.shadowOffsetY,
+  ];
+  const stores = { ...program.stores };
+  for (const [lane, field] of [
+    [0, fields.outlineRed],
+    [1, fields.outlineGreen],
+    [2, fields.outlineBlue],
+    [3, fields.outlineAlpha],
+  ]) {
+    stores[`storeF32:buffer4:lane${lane}`] = `f32(${semantic}:${field})`;
+  }
+  for (const [lane, field] of [
+    [0, fields.shadowRed],
+    [1, fields.shadowGreen],
+    [2, fields.shadowBlue],
+    [3, fields.shadowAlpha],
+  ]) {
+    stores[`storeF32:buffer5:lane${lane}`] = `f32(${semantic}:${field})`;
+  }
+  stores['storeF32:buffer6:lane0'] = multiply(
+    multiply(`f32(${semantic}:${fields.shadowOffsetX})`, `f32(${semantic}:${fields.inverseFontSize})`),
+    `f32(${binding}:10)`,
+  );
+  stores['storeF32:buffer6:lane1'] = multiply(
+    multiply(`f32(${semantic}:${fields.shadowOffsetY})`, `f32(${semantic}:${fields.inverseFontSize})`),
+    `f32(${binding}:11)`,
+  );
+  stores['storeF32:buffer6:lane2'] = multiply(
+    multiply(`f32(${semantic}:${fields.outlineWidth})`, `f32(${semantic}:${fields.inverseFontSize})`),
+    `f32(${binding}:12)`,
+  );
+  const previousF32Count = program.metadata.f32InputCount;
+  return {
+    ...program,
+    metadata: { ...program.metadata, f32InputCount: previousF32Count + effectFields.length + 4 },
+    inputs: [
+      ...program.inputs.slice(0, 7),
+      ...effectFields.map((field) => ({ scope: semantic, field })),
+      { scope: semantic, field: fields.inverseFontSize },
+      ...program.inputs.slice(7, previousF32Count),
+      { scope: binding, field: 10 },
+      { scope: binding, field: 11 },
+      { scope: binding, field: 12 },
+      ...program.inputs.slice(previousF32Count),
+    ],
+    stores,
+  };
+}
+
+function multiply(left, right) {
+  if (right < left) [left, right] = [right, left];
+  return `multiplyF32(${left}, ${right})`;
+}
 
 function decodePolicy(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);

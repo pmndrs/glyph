@@ -50,6 +50,7 @@ const msdf = defineRasterTechnique({
   kind: 'msdf',
   extension: 'PMNDRS_font_distance_field',
   version: 0,
+  textEffects: ['outline', 'shadow'],
   descriptor() {
     return { encoding: 'mtsdf' } as const;
   },
@@ -67,6 +68,7 @@ const configurable = defineRasterTechnique({
   kind: 'studio.configurable-raster',
   extension: 'STUDIO_font_configurable',
   version: 0,
+  textEffects: [],
   descriptor(options: { readonly quality: 'low' | 'high' }) {
     return { quality: options.quality };
   },

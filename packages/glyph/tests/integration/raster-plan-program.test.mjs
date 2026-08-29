@@ -29,6 +29,7 @@ function technique(id) {
     kind: 'test',
     extension: 'TEST_raster',
     version: 0,
+    textEffects: [],
     descriptor: () => ({}),
     async decode() {
       return {};

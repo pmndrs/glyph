@@ -41,6 +41,7 @@ function collisionTechnique(name) {
     kind: bitmap.kind,
     extension: bitmap.extension,
     version: bitmap.version,
+    textEffects: bitmap.textEffects,
     descriptor: (options) => bitmap.descriptor(options),
     decode: (font, artifact, signal) => bitmap.decode(font, artifact, signal),
     dispose: (data) => bitmap.dispose(data),

@@ -177,9 +177,38 @@ export function engineStyleValue(
             end: feature.end ?? end,
           })),
         }),
-    foregroundRgba: packedForeground(style),
+    ...(style.color === undefined ? {} : { foregroundRgba: packedColor(style.color) }),
+    ...(style.opacity === undefined ? {} : { opacity: style.opacity }),
+    ...(style.outline === undefined
+      ? {}
+      : { outline: { rgba: packedColor(style.outline.color), width: style.outline.width } }),
+    ...(style.shadow === undefined
+      ? {}
+      : {
+          shadow: {
+            rgba: packedColor(style.shadow.color),
+            offsetX: style.shadow.offset[0],
+            offsetY: style.shadow.offset[1],
+          },
+        }),
     ...(style.decoration === undefined ? {} : { decoration: engineDecoration(style.decoration, style) }),
   };
+}
+
+/** @internal Reject effects at the public call that accepted a style. */
+export function assertTextEffectsSupported(
+  style: TextStyle,
+  techniques: readonly AnyRasterTechnique[],
+  label: string,
+): void {
+  for (const technique of techniques) {
+    if (style.outline !== undefined && !technique.textEffects.includes('outline')) {
+      throw new TypeError(`raster technique ${technique.id} does not support outline in ${label}`);
+    }
+    if (style.shadow !== undefined && !technique.textEffects.includes('shadow')) {
+      throw new TypeError(`raster technique ${technique.id} does not support shadow in ${label}`);
+    }
+  }
 }
 
 function engineDecoration(decoration: NonNullable<TextStyle['decoration']>, style: TextStyle): PlannerDecoration {
@@ -222,10 +251,18 @@ export function packedForeground(style: TextStyle): number {
   if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
     throw new RangeError('opacity must be in [0, 1]');
   }
-  const input = style.color ?? '#ffffff';
-  const rgba = typeof input === 'string' ? parseHexColorBytes(input) : linearColorBytes(input);
+  const rgba = colorBytes(style.color ?? '#ffffff');
   const alpha = Math.round(rgba[3] * opacity);
   return (rgba[0] | (rgba[1] << 8) | (rgba[2] << 16) | (alpha << 24)) >>> 0;
+}
+
+function packedColor(input: NonNullable<TextStyle['color']>): number {
+  const rgba = colorBytes(input);
+  return (rgba[0] | (rgba[1] << 8) | (rgba[2] << 16) | (rgba[3] << 24)) >>> 0;
+}
+
+function colorBytes(input: NonNullable<TextStyle['color']>): readonly [number, number, number, number] {
+  return typeof input === 'string' ? parseHexColorBytes(input) : linearColorBytes(input);
 }
 
 function parseHexColorBytes(value: string): readonly [number, number, number, number] {

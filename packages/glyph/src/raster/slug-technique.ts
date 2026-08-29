@@ -78,6 +78,7 @@ export const slug: RasterTechnique<
   kind: SLUG_KIND,
   extension: SLUG_EXTENSION,
   version: SLUG_FORMAT_VERSION,
+  textEffects: [],
   runtimeBaker: () => import('../runtime-bakers/slug.js'),
   descriptor(): SlugDescriptor {
     return slugDescriptor();

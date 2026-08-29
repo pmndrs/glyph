@@ -380,6 +380,7 @@ test('external techniques bake through their own declared baker, never the Worke
     kind: 'testExternal',
     extension: 'TEST_external_route',
     version: 0,
+    textEffects: [],
     runtimeBaker: () =>
       Promise.resolve({
         kind: 'testExternal',

@@ -1,4 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import type { RasterTextEffect } from '../raster-technique.js';
 import type { PolicyBufferId, PolicyInput, PolicyInputScope, PolicyOperation } from './render-policy.js';
 import type { PolicyBufferDeclaration, AnyTechniqueSchema } from './technique-schema.js';
 import { isTechniqueSchema } from './technique-schema.js';
@@ -181,6 +182,14 @@ export interface PolicyProgramSemantics {
   readonly blockOrigin: PolicyF32Value;
   readonly fontSize: PolicyF32Value;
   readonly color: PolicyColorChannels;
+  readonly outline: Readonly<{ readonly color: PolicyColorChannels; readonly width: PolicyF32Value }> | undefined;
+  readonly shadow:
+    | Readonly<{
+        readonly color: PolicyColorChannels;
+        readonly offsetX: PolicyF32Value;
+        readonly offsetY: PolicyF32Value;
+      }>
+    | undefined;
   readonly inverseFontSize: PolicyF32Value | undefined;
   readonly transformIndex: PolicyU32Value;
   readonly stableGlyphId: PolicyU32Value;
@@ -194,6 +203,7 @@ export interface PolicyProgramOptions<
   readonly bindingF32?: F32;
   readonly bindingU32?: U32;
   readonly inverseFontSize?: boolean;
+  readonly textEffects?: readonly RasterTextEffect[];
 }
 
 declare const compiledPolicySchemaBrand: unique symbol;
@@ -271,7 +281,11 @@ interface StoreRecord {
 /** Build a program against one technique's authoritative schema. */
 export function techniqueProgram<const Schema extends AnyTechniqueSchema>(
   schema: Schema,
-  options: { readonly inverseFontSize?: boolean; readonly system?: PolicyProgramSystemBuffers } = {},
+  options: {
+    readonly inverseFontSize?: boolean;
+    readonly textEffects?: readonly RasterTextEffect[];
+    readonly system?: PolicyProgramSystemBuffers;
+  } = {},
 ): TechniquePolicyProgramBuilder<
   Schema,
   Schema['buffers'],
@@ -290,6 +304,7 @@ export function techniqueProgram<const Schema extends AnyTechniqueSchema>(
     bindingF32: (schema.binding.f32 ?? []) as BindingNames<Schema['binding']['f32']>,
     bindingU32: (schema.binding.u32 ?? []) as BindingNames<Schema['binding']['u32']>,
     ...(options.inverseFontSize === undefined ? {} : { inverseFontSize: options.inverseFontSize }),
+    ...(options.textEffects === undefined ? {} : { textEffects: options.textEffects }),
   });
   let compiled = false;
   return Object.freeze({
@@ -398,6 +413,7 @@ export function policyProgram<
   if (options.inverseFontSize !== undefined && typeof options.inverseFontSize !== 'boolean') {
     throw new TypeError('policy inverseFontSize needs a boolean');
   }
+  const textEffects = normalizeTextEffects(options.textEffects);
   const semanticF32 = textShaperAbi.engine.semanticF32Fields;
   const semanticU32 = textShaperAbi.engine.semanticU32Fields;
   const bindingF32Names = [...(options.bindingF32 ?? [])];
@@ -411,7 +427,14 @@ export function policyProgram<
   if (uniqueNames.size !== bindingF32Names.length + bindingU32Names.length) {
     throw new TypeError('policy binding field names must be unique');
   }
-  const f32InputCount = 7 + (options.inverseFontSize === true ? 1 : 0) + bindingF32Names.length;
+  const hasOutline = textEffects.includes('outline');
+  const hasShadow = textEffects.includes('shadow');
+  const f32InputCount =
+    7 +
+    (hasOutline ? 5 : 0) +
+    (hasShadow ? 6 : 0) +
+    (options.inverseFontSize === true ? 1 : 0) +
+    bindingF32Names.length;
   const u32InputCount = 2 + bindingU32Names.length;
   if (f32InputCount > MAX_REGISTERS || u32InputCount > MAX_REGISTERS) {
     throw new RangeError(`policy input fields exceed the ${MAX_REGISTERS}-slot register file`);
@@ -428,6 +451,25 @@ export function policyProgram<
     { scope: 'semantic', field: semanticF32.foregroundGreen },
     { scope: 'semantic', field: semanticF32.foregroundBlue },
     { scope: 'semantic', field: semanticF32.foregroundAlpha },
+    ...(hasOutline
+      ? [
+          { scope: 'semantic' as const, field: semanticF32.outlineRed },
+          { scope: 'semantic' as const, field: semanticF32.outlineGreen },
+          { scope: 'semantic' as const, field: semanticF32.outlineBlue },
+          { scope: 'semantic' as const, field: semanticF32.outlineAlpha },
+          { scope: 'semantic' as const, field: semanticF32.outlineWidth },
+        ]
+      : []),
+    ...(hasShadow
+      ? [
+          { scope: 'semantic' as const, field: semanticF32.shadowRed },
+          { scope: 'semantic' as const, field: semanticF32.shadowGreen },
+          { scope: 'semantic' as const, field: semanticF32.shadowBlue },
+          { scope: 'semantic' as const, field: semanticF32.shadowAlpha },
+          { scope: 'semantic' as const, field: semanticF32.shadowOffsetX },
+          { scope: 'semantic' as const, field: semanticF32.shadowOffsetY },
+        ]
+      : []),
     ...(options.inverseFontSize === true ? [{ scope: 'semantic' as const, field: semanticF32.inverseFontSize }] : []),
     ...bindingF32Names.map((_, field) => ({ scope: options.scope, field })),
     { scope: 'semantic', field: semanticU32.transformIndex },
@@ -448,6 +490,29 @@ export function policyProgram<
       blue: loadF32('color.blue'),
       alpha: loadF32('color.alpha'),
     },
+    outline: hasOutline
+      ? {
+          color: {
+            red: loadF32('outline.color.red'),
+            green: loadF32('outline.color.green'),
+            blue: loadF32('outline.color.blue'),
+            alpha: loadF32('outline.color.alpha'),
+          },
+          width: loadF32('outline.width'),
+        }
+      : undefined,
+    shadow: hasShadow
+      ? {
+          color: {
+            red: loadF32('shadow.color.red'),
+            green: loadF32('shadow.color.green'),
+            blue: loadF32('shadow.color.blue'),
+            alpha: loadF32('shadow.color.alpha'),
+          },
+          offsetX: loadF32('shadow.offsetX'),
+          offsetY: loadF32('shadow.offsetY'),
+        }
+      : undefined,
     inverseFontSize: options.inverseFontSize === true ? loadF32('inverseFontSize') : undefined,
     transformIndex: u32Value({ kind: 'loadU32', input: 0, label: 'transformIndex', authoringScope }),
     stableGlyphId: u32Value({ kind: 'loadU32', input: 1, label: 'stableGlyphId', authoringScope }),
@@ -497,6 +562,47 @@ export function policyProgram<
     compile() {
       const operations: PolicyOperation[] = [];
       const registers = new Map<Node, number>();
+      const remainingUses = new Map<Node, number>();
+      const visited = new Set<Node>();
+      const addUse = (node: Node): void => {
+        remainingUses.set(node, (remainingUses.get(node) ?? 0) + 1);
+      };
+      const visit = (node: Node): void => {
+        if (visited.has(node)) return;
+        visited.add(node);
+        if (node.kind === 'binary') {
+          addUse(node.left);
+          addUse(node.right);
+          visit(node.left);
+          visit(node.right);
+        } else if (node.kind === 'convertU32ToF32') {
+          addUse(node.source);
+          visit(node.source);
+        }
+      };
+      for (const store of stores) {
+        addUse(store.node);
+        visit(store.node);
+      }
+      const freeRegisters: number[] = [];
+      let registerCount = 0;
+      const allocateRegister = (): number => {
+        const reused = freeRegisters.pop();
+        if (reused !== undefined) return reused;
+        if (registerCount >= MAX_REGISTERS) {
+          throw new RangeError(`policy program needs more than ${MAX_REGISTERS} simultaneously live registers`);
+        }
+        return registerCount++;
+      };
+      const release = (node: Node): void => {
+        const remaining = (remainingUses.get(node) ?? 0) - 1;
+        remainingUses.set(node, remaining);
+        if (remaining !== 0) return;
+        const register = registers.get(node);
+        if (register === undefined) throw new Error('policy register liveness is inconsistent');
+        registers.delete(node);
+        freeRegisters.push(register);
+      };
       const emit = (node: Node): number => {
         const assigned = registers.get(node);
         if (assigned !== undefined) return assigned;
@@ -526,23 +632,37 @@ export function policyProgram<
             break;
           }
         }
-        const register = registers.size;
-        if (register >= MAX_REGISTERS) {
-          throw new RangeError(
-            `policy program needs more than ${MAX_REGISTERS} registers; name intermediate values and reuse them`,
-          );
-        }
+        const register = allocateRegister();
         registers.set(node, register);
         operations.push({ ...operation, target: register });
+        if (node.kind === 'binary') {
+          release(node.left);
+          release(node.right);
+        } else if (node.kind === 'convertU32ToF32') {
+          release(node.source);
+        }
         return register;
       };
       for (const store of stores) {
         const register = emit(store.node);
         operations.push({ opcode: store.opcode, operand0: register, operand1: store.lane, immediate0: store.buffer });
+        release(store.node);
       }
       return { inputs, operations, f32InputCount, u32InputCount } as unknown as CompiledPolicyProgramBody;
     },
   };
+}
+
+function normalizeTextEffects(value: readonly RasterTextEffect[] | undefined): readonly RasterTextEffect[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new TypeError('policy textEffects must be an array');
+  for (const effect of value) {
+    if (effect !== 'outline' && effect !== 'shadow') {
+      throw new TypeError(`policy text effect "${String(effect)}" is not supported`);
+    }
+  }
+  if (new Set(value).size !== value.length) throw new TypeError('policy textEffects must not contain duplicates');
+  return value;
 }
 
 /** @internal Reject a compiled body that was not produced from this exact schema witness. */

@@ -96,6 +96,7 @@ export const bitmap: RasterTechnique<
   kind: BITMAP_KIND,
   extension: BITMAP_EXTENSION,
   version: BITMAP_FORMAT_VERSION,
+  textEffects: [],
   runtimeBaker: () => import('../runtime-bakers/bitmap.js'),
   descriptor(options: BitmapTechniqueOptions): BitmapDescriptor {
     const normalized = normalizeBitmapOptions(options);

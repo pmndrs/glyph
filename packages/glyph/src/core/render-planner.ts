@@ -13,6 +13,7 @@ import {
 import { createExactFrameBufferPool, type ExactFrameBufferPool } from '../internal/frame-transfer-pool.js';
 import {
   compileEngineGeometry,
+  assertTextEffectsSupported,
   engineStyleId,
   engineStyleValue,
   minimalTextMutation,
@@ -1428,6 +1429,7 @@ function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, o
   const font = backend._retainFontStackBinding(value.font);
   const leases: Array<{ dispose(): void }> = [font];
   try {
+    assertTextEffectsSupported(style, font.techniques, 'text engine text style');
     const material =
       value.material === undefined ? undefined : backend._retainOpaqueBinding(value.material, 'material');
     if (material !== undefined) leases.push(material);
@@ -1443,6 +1445,13 @@ function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, o
       }
       const spanFont = span.font === undefined ? undefined : backend._retainFontStackBinding(span.font);
       if (spanFont !== undefined) leases.push(spanFont);
+      if (span.style !== undefined) {
+        assertTextEffectsSupported(
+          span.style,
+          spanFont?.techniques ?? font.techniques,
+          `text engine span [${span.start}, ${span.end}) style`,
+        );
+      }
       const spanMaterial =
         span.material === undefined ? undefined : backend._retainOpaqueBinding(span.material, 'material');
       if (spanMaterial !== undefined) leases.push(spanMaterial);

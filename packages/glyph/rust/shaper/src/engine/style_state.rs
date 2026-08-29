@@ -10,7 +10,8 @@ use crate::{
             STYLE_FIELD_DIRECTION, STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE,
             STYLE_FIELD_FONT_STACK, STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE,
             STYLE_FIELD_LETTER_SPACING, STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MATERIAL,
-            STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING,
+            STYLE_FIELD_OPACITY, STYLE_FIELD_OUTLINE, STYLE_FIELD_RASTER_PIXEL_RATIO,
+            STYLE_FIELD_SHADOW, STYLE_FIELD_WORD_SPACING,
         },
         semantic_wire::{StyleMutation, StyleMutationBatch, StyleValue},
     },
@@ -47,6 +48,12 @@ pub(crate) struct RetainedStyle {
     pub raster_pixel_ratio: f32,
     pub direction: u8,
     pub foreground_rgba: u32,
+    pub opacity: f32,
+    pub outline_rgba: u32,
+    pub outline_width: f32,
+    pub shadow_rgba: u32,
+    pub shadow_offset_x: f32,
+    pub shadow_offset_y: f32,
     pub decoration_rgba: u32,
     pub decoration_flags: u32,
     pub decoration_style: u8,
@@ -81,6 +88,12 @@ pub(crate) struct ResolvedStyle {
     pub direction: u8,
     pub bidi_override: bool,
     pub foreground_rgba: u32,
+    pub opacity: f32,
+    pub outline_rgba: u32,
+    pub outline_width: f32,
+    pub shadow_rgba: u32,
+    pub shadow_offset_x: f32,
+    pub shadow_offset_y: f32,
     pub decoration_rgba: u32,
     pub decoration_flags: u32,
     pub decoration_style: u8,
@@ -135,6 +148,12 @@ impl Default for ResolvedStyle {
             direction: 0,
             bidi_override: false,
             foreground_rgba: u32::MAX,
+            opacity: 1.0,
+            outline_rgba: 0,
+            outline_width: 0.0,
+            shadow_rgba: 0,
+            shadow_offset_x: 0.0,
+            shadow_offset_y: 0.0,
             decoration_rgba: 0,
             decoration_flags: 0,
             decoration_style: DECORATION_NONE,
@@ -238,6 +257,12 @@ impl ResolvedStyleArena {
                 || old.material_id != new.material_id
                 || old.raster_pixel_ratio.to_bits() != new.raster_pixel_ratio.to_bits()
                 || old.foreground_rgba != new.foreground_rgba
+                || old.opacity.to_bits() != new.opacity.to_bits()
+                || old.outline_rgba != new.outline_rgba
+                || old.outline_width.to_bits() != new.outline_width.to_bits()
+                || old.shadow_rgba != new.shadow_rgba
+                || old.shadow_offset_x.to_bits() != new.shadow_offset_x.to_bits()
+                || old.shadow_offset_y.to_bits() != new.shadow_offset_y.to_bits()
                 || old.decoration_rgba != new.decoration_rgba
                 || old.decoration_flags != new.decoration_flags
                 || old.decoration_style != new.decoration_style
@@ -681,6 +706,18 @@ fn apply_style(mut resolved: ResolvedStyle, style: RetainedStyle, source: usize)
     if fields & STYLE_FIELD_FOREGROUND != 0 {
         resolved.foreground_rgba = style.foreground_rgba;
     }
+    if fields & STYLE_FIELD_OPACITY != 0 {
+        resolved.opacity = style.opacity;
+    }
+    if fields & STYLE_FIELD_OUTLINE != 0 {
+        resolved.outline_rgba = style.outline_rgba;
+        resolved.outline_width = style.outline_width;
+    }
+    if fields & STYLE_FIELD_SHADOW != 0 {
+        resolved.shadow_rgba = style.shadow_rgba;
+        resolved.shadow_offset_x = style.shadow_offset_x;
+        resolved.shadow_offset_y = style.shadow_offset_y;
+    }
     if fields & STYLE_FIELD_DECORATION != 0 {
         resolved.decoration_rgba = style.decoration_rgba;
         resolved.decoration_flags = style.decoration_flags;
@@ -774,6 +811,12 @@ fn retained(value: StyleValue<'_>) -> RetainedStyle {
         raster_pixel_ratio: value.raster_pixel_ratio,
         direction: value.direction,
         foreground_rgba: value.foreground_rgba,
+        opacity: value.opacity,
+        outline_rgba: value.outline_rgba,
+        outline_width: value.outline_width,
+        shadow_rgba: value.shadow_rgba,
+        shadow_offset_x: value.shadow_offset_x,
+        shadow_offset_y: value.shadow_offset_y,
         decoration_rgba: value.decoration_rgba,
         decoration_flags: value.decoration_flags,
         decoration_style: value.decoration_style,
@@ -1068,6 +1111,12 @@ mod tests {
             raster_pixel_ratio: 1.0,
             direction: 0,
             foreground_rgba: u32::MAX,
+            opacity: 1.0,
+            outline_rgba: 0,
+            outline_width: 0.0,
+            shadow_rgba: 0,
+            shadow_offset_x: 0.0,
+            shadow_offset_y: 0.0,
             decoration_rgba: 0,
             decoration_flags: 0,
             decoration_style: DECORATION_NONE,

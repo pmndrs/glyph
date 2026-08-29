@@ -388,6 +388,10 @@ A renderer integration has five responsibilities:
 
 Three is the maintained reference executor. Bitmap, MSDF, and Slug register portable plans and compiled resources through the same `/core` contract as external techniques; Three retains only their shader/material and GPU realization. A custom Three technique registers its portable plan in `/core`, then selects one compatible `{ technique, variant }` through `registerThreeRasterPlanProgram`; Three assembles the host policy, and only the shader/material realization half uses `threePolicyAbi`.
 
+Each technique declares which authored text effects its portable policy and shader support. MSDF supports outline and
+shadow; Bitmap and Slug currently support neither. Unsupported effects throw when the style enters `Text`, `Paragraph`,
+or a `/core` render planner instead of being dropped from the plan.
+
 The renderer-neutral engine and backend contracts, frame wire, policy authoring toolkit, and plan view publish as `@pmndrs/glyph/core`, and the technique shaders as `@pmndrs/glyph/tsl` and `@pmndrs/glyph/typegpu` — the [Core API](#core-api) section shows the four moves. A new engine integration should start from the [renderer integration guide](docs/guides/renderer-integration.md), which walks all five responsibilities above with working code, then use the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as reference material.
 
 ## Technique shaders on their own

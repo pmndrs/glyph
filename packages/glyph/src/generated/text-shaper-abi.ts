@@ -123,7 +123,18 @@ export const textShaperAbi = {
       "inlineOrigin": 6,
       "inlineStart": 0,
       "inverseFontSize": 12,
-      "rasterPixelRatio": 5
+      "outlineAlpha": 16,
+      "outlineBlue": 15,
+      "outlineGreen": 14,
+      "outlineRed": 13,
+      "outlineWidth": 17,
+      "rasterPixelRatio": 5,
+      "shadowAlpha": 21,
+      "shadowBlue": 20,
+      "shadowGreen": 19,
+      "shadowOffsetX": 22,
+      "shadowOffsetY": 23,
+      "shadowRed": 18
     },
     "semanticKinds": {
       "caret": 5,
@@ -150,7 +161,7 @@ export const textShaperAbi = {
       "measurement": 1
     },
     "styleFields": {
-      "all": 8191,
+      "all": 65535,
       "baselineShift": 256,
       "decoration": 4096,
       "direction": 1024,
@@ -162,7 +173,10 @@ export const textShaperAbi = {
       "letterSpacing": 64,
       "lineHeight": 32,
       "material": 2,
+      "opacity": 8192,
+      "outline": 16384,
       "rasterPixelRatio": 512,
+      "shadow": 32768,
       "wordSpacing": 128
     },
     "styleFlags": {
@@ -529,10 +543,16 @@ export const textShaperAbi = {
       "letterSpacing": 52,
       "lineHeight": 48,
       "materialId": 28,
+      "opacity": 88,
       "opcode": 0,
-      "paragraphId": 88,
+      "outlineRgba": 92,
+      "outlineWidth": 96,
+      "paragraphId": 112,
       "rasterPixelRatio": 64,
-      "size": 92,
+      "shadowOffsetX": 104,
+      "shadowOffsetY": 108,
+      "shadowRgba": 100,
+      "size": 116,
       "styleId": 4,
       "textEnd": 20,
       "textStart": 16,

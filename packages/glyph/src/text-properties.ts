@@ -83,8 +83,11 @@ export interface TextStyle {
   readonly features?: readonly FontFeature[];
   readonly decoration?: TextDecorationStyle;
   readonly color?: ColorInput;
+  /** Alpha multiplier inherited independently from color. */
   readonly opacity?: number;
+  /** MSDF outline color and width in paragraph-local units. */
   readonly outline?: { readonly color: ColorInput; readonly width: number };
+  /** MSDF hard-shadow color and displacement in paragraph-local units. */
   readonly shadow?: { readonly color: ColorInput; readonly offset: readonly [number, number] };
 }
 

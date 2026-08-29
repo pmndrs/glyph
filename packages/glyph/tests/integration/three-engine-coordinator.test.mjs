@@ -36,6 +36,7 @@ const suppliedGeometryTechnique = defineRasterTechnique({
   kind: 'test',
   extension: 'TEST_three_supplied_geometry',
   version: 0,
+  textEffects: [],
   descriptor: () => ({}),
   async decode() {
     return {};
@@ -310,6 +311,15 @@ test('an async target must return the same unmodified transferred publication', 
   assert.throws(
     () => planner.createText({ font: binding, text: 'invalid', style: { fontSize: 0 } }),
     /fontSize must be positive/,
+  );
+  assert.throws(
+    () =>
+      planner.createText({
+        font: binding,
+        text: 'invalid',
+        style: { outline: { color: '#ffffff', width: 1 } },
+      }),
+    /test\.three-supplied-geometry.*outline/,
   );
   const text = planner.createText({ font: binding, text: 'abc', style: { fontSize: 16 } });
   try {

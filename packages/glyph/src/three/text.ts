@@ -13,7 +13,7 @@ import {
   type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
 } from '../layout.js';
-import type { FontSelection } from '../loaded-font.js';
+import { immutableFontSelectionFonts, type FontSelection } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type {
   GlyphBufferCapacity,
@@ -30,7 +30,7 @@ import {
   assertTextStyleFeatureRanges,
   mergePropertyList,
 } from '../text-properties.js';
-import { normalizedColumns, replacedContent } from '../engine-encoding.js';
+import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type {
   BackendFontStackBinding,
   BackendTransformBinding,
@@ -1049,6 +1049,22 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
       : alignSpansToClusters(text, assertSpanRanges(text, stated));
   const spans =
     resolved === previous?.spans ? previous.spans : Object.freeze(resolved.map((span) => Object.freeze({ ...span })));
+  const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.technique);
+  const inheritedTechniques = [
+    ...rootTechniques,
+    ...spans.flatMap((span) =>
+      span.font === undefined ? [] : immutableFontSelectionFonts(span.font).map((font) => font.technique),
+    ),
+  ];
+  assertTextEffectsSupported(style, inheritedTechniques, 'Text style');
+  for (const [index, span] of spans.entries()) {
+    if (span.style === undefined) continue;
+    assertTextEffectsSupported(
+      span.style,
+      span.font === undefined ? rootTechniques : immutableFontSelectionFonts(span.font).map((font) => font.technique),
+      `Text span ${index} style`,
+    );
+  }
   const rasterPixelRatio = properties.rasterPixelRatio;
   if (rasterPixelRatio !== undefined && (!Number.isFinite(rasterPixelRatio) || rasterPixelRatio <= 0)) {
     throw new RangeError('Text rasterPixelRatio must be positive and finite');

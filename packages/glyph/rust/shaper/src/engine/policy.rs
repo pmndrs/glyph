@@ -985,6 +985,7 @@ fn f32_input_dependency(source: InputSource) -> u16 {
         0..=7 => 1 << source.field,
         8..=11 => 1 << 8,
         12 => 1 << 4,
+        13..=23 => super::positioning::SEMANTIC_EFFECTS_CHANGE,
         _ => 0,
     }
 }

@@ -7,7 +7,11 @@ use super::{
     frame::{
         SEMANTIC_F32_BLOCK_ORIGIN, SEMANTIC_F32_FOREGROUND_ALPHA, SEMANTIC_F32_FOREGROUND_BLUE,
         SEMANTIC_F32_FOREGROUND_GREEN, SEMANTIC_F32_FOREGROUND_RED, SEMANTIC_F32_INLINE_ORIGIN,
-        SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_U32_CLUSTER_ID, SEMANTIC_U32_FOREGROUND_RGBA,
+        SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_F32_OUTLINE_ALPHA, SEMANTIC_F32_OUTLINE_BLUE,
+        SEMANTIC_F32_OUTLINE_GREEN, SEMANTIC_F32_OUTLINE_RED, SEMANTIC_F32_OUTLINE_WIDTH,
+        SEMANTIC_F32_SHADOW_ALPHA, SEMANTIC_F32_SHADOW_BLUE, SEMANTIC_F32_SHADOW_GREEN,
+        SEMANTIC_F32_SHADOW_OFFSET_X, SEMANTIC_F32_SHADOW_OFFSET_Y, SEMANTIC_F32_SHADOW_RED,
+        SEMANTIC_U32_CLUSTER_ID, SEMANTIC_U32_FOREGROUND_RGBA,
     },
     plan_input::{PlanGlyph, PlanInput},
     policy::{CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedPolicy},
@@ -969,19 +973,48 @@ fn derived_semantic_f32(
             .ok_or(GatherError::SourceFieldMissing)?;
         return Ok(Some(1.0 / font_size));
     }
-    let (shift, srgb) = match field {
-        SEMANTIC_F32_FOREGROUND_RED => (0, true),
-        SEMANTIC_F32_FOREGROUND_GREEN => (8, true),
-        SEMANTIC_F32_FOREGROUND_BLUE => (16, true),
-        SEMANTIC_F32_FOREGROUND_ALPHA => (24, false),
+    let semantic = || {
+        input
+            .glyphs
+            .get(glyph_index)
+            .and_then(|glyph| usize::try_from(glyph.semantic_glyph_index).ok())
+            .and_then(|index| input.semantic_glyphs.get(index))
+            .copied()
+            .ok_or(GatherError::SourceFieldMissing)
+    };
+    if field == SEMANTIC_F32_OUTLINE_WIDTH {
+        return Ok(Some(semantic()?.outline_width));
+    }
+    if field == SEMANTIC_F32_SHADOW_OFFSET_X {
+        return Ok(Some(semantic()?.shadow_offset_x));
+    }
+    if field == SEMANTIC_F32_SHADOW_OFFSET_Y {
+        return Ok(Some(semantic()?.shadow_offset_y));
+    }
+    let (packed, shift, srgb) = match field {
+        SEMANTIC_F32_FOREGROUND_RED => (None, 0, true),
+        SEMANTIC_F32_FOREGROUND_GREEN => (None, 8, true),
+        SEMANTIC_F32_FOREGROUND_BLUE => (None, 16, true),
+        SEMANTIC_F32_FOREGROUND_ALPHA => (None, 24, false),
+        SEMANTIC_F32_OUTLINE_RED => (Some(semantic()?.outline_rgba), 0, true),
+        SEMANTIC_F32_OUTLINE_GREEN => (Some(semantic()?.outline_rgba), 8, true),
+        SEMANTIC_F32_OUTLINE_BLUE => (Some(semantic()?.outline_rgba), 16, true),
+        SEMANTIC_F32_OUTLINE_ALPHA => (Some(semantic()?.outline_rgba), 24, false),
+        SEMANTIC_F32_SHADOW_RED => (Some(semantic()?.shadow_rgba), 0, true),
+        SEMANTIC_F32_SHADOW_GREEN => (Some(semantic()?.shadow_rgba), 8, true),
+        SEMANTIC_F32_SHADOW_BLUE => (Some(semantic()?.shadow_rgba), 16, true),
+        SEMANTIC_F32_SHADOW_ALPHA => (Some(semantic()?.shadow_rgba), 24, false),
         _ => return Ok(None),
     };
-    let packed = input
-        .semantic_u32
-        .get(usize::from(SEMANTIC_U32_FOREGROUND_RGBA))
-        .and_then(|values| values.get(glyph_index))
-        .copied()
-        .ok_or(GatherError::SourceFieldMissing)?;
+    let packed = match packed {
+        Some(packed) => packed,
+        None => input
+            .semantic_u32
+            .get(usize::from(SEMANTIC_U32_FOREGROUND_RGBA))
+            .and_then(|values| values.get(glyph_index))
+            .copied()
+            .ok_or(GatherError::SourceFieldMissing)?,
+    };
     let channel = (packed >> shift) & 0xff;
     Ok(Some(if srgb {
         f32::from_bits(SRGB8_TO_LINEAR_BITS[channel as usize])

@@ -72,6 +72,9 @@ export interface PlannerStyleValue {
   readonly rasterPixelRatio?: number;
   readonly direction?: 'auto' | 'ltr' | 'rtl';
   readonly foregroundRgba?: number;
+  readonly opacity?: number;
+  readonly outline?: Readonly<{ readonly rgba: number; readonly width: number }>;
+  readonly shadow?: Readonly<{ readonly rgba: number; readonly offsetX: number; readonly offsetY: number }>;
   readonly decoration?: PlannerDecoration;
 }
 
@@ -922,6 +925,9 @@ function writeStyleMutations(
       present(value.rasterPixelRatio, fields.rasterPixelRatio) |
       present(value.direction, fields.direction) |
       present(value.foregroundRgba, fields.foreground) |
+      present(value.opacity, fields.opacity) |
+      present(value.outline, fields.outline) |
+      present(value.shadow, fields.shadow) |
       present(value.decoration, fields.decoration);
     view.setUint8(offset + layout.opcode, textShaperAbi.engine.styleMutationOpcodes.upsert);
     view.setUint8(offset + layout.direction, direction(value.direction));
@@ -950,6 +956,12 @@ function writeStyleMutations(
     optionalF32(view, offset + layout.baselineShift, value.baselineShift, 'baseline shift');
     optionalF32(view, offset + layout.rasterPixelRatio, value.rasterPixelRatio, 'raster pixel ratio');
     optionalU32(view, offset + layout.foregroundRgba, value.foregroundRgba, 'foreground RGBA');
+    optionalF32(view, offset + layout.opacity, value.opacity, 'opacity');
+    optionalU32(view, offset + layout.outlineRgba, value.outline?.rgba, 'outline RGBA');
+    optionalF32(view, offset + layout.outlineWidth, value.outline?.width, 'outline width');
+    optionalU32(view, offset + layout.shadowRgba, value.shadow?.rgba, 'shadow RGBA');
+    optionalF32(view, offset + layout.shadowOffsetX, value.shadow?.offsetX, 'shadow offset x');
+    optionalF32(view, offset + layout.shadowOffsetY, value.shadow?.offsetY, 'shadow offset y');
     writeDecoration(view, offset, value.decoration);
   }
 }

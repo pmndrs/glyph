@@ -12,6 +12,7 @@ import { slug } from '@pmndrs/glyph/three/slug';
 import { defineTextMaterial, FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { bitmapSchema } from '../../dist/raster/bitmap-technique.js';
+import { msdfSchema } from '../../dist/raster/msdf.js';
 import { slugSchema } from '../../dist/raster/slug-technique.js';
 import { threeEngineDomainReport } from '../../dist/three/engine-domain.js';
 import { threeSystemBuffers } from '../../dist/three/render-policy.js';
@@ -31,6 +32,12 @@ const iconSlugFontUrl = new URL(
   import.meta.url,
 );
 const multiTechniqueFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
+const MULTI_TECHNIQUE_MSDF = Object.freeze({
+  planeUnitsPerEm: 64,
+  pixelRange: 8,
+  atlasWidth: 1003,
+  atlasHeight: 514,
+});
 const glyphAttribute = (bufferId) => `_pmndrsGlyph_${bufferId}`;
 
 test('one portable request returns typed resources for every declared technique', async () => {
@@ -47,6 +54,69 @@ test('one portable request returns typed resources for every declared technique'
   bitmapFont.dispose();
   msdfFont.dispose();
   slugFont.dispose();
+});
+
+test('Three carries supported text effects into MSDF lanes and rejects them for unsupported techniques', async () => {
+  const bytes = await readFile(multiTechniqueFontUrl);
+  const loader = new FontLoader();
+  const [bitmapFont, msdfFont, slugFont] = await loader.loadFontsAsync({ baked: dataUrl(bytes) }, [
+    { technique: bitmap, options: { strikes: [32] } },
+    { technique: msdf },
+    { technique: slug },
+  ]);
+  const effectStyle = {
+    fontSize: 32,
+    color: '#00ff00',
+    opacity: 0.5,
+    outline: { color: '#ff000080', width: 2 },
+    shadow: { color: '#0000ff80', offset: [3, 4] },
+  };
+  assert.throws(() => new Text({ font: bitmapFont, text: 'A', style: effectStyle }), /pmndrs\.bitmap.*outline/);
+  assert.throws(() => new Text({ font: slugFont, text: 'A', style: effectStyle }), /pmndrs\.slug.*outline/);
+
+  const scene = new THREE.Scene();
+  const group = new TextGroup();
+  const label = new Text({
+    font: msdfFont,
+    text: { text: 'A', spans: [{ start: 0, end: 1, style: { fontSize: 24 } }] },
+    style: effectStyle,
+  });
+  try {
+    group.add(label);
+    scene.add(group);
+    scene.updateMatrixWorld(true);
+    assert.equal(label.error, undefined);
+    const draw = group.children.find((child) => child.isMesh);
+    assert.ok(draw, 'MSDF effect text must publish a draw');
+    const outline = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.effectA.id)).array;
+    const shadow = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.effectB.id)).array;
+    const page = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.page.id)).array;
+    const color = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.color.id)).array;
+    assert.deepEqual([...color.slice(0, 3)], [0, 1, 0], 'a typography-only span must inherit foreground');
+    assert.deepEqual([...outline.slice(0, 3)], [1, 0, 0]);
+    assert.ok(Math.abs(outline[3] - 64 / 255) < 1e-6, 'outline alpha must include text opacity');
+    assert.deepEqual([...shadow.slice(0, 3)], [0, 0, 1]);
+    assert.ok(Math.abs(shadow[3] - 64 / 255) < 1e-6, 'shadow alpha must include text opacity');
+    const effectFontSize = 24;
+    const expectedEffects = [
+      (3 * MULTI_TECHNIQUE_MSDF.planeUnitsPerEm) / (effectFontSize * MULTI_TECHNIQUE_MSDF.atlasWidth),
+      (4 * MULTI_TECHNIQUE_MSDF.planeUnitsPerEm) / (effectFontSize * MULTI_TECHNIQUE_MSDF.atlasHeight),
+      (2 * MULTI_TECHNIQUE_MSDF.planeUnitsPerEm) / (effectFontSize * MULTI_TECHNIQUE_MSDF.pixelRange),
+    ];
+    for (let lane = 0; lane < expectedEffects.length; lane += 1) {
+      assert.ok(
+        Math.abs(page[lane] - expectedEffects[lane]) < 1e-6,
+        `MSDF effect lane ${lane} must convert paragraph units through the fixture's font binding`,
+      );
+    }
+  } finally {
+    group.dispose();
+    label.dispose();
+    bitmapFont.dispose();
+    msdfFont.dispose();
+    slugFont.dispose();
+    loader.dispose();
+  }
 });
 
 test('Three font loading rejects malformed arguments before starting LoadingManager work', async () => {

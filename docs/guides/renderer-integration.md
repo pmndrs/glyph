@@ -164,6 +164,11 @@ Authors use semantic names and branded hash helpers. They do not type raw wire n
 by policy compilation; technique, program, resource, and policy-buffer IDs are hashed and collision-checked. Raw shaper
 ABI layouts are package-private.
 
+Each raster technique also declares the text effects its portable policy and shader can realize. Today MSDF declares
+`['outline', 'shadow']`; Bitmap, Slug, and the example technique declare none. `Text`, `Paragraph`, and direct `/core`
+planner calls reject an authored effect immediately when any selected font technique cannot render it. The plan therefore
+never silently drops an effect or delegates an unsupported style to the renderer.
+
 ## 4. Bind fonts and stacks to the backend
 
 Binding is the cold bridge from an immutable font to this engine and policy. It is idempotent and lease-counted.

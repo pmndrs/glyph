@@ -138,6 +138,7 @@ export type {
   RasterTechniqueInput,
   RasterTechniqueRequest,
   RasterTechniqueTypesOf,
+  RasterTextEffect,
 } from './raster-technique.js';
 export { defineRasterResourceId, defineRasterTechnique } from './raster-technique.js';
 

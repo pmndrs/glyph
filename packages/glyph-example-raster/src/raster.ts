@@ -45,6 +45,7 @@ export const glyphExample: RasterTechnique<
   kind: GLYPH_EXAMPLE_KIND,
   extension: GLYPH_EXAMPLE_EXTENSION,
   version: GLYPH_EXAMPLE_FORMAT_VERSION,
+  textEffects: [],
   runtimeBaker: () => import('./runtime-baker.js'),
   descriptor(options: GlyphExampleOptions | undefined): GlyphExampleDescriptor {
     return glyphExampleDescriptor(options);

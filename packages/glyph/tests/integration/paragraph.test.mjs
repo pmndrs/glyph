@@ -25,6 +25,7 @@ const portableTechnique = defineRasterTechnique({
   kind: 'test',
   extension: 'TEST_paragraph_portable',
   version: 0,
+  textEffects: [],
   descriptor: () => ({}),
   async decode() {
     return {};
@@ -181,6 +182,14 @@ test('Paragraphs share one service host and compile a third-party font binding o
     }),
   );
   const callsBefore = portableCompileCalls;
+  await assert.rejects(
+    createParagraph({
+      font,
+      text: 'unsupported effect',
+      style: { outline: { color: '#ffffff', width: 1 } },
+    }),
+    /test\.paragraph\.portable-technique.*outline/,
+  );
   const first = await createParagraph({ font, text: 'portable', style: { fontSize: 16 } });
   const second = await createParagraph({ font, text: 'shared resources', style: { fontSize: 16 } });
   try {

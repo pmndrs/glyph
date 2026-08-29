@@ -16,6 +16,7 @@ const technique = defineRasterTechnique({
   kind: 'probe',
   extension: 'PROBE_three_exact_schema',
   version: 0,
+  textEffects: [],
   descriptor: () => ({}),
   async decode() {
     return {};

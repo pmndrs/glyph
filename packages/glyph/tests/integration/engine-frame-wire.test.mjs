@@ -302,6 +302,9 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
           rasterPixelRatio: 2,
           direction: 'rtl',
           foregroundRgba: 0x1122_3344,
+          opacity: 0.75,
+          outline: { rgba: 0x99aa_bbcc, width: 1.5 },
+          shadow: { rgba: 0xddee_ff11, offsetX: 2, offsetY: -3 },
           decoration: {
             style: 'solid',
             rgba: 0x5566_7788,

@@ -489,6 +489,7 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
     kind: 'test',
     extension: 'TEST_example_renderer_geometry',
     version: 0,
+    textEffects: [],
     descriptor: () => ({}),
     async decode() {
       return {};

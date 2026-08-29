@@ -22,6 +22,7 @@ const technique = defineRasterTechnique({
   kind: 'test',
   extension: 'TEST_policy_program',
   version: 0,
+  textEffects: [],
   descriptor: () => ({}),
   async decode() {
     return {};

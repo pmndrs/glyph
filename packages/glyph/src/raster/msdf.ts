@@ -93,6 +93,7 @@ export const msdf: RasterTechnique<
   kind: MSDF_KIND,
   extension: MSDF_EXTENSION,
   version: MSDF_FORMAT_VERSION,
+  textEffects: ['outline', 'shadow'],
   runtimeBaker: () => import('../runtime-bakers/msdf.js'),
   descriptor(options: MsdfOptions | undefined): MsdfDescriptor {
     return msdfDescriptor(options);
@@ -264,6 +265,9 @@ export const msdfSchema: TechniqueSchema<
       'uvSizeY',
       'uvMaxX',
       'uvMaxY',
+      'shadowScaleX',
+      'shadowScaleY',
+      'outlineScale',
     ];
     readonly u32: readonly ['page'];
   },
@@ -293,6 +297,9 @@ export const msdfSchema: TechniqueSchema<
       'uvSizeY',
       'uvMaxX',
       'uvMaxY',
+      'shadowScaleX',
+      'shadowScaleY',
+      'outlineScale',
     ],
     u32: ['page'],
   },
@@ -321,11 +328,29 @@ export const msdfPlanProgram: RasterPlanProgram<typeof msdf, typeof msdfSchema> 
   technique: msdf,
   schema: msdfSchema,
   policyBody(system) {
-    const p = techniqueProgram(msdfSchema, { system });
-    const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
-    const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, uvMaxX, uvMaxY, page } =
-      p.binding;
-    const zero = f32.const(0);
+    const p = techniqueProgram(msdfSchema, { inverseFontSize: true, textEffects: msdf.textEffects, system });
+    const { inlineOrigin, blockOrigin, fontSize, color, outline, shadow, inverseFontSize } = p.semantics;
+    if (outline === undefined || shadow === undefined || inverseFontSize === undefined) {
+      throw new Error('MSDF text effects are not configured');
+    }
+    const {
+      bearingX,
+      bearingY,
+      width,
+      height,
+      uvOriginX,
+      uvOriginY,
+      uvSizeX,
+      uvSizeY,
+      uvMaxX,
+      uvMaxY,
+      shadowScaleX,
+      shadowScaleY,
+      outlineScale,
+      page,
+    } = p.binding;
+    const effectValue = (value: typeof outline.width, scale: typeof outlineScale) =>
+      f32.mul(f32.mul(value, inverseFontSize), scale);
     return p.compile({
       rect: [
         f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
@@ -336,9 +361,14 @@ export const msdfPlanProgram: RasterPlanProgram<typeof msdf, typeof msdfSchema> 
       uvRect: [uvOriginX, uvOriginY, uvSizeX, uvSizeY],
       uvBounds: [uvOriginX, uvOriginY, uvMaxX, uvMaxY],
       color: [color.red, color.green, color.blue, color.alpha],
-      effectA: [zero, zero, zero, zero],
-      effectB: [zero, zero, zero, zero],
-      page: [zero, zero, zero, u32.toF32(page)],
+      effectA: [outline.color.red, outline.color.green, outline.color.blue, outline.color.alpha],
+      effectB: [shadow.color.red, shadow.color.green, shadow.color.blue, shadow.color.alpha],
+      page: [
+        effectValue(shadow.offsetX, shadowScaleX),
+        effectValue(shadow.offsetY, shadowScaleY),
+        effectValue(outline.width, outlineScale),
+        u32.toF32(page),
+      ],
     });
   },
   compileFont(compiler) {
@@ -376,6 +406,9 @@ export const msdfPlanProgram: RasterPlanProgram<typeof msdf, typeof msdfSchema> 
         uvSizeY: (row) => span(row, 10, 14, 'height'),
         uvMaxX: (row) => atlas(row, 12, 'width'),
         uvMaxY: (row) => atlas(row, 14, 'height'),
+        shadowScaleX: () => data.planeUnitsPerEm / data.binding.width,
+        shadowScaleY: () => data.planeUnitsPerEm / data.binding.height,
+        outlineScale: () => data.planeUnitsPerEm / data.pixelRange,
       },
       u32: { page },
     });
