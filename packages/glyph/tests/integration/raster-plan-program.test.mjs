@@ -506,7 +506,7 @@ test('binding compilation snapshots reader accessors before serialization', () =
 });
 
 test('a caught compiler input failure is terminal for that callback', () => {
-  const value = technique('test.plan-latched-failure');
+  const value = technique('test.plan-terminal-failure');
   registerRasterPlanProgram({
     technique: value,
     schema: schemaFor(value),

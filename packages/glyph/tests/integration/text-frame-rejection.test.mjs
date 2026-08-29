@@ -177,13 +177,6 @@ test('a malformed feature range throws naming the span and the feature', { timeo
   );
 });
 
-// The two latch tests that stood here drove the latch through that same overlap, which is the only
-// way a caller could ever produce a frame rejection. With the boundary closed there is no public
-// path to one, so the latch can no longer be exercised from a `Text` at all -- which is the whole
-// point of closing it. The latch is retained as containment for a defect in this package: it stops
-// an invalid frame recompiling and failing silently at frame rate behind the last good picture.
-// Its remaining coverage is the Rust-side tests that produce each status directly.
-
 test(
   'a fixed budget that cannot hold the content keeps the last revision and does not break the frame',
   { timeout },
