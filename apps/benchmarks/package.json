@@ -15,7 +15,7 @@
     "@pmndrs/glyph": "workspace:*",
     "@pmndrs/glyph-example-raster": "workspace:*",
     "@pmndrs/glyph-example-renderer": "workspace:*",
-    "@react-three/fiber": "10.0.0-alpha.3",
+    "@react-three/fiber": "10.0.0-alpha.4",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "koota": "0.6.6",

@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@pmndrs/glyph": "workspace:*",
-    "@react-three/fiber": "10.0.0-alpha.3",
+    "@react-three/fiber": "10.0.0-alpha.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "three": "0.185.1"
