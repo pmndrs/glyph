@@ -34,11 +34,17 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
     fetchedUrls.push(new URL(url, location.href).href);
     return nativeFetch(input, init);
   };
-  const capture = await captureSlugExternalRenderParity({
-    backend,
-    externalArtifactUrl: new URL(externalArtifactUrl, location.href).href,
-    fetch: observedFetch,
-  });
+  let capture;
+  try {
+    capture = await captureSlugExternalRenderParity({
+      backend,
+      externalArtifactUrl: new URL(externalArtifactUrl, location.href).href,
+      fetch: observedFetch,
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.stack : error);
+    throw error;
+  }
   if (!equalBytes(capture.embedded, capture.external)) {
     throw new Error(`${backend} external Slug pixels differ from embedded pixels`);
   }

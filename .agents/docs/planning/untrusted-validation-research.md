@@ -57,7 +57,7 @@ Every candidate must validate the same values and return the same normalized tru
 4. direct-memory Wasm ABI metadata and bounded response framing;
 5. benchmark-only imported result/report data, kept out of published runtime graphs.
 
-Structural validation is only the first layer. Checked arithmetic, reciprocal identities, byte ranges, overlap rules, cryptographic hashes, KTX2/GLB parsing, font semantics, resource budgets, and ownership state remain explicit package logic.
+Structural validation is only the first layer. Checked arithmetic, reciprocal identities, byte ranges, overlap rules, declared fingerprints, KTX2/GLB parsing, font semantics, resource budgets, and ownership state remain explicit package logic. Fingerprints identify compatible bake outputs; they are not cryptographic integrity checks.
 
 ## Experiment
 

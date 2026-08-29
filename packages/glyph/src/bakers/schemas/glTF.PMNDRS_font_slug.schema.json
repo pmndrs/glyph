@@ -5,8 +5,8 @@
   "allOf": [{ "$ref": "glTFProperty.schema.json" }],
   "properties": {
     "version": { "type": "integer", "enum": [0] },
-    "rasterKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-    "shapingHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "rasterKey": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "shapingFingerprint": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
     "glyphCount": { "type": "integer", "minimum": 1, "maximum": 65535 },
     "glyphIdWidth": { "type": "integer", "enum": [16] },
     "planeUnitsPerEm": { "type": "integer", "minimum": 1, "maximum": 32767 },
@@ -50,5 +50,5 @@
       }
     }
   },
-  "required": ["version", "rasterKey", "shapingHash", "glyphCount", "glyphIdWidth", "planeUnitsPerEm", "recordBufferView", "recordStride", "pages"]
+  "required": ["version", "rasterKey", "shapingFingerprint", "glyphCount", "glyphIdWidth", "planeUnitsPerEm", "recordBufferView", "recordStride", "pages"]
 }

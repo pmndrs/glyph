@@ -5,7 +5,8 @@ import type {
   RasterPayloadReport,
   SerializedBakeError,
 } from '../bake.js';
-import type { RasterKey, Sha256Hex } from '../identity.js';
+import type { RasterKey, Fingerprint } from '../identity.js';
+import { isFingerprint as isFingerprintValue } from './fingerprint.js';
 
 export interface AbiFunction {
   readonly export: string;
@@ -69,7 +70,7 @@ export interface DirectRasterBakerExports {
 interface ArtifactMetadata {
   readonly role: 'raster' | 'raster-page';
   readonly id: string;
-  readonly sha256: Sha256Hex;
+  readonly fingerprint: Fingerprint;
   readonly byteOffset: number;
   readonly byteLength: number;
 }
@@ -280,7 +281,7 @@ export function decodeSegmentedResponse<Kind extends string>(
       role: artifact.role,
       id: artifact.id,
       bytes,
-      sha256: artifact.sha256,
+      fingerprint: artifact.fingerprint,
     };
   });
   return {
@@ -328,7 +329,7 @@ export function decodeResponse<Kind extends string>(
     bytes: response
       .subarray(metadataEnd + artifact.byteOffset, metadataEnd + artifact.byteOffset + artifact.byteLength)
       .slice(),
-    sha256: artifact.sha256,
+    fingerprint: artifact.fingerprint,
   }));
   return {
     rasterKey: result.rasterKey as RasterKey,
@@ -350,7 +351,7 @@ function assertResultMetadata<Kind extends string>(
     result.kind !== spec.kind ||
     result.extension !== spec.extension ||
     result.version !== spec.version ||
-    !isHash(result.rasterKey) ||
+    !isFingerprint(result.rasterKey) ||
     !Array.isArray(result.artifacts) ||
     !isRasterPayloadReport(result.report, spec.pageFormat)
   ) {
@@ -378,7 +379,7 @@ function isArtifactMetadata(value: unknown): value is ArtifactMetadata {
     isNonArrayObject(value) &&
     (value.role === 'raster' || value.role === 'raster-page') &&
     typeof value.id === 'string' &&
-    isHash(value.sha256) &&
+    isFingerprint(value.fingerprint) &&
     Number.isSafeInteger(value.byteOffset) &&
     Number.isSafeInteger(value.byteLength)
   );
@@ -464,8 +465,8 @@ function isPositiveSafeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
-function isHash(value: unknown): value is Sha256Hex {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+function isFingerprint(value: unknown): value is Fingerprint {
+  return isFingerprintValue(value);
 }
 
 export function isNonArrayObject(value: unknown): value is Record<string, unknown> {

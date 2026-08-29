@@ -58,7 +58,7 @@ pub struct BakeArtifactV0 {
     pub id: String,
     #[serde(skip)]
     pub bytes: Vec<u8>,
-    pub sha256: String,
+    pub fingerprint: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -88,8 +88,8 @@ pub struct FontMetricsV0 {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvenanceV0 {
-    pub source_hash: String,
-    pub descriptor_hash: String,
+    pub source_fingerprint: String,
+    pub descriptor_fingerprint: String,
     pub font_face_index: u32,
     pub baker_version: String,
     pub harfrust_version: String,

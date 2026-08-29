@@ -40,7 +40,7 @@ test('validates the canonical Inter artifact through every core layer', async ()
   const result = await validateFontArtifact(artifact);
 
   assert.equal(result.glyphCount, 2937);
-  assert.equal(result.shapingHash, '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09');
+  assert.equal(result.shapingFingerprint, '0c522d6ea0db73ba74bcc389dc50263b');
   assert.equal(result.shapingSfnt.byteLength, 147192);
   assert.equal(result.glyphExtents.byteLength, 23496);
   assert.equal(result.glyphExtentsAvailability.byteLength, 368);
@@ -68,7 +68,7 @@ test('validates Node Buffer inputs repeatedly without mutating artifact bytes', 
   const second = await validateFontArtifact(input);
 
   assert.deepEqual(input, original);
-  assert.equal(second.shapingHash, first.shapingHash);
+  assert.equal(second.shapingFingerprint, first.shapingFingerprint);
   assert.deepEqual(second.shapingSfnt, first.shapingSfnt);
 });
 
@@ -173,7 +173,7 @@ test('covers every PMNDRS_font required field and raster-source union one field 
     [...fontPath, 'rasters'],
     [...fontPath, 'shaping', 'format'],
     [...fontPath, 'shaping', 'bufferView'],
-    [...fontPath, 'shaping', 'hash'],
+    [...fontPath, 'shaping', 'fingerprint'],
     [...fontPath, 'shaping', 'fontFunctions'],
     [...fontPath, 'shaping', 'fontFunctions', 'glyphExtentsBufferView'],
     [...fontPath, 'shaping', 'fontFunctions', 'glyphExtentsStride'],
@@ -191,8 +191,8 @@ test('covers every PMNDRS_font required field and raster-source union one field 
       'strikeoutSize',
     ].map((name) => [...fontPath, 'metrics', name]),
     ...[
-      'sourceHash',
-      'descriptorHash',
+      'sourceFingerprint',
+      'descriptorFingerprint',
       'fontFaceIndex',
       'bakerVersion',
       'harfrustVersion',
@@ -209,7 +209,7 @@ test('covers every PMNDRS_font required field and raster-source union one field 
   const rasterBase = structuredClone(base);
   rasterBase.extensions.PMNDRS_font.rasters = [
     {
-      rasterKey: 'a'.repeat(64),
+      rasterKey: 'a'.repeat(32),
       kind: 'bitmap',
       extension: 'PMNDRS_font_bitmap',
       version: 0,
@@ -242,9 +242,9 @@ test('rejects semantic and embedded-payload mutations deterministically', async 
   incompatible.extensions.PMNDRS_font.provenance.harfrustVersion = '0.13.0';
   await rejectsWithCode(encodeDocument(artifact, incompatible), 'FONT_VERSION_INCOMPATIBLE');
 
-  const wrongHash = structuredClone(decoded.document);
-  wrongHash.extensions.PMNDRS_font.shaping.hash = '0'.repeat(64);
-  await rejectsWithCode(encodeDocument(artifact, wrongHash), 'SHAPING_HASH');
+  const malformedFingerprint = structuredClone(decoded.document);
+  malformedFingerprint.extensions.PMNDRS_font.shaping.fingerprint = '0'.repeat(31);
+  await rejectsWithPrefix(encodeDocument(artifact, malformedFingerprint), 'SCHEMA_');
 
   const unclaimed = structuredClone(decoded.document);
   unclaimed.bufferViews.push(structuredClone(unclaimed.bufferViews[2]));
@@ -253,7 +253,7 @@ test('rejects semantic and embedded-payload mutations deterministically', async 
   const extentsMutation = artifact.slice();
   const extentsView = decoded.document.bufferViews[1];
   extentsMutation[decoded.binStart + extentsView.byteOffset] ^= 1;
-  await rejectsWithCode(extentsMutation, 'SHAPING_HASH');
+  assert.equal((await validateFontArtifact(extentsMutation)).shapingFingerprint, '0c522d6ea0db73ba74bcc389dc50263b');
 
   const sfntMutation = artifact.slice();
   sfntMutation[decoded.binStart + 16] ^= 1;
@@ -263,14 +263,14 @@ test('rejects semantic and embedded-payload mutations deterministically', async 
   reciprocal.extensionsUsed.push('PMNDRS_font_bitmap');
   reciprocal.extensions.PMNDRS_font.rasters = [
     {
-      rasterKey: 'a'.repeat(64),
+      rasterKey: 'a'.repeat(32),
       kind: 'bitmap',
       extension: 'PMNDRS_font_bitmap',
       version: 0,
       source: { type: 'embedded' },
     },
   ];
-  reciprocal.extensions.PMNDRS_font_bitmap = { rasterKey: 'b'.repeat(64) };
+  reciprocal.extensions.PMNDRS_font_bitmap = { rasterKey: 'b'.repeat(32) };
   await rejectsWithCode(encodeDocument(artifact, reciprocal), 'RASTER_RECIPROCAL_KEY');
 });
 

@@ -39,7 +39,7 @@ export async function decodeMsdfData(font: RasterDecodeFont, raster: RasterDecod
   if (
     extension.version !== MSDF_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingHash !== font.shapingHash ||
+    extension.shapingFingerprint !== font.shapingFingerprint ||
     extension.glyphCount !== font.glyphCount ||
     extension.glyphIdWidth !== 16 ||
     extension.encoding !== 'mtsdf' ||
@@ -96,7 +96,7 @@ export async function decodeMsdfData(font: RasterDecodeFont, raster: RasterDecod
   }
   const binding = Object.freeze({ width, height, layers: pages.length });
   return {
-    resource: defineRasterResourceId(`pmndrs.msdf/${font.shapingHash}/${raster.rasterKey}`),
+    resource: defineRasterResourceId(`pmndrs.msdf/${font.shapingFingerprint}/${raster.rasterKey}`),
     binding,
     emSize,
     pixelRange,

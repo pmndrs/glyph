@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test, { before } from 'node:test';
 
 import { SlugArtifactValidationError, validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { slugDescriptor, slugDescriptorRasterKey } from '../../dist/internal/slug-contract.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { interShapingFingerprint } from '../support/inter-identity.mjs';
 
 const GLB_MAGIC = 0x4654_6c67;
 const JSON_CHUNK = 0x4e4f_534a;
 const BIN_CHUNK = 0x004e_4942;
-const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09';
+const shapingFingerprint = interShapingFingerprint;
 let rasterKey;
 let context;
 let embedded;
@@ -18,7 +19,7 @@ before(async () => {
   rasterKey = await slugDescriptorRasterKey();
   context = {
     rasterKey,
-    shapingHash,
+    shapingFingerprint,
     glyphCount: 2,
     glyphIdWidth: 16,
     descriptor: slugDescriptor(),
@@ -26,7 +27,7 @@ before(async () => {
   embedded = makeArtifact('embedded');
 });
 
-test('validates exact embedded and authenticated external Slug page resources', async () => {
+test('validates exact embedded and fingerprint-addressed external Slug page resources', async () => {
   const embeddedResult = await validateSlugArtifact(embedded.bytes, context);
   assert.equal(embeddedResult.records.byteLength, 80);
   assert.deepEqual(
@@ -82,7 +83,7 @@ test('keeps package-owned Slug schemas byte-identical to their canonical sources
 
 test('rejects identity, exact record, bounds, overflow, and address mutations', async () => {
   const wrongIdentity = structuredClone(embedded.document);
-  wrongIdentity.extensions.PMNDRS_font_slug.shapingHash = '0'.repeat(64);
+  wrongIdentity.extensions.PMNDRS_font_slug.shapingFingerprint = '0'.repeat(32);
   await rejectsWithCode(buildGlb(wrongIdentity, embedded.binary), 'RECIPROCAL_IDENTITY');
 
   const shortRecord = structuredClone(embedded.document);
@@ -137,7 +138,7 @@ test('rejects malformed RGBA16F KTX2 data and nonzero integer-grid tails', async
   await rejectsWithCode(embedded.bytes, 'GPU_BUDGET', { ...context, limits: { maxGpuBytes: 1 } });
 });
 
-test('requires exact external lengths and hashes for every Slug page resource', async () => {
+test('requires exact external lengths and fingerprints for every Slug page resource', async () => {
   const external = makeArtifact('external');
   await rejectsWithCode(external.bytes, 'EXTERNAL_PAGE_MISSING');
 
@@ -145,7 +146,7 @@ test('requires exact external lengths and hashes for every Slug page resource', 
   const curve = resources.get('curve.ktx2').slice();
   curve[curve.byteLength - 1] ^= 1;
   resources.set('curve.ktx2', curve);
-  await rejectsWithCode(external.bytes, 'EXTERNAL_PAGE_HASH', {
+  await rejectsWithCode(external.bytes, 'EXTERNAL_PAGE_FINGERPRINT', {
     ...context,
     externalPages: resources,
   });
@@ -180,7 +181,7 @@ function makeArtifact(packaging) {
           type: 'external',
           uri: name,
           byteLength: resources.get(name).byteLength,
-          artifactHash: hash(resources.get(name)),
+          artifactFingerprint: fingerprint128(resources.get(name), fingerprintDomain.artifact),
         };
   const document = {
     asset: { version: '2.0' },
@@ -190,7 +191,7 @@ function makeArtifact(packaging) {
       PMNDRS_font_slug: {
         version: 0,
         rasterKey,
-        shapingHash,
+        shapingFingerprint,
         glyphCount: 2,
         glyphIdWidth: 16,
         planeUnitsPerEm: 2048,
@@ -314,8 +315,4 @@ function buildGlb(document, binary) {
   view.setUint32(binHeader + 4, BIN_CHUNK, true);
   output.set(binary, binHeader + 8);
   return output;
-}
-
-function hash(bytes) {
-  return createHash('sha256').update(bytes).digest('hex');
 }

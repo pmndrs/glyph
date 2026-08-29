@@ -7,6 +7,7 @@ import {
 } from './raster-ktx.js';
 import { DenseGlyphRecordError, validateDenseGlyphRecordTable, type RasterPageDimensions } from './raster-records.js';
 import { canonicalJson } from './raster-identity.js';
+import { fingerprint128, fingerprintDomain, isFingerprint as isFingerprintValue } from './fingerprint.js';
 import { normalizeRasterCoverage, type RasterCoverage } from '../raster-coverage.js';
 import type { JsonValue } from '../raster.js';
 
@@ -130,11 +131,7 @@ export function validateRasterCoverage(
     canonicalJson(extension.coverage as JsonValue) !== canonicalJson(actualCoverage) ||
     canonicalJson(actualCoverage) !== canonicalJson(expectedCoverage)
   ) {
-    fail(
-      'RASTER_COVERAGE_DESCRIPTOR',
-      `${label} coverage does not match the authenticated raster descriptor`,
-      `${path}/coverage`,
-    );
+    fail('RASTER_COVERAGE_DESCRIPTOR', `${label} coverage does not match the raster descriptor`, `${path}/coverage`);
   }
   const viewIndex = asInteger(extension.coverageBufferView, `${path}/coverageBufferView`, 0, views.length - 1);
   claimRasterView(claimedViews, views, viewIndex, `${path}/coverageBufferView`, label);
@@ -200,8 +197,8 @@ export async function resolveRasterPageSource(
     if (source.byteLength !== bytes.byteLength) {
       fail('EXTERNAL_PAGE_LENGTH', 'external page byte length does not match its directory', path);
     }
-    if (source.artifactHash !== (await sha256(bytes))) {
-      fail('EXTERNAL_PAGE_HASH', 'external page hash does not match its directory', path);
+    if (source.artifactFingerprint !== fingerprint128(bytes, fingerprintDomain.artifact)) {
+      fail('EXTERNAL_PAGE_FINGERPRINT', 'external page fingerprint does not match its directory', path);
     }
     return { bytes, source: 'external', uri };
   }
@@ -366,8 +363,8 @@ export function checkedSum(left: number, right: number, path: string): number {
   return value;
 }
 
-export function isSha256(value: unknown): value is string {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+export function isFingerprint(value: unknown): value is string {
+  return isFingerprintValue(value);
 }
 
 export function fail(code: string, message: string, path?: string): never {
@@ -376,9 +373,4 @@ export function fail(code: string, message: string, path?: string): never {
 
 function allZero(bytes: Uint8Array): boolean {
   return bytes.every((value) => value === 0);
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes.slice().buffer);
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }

@@ -4,6 +4,8 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { fingerprint } from '@pmndrs/glyph';
+
 import { ADVANCED_SHAPING_CASES } from '../src/workloads/advanced-shaping/scene.ts';
 
 const harfBuzzVersion = '13.0.0';
@@ -50,6 +52,7 @@ try {
       fontFile: outputFontName,
       fontBytes: generatedBytes.byteLength,
       fontSha256: sha256(generatedBytes),
+      fontFingerprint: fingerprint.source(generatedBytes),
       license: 'OFL-1.1',
       licenseFile: 'LICENSE.txt',
       licenseSha256: sha256(licenseBytes),

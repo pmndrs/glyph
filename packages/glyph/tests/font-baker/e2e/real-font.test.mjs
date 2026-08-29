@@ -48,10 +48,10 @@ test('the canonical Inter fixture bakes deterministically and retains HarfRust s
     readFile(new URL('harfrust.json', shapingDirectory), 'utf8'),
   ]);
   const manifest = JSON.parse(manifestSource);
-  const sourceHash = createHash('sha256').update(source).digest('hex');
+  const sourceSha256 = createHash('sha256').update(source).digest('hex');
 
   assert.equal(source.byteLength, manifest.source.fontBytes);
-  assert.equal(sourceHash, manifest.source.fontSha256);
+  assert.equal(sourceSha256, manifest.source.fontSha256);
 
   const baker = await createFontBaker(wasm);
   const request = {
@@ -65,10 +65,11 @@ test('the canonical Inter fixture bakes deterministically and retains HarfRust s
 
   assert.equal(first.artifacts.length, 1);
   assert.equal(artifact.role, 'font');
-  assert.equal(artifact.id, `font-${expected.shapingHash}`);
+  assert.equal(artifact.id, `font-${expected.shapingFingerprint}`);
   assert.equal(artifact.bytes.byteLength, expected.artifactBytes);
-  assert.equal(artifact.sha256, expected.artifactSha256);
-  assert.equal(artifact.sha256, second.artifacts[0].sha256);
+  assert.equal(artifact.fingerprint, expected.artifactFingerprint);
+  assert.equal(artifact.fingerprint, second.artifacts[0].fingerprint);
+  assert.equal(createHash('sha256').update(artifact.bytes).digest('hex'), expected.artifactSha256);
   assert.deepEqual(artifact.bytes, second.artifacts[0].bytes);
   assert.deepEqual(first.report, second.report);
   assert.deepEqual(first.warnings, []);
@@ -88,7 +89,7 @@ test('the canonical Inter fixture bakes deterministically and retains HarfRust s
   const inspected = await validateFontArtifact(artifact.bytes);
   const extension = inspected.document.extensions.PMNDRS_font;
   assert.equal(inspected.shapingSfnt.byteLength, expected.shapingSfntBytes);
-  assert.equal(extension.shaping.hash, expected.shapingHash);
+  assert.equal(extension.shaping.fingerprint, expected.shapingFingerprint);
   assert.equal(extension.metrics.glyphCount, expected.glyphCount);
   assert.equal(extension.metrics.unitsPerEm, expected.unitsPerEm);
   assert.equal(extension.metrics.ascender, expected.ascender);
@@ -99,8 +100,8 @@ test('the canonical Inter fixture bakes deterministically and retains HarfRust s
   assert.equal(extension.metrics.underlineThickness, 140);
   assert.equal(extension.metrics.strikeoutPosition, 671);
   assert.equal(extension.metrics.strikeoutSize, 140);
-  assert.equal(extension.provenance.sourceHash, manifest.source.fontSha256);
-  assert.equal(extension.provenance.descriptorHash, manifest.bake.descriptorHash);
+  assert.equal(extension.provenance.sourceFingerprint, manifest.source.fontFingerprint);
+  assert.equal(extension.provenance.descriptorFingerprint, manifest.bake.descriptorFingerprint);
   assert.equal(inspected.khronos.validatorVersion, manifest.versions.gltfValidator);
 
   assert.deepEqual(
@@ -134,14 +135,15 @@ test('the canonical Amiri fixture preserves exact complex shaping through the GL
   const artifact = first.artifacts[0];
   const expected = manifest.bake.expectedCore;
   assert.equal(artifact.bytes.byteLength, expected.artifactBytes);
-  assert.equal(artifact.sha256, expected.artifactSha256);
+  assert.equal(artifact.fingerprint, expected.artifactFingerprint);
+  assert.equal(createHash('sha256').update(artifact.bytes).digest('hex'), expected.artifactSha256);
   assert.deepEqual(artifact.bytes, second.artifacts[0].bytes);
   assert.deepEqual(first.report.shared.shaping.tables, expected.tables);
 
   const inspected = await validateFontArtifact(artifact.bytes);
   const extension = inspected.document.extensions.PMNDRS_font;
   assert.equal(inspected.shapingSfnt.byteLength, expected.shapingSfntBytes);
-  assert.equal(extension.shaping.hash, expected.shapingHash);
+  assert.equal(extension.shaping.fingerprint, expected.shapingFingerprint);
   assert.deepEqual(extension.metrics, {
     ascender: expected.ascender,
     descender: expected.descender,
@@ -154,7 +156,7 @@ test('the canonical Amiri fixture preserves exact complex shaping through the GL
     strikeoutPosition: expected.strikeoutPosition,
     strikeoutSize: expected.strikeoutSize,
   });
-  assert.equal(extension.provenance.sourceHash, manifest.source.fontSha256);
+  assert.equal(extension.provenance.sourceFingerprint, manifest.source.fontFingerprint);
 
   assert.deepEqual(
     await shapeReducedFont(t, inspected.shapingSfnt, 'Amiri-Regular.shaping.ttf', casesDirectory),
@@ -191,9 +193,9 @@ test('the authenticated Noto CJK fixture retains the closed shaping profile at t
   assert.deepEqual(first.warnings, []);
   const artifact = first.artifacts[0];
   assert.equal(artifact.role, 'font');
-  assert.equal(artifact.id, `font-${expected.shapingHash}`);
+  assert.equal(artifact.id, `font-${expected.shapingFingerprint}`);
   assert.equal(artifact.bytes.byteLength, expected.artifactBytes);
-  assert.equal(artifact.sha256, expected.artifactSha256);
+  assert.equal(artifact.fingerprint, expected.artifactFingerprint);
   assert.equal(createHash('sha256').update(artifact.bytes).digest('hex'), expected.artifactSha256);
 
   assert.equal(first.report.source.bytes, manifest.source.fontBytes);
@@ -218,7 +220,7 @@ test('the authenticated Noto CJK fixture retains the closed shaping profile at t
   assert.equal(createHash('sha256').update(inspected.shapingSfnt).digest('hex'), expected.shapingSfntSha256);
   assert.equal(inspected.glyphExtents.byteLength, expected.extentsBytes);
   assert.equal(inspected.glyphExtentsAvailability.byteLength, expected.extentsAvailabilityBytes);
-  assert.equal(extension.shaping.hash, expected.shapingHash);
+  assert.equal(extension.shaping.fingerprint, expected.shapingFingerprint);
   assert.deepEqual(extension.metrics, {
     ascender: expected.ascender,
     descender: expected.descender,
@@ -231,8 +233,8 @@ test('the authenticated Noto CJK fixture retains the closed shaping profile at t
     strikeoutPosition: expected.strikeoutPosition,
     strikeoutSize: expected.strikeoutSize,
   });
-  assert.equal(extension.provenance.sourceHash, manifest.source.fontSha256);
-  assert.equal(extension.provenance.descriptorHash, manifest.bake.descriptorHash);
+  assert.equal(extension.provenance.sourceFingerprint, manifest.source.fontFingerprint);
+  assert.equal(extension.provenance.descriptorFingerprint, manifest.bake.descriptorFingerprint);
   assert.equal(inspected.khronos.validatorVersion, manifest.versions.gltfValidator);
 
   assert.deepEqual(

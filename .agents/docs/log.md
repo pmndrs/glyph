@@ -244,6 +244,13 @@
 
 - **Portable Slug source gate** — Added a device-free package test that compiles the staged Slug graph through both Three.js node builders and verifies unique shared declarations, both bounded loops and terminators, the shared solver, and WebGL2 builtin compatibility. TypeGPU runtimes are optional peers, so renderer-neutral and baker consumers retain no static dependency on them.
 
+- **Baked identities no longer depend on Web Crypto** — Bake and runtime-bake producers stamp related font, raster, and
+  page artifacts with domain-separated MurmurHash3 x86 128 fingerprints. Normal loading compares those fingerprints and
+  declared lengths without hashing payload bytes, while content-addressed external references prevent ordinary stale
+  cache collisions. Build-time composition still recomputes fingerprints before publication. The contract detects
+  accidentally mixed or stale bake outputs and leaves damaged containers to decode or upload validation; it does not
+  claim cryptographic integrity.
+
 ## 2026-08-28
 
 - **Enabled workspace source-condition development** — Every TypeScript package subpath now exposes a custom `source`

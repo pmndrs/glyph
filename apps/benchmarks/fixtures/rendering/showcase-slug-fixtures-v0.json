@@ -6,17 +6,17 @@
       "file": "inter-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 3445000,
-        "sha256": "97ff4948808a5a02ea11b582621de49fa4e8fdf59dd78d8dc930be82f1ea3593"
+        "bytes": 3444836,
+        "sha256": "4accc530ee1083562e273ebb669a277cb533b5a27fd31b2810bde38e2df53217"
       },
       "compressed": {
-        "bytes": 618555,
-        "sha256": "ea1777d25fce6f9cc3985a550ab1e210c6d89921d4ea9d99e0597f18c7ce7ba3"
+        "bytes": 618335,
+        "sha256": "e3591a7370369a546f84a6599db8765945d195751882f9485a373d0c847a67c1"
       },
       "raster": {
         "kind": "slug",
         "metadataBytes": 117480,
-        "serializedBytes": 3272816,
+        "serializedBytes": 3272760,
         "decodedGpuBytes": 3153920,
         "pages": [
           {
@@ -35,17 +35,17 @@
       "file": "amiri-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 12081552,
-        "sha256": "95c3037373652872fd7fd1d6a81873ac946c381f86ab2cb49692d0b47e9dda8e"
+        "bytes": 12081388,
+        "sha256": "85b522b95048a1039d0b8adc2f3bf5a4490241aa7b3cd878180f2d20a7b021fe"
       },
       "compressed": {
-        "bytes": 1955123,
-        "sha256": "7f5c4ff7370c0210275c959042ea9a772d17b8beac6158c427eac4d86cc6b82e"
+        "bytes": 1955019,
+        "sha256": "552f3cd0b4284ca3048df578caf106e65ca4ab8f7297c57a83b95bb8c56422eb"
       },
       "raster": {
         "kind": "slug",
         "metadataBytes": 268400,
-        "serializedBytes": 11902460,
+        "serializedBytes": 11902404,
         "decodedGpuBytes": 11632640,
         "pages": [
           {
@@ -64,17 +64,17 @@
       "file": "noto-sans-devanagari-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 1613844,
-        "sha256": "ae04d68331c25042fe414f0f4022df5b33a4fe97e47f66bf254fc973f211c26a"
+        "bytes": 1613680,
+        "sha256": "77c2de1460b4399fdaed31b745383b8628040a12ef13cb69e6d908f013e03579"
       },
       "compressed": {
-        "bytes": 296729,
-        "sha256": "0e3dff2536cbe1afefdfb23b12ae6e56023b5817396008bc88ec8fbe2f2c1a08"
+        "bytes": 296604,
+        "sha256": "4ba8a6bfbb8ded5c39bd864bf863d3b1b06a50f939720b49b26fa9622f859a0c"
       },
       "raster": {
         "kind": "slug",
         "metadataBytes": 38160,
-        "serializedBytes": 1555092,
+        "serializedBytes": 1555036,
         "decodedGpuBytes": 1515520,
         "pages": [
           {
@@ -93,17 +93,17 @@
       "file": "dot-gothic-16-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 22643424,
-        "sha256": "30cd2a860976e4704805d0792bdfa7b707e5f53618f24e8e5f1ae17a6b6f8081"
+        "bytes": 22643260,
+        "sha256": "ba182933fb19d3c373f5ad0caf23ccf18c2aae008a1123c95ea983db498b9031"
       },
       "compressed": {
-        "bytes": 3639812,
-        "sha256": "543130769e8c28fe8d78bf698782a24452a0c19345db810f1f56f3238e6bcacb"
+        "bytes": 3639708,
+        "sha256": "46b83adc238f5ba714358aa5826fd0b3e100ec5f427aeca569ff67b5910d5a95"
       },
       "raster": {
         "kind": "slug",
         "metadataBytes": 374480,
-        "serializedBytes": 22346848,
+        "serializedBytes": 22346792,
         "decodedGpuBytes": 21970944,
         "pages": [
           {
@@ -122,17 +122,17 @@
       "file": "font-awesome-free-6.7.2-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 2945492,
-        "sha256": "ac20628da6609d6a567c6e0e508e7890e7c8fbb5df8cc1464ac2574158777884"
+        "bytes": 2945328,
+        "sha256": "6f5a4f2ca29c0a5a9e9a3e08ebc501d11ee93fadac99962979b3f44c00b889f2"
       },
       "compressed": {
-        "bytes": 658058,
-        "sha256": "0e43134bdd6c3d4f7ce63a0aff3f022e7b041849df2f7dd1cfdf22d2fe6bf22b"
+        "bytes": 657935,
+        "sha256": "7aa380b2bd99d7342ab10f072659cdec2701ddc74ed357b3ed48c50ad4a6137e"
       },
       "raster": {
         "kind": "slug",
         "metadataBytes": 56120,
-        "serializedBytes": 2908348,
+        "serializedBytes": 2908292,
         "decodedGpuBytes": 2850816,
         "pages": [
           {
@@ -151,17 +151,17 @@
       "file": "noto-sans-cjk-showcase-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 382756,
-        "sha256": "0d01ac049a7e476f964168992d3688b9c3e75848faf5ead275a69118e151104f"
+        "bytes": 382592,
+        "sha256": "318e004dda64563488b7b65376e354fd1cfaf440c0d0576429ad0b10b1df58a8"
       },
       "compressed": {
-        "bytes": 96199,
-        "sha256": "96c0b045109c0f6cdba98ec221b0619297658d2ce0354b7cbff6c62112d85c2c"
+        "bytes": 96075,
+        "sha256": "407c248f47145001430ec9191246407c1a13d82f9704e7bc0600ffb2f34ed4fa"
       },
       "raster": {
         "kind": "slug",
         "metadataBytes": 6200,
-        "serializedBytes": 376240,
+        "serializedBytes": 376184,
         "decodedGpuBytes": 368640,
         "pages": [
           {
@@ -180,17 +180,17 @@
       "file": "source-serif-4-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 1875812,
-        "sha256": "8756fc6854196f7e375abdbff649a18850b944e5a06176522e8ab90a5944a2d2"
+        "bytes": 1875648,
+        "sha256": "e73df7d2421a7b96289dc06230fe3eb71575c1ad515e2d3e637dfcaab61cad3e"
       },
       "compressed": {
-        "bytes": 407631,
-        "sha256": "33a065b678ec1d3e903f60291ca703b2631f01ae7b33086bfccef159fe1b4f95"
+        "bytes": 407529,
+        "sha256": "b00dd7a93c22c903673a03e094df3e71b5e18d9716a9437f86f011eb373c4f62"
       },
       "raster": {
         "kind": "slug",
         "metadataBytes": 58560,
-        "serializedBytes": 1739332,
+        "serializedBytes": 1739276,
         "decodedGpuBytes": 1679360,
         "pages": [
           {
@@ -209,17 +209,17 @@
       "file": "dancing-script-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 1658924,
-        "sha256": "fa38514caf2d239845ce166095583fee9d82f1675cc0875d5e6cc7841c91dc97"
+        "bytes": 1658760,
+        "sha256": "7e785b46e586398323a9f20ae1f29e49b0aff1d344899459cb06ff45943c0f61"
       },
       "compressed": {
-        "bytes": 288310,
-        "sha256": "e549ed6ae02091e9f92fd4de6a1746b0a6dad897533eb6e8be1dd521da18d86b"
+        "bytes": 288146,
+        "sha256": "caa32b581e584dd83ae222fe9599995253d733a8c9e579a9abde38da7907caec"
       },
       "raster": {
         "kind": "slug",
         "metadataBytes": 40680,
-        "serializedBytes": 1614956,
+        "serializedBytes": 1614900,
         "decodedGpuBytes": 1572864,
         "pages": [
           {

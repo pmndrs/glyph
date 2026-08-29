@@ -7,6 +7,7 @@ import { validateBytes } from 'gltf-validator';
 import { GlyphError } from '../glyph-error.js';
 import { GlbReadError, readGlb, type ParsedGlb } from '../internal/glb-reader.js';
 import { FONT_BAKER_VERSION } from './contract.js';
+import type { Fingerprint } from '../identity.js';
 
 import extensionSchema from './schemas/gltf-2.0/extension.schema.json' with { type: 'json' };
 import extrasSchema from './schemas/gltf-2.0/extras.schema.json' with { type: 'json' };
@@ -14,7 +15,6 @@ import gltfPropertySchema from './schemas/gltf-2.0/glTFProperty.schema.json' wit
 import fontExtensionSchema from './schemas/extensions/glTF.PMNDRS_font.schema.json' with { type: 'json' };
 
 const GLTF_VALIDATOR_VERSION = '2.0.0-dev.3.10';
-const textEncoder = new TextEncoder();
 
 export interface FontArtifactValidationIssue {
   readonly code: string;
@@ -48,7 +48,8 @@ export interface ValidatedFontArtifact {
   readonly shapingSfnt: Uint8Array;
   readonly glyphExtents: Uint8Array;
   readonly glyphExtentsAvailability: Uint8Array;
-  readonly shapingHash: string;
+  readonly shapingFingerprint: Fingerprint;
+  readonly sourceFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly khronos: KhronosValidationReport;
 }
@@ -247,6 +248,11 @@ async function validateFontSemantics(
   );
   const metrics = requireNonArrayObject(font.metrics, 'metrics', '/extensions/PMNDRS_font/metrics');
   const provenance = requireNonArrayObject(font.provenance, 'provenance', '/extensions/PMNDRS_font/provenance');
+  const sourceFingerprint = asString(
+    provenance.sourceFingerprint,
+    'source fingerprint',
+    '/extensions/PMNDRS_font/provenance/sourceFingerprint',
+  );
   asInteger(
     provenance.fontFaceIndex,
     'fontFaceIndex',
@@ -350,21 +356,19 @@ async function validateFontSemantics(
   const glyphExtentsAvailability = sliceView(bin, availabilityView);
   validateShapingSfnt(shapingSfnt, metrics);
   validateExtents(glyphExtents, glyphExtentsAvailability, glyphCount);
-  const actualHash = await computeShapingHash(shapingSfnt, glyphExtents, glyphExtentsAvailability);
-  if (actualHash !== shaping.hash) {
-    fail(
-      'SHAPING_HASH',
-      'shaping hash does not match the three canonical payload views',
-      '/extensions/PMNDRS_font/shaping/hash',
-    );
-  }
+  const shapingFingerprint = asString(
+    shaping.fingerprint,
+    'shaping fingerprint',
+    '/extensions/PMNDRS_font/shaping/fingerprint',
+  );
   validateRasterDirectory(font, extensions, extensionsUsed);
   return {
     document,
     shapingSfnt,
     glyphExtents,
     glyphExtentsAvailability,
-    shapingHash: actualHash,
+    shapingFingerprint: shapingFingerprint as Fingerprint,
+    sourceFingerprint: sourceFingerprint as Fingerprint,
     glyphCount,
     khronos,
   };
@@ -550,24 +554,6 @@ function validateExtents(extents: Uint8Array, availability: Uint8Array, glyphCou
       fail('GLYPH_EXTENTS_ABSENT_DATA', `absent glyph ${glyphId} must have a zero extents record`);
     }
   }
-}
-
-async function computeShapingHash(sfnt: Uint8Array, extents: Uint8Array, availability: Uint8Array): Promise<string> {
-  const parts: Uint8Array<ArrayBufferLike>[] = [textEncoder.encode('PMNDRS_font\0v0\0')];
-  for (const value of [sfnt, extents, availability]) {
-    const length = new Uint8Array(4);
-    new DataView(length.buffer).setUint32(0, value.byteLength, true);
-    parts.push(length, value);
-  }
-  const totalLength = parts.reduce((sum, value) => sum + value.byteLength, 0);
-  const input = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const part of parts) {
-    input.set(part, offset);
-    offset += part.byteLength;
-  }
-  const digest = await crypto.subtle.digest('SHA-256', input.buffer);
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
 function checksum(bytes: Uint8Array): number {

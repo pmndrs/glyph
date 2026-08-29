@@ -32,7 +32,7 @@ export function snapshotSerializedFontFace(
       [...source.resourceIdentities].map((identity) => {
         const resource = registered.resources.get(identity)!;
         return Object.freeze({
-          artifactHash: resource.artifactHash,
+          artifactFingerprint: resource.artifactFingerprint,
           byteLength: resource.byteLength,
         });
       }),
@@ -47,7 +47,7 @@ export function snapshotSerializedFontFace(
           ? {}
           : {
               data: copyBuffer(source.artifactBytes),
-              artifactHash: source.artifactHash!,
+              artifactFingerprint: source.artifactFingerprint!,
             }),
         resources,
       }),
@@ -57,13 +57,13 @@ export function snapshotSerializedFontFace(
     kind: 'glyph-font-face',
     version: 1,
     data: copyBuffer(registered.artifactBytes),
-    artifactHash: registered.artifactHash,
+    artifactFingerprint: registered.artifactFingerprint,
     rasters: Object.freeze(rasters),
     resources: Object.freeze(
       [...resourceIdentities].map((identity) => {
         const resource = registered.resources.get(identity)!;
         return Object.freeze({
-          artifactHash: resource.artifactHash,
+          artifactFingerprint: resource.artifactFingerprint,
           byteLength: resource.byteLength,
           data: copyBuffer(resource.bytes),
         });
@@ -93,9 +93,9 @@ export async function loadSerializedFontFaceSource(
     signal?.throwIfAborted();
     for (const resource of serialized.resources) {
       registered.resources.set(
-        `${resource.artifactHash}:${resource.byteLength}`,
+        `${resource.artifactFingerprint}:${resource.byteLength}`,
         Object.freeze({
-          artifactHash: resource.artifactHash,
+          artifactFingerprint: resource.artifactFingerprint,
           byteLength: resource.byteLength,
           bytes: new Uint8Array(resource.data),
         }),

@@ -6,7 +6,7 @@ export type PmndrsFontExtension = {
   readonly shaping: {
     readonly format: "opentype-sfnt-harfrust-v0";
     readonly bufferView: number;
-    readonly hash: string;
+    readonly fingerprint: string;
     readonly fontFunctions: {
       readonly glyphExtentsBufferView: number;
       readonly glyphExtentsStride: 8;
@@ -26,8 +26,8 @@ export type PmndrsFontExtension = {
     readonly strikeoutSize: number;
   };
   readonly provenance: {
-    readonly sourceHash: string;
-    readonly descriptorHash: string;
+    readonly sourceFingerprint: string;
+    readonly descriptorFingerprint: string;
     readonly fontFaceIndex: number;
     readonly bakerVersion: string;
     readonly harfrustVersion: string;
@@ -44,7 +44,7 @@ export type PmndrsFontExtension = {
     } | {
       readonly type: "external";
       readonly uri?: string;
-      readonly artifactHash?: string;
+      readonly artifactFingerprint?: string;
     };
   })[];
 };

@@ -34,7 +34,7 @@ struct WasmResultMetadata<'a> {
 struct WasmArtifactMetadata<'a> {
     role: &'a str,
     id: &'a str,
-    sha256: &'a str,
+    fingerprint: &'a str,
     byte_offset: usize,
     byte_length: usize,
 }
@@ -104,7 +104,7 @@ fn encode_response(result: Result<BitmapBakeResultV0, crate::BitmapBakeError>) -
                 artifacts.push(WasmArtifactMetadata {
                     role: &artifact.role,
                     id: &artifact.id,
-                    sha256: &artifact.sha256,
+                    fingerprint: &artifact.fingerprint,
                     byte_offset: offset,
                     byte_length: artifact.bytes.len(),
                 });

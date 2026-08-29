@@ -9,7 +9,7 @@ import {
   msdfRasterKey,
 } from '@pmndrs/glyph/raster/msdf';
 
-test('preserves the legacy MSDF identity while authenticating custom quality', async () => {
+test('derives canonical MSDF fingerprints for default and custom quality', async () => {
   const legacy = msdfDescriptor();
   const explicitDefault = msdfDescriptor({ emSize: 64, pixelRange: 8 });
   const rangeFour = msdfDescriptor({ emSize: 32, pixelRange: 4 });
@@ -22,18 +22,9 @@ test('preserves the legacy MSDF identity while authenticating custom quality', a
     generatorVersion: '0.0.0',
     pixelRange: 4,
   });
-  assert.equal(
-    await msdfDescriptorRasterKey(legacy),
-    'e944ba8d2856314856289466e82e471e0adc0775a7c9c3affec7c59bfdd8fe93',
-  );
-  assert.equal(
-    await msdfDescriptorRasterKey(rangeFour),
-    '9c8825cc24b9549e9cc923a17a32665770a4ec05be48e7439a0d5ac89f05afa1',
-  );
-  assert.equal(
-    await msdfDescriptorRasterKey(rangeSix),
-    'fa8f5c03367db3652abb41659835618f989ad00c0dc0c39fac8dcf3e21ee16a8',
-  );
+  assert.equal(await msdfDescriptorRasterKey(legacy), 'c51a74581f4288c40c308436ca120d67');
+  assert.equal(await msdfDescriptorRasterKey(rangeFour), '18a97f4dfdbf96aade7117a9fbfa0b85');
+  assert.equal(await msdfDescriptorRasterKey(rangeSix), 'd36b09cea1bfb26bcc16d3e34dc876e8');
   assert.equal(await msdfRasterKey({ emSize: 32, pixelRange: 4 }), await msdfDescriptorRasterKey(rangeFour));
 });
 

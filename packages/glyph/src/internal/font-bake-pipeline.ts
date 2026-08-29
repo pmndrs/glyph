@@ -73,9 +73,10 @@ export async function bakeFontPipeline(options: FontBakePipelineOptions): Promis
     const raster = await plan.baker.bake({
       font: {
         source,
+        sourceFingerprint: coreFont.sourceFingerprint,
         fontFaceIndex,
         glyphCount: coreFont.extension.metrics.glyphCount,
-        shapingHash: coreFont.shapingHash,
+        shapingFingerprint: coreFont.shapingFingerprint,
       },
       rasterKey: plan.rasterKey,
       packaging: plan.packaging,

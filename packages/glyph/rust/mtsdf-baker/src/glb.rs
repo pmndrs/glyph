@@ -21,7 +21,7 @@ pub(crate) struct BuiltRasterGlb {
 pub(crate) struct BuiltPage {
     pub id: String,
     pub bytes: Vec<u8>,
-    pub sha256: String,
+    pub fingerprint: String,
     pub width: u16,
     pub height: u16,
     pub embedded: bool,
@@ -29,7 +29,7 @@ pub(crate) struct BuiltPage {
 
 pub(crate) fn build_mtsdf_glb(
     raster_key: &str,
-    shaping_hash: &str,
+    shaping_fingerprint: &str,
     glyph_count: u16,
     page_packaging: PagePackaging,
     settings: MtsdfBakeSettingsV0,
@@ -64,8 +64,11 @@ pub(crate) fn build_mtsdf_glb(
         })?;
         #[cfg(not(feature = "profiling"))]
         let ktx2 = encode_ktx2(KtxFormat::Rgba8Unorm, page.width, page.height, &page.texels)?;
-        let sha256 = pmndrs_glyph_raster_artifact::sha256_hex(&ktx2);
-        let id = format!("msdf-{shaping_hash}-{raster_key}-p{page_index}.ktx2");
+        let fingerprint = pmndrs_glyph_raster_artifact::fingerprint128(
+            &ktx2,
+            pmndrs_glyph_raster_artifact::ARTIFACT_FINGERPRINT_V0,
+        );
+        let id = format!("msdf-{shaping_fingerprint}-{raster_key}-p{page_index}-{fingerprint}.ktx2");
         let source = match page_packaging {
             PagePackaging::Embedded => {
                 let view = append_buffer_view(&mut binary, &mut buffer_views, &ktx2)?;
@@ -75,7 +78,7 @@ pub(crate) fn build_mtsdf_glb(
                 "type": "external",
                 "uri": id,
                 "byteLength": ktx2.len(),
-                "artifactHash": sha256,
+                "artifactFingerprint": fingerprint,
             }),
         };
         pages.push(json!({
@@ -93,7 +96,7 @@ pub(crate) fn build_mtsdf_glb(
         page_artifacts.push(BuiltPage {
             id,
             bytes: ktx2,
-            sha256,
+            fingerprint,
             width: page.width,
             height: page.height,
             embedded: page_packaging == PagePackaging::Embedded,
@@ -104,7 +107,7 @@ pub(crate) fn build_mtsdf_glb(
     let mut extension = json!({
         "version": 0,
         "rasterKey": raster_key,
-        "shapingHash": shaping_hash,
+        "shapingFingerprint": shaping_fingerprint,
         "glyphCount": glyph_count,
         "glyphIdWidth": 16,
         "encoding": "mtsdf",

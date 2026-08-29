@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,6 +26,7 @@ import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const multiFormatUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
@@ -35,6 +35,7 @@ const multiFormatBytes = await readFile(multiFormatUrl);
 let root;
 let sourceBytes;
 let embeddedBytes;
+let amiriBytes;
 let incompatibleBytes;
 let externalCoreBytes;
 let externalRasterBytes;
@@ -75,10 +76,11 @@ before(async () => {
     ],
   });
   externalRasterId = external.execution.outputs.find(({ role }) => role === 'raster').file;
-  [embeddedBytes, externalCoreBytes, externalRasterBytes] = await Promise.all([
+  [embeddedBytes, externalCoreBytes, externalRasterBytes, amiriBytes] = await Promise.all([
     readFile(embeddedOutput),
     readFile(externalOutput),
     readFile(externalRasterId),
+    readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/amiri-bitmap-16.font.glb', import.meta.url)),
   ]);
   externalRasterId = externalRasterId.split('/').at(-1);
   incompatibleBytes = replaceAscii(embeddedBytes, '"bakerVersion":"0.0.0"', '"bakerVersion":"9.9.9"');
@@ -296,7 +298,21 @@ test('missing and invalid probes fall back once with deduplicated diagnostics', 
   assert.equal(calls.filter((url) => url === 'https://assets.test/fonts/Missing.font.glb').length, 1);
   const retained = getRegisteredFontData(missingA);
   assert.deepEqual(Buffer.from(retained.sourceBytes), Buffer.from(sourceBytes));
-  assert.equal(retained.sourceHash, '40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82');
+  assert.equal(retained.sourceFingerprint, '14fa0a34f3783dd4f131d5b546e453b7');
+});
+
+test('normal loading does not require Web Crypto or a secure context', async (t) => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  Object.defineProperty(globalThis, 'crypto', { configurable: true, value: undefined });
+  t.after(() => {
+    if (descriptor === undefined) delete globalThis.crypto;
+    else Object.defineProperty(globalThis, 'crypto', descriptor);
+  });
+  const loader = new FontLoader({
+    fetch: fixtureFetch(new Map([['https://assets.test/Inter.font.glb', embeddedBytes]]), []),
+  });
+  const font = await loader.load({ baked: 'https://assets.test/Inter.font.glb' });
+  assert.equal(font.shapingFingerprint, '0c522d6ea0db73ba74bcc389dc50263b');
 });
 
 test('baked-only failures never fetch a source or invoke fallback', async () => {
@@ -321,7 +337,7 @@ test('baked-only failures never fetch a source or invoke fallback', async () => 
   assert.equal(bakes, 0);
 });
 
-test('runtime output cannot claim provenance for different source bytes', async () => {
+test('normal loading trusts the runtime baker stamp instead of hashing source bytes again', async () => {
   const changedSource = new Uint8Array(sourceBytes);
   changedSource[changedSource.byteLength - 1] ^= 1;
   const loader = new FontLoader({
@@ -333,10 +349,8 @@ test('runtime output cannot claim provenance for different source bytes', async 
     onWarning() {},
   });
 
-  await assert.rejects(
-    loader.load('/source.ttf'),
-    (error) => error instanceof GlyphFontError && error.reason === 'FONT_SOURCE_IDENTITY',
-  );
+  const font = await loader.load('/source.ttf');
+  assert.equal(getRegisteredFontData(font).sourceFingerprint, '14fa0a34f3783dd4f131d5b546e453b7');
 });
 
 test('shaping deduplication keeps differently sourced bytes qualified by provenance', async () => {
@@ -345,8 +359,8 @@ test('shaping deduplication keeps differently sourced bytes qualified by provena
   const canonicalData = getRegisteredFontData(canonical);
   const changedSource = Uint8Array.from(sourceBytes);
   changedSource[changedSource.byteLength - 1] ^= 1;
-  const changedHash = createHash('sha256').update(changedSource).digest('hex');
-  const changedArtifact = replaceAscii(embeddedBytes, canonicalData.sourceHash, changedHash);
+  const changedFingerprint = fingerprint128(changedSource, fingerprintDomain.source);
+  const changedArtifact = replaceAscii(embeddedBytes, canonicalData.sourceFingerprint, changedFingerprint);
   const calls = [];
   const loader = new FontLoader({
     registry,
@@ -362,10 +376,31 @@ test('shaping deduplication keeps differently sourced bytes qualified by provena
   assert.equal(deduplicated, canonical);
   assert.equal(canonicalData.sourceBytes, undefined);
   assert.equal(canonicalData.sourceCandidates.length, 1);
-  assert.equal(canonicalData.sourceCandidates[0].sourceHash, changedHash);
+  assert.equal(canonicalData.sourceCandidates[0].sourceFingerprint, changedFingerprint);
   assert.equal(canonicalData.sourceCandidates[0].sourceUrl, 'https://assets.test/variant.ttf');
   assert.equal(typeof canonicalData.sourceCandidates[0].fetch, 'function');
   assert.deepEqual(calls, ['https://assets.test/variant.font.glb', 'https://assets.test/variant.ttf']);
+});
+
+test('registration rejects a descriptor stamp that contradicts the declared face', async () => {
+  const validated = await validateFontArtifact(embeddedBytes);
+  const descriptorFingerprint = validated.document.extensions.PMNDRS_font.provenance.descriptorFingerprint;
+  const contradictory = replaceAscii(embeddedBytes, descriptorFingerprint, '0'.repeat(32));
+  await assert.rejects(
+    new FontRegistry().registerAsset(contradictory),
+    (error) => error instanceof GlyphFontError && error.reason === 'INVALID_FONT_ASSET',
+  );
+});
+
+test('shaping deduplication rejects equal stamps with contradictory payload shapes', async () => {
+  const registry = new FontRegistry();
+  const inter = await registry.registerAsset(embeddedBytes);
+  const amiri = await validateFontArtifact(amiriBytes);
+  const contradictory = replaceAllAscii(amiriBytes, amiri.shapingFingerprint, inter.shapingFingerprint);
+  await assert.rejects(
+    registry.registerAsset(contradictory),
+    (error) => error instanceof GlyphFontError && error.reason === 'INVALID_FONT_ASSET',
+  );
 });
 
 test('registration merges embedded and external delivery without changing raster identity', async () => {
@@ -391,13 +426,13 @@ test('registration merges embedded and external delivery without changing raster
   assert.throws(() => raster.view(1_000_000), RangeError);
 });
 
-test('external raster loading resolves relative to the baked core and authenticates its hash', async () => {
+test('external raster loading resolves content-addressed resources and validates lengths without rehashing bytes', async () => {
   const calls = [];
   const coreUrl = 'https://assets.test/generated/Inter.font.glb';
   const rasterUrl = `https://assets.test/generated/${externalRasterId}`;
-  const pageUrl = 'https://assets.test/generated/page.bin';
+  const pageFingerprint = fingerprint128(Uint8Array.of(3, 1, 4, 1, 5, 9), fingerprintDomain.artifact);
+  const pageUrl = `https://assets.test/generated/page-${pageFingerprint}.bin`;
   const pageBytes = Uint8Array.of(3, 1, 4, 1, 5, 9);
-  const pageHash = createHash('sha256').update(pageBytes).digest('hex');
   const loader = new FontLoader({
     fetch: fixtureFetch(
       new Map([
@@ -416,9 +451,9 @@ test('external raster loading resolves relative to the baked core and authentica
   assert.equal(font.getRaster(reference.rasterKey), raster);
   const resolvedPage = await raster.resource({
     type: 'external',
-    uri: 'page.bin',
+    uri: `page-${pageFingerprint}.bin`,
     byteLength: pageBytes.byteLength,
-    artifactHash: pageHash,
+    artifactFingerprint: pageFingerprint,
   });
   assert.deepEqual(resolvedPage, pageBytes);
   resolvedPage.fill(0);
@@ -427,11 +462,15 @@ test('external raster loading resolves relative to the baked core and authentica
   await assert.rejects(
     raster.resource({
       type: 'external',
-      uri: 'page.bin',
-      byteLength: pageBytes.byteLength,
-      artifactHash: '0'.repeat(64),
+      uri: `page-${pageFingerprint}.bin`,
+      byteLength: pageBytes.byteLength + 1,
+      artifactFingerprint: pageFingerprint,
     }),
-    (error) => error instanceof GlyphFontError && error.reason === 'RASTER_RESOURCE_HASH',
+    (error) =>
+      error instanceof GlyphFontError &&
+      error.reason === 'RASTER_RESOURCE_FETCH' &&
+      error.cause instanceof AggregateError &&
+      error.cause.errors.some((cause) => cause instanceof GlyphFontError && cause.reason === 'RASTER_RESOURCE_LENGTH'),
   );
   const controller = new AbortController();
   controller.abort(new Error('page cancelled'));
@@ -439,9 +478,9 @@ test('external raster loading resolves relative to the baked core and authentica
     raster.resource(
       {
         type: 'external',
-        uri: 'page.bin',
+        uri: `page-${pageFingerprint}.bin`,
         byteLength: pageBytes.byteLength,
-        artifactHash: pageHash,
+        artifactFingerprint: pageFingerprint,
       },
       controller.signal,
     ),
@@ -451,10 +490,8 @@ test('external raster loading resolves relative to the baked core and authentica
 
   const otherRegistry = new FontRegistry();
   const otherFont = await otherRegistry.registerAsset(externalCoreBytes);
-  await assert.rejects(
-    otherRegistry.attachRaster(otherFont, embeddedBytes),
-    (error) => error instanceof GlyphFontError && error.reason === 'RASTER_ARTIFACT_HASH',
-  );
+  const alternateDelivery = await otherRegistry.attachRaster(otherFont, embeddedBytes);
+  assert.equal(alternateDelivery.rasterKey, otherFont.rasterReferences[0].rasterKey);
 });
 
 test('FontFace source leases share one canonical main and lazily loaded sidecar dependency graph', async () => {
@@ -668,7 +705,7 @@ test('registries isolate generations, own their bytes, enforce limits, and inval
 
   assert.notEqual(first.key, second.key);
   assert.notEqual(first.handle, second.handle);
-  assert.equal(first.shapingHash, second.shapingHash);
+  assert.equal(first.shapingFingerprint, second.shapingFingerprint);
   assert.equal(getRegisteredFontData(first).shapingSfnt[0], 0);
 
   first.dispose();
@@ -863,5 +900,22 @@ function replaceAscii(source, from, to) {
   }
   assert.notEqual(offset, -1, `fixture text ${from} was not found`);
   bytes.set(replacement, offset);
+  return bytes;
+}
+
+function replaceAllAscii(source, from, to) {
+  assert.equal(from.length, to.length);
+  const bytes = new Uint8Array(source);
+  const needle = new TextEncoder().encode(from);
+  const replacement = new TextEncoder().encode(to);
+  let replacements = 0;
+  for (let index = 0; index <= bytes.byteLength - needle.byteLength; index += 1) {
+    if (needle.every((value, inner) => bytes[index + inner] === value)) {
+      bytes.set(replacement, index);
+      replacements += 1;
+      index += needle.byteLength - 1;
+    }
+  }
+  assert.ok(replacements > 0, `fixture text ${from} was not found`);
   return bytes;
 }

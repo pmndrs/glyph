@@ -10,17 +10,17 @@
         "pixelRange": 8
       },
       "uncompressed": {
-        "bytes": 39347796,
-        "sha256": "3dcd0e04ca5a282293c931129443167d067e13f959c2370024b0286b0dd189f9"
+        "bytes": 39347632,
+        "sha256": "c527f223ae47c063f01937fcba09694dad925bc13a46895ff99068149441b639"
       },
       "compressed": {
-        "bytes": 8167575,
-        "sha256": "34f7cb05dc98a3fd95fc0b57408ba7ce0bfdf7819b16493a8ec3f863b4dcd46f"
+        "bytes": 6798330,
+        "sha256": "3d8463349b6e493b2c1ed24f70a392ef07e18e2f8f9e17df16f5c3baab34f857"
       },
       "raster": {
         "kind": "msdf",
         "metadataBytes": 58740,
-        "serializedBytes": 39175608,
+        "serializedBytes": 39175552,
         "decodedGpuBytes": 39111736,
         "runtimeTextureArray": {
           "width": 1024,
@@ -111,17 +111,17 @@
         "pixelRange": 8
       },
       "uncompressed": {
-        "bytes": 94640228,
-        "sha256": "e4f276536148e5e31be4d2c2e4e22340ed49431a63e8b6267b17ab185984ceda"
+        "bytes": 94640064,
+        "sha256": "381c53a16cdab260749458658e2207601aa2e25459936ef596f29a0857d623a2"
       },
       "compressed": {
-        "bytes": 16818461,
-        "sha256": "ebab9ec36f8cf2049588cdc15db90d02ce8425a418e168f2d6f452fc4bfe8fc1"
+        "bytes": 14586181,
+        "sha256": "e3cb775718412e4964f968971b3d7a83b119894468f306a0a551ce38605c41ab"
       },
       "raster": {
         "kind": "msdf",
         "metadataBytes": 134200,
-        "serializedBytes": 94461136,
+        "serializedBytes": 94461080,
         "decodedGpuBytes": 94315540,
         "runtimeTextureArray": {
           "width": 1024,
@@ -310,17 +310,17 @@
         "pixelRange": 8
       },
       "uncompressed": {
-        "bytes": 13776112,
-        "sha256": "cbaba2e396ab9956684047137efda0b30d1e04d25c5a3fff8350b1f8926e5cc2"
+        "bytes": 13775948,
+        "sha256": "ff29a799207008cf3a8db23a41d5a18177cce70f757118e58ae5bd3ea0365956"
       },
       "compressed": {
-        "bytes": 3721231,
-        "sha256": "b9452f6eff2ad4a2250001524ddec9bb1ebf7af721097f6b969578f653ba87c2"
+        "bytes": 3089711,
+        "sha256": "a9401902c8d85d444e0150a00215c141a20d7a4336751693706da6674ece8ff9"
       },
       "raster": {
         "kind": "msdf",
         "metadataBytes": 19080,
-        "serializedBytes": 13717364,
+        "serializedBytes": 13717304,
         "decodedGpuBytes": 13695832,
         "runtimeTextureArray": {
           "width": 1024,
@@ -369,17 +369,17 @@
         "pixelRange": 8
       },
       "uncompressed": {
-        "bytes": 175910120,
-        "sha256": "e3dd6edef71107760e0c0dfbef323e2f6c5295ad2fd6a734d99289f8fdc65859"
+        "bytes": 175909956,
+        "sha256": "eea25324a957c9eee300699ab69aa3cb5467386d1179a9d4677ce051b405eca4"
       },
       "compressed": {
-        "bytes": 58845578,
-        "sha256": "1a721cab94a1bf7658b71402dd6ad82cfdf44ba718ce92e1de640b0bfe9d41ee"
+        "bytes": 44935133,
+        "sha256": "bdb9c66116915527414f85d30de6be8e31a7b99f2cc62fa41fa4edd2bfebd01e"
       },
       "raster": {
         "kind": "msdf",
         "metadataBytes": 187240,
-        "serializedBytes": 175613544,
+        "serializedBytes": 175613488,
         "decodedGpuBytes": 175405952,
         "runtimeTextureArray": {
           "width": 1024,
@@ -708,17 +708,17 @@
         "pixelRange": 8
       },
       "uncompressed": {
-        "bytes": 32580984,
-        "sha256": "b6e14cbecd01651c59791724dbceb91d44f7712580e700f65ea32189ba17ac51"
+        "bytes": 32580820,
+        "sha256": "405e1bec5c44771557d66b1ddcbdc23e31acfd756ec34f96f401e1b304497011"
       },
       "compressed": {
-        "bytes": 8760215,
-        "sha256": "2f6b903434755a3b8e0f9daced997aeddf5421c992401307793fbca1c74a8c7b"
+        "bytes": 7227745,
+        "sha256": "46821ef2fb9c05a9ae671ce685868216bd23520ef6a62ac73558ccc3fa681274"
       },
       "raster": {
         "kind": "msdf",
         "metadataBytes": 28060,
-        "serializedBytes": 32543840,
+        "serializedBytes": 32543780,
         "decodedGpuBytes": 32511100,
         "runtimeTextureArray": {
           "width": 1024,
@@ -802,17 +802,17 @@
         "pixelRange": 8
       },
       "uncompressed": {
-        "bytes": 3172836,
-        "sha256": "e58fa81df46ce0430740faa166d17fc258ce1f360496392723dbde066eaf4de9"
+        "bytes": 3172672,
+        "sha256": "31979ce811ccb8421cee86816348ad6de26a0ff00f547c817e69a8c6f47ef97a"
       },
       "compressed": {
-        "bytes": 1293464,
-        "sha256": "98855f4627dff24aa7f14d1872fc75071da2be6e90625fc45f63d17b73c2db4d"
+        "bytes": 999203,
+        "sha256": "ad9cd08290ce9a3cc28b5e8313cdbe1b42303408cc8b2e75cdf0fdfcf2e9d3fb"
       },
       "raster": {
         "kind": "msdf",
         "metadataBytes": 3100,
-        "serializedBytes": 3166324,
+        "serializedBytes": 3166264,
         "decodedGpuBytes": 3162112,
         "runtimeTextureArray": {
           "width": 1024,
@@ -840,17 +840,17 @@
         "pixelRange": 8
       },
       "uncompressed": {
-        "bytes": 16966656,
-        "sha256": "292bc28b85c970af5b7761159f9f9e7d37a723ca0c1ca244096725e9ce7764b9"
+        "bytes": 16966492,
+        "sha256": "6d12141002697a291cc23f71d9e1f85eafae7905c05d36ce93ddef79f8d4c81b"
       },
       "compressed": {
-        "bytes": 4665607,
-        "sha256": "b262c000167c2f9c5914cef8b2aae9cd8f33b256990098c6eef08dd133dba9fc"
+        "bytes": 3830910,
+        "sha256": "1b266dc2492dd9893f0918dfd663e83e6b8f5e011d8bf9787a2c018170b02831"
       },
       "raster": {
         "kind": "msdf",
         "metadataBytes": 29280,
-        "serializedBytes": 16830180,
+        "serializedBytes": 16830120,
         "decodedGpuBytes": 16798004,
         "runtimeTextureArray": {
           "width": 1024,
@@ -906,17 +906,17 @@
         "pixelRange": 8
       },
       "uncompressed": {
-        "bytes": 13048480,
-        "sha256": "6a1d3d770b531b75fafe9c1a20e80921192014f33669a5be15b2eea627c0111c"
+        "bytes": 13048316,
+        "sha256": "402e48c47dc313f5dfbe068ad8eb26a821040d26c33f0444e02738b9e741bdd3"
       },
       "compressed": {
-        "bytes": 2604901,
-        "sha256": "1ea330f8cb66f9455a649f696760cb91fdd99278592814fbd8307e7a0adf398b"
+        "bytes": 2260160,
+        "sha256": "f7dfa9c1b30685483d6282043b2a8fcc657485709765543732806072b3946021"
       },
       "raster": {
         "kind": "msdf",
         "metadataBytes": 20340,
-        "serializedBytes": 13004516,
+        "serializedBytes": 13004456,
         "decodedGpuBytes": 12981724,
         "runtimeTextureArray": {
           "width": 1024,

@@ -7,8 +7,9 @@ import { bitmapBakerFromCore, createBitmapBaker } from '../../dist/bakers/bitmap
 import { BitmapArtifactValidationError, validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { bitmapDescriptor, bitmapRasterKey } from '../../dist/raster/bitmap.js';
 import { ARTIFACT_FUZZ_SEED, mutateArtifact } from '../support/artifact-mutations.mjs';
+import { interShapingFingerprint, interSourceFingerprint } from '../support/inter-identity.mjs';
 
-const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09';
+const shapingFingerprint = interShapingFingerprint;
 
 test('fixed-seed bitmap artifact mutations fail safely and deterministically', async () => {
   const [source, wasm] = await Promise.all([
@@ -20,13 +21,19 @@ test('fixed-seed bitmap artifact mutations fail safely and deterministically', a
   const baker = bitmapBakerFromCore(await createBitmapBaker(wasm));
   const artifact = (
     await baker.bake({
-      font: { source, fontFaceIndex: 0, glyphCount: 2937, shapingHash },
+      font: {
+        source,
+        sourceFingerprint: interSourceFingerprint,
+        fontFaceIndex: 0,
+        glyphCount: 2937,
+        shapingFingerprint,
+      },
       rasterKey,
       packaging: { artifact: 'external', pages: 'embedded' },
       descriptor,
     })
   ).artifacts[0].bytes;
-  const context = { rasterKey, shapingHash, glyphCount: 2937, glyphIdWidth: 16, descriptor };
+  const context = { rasterKey, shapingFingerprint, glyphCount: 2937, glyphIdWidth: 16, descriptor };
 
   let rejected = 0;
   for (const mutation of mutateArtifact(artifact, 128)) {

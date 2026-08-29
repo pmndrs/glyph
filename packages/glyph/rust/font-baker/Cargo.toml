@@ -46,7 +46,7 @@ harfrust = { version = "0.12.0", default-features = false, features = ["libm"], 
 read-fonts = { version = "0.42.1", default-features = false, features = ["libm"] }
 serde = { version = "1.0.229", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1.0.145", default-features = false, features = ["alloc"] }
-sha2 = { version = "0.11.0", default-features = false }
+pmndrs-glyph-raster-artifact = { path = "../raster-artifact", default-features = false }
 skera = { version = "=0.5.1", default-features = false, optional = true }
 skrifa = { version = "0.45.1", default-features = false, features = ["libm"] }
 thiserror = { version = "2.0.19", default-features = false }

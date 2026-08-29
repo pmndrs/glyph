@@ -312,15 +312,23 @@ type Brand<Value, Name extends string> = Value & { readonly [brand]: Name };
 
 type FontKey = Brand<string, 'FontKey'>;
 type RasterKey = Brand<string, 'RasterKey'>;
-type Sha256Hex = Brand<string, 'Sha256Hex'>;
+type Fingerprint = Brand<string, 'Fingerprint'>;
 type FontHandle = Brand<number, 'FontHandle'>;
 type RasterHandle = Brand<number, 'RasterHandle'>;
 
 type LocalGlyphId = number;
 type FontSlot = number;
+
+declare const fingerprint: Readonly<{
+  artifact(bytes: Uint8Array): Fingerprint;
+  source(bytes: Uint8Array): Fingerprint;
+}>;
 ```
 
-`LocalGlyphId` is meaningful only with a font. Rasters attach only after matching the core font's shaping hash, glyph count, and ID width.
+`LocalGlyphId` is meaningful only with a font. Rasters attach only after matching the core font's shaping fingerprint,
+glyph count, and ID width. Raster authors use `fingerprint.source()` to validate the source stamp at their bake boundary
+and `fingerprint.artifact()` to stamp each emitted artifact. Normal loading compares stamps and does not call either
+method over payload bytes.
 
 ## Loader
 
@@ -363,8 +371,8 @@ declare function defineFont<const Input extends FontInput, const Module extends 
 
 type RasterSource =
   | { type: 'embedded' }
-  | { type: 'external'; uri: string; artifactHash: Sha256Hex }
-  | { type: 'external'; artifactHash?: Sha256Hex };
+  | { type: 'external'; uri: string; artifactFingerprint: Fingerprint }
+  | { type: 'external'; artifactFingerprint?: Fingerprint };
 
 interface RasterReference<Kind extends string = string> {
   rasterKey: RasterKey;
@@ -480,7 +488,11 @@ The object form only overrides those rules. `{ source }` still derives a sibling
 
 Probe, preload, and load share one normalized cache key containing the normalized source URL when present, the resolved or explicit baked URL, and relevant loader/format versions. Concurrent calls reuse the same promise, and a successful preload returns the same registered font generation as a later `load` or `useFont` call. Changing an explicit baked URL intentionally creates a different load key.
 
-Registration has a second identity layer. Request keys deduplicate equivalent probes and fetches; after validation, `shapingHash` deduplicates the registered core resource. Consequently a string, equivalent `URL`, equivalent object input, and another load path that produce the same canonical shaping payload converge on one core resource within a registry. JavaScript object identity is never part of either key. Separate registries remain isolated ownership domains.
+Registration has a second identity layer. Request keys deduplicate equivalent probes and fetches; after validation,
+`shapingFingerprint` deduplicates the registered core resource. Consequently a string, equivalent `URL`, equivalent
+object input, and another load path that produce the same canonical shaping payload converge on one core resource within
+a registry. JavaScript object identity is never part of either key. Separate registries remain isolated ownership
+domains.
 
 The loader and registry default to 64 MiB per fetched/attached artifact, 4,096 buffer views, and 256 raster references. Positive safe-integer overrides may lower or raise those deployment limits. `Content-Length` is rejected early when it exceeds the configured byte limit, but it is never trusted: response bodies are counted while streaming and registration checks `ArrayBufferView.byteLength` before making an owned copy. A limit failure has a distinct structured code and never publishes a partial registration.
 
@@ -513,7 +525,7 @@ interface FontMetrics {
 interface RegisteredFont {
   readonly key: FontKey;
   readonly handle: FontHandle;
-  readonly shapingHash: Sha256Hex;
+  readonly shapingFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
   readonly metrics: FontMetrics;
@@ -591,7 +603,7 @@ interface BakeArtifact {
   role: 'font' | 'raster' | 'raster-page';
   id: string;
   bytes: Uint8Array;
-  sha256: Sha256Hex;
+  fingerprint: Fingerprint;
 }
 
 interface BakeResult {
@@ -687,7 +699,7 @@ interface NodeBakeExecutionReport {
     role: BakeArtifact['role'];
     file: string;
     bytes: number;
-    sha256: string;
+    fingerprint: Fingerprint;
   }[];
 }
 
@@ -728,7 +740,7 @@ import { bakeProject } from '@pmndrs/glyph/bake';
 const report = await bakeProject();
 ```
 
-With no entries it analyzes the project's conventional `src` tree; explicit entries restrict the module graph. With no asset roots it uses an existing `public` directory. With no output root, each artifact is written as the canonical `.font.glb` sibling beside its matched source under that asset root. When `outputRoot` is present, the source's asset-root-relative path is reproduced there. `bakeFont` is the explicit low-level escape hatch for a known local input/output pair. For external packaging, `output` names the core artifact and raster artifact names deterministically bind the shaping hash and raster key. The host writes same-directory temporary files and renames them only after every artifact is ready; it rejects source/output overlap, duplicate targets, and package-owned artifact IDs that are not single filenames. Cancellation is checked between every asynchronous or coarse Wasm phase and before publication. The Node host owns filesystem work only.
+With no entries it analyzes the project's conventional `src` tree; explicit entries restrict the module graph. With no asset roots it uses an existing `public` directory. With no output root, each artifact is written as the canonical `.font.glb` sibling beside its matched source under that asset root. When `outputRoot` is present, the source's asset-root-relative path is reproduced there. `bakeFont` is the explicit low-level escape hatch for a known local input/output pair. For external packaging, `output` names the core artifact and raster artifact names deterministically bind the shaping fingerprint and raster key. The host writes same-directory temporary files and renames them only after every artifact is ready; it rejects source/output overlap, duplicate targets, and package-owned artifact IDs that are not single filenames. Cancellation is checked between every asynchronous or coarse Wasm phase and before publication. The Node host owns filesystem work only.
 
 The portable core reports authoritative raw byte counts. A completed Node report adds gzip and Brotli sizes for GLB transport, raw page bytes, phase and total timings, before/after RSS, Node's process-lifetime peak RSS, and the exact path/role/size/hash of every output. The peak is deliberately labeled as process-wide lifetime evidence rather than an isolated allocation measurement.
 
@@ -795,7 +807,7 @@ interface RuntimeBakeSuccess {
     role: 'font';
     id: string;
     bytes: ArrayBuffer;
-    sha256: Sha256Hex;
+    fingerprint: Fingerprint;
   }[];
   report: FontPayloadReport;
   warnings: readonly BakeWarning[];
@@ -1160,7 +1172,7 @@ Inline values such as `bitmap({ strikes: [16, 32] })` infer a literal tuple. A b
 
 MSDF option normalization fills a missing field from the 64/8 defaults, then authenticates both effective fields in every non-default descriptor. Explicit 64/8 canonicalizes to the legacy fieldless descriptor and raster key so old baked assets remain compatible. The generated resource sets `planeUnitsPerEm` equal to `emSize` and pads each glyph by `ceil(pixelRange / 2)` texels. These controls allow callers to trade atlas cost against field resolution; they do not change the recommended default without separate quality and payload evidence.
 
-Coverage seeds are normalized, bounded, and authenticated in the raster descriptor. Their union selects atlas generation only: it retains the complete shaping font, dense source-local glyph namespace, and original glyph IDs and does not claim transitive shaping closure. Unicode ranges ignore unmapped scalars, authored text rejects them, and exact IDs reject values outside the selected face. A sparse artifact carries an exact little-endian glyph-selection bitset; runtime preparation reports omitted shaped IDs through `RasterCoverageError` before a replacement batch can publish.
+Coverage seeds are normalized, bounded, and fingerprinted in the raster descriptor. Their union selects atlas generation only: it retains the complete shaping font, dense source-local glyph namespace, and original glyph IDs and does not claim transitive shaping closure. Unicode ranges ignore unmapped scalars, authored text rejects them, and exact IDs reject values outside the selected face. A sparse artifact carries an exact little-endian glyph-selection bitset; runtime preparation reports omitted shaped IDs through `RasterCoverageError` before a replacement batch can publish.
 
 The optional bitmap presentation helpers snapshot copied font handles, glyph IDs, UTF-16 clusters, exact font-size bits, occurrence ordinals, and currently displayed instance origins without retaining a `Text`, batch, texture, or geometry. A transition matches only the same complete glyph identity and updates the target batch's existing origin arrays. New or reshaped glyphs remain at their authoritative target positions; sizes, UVs, paint, shaping, line breaks, and `ParagraphLayout` never interpolate. Progress is finite and bounded to `[0, 1]`, stale or disposed batches reject mutation, and `finish`/`dispose` are idempotent. Target-origin storage is allocated only when a consumer creates a transition. The existing TSL graph still performs the final physical-pixel snap.
 
@@ -1185,7 +1197,7 @@ later companions externally.
 
 The proof exposed one functional forwarding defect: `RasterRuntime.load` accepted `resolveResource` but omitted it from the
 cache-owned options passed to `RegisteredFont.loadRaster`. The runtime now carries both artifact and resource resolvers through
-the shared load, and an authenticated external-record test proves the resource resolver is invoked exactly once. It also
+the shared load, and a fingerprint-addressed external-record test proves the resource resolver is invoked exactly once. It also
 exposed artifact-authoring friction rather than a closed core assumption: external/runtime companion GLBs must be ordinary
 standalone-valid glTF because attachment runs the pinned Khronos validator. The proof package owns a minimal one-point witness
 and encoder. A future package-neutral artifact helper is an ergonomic opportunity, not a prerequisite or private-import escape
@@ -1216,9 +1228,10 @@ interface RasterBakerModule<Kind extends string, Options, Descriptor> {
 
 interface RasterBakeFontContext {
   source: Uint8Array;
+  sourceFingerprint: Fingerprint;
   fontFaceIndex: number;
   glyphCount: number;
-  shapingHash: string;
+  shapingFingerprint: Fingerprint;
 }
 
 interface RasterBakeRequest<Descriptor> {
@@ -1273,6 +1286,6 @@ Public inference is tested as API behavior. Compile-only fixtures must prove tha
 - shape plans: font generation + direction + script + language + features;
 - shaped runs: font generation + text range/content + run properties;
 - layouts: paragraph version + constraints;
-- rasters: font generation + raster key + artifact hash + device capability key.
+- rasters: font generation + raster key + artifact fingerprint + device capability key.
 
 Persistent storage is not required in the first slice; in-flight and completed in-memory deduplication is required.

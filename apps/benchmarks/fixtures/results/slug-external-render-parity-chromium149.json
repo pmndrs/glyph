@@ -1,7 +1,7 @@
 {
   "schemaVersion": 0,
   "kind": "slug-external-render-parity-observation",
-  "capturedAt": "2026-08-28T10:46:04.858Z",
+  "capturedAt": "2026-08-29T21:52:18.687Z",
   "authority": "public-font-loader-and-text-framebuffer",
   "environment": {
     "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
@@ -19,32 +19,32 @@
     {
       "role": "font",
       "file": "inter-external.font.glb",
-      "bytes": 172636,
-      "sha256": "217c1715aedf21097224b45a3e2c6ff77ecfc2cdaead9809ef7775f6889136f3"
+      "bytes": 172472,
+      "fingerprint": "46ab4b8633d01b497aad272fc04da065"
     },
     {
       "role": "raster",
-      "file": "slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb.glb",
-      "bytes": 119280,
-      "sha256": "602a55586c1001819af7ac5d6a4d71fb3260c604d69dcc0334eb2b8c84dceccd"
+      "file": "slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-8698b273498317cea47daf174cbe54f1.glb",
+      "bytes": 119056,
+      "fingerprint": "8698b273498317cea47daf174cbe54f1"
     },
     {
       "role": "raster-page",
-      "file": "slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-curves.ktx2",
+      "file": "slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-p0-curves-31bec94164c8f8a714d6b66707e750bb.ktx2",
       "bytes": 2097348,
-      "sha256": "0a2b3e50a690683d1fbc71cc6367f8a2da863126983b93bd8192543ed88f044f"
+      "fingerprint": "31bec94164c8f8a714d6b66707e750bb"
     },
     {
       "role": "raster-page",
-      "file": "slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-headers.r32ui.bin",
+      "file": "slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-p0-headers-bb27843c30e0b90b99b486ff8f7aaaac.r32ui.bin",
       "bytes": 376832,
-      "sha256": "71162d7b853301cc8e109adf17f3b4c1f10ab4ffbe16637cb8c01903a1508280"
+      "fingerprint": "bb27843c30e0b90b99b486ff8f7aaaac"
     },
     {
       "role": "raster-page",
-      "file": "slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-references.r16ui.bin",
+      "file": "slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-p0-references-4203fb0cd0b6032eddd057fff0158c77.r16ui.bin",
       "bytes": 679936,
-      "sha256": "9b6f9f218c8b4585841893241a06af47e0ccb4cc9ddb1b4f887ebe886507ce82"
+      "fingerprint": "4203fb0cd0b6032eddd057fff0158c77"
     }
   ],
   "cases": [
@@ -77,25 +77,25 @@
           "count": 1
         },
         {
-          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-curves.ktx2",
+          "url": "transient:///slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-8698b273498317cea47daf174cbe54f1.glb",
           "count": 1
         },
         {
-          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-headers.r32ui.bin",
+          "url": "transient:///slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-p0-curves-31bec94164c8f8a714d6b66707e750bb.ktx2",
           "count": 1
         },
         {
-          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-references.r16ui.bin",
+          "url": "transient:///slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-p0-headers-bb27843c30e0b90b99b486ff8f7aaaac.r32ui.bin",
           "count": 1
         },
         {
-          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb.glb",
+          "url": "transient:///slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-p0-references-4203fb0cd0b6032eddd057fff0158c77.r16ui.bin",
           "count": 1
         }
       ],
       "fetchContract": "core, companion, and every page resource exactly once; one target-v1 load feeds both Text and the CPU reference",
-      "embeddedRenderSubmitMs": 25.359999999403954,
-      "externalRenderSubmitMs": 12.200000002980232
+      "embeddedRenderSubmitMs": 25.555000007152557,
+      "externalRenderSubmitMs": 13.129999995231628
     },
     {
       "backend": "webgl2",
@@ -126,25 +126,25 @@
           "count": 1
         },
         {
-          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-curves.ktx2",
+          "url": "transient:///slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-8698b273498317cea47daf174cbe54f1.glb",
           "count": 1
         },
         {
-          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-headers.r32ui.bin",
+          "url": "transient:///slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-p0-curves-31bec94164c8f8a714d6b66707e750bb.ktx2",
           "count": 1
         },
         {
-          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-references.r16ui.bin",
+          "url": "transient:///slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-p0-headers-bb27843c30e0b90b99b486ff8f7aaaac.r32ui.bin",
           "count": 1
         },
         {
-          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb.glb",
+          "url": "transient:///slug-0c522d6ea0db73ba74bcc389dc50263b-2d776923eae1be079f8aacc606d01c01-p0-references-4203fb0cd0b6032eddd057fff0158c77.r16ui.bin",
           "count": 1
         }
       ],
       "fetchContract": "core, companion, and every page resource exactly once; one target-v1 load feeds both Text and the CPU reference",
-      "embeddedRenderSubmitMs": 36.65999999642372,
-      "externalRenderSubmitMs": 25.780000001192093
+      "embeddedRenderSubmitMs": 38.785000026226044,
+      "externalRenderSubmitMs": 28.049999982118607
     }
   ]
 }

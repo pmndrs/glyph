@@ -19,6 +19,8 @@ import {
   msdfDescriptorRasterKey,
 } from '@pmndrs/glyph/raster/msdf';
 import { mtsdfBakerAbi } from '../../dist/mtsdf-baker-abi.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { interShapingFingerprint } from '../support/inter-identity.mjs';
 
 const wasmUrl = new URL('../../dist/mtsdf-baker.wasm', import.meta.url);
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
@@ -26,8 +28,8 @@ const showcaseFontUrl = new URL(
   '../../../../apps/benchmarks/fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf',
   import.meta.url,
 );
-const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09';
-const showcaseShapingHash = '3f8183c0d56b8b225b8a6a7b2fda80966579b46636b96975434fa30e8c17c33e';
+const shapingFingerprint = interShapingFingerprint;
+const showcaseShapingFingerprint = '0e83f1eecef0d421fa6c592495eb46f5';
 const publishedAbi = mtsdfBakerAbi;
 const progressImports = { env: { pmndrs_glyph_bake_progress() {} } };
 
@@ -37,6 +39,7 @@ async function setup() {
   const instance = await WebAssembly.instantiate(module, progressImports);
   return {
     source: new Uint8Array(source),
+    sourceFingerprint: fingerprint128(source, fingerprintDomain.source),
     module,
     instance,
     core: await createMsdfBaker(module),
@@ -63,17 +66,18 @@ test('ships one generated progress import and bundles its artifact contract in T
 });
 
 test('bakes canonical Inter through the public direct-memory shim', async () => {
-  const { source, core } = await setup();
+  const { source, sourceFingerprint, core } = await setup();
   const descriptor = msdfDescriptor();
   const rasterKey = await msdfDescriptorRasterKey();
   const progress = [];
-  assert.equal(rasterKey, 'e944ba8d2856314856289466e82e471e0adc0775a7c9c3affec7c59bfdd8fe93');
+  assert.equal(rasterKey, 'c51a74581f4288c40c308436ca120d67');
   const result = await msdfBakerFromCore(core).bake({
     font: {
       source,
+      sourceFingerprint,
       fontFaceIndex: 0,
       glyphCount: 2937,
-      shapingHash,
+      shapingFingerprint,
     },
     rasterKey,
     packaging: { artifact: 'external', pages: 'external' },
@@ -90,11 +94,11 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
   assert.ok(result.report.pages.every((page) => page.format === 'rgba8unorm'));
   const raster = result.artifacts.find((artifact) => artifact.role === 'raster');
   assert.ok(raster);
-  assert.match(raster.id, new RegExp(`^msdf-${shapingHash}-${rasterKey}\\.glb$`));
+  assert.match(raster.id, new RegExp(`^msdf-${shapingFingerprint}-${rasterKey}-[0-9a-f]{32}\\.glb$`));
   const pages = result.artifacts.filter((artifact) => artifact.role === 'raster-page');
   assert.equal(pages.length, result.report.pages.length);
   for (const [index, page] of pages.entries()) {
-    assert.match(page.id, new RegExp(`^msdf-${shapingHash}-${rasterKey}-p${index}\\.ktx2$`));
+    assert.match(page.id, new RegExp(`^msdf-${shapingFingerprint}-${rasterKey}-p${index}-[0-9a-f]{32}\\.ktx2$`));
     assert.deepEqual(
       [...page.bytes.subarray(0, 12)],
       [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a],
@@ -102,21 +106,13 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
   }
   const extension = glbRoot(raster.bytes).extensions[MSDF_EXTENSION];
   assert.deepEqual(
-    result.artifacts.map(({ bytes, sha256 }) => [bytes.byteLength, sha256]),
+    result.artifacts.map(({ bytes }) => bytes.byteLength),
     [
-      [63_724, 'd83c34f649161ebf340d33e22da9e762d31cf99f6b2367eaeabd030d98cf5049'],
-      [3_989_700, '320bc0aac4bcd3a660861a6af5c728e0b047b7b5a6141d046d534c83b877e82b'],
-      [4_190_404, 'a0bb19f84588e747a7d556119d5fbdd75084a7869355c0aa045689a416970d5e'],
-      [4_161_760, '3c76d1c9e058c9becee560ccc58b721a5dc3359b27ab93be47d7bd3a0b0ad47b'],
-      [4_137_316, '095ebc605f00defd59da9808b8d5b9522445cbcee3ed19324480ea7c984f6b72'],
-      [4_051_140, '417b4869520898901bd282c3b16a8eec355534a64a8f4a78529a7fb77b760252'],
-      [3_969_644, '3a7beb16625b370f0041c51f06eb762eef697522dcd07893a1566873105f54ae'],
-      [3_845_356, 'c36c1bb1393f4e60970818e2971a14b274d1468f91fd3ad3c56c105426c44e2f'],
-      [4_178_128, 'c28588971b398ed4549c3d3463009cd01054f994c69ac2d1e535e5bce490f23a'],
-      [4_186_308, '3bae056da8e8a898f9729e41cbfebffd0dd33ee64f14c8279c3d4dd752d33a62'],
-      [2_403_940, 'cc3a360aa08c39837ef367b2375fbe83fa9c3f7030c02daafca638d500377e01'],
+      63_104, 3_989_700, 4_190_404, 4_161_760, 4_137_316, 4_051_140, 3_969_644, 3_845_356, 4_178_128, 4_186_308,
+      2_403_940,
     ],
   );
+  assert.ok(result.artifacts.every(({ fingerprint }) => /^[0-9a-f]{32}$/.test(fingerprint)));
   assert.equal(extension.encoding, 'mtsdf');
   assert.equal(extension.emSize, MSDF_EM_SIZE);
   assert.equal(extension.pixelRange, MSDF_PIXEL_RANGE);
@@ -129,8 +125,9 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
   await exerciseRuntime(result, raster, extension, rasterKey);
 });
 
-test('bakes and validates authenticated 32 px/em quality policies', async () => {
+test('bakes and validates fingerprinted 32 px/em quality policies', async () => {
   const [wasm, source] = await Promise.all([readFile(wasmUrl), readFile(showcaseFontUrl)]);
+  const sourceFingerprint = fingerprint128(source, fingerprintDomain.source);
   const core = await createMsdfBaker(wasm);
   const reports = [];
   for (const pixelRange of [4, 6]) {
@@ -139,9 +136,10 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
     const result = await msdfBakerFromCore(core).bake({
       font: {
         source: new Uint8Array(source),
+        sourceFingerprint,
         fontFaceIndex: 0,
         glyphCount: 155,
-        shapingHash: showcaseShapingHash,
+        shapingFingerprint: showcaseShapingFingerprint,
       },
       rasterKey,
       packaging: { artifact: 'embedded', pages: 'embedded' },
@@ -155,7 +153,7 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
     assert.equal(extension.planeUnitsPerEm, 32);
     const validated = await validateMsdfArtifact(raster.bytes, {
       rasterKey,
-      shapingHash: showcaseShapingHash,
+      shapingFingerprint: showcaseShapingFingerprint,
       glyphCount: 155,
       glyphIdWidth: 16,
       descriptor,
@@ -163,7 +161,7 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
     assert.equal(validated.pages.length, result.report.pages.length);
     if (pixelRange === 4) {
       const { document, views } = glbViews(raster.bytes);
-      const font = { handle: 7, shapingHash: showcaseShapingHash, glyphCount: 155 };
+      const font = { handle: 7, shapingFingerprint: showcaseShapingFingerprint, glyphCount: 155 };
       const runtimeRaster = {
         font: font.handle,
         handle: 11,
@@ -196,12 +194,12 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
 });
 
 test('bakes bounded coverage with deterministic progress and a validated selection bitset', async () => {
-  const { source, core } = await setup();
+  const { source, sourceFingerprint, core } = await setup();
   const descriptor = msdfDescriptor({ coverage: { glyphIds: [43, 44] } });
   const rasterKey = await msdfDescriptorRasterKey(descriptor);
   const progress = [];
   const result = await msdfBakerFromCore(core).bake({
-    font: { source, fontFaceIndex: 0, glyphCount: 2937, shapingHash },
+    font: { source, sourceFingerprint, fontFaceIndex: 0, glyphCount: 2937, shapingFingerprint },
     rasterKey,
     packaging: { artifact: 'external', pages: 'embedded' },
     descriptor,
@@ -214,7 +212,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   assert.ok(progress.every((entry) => entry[1] === 2));
   const validated = await validateMsdfArtifact(raster.bytes, {
     rasterKey,
-    shapingHash,
+    shapingFingerprint,
     glyphCount: 2937,
     glyphIdWidth: 16,
     descriptor,
@@ -226,7 +224,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   );
 
   const { document, views } = glbViews(raster.bytes);
-  const font = { handle: 7, shapingHash, glyphCount: 2937 };
+  const font = { handle: 7, shapingFingerprint, glyphCount: 2937 };
   const runtimeRaster = {
     font: font.handle,
     handle: 11,
@@ -271,10 +269,11 @@ test('releases a source allocation when the request allocation fails', () => {
       core.bake({
         source: new Uint8Array(8),
         request: {
+          sourceFingerprint: '0'.repeat(32),
           fontFaceIndex: 0,
           glyphCount: 1,
-          shapingHash: '0'.repeat(64),
-          rasterKey: '0'.repeat(64),
+          shapingFingerprint: '0'.repeat(32),
+          rasterKey: '0'.repeat(32),
           packaging: { artifact: 'external', pages: 'embedded' },
           descriptor: msdfDescriptor(),
         },
@@ -287,7 +286,7 @@ test('releases a source allocation when the request allocation fails', () => {
 test('copies a segmented response in bounded chunks and releases its Wasm ownership', () => {
   const artifactBytes = Uint8Array.from({ length: 10 }, (_, index) => index + 1);
   const metadata = {
-    rasterKey: '1'.repeat(64),
+    rasterKey: '1'.repeat(32),
     kind: 'msdf',
     extension: MSDF_EXTENSION,
     version: 0,
@@ -295,7 +294,7 @@ test('copies a segmented response in bounded chunks and releases its Wasm owners
       {
         role: 'raster',
         id: 'segmented.glb',
-        sha256: '2'.repeat(64),
+        fingerprint: '2'.repeat(32),
         byteOffset: 0,
         byteLength: artifactBytes.byteLength,
       },
@@ -348,10 +347,11 @@ test('copies a segmented response in bounded chunks and releases its Wasm owners
   const result = createMsdfBakerFromInstance(instance).bake({
     source: new Uint8Array([1]),
     request: {
+      sourceFingerprint: '0'.repeat(32),
       fontFaceIndex: 0,
       glyphCount: 1,
-      shapingHash: '0'.repeat(64),
-      rasterKey: '1'.repeat(64),
+      shapingFingerprint: '0'.repeat(32),
+      rasterKey: '1'.repeat(32),
       packaging: { artifact: 'embedded', pages: 'embedded' },
       descriptor: msdfDescriptor(),
     },
@@ -372,7 +372,7 @@ function glbRoot(bytes) {
 async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts, rasterKey) {
   const context = {
     rasterKey,
-    shapingHash,
+    shapingFingerprint,
     glyphCount: 2937,
     glyphIdWidth: 16,
     descriptor: msdfDescriptor(),
@@ -401,7 +401,7 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
   const required = [
     'version',
     'rasterKey',
-    'shapingHash',
+    'shapingFingerprint',
     'glyphCount',
     'glyphIdWidth',
     'encoding',
@@ -440,7 +440,7 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
   const present = firstPresentGlyph(embedded.records);
 
   const wrongIdentity = structuredClone(decoded.document);
-  wrongIdentity.extensions[MSDF_EXTENSION].shapingHash = '0'.repeat(64);
+  wrongIdentity.extensions[MSDF_EXTENSION].shapingFingerprint = '0'.repeat(32);
   await rejectsMsdf(rewriteGlbDocument(embeddedBytes, wrongIdentity), context, 'RECIPROCAL_IDENTITY');
 
   const wrongConstant = structuredClone(decoded.document);
@@ -489,7 +489,11 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
   const tamperedExternalPages = new Map(pageArtifacts.map(({ id, bytes }) => [id, bytes.slice()]));
   const firstPage = tamperedExternalPages.values().next().value;
   firstPage[firstPage.byteLength - 1] ^= 1;
-  await rejectsMsdf(rasterArtifact.bytes, { ...context, externalPages: tamperedExternalPages }, 'EXTERNAL_PAGE_HASH');
+  await rejectsMsdf(
+    rasterArtifact.bytes,
+    { ...context, externalPages: tamperedExternalPages },
+    'EXTERNAL_PAGE_FINGERPRINT',
+  );
 }
 
 async function rejectsMsdf(bytes, context, codePrefix) {
@@ -594,7 +598,7 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   }
   const font = {
     handle: 7,
-    shapingHash,
+    shapingFingerprint,
     glyphCount: 2937,
   };
   const runtimeRaster = {

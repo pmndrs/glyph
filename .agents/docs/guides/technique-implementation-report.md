@@ -114,7 +114,7 @@ export const glyphExample = defineRasterFormat({
       throw new RangeError('glyph-example record payload length does not match the font glyph count');
     }
     return {
-      resource: defineRasterResourceId(`studio.glyph-example/${font.shapingHash}/${raster.rasterKey}`),
+      resource: defineRasterResourceId(`studio.glyph-example/${font.shapingFingerprint}/${raster.rasterKey}`),
       inset: extension.descriptor.inset,
       colors,
       glyphCount: font.glyphCount,

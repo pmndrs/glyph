@@ -12,6 +12,7 @@
     "fontFile": "Inter-Regular.ttf",
     "fontBytes": 411640,
     "fontSha256": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+    "fontFingerprint": "14fa0a34f3783dd4f131d5b546e453b7",
     "license": "OFL-1.1",
     "licenseFile": "LICENSE.txt",
     "licenseSha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a"
@@ -21,11 +22,12 @@
   "bake": {
     "bakerVersion": "0.0.0",
     "formatVersion": 0,
-    "descriptorHash": "f1c0e6c2ead13ceab41f2e39aa883e139fcecfb59c08bee7818242615170331d",
+    "descriptorFingerprint": "b7ce185ebb8b55f9077237a24bb9d93b",
     "expectedCore": {
-      "artifactBytes": 172240,
-      "artifactSha256": "4c87184ce8df2037d87427a63af7c1fa68c7bf7c00042b177c69d442792d1db8",
-      "shapingHash": "6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+      "artifactBytes": 172164,
+      "artifactFingerprint": "df97b6629eff847cec1a28b30e368420",
+      "artifactSha256": "5c7896531e2f7c8d648e5488c116865994f1a892854ebb0beb980cc728f5e197",
+      "shapingFingerprint": "0c522d6ea0db73ba74bcc389dc50263b",
       "shapingSfntBytes": 147192,
       "extentsBytes": 23496,
       "extentsAvailabilityBytes": 368,

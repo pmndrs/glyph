@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test, { before } from 'node:test';
 
@@ -9,6 +10,7 @@ import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/glyph/raster/bitmap';
 
 import { BakeCompositionError, composeFontBake } from '../../dist/internal/compose-bake.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
 
 let core;
 let bitmapEmbedded;
@@ -25,13 +27,14 @@ before(async () => {
   ]);
   golden = JSON.parse(goldenBytes);
   const fontBaker = await createFontBaker(fontWasm);
+  const sourceFingerprint = fingerprint128(source, fingerprintDomain.source);
   core = fontBaker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } });
   const coreValidation = await validateFontArtifact(core.artifacts[0].bytes);
   const descriptor = bitmapDescriptor({ strikes: [16] });
   const rasterKey = await bitmapRasterKey({ strikes: [16] });
   context = {
     rasterKey,
-    shapingHash: coreValidation.shapingHash,
+    shapingFingerprint: coreValidation.shapingFingerprint,
     glyphCount: coreValidation.glyphCount,
     glyphIdWidth: 16,
     descriptor,
@@ -39,9 +42,10 @@ before(async () => {
   const bitmapBaker = bitmapBakerFromCore(await createBitmapBaker(bitmapWasm));
   const font = {
     source,
+    sourceFingerprint,
     fontFaceIndex: 0,
     glyphCount: coreValidation.glyphCount,
-    shapingHash: coreValidation.shapingHash,
+    shapingFingerprint: coreValidation.shapingFingerprint,
   };
   [bitmapEmbedded, bitmapExternal] = await Promise.all([
     bitmapBaker.bake({
@@ -101,7 +105,7 @@ test('preserves the exact shaping-only artifact for the identity-neutral empty r
 });
 
 test('rebases opaque buffer-view references for multiple distinct embedded extensions', async () => {
-  const custom = await customRaster(bitmapEmbedded, '1'.repeat(64), 'STUDIO_font_custom');
+  const custom = customRaster(bitmapEmbedded, '1'.repeat(32), 'STUDIO_font_custom');
   const result = await composeFontBake(core, [
     { raster: bitmapEmbedded, packaging: { artifact: 'embedded', pages: 'embedded' } },
     { raster: custom, packaging: { artifact: 'embedded', pages: 'embedded' } },
@@ -118,7 +122,7 @@ test('rebases opaque buffer-view references for multiple distinct embedded exten
   await validateBitmapArtifact(result.artifacts[0].bytes, context);
 });
 
-test('emits an authenticated external companion and independently addressable pages', async () => {
+test('emits a fingerprint-addressed external companion and independently addressable pages', async () => {
   const result = await composeFontBake(core, [
     { raster: bitmapExternal, packaging: { artifact: 'external', pages: 'external' } },
   ]);
@@ -137,7 +141,7 @@ test('emits an authenticated external companion and independently addressable pa
       source: {
         type: 'external',
         uri: bitmapExternal.artifacts[0].id,
-        artifactHash: bitmapExternal.artifacts[0].sha256,
+        artifactFingerprint: bitmapExternal.artifacts[0].fingerprint,
       },
     },
   ]);
@@ -158,16 +162,16 @@ test('emits an authenticated external companion and independently addressable pa
 test('rejects tampered artifacts, reciprocal mismatches, and duplicate raster keys', async () => {
   const tampered = structuredClone(bitmapEmbedded);
   tampered.artifacts[0].bytes = tampered.artifacts[0].bytes.slice();
-  tampered.artifacts[0].bytes[0] ^= 1;
+  tampered.artifacts[0].bytes[tampered.artifacts[0].bytes.byteLength - 1] ^= 1;
   await assert.rejects(
     composeFontBake(core, [{ raster: tampered, packaging: { artifact: 'embedded', pages: 'embedded' } }]),
-    (error) => error instanceof BakeCompositionError && error.reason === 'ARTIFACT_HASH',
+    (error) => error instanceof BakeCompositionError && error.reason === 'ARTIFACT_FINGERPRINT',
   );
 
   await assert.rejects(
     composeFontBake(core, [
       {
-        raster: { ...bitmapEmbedded, rasterKey: '0'.repeat(64) },
+        raster: { ...bitmapEmbedded, rasterKey: '0'.repeat(32) },
         packaging: { artifact: 'embedded', pages: 'embedded' },
       },
     ]),
@@ -183,7 +187,7 @@ test('rejects tampered artifacts, reciprocal mismatches, and duplicate raster ke
   );
 });
 
-async function customRaster(source, rasterKey, extension) {
+function customRaster(source, rasterKey, extension) {
   const main = source.artifacts[0];
   const parsed = parseGlb(main.bytes);
   const document = structuredClone(parsed.document);
@@ -194,13 +198,13 @@ async function customRaster(source, rasterKey, extension) {
   document.extensionsUsed = [extension];
   document.extensionsRequired = [extension];
   const bytes = encodeGlb(document, parsed.bin.subarray(0, parsed.declaredBinLength));
-  const sha256 = await hash(bytes);
+  const fingerprint = fingerprint128(bytes, fingerprintDomain.artifact);
   return {
     ...source,
     rasterKey,
     kind: 'studio.custom',
     extension,
-    artifacts: [{ ...main, id: 'studio-custom.glb', bytes, sha256 }],
+    artifacts: [{ ...main, id: 'studio-custom.glb', bytes, fingerprint }],
   };
 }
 
@@ -229,19 +233,14 @@ function align4(value) {
   return remainder === 0 ? value : value + 4 - remainder;
 }
 
-async function hash(bytes) {
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes.slice().buffer))]
-    .map((value) => value.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 function summarize(result) {
   return {
-    artifacts: result.artifacts.map(({ role, id, bytes, sha256 }) => ({
+    artifacts: result.artifacts.map(({ role, id, bytes, fingerprint }) => ({
       role,
       id,
       bytes: bytes.byteLength,
-      sha256,
+      fingerprint,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
     })),
     report: result.report,
   };

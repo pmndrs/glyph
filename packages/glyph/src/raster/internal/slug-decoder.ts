@@ -7,7 +7,8 @@ import {
 } from 'ktx-parse';
 
 import type { RasterDecodeFont } from '../../font.js';
-import type { Sha256Hex } from '../../identity.js';
+import type { Fingerprint } from '../../identity.js';
+import { isFingerprint } from '../../internal/fingerprint.js';
 import { jsonArray, jsonObject, nonnegativeSafeInteger, positiveSafeInteger } from '../../internal/raster-atlas.js';
 import { validateNativeKtx2 } from '../../internal/raster-ktx.js';
 import {
@@ -37,7 +38,7 @@ export async function decodeSlugData(
   if (
     extension.version !== SLUG_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingHash !== font.shapingHash ||
+    extension.shapingFingerprint !== font.shapingFingerprint ||
     extension.glyphCount !== font.glyphCount ||
     extension.glyphIdWidth !== 16 ||
     extension.planeUnitsPerEm !== SLUG_PLANE_UNITS_PER_EM ||
@@ -132,7 +133,7 @@ async function decodeSlugPage(
   assertGridLength(referenceBytes, referenceCapacity, 2, `${path} reference`);
 
   return {
-    resource: defineRasterResourceId(`pmndrs.slug/${font.shapingHash}/${raster.rasterKey}/${pageIndex}`),
+    resource: defineRasterResourceId(`pmndrs.slug/${font.shapingFingerprint}/${raster.rasterKey}/${pageIndex}`),
     curveWidth,
     curveHeight,
     curveBytes,
@@ -162,10 +163,10 @@ async function rasterResourceBytes(
       type: 'external',
       uri: nonemptyString(source.uri, `${path} uri`),
       byteLength: positiveSafeInteger(source.byteLength, `${path} byteLength`),
-      artifactHash: sha256Hex(source.artifactHash, `${path} artifactHash`),
+      artifactFingerprint: fingerprint(source.artifactFingerprint, `${path} artifactFingerprint`),
     };
   } else {
-    throw new TypeError(`${path} must be a bufferView or authenticated external resource`);
+    throw new TypeError(`${path} must be a bufferView or fingerprint-addressed external resource`);
   }
   return raster.resource(resource, signal);
 }
@@ -244,10 +245,10 @@ function nonemptyString(value: JsonValue | undefined, path: string): string {
   return value;
 }
 
-function sha256Hex(value: JsonValue | undefined, path: string): Sha256Hex {
+function fingerprint(value: JsonValue | undefined, path: string): Fingerprint {
   const text = nonemptyString(value, path);
-  if (!/^[0-9a-f]{64}$/.test(text)) throw new TypeError(`${path} must be lowercase SHA-256`);
-  return text as Sha256Hex;
+  if (!isFingerprint(text)) throw new TypeError(`${path} must be a lowercase 128-bit fingerprint`);
+  return text as Fingerprint;
 }
 
 function textureDimension(value: JsonValue | undefined, path: string): number {

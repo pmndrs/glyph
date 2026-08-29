@@ -17,9 +17,9 @@
         "type": { "type": "string", "enum": ["external"] },
         "uri": { "type": "string", "minLength": 1 },
         "byteLength": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
-        "artifactHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        "artifactFingerprint": { "type": "string", "pattern": "^[0-9a-f]{32}$" }
       },
-      "required": ["type", "uri", "byteLength", "artifactHash"],
+      "required": ["type", "uri", "byteLength", "artifactFingerprint"],
       "additionalProperties": false
     }
   ]

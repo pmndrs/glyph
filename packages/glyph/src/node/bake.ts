@@ -34,6 +34,7 @@ export * from '../font-baker/validator.js';
 
 import type { BakeArtifact, BakeWarning, FontPayloadReport, RasterBakePlan, RasterBakerModule } from '../bake.js';
 import type { JsonValue } from '../raster.js';
+import type { Fingerprint } from '../identity.js';
 import type {
   DiscoveryDiagnostic,
   DiscoveredFontDefinition,
@@ -83,7 +84,7 @@ export interface NodeBakeExecutionReport {
     readonly role: BakeArtifact['role'];
     readonly file: string;
     readonly bytes: number;
-    readonly sha256: string;
+    readonly fingerprint: Fingerprint;
   }[];
 }
 
@@ -213,7 +214,7 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
         role: artifact.role,
         file,
         bytes: artifact.bytes.byteLength,
-        sha256: artifact.sha256,
+        fingerprint: artifact.fingerprint,
       })),
     },
   };

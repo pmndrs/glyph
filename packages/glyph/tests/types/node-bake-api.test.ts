@@ -22,7 +22,7 @@ const project = bakeProject({
 
 declare const report: NodeFontBakeReport;
 const elapsed: number = report.execution.timingsMs.total;
-const outputHash: string | undefined = report.execution.outputs[0]?.sha256;
+const outputHash: string | undefined = report.execution.outputs[0]?.fingerprint;
 void explicit;
 void project;
 void elapsed;

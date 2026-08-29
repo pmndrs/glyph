@@ -1,5 +1,5 @@
 import type { RasterDecodeFont, RegisteredFont } from './font.js';
-import type { FontHandle, RasterHandle, RasterKey, Sha256Hex } from './identity.js';
+import type { FontHandle, RasterHandle, RasterKey, Fingerprint } from './identity.js';
 import type { BakeProgressListener, RasterBakeArtifact } from './bake.js';
 
 export type RasterKind = string;
@@ -17,12 +17,12 @@ export type RasterSource =
   | {
       readonly type: 'external';
       readonly uri: string;
-      readonly artifactHash: Sha256Hex;
+      readonly artifactFingerprint: Fingerprint;
     }
   | {
       readonly type: 'external';
       readonly uri?: never;
-      readonly artifactHash?: Sha256Hex;
+      readonly artifactFingerprint?: Fingerprint;
     };
 
 export interface RasterReference<Kind extends string = string> {
@@ -39,7 +39,7 @@ export type RasterResourceSource =
       readonly type: 'external';
       readonly uri: string;
       readonly byteLength: number;
-      readonly artifactHash: Sha256Hex;
+      readonly artifactFingerprint: Fingerprint;
     };
 
 export interface RasterSelection<Kind extends string = string> {
@@ -57,7 +57,7 @@ export interface RasterDecodeArtifact<Kind extends string = string> {
   readonly extensionData: JsonValue;
   /** Borrow a bounds-checked view of immutable artifact storage. Technique providers must not mutate it. */
   view(bufferView: number): Uint8Array;
-  /** Resolve an embedded or authenticated external extension resource. */
+  /** Resolve an embedded or fingerprint-addressed external extension resource. */
   resource(source: RasterResourceSource, signal?: AbortSignal): Promise<Uint8Array>;
 }
 
@@ -92,6 +92,7 @@ export type RasterResourceResolver = (context: RasterResourceResolverContext) =>
 
 interface RuntimeRasterBakeRequestBase {
   readonly source: Uint8Array;
+  readonly sourceFingerprint: Fingerprint;
   readonly font: RasterDecodeFont;
   readonly fontFaceIndex: number;
   readonly rasterKey: RasterKey | string;

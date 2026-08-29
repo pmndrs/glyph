@@ -39,7 +39,7 @@ test('compiles and accepts the canonical MTSDF V0 extension shape', () => {
   assertRequiredFields(validateDistanceField, specimen, [
     'version',
     'rasterKey',
-    'shapingHash',
+    'shapingFingerprint',
     'glyphCount',
     'glyphIdWidth',
     'encoding',
@@ -65,7 +65,7 @@ test('compiles and accepts the canonical Slug V0 extension shape', () => {
   assertRequiredFields(validateSlug, specimen, [
     'version',
     'rasterKey',
-    'shapingHash',
+    'shapingFingerprint',
     'glyphCount',
     'glyphIdWidth',
     'planeUnitsPerEm',
@@ -108,8 +108,8 @@ async function readSchema(path) {
 function distanceFieldSpecimen() {
   return {
     version: 0,
-    rasterKey: '1'.repeat(64),
-    shapingHash: '2'.repeat(64),
+    rasterKey: '1'.repeat(32),
+    shapingFingerprint: '2'.repeat(32),
     glyphCount: 2937,
     glyphIdWidth: 16,
     encoding: 'mtsdf',
@@ -125,8 +125,8 @@ function distanceFieldSpecimen() {
 function slugSpecimen() {
   return {
     version: 0,
-    rasterKey: '3'.repeat(64),
-    shapingHash: '2'.repeat(64),
+    rasterKey: '3'.repeat(32),
+    shapingFingerprint: '2'.repeat(32),
     glyphCount: 2937,
     glyphIdWidth: 16,
     planeUnitsPerEm: 2048,

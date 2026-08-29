@@ -57,7 +57,7 @@ async function fixture(name) {
   const identity = core.document.extensions.PMNDRS_font.rasters[0];
   const context = {
     rasterKey: identity.rasterKey,
-    shapingHash: core.shapingHash,
+    shapingFingerprint: core.shapingFingerprint,
     glyphCount: core.glyphCount,
     glyphIdWidth: 16,
   };

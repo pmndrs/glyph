@@ -50,7 +50,9 @@ flowchart TD
   Resolver --> Validate["attach after identity validation"]
 ```
 
-Bundling or splitting MUST NOT change the binary records. A raster is attached to a registered font by the SHA-256 of the canonical shaping payload plus the declared glyph count and ID width. A resource with a mismatched identity is rejected before GPU upload.
+Bundling or splitting MUST NOT change the binary records. A raster is attached to a registered font by the stamped
+shaping fingerprint plus the declared glyph count and ID width. A resource with a mismatched identity is rejected before
+GPU upload.
 
 The core `PMNDRS_font.rasters` directory describes availability. Each entry contains:
 
@@ -62,12 +64,13 @@ interface RasterReference {
   version: number;
   source:
     | { type: 'embedded' }
-    | { type: 'external'; uri: string; artifactHash: string }
-    | { type: 'external'; artifactHash?: string };
+    | { type: 'external'; uri: string; artifactFingerprint: Fingerprint }
+    | { type: 'external'; artifactFingerprint?: Fingerprint };
 }
 ```
 
-`rasterKey` is the lowercase hexadecimal SHA-256 digest of the UTF-8 bytes of the [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) canonical JSON object below:
+`rasterKey` is the 128-bit descriptor-domain fingerprint of the UTF-8 bytes of the
+[RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) canonical JSON object below:
 
 ```json
 {
@@ -78,9 +81,9 @@ interface RasterReference {
 }
 ```
 
-The package supplies the actual `descriptor`. It MUST include every non-default option that changes required payload content and its generator compatibility version; a generator-versioned canonical default may remain implicit only when every producer and consumer resolves it identically. It MUST contain only JSON values and MUST reject non-finite numbers before canonicalization. For bitmap it includes the complete canonical strike tuple. For MTSDF, the legacy fieldless descriptor means 64 px/em with a full eight-pixel range; any non-default descriptor contains both effective `emSize` and `pixelRange` values, including a default filled for an omitted field. Explicit effective 64/8 canonicalizes back to the legacy descriptor. Object member order in source code is irrelevant because RFC 8785 defines the hashed serialization. Callers do not author keys. A baker, runtime module, and static source analyzer given the same definition MUST derive the same key. `kind` is an open module-owned identifier; core does not enumerate first-party or external raster techniques. `extension` names the companion glTF extension that defines that raster's payload, and `version` selects that companion contract. The three companion extensions below are the packages currently planned by this project, not a closed registry.
+The package supplies the actual `descriptor`. It MUST include every non-default option that changes required payload content and its generator compatibility version; a generator-versioned canonical default may remain implicit only when every producer and consumer resolves it identically. It MUST contain only JSON values and MUST reject non-finite numbers before canonicalization. For bitmap it includes the complete canonical strike tuple. For MTSDF, the legacy fieldless descriptor means 64 px/em with a full eight-pixel range; any non-default descriptor contains both effective `emSize` and `pixelRange` values, including a default filled for an omitted field. Explicit effective 64/8 canonicalizes back to the legacy descriptor. Object member order in source code is irrelevant because RFC 8785 defines the fingerprinted serialization. Callers do not author keys. A baker, runtime module, and static source analyzer given the same definition MUST derive the same key. `kind` is an open module-owned identifier; core does not enumerate first-party or external raster techniques. `extension` names the companion glTF extension that defines that raster's payload, and `version` selects that companion contract. The three companion extensions below are the packages currently planned by this project, not a closed registry.
 
-An external `uri` uses RFC 3986 URI syntax and glTF's relative-URI resolution rules, but remains a custom extension field rather than a core glTF resource property. Every URI-addressed artifact carries a lowercase SHA-256 `artifactHash` over the complete external artifact and is authenticated before registration. If `uri` is absent, the application must provide the raster through its resolver API; a hash may still be supplied to authenticate those bytes. glTF `extensionsRequired`, not a duplicated raster flag, determines whether unsupported embedded extensions invalidate a combined asset.
+An external `uri` uses RFC 3986 URI syntax and glTF's relative-URI resolution rules, but remains a custom extension field rather than a core glTF resource property. Every URI-addressed artifact carries an `artifactFingerprint` calculated from the complete external artifact at bake time, and its URI SHOULD be content-addressed by that value. If `uri` is absent, the application must provide the raster through its resolver API and MAY still declare a fingerprint for identity matching. Normal loading compares declared fingerprints and byte lengths; it does not hash payload bytes. glTF `extensionsRequired`, not a duplicated raster flag, determines whether unsupported embedded extensions invalidate a combined asset.
 
 A combined GLB may embed at most one raster for a given companion extension name because a glTF root has only one value for each extension key. Additional raster definitions using that extension MUST be external. Registration verifies that the embedded extension root's `rasterKey` equals the elected directory entry; an unrelated root object never satisfies an embedded reference.
 
@@ -90,7 +93,7 @@ Every raster extension root contains the reciprocal binding:
 interface RasterBinding {
   version: 0;
   rasterKey: string;
-  shapingHash: string;
+  shapingFingerprint: Fingerprint;
   glyphCount: number;
   glyphIdWidth: 16;
 }
@@ -129,7 +132,7 @@ type ResourceSource =
       type: 'external';
       uri: string;
       byteLength: number;
-      artifactHash: string;
+      artifactFingerprint: Fingerprint;
     };
 
 interface BinaryResource {
@@ -155,11 +158,11 @@ interface TextureVariant {
 }
 ```
 
-Embedded bytes occupy the complete referenced glTF `bufferView`. An external source URI resolves relative to the companion raster asset, declares its encoded byte length, and requires lowercase SHA-256 over the complete resource. Redirected or cross-origin bytes are accepted only after the same length and hash checks. The page directory and dense glyph records remain in the companion raster asset, so a raster module can determine required logical pages before fetching their payloads.
+Embedded bytes occupy the complete referenced glTF `bufferView`. An external source URI resolves relative to the companion raster asset, declares its encoded byte length, and carries the bake-time fingerprint of the complete resource. Redirected or cross-origin bytes are accepted only after the same stamped-identity and length checks. The page directory and dense glyph records remain in the companion raster asset, so a raster module can determine required logical pages before fetching their payloads.
 
 A variant whose KTX2 `vkFormat` names a native GPU format can be uploaded directly only when the device supports it. A Basis payload requires a dynamically imported transcoder and is not described as direct upload. The runtime selects the first supported variant in listed order. Page sources may be fetched, decoded, uploaded, cached, and evicted independently; all variants belonging to one logical page reconstruct the same declared texel content within their quality class.
 
-Before decompression, transcoding, or upload, the raster module MUST validate the selected source length and hash, parse every KTX2 level, and prove that its decoded byte count equals the size implied by the declared dimensions, mip count, and GPU format. Dimensions MUST fit the active device limits and the configured per-font/per-raster GPU-byte budget. Reversible supercompression and Basis/native transcoding run off the main thread. A size mismatch, hash mismatch, unsupported dimension, arithmetic overflow, or budget excess rejects the page before allocation or GPU submission.
+Before decompression, transcoding, or upload, the raster module MUST validate the selected source length and stamped fingerprint, parse every KTX2 level, and prove that its decoded byte count equals the size implied by the declared dimensions, mip count, and GPU format. Dimensions MUST fit the active device limits and the configured per-font/per-raster GPU-byte budget. Reversible supercompression and Basis/native transcoding run off the main thread. A size mismatch, identity mismatch, unsupported dimension, arithmetic overflow, or budget excess rejects the page before allocation or GPU submission.
 
 Every V0 raster MUST provide a lossless baseline variant. GPU-native block-compressed variants are additive. They cannot be the sole variant until the supported platform matrix guarantees them.
 
@@ -360,7 +363,7 @@ The caller explicitly selects a configured raster definition, normally through a
 1. loads and registers the core font GLB;
 2. locates an embedded raster or resolves/fetches an external artifact;
 3. dynamically imports only that raster's decoder/renderer module;
-4. verifies `shapingHash`, glyph count, ID width, extension version, ranges, and texture capabilities;
+4. verifies `shapingFingerprint`, glyph count, ID width, extension version, ranges, and texture capabilities;
 5. selects a supported texture variant;
 6. creates GPU resources in bulk without per-glyph object reconstruction;
 7. attaches the resource to `(FontHandle, rasterKey)`.
@@ -376,13 +379,13 @@ Every raster format requires golden-byte, range, and GPU-readback fixtures cover
 - bundled and external packaging producing identical records;
 - rejecting two embedded raster references with the same companion extension name or an embedded root with the wrong `rasterKey`;
 - application-resolved external bytes with no URI;
-- missing or mismatched required external `artifactHash`;
-- wrong shaping hash, glyph count, ID width, and raster key;
+- missing or mismatched required external `artifactFingerprint`;
+- wrong shaping fingerprint, glyph count, ID width, and raster key;
 - bitmap artifacts missing a declared strike, containing an undeclared strike, or ordering a non-canonical strike tuple;
 - missing pages and the `0xffff` sentinel;
 - out-of-range atlas rectangles and page indexes;
 - unsupported compressed variants with successful lossless fallback;
-- embedded and external page sources, external length/hash failure, relative URI resolution, fetch deduplication, cancellation, eviction, and stale-generation rejection;
+- embedded and external page sources, external length/fingerprint failure, relative URI resolution, fetch deduplication, cancellation, eviction, and stale-generation rejection;
 - logical page indexes that do not match GPU array layers or draw ordering;
 - mismatched KTX2 decoded sizes, oversized dimensions, decompression bombs, format/feature mismatches, and configured GPU-budget overflow;
 - misaligned bitmap/distance-field two-byte records and Slug four-byte records;

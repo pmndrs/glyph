@@ -36,7 +36,7 @@ export async function decodeBitmapData(font: RasterDecodeFont, raster: RasterDec
   if (
     extension.version !== BITMAP_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingHash !== font.shapingHash ||
+    extension.shapingFingerprint !== font.shapingFingerprint ||
     extension.glyphCount !== font.glyphCount ||
     extension.glyphIdWidth !== 16
   ) {
@@ -99,7 +99,7 @@ export async function decodeBitmapData(font: RasterDecodeFont, raster: RasterDec
           ...decoded,
           format: 'r8unorm',
           resource: defineRasterResourceId(
-            `pmndrs.bitmap/${font.shapingHash}/${raster.rasterKey}/${strikeIndex}/${pageIndex}`,
+            `pmndrs.bitmap/${font.shapingFingerprint}/${raster.rasterKey}/${strikeIndex}/${pageIndex}`,
           ),
         };
       },

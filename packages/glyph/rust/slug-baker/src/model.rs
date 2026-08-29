@@ -42,9 +42,10 @@ pub struct SlugPackagingV0 {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SlugBakeRequestV0 {
+    pub source_fingerprint: String,
     pub font_face_index: u32,
     pub glyph_count: u16,
-    pub shaping_hash: String,
+    pub shaping_fingerprint: String,
     pub raster_key: String,
     pub packaging: SlugPackagingV0,
     pub descriptor: SlugDescriptorV0,
@@ -57,7 +58,7 @@ pub struct SlugBakeArtifactV0 {
     pub id: String,
     #[serde(skip)]
     pub bytes: Vec<u8>,
-    pub sha256: String,
+    pub fingerprint: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
