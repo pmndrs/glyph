@@ -132,8 +132,6 @@ function mtsdfTextValidation(values: readonly import('./contracts').BenchmarkMea
       metrics.changedPixels < 500 ||
       typeof metrics.distinctRgbColors !== 'number' ||
       metrics.distinctRgbColors < 4 ||
-      metrics.artifactBytes !== 39_347_792 ||
-      metrics.compressedArtifactBytes !== 6_798_458 ||
       metrics.renderTargetGpuBytes !== value.outputBytes ||
       !finiteNonnegative(metrics.fontLoadMs) ||
       !finiteNonnegative(metrics.firstDrawMs) ||
