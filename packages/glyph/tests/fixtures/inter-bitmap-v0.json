@@ -4,9 +4,10 @@
     "fixture": "apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf",
     "bytes": 411640,
     "sha256": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+    "fingerprint": "14fa0a34f3783dd4f131d5b546e453b7",
     "faceIndex": 0,
     "glyphCount": 2937,
-    "shapingHash": "6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09"
+    "shapingFingerprint": "0c522d6ea0db73ba74bcc389dc50263b"
   },
   "descriptor": {
     "generatorVersion": "0.0.0",
@@ -14,10 +15,10 @@
       16
     ]
   },
-  "rasterKey": "f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02",
+  "rasterKey": "d1dcd31304f795b5f2c497c579aa29f0",
   "generator": {
     "version": "0.0.0",
-    "optimizedWasmBytes": 622545,
+    "optimizedWasmBytes": 616199,
     "dependencies": {
       "readFonts": "0.42.1",
       "skrifa": "0.45.1",
@@ -38,14 +39,15 @@
     "artifacts": [
       {
         "role": "raster",
-        "id": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
-        "bytes": 755064,
-        "sha256": "abee758ffb7443d3617600395da6192594fb3d7ab14e0c03f0e1ee1bb24a8179"
+        "id": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0-9d7d705d24a4455c978a80f51c76a438.glb",
+        "bytes": 755008,
+        "fingerprint": "9d7d705d24a4455c978a80f51c76a438",
+        "sha256": "a91a386d6b8a9d67ab255324071ad2bb36de78e19f353224129ebd5affa5ff76"
       }
     ],
     "report": {
       "metadataBytes": 58740,
-      "serializedBytes": 755064,
+      "serializedBytes": 755008,
       "gpuBytes": 695296,
       "pages": [
         {
@@ -73,20 +75,22 @@
     "artifacts": [
       {
         "role": "raster",
-        "id": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
-        "bytes": 59808,
-        "sha256": "91b1676df18544201edf3ecd2bd9fcdb6d00a7e1acaccb789d1cebfbf1b4d9c2"
+        "id": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0-f1c3144ea7e98b216b56863cefb6a14d.glb",
+        "bytes": 59696,
+        "fingerprint": "f1c3144ea7e98b216b56863cefb6a14d",
+        "sha256": "d9f6c80b963b4ea0c0c00767eb7771fb72082c774e46678b2d9a83fe508c6968"
       },
       {
         "role": "raster-page",
-        "id": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+        "id": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0-s16-p0-c9f48482f59f7f8a49cfd1fb65211947.ktx2",
         "bytes": 695444,
+        "fingerprint": "c9f48482f59f7f8a49cfd1fb65211947",
         "sha256": "c07da2241f3a11fdf39ae72e442eaa009f5de2e3b5f568c24a789922724c6790"
       }
     ],
     "report": {
       "metadataBytes": 58740,
-      "serializedBytes": 755252,
+      "serializedBytes": 755140,
       "gpuBytes": 695296,
       "pages": [
         {
@@ -105,7 +109,7 @@
         "width": 1024,
         "height": 679,
         "source": "external",
-        "uri": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+        "uri": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0-s16-p0-c9f48482f59f7f8a49cfd1fb65211947.ktx2",
         "bytes": 695444,
         "sha256": "c07da2241f3a11fdf39ae72e442eaa009f5de2e3b5f568c24a789922724c6790"
       }
@@ -116,9 +120,10 @@
       "artifacts": [
         {
           "role": "font",
-          "id": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
-          "bytes": 927248,
-          "sha256": "987312b799b3dfc8e5cbf941a9bbec2dd006b808dee61555605cdad234cd6e33"
+          "id": "font-0c522d6ea0db73ba74bcc389dc50263b",
+          "bytes": 927084,
+          "fingerprint": "d3b51ed8742684bb3d5e9a5773f78909",
+          "sha256": "eff4e3e51abafc8b90aafbef4a0ccef824cf60e96394f00f6c87a615b6c41aaf"
         }
       ],
       "report": {
@@ -186,7 +191,7 @@
           {
             "kind": "bitmap",
             "metadataBytes": 58740,
-            "serializedBytes": 755064,
+            "serializedBytes": 755008,
             "gpuBytes": 695296,
             "pages": [
               {
@@ -202,18 +207,18 @@
         ],
         "containers": [
           {
-            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "artifactId": "font-0c522d6ea0db73ba74bcc389dc50263b",
             "role": "font",
-            "jsonBytes": 1979,
+            "jsonBytes": 1815,
             "paddingBytes": 1,
-            "totalBytes": 927248
+            "totalBytes": 927084
           }
         ],
         "transport": [
           {
-            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "artifactId": "font-0c522d6ea0db73ba74bcc389dc50263b",
             "format": "raw",
-            "bytes": 927248
+            "bytes": 927084
           }
         ]
       }
@@ -222,20 +227,23 @@
       "artifacts": [
         {
           "role": "font",
-          "id": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
-          "bytes": 172640,
-          "sha256": "5cab98ae6d86290b375cfc02a7e2d610c1f56cfe446890e730ef0a43797752d3"
+          "id": "font-0c522d6ea0db73ba74bcc389dc50263b",
+          "bytes": 172480,
+          "fingerprint": "a0d577bed54f642989faa7afe97bbb89",
+          "sha256": "447a5f38a6b7c80046633a7107716d275149b19a86f62fdb4892c27d742dbf88"
         },
         {
           "role": "raster",
-          "id": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
-          "bytes": 59808,
-          "sha256": "91b1676df18544201edf3ecd2bd9fcdb6d00a7e1acaccb789d1cebfbf1b4d9c2"
+          "id": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0-f1c3144ea7e98b216b56863cefb6a14d.glb",
+          "bytes": 59696,
+          "fingerprint": "f1c3144ea7e98b216b56863cefb6a14d",
+          "sha256": "d9f6c80b963b4ea0c0c00767eb7771fb72082c774e46678b2d9a83fe508c6968"
         },
         {
           "role": "raster-page",
-          "id": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+          "id": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0-s16-p0-c9f48482f59f7f8a49cfd1fb65211947.ktx2",
           "bytes": 695444,
+          "fingerprint": "c9f48482f59f7f8a49cfd1fb65211947",
           "sha256": "c07da2241f3a11fdf39ae72e442eaa009f5de2e3b5f568c24a789922724c6790"
         }
       ],
@@ -304,7 +312,7 @@
           {
             "kind": "bitmap",
             "metadataBytes": 58740,
-            "serializedBytes": 755252,
+            "serializedBytes": 755140,
             "gpuBytes": 695296,
             "pages": [
               {
@@ -320,33 +328,33 @@
         ],
         "containers": [
           {
-            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "artifactId": "font-0c522d6ea0db73ba74bcc389dc50263b",
             "role": "font",
-            "jsonBytes": 1556,
-            "paddingBytes": 0,
-            "totalBytes": 172640
+            "jsonBytes": 1393,
+            "paddingBytes": 3,
+            "totalBytes": 172480
           },
           {
-            "artifactId": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+            "artifactId": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0-f1c3144ea7e98b216b56863cefb6a14d.glb",
             "role": "raster",
-            "jsonBytes": 1039,
-            "paddingBytes": 1,
-            "totalBytes": 59808
+            "jsonBytes": 926,
+            "paddingBytes": 2,
+            "totalBytes": 59696
           }
         ],
         "transport": [
           {
-            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "artifactId": "font-0c522d6ea0db73ba74bcc389dc50263b",
             "format": "raw",
-            "bytes": 172640
+            "bytes": 172480
           },
           {
-            "artifactId": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+            "artifactId": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0-f1c3144ea7e98b216b56863cefb6a14d.glb",
             "format": "raw",
-            "bytes": 59808
+            "bytes": 59696
           },
           {
-            "artifactId": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+            "artifactId": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0-s16-p0-c9f48482f59f7f8a49cfd1fb65211947.ktx2",
             "format": "raw",
             "bytes": 695444
           }
@@ -357,9 +365,10 @@
       "artifacts": [
         {
           "role": "font",
-          "id": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
-          "bytes": 172240,
-          "sha256": "4c87184ce8df2037d87427a63af7c1fa68c7bf7c00042b177c69d442792d1db8"
+          "id": "font-0c522d6ea0db73ba74bcc389dc50263b",
+          "bytes": 172164,
+          "fingerprint": "df97b6629eff847cec1a28b30e368420",
+          "sha256": "5c7896531e2f7c8d648e5488c116865994f1a892854ebb0beb980cc728f5e197"
         }
       ],
       "report": {
@@ -426,18 +435,18 @@
         "rasters": [],
         "containers": [
           {
-            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "artifactId": "font-0c522d6ea0db73ba74bcc389dc50263b",
             "role": "font",
-            "jsonBytes": 1155,
-            "paddingBytes": 1,
-            "totalBytes": 172240
+            "jsonBytes": 1080,
+            "paddingBytes": 0,
+            "totalBytes": 172164
           }
         ],
         "transport": [
           {
-            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "artifactId": "font-0c522d6ea0db73ba74bcc389dc50263b",
             "format": "raw",
-            "bytes": 172240
+            "bytes": 172164
           }
         ]
       }

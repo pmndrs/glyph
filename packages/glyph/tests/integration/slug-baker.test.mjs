@@ -11,10 +11,12 @@ import {
 } from '../../dist/bakers/slug.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { SLUG_EXTENSION, slugDescriptor, slugDescriptorRasterKey } from '../../dist/internal/slug-contract.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { interShapingFingerprint } from '../support/inter-identity.mjs';
 
 const wasmUrl = new URL('../../dist/slug-baker.wasm', import.meta.url);
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
-const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09';
+const shapingFingerprint = interShapingFingerprint;
 const progressImports = { env: { pmndrs_glyph_bake_progress() {} } };
 
 async function setup() {
@@ -23,6 +25,7 @@ async function setup() {
   const instance = await WebAssembly.instantiate(module, progressImports);
   return {
     source: new Uint8Array(source),
+    sourceFingerprint: fingerprint128(source, fingerprintDomain.source),
     module,
     instance,
     core: await createSlugBaker(module),
@@ -47,13 +50,13 @@ test('ships the generated generic direct/segmented Slug ABI', async () => {
 });
 
 test('bakes and validates exact external and embedded Inter Slug resources', async () => {
-  const { source, core } = await setup();
+  const { source, sourceFingerprint, core } = await setup();
   const descriptor = slugDescriptor();
   const rasterKey = await slugDescriptorRasterKey();
   const progress = [];
   const baker = slugBakerFromCore(core);
   const input = (pages) => ({
-    font: { source, fontFaceIndex: 0, glyphCount: 2937, shapingHash },
+    font: { source, sourceFingerprint, fontFaceIndex: 0, glyphCount: 2937, shapingFingerprint },
     rasterKey,
     packaging: { artifact: 'external', pages },
     descriptor,
@@ -91,11 +94,11 @@ test('bakes and validates exact external and embedded Inter Slug resources', asy
   const pageArtifacts = external.artifacts.filter(({ role }) => role === 'raster-page');
   assert.equal(pageArtifacts.length, external.report.pages.length * 3);
   assert.equal(embedded.artifacts.filter(({ role }) => role === 'raster-page').length, 0);
-  assert.ok(pageArtifacts.some(({ id }) => id.endsWith('-curves.ktx2')));
-  assert.ok(pageArtifacts.some(({ id }) => id.endsWith('-headers.r32ui.bin')));
-  assert.ok(pageArtifacts.some(({ id }) => id.endsWith('-references.r16ui.bin')));
+  assert.ok(pageArtifacts.some(({ id }) => /-curves-[0-9a-f]{32}\.ktx2$/.test(id)));
+  assert.ok(pageArtifacts.some(({ id }) => /-headers-[0-9a-f]{32}\.r32ui\.bin$/.test(id)));
+  assert.ok(pageArtifacts.some(({ id }) => /-references-[0-9a-f]{32}\.r16ui\.bin$/.test(id)));
 
-  const context = { rasterKey, shapingHash, glyphCount: 2937, glyphIdWidth: 16, descriptor };
+  const context = { rasterKey, shapingFingerprint, glyphCount: 2937, glyphIdWidth: 16, descriptor };
   const externalValidated = await validateSlugArtifact(externalRaster.bytes, {
     ...context,
     externalPages: new Map(pageArtifacts.map(({ id, bytes }) => [id, bytes])),
@@ -123,10 +126,11 @@ test('surfaces structured identity failures before rasterizing', async () => {
       core.bake({
         source,
         request: {
+          sourceFingerprint: fingerprint128(source, fingerprintDomain.source),
           fontFaceIndex: 0,
           glyphCount: 2937,
-          shapingHash,
-          rasterKey: '0'.repeat(64),
+          shapingFingerprint,
+          rasterKey: '0'.repeat(32),
           packaging: { artifact: 'external', pages: 'embedded' },
           descriptor: slugDescriptor(),
         },
@@ -149,10 +153,11 @@ test('releases the source allocation when the request allocation fails', () => {
       core.bake({
         source: new Uint8Array(8),
         request: {
+          sourceFingerprint: '0'.repeat(32),
           fontFaceIndex: 0,
           glyphCount: 1,
-          shapingHash: '0'.repeat(64),
-          rasterKey: '0'.repeat(64),
+          shapingFingerprint: '0'.repeat(32),
+          rasterKey: '0'.repeat(32),
           packaging: { artifact: 'external', pages: 'embedded' },
           descriptor: slugDescriptor(),
         },
@@ -165,7 +170,7 @@ test('releases the source allocation when the request allocation fails', () => {
 test('copies segmented Slug artifacts in bounded chunks and releases Wasm ownership', () => {
   const artifactBytes = Uint8Array.from({ length: 10 }, (_, index) => index + 1);
   const metadata = {
-    rasterKey: '1'.repeat(64),
+    rasterKey: '1'.repeat(32),
     kind: 'slug',
     extension: SLUG_EXTENSION,
     version: 0,
@@ -173,7 +178,7 @@ test('copies segmented Slug artifacts in bounded chunks and releases Wasm owners
       {
         role: 'raster',
         id: 'segmented.glb',
-        sha256: '2'.repeat(64),
+        fingerprint: '2'.repeat(32),
         byteOffset: 0,
         byteLength: artifactBytes.byteLength,
       },
@@ -226,10 +231,11 @@ test('copies segmented Slug artifacts in bounded chunks and releases Wasm owners
   const result = createSlugBakerFromInstance(instance).bake({
     source: new Uint8Array([1]),
     request: {
+      sourceFingerprint: '0'.repeat(32),
       fontFaceIndex: 0,
       glyphCount: 1,
-      shapingHash: '0'.repeat(64),
-      rasterKey: '1'.repeat(64),
+      shapingFingerprint: '0'.repeat(32),
+      rasterKey: '1'.repeat(32),
       packaging: { artifact: 'embedded', pages: 'embedded' },
       descriptor: slugDescriptor(),
     },

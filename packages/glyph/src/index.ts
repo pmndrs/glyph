@@ -195,7 +195,8 @@ export type {
 
 export type { Font, FontMetrics, RasterDecodeFont } from './font.js';
 
-export type { FontSlot, LocalGlyphId, RasterKey, Sha256Hex } from './identity.js';
+export type { FontSlot, LocalGlyphId, RasterKey, Fingerprint } from './identity.js';
+export { fingerprint } from './identity.js';
 
 export { glyphFlags } from './layout.js';
 export type {

@@ -1,13 +1,15 @@
 import type { RasterPayloadReport, SerializedBakeError } from '../bake.js';
-import type { RasterKey, Sha256Hex } from '../identity.js';
+import type { RasterKey, Fingerprint } from '../identity.js';
+import { isFingerprint as isFingerprintValue } from './fingerprint.js';
 
 export interface RasterBakeWorkerRequest {
   readonly type: 'bake-raster-v0';
   readonly id: number;
   readonly source: ArrayBuffer;
+  readonly sourceFingerprint: Fingerprint;
   readonly fontFaceIndex: number;
   readonly glyphCount: number;
-  readonly shapingHash: Sha256Hex;
+  readonly shapingFingerprint: Fingerprint;
   readonly rasterKey: RasterKey;
   readonly options: unknown;
 }
@@ -16,7 +18,7 @@ export interface RasterBakeWorkerArtifact {
   readonly role: 'raster' | 'raster-page';
   readonly id: string;
   readonly bytes: ArrayBuffer;
-  readonly sha256: Sha256Hex;
+  readonly fingerprint: Fingerprint;
 }
 
 export interface RasterBakeWorkerSuccess {
@@ -46,10 +48,11 @@ export function isRasterBakeWorkerRequest(value: unknown): value is RasterBakeWo
     value.type === 'bake-raster-v0' &&
     isPositiveSafeInteger(value.id) &&
     value.source instanceof ArrayBuffer &&
+    isFingerprint(value.sourceFingerprint) &&
     isNonnegativeSafeInteger(value.fontFaceIndex) &&
     isPositiveSafeInteger(value.glyphCount) &&
-    isHash(value.shapingHash) &&
-    isHash(value.rasterKey) &&
+    isFingerprint(value.shapingFingerprint) &&
+    isFingerprint(value.rasterKey) &&
     Object.hasOwn(value, 'options')
   );
 }
@@ -65,7 +68,7 @@ export function isRasterBakeWorkerResult(value: unknown): value is RasterBakeWor
   }
   if (!value.ok) return isSerializedError(value.error);
   return (
-    isHash(value.rasterKey) &&
+    isFingerprint(value.rasterKey) &&
     typeof value.kind === 'string' &&
     typeof value.extension === 'string' &&
     isNonnegativeSafeInteger(value.version) &&
@@ -82,7 +85,7 @@ function isArtifact(value: unknown): value is RasterBakeWorkerArtifact {
     typeof value.id === 'string' &&
     value.id.length > 0 &&
     value.bytes instanceof ArrayBuffer &&
-    isHash(value.sha256)
+    isFingerprint(value.fingerprint)
   );
 }
 
@@ -119,8 +122,8 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isHash(value: unknown): value is Sha256Hex {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+function isFingerprint(value: unknown): value is Fingerprint {
+  return isFingerprintValue(value);
 }
 
 function isPositiveSafeInteger(value: unknown): value is number {

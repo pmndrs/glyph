@@ -25,7 +25,7 @@ export function slugDescriptor(): SlugDescriptor {
 }
 
 /** Derive the key shared by the fixed baker and runtime module. */
-export function slugDescriptorRasterKey(): Promise<RasterKey> {
+export function slugDescriptorRasterKey(): RasterKey {
   return deriveRasterKey({
     descriptor,
     extension: SLUG_EXTENSION,

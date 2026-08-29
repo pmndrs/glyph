@@ -212,6 +212,13 @@
   sizes without the accumulated line-advance drift that could push bitmap prose past its requested width. Integer-fit,
   shrink, remainder distribution, and paragraph integration fixtures pin the new one-unit contract.
 
+## 2026-08-29
+- **Baked identities no longer depend on Web Crypto** — Bake and runtime-bake producers stamp related font, raster, and
+  page artifacts with domain-separated MurmurHash3 x86 128 fingerprints. Normal loading compares those fingerprints and
+  declared lengths without hashing payload bytes, while content-addressed external references prevent ordinary stale
+  cache collisions. Build-time composition still recomputes fingerprints before publication. The contract detects
+  accidentally mixed or stale bake outputs and leaves damaged containers to decode or upload validation; it does not
+  claim cryptographic integrity.
 ## 2026-08-28
 
 - **Enabled workspace source-condition development** — Every TypeScript package subpath now exposes a custom `source`

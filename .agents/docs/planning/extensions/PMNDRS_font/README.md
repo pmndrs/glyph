@@ -61,7 +61,7 @@ This extension does not define text strings, paragraph layout, line breaking, ra
       "shaping": {
         "format": "opentype-sfnt-harfrust-v0",
         "bufferView": 0,
-        "hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "fingerprint": "0123456789abcdef0123456789abcdef",
         "fontFunctions": {
           "glyphExtentsBufferView": 1,
           "glyphExtentsStride": 8,
@@ -77,8 +77,8 @@ This extension does not define text strings, paragraph layout, line breaking, ra
         "lineGap": 0
       },
       "provenance": {
-        "sourceHash": "1111111111111111111111111111111111111111111111111111111111111111",
-        "descriptorHash": "2222222222222222222222222222222222222222222222222222222222222222",
+        "sourceFingerprint": "11111111111111111111111111111111",
+        "descriptorFingerprint": "22222222222222222222222222222222",
         "bakerVersion": "0.1.0",
         "harfrustVersion": "0.12.0",
         "harfbuzzReferenceVersion": "13.0.0",
@@ -86,14 +86,18 @@ This extension does not define text strings, paragraph layout, line breaking, ra
       },
       "rasters": [
         {
-          "rasterKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "rasterKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "kind": "msdf",
           "extension": "PMNDRS_font_distance_field",
           "version": 0,
-          "source": { "type": "external", "uri": "inter.ui-msdf.glb" }
+          "source": {
+            "type": "external",
+            "uri": "mtsdf-11111111111111111111111111111111-22222222222222222222222222222222-33333333333333333333333333333333.glb",
+            "artifactFingerprint": "33333333333333333333333333333333"
+          }
         },
         {
-          "rasterKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "rasterKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "kind": "slug",
           "extension": "PMNDRS_font_slug",
           "version": 0,
@@ -115,7 +119,9 @@ Required tables are `head`, `maxp`, `cmap`, `hhea`, `hmtx`, and `OS/2`. `GDEF`, 
 
 The exact whitelist, metric policy, checksums, and validation rules are normative in the [V0 shaping contract](../../shaping-data-contract.md) while this extension is incubated in `pmndrs/glyph`.
 
-`shaping.hash` is lowercase SHA-256 over the domain-separated, length-prefixed SFNT, glyph-extents, and extents-availability bytes defined by the shaping contract. Companion raster artifacts MUST repeat this hash.
+`shaping.fingerprint` is the lowercase 128-bit MurmurHash3 fingerprint over the length-prefixed SFNT, glyph-extents,
+and extents-availability bytes defined by the shaping contract. Companion raster artifacts MUST repeat this fingerprint.
+It identifies compatible bake outputs; it is not a cryptographic integrity claim.
 
 ### Metrics
 
@@ -125,11 +131,11 @@ When `OS/2.fsSelection.USE_TYPO_METRICS` is set, the serialized line metrics com
 
 ### Raster directory
 
-Raster keys MUST be unique within the font. A key is the lowercase deterministic SHA-256 over the raster kind, companion extension/version, and canonical package-owned descriptor defined by the [raster contract](../../raster-data-contract.md); it is not a caller-authored alias. `kind` is an open identifier owned by the raster module. `extension` names the companion glTF extension that defines its data, and `version` selects that companion contract. Core consumers MUST NOT reject an otherwise valid font merely because the directory contains an unknown optional raster kind. `rasterKey`, `kind`, `extension`, and `version` MUST agree with an attached raster that the consumer elects to load.
+Raster keys MUST be unique within the font. A key is the deterministic 128-bit descriptor fingerprint over the raster kind, companion extension/version, and canonical package-owned descriptor defined by the [raster contract](../../raster-data-contract.md); it is not a caller-authored alias. `kind` is an open identifier owned by the raster module. `extension` names the companion glTF extension that defines its data, and `version` selects that companion contract. Core consumers MUST NOT reject an otherwise valid font merely because the directory contains an unknown optional raster kind. `rasterKey`, `kind`, `extension`, and `version` MUST agree with an attached raster that the consumer elects to load.
 
-An embedded raster is stored at the root `extensions` object in the same GLB. Because glTF permits one root value per extension name, a combined GLB MUST NOT embed more than one raster using the same companion extension; additional entries using that extension MUST be external. The embedded root's reciprocal `rasterKey` MUST equal its elected directory entry. An external source URI resolves relative to the core GLB and MUST carry `artifactHash`, the lowercase SHA-256 over the complete external artifact. When an external source omits `uri`, the application supplies bytes through its resolver and MAY still declare a hash for authentication.
+An embedded raster is stored at the root `extensions` object in the same GLB. Because glTF permits one root value per extension name, a combined GLB MUST NOT embed more than one raster using the same companion extension; additional entries using that extension MUST be external. The embedded root's reciprocal `rasterKey` MUST equal its elected directory entry. An external source URI resolves relative to the core GLB and MUST carry `artifactFingerprint`, calculated over the complete external artifact at bake time. Content-addressed names prevent ordinary stale-cache collisions. When an external source omits `uri`, the application supplies bytes through its resolver and MAY still declare a fingerprint for identity matching.
 
-Companion extensions own a logical raster-page directory. Page payloads may remain embedded in the companion asset or use independently addressed URI, byte-length, and SHA-256 sources relative to that companion asset. Core does not interpret those pages or equate their indexes with GPU binding state.
+Companion extensions own a logical raster-page directory. Page payloads may remain embedded in the companion asset or use independently addressed URI, byte-length, and fingerprint sources relative to that companion asset. Core does not interpret those pages or equate their indexes with GPU binding state.
 
 The top-level glTF `extensionsRequired` array is the sole required-extension mechanism. Raster entries do not duplicate it.
 

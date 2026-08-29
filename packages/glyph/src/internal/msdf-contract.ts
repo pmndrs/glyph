@@ -68,7 +68,7 @@ export function msdfDescriptor(options?: MsdfOptions): MsdfDescriptor {
   });
 }
 
-/** Resolve the authenticated generation policy represented by a descriptor. */
+/** Resolve the canonical generation policy represented by a descriptor. */
 export function msdfDescriptorConfiguration(descriptor: MsdfDescriptor): MsdfConfiguration {
   const keys = Object.keys(descriptor);
   if (
@@ -110,7 +110,7 @@ const defaultConfiguration = Object.freeze({
 }) satisfies MsdfConfiguration;
 
 /** Derive a key from a descriptor that has crossed package-owned validation. */
-export function msdfDescriptorRasterKey(descriptor: MsdfDescriptor = defaultDescriptor): Promise<RasterKey> {
+export function msdfDescriptorRasterKey(descriptor: MsdfDescriptor = defaultDescriptor): RasterKey {
   msdfDescriptorConfiguration(descriptor);
   return deriveRasterKey({
     descriptor,
@@ -121,7 +121,7 @@ export function msdfDescriptorRasterKey(descriptor: MsdfDescriptor = defaultDesc
 }
 
 /** Derive the MTSDF raster key shared by discovery, bakers, and runtimes. */
-export function msdfRasterKey(options?: MsdfOptions): Promise<RasterKey> {
+export async function msdfRasterKey(options?: MsdfOptions): Promise<RasterKey> {
   return msdfDescriptorRasterKey(msdfDescriptor(options));
 }
 

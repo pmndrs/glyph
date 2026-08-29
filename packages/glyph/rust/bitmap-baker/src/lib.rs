@@ -45,8 +45,9 @@ pub fn bake_bitmap(
     request: BitmapBakeRequestV0,
 ) -> Result<BitmapBakeResultV0, BitmapBakeError> {
     request.descriptor.validate()?;
-    validate_hash("shapingHash", &request.shaping_hash)?;
-    validate_hash("rasterKey", &request.raster_key)?;
+    validate_fingerprint("sourceFingerprint", &request.source_fingerprint)?;
+    validate_fingerprint("shapingFingerprint", &request.shaping_fingerprint)?;
+    validate_fingerprint("rasterKey", &request.raster_key)?;
     let expected_raster_key = descriptor_raster_key(&request.descriptor);
     if request.raster_key != expected_raster_key {
         return Err(BitmapBakeError::new(
@@ -54,6 +55,14 @@ pub fn bake_bitmap(
             "raster key does not match the canonical bitmap descriptor",
         )
         .at("/rasterKey"));
+    }
+    if pmndrs_glyph_raster_artifact::fingerprint128(
+        source,
+        pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+    ) != request.source_fingerprint
+    {
+        return Err(BitmapBakeError::new(InvalidIdentity, "source fingerprint does not match the supplied font")
+            .at("/sourceFingerprint"));
     }
 
     let coverage = rasterize::resolve_coverage(
@@ -92,20 +101,23 @@ pub fn bake_bitmap(
             .map_or(0, |selection| selection.bits().len());
     let built = glb::build_bitmap_glb(
         &request.raster_key,
-        &request.shaping_hash,
+        &request.shaping_fingerprint,
         request.glyph_count,
         request.packaging.pages,
         &strikes,
         request.descriptor.coverage.as_ref(),
         coverage.as_ref().map(|selection| selection.bits()),
     )?;
-    let raster_id = format!("bitmap-{}-{}.glb", request.shaping_hash, request.raster_key);
-    let raster_hash = hex_sha256(&built.bytes);
+    let raster_fingerprint = artifact_fingerprint(&built.bytes);
+    let raster_id = format!(
+        "bitmap-{}-{}-{raster_fingerprint}.glb",
+        request.shaping_fingerprint, request.raster_key,
+    );
     let mut artifacts = vec![BitmapBakeArtifactV0 {
         role: "raster".into(),
         id: raster_id,
         bytes: built.bytes,
-        sha256: raster_hash,
+        fingerprint: raster_fingerprint,
     }];
     let mut page_reports = Vec::with_capacity(built.pages.len());
     let mut gpu_bytes = 0_usize;
@@ -131,7 +143,7 @@ pub fn bake_bitmap(
                 role: "raster-page".into(),
                 id: page.id,
                 bytes: page.bytes,
-                sha256: page.sha256,
+                fingerprint: page.fingerprint,
             });
         }
     }
@@ -174,15 +186,21 @@ pub fn descriptor_raster_key(descriptor: &BitmapDescriptorV0) -> String {
         BITMAP_KIND,
         BITMAP_FORMAT_VERSION,
     );
-    hex_sha256(canonical.as_bytes())
+    pmndrs_glyph_raster_artifact::fingerprint128(
+        canonical.as_bytes(),
+        pmndrs_glyph_raster_artifact::DESCRIPTOR_FINGERPRINT_V0,
+    )
 }
 
-pub(crate) fn hex_sha256(bytes: &[u8]) -> String {
-    pmndrs_glyph_raster_artifact::sha256_hex(bytes)
+pub(crate) fn artifact_fingerprint(bytes: &[u8]) -> String {
+    pmndrs_glyph_raster_artifact::fingerprint128(
+        bytes,
+        pmndrs_glyph_raster_artifact::ARTIFACT_FINGERPRINT_V0,
+    )
 }
 
-fn validate_hash(name: &str, value: &str) -> Result<(), BitmapBakeError> {
-    if value.len() != 64
+fn validate_fingerprint(name: &str, value: &str) -> Result<(), BitmapBakeError> {
+    if value.len() != 32
         || !value
             .as_bytes()
             .iter()
@@ -190,7 +208,7 @@ fn validate_hash(name: &str, value: &str) -> Result<(), BitmapBakeError> {
     {
         return Err(BitmapBakeError::new(
             InvalidIdentity,
-            format!("{name} must be lowercase hexadecimal SHA-256"),
+            format!("{name} must be a lowercase 128-bit fingerprint"),
         )
         .at(format!("/{name}")));
     }
@@ -204,7 +222,7 @@ mod tests {
     const INTER: &[u8] = include_bytes!(
         "../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf"
     );
-    const SHAPING_HASH: &str = "6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09";
+    const SHAPING_FINGERPRINT: &str = "0c522d6ea0db73ba74bcc389dc50263b";
 
     fn request(pages: PagePackaging) -> BitmapBakeRequestV0 {
         let descriptor = BitmapDescriptorV0 {
@@ -213,9 +231,13 @@ mod tests {
             strikes: vec![16],
         };
         BitmapBakeRequestV0 {
+            source_fingerprint: pmndrs_glyph_raster_artifact::fingerprint128(
+                INTER,
+                pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+            ),
             font_face_index: 0,
             glyph_count: 2937,
-            shaping_hash: SHAPING_HASH.into(),
+            shaping_fingerprint: SHAPING_FINGERPRINT.into(),
             raster_key: descriptor_raster_key(&descriptor),
             packaging: BitmapPackagingV0 {
                 artifact: ArtifactPackaging::External,
@@ -234,7 +256,7 @@ mod tests {
         };
         assert_eq!(
             descriptor_raster_key(&descriptor),
-            "26e1ebd842adaa30a61b27bf182f244432a61890ed8882d141c270a95ff56783"
+            "0529767598b1d6ebf89e3ce623bcc2c1"
         );
     }
 
@@ -251,7 +273,7 @@ mod tests {
         };
         assert_eq!(
             descriptor_raster_key(&descriptor),
-            "c2ca57973a0666f858d350def46deb26b41b9219e3073df6636a3eaa0810e853"
+            "1337754c97c73e84d8d6d5429d514fb5"
         );
     }
 
@@ -348,7 +370,7 @@ mod tests {
     fn artifact_names_include_font_and_raster_identity() {
         let first = bake_bitmap(INTER, request(PagePackaging::External)).unwrap();
         let mut second_request = request(PagePackaging::External);
-        second_request.shaping_hash = "0".repeat(64);
+        second_request.shaping_fingerprint = "0".repeat(32);
         let second = bake_bitmap(INTER, second_request).unwrap();
 
         assert_ne!(first.artifacts[0].id, second.artifacts[0].id);
@@ -356,13 +378,13 @@ mod tests {
             first
                 .artifacts
                 .iter()
-                .all(|artifact| artifact.id.contains(SHAPING_HASH))
+                .all(|artifact| artifact.id.contains(SHAPING_FINGERPRINT))
         );
         assert!(
             second
                 .artifacts
                 .iter()
-                .all(|artifact| artifact.id.contains(&"0".repeat(64)))
+                .all(|artifact| artifact.id.contains(&"0".repeat(32)))
         );
     }
 

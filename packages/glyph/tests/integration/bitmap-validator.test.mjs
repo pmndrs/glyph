@@ -6,11 +6,12 @@ import test, { before } from 'node:test';
 import { bitmapBakerFromCore, createBitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 import { BitmapArtifactValidationError, validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/glyph/raster/bitmap';
+import { interShapingFingerprint, interSourceFingerprint } from '../support/inter-identity.mjs';
 
 const GLB_MAGIC = 0x4654_6c67;
 const JSON_CHUNK = 0x4e4f_534a;
 const BIN_CHUNK = 0x004e_4942;
-const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09';
+const shapingFingerprint = interShapingFingerprint;
 const descriptor = bitmapDescriptor({ strikes: [16] });
 let rasterKey;
 let embedded;
@@ -29,7 +30,13 @@ before(async () => {
   golden = JSON.parse(goldenBytes);
   rasterKey = await bitmapRasterKey({ strikes: [16] });
   const baker = bitmapBakerFromCore(await createBitmapBaker(wasm));
-  const font = { source, fontFaceIndex: 0, glyphCount: 2937, shapingHash };
+  const font = {
+    source,
+    sourceFingerprint: interSourceFingerprint,
+    fontFaceIndex: 0,
+    glyphCount: 2937,
+    shapingFingerprint,
+  };
   [embedded, external] = await Promise.all([
     baker.bake({
       font,
@@ -44,7 +51,7 @@ before(async () => {
       descriptor,
     }),
   ]);
-  context = { rasterKey, shapingHash, glyphCount: 2937, glyphIdWidth: 16, descriptor };
+  context = { rasterKey, shapingFingerprint, glyphCount: 2937, glyphIdWidth: 16, descriptor };
 });
 
 test('matches the exact canonical Inter bitmap identities and payload bytes', async () => {
@@ -55,20 +62,22 @@ test('matches the exact canonical Inter bitmap identities and payload bytes', as
   assert.equal(rasterKey, golden.rasterKey);
   assert.deepEqual(descriptor, golden.descriptor);
   assert.deepEqual(
-    embedded.artifacts.map(({ role, id, bytes, sha256 }) => ({
+    embedded.artifacts.map(({ role, id, bytes, fingerprint }) => ({
       role,
       id,
       bytes: bytes.byteLength,
-      sha256,
+      fingerprint,
+      sha256: hash(bytes),
     })),
     golden.embedded.artifacts,
   );
   assert.deepEqual(
-    external.artifacts.map(({ role, id, bytes, sha256 }) => ({
+    external.artifacts.map(({ role, id, bytes, fingerprint }) => ({
       role,
       id,
       bytes: bytes.byteLength,
-      sha256,
+      fingerprint,
+      sha256: hash(bytes),
     })),
     golden.external.artifacts,
   );
@@ -141,7 +150,7 @@ test('covers every required bitmap field one deletion at a time', async () => {
   const required = [
     [...root, 'version'],
     [...root, 'rasterKey'],
-    [...root, 'shapingHash'],
+    [...root, 'shapingFingerprint'],
     [...root, 'glyphCount'],
     [...root, 'glyphIdWidth'],
     [...root, 'strikes'],
@@ -188,7 +197,7 @@ test('rejects reciprocal identity, strike, record, page, KTX2, and budget mutati
   const absent = findRecord(bytes, recordsStart, 2937, (view, offset) => view.getUint16(offset + 16, true) === 0xffff);
 
   const wrongIdentity = structuredClone(decoded.document);
-  wrongIdentity.extensions.PMNDRS_font_bitmap.shapingHash = '0'.repeat(64);
+  wrongIdentity.extensions.PMNDRS_font_bitmap.shapingFingerprint = '0'.repeat(32);
   await rejectsWithCode(encodeGlb(bytes, wrongIdentity), 'RECIPROCAL_IDENTITY');
 
   const wrongStrike = structuredClone(decoded.document);
@@ -242,7 +251,7 @@ test('rejects reciprocal identity, strike, record, page, KTX2, and budget mutati
   await rejectsWithCode(bytes, 'GPU_BUDGET', { ...context, limits: { maxGpuBytes: 1 } });
 });
 
-test('requires and authenticates every external page before KTX2 parsing', async () => {
+test('requires and fingerprints every external page during bake validation', async () => {
   const raster = external.artifacts[0].bytes;
   await rejectsWithCode(raster, 'EXTERNAL_PAGE_MISSING');
 
@@ -251,7 +260,7 @@ test('requires and authenticates every external page before KTX2 parsing', async
   );
   const first = externalPages.values().next().value;
   first[first.byteLength - 1] ^= 1;
-  await rejectsWithCode(raster, 'EXTERNAL_PAGE_HASH', { ...context, externalPages });
+  await rejectsWithCode(raster, 'EXTERNAL_PAGE_FINGERPRINT', { ...context, externalPages });
 });
 
 test('validates the pinned 65,535-glyph dense-record and multi-page boundary', async () => {
@@ -289,7 +298,7 @@ test('validates the pinned 65,535-glyph dense-record and multi-page boundary', a
           type: 'external',
           uri: `max-page-${index}.ktx2`,
           byteLength: pageArtifact.bytes.byteLength,
-          artifactHash: pageArtifact.sha256,
+          artifactFingerprint: pageArtifact.fingerprint,
         },
         container: 'ktx2',
         gpuFormat: 'r8unorm',
@@ -305,7 +314,7 @@ test('validates the pinned 65,535-glyph dense-record and multi-page boundary', a
       PMNDRS_font_bitmap: {
         version: 0,
         rasterKey,
-        shapingHash,
+        shapingFingerprint,
         glyphCount: fixture.glyphCount,
         glyphIdWidth: 16,
         strikes: [

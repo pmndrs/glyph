@@ -30,7 +30,7 @@ test('fixed-seed font artifact mutations fail safely and deterministically', asy
 async function outcome(bytes) {
   try {
     const result = await validateFontArtifact(bytes);
-    return { ok: true, shapingHash: result.shapingHash };
+    return { ok: true, shapingFingerprint: result.shapingFingerprint };
   } catch (error) {
     assert(error instanceof FontArtifactValidationError);
     assert(error.issues.length > 0);

@@ -80,8 +80,8 @@ try {
     font: {
       fixture: 'noto-sans-cjk-jp-regular-v0',
       sourceSha256: createHash('sha256').update(source).digest('hex'),
-      artifactSha256: artifact.sha256,
-      shapingHash: font.shapingHash,
+      artifactFingerprint: artifact.fingerprint,
+      shapingFingerprint: font.shapingFingerprint,
       sourceOracle: '../shaping/noto-sans-cjk/harfrust.json',
       independentOracle: '../shaping/noto-sans-cjk/harfbuzz.json',
     },

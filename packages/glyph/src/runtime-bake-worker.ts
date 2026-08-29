@@ -13,6 +13,7 @@ import { bakeFontPipeline } from './internal/font-bake-pipeline.js';
 import { MSDF_GENERATOR_VERSION, msdfDescriptor, type MsdfDescriptor } from './internal/msdf-contract.js';
 import { createResolvedRasterBakePlan, type ResolvedRasterBakePlan } from './internal/raster-bake-plan.js';
 import { canonicalJson, deriveRasterKey } from './internal/raster-identity.js';
+import { fingerprint128, fingerprintDomain } from './internal/fingerprint.js';
 import { createRuntimeFontCache, type CachedFontArtifact } from './internal/runtime-font-cache.js';
 import {
   isRuntimeBakeRequest,
@@ -50,7 +51,8 @@ async function handleMessage(value: RuntimeBakeRequest): Promise<void> {
     const source = new Uint8Array(value.source);
     const cache =
       value.cache === undefined || value.cache.expiresAt <= Date.now() ? undefined : createRuntimeFontCache();
-    const cacheKey = await cache?.key(source, value);
+    const cacheKey =
+      cache === undefined ? undefined : cache.key(fingerprint128(source, fingerprintDomain.source), value);
     const cached = cacheKey === undefined ? undefined : await cache?.match(cacheKey);
     if (cached !== undefined) {
       scope.postMessage(bakeProgressMessage(value.id, 'font', 'complete', 1, 1));
@@ -98,7 +100,7 @@ function postSuccess(id: number, artifact: CachedFontArtifact, report: unknown, 
       role: 'font',
       id: artifact.id,
       bytes: copyToOwnedArrayBuffer(artifact.bytes),
-      sha256: artifact.sha256,
+      fingerprint: artifact.fingerprint,
     },
   ];
   const response: RuntimeBakeSuccess = {

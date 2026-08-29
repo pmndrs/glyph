@@ -20,7 +20,7 @@ pub(crate) struct BuiltRasterGlb {
 pub(crate) struct BuiltResource {
     pub id: String,
     pub bytes: Vec<u8>,
-    pub sha256: String,
+    pub fingerprint: String,
     pub embedded: bool,
 }
 
@@ -34,7 +34,7 @@ pub(crate) struct BuiltPageReport {
 
 pub(crate) fn build_slug_glb(
     raster_key: &str,
-    shaping_hash: &str,
+    shaping_fingerprint: &str,
     glyph_count: u16,
     page_packaging: PagePackaging,
     packed: &PackedSlug,
@@ -64,12 +64,13 @@ pub(crate) fn build_slug_glb(
             metadata.curve_height,
             &page.curve_bytes,
         )?;
-        let stem = format!("slug-{shaping_hash}-{raster_key}-p{page_index}");
+        let stem = format!("slug-{shaping_fingerprint}-{raster_key}-p{page_index}");
         let curve_source = append_resource(
             &mut binary,
             &mut buffer_views,
             &mut resources,
-            format!("{stem}-curves.ktx2"),
+            format!("{stem}-curves"),
+            "ktx2",
             curve,
             page_packaging,
         )?;
@@ -77,7 +78,8 @@ pub(crate) fn build_slug_glb(
             &mut binary,
             &mut buffer_views,
             &mut resources,
-            format!("{stem}-headers.r32ui.bin"),
+            format!("{stem}-headers"),
+            "r32ui.bin",
             page.header_bytes.clone(),
             page_packaging,
         )?;
@@ -85,7 +87,8 @@ pub(crate) fn build_slug_glb(
             &mut binary,
             &mut buffer_views,
             &mut resources,
-            format!("{stem}-references.r16ui.bin"),
+            format!("{stem}-references"),
+            "r16ui.bin",
             page.reference_bytes.clone(),
             page_packaging,
         )?;
@@ -144,7 +147,7 @@ pub(crate) fn build_slug_glb(
             SLUG_EXTENSION: {
                 "version": 0,
                 "rasterKey": raster_key,
-                "shapingHash": shaping_hash,
+                "shapingFingerprint": shaping_fingerprint,
                 "glyphCount": glyph_count,
                 "glyphIdWidth": 16,
                 "planeUnitsPerEm": SLUG_PLANE_UNITS_PER_EM,
@@ -168,10 +171,15 @@ fn append_resource(
     buffer_views: &mut Vec<Value>,
     resources: &mut Vec<BuiltResource>,
     id: String,
+    extension: &str,
     bytes: Vec<u8>,
     packaging: PagePackaging,
 ) -> Result<Value, SlugBakeError> {
-    let sha256 = pmndrs_glyph_raster_artifact::sha256_hex(&bytes);
+    let fingerprint = pmndrs_glyph_raster_artifact::fingerprint128(
+        &bytes,
+        pmndrs_glyph_raster_artifact::ARTIFACT_FINGERPRINT_V0,
+    );
+    let id = format!("{id}-{fingerprint}.{extension}");
     let source = match packaging {
         PagePackaging::Embedded => {
             let view = append_buffer_view(binary, buffer_views, &bytes)?;
@@ -181,13 +189,13 @@ fn append_resource(
             "type": "external",
             "uri": id,
             "byteLength": bytes.len(),
-            "artifactHash": sha256,
+            "artifactFingerprint": fingerprint,
         }),
     };
     resources.push(BuiltResource {
         id,
         bytes,
-        sha256,
+        fingerprint,
         embedded: packaging == PagePackaging::Embedded,
     });
     Ok(source)

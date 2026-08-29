@@ -1,12 +1,13 @@
 import type {
   JsonValue,
+  Fingerprint,
   RasterResourceId,
   RasterResourceSource,
   RasterDecodeArtifact,
   RasterDecodeFont,
   RasterFormat,
   RasterFormatId,
-  Sha256Hex,
+  Fingerprint,
 } from '@pmndrs/glyph';
 import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
 
@@ -62,7 +63,7 @@ export const glyphExample: RasterFormat<
       throw new RangeError('glyph-example record payload length does not match the font glyph count');
     }
     return {
-      resource: defineRasterResourceId(`studio.glyph-example/${font.shapingHash}/${raster.rasterKey}`),
+      resource: defineRasterResourceId(`studio.glyph-example/${font.shapingFingerprint}/${raster.rasterKey}`),
       inset: extension.descriptor.inset,
       colors,
       glyphCount: font.glyphCount,
@@ -81,7 +82,7 @@ function decodeExtension(
   if (
     extension.version !== GLYPH_EXAMPLE_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingHash !== font.shapingHash ||
+    extension.shapingFingerprint !== font.shapingFingerprint ||
     extension.glyphCount !== font.glyphCount ||
     extension.glyphIdWidth !== 16 ||
     extension.recordStride !== RECORD_STRIDE
@@ -98,7 +99,7 @@ function decodeExtension(
   return {
     version: 0,
     rasterKey: raster.rasterKey,
-    shapingHash: font.shapingHash,
+    shapingFingerprint: font.shapingFingerprint,
     glyphCount: font.glyphCount,
     glyphIdWidth: 16,
     descriptor,
@@ -120,14 +121,14 @@ function resourceSource(value: unknown): RasterResourceSource {
   if (typeof source.uri !== 'string' || source.uri.length === 0) {
     throw new TypeError('glyph-example external record source must have a URI');
   }
-  if (typeof source.artifactHash !== 'string' || !/^[0-9a-f]{64}$/.test(source.artifactHash)) {
-    throw new TypeError('glyph-example external record source must have a SHA-256 hash');
+  if (typeof source.artifactFingerprint !== 'string' || !/^[0-9a-f]{32}$/.test(source.artifactFingerprint)) {
+    throw new TypeError('glyph-example external record source must have a 128-bit fingerprint');
   }
   return {
     type: 'external',
     uri: source.uri,
     byteLength: nonnegativeInteger(source.byteLength, 'glyph-example records.byteLength'),
-    artifactHash: source.artifactHash as Sha256Hex,
+    artifactFingerprint: source.artifactFingerprint as Fingerprint,
   };
 }
 

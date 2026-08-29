@@ -10,6 +10,7 @@ import {
 } from './raster-bake-worker-protocol.js';
 import { SerialWorkerHost } from './serial-worker-host.js';
 import { isBakeProgressMessage, type BakeProgressMessage } from './bake-progress-protocol.js';
+import { isFingerprint } from './fingerprint.js';
 
 class RuntimeRasterBakeError extends GlyphError<'bake-failed'> {
   readonly reason: string;
@@ -44,9 +45,10 @@ export function createRasterBakeWorkerHost<Kind extends string, Options>(options
           type: 'bake-raster-v0',
           id,
           source,
+          sourceFingerprint: request.sourceFingerprint,
           fontFaceIndex: request.fontFaceIndex,
           glyphCount: request.font.glyphCount,
-          shapingHash: request.font.shapingHash,
+          shapingFingerprint: request.font.shapingFingerprint,
           rasterKey: rasterKey(request.rasterKey),
           options: 'options' in request ? request.options : undefined,
         },
@@ -88,6 +90,6 @@ export function createRasterBakeWorkerHost<Kind extends string, Options>(options
 }
 
 function rasterKey(value: string): RasterKey {
-  if (!/^[0-9a-f]{64}$/.test(value)) throw new TypeError('runtime raster key must be SHA-256');
-  return value as RasterKey;
+  if (!isFingerprint(value)) throw new TypeError('runtime raster key must be a 128-bit fingerprint');
+  return value as string as RasterKey;
 }

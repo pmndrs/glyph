@@ -5,14 +5,14 @@
     "amiri": {
       "fixture": "amiri-regular-v0",
       "sourceSha256": "ab391c4147d054c48976e98322ad0eefe1427aa0e0502a12a4c75d80a70cfcd7",
-      "shapingHash": "2e29d8d1378084212287efa84db35066310164048a6b4495aff97512d46336d5",
+      "shapingFingerprint": "99702628e4719fb94807a41bcff9dc69",
       "sourceOracle": "../shaping/amiri-regular/harfrust.json",
       "independentOracle": "../shaping/amiri-regular/harfbuzz.json"
     },
     "inter": {
       "fixture": "inter-regular-v0",
       "sourceSha256": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
-      "shapingHash": "6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09"
+      "shapingFingerprint": "0c522d6ea0db73ba74bcc389dc50263b"
     }
   },
   "bidi": {

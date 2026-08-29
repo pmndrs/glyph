@@ -23,16 +23,18 @@ import {
   type MsdfDescriptor,
 } from '../internal/msdf-contract.js';
 import { GlyphError } from '../glyph-error.js';
+import type { Fingerprint, RasterKey } from '../identity.js';
 
 export { mtsdfBakerAbi as msdfBakerAbi } from '../generated/mtsdf-baker-abi.js';
 
 export type MsdfBakerOptions = MsdfOptions | undefined;
 
 export interface MsdfBakerRequest {
+  readonly sourceFingerprint: Fingerprint;
   readonly fontFaceIndex: number;
   readonly glyphCount: number;
-  readonly shapingHash: string;
-  readonly rasterKey: string;
+  readonly shapingFingerprint: Fingerprint;
+  readonly rasterKey: RasterKey;
   readonly packaging: {
     readonly artifact: 'embedded' | 'external';
     readonly pages: 'embedded' | 'external';
@@ -143,9 +145,10 @@ export function msdfBakerFromCore(core: MsdfBakerCore): RasterBakerModule<'msdf'
         source: request.font.source,
         ...(request.onProgress === undefined ? {} : { onProgress: request.onProgress }),
         request: {
+          sourceFingerprint: request.font.sourceFingerprint,
           fontFaceIndex: request.font.fontFaceIndex,
           glyphCount: request.font.glyphCount,
-          shapingHash: request.font.shapingHash,
+          shapingFingerprint: request.font.shapingFingerprint,
           rasterKey: request.rasterKey,
           packaging: request.packaging,
           descriptor: request.descriptor,

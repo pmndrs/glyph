@@ -2,7 +2,8 @@ import type { FontBakeResult } from '../font-baker/index.js';
 
 import type { BakeArtifact, BakeWarning, FontPayloadReport, RasterBakeArtifact, RasterPackaging } from '../bake.js';
 import { GlyphError } from '../glyph-error.js';
-import type { Sha256Hex } from '../identity.js';
+import type { Fingerprint } from '../identity.js';
+import { fingerprint128, fingerprintDomain, isFingerprint } from './fingerprint.js';
 import { readGlb } from './glb-reader.js';
 
 export interface RasterComposition {
@@ -38,11 +39,11 @@ export async function composeFontBake(
     'CORE_ARTIFACT',
     'font bake result must contain exactly one font artifact',
   );
-  await authenticateArtifact(coreArtifact, '/core/artifacts/0');
+  const validatedCoreArtifact = asArtifact(coreArtifact);
   if (rasters.length === 0) {
     return {
-      artifacts: [asArtifact(coreArtifact)],
-      report: mapReport(core, [], [asArtifact(coreArtifact)]),
+      artifacts: [validatedCoreArtifact],
+      report: mapReport(core, [], [validatedCoreArtifact]),
       warnings: core.warnings,
     };
   }
@@ -53,7 +54,7 @@ export async function composeFontBake(
   const font = requireNonArrayObject(extensions.PMNDRS_font, '/extensions/PMNDRS_font');
   const shaping = requireNonArrayObject(font.shaping, '/extensions/PMNDRS_font/shaping');
   const metrics = requireNonArrayObject(font.metrics, '/extensions/PMNDRS_font/metrics');
-  const shapingHash = asHash(shaping.hash, '/extensions/PMNDRS_font/shaping/hash');
+  const shapingFingerprint = asFingerprint(shaping.fingerprint, '/extensions/PMNDRS_font/shaping/fingerprint');
   const glyphCount = asInteger(metrics.glyphCount, '/extensions/PMNDRS_font/metrics/glyphCount');
   const glyphIdWidth = asInteger(metrics.glyphIdWidth, '/extensions/PMNDRS_font/metrics/glyphIdWidth');
   if (glyphIdWidth !== 16) fail('GLYPH_ID_WIDTH', 'V0 composition requires 16-bit glyph IDs');
@@ -78,28 +79,26 @@ export async function composeFontBake(
       fail('RASTER_KEY_DUPLICATE', 'composition contains a duplicate raster key', `${path}/rasterKey`);
     }
     rasterKeys.add(raster.rasterKey);
+    const rasterArtifacts = raster.artifacts.map(asArtifact);
     const main = exactlyOne(
-      raster.artifacts.filter(({ role }) => role === 'raster'),
+      rasterArtifacts.filter(({ role }) => role === 'raster'),
       'RASTER_ARTIFACT',
       'raster bake result must contain exactly one companion artifact',
       `${path}/artifacts`,
     );
-    if (raster.artifacts.some(({ role }) => role !== 'raster' && role !== 'raster-page')) {
+    if (rasterArtifacts.some(({ role }) => role !== 'raster' && role !== 'raster-page')) {
       fail(
         'RASTER_ARTIFACT_ROLE',
         'raster results may contain only one raster index and raster-page artifacts',
         `${path}/artifacts`,
       );
     }
-    if (packaging.pages === 'embedded' && raster.artifacts.some(({ role }) => role === 'raster-page')) {
+    if (packaging.pages === 'embedded' && rasterArtifacts.some(({ role }) => role === 'raster-page')) {
       fail(
         'RASTER_PAGE_PACKAGING',
         'embedded page packaging must not emit independent raster-page artifacts',
         `${path}/artifacts`,
       );
-    }
-    for (let artifactIndex = 0; artifactIndex < raster.artifacts.length; artifactIndex += 1) {
-      await authenticateArtifact(raster.artifacts[artifactIndex]!, `${path}/artifacts/${artifactIndex}`);
     }
     const parsedRaster = readGlb(main.bytes);
     const rasterExtensions = requireNonArrayObject(parsedRaster.document.extensions, `${path}/extensions`);
@@ -110,7 +109,7 @@ export async function composeFontBake(
     assertRasterIdentity(
       extensionData,
       raster,
-      shapingHash,
+      shapingFingerprint,
       glyphCount,
       glyphIdWidth,
       `${path}/extensions/${raster.extension}`,
@@ -122,9 +121,9 @@ export async function composeFontBake(
         kind: raster.kind,
         extension: raster.extension,
         version: raster.version,
-        source: { type: 'external', uri: main.id, artifactHash: main.sha256 },
+        source: { type: 'external', uri: main.id, artifactFingerprint: main.fingerprint },
       });
-      outputArtifacts.push(...raster.artifacts.map(asArtifact));
+      outputArtifacts.push(...rasterArtifacts);
       continue;
     }
 
@@ -163,7 +162,7 @@ export async function composeFontBake(
       version: raster.version,
       source: { type: 'embedded' },
     });
-    outputArtifacts.push(...raster.artifacts.filter(({ role }) => role === 'raster-page').map(asArtifact));
+    outputArtifacts.push(...rasterArtifacts.filter(({ role }) => role === 'raster-page'));
   }
 
   document.extensionsUsed = used;
@@ -174,7 +173,7 @@ export async function composeFontBake(
     role: 'font',
     id: coreArtifact.id,
     bytes: combined,
-    sha256: await sha256(combined),
+    fingerprint: fingerprint128(combined, fingerprintDomain.artifact),
   };
   const artifacts = [fontArtifact, ...outputArtifacts];
   assertUniqueArtifactIds(artifacts);
@@ -188,7 +187,7 @@ export async function composeFontBake(
 function assertRasterIdentity(
   extension: Readonly<Record<string, unknown>>,
   raster: RasterBakeArtifact,
-  shapingHash: string,
+  shapingFingerprint: Fingerprint,
   glyphCount: number,
   glyphIdWidth: number,
   path: string,
@@ -196,7 +195,7 @@ function assertRasterIdentity(
   if (
     extension.version !== raster.version ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingHash !== shapingHash ||
+    extension.shapingFingerprint !== shapingFingerprint ||
     extension.glyphCount !== glyphCount ||
     extension.glyphIdWidth !== glyphIdWidth
   ) {
@@ -318,22 +317,17 @@ function concatenate(parts: readonly Uint8Array[], byteLength: number): Uint8Arr
   return output;
 }
 
-async function authenticateArtifact(
-  artifact: { readonly bytes: Uint8Array; readonly sha256: string },
-  path: string,
-): Promise<void> {
-  if (artifact.sha256 !== (await sha256(artifact.bytes))) {
-    fail('ARTIFACT_HASH', 'bake artifact hash does not match its bytes', `${path}/sha256`);
-  }
-}
-
 function asArtifact(artifact: {
   readonly role: 'font' | 'raster' | 'raster-page';
   readonly id: string;
   readonly bytes: Uint8Array;
-  readonly sha256: string;
+  readonly fingerprint: Fingerprint;
 }): BakeArtifact {
-  return { ...artifact, sha256: asHash(artifact.sha256, '/artifact/sha256') };
+  const fingerprint = asFingerprint(artifact.fingerprint, '/artifact/fingerprint');
+  if (fingerprint !== fingerprint128(artifact.bytes, fingerprintDomain.artifact)) {
+    fail('ARTIFACT_FINGERPRINT', 'artifact bytes do not match their stamped fingerprint', '/artifact/fingerprint');
+  }
+  return { ...artifact, fingerprint };
 }
 
 function exactlyOne<Value>(values: readonly Value[], code: string, message: string, path?: string): Value {
@@ -371,11 +365,11 @@ function asInteger(value: unknown, path: string): number {
   return value;
 }
 
-function asHash(value: unknown, path: string): Sha256Hex {
-  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
-    fail('TYPE_HASH', 'value must be lowercase hexadecimal SHA-256', path);
+function asFingerprint(value: unknown, path: string): Fingerprint {
+  if (!isFingerprint(value)) {
+    fail('TYPE_FINGERPRINT', 'value must be a lowercase 128-bit fingerprint', path);
   }
-  return value as Sha256Hex;
+  return value as Fingerprint;
 }
 
 function align4(value: number): number {
@@ -392,11 +386,6 @@ function checkedSum(left: number, right: number, path: string): number {
 
 function readU32(bytes: Uint8Array, offset: number): number {
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(offset, true);
-}
-
-async function sha256(bytes: Uint8Array): Promise<Sha256Hex> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes.slice().buffer);
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('') as Sha256Hex;
 }
 
 function fail(code: string, message: string, path?: string): never {

@@ -10,7 +10,7 @@ import {
   type RasterFormatMetadata,
   type RasterResourceSource,
   type RasterSource,
-  type Sha256Hex,
+  type Fingerprint,
 } from '../../src/index.js';
 import { defineRasterBaker, rasterBake } from '../../src/bake.js';
 import { defineRasterFormat } from '../../src/config/raster-format.js';
@@ -21,15 +21,15 @@ type Expect<Value extends true> = Value;
 
 const resolverRasterSource: RasterSource = { type: 'external' };
 void resolverRasterSource;
-// @ts-expect-error URI-addressed raster artifacts require an authenticated hash.
-const unauthenticatedRasterSource: RasterSource = { type: 'external', uri: 'bitmap.glb' };
-void unauthenticatedRasterSource;
-declare const pageHash: Sha256Hex;
+// @ts-expect-error URI-addressed raster artifacts require a stamped fingerprint.
+const unidentifiedRasterSource: RasterSource = { type: 'external', uri: 'bitmap.glb' };
+void unidentifiedRasterSource;
+declare const pageHash: Fingerprint;
 const externalRasterResource: RasterResourceSource = {
   type: 'external',
   uri: 'page.ktx2',
   byteLength: 1024,
-  artifactHash: pageHash,
+  artifactFingerprint: pageHash,
 };
 void externalRasterResource;
 

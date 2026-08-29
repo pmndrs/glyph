@@ -1,5 +1,6 @@
 import type { RasterKey } from '../identity.js';
 import type { JsonValue } from '../raster.js';
+import { fingerprint128, fingerprintDomain } from './fingerprint.js';
 
 const textEncoder = new TextEncoder();
 const MAX_JSON_DEPTH = 256;
@@ -80,25 +81,18 @@ function withAncestor<Result>(value: object, path: string, ancestors: Set<object
   }
 }
 
-function hexadecimal(bytes: Uint8Array): string {
-  let value = '';
-  for (const byte of bytes) value += byte.toString(16).padStart(2, '0');
-  return value;
-}
-
 /** Derive a caller-independent raster key from a module-owned descriptor. */
-export async function deriveRasterKey(input: {
+export function deriveRasterKey(input: {
   readonly descriptor: JsonValue;
   readonly extension: string;
   readonly kind: string;
   readonly version: number;
-}): Promise<RasterKey> {
+}): RasterKey {
   const canonical = canonicalJson({
     descriptor: input.descriptor,
     extension: input.extension,
     kind: input.kind,
     version: input.version,
   });
-  const digest = await crypto.subtle.digest('SHA-256', textEncoder.encode(canonical));
-  return hexadecimal(new Uint8Array(digest)) as RasterKey;
+  return fingerprint128(textEncoder.encode(canonical), fingerprintDomain.descriptor) as string as RasterKey;
 }

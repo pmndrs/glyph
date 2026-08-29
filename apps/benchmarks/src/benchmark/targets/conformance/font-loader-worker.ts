@@ -48,7 +48,7 @@ export function createFontLoaderWorkerConformanceTarget(): BenchmarkTarget {
         }
         return {
           bytes: canonicalFontManifest.bake.expectedCore.artifactBytes,
-          hash: canonicalFontManifest.bake.expectedCore.shapingHash,
+          hash: canonicalFontManifest.bake.expectedCore.shapingFingerprint,
         };
       } finally {
         font.dispose();

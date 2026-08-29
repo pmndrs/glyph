@@ -3,16 +3,21 @@ import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from '../font-baker/contract.
 import { copyToOwnedArrayBuffer } from './owned-array-buffer.js';
 import { canonicalJson } from './raster-identity.js';
 import type { RuntimeBakeRequest } from './runtime-bake-protocol.js';
+import type { Fingerprint } from '../identity.js';
+import { fingerprint128, fingerprintDomain, isFingerprint } from './fingerprint.js';
 
-const CACHE_NAME = `pmndrs-glyph-font-bakes-${FONT_FORMAT_VERSION}-${FONT_BAKER_VERSION}`;
+const textEncoder = new TextEncoder();
+
+const CACHE_IDENTITY_VERSION = 1;
+const CACHE_NAME = `pmndrs-glyph-font-bakes-${FONT_FORMAT_VERSION}-${FONT_BAKER_VERSION}-${CACHE_IDENTITY_VERSION}`;
 const CACHE_PATH = '/.pmndrs-glyph/font-bakes/';
 const EXPIRES_HEADER = 'x-pmndrs-expires-at';
 const LENGTH_HEADER = 'x-pmndrs-byte-length';
 const ARTIFACT_ID_HEADER = 'x-pmndrs-artifact-id';
-const SHA256_HEADER = 'x-pmndrs-sha256';
+const FINGERPRINT_HEADER = 'x-pmndrs-fingerprint';
 
 export interface RuntimeFontCache {
-  key(source: Uint8Array, request: RuntimeBakeRequest): Promise<string>;
+  key(sourceFingerprint: Fingerprint, request: RuntimeBakeRequest): string;
   match(key: string): Promise<CachedFontArtifact | undefined>;
   put(key: string, artifact: CachedFontArtifact, expiresAt: number): Promise<void>;
 }
@@ -20,7 +25,7 @@ export interface RuntimeFontCache {
 export interface CachedFontArtifact {
   readonly bytes: Uint8Array;
   readonly id: string;
-  readonly sha256: string;
+  readonly fingerprint: Fingerprint;
 }
 
 /** CacheStorage owns quota eviction; the source response owns whether and how long the derived artifact persists. */
@@ -37,15 +42,14 @@ export function createRuntimeFontCache(): RuntimeFontCache | undefined {
 export function createCache(storage: CacheStorage, origin: string, now: () => number): RuntimeFontCache {
   const requestFor = (key: string): Request => new Request(new URL(`${CACHE_PATH}${key}`, origin));
   return {
-    async key(source, request) {
-      const sourceHash = await sha256(source);
+    key(sourceFingerprint, request) {
       const identity = canonicalJson({
         face: request.font.fontFaceIndex,
         rasters: request.rasters ?? [],
-        sourceHash,
+        sourceFingerprint,
         unicodeRanges: request.unicodeRanges ?? null,
       });
-      return sha256(new TextEncoder().encode(identity));
+      return fingerprint128(textEncoder.encode(identity), fingerprintDomain.cache);
     },
     async match(key) {
       try {
@@ -56,26 +60,25 @@ export function createCache(storage: CacheStorage, origin: string, now: () => nu
         const expiresAt = headerInteger(response, EXPIRES_HEADER);
         const byteLength = headerInteger(response, LENGTH_HEADER);
         const id = response.headers.get(ARTIFACT_ID_HEADER);
-        const artifactHash = response.headers.get(SHA256_HEADER);
+        const fingerprint = response.headers.get(FINGERPRINT_HEADER);
         if (
           expiresAt === undefined ||
           byteLength === undefined ||
           byteLength <= 0 ||
           id === null ||
           id.length === 0 ||
-          artifactHash === null ||
-          !/^[0-9a-f]{64}$/.test(artifactHash) ||
+          !isFingerprint(fingerprint) ||
           now() >= expiresAt
         ) {
           await cache.delete(request);
           return undefined;
         }
         const bytes = new Uint8Array(await response.arrayBuffer());
-        if (bytes.byteLength !== byteLength || (await sha256(bytes)) !== artifactHash) {
+        if (bytes.byteLength !== byteLength) {
           await cache.delete(request);
           return undefined;
         }
-        return { bytes, id, sha256: artifactHash };
+        return { bytes, id, fingerprint };
       } catch {
         return undefined;
       }
@@ -93,7 +96,7 @@ export function createCache(storage: CacheStorage, origin: string, now: () => nu
               [EXPIRES_HEADER]: String(expiresAt),
               [LENGTH_HEADER]: String(bytes.byteLength),
               [ARTIFACT_ID_HEADER]: artifact.id,
-              [SHA256_HEADER]: artifact.sha256,
+              [FINGERPRINT_HEADER]: artifact.fingerprint,
             },
           }),
         );
@@ -119,11 +122,4 @@ function headerInteger(response: Response, name: string): number | undefined {
   if (value === null || !/^\d+$/.test(value)) return undefined;
   const number = Number(value);
   return Number.isSafeInteger(number) ? number : undefined;
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', copyToOwnedArrayBuffer(bytes)));
-  let output = '';
-  for (const byte of digest) output += byte.toString(16).padStart(2, '0');
-  return output;
 }

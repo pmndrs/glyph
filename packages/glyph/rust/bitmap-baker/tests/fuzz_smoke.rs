@@ -22,9 +22,13 @@ fn arbitrary_font_bytes_fail_safely_and_deterministically() {
             *byte = random.next() as u8;
         }
         let request = BitmapBakeRequestV0 {
+            source_fingerprint: pmndrs_glyph_raster_artifact::fingerprint128(
+                &source,
+                pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+            ),
             font_face_index: random.next(),
             glyph_count: 1,
-            shaping_hash: "0".repeat(64),
+            shaping_fingerprint: "0".repeat(32),
             raster_key: raster_key.clone(),
             packaging: BitmapPackagingV0 {
                 artifact: ArtifactPackaging::External,

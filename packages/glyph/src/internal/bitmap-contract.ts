@@ -79,7 +79,7 @@ export function canonicalizeBitmapDescriptor(strikes: readonly number[], coverag
 }
 
 /** Derive a key from a descriptor that has already crossed package-owned validation. */
-export function bitmapDescriptorRasterKey(descriptor: BitmapDescriptor): Promise<RasterKey> {
+export function bitmapDescriptorRasterKey(descriptor: BitmapDescriptor): RasterKey {
   return deriveRasterKey({
     descriptor,
     extension: BITMAP_EXTENSION,

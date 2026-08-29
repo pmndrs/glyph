@@ -18,7 +18,7 @@ import {
 import msdfSchema from './schemas/glTF.PMNDRS_font_distance_field.schema.json' with { type: 'json' };
 import sourceSchema from './schemas/resourceSource.PMNDRS_font.schema.json' with { type: 'json' };
 import resourceSchema from './schemas/textureResource.PMNDRS_font.schema.json' with { type: 'json' };
-import type { RasterKey, Sha256Hex } from '../identity.js';
+import type { RasterKey, Fingerprint } from '../identity.js';
 import {
   RasterArtifactValidationError,
   asArray,
@@ -28,7 +28,7 @@ import {
   claimOtherRasterExtensionViews,
   claimRasterView,
   fail,
-  isSha256,
+  isFingerprint,
   requireNonArrayObject,
   resolveRasterPageSource,
   sliceRasterView,
@@ -77,7 +77,7 @@ export interface MsdfArtifactValidationLimits {
 
 export interface MsdfArtifactValidationContext {
   readonly rasterKey: RasterKey | string;
-  readonly shapingHash: Sha256Hex | string;
+  readonly shapingFingerprint: Fingerprint | string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
   readonly descriptor: MsdfDescriptor;
@@ -96,7 +96,7 @@ export interface ValidatedMsdfPage {
 export interface ValidatedMsdfArtifact {
   readonly document: Readonly<Record<string, unknown>>;
   readonly rasterKey: RasterKey;
-  readonly shapingHash: Sha256Hex;
+  readonly shapingFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly records: Uint8Array;
   readonly pages: readonly ValidatedMsdfPage[];
@@ -161,8 +161,12 @@ async function validateMsdfSemantics(
   if (context.rasterKey !== expectedKey) {
     fail('RASTER_KEY', 'expected raster key does not match the MTSDF descriptor', '/rasterKey');
   }
-  if (!isSha256(context.shapingHash)) {
-    fail('SHAPING_HASH', 'expected shaping hash must be lowercase SHA-256', '/shapingHash');
+  if (!isFingerprint(context.shapingFingerprint)) {
+    fail(
+      'SHAPING_FINGERPRINT',
+      'expected shaping fingerprint must be lowercase 128-bit hexadecimal',
+      '/shapingFingerprint',
+    );
   }
   if (!Number.isInteger(context.glyphCount) || context.glyphCount < 1 || context.glyphCount > 65_535) {
     fail('GLYPH_COUNT', 'expected glyph count must be in 1..=65535', '/glyphCount');
@@ -204,7 +208,7 @@ async function validateMsdfSemantics(
   if (
     extension.version !== MSDF_FORMAT_VERSION ||
     extension.rasterKey !== context.rasterKey ||
-    extension.shapingHash !== context.shapingHash ||
+    extension.shapingFingerprint !== context.shapingFingerprint ||
     extension.glyphCount !== context.glyphCount ||
     extension.glyphIdWidth !== context.glyphIdWidth
   ) {
@@ -325,7 +329,7 @@ async function validateMsdfSemantics(
   return {
     document,
     rasterKey: context.rasterKey as RasterKey,
-    shapingHash: context.shapingHash as Sha256Hex,
+    shapingFingerprint: context.shapingFingerprint as Fingerprint,
     glyphCount: context.glyphCount,
     ...(coverage === undefined ? {} : { coverage }),
     records,

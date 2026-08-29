@@ -103,7 +103,7 @@ fn public_api_selects_one_collection_face_and_rejects_an_unknown_index() {
     let second = bake_font(&collection, BakeDescriptorV0::new(1)).expect("second TTC face");
 
     assert_eq!(first.artifacts[0].id, second.artifacts[0].id);
-    assert_ne!(first.artifacts[0].sha256, second.artifacts[0].sha256);
+    assert_ne!(first.artifacts[0].fingerprint, second.artifacts[0].fingerprint);
     assert_eq!(
         bake_font(&collection, BakeDescriptorV0::new(2))
             .expect_err("TTC face index is bounds checked")

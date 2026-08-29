@@ -134,19 +134,23 @@ options must produce the same JSON value and unsupported values must fail before
 ## 3. Generate a package-owned companion artifact
 
 Implement one artifact function accepting `RasterBakeRequest<Descriptor>` and returning
-`RasterBakeArtifact<Kind>`. It owns the extension JSON, binary records, optional page artifacts, hashes, and payload report.
+`RasterBakeArtifact<Kind>`. It owns the extension JSON, binary records, optional page artifacts, fingerprints, and payload
+report.
 
 ```ts
-import type { RasterBakeArtifact, RasterBakeRequest } from '@pmndrs/glyph';
+import { fingerprint, type RasterBakeArtifact, type RasterBakeRequest } from '@pmndrs/glyph';
 
 export async function bakeExampleArtifact(
   request: RasterBakeRequest<ExampleDescriptor>,
 ): Promise<RasterBakeArtifact<typeof EXAMPLE_KIND>> {
   request.signal?.throwIfAborted();
+  if (fingerprint.source(request.font.source) !== request.font.sourceFingerprint) {
+    throw new TypeError('source bytes do not match their stamped fingerprint');
+  }
   const generated = await generateRecords(request.font, request.descriptor, request.signal);
   const companion = await encodeCompanionGlb({
     rasterKey: request.rasterKey,
-    shapingHash: request.font.shapingHash,
+    shapingFingerprint: request.font.shapingFingerprint,
     glyphCount: request.font.glyphCount,
     descriptor: request.descriptor,
     packaging: request.packaging,
@@ -159,12 +163,12 @@ export async function bakeExampleArtifact(
 
 The returned artifact must satisfy these boundaries:
 
-- `kind`, extension name, format version, raster key, shaping hash, and glyph count agree everywhere;
+- `kind`, extension name, format version, raster key, shaping fingerprint, and glyph count agree everywhere;
 - the companion uses the `raster` role and independently delivered payloads use `raster-page`;
-- every artifact has deterministic bytes, ID, and SHA-256;
+- every artifact has deterministic bytes, ID, and bake-time fingerprint;
 - the payload report states exact serialized, metadata, page, and decoded GPU bytes;
 - embedded and external packaging preserve the same semantic extension data;
-- external resources declare URI, byte length, and hash;
+- external resources declare a content-addressed URI, byte length, and fingerprint;
 - abort is checked before expensive work, after awaited work, and before publication.
 
 A standalone companion is still an ordinary valid GLB. If the Node composer must embed it into the core font artifact,
@@ -243,7 +247,7 @@ export function exampleRaster(options: ExampleOptions = {}) {
 }
 ```
 
-`decode` must treat the artifact as untrusted: validate extension identity, descriptor, record sizes, buffer ranges, hashes,
+`decode` must treat the artifact as untrusted: validate extension identity, descriptor, record sizes, buffer ranges, fingerprints,
 formats, device limits, and GPU budgets before allocation. `prepare` owns genuinely cold page readiness. Once dependencies
 are resident, `stageBatch` should complete synchronously.
 
@@ -274,9 +278,10 @@ const runtimeBaker: RuntimeRasterBakerModule<typeof EXAMPLE_KIND, ExampleOptions
     return bakeExampleArtifact({
       font: {
         source: request.source,
+        sourceFingerprint: request.sourceFingerprint,
         fontFaceIndex: request.fontFaceIndex,
         glyphCount: request.font.glyphCount,
-        shapingHash: request.font.shapingHash,
+        shapingFingerprint: request.font.shapingFingerprint,
       },
       rasterKey: request.rasterKey,
       packaging: { artifact: 'embedded', pages: 'embedded' },
@@ -342,7 +347,7 @@ Resident text, layout, and paint changes use `text.setProperties(...)` and publi
 
 Test the plugin at three layers:
 
-1. Artifact tests prove deterministic embedded/external bytes, hashes, identity, report accounting, semantic validation,
+1. Artifact tests prove deterministic embedded/external bytes, fingerprints, identity, report accounting, semantic validation,
    malformed-input rejection, and cancellation.
 2. Runtime tests prove initial creation, same-capacity replacement of every glyph field, shrink, exact-capacity growth,
    overflow or topology replacement, commit, abort, staging failure, stale-generation recovery, and repeated disposal.

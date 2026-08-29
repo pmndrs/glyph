@@ -130,14 +130,14 @@ try {
         amiri: {
           fixture: 'amiri-regular-v0',
           sourceSha256: 'ab391c4147d054c48976e98322ad0eefe1427aa0e0502a12a4c75d80a70cfcd7',
-          shapingHash: amiri.shapingHash,
+          shapingFingerprint: amiri.shapingFingerprint,
           sourceOracle: '../shaping/amiri-regular/harfrust.json',
           independentOracle: '../shaping/amiri-regular/harfbuzz.json',
         },
         inter: {
           fixture: 'inter-regular-v0',
           sourceSha256: '40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82',
-          shapingHash: inter.shapingHash,
+          shapingFingerprint: inter.shapingFingerprint,
         },
       },
       bidi,

@@ -17,6 +17,7 @@ import {
 } from '../internal/bitmap-contract.js';
 import type { RasterCoverage } from '../raster-coverage.js';
 import { GlyphError } from '../glyph-error.js';
+import type { Fingerprint, RasterKey } from '../identity.js';
 
 export { bitmapBakerAbi } from '../generated/bitmap-baker-abi.js';
 
@@ -26,10 +27,11 @@ export interface BitmapBakerOptions {
 }
 
 export interface BitmapBakerRequest {
+  readonly sourceFingerprint: Fingerprint;
   readonly fontFaceIndex: number;
   readonly glyphCount: number;
-  readonly shapingHash: string;
-  readonly rasterKey: string;
+  readonly shapingFingerprint: Fingerprint;
+  readonly rasterKey: RasterKey;
   readonly packaging: {
     readonly artifact: 'embedded' | 'external';
     readonly pages: 'embedded' | 'external';
@@ -110,9 +112,10 @@ export function bitmapBakerFromCore(
         source: request.font.source,
         ...(request.onProgress === undefined ? {} : { onProgress: request.onProgress }),
         request: {
+          sourceFingerprint: request.font.sourceFingerprint,
           fontFaceIndex: request.font.fontFaceIndex,
           glyphCount: request.font.glyphCount,
-          shapingHash: request.font.shapingHash,
+          shapingFingerprint: request.font.shapingFingerprint,
           rasterKey: request.rasterKey,
           packaging: request.packaging,
           descriptor: request.descriptor,

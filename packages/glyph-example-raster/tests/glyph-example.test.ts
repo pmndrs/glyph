@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
-import { glyph, type RasterFormatMetadata, type RasterKey, type Sha256Hex } from '@pmndrs/glyph';
+import { glyph, fingerprint, type RasterFormatMetadata, type RasterKey, type Fingerprint } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { rasterBake } from '@pmndrs/glyph/baker';
 import { type PortableGeometryPayload } from '@pmndrs/glyph';
@@ -73,11 +73,12 @@ describe('public external raster proof', () => {
     const request = {
       font: {
         source: new Uint8Array(),
+        sourceFingerprint: fingerprint.source(new Uint8Array()),
         fontFaceIndex: 0,
         glyphCount: 5,
-        shapingHash: '1'.repeat(64) as Sha256Hex,
+        shapingFingerprint: '1'.repeat(32) as Fingerprint,
       },
-      rasterKey: '2'.repeat(64) as RasterKey,
+      rasterKey: '2'.repeat(32) as RasterKey,
       packaging: { artifact: 'external', pages: 'external' } as const,
       descriptor: glyphExampleDescriptor({ paletteSeed: 7, inset: 0.1 }),
     };
@@ -89,7 +90,7 @@ describe('public external raster proof', () => {
     expect(left.artifacts[0]?.bytes.subarray(0, 4)).toEqual(Uint8Array.of(0x67, 0x6c, 0x54, 0x46));
   });
 
-  test('bakes, authenticates, loads, and resolves package-owned external records through public APIs', async () => {
+  test('bakes, loads, and resolves fingerprint-addressed external records through public APIs', async () => {
     const baked = await bakeFixture({ artifact: 'external', pages: 'external' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     const companion = baked.execution.outputs.find(({ role }) => role === 'raster');

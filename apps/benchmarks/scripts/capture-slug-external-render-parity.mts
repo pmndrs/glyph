@@ -42,11 +42,11 @@ try {
   }
   const servedDirectory = `/fixtures/rendering/${basename(temporaryDirectory)}`;
   const expectedUrls = report.execution.outputs.map(({ file }) => `${servedDirectory}/${basename(file)}`);
-  const artifacts = report.execution.outputs.map(({ role, file, bytes, sha256 }) => ({
+  const artifacts = report.execution.outputs.map(({ role, file, bytes, fingerprint: artifactFingerprint }) => ({
     role,
     file: basename(file),
     bytes,
-    sha256,
+    fingerprint: artifactFingerprint,
   }));
   if (new Set(expectedUrls).size !== 5) {
     throw new Error('Fully external Inter Slug bake produced duplicate output URLs');
@@ -178,7 +178,7 @@ function validateArtifacts(candidate: unknown): Set<string> {
       typeof artifact.bytes !== 'number' ||
       !Number.isSafeInteger(artifact.bytes) ||
       artifact.bytes <= 0 ||
-      !hexDigest(artifact.sha256)
+      !fingerprint(artifact.fingerprint)
     ) {
       throw new TypeError('Slug external parity artifact has invalid identity metadata');
     }
@@ -217,6 +217,10 @@ function object(candidate: unknown, label: string): Record<string, unknown> {
     throw new TypeError(`${label} must be an object`);
   }
   return candidate as Record<string, unknown>;
+}
+
+function fingerprint(candidate: unknown): candidate is string {
+  return typeof candidate === 'string' && /^[0-9a-f]{32}$/u.test(candidate);
 }
 
 function hexDigest(candidate: unknown): candidate is string {

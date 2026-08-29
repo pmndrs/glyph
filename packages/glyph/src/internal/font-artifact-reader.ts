@@ -1,7 +1,7 @@
 import type { PmndrsFontExtension } from '../generated/font-artifact-schema.js';
 import { FONT_BAKER_VERSION } from '../font-baker/contract.js';
 import { GlyphError } from '../glyph-error.js';
-import type { Sha256Hex } from '../identity.js';
+import type { Fingerprint } from '../identity.js';
 import type { RegisteredBufferView } from './registered-font.js';
 import { readGlb, type ParsedGlb } from './glb-reader.js';
 
@@ -14,7 +14,8 @@ export interface RuntimeFontArtifact {
   readonly shapingSfnt: Uint8Array;
   readonly glyphExtents: Uint8Array;
   readonly glyphExtentsAvailability: Uint8Array;
-  readonly shapingHash: Sha256Hex;
+  readonly shapingFingerprint: Fingerprint;
+  readonly sourceFingerprint: Fingerprint;
 }
 
 export class RuntimeFontArtifactError extends GlyphError<'artifact-invalid'> {
@@ -68,7 +69,8 @@ export function readRuntimeFontArtifact(bytes: Uint8Array): RuntimeFontArtifact 
     shapingSfnt: shaping,
     glyphExtents: extents,
     glyphExtentsAvailability: availability,
-    shapingHash: text(extension.shaping.hash, 'shaping.hash') as Sha256Hex,
+    shapingFingerprint: text(extension.shaping.fingerprint, 'shaping.fingerprint') as Fingerprint,
+    sourceFingerprint: text(extension.provenance.sourceFingerprint, 'provenance.sourceFingerprint') as Fingerprint,
   };
 }
 

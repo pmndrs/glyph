@@ -102,7 +102,7 @@ interface BakeArtifact {
   readonly role: 'raster' | 'raster-page';
   readonly id: string;
   readonly bytes: Uint8Array;
-  readonly sha256: Sha256Hex;
+  readonly fingerprint: Fingerprint;
 }
 ```
 
@@ -121,7 +121,7 @@ const font = await runtime.loadFont({
 ```
 
 Before it resolves, core has loaded and validated the shaping artifact, found the selected raster companion, resolved every
-required embedded resource or hash-validated external resource, and called the technique decoder. No GPU resource exists
+required embedded resource or fingerprint-addressed external resource, and called the technique decoder. No GPU resource exists
 yet.
 
 ```ts
@@ -140,11 +140,11 @@ type RasterResourceSource =
       readonly type: 'external';
       readonly uri: string;
       readonly byteLength: number;
-      readonly artifactHash: Sha256Hex;
+      readonly artifactFingerprint: Fingerprint;
     };
 ```
 
-Raster authors use `view()` for embedded bytes and `resource()` for either embedded or SHA-256-validated external page
+Raster authors use `view()` for embedded bytes and `resource()` for either embedded or fingerprint-addressed external page
 bytes. Applications normally do not call either method; the selected technique's `decode()` does.
 
 ```ts

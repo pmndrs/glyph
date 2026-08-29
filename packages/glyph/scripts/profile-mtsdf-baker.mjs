@@ -10,7 +10,6 @@
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { join } from 'node:path';
@@ -46,7 +45,11 @@ async function main() {
       const native = await runNativeProfile(profileCase);
       const direct = await runDirectProfile(profileCase, source);
       const worker = await runWorkerProfile(profileCase);
-      assert.equal(worker.artifactSha256, direct.artifactSha256, `${profileCase} Worker/direct artifact drift`);
+      assert.equal(
+        worker.artifactFingerprint,
+        direct.artifactFingerprint,
+        `${profileCase} Worker/direct artifact drift`,
+      );
       observations.push(summarize(profileCase, native, direct, worker));
     }
     const report = {
@@ -98,10 +101,11 @@ async function runNativeProfile(profileCase) {
 }
 
 async function runDirectProfile(profileCase, source) {
-  const [{ createProfiledDirectRasterBakerFromInstance }, { mtsdfBakerAbi }, contract] = await Promise.all([
+  const [{ createProfiledDirectRasterBakerFromInstance }, { mtsdfBakerAbi }, contract, fingerprint] = await Promise.all([
     import('../dist/internal/raster-baker-profile.js'),
     import('../dist/generated/mtsdf-baker-abi.js'),
     import('../dist/internal/msdf-contract.js'),
+    import('../dist/internal/fingerprint.js'),
   ]);
   const instance = await WebAssembly.instantiate(
     await WebAssembly.compile(await readFile(new URL('../dist/mtsdf-baker.wasm', import.meta.url))),
@@ -112,7 +116,8 @@ async function runDirectProfile(profileCase, source) {
   const samples = [];
   const descriptor = contract.msdfDescriptor(optionsForCase(profileCase));
   const rasterKey = await contract.msdfDescriptorRasterKey(descriptor);
-  const shapingHash = createHash('sha256').update(source).digest('hex');
+  const sourceFingerprint = fingerprint.fingerprint128(source, fingerprint.fingerprintDomain.source);
+  const shapingFingerprint = fingerprint.fingerprint128(source, fingerprint.fingerprintDomain.shaping);
   const directAbi = {
     memory: mtsdfBakerAbi.memory,
     functions: {
@@ -157,7 +162,8 @@ async function runDirectProfile(profileCase, source) {
     request: {
       fontFaceIndex: 0,
       glyphCount: 2937,
-      shapingHash,
+      sourceFingerprint,
+      shapingFingerprint,
       rasterKey,
       packaging: { artifact: 'embedded', pages: 'embedded' },
       descriptor,
@@ -166,7 +172,7 @@ async function runDirectProfile(profileCase, source) {
   assert.equal(samples.length, 1);
   return {
     ...samples[0],
-    artifactSha256: result.artifacts[0].sha256,
+    artifactFingerprint: result.artifacts[0].fingerprint,
     serializedBytes: result.report.serializedBytes,
   };
 }
@@ -179,12 +185,14 @@ async function runWorkerProfile(profileCase) {
 
 async function runWorkerChild(profileCase) {
   globalThis.Worker = NodeWebWorker;
-  const [{ default: baker }, contract] = await Promise.all([
+  const [{ default: baker }, contract, fingerprint] = await Promise.all([
     import('../dist/runtime-bakers/msdf.js'),
     import('../dist/internal/msdf-contract.js'),
+    import('../dist/internal/fingerprint.js'),
   ]);
   const source = new Uint8Array(await readFile(fontPath));
-  const shapingHash = createHash('sha256').update(source).digest('hex');
+  const sourceFingerprint = fingerprint.fingerprint128(source, fingerprint.fingerprintDomain.source);
+  const shapingFingerprint = fingerprint.fingerprint128(source, fingerprint.fingerprintDomain.shaping);
   const options = optionsForCase(profileCase);
   const rasterKey = await contract.msdfRasterKey(options);
   const rssBeforeBytes = process.memoryUsage.rss();
@@ -192,7 +200,8 @@ async function runWorkerChild(profileCase) {
   let completeAt;
   const result = await baker.bake({
     source,
-    font: { glyphCount: 2937, shapingHash },
+    sourceFingerprint,
+    font: { glyphCount: 2937, shapingFingerprint },
     fontFaceIndex: 0,
     rasterKey,
     options,
@@ -207,7 +216,7 @@ async function runWorkerChild(profileCase) {
     rssBeforeBytes,
     rssAfterBytes: process.memoryUsage.rss(),
     processMaxRssBytes: process.resourceUsage().maxRSS * 1024,
-    artifactSha256: result.artifacts[0].sha256,
+    artifactFingerprint: result.artifacts[0].fingerprint,
     serializedBytes: result.report.serializedBytes,
   };
   process.stdout.write(`${JSON.stringify(report)}\n`, () => process.exit(0));
@@ -267,8 +276,8 @@ function summarize(profileCase, native, direct, worker) {
       edgeVisitsPerSecond: counters.edgesVisited / seconds,
     },
     payload: native.payload,
-    artifactSha256: direct.artifactSha256,
-    nativeArtifactSha256: native.artifacts[0].sha256,
+    artifactFingerprint: direct.artifactFingerprint,
+    nativeArtifactFingerprint: native.artifacts[0].fingerprint,
     wasmHost: direct,
     worker,
   };
@@ -304,11 +313,11 @@ function stableCase(entry) {
     coverage: entry.coverage,
     counters: entry.counters,
     payload: entry.payload,
-    artifactSha256: entry.artifactSha256,
-    nativeArtifactSha256: entry.nativeArtifactSha256,
-    directArtifactSha256: entry.wasmHost.artifactSha256,
+    artifactFingerprint: entry.artifactFingerprint,
+    nativeArtifactFingerprint: entry.nativeArtifactFingerprint,
+    directArtifactFingerprint: entry.wasmHost.artifactFingerprint,
     directSerializedBytes: entry.wasmHost.serializedBytes,
-    workerArtifactSha256: entry.worker.artifactSha256,
+    workerArtifactFingerprint: entry.worker.artifactFingerprint,
     workerSerializedBytes: entry.worker.serializedBytes,
   };
 }

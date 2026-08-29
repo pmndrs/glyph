@@ -36,21 +36,23 @@ pub fn abi_json() -> &'static str {
     include_str!(concat!(env!("OUT_DIR"), "/font-baker-abi-v0.json"))
 }
 
-use sha2::{Digest, Sha256};
-use std::{borrow::ToOwned, string::String, vec::Vec};
+use pmndrs_glyph_raster_artifact::{
+    ARTIFACT_FINGERPRINT_V0, DESCRIPTOR_FINGERPRINT_V0, SOURCE_FINGERPRINT_V0, fingerprint128,
+};
+use std::{borrow::ToOwned, vec::Vec};
 
 /// Bake one source font face into the canonical shaping-only `PMNDRS_font` GLB.
 pub fn bake_font(source: &[u8], descriptor: BakeDescriptorV0) -> Result<BakeResultV0, BakeError> {
     let descriptor = descriptor.validate()?;
-    let source_hash = hex_sha256(source);
-    let descriptor_hash = hex_sha256(&descriptor.canonical_bytes());
+    let source_fingerprint = fingerprint128(source, SOURCE_FINGERPRINT_V0);
+    let descriptor_fingerprint = fingerprint128(&descriptor.canonical_bytes(), DESCRIPTOR_FINGERPRINT_V0);
     let shaping = sfnt::build_shaping_payload(source, descriptor.font_face_index)?;
     let shaping_report = shaping.report.clone();
     let artifact = glb::build_font_glb(
         &shaping,
         ProvenanceV0 {
-            source_hash,
-            descriptor_hash,
+            source_fingerprint,
+            descriptor_fingerprint,
             font_face_index: descriptor.font_face_index,
             baker_version: abi_contract::BAKER_VERSION.to_owned(),
             harfrust_version: abi_contract::HARFRUST_VERSION.to_owned(),
@@ -58,8 +60,8 @@ pub fn bake_font(source: &[u8], descriptor: BakeDescriptorV0) -> Result<BakeResu
             unicode_version: abi_contract::UNICODE_VERSION.to_owned(),
         },
     )?;
-    let artifact_hash = hex_sha256(&artifact.bytes);
-    let artifact_id = format!("font-{}", shaping.shaping_hash);
+    let artifact_fingerprint = fingerprint128(&artifact.bytes, ARTIFACT_FINGERPRINT_V0);
+    let artifact_id = format!("font-{}", shaping.shaping_fingerprint);
     let compressed = report::compressed_lengths(&artifact.bytes)?;
     let total_bytes = artifact.bytes.len();
 
@@ -68,7 +70,7 @@ pub fn bake_font(source: &[u8], descriptor: BakeDescriptorV0) -> Result<BakeResu
             role: "font".to_owned(),
             id: artifact_id.clone(),
             bytes: artifact.bytes,
-            sha256: artifact_hash,
+            fingerprint: artifact_fingerprint,
         }],
         report: BakeReportV0 {
             source: report::SourcePayloadReport {
@@ -108,14 +110,4 @@ pub fn bake_font(source: &[u8], descriptor: BakeDescriptorV0) -> Result<BakeResu
         },
         warnings: Vec::new(),
     })
-}
-
-pub(crate) fn hex_sha256(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    let mut output = String::with_capacity(64);
-    for byte in digest {
-        use core::fmt::Write;
-        let _ = write!(output, "{byte:02x}");
-    }
-    output
 }

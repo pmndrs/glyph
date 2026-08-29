@@ -14,6 +14,7 @@ import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/glyph/raster/bitmap';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 
 import { runCli } from '../../dist/node/cli.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const iconFontUrl = new URL(
@@ -78,8 +79,8 @@ test('bakeFont writes exact combined embedded and external artifacts with comple
     assert.equal(hash(bytes), expected.sha256);
   }
   assert.deepEqual(
-    external.execution.outputs.map(({ role, bytes, sha256 }) => ({ role, bytes, sha256 })),
-    golden.composed.external.artifacts.map(({ role, bytes, sha256 }) => ({ role, bytes, sha256 })),
+    external.execution.outputs.map(({ role, bytes, fingerprint }) => ({ role, bytes, fingerprint })),
+    golden.composed.external.artifacts.map(({ role, bytes, fingerprint }) => ({ role, bytes, fingerprint })),
   );
   assert.equal(external.transport.filter(({ artifactId }) => artifactId.endsWith('.ktx2')).length, 1);
   assert.ok((await readdir(join(root, 'external'))).every((name) => !name.endsWith('.tmp')));
@@ -109,7 +110,7 @@ test('bakeFont preserves bounded raster options through the Node composition pat
   const descriptor = bitmapDescriptor(options);
   const validated = await validateBitmapArtifact(bytes, {
     rasterKey: await bitmapRasterKey(options),
-    shapingHash: core.shapingHash,
+    shapingFingerprint: core.shapingFingerprint,
     glyphCount: core.glyphCount,
     glyphIdWidth: 16,
     descriptor,
@@ -183,7 +184,10 @@ test('bakeProject groups static definitions, imports only the resolved baker, an
     ['font', 'raster'],
   );
   const outputBytes = await readFile(output);
-  assert.equal(hash(outputBytes), report.fonts[0].execution.outputs[0].sha256);
+  assert.equal(
+    report.fonts[0].execution.outputs[0].fingerprint,
+    fingerprint128(outputBytes, fingerprintDomain.artifact),
+  );
   const validated = await validateFontArtifact(outputBytes);
   assert.deepEqual(
     validated.document.extensions.PMNDRS_font.rasters.map(({ source }) => source.type),
