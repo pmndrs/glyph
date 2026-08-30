@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:ef2e753861cc155d1b53842529718e4dad5066e9aa88c55b2fb95c6a679605de'
+source_digest: 'sha256:f2cb93292aa099f3f37ef1383f15b0761b57852fb482241f87456720d0a21c89'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -17,9 +17,9 @@ sources:
   - id: public-api
     resource: ../../packages/glyph/src/index.ts
     title: Renderer-neutral public exports
-  - id: runtime
-    resource: ../../packages/glyph/src/text-runtime.ts
-    title: Font and Rust-runtime ownership
+  - id: glyph-engine
+    resource: ../../packages/glyph/src/glyph-engine.ts
+    title: GlyphEngine and font-registration ownership
   - id: node-cli
     resource: ../../packages/glyph/src/node/cli.ts
     title: Project-discovery and direct font-bake CLI
@@ -38,9 +38,9 @@ sources:
   - id: rust-engine
     resource: ../../packages/glyph/rust/shaper/src/engine/state.rs
     title: Retained Rust text engine
-  - id: frame-host
-    resource: ../../packages/glyph/src/core/host.ts
-    title: Single-export Wasm host
+  - id: backend
+    resource: ../../packages/glyph/src/core/backend.ts
+    title: Glyph backend and Wasm plan transport
   - id: core-api
     resource: ../../packages/glyph/src/core.ts
     title: Renderer-neutral core layer
@@ -72,8 +72,8 @@ sources:
     resource: ../planning/three-api.md
     title: Three.js text API reference
 generated:
-  by: openai-codex/gpt-5
-  at: '2026-08-24T03:12:27Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-28T20:10:29Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -95,27 +95,43 @@ The package owns five runtime layers:
 Runtime Rust and all shared Rust code remain `no_std + alloc` compatible with the package allocator contract. The optional
 font-baker Wasm alone enables a feature-gated `std` adapter for Fontations subsetting; the same crate continues to
 pass its `wasm32-unknown-unknown --no-default-features` build. The text engine uses the existing compile-time direct-memory mapping
-for font registrations and the single mutating `pmndrs_glyph_engine_update(sessionId, requestOffset, requestLength)`
-export for retained engine sessions.
+for font registrations and the single mutating
+`pmndrs_glyph_engine_update(plannerId, requestOffset, requestLength)` export for render planners.
 TypeScript does not independently shape, lay out, or pack paragraphs.
+
+`GlyphBackend` is the cold registration owner within one engine: it claims policies, font bindings, font stacks, and
+render planners, retains every claimed ID's provenance, and rejects cross-backend references before a live borrow expires.
+`RenderPlanner` is the hot lifetime of one independently revisioned desired-text set. It owns paragraph state,
+physical plan storage and generations, publications, and engine-side resource residency; it is not a scene, device, or
+render pass. Portable compiled resources remain immutable payload data. A renderer owns the per-device realization pool
+that turns those payloads into textures, buffers, and geometry and leases them across render planners by stable identity.
 
 ## Public package surfaces
 
-| Subpath                      | Purpose                                                                                                                          |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `@pmndrs/glyph`              | Font/raster contracts, loading, fallback stacks, formatting helpers, paragraph inputs, layout-query values, and portable bakers. |
-| `@pmndrs/glyph/three`        | Three `FontLoader`, `Text`, `TextGroup`, material factories, and policy registration.                                            |
-| `@pmndrs/glyph/three/bitmap` | Compatibility alias re-exporting the renderer-neutral Bitmap raster module.                                                      |
-| `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                        |
-| `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                        |
-| `@pmndrs/glyph/react`        | React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                              |
-| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                     |
-| `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                        |
-| `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                 |
-| `@pmndrs/glyph/core`         | Renderer-neutral engine host, frame wire, plan/layout-query views, technique schemas, policy-program DSL, and binding compiler.  |
-| `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                 |
-| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.          |
-| `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                 |
+| Subpath                      | Purpose                                                                                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `@pmndrs/glyph`              | Font/raster contracts, loading, fallback stacks, formatting helpers, paragraph inputs, layout-query values, and portable bakers.          |
+| `@pmndrs/glyph/three`        | Three `FontLoader`, `Text`, `TextGroup`, material factories, and policy registration.                                                     |
+| `@pmndrs/glyph/three/bitmap` | Compatibility alias re-exporting the renderer-neutral Bitmap raster module.                                                               |
+| `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                                 |
+| `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                                 |
+| `@pmndrs/glyph/react`        | React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                                       |
+| `@pmndrs/glyph/react/bitmap` | Typed `useBitmapFont(input, options)` convenience over `useFont`.                                                                         |
+| `@pmndrs/glyph/react/msdf`   | Typed `useMSDF(input, options?)` convenience over `useFont`.                                                                              |
+| `@pmndrs/glyph/react/slug`   | Typed `useSlug(input)` convenience over `useFont`.                                                                                        |
+| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                              |
+| `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                                 |
+| `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                          |
+| `@pmndrs/glyph/core`         | Renderer-neutral Glyph engine and backend, render planners, plan/layout-query views, technique schemas, policy DSL, and binding compiler. |
+| `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                          |
+| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.                   |
+| `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                          |
+
+The three renderer-neutral raster leaves and their `three/*` compatibility barrels retain registration side effects under
+tree shaking. Shader implementations remain explicit `/tsl` or `/typegpu` imports and are not pulled in by registration.
+Every TypeScript subpath also publishes a custom `source` condition. Workspace Vite applications opt into that condition
+for direct TS/TSX hot reload, while ordinary Node and package consumers continue to resolve built declarations and ESM.
+Wasm and `package.json` exports remain distribution artifacts because they have no TypeScript source equivalent.
 
 The font-baker Rust source, direct-memory wrapper, schemas, tests, build pipeline, optimized Wasm, and generated ABI are
 owned by this package. There is no separately published font-baker package. The root entry has no static edge to the
@@ -143,13 +159,12 @@ compressed `--unicode-set` accepted by `glyph bake --unicodes`. Fonts without au
 than invented semantic labels. Rich vendor labels and aliases remain external catalog data.
 
 The R3F `Text` component infers the technique union from a required outer font selection, including a font stack chosen
-from runtime state. Callers do not widen dynamic selections to `AnyRasterTechnique`. An inline `TextSpan` may omit
-`font` because it is flattened into a styled run and inherits from its enclosing paragraph; a rendered `Text` without a
-font is invalid. The two are separate components because they are separate kinds of thing: `Text` is a paragraph box and
-a Three `Object3D`, while `TextSpan` is never mounted and its props are exactly the five the flattener reads. Every
-box-level prop is a type error on a span rather than a value silently discarded, and a `ref` on a span — which could
-never fire, because no object exists — no longer type-checks. Flutter separates `RichText` from `TextSpan` on the same
-line. `TextGroup` owns batching and compositing policy, never font inheritance. Both components register their Three
+from runtime state. Callers do not widen dynamic selections to `AnyRasterTechnique`. A nested `Text` is flattened into
+an inline styled run and may omit `font` because it inherits from its enclosing paragraph; a rendered outer `Text`
+without a font is invalid. Nested text creates no Three object and accepts only `children`, `font`, `style`, `paint`, and
+`material`. Because JSX erases the generic element identity needed to reject every box-only prop statically, the
+flattener validates this boundary synchronously and names any invalid property instead of silently discarding it.
+`TextGroup` owns batching and compositing policy, never font inheritance. Both mounted components register their Three
 objects with the R3F host and are constructed during its commit rather than in a layout effect. React `Activity` can
 therefore pre-render a hidden text or whole text group, while R3F retains visibility and eventual disposal ownership.
 
@@ -183,22 +198,30 @@ that span and its index in `Text.spans`.
 Publicly constructible frame inputs are validated where they enter `Text`, `TextGroup`, `Paragraph`, policy assembly, or
 font registration; malformed data never waits for scene traversal to fail. A residual engine rejection therefore names an
 internal invariant defect through `TextFrameError` while the last committed draw state remains live. Renderer preparation is
-separate: if an engine-accepted publication cannot yet realize its resources or material, Three retains that exact
-publication and retries it on the next frame without another engine call. It neither restores an older snapshot nor waits
-for unrelated input to move. New desired input supersedes an unpublished candidate and requests a checkpoint from the last
-consumed plan revision (D-279).
+separate: if an engine-accepted publication cannot realize its resources or material, Three discards the candidate, keeps
+the last accepted draw state and fences, and retains the error. It does not retry unchanged frames. Explicit material or
+other renderer-relevant invalidation requests a checkpoint from the last consumed plan revision. A malformed emitted plan
+is an engine defect and never enters this recovery path (D-285).
 
 `registerThreeRasterPlanProgram` refuses a technique registered after a runtime has read the registry (D-271), naming the
 technique instead of applying to nothing. Snapshot tracking uses weak registry references, so an abandoned runtime cannot
-keep its identity registry alive or permanently poison later registration after collection. `/three` also re-exports `ParagraphLayoutSummary`, `ParagraphLayoutInspection`,
-`ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a `/three` importer can name what
-`Text.layout()`, `Text.glyphs()`, and `ParagraphStyle.features` give it.
+keep its identity registry alive or permanently poison later registration after collection. `/three` also re-exports
+`ParagraphLayoutSummary`, `GlyphLayoutInspection`, `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a
+`/three` importer can name what `Text.measure()`, `Text.glyphs()`, and `TextStyle.features` give it.
 
-One baked GLB may expose several raster techniques without repeating its input identity. `TextRuntime.loadFont()` and
-R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `LoadedFont` values. The
-artifact is fetched, validated, registered with the shaper, and retained once; each requested technique still derives
-its exact descriptor, resolves and decodes its own raster resource, and retains its associated data type. A mapped tuple
-keeps required Bitmap options and custom third-party technique types enforceable at every position.
+One baked GLB may expose several raster techniques without repeating its input identity. Root
+`loadFont(input, rasters, options?)` accepts a nonempty raster tuple and returns a position-preserving tuple of `Font`
+values, fetching and validating the artifact once while retaining each technique's exact data type. R3F's generic
+`useFont(input, technique, options?)` intentionally loads one typed technique; a component that renders several calls the
+corresponding hooks, which R3F caches under their canonical per-technique keys.
+
+Single-technique React consumers may import `useBitmapFont`, `useMSDF`, or `useSlug` from the matching `/react/*`
+subpath. Each hook only constructs that technique's typed request and delegates to `useFont`; Suspense, cache identity,
+and disposal therefore have one implementation. Technique-specific subpaths preserve the registration and
+bundle boundary instead of making the main React entry import every built-in raster. Every hook carries `preload()` and
+`clear()`. Generic `useFont(input, technique, options?)` is the extension point for third-party techniques. R3F's
+`useLoader` cache owns the shared promise and resolved value; Glyph adds only deterministic font-lease disposal so
+clearing a preload does not dispose an independently mounted consumer.
 
 Artifact metrics carry text decoration from bake time (D-246): required `underlinePosition`/`underlineThickness` from
 `post` and `strikeoutPosition`/`strikeoutSize` from `OS/2`, with a conservative derived fallback when a source font
@@ -209,7 +232,7 @@ boundary), the engine cascade stamps the CSS decorating box so one continuous li
 the declaring span's scale, and records flow through both planners as resource-free rows of the reserved
 `pmndrs.decoration` technique. Plan programs carry a primitive kind in the former reserved wire field; underline and
 overline rows precede the paragraph's glyphs while line-through follows them, matching CSS paint order, and Three
-realizes every decoration draw with one shared flat-quad TSL material. Decorated sessions rebuild their gather output;
+realizes every decoration draw with one shared flat-quad TSL material. Decorated render planners rebuild their gather output;
 the undecorated retained fast path is unchanged.
 
 When runtime baking is required, one Worker request normalizes the Unicode ranges, prepares the selected source once,
@@ -226,7 +249,7 @@ restrictions, and storage corruption are transparent misses followed by the same
 
 ## Retained frame transaction
 
-One `TextGroup` owns one Rust engine session. A traversal sends only changed paragraph sections:
+One `TextGroup` owns one Rust render planner. A traversal sends only changed paragraph sections:
 
 - text replacement sends text plus any dependent style/geometry state;
 - font, spans, shaping style, paint, raster ratio, or material send style state;
@@ -258,7 +281,9 @@ correct spacing through intermediate animated sizes for Bitmap, MSDF, and Slug.
 
 The Three executor does not infer paragraph layout from GPU records and does not maintain a parallel candidate/current
 target state machine. It applies the Rust command buffer transactionally and retains only renderer resources required by
-future deltas.
+future deltas. Portable payload bytes are already shared by `LoadedFont`; Three's current GPU texture realization remains
+render-planner-local. Pooling those immutable device objects above render planners is a Three implementation follow-up, not a core scene,
+device, render-pass, or implicit-standalone-batch API.
 
 A paragraph's content box may declare `columns: { count, gap }`, flowing text through side-by-side ordered columns inside
 the exact content-box width. Columns fill in order without balancing, so the final column may run short, and an exact
@@ -275,6 +300,27 @@ compiler alone lowers them into the strike-major wire table. Three validates dec
 semantics when a variant registers, then validates every retained payload attribute when a font is bound, before device
 realization. Material contexts retain the discriminated `PortableResource` union rather than erasing validated payloads
 to `unknown`.
+
+CPU reference renderers and allocation diagnostics may pair `compileRasterFont()` with `readCompiledRasterFont()`.
+The authenticated read-only view resolves schema field names, strike rows, selected resources, and portable payloads
+directly from the compiled binding. It does not expose technique-private decoded font data, perform another raster
+decode, or copy the binding's scalar value tables; ordinary renderers continue through their render-planner target.
+
+Portable resource declarations select `one` or `many` cardinality. Fixed-member groups carry synchronized leaf buffers
+and textures under one retained identity; groups cannot nest, geometry cannot repeat, and every resourceful schema names
+the primary render resource used by the plan primitive. Bitmap repeated strikes, MSDF atlas/range companions, and Slug
+repeated page groups all compile through this contract. Capability profiles contain capabilities only;
+`compileRenderPolicy()` assigns their nonzero wire IDs by descriptor order, and ordinary single-profile frames omit the
+selector.
+
+Renderer-authored wire identities are hashed domain/name pairs returned as branded numbers (`PolicyHandle`,
+`FontBindingHandle`, `FontStackHandle`, `PlannerHandle`, `MaterialHandle`, or `PolicyBufferId`). Module-level policy
+and buffer constants use `id(kind, stableName)`. Engine-created bindings, stacks, render planners, materials, paragraphs,
+styles, flows, and regions use backend-scoped identities whose provenance is released by `backend.dispose()`.
+Both paths reject invalid names or observed collisions at the authoring call, and every consuming backend call verifies active
+provenance. Buffer IDs are folded into the nonzero `u16` ABI range; registration and policy compilation still reject
+conflicting IDs when values meet. Dense renderer slots such as `transformIndex` remain explicit compact indices rather
+than identities.
 
 The first-party policy can select indexed transform batching, direct per-draw transforms, or a hybrid. Indexed mode adds a
 stable transform-table ID to each rendered glyph so compatible paragraphs may collapse into one draw. Direct mode splits
@@ -307,15 +353,32 @@ A public compiled-Wasm integration loads Bitmap Inter plus Slug Font Awesome, sh
 fallback stack, and observes two Rust-planned draws with exact Bitmap `vec2` and Slug `vec4` physical records. The
 selected font binding—not a `Text` technique selector—carries the renderer program and resource.
 
+Techniques explicitly declare the text effects their portable policy and shader implement. MSDF supports outline and
+shadow; Bitmap and Slug currently support neither. Three, `Paragraph`, and direct `/core` planner entry points validate
+the selected font techniques at the call that accepts a style, so an unsupported effect cannot become a malformed or
+silently degraded render plan. The semantic ABI carries effect color, width, offset, and inherited opacity only for
+technique programs that opt in.
+
 ## Semantic queries
 
-Ordinary rendering requests no layout readback. `Text.layout()` explicitly requests aggregate measurements and
-counts; `Text.glyphs()` additionally copies line and glyph arrays. Query results are cached by committed revision.
-When the only pending change is the laid-out text's geometry, `layout()` routes through the core host's
-`session.measureParagraph` — the paragraph-scoped synchronous query below — so repeated measurement under changing
-constraints performs no publication flips and no revision burns, and the next ordinary frame adopts the speculative
-work. Any other pending change synchronizes the containing Rust session once and the following render traversal reuses
-that publication.
+Publication emits no semantic readback by default. A renderer that needs current local bounds requests the measurement
+sidecar on the same update; core copies it into the retained text cache before target acceptance, so plan publication and
+bounds cost one Wasm hop. Every semantic mutation invalidates that cache immediately. `Text.measure()` then answers from
+the cache or explicitly measures current desired state, while `Text.glyphs()` similarly requests the positioned
+inspection lane. Neither query traverses matrices, realizes renderer resources, flips publication slots, or burns a
+revision.
+
+A same-build isolation over one 21,805-glyph paragraph measured 0.002 ms for an unchanged publication, 0.174 ms for the
+aggregate measurement sidecar, and 0.582 ms for full glyph inspection. Three requests only aggregate measurement and
+only while it has changed text to publish; an idle synchronization does not enter the engine. Default renderer-neutral
+publication therefore pays no semantic-sidecar cost, while renderers that need same-frame bounds pay the explicit
+per-publication cost instead of making a second Wasm query.
+
+An explicit query before first render carries the desired paragraph lifecycle and applies text, style, and geometry
+mutations only for the queried paragraph. Sequential queries extend one speculative batch candidate. The next ordinary
+publication adopts matching prepared work and publishes the batch once instead of shaping twice; a geometry-only mismatch
+reuses the semantic prefix and recomputes only flow and positioning. Unchanged measurements and inspections remain cached
+until the next semantic mutation.
 
 The engine additionally exports `pmndrs_glyph_engine_measure_paragraph`, a paragraph-scoped synchronous query beside
 `pmndrs_glyph_engine_update`. It reuses the update request layout with the queried paragraph as an ABI argument, runs
@@ -325,7 +388,7 @@ renderer-fence acknowledgment. The host must copy the records out before its nex
 terminates leave-committed, so the following ordinary frame proceeds from pre-measure revisions with no checkpoint
 hazard.
 
-The prepared pending state is retained as one speculative session transaction. Sequential queries extend it while the
+The prepared pending state is retained as one speculative render-planner transaction. Sequential queries extend it while the
 committed revision, lifecycle input, and the queried paragraph's text/style input fingerprints still match — a
 geometry-only follow-up query re-runs just geometry, flow, and positioning over the retained semantic prefix, and
 identities extend linearly from the transaction's high-water marks instead of rolling back between queries. Any
@@ -374,25 +437,31 @@ There are no instance-ignoring runtime ABI readers. Package builds isolate the d
 `artifact-baker` feature sets from kernel-only test targets and reject an optimized module missing any contract-declared
 artifact export, preventing Cargo's shared top-level artifact path from silently publishing a smaller test variant.
 
-The renderer-neutral core publishes as `@pmndrs/glyph/core` (D-249): runtime shaper creation, the engine host and sessions, frame-wire
-serialization, render-plan and layout views, font-binding compilation, the versioned ABI, and the policy-authoring
+The renderer-neutral core publishes as `@pmndrs/glyph/core` (D-249): GlyphEngine creation, engine-owned backends and render planners,
+semantic render-plan and layout readers, portable font compilation, and the policy-authoring
 toolkit. The four technique TSL node graphs publish as `@pmndrs/glyph/tsl` under Tsl-prefixed names, including the Slug shader tree that
 previously lived in core internals. Three's first-party policy is authored with the same public toolkit in
 `three/render-policy.ts`, and a scoped import lint denies the three, tsl, and react surfaces any import from `internal/`
 or `generated/`, so the first-party integrations consume exactly the layering a third party would.
 
-Both layers publish as npm subpaths. They are how a renderer integrates without our `Object3D`s, and `@pmndrs/glyph/three` is itself built on `/core`, so the earlier finding that they had no consumers was wrong. `packages/glyph-example-renderer` is the standing proof that a second engine consumer can be written against `/core` alone, and it now drives real frames through the item 11 retention protocol: publications are borrowed by default but expire loudly (`isExpired`/`assertLive`), `retain` makes one contiguous host-owned copy branded in the type system, a renderer-owned fence advances only after device commit, patches surface dirty ranges, and storage generations retire through `(kind, id, generation)` records (`core/retention.ts`). `/core`'s contract still has sharp edges -- caller-chosen raw `u32` handles where branded `FontHandle`/`RasterHandle` already exist, caller-supplied opaque byte blobs, no published path from host-owned bytes to a registered shaping font (audit item 12; the example renderer's real-frame test records the clean `fontMissing` rejection), and a manual acquire/release refcount pair -- and those are tracked as hardening in the API surface audit rather than as a reason to withdraw the entry point.
+Both layers publish as npm subpaths. They are how a renderer integrates without our `Object3D`s, and
+`@pmndrs/glyph/three` is itself built on `/core`. `packages/glyph-example-renderer` is the standing second-engine proof:
+borrowed targets consume Wasm A/B memory synchronously, async targets receive exactly one bounded self-owned copy,
+renderer fences advance only after device commit, and storage generations retire by exact identity. Public wire
+identities are branded numeric hashes; backend-created registrations are automatic and expire with that backend. The
+Glyph engine owns backends, the backend owns bindings, policies, and render planners, and each render planner owns text plus one target and acceptance
+frontier. Portable font compilation retains only validated buffer, texture, grouped-resource, and GLB-like geometry
+payloads, never renderer objects.
 
-The same reasoning withdrew the `*-abi` and `bakers/*/validate` subpaths. The ABI subpaths existed to publish struct
-offsets for pointer arithmetic, which is an internal representation handed to a caller who then owns keeping it valid;
-`textShaperAbi` reaches its one legitimate consumer through core. The validator subpaths had no consumer outside this
-package. Both sets of modules remain, reached by relative path from the package's own tests and scripts.
+The same reasoning withdrew the `*-abi` and `bakers/*/validate` subpaths. Raw struct offsets and enum numbers remain
+package-private implementation data; `/core` exposes validated semantic policy values and record readers instead. The
+validator subpaths likewise had no consumer outside this package. Both sets of modules remain reachable by relative path
+from package-owned tests and scripts where wire-level verification is legitimate.
 
-The renderer-neutral core owns the completed asynchronous Worker transfer contract: it copies opaque frame bytes once
-into a bounded worker-owned transferable pool, applies explicit backpressure, and requires root to transfer each retired
-buffer back so reuse or final collection occurs in the owning realm. Adopting that mode in the Three host is deferred;
-the synchronous Three path does not restore the deleted TypeScript shaping Worker. TypeGPU is likewise a later adapter
-slice built directly against the Rust render plan.
+The renderer-neutral core owns the completed asynchronous Worker transfer contract: it copies opaque plan bytes once into
+a bounded exact-size transferable pool, applies explicit backpressure, and requires the target to return the same
+unmodified full-span buffer. Three uses the default synchronous borrowed target. The example renderer proves TypeGPU and
+WebGPU realization directly against the same Rust render plan.
 
 ## Current correctness evidence
 
@@ -402,7 +471,7 @@ The foundation currently has:
   later cursor-convergence regressions;
 - the package JavaScript/integration gate passing through the single-path public exports;
 - exact retained Amiri bidi, policy, ellipsis, clipping, UIKit-layout, and CJK contracts exercised by the browser
-  `paragraph-contracts` target through public `FontLoader`, `Text`, `TextGroup`, `layout()`, and `glyphs()`;
+  `paragraph-contracts` target through public `FontLoader`, `Text`, `TextGroup`, `measure()`, and `glyphs()`;
 - 32/32 pixel-exact public Bitmap WebGL2 frames against the independent CPU oracle, including resize and clipping, with
   zero differing channel bytes and pinned SHA-256 `a47930d3…15e893`;
 - source-font SHA-256, registered shaping hashes, and HarfRust/HarfBuzz oracle identities authenticated independently of
@@ -479,8 +548,12 @@ that detached upload view before invalidating its texture. A focused integration
 proves exact canonical/upload equality with untouched padding. The complete 48-cell presentation matrix keeps every
 Bitmap, MTSDF, and Slug workload visible on WebGPU and forced WebGL2; this is the deliberate one-copy WebGL2 fallback,
 not another renderer-side layout or packing path.
-The corrected complete MTSDF baker remains 552,025 raw / 215,030 gzip / 168,758 Brotli bytes; the earlier 52 KiB
-observation was a kernel-only test artifact that reused the distributable Cargo target directory.
+The corrected complete MTSDF baker is 556,619 raw / 218,279 gzip / 171,376 Brotli bytes. A fresh isolated build of the
+zero-import feature-minimal admission module is 69,731 optimized / 30,131 gzip / 25,327 Brotli bytes; release evidence
+reads that fresh-build record rather than the superseded SIMD-experiment snapshot.
+Correcting channel selection changes pixel identities without changing atlas dimensions or GPU residency, but the new
+channel data is less compressible: canonical Inter moves from 6,798,458 to 8,007,071 gzip bytes and Font Awesome from
+7,227,921 to 8,705,885. These are baked-asset transfer costs, not default package or per-frame renderer costs.
 
 The public Three benchmark now supports an outside-only mode that leaves the internal phase collector disabled and wraps
 one `updateMatrixWorld()` call with a host timer. An eight-warmup/31-sample run over 25,515 positioned glyphs measured
@@ -491,10 +564,13 @@ exports, calls, branches, and clock reads are now absent from the package source
 workload markers and the direct Wasm timer remain outside the shipped library.
 
 After the final plan-application lifecycle audit, Three sizes indexed transforms from live paragraph IDs instead of
-scanning every glyph record in JavaScript. A renderer failure retains an unconsumed owned plan for zero-crossing retry;
-dirty upload ranges accumulate across presentation restoration and Rust patches; buffer/resource generations dispose
-only their exact dependent materials; direct materials survive indexed transform-table growth; and loaded-font disposal
-removes its decoded renderer resources. The unchanged eight-warmup/31-sample public 25,515-glyph lane measures
+scanning every glyph record in JavaScript. A renderer preparation failure discards its candidate, retains the last
+accepted plan fence and error, and waits for explicit renderer-relevant invalidation to request a checkpoint. Dirty upload
+ranges accumulate across presentation restoration and Rust patches; buffer/resource generations dispose only their exact
+dependent materials; and direct materials survive indexed transform-table growth. A loaded font owns one
+cached Three binding and decoded resource set: disposal marks them for retirement, while the final registered-stack lease
+keeps them valid and then disposes the Wasm binding before removing renderer resources. The unchanged
+eight-warmup/31-sample public 25,515-glyph lane measures
 17.84/6.32/3.04/13.84 ms medians and 18.99/6.64/4.60/14.01 ms p95 for cold/font-size/width/text. The adjacent recorded
 run was 19.42/6.59/3.10/14.24 ms median; process-separated samples support no regression and a plausible cold-path
 reduction, not causal attribution.
@@ -575,7 +651,7 @@ break-sensitive path, so the 42.4% RSD describes remaining workload classes rath
 optimized SIMD shaper is 1,147,266 raw bytes. Five patches write roughly 1.2 KiB per update, and the retained high-water
 mark remains 80.38 MiB. Median is now below 4 ms, but p95 and memory-growth gates remain open.
 
-Policy gather now retains complete prior input lanes by committed session/policy/capability revision. Zero-change glyphs
+Policy gather now retains complete prior input lanes by committed render-planner/policy/capability revision. Zero-change glyphs
 reuse them without binding or policy work; changed glyphs update only reachable lanes. A resource or draw-storage key
 change retains the verified prefix and fully rebuilds the suffix, preserving correct replacement-buffer inputs without
 double-scanning the prefix. The same production lane now measures 1.314 ms median / 5.863 ms p95 with 76.2% RSD, five
@@ -616,15 +692,14 @@ and 8.281 ms middle-splice medians. The adjacent prior medians were 6.178, 2.817
 show no regression and suggest a small scan reduction, but do not establish a latency win. The same change preserves
 whole-buffer update alignment after dirty-range promotion and costs 182 raw / 42 gzip / 233 Brotli bytes.
 
-Three retains pending attribute upload ranges until its renderer consumes them. Consecutive Rust publications,
-presentation-origin restoration, and a retry before rendering coalesce overlapping or adjacent ranges instead of
-clearing earlier writes. Paragraph transform identities return to a binding-local free list only after the Rust removal
+Three retains pending attribute upload ranges until its renderer consumes them. Consecutive Rust publications and
+presentation-origin restoration before rendering coalesce overlapping or adjacent ranges instead of clearing earlier
+writes. Paragraph transform identities return to a binding-local free list only after the Rust removal
 transaction commits, bounding the indexed transform table under create/dispose churn. A disposed `Text` may remain in
 the Three scene graph until its host detaches it without poisoning the surviving batch, and batch-wide runtime validation
-runs inside the group error boundary before reconciliation mutates ownership. An internal semantic-query contract failure
-advances the observed engine revision and retains unexpected render work for the ordinary zero-crossing retry path rather
-than leaving the Wasm session permanently revision-conflicted. The focused public integration exercises all four
-lifecycles, and the complete package gate passes 158 Rust and 165 Node tests. The canonical direct benchmark now defaults
+runs inside the group error boundary before reconciliation mutates ownership. Semantic queries use the nonpublishing
+paragraph-measure call; an internal query contract failure leaves the engine revision and renderer fence untouched and
+throws from the query. Focused public integration exercises all four lifecycles. The canonical direct benchmark defaults
 to eight warmups and 31 measured samples so its reported p95 is not the maximum of an 11-sample run.
 
 The Wasm boundary also retains fixed-seed mutation coverage for the two replacement parsers. Sixty-four policy and frame

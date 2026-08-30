@@ -1,5 +1,5 @@
-import type { LoadedFont, ParagraphLayout } from '@pmndrs/glyph';
-import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/glyph/three/bitmap';
+import type { Font, GlyphLayout } from '@pmndrs/glyph';
+import { selectBitmapStrikePpem, type bitmap, type BitmapData } from '@pmndrs/glyph/three/bitmap';
 import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -14,7 +14,7 @@ const CONFORMANCE_TEXT_COLOR = '#ffffff';
  */
 export interface BitmapConformanceLine {
   readonly object: Text<typeof bitmap>;
-  readonly layout: ParagraphLayout;
+  readonly layout: GlyphLayout;
   readonly height: number;
   readonly width: number;
   readonly cssFontSize: number;
@@ -31,7 +31,8 @@ export interface BitmapConformanceLine {
  */
 export function createBitmapConformanceLine(
   parent: THREE.Object3D,
-  font: LoadedFont<typeof bitmap>,
+  font: Font<typeof bitmap>,
+  data: BitmapData,
   text: string,
   cssFontSize: number,
   rasterPixelRatio: number,
@@ -42,9 +43,15 @@ export function createBitmapConformanceLine(
     font,
     text,
     pixelSnapping: true,
-    contentBox: { align: 'start' },
-    style: { fontSize: cssFontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT, language: 'en', direction: 'ltr', features: [] },
-    paint: { color: CONFORMANCE_TEXT_COLOR },
+    layout: { align: 'start' },
+    style: {
+      fontSize: cssFontSize,
+      lineHeight: LIVE_TEXT_LINE_HEIGHT,
+      language: 'en',
+      direction: 'ltr',
+      features: [],
+      color: CONFORMANCE_TEXT_COLOR,
+    },
     rasterPixelRatio,
   });
   parent.add(object);
@@ -64,7 +71,7 @@ export function createBitmapConformanceLine(
       glyphCount: countRenderedGlyphs(object),
       missingGlyphCount,
       drawCount: countDraws(object),
-      strikePpem: selectBitmapStrikePpem(font.data.strikes, cssFontSize, rasterPixelRatio),
+      strikePpem: selectBitmapStrikePpem(data.strikes, cssFontSize, rasterPixelRatio),
     };
   } catch (error) {
     disposeText(object);

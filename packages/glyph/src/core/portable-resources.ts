@@ -1,7 +1,7 @@
 /**
  * The constrained portable resource vocabulary a compiled font may retain.
  *
- * A payload is immutable data — bytes plus the typed layout a renderer needs to
+ * A payload is immutable data — bytes plus the typed measure a renderer needs to
  * realize it — never a GPU object, shader-language node, or renderer callback.
  * The union is deliberately small: it describes only what the shipped techniques
  * actually retain, not a universal GPU object model. A mismatched texture size,
@@ -29,12 +29,8 @@ export type PortableCustomVertexSemantic = string & { readonly [portableVertexSe
 export type PortableVertexSemantic = 'position' | 'uv' | 'normal' | 'tangent' | 'color' | PortableCustomVertexSemantic;
 
 /** Closed portable resource kinds accepted by the core compiler. */
-export const portableResourceKinds: readonly ['buffer', 'texture', 'texture-array', 'geometry'] = Object.freeze([
-  'buffer',
-  'texture',
-  'texture-array',
-  'geometry',
-] as const);
+export const portableResourceKinds: readonly ['buffer', 'texture', 'texture-array', 'geometry', 'group'] =
+  Object.freeze(['buffer', 'texture', 'texture-array', 'geometry', 'group'] as const);
 
 export const portableTopologies: readonly ['triangle-list', 'triangle-strip'] = Object.freeze([
   'triangle-list',
@@ -56,6 +52,18 @@ const textureBytesPerTexel: Readonly<Record<PortableTextureFormat, number>> = Ob
   rgba32uint: 16,
   r32uint: 4,
 });
+
+const portableResourceIdentities = new WeakMap<object, object>();
+
+/** @internal Stable package identity for one normalized immutable payload. */
+export function portableResourceIdentity(resource: PortableResource): object {
+  let identity = portableResourceIdentities.get(resource);
+  if (identity === undefined) {
+    identity = Object.freeze({});
+    portableResourceIdentities.set(resource, identity);
+  }
+  return identity;
+}
 
 /** One contiguous slice of a geometry payload's immutable bytes. */
 export interface PortableBufferView {
@@ -100,7 +108,7 @@ export interface PortableDrawRange {
   readonly count: number;
 }
 
-/** Immutable byte payload with an optional fixed-width record layout. */
+/** Immutable byte payload with an optional fixed-width record measure. */
 export interface PortableBufferPayload {
   readonly kind: 'buffer';
   readonly bytes: Uint8Array;
@@ -146,12 +154,20 @@ export interface PortableGeometryPayload {
   readonly instances?: never;
 }
 
-/** The constrained payloads a technique may retain under a reserved resource kind. */
-export type PortableResource =
+export type PortableLeafResource =
   | PortableBufferPayload
   | PortableTexturePayload
   | PortableTextureArrayPayload
   | PortableGeometryPayload;
+
+/** One fixed set of named payloads selected together by a draw resource. */
+export interface PortableResourceGroupPayload {
+  readonly kind: 'group';
+  readonly members: Readonly<Record<string, PortableLeafResource>>;
+}
+
+/** The constrained payloads a technique may retain under a reserved resource kind. */
+export type PortableResource = PortableLeafResource | PortableResourceGroupPayload;
 
 export type PortableResourceKind = PortableResource['kind'];
 
@@ -173,6 +189,15 @@ export function assertPortableResource(
   payload: unknown,
   declaredFormat?: PortableTextureFormat,
   declaredVertexInputs?: readonly PortableVertexInput[],
+  declaredMembers?: Readonly<
+    Record<
+      string,
+      {
+        readonly kind: 'buffer' | 'texture' | 'texture-array';
+        readonly format?: PortableTextureFormat;
+      }
+    >
+  >,
 ): void {
   if (kind === 'buffer') return assertPortableBuffer(name, payload);
   if (kind === 'texture' || kind === 'texture-array') return assertPortableTexture(kind, name, payload, declaredFormat);
@@ -181,6 +206,7 @@ export function assertPortableResource(
     if (declaredVertexInputs !== undefined) assertGeometryVertexInputs(name, payload, declaredVertexInputs);
     return;
   }
+  if (kind === 'group') return assertPortableResourceGroup(name, payload, declaredMembers);
   throw new TypeError(`portable resource kind "${kind}" is not reserved by the core contract`);
 }
 
@@ -191,6 +217,15 @@ export function normalizePortableResource(
   payload: unknown,
   declaredFormat?: PortableTextureFormat,
   declaredVertexInputs?: readonly PortableVertexInput[],
+  declaredMembers?: Readonly<
+    Record<
+      string,
+      {
+        readonly kind: 'buffer' | 'texture' | 'texture-array';
+        readonly format?: PortableTextureFormat;
+      }
+    >
+  >,
 ): PortableResource {
   if (kind === 'buffer') {
     assertPayload(payload, name, 'buffer');
@@ -263,7 +298,67 @@ export function normalizePortableResource(
     assertPortableResource(kind, name, candidate, declaredFormat, declaredVertexInputs);
     return Object.freeze({ ...candidate, bytes: new Uint8Array(bytes) });
   }
+  if (kind === 'group') {
+    assertPortableResourceGroup(name, payload, declaredMembers);
+    const source = payload as PortableResourceGroupPayload;
+    const members: Record<string, PortableLeafResource> = Object.create(null);
+    for (const [memberName, member] of Object.entries(source.members)) {
+      const declaration = declaredMembers?.[memberName];
+      members[memberName] = normalizePortableResource(
+        declaration?.kind ?? member.kind,
+        `${name}.${memberName}`,
+        member,
+        declaration?.format,
+      ) as PortableLeafResource;
+    }
+    return Object.freeze({ kind, members: Object.freeze(members) });
+  }
   throw new TypeError(`portable resource kind "${kind}" is not reserved by the core contract`);
+}
+
+function assertPortableResourceGroup(
+  name: string,
+  payload: unknown,
+  declaredMembers?: Readonly<
+    Record<
+      string,
+      {
+        readonly kind: 'buffer' | 'texture' | 'texture-array';
+        readonly format?: PortableTextureFormat;
+      }
+    >
+  >,
+): asserts payload is PortableResourceGroupPayload {
+  assertPayload(payload, name, 'group');
+  const members = payload.members;
+  if (!isNonArrayObject(members) || Object.keys(members).length === 0) {
+    throw new TypeError(`portable resource group "${name}" needs named members`);
+  }
+  if (declaredMembers !== undefined) {
+    const declaredNames = Object.keys(declaredMembers);
+    const actualNames = Object.keys(members);
+    if (
+      declaredNames.length !== actualNames.length ||
+      actualNames.some((memberName) => !Object.hasOwn(declaredMembers, memberName))
+    ) {
+      throw new TypeError(`portable resource group "${name}" members do not match its declaration`);
+    }
+  }
+  for (const [memberName, member] of Object.entries(members)) {
+    if (memberName.length === 0) throw new TypeError(`portable resource group "${name}" has an empty member name`);
+    if (!isNonArrayObject(member)) {
+      throw new TypeError(`portable resource group "${name}" member "${memberName}" needs a leaf resource`);
+    }
+    const memberKind: unknown = member.kind;
+    if (memberKind === 'group') {
+      throw new TypeError(`portable resource group "${name}" member "${memberName}" needs a leaf resource`);
+    }
+    const declaration = declaredMembers?.[memberName];
+    if (declaration !== undefined && memberKind !== declaration.kind) {
+      throw new TypeError(`portable resource group "${name}" member "${memberName}" has the wrong payload kind`);
+    }
+    assertPortableResource(memberKind as PortableResourceKind, `${name}.${memberName}`, member, declaration?.format);
+  }
 }
 
 function copyGeometryViews(views: readonly PortableBufferView[], name: string): readonly PortableBufferView[] {

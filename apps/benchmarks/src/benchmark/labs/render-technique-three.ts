@@ -1,6 +1,6 @@
-import { createTextRuntime, FontRegistry, type AnyRasterTechnique, type LoadedFont } from '@pmndrs/glyph';
+import type { AnyRasterTechnique, Font } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import * as THREE from 'three/webgpu';
 
@@ -44,12 +44,12 @@ export async function runRenderTechniqueThreeLab({
 } = {}): Promise<RenderTechniqueThreeLabReport> {
   assertCount(samples, 'samples', 1);
   assertCount(warmup, 'warmup', 0);
-  const runtime = await createTextRuntime({ registry: new FontRegistry() });
-  let genericFont: LoadedFont<typeof glyphExample> | undefined;
-  let bitmapFont: LoadedFont<typeof bitmap> | undefined;
+  const loader = new FontLoader();
+  let genericFont: Font<typeof glyphExample> | undefined;
+  let bitmapFont: Font<typeof bitmap> | undefined;
   try {
     const genericStarted = performance.now();
-    genericFont = await runtime.loadFont({
+    genericFont = await loader.loadAsync({
       input: {
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
@@ -59,7 +59,7 @@ export async function runRenderTechniqueThreeLab({
     const genericFontLoadMs = performance.now() - genericStarted;
 
     const bitmapStarted = performance.now();
-    bitmapFont = await runtime.loadFont({
+    bitmapFont = await loader.loadAsync({
       input: {
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
@@ -87,12 +87,12 @@ export async function runRenderTechniqueThreeLab({
   } finally {
     genericFont?.dispose();
     bitmapFont?.dispose();
-    runtime.dispose();
+    loader.dispose();
   }
 }
 
 function measureTechnique(
-  font: LoadedFont<AnyRasterTechnique>,
+  font: Font<AnyRasterTechnique>,
   warmup: number,
   samples: number,
 ): RenderTechniqueThreeLabResult {

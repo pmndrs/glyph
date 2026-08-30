@@ -5,16 +5,22 @@ import { defineRasterResourceId, defineRasterTechnique } from '../../dist/index.
 import {
   compileRasterFont,
   defineTechniqueSchema,
+  fontBindingResources,
+  readCompiledRasterFont,
   registerRasterPlanProgram,
   resolveRasterPlanProgram,
-  textShaperAbi,
+  id as glyphId,
 } from '../../dist/core.js';
-import { RenderWireIdentityRegistry } from '../../dist/core/render-policy.js';
+import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
+import { createImmutableFontLease, immutableFontVariantIdentity } from '../../dist/loaded-font.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
+import { immutableTestFont } from '../support/immutable-font.mjs';
 
 const COLORS = defineRasterResourceId('test/colors');
 const MESH = defineRasterResourceId('test/mesh');
 const OTHER = defineRasterResourceId('test/other');
+const COLLIDING_RESOURCE_A = defineRasterResourceId('pmndrs.msdf/4wzx/16');
+const COLLIDING_RESOURCE_B = defineRasterResourceId('pmndrs.msdf/b6cd/16');
 const body = () => ({ inputs: [], operations: [], f32InputCount: 0, u32InputCount: 0 });
 
 function technique(id) {
@@ -23,6 +29,7 @@ function technique(id) {
     kind: 'test',
     extension: 'TEST_raster',
     version: 0,
+    textEffects: [],
     descriptor: () => ({}),
     async decode() {
       return {};
@@ -47,12 +54,12 @@ function schemaFor(value) {
         ],
       },
     },
-    render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
+    render: { resource: 'colors', geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
   });
 }
 
 function loaded(value, glyphCount = 2) {
-  return { technique: value, font: { glyphCount }, data: {} };
+  return immutableTestFont(value, {}, glyphCount);
 }
 
 function validCompile(compiler, colorBytes = new Uint8Array([1, 2, 3, 4])) {
@@ -76,6 +83,7 @@ test('registration preserves authenticated technique and schema witnesses', () =
   assert.equal(registered.schema, schema);
   assert.equal(resolveRasterPlanProgram(value.id), registered);
   assert.equal(registerRasterPlanProgram(source), registered);
+  assert.equal(registerRasterPlanProgram(registered), registered);
   assert.throws(() => registerRasterPlanProgram({ ...source }), /different raster plan program/);
   assert.throws(
     () => registerRasterPlanProgram({ ...source, schema: { ...schema } }),
@@ -138,10 +146,31 @@ test('the same string ID cannot substitute a different technique data witness', 
     policyBody: body,
     compileFont: validCompile,
   });
-  assert.throws(
-    () => compileRasterFont(loaded(second), new RenderWireIdentityRegistry()),
-    /does not match the registered program/,
-  );
+  assert.throws(() => compileRasterFont(loaded(second), glyphId), /does not match the registered program/);
+});
+
+test('font compilation accepts only live package fonts and exposes a constrained reader', () => {
+  const value = technique('test.plan-authentic-font');
+  let reader;
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      reader = compiler.font;
+      assert.deepEqual(Object.keys(reader).sort(), ['data', 'glyphCount', 'technique']);
+      assert.equal(reader.technique, value);
+      assert.equal(reader.glyphCount, 3);
+      return validCompile(compiler);
+    },
+  });
+
+  assert.throws(() => compileRasterFont({ technique: value, disposed: false }, glyphId), /not created by this package/);
+  const font = loaded(value, 3);
+  assert.ok(compileRasterFont(font, glyphId));
+  assert.throws(() => reader.data, /no longer active/);
+  font.dispose();
+  assert.throws(() => compileRasterFont(font, glyphId), /disposed/);
 });
 
 test('font compilation owns binding metadata and normalizes retained payloads', () => {
@@ -153,7 +182,7 @@ test('font compilation owns binding metadata and normalizes retained payloads', 
     policyBody: body,
     compileFont: (compiler) => validCompile(compiler, sourceBytes),
   });
-  const compiled = compileRasterFont(loaded(value), new RenderWireIdentityRegistry());
+  const compiled = compileRasterFont(loaded(value), glyphId);
   sourceBytes[0] = 255;
 
   assert.ok(compiled.binding.byteLength > 0);
@@ -162,12 +191,46 @@ test('font compilation owns binding metadata and normalizes retained payloads', 
   assert.deepEqual(
     [...compiled.declaredResources],
     [
-      ['colors', COLORS],
-      ['mesh', MESH],
+      ['colors', [COLORS]],
+      ['mesh', [MESH]],
     ],
   );
   assert.equal(typeof compiled.resources.set, 'undefined');
   assert.equal(typeof compiled.declaredResources.clear, 'undefined');
+});
+
+test('compiled font views expose named fields and selected portable resources without decoded data', () => {
+  const value = technique('test.plan-read-compiled');
+  const program = registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array([1, 2, 3, 4]), stride: 4 });
+      compiler.retain('mesh', MESH, indexedQuadGeometry());
+      return compiler.compile({
+        strikes: [12, 24],
+        resource: (glyph, strike) => (glyph === 1 && strike === 1 ? undefined : COLORS),
+        f32: { opacity: (row) => row + 0.25 },
+        u32: { page: (row) => row + 10 },
+      });
+    },
+  });
+  const compiled = compileRasterFont(loaded(value, 2), glyphId);
+  const view = readCompiledRasterFont(compiled, program);
+
+  assert.equal(view.scope, 'glyph');
+  assert.equal(view.glyphCount, 2);
+  assert.deepEqual(view.strikes, [12, 24]);
+  assert.equal(view.f32('opacity', 1), 1.25);
+  assert.equal(view.u32('page', 0), 10);
+  assert.equal(view.resource(0, 1).key, COLORS);
+  assert.equal(view.resource(1, 1), undefined);
+  assert.equal(view.resources.find(({ key }) => key === COLORS).payload.bytes[0], 1);
+  assert.throws(() => view.f32('missing', 0), /no f32 field/);
+  assert.throws(() => view.u32('page', 2), /outside/);
+  assert.throws(() => readCompiledRasterFont({ ...compiled }, program), /not created by this package/);
+  assert.throws(() => readCompiledRasterFont(compiled, null), /registered portable plan program/);
 });
 
 test('resource selection receives explicit glyph and strike coordinates', () => {
@@ -191,7 +254,7 @@ test('resource selection receives explicit glyph and strike coordinates', () => 
       });
     },
   });
-  const identities = new RenderWireIdentityRegistry();
+  const identities = glyphId;
   const compiled = compileRasterFont(loaded(value, 3), identities);
 
   assert.deepEqual(calls, [
@@ -206,7 +269,7 @@ test('resource selection receives explicit glyph and strike coordinates', () => 
   const selected = bindingResourceIndices(compiled.binding);
   assert.deepEqual(
     selected.map((index) => resourceIds[index]),
-    Array.from({ length: 6 }, () => identities.resourceId(COLORS)),
+    Array.from({ length: 6 }, () => identities.resource(COLORS)),
   );
 });
 
@@ -222,16 +285,88 @@ test('authored resource identities remain stable across independent compiler cal
       return validCompile(compiler, new Uint8Array([invocation, 2, 3, 4]));
     },
   });
-  const identities = new RenderWireIdentityRegistry();
+  const identities = glyphId;
   const first = compileRasterFont(loaded(value), identities);
   const second = compileRasterFont(loaded(value), identities);
 
-  assert.equal(first.declaredResources.get('colors'), COLORS);
-  assert.equal(second.declaredResources.get('colors'), COLORS);
+  assert.deepEqual(first.declaredResources.get('colors'), [COLORS]);
+  assert.deepEqual(second.declaredResources.get('colors'), [COLORS]);
   assert.deepEqual(bindingResourceIds(first.binding), bindingResourceIds(second.binding));
-  assert.ok(bindingResourceIds(first.binding).includes(identities.resourceId(COLORS)));
+  assert.ok(bindingResourceIds(first.binding).includes(identities.resource(COLORS)));
   assert.equal(first.resources.get(COLORS).bytes[0], 1);
   assert.equal(second.resources.get(COLORS).bytes[0], 2);
+});
+
+test('standalone font compilation scopes dynamic resource collisions to one call', () => {
+  const value = technique('test.plan-independent-default-identities');
+  const program = registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      const colors = compiler.font.glyphCount === 2 ? COLLIDING_RESOURCE_A : COLLIDING_RESOURCE_B;
+      compiler.retain('colors', colors, { kind: 'buffer', bytes: new Uint8Array(4), stride: 4 });
+      compiler.retain('mesh', MESH, indexedQuadGeometry());
+      return compiler.compile({
+        strikes: [0],
+        resource: () => colors,
+        f32: { opacity: () => 0.5 },
+        u32: { page: () => 0 },
+      });
+    },
+  });
+
+  const first = compileRasterFont(loaded(value, 2));
+  const second = compileRasterFont(loaded(value, 3));
+  assert.ok(readCompiledRasterFont(first, program).resources.some(({ key }) => key === COLLIDING_RESOURCE_A));
+  assert.ok(readCompiledRasterFont(second, program).resources.some(({ key }) => key === COLLIDING_RESOURCE_B));
+});
+
+test('font resource identity mapping rejects counterfeit factories before reading keys', () => {
+  assert.throws(() => fontBindingResources([], {}), /font binding resource ids/);
+});
+
+test('one loaded font reuses its immutable compilation across engine identity registries', () => {
+  const value = technique('test.plan-compile-once');
+  let calls = 0;
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      calls += 1;
+      return validCompile(compiler);
+    },
+  });
+  const font = loaded(value);
+  const first = compileRasterFont(font, glyphId);
+  const second = compileRasterFont(font, glyphId);
+
+  assert.equal(first, second);
+  assert.equal(calls, 1);
+});
+
+test('independent Font leases over one immutable variant share compilation', () => {
+  const value = technique('test.plan-compile-shared-variant');
+  let calls = 0;
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      calls += 1;
+      return validCompile(compiler);
+    },
+  });
+  const firstFont = loaded(value);
+  const secondFont = createImmutableFontLease(immutableFontVariantIdentity(firstFont));
+  const first = compileRasterFont(firstFont, glyphId);
+  const second = compileRasterFont(secondFont, glyphId);
+
+  assert.equal(first, second);
+  assert.equal(calls, 1);
+  firstFont.dispose();
+  secondFont.dispose();
 });
 
 test('retention rejects undeclared, duplicate, missing, and wrong-kind resources', () => {
@@ -299,7 +434,7 @@ test('retention rejects undeclared, duplicate, missing, and wrong-kind resources
         return result ?? validCompile(compiler);
       },
     });
-    assert.throws(() => compileRasterFont(loaded(value), new RenderWireIdentityRegistry()), expected);
+    assert.throws(() => compileRasterFont(loaded(value), glyphId), expected);
   }
 });
 
@@ -315,10 +450,7 @@ test('binding readers and selected resources reject at compiler.compile', () => 
       return compiler.compile({ strikes: [0], resource: () => COLORS, f32: {}, u32: { page: () => 0 } });
     },
   });
-  assert.throws(
-    () => compileRasterFont(loaded(missingReader), new RenderWireIdentityRegistry()),
-    /needs f32 reader "opacity"/,
-  );
+  assert.throws(() => compileRasterFont(loaded(missingReader), glyphId), /needs f32 reader "opacity"/);
 
   const unknownResource = technique('test.plan-unknown-selected-resource');
   registerRasterPlanProgram({
@@ -336,10 +468,7 @@ test('binding readers and selected resources reject at compiler.compile', () => 
       });
     },
   });
-  assert.throws(
-    () => compileRasterFont(loaded(unknownResource), new RenderWireIdentityRegistry()),
-    /unknown raster resource/,
-  );
+  assert.throws(() => compileRasterFont(loaded(unknownResource), glyphId), /outside render role "colors"/);
 });
 
 test('binding compilation snapshots reader accessors before serialization', () => {
@@ -371,13 +500,13 @@ test('binding compilation snapshots reader accessors before serialization', () =
     },
   });
 
-  assert.doesNotThrow(() => compileRasterFont(loaded(value), new RenderWireIdentityRegistry()));
+  assert.doesNotThrow(() => compileRasterFont(loaded(value), glyphId));
   assert.equal(resourceReads, 1);
   assert.equal(opacityReads, 1);
 });
 
 test('a caught compiler input failure is terminal for that callback', () => {
-  const value = technique('test.plan-latched-failure');
+  const value = technique('test.plan-terminal-failure');
   registerRasterPlanProgram({
     technique: value,
     schema: schemaFor(value),
@@ -392,10 +521,7 @@ test('a caught compiler input failure is terminal for that callback', () => {
       return {};
     },
   });
-  assert.throws(
-    () => compileRasterFont(loaded(value), new RenderWireIdentityRegistry()),
-    /undeclared resource name "foreign"/,
-  );
+  assert.throws(() => compileRasterFont(loaded(value), glyphId), /undeclared resource name "foreign"/);
 });
 
 test('compileFont must synchronously return this compiler invocation result', () => {
@@ -408,10 +534,7 @@ test('compileFont must synchronously return this compiler invocation result', ()
       return validCompile(compiler);
     },
   });
-  assert.throws(
-    () => compileRasterFont(loaded(asynchronous), new RenderWireIdentityRegistry()),
-    /must return synchronously/,
-  );
+  assert.throws(() => compileRasterFont(loaded(asynchronous), glyphId), /must return synchronously/);
 
   const counterfeit = technique('test.plan-counterfeit');
   registerRasterPlanProgram({
@@ -423,10 +546,7 @@ test('compileFont must synchronously return this compiler invocation result', ()
       return { binding: new Uint8Array(), resources: new Map(), declaredResources: new Map() };
     },
   });
-  assert.throws(
-    () => compileRasterFont(loaded(counterfeit), new RenderWireIdentityRegistry()),
-    /must return the result of compiler.compile/,
-  );
+  assert.throws(() => compileRasterFont(loaded(counterfeit), glyphId), /must return the result of compiler.compile/);
 });
 
 test('the compiler is revoked after its callback returns', () => {
@@ -441,7 +561,7 @@ test('the compiler is revoked after its callback returns', () => {
       return validCompile(compiler);
     },
   });
-  compileRasterFont(loaded(value), new RenderWireIdentityRegistry());
+  compileRasterFont(loaded(value), glyphId);
   assert.throws(() => escaped.font, /no longer active/);
   assert.throws(
     () => escaped.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) }),

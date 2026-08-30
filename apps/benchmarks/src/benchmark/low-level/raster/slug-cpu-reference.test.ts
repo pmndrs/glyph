@@ -1,8 +1,8 @@
-import { defineRasterResourceId, type ParagraphLayout } from '@pmndrs/glyph';
-import { SLUG_GLYPH_RECORD_STRIDE, type SlugData, type SlugPageData } from '@pmndrs/glyph/raster/slug';
+import { defineRasterResourceId, type GlyphLayout } from '@pmndrs/glyph';
+import type { SlugPageData } from '@pmndrs/glyph/raster/slug';
 import { describe, expect, it } from 'vitest';
 
-import { renderFlatSlugCpuReference } from './slug-cpu-reference';
+import { renderFlatSlugCpuReference, type SlugCpuReferenceData } from './slug-cpu-reference';
 
 describe('conformance flat Slug CPU reference', () => {
   it('reconstructs an exact quadratic square at physical pixel centers', () => {
@@ -50,7 +50,7 @@ describe('conformance flat Slug CPU reference', () => {
 
   it('skips canonical absent records and rejects malformed page storage', () => {
     const absent = squareData();
-    new DataView(absent.records.buffer).setUint16(8, 0xffff, true);
+    absent.glyphs.page[0] = 0xffff;
     expect(renderFlatSlugCpuReference(absent, specimenLayout(), { width: 4, height: 4 })).toMatchObject({
       glyphCount: 0,
       bounds: undefined,
@@ -62,26 +62,23 @@ describe('conformance flat Slug CPU reference', () => {
     expect(() => renderFlatSlugCpuReference(malformed, specimenLayout(), { width: 4, height: 4 })).toThrow(
       'Slug curve bytes',
     );
+
+    const ragged = { ...data, glyphs: { ...data.glyphs, curveBase: new Uint32Array(0) } };
+    expect(() => renderFlatSlugCpuReference(ragged, specimenLayout(), { width: 4, height: 4 })).toThrow(
+      'glyph columns must have equal lengths',
+    );
+
+    const uncounted = {
+      ...data,
+      glyphs: { ...data.glyphs, curveBase: new DataView(new ArrayBuffer(4)) as unknown as Uint32Array },
+    };
+    expect(() => renderFlatSlugCpuReference(uncounted, specimenLayout(), { width: 4, height: 4 })).toThrow(
+      'glyph columns must have equal lengths',
+    );
   });
 });
 
-function squareData(): SlugData {
-  const records = new Uint8Array(SLUG_GLYPH_RECORD_STRIDE);
-  const record = new DataView(records.buffer);
-  record.setInt16(0, 0, true);
-  record.setInt16(2, 0, true);
-  record.setInt16(4, 2048, true);
-  record.setInt16(6, 2048, true);
-  record.setUint16(8, 0, true);
-  record.setUint16(10, 1, true);
-  record.setUint16(12, 1, true);
-  record.setUint32(16, 0, true);
-  record.setUint32(20, 8, true);
-  record.setUint32(24, 0, true);
-  record.setUint32(28, 1, true);
-  record.setUint32(32, 0, true);
-  record.setUint32(36, 8, true);
-
+function squareData(): SlugCpuReferenceData {
   const curves = Uint16Array.from([
     ...curve(0, 0, 0.5, 0, 1, 0),
     ...curve(1, 0, 1, 0.5, 1, 1),
@@ -106,7 +103,19 @@ function squareData(): SlugData {
   };
   return {
     planeUnitsPerEm: 2048,
-    records,
+    glyphs: {
+      planeLeft: new Int16Array([0]),
+      planeBottom: new Int16Array([0]),
+      planeRight: new Int16Array([2048]),
+      planeTop: new Int16Array([2048]),
+      page: new Uint16Array([0]),
+      horizontalBands: new Uint16Array([1]),
+      verticalBands: new Uint16Array([1]),
+      curveBase: new Uint32Array([0]),
+      horizontalHeaderBase: new Uint32Array([0]),
+      verticalHeaderBase: new Uint32Array([1]),
+      referenceBase: new Uint32Array([0]),
+    },
     pages: [page],
   };
 }
@@ -127,8 +136,8 @@ function half(value: number): number {
 }
 
 function specimenLayout(
-  overrides: Partial<Pick<ParagraphLayout, 'glyphIds' | 'glyphFontSlots' | 'glyphFontSizes' | 'x' | 'y'>> = {},
-): ParagraphLayout {
+  overrides: Partial<Pick<GlyphLayout, 'glyphIds' | 'glyphFontSlots' | 'glyphFontSizes' | 'x' | 'y'>> = {},
+): GlyphLayout {
   const glyphCount = overrides.glyphIds?.length ?? 1;
   return {
     width: 4,
@@ -155,6 +164,7 @@ function specimenLayout(
     glyphInkWidths: new Float32Array(glyphCount),
     glyphInkHeights: new Float32Array(glyphCount),
     glyphFlags: new Uint16Array(glyphCount),
+    glyphBidiLevels: new Uint8Array(glyphCount),
     lineTextStarts: new Uint32Array([0]),
     lineTextEnds: new Uint32Array([1]),
     lineGlyphStarts: new Uint32Array([0]),

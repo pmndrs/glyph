@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:b9c76d97e56f3245ce979687973d1472ea581b50fd9e3f22a3f8b419c9e1869b'
+source_digest: 'sha256:01de613e24d913365e310eda9efcfc89f810eb1e67bef5029a8e64b7ecddaed1'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -210,6 +210,10 @@ generated:
 
 # Package reference: `@pmndrs/glyph-benchmarks`
 
+The Vite and TypeScript configurations opt into the workspace packages' custom `source` export condition. Development,
+build, and typecheck therefore consume current TypeScript sources without requiring a package rebuild; release-oriented
+Node workflows continue to exercise built package exports.
+
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
 The application now also contains focused target-v1 browser proofs for Bitmap, MTSDF, Slug, and Worker preparation while
@@ -232,11 +236,11 @@ the default Bitmap material, then renders the same Rust-produced draw with a `de
 rather than against a stored golden: an identical lit-pixel set proves the custom material inherited canonical placement,
 snapping, and coverage, and an empty green channel proves it still emitted its own output.
 
-The finite Bitmap conformance lane now drives that adapter directly. `bitmap-finite-scene` builds its paragraph with the
-target-v1 `Text` and reads the CPU reference from the `LoadedFont` raster data it already holds, which removes the second
-raster load and decode the merged-v0 path performed. A committed `Text` replaces the awaited readiness promise: the
-paragraph is parented, `updateMatrixWorld` reconciles it, and a preparation failure surfaces as a thrown error rather than
-an empty frame. The migrated lane reproduces the CPU compositor in zero mismatched bytes and returns the merged-v0
+The finite Bitmap conformance lane drives that adapter directly. `bitmap-finite-scene` builds its paragraph with `Text`
+and reads the CPU reference from a compatibility view reconstructed from the compiled binding and portable payloads.
+The canonical technique decodes once; no wrapper impersonates its ID and no second raster load occurs. A committed
+`Text` replaces the awaited readiness promise: the paragraph is parented, `updateMatrixWorld` reconciles it, and a
+preparation failure surfaces as a thrown error rather than an empty frame. The migrated lane reproduces the CPU compositor in zero mismatched bytes and returns the merged-v0
 full-frame hash `a47930d3…e893` with the same 5,930 lit and 3,473 half-coverage pixels and `[68, 18, 313, 112]` ink
 bounds, so the oracle changed renderer without changing what counts as correct. Both `bitmap-text-webgl2` and
 `source-outline-bitmap-webgl2` consume this scene, so both moved together.
@@ -245,11 +249,11 @@ The three live technique scenes moved to target-v1 next. `techniques/{bitmap,mts
 standalone `Text` — an implicit batch of one, deliberately left off `TextGroup` so the single-paragraph adapter path stays
 exercised and their `drawCount` stays directly comparable with merged v0 — from the `LoadedFont` that
 `workloads/font-assets` already produced, commit it by parenting and forcing `updateMatrixWorld`, and read `error` plus
-explicit `layout()` or `glyphs()` results instead of awaiting readiness. Flat merged-v0 properties become nested `contentBox`, `style`, and `paint`, with
-the paragraph measure expressed as an exact width constraint and the live colour as `#ffffff`, which resolves through the
-same transfer function as the numeric constant it replaces. Because a rejected generation would otherwise leave the failed
-candidate font leased and undisposable, each scene commits through one apply-or-roll-back step that restores the previously
-committed inputs before rethrowing.
+explicit `measure()` or `glyphs()` results instead of awaiting readiness. Flat merged-v0 properties become `style`,
+`layout`, and `constraints`; the paragraph measure uses an exact width constraint and the live colour is `#ffffff`, which
+resolves through the same transfer function as the numeric constant it replaces. Desired-state validation is atomic at
+`Text.set()`: a rejected update leaves current desired state untouched, while renderer failures surface without restoring
+stale authored inputs.
 
 Their presentation transitions are now owned by the application. Merged v0 exported `captureBitmapGlyphPositions` and
 `createBitmapGlyphPositionTransition`, which packaged glyph identity matching and interpolation together for Bitmap only.
@@ -284,20 +288,17 @@ stays invisible until someone watches a workload. `probe:live-update-latency` me
 canvas, and its typewriter observation opens on the very task that pauses a full-speed reveal, so every further distinct
 frame is the harness still catching up rather than new content.
 
-Every benchmark surface now loads through the target-v1 `FontLoader` and renders through the `/three` adapter; the
-merged-v0 harness subpaths and the dual-shape `BenchmarkFontAsset` bridge that carried unmigrated scenes are gone, so a
-scene reads its registered font from `loaded.font` and its decoded raster from `loaded.data`. A fresh matrix after the
-move rendered all seven workloads visibly for Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per
-case.
+Every benchmark surface now loads through `FontLoader` and renders through the `/three` adapter. A scene binds the
+canonical `loaded` Font and reads CPU-oracle compatibility data reconstructed from its exact registered portable plan.
+Bitmap, MTSDF, and Slug therefore exercise the same named bindings and retained resources an external renderer sees
+without publishing internal decoded Font data. A fresh matrix after the move rendered all seven workloads visibly for
+Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per case.
 
-The technique-generic comparison workload layer has now moved off that harness path. `ComparisonWorkloadEntry` holds
-`Text<AnyRasterTechnique>`, and every workload factory receives the `LoadedFont` the shared target-v1 `FontLoader`
-already produced, so no comparison scene names or loads a raster module. Type erasure happens once, at the font:
-`LoadedFont` is covariant in its technique, so a concrete `LoadedFont<typeof bitmap>` widens to
-`LoadedFont<AnyRasterTechnique>` and every `Text`, `TextGroup`, and `TextUpdate` downstream is uniformly erased without a
-cast. Erasing at the `Text` instead does not compile: the `set` method and the `font` accessor make `Text` invariant in
-its technique. `TextGroup` no longer receives the selected technique at construction; its shared Rust session and
-renderer policy derive each draw's technique from the loaded font binding.
+The technique-generic comparison workload layer has moved off that harness path. `ComparisonWorkloadEntry` holds
+`Text<AnyRasterTechnique>`, and every workload factory receives the canonical `Font` the shared `FontLoader` produced,
+so no comparison scene names or loads a raster module. Type erasure happens once at the workload boundary; every `Text`,
+`TextGroup`, and update downstream uses the same technique-erased application vocabulary. The shared Rust session and
+renderer policy derive each draw's technique from the host-owned font binding.
 
 Batching is a per-workload policy on the definition rather than a host-wide rule. Text ladder, Zoom text, Icon grid,
 Off-axis / 3D, Dynamic layout, and Paint & effects mount under one shared `TextGroup`, so every paragraph in the workload
@@ -530,6 +531,10 @@ The browser product also carries the React 19 subpath proofs. A shared registry 
 The initial deterministic browser probe is admitted with a checked-in record: 100 executions across 10 fresh GPU-friendly Chromium/Vite lifecycles, zero retries/failures, unique causal completion identities, and wrong-expectation plus withheld-completion negative controls. Probe exit status and every parsed lifecycle/environment field are validated before publication. Browser scripts navigate only through DOM readiness and then wait on the product's own completion promise or visible state; they do not use network-idle heuristics. Exact contract comparison rejects non-finite numbers, exotic objects, key-order differences, and missing or additional fields without JSON coercion. The current live probe executes the exact TSL graph on asserted WebGPU and forced WebGL2 backends before paragraph measurement, positioned-layout, bidi/policy, CJK, and mobile Playwright flows. This proves a real GPU shader workload while reserving the rendered-font claim for item 6.1.
 
 Roadmap item 10.3 leaves browser core, every baker host, and every Wasm artifact byte-identical. Relative to the warm-publication baseline, bounded retained capacity adds 5,155 raw / 2,779 minified / 627 gzip / 598 Brotli bytes to the optional Bitmap closure, 6,038 / 3,148 / 778 / 762 to MTSDF, and 9,309 / 4,976 / 1,238 / 1,204 to Slug. A dedicated regression bounds those increments independently from the accumulated pre-coverage baseline. All three remain below the existing absolute 425,000 raw / 325,000 minified / 95,000 gzip / 75,000 Brotli renderer ceilings, so no absolute runtime, baker-host, or Wasm budget changes.
+
+The portable grouped-resource follow-up measures the Three adapter at 581,779 raw / 363,980 minified / 94,281 gzip /
+78,517 Brotli bytes and its largest technique runtime graph at 559,969 / 350,423 / 91,290 / 76,152. The corresponding
+renderer-neutral core graph shrank to 330,709 / 209,530 / 55,042 / 46,099; TypeGPU remains an external peer.
 
 ## Package scripts
 

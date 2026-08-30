@@ -2,9 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { defineTextMaterial, Text } from '@pmndrs/glyph/three';
+import { defineTextMaterial, FontLoader, Text } from '@pmndrs/glyph/three';
 import { bitmapShader, decorationShader, msdfShader, slugShader } from '../../dist/tsl.js';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
@@ -19,13 +18,9 @@ test('the canonical technique shaders are exported as callable node builders', (
 });
 
 test('a custom Three material composes over the Bitmap shader in the Rust command-buffer draw path', async () => {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
+    input: { baked: { bytes: await readFile(fontUrl) } },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
   const built = [];
@@ -66,17 +61,13 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
   label.removeFromParent();
   label.dispose();
   font.dispose();
-  runtime.dispose();
+  loader.dispose();
 });
 
 test('Bitmap pixel snapping is an explicit opt-in graph specialization', async () => {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
+    input: { baked: { bytes: await readFile(fontUrl) } },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
   const clipPositions = [];
@@ -96,9 +87,5 @@ test('Bitmap pixel snapping is an explicit opt-in graph specialization', async (
   unsnapped.dispose();
   snapped.dispose();
   font.dispose();
-  runtime.dispose();
+  loader.dispose();
 });
-
-function dataUrl(bytes) {
-  return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
-}

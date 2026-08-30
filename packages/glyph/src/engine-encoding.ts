@@ -1,13 +1,14 @@
-import type { GlyphPaintInput, ParagraphSpan } from './formatted-text.js';
+import type { ParagraphSpan } from './formatted-text.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
-import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
+import type { AxisConstraint, Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
 import type {
-  TextEngineConstraint,
-  TextEngineDecoration,
-  TextEngineFrameLimits,
-  TextEngineRegion,
-  TextEngineStyleValue,
+  PlannerConstraint,
+  PlannerDecoration,
+  PlannerFrameLimits,
+  PlannerRegion,
+  PlannerStyleValue,
 } from './core/frame-wire.js';
+import type { BackendIdFactory, ParagraphId, StyleId } from './core/render-policy.js';
 
 /**
  * The single implementation of the paragraph-to-engine encodings shared by every host:
@@ -17,59 +18,58 @@ import type {
  * another in what the engine is asked to flow.
  */
 
-/**
- * Column region ids stride the high byte so every paragraph's extra columns
- * stay unique in the frame's region table while column zero keeps the
- * paragraph id itself — the single-column request bytes are unchanged.
- */
-export const COLUMN_REGION_ID_STRIDE = 0x01_00_00_00;
-
-export function normalizedColumns(contentBox: ParagraphContentBox | undefined): {
+export function normalizedColumns(
+  layout: ParagraphLayout | undefined,
+  constraints: Constraints | undefined,
+): {
   count: number;
   gap: number;
 } {
-  const columns = contentBox?.columns;
+  const columns = layout?.columns;
   if (columns === undefined) return { count: 1, gap: 0 };
   const gap = columns.gap ?? 0;
   if (!Number.isSafeInteger(columns.count) || columns.count < 1 || columns.count > 16) {
-    throw new RangeError('contentBox columns count must be an integer between 1 and 16');
+    throw new RangeError('layout columns count must be an integer between 1 and 16');
   }
   if (!Number.isFinite(gap) || gap < 0) {
-    throw new RangeError('contentBox columns gap must be a nonnegative finite number');
+    throw new RangeError('layout columns gap must be a nonnegative finite number');
   }
-  if (columns.count > 1 && contentBox?.width?.mode !== 'exact') {
-    throw new TypeError('contentBox columns require an exact width to derive the column measure');
+  if (columns.count > 1 && constraints?.width?.mode !== 'exact') {
+    throw new TypeError('layout columns require an exact width constraint to derive the column measure');
   }
   // Ordered columns fill without balancing, so the column height is the only
   // signal that advances flow into the next region: unbounded height would
   // keep every line in the first column forever.
-  if (columns.count > 1 && contentBox?.height === undefined) {
-    throw new TypeError('contentBox columns require a bounded height to fill columns in order');
+  if (columns.count > 1 && constraints?.height === undefined) {
+    throw new TypeError('layout columns require a bounded height constraint to fill columns in order');
   }
   return { count: columns.count, gap };
 }
 
 export function compileEngineGeometry(
-  paragraphId: number,
+  id: BackendIdFactory,
+  paragraphId: ParagraphId,
+  transformIndex: number,
   geometryRevision: number,
-  contentBox: ParagraphContentBox | undefined,
+  layout: ParagraphLayout | undefined,
+  constraints: Constraints | undefined,
   regionStart: number,
   textLength: number,
-): { readonly constraint: TextEngineConstraint; readonly regions: readonly TextEngineRegion[] } {
-  const width = axis(contentBox?.width);
-  const height = axis(contentBox?.height);
-  const columns = normalizedColumns(contentBox);
+): { readonly constraint: PlannerConstraint; readonly regions: readonly PlannerRegion[] } {
+  const width = axis(constraints?.width);
+  const height = axis(constraints?.height);
+  const columns = normalizedColumns(layout, constraints);
   const inlineEnd = width.mode === 'unconstrained' ? 0x01_00_00_00 : width.size;
   const blockEnd = height.mode === 'unconstrained' ? 0x01_00_00_00 : height.size;
-  const maxLines = contentBox?.maxLines ?? Math.max(1, textLength);
+  const maxLines = layout?.maxLines ?? Math.max(1, textLength);
   const columnWidth = (inlineEnd - columns.gap * (columns.count - 1)) / columns.count;
   if (columns.count > 1 && columnWidth <= 0) {
-    throw new RangeError('contentBox columns and gap leave no positive column measure');
+    throw new RangeError('layout columns and gap leave no positive column measure');
   }
   return {
     constraint: {
       paragraphId,
-      flowThreadId: paragraphId,
+      flowThreadId: id.flowThread(`paragraph/${paragraphId}`),
       geometryRevision,
       width: width.size,
       height: height.size,
@@ -83,23 +83,23 @@ export function compileEngineGeometry(
       resumeRegion: 0,
       widthMode: width.mode,
       heightMode: height.mode,
-      wrap: contentBox?.wrap ?? 'word',
-      align: contentBox?.align ?? 'start',
-      overflow: contentBox?.overflow ?? 'visible',
+      wrap: layout?.wrap ?? 'word',
+      align: layout?.align ?? 'start',
+      overflow: layout?.overflow ?? 'visible',
       blockAlign: 'start',
-      ...(contentBox?.firstLineIndent === undefined ? {} : { firstLineIndent: contentBox.firstLineIndent }),
-      ...(contentBox?.spaceBefore === undefined ? {} : { spaceBefore: contentBox.spaceBefore }),
-      ...(contentBox?.spaceAfter === undefined ? {} : { spaceAfter: contentBox.spaceAfter }),
-      ...(contentBox?.justify === undefined ? {} : { justify: contentBox.justify }),
-      ...(contentBox?.lastLine === undefined ? {} : { lastLine: contentBox.lastLine }),
+      ...(layout?.firstLineIndent === undefined ? {} : { firstLineIndent: layout.firstLineIndent }),
+      ...(layout?.spaceBefore === undefined ? {} : { spaceBefore: layout.spaceBefore }),
+      ...(layout?.spaceAfter === undefined ? {} : { spaceAfter: layout.spaceAfter }),
+      ...(layout?.justify === undefined ? {} : { justify: layout.justify }),
+      ...(layout?.lastLine === undefined ? {} : { lastLine: layout.lastLine }),
     },
     regions: Array.from({ length: columns.count }, (_, column) => {
       const inlineStart = column * (columnWidth + columns.gap);
       const columnInlineEnd = column === columns.count - 1 ? inlineEnd : inlineStart + columnWidth;
       return {
-        id: paragraphId + COLUMN_REGION_ID_STRIDE * column,
+        id: id.region(`paragraph/${paragraphId}/column/${column}`),
         geometryRevision,
-        transformIndex: paragraphId,
+        transformIndex,
         shape: 'rectangle' as const,
         exclusionStart: 0,
         exclusionCount: 0,
@@ -118,7 +118,12 @@ export function compileEngineGeometry(
   };
 }
 
-export function axis(value: ParagraphContentBox['width'] | undefined): {
+export function engineStyleId(id: BackendIdFactory, paragraphId: ParagraphId, index: number): StyleId {
+  if (!Number.isSafeInteger(index) || index < 1) throw new RangeError('style index must be a positive integer');
+  return id.style(`paragraph/${paragraphId}/style/${index}`);
+}
+
+export function axis(value: AxisConstraint | undefined): {
   readonly mode: 'unconstrained' | 'at-most' | 'exact';
   readonly size: number;
 } {
@@ -133,7 +138,7 @@ export function engineLimits(
   regionCount: number,
   maxOutputBytes: number,
   mutationRecordCount = 0,
-): TextEngineFrameLimits {
+): PlannerFrameLimits {
   return {
     maxParagraphs: Math.max(1, paragraphCount),
     maxClusters: Math.max(1, textLength * 2, mutationRecordCount),
@@ -149,12 +154,11 @@ export function engineLimits(
 }
 
 export function engineStyleValue(
-  style: ParagraphStyle,
-  paint: GlyphPaintInput | undefined,
+  style: TextStyle,
   start: number,
   end: number,
-  base: TextEngineStyleValue,
-): TextEngineStyleValue {
+  base: PlannerStyleValue,
+): PlannerStyleValue {
   return {
     ...base,
     ...(style.fontSize === undefined ? {} : { fontSize: style.fontSize }),
@@ -173,21 +177,47 @@ export function engineStyleValue(
             end: feature.end ?? end,
           })),
         }),
-    ...(paint === undefined ? {} : { foregroundRgba: packedForeground(paint) }),
-    ...(style.decoration === undefined ? {} : { decoration: engineDecoration(style.decoration, paint) }),
+    ...(style.color === undefined ? {} : { foregroundRgba: packedColor(style.color) }),
+    ...(style.opacity === undefined ? {} : { opacity: style.opacity }),
+    ...(style.outline === undefined
+      ? {}
+      : { outline: { rgba: packedColor(style.outline.color), width: style.outline.width } }),
+    ...(style.shadow === undefined
+      ? {}
+      : {
+          shadow: {
+            rgba: packedColor(style.shadow.color),
+            offsetX: style.shadow.offset[0],
+            offsetY: style.shadow.offset[1],
+          },
+        }),
+    ...(style.decoration === undefined ? {} : { decoration: engineDecoration(style.decoration, style) }),
   };
 }
 
-function engineDecoration(
-  decoration: NonNullable<ParagraphStyle['decoration']>,
-  paint: GlyphPaintInput | undefined,
-): TextEngineDecoration {
+/** @internal Reject effects at the public call that accepted a style. */
+export function assertTextEffectsSupported(
+  style: TextStyle,
+  techniques: readonly AnyRasterTechnique[],
+  label: string,
+): void {
+  for (const technique of techniques) {
+    if (style.outline !== undefined && !technique.textEffects.includes('outline')) {
+      throw new TypeError(`raster technique ${technique.id} does not support outline in ${label}`);
+    }
+    if (style.shadow !== undefined && !technique.textEffects.includes('shadow')) {
+      throw new TypeError(`raster technique ${technique.id} does not support shadow in ${label}`);
+    }
+  }
+}
+
+function engineDecoration(decoration: NonNullable<TextStyle['decoration']>, style: TextStyle): PlannerDecoration {
   if (decoration.style !== undefined && decoration.style !== 'solid') {
     throw new TypeError(`'${decoration.style}' decoration lines are not implemented yet; only 'solid' is supported`);
   }
   return {
     style: decoration.style ?? 'solid',
-    rgba: packedForeground(decoration.color === undefined ? (paint ?? {}) : { color: decoration.color }),
+    rgba: packedForeground(decoration.color === undefined ? style : { color: decoration.color }),
     ...(decoration.underline === undefined ? {} : { underline: decoration.underline }),
     ...(decoration.overline === undefined ? {} : { overline: decoration.overline }),
     ...(decoration.lineThrough === undefined ? {} : { lineThrough: decoration.lineThrough }),
@@ -216,15 +246,23 @@ export function styledSpans<Span extends ParagraphSpan<AnyRasterTechnique>>(
   return spans === undefined ? [] : spans.filter((span) => span.start !== span.end);
 }
 
-export function packedForeground(paint: GlyphPaintInput): number {
-  const opacity = paint.opacity ?? 1;
+export function packedForeground(style: TextStyle): number {
+  const opacity = style.opacity ?? 1;
   if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
     throw new RangeError('opacity must be in [0, 1]');
   }
-  const input = paint.color ?? '#ffffff';
-  const rgba = typeof input === 'string' ? parseHexColorBytes(input) : linearColorBytes(input);
+  const rgba = colorBytes(style.color ?? '#ffffff');
   const alpha = Math.round(rgba[3] * opacity);
   return (rgba[0] | (rgba[1] << 8) | (rgba[2] << 16) | (alpha << 24)) >>> 0;
+}
+
+function packedColor(input: NonNullable<TextStyle['color']>): number {
+  const rgba = colorBytes(input);
+  return (rgba[0] | (rgba[1] << 8) | (rgba[2] << 16) | (rgba[3] << 24)) >>> 0;
+}
+
+function colorBytes(input: NonNullable<TextStyle['color']>): readonly [number, number, number, number] {
+  return typeof input === 'string' ? parseHexColorBytes(input) : linearColorBytes(input);
 }
 
 function parseHexColorBytes(value: string): readonly [number, number, number, number] {
@@ -260,6 +298,7 @@ export function replacedContent<Update extends { readonly text?: unknown; readon
   update: Update,
 ): Update {
   if (!('text' in update) || 'spans' in update) return update;
+  if (typeof update.text !== 'string') return update;
   return { ...update, spans: [] };
 }
 
@@ -269,7 +308,7 @@ export interface EngineTextMutation {
   readonly insert: string;
 }
 
-/** Derives the smallest cluster-aligned replace that turns `previous` into `next`. */
+/** Derives the smallest Unicode-scalar-aligned replace that turns `previous` into `next`. */
 export function minimalTextMutation(previous: string, next: string): EngineTextMutation | undefined {
   if (previous === next) return undefined;
   const shared = Math.min(previous.length, next.length);

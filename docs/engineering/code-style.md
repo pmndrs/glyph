@@ -103,6 +103,7 @@ This standard is the canonical code-quality policy for `pmndrs/glyph`. It suppor
 
 - Review generated outputs through their generator, inputs, provenance, deterministic regeneration check, and conformance suite. Do not hand-style generated source.
 - Prefer names and types that make ordinary code self-explanatory. Add comments for non-obvious ownership, safety, protocol, performance, or mathematical invariants; match surrounding comment density instead of applying a blanket comment rule.
+- Give every public TypeScript declaration concise TSDoc that states its contract and any non-obvious cost or lifetime behavior.
 - Keep line-level mechanics in code. Put durable package ownership and constraints in package reference, decisions in the decision register, milestone status in the checkbox roadmap, and chronology in the OKF log.
 - Update affected canonical documentation with source changes. Do not create shadow plans, duplicate package histories, or a second copy of this standard.
 - Keep configured lint and formatting checks in the root `pnpm check` lane so local and CI verification enforce the same React, TypeScript, and presentation rules.

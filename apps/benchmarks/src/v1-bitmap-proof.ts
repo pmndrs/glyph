@@ -1,5 +1,5 @@
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import type { LoadedFont } from '@pmndrs/glyph';
+import type { Font } from '@pmndrs/glyph';
 import { FontLoader, Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -30,7 +30,7 @@ async function render(): Promise<TargetV1BitmapResult> {
   const target = new THREE.RenderTarget(256, 128, { format: THREE.RGBAFormat, type: THREE.UnsignedByteType });
   target.texture.colorSpace = THREE.NoColorSpace;
   let text: Text<typeof bitmap> | undefined;
-  let font: LoadedFont<typeof bitmap> | undefined;
+  let font: Font<typeof bitmap> | undefined;
   try {
     renderer.setSize(256, 128, false);
     renderer.setPixelRatio(1);
@@ -44,7 +44,7 @@ async function render(): Promise<TargetV1BitmapResult> {
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-128, 128, 64, -64, 0.1, 10);
     camera.position.z = 1;
-    text = new Text({ font, text: 'Target v1 Bitmap', style: { fontSize: 28 }, paint: { color: '#ffffff' } });
+    text = new Text({ font, text: 'Target v1 Bitmap', style: { fontSize: 28, color: '#ffffff' } });
     text.position.set(-112, 24, 0);
     scene.add(text);
     renderer.setRenderTarget(target);
@@ -64,7 +64,7 @@ async function render(): Promise<TargetV1BitmapResult> {
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
       drawCount: text.children.filter((child) => child instanceof THREE.Mesh).length,
-      glyphCount: text.layout()?.glyphCount ?? 0,
+      glyphCount: text.measure().glyphCount,
       litPixels,
       retainedDraw: retainedDraw === firstDraw,
       retainedStorage: retainedDraw?.geometry.getAttribute('_pmndrsGlyphOrigins') === firstStorage,

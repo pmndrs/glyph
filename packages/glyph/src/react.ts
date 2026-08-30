@@ -1,9 +1,8 @@
-import { extend, useThree, type ThreeElement, type ThreeElements } from '@react-three/fiber/webgpu';
+import { extend, useLoader, useThree, type ThreeElement, type ThreeElements } from '@react-three/fiber/webgpu';
 import {
   createElement,
   forwardRef,
   isValidElement,
-  use,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -14,18 +13,21 @@ import {
   type Ref,
 } from 'react';
 
-import { type GlyphPaintInput, resolveRangesToClusters } from './formatted-text.js';
-import type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
-import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
-import type { AnyRasterTechnique } from './raster-technique.js';
-import type { LoadedFontRequest, LoadedFontTechniques, LoadedFonts, LoadedFontsRequest } from './text-runtime.js';
+import { resolveRangesToClusters } from './formatted-text.js';
+import type { Font } from './font.js';
+import { immutableFontRequestKey, type LoadFontInput } from './loader.js';
+import { cloneImmutableFont, type FontSelection, type FontStack } from './loaded-font.js';
+import { mergePropertyList } from './property-list.js';
+import { type Constraints, type ParagraphLayout, type PropertyList, type TextStyle } from './text-properties.js';
+import type { AnyRasterTechnique, RasterOptionsOf } from './raster-technique.js';
 import {
-  FontLoader,
+  FontLoader as ThreeFontLoader,
   Text as ThreeText,
   TextGroup as ThreeTextGroup,
   type StandaloneTextProperties,
   type TextGroupOptions,
   type TextSpan as ThreeTextSpanRecord,
+  type ThreeFontLoadRequest,
   type ThreeTextMaterial,
 } from './three.js';
 
@@ -41,42 +43,13 @@ export type R3fTextChild<Technique extends AnyRasterTechnique> =
   | number
   | null
   | false
-  | ReactElement<R3fTextSpanProps<Technique>>
+  | ReactElement<R3fTextProps<Technique>>
   | readonly R3fTextChild<Technique>[];
 
-/**
- * Props of an inline `<TextSpan>`: exactly what a styled run inside a paragraph can carry.
- *
- * A span is not an object in the scene. It has no transform, no capacity, no error boundary, and no
- * instance to hold a ref to, because the whole tree collapses into one string and one span array
- * before any object exists. Naming those props here as `never` is what turns
- * `<Text><TextSpan position={…}>` into a type error instead of a prop the compiler accepts and the
- * flattener discards.
- *
- * Flutter draws the same line between `RichText`, which is a box, and `TextSpan`, which is not.
- */
-export type R3fTextSpanProps<Technique extends AnyRasterTechnique> = {
-  readonly font?: R3fFontSelection<Technique>;
-  readonly children?: R3fTextChild<Technique>;
-  readonly style?: ParagraphStyle;
-  readonly paint?: GlyphPaintInput;
-  readonly material?: ThreeTextMaterial;
-} & { readonly [Key in BoxOnlyPropKey]?: never };
-
-/**
- * The props that belong to the paragraph box and have no meaning on a run inside it.
- *
- * Derived from `R3fTextProps` rather than listed, so a prop added to the outer element cannot
- * quietly become a silently-discarded inline prop.
- */
-type BoxOnlyPropKey = Exclude<keyof R3fTextProps<AnyRasterTechnique>, keyof InlineProperties<never> | 'children'>;
-
-type R3fFontSelection<Technique extends AnyRasterTechnique> =
-  | FontSelection<Technique>
-  | (Technique extends AnyRasterTechnique ? FontSelection<Technique> : never);
+type R3fFontSelection<Technique extends AnyRasterTechnique> = FontSelection<Technique>;
 
 type FontSelectionTechnique<Selection> =
-  Selection extends LoadedFont<infer Technique>
+  Selection extends Font<infer Technique>
     ? Technique
     : Selection extends FontStack<infer Technique>
       ? Technique
@@ -85,9 +58,12 @@ type FontSelectionTechnique<Selection> =
 export type R3fTextProps<Technique extends AnyRasterTechnique> = Object3DProps & {
   readonly font?: R3fFontSelection<Technique>;
   readonly children?: R3fTextChild<Technique>;
-  readonly contentBox?: ParagraphContentBox;
-  readonly style?: ParagraphStyle;
-  readonly paint?: GlyphPaintInput;
+  /** Text shaping and presentation properties inherited by nested Text spans. */
+  readonly style?: PropertyList<TextStyle>;
+  /** Paragraph flow properties; nested Text spans cannot set this property. */
+  readonly layout?: PropertyList<ParagraphLayout>;
+  /** Bounds imposed on this root Text paragraph. */
+  readonly constraints?: PropertyList<Constraints>;
   readonly rasterPixelRatio?: number;
   readonly material?: ThreeTextMaterial;
   readonly capacity?: StandaloneTextProperties<Technique>['capacity'];
@@ -110,8 +86,7 @@ interface FlattenedText<Technique extends AnyRasterTechnique> {
 
 interface InlineProperties<Technique extends AnyRasterTechnique> {
   readonly font?: FontSelection<Technique>;
-  readonly style?: ParagraphStyle;
-  readonly paint?: GlyphPaintInput;
+  readonly style?: TextStyle;
   readonly material?: ThreeTextMaterial;
 }
 
@@ -120,22 +95,34 @@ type DesiredR3fTextProperties<Technique extends AnyRasterTechnique> = Partial<St
   readonly text: string;
 };
 
-interface UseFont {
-  <Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): LoadedFont<Technique>;
-  <const Techniques extends LoadedFontTechniques>(request: LoadedFontsRequest<Techniques>): LoadedFonts<Techniques>;
-  preload<Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): Promise<LoadedFont<Technique>>;
-  preload<const Techniques extends LoadedFontTechniques>(
-    request: LoadedFontsRequest<Techniques>,
-  ): Promise<LoadedFonts<Techniques>>;
-  clear<Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): void;
-  clear<const Techniques extends LoadedFontTechniques>(request: LoadedFontsRequest<Techniques>): void;
+type TechniqueOptions<Technique extends AnyRasterTechnique> = [RasterOptionsOf<Technique>] extends [never]
+  ? []
+  : undefined extends RasterOptionsOf<Technique>
+    ? [options?: RasterOptionsOf<Technique>]
+    : [options: RasterOptionsOf<Technique>];
+
+/** Generic R3F font hook for built-in and third-party raster techniques. */
+export interface UseFont {
+  /** Load one font and retain its mounted lease through React. */
+  <Technique extends AnyRasterTechnique>(
+    input: LoadFontInput,
+    technique: Technique,
+    ...options: TechniqueOptions<Technique>
+  ): Font<Technique>;
+  /** Start the same cached load before a component requests it. */
+  preload<Technique extends AnyRasterTechnique>(
+    input: LoadFontInput,
+    technique: Technique,
+    ...options: TechniqueOptions<Technique>
+  ): void;
+  /** Release the cached lease without invalidating mounted consumers. */
+  clear<Technique extends AnyRasterTechnique>(
+    input: LoadFontInput,
+    technique: Technique,
+    ...options: TechniqueOptions<Technique>
+  ): void;
 }
 
-const fontLoader = new FontLoader();
-type AnyLoadedFontResult = LoadedFont<AnyRasterTechnique> | readonly LoadedFont<AnyRasterTechnique>[];
-const fontPromises = new Map<string, Promise<AnyLoadedFontResult>>();
-const techniqueIds = new WeakMap<object, number>();
-let nextTechniqueId = 1;
 const ThreeTextElement = extend(ThreeText);
 const ThreeTextGroupElement = extend(ThreeTextGroup);
 
@@ -148,6 +135,7 @@ interface TextComponent {
   <Technique extends AnyRasterTechnique>(input: R3fTextProps<Technique>): ReactElement | null;
 }
 
+/** R3F paragraph component backed by one retained Three text instance. */
 export const Text = forwardRef(function Text<Technique extends AnyRasterTechnique>(
   properties: Omit<R3fTextProps<Technique>, 'ref'>,
   forwardedRef: Ref<ThreeText<Technique>>,
@@ -165,31 +153,6 @@ export const Text = forwardRef(function Text<Technique extends AnyRasterTechniqu
     publishObject: publishObject as (value: ThreeText<AnyRasterTechnique> | null) => void,
   });
 }) as TextComponent;
-
-/**
- * A styled run inside a `<Text>`. It renders nothing on its own.
- *
- * `flattenText` reads this element's props and never mounts it, which is why it must not accept
- * anything that would imply an object: a transform, a capacity, an error handler, or a ref would all
- * be accepted and then dropped. `<Text>` remains the paragraph; this is the span.
- */
-export const TextSpan: TextSpanComponent = function TextSpan(): null {
-  throw new TypeError('TextSpan is an inline run of a Text paragraph and cannot be rendered on its own');
-} as TextSpanComponent;
-
-/**
- * A span infers its technique from its own `font` exactly as `Text` does, because a span routinely
- * switches font — an icon run inside a text paragraph is the ordinary case — and a span with no font
- * inherits the surrounding one.
- */
-interface TextSpanComponent {
-  <const Selection, Technique extends AnyRasterTechnique = FontSelectionTechnique<Selection>>(
-    input: Omit<R3fTextSpanProps<Technique>, 'font'> & {
-      readonly font: Selection & ([FontSelectionTechnique<Selection>] extends [never] ? never : unknown);
-    },
-  ): ReactElement | null;
-  <Technique extends AnyRasterTechnique>(input: R3fTextSpanProps<Technique>): ReactElement | null;
-}
 
 function TextObject({
   desired,
@@ -238,6 +201,7 @@ function TextObject({
   });
 }
 
+/** R3F retained batching boundary for descendant Text components. */
 export const TextGroup: (input: R3fTextGroupProps) => ReactElement | null = forwardRef(function TextGroup(
   properties: Omit<R3fTextGroupProps, 'ref'>,
   forwardedRef: Ref<ThreeTextGroup>,
@@ -300,18 +264,26 @@ function TextGroupObject({
   );
 }
 
-const useFontImplementation = ((
-  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
-): AnyLoadedFontResult => use(preloadFontInternal(request))) as UseFont;
-
-useFontImplementation.preload = preloadFont;
-useFontImplementation.clear = (
-  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
-): void => {
-  fontPromises.delete(fontRequestKey(request));
+/** Load a typed Font through R3F's shared Suspense cache. */
+export const useFont = ((
+  input: LoadFontInput,
+  technique: AnyRasterTechnique,
+  ...options: readonly [unknown?]
+): Font<AnyRasterTechnique> => {
+  const { key, request } = reactFontRequest(input, technique, options);
+  const retained = useReactFontLoader(ReactFontLoader, request, undefined, undefined, key);
+  const store = useMemo(() => createMountedFontStore(retained), [retained]);
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+}) as UseFont;
+useFont.preload = (input: LoadFontInput, technique: AnyRasterTechnique, ...options: readonly [unknown?]): void => {
+  const { key, request } = reactFontRequest(input, technique, options);
+  useReactFontLoader.preload(ReactFontLoader, request, undefined, undefined, key);
 };
-
-export const useFont: UseFont = useFontImplementation;
+useFont.clear = (input: LoadFontInput, technique: AnyRasterTechnique, ...options: readonly [unknown?]): void => {
+  const { key, request } = reactFontRequest(input, technique, options);
+  reactFontLoader().release(key);
+  useReactFontLoader.clear(ReactFontLoader, request, key);
+};
 
 interface ObjectStore<Value> {
   readonly subscribe: (listener: () => void) => () => void;
@@ -346,50 +318,125 @@ function assignRef<Value>(ref: Ref<Value> | undefined, value: Value | undefined)
   };
 }
 
-function preloadFont<Technique extends AnyRasterTechnique>(
-  request: LoadedFontRequest<Technique>,
-): Promise<LoadedFont<Technique>>;
-function preloadFont<const Techniques extends LoadedFontTechniques>(
-  request: LoadedFontsRequest<Techniques>,
-): Promise<LoadedFonts<Techniques>>;
-function preloadFont(
-  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
-): Promise<AnyLoadedFontResult> {
-  return preloadFontInternal(request);
+interface ReactFontRequest {
+  readonly key: string;
+  readonly request: ThreeFontLoadRequest<AnyRasterTechnique>;
 }
 
-function preloadFontInternal(
-  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
-): Promise<AnyLoadedFontResult> {
-  const key = fontRequestKey(request);
-  let promise = fontPromises.get(key);
-  if (promise !== undefined) return promise;
-  const loaded = 'rasters' in request ? fontLoader.loadFontsAsync(request) : fontLoader.loadAsync(request);
-  promise = loaded.catch((error: unknown) => {
-    if (fontPromises.get(key) === promise) fontPromises.delete(key);
-    throw error;
-  });
-  fontPromises.set(key, promise);
-  return promise;
+interface ReactFontLoad {
+  cancelled: boolean;
+  readonly controller: AbortController;
+  font: Font<AnyRasterTechnique> | undefined;
 }
 
-function fontRequestKey(
-  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
-): string {
-  const rasters = 'rasters' in request ? request.rasters : [request.raster];
-  const rasterKeys = rasters.map((raster) => [techniqueKey(raster.technique), raster.options ?? null]);
-  const input =
-    'baked' in request.input ? ['baked', String(request.input.baked)] : ['source', String(request.input.source)];
-  return JSON.stringify([input, rasterKeys]);
-}
+class ReactFontLoader extends ThreeFontLoader {
+  readonly #loads = new Map<string, ReactFontLoad>();
 
-function techniqueKey(technique: AnyRasterTechnique): number {
-  let techniqueId = techniqueIds.get(technique);
-  if (techniqueId === undefined) {
-    techniqueId = nextTechniqueId++;
-    techniqueIds.set(technique, techniqueId);
+  override load<Technique extends AnyRasterTechnique>(
+    request: ThreeFontLoadRequest<Technique>,
+    onLoad: (font: Font<Technique>) => void,
+    onProgress?: (event: ProgressEvent) => void,
+    onError?: (error: unknown) => void,
+  ): void {
+    const key = immutableFontRequestKey(request.input, request.raster);
+    const load: ReactFontLoad = { cancelled: false, controller: new AbortController(), font: undefined };
+    const loader = new ThreeFontLoader(this.manager);
+    this.#loads.set(key, load);
+    loader.load(
+      { ...request, signal: load.controller.signal },
+      (font) => {
+        loader.dispose();
+        if (load.cancelled || this.#loads.get(key) !== load) {
+          font.dispose();
+          onError?.(new DOMException('React font load was cleared', 'AbortError'));
+          return;
+        }
+        load.font = font;
+        onLoad(font);
+      },
+      onProgress,
+      (error) => {
+        loader.dispose();
+        if (this.#loads.get(key) === load) this.#loads.delete(key);
+        onError?.(error);
+      },
+    );
   }
-  return techniqueId;
+
+  release(key: string): void {
+    const load = this.#loads.get(key);
+    if (load === undefined) return;
+    this.#loads.delete(key);
+    load.cancelled = true;
+    load.controller.abort(new DOMException('React font load was cleared', 'AbortError'));
+    load.font?.dispose();
+    load.font = undefined;
+  }
+}
+
+interface UseReactFontLoader {
+  (
+    loader: typeof ReactFontLoader,
+    request: ThreeFontLoadRequest<AnyRasterTechnique>,
+    extensions: undefined,
+    onProgress: undefined,
+    cacheKey: string,
+  ): Font<AnyRasterTechnique>;
+  preload(
+    loader: typeof ReactFontLoader,
+    request: ThreeFontLoadRequest<AnyRasterTechnique>,
+    extensions: undefined,
+    onProgress: undefined,
+    cacheKey: string,
+  ): void;
+  clear(loader: typeof ReactFontLoader, request: ThreeFontLoadRequest<AnyRasterTechnique>, cacheKey: string): void;
+}
+
+const useReactFontLoader = useLoader as unknown as UseReactFontLoader;
+
+function reactFontLoader(): ReactFontLoader {
+  return useLoader.loader(ReactFontLoader as never) as unknown as ReactFontLoader;
+}
+
+function reactFontRequest(
+  input: LoadFontInput,
+  technique: AnyRasterTechnique,
+  options: readonly [unknown?],
+): ReactFontRequest {
+  const request = {
+    input,
+    raster: options.length === 0 || options[0] === undefined ? { technique } : { technique, options: options[0] },
+  } as ThreeFontLoadRequest<AnyRasterTechnique>;
+  return { key: immutableFontRequestKey(request.input, request.raster), request };
+}
+
+interface MountedFontStore {
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly getSnapshot: () => Font<AnyRasterTechnique>;
+}
+
+function createMountedFontStore(source: Font<AnyRasterTechnique>): MountedFontStore {
+  let current = source;
+  let mounted: Font<AnyRasterTechnique> | undefined;
+  const listeners = new Set<() => void>();
+  return {
+    subscribe(listener) {
+      listeners.add(listener);
+      if (mounted === undefined) {
+        mounted = cloneImmutableFont(source);
+        current = mounted;
+        for (const subscriber of listeners) subscriber();
+      }
+      return () => {
+        if (!listeners.delete(listener) || listeners.size !== 0 || mounted === undefined) return;
+        const released = mounted;
+        mounted = undefined;
+        current = source;
+        released.dispose();
+      };
+    },
+    getSnapshot: () => current,
+  };
 }
 
 /**
@@ -421,8 +468,9 @@ function flattenText<Technique extends AnyRasterTechnique>(
       for (const nested of child) append(nested, inherited);
       return;
     }
-    if (!isValidElement<R3fTextSpanProps<Technique>>(child) || child.type !== TextSpan)
-      throw new TypeError('R3F Text children must be text, numbers, arrays, or TextSpan elements');
+    if (!isValidElement<R3fTextProps<Technique>>(child) || child.type !== Text)
+      throw new TypeError('R3F Text children must be text, numbers, arrays, or nested Text elements');
+    assertInlineTextProperties(child.props);
     const inline = inlineProperties(child.props, inherited);
     const start = length;
     const spanIndex = spans.length;
@@ -437,21 +485,27 @@ function flattenText<Technique extends AnyRasterTechnique>(
 }
 
 function inlineProperties<Technique extends AnyRasterTechnique>(
-  properties: R3fTextSpanProps<Technique>,
+  properties: R3fTextProps<Technique>,
   inherited: InlineProperties<Technique>,
 ): InlineProperties<Technique> {
+  const statedStyle = mergePropertyList(properties.style, 'nested Text style');
+  const style =
+    Object.keys(statedStyle).length === 0 ? inherited.style : Object.freeze({ ...inherited.style, ...statedStyle });
   return Object.freeze({
     ...((properties.font ?? inherited.font) === undefined ? {} : { font: properties.font ?? inherited.font }),
-    ...(properties.style === undefined && inherited.style === undefined
-      ? {}
-      : { style: Object.freeze({ ...inherited.style, ...properties.style }) }),
-    ...(properties.paint === undefined && inherited.paint === undefined
-      ? {}
-      : { paint: Object.freeze({ ...inherited.paint, ...properties.paint }) }),
+    ...(style === undefined ? {} : { style }),
     ...((properties.material ?? inherited.material) === undefined
       ? {}
       : { material: properties.material ?? inherited.material }),
   });
+}
+
+const INLINE_TEXT_PROPERTIES = new Set(['children', 'font', 'material', 'style']);
+
+function assertInlineTextProperties<Technique extends AnyRasterTechnique>(properties: R3fTextProps<Technique>): void {
+  for (const key of Object.keys(properties)) {
+    if (!INLINE_TEXT_PROPERTIES.has(key)) throw new TypeError(`nested R3F Text cannot use the box property ${key}`);
+  }
 }
 
 function textProperties<Technique extends AnyRasterTechnique>(
@@ -462,9 +516,9 @@ function textProperties<Technique extends AnyRasterTechnique>(
     ...(properties.font === undefined ? {} : { font: properties.font }),
     text: flattened.text,
     spans: flattened.spans,
-    ...(properties.contentBox === undefined ? {} : { contentBox: properties.contentBox }),
     ...(properties.style === undefined ? {} : { style: properties.style }),
-    ...(properties.paint === undefined ? {} : { paint: properties.paint }),
+    ...(properties.layout === undefined ? {} : { layout: properties.layout }),
+    ...(properties.constraints === undefined ? {} : { constraints: properties.constraints }),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
     ...(properties.capacity === undefined ? {} : { capacity: properties.capacity }),
@@ -477,9 +531,9 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
   for (const key of [
     'font',
     'children',
-    'contentBox',
     'style',
-    'paint',
+    'layout',
+    'constraints',
     'rasterPixelRatio',
     'material',
     'capacity',
@@ -497,9 +551,6 @@ function groupObjectProperties(properties: R3fTextGroupProps): TextGroupElementP
     delete object[key];
   return object as TextGroupElementProps;
 }
-
-export { span, txt } from './formatted-text.js';
-export type { SpanFormat, SpanStyle, SpanTag, UnboundSpanTag } from './formatted-text.js';
 
 function sameCapacity(
   capacity: NonNullable<StandaloneTextProperties<AnyRasterTechnique>['capacity']>,
@@ -522,9 +573,9 @@ function sameDesiredText<Technique extends AnyRasterTechnique>(
     left.text !== right.text ||
     left.rasterPixelRatio !== right.rasterPixelRatio ||
     left.material !== right.material ||
-    !sameSnapshot(left.contentBox, right.contentBox) ||
     !sameSnapshot(left.style, right.style) ||
-    !sameSnapshot(left.paint, right.paint)
+    !sameSnapshot(left.layout, right.layout) ||
+    !sameSnapshot(left.constraints, right.constraints)
   )
     return false;
   const leftSpans = left.spans ?? [];
@@ -538,8 +589,7 @@ function sameDesiredText<Technique extends AnyRasterTechnique>(
       span.end === other.end &&
       span.font === other.font &&
       span.material === other.material &&
-      sameSnapshot(span.style, other.style) &&
-      sameSnapshot(span.paint, other.paint)
+      sameSnapshot(span.style, other.style)
     );
   });
 }

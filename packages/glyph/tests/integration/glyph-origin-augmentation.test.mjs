@@ -32,42 +32,45 @@ import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
-import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import { slug } from '@pmndrs/glyph/three/slug';
 import * as THREE from 'three/webgpu';
 
 const fixtures = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
-const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const dataUrl = (bytes) => `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 
-const contentBox = {
+const layout = {
   align: 'center',
   maxLines: 1,
   overflow: 'clip',
-  width: { mode: 'exact', size: 96 },
   wrap: 'none',
 };
+const constraints = { width: { mode: 'exact', size: 96 } };
 const style = { fontSize: 6, lineHeight: 1 };
 const paint = { color: '#ffffff' };
 
 // One Wasm runtime and one baked font for the whole file; each test mounts its own scene on them.
-let runtime;
+let loader;
 let loaded;
 
 async function loadFont() {
   if (loaded !== undefined) return loaded;
-  runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
-  loaded = await runtime.loadFont({
-    input: { baked: dataUrl(gunzipSync(await readFile(new URL('inter-slug.font.glb.gz', fixtures)))) },
+  loader = new FontLoader();
+  loaded = await loader.loadAsync({
+    input: {
+      baked: {
+        bytes: gunzipSync(await readFile(new URL('inter-slug.font.glb.gz', fixtures))),
+        ownership: 'copy',
+      },
+    },
     raster: { technique: slug },
   });
   return loaded;
 }
 
 after(() => {
-  runtime?.dispose();
-  runtime = undefined;
+  loaded?.dispose();
+  loader?.dispose();
+  loader = undefined;
   loaded = undefined;
 });
 
@@ -75,7 +78,7 @@ function mount(font, text) {
   const scene = new THREE.Scene();
   const group = new TextGroup({ batching: 'group' });
   scene.add(group);
-  const node = new Text({ contentBox, font, paint, style, text });
+  const node = new Text({ constraints, font, layout, style: [style, paint], text });
   group.add(node);
   scene.updateMatrixWorld(true);
   return { group, node, scene };
@@ -152,7 +155,7 @@ test('an edited node reports the origins of a node built with the same text', as
   const mounted = mount(font, 'ACTIVATE');
   try {
     const want = control.node.snapshotGlyphs();
-    mounted.node.set({ contentBox, font, paint, spans: [], style, text: 'ACTIVE' });
+    mounted.node.set({ constraints, font, layout, spans: [], style: [style, paint], text: 'ACTIVE' });
     mounted.scene.updateMatrixWorld(true);
     const edited = mounted.node.snapshotGlyphs();
 
@@ -182,7 +185,7 @@ test('repeated edits keep the origin lane addressable', async () => {
     // Deletion and insertion alternate so the run both shrinks and grows, which is what retires and
     // reallocates the records the lane indexes.
     for (const text of ['ACTIVE', 'ACTIVATE', 'ACTIVE', 'ACTIVATE', 'ACTIVE']) {
-      mounted.node.set({ contentBox, font, paint, spans: [], style, text });
+      mounted.node.set({ constraints, font, layout, spans: [], style: [style, paint], text });
       mounted.scene.updateMatrixWorld(true);
       const control = mount(font, text);
       try {
@@ -210,7 +213,7 @@ test('a snapshot taken before a reflow cannot be written to the layout that repl
   const mounted = mount(font, 'ACTIVATE');
   try {
     const stale = mounted.node.snapshotGlyphs();
-    mounted.node.set({ contentBox, font, paint, spans: [], style, text: 'ACTIVE' });
+    mounted.node.set({ constraints, font, layout, spans: [], style: [style, paint], text: 'ACTIVE' });
     mounted.scene.updateMatrixWorld(true);
     // The identities in `stale` address glyphs the current layout no longer has. Writing it would
     // move whichever records inherited those slots, which is precisely the corruption the retained

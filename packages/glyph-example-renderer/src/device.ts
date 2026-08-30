@@ -2,17 +2,23 @@ import tgpu from 'typegpu';
 
 import {
   assertPortableResource,
-  RenderWireIdentityRegistry,
   resolveRasterPlanProgram,
-  textShaperAbi,
   type PortableGeometryPayload,
+  type PolicyBufferId,
+  type RenderPlanBufferId,
+  type RenderPlanResourceId,
   type RenderProgramId,
+  type ResourceHandle,
   type RenderTechniqueId,
   type TechniqueGeometryDeclaration,
+  type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
-  type TextEngineBufferRecord,
-  type TextEnginePatchRecord,
-  type TextEngineRetirementRecord,
+  type RenderPlanBufferRecord,
+  type RenderPlanBufferBinding,
+  type RenderPlanPatchRecord,
+  type RenderPlanRetirementRecord,
+  type RenderPlanScalarType,
+  id,
 } from '@pmndrs/glyph/core';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 import {
@@ -24,18 +30,14 @@ import {
 import type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResourceRecord } from './draw-list.js';
 import { EXAMPLE_RENDERER_PROGRAM_NAMESPACE } from './policy.js';
 
+/** One named instance-buffer input required by an example renderer shader. */
 export interface ExampleRendererShaderBuffer {
-  readonly id: number;
+  readonly id: PolicyBufferId;
   readonly scalar: 'f32' | 'u32';
   readonly vectorWidth: number;
 }
 
 type ShaderResourceName<Resources extends TechniqueResourceDeclarations> = Extract<keyof Resources, string>;
-type ShaderGeometryResource<Geometry extends TechniqueGeometryDeclaration> = Geometry extends {
-  readonly resource: infer Name extends string;
-}
-  ? Name
-  : undefined;
 
 /** Renderer-facing metadata shared by shader languages that realize one technique schema. */
 export interface ExampleRendererShaderVariant<
@@ -50,11 +52,9 @@ export interface ExampleRendererShaderVariant<
   readonly buffers: Readonly<Record<string, ExampleRendererShaderBuffer>>;
   readonly resources: Resources;
   readonly outputs: Readonly<Record<string, string>>;
-  /** The per-glyph resource selected by each primitive row. */
-  readonly resource: ShaderResourceName<Resources>;
-  readonly geometryResource: ShaderGeometryResource<Geometry>;
 }
 
+/** A renderer-selected shader realization for one portable technique variant. */
 export interface ExampleRendererShader<Variant extends ExampleRendererShaderVariant = ExampleRendererShaderVariant> {
   readonly variant: Variant;
   readonly programNamespace: string;
@@ -64,8 +64,9 @@ export interface ExampleRendererShader<Variant extends ExampleRendererShaderVari
   readonly fragmentWgsl: string;
 }
 
+/** One acquired portable resource passed to a renderer device for realization. */
 export interface ExampleRendererResourceInput {
-  readonly id: number;
+  readonly id: ResourceHandle;
   readonly generation: number;
   readonly name: string;
   readonly resource: unknown;
@@ -73,13 +74,28 @@ export interface ExampleRendererResourceInput {
 
 /** A fully validated resource batch that has not touched live device state. */
 export interface ExamplePendingResources {
-  /** Apply once without throwing; stale prepared batches are discarded rather than restored. */
+  /** Apply the validated batch once. */
   commit(): void;
+  /** Release an uncommitted batch. Safe to call more than once. */
+  discard(): void;
 }
 
 /** One fully validated publication whose commit only swaps prepared owned state. */
 export interface ExamplePendingSubmission {
-  commit(): void;
+  /** Publish once; false means a newer candidate already won. */
+  commit(): boolean;
+  /** Release an uncommitted publication. Safe to call more than once. */
+  discard(): void;
+}
+
+/** Candidate recording state used by a concrete backend to stage work before publication. */
+export interface RecordingPendingSubmission extends ExamplePendingSubmission {
+  /** True when accepting the publication replaces or clears retained render state. */
+  readonly replacesRenderState: boolean;
+  readonly realizedDraws: readonly ExampleRealizedDraw[];
+  readonly buffersByName: ReadonlyMap<string, Uint8Array>;
+  publish(beforeCommit: () => void): boolean;
+  publishAsync(beforeCommit: () => Promise<void>): Promise<boolean>;
 }
 
 type GlyphExampleRendererShader = ExampleRendererShader<typeof glyphExampleTypeGpuVariant>;
@@ -101,6 +117,7 @@ export function getExampleRendererShader(): GlyphExampleRendererShader {
   return resolvedExampleRendererShader;
 }
 
+/** Lazily resolved TypeGPU shader metadata used by the concrete example device. */
 export const exampleRendererShader: GlyphExampleRendererShader = Object.freeze({
   variant: glyphExampleTypeGpuVariant,
   programNamespace: EXAMPLE_RENDERER_PROGRAM_NAMESPACE,
@@ -120,40 +137,49 @@ export interface ExampleRendererDevice {
   prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources;
   /** Validate and realize a whole publication without touching accepted device state. */
   prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission;
+  /** Release portable resources after their last accepted plan reference retires. */
+  releaseResources(referenceIds: readonly ResourceHandle[]): void;
 }
 
-/** A concrete device used by the acceptance path; a real backend can implement the same seam. */
+/** Deterministic CPU oracle for plan validation and backend tests. */
 export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   readonly shader: ExampleRendererShader;
-  readonly resources: Map<number, unknown> = new Map();
+  readonly resources: Map<ResourceHandle, unknown> = new Map();
   readonly resourcesByName: Map<string, unknown> = new Map();
   readonly geometriesByName: Map<string, ExampleGeometry> = new Map();
-  readonly buffers: Map<number, Uint8Array> = new Map();
+  readonly buffers: Map<RenderPlanBufferId, Uint8Array> = new Map();
   readonly buffersByName: Map<string, Uint8Array> = new Map();
   readonly retirements: number[] = [];
   readonly submissions: ExampleDrawList[] = [];
   readonly realizedDraws: ExampleRealizedDraw[] = [];
-  readonly #resourceNames = new Map<number, string>();
-  readonly #resourceGenerations = new Map<number, number>();
-  readonly #resourceIds = new Map<string, number>();
-  readonly #planResources = new Map<number, RetainedExamplePlanResource>();
+  readonly #resourceNames = new Map<ResourceHandle, string>();
+  readonly #resourceGenerations = new Map<ResourceHandle, number>();
+  readonly #resourceIds = new Map<string, Set<ResourceHandle>>();
+  readonly #planResources = new Map<RenderPlanResourceId, RetainedExamplePlanResource>();
   readonly #retainedBuffers = new Map<string, RetainedExampleBuffer>();
   readonly #techniqueWireId: RenderTechniqueId;
   readonly #programWireId: RenderProgramId;
   readonly #programVariant: number;
+  readonly #renderResourceName: string;
   #resourceRevision = 0;
   #submissionRevision = 0;
+  #asyncPublicationInFlight = false;
 
+  /** Creates a deterministic CPU renderer for the selected shader contract. */
   constructor(shader: ExampleRendererShader = exampleRendererShader) {
     assertExampleRendererShader(shader);
     this.shader = shader;
-    const identities = new RenderWireIdentityRegistry();
-    this.#techniqueWireId = identities.techniqueId(shader.variant.techniqueId);
-    this.#programWireId = identities.programId(shader.variant.techniqueId, shader.programNamespace, shader.programName);
+    const identities = id;
+    const portable = resolveRasterPlanProgram(shader.variant.techniqueId)!;
+    this.#renderResourceName = portable.schema.render.resource!;
+    this.#techniqueWireId = identities.technique(shader.variant.techniqueId);
+    this.#programWireId = identities.program(shader.variant.techniqueId, shader.programNamespace, shader.programName);
     this.#programVariant = unsignedInteger(shader.programVariant, 0xffff, 'shader program variant');
   }
 
+  /** Validates and stages portable resources without mutating accepted state. */
   prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources {
+    this.#assertMutable('prepare resources');
     if (!Array.isArray(resources)) throw new TypeError('example renderer resources must be an array');
     const revision = this.#resourceRevision;
     const state = this.#resourceState();
@@ -167,16 +193,22 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     return Object.freeze({
       commit: () => {
         if (!active) return;
+        this.#assertMutable('commit resources');
         active = false;
         // Another commit owns the newer state. Discard this stale batch instead of overwriting it.
         if (this.#resourceRevision !== revision) return;
         this.#replaceResourceState(state);
         if (entries.length !== 0) this.#resourceRevision += 1;
       },
+      discard: () => {
+        active = false;
+      },
     });
   }
 
-  prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission {
+  /** Validates and stages one draw list without mutating accepted state. */
+  prepareSubmission(drawList: ExampleDrawList): RecordingPendingSubmission {
+    this.#assertMutable('prepare a submission');
     assertDrawList(drawList);
     const resourceRevision = this.#resourceRevision;
     const submissionRevision = this.#submissionRevision;
@@ -189,13 +221,39 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       drawList.retirements.length !== 0;
     if (!replacesRenderState) {
       let active = true;
-      return Object.freeze({
-        commit: () => {
-          if (!active) return;
-          active = false;
-          if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision) return;
+      const publish = (beforeCommit: () => void): boolean => {
+        if (!active) return false;
+        this.#assertMutable('publish a submission');
+        active = false;
+        if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision)
+          return false;
+        beforeCommit();
+        this.submissions.push(drawList);
+        this.#submissionRevision += 1;
+        return true;
+      };
+      const publishAsync = async (beforeCommit: () => Promise<void>): Promise<boolean> => {
+        if (!active) return false;
+        this.#assertMutable('publish a submission');
+        active = false;
+        if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision)
+          return false;
+        return this.#publishAsync(async () => {
+          await beforeCommit();
           this.submissions.push(drawList);
           this.#submissionRevision += 1;
+          return true;
+        });
+      };
+      return Object.freeze({
+        replacesRenderState,
+        realizedDraws: Object.freeze([...this.realizedDraws]),
+        buffersByName: new Map(this.buffersByName),
+        publish,
+        publishAsync,
+        commit: () => publish(() => {}),
+        discard: () => {
+          active = false;
         },
       });
     }
@@ -228,11 +286,29 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       this.#realizeDraw(draw, drawList, buffers, resources, planResources.retained),
     );
     let active = true;
-    return Object.freeze({
-      commit: () => {
-        if (!active) return;
-        active = false;
-        if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision) return;
+    const publish = (beforeCommit: () => void): boolean => {
+      if (!active) return false;
+      this.#assertMutable('publish a submission');
+      active = false;
+      if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision) return false;
+      beforeCommit();
+      replaceMap(this.#retainedBuffers, buffers.retained);
+      replaceMap(this.buffers, buffers.activeById);
+      replaceMap(this.buffersByName, buffers.activeByName);
+      replaceMap(this.#planResources, planResources.retained);
+      this.retirements.push(...planResources.retiredIds);
+      this.realizedDraws.splice(0, this.realizedDraws.length, ...realized);
+      this.submissions.push(drawList);
+      this.#submissionRevision += 1;
+      return true;
+    };
+    const publishAsync = async (beforeCommit: () => Promise<void>): Promise<boolean> => {
+      if (!active) return false;
+      this.#assertMutable('publish a submission');
+      active = false;
+      if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision) return false;
+      return this.#publishAsync(async () => {
+        await beforeCommit();
         replaceMap(this.#retainedBuffers, buffers.retained);
         replaceMap(this.buffers, buffers.activeById);
         replaceMap(this.buffersByName, buffers.activeByName);
@@ -241,19 +317,34 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
         this.realizedDraws.splice(0, this.realizedDraws.length, ...realized);
         this.submissions.push(drawList);
         this.#submissionRevision += 1;
+        return true;
+      });
+    };
+    return Object.freeze({
+      replacesRenderState,
+      realizedDraws: Object.freeze(realized),
+      buffersByName: new Map(buffers.activeByName),
+      publish,
+      publishAsync,
+      commit: () => publish(() => {}),
+      discard: () => {
+        active = false;
       },
     });
   }
 
-  createResource(id: number, name: string, resource: unknown, generation = 1): void {
+  /** Immediately records one already-validated resource for focused backend tests. */
+  createResource(id: ResourceHandle, name: string, resource: unknown, generation = 1): void {
     this.prepareResources([{ id, generation, name, resource }]).commit();
   }
 
+  /** Applies validated buffer records and patches to the recording state. */
   applyBufferPlan(
-    buffers: readonly TextEngineBufferRecord[],
-    patches: readonly TextEnginePatchRecord[],
-    retirements: readonly TextEngineRetirementRecord[],
+    buffers: readonly RenderPlanBufferRecord[],
+    patches: readonly RenderPlanPatchRecord[],
+    retirements: readonly RenderPlanRetirementRecord[],
   ): void {
+    this.#assertMutable('apply a buffer plan');
     if (!Array.isArray(buffers) || !Array.isArray(patches) || !Array.isArray(retirements)) {
       throw new TypeError('example renderer buffer plans require arrays');
     }
@@ -271,14 +362,17 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     this.#submissionRevision += 1;
   }
 
-  bufferBytes(id: number, generation: number): Uint8Array | undefined {
+  /** Returns retained bytes for an exact buffer generation, when present. */
+  bufferBytes(id: RenderPlanBufferId, generation: number): Uint8Array | undefined {
     return this.#retainedBuffers.get(bufferKey(id, generation))?.bytes;
   }
 
-  retireResource(id: number, generation: number): void {
+  /** Retires one exact resource generation from the recording state. */
+  retireResource(id: ResourceHandle, generation: number): void {
+    this.#assertMutable('retire a resource');
     const state = this.#resourceState();
     const retired = retireResourceState(state, {
-      kind: textShaperAbi.engine.retirementKinds.resource,
+      kind: 'resource',
       id,
       generation,
       afterPublicationGeneration: 0,
@@ -291,7 +385,35 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     this.#resourceRevision += 1;
   }
 
+  /** Releases retained CPU resources after their last accepted plan reference retires. */
+  releaseResources(referenceIds: readonly ResourceHandle[]): void {
+    this.#assertMutable('release resources');
+    if (!Array.isArray(referenceIds)) throw new TypeError('released resource references must be an array');
+    const state = this.#resourceState();
+    let changed = false;
+    for (const id of referenceIds) {
+      const referenceId = positiveInteger(id, 'released resource reference') as ResourceHandle;
+      const generation = state.resourceGenerations.get(referenceId);
+      if (generation === undefined) continue;
+      changed =
+        retireResourceState(state, {
+          kind: 'resource',
+          id: referenceId,
+          generation,
+          afterPublicationGeneration: 0,
+          byteOffset: 0,
+          byteLength: 0,
+        }) || changed;
+    }
+    if (!changed) return;
+    this.#replaceResourceState(state);
+    this.retirements.push(...referenceIds);
+    this.#resourceRevision += 1;
+  }
+
+  /** Validates and commits one draw list synchronously. */
   submit(drawList: ExampleDrawList): void {
+    this.#assertMutable('submit a draw list');
     assertDrawList(drawList);
     const buffers: ExampleBufferState = {
       retained: this.#retainedBuffers,
@@ -307,18 +429,35 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     this.#submissionRevision += 1;
   }
 
+  async #publishAsync<T>(publish: () => Promise<T>): Promise<T> {
+    this.#assertMutable('publish a submission');
+    this.#asyncPublicationInFlight = true;
+    try {
+      return await publish();
+    } finally {
+      this.#asyncPublicationInFlight = false;
+    }
+  }
+
+  #assertMutable(operation: string): void {
+    if (this.#asyncPublicationInFlight) {
+      throw new Error(`example renderer cannot ${operation} while an asynchronous publication is in progress`);
+    }
+  }
+
   #bufferBindings(
-    records: readonly TextEngineBufferRecord[],
+    records: readonly RenderPlanBufferRecord[],
     primitive: ExamplePrimitiveRecord,
     state: ExampleBufferState,
   ): ReadonlyMap<string, Uint8Array> {
-    const byPolicyId = new Map<number, RetainedExampleBuffer>();
+    const byPolicyId = new Map<PolicyBufferId, RetainedExampleBuffer>();
     for (const record of records) {
       const retained = currentBuffer(state, record);
-      if (byPolicyId.has(retained.policyBufferId)) {
-        throw new Error(`example renderer draw repeats policy buffer ${retained.policyBufferId}`);
+      if (retained.binding.kind === 'order') continue;
+      if (byPolicyId.has(retained.binding.id)) {
+        throw new Error(`example renderer draw repeats policy buffer ${retained.binding.id}`);
       }
-      byPolicyId.set(retained.policyBufferId, retained);
+      byPolicyId.set(retained.binding.id, retained);
     }
     const buffers = new Map<string, Uint8Array>();
     const recordEnd = checkedAdd(primitive.recordIndex, primitive.recordCount, 'primitive record span');
@@ -343,10 +482,10 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     records: readonly ExampleResourceRecord[],
     primitive: ExamplePrimitiveRecord,
     state: ExampleResourceState,
-    planResources: ReadonlyMap<number, RetainedExamplePlanResource>,
+    planResources: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>,
   ): ReadonlyMap<string, unknown> {
     const selected = new Set<string>();
-    const selectedByName = new Map<string, { readonly referenceId: number; readonly resource: unknown }>();
+    const selectedByName = new Map<string, { readonly referenceId: ResourceHandle; readonly resource: unknown }>();
     for (const record of records) {
       const retained = currentPlanResource(planResources, record);
       const { id, generation, referenceId } = retained;
@@ -367,7 +506,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       if (selectedByName.has(name)) throw new Error(`example renderer draw repeats resource "${name}"`);
       selectedByName.set(name, { referenceId, resource });
     }
-    const primaryId = positiveInteger(primitive.resourceId, 'primitive resource id');
+    const primaryId = positiveInteger(primitive.resourceId, 'primitive resource id') as RenderPlanResourceId;
     const primaryGeneration = positiveInteger(primitive.resourceGeneration, 'primitive resource generation');
     if (!selected.has(resourceKey(primaryId, primaryGeneration))) {
       throw new Error('example renderer primitive resource is not included in its draw resource span');
@@ -375,15 +514,15 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     const primary = planResources.get(primaryId);
     if (
       primary?.generation !== primaryGeneration ||
-      state.resourceNames.get(primary.referenceId) !== this.shader.variant.resource
+      state.resourceNames.get(primary.referenceId) !== this.#renderResourceName
     ) {
-      throw new Error(`example renderer primitive does not select primary resource "${this.shader.variant.resource}"`);
+      throw new Error(`example renderer primitive does not select primary resource "${this.#renderResourceName}"`);
     }
 
     const resources = new Map<string, unknown>();
     for (const name of Object.keys(this.shader.variant.resources)) {
       const selectedResource = selectedByName.get(name);
-      if (selectedResource === undefined || state.resourceIds.get(name) !== selectedResource.referenceId) {
+      if (selectedResource === undefined || !state.resourceIds.get(name)?.has(selectedResource.referenceId)) {
         throw new Error(`example renderer submission is missing its required "${name}" resource`);
       }
       resources.set(name, selectedResource.resource);
@@ -396,7 +535,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     drawList: ExampleDrawList,
     bufferState: ExampleBufferState,
     resourceState: ExampleResourceState,
-    planResources: ReadonlyMap<number, RetainedExamplePlanResource>,
+    planResources: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>,
   ): ExampleRealizedDraw {
     assertObject(draw, 'draw');
     positiveInteger(draw.id, 'draw id');
@@ -425,7 +564,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     if (primitive.techniqueId !== this.#techniqueWireId) {
       throw new Error('example renderer primitive technique does not match its selected shader');
     }
-    if (primitive.kind !== textShaperAbi.engine.primitiveKinds.glyph) {
+    if (primitive.kind !== 'glyph') {
       throw new Error('example renderer selected shader requires a glyph primitive');
     }
     const bufferRecords = recordSpan(drawList.bufferRecords, draw.bufferStart, draw.bufferCount, 'buffer');
@@ -457,7 +596,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       geometriesByName: new Map(this.geometriesByName),
       resourceNames: new Map(this.#resourceNames),
       resourceGenerations: new Map(this.#resourceGenerations),
-      resourceIds: new Map(this.#resourceIds),
+      resourceIds: new Map([...this.#resourceIds].map(([name, ids]) => [name, new Set(ids)])),
     };
   }
 
@@ -472,16 +611,16 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
 }
 
 interface ExampleResourceState {
-  readonly resources: Map<number, unknown>;
+  readonly resources: Map<ResourceHandle, unknown>;
   readonly resourcesByName: Map<string, unknown>;
   readonly geometriesByName: Map<string, ExampleGeometry>;
-  readonly resourceNames: Map<number, string>;
-  readonly resourceGenerations: Map<number, number>;
-  readonly resourceIds: Map<string, number>;
+  readonly resourceNames: Map<ResourceHandle, string>;
+  readonly resourceGenerations: Map<ResourceHandle, number>;
+  readonly resourceIds: Map<string, Set<ResourceHandle>>;
 }
 
 interface ExampleResourceEntry {
-  readonly id: number;
+  readonly id: ResourceHandle;
   readonly generation: number;
   readonly name: string;
   readonly resource: unknown;
@@ -489,24 +628,24 @@ interface ExampleResourceEntry {
 }
 
 interface RetainedExamplePlanResource {
-  readonly id: number;
+  readonly id: RenderPlanResourceId;
   readonly generation: number;
   readonly techniqueId: number;
   readonly resourceKind: number;
-  readonly referenceId: number;
+  readonly referenceId: ResourceHandle;
 }
 
 interface ExamplePlanResourceState {
-  readonly retained: ReadonlyMap<number, RetainedExamplePlanResource>;
-  readonly retiredIds: readonly number[];
+  readonly retained: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>;
+  readonly retiredIds: readonly RenderPlanResourceId[];
 }
 
 interface RetainedExampleBuffer {
-  readonly id: number;
+  readonly id: RenderPlanBufferId;
   readonly generation: number;
   readonly programId: number;
-  readonly policyBufferId: number;
-  readonly scalarType: number;
+  readonly binding: RenderPlanBufferBinding;
+  readonly scalarType: RenderPlanScalarType;
   readonly vectorWidth: number;
   readonly capacityRecords: number;
   readonly bytes: Uint8Array;
@@ -514,10 +653,11 @@ interface RetainedExampleBuffer {
 
 interface ExampleBufferState {
   readonly retained: ReadonlyMap<string, RetainedExampleBuffer>;
-  readonly activeById: ReadonlyMap<number, Uint8Array>;
+  readonly activeById: ReadonlyMap<RenderPlanBufferId, Uint8Array>;
   readonly activeByName: ReadonlyMap<string, Uint8Array>;
 }
 
+/** Concrete geometry and draw counts resolved from one portable primitive. */
 export interface ExampleGeometry {
   readonly kind: 'synthetic-quad' | 'supplied';
   readonly indexed: boolean;
@@ -534,6 +674,7 @@ export interface ExampleDrawBindings {
   readonly resources: ReadonlyMap<string, unknown>;
 }
 
+/** One validated draw with its concrete geometry and named shader bindings. */
 export interface ExampleRealizedDraw extends ExampleDrawBindings {
   readonly draw: ExampleDraw;
   readonly primitive: ExamplePrimitiveRecord;
@@ -548,7 +689,7 @@ function validateResourceEntry(
   input: ExampleRendererResourceInput,
 ): ExampleResourceEntry {
   assertObject(input, 'resource entry');
-  const id = positiveInteger(input.id, 'resource id');
+  const id = positiveInteger(input.id, 'resource id') as ResourceHandle;
   const generation = positiveInteger(input.generation, 'resource generation');
   if (typeof input.name !== 'string' || input.name.length === 0) {
     throw new TypeError('example renderer resource names are required');
@@ -556,10 +697,6 @@ function validateResourceEntry(
   const previousName = state.resourceNames.get(id);
   if (previousName !== undefined && previousName !== input.name) {
     throw new Error(`example renderer resource id ${id} is already bound to "${previousName}"`);
-  }
-  const previousId = state.resourceIds.get(input.name);
-  if (previousId !== undefined && previousId !== id) {
-    throw new Error(`example renderer resource "${input.name}" is already bound to id ${previousId}`);
   }
   const previousGeneration = state.resourceGenerations.get(id);
   if (previousGeneration !== undefined && generation < previousGeneration) {
@@ -572,18 +709,16 @@ function validateResourceEntry(
     ? shader.variant.resources[input.name as keyof typeof shader.variant.resources]
     : undefined;
   if (declaration !== undefined) {
-    assertPortableResource(
-      declaration.kind,
-      input.name,
-      input.resource,
-      'format' in declaration ? declaration.format : undefined,
-      declaration.kind === 'geometry' ? declaration.attributes : undefined,
-    );
-  } else if (shader.variant.geometryResource !== input.name) {
+    const previousIds = state.resourceIds.get(input.name);
+    if (declaration.cardinality !== 'many' && previousIds !== undefined && !previousIds.has(id)) {
+      throw new Error(`example renderer resource "${input.name}" already has its singleton binding`);
+    }
+    assertDeclaredResource(declaration, input.name, input.resource);
+  } else if (shader.variant.geometry.kind === 'synthetic-quad' || shader.variant.geometry.resource !== input.name) {
     throw new Error(`example renderer shader does not declare resource "${input.name}"`);
   }
   const geometry =
-    shader.variant.geometryResource === input.name
+    shader.variant.geometry.kind !== 'synthetic-quad' && shader.variant.geometry.resource === input.name
       ? realizeGeometry(shader.variant.geometry, input.name, input.resource)
       : undefined;
   return {
@@ -595,19 +730,42 @@ function validateResourceEntry(
   };
 }
 
+function assertDeclaredResource(declaration: TechniqueResourceDeclaration, name: string, resource: unknown): void {
+  assertPortableResource(
+    declaration.kind,
+    name,
+    resource,
+    declaration.kind === 'texture' || declaration.kind === 'texture-array' ? declaration.format : undefined,
+    declaration.kind === 'geometry' ? declaration.attributes : undefined,
+  );
+  if (declaration.kind !== 'group') return;
+  assertObject(resource, `resource group "${name}"`);
+  assertObject(resource.members, `resource group "${name}" members`);
+  const expected = Object.keys(declaration.members);
+  const actual = Object.keys(resource.members);
+  if (expected.length !== actual.length || actual.some((member) => !Object.hasOwn(declaration.members, member))) {
+    throw new TypeError(`resource group "${name}" members do not match its shader declaration`);
+  }
+  for (const member of expected) {
+    assertDeclaredResource(declaration.members[member]!, `${name}.${member}`, resource.members[member]);
+  }
+}
+
 function absorbResourceEntry(state: ExampleResourceState, entry: ExampleResourceEntry): void {
   state.resources.set(entry.id, entry.resource);
   state.resourcesByName.set(entry.name, entry.resource);
   state.resourceNames.set(entry.id, entry.name);
   state.resourceGenerations.set(entry.id, entry.generation);
-  state.resourceIds.set(entry.name, entry.id);
+  const ids = state.resourceIds.get(entry.name) ?? new Set<ResourceHandle>();
+  ids.add(entry.id);
+  state.resourceIds.set(entry.name, ids);
   if (entry.geometry !== undefined) state.geometriesByName.set(entry.name, entry.geometry);
 }
 
-function retireResourceState(state: ExampleResourceState, retirement: TextEngineRetirementRecord): boolean {
+function retireResourceState(state: ExampleResourceState, retirement: RenderPlanRetirementRecord): boolean {
   assertObject(retirement, 'resource retirement');
-  if (retirement.kind !== textShaperAbi.engine.retirementKinds.resource) return false;
-  const id = positiveInteger(retirement.id, 'retired resource id');
+  if (retirement.kind !== 'resource') return false;
+  const id = positiveInteger(retirement.id, 'retired resource id') as ResourceHandle;
   const generation = positiveInteger(retirement.generation, 'retired resource generation');
   if (state.resourceGenerations.get(id) !== generation) return false;
   const name = state.resourceNames.get(id);
@@ -615,9 +773,16 @@ function retireResourceState(state: ExampleResourceState, retirement: TextEngine
   state.resourceGenerations.delete(id);
   state.resourceNames.delete(id);
   if (name !== undefined) {
-    state.resourcesByName.delete(name);
-    state.geometriesByName.delete(name);
-    if (state.resourceIds.get(name) === id) state.resourceIds.delete(name);
+    const ids = state.resourceIds.get(name);
+    ids?.delete(id);
+    if (ids?.size === 0) {
+      state.resourceIds.delete(name);
+      state.resourcesByName.delete(name);
+      state.geometriesByName.delete(name);
+    } else if (ids !== undefined) {
+      const replacement = ids.values().next().value;
+      if (replacement !== undefined) state.resourcesByName.set(name, state.resources.get(replacement));
+    }
   }
   return true;
 }
@@ -625,24 +790,23 @@ function retireResourceState(state: ExampleResourceState, retirement: TextEngine
 function preparePlanResourceState(
   techniqueWireId: RenderTechniqueId,
   resources: ExampleResourceState,
-  source: ReadonlyMap<number, RetainedExamplePlanResource>,
+  source: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>,
   records: readonly ExampleResourceRecord[],
-  retirements: readonly TextEngineRetirementRecord[],
+  retirements: readonly RenderPlanRetirementRecord[],
 ): ExamplePlanResourceState {
   const retained = new Map(source);
-  const seen = new Set<number>();
+  const seen = new Set<RenderPlanResourceId>();
   for (const record of records) {
     assertObject(record, 'resource record');
-    const id = positiveInteger(record.id, 'resource record id');
+    const id = positiveInteger(record.id, 'resource record id') as RenderPlanResourceId;
     const generation = positiveInteger(record.generation, 'resource record generation');
-    const referenceId = positiveInteger(record.referenceId, 'resource record reference id');
+    const referenceId = positiveInteger(record.referenceId, 'resource record reference id') as ResourceHandle;
     const resourceKind = unsignedInteger(record.resourceKind, 32, 'resource record kind');
     if (resourceKind === 0) throw new RangeError('example renderer resource record kind must be positive');
     if (record.techniqueId !== techniqueWireId) {
       throw new Error('example renderer resource technique does not match its selected shader');
     }
-    const actions = textShaperAbi.engine.resourceActions;
-    if (record.action !== actions.create && record.action !== actions.update && record.action !== actions.retain) {
+    if (record.action !== 'create' && record.action !== 'update' && record.action !== 'retain') {
       throw new Error(`example renderer resource ${id}:${generation} has unsupported action ${record.action}`);
     }
     if (seen.has(id)) throw new Error(`example renderer plan repeats active resource id ${id}`);
@@ -665,24 +829,24 @@ function preparePlanResourceState(
     }
     retained.set(id, { id, generation, techniqueId: techniqueWireId, resourceKind, referenceId });
   }
-  const retiredIds: number[] = [];
-  const resourceRetirement = textShaperAbi.engine.retirementKinds.resource;
+  const retiredIds: RenderPlanResourceId[] = [];
   for (const retirement of retirements) {
-    if (retirement.kind !== resourceRetirement) continue;
-    const current = retained.get(retirement.id);
+    if (retirement.kind !== 'resource') continue;
+    const resourceId = retirement.id as RenderPlanResourceId;
+    const current = retained.get(resourceId);
     if (current?.generation !== retirement.generation) continue;
-    retained.delete(retirement.id);
-    retiredIds.push(retirement.id);
+    retained.delete(resourceId);
+    retiredIds.push(resourceId);
   }
   return { retained, retiredIds };
 }
 
 function currentPlanResource(
-  retained: ReadonlyMap<number, RetainedExamplePlanResource>,
+  retained: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>,
   record: ExampleResourceRecord,
 ): RetainedExamplePlanResource {
   assertObject(record, 'draw resource record');
-  const id = positiveInteger(record.id, 'draw resource id');
+  const id = positiveInteger(record.id, 'draw resource id') as RenderPlanResourceId;
   const generation = positiveInteger(record.generation, 'draw resource generation');
   const current = retained.get(id);
   if (
@@ -702,7 +866,7 @@ function validatePrimitiveRecord(
   techniqueWireId: RenderTechniqueId,
   programWireId: RenderProgramId,
   programVariant: number,
-  resources: ReadonlyMap<number, RetainedExamplePlanResource>,
+  resources: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>,
 ): void {
   assertObject(primitive, 'primitive');
   positiveInteger(primitive.id, 'primitive id');
@@ -712,13 +876,13 @@ function validatePrimitiveRecord(
   if (primitive.programId !== programWireId || primitive.programVariant !== programVariant) {
     throw new Error('example renderer primitive program does not match its selected shader');
   }
-  if (primitive.kind !== textShaperAbi.engine.primitiveKinds.glyph) {
+  if (primitive.kind !== 'glyph') {
     throw new Error('example renderer selected shader requires a glyph primitive');
   }
   const count = positiveInteger(primitive.recordCount, 'primitive record count');
   if (count > 0xffff) throw new RangeError('example renderer primitive record count exceeds u16');
   nonnegativeInteger(primitive.recordIndex, 'primitive record index');
-  const resourceId = positiveInteger(primitive.resourceId, 'primitive resource id');
+  const resourceId = positiveInteger(primitive.resourceId, 'primitive resource id') as RenderPlanResourceId;
   const resourceGeneration = positiveInteger(primitive.resourceGeneration, 'primitive resource generation');
   if (resources.get(resourceId)?.generation !== resourceGeneration) {
     throw new Error(
@@ -731,34 +895,34 @@ function prepareBufferState(
   shader: ExampleRendererShader,
   programWireId: RenderProgramId,
   source: ReadonlyMap<string, RetainedExampleBuffer>,
-  buffers: readonly TextEngineBufferRecord[],
-  patches: readonly TextEnginePatchRecord[],
-  retirements: readonly TextEngineRetirementRecord[],
+  buffers: readonly RenderPlanBufferRecord[],
+  patches: readonly RenderPlanPatchRecord[],
+  retirements: readonly RenderPlanRetirementRecord[],
 ): ExampleBufferState {
   if (!Array.isArray(buffers) || !Array.isArray(patches) || !Array.isArray(retirements)) {
     throw new TypeError('example renderer buffer plans require arrays');
   }
   const retained = cloneRetainedBuffers(source);
-  const active = new Map<number, string>();
+  const active = new Map<RenderPlanBufferId, string>();
   for (const record of buffers) retainBufferRecord(retained, active, record, programWireId);
   for (const patch of patches) applyBufferPatch(retained, active, patch);
   for (const retirement of retirements) validateRetirement(retirement);
   for (const retirement of retirements) retireBuffer(retained, active, retirement);
-  const activeById = new Map<number, Uint8Array>();
+  const activeById = new Map<RenderPlanBufferId, Uint8Array>();
   const activeByName = new Map<string, Uint8Array>();
   for (const [id, key] of active) {
     const buffer = retained.get(key);
     if (buffer === undefined) continue;
     activeById.set(id, buffer.bytes);
-    const name = declaredBufferName(shader, buffer.policyBufferId);
+    const name = declaredBufferName(shader, buffer.binding);
     if (name !== undefined) activeByName.set(name, buffer.bytes);
   }
   return { retained, activeById, activeByName };
 }
 
-function currentBuffer(state: ExampleBufferState, record: TextEngineBufferRecord): RetainedExampleBuffer {
+function currentBuffer(state: ExampleBufferState, record: RenderPlanBufferRecord): RetainedExampleBuffer {
   assertObject(record, 'draw buffer record');
-  const id = positiveInteger(record.id, 'draw buffer id');
+  const id = positiveInteger(record.id, 'draw buffer id') as RenderPlanBufferId;
   const generation = positiveInteger(record.generation, 'draw buffer generation');
   const retained = state.retained.get(bufferKey(id, generation));
   if (retained === undefined || state.activeById.get(id) !== retained.bytes) {
@@ -766,7 +930,7 @@ function currentBuffer(state: ExampleBufferState, record: TextEngineBufferRecord
   }
   if (
     record.programId !== retained.programId ||
-    record.policyBufferId !== retained.policyBufferId ||
+    !sameBufferBinding(record.binding, retained.binding) ||
     record.scalarType !== retained.scalarType ||
     record.vectorWidth !== retained.vectorWidth ||
     record.capacityRecords !== retained.capacityRecords ||
@@ -783,27 +947,27 @@ function cloneRetainedBuffers(source: ReadonlyMap<string, RetainedExampleBuffer>
 
 function retainBufferRecord(
   retained: Map<string, RetainedExampleBuffer>,
-  active: Map<number, string>,
-  record: TextEngineBufferRecord,
+  active: Map<RenderPlanBufferId, string>,
+  record: RenderPlanBufferRecord,
   programWireId: RenderProgramId,
 ): void {
   assertObject(record, 'buffer record');
-  const id = positiveInteger(record.id, 'buffer id');
+  const id = positiveInteger(record.id, 'buffer id') as RenderPlanBufferId;
   const generation = positiveInteger(record.generation, 'buffer generation');
   const retainedProgramId = positiveInteger(record.programId, 'buffer program id');
   if (retainedProgramId !== programWireId) {
     throw new Error(`example renderer buffer ${id}:${generation} belongs to a different renderer program`);
   }
-  const policyBufferId = positiveInteger(record.policyBufferId, 'policy buffer id');
+  const binding = validateBufferBinding(record.binding);
   const byteLength = nonnegativeInteger(record.byteLength, 'buffer byte length');
   const capacityRecords = nonnegativeInteger(record.capacityRecords, 'buffer capacity');
-  if (!Number.isSafeInteger(record.scalarType) || record.scalarType < 1 || record.scalarType > 3) {
-    throw new RangeError('example renderer buffer scalar types must be 1, 2, or 3');
+  if (record.scalarType !== 'f32' && record.scalarType !== 'u32' && record.scalarType !== 'u16') {
+    throw new RangeError('example renderer buffer has an unsupported scalar type');
   }
   if (!Number.isSafeInteger(record.vectorWidth) || record.vectorWidth < 1 || record.vectorWidth > 4) {
     throw new RangeError('example renderer buffer vector widths must be between 1 and 4');
   }
-  const scalarBytes = record.scalarType === textShaperAbi.policy.scalarTypes.u16 ? 2 : 4;
+  const scalarBytes = record.scalarType === 'u16' ? 2 : 4;
   const expectedByteLength = capacityRecords * record.vectorWidth * scalarBytes;
   if (!Number.isSafeInteger(expectedByteLength) || byteLength !== expectedByteLength) {
     throw new RangeError('example renderer requires tightly packed physical buffers');
@@ -814,7 +978,7 @@ function retainBufferRecord(
   if (
     existing !== undefined &&
     (existing.programId !== retainedProgramId ||
-      existing.policyBufferId !== policyBufferId ||
+      !sameBufferBinding(existing.binding, binding) ||
       existing.scalarType !== record.scalarType ||
       existing.vectorWidth !== record.vectorWidth ||
       existing.capacityRecords !== capacityRecords ||
@@ -827,7 +991,7 @@ function retainBufferRecord(
       id,
       generation,
       programId: retainedProgramId,
-      policyBufferId,
+      binding,
       scalarType: record.scalarType,
       vectorWidth: record.vectorWidth,
       capacityRecords,
@@ -839,11 +1003,11 @@ function retainBufferRecord(
 
 function applyBufferPatch(
   retained: Map<string, RetainedExampleBuffer>,
-  active: ReadonlyMap<number, string>,
-  patch: TextEnginePatchRecord,
+  active: ReadonlyMap<RenderPlanBufferId, string>,
+  patch: RenderPlanPatchRecord,
 ): void {
   assertObject(patch, 'buffer patch');
-  const id = positiveInteger(patch.bufferId, 'patch buffer id');
+  const id = positiveInteger(patch.bufferId, 'patch buffer id') as RenderPlanBufferId;
   const generation = positiveInteger(patch.bufferGeneration, 'patch buffer generation');
   const destinationOffset = nonnegativeInteger(patch.destinationOffset, 'patch destination offset');
   const byteLength = nonnegativeInteger(patch.byteLength, 'patch byte length');
@@ -854,17 +1018,16 @@ function applyBufferPatch(
   assertRange(destinationOffset, byteLength, target.bytes.byteLength, 'buffer patch');
   const targetScalarBytes = retainedScalarBytes(target);
   assertAligned(destinationOffset, byteLength, targetScalarBytes, 'buffer patch');
-  const opcodes = textShaperAbi.engine.patchOpcodes;
-  if (patch.opcode === opcodes.allocateOrResize) {
+  if (patch.kind === 'allocate-or-resize') {
     if (destinationOffset !== 0 || byteLength !== target.bytes.byteLength) {
       throw new RangeError(`example renderer allocation patch does not match buffer ${key}`);
     }
     return;
   }
-  if (patch.opcode === opcodes.retire) return;
-  if (patch.opcode === opcodes.write) {
+  if (patch.kind === 'retire') return;
+  if (patch.kind === 'write') {
     if (byteLength === 0) {
-      if (patch.payload !== undefined && patch.payload.byteLength !== 0) {
+      if (patch.payload.byteLength !== 0) {
         throw new RangeError('zero-length write patch has a payload');
       }
       return;
@@ -875,7 +1038,7 @@ function applyBufferPatch(
     target.bytes.set(patch.payload, destinationOffset);
     return;
   }
-  if (patch.opcode === opcodes.fill) {
+  if (patch.kind === 'fill') {
     if (byteLength % 4 !== 0) throw new RangeError('fill patch is not u32 aligned');
     const fillValue = nonnegativeInteger(patch.fillValue, 'fill value');
     if (fillValue > 0xffff_ffff) throw new RangeError('fill value exceeds u32');
@@ -883,8 +1046,8 @@ function applyBufferPatch(
     for (let offset = 0; offset < byteLength; offset += 4) view.setUint32(offset, fillValue, true);
     return;
   }
-  if (patch.opcode === opcodes.copy) {
-    const sourceId = positiveInteger(patch.sourceBufferId, 'copy source buffer id');
+  if (patch.kind === 'copy') {
+    const sourceId = positiveInteger(patch.sourceBufferId, 'copy source buffer id') as RenderPlanBufferId;
     const sourceKey = active.get(sourceId);
     const source = sourceKey === undefined ? undefined : retained.get(sourceKey);
     if (source === undefined) throw new Error(`copy patch references inactive source buffer ${sourceId}`);
@@ -898,31 +1061,30 @@ function applyBufferPatch(
     }
     return;
   }
-  throw new Error(`unsupported text-engine patch opcode ${patch.opcode}`);
+  throw new Error('unsupported text-engine patch kind');
 }
 
 function retireBuffer(
   retained: Map<string, RetainedExampleBuffer>,
-  active: Map<number, string>,
-  retirement: TextEngineRetirementRecord,
+  active: Map<RenderPlanBufferId, string>,
+  retirement: RenderPlanRetirementRecord,
 ): void {
   assertObject(retirement, 'retirement');
-  if (retirement.kind !== textShaperAbi.engine.retirementKinds.buffer) return;
-  const id = positiveInteger(retirement.id, 'retired buffer id');
+  if (retirement.kind !== 'buffer') return;
+  const id = positiveInteger(retirement.id, 'retired buffer id') as RenderPlanBufferId;
   const generation = positiveInteger(retirement.generation, 'retired buffer generation');
   const key = bufferKey(id, generation);
   retained.delete(key);
   if (active.get(id) === key) active.delete(id);
 }
 
-function validateRetirement(retirement: TextEngineRetirementRecord): void {
+function validateRetirement(retirement: RenderPlanRetirementRecord): void {
   assertObject(retirement, 'retirement');
-  const kinds = textShaperAbi.engine.retirementKinds;
   if (
-    retirement.kind !== kinds.resource &&
-    retirement.kind !== kinds.buffer &&
-    retirement.kind !== kinds.slotRange &&
-    retirement.kind !== kinds.outputBytes
+    retirement.kind !== 'resource' &&
+    retirement.kind !== 'buffer' &&
+    retirement.kind !== 'slot-range' &&
+    retirement.kind !== 'output-bytes'
   ) {
     throw new Error(`unsupported text-engine retirement kind ${retirement.kind}`);
   }
@@ -933,8 +1095,22 @@ function validateRetirement(retirement: TextEngineRetirementRecord): void {
   nonnegativeInteger(retirement.byteLength, 'retirement byte length');
 }
 
-function declaredBufferName(shader: ExampleRendererShader, policyBufferId: number): string | undefined {
-  return Object.entries(shader.variant.buffers).find(([, buffer]) => buffer.id === policyBufferId)?.[0];
+function declaredBufferName(shader: ExampleRendererShader, binding: RenderPlanBufferBinding): string | undefined {
+  if (binding.kind === 'order') return undefined;
+  return Object.entries(shader.variant.buffers).find(([, buffer]) => buffer.id === binding.id)?.[0];
+}
+
+function validateBufferBinding(binding: RenderPlanBufferBinding): RenderPlanBufferBinding {
+  if (binding?.kind === 'order') return binding;
+  if (binding?.kind === 'policy') {
+    positiveInteger(binding.id, 'policy buffer id');
+    return binding;
+  }
+  throw new TypeError('example renderer buffer has an invalid binding');
+}
+
+function sameBufferBinding(left: RenderPlanBufferBinding, right: RenderPlanBufferBinding): boolean {
+  return left.kind === right.kind && (left.kind === 'order' || (right.kind === 'policy' && left.id === right.id));
 }
 
 function bufferKey(id: number, generation: number): string {
@@ -979,7 +1155,7 @@ function assertAligned(offset: number, length: number, alignment: number, label:
 }
 
 function retainedScalarBytes(buffer: RetainedExampleBuffer): number {
-  return buffer.scalarType === textShaperAbi.policy.scalarTypes.u16 ? 2 : 4;
+  return buffer.scalarType === 'u16' ? 2 : 4;
 }
 
 function syntheticQuadGeometry(instanceCount: number): ExampleGeometry {
@@ -1086,17 +1262,12 @@ function assertExampleRendererShader(shader: ExampleRendererShader): void {
     }
   }
   assertObject(shader.variant.resources, 'shader resources');
-  if (
-    typeof shader.variant.resource !== 'string' ||
-    !Object.hasOwn(shader.variant.resources, shader.variant.resource)
-  ) {
-    throw new TypeError(`example renderer shader primary resource "${shader.variant.resource}" is not declared`);
+  const renderResource = portable.schema.render.resource;
+  if (renderResource === undefined || !Object.hasOwn(shader.variant.resources, renderResource)) {
+    throw new TypeError('example renderer portable plan does not select a declared render resource');
   }
   const geometryResource =
     shader.variant.geometry.kind === 'synthetic-quad' ? undefined : shader.variant.geometry.resource;
-  if (shader.variant.geometryResource !== geometryResource) {
-    throw new TypeError('example renderer shader geometry resource contradicts its geometry declaration');
-  }
   if (geometryResource !== undefined && !Object.hasOwn(shader.variant.resources, geometryResource)) {
     throw new TypeError(`example renderer shader geometry resource "${geometryResource}" is not declared`);
   }
@@ -1148,8 +1319,8 @@ function recordSpan<Record>(
   return records.slice(first, end);
 }
 
-function shaderScalarType(scalar: ExampleRendererShaderBuffer['scalar']): number {
-  return scalar === 'f32' ? textShaperAbi.policy.scalarTypes.f32 : textShaperAbi.policy.scalarTypes.u32;
+function shaderScalarType(scalar: ExampleRendererShaderBuffer['scalar']): RenderPlanScalarType {
+  return scalar;
 }
 
 function resourceKey(id: number, generation: number): string {

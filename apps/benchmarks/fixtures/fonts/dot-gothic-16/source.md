@@ -7,6 +7,7 @@
 - License: SIL Open Font License 1.1
 - License SHA-256: `b6630c61ea078cacd7fabe37d14ffe557a0b45b06683374a9aa9e24262993e33`
 
-This bounded Japanese font exists only to make the milestone-7 CJK line-break
-case visible before milestone 12 introduces scalable pan-CJK raster paging. The
-existing Noto Sans CJK JP fixture remains the shaping and paragraph oracle.
+All 9,362 glyphs in this face are baked deliberately as the pixel-style raster
+stress fixture. It is bounded only relative to a pan-CJK face; the separate
+155-glyph Noto Sans CJK showcase subset serves the ordinary Japanese visual.
+The full Noto Sans CJK JP fixture remains the shaping and paragraph oracle.

@@ -1,11 +1,11 @@
 import {
-  FontRegistry,
+  createFontLibrary,
+  type Constraints,
   type FontFeature,
-  type LoadedFont,
-  type ParagraphContentBox,
+  type Font,
+  type ParagraphLayout,
   type ParagraphLayoutSummary,
-  type ParagraphStyle,
-  type RegisteredFont,
+  type TextStyle,
 } from '@pmndrs/glyph';
 import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
 import { Text } from '@pmndrs/glyph/three';
@@ -49,7 +49,7 @@ import {
   type GlyphOriginSnapshot,
   type ShapedTextIdentity,
 } from '../shared/glyph-origin-transition';
-import { registeredMtsdfConfiguration, type MtsdfRasterConfiguration } from './metadata';
+import { mtsdfDataConfiguration, type MtsdfRasterConfiguration } from './metadata';
 
 export interface MtsdfTextLiveStats {
   readonly technique: 'mtsdf';
@@ -165,11 +165,12 @@ export interface MtsdfTextPersistentScene extends PersistentRenderScene {
 
 /** The inputs one committed generation of the live paragraph was built from. */
 interface MtsdfTextState {
-  readonly font: LoadedFont<typeof mtsdf>;
+  readonly font: Font<typeof mtsdf>;
   /** The shaped-run inputs this generation committed, kept beside the style so a rollback restores both together. */
   readonly identity: ShapedTextIdentity;
-  readonly contentBox: ParagraphContentBox;
-  readonly style: ParagraphStyle;
+  readonly constraints: Constraints;
+  readonly layout: ParagraphLayout;
+  readonly style: TextStyle;
   readonly rasterPixelRatio: number;
 }
 
@@ -201,11 +202,10 @@ interface MtsdfPersistentActivation {
 }
 
 interface MtsdfPersistentFontFixture {
-  /** The registry-scoped font the raster metadata is read from; the controller keys ownership on it. */
-  readonly font: RegisteredFont;
+  readonly font: Font<typeof mtsdf>;
   readonly fontLoadMs: number;
   readonly loaded: Awaited<ReturnType<typeof loadMtsdfFontAsset>>;
-  readonly loadedFont: LoadedFont<typeof mtsdf>;
+  readonly loadedFont: Font<typeof mtsdf>;
   readonly rasterConfiguration: MtsdfRasterConfiguration;
 }
 
@@ -229,21 +229,9 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
     return activation;
   };
 
-  /**
-   * Commits one generation of shaping inputs. A rejected generation is rolled back to the committed one so the failed
-   * candidate font is left unleased, which is what lets the fixture controller dispose it.
-   */
+  /** Commits one validated generation; `Text.set()` leaves desired state unchanged when it rejects. */
   const commitState = (resources: MtsdfPersistentActivation, next: MtsdfTextState): void => {
-    try {
-      applyState(resources.line, next);
-    } catch (error) {
-      try {
-        applyState(resources.line, resources.state);
-      } catch {
-        // The rollback cannot improve on the original failure; report the failure the caller asked about.
-      }
-      throw error;
-    }
+    applyState(resources.line, next);
     resources.state = next;
   };
 
@@ -297,7 +285,8 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       const before = originsToInterpolate(resources, resources.state.identity);
       commitState(resources, {
         ...resources.state,
-        contentBox: mtsdfContentBox(nextContentWidth, textAlign),
+        constraints: mtsdfConstraints(nextContentWidth),
+        layout: mtsdfLayout(textAlign),
         rasterPixelRatio: viewport.dpr,
       });
       if (disposed || activation !== resources || revision !== updateRevision) return;
@@ -331,8 +320,8 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         context.viewport.height,
         gridVisible,
       );
-      const registry = new FontRegistry({ maxArtifactBytes: MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT });
-      let loadedFont: LoadedFont<typeof mtsdf> | undefined;
+      const library = createFontLibrary({ maxArtifactBytes: MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT });
+      let loadedFont: Font<typeof mtsdf> | undefined;
       let fontFixtureController: RetainedFontFixtureController<MtsdfPersistentFontFixture> | undefined;
       let line: Text<typeof mtsdf> | undefined;
       try {
@@ -341,22 +330,21 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
           technique: 'mtsdf',
           fixture: options.fontFixture ?? 'inter',
           delivery: options.delivery ?? 'baked',
-          registry,
+          library,
           signal: context.signal,
           ...(options.onBakeProgress === undefined ? {} : { onProgress: options.onBakeProgress }),
         });
         loadedFont = loaded.loaded;
         const fontLoadMs = performance.now() - fontStartedAt;
         context.signal.throwIfAborted();
-        const rasterConfiguration = await registeredMtsdfConfiguration(loaded.loaded.font, context.signal);
+        const rasterConfiguration = mtsdfDataConfiguration(loaded.data);
         fontFixtureController = createRetainedFontFixtureController(
-          registry,
+          library,
           {
             fixture: options.fontFixture ?? 'inter',
-            asset: { font: loaded.loaded.font, fontLoadMs, loaded, loadedFont, rasterConfiguration },
+            asset: { font: loaded.loaded, fontLoadMs, loaded, loadedFont, rasterConfiguration },
           },
-          // The loaded font owns the registered font, its decoded raster, and the runtime entry; releasing only the
-          // registered font would strand the raster this technique still holds.
+          // Dispose the application Font lease; live renderer bindings retain their own counted lease.
           { dispose: (asset) => asset.loadedFont.dispose() },
         );
         const textStartedAt = performance.now();
@@ -370,16 +358,17 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         const state: MtsdfTextState = {
           font: loadedFont,
           identity,
-          contentBox: mtsdfContentBox(benchmarkContentWidth(context.viewport.width, layoutWidthRatio), textAlign),
+          constraints: mtsdfConstraints(benchmarkContentWidth(context.viewport.width, layoutWidthRatio)),
+          layout: mtsdfLayout(textAlign),
           style: mtsdfStyle(fontSize, identity),
           rasterPixelRatio: context.viewport.dpr,
         };
         line = new Text({
           font: state.font,
           text: state.identity.text,
-          contentBox: state.contentBox,
+          constraints: state.constraints,
+          layout: state.layout,
           style: state.style,
-          paint: { color: LIVE_TEXT_COLOR_CSS },
           rasterPixelRatio: state.rasterPixelRatio,
         });
         const activeLine = line;
@@ -502,20 +491,20 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
     },
     async loadFontFixture(fixture) {
       const resources = await activationGate.wait();
-      await resources.fontFixture.load(fixture, async (requested, registry) => {
+      await resources.fontFixture.load(fixture, async (requested, library) => {
         const fontStartedAt = performance.now();
         const loaded = await loadMtsdfFontAsset({
           technique: 'mtsdf',
           fixture: requested,
           delivery: options.delivery ?? 'baked',
-          registry,
+          library,
           signal: resources.signal,
           ...(options.onBakeProgress === undefined ? {} : { onProgress: options.onBakeProgress }),
         });
         try {
-          const rasterConfiguration = await registeredMtsdfConfiguration(loaded.loaded.font, resources.signal);
+          const rasterConfiguration = mtsdfDataConfiguration(loaded.data);
           return {
-            font: loaded.loaded.font,
+            font: loaded.loaded,
             fontLoadMs: performance.now() - fontStartedAt,
             loaded,
             loadedFont: loaded.loaded,
@@ -548,7 +537,8 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         commitState(resources, {
           font: fontFixture.loadedFont,
           identity,
-          contentBox: mtsdfContentBox(nextContentWidth, next.textAlign),
+          constraints: mtsdfConstraints(nextContentWidth),
+          layout: mtsdfLayout(next.textAlign),
           style: mtsdfStyle(nextFontSize, identity),
           rasterPixelRatio: resources.viewport.dpr,
         });
@@ -593,7 +583,8 @@ function applyState(line: Text<typeof mtsdf>, next: MtsdfTextState): void {
   line.set({
     font: next.font,
     text: next.identity.text,
-    contentBox: next.contentBox,
+    constraints: next.constraints,
+    layout: next.layout,
     style: next.style,
     rasterPixelRatio: next.rasterPixelRatio,
   });
@@ -628,20 +619,25 @@ function advancePresentation(
   }
 }
 
-function mtsdfContentBox(width: number, align: 'start' | 'center'): ParagraphContentBox {
-  return { width: { mode: 'exact', size: width }, wrap: 'word', align, overflow: 'visible' };
+function mtsdfConstraints(width: number): Constraints {
+  return { width: { mode: 'exact', size: width } };
+}
+
+function mtsdfLayout(align: 'start' | 'center'): ParagraphLayout {
+  return { wrap: 'word', align, overflow: 'visible' };
 }
 
 function mtsdfStyle(
   fontSize: number,
   shaping: { readonly language: string; readonly direction: 'ltr' | 'rtl'; readonly features: readonly FontFeature[] },
-): ParagraphStyle {
+): TextStyle {
   return {
     fontSize,
     lineHeight: LIVE_TEXT_LINE_HEIGHT,
     language: shaping.language,
     direction: shaping.direction,
     features: shaping.features,
+    color: LIVE_TEXT_COLOR_CSS,
   };
 }
 
@@ -676,9 +672,7 @@ function positionLiveLine(
 }
 
 function committedLayout(line: Text<typeof mtsdf>): ParagraphLayoutSummary {
-  const layout = line.layout();
-  if (layout === undefined) throw new Error('live MSDF Text lost its committed layout');
-  return layout;
+  return line.measure();
 }
 
 function missingGlyphCount(layout: ParagraphLayoutSummary): number {

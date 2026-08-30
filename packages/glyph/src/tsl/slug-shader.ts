@@ -8,9 +8,9 @@ import { slugDilate, slugDilateMatrix, slugRender, type SlugRenderOptions } from
  * glyph's band tables inside the shared page; core owns their meaning, and a program owns how it stores them.
  */
 export interface TslSlugInstanceNodes {
-  /** Paragraph-local glyph origin, in layout units, with y measured downward. */
+  /** Paragraph-local glyph origin, with y measured downward. */
   readonly origin: Node<'vec2'>;
-  /** Glyph quad extent in layout units. */
+  /** Glyph quad extent in paragraph-local units. */
   readonly size: Node<'vec2'>;
   /** Upper-left em-space coordinate of the glyph quad. */
   readonly emOrigin: Node<'vec2'>;

@@ -1,4 +1,4 @@
-import type { LoadedFont, ParagraphContentBox, ParagraphStyle } from '@pmndrs/glyph';
+import type { Constraints, Font, ParagraphLayout, TextStyle } from '@pmndrs/glyph';
 import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
 import type { slug } from '@pmndrs/glyph/three/slug';
 import { Text } from '@pmndrs/glyph/three';
@@ -59,8 +59,8 @@ interface ComparisonResources {
   readonly slugScene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
   readonly shaping: ComparisonShaping;
-  readonly mtsdfFont: LoadedFont<typeof mtsdf>;
-  readonly slugFont: LoadedFont<typeof slug>;
+  readonly mtsdfFont: Font<typeof mtsdf>;
+  readonly slugFont: Font<typeof slug>;
   readonly mtsdfLine: Text<typeof mtsdf>;
   readonly slugLine: Text<typeof slug>;
   readonly quad: THREE.QuadMesh;
@@ -322,8 +322,8 @@ async function createComparisonResources(
   fontFixture: SelectableFontFixture,
   text: string,
 ): Promise<ComparisonResources> {
-  let mtsdfFont: LoadedFont<typeof mtsdf> | undefined;
-  let slugFont: LoadedFont<typeof slug> | undefined;
+  let mtsdfFont: Font<typeof mtsdf> | undefined;
+  let slugFont: Font<typeof slug> | undefined;
   let mtsdfLine: Text<typeof mtsdf> | undefined;
   let slugLine: Text<typeof slug> | undefined;
   let mtsdfTarget: THREE.RenderTarget | undefined;
@@ -352,9 +352,8 @@ async function createComparisonResources(
     const specimen = rasterConformanceSpecimen(fontFixture);
     const shaping: ComparisonShaping = { language: specimen.language, direction: specimen.direction };
     const view = comparisonLineView(context.viewport, 1);
-    const paint = { color: '#ffffff' };
-    mtsdfLine = new Text({ text, font: mtsdfFont, paint, ...lineViewUpdate(shaping, view) });
-    slugLine = new Text({ text, font: slugFont, paint, ...lineViewUpdate(shaping, view) });
+    mtsdfLine = new Text({ text, font: mtsdfFont, ...lineViewUpdate(shaping, view) });
+    slugLine = new Text({ text, font: slugFont, ...lineViewUpdate(shaping, view) });
     mtsdfLine.position.set(18, -42, 0);
     slugLine.position.copy(mtsdfLine.position);
     const mtsdfScene = new THREE.Scene();
@@ -549,13 +548,21 @@ function lineViewUpdate(
   shaping: ComparisonShaping,
   view: ComparisonLineView,
 ): {
-  readonly style: ParagraphStyle;
-  readonly contentBox: ParagraphContentBox;
+  readonly style: TextStyle;
+  readonly layout: ParagraphLayout;
+  readonly constraints: Constraints;
   readonly rasterPixelRatio: number;
 } {
   return {
-    style: { fontSize: view.fontSize, lineHeight: 1.2, language: shaping.language, direction: shaping.direction },
-    contentBox: { width: { mode: 'at-most', size: view.width }, wrap: 'word' },
+    style: {
+      fontSize: view.fontSize,
+      lineHeight: 1.2,
+      language: shaping.language,
+      direction: shaping.direction,
+      color: '#ffffff',
+    },
+    constraints: { width: { mode: 'at-most', size: view.width } },
+    layout: { wrap: 'word' },
     rasterPixelRatio: view.rasterPixelRatio,
   };
 }

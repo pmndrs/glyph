@@ -2,7 +2,7 @@ import type { FontHandle } from './identity.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
 
 /**
- * Axis-aligned box in paragraph-local layout units: origin at the paragraph box's top-left corner,
+ * Axis-aligned box in paragraph-local units: origin at the paragraph box's top-left corner,
  * positive X right, positive Y down. Every box this module publishes is in that one space.
  */
 export interface LayoutBox {
@@ -13,7 +13,7 @@ export interface LayoutBox {
 }
 
 /**
- * Named bits of `ParagraphLayout.glyphFlags`.
+ * Named bits of `GlyphLayout.glyphFlags`.
  *
  * These are the shaper's own flags, carried through the engine unchanged, so a consumer reading a
  * bit is reading HarfRust's answer rather than a pmndrs re-derivation. `produced` is the union of
@@ -55,15 +55,19 @@ export interface BaselineMetrics {
  *
  * Two extents are published and they are not interchangeable. `contentWidth`/`contentHeight` are
  * *advance* extents: the space the text claims, which is the correct number for a flex or grid host
- * because CSS box layout is advance-based. `inkBounds` is the *ink* extent: the union of the glyphs'
+ * because CSS box measure is advance-based. `inkBounds` is the *ink* extent: the union of the glyphs'
  * outlines, which is the correct number for centring something visually, because italics, accents,
  * and swashes overhang their advances. Using one where the other belongs is a silent visual error,
  * so both ship under names that cannot be confused.
  */
 export interface ParagraphMeasurement extends BaselineMetrics {
-  /** Resolved paragraph box width in local layout units. */
+  /** Whole-paragraph baseline metrics use `firstBaseline` as their reference baseline. */
+  readonly ascent: number;
+  readonly descent: number;
+  readonly lineHeight: number;
+  /** Resolved paragraph box width in paragraph-local units. */
   readonly width: number;
-  /** Resolved paragraph box height in local layout units. */
+  /** Resolved paragraph box height in paragraph-local units. */
   readonly height: number;
   /** Maximum horizontal advance extent of the laid-out lines before box clamping. */
   readonly contentWidth: number;
@@ -105,7 +109,7 @@ export interface ParagraphLineMetrics extends BaselineMetrics {
 }
 
 /**
- * Bounded aggregate inspection of one retained layout. Unlike `ParagraphLayout`, this contains no
+ * Bounded aggregate inspection of one retained layout. Unlike `GlyphLayout`, this contains no
  * per-glyph arrays and is suitable for positioning UI, telemetry, and missing-glyph admission
  * checks.
  */
@@ -137,7 +141,7 @@ export interface ParagraphIntrinsicWidths {
   readonly maxContentWidth: number;
 }
 
-/** A paragraph measurement plus the intrinsic widths carried by every `Paragraph.layout()` result. */
+/** A paragraph measurement plus the intrinsic widths carried by every `Paragraph.measure()` result. */
 export interface ParagraphMetrics extends ParagraphMeasurement, ParagraphIntrinsicWidths {}
 
 /**
@@ -151,12 +155,14 @@ export interface ParagraphMetrics extends ParagraphMeasurement, ParagraphIntrins
  * columns against each other. The one real consumer of the previous shape hand-wrote a parallel
  * length assertion over six of these arrays; that assertion is now the reader's obligation.
  */
-export interface ParagraphLayout extends ParagraphMeasurement {
+export interface GlyphLayout extends ParagraphMeasurement {
   readonly fontHandles: Uint32Array;
   readonly glyphFontSlots: Uint16Array;
   readonly glyphIds: Uint16Array;
   readonly clusters: Uint32Array;
-  /** Effective em size for each glyph in local layout units. */
+  /** Resolved Unicode bidi embedding level per glyph; odd levels run right-to-left. */
+  readonly glyphBidiLevels: Uint8Array;
+  /** Effective em size for each glyph in paragraph-local units. */
   readonly glyphFontSizes: Float32Array;
   readonly x: Float32Array;
   readonly y: Float32Array;
@@ -185,12 +191,40 @@ export interface ParagraphLayout extends ParagraphMeasurement {
  * with stable identities for directed augmentation.
  *
  * This is what `glyphs()` answers and what `Paragraph.glyphs(constraints)` copies out of Wasm.
- * It is a second query after `layout()`, not a bigger copy of it: asking for these columns
+ * It is a second query after `measure()`, not a bigger copy of it: asking for these columns
  * makes the engine emit a record per glyph, which a caller probing sizes never wants to pay
- * for. See `layout()` and `Text.layout()` for the split.
+ * for. See `measure()` and `Text.measure()` for the split.
  */
-export interface ParagraphLayoutInspection extends ParagraphLayout, ParagraphLayoutSummary, ParagraphIntrinsicWidths {
+export interface GlyphLayoutInspection extends GlyphLayout, ParagraphLayoutSummary, ParagraphIntrinsicWidths {
   readonly glyphStableIds: Uint32Array;
+}
+
+/** @internal Returns caller-owned columns while an integration keeps its canonical cached copy private. */
+export function copyGlyphLayoutInspection(layout: GlyphLayoutInspection): GlyphLayoutInspection {
+  return Object.freeze({
+    ...layout,
+    fontHandles: layout.fontHandles.slice(),
+    glyphStableIds: layout.glyphStableIds.slice(),
+    glyphFontSlots: layout.glyphFontSlots.slice(),
+    glyphIds: layout.glyphIds.slice(),
+    clusters: layout.clusters.slice(),
+    glyphBidiLevels: layout.glyphBidiLevels.slice(),
+    glyphFontSizes: layout.glyphFontSizes.slice(),
+    x: layout.x.slice(),
+    y: layout.y.slice(),
+    glyphAdvances: layout.glyphAdvances.slice(),
+    glyphInkX: layout.glyphInkX.slice(),
+    glyphInkY: layout.glyphInkY.slice(),
+    glyphInkWidths: layout.glyphInkWidths.slice(),
+    glyphInkHeights: layout.glyphInkHeights.slice(),
+    glyphFlags: layout.glyphFlags.slice(),
+    lineTextStarts: layout.lineTextStarts.slice(),
+    lineTextEnds: layout.lineTextEnds.slice(),
+    lineGlyphStarts: layout.lineGlyphStarts.slice(),
+    lineGlyphCounts: layout.lineGlyphCounts.slice(),
+    lineBaselines: layout.lineBaselines.slice(),
+    lineAdvances: layout.lineAdvances.slice(),
+  });
 }
 
 export interface FontSlotRecord {

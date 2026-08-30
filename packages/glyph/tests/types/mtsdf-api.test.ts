@@ -1,4 +1,4 @@
-import type { RegisteredFont, RegisteredRaster } from '@pmndrs/glyph';
+import type { RasterDecodeArtifact, RasterDecodeFont } from '@pmndrs/glyph';
 import {
   validateMsdfArtifact,
   type MsdfArtifactValidationContext,
@@ -18,8 +18,8 @@ const descriptor = msdfDescriptor();
 const configuredDescriptor = msdfDescriptor({ emSize: 32, pixelRange: 6 });
 const configuredOptions: MsdfOptions = { emSize: 32, pixelRange: 6 };
 const kind: 'msdf' = MSDF_KIND;
-declare const font: RegisteredFont;
-declare const raster: RegisteredRaster<'msdf'>;
+declare const font: RasterDecodeFont;
+declare const raster: RasterDecodeArtifact<'msdf'>;
 const data: Promise<MsdfData> = msdf.decode(font, raster);
 declare const artifactBytes: Uint8Array;
 declare const validationContext: MsdfArtifactValidationContext;

@@ -1,12 +1,12 @@
 import {
-  FontRegistry,
+  createFontLibrary,
   type BakeProgressListener,
+  type Constraints,
   type FontFeature,
-  type LoadedFont,
-  type ParagraphContentBox,
+  type Font,
+  type ParagraphLayout,
   type ParagraphLayoutSummary,
-  type ParagraphStyle,
-  type RegisteredFont,
+  type TextStyle,
 } from '@pmndrs/glyph';
 import type { slug } from '@pmndrs/glyph/three/slug';
 import { Text } from '@pmndrs/glyph/three';
@@ -150,21 +150,21 @@ export interface SlugTextPersistentSceneOptions {
 }
 
 interface SlugPersistentFontFixture {
-  /** The registry-scoped font the fixture controller keys ownership on. */
-  readonly font: RegisteredFont;
+  readonly font: Font<typeof slug>;
   readonly fontLoadMs: number;
   readonly loaded: Awaited<ReturnType<typeof loadSlugFontAsset>>;
-  readonly loadedFont: LoadedFont<typeof slug>;
+  readonly loadedFont: Font<typeof slug>;
   readonly rasterConfiguration: SlugRasterConfiguration;
 }
 
 /** The inputs one committed generation of the live paragraph was built from. */
 interface SlugTextState {
-  readonly font: LoadedFont<typeof slug>;
+  readonly font: Font<typeof slug>;
   /** The shaped-run inputs this generation committed, kept beside the style so a rollback restores both together. */
   readonly identity: ShapedTextIdentity;
-  readonly contentBox: ParagraphContentBox;
-  readonly style: ParagraphStyle;
+  readonly constraints: Constraints;
+  readonly layout: ParagraphLayout;
+  readonly style: TextStyle;
   readonly rasterPixelRatio: number;
 }
 
@@ -224,13 +224,13 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
   let startupMs = 0;
   let firstDrawMs = 0;
   let firstDrawRecorded = false;
-  const registry = new FontRegistry();
+  const library = createFontLibrary();
   let fontFixture: RetainedFontFixtureController<SlugPersistentFontFixture> | undefined;
   let activationSignal: AbortSignal | undefined;
   let canvasSurface: ReturnType<typeof createCanvasSurface> | undefined;
   let scene: THREE.Scene | undefined;
   let camera: THREE.OrthographicCamera | undefined;
-  let loadedFont: LoadedFont<typeof slug> | undefined;
+  let loadedFont: Font<typeof slug> | undefined;
   let line: Text<typeof slug> | undefined;
   let committedState: SlugTextState | undefined;
   let presentation: SlugPresentation | undefined;
@@ -258,24 +258,9 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
     return { canvasSurface, camera, line, scene, state: committedState };
   };
 
-  /**
-   * Commits one generation of shaping inputs. A rejected generation is rolled back to the committed one so the failed
-   * candidate font is left unleased, which is what lets the fixture controller dispose it.
-   */
+  /** Commits one validated generation; `Text.set()` leaves desired state unchanged when it rejects. */
   const commitState = (activeLine: Text<typeof slug>, next: SlugTextState): void => {
-    const previous = committedState;
-    try {
-      applyState(activeLine, next);
-    } catch (error) {
-      if (previous !== undefined) {
-        try {
-          applyState(activeLine, previous);
-        } catch {
-          // The rollback cannot improve on the original failure; report the failure the caller asked about.
-        }
-      }
-      throw error;
-    }
+    applyState(activeLine, next);
     committedState = next;
   };
 
@@ -357,7 +342,8 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       const before = originsToInterpolate(activeLine, state, state.identity);
       commitState(activeLine, {
         ...state,
-        contentBox: slugContentBox(nextContentWidth, textAlign),
+        constraints: slugConstraints(nextContentWidth),
+        layout: slugLayout(textAlign),
         rasterPixelRatio: viewport.dpr,
       });
       if (closing || disposed || revision !== updateRevision) return;
@@ -398,22 +384,21 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         technique: 'slug',
         fixture: initialFontFixture,
         delivery,
-        registry,
+        library,
         signal: context.signal,
         ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
       });
       loadedFont = loaded.loaded;
       const fontLoadMs = performance.now() - fontStarted;
       context.signal.throwIfAborted();
-      const rasterConfiguration = slugDataConfiguration(loaded.loaded.data);
+      const rasterConfiguration = slugDataConfiguration(loaded.data);
       fontFixture = createRetainedFontFixtureController(
-        registry,
+        library,
         {
           fixture: initialFontFixture,
-          asset: { font: loaded.loaded.font, fontLoadMs, loaded, loadedFont, rasterConfiguration },
+          asset: { font: loaded.loaded, fontLoadMs, loaded, loadedFont, rasterConfiguration },
         },
-        // The loaded font owns the registered font, its decoded raster, and the runtime entry; releasing only the
-        // registered font would strand the raster this technique still holds.
+        // Dispose the application Font lease; live renderer bindings retain their own counted lease.
         { dispose: (asset) => asset.loadedFont.dispose() },
       );
       const textStarted = performance.now();
@@ -421,16 +406,17 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       const state: SlugTextState = {
         font: loadedFont,
         identity,
-        contentBox: slugContentBox(committedContentWidth, textAlign),
+        constraints: slugConstraints(committedContentWidth),
+        layout: slugLayout(textAlign),
         style: slugStyle(fontSize, identity),
         rasterPixelRatio: context.viewport.dpr,
       };
       line = new Text({
         font: state.font,
         text: state.identity.text,
-        contentBox: state.contentBox,
+        constraints: state.constraints,
+        layout: state.layout,
         style: state.style,
-        paint: { color: LIVE_TEXT_COLOR_CSS },
         rasterPixelRatio: state.rasterPixelRatio,
       });
       const activeLine = line;
@@ -540,20 +526,20 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       if (activeFontFixture === undefined || signal === undefined) {
         throw new DOMException('The Slug scene is not active', 'InvalidStateError');
       }
-      await activeFontFixture.load(fixture, async (requested, fixtureRegistry) => {
+      await activeFontFixture.load(fixture, async (requested, fixtureLibrary) => {
         const fontStartedAt = performance.now();
         const loaded = await loadSlugFontAsset({
           technique: 'slug',
           fixture: requested,
           delivery,
-          registry: fixtureRegistry,
+          library: fixtureLibrary,
           signal,
           ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
         });
         try {
-          const rasterConfiguration = slugDataConfiguration(loaded.loaded.data);
+          const rasterConfiguration = slugDataConfiguration(loaded.data);
           return {
-            font: loaded.loaded.font,
+            font: loaded.loaded,
             fontLoadMs: performance.now() - fontStartedAt,
             loaded,
             loadedFont: loaded.loaded,
@@ -590,7 +576,8 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         commitState(activeLine, {
           font: fixture.loadedFont,
           identity,
-          contentBox: slugContentBox(nextContentWidth, next.textAlign),
+          constraints: slugConstraints(nextContentWidth),
+          layout: slugLayout(next.textAlign),
           style: slugStyle(nextFontSize, identity),
           rasterPixelRatio: active.state.rasterPixelRatio,
         });
@@ -643,7 +630,8 @@ function applyState(line: Text<typeof slug>, next: SlugTextState): void {
   line.set({
     font: next.font,
     text: next.identity.text,
-    contentBox: next.contentBox,
+    constraints: next.constraints,
+    layout: next.layout,
     style: next.style,
     rasterPixelRatio: next.rasterPixelRatio,
   });
@@ -651,20 +639,25 @@ function applyState(line: Text<typeof slug>, next: SlugTextState): void {
   if (line.error !== undefined) throw line.error;
 }
 
-function slugContentBox(width: number, align: 'start' | 'center'): ParagraphContentBox {
-  return { width: { mode: 'exact', size: width }, wrap: 'word', align, overflow: 'visible' };
+function slugConstraints(width: number): Constraints {
+  return { width: { mode: 'exact', size: width } };
+}
+
+function slugLayout(align: 'start' | 'center'): ParagraphLayout {
+  return { wrap: 'word', align, overflow: 'visible' };
 }
 
 function slugStyle(
   fontSize: number,
   shaping: { readonly language: string; readonly direction: 'ltr' | 'rtl'; readonly features: readonly FontFeature[] },
-): ParagraphStyle {
+): TextStyle {
   return {
     fontSize,
     lineHeight: LIVE_TEXT_LINE_HEIGHT,
     language: shaping.language,
     direction: shaping.direction,
     features: shaping.features,
+    color: LIVE_TEXT_COLOR_CSS,
   };
 }
 
@@ -682,9 +675,7 @@ function positionLiveLine(
 }
 
 function committedLayout(line: Text<typeof slug>): ParagraphLayoutSummary {
-  const layout = line.layout();
-  if (layout === undefined) throw new Error('live Slug Text lost its committed layout');
-  return layout;
+  return line.measure();
 }
 
 function missingGlyphCount(layout: ParagraphLayoutSummary): number {

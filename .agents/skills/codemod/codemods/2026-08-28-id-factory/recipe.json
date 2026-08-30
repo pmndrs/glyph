@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-28-id-factory",
+  "created": "2026-08-28",
+  "package": "@pmndrs/glyph",
+  "from": "canary before feat/render-technique-portability",
+  "to": "canary at or after feat/render-technique-portability",
+  "summary": "Replace kind strings and parallel render-ID helpers with the callable, domain-branded id.* API.",
+  "instructions": "./instructions.md",
+  "transform": "./transform.mjs",
+  "changes": [
+    { "kind": "call-rewrite", "from": "id(kind, name)", "to": "id.<domain>(name)", "automatic": true },
+    { "kind": "call-rewrite", "from": "techniqueId(value)", "to": "id.technique(value)", "automatic": true },
+    { "kind": "call-rewrite", "from": "programId(...)", "to": "id.program(...)", "automatic": true },
+    { "kind": "call-rewrite", "from": "resourceId(value)", "to": "id.resource(value)", "automatic": true },
+    {
+      "kind": "call-rewrite",
+      "from": "renderWireId(name)",
+      "to": "choose id.technique, id.program, id.resource, or id(name)",
+      "automatic": false
+    },
+    {
+      "kind": "type-rename",
+      "from": "RenderWireIdentityRegistry",
+      "to": "RenderIdFactory",
+      "automatic": true
+    },
+    { "kind": "property-rename", "from": "RasterPolicyProgramOptions.identityRegistry", "to": "ids", "automatic": true }
+  ],
+  "verification": [
+    "mise exec -- pnpm --filter @pmndrs/glyph check",
+    "mise exec -- pnpm --filter @pmndrs/glyph-example-renderer check",
+    "mise exec -- pnpm --filter @pmndrs/glyph-benchmarks check"
+  ]
+}

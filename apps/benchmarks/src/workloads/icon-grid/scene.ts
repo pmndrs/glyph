@@ -99,17 +99,19 @@ export function createIconGridEntries({
       font: iconFont,
       rasterPixelRatio: dpr,
       text: glyph,
-      style: { fontSize: iconSize },
-      paint: { color: paintColor(LIVE_TEXT_COLOR) },
+      style: { fontSize: iconSize, color: paintColor(LIVE_TEXT_COLOR) },
     });
     const labelText = new Text({
       font: labelFont,
       rasterPixelRatio: dpr,
       text: iconGridLabel(iconIndex),
-      style: { fontSize: ICON_GRID_LABEL_SIZE, lineHeight: LIVE_TEXT_LINE_HEIGHT },
-      paint: { color: paintColor(LIVE_TEXT_COLOR) },
-      contentBox: {
-        width: exactWidth(ICON_GRID_LABEL_WIDTH),
+      style: {
+        fontSize: ICON_GRID_LABEL_SIZE,
+        lineHeight: LIVE_TEXT_LINE_HEIGHT,
+        color: paintColor(LIVE_TEXT_COLOR),
+      },
+      constraints: { width: exactWidth(ICON_GRID_LABEL_WIDTH) },
+      layout: {
         maxLines: 2,
         overflow: 'ellipsis',
         wrap: 'none',

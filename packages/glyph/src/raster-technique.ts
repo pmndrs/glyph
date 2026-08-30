@@ -1,5 +1,5 @@
-import type { RegisteredFont } from './font.js';
-import type { JsonValue, RasterOptionsArgument, RegisteredRaster, RuntimeRasterBakerLoader } from './raster.js';
+import type { RasterDecodeFont } from './font.js';
+import type { JsonValue, RasterDecodeArtifact, RasterOptionsArgument, RuntimeRasterBakerLoader } from './raster.js';
 
 declare const rasterTechniqueIdBrand: unique symbol;
 declare const rasterResourceIdBrand: unique symbol;
@@ -11,6 +11,9 @@ export type RasterTechniqueId = string & { readonly [rasterTechniqueIdBrand]: tr
 
 /** Stable technique-authored identity for one physical raster resource. */
 export type RasterResourceId = string & { readonly [rasterResourceIdBrand]: true };
+
+/** Text effects a technique's policy and shader can render. */
+export type RasterTextEffect = 'outline' | 'shadow';
 
 interface RasterTechniqueTypeMap<Options, Descriptor, Data> {
   readonly options: Options;
@@ -24,6 +27,7 @@ export interface AnyRasterTechnique {
   readonly kind: string;
   readonly extension: string;
   readonly version: number;
+  readonly textEffects: readonly RasterTextEffect[];
   readonly [rasterTechniqueTypes]?: RasterTechniqueTypeMap<unknown, JsonValue, unknown>;
 }
 
@@ -44,7 +48,7 @@ export interface RasterTechnique<
   readonly runtimeBaker?: RuntimeRasterBakerLoader<Kind, Options>;
 
   descriptor(options: RasterOptionsArgument<Options>): Descriptor;
-  decode(font: RegisteredFont, raster: RegisteredRaster<Kind>, signal?: AbortSignal): Promise<Data>;
+  decode(font: RasterDecodeFont, raster: RasterDecodeArtifact<Kind>, signal?: AbortSignal): Promise<Data>;
   dispose(data: Data): void;
 }
 
@@ -110,11 +114,22 @@ export function defineRasterTechnique<
   ) {
     throw new TypeError('raster techniques need descriptor, decode, dispose, and optional runtimeBaker functions');
   }
+  if (!Array.isArray(technique.textEffects)) throw new TypeError('raster technique textEffects must be an array');
+  const textEffects = [...technique.textEffects];
+  for (const effect of textEffects) {
+    if (effect !== 'outline' && effect !== 'shadow') {
+      throw new TypeError(`raster technique text effect "${String(effect)}" is not supported`);
+    }
+  }
+  if (new Set(textEffects).size !== textEffects.length) {
+    throw new TypeError('raster technique textEffects must not contain duplicates');
+  }
   const defined = Object.freeze({
     id: technique.id,
     kind: technique.kind,
     extension: technique.extension,
     version: technique.version,
+    textEffects: Object.freeze(textEffects),
     ...(technique.runtimeBaker === undefined ? {} : { runtimeBaker: technique.runtimeBaker }),
     descriptor: technique.descriptor,
     decode: technique.decode,

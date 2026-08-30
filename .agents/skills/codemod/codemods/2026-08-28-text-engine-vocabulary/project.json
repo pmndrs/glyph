@@ -1,0 +1,27 @@
+{
+  "extends": "../../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "customConditions": ["source"],
+    "jsx": "react-jsx",
+    "noEmit": true
+  },
+  "include": [
+    "../../../../../packages/**/*.ts",
+    "../../../../../packages/**/*.tsx",
+    "../../../../../packages/**/*.mts",
+    "../../../../../packages/**/*.mjs",
+    "../../../../../apps/**/*.ts",
+    "../../../../../apps/**/*.tsx",
+    "../../../../../apps/**/*.mjs"
+  ],
+  "exclude": [
+    "../../../../../**/dist/**",
+    "../../../../../**/node_modules/**",
+    "../../../../../apps/benchmarks/size-entries/**/*.ts",
+    "../../../../../packages/glyph/tests/types/mtsdf-api.test.ts",
+    "../../../../../packages/glyph/tests/types/portable-resources.test.ts",
+    "../../../../../packages/glyph/tests/types/raster-plan-program.test.ts",
+    "../../../../../packages/glyph/tests/types/technique-schema.test.ts"
+  ]
+}

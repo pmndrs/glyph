@@ -1,4 +1,4 @@
-import { FontRegistry, type LoadedFont } from '@pmndrs/glyph';
+import type { Font } from '@pmndrs/glyph';
 import { Text, TextGroup } from '@pmndrs/glyph/three';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import { registerExternalGlyphExampleThree } from './external-raster-three';
@@ -38,7 +38,7 @@ interface ExternalRasterResources {
   readonly camera: THREE.OrthographicCamera;
   readonly text: Text<typeof glyphExample>;
   readonly textGroup: TextGroup;
-  readonly font: LoadedFont<typeof glyphExample>;
+  readonly font: Font<typeof glyphExample>;
   readonly orderingGeometry: THREE.PlaneGeometry;
   readonly orderingMaterial: THREE.MeshBasicNodeMaterial;
   readonly retainedMesh: THREE.Mesh;
@@ -104,7 +104,7 @@ async function createResources(
   let target: THREE.RenderTarget | undefined;
   let text: Text<typeof glyphExample> | undefined;
   let textGroup: TextGroup | undefined;
-  let font: LoadedFont<typeof glyphExample> | undefined;
+  let font: Font<typeof glyphExample> | undefined;
   let orderingGeometry: THREE.PlaneGeometry | undefined;
   let orderingMaterial: THREE.MeshBasicNodeMaterial | undefined;
   try {
@@ -126,15 +126,13 @@ async function createResources(
       source: sourceUrlForFixture('inter'),
       raster: { technique: glyphExample, options: { paletteSeed: 17, inset: 0.1 } },
       runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
-      registry: new FontRegistry(),
       ...(signal === undefined ? {} : { signal }),
     });
     signal?.throwIfAborted();
     text = new Text({
       text: INITIAL_TEXT,
       font,
-      style: { fontSize: 48 },
-      paint: { color: '#ffffff' },
+      style: { fontSize: 48, color: '#ffffff' },
     });
     const scene = new THREE.Scene();
     const coverGroup = new THREE.Group();

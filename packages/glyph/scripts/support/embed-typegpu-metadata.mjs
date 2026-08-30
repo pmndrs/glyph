@@ -18,13 +18,13 @@ import { join } from 'node:path';
  * @param {string} stagingDirectory The staged distribution whose `typegpu` outputs are rewritten in place.
  */
 export async function embedTypeGpuMetadata(stagingDirectory) {
-  const { default: typegpuPlugin } = await import('unplugin-typegpu/rollup');
-  const plugin = typegpuPlugin();
   const moduleDirectory = join(stagingDirectory, 'typegpu');
   const entries = [
     'typegpu.js',
     ...(await readdir(moduleDirectory)).filter((name) => name.endsWith('.js')).map((name) => join('typegpu', name)),
   ];
+  const { default: typegpuPlugin } = await import('unplugin-typegpu/rollup');
+  const plugin = typegpuPlugin();
   for (const entry of entries) {
     const file = join(stagingDirectory, entry);
     const source = await readFile(file, 'utf8');
@@ -32,6 +32,10 @@ export async function embedTypeGpuMetadata(stagingDirectory) {
     const transformed = await plugin.transform.handler.call({}, source, file);
     if (transformed && typeof transformed.code === 'string' && transformed.code !== source) {
       await writeFile(file, transformed.code);
+    }
+    const output = transformed?.code ?? source;
+    if (output.includes('use gpu') && !output.includes('__TYPEGPU_META__')) {
+      throw new Error(`${file} contains TypeGPU directives without compiler metadata`);
     }
   }
 }

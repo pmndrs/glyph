@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { FontLoader, FontRegistry } from '@pmndrs/glyph';
+import * as glyph from '@pmndrs/glyph';
 
 const manifestUrl = new URL('../../package.json', import.meta.url);
 
@@ -23,6 +23,20 @@ test('the published contract is ESM-only', async () => {
     registry: 'https://registry.npmjs.org/',
   });
   assert.deepEqual(manifest.bin, { glyph: './bin/glyph.js' });
+  assert.deepEqual(manifest.sideEffects, [
+    './src/raster/bitmap-technique.ts',
+    './src/raster/msdf.ts',
+    './src/raster/slug-technique.ts',
+    './src/three/bitmap.ts',
+    './src/three/msdf.ts',
+    './src/three/slug.ts',
+    './dist/raster/bitmap-technique.js',
+    './dist/raster/msdf.js',
+    './dist/raster/slug-technique.js',
+    './dist/three/bitmap.js',
+    './dist/three/msdf.js',
+    './dist/three/slug.js',
+  ]);
   assert.equal(manifest.exports['./internal/raster-baker-profile'], undefined);
   assert.deepEqual(manifest.pmndrs, {
     glyph: { bitmap: './bakers/bitmap', msdf: './bakers/msdf', slug: './bakers/slug' },
@@ -75,16 +89,19 @@ test('the published contract is ESM-only', async () => {
       continue;
     }
 
-    assert.deepEqual(Object.keys(target).sort(), ['import', 'types']);
+    assert.deepEqual(Object.keys(target).sort(), ['import', 'source', 'types']);
+    assert.match(target.source, /^\.\/src\/.*\.ts$/);
+    assert.deepEqual(target.types, { source: target.source, default: target.import.replace(/\.js$/, '.d.ts') });
     assert.match(target.import, /^\.\/dist\/.*\.js$/);
-    assert.match(target.types, /^\.\/dist\/.*\.d\.ts$/);
     assert.equal('require' in target, false);
   }
 });
 
-test('the public loader graph exposes registration without eager baker or Node host edges', async () => {
-  assert.equal(typeof FontLoader, 'function');
-  assert.equal(typeof FontRegistry, 'function');
+test('the public loader graph exposes immutable loading without mutable registration handles', async () => {
+  assert.equal(typeof glyph.loadFont, 'function');
+  assert.equal(typeof glyph.createFontLibrary, 'function');
+  assert.equal('FontLoader' in glyph, false);
+  assert.equal('FontRegistry' in glyph, false);
   const [entry, loader, runtimeHost, runtimeWorker, serialWorkerHost] = await Promise.all([
     readFile(new URL('../../dist/index.js', import.meta.url), 'utf8'),
     readFile(new URL('../../dist/loader.js', import.meta.url), 'utf8'),
@@ -98,7 +115,7 @@ test('the public loader graph exposes registration without eager baker or Node h
   assert.doesNotMatch(initialGraph, /(?:\.\/node\/|\.\/bakers\/)/);
   assert.doesNotMatch(initialGraph, /(?:PMNDRS_font_slug|\.\/raster\/slug|slug-shaders)/);
   assert.doesNotMatch(entry, /(?:three\/|three["'])/, 'core entry must not import Three');
-  assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\/runtime-bake-worker\.js["']/);
+  assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\.\/dist\/runtime-bake-worker\.js["']/);
   assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/);
   assert.match(serialWorkerHost, /type:\s*["']module["']/);
   assert.match(runtimeWorker, /from ["']\.\/font-baker\/wasm-url\.js["']/);

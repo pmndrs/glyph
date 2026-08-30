@@ -1,4 +1,4 @@
-import { registerThreeRasterPlanProgram, threePolicyAbi } from '@pmndrs/glyph/three';
+import { registerThreeRasterPlanProgram } from '@pmndrs/glyph/three';
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 import { afterAll, expect, test } from 'vitest';
@@ -32,8 +32,6 @@ test('renderer languages share one exact portable shader contract', () => {
     expect(variant.buffers).toBe(glyphExampleShaderContract.buffers);
     expect(variant.resources).toBe(glyphExampleShaderContract.resources);
     expect(variant.outputs).toBe(glyphExampleShaderContract.outputs);
-    expect(variant.resource).toBe(glyphExampleShaderContract.resource);
-    expect(variant.geometryResource).toBe(glyphExampleShaderContract.geometryResource);
   }
 });
 
@@ -57,11 +55,11 @@ test('a Three consumer manually registers the example TSL realization', () => {
         const size = context.namedBuffers.get('size');
         const color = context.namedBuffers.get('color');
         if (
-          origin?.scalarType !== threePolicyAbi.scalarTypes.f32 ||
+          origin?.scalarType !== 'f32' ||
           origin.vectorWidth !== 2 ||
-          size?.scalarType !== threePolicyAbi.scalarTypes.f32 ||
+          size?.scalarType !== 'f32' ||
           size.vectorWidth !== 2 ||
-          color?.scalarType !== threePolicyAbi.scalarTypes.f32 ||
+          color?.scalarType !== 'f32' ||
           color.vectorWidth !== 4
         ) {
           throw new TypeError('glyph-example TSL registration received incompatible buffers');
@@ -88,9 +86,9 @@ test('a Three consumer manually registers the example TSL realization', () => {
   registerThreeRasterPlanProgram(program);
   const attribute = new THREE.StorageInstancedBufferAttribute(new Float32Array(4), 2);
   const namedBuffers = new Map([
-    ['origin', { scalarType: threePolicyAbi.scalarTypes.f32, vectorWidth: 2, attribute }],
-    ['size', { scalarType: threePolicyAbi.scalarTypes.f32, vectorWidth: 2, attribute }],
-    ['color', { scalarType: threePolicyAbi.scalarTypes.f32, vectorWidth: 4, attribute }],
+    ['origin', { scalarType: 'f32' as const, vectorWidth: 2, attribute }],
+    ['size', { scalarType: 'f32' as const, vectorWidth: 2, attribute }],
+    ['color', { scalarType: 'f32' as const, vectorWidth: 4, attribute }],
   ]);
   const material = program.variant.createMaterial({
     technique: glyphExamplePlanProgram.technique,
@@ -115,7 +113,6 @@ test('the TypeGPU realization matches the same contract and resolves to WGSL', (
     techniqueId: glyphExampleTslVariant.techniqueId,
     geometry: glyphExampleTslVariant.geometry,
     buffers: glyphExampleTslVariant.buffers,
-    resource: glyphExampleTslVariant.resource,
   });
   expect(glyphExampleShaderContract).toMatchObject({
     techniqueId: glyphExamplePlanProgram.technique.id,

@@ -126,7 +126,7 @@ function assertObservation(candidate: unknown): asserts candidate is Record<stri
       entry.width !== 512 ||
       entry.height !== 512 ||
       entry.fetchContract !==
-        'core and companion once; page resources twice for public Text and independent CPU-reference decodes' ||
+        'core, companion, and every page resource exactly once; one target-v1 load feeds both Text and the CPU reference' ||
       !Array.isArray(entry.fetches) ||
       entry.fetches.length !== 5
     ) {
@@ -153,8 +153,7 @@ function assertObservation(candidate: unknown): asserts candidate is Record<stri
       observedFetches.set(fetch.url, fetch.count);
     }
     for (const url of artifactUrls) {
-      const expectedCount = /(?:-curves\.ktx2|-headers\.r32ui\.bin|-references\.r16ui\.bin)$/u.test(url) ? 2 : 1;
-      if (observedFetches.get(url) !== expectedCount) {
+      if (observedFetches.get(url) !== 1) {
         throw new TypeError(`${entry.backend} changed the fetch count for ${url}`);
       }
     }

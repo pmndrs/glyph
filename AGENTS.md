@@ -53,4 +53,8 @@ Before searching for or inventing a specialized maintenance command, run `mise e
 
 TypeScript checks use the repository-pinned compiler and the patched `@types/three` declaration graph. For TSL typing changes, begin with the focused regression fixture before running a package or application project.
 
+Use the repository-local `codemod` skill for TypeScript or TSX symbol renames, import moves, signature changes, and public
+API migrations. It uses pinned ts-morph and dated migration recipes; global find-and-replace is not an allowed code rename
+tool. Update non-code documentation only after the AST migration and residual-use inventory are clean.
+
 Create small Conventional Commits that each preserve one coherent invariant. Finish completed work with a clean worktree.

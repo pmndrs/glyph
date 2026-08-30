@@ -1,58 +1,58 @@
 import {
-  readTextEngineBuffer,
-  readTextEnginePatch,
-  readTextEngineResource,
-  readTextEngineRetirement,
-  retainedPublicationBrand,
-  TextEngineRenderPlanView,
-  type RetainedTextEnginePublication,
+  readRenderPlanBuffer,
+  readRenderPlanDraw,
+  readRenderPlanPatch,
+  readRenderPlanPrimitive,
+  readRenderPlanResource,
+  readRenderPlanRetirement,
+  type AsyncPlanCandidate,
+  type PlanCandidate,
+  type RenderPlanReader,
 } from '@pmndrs/glyph/core';
 
-import { decodeDraw, decodePrimitive, type ExampleDrawList } from './draw-list.js';
+import type { ExampleDrawList } from './draw-list.js';
 import type { ExampleTableSnapshot } from './snapshot.js';
 
-/**
- * Reads one retained publication into the host's draw-list structures.
- *
- * The parameter demands `RetainedTextEnginePublication`, not a plain publication: a
- * draw list is built to be held across frames, and a borrowed publication expires at
- * the session's next call. The brand makes passing a live-but-doomed borrow a compile
- * error instead of a latent read of freed memory.
- */
-export function readDrawList(
-  publication: RetainedTextEnginePublication,
-  view: TextEngineRenderPlanView = new TextEngineRenderPlanView(),
+/** Decode a target candidate and own only the fields the returned list retains. */
+export function readCandidate(candidate: PlanCandidate | AsyncPlanCandidate): ExampleDrawList {
+  return readPlan(candidate.plan, candidate, candidate.plan.delivery === 'borrowed');
+}
+
+function readPlan(
+  view: RenderPlanReader,
+  publication: Readonly<{ engineRevision: number; planRevision: number; publicationGeneration: number }>,
+  copyRetainedBytes: boolean,
 ): ExampleDrawList {
-  // The brand is checked again at runtime because plain JavaScript callers bypass the types.
-  if (!(retainedPublicationBrand in publication)) {
-    throw new TypeError('readDrawList needs a retained publication: borrow expires, retain first');
-  }
-  view.bind(publication);
   const draws = view.table('draws');
-  const decoded: ReturnType<typeof decodeDraw>[] = [];
-  for (let index = 0; index < draws.count; index += 1) decoded.push(decodeDraw(view, view.record(draws, index)));
+  const decoded: ReturnType<typeof readRenderPlanDraw>[] = [];
+  for (let index = 0; index < draws.count; index += 1) decoded.push(readRenderPlanDraw(view, draws, index));
   const resources = view.table('resources');
-  const resourceRecords: ReturnType<typeof readTextEngineResource>[] = [];
+  const resourceRecords: ReturnType<typeof readRenderPlanResource>[] = [];
   for (let index = 0; index < resources.count; index += 1) {
-    resourceRecords.push(readTextEngineResource(view, resources, index));
+    resourceRecords.push(readRenderPlanResource(view, resources, index));
   }
   const buffers = view.table('buffers');
-  const bufferRecords: ReturnType<typeof readTextEngineBuffer>[] = [];
+  const bufferRecords: ReturnType<typeof readRenderPlanBuffer>[] = [];
   for (let index = 0; index < buffers.count; index += 1) {
-    bufferRecords.push(readTextEngineBuffer(view, buffers, index));
+    bufferRecords.push(readRenderPlanBuffer(view, buffers, index));
   }
   const primitives = view.table('primitives');
-  const primitiveRecords: ReturnType<typeof decodePrimitive>[] = [];
+  const primitiveRecords: ReturnType<typeof readRenderPlanPrimitive>[] = [];
   for (let index = 0; index < primitives.count; index += 1) {
-    primitiveRecords.push(decodePrimitive(view, view.record(primitives, index)));
+    primitiveRecords.push(readRenderPlanPrimitive(view, primitives, index));
   }
   const patches = view.table('patches');
-  const patchRecords: ReturnType<typeof readTextEnginePatch>[] = [];
-  for (let index = 0; index < patches.count; index += 1) patchRecords.push(readTextEnginePatch(view, patches, index));
+  const patchRecords: ReturnType<typeof readRenderPlanPatch>[] = [];
+  for (let index = 0; index < patches.count; index += 1) {
+    const patch = readRenderPlanPatch(view, patches, index);
+    patchRecords.push(
+      copyRetainedBytes && patch.kind === 'write' ? { ...patch, payload: patch.payload.slice() } : patch,
+    );
+  }
   const retirements = view.table('retirements');
-  const retirementRecords: ReturnType<typeof readTextEngineRetirement>[] = [];
+  const retirementRecords: ReturnType<typeof readRenderPlanRetirement>[] = [];
   for (let index = 0; index < retirements.count; index += 1) {
-    retirementRecords.push(readTextEngineRetirement(view, retirements, index));
+    retirementRecords.push(readRenderPlanRetirement(view, retirements, index));
   }
   return {
     engineRevision: publication.engineRevision,
@@ -64,23 +64,25 @@ export function readDrawList(
     primitiveRecords,
     patches: patchRecords,
     retirements: retirementRecords,
-    resources: snapshot(view, 'resources'),
-    buffers: snapshot(view, 'buffers'),
-    primitives: snapshot(view, 'primitives'),
-    diagnostics: snapshot(view, 'diagnostics'),
+    resources: snapshot(view, 'resources', copyRetainedBytes),
+    buffers: snapshot(view, 'buffers', copyRetainedBytes),
+    primitives: snapshot(view, 'primitives', copyRetainedBytes),
+    diagnostics: snapshot(view, 'diagnostics', copyRetainedBytes),
   };
 }
 
-/** A window into the retained bytes — no second copy. */
+/** Own borrowed bytes that escape target acceptance; preserve existing ownership otherwise. */
 function snapshot(
-  view: TextEngineRenderPlanView,
+  view: RenderPlanReader,
   name: 'resources' | 'buffers' | 'primitives' | 'diagnostics',
+  copy: boolean,
 ): ExampleTableSnapshot {
   const table = view.table(name);
   const byteLength = table.count * table.stride;
+  const records = byteLength === 0 ? new Uint8Array(0) : view.bytes(table.offset, byteLength);
   return {
     count: table.count,
     stride: table.stride,
-    records: byteLength === 0 ? new Uint8Array(0) : view.bytes(table.offset, byteLength),
+    records: copy ? records.slice() : records,
   };
 }

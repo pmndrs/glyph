@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test, { after, before } from 'node:test';
 
-import { FontLoader, FontLoadError, FontRegistry } from '@pmndrs/glyph';
+import { FontLoader, FontLoadError, FontRegistry } from '../../dist/loader.js';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
@@ -368,7 +368,8 @@ test('registration merges embedded and external delivery without changing raster
   assert.equal(records.byteLength, 2937 * 20);
   const firstByte = records[0];
   records[0] ^= 0xff;
-  assert.equal(raster.view(recordsBufferView)[0], firstByte);
+  assert.equal(raster.view(recordsBufferView)[0], firstByte ^ 0xff);
+  records[0] = firstByte;
   assert.throws(() => raster.view(1_000_000), RangeError);
 });
 

@@ -1,28 +1,25 @@
 import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/webgpu';
 
-import { textShaperAbi } from '../core.js';
 import {
-  compileRasterFont,
   createRasterPolicyProgram,
-  RenderWireIdentityRegistry,
   resolveRasterPlanProgram,
   type AnyTechniqueSchema,
-  type CompiledRasterFont,
   type PolicyBufferDeclarations,
   type PolicyScalarKind,
+  type RenderIdFactory,
   type PortableResource,
   type PortableTextureFormat,
   type TechniqueGeometryDeclaration,
   type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
+  type RenderPlanScalarType,
 } from '../core.js';
-import type { LoadedFont } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { ThreeTextMaterial } from './material.js';
 import { threePolicyCapabilitySet, threeSystemBuffers } from './render-policy.js';
 
 export interface ThreePlanProgramBuffer {
-  readonly scalarType: number;
+  readonly scalarType: RenderPlanScalarType;
   readonly vectorWidth: number;
   readonly attribute: StorageInstancedBufferAttribute;
 }
@@ -66,9 +63,14 @@ export type ThreeRasterPlanBufferCapabilities<Buffers extends PolicyBufferDeclar
 };
 
 export type ThreeRasterPlanResourceCapability<Declaration> = Declaration extends TechniqueResourceDeclaration
-  ? Declaration extends { readonly format: PortableTextureFormat }
-    ? { readonly kind: Declaration['kind']; readonly format: Declaration['format'] }
-    : { readonly kind: Declaration['kind']; readonly format?: never }
+  ? Declaration extends { readonly kind: 'group'; readonly members: infer Members }
+    ? {
+        readonly kind: 'group';
+        readonly members: { readonly [Name in keyof Members]: ThreeRasterPlanResourceCapability<Members[Name]> };
+      }
+    : Declaration extends { readonly format: PortableTextureFormat }
+      ? { readonly kind: Declaration['kind']; readonly format: Declaration['format'] }
+      : { readonly kind: Declaration['kind']; readonly format?: never }
   : never;
 
 export type ThreeRasterPlanResourceCapabilities<Resources extends TechniqueResourceDeclarations> = {
@@ -105,15 +107,14 @@ export interface CompiledThreeRasterPlanProgram {
   readonly techniqueId: number;
   readonly programId: number;
   readonly policy: import('../core.js').PolicyProgram;
-  compileFont(font: LoadedFont<AnyRasterTechnique>, identities: RenderWireIdentityRegistry): CompiledRasterFont;
   createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
 }
 
 const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
 const registeredSources = new WeakMap<object, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
-const snapshotsByRegistry = new WeakMap<RenderWireIdentityRegistry, WeakRef<RenderWireIdentityRegistry>[]>();
-const snapshotReferences = new Set<WeakRef<RenderWireIdentityRegistry>>();
-const snapshotFinalizer = new FinalizationRegistry<WeakRef<RenderWireIdentityRegistry>>((reference) => {
+const snapshotsByRegistry = new WeakMap<RenderIdFactory, WeakRef<RenderIdFactory>[]>();
+const snapshotReferences = new Set<WeakRef<RenderIdFactory>>();
+const snapshotFinalizer = new FinalizationRegistry<WeakRef<RenderIdFactory>>((reference) => {
   snapshotReferences.delete(reference);
 });
 const THREE_RESERVED_ATTRIBUTE_WIDTHS: Readonly<Record<string, readonly number[]>> = Object.freeze({
@@ -198,10 +199,10 @@ export function registerThreeRasterPlanProgram<
       `Three already selected raster variant "${existing.variant.id}" for technique "${techniqueId}"`,
     );
   }
-  const runtimeCount = liveSnapshotCount();
-  if (runtimeCount !== 0) {
+  const engineCount = liveSnapshotCount();
+  if (engineCount !== 0) {
     throw new Error(
-      `Three raster variant "${techniqueId}/${variantId}" was registered after ${runtimeCount} text runtime(s) ` +
+      `Three raster variant "${techniqueId}/${variantId}" was registered after ${engineCount} glyph engine(s) ` +
         'already read the registry; register every technique before its first Text or TextGroup realization',
     );
   }
@@ -211,7 +212,7 @@ export function registerThreeRasterPlanProgram<
 
 /** @internal Compile the cold registry snapshot into policy, binding, and material factories. */
 export function compiledThreeRasterPlanPrograms(
-  identities: RenderWireIdentityRegistry,
+  identities: RenderIdFactory,
   transformMode: 'indexed' | 'direct' = 'indexed',
 ): readonly CompiledThreeRasterPlanProgram[] {
   const selected = [...programs.values()].sort((left, right) => left.technique.id.localeCompare(right.technique.id));
@@ -253,8 +254,8 @@ export function assertThreeGeometryPayload(
   }
 }
 
-/** @internal Forget a disposed runtime's renderer snapshot. */
-export function releaseThreeRasterPlanProgramSnapshot(identities: RenderWireIdentityRegistry): void {
+/** @internal Forget a disposed Three coordinator's renderer snapshot. */
+export function releaseThreeRasterPlanProgramSnapshot(identities: RenderIdFactory): void {
   const references = snapshotsByRegistry.get(identities);
   if (references === undefined) return;
   const reference = references.pop();
@@ -273,31 +274,21 @@ function liveSnapshotCount(): number {
   return count;
 }
 
+/** Three-owned semantic values used by renderer-specific shader adapters. */
 export interface ThreePolicyAbi {
-  readonly opcodes: typeof textShaperAbi.policy.opcodes;
-  readonly scalarTypes: typeof textShaperAbi.policy.scalarTypes;
-  readonly bufferUsage: typeof textShaperAbi.policy.bufferUsage;
-  readonly allocationStrategies: typeof textShaperAbi.policy.allocationStrategies;
-  readonly batchFields: typeof textShaperAbi.policy.batchFields;
-  readonly semanticF32Fields: typeof textShaperAbi.engine.semanticF32Fields;
-  readonly semanticU32Fields: typeof textShaperAbi.engine.semanticU32Fields;
+  readonly scalarTypes: Readonly<{ readonly f32: 'f32'; readonly u32: 'u32'; readonly u16: 'u16' }>;
   readonly transformBufferId: typeof threeSystemBuffers.transformIndex.id;
 }
 
+/** Three-owned policy metadata; raw shaper opcodes and layouts remain package-private. */
 export const threePolicyAbi: ThreePolicyAbi = Object.freeze({
-  opcodes: textShaperAbi.policy.opcodes,
-  scalarTypes: textShaperAbi.policy.scalarTypes,
-  bufferUsage: textShaperAbi.policy.bufferUsage,
-  allocationStrategies: textShaperAbi.policy.allocationStrategies,
-  batchFields: textShaperAbi.policy.batchFields,
-  semanticF32Fields: textShaperAbi.engine.semanticF32Fields,
-  semanticU32Fields: textShaperAbi.engine.semanticU32Fields,
+  scalarTypes: Object.freeze({ f32: 'f32', u32: 'u32', u16: 'u16' }),
   transformBufferId: threeSystemBuffers.transformIndex.id,
 });
 
 function compileProgram(
   program: ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>,
-  identities: RenderWireIdentityRegistry,
+  identities: RenderIdFactory,
   transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterPlanProgram {
   const portable = resolveRasterPlanProgram(program.technique.id);
@@ -310,7 +301,7 @@ function compileProgram(
     capabilitySet: threePolicyCapabilitySet(),
     transformMode,
     allocationMode: 'ordered',
-    identityRegistry: identities,
+    ids: identities,
   });
   return {
     technique: program.technique,
@@ -319,15 +310,6 @@ function compileProgram(
     techniqueId: policy.techniqueId,
     programId: policy.programId,
     policy,
-    compileFont(font, bindingIdentities) {
-      if (font.technique.id !== program.technique.id) {
-        throw new TypeError('Three raster plan program received an incompatible loaded font');
-      }
-      const compiled = compileRasterFont(font, bindingIdentities);
-      if (compiled === undefined)
-        throw new Error(`no portable raster plan program is registered for "${font.technique.id}"`);
-      return compiled;
-    },
     createMaterial: (context) => program.variant.createMaterial(context),
   };
 }
@@ -442,25 +424,79 @@ function normalizeResourceCapabilities(
     if (!isNonArrayObject(capability)) {
       throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs resource "${name}"`);
     }
-    const format = 'format' in declaration ? declaration.format : undefined;
-    const candidateFormat = capability.format;
-    if (capability.kind !== declaration.kind || candidateFormat !== format) {
-      throw new TypeError(
-        `Three raster variant "${techniqueId}/${variantId}" resource "${name}" must consume ` +
-          `${format === undefined ? declaration.kind : `${declaration.kind}:${format}`}`,
-      );
-    }
-    owned[name] =
-      declaration.kind === 'buffer'
-        ? Object.freeze({ kind: declaration.kind })
-        : declaration.kind === 'geometry'
-          ? Object.freeze({
-              kind: declaration.kind,
-              attributes: Object.freeze(declaration.attributes.map((attribute) => Object.freeze({ ...attribute }))),
-            })
-          : Object.freeze({ kind: declaration.kind, format: declaration.format });
+    owned[name] = normalizeResourceCapability(techniqueId, variantId, name, capability, declaration);
   }
   return Object.freeze(owned);
+}
+
+function normalizeResourceCapability(
+  techniqueId: string,
+  variantId: string,
+  name: string,
+  capability: Record<PropertyKey, unknown>,
+  declaration: TechniqueResourceDeclaration,
+): TechniqueResourceDeclaration {
+  const format =
+    declaration.kind === 'texture' || declaration.kind === 'texture-array' ? declaration.format : undefined;
+  if (capability.kind !== declaration.kind || capability.format !== format) {
+    throw new TypeError(
+      `Three raster variant "${techniqueId}/${variantId}" resource "${name}" must consume ` +
+        `${format === undefined ? declaration.kind : `${declaration.kind}:${format}`}`,
+    );
+  }
+  if (declaration.kind === 'group') {
+    const members = capability.members;
+    if (!isNonArrayObject(members)) {
+      throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" resource "${name}" needs group members`);
+    }
+    assertExactNames(members, Object.keys(declaration.members), techniqueId, variantId, `resource "${name}" member`);
+    const owned: Record<string, TechniqueResourceDeclaration> = Object.create(null);
+    for (const [memberName, memberDeclaration] of Object.entries(declaration.members)) {
+      const member = members[memberName];
+      if (!isNonArrayObject(member)) {
+        throw new TypeError(
+          `Three raster variant "${techniqueId}/${variantId}" resource "${name}" needs member "${memberName}"`,
+        );
+      }
+      owned[memberName] = normalizeResourceCapability(
+        techniqueId,
+        variantId,
+        `${name}.${memberName}`,
+        member,
+        memberDeclaration,
+      );
+    }
+    return Object.freeze({
+      kind: 'group',
+      members: Object.freeze(owned),
+      ...(declaration.cardinality === undefined ? {} : { cardinality: declaration.cardinality }),
+    }) as TechniqueResourceDeclaration;
+  }
+  if (declaration.kind === 'buffer') {
+    return Object.freeze({
+      kind: declaration.kind,
+      ...(declaration.cardinality === undefined ? {} : { cardinality: declaration.cardinality }),
+    });
+  }
+  if (declaration.kind === 'geometry') {
+    return Object.freeze({
+      kind: declaration.kind,
+      attributes: Object.freeze(declaration.attributes.map((attribute) => Object.freeze({ ...attribute }))),
+      ...(declaration.cardinality === undefined ? {} : { cardinality: declaration.cardinality }),
+    });
+  }
+  if (declaration.kind === 'texture') {
+    return Object.freeze({
+      kind: declaration.kind,
+      format: declaration.format,
+      ...(declaration.cardinality === undefined ? {} : { cardinality: declaration.cardinality }),
+    });
+  }
+  return Object.freeze({
+    kind: declaration.kind,
+    format: declaration.format,
+    ...(declaration.cardinality === undefined ? {} : { cardinality: declaration.cardinality }),
+  });
 }
 
 function normalizeOutputs(techniqueId: string, variantId: string, value: unknown): Readonly<Record<string, string>> {

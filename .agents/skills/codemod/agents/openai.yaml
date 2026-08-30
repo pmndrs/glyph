@@ -1,0 +1,4 @@
+interface:
+  display_name: 'TypeScript Codemod'
+  short_description: 'Author and apply durable ts-morph migrations'
+  default_prompt: 'Use $codemod to author or apply this TypeScript migration as a dated, verified recipe.'

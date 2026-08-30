@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-28-text-engine-lifecycle",
+  "created": "2026-08-28",
+  "package": "@pmndrs/glyph",
+  "from": "canary before feat/render-technique-portability",
+  "to": "canary at or after feat/render-technique-portability",
+  "summary": "Name the package owners GlyphEngine and GlyphBackend, then the text lifecycle RetainedPlan.",
+  "instructions": "./instructions.md",
+  "transform": "./transform.mjs",
+  "changes": [
+    { "kind": "symbol-rename", "from": "createTextRuntime", "to": "createGlyphEngine", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextRuntime", "to": "GlyphEngine", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextRuntimeOptions", "to": "GlyphEngineOptions", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineHost", "to": "GlyphBackend", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineHostOptions", "to": "GlyphBackendOptions", "automatic": true },
+    {
+      "kind": "method-rename",
+      "from": "runtime.createTextEngineHost",
+      "to": "glyphEngine.createBackend",
+      "automatic": true
+    },
+    { "kind": "method-rename", "from": "host.createSession", "to": "backend.createRetainedPlan", "automatic": true },
+    {
+      "kind": "symbol-rename",
+      "from": "SynchronousTextEngineSession",
+      "to": "SynchronousRetainedPlan",
+      "automatic": true
+    },
+    { "kind": "symbol-rename", "from": "AsyncTextEngineSession", "to": "AsyncRetainedPlan", "automatic": true },
+    { "kind": "symbol-rename", "from": "SessionFor", "to": "RetainedPlanFor", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineSessionOptions", "to": "RetainedPlanOptions", "automatic": true },
+    {
+      "kind": "symbol-rename",
+      "from": "TextEnginePublishOptions",
+      "to": "RetainedPlanPublishOptions",
+      "automatic": true
+    },
+    {
+      "kind": "symbol-rename",
+      "from": "TextEngineSessionDisposedError",
+      "to": "RetainedPlanDisposedError",
+      "automatic": true
+    },
+    { "kind": "symbol-rename", "from": "TextEngineText", "to": "RetainedText", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineTextOptions", "to": "RetainedTextOptions", "automatic": true },
+    { "kind": "symbol-rename", "from": "TextEngineTextUpdate", "to": "RetainedTextUpdate", "automatic": true },
+    { "kind": "internal-rename", "from": "TextEngineSession", "to": "PlanTransport", "automatic": true },
+    { "kind": "abi-rename", "from": "createSession", "to": "createRetainedPlan", "automatic": true },
+    { "kind": "abi-rename", "from": "reserveSession", "to": "reserveRetainedPlan", "automatic": true },
+    { "kind": "abi-rename", "from": "disposeSession", "to": "disposeRetainedPlan", "automatic": true },
+    { "kind": "abi-rename", "from": "sessionCount", "to": "retainedPlanCount", "automatic": true },
+    { "kind": "abi-rename", "from": "sessionId", "to": "retainedPlanId", "automatic": true },
+    { "kind": "abi-rename", "from": "sessionConflict", "to": "retainedPlanConflict", "automatic": true },
+    { "kind": "abi-rename", "from": "sessionMissing", "to": "retainedPlanMissing", "automatic": true },
+    {
+      "kind": "abi-rename",
+      "from": "defaultSessionTextCapacity",
+      "to": "defaultRetainedPlanTextCapacity",
+      "automatic": true
+    },
+    {
+      "kind": "concept-rename",
+      "from": "policy authoring session",
+      "to": "policy authoring scope (internal `authoringScope`)",
+      "automatic": true
+    }
+  ],
+  "verification": [
+    "mise exec -- pnpm --filter @pmndrs/glyph check",
+    "mise exec -- pnpm --filter @pmndrs/glyph-example-renderer check",
+    "mise exec -- pnpm --filter @pmndrs/glyph-benchmarks check",
+    "mise exec -- pnpm --filter @pmndrs/glyph-r3f-hello-world check"
+  ]
+}

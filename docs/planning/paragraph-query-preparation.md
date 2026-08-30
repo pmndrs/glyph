@@ -2,7 +2,7 @@
 type: Engineering Research
 title: Paragraph-scoped preparation and synchronous layout queries
 description: Defines how one paragraph can be shaped and laid out on demand, measured without compiling a render plan, and adopted by the next frame transaction without a third full buffer.
-status: draft
+status: stable
 tags:
   - layout
   - shaping
@@ -47,7 +47,7 @@ sources:
 
 ## Conclusion
 
-The engine should support a synchronous, paragraph-scoped prepare/query transaction whose result can be adopted by the
+The engine supports a synchronous, paragraph-scoped prepare/query transaction whose result can be adopted by the
 next full frame. It does **not** require a third Wasm result buffer or a third complete paragraph arena.
 
 The narrow design retains one speculative transaction per engine session. Each synchronous query targets one complete
@@ -57,20 +57,15 @@ measurement or inspection records, and leaves render-plan gathering, policy exec
 patches, and retirement untouched. The next full update either adopts the exact candidate set or invalidates it and
 reuses its allocations.
 
-This is a bounded follow-up on its own `feat/*` stack after the Rust/Three cutover merges, not an unreviewed change
-inside that stack. The remaining realtime publishing features likewise start from the independently consumable merged
-cutover; neither follow-up is a hidden merge prerequisite for it.
-The current update function deliberately couples paragraph preparation, session-global identity allocation, plan
-preparation, A/B publication, and commit. Splitting those phases safely requires a new transaction state and ABI tests;
-a request flag that only suppresses output would leave committed layout and displayed render state on different
-revisions.
+The implementation uses a dedicated paragraph-measure entry point and transaction state rather than a request flag that
+merely suppresses output. This keeps committed layout and displayed render state on the same publication revision.
 
 ## What exists now
 
-Three's `Text.layout()` asks its owning batch to synchronize. When properties are pending, the measurement mask
-rides the same full frame update, which is correct and avoids shaping twice. That update nevertheless prepares the
-session render plan and applies it before returning the measurement. When the batch is already committed, a cache miss
-sends an otherwise empty update, and Rust emits measurement records for every paragraph in the session.
+Three's `Text.measure()` asks its owning planner for current desired measurement. A cache miss runs the targeted
+paragraph-scoped query, copies its aggregate records, and does not gather or apply a render plan. `Text.glyphs()` uses
+the positioned query lane and copies the caller-owned columns. Matching speculative work is adopted by the next ordinary
+publication instead of being shaped twice.
 
 Rust already retains the expensive products per paragraph:
 
@@ -81,8 +76,7 @@ Rust already retains the expensive products per paragraph:
 - a full update commits paragraph state, plan state, identities, and engine/plan revisions atomically only after the
   inactive result slot has been staged successfully.
 
-The current architecture therefore has the right reusable products but the wrong transaction granularity for a
-query-before-render workflow.
+The resulting transaction granularity supports query-before-render without changing publication authority.
 
 ## Three different kinds of buffering
 
@@ -268,7 +262,7 @@ sequenceDiagram
 Paragraph data is locally retained, but glyph stable IDs and content revisions are allocated from session-global
 cursors. Multiple independent speculative transactions would reserve competing ranges, require rebasing prepared glyphs
 at commit, or introduce a second identity-allocation scheme. One transaction keeps a single linear reservation while
-still allowing `layout()` calls for A, then B, to retain both paragraph results for the final frame.
+still allowing `measure()` calls for A, then B, to retain both paragraph results for the final frame.
 
 This keeps allocation deterministic and bounds existing paragraphs to their committed plus already-present pending
 high-water storage. The descriptor grows only by compact paragraph metadata. If evidence later requires concurrent
@@ -291,8 +285,8 @@ stateDiagram-v2
 
 The desired semantic split is:
 
-- `layout()` with no pending change returns the frozen committed cache without crossing;
-- `layout()` with a pending change prepares only that paragraph, returns its pending measurement synchronously,
+- `measure()` with no pending change returns the frozen committed cache without crossing;
+- `measure()` with a pending change prepares only that paragraph, returns its pending measurement synchronously,
   and adds it to the session's speculative token;
 - sequential measurements of other pending paragraphs extend that same transaction instead of invalidating earlier
   work;

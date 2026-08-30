@@ -32,7 +32,7 @@ Codified in `.agents/skills/engine-call-contract/SKILL.md`. Two rules:
 
 ## Why measurement is two calls, and what they should be named
 
-**Do not merge them again.** `layout()` takes the paragraph-scoped engine query: synchronous, no publication flip, no revision advance, no checkpoint. `glyphs()` makes the engine emit a record per glyph and per line and copies those arrays out of Wasm.
+**Do not merge them again.** `measure()` takes the paragraph-scoped engine query: synchronous, no publication flip, no revision advance, no checkpoint. `glyphs()` makes the engine emit a record per glyph and per line and copies those arrays out of Wasm.
 
 Merging them was tried in this session and regressed the fast path from **0 engine crossings to 4** on a constraint sweep. `three-v1.test.mjs`, "repeated layout under changing constraints stays on the paragraph query path", is the test that caught it and is the guard against it happening again. Skia and Flutter separate the same way and for the same reason: `getRectsForRange` and `getBoxesForSelection` are on-demand rather than part of laying out.
 
@@ -40,10 +40,10 @@ Merging them was tried in this session and regressed the fast path from **0 engi
 
 | ours | does | Skia's equivalent |
 | --- | --- | --- |
-| `layout(constraints)` | shaping and line breaking, returns metrics | `layout(width)` |
+| `measure(constraints)` | shaping and line breaking, returns metrics | `layout(width)` |
 | `glyphs()` | queries the finished result, emits and copies columns | `getRectsForRange()` |
 
-The old `measure` name implied the working call was free, while the old `layout` name implied the positioned query did the layout work. The working call is now `layout(constraints)` and the positioned columns are `glyphs()`, matching Skia's `layout()` then `getRectsForRange()`. Both surfaces carry both verbs. That Yoga and uikit name their hook `measure` only means ours is *called from* a measure callback; it does not have to share the name.
+`ParagraphLayout` is authored paragraph flow configuration; `measure(constraints)` is the action that answers aggregate metrics. Positioned columns remain an explicit `glyphs(constraints)` query. Both renderer-free Paragraph and retained renderer text carry the same verbs.
 
 ## What measurement guarantees
 
@@ -51,7 +51,7 @@ The old `measure` name implied the working call was free, while the old `layout`
 
 Compute-or-cached is inherent and not a wart. The first query pays shaping; it is retained as a speculative transaction (`state.rs:188`) so a second query at a different constraint re-runs only geometry, flow, and positioning, and the next ordinary frame committing the same inputs adopts that work rather than redoing it.
 
-**Known gap.** `inkBounds` is absent from `layout()` because the ink union is knowable only after positioning. Advance-centring works from `layout()`; visual centring needs `glyphs()`. Closing this means computing the union during the measurement pass in Rust.
+The fast `measure()` path may return `inkBounds: undefined` because it does not position glyphs. Advance-based placement works from `measure()`; visual placement against exact ink calls `glyphs()`, which returns the authoritative positioned ink bounds. This split is deliberate: callers pay the positioned-column cost only when they ask for it.
 
 ## Corrections this session paid for
 

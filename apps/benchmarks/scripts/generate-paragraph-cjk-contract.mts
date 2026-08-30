@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 
-import type { ParagraphStyle } from '@pmndrs/glyph';
+import type { TextStyle } from '@pmndrs/glyph';
 import { createFontBaker } from '@pmndrs/glyph/bake';
 
 import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts';
@@ -61,10 +61,10 @@ try {
       text: 'pmndrs glyph：骨かな한글ABC、𠀋、禰󠄀',
       style: { fontSize: 32, lineHeight: 1.25, direction: 'ltr', language: 'ja' },
     },
-  } as const satisfies Record<string, { readonly text: string; readonly style: ParagraphStyle }>;
+  } as const satisfies Record<string, { readonly text: string; readonly style: TextStyle }>;
   const cases: Record<string, unknown> = {};
   for (const [id, input] of Object.entries(inputs)) {
-    const paragraph = createContractText(font, input.text, input.style);
+    const paragraph = createContractText(font.font, input.text, input.style);
     const layouts: Record<string, unknown> = {};
     try {
       for (const [constraintId, value] of Object.entries(constraints)) {
@@ -82,7 +82,7 @@ try {
       fixture: 'noto-sans-cjk-jp-regular-v0',
       sourceSha256: createHash('sha256').update(source).digest('hex'),
       artifactSha256: artifact.sha256,
-      shapingHash: font.font.shapingHash,
+      shapingHash: font.shapingHash,
       sourceOracle: '../shaping/noto-sans-cjk/harfrust.json',
       independentOracle: '../shaping/noto-sans-cjk/harfbuzz.json',
     },

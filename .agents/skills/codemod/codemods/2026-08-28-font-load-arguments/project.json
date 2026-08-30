@@ -1,0 +1,17 @@
+{
+  "extends": "../../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "customConditions": ["source"],
+    "jsx": "react-jsx",
+    "noEmit": true
+  },
+  "include": [
+    "../../../../../packages/**/*.ts",
+    "../../../../../packages/**/*.tsx",
+    "../../../../../packages/**/*.mts",
+    "../../../../../apps/**/*.ts",
+    "../../../../../apps/**/*.tsx"
+  ],
+  "exclude": ["../../../../../**/dist/**", "../../../../../**/node_modules/**"]
+}

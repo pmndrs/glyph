@@ -148,28 +148,87 @@ function bitmapProgram(abi, glyphScope) {
 }
 
 function mtsdfProgram(abi) {
-  const context = programContext(abi, 'glyph', 10, 1);
-  const { operations: ops, loadF32, loadU32, binary, constantF32, storeF32 } = context;
-  loadF32(17);
-  loadU32(17, 0);
-  binary('multiplyF32', 18, 7, 2);
-  binary('addF32', 19, 0, 18);
-  binary('multiplyF32', 20, 8, 2);
-  binary('subtractF32', 21, 1, 20);
-  binary('multiplyF32', 22, 9, 2);
-  binary('multiplyF32', 23, 10, 2);
-  ops.push({ opcode: abi.policy.opcodes.convertU32ToF32, target: 24, operand0: 17 });
-  constantF32(25, 0);
-  stores(storeF32, [
-    [1, [19, 21, 22, 23]],
-    [2, [11, 12, 13, 14]],
-    [3, [11, 12, 15, 16]],
-    [4, [3, 4, 5, 6]],
-    [5, [25, 25, 25, 25]],
-    [6, [25, 25, 25, 25]],
-    [7, [25, 25, 25, 24]],
+  const semantic = abi.engine.semanticF32Fields;
+  const semanticU32 = abi.engine.semanticU32Fields;
+  const semanticFields = [
+    semantic.inlineOrigin,
+    semantic.blockOrigin,
+    semantic.fontSize,
+    semantic.foregroundRed,
+    semantic.foregroundGreen,
+    semantic.foregroundBlue,
+    semantic.foregroundAlpha,
+    semantic.outlineWidthEm,
+    semantic.shadowOffsetXEm,
+    semantic.shadowOffsetYEm,
+  ];
+  const operations = [];
+  const loadF32 = (target, inputField) =>
+    operations.push({ opcode: abi.policy.opcodes.loadF32, target, operand0: inputField });
+  const loadU32 = (target, inputField) =>
+    operations.push({ opcode: abi.policy.opcodes.loadU32, target, operand0: inputField });
+  const binary = (name, target, left, right) =>
+    operations.push({ opcode: abi.policy.opcodes[name], target, operand0: left, operand1: right });
+  const storeF32 = (buffer, lane, register) =>
+    operations.push({ opcode: abi.policy.opcodes.storeF32, operand0: register, operand1: lane, immediate0: buffer });
+  const storeU32 = (buffer, lane, register) =>
+    operations.push({ opcode: abi.policy.opcodes.storeU32, operand0: register, operand1: lane, immediate0: buffer });
+  const copyF32 = (buffer, lane, inputField) => {
+    loadF32(0, inputField);
+    storeF32(buffer, lane, 0);
+  };
+  const scaled = (buffer, lane, left, right) => {
+    loadF32(0, left);
+    loadF32(1, right);
+    binary('multiplyF32', 2, 0, 1);
+    storeF32(buffer, lane, 2);
+  };
+  const transformed = (buffer, lane, origin, extent, operation) => {
+    loadF32(0, origin);
+    loadF32(1, extent);
+    loadF32(2, 2);
+    binary('multiplyF32', 3, 1, 2);
+    binary(operation, 4, 0, 3);
+    storeF32(buffer, lane, 4);
+  };
+
+  transformed(1, 0, 0, 10, 'addF32');
+  transformed(1, 1, 1, 11, 'subtractF32');
+  scaled(1, 2, 12, 2);
+  scaled(1, 3, 13, 2);
+  for (let lane = 0; lane < 4; lane += 1) copyF32(2, lane, 14 + lane);
+  copyF32(3, 0, 14);
+  copyF32(3, 1, 15);
+  copyF32(3, 2, 18);
+  copyF32(3, 3, 19);
+  for (let lane = 0; lane < 4; lane += 1) copyF32(4, lane, 3 + lane);
+  loadU32(0, 0);
+  storeU32(5, 0, 0);
+  loadU32(0, 1);
+  storeU32(5, 1, 0);
+  copyF32(6, 0, 8);
+  copyF32(6, 1, 9);
+  copyF32(6, 2, 7);
+  loadU32(0, 2);
+  operations.push({ opcode: abi.policy.opcodes.convertU32ToF32, target: 1, operand0: 0 });
+  storeF32(6, 3, 1);
+  const context = {
+    inputs: [
+      ...semanticFields.map((inputField) => ({ scope: 'semantic', field: inputField })),
+      ...Array.from({ length: 10 }, (_, fieldIndex) => ({ scope: 'glyph', field: fieldIndex })),
+      { scope: 'semantic', field: semanticU32.outlineRgba },
+      { scope: 'semantic', field: semanticU32.shadowRgba },
+      { scope: 'glyph', field: 0 },
+    ],
+    operations,
+    f32InputCount: 20,
+    u32InputCount: 3,
+  };
+  return program(context, [
+    ...floatBuffers(abi, [4, 4, 4, 4]),
+    ...uintBuffers(abi, [2], 5),
+    { id: 6, scalar: abi.policy.scalarTypes.f32, vectorWidth: 4 },
   ]);
-  return program(context, floatBuffers(abi, [4, 4, 4, 4, 4, 4, 4]));
 }
 
 function slugProgram(abi) {

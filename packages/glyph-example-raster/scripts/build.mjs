@@ -9,9 +9,9 @@ const outputRoot = join(packageRoot, 'dist');
 await rm(outputRoot, { recursive: true, force: true });
 await run('pnpm', ['exec', 'tsc', '-p', join(packageRoot, 'tsconfig.build.json')]);
 
+const typegpuOutput = join(packageRoot, 'dist/typegpu.js');
 const { default: typegpuPlugin } = await import('unplugin-typegpu/rollup');
 const plugin = typegpuPlugin();
-const typegpuOutput = join(packageRoot, 'dist/typegpu.js');
 const source = await readFile(typegpuOutput, 'utf8');
 if (source.includes('use gpu')) {
   const transformed = await plugin.transform.handler.call({}, source, typegpuOutput);

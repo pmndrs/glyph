@@ -26,8 +26,6 @@ export interface GlyphExampleShaderContract {
   }>;
   readonly resources: NonNullable<typeof glyphExampleSchema.resources>;
   readonly outputs: Readonly<{ readonly position: 'vec3'; readonly color: 'vec3'; readonly opacity: 'float' }>;
-  readonly resource: string;
-  readonly geometryResource: string | undefined;
 }
 
 function shaderBuffer<Name extends keyof typeof glyphExampleSchema.buffers>(
@@ -49,9 +47,6 @@ function shaderBuffer<Name extends keyof typeof glyphExampleSchema.buffers>(
 
 const geometry = geometryDeclaration();
 
-const resourceNames = Object.keys(glyphExampleSchema.resources ?? {});
-if (resourceNames.length !== 1) throw new TypeError('glyph-example shader contract requires one declared resource');
-
 export const glyphExampleShaderContract: GlyphExampleShaderContract = Object.freeze({
   techniqueId: glyphExample.id,
   geometry,
@@ -62,14 +57,12 @@ export const glyphExampleShaderContract: GlyphExampleShaderContract = Object.fre
   }),
   resources: glyphExampleSchema.resources!,
   outputs: Object.freeze({ position: 'vec3', color: 'vec3', opacity: 'float' }),
-  resource: resourceNames[0]!,
-  geometryResource: geometry.resource,
 });
 
 function geometryDeclaration(): typeof glyphExampleSchema.render.geometry {
   const geometry = glyphExampleSchema.render?.geometry;
-  if (geometry?.kind !== 'synthetic-quad') {
-    throw new TypeError('glyph-example shader contract requires synthetic-quad geometry');
+  if (geometry?.kind !== 'quad' || geometry.resource !== 'glyphGeometry') {
+    throw new TypeError('glyph-example shader contract requires its supplied quad geometry');
   }
   return geometry;
 }
@@ -81,6 +74,4 @@ export interface GlyphExampleShaderVariant<Language extends string = string> {
   readonly buffers: typeof glyphExampleShaderContract.buffers;
   readonly resources: typeof glyphExampleShaderContract.resources;
   readonly outputs: typeof glyphExampleShaderContract.outputs;
-  readonly resource: typeof glyphExampleShaderContract.resource;
-  readonly geometryResource: typeof glyphExampleShaderContract.geometryResource;
 }

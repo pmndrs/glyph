@@ -19,6 +19,7 @@ export async function runGlyphTest(): Promise<void> {
   await runNode('scripts/unicode.mts', ['check-data']);
   await runNode('scripts/build.mjs');
   await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.types.json']);
+  await runNode('scripts/bundle-registration-smoke.mjs');
   for (const target of completeRustTargets) {
     await runCargo([
       'test',

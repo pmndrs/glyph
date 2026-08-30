@@ -93,9 +93,9 @@ export function createDynamicLayoutEntries(
       font: context.font,
       rasterPixelRatio: context.dpr,
       text: sourceText,
-      style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
-      paint: { color: paintColor(LIVE_TEXT_COLOR) },
-      contentBox: { width: exactWidth(width), wrap: 'word', align: alignment },
+      style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT, color: paintColor(LIVE_TEXT_COLOR) },
+      layout: { wrap: 'word', align: alignment },
+      constraints: { width: exactWidth(width) },
     });
     const bounds = createLayoutBounds();
     setDynamicLayoutBoundsVisibility(bounds, context.showLayoutBounds);
@@ -154,9 +154,9 @@ export function animateDynamicLayoutEntries(
   }
 }
 
-/** Each lane keeps its own alignment, so the reflowed measure has to carry the rest of the content box with it. */
+/** Each lane keeps its paragraph layout while the reflow updates only its width constraint. */
 function setDynamicLayoutWidth(entry: ComparisonWorkloadEntry, width: number): void {
-  entry.text.set({ contentBox: { ...entry.text.contentBox, width: exactWidth(width) } });
+  entry.text.set({ constraints: { ...entry.text.constraints, width: exactWidth(width) } });
 }
 
 export function layoutDynamicLayoutEntries(

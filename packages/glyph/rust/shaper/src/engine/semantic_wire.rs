@@ -24,11 +24,11 @@ use crate::{
         STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION,
         STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK,
         STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE, STYLE_FIELD_LETTER_SPACING,
-        STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK, STYLE_FIELD_MATERIAL,
-        STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING, STYLE_FLAG_ROOT,
-        STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
-        TEXT_MUTATION_REPLACE_UTF16, UpdateLimits, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD,
-        WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
+        STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK, STYLE_FIELD_MATERIAL, STYLE_FIELD_OPACITY,
+        STYLE_FIELD_OUTLINE, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_SHADOW,
+        STYLE_FIELD_WORD_SPACING, STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT,
+        TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16, UpdateLimits, WRAP_CHARACTER,
+        WRAP_NONE, WRAP_WORD, WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
     },
     valid_language_bytes, valid_tag,
     wire::{array, read_f32, read_u16, read_u32},
@@ -92,6 +92,12 @@ pub(crate) struct StyleValue<'a> {
     pub raster_pixel_ratio: f32,
     pub direction: u8,
     pub foreground_rgba: u32,
+    pub opacity: f32,
+    pub outline_rgba: u32,
+    pub outline_width: f32,
+    pub shadow_rgba: u32,
+    pub shadow_offset_x: f32,
+    pub shadow_offset_y: f32,
     pub decoration_rgba: u32,
     pub decoration_flags: u32,
     pub decoration_style: u8,
@@ -720,6 +726,12 @@ impl<'a> StyleMutationBatch<'a> {
                 .ok()?,
             direction: record[abi::ENGINE_STYLE_MUTATION_DIRECTION],
             foreground_rgba: read_u32(record, abi::ENGINE_STYLE_MUTATION_FOREGROUND_RGBA).ok()?,
+            opacity: read_f32(record, abi::ENGINE_STYLE_MUTATION_OPACITY).ok()?,
+            outline_rgba: read_u32(record, abi::ENGINE_STYLE_MUTATION_OUTLINE_RGBA).ok()?,
+            outline_width: read_f32(record, abi::ENGINE_STYLE_MUTATION_OUTLINE_WIDTH).ok()?,
+            shadow_rgba: read_u32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_RGBA).ok()?,
+            shadow_offset_x: read_f32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_X).ok()?,
+            shadow_offset_y: read_f32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_Y).ok()?,
             decoration_rgba: read_u32(record, abi::ENGINE_STYLE_MUTATION_DECORATION_RGBA).ok()?,
             decoration_flags: read_u32(record, abi::ENGINE_STYLE_MUTATION_DECORATION_FLAGS).ok()?,
             decoration_style: record[abi::ENGINE_STYLE_MUTATION_DECORATION_STYLE],
@@ -1005,8 +1017,65 @@ fn validate_style_record(request: &[u8], record: &[u8]) -> Result<(), u32> {
     {
         return Err(STATUS_INVALID_REQUEST);
     }
+    validate_opacity(record, field_mask)?;
+    validate_outline(record, field_mask)?;
+    validate_shadow(record, field_mask)?;
     validate_decoration(record, field_mask)?;
     Ok(())
+}
+
+fn validate_opacity(record: &[u8], field_mask: u32) -> Result<(), u32> {
+    if field_mask & STYLE_FIELD_OPACITY == 0 {
+        return if read_u32(record, abi::ENGINE_STYLE_MUTATION_OPACITY)? == 0 {
+            Ok(())
+        } else {
+            Err(STATUS_INVALID_REQUEST)
+        };
+    }
+    let opacity = read_f32(record, abi::ENGINE_STYLE_MUTATION_OPACITY)?;
+    if opacity.is_finite() && (0.0..=1.0).contains(&opacity) {
+        Ok(())
+    } else {
+        Err(STATUS_INVALID_REQUEST)
+    }
+}
+
+fn validate_outline(record: &[u8], field_mask: u32) -> Result<(), u32> {
+    let rgba = read_u32(record, abi::ENGINE_STYLE_MUTATION_OUTLINE_RGBA)?;
+    let width_bits = read_u32(record, abi::ENGINE_STYLE_MUTATION_OUTLINE_WIDTH)?;
+    if field_mask & STYLE_FIELD_OUTLINE == 0 {
+        return if rgba == 0 && width_bits == 0 {
+            Ok(())
+        } else {
+            Err(STATUS_INVALID_REQUEST)
+        };
+    }
+    let width = read_f32(record, abi::ENGINE_STYLE_MUTATION_OUTLINE_WIDTH)?;
+    if width.is_finite() && width >= 0.0 {
+        Ok(())
+    } else {
+        Err(STATUS_INVALID_REQUEST)
+    }
+}
+
+fn validate_shadow(record: &[u8], field_mask: u32) -> Result<(), u32> {
+    let rgba = read_u32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_RGBA)?;
+    let x_bits = read_u32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_X)?;
+    let y_bits = read_u32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_Y)?;
+    if field_mask & STYLE_FIELD_SHADOW == 0 {
+        return if rgba == 0 && x_bits == 0 && y_bits == 0 {
+            Ok(())
+        } else {
+            Err(STATUS_INVALID_REQUEST)
+        };
+    }
+    let x = read_f32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_X)?;
+    let y = read_f32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_Y)?;
+    if x.is_finite() && y.is_finite() {
+        Ok(())
+    } else {
+        Err(STATUS_INVALID_REQUEST)
+    }
 }
 
 fn validate_style_payload(

@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { createTextRuntime, FontRegistry } from '../../dist/index.js';
-import { Text, TextGroup } from '../../dist/three.js';
+import { FontLoader, Text, TextGroup } from '../../dist/three.js';
 import { bitmap } from '../../dist/three/bitmap.js';
 
 export const paragraphBenchmarkSource = [
@@ -30,19 +29,15 @@ const corpusFixtures = {
 
 export async function loadParagraphBenchmarkFixture(corpus: BenchmarkCorpus = 'latin') {
   const workspaceRoot = new URL('../../../../', import.meta.url);
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('packages/glyph/dist/text-shaper.wasm', workspaceRoot)),
-  });
+  const loader = new FontLoader();
   const bytes = await readFile(
     new URL(`apps/benchmarks/fixtures/rendering/${corpusFixtures[corpus].font}`, workspaceRoot),
   );
-  const loaded = await runtime.loadFont({
+  const loaded = await loader.loadAsync({
     input: { baked: `data:application/octet-stream;base64,${bytes.toString('base64')}` },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
-  return { runtime, loaded };
+  return { loader, loaded };
 }
 
 export function createBenchmarkParagraph(
@@ -54,8 +49,9 @@ export function createBenchmarkParagraph(
   const paragraph = new Text({
     font: fixture.loaded,
     text,
-    contentBox: { width: { mode: 'exact', size: width }, wrap: 'word' },
     style: { fontSize: 24 },
+    layout: { wrap: 'word' },
+    constraints: { width: { mode: 'exact', size: width } },
   });
   group.add(paragraph);
   return { group, paragraph };

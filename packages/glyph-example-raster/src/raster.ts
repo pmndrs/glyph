@@ -2,10 +2,10 @@ import type {
   JsonValue,
   RasterResourceId,
   RasterResourceSource,
+  RasterDecodeArtifact,
+  RasterDecodeFont,
   RasterTechnique,
   RasterTechniqueId,
-  RegisteredFont,
-  RegisteredRaster,
   Sha256Hex,
 } from '@pmndrs/glyph';
 import { defineRasterResourceId, defineRasterTechnique } from '@pmndrs/glyph';
@@ -32,7 +32,7 @@ export interface GlyphExampleData {
 
 /**
  * A third-party portable raster technique. It owns identity, decoding, and resource lifetime and never mentions a
- * renderer; its shader subpaths consume the plan's named buffers and synthetic-quad contract.
+ * renderer; its shader subpaths consume the plan's named buffers and supplied geometry contract.
  */
 export const glyphExample: RasterTechnique<
   RasterTechniqueId & 'studio.glyph-example',
@@ -45,6 +45,7 @@ export const glyphExample: RasterTechnique<
   kind: GLYPH_EXAMPLE_KIND,
   extension: GLYPH_EXAMPLE_EXTENSION,
   version: GLYPH_EXAMPLE_FORMAT_VERSION,
+  textEffects: [],
   runtimeBaker: () => import('./runtime-baker.js'),
   descriptor(options: GlyphExampleOptions | undefined): GlyphExampleDescriptor {
     return glyphExampleDescriptor(options);
@@ -73,8 +74,8 @@ export const glyphExample: RasterTechnique<
 });
 
 function decodeExtension(
-  font: RegisteredFont,
-  raster: RegisteredRaster<typeof GLYPH_EXAMPLE_KIND>,
+  font: RasterDecodeFont,
+  raster: RasterDecodeArtifact<typeof GLYPH_EXAMPLE_KIND>,
 ): GlyphExampleExtension {
   const extension = objectValue(raster.extensionData, 'glyph-example extension');
   if (

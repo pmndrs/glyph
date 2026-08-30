@@ -16,13 +16,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
+import { threeEngineDomainReport } from '../../dist/three/engine-domain.js';
+
 const fixtures = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
-const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 
 /** Fonts chosen for shaping behaviour that has broken the engine before. */
 const FONT_FIXTURES = {
@@ -96,19 +96,30 @@ function integer(random, min, max) {
   return min + Math.floor(random() * (max - min + 1));
 }
 
-const dataUrl = (bytes) => `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
-
-async function loadFonts(runtime) {
-  const entries = await Promise.all(
-    Object.entries(FONT_FIXTURES).map(async ([name, file]) => [
-      name,
-      await runtime.loadFont({
-        input: { baked: dataUrl(await readFile(new URL(file, fixtures))) },
-        raster: { technique: bitmap, options: { strikes: [16] } },
-      }),
-    ]),
-  );
-  return Object.fromEntries(entries);
+async function loadFonts() {
+  const loader = new FontLoader();
+  try {
+    const entries = await Promise.all(
+      Object.entries(FONT_FIXTURES).map(async ([name, file]) => [
+        name,
+        await loader.loadAsync({
+          input: { baked: { bytes: await readFile(new URL(file, fixtures)), ownership: 'copy' } },
+          raster: { technique: bitmap, options: { strikes: [16] } },
+        }),
+      ]),
+    );
+    const fonts = Object.fromEntries(entries);
+    return {
+      fonts,
+      dispose() {
+        for (const font of Object.values(fonts)) font.dispose();
+        loader.dispose();
+      },
+    };
+  } catch (error) {
+    loader.dispose();
+    throw error;
+  }
 }
 
 const MEASUREMENT_KEYS = [
@@ -160,9 +171,9 @@ class Subject {
     this.node = new Text({
       font: this.fonts[this.fontKey],
       text: this.text,
-      style: this.style(),
-      paint: { color: this.color },
-      contentBox: { width: { mode: 'exact', size: this.width }, wrap: 'word' },
+      style: { ...this.style(), ...{ color: this.color } },
+      constraints: { width: { mode: 'exact', size: this.width } },
+      layout: { wrap: 'word' },
     });
     group.add(this.node);
     this.attached = true;
@@ -172,9 +183,9 @@ class Subject {
     if (this.node === undefined) return;
     this.node.font = this.fonts[this.fontKey];
     this.node.text = this.text;
-    this.node.style = this.style();
-    this.node.paint = { color: this.color };
-    this.node.contentBox = { width: { mode: 'exact', size: this.width }, wrap: 'word' };
+    this.node.style = [this.style(), { color: this.color }];
+    this.node.constraints = { width: { mode: 'exact', size: this.width } };
+    this.node.layout = { wrap: 'word' };
   }
 }
 
@@ -249,12 +260,12 @@ function checkSubject(subject, context) {
   const { node } = subject;
   assert.equal(node.error, undefined, `${context}: paragraph reported ${String(node.error?.message)}`);
 
-  const measured = node.layout();
+  const measured = node.measure();
   assert.notEqual(measured, undefined, `${context}: committed layout metrics went missing`);
 
   // Re-measuring without an intervening mutation must answer identically. A retained
   // query that disagrees with itself is the observable form of desynchronized state.
-  const again = node.layout();
+  const again = node.measure();
   assert.equal(summarize(again), summarize(measured), `${context}: repeated measurement disagreed with itself`);
 
   // Dual derivation: the per-glyph inspection lane and the line-level measurement lane
@@ -323,8 +334,14 @@ async function runSequence({ seed, steps, paragraphs, fonts }) {
       // Layout queries between mutations open speculative transactions that the next
       // publish either adopts or drops; interleaving them is the point of the harness.
       if (random() < 0.5) {
-        for (const candidate of subjects) {
-          if (candidate.attached && candidate.node !== undefined) candidate.node.layout();
+        for (const [candidateIndex, candidate] of subjects.entries()) {
+          if (!candidate.attached || candidate.node === undefined) continue;
+          try {
+            candidate.node.measure();
+          } catch (error) {
+            error.message = `p${candidateIndex} measurement: ${error.message}`;
+            throw error;
+          }
         }
         journal.push('layout');
       }
@@ -344,11 +361,8 @@ async function runSequence({ seed, steps, paragraphs, fonts }) {
 }
 
 test('randomized interactive sequences never fail to publish valid input', async () => {
-  const runtime = await createTextRuntime({
-    registry: new FontRegistry(),
-    wasm: await readFile(shaperWasmUrl),
-  });
-  const fonts = await loadFonts(runtime);
+  const loaded = await loadFonts();
+  const { fonts } = loaded;
   try {
     // A fixed seed list keeps the gate deterministic. Widen it deliberately when a new
     // defect class appears, and add the reproducing seed here rather than re-rolling.
@@ -356,7 +370,7 @@ test('randomized interactive sequences never fail to publish valid input', async
       await runSequence({ seed, steps: 24, paragraphs: 3, fonts });
     }
   } finally {
-    runtime.dispose();
+    loaded.dispose();
   }
 });
 
@@ -364,11 +378,8 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
   // The seed corpus replayed exactly: every case typed one grapheme at a time under an
   // oscillating width, with the case switch changing font, direction, language, and
   // features together. This is the live Advanced-shaping workload's sequence.
-  const runtime = await createTextRuntime({
-    registry: new FontRegistry(),
-    wasm: await readFile(shaperWasmUrl),
-  });
-  const fonts = await loadFonts(runtime);
+  const loaded = await loadFonts();
+  const { fonts } = loaded;
   const scene = new THREE.Scene();
   const group = new TextGroup({ batching: 'group' });
   scene.add(group);
@@ -377,7 +388,8 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
       font: fonts.inter,
       text: '',
       style: { fontSize: 20, lineHeight: 1.25 },
-      contentBox: { width: { mode: 'exact', size: 400 }, wrap: 'word' },
+      constraints: { width: { mode: 'exact', size: 400 } },
+      layout: { wrap: 'word' },
     });
     group.add(node);
     return node;
@@ -397,7 +409,8 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
           ...(shapingCase.features.length === 0 ? {} : { features: shapingCase.features }),
         };
         node.text = '';
-        node.contentBox = { width: { mode: 'exact', size: 600 - index * 7 }, wrap: 'word' };
+        node.constraints = { width: { mode: 'exact', size: 600 - index * 7 } };
+        node.layout = { wrap: 'word' };
       }
       scene.updateMatrixWorld(true);
 
@@ -405,12 +418,9 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
         const content = units.slice(0, tick).join('');
         for (const [index, node] of nodes.entries()) {
           node.text = content;
-          node.contentBox = {
-            width: { mode: 'exact', size: 240 + ((tick * 37 + index * 11) % 420) },
-            wrap: 'word',
-          };
+          node.constraints = { width: { mode: 'exact', size: 240 + ((tick * 37 + index * 11) % 420) } };
         }
-        for (const node of nodes) node.layout();
+        for (const node of nodes) node.measure();
         scene.updateMatrixWorld(true);
         for (const [index, node] of nodes.entries()) {
           assert.equal(
@@ -418,12 +428,7 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
             undefined,
             `${shapingCase.id} tick ${tick} p${index}: ${String(node.error?.message)}`,
           );
-          const metrics = node.layout();
-          assert.notEqual(
-            metrics,
-            undefined,
-            `${shapingCase.id} tick ${tick} p${index} lost its committed layout metrics`,
-          );
+          const metrics = node.measure();
           assert.equal(
             metrics.missingGlyphCount,
             0,
@@ -435,67 +440,49 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
   } finally {
     for (const node of nodes) node.dispose();
     group.dispose();
-    runtime.dispose();
+    loaded.dispose();
   }
 });
 
-test('teardown is total, idempotent, and non-throwing while paragraphs still hold leases', async () => {
-  // Disposal runs in `finally` blocks and unmount paths that are often already unwinding
-  // an earlier failure. A throw there destroys the original error and strands the Wasm
-  // instance, so outstanding leases are reported and force-released instead of refused.
-  // A TextGroup deliberately does not dispose its children -- Three's ownership rule --
-  // so this is the ordinary shape of an application shutting down.
-  const runtime = await createTextRuntime({
-    registry: new FontRegistry(),
-    wasm: await readFile(shaperWasmUrl),
-  });
-  const fonts = await loadFonts(runtime);
+test('font and loader teardown is total while Text retains the renderer domain', async () => {
+  const loaded = await loadFonts();
+  const { fonts } = loaded;
   const scene = new THREE.Scene();
   const group = new TextGroup({ batching: 'group' });
   scene.add(group);
+  const texts = [];
   for (let index = 0; index < 4; index += 1) {
-    group.add(
-      new Text({
-        font: fonts.inter,
-        text: 'retained',
-        style: { fontSize: 20, lineHeight: 1.25 },
-        contentBox: { width: { mode: 'exact', size: 400 }, wrap: 'word' },
-      }),
-    );
+    const text = new Text({
+      font: fonts.inter,
+      text: 'retained',
+      style: { fontSize: 20, lineHeight: 1.25 },
+      constraints: { width: { mode: 'exact', size: 400 } },
+      layout: { wrap: 'word' },
+    });
+    texts.push(text);
+    group.add(text);
   }
   scene.updateMatrixWorld(true);
 
-  const warnings = [];
-  const originalWarn = console.warn;
-  console.warn = (...args) => void warnings.push(args.join(' '));
   try {
+    loaded.dispose();
+    loaded.dispose();
+    assert.ok(Object.values(fonts).every((font) => font.disposed));
+    assert.equal(threeEngineDomainReport().active, true, 'live Text leases keep the renderer domain valid');
+    for (const text of texts) assert.ok(text.measure().glyphCount > 0);
     group.dispose();
-    runtime.dispose();
-    // Repeating every teardown must be a no-op, not a second failure.
     group.dispose();
-    runtime.dispose();
   } finally {
-    console.warn = originalWarn;
+    for (const text of texts) text.dispose();
+    group.dispose();
+    loaded.dispose();
   }
-
-  assert.ok(
-    warnings.some((line) => line.includes('live paragraph lease')),
-    `force-released leases must be reported; saw ${JSON.stringify(warnings)}`,
-  );
-  assert.equal(fonts.inter.disposed, true, 'the font must actually be disposed, not left half-torn-down');
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
-test('teardown order does not matter, including a paragraph disposed after its runtime', async () => {
-  // react-three-fiber defers dispose to idle priority (disposeOnIdle), so a Text routinely
-  // disposes AFTER the runtime an application tore down on unmount. Ownership assertions
-  // that hold for a live font are meaningless once it is disposed: the ledger is closed,
-  // and a late release is not a double release. r3f swallows dispose errors, so a throw
-  // here would be invisible in React and fatal in plain Three.
-  const runtime = await createTextRuntime({
-    registry: new FontRegistry(),
-    wasm: await readFile(shaperWasmUrl),
-  });
-  const fonts = await loadFonts(runtime);
+test('renderer leases may dispose before their user font and loader handles', async () => {
+  const loaded = await loadFonts();
+  const { fonts } = loaded;
   const scene = new THREE.Scene();
   const group = new TextGroup({ batching: 'group' });
   scene.add(group);
@@ -504,24 +491,25 @@ test('teardown order does not matter, including a paragraph disposed after its r
       font: fonts.inter,
       text: 'deferred',
       style: { fontSize: 20, lineHeight: 1.25 },
-      contentBox: { width: { mode: 'exact', size: 400 }, wrap: 'word' },
+      constraints: { width: { mode: 'exact', size: 400 } },
+      layout: { wrap: 'word' },
     });
     group.add(node);
     return node;
   });
   scene.updateMatrixWorld(true);
 
-  const originalWarn = console.warn;
-  console.warn = () => undefined;
   try {
-    // Deliberately the wrong order: the runtime goes first, the paragraphs afterwards.
-    runtime.dispose();
     for (const text of texts) text.dispose();
     group.dispose();
-    // And again, because idle callbacks can also fire more than the paragraph count.
     for (const text of texts) text.dispose();
+    loaded.dispose();
+    loaded.dispose();
   } finally {
-    console.warn = originalWarn;
+    for (const text of texts) text.dispose();
+    group.dispose();
+    loaded.dispose();
   }
-  assert.equal(fonts.inter.disposed, true);
+  assert.ok(Object.values(fonts).every((font) => font.disposed));
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });

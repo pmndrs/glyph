@@ -64,7 +64,6 @@ test('creates Claude imports and complete skill directory links', async (testCon
   await mkdir(nested, { recursive: true });
   await writeFile(join(nested, 'AGENTS.md'), '# Nested agents\n');
   const sourceSkill = await createSkill(root, 'example');
-  await createSkill(root, 'claude-review');
 
   const result = await synchronizeClaudeProject(root);
 
@@ -72,7 +71,6 @@ test('creates Claude imports and complete skill directory links', async (testCon
   assert.equal(await readFile(join(nested, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
   assert.equal(await realpath(join(root, '.claude', 'skills', 'example')), await realpath(sourceSkill));
   assert.equal(await readFile(join(root, '.claude', 'skills', 'example', 'references', 'guide.md'), 'utf8'), 'guide\n');
-  await assert.rejects(realpath(join(root, '.claude', 'skills', 'claude-review')), { code: 'ENOENT' });
   assert.equal(result.createdClaudeFiles.length, 1);
   assert.equal(result.createdSkillLinks.length, 1);
 });

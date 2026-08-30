@@ -1,14 +1,16 @@
 import * as TSL from 'three/tsl';
 import type { Node, Texture } from 'three/webgpu';
 
+import { unpackSrgbRgba } from './packed-color.js';
+
 /**
- * One glyph instance's canonical MSDF fields, already resolved to nodes. Core owns what each field means; how a
- * program packs them — the first-party target interleaves them into seven `vec4` storage buffers — stays its own choice.
+ * One glyph instance's canonical MSDF fields, already resolved to nodes. The technique schema owns lane meaning and
+ * scalar packing; the target owns GPU storage realization.
  */
 export interface TslMsdfInstanceNodes {
-  /** Paragraph-local glyph origin, in layout units, with y measured downward. */
+  /** Paragraph-local glyph origin, with y measured downward. */
   readonly origin: Node<'vec2'>;
-  /** Glyph quad extent in layout units. */
+  /** Glyph quad extent in paragraph-local units. */
   readonly size: Node<'vec2'>;
   /** Upper-left atlas coordinate of the glyph's distance rectangle. */
   readonly uvOrigin: Node<'vec2'>;
@@ -17,8 +19,8 @@ export interface TslMsdfInstanceNodes {
   /** Sampling clamp for the glyph's atlas cell as `(minimumU, minimumV, maximumU, maximumV)`. */
   readonly uvBounds: Node<'vec4'>;
   readonly fillColor: Node<'vec4'>;
-  readonly outlineColor: Node<'vec4'>;
-  readonly shadowColor: Node<'vec4'>;
+  /** Packed little-endian sRGB outline and shadow colors from the technique's `effectColor` buffer. */
+  readonly effectColor: Node<'uvec2'>;
   /** Shadow displacement in atlas units, subtracted from the sampled coordinate. */
   readonly shadowOffset: Node<'vec2'>;
   /** Outline half-width in signed-distance units. */
@@ -65,6 +67,8 @@ export interface TslMsdfShaderOutput {
  * the glyph's upper-left corner. A program supplying different geometry owns that correspondence.
  */
 export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfShaderResources): TslMsdfShaderOutput {
+  const outlineColor = unpackSrgbRgba(instance.effectColor.x);
+  const shadowColor = unpackSrgbRgba(instance.effectColor.y);
   const atlasU = instance.uvOrigin.x.add(TSL.uv().x.mul(instance.uvSize.x));
   const atlasV = instance.uvOrigin.y.add(TSL.uv().y.mul(instance.uvSize.y));
   const minimumU = instance.uvBounds.x.add(0.5 / resources.atlasWidth);
@@ -92,14 +96,14 @@ export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfSha
   ).depth(layer);
   const shadowCoverage = distanceCoverage(shadowSample.a.sub(0.5), pixelRange).mul(shadowInside);
   const fillAlpha = instance.fillColor.a.mul(fillCoverage);
-  const outlineAlpha = instance.outlineColor.a.mul(outlineOnly);
+  const outlineAlpha = outlineColor.a.mul(outlineOnly);
   const glyphAlpha = fillAlpha.add(outlineAlpha);
-  const shadowAlpha = instance.shadowColor.a.mul(shadowCoverage).mul(TSL.float(1).sub(glyphAlpha));
+  const shadowAlpha = shadowColor.a.mul(shadowCoverage).mul(TSL.float(1).sub(glyphAlpha));
   const outputAlpha = glyphAlpha.add(shadowAlpha);
   const outputRgb = instance.fillColor.rgb
     .mul(fillAlpha)
-    .add(instance.outlineColor.rgb.mul(outlineAlpha))
-    .add(instance.shadowColor.rgb.mul(shadowAlpha))
+    .add(outlineColor.rgb.mul(outlineAlpha))
+    .add(shadowColor.rgb.mul(shadowAlpha))
     .div(TSL.max(outputAlpha, 1e-6));
 
   return {
@@ -126,8 +130,8 @@ function screenPixelRange(
   atlasV: Node<'float'>,
   resources: TslMsdfShaderResources,
 ): Node<'float'> {
-  const screenTexelsU = TSL.float(1).div(TSL.max(TSL.fwidth(atlasU), 1e-6));
-  const screenTexelsV = TSL.float(1).div(TSL.max(TSL.fwidth(atlasV), 1e-6));
+  const screenTexelsU = TSL.inverseSqrt(TSL.max(TSL.dFdx(atlasU).pow2().add(TSL.dFdy(atlasU).pow2()), 1e-12));
+  const screenTexelsV = TSL.inverseSqrt(TSL.max(TSL.dFdx(atlasV).pow2().add(TSL.dFdy(atlasV).pow2()), 1e-12));
   return TSL.max(
     TSL.float(0.5).mul(
       TSL.float(resources.pixelRange / resources.atlasWidth)

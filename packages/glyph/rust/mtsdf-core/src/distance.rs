@@ -3,7 +3,7 @@ use core_maths::CoreFloat as _;
 
 use crate::{
     math::{Point, clamp_unit, squared_distance},
-    outline::{BLUE, CubicSoa, EdgeSoa, GREEN, LineSoa, QuadraticSoa, RED},
+    outline::{BLUE, CubicSoa, EdgeContext, EdgeSoa, GREEN, LineSoa, QuadraticSoa, RED},
 };
 
 const CUBIC_STARTS: usize = 8;
@@ -20,7 +20,19 @@ pub(crate) struct Distance4 {
 pub(crate) struct ContourDistance {
     lanes: [f32; 4],
     alignments: [f32; 4],
+    minimum_negative_perpendicular: [f32; 3],
+    minimum_positive_perpendicular: [f32; 3],
+    near_edges: [NearEdge; 3],
     point_winding: i32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct NearEdge {
+    from_start: Point,
+    from_end: Point,
+    start_direction: Point,
+    end_direction: Point,
+    parameter: f32,
 }
 
 impl Default for ContourDistance {
@@ -28,6 +40,9 @@ impl Default for ContourDistance {
         Self {
             lanes: [f32::INFINITY; 4],
             alignments: [f32::INFINITY; 4],
+            minimum_negative_perpendicular: [f32::NEG_INFINITY; 3],
+            minimum_positive_perpendicular: [f32::INFINITY; 3],
+            near_edges: [NearEdge::default(); 3],
             point_winding: 0,
         }
     }
@@ -50,12 +65,12 @@ impl Distance4 {
         let Some((&first, remaining)) = contours.split_first() else {
             return Self { lanes: [0.0; 4] };
         };
-        let mut shape = first.signed();
+        let mut shape = first;
         let mut inner = None;
         let mut outer = None;
         classify_contour(shape, edges.contour_windings[0], &mut inner, &mut outer);
         for (index, contour) in remaining.iter().enumerate() {
-            let distance = contour.signed();
+            let distance = *contour;
             shape.merge(distance);
             classify_contour(
                 distance,
@@ -65,7 +80,8 @@ impl Distance4 {
             );
         }
 
-        let mut signed = resolve_overlaps(shape, inner, outer, contours, &edges.contour_windings);
+        let mut signed =
+            resolve_overlaps(shape, inner, outer, contours, &edges.contour_windings).signed();
         let filled = contours
             .iter()
             .map(|contour| contour.point_winding)
@@ -112,12 +128,12 @@ fn resolve_tile(
     let Some((&first, remaining)) = contours.split_first() else {
         return Distance4 { lanes: [0.0; 4] };
     };
-    let mut shape = first.signed();
+    let mut shape = first;
     let mut inner = None;
     let mut outer = None;
     classify_contour(shape, edges.contour_windings[0], &mut inner, &mut outer);
     for (index, contour) in remaining.iter().enumerate() {
-        let distance = contour.signed();
+        let distance = *contour;
         shape.merge(distance);
         classify_contour(
             distance,
@@ -127,7 +143,8 @@ fn resolve_tile(
         );
     }
 
-    let mut signed = resolve_overlaps(shape, inner, outer, contours, &edges.contour_windings);
+    let mut signed =
+        resolve_overlaps(shape, inner, outer, contours, &edges.contour_windings).signed();
     let filled = contours
         .iter()
         .map(|contour| contour.point_winding)
@@ -154,7 +171,6 @@ fn reset_tile_contours(contours: &mut [ContourDistance]) {
 #[derive(Clone, Copy, Debug)]
 struct SignedDistance4 {
     lanes: [f32; 4],
-    alignments: [f32; 4],
 }
 
 impl SignedDistance4 {
@@ -162,35 +178,86 @@ impl SignedDistance4 {
         let [red, green, blue, _] = self.lanes;
         red.min(green).max(red.max(green).min(blue))
     }
-
-    fn merge(&mut self, other: Self) {
-        for index in 0..4 {
-            update_distance(
-                &mut self.lanes[index],
-                &mut self.alignments[index],
-                DistanceCandidate {
-                    value: other.lanes[index],
-                    alignment: other.alignments[index],
-                },
-            );
-        }
-    }
 }
 
 impl ContourDistance {
-    fn signed(self) -> SignedDistance4 {
-        SignedDistance4 {
-            lanes: self.lanes,
-            alignments: self.alignments,
+    fn resolve(self) -> f32 {
+        self.signed().resolve()
+    }
+
+    fn merge(&mut self, other: Self) {
+        for channel in 0..3 {
+            let candidate = DistanceCandidate {
+                value: other.lanes[channel],
+                alignment: other.alignments[channel],
+                parameter: other.near_edges[channel].parameter,
+            };
+            if update_distance(
+                &mut self.lanes[channel],
+                &mut self.alignments[channel],
+                candidate,
+            ) {
+                self.near_edges[channel] = other.near_edges[channel];
+            }
+            self.minimum_negative_perpendicular[channel] = self.minimum_negative_perpendicular
+                [channel]
+                .max(other.minimum_negative_perpendicular[channel]);
+            self.minimum_positive_perpendicular[channel] = self.minimum_positive_perpendicular
+                [channel]
+                .min(other.minimum_positive_perpendicular[channel]);
         }
+        update_distance(
+            &mut self.lanes[3],
+            &mut self.alignments[3],
+            DistanceCandidate {
+                value: other.lanes[3],
+                alignment: other.alignments[3],
+                parameter: 0.0,
+            },
+        );
+    }
+
+    fn signed(self) -> SignedDistance4 {
+        let mut lanes = self.lanes;
+        for (channel, lane) in lanes.iter_mut().enumerate().take(3) {
+            let mut distance = if *lane < 0.0 {
+                self.minimum_negative_perpendicular[channel]
+            } else {
+                self.minimum_positive_perpendicular[channel]
+            };
+            let near = self.near_edges[channel];
+            let mut candidate = *lane;
+            if near.parameter < 0.0 {
+                let projection = near.from_start.dot(near.start_direction);
+                if projection < 0.0 {
+                    let perpendicular = near.from_start.cross(near.start_direction);
+                    if perpendicular.abs() <= candidate.abs() {
+                        candidate = perpendicular;
+                    }
+                }
+            } else if near.parameter > 1.0 {
+                let projection = near.from_end.dot(near.end_direction);
+                if projection > 0.0 {
+                    let perpendicular = near.from_end.cross(near.end_direction);
+                    if perpendicular.abs() <= candidate.abs() {
+                        candidate = perpendicular;
+                    }
+                }
+            }
+            if candidate.abs() < distance.abs() {
+                distance = candidate;
+            }
+            *lane = distance;
+        }
+        SignedDistance4 { lanes }
     }
 }
 
 fn classify_contour(
-    distance: SignedDistance4,
+    distance: ContourDistance,
     winding: i8,
-    inner: &mut Option<SignedDistance4>,
-    outer: &mut Option<SignedDistance4>,
+    inner: &mut Option<ContourDistance>,
+    outer: &mut Option<ContourDistance>,
 ) {
     let scalar = distance.resolve();
     if winding > 0 && scalar >= 0.0 {
@@ -201,7 +268,7 @@ fn classify_contour(
     }
 }
 
-fn merge_optional(target: &mut Option<SignedDistance4>, distance: SignedDistance4) {
+fn merge_optional(target: &mut Option<ContourDistance>, distance: ContourDistance) {
     if let Some(target) = target {
         target.merge(distance);
     } else {
@@ -210,20 +277,19 @@ fn merge_optional(target: &mut Option<SignedDistance4>, distance: SignedDistance
 }
 
 fn resolve_overlaps(
-    shape: SignedDistance4,
-    inner: Option<SignedDistance4>,
-    outer: Option<SignedDistance4>,
+    shape: ContourDistance,
+    inner: Option<ContourDistance>,
+    outer: Option<ContourDistance>,
     contours: &[ContourDistance],
     windings: &[i8],
-) -> SignedDistance4 {
-    let inner_scalar = inner.map_or(f32::NEG_INFINITY, SignedDistance4::resolve);
-    let outer_scalar = outer.map_or(f32::INFINITY, SignedDistance4::resolve);
+) -> ContourDistance {
+    let inner_scalar = inner.map_or(f32::NEG_INFINITY, ContourDistance::resolve);
+    let outer_scalar = outer.map_or(f32::INFINITY, ContourDistance::resolve);
     let (mut distance, selected_winding) = if let Some(mut distance) = inner
         && inner_scalar >= 0.0
         && inner_scalar.abs() <= outer_scalar.abs()
     {
         for (&contour, &winding) in contours.iter().zip(windings) {
-            let contour = contour.signed();
             let scalar = contour.resolve();
             if winding > 0 && scalar.abs() < outer_scalar.abs() && scalar > distance.resolve() {
                 distance = contour;
@@ -235,7 +301,6 @@ fn resolve_overlaps(
         && outer_scalar.abs() < inner_scalar.abs()
     {
         for (&contour, &winding) in contours.iter().zip(windings) {
-            let contour = contour.signed();
             let scalar = contour.resolve();
             if winding < 0 && scalar.abs() < inner_scalar.abs() && scalar < distance.resolve() {
                 distance = contour;
@@ -248,7 +313,6 @@ fn resolve_overlaps(
 
     for (&contour, &winding) in contours.iter().zip(windings) {
         if winding != selected_winding {
-            let contour = contour.signed();
             let scalar = contour.resolve();
             if scalar * distance.resolve() >= 0.0 && scalar.abs() < distance.resolve().abs() {
                 distance = contour;
@@ -273,7 +337,15 @@ fn visit_lines(point: Point, edges: &LineSoa, contours: &mut [ContourDistance]) 
         let a = Point::new(edges.x0[index], edges.y0[index]);
         let b = Point::new(edges.x1[index], edges.y1[index]);
         let contour = contour_mut(contours, edges.contour[index]);
-        update_lanes(contour, edges.color[index], line_distance(point, a, b));
+        update_lanes(
+            contour,
+            edges.color[index],
+            line_distance(point, a, b),
+            point,
+            a,
+            b,
+            edges.context[index],
+        );
         contour.point_winding += line_winding(point, a, b);
     }
 }
@@ -289,7 +361,11 @@ fn visit_quadratics(point: Point, edges: &QuadraticSoa, contours: &mut [ContourD
         update_lanes(
             contour,
             edges.color[index],
-            DistanceCandidate::interior(quadratic_distance(point, points)),
+            quadratic_distance(point, points),
+            point,
+            points[0],
+            points[2],
+            edges.context[index],
         );
         contour.point_winding += quadratic_winding(point, points);
     }
@@ -307,7 +383,11 @@ fn visit_cubics(point: Point, edges: &CubicSoa, contours: &mut [ContourDistance]
         update_lanes(
             contour,
             edges.color[index],
-            DistanceCandidate::interior(cubic_distance(point, points)),
+            cubic_distance(point, points),
+            point,
+            points[0],
+            points[3],
+            edges.context[index],
         );
         contour.point_winding += cubic_winding(point, points);
     }
@@ -328,7 +408,15 @@ fn visit_lines_tile(
         let candidates = points.map(|point| line_distance(point, a, b));
         for lane in 0..4 {
             let contour = contour_mut(&mut contours[lane], edges.contour[index]);
-            update_lanes(contour, edges.color[index], candidates[lane]);
+            update_lanes(
+                contour,
+                edges.color[index],
+                candidates[lane],
+                points[lane],
+                a,
+                b,
+                edges.context[index],
+            );
             contour.point_winding += line_winding(points[lane], a, b);
         }
     }
@@ -351,7 +439,11 @@ fn visit_quadratics_tile(
             update_lanes(
                 contour,
                 edges.color[index],
-                DistanceCandidate::interior(quadratic_distance(points[lane], edge_points)),
+                quadratic_distance(points[lane], edge_points),
+                points[lane],
+                edge_points[0],
+                edge_points[2],
+                edges.context[index],
             );
             contour.point_winding += quadratic_winding(points[lane], edge_points);
         }
@@ -376,7 +468,11 @@ fn visit_cubics_tile(
             update_lanes(
                 contour,
                 edges.color[index],
-                DistanceCandidate::interior(cubic_distance(points[lane], edge_points)),
+                cubic_distance(points[lane], edge_points),
+                points[lane],
+                edge_points[0],
+                edge_points[3],
+                edges.context[index],
             );
             contour.point_winding += cubic_winding(points[lane], edge_points);
         }
@@ -387,36 +483,111 @@ fn visit_cubics_tile(
 struct DistanceCandidate {
     value: f32,
     alignment: f32,
+    parameter: f32,
 }
 
-impl DistanceCandidate {
-    fn interior(value: f32) -> Self {
-        Self {
-            value,
-            alignment: 0.0,
-        }
-    }
-}
-
-fn update_lanes(contour: &mut ContourDistance, color: u8, candidate: DistanceCandidate) {
+fn update_lanes(
+    contour: &mut ContourDistance,
+    color: u8,
+    candidate: DistanceCandidate,
+    point: Point,
+    start: Point,
+    end: Point,
+    context: EdgeContext,
+) {
+    let near = NearEdge {
+        from_start: point - start,
+        from_end: point - end,
+        start_direction: context.start_direction,
+        end_direction: context.end_direction,
+        parameter: candidate.parameter,
+    };
     if color & RED != 0 {
-        update_distance(&mut contour.lanes[0], &mut contour.alignments[0], candidate);
+        update_channel(contour, 0, candidate, near);
     }
     if color & GREEN != 0 {
-        update_distance(&mut contour.lanes[1], &mut contour.alignments[1], candidate);
+        update_channel(contour, 1, candidate, near);
     }
     if color & BLUE != 0 {
-        update_distance(&mut contour.lanes[2], &mut contour.alignments[2], candidate);
+        update_channel(contour, 2, candidate, near);
     }
     update_distance(&mut contour.lanes[3], &mut contour.alignments[3], candidate);
+    add_endpoint_perpendicular_distances(contour, color, candidate.value, near, context);
 }
 
-fn update_distance(current: &mut f32, alignment: &mut f32, candidate: DistanceCandidate) {
+fn update_channel(
+    contour: &mut ContourDistance,
+    channel: usize,
+    candidate: DistanceCandidate,
+    near: NearEdge,
+) {
+    if update_distance(
+        &mut contour.lanes[channel],
+        &mut contour.alignments[channel],
+        candidate,
+    ) {
+        contour.near_edges[channel] = near;
+    }
+}
+
+fn update_distance(current: &mut f32, alignment: &mut f32, candidate: DistanceCandidate) -> bool {
     if candidate.value.abs() < current.abs()
         || (candidate.value.abs() == current.abs() && candidate.alignment < *alignment)
     {
         *current = candidate.value;
         *alignment = candidate.alignment;
+        true
+    } else {
+        false
+    }
+}
+
+fn add_endpoint_perpendicular_distances(
+    contour: &mut ContourDistance,
+    color: u8,
+    true_distance: f32,
+    near: NearEdge,
+    context: EdgeContext,
+) {
+    let start_domain = near.from_start.dot(context.start_domain_direction);
+    if start_domain > 0.0 {
+        let mut distance = true_distance;
+        if replace_with_perpendicular(&mut distance, near.from_start, -context.start_direction) {
+            add_perpendicular_distance(contour, color, -distance);
+        }
+    }
+    let end_domain = -near.from_end.dot(context.end_domain_direction);
+    if end_domain > 0.0 {
+        let mut distance = true_distance;
+        if replace_with_perpendicular(&mut distance, near.from_end, context.end_direction) {
+            add_perpendicular_distance(contour, color, distance);
+        }
+    }
+}
+
+fn replace_with_perpendicular(distance: &mut f32, endpoint_delta: Point, direction: Point) -> bool {
+    if endpoint_delta.dot(direction) <= 0.0 {
+        return false;
+    }
+    let perpendicular = endpoint_delta.cross(direction);
+    if perpendicular.abs() >= distance.abs() {
+        return false;
+    }
+    *distance = perpendicular;
+    true
+}
+
+fn add_perpendicular_distance(contour: &mut ContourDistance, color: u8, distance: f32) {
+    for (channel, channel_color) in [RED, GREEN, BLUE].into_iter().enumerate() {
+        if color & channel_color == 0 {
+            continue;
+        }
+        if distance <= 0.0 && distance > contour.minimum_negative_perpendicular[channel] {
+            contour.minimum_negative_perpendicular[channel] = distance;
+        }
+        if distance >= 0.0 && distance < contour.minimum_positive_perpendicular[channel] {
+            contour.minimum_positive_perpendicular[channel] = distance;
+        }
     }
 }
 
@@ -431,6 +602,7 @@ fn line_distance(point: Point, a: Point, b: Point) -> DistanceCandidate {
         return DistanceCandidate {
             value: squared_distance(point, a).sqrt(),
             alignment: 1.0,
+            parameter: 0.0,
         };
     }
     let from_start = point - a;
@@ -444,6 +616,7 @@ fn line_distance(point: Point, a: Point, b: Point) -> DistanceCandidate {
         } else {
             normalized_abs_dot(direction, closest - point)
         },
+        parameter: raw_t,
     }
 }
 
@@ -469,6 +642,7 @@ fn line_distance_tile_simd(points: [Point; 4], a: Point, b: Point) -> [DistanceC
         return values.map(|value| DistanceCandidate {
             value,
             alignment: 1.0,
+            parameter: 0.0,
         });
     }
 
@@ -529,9 +703,11 @@ fn line_distance_tile_simd(points: [Point; 4], a: Point, b: Point) -> [DistanceC
     let alignments = v128_bitselect(f32x4_splat(0.0), endpoint_alignment, interior);
     let values = extract_f32x4(values);
     let alignments = extract_f32x4(alignments);
+    let parameters = extract_f32x4(raw_t);
     core::array::from_fn(|index| DistanceCandidate {
         value: values[index],
         alignment: alignments[index],
+        parameter: parameters[index],
     })
 }
 
@@ -555,21 +731,41 @@ fn normalized_abs_dot(a: Point, b: Point) -> f32 {
     }
 }
 
-fn quadratic_distance(point: Point, points: [Point; 3]) -> f32 {
+fn quadratic_distance(point: Point, points: [Point; 3]) -> DistanceCandidate {
     let qa = F64Point::from(points[0] - point);
     let ab = F64Point::from(points[1] - points[0]);
     let br = F64Point::from(points[2] - points[1] - (points[1] - points[0]));
-    let endpoint_start = qa.length();
-    let endpoint_end = F64Point::from(points[2] - point).length();
-    let (mut minimum_distance, mut minimum_direction) = if endpoint_start <= endpoint_end {
-        (endpoint_start, ab)
-    } else {
-        (endpoint_end, ab + br)
-    };
-    let mut minimum_offset = if endpoint_start <= endpoint_end {
+    let start_direction = nonzero_quadratic_direction(points, false);
+    let end_direction = nonzero_quadratic_direction(points, true);
+    let endpoint_start = non_zero_sign64(start_direction.cross(qa)) * qa.length();
+    let end_offset = F64Point::from(points[2] - point);
+    let endpoint_end = non_zero_sign64(end_direction.cross(end_offset)) * end_offset.length();
+    let (mut minimum_distance, mut minimum_direction, mut parameter) =
+        if endpoint_start.abs() <= endpoint_end.abs() {
+            (
+                endpoint_start,
+                start_direction,
+                safe_ratio64(
+                    -qa.dot(start_direction),
+                    start_direction.dot(start_direction),
+                    0.0,
+                ),
+            )
+        } else {
+            (
+                endpoint_end,
+                end_direction,
+                safe_ratio64(
+                    F64Point::from(point - points[1]).dot(end_direction),
+                    end_direction.dot(end_direction),
+                    1.0,
+                ),
+            )
+        };
+    let mut minimum_offset = if endpoint_start.abs() <= endpoint_end.abs() {
         qa
     } else {
-        F64Point::from(points[2] - point)
+        end_offset
     };
 
     for t in solve_cubic(
@@ -586,14 +782,37 @@ fn quadratic_distance(point: Point, points: [Point; 3]) -> f32 {
         }
         let offset = qa + ab * (2.0 * t) + br * (t * t);
         let distance = offset.length();
-        if distance <= minimum_distance {
-            minimum_distance = distance;
+        if distance <= minimum_distance.abs() {
+            minimum_distance = non_zero_sign64((ab + br * t).cross(offset)) * distance;
             minimum_direction = ab + br * t;
             minimum_offset = offset;
+            parameter = t;
         }
     }
 
-    (non_zero_sign64(minimum_direction.cross(minimum_offset)) * minimum_distance) as f32
+    let alignment = if (0.0..=1.0).contains(&parameter) {
+        0.0
+    } else {
+        normalized_abs_dot64(minimum_direction, minimum_offset)
+    };
+    DistanceCandidate {
+        value: minimum_distance as f32,
+        alignment: alignment as f32,
+        parameter: parameter as f32,
+    }
+}
+
+fn nonzero_quadratic_direction(points: [Point; 3], at_end: bool) -> F64Point {
+    let direction = if at_end {
+        points[2] - points[1]
+    } else {
+        points[1] - points[0]
+    };
+    F64Point::from(if direction == Point::ZERO {
+        points[2] - points[0]
+    } else {
+        direction
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -644,6 +863,23 @@ impl F64Point {
 
     fn length(self) -> f64 {
         self.dot(self).sqrt()
+    }
+}
+
+fn normalized_abs_dot64(a: F64Point, b: F64Point) -> f64 {
+    let length_product = a.dot(a).sqrt() * b.dot(b).sqrt();
+    if length_product <= f64::EPSILON {
+        0.0
+    } else {
+        (a.dot(b) / length_product).abs()
+    }
+}
+
+fn safe_ratio64(numerator: f64, denominator: f64, fallback: f64) -> f64 {
+    if denominator.abs() <= f64::EPSILON {
+        fallback
+    } else {
+        numerator / denominator
     }
 }
 
@@ -709,13 +945,29 @@ fn solve_quadratic(a: f64, b: f64, c: f64) -> [Option<f64>; 2] {
     }
 }
 
-fn cubic_distance(point: Point, points: [Point; 4]) -> f32 {
+fn cubic_distance(point: Point, points: [Point; 4]) -> DistanceCandidate {
     let start = squared_distance(point, points[0]);
     let end = squared_distance(point, points[3]);
-    let (mut best, mut best_t) = if start <= end {
-        (start, 0.0)
+    let (mut best, mut best_t, mut parameter) = if start <= end {
+        let direction = cubic_direction(points, 0.0);
+        let offset = points[0] - point;
+        (
+            start,
+            0.0,
+            safe_ratio(-offset.dot(direction), direction.length_squared(), 0.0),
+        )
     } else {
-        (end, 1.0)
+        let direction = cubic_direction(points, 1.0);
+        let offset = points[3] - point;
+        (
+            end,
+            1.0,
+            safe_ratio(
+                direction.dot(direction - offset),
+                direction.length_squared(),
+                1.0,
+            ),
+        )
     };
     for start in 0..=CUBIC_STARTS {
         let mut t = start as f32 / CUBIC_STARTS as f32;
@@ -734,10 +986,42 @@ fn cubic_distance(point: Point, points: [Point; 4]) -> f32 {
         if candidate < best {
             best = candidate;
             best_t = t;
+            parameter = t;
         }
     }
     let delta = cubic_point(points, best_t) - point;
-    non_zero_sign(cubic_derivative(points, best_t).cross(delta)) * best.sqrt()
+    let direction = cubic_direction(points, best_t);
+    DistanceCandidate {
+        value: non_zero_sign(direction.cross(delta)) * best.sqrt(),
+        alignment: if (0.0..=1.0).contains(&parameter) {
+            0.0
+        } else {
+            normalized_abs_dot(direction, delta)
+        },
+        parameter,
+    }
+}
+
+fn cubic_direction(points: [Point; 4], t: f32) -> Point {
+    let direction = cubic_derivative(points, t);
+    if direction != Point::ZERO {
+        return direction;
+    }
+    if t == 0.0 {
+        points[2] - points[0]
+    } else if t == 1.0 {
+        points[3] - points[1]
+    } else {
+        direction
+    }
+}
+
+fn safe_ratio(numerator: f32, denominator: f32, fallback: f32) -> f32 {
+    if denominator.abs() <= f32::EPSILON {
+        fallback
+    } else {
+        numerator / denominator
+    }
 }
 
 fn quadratic_point(points: [Point; 3], t: f32) -> Point {
@@ -805,9 +1089,7 @@ fn line_winding(point: Point, a: Point, b: Point) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "adjacent-texel-tile-experiment")]
-    use crate::outline::Edge;
-    use crate::outline::WHITE;
+    use crate::outline::{Edge, WHITE};
 
     #[test]
     fn line_distance_handles_degenerate_edges() {
@@ -819,7 +1101,27 @@ mod tests {
 
     #[test]
     fn cubic_distance_terminates_for_degenerate_control_points() {
-        assert_eq!(cubic_distance(Point::new(1.0, 0.0), [Point::ZERO; 4]), 1.0);
+        assert_eq!(
+            cubic_distance(Point::new(1.0, 0.0), [Point::ZERO; 4]).value,
+            1.0
+        );
+    }
+
+    #[test]
+    fn cubic_endpoint_selector_parameter_does_not_extrapolate_the_nearest_point() {
+        let candidate = cubic_distance(
+            Point::new(-1.0, 1.0),
+            [
+                Point::new(0.0, 0.0),
+                Point::new(1.0, 0.0),
+                Point::new(1.0, 1.0),
+                Point::new(2.0, 1.0),
+            ],
+        );
+
+        assert!((candidate.value + 2.0_f32.sqrt()).abs() < 1.0e-6);
+        assert!(candidate.parameter < 0.0);
+        assert!((candidate.alignment - core::f32::consts::FRAC_1_SQRT_2).abs() < 1.0e-6);
     }
 
     #[test]
@@ -833,7 +1135,7 @@ mod tests {
             ],
         );
 
-        assert!((distance.abs() - 145.534_84).abs() < 1.0e-3);
+        assert!((distance.value.abs() - 145.534_84).abs() < 1.0e-3);
     }
 
     #[test]
@@ -847,6 +1149,7 @@ mod tests {
         edges.quadratics.y1.extend([1.0, 0.0]);
         edges.quadratics.color.extend([WHITE, WHITE]);
         edges.quadratics.contour.extend([0, 0]);
+        edges.quadratics.context.extend([EdgeContext::default(); 2]);
         let mut contours = [ContourDistance::default()];
 
         visit_quadratics(Point::new(0.75, 0.75), &edges.quadratics, &mut contours);
@@ -857,6 +1160,41 @@ mod tests {
                 .iter()
                 .all(|distance| distance.abs() < 1.0e-6)
         );
+    }
+
+    #[test]
+    fn perpendicular_rgb_preserves_a_magnified_square_corner() {
+        let outline = [
+            Edge::Line {
+                points: [Point::new(0.0, 0.0), Point::new(0.0, 1.0)],
+                color: RED | BLUE,
+            },
+            Edge::Line {
+                points: [Point::new(0.0, 1.0), Point::new(1.0, 1.0)],
+                color: RED | GREEN,
+            },
+            Edge::Line {
+                points: [Point::new(1.0, 1.0), Point::new(1.0, 0.0)],
+                color: GREEN | BLUE,
+            },
+            Edge::Line {
+                points: [Point::new(1.0, 0.0), Point::new(0.0, 0.0)],
+                color: RED | BLUE,
+            },
+        ];
+        let mut edges = EdgeSoa::default();
+        let contour = 0..outline.len();
+        edges
+            .populate(&outline, core::slice::from_ref(&contour))
+            .unwrap();
+        let mut contours = [ContourDistance::default()];
+
+        let sample = Distance4::evaluate(Point::new(1.2, 1.2), &edges, 1.0, &mut contours);
+        let [red, green, blue, alpha] = sample.lanes().map(|value| (value - 0.5).abs());
+        let reconstructed = red.min(green).max(red.max(green).min(blue));
+
+        assert!((reconstructed - 0.2).abs() < 1.0e-6);
+        assert!((alpha - 0.2_f32.hypot(0.2)).abs() < 1.0e-6);
     }
 
     #[cfg(feature = "adjacent-texel-tile-experiment")]

@@ -1,0 +1,975 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Glyph renderer integration and technique report</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: light-dark(#f6f4ee, #111416);
+        --surface: light-dark(#fff, #1a1e21);
+        --text: light-dark(#202426, #edf1f3);
+        --muted: light-dark(#667077, #aab3b9);
+        --line: light-dark(#d8d5cc, #364047);
+        --core: light-dark(#17657a, #63c6df);
+        --render: light-dark(#855219, #e7ac6a);
+        --good: light-dark(#1b6b43, #72d39f);
+        --code: light-dark(#eeece5, #0d1012);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.55 ui-sans-serif,
+          system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 40px 24px 72px;
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.16;
+        letter-spacing: -0.02em;
+      }
+      h1 {
+        max-width: 880px;
+        margin: 0;
+        font-size: clamp(2.2rem, 5vw, 4rem);
+      }
+      h2 {
+        margin: 52px 0 16px;
+        font-size: 1.7rem;
+      }
+      h3 {
+        margin: 28px 0 10px;
+        font-size: 1.1rem;
+      }
+      p,
+      li {
+        max-width: 900px;
+      }
+      a {
+        color: var(--core);
+      }
+      code {
+        font:
+          0.92em/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      pre {
+        overflow: auto;
+        padding: 17px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--code);
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        margin: 24px 0;
+        padding: 14px 0;
+        border-block: 1px solid var(--line);
+      }
+      nav a {
+        text-decoration: none;
+      }
+      .eyebrow {
+        color: var(--core);
+        font-size: 0.75rem;
+        font-weight: 750;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .lede {
+        max-width: 860px;
+        color: var(--muted);
+        font-size: 1.16rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+        gap: 14px;
+      }
+      .card {
+        padding: 17px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+      }
+      .card h3 {
+        margin-top: 0;
+      }
+      .callout {
+        max-width: 920px;
+        margin: 20px 0;
+        padding: 4px 0 4px 16px;
+        border-left: 4px solid var(--render);
+      }
+      .diagram {
+        overflow-x: auto;
+        margin: 20px 0;
+      }
+      svg {
+        display: block;
+        width: 100%;
+        min-width: 900px;
+        height: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+      }
+      svg text {
+        fill: var(--text);
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      svg .minor {
+        fill: var(--muted);
+        font-size: 12px;
+      }
+      svg .title {
+        font-size: 15px;
+        font-weight: 700;
+      }
+      svg .box {
+        fill: var(--bg);
+        stroke: var(--line);
+        stroke-width: 1.5;
+        rx: 8;
+      }
+      svg .core {
+        stroke: var(--core);
+        stroke-width: 3;
+      }
+      svg .render {
+        stroke: var(--render);
+        stroke-width: 3;
+      }
+      svg .accept {
+        stroke: var(--good);
+        stroke-width: 3;
+      }
+      svg .edge {
+        fill: none;
+        stroke: var(--muted);
+        stroke-width: 1.7;
+        marker-end: url(#arrow);
+      }
+      svg .dashed {
+        stroke-dasharray: 6 5;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--surface);
+      }
+      th,
+      td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-size: 0.78rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .table {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 40px minmax(0, 1fr);
+        gap: 14px;
+        margin: 26px 0;
+      }
+      .step > b {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--core);
+        color: var(--bg);
+      }
+      .step h3 {
+        margin-top: 5px;
+      }
+      .status {
+        color: var(--good);
+        font-weight: 700;
+      }
+      footer {
+        margin-top: 56px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+      }
+      @media (max-width: 680px) {
+        main {
+          padding: 26px 15px 52px;
+        }
+        .step {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">pmndrs/glyph · durable implementation report</div>
+      <h1>From immutable font to accepted GPU draw</h1>
+      <p class="lede">
+        This is the current renderer-neutral contract. A Glyph engine owns shaping memory, a backend owns one renderer
+        integration, a render planner owns desired text and one acceptance frontier, and a plan target joins that core
+        hierarchy to a renderer device or context.
+      </p>
+
+      <nav>
+        <a href="#flow">Complete flow</a>
+        <a href="#authoring">Text authoring</a>
+        <a href="#ownership">Ownership</a>
+        <a href="#migration">Canary migration</a>
+        <a href="#integration">Integration API</a>
+        <a href="#resources">Resources</a>
+        <a href="#technique">Technique API</a>
+        <a href="#topologies">Topologies</a>
+        <a href="#evidence">Evidence</a>
+      </nav>
+
+      <section id="flow">
+        <h2>Complete application and rendering flow</h2>
+        <div class="diagram">
+          <svg viewBox="0 0 1080 540" role="img" aria-label="Application, core, and renderer lifecycle">
+            <defs>
+              <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L9,3 z" fill="currentColor" />
+              </marker>
+            </defs>
+            <text x="25" y="34" class="title">APPLICATION ASSETS</text>
+            <rect x="25" y="50" width="190" height="66" class="box" />
+            <text x="42" y="77" class="title">loadFont()</text>
+            <text x="42" y="98" class="minor">immutable GLB-backed Font</text>
+            <rect x="245" y="50" width="190" height="66" class="box" />
+            <text x="262" y="77" class="title">createFontStack()</text>
+            <text x="262" y="98" class="minor">application fallback order</text>
+            <path d="M215 83 H245" class="edge" />
+
+            <text x="25" y="166" class="title">CORE OWNERSHIP</text>
+            <rect x="25" y="182" width="190" height="72" class="box core" />
+            <text x="42" y="210" class="title">GlyphEngine</text>
+            <text x="42" y="231" class="minor">Wasm + font registry + backends</text>
+            <rect x="245" y="182" width="190" height="72" class="box core" />
+            <text x="262" y="210" class="title">GlyphBackend</text>
+            <text x="262" y="231" class="minor">policy + bindings + render planners</text>
+            <rect x="465" y="182" width="190" height="72" class="box core" />
+            <text x="482" y="210" class="title">RenderPlanner</text>
+            <text x="482" y="231" class="minor">text + target + revisions</text>
+            <rect x="685" y="182" width="170" height="72" class="box core" />
+            <text x="702" y="210" class="title">Text instances</text>
+            <text x="702" y="231" class="minor">desired retained state</text>
+            <path d="M215 218 H245" class="edge" />
+            <path d="M435 218 H465" class="edge" />
+            <path d="M655 218 H685" class="edge" />
+            <path d="M340 116 V182" class="edge dashed" />
+
+            <rect x="685" y="292" width="170" height="72" class="box core" />
+            <text x="702" y="320" class="title">measure() / glyphs()</text>
+            <text x="702" y="341" class="minor">on-demand cached query</text>
+            <path d="M770 254 V292" class="edge" />
+
+            <rect x="465" y="292" width="190" height="72" class="box core" />
+            <text x="482" y="320" class="title">publish()</text>
+            <text x="482" y="341" class="minor">shape → layout → plan</text>
+            <path d="M685 235 C620 260 590 270 560 292" class="edge" />
+
+            <text x="25" y="414" class="title">RENDERER OWNERSHIP</text>
+            <rect x="245" y="430" width="190" height="74" class="box render" />
+            <text x="262" y="458" class="title">PlanTarget.accept()</text>
+            <text x="262" y="479" class="minor">decode + stage transaction</text>
+            <rect x="465" y="430" width="190" height="74" class="box render" />
+            <text x="482" y="458" class="title">Device / context</text>
+            <text x="482" y="479" class="minor">buffers + resources + pipeline</text>
+            <rect x="685" y="430" width="170" height="74" class="box render" />
+            <text x="702" y="458" class="title">Pass / canvas</text>
+            <text x="702" y="479" class="minor">submit ordered draws</text>
+            <rect x="885" y="430" width="170" height="74" class="box accept" />
+            <text x="902" y="458" class="title">Acceptance</text>
+            <text x="902" y="479" class="minor">commit or reject</text>
+            <path d="M520 364 C475 395 410 405 375 430" class="edge" />
+            <path d="M435 467 H465" class="edge" />
+            <path d="M655 467 H685" class="edge" />
+            <path d="M855 467 H885" class="edge" />
+            <path d="M970 430 C970 385 705 390 625 364" class="edge dashed" />
+          </svg>
+        </div>
+        <p class="callout">
+          <strong>Mutation is lazy.</strong> <code>update()</code> changes desired state. <code>measure()</code> and
+          <code>glyphs()</code> synchronously pay shaping/lookup cost only on a cache miss.
+          <code>publish()</code> compiles the planner's desired text and does not advance its accepted revision until
+          the target commits.
+        </p>
+      </section>
+
+      <section id="authoring">
+        <h2>Text authoring: properties versus actions</h2>
+        <div class="grid">
+          <div class="card">
+            <h3><code>style</code> · <code>TextStyle</code></h3>
+            <p>
+              Inherited text shaping and presentation: size, spacing, language, direction, features, decoration, and
+              colour.
+            </p>
+          </div>
+          <div class="card">
+            <h3><code>layout</code> · <code>ParagraphLayout</code></h3>
+            <p>
+              Stable paragraph flow: wrapping, alignment, overflow, line limits, indentation, justification, and
+              columns.
+            </p>
+          </div>
+          <div class="card">
+            <h3><code>constraints</code> · <code>Constraints</code></h3>
+            <p>Parent-imposed width and height. Each axis is unconstrained, at-most, or exact.</p>
+          </div>
+        </div>
+        <pre><code>import { Constraints, loadFont, ParagraphLayout, TextStyle } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+
+const font = await loadFont({ baked: '/fonts/Inter.font.glb' }, msdf);
+
+const styles = TextStyle.create({
+  body: { fontSize: 32, color: '#f4f7ff' },
+  muted: { opacity: 0.6 },
+});
+const layouts = ParagraphLayout.create({
+  prose: { wrap: 'word', align: 'start' },
+});
+const constraints = Constraints.create({
+  prose: { width: { mode: 'at-most', size: 480 } },
+});
+const disabled = false;
+
+const text = new Text({
+  font,
+  text: 'Current desired text',
+  style: [styles.body, disabled &amp;&amp; styles.muted],
+  layout: layouts.prose,
+  constraints: constraints.prose,
+});
+
+const metrics = text.measure(); // aggregate; no draw publication
+const glyphs = text.glyphs();   // positioned caller-owned columns</code></pre>
+        <p>
+          Property lists resolve left-to-right and ignore false, null, and undefined entries. TypeScript catches invalid
+          authored values; public calls validate known runtime values before changing state. Unknown object keys are
+          ignored for JavaScript and decoded-data compatibility.
+        </p>
+        <h3>React font loading</h3>
+        <pre><code>import { Text, useFont } from '@pmndrs/glyph/react';
+import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
+import { useMSDF } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
+
+useMSDF.preload('/fonts/Inter.font.glb');
+
+function Label() {
+  const inter = useMSDF('/fonts/Inter.font.glb');
+  return &lt;Text font={inter} style={styles.body}&gt;Hello&lt;/Text&gt;;
+}
+
+// Third-party techniques use the same shared R3F loader cache.
+function CustomLabel() {
+  const custom = useFont('/fonts/Custom.font.glb', customTechnique, customOptions);
+  return &lt;Text font={custom}&gt;Custom&lt;/Text&gt;;
+}</code></pre>
+        <p>
+          <code>useBitmapFont</code>, <code>useMSDF</code>, and <code>useSlug</code> are typed wrappers over generic
+          <code>useFont</code>; each carries matching <code>.preload()</code> and <code>.clear()</code>. Nested
+          <code>&lt;Text&gt;</code> is the inline-span API—there is no public React <code>TextSpan</code> or
+          <code>createUseFont</code>.
+        </p>
+      </section>
+
+      <section id="ownership">
+        <h2>Ownership and cardinality</h2>
+        <div class="table">
+          <table>
+            <thead>
+              <tr>
+                <th>Object</th>
+                <th>Created by</th>
+                <th>Owns</th>
+                <th>Use more than one when</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Font</code></td>
+                <td><code>loadFont()</code></td>
+                <td>Immutable artifact backing and decoded portable raster data</td>
+                <td>Source, face, subset, or raster variant differs</td>
+              </tr>
+              <tr>
+                <td><code>GlyphEngine</code></td>
+                <td><code>createGlyphEngine()</code></td>
+                <td>One Wasm domain, engine-local shaping registrations, all child backends</td>
+                <td>Worker/memory/teardown isolation is required</td>
+              </tr>
+              <tr>
+                <td><code>GlyphBackend</code></td>
+                <td><code>glyphEngine.createBackend()</code></td>
+                <td>One integration’s policy, bindings, identities, and render planners</td>
+                <td>Renderer policy, physical device domain, or integration lifetime differs</td>
+              </tr>
+              <tr>
+                <td><code>RenderPlanner</code></td>
+                <td><code>backend.createPlanner()</code></td>
+                <td>Desired text, target, capacity budget, and one acceptance frontier</td>
+                <td>Scene, viewport, target, worker, or independent commit boundary differs</td>
+              </tr>
+              <tr>
+                <td><code>RetainedText</code></td>
+                <td><code>planner.createText()</code></td>
+                <td>One desired text state inside the render planner</td>
+                <td>Application text instances differ</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          A Glyph engine permanently owns its backends; a disposed engine disposes them first. A backend cannot rebind.
+          Fonts are different: they are immutable application assets and may bind into several engines or backends.
+          Bindings are backend-local, counted leases.
+        </p>
+      </section>
+
+      <section id="migration">
+        <h2>Canary implementor migration</h2>
+        <p>
+          The dated ts-morph codemod is for renderer and technique implementors as well as this monorepo. It was
+          dogfooded across the custom example renderer, benchmark consumers, and Three adapter; the example raster
+          package had no affected planner call sites. One aggregate command verifies or applies every archived migration
+          in lexical order.
+        </p>
+        <pre><code>mise exec -- node .agents/skills/codemod/scripts/run-all-codemods.mjs \
+  --project path/to/tsconfig.json \
+  --target path/to/project \
+  --check
+
+# Repeat with --write after reviewing the inventory.</code></pre>
+        <p>
+          The transform distinguishes the long-lived <code>RenderPlanner</code> from each transient
+          <code>RenderPlan</code>, migrates plan readers and status types, and preserves unrelated application strings.
+          Its adjacent <code>instructions.md</code> records the two protocol status strings and Rust/Wasm ABI names that
+          require deliberate review rather than blind text replacement.
+        </p>
+      </section>
+
+      <section id="integration">
+        <h2>Complete custom-renderer setup</h2>
+
+        <div class="step">
+          <b>1</b>
+          <div>
+            <h3>Load a font before creating renderer state</h3>
+            <pre><code>import { createFontStack, loadFont } from '@pmndrs/glyph';
+import { glyphExample } from '@pmndrs/glyph-example-raster';
+
+const font = await loadFont(
+  { baked: '/fonts/Inter.font.glb' },
+  { technique: glyphExample, options: { paletteSeed: 7 } },
+);
+const fontStack = createFontStack(font);</code></pre>
+            <p>Loading validates immutable CPU data. It does not create a Glyph engine or GPU object.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <b>2</b>
+          <div>
+            <h3>Create a Glyph engine, backend, and policy</h3>
+            <pre><code>import { createGlyphEngine } from '@pmndrs/glyph/core';
+
+const glyphEngine = await createGlyphEngine();
+const backend = glyphEngine.createBackend({
+  integration: 'studio.webgpu-text',
+});
+const policy = backend.installPolicy(rendererPolicy);</code></pre>
+            <p>
+              The renderer builds <code>rendererPolicy</code> from its capabilities and system lanes plus each
+              technique’s portable policy program. Capability ordinals are automatic; stable protocol IDs are branded
+              numeric hashes, never user-authored numbers.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <b>3</b>
+          <div>
+            <h3>Bind the stack and create one plan target</h3>
+            <pre><code>const stack = backend.bindFontStack(fontStack);
+
+const target = {
+  delivery: 'borrowed',
+  accept(candidate, signal) {
+    signal.throwIfAborted();
+    const transaction = device.beginCandidate(candidate.planRevision);
+    try {
+      decodeAndStage(candidate, transaction);
+      transaction.commit();
+      return { accepted: true };
+    } catch (error) {
+      transaction.discard();
+      return { accepted: false, error };
+    }
+  },
+  dispose() {
+    device.disposeTarget();
+  },
+} satisfies PlanTarget;</code></pre>
+            <p>
+              The default path borrows Wasm A/B memory only during synchronous <code>accept()</code>. The CPU copies
+              needed bytes into renderer-owned GPU/upload storage before returning; GPU execution may continue
+              afterward.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <b>4</b>
+          <div>
+            <h3>Create a render planner and text</h3>
+            <pre><code>const planner = backend.createPlanner({
+  policy,
+  capabilitySet,
+  target: () =&gt; target,
+  limits,
+  requestCapacity: 64 * 1024,
+  resultCapacity: 256 * 1024,
+  textCapacity: 16 * 1024,
+});
+
+const title = planner.createText({
+  font: stack,
+  text: 'Hello',
+  style: { fontSize: 48 },
+  layout: { wrap: 'word' },
+  constraints: { width: { mode: 'at-most', size: 800 } },
+});</code></pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <b>5</b>
+          <div>
+            <h3>Update, query on demand, then publish</h3>
+            <pre><code>title.update({ text: 'Hello, Glyph' });
+
+const metrics = title.measure();
+const positioned = title.glyphs();
+
+const result = planner.publish({ semanticViews: 'measurement' });
+if (!result.accepted) reportRendererError(result.error);</code></pre>
+            <p>
+              <code>measure()</code> returns aggregate metrics. <code>glyphs()</code> returns caller-owned positioned
+              columns and ink boxes. Both may synchronously incur lookup work on a cache miss;
+              <code>glyphs()</code> also copies its returned columns. Their canonical constraint caches are bounded
+              three-entry LRUs. Neither publishes a draw.
+            </p>
+            <p>
+              Publication defaults to <code>semanticViews: 'none'</code>. Ask for <code>'measurement'</code> only when
+              accepted plans must refresh aggregate bounds in the same frame; ask for
+              <code>'layout-inspection'</code> or <code>'all'</code> only when the renderer needs positioned glyph
+              columns.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <b>6</b>
+          <div>
+            <h3>Dispose from leaf to root</h3>
+            <pre><code>title.dispose();
+planner.dispose();
+stack.dispose();
+policy.dispose();
+backend.dispose();
+glyphEngine.dispose();
+font.dispose();</code></pre>
+            <p>
+              Parent disposal is a safety net and cascades through children. Explicit leaf disposal makes resource
+              release timing predictable.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="resources">
+        <h2>What the renderer does with resources</h2>
+        <div class="table">
+          <table>
+            <thead>
+              <tr>
+                <th>Plan table</th>
+                <th>Renderer action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>resources</code></td>
+                <td>
+                  Acquire a counted portable payload and create/update/retain its texture, buffer, geometry, or group
+                  realization.
+                </td>
+              </tr>
+              <tr>
+                <td><code>buffers</code></td>
+                <td>Declare renderer storage shape and map semantic policy-buffer IDs to shader bindings.</td>
+              </tr>
+              <tr>
+                <td><code>patches</code></td>
+                <td>Allocate/resize, write, fill, copy, or retire exact byte ranges.</td>
+              </tr>
+              <tr>
+                <td><code>primitives</code></td>
+                <td>Map record spans to technique, resource generation, geometry meaning, and logical order.</td>
+              </tr>
+              <tr>
+                <td><code>draws</code></td>
+                <td>Submit ordered program/material/transform spans.</td>
+              </tr>
+              <tr>
+                <td><code>retirements</code></td>
+                <td>Release exact resource or buffer generations after the accepted publication fence.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <pre><code>const resources = candidate.plan.table('resources');
+for (let i = 0; i &lt; resources.count; i += 1) {
+  const record = readRenderPlanResource(candidate.plan, resources, i);
+  if (record.referenceId === 0) throw new TypeError('missing payload reference');
+
+  const lease = candidate.acquirePayload(record.referenceId);
+  transaction.realize(record.id, record.generation, {
+    name: lease.resourceName,
+    payload: lease.payload,
+    release: () =&gt; lease.dispose(),
+  });
+}</code></pre>
+        <p>
+          The map is a device cache keyed by branded numeric <code>(id, generation)</code>, not the endpoint. The cached
+          value is the physical texture/buffer/geometry plus its payload lease and destruction logic. Acceptance swaps a
+          complete candidate cache into live state. Rejection destroys only provisional objects; it never restores stale
+          content. A resource retirement removes the accepted plan reference; when no accepted reference remains, the
+          target disposes the portable payload lease and asks the device to destroy its physical realization.
+        </p>
+        <p>
+          <code>AsyncPlanTarget</code> exists only when CPU consumption crosses an asynchronous boundary such as a
+          Worker. It receives one owned transferable copy and must return the same buffer identity when done. The normal
+          same-thread GPU path uses <code>PlanTarget</code> and makes no extra plan copy.
+        </p>
+        <pre><code>// The target captured PlanTargetControl when the render planner was created.
+oldDevice.dispose();
+const nextDevice = new TypeGpuExampleRendererDevice({ device: nextGpuDevice, width, height });
+engine.replaceDevice(nextDevice);
+
+// No authored mutation is required: this publication is a complete checkpoint.
+const recovered = planner.publish();</code></pre>
+        <p>
+          Device replacement clears only renderer-owned physical state. The immutable font and portable payload remain
+          reusable; the checkpoint re-declares current resources, buffers, primitives, and draws so the new device can
+          rebuild deterministically.
+        </p>
+      </section>
+
+      <section id="technique">
+        <h2>What a portable raster technique provides</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Raster decoder</h3>
+            <p>Validates its GLB extension and returns immutable typed data plus stable resource identities.</p>
+          </div>
+          <div class="card">
+            <h3>Technique schema</h3>
+            <p>Names policy buffers, lanes, retained resources, geometry meaning, and shader-facing semantics.</p>
+          </div>
+          <div class="card">
+            <h3>Policy-body factory</h3>
+            <p>
+              Computes per-glyph values from semantic inputs while the renderer supplies system lanes and capabilities.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Font compiler</h3>
+            <p>
+              Runs on first backend binding, producing binding bytes and constrained portable payloads—not per frame or
+              glyph.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Baker</h3>
+            <p>
+              Produces the authenticated artifact. Discovery already follows <code>runtimeBaker</code>; no renderer
+              dependency is involved.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Optional shader subpaths</h3>
+            <p>
+              TypeGPU, TSL, WGSL, or GLSL variants may ship explicitly. Core imports none of them; an engine selects or
+              authors one.
+            </p>
+          </div>
+        </div>
+        <pre><code>export const plan = {
+  technique,
+  schema,
+  programVariant: 0,
+  policyBody(system) {
+    const p = techniqueProgram(schema, { system });
+    return p.compile({
+      origin: [
+        f32.add(p.semantics.inlineOrigin, p.binding.inset),
+        f32.sub(p.semantics.blockOrigin, p.binding.inset),
+      ],
+      color: [
+        f32.mul(p.semantics.color.red, p.binding.red),
+        f32.mul(p.semantics.color.green, p.binding.green),
+        f32.mul(p.semantics.color.blue, p.binding.blue),
+        f32.mul(p.semantics.color.alpha, p.binding.alpha),
+      ],
+    });
+  },
+  compileFont(compiler) {
+    compiler.retain('glyphGeometry', compiler.font.data.resource, geometry);
+    return compiler.compile({
+      strikes: [0],
+      resource: () =&gt; compiler.font.data.resource,
+      f32: { inset: row =&gt; compiler.font.data.insets[row] },
+    });
+  },
+} satisfies RasterPlanProgram;</code></pre>
+        <p>
+          The main technique import performs only renderer-neutral plan registration. Shader variants remain explicit
+          subpath imports. Three, TypeGPU, and another engine all consume the same schema, payloads, and plan records
+          without technique-specific core adapters.
+        </p>
+      </section>
+
+      <section id="topologies">
+        <h2>Valid renderer topologies</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>One WebGL canvas</h3>
+            <p>
+              Usually one Glyph engine → one backend → one or more render planners → one WebGL context. A second canvas
+              means another non-sharing WebGL context and normally another backend/device cache.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Two WebGPU canvases</h3>
+            <p>
+              One <code>GPUDevice</code> may configure both canvas contexts. One backend may serve render planners for
+              both when policy and device cache domain are shared; each planner keeps its own target and acceptance
+              frontier.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Onscreen + Offscreen WebGPU</h3>
+            <p>
+              A shared device can serve both contexts. Use separate render planners; use an async target only where plan
+              consumption crosses the Worker boundary.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Onscreen + Offscreen WebGL</h3>
+            <p>
+              The contexts do not share GPU objects. Treat them as separate device/cache domains, generally separate
+              backends, and optionally separate Glyph engines if worker isolation is desired.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Sync and async together</h3>
+            <p>
+              Yes. Separate render planners under one backend may use borrowed synchronous and owned asynchronous
+              targets. The engine-wide borrow gate prevents reentry while a synchronous candidate is active.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Several Glyph engines</h3>
+            <p>
+              Valid for independent workers or teardown domains. Immutable fonts may bind into each; shaping
+              registrations and Wasm memory are intentionally not shared across engines.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="evidence">
+        <h2>Verification and deliberate follow-up</h2>
+        <p class="status">
+          Local package, root, renderer, live, size, and performance gates: green. Final external review: complete. PR
+          #120 requires green current-head CI; the linked PR check status is authoritative.
+        </p>
+        <ul>
+          <li>
+            929 Glyph package tests passed in the latest package run, including cache behavior, branded plan identities,
+            root/Three measurement parity, caller-owned glyph columns, first-frame bounds, render-plan ownership, and
+            React lifecycle.
+          </li>
+          <li>
+            The focused Rust, baker, artifact, mutation, type, renderer, and Unicode 17 conformance lanes pass. The
+            complete package gauntlet exposed only two intentionally changed byte identities; both were independently
+            verified and re-pinned before their focused rerun passed.
+          </li>
+          <li>
+            The external example renderer has deterministic recording-device tests and a concrete TypeGPU/WebGPU
+            pixel-readback gate.
+          </li>
+          <li>
+            The example packages pass 13 raster and 12 renderer tests. The benchmark app passes 113 unit tests, its full
+            headless browser matrix, production build, formatting, typecheck, and package-size freshness gate.
+          </li>
+          <li>
+            The final root <code>pnpm check</code> passes across every package and application, including 929 Glyph
+            tests, the Rust/Wasm and Unicode suites, deterministic R3F bakes, its production build and live browser
+            check, repository formatting, and OKF validation. All six dated ts-morph migrations report no remaining
+            changes across Glyph, both example packages, benchmarks, and the R3F application; all eight codemod harness
+            and archive tests pass.
+          </li>
+          <li>
+            Hardware TypeGPU/WebGPU and Three labs each produced a non-empty draw before and after retained updates;
+            TypeGPU also recovered one draw and 6,588 visible pixels after replacing the destroyed WebGPU device without
+            mutating text. Median submission was 0.140 ms for TypeGPU and 0.125 ms for the generic Three path.
+          </li>
+          <li>
+            The hardware WebGPU presentation sweep held 120 FPS with zero slow frames across all 27 Bitmap, MTSDF, and
+            Slug workload cells. CPU submission medians stayed between 0.205 and 0.585 ms; measured GPU work stayed
+            between 0.577 and 1.979 ms. WebGPU and WebGL2 live-update probes made every text, font-size, and width
+            change visible within one or two frames with no idle submissions.
+          </li>
+          <li>
+            A same-machine run against checkpoint <code>689958d3</code> found no Rust planner regression. Current cold,
+            font-size, column-resize, and measurement-query medians were 2.6%, 8.9%, 17.9%, and 14.8% faster; suffix and
+            localized-splice were within 0.4% while the small localized-edit case remained high-variance.
+          </li>
+          <li>
+            The retained multi-text benchmark remains linear. Its three current 512-text medians span 16.46–17.91 ms
+            around the checkpoint's 17.20 ms, so this harness demonstrates no regression but is too noisy to claim a
+            speedup.
+          </li>
+          <li>
+            A same-build semantic-sidecar isolation over one 21,805-glyph paragraph measured 0.002 ms for an unchanged
+            publication, 0.174 ms for aggregate measurement, and 0.582 ms for full glyph inspection. Three requests
+            aggregate measurement only when text has a pending publication; default custom-renderer publication and idle
+            Three synchronization do not pay that cost.
+          </li>
+          <li>
+            The corrected MTSDF edge selector matches native msdfgen across ordinary, acute, overlapping,
+            self-intersecting, quadratic, cubic, and complex-counter oracles with zero coverage mismatches. Moving
+            normalized corner vectors from each pixel-edge visit to per-edge preprocessing reduced the initial 22%
+            warm-generation regression to 3.9% (48.79 ms versus 46.97 ms); this code runs only in optional baking.
+          </li>
+          <li>
+            All eight checked-in MTSDF font assets were rebaked. Atlas dimensions and GPU residency are unchanged, but
+            corrected channel data is less compressible: Inter gzip grows from 6,798,458 to 8,007,071 bytes and Font
+            Awesome from 7,227,921 to 8,705,885. This is an explicit baked-asset transfer tradeoff, not runtime code or
+            frame cost.
+          </li>
+          <li>
+            A shrinking-style regression now proves incremental mutation counters retire their old published delta;
+            repeated four-style-to-one-style commits no longer consume the render planner's future style budget.
+          </li>
+          <li>
+            Benchmark CPU oracles now consume the exact registered technique through a validated compiled-font view;
+            they no longer clone a same-ID technique or decode raster payloads twice. External Slug parity fetches all
+            five artifacts once and passes on WebGPU and WebGL2 with equal embedded/external framebuffer hashes.
+          </li>
+          <li>
+            Slug's public table lanes now name their actual curve, horizontal-header, vertical-header, and reference
+            bases. Lane order and binding bytes are unchanged; typed and uncounted malformed oracle columns have direct
+            negative coverage.
+          </li>
+          <li>
+            Current measured sizes are 427,771 raw / 69,579 gzip / 58,310 Brotli bytes for <code>/core</code>, 447,734 /
+            73,453 / 61,214 for the browser root, and 712,007 / 115,862 / 95,598 for Three. Against the prior evidence,
+            core shrank by 445 raw bytes, the browser root moved by +54 raw / +1 gzip, and Three by +348 raw / +44 gzip.
+            The complete shaper and planner Wasm is 1,173,078 raw / 457,524 gzip / 360,900 Brotli bytes after compact
+            effect lanes and exact selected-resource provenance. The optional corrected MTSDF baker is 556,619 raw /
+            218,279 gzip / 171,376 Brotli bytes, +8,698 raw / +4,034 gzip. Its fresh zero-import feature-minimal
+            admission module is 69,731 optimized / 30,131 gzip / 25,327 Brotli bytes; the reviewed size gate passes.
+          </li>
+          <li>
+            Deterministic bake verification covers every checked Bitmap, MTSDF, Slug, and paragraph fixture. Slug
+            fixture bytes changed only in generator provenance from <code>@pmndrs/text</code> to
+            <code>@pmndrs/glyph</code>; their GLB binary payloads remained byte-identical. HarfBuzz 13.0.0 provisioning
+            now replaces an incomplete cache only after all three authenticated utilities have been assembled.
+          </li>
+          <li>
+            The final Opus High pass found no shipped runtime, ownership, renderer-neutrality, malformed-plan,
+            transport, Rust lifecycle, MTSDF, or codemod defect. Its three validated evidence findings tightened every
+            built-in technique graph back to a 430,000 raw / 267,000 minified / 72,500 gzip / 60,500 Brotli ceiling,
+            removed one empty type-test placeholder, and corrected the retained-text query-cache description. Two
+            proposed findings were rejected against existing executable proof: Unicode exclusion is a module-membership
+            gate, and the portable plus Three compatibility imports pass a tree-shaken registration smoke test.
+          </li>
+        </ul>
+        <p>
+          <strong>Review:</strong> Opus High session <code>bbad9adc-4350-46a7-a885-3f49c1a950ce</code> completed its
+          final read-only pass over <code>89f9ef46</code>. Every reported item was checked directly against source
+          before the three evidence corrections above were accepted.
+        </p>
+        <p>
+          <strong>Merge identity:</strong> draft <a href="https://github.com/pmndrs/glyph/pull/120">PR #120</a> on
+          <code>feat/render-technique-portability</code>, based directly on <code>feat/plan-retention</code> / PR #110.
+          The single-branch stack is submitted through <code>gh stack</code> and remains deliberately unmerged.
+        </p>
+        <p>
+          <strong>Remote evidence:</strong> GitHub
+          <a href="https://github.com/pmndrs/glyph/actions/runs/33245505129">CI run 33245505129</a> passed Static
+          checks, the complete Check gauntlet, and the package-size comparison at <code>89f9ef46</code>. The
+          <a href="https://github.com/pmndrs/glyph/pull/120/checks">PR #120 checks</a> are the durable authority for the
+          submitted head; merge readiness requires all three lanes to remain green there.
+        </p>
+        <p>
+          <strong>Deliberate Three follow-up:</strong> compatible font-stack runs inside one text and renderer-private
+          GPU realizations across render planners can share more physical storage. Core now supplies counted immutable
+          payload leases and per-device realization identities; implementing that sharing remains Three-owned and must
+          preserve paragraph and visual order. No implicit core batch, scene, canvas, or device abstraction is needed.
+        </p>
+        <p>
+          <strong>Deliberate MTSDF quality follow-up:</strong> the default 64 px/em tier remains intended for ordinary
+          text. At the lab's 1,024 CSS px and 2× DPR endpoint, one atlas texel spans about 32 device pixels; no shader
+          can reconstruct curve detail absent from that grid. The existing descriptor can author 128 or 256 px/em
+          assets, but automatic projected-size tier selection and its roughly fourfold atlas-area cost per doubling
+          remain a separately measured resource-policy decision. Slug remains the analytic option for effectively
+          unbounded zoom.
+        </p>
+      </section>
+
+      <footer>
+        Canonical prose: <a href="../guides/renderer-integration.md">renderer integration guide</a>,
+        <a href="../guides/technique-implementation-report.md">technique explanation</a>, and
+        <a href="../planning/decision-register.md">decision register</a>.
+      </footer>
+    </main>
+  </body>
+</html>

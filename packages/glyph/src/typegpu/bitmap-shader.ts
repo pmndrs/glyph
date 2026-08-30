@@ -14,9 +14,9 @@ export const TypeGpuBitmapInstance: d.WgslStruct<{
   color: d.Vec4f;
   pageIndex: d.U32;
 }> = d.struct({
-  /** Paragraph-local glyph origin, in layout units, with y measured downward. */
+  /** Paragraph-local glyph origin, with y measured downward. */
   origin: d.vec2f,
-  /** Glyph quad extent in layout units. */
+  /** Glyph quad extent in paragraph-local units. */
   size: d.vec2f,
   /** Upper-left atlas coordinate of the glyph's coverage rectangle. */
   uvOrigin: d.vec2f,
@@ -33,7 +33,7 @@ export type TypeGpuBitmapInstance = d.InferGPU<typeof TypeGpuBitmapInstance>;
  * The GPU resource one Bitmap glyph batch binds: the single-channel coverage pages its strike binding selected. Pages
  * are uploaded in the atlas's own top-down row order, so any flipY-style host setting must stay disabled. Coverage is
  * read as exact clamped texels — the fetch the `/tsl` realization compiles to for data textures — so no sampler enters
- * the layout.
+ * the measure.
  */
 export const TypeGpuBitmapPageLayout: TgpuBindGroupLayout<{
   page: TgpuLayoutTexture<d.WgslTexture2dArray<d.F32>> & { visibility?: readonly ['fragment'] };
@@ -128,7 +128,7 @@ export function bitmapAtlasUv(uvOrigin: d.v2f, uvSize: d.v2f, quadUv: d.v2f): d.
   return d.vec2f(uvOrigin.x + quadUv.x * uvSize.x, uvOrigin.y + quadUv.y * uvSize.y);
 }
 
-/** Glyph-quad position in paragraph space, with layout units' downward y flipped upward. */
+/** Glyph-quad position in paragraph space, with its downward y flipped upward. */
 export function bitmapQuadPosition(origin: d.v2f, size: d.v2f, quadPosition: d.v2f): d.v3f {
   'use gpu';
 
@@ -137,7 +137,7 @@ export function bitmapQuadPosition(origin: d.v2f, size: d.v2f, quadPosition: d.v
 
 /**
  * Rounds one projected clip-space axis onto whole physical pixels and returns the final clip value. Snapping in clip
- * space rather than in layout units keeps the paragraph transform, camera, and device pixel ratio out of the technique:
+ * space rather than paragraph space keeps the paragraph transform, camera, and device pixel ratio out of the technique:
  * whatever chain produced the clip position, its device-space landing is what has to sit on the grid the atlas was
  * baked for. The operation order — reciprocals included — matches the TSL realization's emitted shader exactly.
  */

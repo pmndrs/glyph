@@ -2,18 +2,26 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { createTextRuntime, defineRasterTechnique, rasterBake } from '@pmndrs/glyph';
+import { createFontStack, defineRasterTechnique, loadFont, rasterBake } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import {
-  textRuntimeShaper,
-  textShaperAbi,
+  createGlyphEngine,
   defineTechniqueSchema,
-  programId,
   registerRasterPlanProgram,
-  techniqueId,
-  type TextEngineBufferRecord,
-  type TextEnginePatchRecord,
-  type TextEngineRetirementRecord,
+  type AsyncPlanTarget,
+  type PolicyBufferId,
+  type RenderPlanBufferId,
+  type RenderPlanDrawId,
+  type RenderPlanPrimitiveId,
+  type RenderPlanResourceId,
+  type ResourceHandle,
+  type RenderPlanBufferRecord,
+  type RenderPlanPatchRecord,
+  type RenderPlanRetirementKind,
+  type RenderPlanRetirementRecord,
+  type PlanTarget,
+  type PlanTargetControl,
+  id as glyphId,
 } from '@pmndrs/glyph/core';
 import { afterEach, expect, test } from 'vitest';
 
@@ -21,6 +29,7 @@ import glyphExampleBaker from '@pmndrs/glyph-example-raster/baker';
 import {
   glyphExample,
   glyphExampleIndexedQuadGeometry,
+  glyphExampleSchema,
   glyphExampleSuppliedGeometryDeclaration,
 } from '@pmndrs/glyph-example-raster';
 import {
@@ -34,17 +43,31 @@ import {
   type ExampleRendererShader,
 } from '../src/index.js';
 import { ExampleTextEngine } from '../src/engine.js';
+import { exampleRenderPolicyDescriptor } from '../src/policy.js';
 
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const shaperWasm = new URL('../../glyph/dist/text-shaper.wasm', import.meta.url);
 const temporaryDirectories: string[] = [];
+const EXPECTED_RECOVERED_TEXT_GLYPHS = 4;
+
+// Direct-device fixtures stand in for records normally decoded from the package-owned wire plan.
+const resourceReference = (value: number): ExampleDrawList['resourceRecords'][number]['referenceId'] =>
+  value as ExampleDrawList['resourceRecords'][number]['referenceId'];
+const planBufferId = (value: number) => value as RenderPlanBufferId;
+const planDrawId = (value: number) => value as RenderPlanDrawId;
+const planPrimitiveId = (value: number) => value as RenderPlanPrimitiveId;
+const planResourceId = (value: number) => value as RenderPlanResourceId;
+const policyBufferId = (value: number) => value as PolicyBufferId;
+const portableResourceId = (value: number) => value as ResourceHandle;
 
 class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
   readonly primary = new RecordingExampleRendererDevice();
   readonly oracle = new RecordingExampleRendererDevice();
   readonly shader = this.primary.shader;
   readonly #oracleGenerations = new Set<number>();
+  failNextResourceCommit = false;
   failNextSubmission = false;
+  discardedResourceBatches = 0;
 
   get resources() {
     return this.primary.resources;
@@ -66,9 +89,18 @@ class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
     const primary = this.primary.prepareResources(resources);
     const oracle = this.oracle.prepareResources(resources);
     return Object.freeze({
-      commit() {
+      commit: () => {
+        if (this.failNextResourceCommit) {
+          this.failNextResourceCommit = false;
+          throw new Error('injected resource commit failure');
+        }
         oracle.commit();
         primary.commit();
+      },
+      discard: () => {
+        this.discardedResourceBatches += 1;
+        oracle.discard();
+        primary.discard();
       },
     });
   }
@@ -88,8 +120,18 @@ class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
         oracle?.commit();
         primary.commit();
         this.#oracleGenerations.add(generation);
+        return true;
+      },
+      discard: () => {
+        oracle?.discard();
+        primary.discard();
       },
     });
+  }
+
+  releaseResources(referenceIds: readonly ResourceHandle[]): void {
+    this.primary.releaseResources(referenceIds);
+    this.oracle.releaseResources(referenceIds);
   }
 }
 
@@ -113,94 +155,240 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
     ],
   });
 
-  const runtime = await createTextRuntime({ wasm: await readFile(shaperWasm) });
+  const glyphEngine = await createGlyphEngine({ wasm: await readFile(shaperWasm) });
   const device = new ThrowOnceExampleRendererDevice();
-  const engine = new ExampleTextEngine(textRuntimeShaper(runtime), device);
+  const engine = new ExampleTextEngine(glyphEngine, device);
   try {
     const bytes = await readFile(output);
-    const font = await runtime.loadFont({
-      input: { baked: `data:model/gltf-binary;base64,${bytes.toString('base64')}` },
-      raster: { technique: glyphExample, options: { paletteSeed: 7 } },
-    });
+    const font = await loadFont(
+      { baked: `data:model/gltf-binary;base64,${bytes.toString('base64')}` },
+      { technique: glyphExample, options: { paletteSeed: 7 } },
+    );
     try {
+      const flowBackend = glyphEngine.createBackend({ integration: 'glyph-example-renderer-test/flow-retention' });
+      type InstrumentedPlanTransport = { measureParagraph: (...arguments_: unknown[]) => unknown };
+      const instrumentedBackend = flowBackend as unknown as {
+        _createPlanTransport: (options: unknown) => InstrumentedPlanTransport;
+      };
+      const createPlanTransport = instrumentedBackend._createPlanTransport.bind(instrumentedBackend);
+      let paragraphQueries = 0;
+      instrumentedBackend._createPlanTransport = (options) => {
+        const transport = createPlanTransport(options);
+        const measureParagraph = transport.measureParagraph.bind(transport);
+        transport.measureParagraph = (...arguments_) => {
+          paragraphQueries += 1;
+          return measureParagraph(...arguments_);
+        };
+        return transport;
+      };
+      const flowPolicy = flowBackend.installPolicy(exampleRenderPolicyDescriptor);
+      const flowFont = flowBackend.bindFontStack(createFontStack(font));
+      const flowTransform = flowBackend.createTransformBinding();
+      const flowLimits = {
+        maxParagraphs: 2,
+        maxClusters: 64,
+        maxLines: 16,
+        maxRegions: 4,
+        maxExclusions: 4,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 4,
+        maxOutputBytes: 128 * 1024,
+      } as const;
+      let flowTargetAcceptances = 0;
+      let flowControl: PlanTargetControl | undefined;
+      let requestCheckpointDuringAcceptance = false;
+      const flowCheckpoints: boolean[] = [];
+      const flowTarget: PlanTarget = {
+        delivery: 'borrowed',
+        accept: (candidate) => {
+          expect(() => flowBackend.dispose()).toThrow('borrowed render plan');
+          flowTargetAcceptances += 1;
+          flowCheckpoints.push(candidate.checkpoint);
+          if (requestCheckpointDuringAcceptance) {
+            requestCheckpointDuringAcceptance = false;
+            flowControl!.requestCheckpoint();
+          }
+          return { accepted: true };
+        },
+        dispose() {},
+      };
+      const flowPlanner = flowBackend.createPlanner({
+        policy: flowPolicy,
+        target: (control) => {
+          flowControl = control;
+          return flowTarget;
+        },
+        limits: flowLimits,
+        requestCapacity: 4096,
+        resultCapacity: 128 * 1024,
+        textCapacity: 1024,
+      });
+      const mutableWidth = { mode: 'at-most' as const, size: 512 };
+      const mutableRegion = {
+        transform: flowTransform,
+        shape: 'rectangle' as const,
+        writingMode: 'horizontal-tb' as const,
+        textOrientation: 'mixed' as const,
+        inlineStart: 0,
+        blockStart: 0,
+        inlineEnd: 512,
+        blockEnd: 256,
+        clipInlineStart: 0,
+        clipBlockStart: 0,
+        clipInlineEnd: 512,
+        clipBlockEnd: 256,
+      };
+      const flowText = flowPlanner.createText({
+        font: flowFont,
+        text: 'a',
+        style: { fontSize: 32 },
+        constraints: { width: mutableWidth },
+        flow: { regions: [{ region: mutableRegion }] },
+      });
+      expect(() => flowPlanner.createText({ font: flowFont, text: 'duplicate', order: 0 })).toThrow(
+        /order 0 is already in use/,
+      );
+      expect(() => flowPlanner.createText({ font: flowFont, text: 'invalid', style: { fontSize: 0 } })).toThrow(
+        /text style fontSize must be positive/,
+      );
+      expect(() =>
+        flowText.update({
+          constraints: { width: { mode: 'at-most', size: 512 } },
+          layout: { firstLineIndent: -1 },
+        }),
+      ).toThrow(/text layout firstLineIndent must be nonnegative/);
+      flowTransform.dispose();
+      mutableWidth.size = Number.NaN;
+      mutableRegion.inlineEnd = Number.NaN;
+      expect(flowText.measure().glyphCount).toBe(1);
+      expect(flowText.glyphs().glyphCount).toBe(1);
+      expect(flowTargetAcceptances).toBe(0);
+      flowText.update({ text: 'abcd' });
+      expect(flowText.measure().glyphCount).toBe(4);
+      expect(flowText.glyphs().glyphCount).toBe(4);
+      expect(flowTargetAcceptances).toBe(0);
+      expect(flowPlanner.publish()).toEqual({ accepted: true });
+      expect(flowTargetAcceptances).toBe(1);
+      const orderedText = flowPlanner.createText({ font: flowFont, text: 'ordered', order: 1 });
+      expect(() => orderedText.update({ order: 0 })).toThrow(/order 0 is already in use/);
+      orderedText.update({ text: 'still-valid' });
+      orderedText.dispose();
+      const publishUnchecked = flowPlanner.publish.bind(flowPlanner) as (options: unknown) => unknown;
+      expect(() => publishUnchecked({ policyParameters: new Uint8Array() })).toThrow(/not supported/);
+      expect(flowTargetAcceptances).toBe(1);
+      flowText.update({ text: 'abcde' });
+      expect(flowPlanner.publish({ semanticViews: 'measurement' })).toEqual({ accepted: true });
+      const queriesAfterMeasuredPublish = paragraphQueries;
+      expect(flowText.measure().glyphCount).toBe(5);
+      expect(paragraphQueries).toBe(queriesAfterMeasuredPublish);
+      expect(flowText.glyphs().glyphCount).toBe(5);
+      expect(paragraphQueries).toBe(queriesAfterMeasuredPublish + 1);
+      flowText.update({ text: 'abcdef' });
+      expect(flowPlanner.publish({ semanticViews: 'layout-inspection' })).toEqual({ accepted: true });
+      const queriesAfterInspectedPublish = paragraphQueries;
+      expect(flowText.measure().glyphCount).toBe(6);
+      expect(flowText.glyphs().glyphCount).toBe(6);
+      expect(paragraphQueries).toBe(queriesAfterInspectedPublish);
+      expect(flowTargetAcceptances).toBe(3);
+      flowControl!.requestCheckpoint();
+      expect(flowPlanner.publish()).toEqual({ accepted: true });
+      expect(flowCheckpoints.at(-1)).toBe(true);
+      requestCheckpointDuringAcceptance = true;
+      flowText.update({ text: 'abcdefg' });
+      expect(flowPlanner.publish()).toEqual({ accepted: true });
+      expect(flowPlanner.publish()).toEqual({ accepted: true });
+      expect(flowCheckpoints.at(-1)).toBe(true);
+      const expandedStyles = {
+        text: 'abc',
+        spans: [
+          { start: 0, end: 1, style: { fontSize: 24 } },
+          { start: 1, end: 2, style: { fontSize: 28 } },
+          { start: 2, end: 3, style: { fontSize: 32 } },
+        ],
+      } as const;
+      // A stale-ledger regression leaked three styles per cycle and exhausted the 64-entry budget here.
+      for (let index = 0; index < 21; index += 1) {
+        flowText.update({ text: expandedStyles });
+        expect(flowPlanner.publish()).toEqual({ accepted: true });
+        flowText.update({ text: 'abc' });
+        expect(flowPlanner.publish()).toEqual({ accepted: true });
+      }
+      const styleBudgetProbe = flowPlanner.createText({
+        font: flowFont,
+        text: { text: 'x', spans: [{ start: 0, end: 1, style: { fontSize: 24 } }] },
+        order: 1,
+      });
+      styleBudgetProbe.dispose();
+      flowText.dispose();
+      expect(() => flowText.measure()).toThrow('disposed');
+      const plannerOwnedText = flowPlanner.createText({ font: flowFont, text: 'plan-owned' });
+      expect(plannerOwnedText.measure().glyphCount).toBeGreaterThan(0);
+      expect(() => flowPlanner.createText({ font: flowFont, text: 'too-many-pending' })).toThrow(
+        /pending paragraph mutations exceed limits.maxParagraphs/,
+      );
+      flowPlanner.dispose();
+      expect(plannerOwnedText.disposed).toBe(true);
+      expect(() => plannerOwnedText.measure()).toThrow('disposed');
+
+      let returnedBuffer: ArrayBuffer | undefined;
+      let reusedBuffers = 0;
+      const asyncTarget: AsyncPlanTarget = {
+        delivery: 'owned',
+        maximumPlanBytes: flowLimits.maxOutputBytes,
+        async accept(candidate) {
+          if (candidate.bytes.buffer === returnedBuffer) reusedBuffers += 1;
+          const workerBytes = structuredClone(candidate.bytes, { transfer: [candidate.bytes.buffer] });
+          const returnedBytes = structuredClone(workerBytes, { transfer: [workerBytes.buffer] });
+          returnedBuffer = returnedBytes.buffer;
+          return { accepted: true, returnedBytes };
+        },
+        dispose() {},
+      };
+      const asyncPlanner = flowBackend.createPlanner({
+        policy: flowPolicy,
+        target: () => asyncTarget,
+        limits: flowLimits,
+        requestCapacity: 4096,
+        resultCapacity: flowLimits.maxOutputBytes,
+        textCapacity: 1024,
+      });
+      const asyncText = asyncPlanner.createText({
+        font: flowFont,
+        text: { text: 'abc', spans: [{ start: 1, end: 1, style: { fontSize: 12 } }] },
+      });
+      expect(await asyncPlanner.publish()).toEqual({ accepted: true });
+      asyncText.update({ text: 'def' });
+      expect(await asyncPlanner.publish()).toEqual({ accepted: true });
+      asyncText.update({ text: 'ghi' });
+      expect(await asyncPlanner.publish()).toEqual({ accepted: true });
+      expect(reusedBuffers).toBe(1);
+      asyncPlanner.dispose();
+      flowBackend.dispose();
+
       const foreignFont = Object.create(font) as typeof font;
       Object.defineProperty(foreignFont, 'technique', {
         value: { ...font.technique, id: 'studio.other-technique' },
       });
-      expect(() => engine.registerFont(foreignFont)).toThrow('cannot render');
+      expect(() => engine.bindFont(foreignFont)).toThrow('cannot render');
       expect(device.resources.size).toBe(0);
 
-      const invalidFont = Object.create(font) as typeof font;
-      Object.defineProperty(invalidFont, 'font', { value: { ...font.font, handle: 0 } });
-      expect(() => engine.registerFont(invalidFont)).toThrow();
+      const stackBinding = engine.bindFontStack(createFontStack(font));
+      expect(() => engine.createText({ font: stackBinding, text: 'invalid', fontSize: Number.NaN })).toThrow(
+        'fontSize',
+      );
+      const text = engine.createText({ font: stackBinding, text: 'glyph', fontSize: 48, width: 1000, height: 1000 });
+
+      device.failNextResourceCommit = true;
+      expect(() => text.publish()).toThrow('injected resource commit failure');
+      expect(device.discardedResourceBatches).toBe(1);
       expect(device.resources.size).toBe(0);
 
-      const binding = engine.registerFont(font);
-      expect(binding).toBe(100);
-      engine.registerFontStack(17, [binding]);
-      engine.openSession(29);
-      const list = engine.render({
-        paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
-        textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: 'glyph' }],
-        styleMutations: [
-          {
-            opcode: 'upsert',
-            paragraphId: 1,
-            styleId: 1,
-            cascadeOrder: 0,
-            start: 0,
-            end: 5,
-            root: true,
-            value: { fontStackHandle: 17, fontSize: 48, rasterPixelRatio: 1, foregroundRgba: 0xffff_ffff },
-          },
-        ],
-        constraints: [
-          {
-            paragraphId: 1,
-            flowThreadId: 1,
-            geometryRevision: 1,
-            width: 1000,
-            height: 1000,
-            viewportBlockStart: 0,
-            viewportBlockEnd: 1000,
-            resumeBlockOffset: 0,
-            maxLines: 32,
-            regionStart: 0,
-            resumeCluster: 0,
-            regionCount: 1,
-            resumeRegion: 0,
-            widthMode: 'at-most',
-            heightMode: 'at-most',
-            wrap: 'word',
-            align: 'start',
-            overflow: 'visible',
-            blockAlign: 'start',
-          },
-        ],
-        regions: [
-          {
-            id: 1,
-            geometryRevision: 1,
-            shape: 'rectangle',
-            exclusionStart: 0,
-            exclusionCount: 0,
-            writingMode: 'horizontal-tb',
-            textOrientation: 'mixed',
-            inlineStart: 0,
-            blockStart: 0,
-            inlineEnd: 1000,
-            blockEnd: 1000,
-            clipInlineStart: 0,
-            clipBlockStart: 0,
-            clipInlineEnd: 1000,
-            clipBlockEnd: 1000,
-          },
-        ],
-      });
+      text.update({ text: 'Glyph' });
+      const list = text.publish();
 
       expect(list.draws.length).toBeGreaterThan(0);
       expect(device.resources.size).toBeGreaterThan(0);
-      expect(device.resourcesByName.has('glyphColors')).toBe(true);
+      expect(device.resourcesByName.has('glyphGeometry')).toBe(true);
       expect(device.buffersByName.has('origin')).toBe(true);
       expect(device.buffersByName.has('size')).toBe(true);
       expect(device.buffersByName.has('color')).toBe(true);
@@ -219,41 +407,72 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         for (const name of declaredBuffers) {
           expect(realized.buffers.get(name), name).toBeInstanceOf(Uint8Array);
         }
-        expect(realized.resources.get('glyphColors')).toBeDefined();
+        expect(realized.resources.get('glyphGeometry')).toBeDefined();
       }
       const acceptedDraws = [...device.realizedDraws];
-      const noOp = engine.render({});
+      const retainedBufferTable = list.buffers.records.slice();
+      const retainedPatchPayloads = list.patches.map((patch) =>
+        patch.kind === 'write' ? patch.payload.slice() : undefined,
+      );
+      const noOp = engine.publish();
       expect(noOp.draws).toEqual([]);
       expect(device.realizedDraws).toEqual(acceptedDraws);
 
       device.failNextSubmission = true;
-      expect(() =>
-        engine.render({ textMutations: [{ paragraphId: 1, start: 0, deleteCount: 1, insert: 'G' }] }),
-      ).toThrow('injected submission failure');
-      expect(device.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2]);
-      const recoveryRequest = engine.frameRequest({});
-      const requestView = new DataView(recoveryRequest.buffer, recoveryRequest.byteOffset, recoveryRequest.byteLength);
-      const requestLayout = textShaperAbi.layouts.engineUpdateRequest;
-      expect(requestView.getUint32(requestLayout.expectedEngineRevision, true)).toBe(3);
-      expect(requestView.getUint32(requestLayout.consumedPlanRevision, true)).toBe(2);
-      expect(requestView.getUint32(requestLayout.acknowledgedPublicationGeneration, true)).toBe(2);
-      const recovered = engine.render({
-        textMutations: [{ paragraphId: 1, start: 1, deleteCount: 1, insert: 'L' }],
-      });
-      expect(recovered.publicationGeneration).toBe(4);
-      expect(device.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 4]);
+      text.update({ text: 'WXYZ' });
+      expect(() => text.publish()).toThrow('injected submission failure');
+      text.update({ text: 'wxyz' });
+      const recovered = text.publish();
+      expect(recovered.primitiveRecords.reduce((count, primitive) => count + primitive.recordCount, 0)).toBe(
+        EXPECTED_RECOVERED_TEXT_GLYPHS,
+      );
+      expect(list.buffers.records).toEqual(retainedBufferTable);
+      expect(list.patches.map((patch) => (patch.kind === 'write' ? patch.payload : undefined))).toEqual(
+        retainedPatchPayloads,
+      );
       expect(bufferSnapshot(device.primary.buffers)).toEqual(bufferSnapshot(device.oracle.buffers));
-      expect(device.oracle.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 3, 4]);
+      text.update({ text: 'updated', color: '#ff8040' });
+      expect(text.publish().draws.length).toBeGreaterThan(0);
+      expect(text.text).toBe('updated');
+      text.dispose();
+      expect(() => text.publish()).toThrow('disposed');
+      engine.publish();
+      expect(device.resources.size).toBe(0);
+      expect(device.resourcesByName.has('glyphGeometry')).toBe(false);
+      const replacement = engine.createText({
+        font: stackBinding,
+        text: 'replacement',
+        fontSize: 42,
+        width: 512,
+      });
+      expect(replacement.publish().draws.length).toBeGreaterThan(0);
+      const rebuiltDevice = new RecordingExampleRendererDevice();
+      engine.replaceDevice(rebuiltDevice);
+      const rebuilt = engine.publish();
+      expect(rebuilt.draws.length).toBeGreaterThan(0);
+      expect(rebuiltDevice.resourcesByName.has('glyphGeometry')).toBe(true);
+      replacement.dispose();
+      engine.publish();
+      expect(rebuiltDevice.resources.size).toBe(0);
+      const liveAtDispose = engine.createText({ font: stackBinding, text: 'dispose-live', fontSize: 32, width: 512 });
+      expect(liveAtDispose.publish().draws.length).toBeGreaterThan(0);
+      expect(rebuiltDevice.resources.size).toBeGreaterThan(0);
+      engine.dispose();
+      expect(rebuiltDevice.resources.size).toBe(0);
+      liveAtDispose.dispose();
+      expect(() => engine.bindFont(font)).toThrow('disposed');
+      expect(device.discardedResourceBatches).toBe(1);
+      stackBinding.dispose();
     } finally {
       engine.dispose();
       font.dispose();
     }
   } finally {
-    runtime.dispose();
+    glyphEngine.dispose();
   }
 });
 
-test('realizes a supplied indexed geometry resource from an authenticated portable declaration', () => {
+test('realizes a supplied indexed geometry resource from an authenticated portable declaration', async () => {
   expect(
     () =>
       new RecordingExampleRendererDevice({
@@ -261,7 +480,6 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
         variant: {
           ...exampleRendererShader.variant,
           geometry: glyphExampleSuppliedGeometryDeclaration,
-          geometryResource: glyphExampleSuppliedGeometryDeclaration.resource,
         },
       }),
   ).toThrow('registered portable geometry and resource schema');
@@ -271,6 +489,7 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
     kind: 'test',
     extension: 'TEST_example_renderer_geometry',
     version: 0,
+    textEffects: [],
     descriptor: () => ({}),
     async decode() {
       return {};
@@ -281,11 +500,7 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
     technique: suppliedTechnique.id,
     scope: 'glyph',
     binding: {},
-    buffers: {
-      origin: { id: 1, scalar: 'f32', lanes: ['left', 'top'] },
-      size: { id: 2, scalar: 'f32', lanes: ['widthX', 'heightY'] },
-      color: { id: 3, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
-    },
+    buffers: glyphExampleSchema.buffers,
     resources: {
       glyphColors: { kind: 'buffer' },
       glyphGeometry: {
@@ -296,7 +511,7 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
         ]),
       },
     },
-    render: { geometry: glyphExampleSuppliedGeometryDeclaration },
+    render: { resource: 'glyphColors', geometry: glyphExampleSuppliedGeometryDeclaration },
   });
   const suppliedPlan = registerRasterPlanProgram({
     technique: suppliedTechnique,
@@ -315,16 +530,19 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
       techniqueId: suppliedTechnique.id,
       geometry: suppliedSchema.render.geometry,
       resources: suppliedSchema.resources,
-      geometryResource: suppliedSchema.render.geometry.resource,
     }),
     programVariant: suppliedPlan.programVariant ?? 0,
   };
   const device = new RecordingExampleRendererDevice(shader);
-  device.createResource(41, 'glyphColors', { kind: 'buffer', bytes: new Uint8Array(16), stride: 4 });
-  device.createResource(42, 'glyphGeometry', glyphExampleIndexedQuadGeometry);
+  device.createResource(portableResourceId(41), 'glyphColors', {
+    kind: 'buffer',
+    bytes: new Uint8Array(16),
+    stride: 4,
+  });
+  device.createResource(portableResourceId(42), 'glyphGeometry', glyphExampleIndexedQuadGeometry);
   const bufferRecords = bindShaderContract(device);
-  const techniqueWireId = techniqueId(shader.variant.techniqueId);
-  const programWireId = programId(shader.variant.techniqueId, shader.programNamespace, shader.programName);
+  const techniqueWireId = glyphId.technique(shader.variant.techniqueId);
+  const programWireId = glyphId.program(shader.variant.techniqueId, shader.programNamespace, shader.programName);
 
   const drawList: ExampleDrawList = {
     engineRevision: 1,
@@ -332,11 +550,11 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
     publicationGeneration: 1,
     draws: [
       {
-        id: 1,
+        id: planDrawId(1),
         programId: programWireId,
         programVariant: 0,
         flags: 0,
-        materialId: 1,
+        materialId: 0,
         clipId: 0,
         depthKey: 0,
         transformId: 0,
@@ -352,21 +570,43 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
       },
     ],
     resourceRecords: [
-      { id: 51, generation: 1, techniqueId: techniqueWireId, resourceKind: 1, referenceId: 41, action: 1 },
-      { id: 52, generation: 1, techniqueId: techniqueWireId, resourceKind: 1, referenceId: 42, action: 1 },
+      {
+        id: planResourceId(51),
+        generation: 1,
+        techniqueId: techniqueWireId,
+        resourceKind: 1,
+        referenceId: resourceReference(41),
+        action: 'create',
+      },
+      {
+        id: planResourceId(52),
+        generation: 1,
+        techniqueId: techniqueWireId,
+        resourceKind: 1,
+        referenceId: resourceReference(42),
+        action: 'create',
+      },
     ],
     bufferRecords,
     primitiveRecords: [
       {
-        id: 1,
+        id: planPrimitiveId(1),
         techniqueId: techniqueWireId,
         programId: programWireId,
         programVariant: 0,
-        kind: textShaperAbi.engine.primitiveKinds.glyph,
+        kind: 'glyph',
         recordCount: 5,
         recordIndex: 0,
-        resourceId: 51,
+        resourceId: planResourceId(51),
         resourceGeneration: 1,
+        bufferId: 0,
+        logicalOrder: 0,
+        clipId: 0,
+        semanticId: 0,
+        inlineStart: 0,
+        blockStart: 0,
+        inlineExtent: 0,
+        blockExtent: 0,
       },
     ],
     patches: [],
@@ -387,12 +627,21 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
   expect(() =>
     device.prepareSubmission({
       ...drawList,
-      draws: [...drawList.draws, { ...drawList.draws[0]!, id: 2, primitiveStart: 1 }],
+      draws: [...drawList.draws, { ...drawList.draws[0]!, id: planDrawId(2), primitiveStart: 1 }],
     }),
   ).toThrow('primitive span exceeds its table');
   expect(device.realizedDraws).toEqual([]);
   expect(device.submissions).toEqual([]);
+  const rejected = device.prepareSubmission(drawList);
+  expect(() =>
+    rejected.publish(() => {
+      throw new Error('injected backend rejection');
+    }),
+  ).toThrow('injected backend rejection');
+  expect(device.realizedDraws).toEqual([]);
+  expect(device.submissions).toEqual([]);
   const pending = device.prepareSubmission(drawList);
+  expect(pending.replacesRenderState).toBe(true);
   expect(device.realizedDraws).toEqual([]);
   pending.commit();
   pending.commit();
@@ -407,40 +656,54 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
   });
 
   const stale = device.prepareSubmission({ ...drawList, publicationGeneration: 2 });
-  device
-    .prepareSubmission({
-      ...drawList,
-      publicationGeneration: 3,
-      draws: [],
-      resourceRecords: [],
-      bufferRecords: [],
-      primitiveRecords: [],
-      retirements: [
-        retirement(textShaperAbi.engine.retirementKinds.resource, 51, 1),
-        retirement(textShaperAbi.engine.retirementKinds.resource, 52, 1),
-      ],
-    })
-    .commit();
+  const retirementOnly = device.prepareSubmission({
+    ...drawList,
+    publicationGeneration: 3,
+    draws: [],
+    resourceRecords: [],
+    bufferRecords: [],
+    primitiveRecords: [],
+    retirements: [retirement('resource', 51, 1), retirement('resource', 52, 1)],
+  });
+  expect(retirementOnly.replacesRenderState).toBe(true);
+  retirementOnly.commit();
   expect(device.realizedDraws).toEqual([]);
-  expect(device.resources.has(41)).toBe(true);
-  expect(device.resources.has(42)).toBe(true);
+  expect(device.resources.has(portableResourceId(41))).toBe(true);
+  expect(device.resources.has(portableResourceId(42))).toBe(true);
   stale.commit();
   expect(device.realizedDraws).toEqual([]);
 
   device.prepareSubmission({ ...drawList, publicationGeneration: 4 }).commit();
   expect(device.realizedDraws).toHaveLength(1);
+
+  const idle = device.prepareSubmission({
+    ...drawList,
+    publicationGeneration: 5,
+    draws: [],
+    resourceRecords: [],
+    bufferRecords: [],
+    primitiveRecords: [],
+    retirements: [],
+  });
+  expect(idle.replacesRenderState).toBe(false);
+  const release = Promise.withResolvers<void>();
+  const idleCommit = idle.publishAsync(() => release.promise);
+  expect(() => device.prepareResources([])).toThrow('asynchronous publication is in progress');
+  expect(() => device.applyBufferPlan([], [], [])).toThrow('asynchronous publication is in progress');
+  release.resolve();
+  await expect(idleCommit).resolves.toBe(true);
 });
 
 test('does not retire a newer resource generation through a stale retirement', () => {
   const device = new RecordingExampleRendererDevice();
-  device.createResource(42, 'glyphColors', portableColors(4), 3);
+  device.createResource(portableResourceId(42), 'glyphGeometry', portableGeometry(4), 3);
 
-  device.retireResource(42, 2);
-  expect(device.resources.has(42)).toBe(true);
+  device.retireResource(portableResourceId(42), 2);
+  expect(device.resources.has(portableResourceId(42))).toBe(true);
   expect(device.retirements).toEqual([]);
 
-  device.retireResource(42, 3);
-  expect(device.resources.has(42)).toBe(false);
+  device.retireResource(portableResourceId(42), 3);
+  expect(device.resources.has(portableResourceId(42))).toBe(false);
   expect(device.retirements).toEqual([42]);
 });
 
@@ -448,163 +711,160 @@ test('applies generation-aware write, fill, copy, and retirement patches transac
   const device = new RecordingExampleRendererDevice();
   const first = bufferRecord(1, 1, 16, 1);
   const second = bufferRecord(2, 1, 16, 2);
-  expect(() => device.applyBufferPlan([{ ...first, programId: techniqueId('foreign-program') }], [], [])).toThrow(
-    'belongs to a different renderer program',
-  );
-  expect(() => device.applyBufferPlan([], [], [retirement(99, 1, 1)])).toThrow(
+  expect(() =>
+    device.applyBufferPlan([{ ...first, programId: glyphId.program('foreign-program', 'example-renderer') }], [], []),
+  ).toThrow('belongs to a different renderer program');
+  expect(() => device.applyBufferPlan([], [], [retirement('invalid' as RenderPlanRetirementKind, 1, 1)])).toThrow(
     'unsupported text-engine retirement kind',
   );
   expect(() => device.applyBufferPlan([{ ...first, capacityRecords: 3 }], [], [])).toThrow(
     'requires tightly packed physical buffers',
   );
-  expect(device.bufferBytes(1, 1)).toBeUndefined();
+  expect(device.bufferBytes(planBufferId(1), 1)).toBeUndefined();
   device.applyBufferPlan(
     [first, second],
     [
-      patch(textShaperAbi.engine.patchOpcodes.allocateOrResize, 1, 1, 0, 16),
-      patch(textShaperAbi.engine.patchOpcodes.allocateOrResize, 2, 1, 0, 16),
-      patch(textShaperAbi.engine.patchOpcodes.write, 1, 1, 4, 4, { payload: new Uint8Array([5, 6, 7, 8]) }),
-      patch(textShaperAbi.engine.patchOpcodes.fill, 1, 1, 8, 4, { fillValue: 0x0c0b_0a09 }),
-      patch(textShaperAbi.engine.patchOpcodes.copy, 2, 1, 0, 8, { sourceBufferId: 1, sourceOffset: 4 }),
+      patch('allocate-or-resize', 1, 1, 0, 16),
+      patch('allocate-or-resize', 2, 1, 0, 16),
+      patch('write', 1, 1, 4, 4, { payload: new Uint8Array([5, 6, 7, 8]) }),
+      patch('fill', 1, 1, 8, 4, { fillValue: 0x0c0b_0a09 }),
+      patch('copy', 2, 1, 0, 8, { sourceBufferId: planBufferId(1), sourceOffset: 4 }),
     ],
     [],
   );
 
-  expect(device.bufferBytes(1, 1)).toEqual(new Uint8Array([0, 0, 0, 0, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0, 0]));
-  expect(device.bufferBytes(2, 1)?.subarray(0, 8)).toEqual(new Uint8Array([5, 6, 7, 8, 9, 10, 11, 12]));
+  expect(device.bufferBytes(planBufferId(1), 1)).toEqual(
+    new Uint8Array([0, 0, 0, 0, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0, 0]),
+  );
+  expect(device.bufferBytes(planBufferId(2), 1)?.subarray(0, 8)).toEqual(new Uint8Array([5, 6, 7, 8, 9, 10, 11, 12]));
 
-  const before = device.bufferBytes(1, 1)?.slice();
+  const before = device.bufferBytes(planBufferId(1), 1)?.slice();
   expect(() =>
-    device.applyBufferPlan(
-      [first, second],
-      [patch(textShaperAbi.engine.patchOpcodes.write, 1, 1, 15, 2, { payload: new Uint8Array([1, 2]) })],
-      [],
-    ),
+    device.applyBufferPlan([first, second], [patch('write', 1, 1, 15, 2, { payload: new Uint8Array([1, 2]) })], []),
   ).toThrow('buffer patch exceeds its buffer');
-  expect(device.bufferBytes(1, 1)).toEqual(before);
+  expect(device.bufferBytes(planBufferId(1), 1)).toEqual(before);
 
   const replacement = bufferRecord(1, 2, 8, 1);
   device.applyBufferPlan(
     [replacement, second],
     [
-      patch(textShaperAbi.engine.patchOpcodes.allocateOrResize, 1, 2, 0, 8),
-      patch(textShaperAbi.engine.patchOpcodes.write, 1, 2, 0, 4, { payload: new Uint8Array([13, 14, 15, 16]) }),
+      patch('allocate-or-resize', 1, 2, 0, 8),
+      patch('write', 1, 2, 0, 4, { payload: new Uint8Array([13, 14, 15, 16]) }),
     ],
-    [retirement(textShaperAbi.engine.retirementKinds.buffer, 1, 1)],
+    [retirement('buffer', 1, 1)],
   );
-  expect(device.bufferBytes(1, 1)).toBeUndefined();
-  expect(device.bufferBytes(1, 2)).toEqual(new Uint8Array([13, 14, 15, 16, 0, 0, 0, 0]));
-  expect(device.bufferBytes(2, 1)?.subarray(0, 8)).toEqual(new Uint8Array([5, 6, 7, 8, 9, 10, 11, 12]));
+  expect(device.bufferBytes(planBufferId(1), 1)).toBeUndefined();
+  expect(device.bufferBytes(planBufferId(1), 2)).toEqual(new Uint8Array([13, 14, 15, 16, 0, 0, 0, 0]));
+  expect(device.bufferBytes(planBufferId(2), 1)?.subarray(0, 8)).toEqual(new Uint8Array([5, 6, 7, 8, 9, 10, 11, 12]));
 });
 
 test('prepares resources without restoring stale device state', () => {
   const device = new RecordingExampleRendererDevice();
-  const first = portableColors(4);
-  device.createResource(42, 'glyphColors', first, 1);
-  expect(device.resources.get(42)).toBe(first);
+  const first = portableGeometry(4);
+  device.createResource(portableResourceId(42), 'glyphGeometry', first, 1);
+  expect(device.resources.get(portableResourceId(42))).toBe(first);
 
-  const second = portableColors(8);
-  const pending = device.prepareResources([{ id: 42, generation: 2, name: 'glyphColors', resource: second }]);
-  expect(device.resources.get(42)).toBe(first);
+  const second = portableGeometry(8);
+  const pending = device.prepareResources([
+    { id: portableResourceId(42), generation: 2, name: 'glyphGeometry', resource: second },
+  ]);
+  expect(device.resources.get(portableResourceId(42))).toBe(first);
   pending.commit();
-  expect(device.resources.get(42)).toBe(second);
+  expect(device.resources.get(portableResourceId(42))).toBe(second);
 
   expect(() =>
     device.prepareResources([
-      { id: 42, generation: 3, name: 'glyphColors', resource: portableColors(12) },
-      { id: 42, generation: 3, name: 'glyphColors', resource: portableColors(16) },
+      { id: portableResourceId(42), generation: 3, name: 'glyphGeometry', resource: portableGeometry(12) },
+      { id: portableResourceId(42), generation: 3, name: 'glyphGeometry', resource: portableGeometry(16) },
     ]),
   ).toThrow('changed content without changing generation');
-  expect(device.resources.get(42)).toBe(second);
+  expect(device.resources.get(portableResourceId(42))).toBe(second);
 
-  const staleResource = portableColors(12);
-  const stale = device.prepareResources([{ id: 42, generation: 3, name: 'glyphColors', resource: staleResource }]);
-  const newer = portableColors(16);
-  device.createResource(42, 'glyphColors', newer, 4);
+  const staleResource = portableGeometry(12);
+  const stale = device.prepareResources([
+    { id: portableResourceId(42), generation: 3, name: 'glyphGeometry', resource: staleResource },
+  ]);
+  const newer = portableGeometry(16);
+  device.createResource(portableResourceId(42), 'glyphGeometry', newer, 4);
   stale.commit();
-  expect(device.resources.get(42)).toBe(newer);
+  expect(device.resources.get(portableResourceId(42))).toBe(newer);
 });
 
-function portableColors(byteLength: number) {
-  return { kind: 'buffer' as const, bytes: new Uint8Array(byteLength), stride: 4 };
+function portableGeometry(marker: number) {
+  const bytes = new Uint8Array(glyphExampleIndexedQuadGeometry.bytes);
+  bytes[0] = marker;
+  return { ...glyphExampleIndexedQuadGeometry, bytes };
 }
 
-function bindShaderContract(device: RecordingExampleRendererDevice): readonly TextEngineBufferRecord[] {
-  const widths = [2, 2, 4];
-  const selectedProgramId = programId(
+function bindShaderContract(device: RecordingExampleRendererDevice): readonly RenderPlanBufferRecord[] {
+  const selectedProgramId = glyphId.program(
     device.shader.variant.techniqueId,
     device.shader.programNamespace,
     device.shader.programName,
   );
-  const records = widths.map((vectorWidth, index) => ({
-    id: index + 1,
+  const records = Object.values(device.shader.variant.buffers).map((buffer, index) => ({
+    id: planBufferId(index + 1),
     generation: 1,
     programId: selectedProgramId,
-    scalarType: textShaperAbi.policy.scalarTypes.f32,
-    vectorWidth,
+    scalarType: buffer.scalar,
+    vectorWidth: buffer.vectorWidth,
     capacityRecords: 8,
-    byteLength: 8 * vectorWidth * 4,
-    policyBufferId: index + 1,
+    byteLength: 8 * buffer.vectorWidth * 4,
+    binding: { kind: 'policy' as const, id: buffer.id },
   }));
   device.applyBufferPlan(
     records,
     records.map((record) => ({
-      opcode: textShaperAbi.engine.patchOpcodes.allocateOrResize,
+      kind: 'allocate-or-resize' as const,
       bufferId: record.id,
       bufferGeneration: record.generation,
       destinationOffset: 0,
       byteLength: record.byteLength,
-      payload: undefined,
-      fillValue: 0,
-      sourceBufferId: 0,
-      sourceOffset: 0,
     })),
     [],
   );
   return records;
 }
 
-function bufferRecord(
-  id: number,
-  generation: number,
-  byteLength: number,
-  policyBufferId: number,
-): TextEngineBufferRecord {
+function bufferRecord(id: number, generation: number, byteLength: number, buffer: number): RenderPlanBufferRecord {
   return {
-    id,
+    id: planBufferId(id),
     generation,
-    programId: programId(
+    programId: glyphId.program(
       exampleRendererShader.variant.techniqueId,
       exampleRendererShader.programNamespace,
       exampleRendererShader.programName,
     ),
-    scalarType: textShaperAbi.policy.scalarTypes.u32,
+    scalarType: 'u32',
     vectorWidth: 1,
     capacityRecords: byteLength / 4,
     byteLength,
-    policyBufferId,
+    binding: { kind: 'policy', id: policyBufferId(buffer) },
   };
 }
 
 function patch(
-  opcode: number,
+  kind: RenderPlanPatchRecord['kind'],
   bufferId: number,
   bufferGeneration: number,
   destinationOffset: number,
   byteLength: number,
-  overrides: Partial<TextEnginePatchRecord> = {},
-): TextEnginePatchRecord {
-  return {
-    opcode,
-    bufferId,
+  overrides: Record<string, unknown> = {},
+): RenderPlanPatchRecord {
+  const base = {
+    bufferId: planBufferId(bufferId),
     bufferGeneration,
     destinationOffset,
     byteLength,
-    payload: undefined,
-    fillValue: 0,
-    sourceBufferId: 0,
-    sourceOffset: 0,
-    ...overrides,
+  };
+  if (kind === 'allocate-or-resize' || kind === 'retire') return { ...base, kind };
+  if (kind === 'write') return { ...base, kind, payload: overrides.payload as Uint8Array };
+  if (kind === 'fill') return { ...base, kind, fillValue: overrides.fillValue as number };
+  return {
+    ...base,
+    kind,
+    sourceBufferId: overrides.sourceBufferId as RenderPlanBufferId,
+    sourceOffset: overrides.sourceOffset as number,
   };
 }
 
@@ -612,6 +872,6 @@ function bufferSnapshot(buffers: ReadonlyMap<number, Uint8Array>): readonly (rea
   return [...buffers].sort(([left], [right]) => left - right).map(([id, bytes]) => [id, Array.from(bytes)] as const);
 }
 
-function retirement(kind: number, id: number, generation: number): TextEngineRetirementRecord {
+function retirement(kind: RenderPlanRetirementKind, id: number, generation: number): RenderPlanRetirementRecord {
   return { kind, id, generation, afterPublicationGeneration: 1, byteOffset: 0, byteLength: 0 };
 }

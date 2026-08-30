@@ -1,4 +1,4 @@
-import { FontRegistry, type LoadedFont, type ParagraphLayout } from '@pmndrs/glyph';
+import type { Font, GlyphLayout } from '@pmndrs/glyph';
 import { slug } from '@pmndrs/glyph/three/slug';
 import { FontLoader, Text, type TextSpan } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -7,10 +7,11 @@ import type { TargetRunOutput } from '../../../contracts';
 import { rasterConformanceSpecimen, type BenchmarkFontFixture } from '../../../font-fixtures';
 import { compareRgba8Coverage } from '../../../low-level/raster/mtsdf-cpu-reference';
 import { compactRgba8Readback } from '../../../low-level/raster/rgba-readback';
-import { renderFlatSlugCpuReference } from '../../../low-level/raster/slug-cpu-reference';
+import { renderFlatSlugCpuReference, type SlugCpuReferenceData } from '../../../low-level/raster/slug-cpu-reference';
 import { sha256 } from '../../shared';
 import type { FontDelivery } from '../../../url-state';
 import type { BakedSlugArtifactSource as SlugBakedArtifactSource } from '../../../../workloads/font-assets';
+import { compiledSlugData } from '../../../../workloads/font-assets/compiled-data';
 import { loadSlugFontAsset } from '../../../../workloads/font-assets/slug';
 import type { PersistentRenderSceneRenderer } from '../../../../renderer/persistent-render-host';
 import { withRendererStateRestored } from '../../../../renderer/renderer-state-transaction';
@@ -143,7 +144,8 @@ interface FlatSlugConformanceResources {
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
   /** Owns the decoded Slug data the CPU reference reads, so no scene decodes the raster a second time. */
-  readonly font: LoadedFont<typeof slug>;
+  readonly font: Font<typeof slug>;
+  readonly data: SlugCpuReferenceData;
   readonly line: Text<typeof slug>;
   readonly sourceTypes?: SlugRasterSourceTypes;
 }
@@ -492,7 +494,7 @@ export async function captureSlugProjectionZoomRoleScene(options: {
   });
   try {
     const layout = committedLayout(resources.line);
-    const zeroOriginReference = renderFlatSlugCpuReference(resources.font.data, layout, {
+    const zeroOriginReference = renderFlatSlugCpuReference(resources.data, layout, {
       width: scene.physicalWidth,
       height: scene.physicalHeight,
       dpr,
@@ -562,8 +564,14 @@ interface CreateFlatSlugConformanceResourcesOptions {
   readonly delivery?: FontDelivery;
   readonly bakedArtifact?: SlugBakedArtifactSource;
   readonly sceneOptions?: FlatSlugSceneOptions;
-  readonly loadFont?: (signal?: AbortSignal) => Promise<LoadedFont<typeof slug>>;
+  readonly loadFont?: (signal?: AbortSignal) => Promise<LoadedSlugConformanceFont>;
   readonly renderer?: PersistentRenderSceneRenderer;
+}
+
+interface LoadedSlugConformanceFont {
+  readonly font: Font<typeof slug>;
+  readonly data: SlugCpuReferenceData;
+  readonly sourceTypes?: SlugRasterSourceTypes;
 }
 
 async function createFlatSlugConformanceResources({
@@ -590,13 +598,15 @@ async function createFlatSlugConformanceResources({
       : undefined;
   const renderer = borrowedRenderer ?? ownedRenderer!;
   let target: THREE.RenderTarget | undefined;
-  let font: LoadedFont<typeof slug> | undefined;
+  let font: Font<typeof slug> | undefined;
   let line: Text<typeof slug> | undefined;
   try {
-    font =
+    const loaded =
       loadFont === undefined
         ? await loadConformanceSlugFont(fontFixture, delivery, bakedArtifact, signal)
         : await loadFont(signal);
+    font = loaded.font;
+    const data = loaded.data;
     const specimen = sceneOptions ?? rasterConformanceSpecimen(fontFixture);
     line = new Text({
       text: specimen.text,
@@ -604,14 +614,15 @@ async function createFlatSlugConformanceResources({
       font,
       rasterPixelRatio: dpr,
       // An exact width is what centre and end alignment measure against; `at-most` would collapse them onto the start.
-      contentBox: { width: { mode: 'exact', size: sceneOptions?.layoutWidth ?? 476 }, wrap: 'word', align: 'start' },
+      constraints: { width: { mode: 'exact', size: sceneOptions?.layoutWidth ?? 476 } },
+      layout: { wrap: 'word', align: 'start' },
       style: {
         fontSize: sceneOptions?.fontSize ?? 64 / dpr,
         lineHeight: 1.2,
         language: specimen.language,
         direction: specimen.direction,
+        color: '#ffffff',
       },
-      paint: { color: '#ffffff' },
     });
     line.position.set(sceneOptions?.originX ?? 18, sceneOptions?.originY ?? -18, 0);
     const scene = new THREE.Scene();
@@ -621,7 +632,7 @@ async function createFlatSlugConformanceResources({
     if (missingGlyphs !== 0) {
       throw new Error(`${fontFixture} Slug conformance specimen contains ${String(missingGlyphs)} missing glyphs`);
     }
-    const sourceTypes = loadFont === undefined ? undefined : slugRasterSourceTypes(font);
+    const sourceTypes = loaded.sourceTypes;
     signal?.throwIfAborted();
     const logicalWidth = sceneOptions?.width ?? WIDTH;
     const logicalHeight = sceneOptions?.height ?? FLAT_CONFORMANCE_HEIGHT;
@@ -648,6 +659,7 @@ async function createFlatSlugConformanceResources({
       scene,
       camera,
       font,
+      data,
       line,
       ...(sourceTypes === undefined ? {} : { sourceTypes }),
     };
@@ -665,26 +677,24 @@ async function loadConformanceSlugFont(
   delivery: FontDelivery,
   bakedArtifact: SlugBakedArtifactSource | undefined,
   signal: AbortSignal | undefined,
-): Promise<LoadedFont<typeof slug>> {
+): Promise<LoadedSlugConformanceFont> {
   const loaded = await loadSlugFontAsset(
     delivery === 'runtime'
       ? {
           technique: 'slug',
           fixture,
           delivery,
-          registry: new FontRegistry(),
           ...(signal === undefined ? {} : { signal }),
         }
       : {
           technique: 'slug',
           fixture,
           delivery,
-          registry: new FontRegistry(),
           ...(bakedArtifact === undefined ? {} : { bakedArtifact }),
           ...(signal === undefined ? {} : { signal }),
         },
   );
-  return loaded.loaded;
+  return { font: loaded.loaded, data: loaded.data };
 }
 
 /**
@@ -696,27 +706,65 @@ async function loadExternalSlugFont(
   artifactUrl: string,
   fetcher: typeof fetch,
   signal?: AbortSignal,
-): Promise<LoadedFont<typeof slug>> {
+): Promise<LoadedSlugConformanceFont> {
   signal?.throwIfAborted();
   const loader = new FontLoader();
+  let sourceTypes: SlugRasterSourceTypes | undefined;
+  let sourceInspectionError: unknown;
   const installedFetch = globalThis.fetch;
-  globalThis.fetch = fetcher;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : String(input);
+    const response = await fetcher(input, init);
+    if (response.ok && new URL(url, globalThis.location.href).pathname.endsWith('.glb')) {
+      try {
+        sourceTypes ??= slugRasterSourceTypesFromGlb(new Uint8Array(await response.clone().arrayBuffer()));
+      } catch (error) {
+        sourceInspectionError ??= error;
+      }
+    }
+    return response;
+  }) as typeof fetch;
   try {
-    return await loader.loadAsync({
-      input: { baked: artifactUrl },
-      raster: { technique: slug },
-      ...(signal === undefined ? {} : { signal }),
-    });
+    let font: Font<typeof slug>;
+    try {
+      font = await loader.loadAsync({
+        input: { baked: artifactUrl },
+        raster: { technique: slug },
+        ...(signal === undefined ? {} : { signal }),
+      });
+    } catch (error) {
+      throw new Error(`External Slug load failed: ${errorMessages(error).join(' <- ')}`, { cause: error });
+    }
+    if (sourceTypes === undefined) {
+      if (sourceInspectionError !== undefined) throw sourceInspectionError;
+      throw new Error('Slug external raster GLB omitted source metadata');
+    }
+    return {
+      font,
+      data: compiledSlugData(font),
+      sourceTypes,
+    };
   } finally {
     globalThis.fetch = installedFetch;
     loader.dispose();
   }
 }
 
-function slugRasterSourceTypes(font: LoadedFont<typeof slug>): SlugRasterSourceTypes {
-  const reference = font.font.rasterReferences.find((candidate) => candidate.rasterKey === font.raster.rasterKey);
-  if (reference === undefined) throw new Error('Slug raster reference disappeared after loading');
-  const extension = nonArrayObject(font.raster.extensionData, 'Slug extension');
+function errorMessages(error: unknown): string[] {
+  const messages: string[] = [];
+  let current: unknown = error;
+  while (current instanceof Error && !messages.includes(current.message)) {
+    messages.push(current.message);
+    current = current.cause;
+  }
+  return messages.length === 0 ? [String(error)] : messages;
+}
+
+function slugRasterSourceTypesFromGlb(bytes: Uint8Array): SlugRasterSourceTypes | undefined {
+  const json = glbJson(bytes);
+  const extensions = nonArrayObject(json.extensions, 'GLB extensions');
+  if (extensions.PMNDRS_font_slug === undefined) return undefined;
+  const extension = nonArrayObject(extensions.PMNDRS_font_slug, 'Slug extension');
   if (!Array.isArray(extension.pages) || extension.pages.length !== 1) {
     throw new TypeError('Slug external parity requires exactly one Inter page');
   }
@@ -729,11 +777,26 @@ function slugRasterSourceTypes(font: LoadedFont<typeof slug>): SlugRasterSourceT
   const headerResource = nonArrayObject(page.headerResource, 'Slug header resource');
   const referenceResource = nonArrayObject(page.referenceResource, 'Slug reference resource');
   return {
-    raster: reference.source.type,
+    raster: 'external',
     curve: resourceSourceType(curveVariant.source, 'Slug curve source'),
     headers: resourceSourceType(headerResource.source, 'Slug header source'),
     references: resourceSourceType(referenceResource.source, 'Slug reference source'),
   };
+}
+
+function glbJson(bytes: Uint8Array): Record<string, unknown> {
+  if (bytes.byteLength < 20) throw new TypeError('Slug external GLB is truncated');
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(0, true) !== 0x4654_6c67 || view.getUint32(4, true) !== 2) {
+    throw new TypeError('Slug external artifact is not GLB v2');
+  }
+  const byteLength = view.getUint32(8, true);
+  const jsonLength = view.getUint32(12, true);
+  if (byteLength !== bytes.byteLength || view.getUint32(16, true) !== 0x4e4f_534a || 20 + jsonLength > byteLength) {
+    throw new TypeError('Slug external GLB JSON chunk is invalid');
+  }
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength)).trimEnd());
+  return nonArrayObject(parsed, 'Slug external GLB JSON');
 }
 
 function requireExternalSlugSources(sourceTypes: SlugRasterSourceTypes | undefined): SlugRasterSourceTypes {
@@ -756,8 +819,9 @@ function resourceSourceType(value: unknown, label: string): 'bufferView' | 'exte
 }
 
 function nonArrayObject(value: unknown, label: string): Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value))
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object`);
+  }
   return value as Record<string, unknown>;
 }
 
@@ -765,7 +829,7 @@ async function captureFlatSlugConformance(
   resources: FlatSlugConformanceResources,
 ): Promise<SlugTextConformanceCapture> {
   const { candidate, width, height, renderSubmitMs } = await captureFlatSlugCandidate(resources);
-  const referenceResult = renderFlatSlugCpuReference(resources.font.data, committedLayout(resources.line), {
+  const referenceResult = renderFlatSlugCpuReference(resources.data, committedLayout(resources.line), {
     width,
     height,
     dpr: resources.dpr,
@@ -910,7 +974,7 @@ function pixelHasInk(bytes: Uint8Array, pixelIndex: number): boolean {
 }
 
 /** Every layout read doubles as the commit check, because `Text` reports a failed synchronize through `error`. */
-function committedLayout(line: Text<typeof slug>): ParagraphLayout {
+function committedLayout(line: Text<typeof slug>): GlyphLayout {
   const error = line.error;
   if (error !== undefined) throw error;
   const layout = line.glyphs();

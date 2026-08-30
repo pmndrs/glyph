@@ -1,4 +1,4 @@
-import type { ParagraphLayout } from '@pmndrs/glyph';
+import type { GlyphLayout } from '@pmndrs/glyph';
 import {
   MSDF_GLYPH_RECORD_STRIDE as MTSDF_GLYPH_RECORD_STRIDE,
   type MsdfData as MtsdfData,
@@ -109,7 +109,7 @@ export interface FlatMtsdfCpuReferenceOptions {
  */
 export function renderFlatMtsdfCpuReference(
   data: MtsdfData,
-  layout: ParagraphLayout,
+  layout: GlyphLayout,
   options: FlatMtsdfCpuReferenceOptions,
 ): MtsdfCpuReference {
   const width = positiveInteger(options.width, 'MTSDF CPU reference width');
@@ -215,7 +215,7 @@ function recordView(data: MtsdfData): DataView {
   return new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
 }
 
-function assertLayoutArrays(layout: ParagraphLayout): void {
+function assertLayoutArrays(layout: GlyphLayout): void {
   const count = layout.glyphIds.length;
   if (
     layout.glyphFontSlots.length !== count ||

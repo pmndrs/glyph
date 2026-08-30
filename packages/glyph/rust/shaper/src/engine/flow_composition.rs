@@ -6,7 +6,10 @@ use super::{
     EngineError, FrameFault,
     cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
     flow_geometry::{FlowGeometryArena, InlineSlotArena},
-    frame::{ALIGN_JUSTIFY, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRITING_HORIZONTAL_TB},
+    frame::{
+        ALIGN_JUSTIFY, AXIS_AT_MOST, AXIS_EXACT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS,
+        WRITING_HORIZONTAL_TB,
+    },
     line_composition::{ComposedLine, LineCursor, layout_next_line_integer},
     semantic_wire::FlowConstraint,
     style_state::StyleSegment,
@@ -31,6 +34,9 @@ pub(crate) struct FlowFragment {
     pub line: ComposedLine,
     pub slot_start: f64,
     pub slot_end: f64,
+    /// This slot reached a flexible region end and is resolved to the
+    /// thread's chosen inline end after every line has composed.
+    pub flexible_end: bool,
     pub boundary_index: u32,
 }
 
@@ -80,13 +86,10 @@ impl FlowLayoutArena {
     pub(crate) fn reserve(
         &mut self,
         line_capacity: usize,
-        max_slots_per_band: usize,
+        fragment_capacity: usize,
     ) -> Result<(), EngineError> {
         reserve(&mut self.lines, line_capacity)?;
-        reserve(
-            &mut self.fragments,
-            line_capacity.saturating_mul(max_slots_per_band),
-        )?;
+        reserve(&mut self.fragments, fragment_capacity)?;
         reserve(&mut self.ellipsis_threads, line_capacity)
     }
 
@@ -106,7 +109,10 @@ impl FlowLayoutArena {
         if clusters.starts.is_empty() || geometry.constraints.is_empty() {
             return Ok(());
         }
-        self.reserve(max_lines, max_slots_per_band)?;
+        // Limits reject excess work; they are not allocation requests. A line consumes at
+        // least one cluster, and ordinary lines need one fragment. Exceptional flows grow.
+        let likely_lines = clusters.starts.len().min(max_lines);
+        self.reserve(likely_lines, likely_lines)?;
         for constraint in geometry.constraints.iter().copied() {
             let resume = cluster_for_offset(clusters, constraint.resume_cluster)?;
             let mut cursor = LineCursor::at_cluster(resume);
@@ -184,6 +190,7 @@ impl FlowLayoutArena {
                         estimate,
                         constraint.wrap,
                         constraint.align,
+                        constraint.width_mode != AXIS_EXACT,
                         f64::from(constraint.first_line_indent),
                         constraint_word_space_shrink(&constraint),
                         max_slots_per_band,
@@ -212,6 +219,13 @@ impl FlowLayoutArena {
                 {
                     self.ellipsis_threads.push(constraint.flow_thread_id);
                 }
+            }
+            if constraint.width_mode != AXIS_EXACT {
+                self.resolve_flexible_inline_end(
+                    constraint.flow_thread_id,
+                    f64::from(constraint.first_line_indent),
+                    flexible_inline_limit(&constraint),
+                )?;
             }
         }
         Ok(())
@@ -311,6 +325,7 @@ impl FlowLayoutArena {
                 },
                 wrapping_for_flow_thread(geometry, old_line.flow_thread_id)?,
                 old_line.align,
+                flexible_for_flow_thread(geometry, old_line.flow_thread_id)?,
                 indent_for_flow_thread(geometry, old_line.flow_thread_id)?,
                 shrink_for_flow_thread(geometry, old_line.flow_thread_id)?,
                 max_slots_per_band,
@@ -328,7 +343,24 @@ impl FlowLayoutArena {
                 for suffix in candidate + 1..previous.lines.len() {
                     self.append_retained_line(previous, suffix)?;
                 }
-                self.recomposed_lines = Some((line_index, candidate + 1));
+                let previous_flexible_end = previous.flexible_inline_end(old_line.flow_thread_id);
+                let next_flexible_end =
+                    if flexible_for_flow_thread(geometry, old_line.flow_thread_id)? {
+                        self.resolve_flexible_inline_end(
+                            old_line.flow_thread_id,
+                            indent_for_flow_thread(geometry, old_line.flow_thread_id)?,
+                            inline_limit_for_flow_thread(geometry, old_line.flow_thread_id)?,
+                        )?
+                    } else {
+                        None
+                    };
+                self.recomposed_lines = if previous_flexible_end.map(f64::to_bits)
+                    != next_flexible_end.map(f64::to_bits)
+                {
+                    self.flow_thread_line_range(old_line.flow_thread_id)
+                } else {
+                    Some((line_index, candidate + 1))
+                };
                 return Ok(true);
             }
             if !metrics_stable {
@@ -375,6 +407,7 @@ impl FlowLayoutArena {
         initial_extents: LineExtents,
         wrap: u8,
         align: u8,
+        flexible_width: bool,
         first_line_indent: f64,
         word_space_shrink: f64,
         max_slots: usize,
@@ -398,6 +431,14 @@ impl FlowLayoutArena {
                 block_start + height,
                 max_slots,
             )?;
+            let region_inline_end = f64::from(
+                geometry
+                    .regions
+                    .get(region_index)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .record
+                    .inline_end,
+            );
             if available.is_empty() {
                 self.fragments.truncate(fragment_start);
                 *cursor = saved_cursor;
@@ -441,6 +482,7 @@ impl FlowLayoutArena {
                     line,
                     slot_start: slot.start,
                     slot_end: slot.end,
+                    flexible_end: flexible_width && slot.end == region_inline_end,
                     boundary_index: NO_BOUNDARY,
                 });
                 composed = true;
@@ -478,6 +520,86 @@ impl FlowLayoutArena {
             return Ok(Some(extents.height()));
         }
         Err(EngineError::InvalidRequest)
+    }
+
+    fn resolve_flexible_inline_end(
+        &mut self,
+        flow_thread_id: u32,
+        first_line_indent: f64,
+        inline_limit: Option<f64>,
+    ) -> Result<Option<f64>, EngineError> {
+        let mut content_end = f64::NEG_INFINITY;
+        let mut found = false;
+        for line in self
+            .lines
+            .iter()
+            .copied()
+            .filter(|line| line.flow_thread_id == flow_thread_id)
+        {
+            for fragment in line_fragments(self, line)? {
+                found |= fragment.flexible_end;
+                let indent = if fragment.line.cluster_start == 0 {
+                    first_line_indent
+                } else {
+                    0.0
+                };
+                content_end = content_end.max(fragment.slot_start + indent + fragment.line.advance);
+            }
+        }
+        if !found || !content_end.is_finite() {
+            return Ok(None);
+        }
+        let resolved_end = inline_limit.map_or(content_end, |limit| content_end.min(limit));
+        for line in self
+            .lines
+            .iter()
+            .copied()
+            .filter(|line| line.flow_thread_id == flow_thread_id)
+        {
+            let start =
+                usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
+            let end = start
+                .checked_add(usize::from(line.fragment_count))
+                .ok_or(EngineError::InvalidRequest)?;
+            for fragment in self
+                .fragments
+                .get_mut(start..end)
+                .ok_or(EngineError::InvalidRequest)?
+            {
+                if fragment.flexible_end {
+                    fragment.slot_end = resolved_end.max(fragment.slot_start);
+                }
+            }
+        }
+        Ok(Some(resolved_end))
+    }
+
+    fn flexible_inline_end(&self, flow_thread_id: u32) -> Option<f64> {
+        for line in self
+            .lines
+            .iter()
+            .copied()
+            .filter(|line| line.flow_thread_id == flow_thread_id)
+        {
+            let fragments = line_fragments(self, line).ok()?;
+            if let Some(fragment) = fragments.iter().find(|fragment| fragment.flexible_end) {
+                return Some(fragment.slot_end);
+            }
+        }
+        None
+    }
+
+    fn flow_thread_line_range(&self, flow_thread_id: u32) -> Option<(usize, usize)> {
+        let start = self
+            .lines
+            .iter()
+            .position(|line| line.flow_thread_id == flow_thread_id)?;
+        let end = self
+            .lines
+            .iter()
+            .rposition(|line| line.flow_thread_id == flow_thread_id)?
+            + 1;
+        Some((start, end))
     }
 
     pub(crate) fn clear(&mut self) {
@@ -594,6 +716,34 @@ fn wrapping_for_flow_thread(
         .find(|constraint| constraint.flow_thread_id == flow_thread_id)
         .map(|constraint| constraint.wrap)
         .ok_or(EngineError::InvalidRequest)
+}
+
+fn flexible_for_flow_thread(
+    geometry: &FlowGeometryArena,
+    flow_thread_id: u32,
+) -> Result<bool, EngineError> {
+    geometry
+        .constraints
+        .iter()
+        .find(|constraint| constraint.flow_thread_id == flow_thread_id)
+        .map(|constraint| constraint.width_mode != AXIS_EXACT)
+        .ok_or(EngineError::InvalidRequest)
+}
+
+fn inline_limit_for_flow_thread(
+    geometry: &FlowGeometryArena,
+    flow_thread_id: u32,
+) -> Result<Option<f64>, EngineError> {
+    geometry
+        .constraints
+        .iter()
+        .find(|constraint| constraint.flow_thread_id == flow_thread_id)
+        .map(flexible_inline_limit)
+        .ok_or(EngineError::InvalidRequest)
+}
+
+fn flexible_inline_limit(constraint: &FlowConstraint) -> Option<f64> {
+    (constraint.width_mode == AXIS_AT_MOST).then(|| f64::from(constraint.width))
 }
 
 fn indent_for_flow_thread(
@@ -914,6 +1064,41 @@ mod tests {
         assert_eq!(layout.lines.len(), 2);
         assert_eq!(layout.fragments[0].line.cluster_end, 6);
         assert_eq!(layout.fragments[1].line.cluster_end, 10);
+    }
+
+    #[test]
+    fn safety_limits_do_not_preallocate_their_full_bound() {
+        let clusters = uniform_clusters(8, 1.0);
+        let styles = [uniform_style(8)];
+        let geometry = plain_geometry(constraint());
+        let mut layout = FlowLayoutArena::default();
+        layout
+            .build(
+                &geometry,
+                &clusters,
+                &styles,
+                &mut InlineSlotArena::default(),
+                65_536,
+                8,
+                |_| {
+                    Some(FontMetrics {
+                        units_per_em: 1_000,
+                        ascender: 800,
+                        descender: -200,
+                        line_gap: 0,
+                        underline_position: -100,
+                        underline_thickness: 50,
+                        strikeout_position: 300,
+                        strikeout_size: 50,
+                    })
+                },
+                |_| Some(1),
+            )
+            .unwrap();
+
+        assert!(layout.lines.capacity() < 64);
+        assert!(layout.fragments.capacity() < 64);
+        assert!(layout.ellipsis_threads.capacity() < 64);
     }
 
     fn uniform_clusters(count: usize, advance: f64) -> ClusterArena {
@@ -1446,6 +1631,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 10.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -1507,6 +1693,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 10.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()

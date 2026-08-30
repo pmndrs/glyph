@@ -1,6 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { LayoutBox, ParagraphLayoutInspection, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
-import type { TextEnginePublication } from './host.js';
+import type { LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
+import type { PlanPublication } from './backend.js';
 
 /**
  * Reads the ink box off one semantic record, or reports its absence.
@@ -20,9 +20,7 @@ function inkBoundsOf(view: SemanticViewReader, record: number, measured: boolean
 }
 
 /** Reads an explicitly requested semantic sidecar. Rendering never calls this reader. */
-export function readTextEngineMeasurements(
-  publication: TextEnginePublication,
-): ReadonlyMap<number, ParagraphLayoutSummary> {
+export function readPlannerMeasurements(publication: PlanPublication): ReadonlyMap<number, ParagraphLayoutSummary> {
   const view = new SemanticViewReader(publication);
   const table = view.table();
   const recordLayout = textShaperAbi.layouts.engineSemanticView;
@@ -55,7 +53,7 @@ export function readTextEngineMeasurements(
       // two are derived from one number instead of two that could disagree.
       const ascent = view.f32(line + recordLayout.ascent);
       // A measurement-only query leaves the line's glyph span zeroed; it is only meaningful
-      // alongside the per-glyph columns, which the layout reader validates before publishing.
+      // alongside the per-glyph columns, which the measure reader validates before publishing.
       const lineGlyphStart = view.u32(line + recordLayout.itemStart);
       lines.push(
         Object.freeze({
@@ -85,10 +83,9 @@ export function readTextEngineMeasurements(
         contentHeight,
         firstBaseline,
         lastBaseline,
-        // The paragraph's ascent is its box top to the first baseline; its descent is the last
-        // baseline to the bottom of the content it actually occupies.
+        // Whole-paragraph BaselineMetrics use the first baseline as their one reference.
         ascent,
-        descent: contentHeight - lastBaseline,
+        descent: contentHeight - ascent,
         lineHeight: contentHeight,
         inkBounds: inkBoundsOf(view, record, inkMeasured),
         overflowed: (flags & textShaperAbi.engine.measurementFlags.overflowed) !== 0,
@@ -105,15 +102,13 @@ export function readTextEngineMeasurements(
 }
 
 /** Copies one explicitly requested retained layout out of borrowed Wasm publication memory. */
-export function readTextEngineLayouts(
-  publication: TextEnginePublication,
-): ReadonlyMap<number, ParagraphLayoutInspection> {
+export function readPlannerLayouts(publication: PlanPublication): ReadonlyMap<number, GlyphLayoutInspection> {
   const view = new SemanticViewReader(publication);
   const table = view.table();
   const recordLayout = textShaperAbi.layouts.engineSemanticView;
   const kinds = textShaperAbi.engine.semanticKinds;
-  const measurements = readTextEngineMeasurements(publication);
-  const layouts = new Map<number, ParagraphLayoutInspection>();
+  const measurements = readPlannerMeasurements(publication);
+  const layouts = new Map<number, GlyphLayoutInspection>();
   for (let index = 0; index < table.count; index += 1) {
     const summary = view.record(table, index);
     if (view.u16(summary + recordLayout.kind) !== kinds.paragraphMeasurement) continue;
@@ -134,6 +129,7 @@ export function readTextEngineLayouts(
     const glyphFontSlots = new Uint16Array(glyphCount);
     const glyphIds = new Uint16Array(glyphCount);
     const clusters = new Uint32Array(glyphCount);
+    const glyphBidiLevels = new Uint8Array(glyphCount);
     const glyphFontSizes = new Float32Array(glyphCount);
     const x = new Float32Array(glyphCount);
     const y = new Float32Array(glyphCount);
@@ -163,6 +159,9 @@ export function readTextEngineLayouts(
       glyphFontSlots[glyphIndex] = fontSlot;
       glyphIds[glyphIndex] = view.u32(glyph + recordLayout.itemStart);
       clusters[glyphIndex] = view.u32(glyph + recordLayout.textStart);
+      const bidiLevel = view.u32(glyph + recordLayout.itemCount);
+      if (bidiLevel > 125) throw new RangeError('layout inspection glyph has an invalid bidi level');
+      glyphBidiLevels[glyphIndex] = bidiLevel;
       glyphFontSizes[glyphIndex] = view.f32(glyph + recordLayout.inlineExtent);
       x[glyphIndex] = view.f32(glyph + recordLayout.inlineStart);
       y[glyphIndex] = view.f32(glyph + recordLayout.blockStart);
@@ -202,7 +201,7 @@ export function readTextEngineLayouts(
     }
 
     // `glyphCount` and `lineCount` are the published authorities for indexing these columns
-    // (`ParagraphLayout`). This reader is their only producer, so the guarantee is checked here
+    // (`GlyphLayout`). This reader is their only producer, so the guarantee is checked here
     // once rather than re-asserted by every consumer — which is exactly what the one real consumer
     // of the previous shape had to hand-write over six of these arrays.
     assertColumnLengths(glyphCount, [
@@ -210,6 +209,7 @@ export function readTextEngineLayouts(
       glyphFontSlots,
       glyphIds,
       clusters,
+      glyphBidiLevels,
       glyphFontSizes,
       x,
       y,
@@ -240,6 +240,7 @@ export function readTextEngineLayouts(
         glyphFontSlots,
         glyphIds,
         clusters,
+        glyphBidiLevels,
         glyphFontSizes,
         x,
         y,
@@ -280,10 +281,10 @@ interface SemanticViewTable {
 }
 
 class SemanticViewReader {
-  readonly #publication: TextEnginePublication;
+  readonly #publication: PlanPublication;
   readonly #view: DataView;
 
-  constructor(publication: TextEnginePublication) {
+  constructor(publication: PlanPublication) {
     if (publication.bytes.buffer !== publication.memoryBuffer) {
       throw new TypeError('text-engine query bytes do not belong to the reported Wasm memory');
     }

@@ -1,18 +1,24 @@
 import { readFile } from 'node:fs/promises';
 
 import {
-  createTextRuntime,
-  FontRegistry,
-  type LoadedFont,
-  type ParagraphContentBox,
-  type ParagraphLayoutInspection,
-  type ParagraphLayoutPolicy,
-  type ParagraphStyle,
+  type Constraints,
+  type Font,
+  type GlyphLayoutInspection,
+  type ParagraphLayout,
+  type TextStyle,
 } from '@pmndrs/glyph';
+import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 
-export type ContractFont = LoadedFont<typeof bitmap>;
+export type ContractFont = Font<typeof bitmap>;
+
+/** Fixture-owned font plus authenticated shaping identity retained outside the public Font API. */
+export interface ContractFontFixture {
+  readonly font: ContractFont;
+  readonly shapingHash: string;
+  dispose(): void;
+}
 
 export interface LegacyAxis {
   readonly mode: 'unconstrained' | 'at-most' | 'exactly';
@@ -29,36 +35,37 @@ export interface LegacyConstraints {
 }
 
 export async function createParagraphContractRuntime() {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../../../packages/glyph/dist/text-shaper.wasm', import.meta.url)),
-  });
+  const loader = new FontLoader();
   return {
     async loadFont(url: URL, coverage?: string) {
-      return runtime.loadFont({
-        input: { baked: dataUrl(await readFile(url)) },
-        raster: {
-          technique: bitmap,
-          options: { strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) },
-        },
-      });
+      const bytes = await readFile(url);
+      const [font, artifact] = await Promise.all([
+        loader.loadAsync({
+          input: { baked: { bytes, ownership: 'copy' } },
+          raster: {
+            technique: bitmap,
+            options: { strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) },
+          },
+        }),
+        validateFontArtifact(bytes),
+      ]);
+      return { font, shapingHash: artifact.shapingHash, dispose: () => font.dispose() } satisfies ContractFontFixture;
     },
     dispose() {
-      runtime.dispose();
+      loader.dispose();
     },
   };
 }
 
-export function createContractText(font: ContractFont, text: string, style: ParagraphStyle) {
+export function createContractText(font: ContractFont, text: string, style: TextStyle) {
   const group = new TextGroup({ capacity: { size: Math.max(1_024, text.length * 4), policy: 'grow' } });
   const value = new Text({ font, text, style });
   group.add(value);
   return {
     group,
     text: value,
-    inspect(constraints: LegacyConstraints): ParagraphLayoutInspection {
-      value.contentBox = contentBox(constraints);
+    inspect(constraints: LegacyConstraints): GlyphLayoutInspection {
+      value.set({ layout: layoutOnly(constraints), constraints: constraintsOnly(constraints) });
       group.updateMatrixWorld(true);
       if (group.error !== undefined) throw group.error;
       const layout = value.glyphs();
@@ -72,18 +79,14 @@ export function createContractText(font: ContractFont, text: string, style: Para
   };
 }
 
-export function contentBox(value: LegacyConstraints): ParagraphContentBox {
+export function constraintsOnly(value: LegacyConstraints): Constraints {
   return {
     ...(value.width === undefined ? {} : { width: axis(value.width) }),
     ...(value.height === undefined ? {} : { height: axis(value.height) }),
-    ...(value.maxLines === undefined ? {} : { maxLines: value.maxLines }),
-    ...(value.wrap === undefined ? {} : { wrap: value.wrap }),
-    ...(value.align === undefined ? {} : { align: value.align }),
-    ...(value.overflow === undefined ? {} : { overflow: value.overflow }),
   };
 }
 
-export function policyOnly(value: LegacyConstraints): ParagraphLayoutPolicy {
+export function layoutOnly(value: LegacyConstraints): ParagraphLayout {
   return {
     ...(value.maxLines === undefined ? {} : { maxLines: value.maxLines }),
     ...(value.wrap === undefined ? {} : { wrap: value.wrap }),
@@ -112,10 +115,6 @@ function axis(value: LegacyAxis) {
   if (value.mode === 'unconstrained') return { mode: 'unconstrained' as const };
   if (value.size === undefined) throw new Error(`${value.mode} constraint omitted its size`);
   return { mode: value.mode === 'exactly' ? ('exact' as const) : ('at-most' as const), size: value.size };
-}
-
-function dataUrl(bytes: Uint8Array): string {
-  return `data:application/octet-stream;base64,${Buffer.from(bytes).toString('base64')}`;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

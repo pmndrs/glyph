@@ -1,3 +1,5 @@
+/// <reference path="./gltf-validator.d.ts" />
+
 import Ajv, { type ErrorObject, type ValidateFunction } from 'ajv';
 import draft04Schema from 'ajv/lib/refs/json-schema-draft-04.json' with { type: 'json' };
 import { validateBytes } from 'gltf-validator';

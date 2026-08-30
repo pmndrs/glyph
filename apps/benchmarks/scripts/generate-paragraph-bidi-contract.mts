@@ -1,14 +1,13 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
-import { Paragraph } from '@pmndrs/glyph/core';
-import type { ParagraphStyle } from '@pmndrs/glyph';
+import { createParagraph, type TextStyle } from '@pmndrs/glyph';
 
 import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts';
 import { createUikitLayoutFixture, YogaMeasureMode } from '../src/benchmark/uikit-layout-fixture.ts';
 import {
   createContractText,
   createParagraphContractRuntime,
-  policyOnly,
+  layoutOnly,
   preserveEquivalentLegacyNumbers,
   type LegacyConstraints,
 } from './support/paragraph-contract-runtime.mts';
@@ -38,7 +37,7 @@ try {
     lineHeight: 1.25,
     direction: 'auto',
     language: 'ar',
-  } as const satisfies ParagraphStyle;
+  } as const satisfies TextStyle;
   const bidiConstraints = {
     width: { mode: 'exactly', size: 300 },
     wrap: 'word',
@@ -49,7 +48,7 @@ try {
     ['ltr', 'ABC مرحبا 123 DEF'],
     ['rtl', 'مرحبا ABC 123 عالم'],
   ] as const) {
-    const paragraph = createContractText(amiri, value, bidiStyle);
+    const paragraph = createContractText(amiri.font, value, bidiStyle);
     try {
       bidi[id] = {
         text: value,
@@ -68,7 +67,7 @@ try {
     lineHeight: 1.25,
     direction: 'ltr',
     language: 'en',
-  } as const satisfies ParagraphStyle;
+  } as const satisfies TextStyle;
   const policyInputs = {
     start: { width: { mode: 'exactly', size: 180 }, align: 'start' },
     center: { width: { mode: 'exactly', size: 180 }, align: 'center' },
@@ -88,7 +87,7 @@ try {
       overflow: 'ellipsis',
     },
   } as const satisfies Record<string, LegacyConstraints>;
-  const policyParagraph = createContractText(inter, policyText, policyStyle);
+  const policyParagraph = createContractText(inter.font, policyText, policyStyle);
   const policyCases: Record<string, unknown> = {};
   try {
     for (const [id, constraints] of Object.entries(policyInputs)) {
@@ -101,17 +100,17 @@ try {
   const uikitInput = {
     text: 'office AVATAR café — ffi, kerning, marks, and wrapping.',
     style: { fontSize: 31, lineHeight: 1.23, direction: 'ltr', language: 'en' },
-  } as const satisfies { readonly text: string; readonly style: ParagraphStyle };
+  } as const satisfies { readonly text: string; readonly style: TextStyle };
   const uikitPolicy = { wrap: 'word', overflow: 'clip' } as const satisfies LegacyConstraints;
-  const uikitPolicyOnly = policyOnly(uikitPolicy);
-  const uikitParagraph = new Paragraph({
-    font: inter,
+  const uikitLayout = layoutOnly(uikitPolicy);
+  const uikitParagraph = await createParagraph({
+    font: inter.font,
     text: uikitInput.text,
     style: uikitInput.style,
-    policy: uikitPolicyOnly,
+    layout: uikitLayout,
   });
   try {
-    const uikitFixture = createUikitLayoutFixture(uikitParagraph, uikitPolicyOnly);
+    const uikitFixture = createUikitLayoutFixture(uikitParagraph, uikitLayout);
     const customLayouting = uikitFixture.customLayouting();
     const natural = customLayouting.measure(
       Number.NaN,
@@ -136,14 +135,14 @@ try {
         amiri: {
           fixture: 'amiri-regular-v0',
           sourceSha256: 'ab391c4147d054c48976e98322ad0eefe1427aa0e0502a12a4c75d80a70cfcd7',
-          shapingHash: amiri.font.shapingHash,
+          shapingHash: amiri.shapingHash,
           sourceOracle: '../shaping/amiri-regular/harfrust.json',
           independentOracle: '../shaping/amiri-regular/harfbuzz.json',
         },
         inter: {
           fixture: 'inter-regular-v0',
           sourceSha256: '40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82',
-          shapingHash: inter.font.shapingHash,
+          shapingHash: inter.shapingHash,
         },
       },
       bidi,

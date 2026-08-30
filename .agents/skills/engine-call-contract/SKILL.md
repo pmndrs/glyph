@@ -36,8 +36,10 @@ Prefer a shape that cannot express the mistake over a check that catches it.
 
 - Structural authoring beats offsets. `txt` and `span` derive ranges from what was written, so an inverted range, a
   past-end range, and a partial overlap are unrepresentable rather than validated.
-- A brand beats a convention. `session.retain()` returns a branded publication, so an API that stores plan data
-  across frames demands the retained brand in its parameter and a borrowed one is a compile error.
+- A brand beats a convention. `session.copyPublication()` returns an owned publication, so a same-realm API that stores
+  plan data across frames demands the owned type and a borrowed one is a compile error. Worker messages revalidate copied
+  bytes with `TextEngineRenderPlanView.bindBytes()` at that realm boundary; the package-private runtime provenance itself
+  is not transferable.
 - Where the language cannot express the domain -- there is no finite-nonnegative number type -- the throw is the
   honest floor. Record it as a known limit rather than defending it as ideal.
 

@@ -1,6 +1,197 @@
 # pmndrs/glyph documentation update log
 
+## 2026-08-28
+
+- **Enabled workspace source-condition development** — Every TypeScript package subpath now exposes a custom `source`
+  condition, and both Vite applications opt into it for build, typecheck, and hot reload. Default consumers still resolve
+  built ESM and declarations; Wasm remains a distribution artifact.
+
+- **Aligned React font loading with R3F's cache and nested Text API** — Generic `useFont` now accepts a technique directly,
+  while `useBitmapFont`, `useMSDF`, and `useSlug` are typed wrappers with matching preload and clear methods. R3F remains
+  the sole promise/result cache; Glyph owns only abort and font-lease disposal. Nested `Text` authors inline runs, and its
+  call-time boundary rejects box properties that JSX cannot reliably exclude statically.
+
+- **Balanced retained style-mutation accounting across shrinking commits** — The pending-style ledger now subtracts a
+  dirty text's old published span count before publishing its replacement count. A regression repeatedly expands one
+  text to four styles and shrinks it to one, then proves a valid second two-style text still fits the unchanged
+  `maxClusters` budget instead of being rejected by leaked historical deltas.
+
+- **Kept renderer oracles on the authenticated portable technique path** — Benchmark font assets now compile and read
+  the exact registered Bitmap, MSDF, or Slug technique instead of cloning a same-ID wrapper to capture private decoded
+  data. The validated read-only compiled-font view resolves named fields, strikes, resource selections, and portable
+  payloads directly from existing binding bytes without a second raster decode or field-table copy. External Slug parity
+  now fetches the core, companion, and each page artifact exactly once while feeding both Text and the independent CPU
+  reference; WebGPU and WebGL2 retain equal embedded/external framebuffer hashes.
+
+- **Closed retained renderer lifecycle and scaling gaps** — Async acceptance now validates returned transfer buffers
+  against a scalar captured before any sibling Wasm growth can detach the publication view. The example target releases
+  payload leases and physical geometry after the final accepted plan reference retires, preserves a checkpoint control,
+  and rebuilds a caller-owned replacement WebGPU device from a complete publication without an authored mutation. Host
+  opaque bindings use bounded handle maps, while retained session aggregate limits remain call-time checked through
+  transactional counters instead of rescanning every text. A matched 64–512 text benchmark cuts the 512-text median from
+  34.38 ms to 15.46 ms; the hardware recovery lab redraws 6,588 visible pixels after device replacement.
+
+- **Implemented explicit font/runtime/host/session ownership** — Root font assets now outlive renderer runtimes; each
+  runtime creates and owns its hosts, each host installs policies and binds immutable fonts, and each session owns one
+  target, retained text batch, and acceptance frontier. The default target consumes borrowed A/B memory synchronously;
+  the async target performs one bounded exact-size copy and requires the same transfer buffer back.
+
+- **Removed raw ABI authoring and decoding from `/core`** — Policies use semantic capability and scalar names, branded
+  hash-derived numeric identities, and collision-checked registries. Renderers consume resources, buffers, patches,
+  primitives, draws, and retirements through semantic readers instead of generated offsets and enum numbers.
+
+- **Rebuilt the renderer and technique implementation guides** — The durable guides now show every callable lifecycle
+  step, current text mutation and measurement, resource leasing and realization, transactional acceptance, canvas/device
+  topology, worker transfer, shader subpaths, portable geometry, policy assembly, raster decoding, and baking. Public
+  `layout()` and `glyphs()` TSDoc concisely names possible cache-miss lookup costs, and their canonical constraint caches
+  are bounded to three LRU answers so arbitrary resize probes cannot retain glyph arrays forever.
+
+## 2026-08-27
+
+- **Closed the ownership plan's input, measurement, and entry-point gaps** — Opus High verified the font/runtime ownership
+  thesis but found the draft had hidden the renderer-neutral text mutation path, omitted target-less Paragraph measurement,
+  `defineFont` bake discovery, app migrations, and target-construction cleanup, and left borrowed expiry and worker payload
+  ownership unenforced. The corrected plan gives render sessions retained text handles, adds async root
+  `createParagraph()` over a private measurement service, preserves existing `FontInput`/`FontToken`/`defineFont`, reuses
+  the bounded transfer pool, and prevents canonical Font backing from entering a transfer list. The root remains the
+  canonical barrel for portable application/provider names; runtime-driving names live only in `/core`, and integrations
+  re-export only signature-required root types. Follow-up review aligned the pool with full-span ownership by requiring
+  exact-length reuse, changed policy installation to consume a complete descriptor with session-owned capability/limit
+  selection, restored explicit baked-byte loading, and made package-size scenarios stable across entry-point moves. The
+  final bounded pass preserved renderer transform ownership through opaque bindings, restored the combined semantic-view
+  request, tied async transfer capacity to session output limits, and added bounded LRU/counter benchmarks for exact-size
+  pooling. Opus High's final diff-only verification at `c94f3093` found no actionable blocker and judged the contract
+  implementable.
+
+- **Moved runtime construction to the integrator surface** — Runtime-independent root `loadFont()` means applications no
+  longer encounter `TextRuntime`. The accepted plan moves runtime and host construction to `/core` and uses
+  `runtime.createTextEngineHost()` so the owner constructs and disposes its children directly. Core keeps `bindFont()` for
+  engine registration and rejects a vague `realizeFont()` API; renderer helpers use `initFont()` only when they actually
+  initialize a pooled physical resource set.
+
+- **Kept zero-copy publication as the default target path** — `PlanTarget` consumes the borrowed A/B publication and
+  accepts synchronously after renderer submission and state commit. Only `AsyncPlanTarget` receives a package-created copy
+  and returns a Promise, for worker round trips or another genuinely deferred acceptance boundary. A worker transfers that
+  buffer back with its correlated commit result before the Promise resolves and the session advances its retirement fence.
+  No owned synchronous mode duplicates the plan merely because GPU execution completes later.
+
+- **Accepted the font/runtime ownership correction** — The implementation plan separates immutable, refcounted font
+  assets from runtime-private Wasm registrations; attaches every renderer host to one runtime owner; binds each session to
+  one policy and one abstract acceptance target; and retains Canvas, device, render-pass, and GPU realization ownership in
+  renderer packages. It records single-canvas, independent-canvas, lockstep, worker, and multi-integration topologies and
+  requires one canonical GLB backing with internal views. Deterministic owners reclaim every engine object, no strong
+  global cache owns Font lifetime, and an unreachable unused Font is collected normally, so finalizers are rejected.
+
+- **Validated the ownership plan with Opus High** — The adversarial review found runtime and React caches that could
+  become accidental lifetime owners, a host-local borrow gate over runtime-wide Wasm memory, missing device-loss fan-out,
+  an unauthenticated cross-host resource-pool key, and a raw acknowledgment path that preserved a second ownership model.
+  D-286 and the plan now require lease-zero Wasm release, an explicit provider-owned FontLibrary, a runtime-wide borrow
+  gate, package-authenticated payload identities, target-factory checkpoint controls, target-bound worker delivery, and
+  atomic lockstep preparation. The finalizer proposal remains rejected: it cannot order bound teardown and adds nothing
+  for an unbound Font whose wrapper and ordinary JS backing are already unreachable together.
+
+- **Closed the target-control follow-up** — Opus verified all original ownership findings, then exposed three omissions in
+  the new target contract. Targets are now explicitly disposable so session teardown detaches device-pool controls;
+  replacement-device checkpoint barriers are per session so an idle canvas cannot deadlock an active sibling; and the
+  worker target resolves referenced resources into an authenticated digest/descriptor manifest because a realm-local
+  resolver closure cannot cross `postMessage`. A final Opus verification reported no remaining blocker. The host's generic
+  session factory maps target delivery to the correct session return type and rejects a reused target object before Wasm
+  allocation. These are contract corrections, not a second integration mode.
+
+- **Clarified host versus renderer resource ownership** — The host owns portable policy/font registrations and sessions,
+  not Canvas, device, context, bind-group, material, or pipeline objects. WebGPU canvases configured with one device may
+  share one renderer realization pool; different WebGPU devices and WebGL contexts require separate pools while still
+  consuming one host's portable bindings. The reviewed HTML implementation report now lives durably under `docs/reports`.
+
+## 2026-08-26
+
+- **Core host and session ownership are now enforceable** — Registrations are claimed per Wasm instance and host,
+  cross-host frame references fail before invalidating the last publication, and scoped ID provenance follows a
+  successful registration. Live sessions retain their policy and font stacks; failed disposal remains retryable.
+  Owned publication copies now use package-private runtime provenance instead of an exported forgeable symbol. Copying
+  does not advance renderer acceptance. Three consumes the A/B borrow directly, preserves realization errors without
+  retrying unchanged frames, and requests a fresh checkpoint only after explicit renderer-relevant invalidation. Malformed
+  emitted plans remain engine defects rather than recovery input. Semantic measurement no longer advances the device
+  acceptance fence after a failed realization, and same-session owned copies now answer `isExpired()` as permanently live.
+  Owned-publication runtime provenance is documented as realm-local; worker receivers call
+  `TextEngineRenderPlanView.bindBytes()` on transferred self-owned bytes instead of pretending a WeakSet witness survives
+  structured cloning. That call now rejects ABI, status, and every render or semantic table framing mismatch before
+  transactionally rebinding its reader. Rejected Three realization makes positioned inspection return `undefined` without
+  an engine retry, and fixed-capacity candidate rejection releases its provisional stack and material leases. The core
+  reference also fixes the lifecycle map: compiled payloads are portable data, while each renderer owns per-device GPU
+  realization and cross-session leases.
+
+- **Reviewed the final portability size delta** — Relative to the previous accepted snapshot, renderer-neutral `/core`
+  grows by 10,875 raw / 1,745 gzip / 1,337 Brotli bytes and the complete Three graph by 10,201 / 1,588 / 1,175. The
+  ordinary tree-shaken browser core changes by only 27 raw / 9 gzip / 47 Brotli bytes. Shaper Wasm grows by 1,668 raw /
+  774 gzip / 372 Brotli bytes. The reviewed evidence is regenerated at the final source head and passes the size gate.
+
+- **Final layout and renderer performance gates found no material regression** — Eight matched Rust/Wasm matrices cover
+  Bitmap, MTSDF, and Slug under ordered and stable allocation plus CJK Bitmap at roughly 22,000 glyphs. Across 35
+  low-variance cases the median head-to-base change is +0.29%; 101- and 301-sample confirmations put the largest apparent
+  changes between -0.52% and +1.39%. The Three lab retains one 12-instance draw at a 0.090 ms generic warm median, while
+  TypeGPU/WebGPU produces changed visible pixels with zero idle submissions at a 0.320 ms submission median.
+
+- **Attached text can measure desired layout before its first frame** — `Text.layout()` now creates or reconciles its
+  batch after attachment and uses a non-publishing paragraph query without matrix traversal, material or GPU realization,
+  or draw publication. Sequential group queries share one speculative lifecycle candidate that the first traversal can
+  adopt. Detached measurement remains `Paragraph`; fixed capacity reports desired metrics while retaining the last
+  accepted draw and reevaluates recovery every traversal rather than latching a rejection.
+
+- **External-agent work now has one resumable operating guide** — The OKF guide records the pinned MCP and client setup,
+  live-catalog model routing, High-only Claude/Codex default, explicit Fable and 0x Alpha mappings, background review and
+  implementation recipes, the labeled pinned-CLI fallback, and bounded append-log handling. It separates process PIDs
+  from provider session ids and requires authoritative result retrieval rather than treating a trace sample as findings.
+
+- **Three font bindings now retire at their real ownership boundary** — A disposed loaded font keeps its cached Wasm
+  binding and decoded renderer resources only while a registered stack still names it. The final shared stack lease
+  disposes the binding and then releases those resources; direct Wasm-count coverage proves the cache does not grow
+  across disposed-font churn, and host coverage rejects premature binding disposal while a stack is live.
+
+- **Portable renderer review closed lifecycle and ownership gaps** — Capability selections now belong to one policy,
+  resource groups validate exact declared member formats on every public path, and failed renderer resource commits
+  dispose the provisional Wasm font binding before discarding device candidates. Host teardown preserves the dependency
+  order from sessions through stacks and bindings to policies; no stale resource or binding is restored after failure.
+
+- **Runtime ID provenance now has an owner and a teardown** — Module-authored policy and buffer constants keep the
+  top-level `id()` path, while `TextEngineHost.id()` owns dynamic binding, stack, session, material, paragraph, style,
+  flow, and region registrations. Host disposal releases those collision records after attempting every Wasm teardown,
+  and the renderer-neutral Paragraph context now follows `TextRuntime` disposal just as the Three coordinator already
+  did. The example engine no longer asks callers to invent stack or session IDs it can allocate itself; stack
+  registration returns the one handle text options genuinely reference.
+
 ## 2026-08-25
+
+- **Pipelined GPU submission is measured and size-priced** — Removing the accidental per-frame queue-completion fence
+  reduced changed-frame `render()` from 0.760/1.585 ms median/p95 to 0.300/0.645 ms in a paired 101-sample WebGPU run
+  on an Apple M2 Pro with a 16-core GPU on macOS arm64.
+  Portable resource realization adds 17,657 raw / 2,732 gzip bytes to Three while `/core` shrinks by 51,779 / 8,426;
+  the reviewed Three and first-party runtime ceilings now price those measured graphs without bundling TypeGPU.
+
+- **GPU publication is serialized through its acceptance fence** — The example renderer rejects resource or buffer
+  mutation while an asynchronous submission is in flight, derives idle-frame classification once in the recording
+  oracle, scopes readback validation errors, and always closes an abandoned render pass. Its named workflow now requests
+  WebGPU explicitly and proves two visible submissions, zero idle submissions, one clear-only disposal submission, and
+  zero pixels after that clear. Validation acceptance commits without a per-frame queue-completion stall; readback supplies
+  the completion fence only where evidence needs it. Package-local shader transforms replace a private cross-package import.
+
+- **The external renderer now proves hardware pixels and retained text updates** — `glyph-example-raster` supplies one
+  indexed GLB-like quad through the portable resource contract. `glyph-example-renderer` realizes that geometry and the
+  named policy-record buffers with TypeGPU, creates a WebGPU pipeline, submits indexed instanced draws, and reads its
+  offscreen RGBA target. Its small `ExampleText` façade owns branded paragraph/style/flow/region identities and exposes
+  create, update, render, and dispose lifecycle calls over the raw retained session. The browser lab runtime-bakes Inter
+  and rejects empty initial or updated draws, empty pixels, or an update that leaves every pixel unchanged. The recording
+  device remains the deterministic CPU oracle for malformed plans and failed-publication behavior.
+
+- **First-party plans now use the portable resource contract** — Resource declarations gained checked `one`/`many`
+  cardinality and fixed-member portable groups. Bitmap retains repeated strike atlases, MSDF retains its atlas and
+  pixel-range companion as one group, and Slug retains repeated curve/header/reference page groups; nested groups and
+  repeated geometry are rejected at schema/compile boundaries. The duplicate built-in font-binding compilers and Three
+  resource-data unions are removed, so first- and third-party techniques share one cold compilation path. Capability-set
+  IDs are now compiler-assigned ABI details; single-profile frame updates omit them. The renderer guide and implementation
+  report now expand every host, font, session, retention, resource, and submission call in the external-renderer flow.
+  Renderer-owned policy, binding, stack, session, material, and buffer IDs now come from the domain-branded `id()` hash
+  helper instead of caller-selected numeric literals; type fixtures reject crossing domains or supplying raw numbers.
 
 - **The external renderer now separates owned bytes from device acceptance** — A retained publication may advance the
   session's convenience counter before a device accepts its candidate, so the example host now carries its own accepted
@@ -28,9 +219,8 @@
   retirements transactionally, and submits non-empty draws. Three selects one
   renderer variant per technique at registration, validates named buffer/resource/geometry capabilities before its first
   runtime snapshot, preserves generic user materials and glyph-origin augmentation, and retains draw/geometry identity
-  across updates. Bitmap, MSDF, and Slug remain on their renderer-owned fallback because repeated strike atlases and
-  grouped Slug pages are not expressible as one declared name and one retained key; the docs now state that limit instead
-  of claiming a migration that did not happen. The browser proof enforces matching WebGPU and forced-WebGL2 frames and
+  across updates. The first implementation left Bitmap repeated strikes and Slug grouped pages outside the portable
+  resource vocabulary; the 2026-08-25 follow-up above closes that gap. The browser proof enforces matching WebGPU and forced-WebGL2 frames and
   currently observes RGBA SHA-256 `0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`;
   the 101-sample Three lab retains one draw and geometry for equal 12-instance inputs at a 0.075 ms CPU-side median for
   the generic path, and reviewed gzip sizes are 63,468 bytes for `/core`, 91,400 bytes for the complete Three

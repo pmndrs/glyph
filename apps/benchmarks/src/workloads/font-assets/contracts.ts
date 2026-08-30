@@ -1,9 +1,10 @@
-import type { BakeProgressListener, FontRegistry, LoadedFont } from '@pmndrs/glyph';
-import type { bitmap as bitmapTechnique } from '@pmndrs/glyph/raster/bitmap';
-import type { msdf as mtsdfTechnique } from '@pmndrs/glyph/raster/msdf';
+import type { BakeProgressListener, FontLibrary, Font } from '@pmndrs/glyph';
+import type { bitmap as bitmapTechnique, BitmapData } from '@pmndrs/glyph/raster/bitmap';
+import type { msdf as mtsdfTechnique, MsdfData } from '@pmndrs/glyph/raster/msdf';
 import type { slug as slugTechnique } from '@pmndrs/glyph/raster/slug';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
+import type { SlugCpuReferenceData } from '../../benchmark/low-level/raster/slug-cpu-reference';
 import type { FontDelivery, RasterTechnique } from '../../benchmark/url-state';
 
 export type BitmapFixtureDensity = 'conformance' | 'live';
@@ -33,7 +34,7 @@ export interface FontDeliveryMetrics {
 
 interface CommonBenchmarkFontAssetRequest {
   readonly fixture: BenchmarkFontFixture;
-  readonly registry?: FontRegistry | undefined;
+  readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
   readonly onProgress?: BakeProgressListener | undefined;
 }
@@ -66,22 +67,24 @@ interface CommonBenchmarkFontAsset {
 }
 
 /**
- * One fixture loaded exactly once through the target-v1 `FontLoader`. `loaded` owns the technique, its decoded raster
- * data, the registered font, and the text runtime, so every scene reads its font from `loaded.font` rather than from a
- * separately projected handle.
+ * One fixture loaded once through `FontLoader`. `loaded` is the canonical Font lease; `data` is a CPU-oracle view
+ * reconstructed from the same compiled binding and portable payloads consumed by renderer integrations.
  */
 export type BenchmarkFontAsset =
   | (CommonBenchmarkFontAsset & {
       readonly technique: 'bitmap';
-      readonly loaded: LoadedFont<typeof bitmapTechnique>;
+      readonly loaded: Font<typeof bitmapTechnique>;
+      readonly data: BitmapData;
     })
   | (CommonBenchmarkFontAsset & {
       readonly technique: 'mtsdf';
-      readonly loaded: LoadedFont<typeof mtsdfTechnique>;
+      readonly loaded: Font<typeof mtsdfTechnique>;
+      readonly data: MsdfData;
     })
   | (CommonBenchmarkFontAsset & {
       readonly technique: 'slug';
-      readonly loaded: LoadedFont<typeof slugTechnique>;
+      readonly loaded: Font<typeof slugTechnique>;
+      readonly data: SlugCpuReferenceData;
     });
 
 export interface BenchmarkFontAssetPreloadRequest {

@@ -2,39 +2,45 @@ import {
   defineTechniqueSchema,
   f32,
   techniqueProgram,
+  type PolicyBufferId,
   type RasterPlanProgram,
   type TechniqueSchema,
+  id,
 } from '@pmndrs/glyph/core';
 
+import { glyphExampleIndexedQuadGeometry, glyphExampleSuppliedGeometryDeclaration } from './geometry-fixture.js';
 import { glyphExample } from './raster.js';
 
-const GLYPH_EXAMPLE_ORIGIN_BUFFER_ID = 1;
-const GLYPH_EXAMPLE_SIZE_BUFFER_ID = 2;
-const GLYPH_EXAMPLE_COLOR_BUFFER_ID = 3;
+const GLYPH_EXAMPLE_ORIGIN_BUFFER_ID: PolicyBufferId = id.buffer('glyph-example-raster/origin');
+const GLYPH_EXAMPLE_SIZE_BUFFER_ID: PolicyBufferId = id.buffer('glyph-example-raster/size');
+const GLYPH_EXAMPLE_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('glyph-example-raster/color');
 
 export const glyphExampleSchema: TechniqueSchema<
   {
-    readonly origin: {
-      readonly id: typeof GLYPH_EXAMPLE_ORIGIN_BUFFER_ID;
-      readonly scalar: 'f32';
-      readonly lanes: readonly ['left', 'top'];
-    };
+    readonly origin: { readonly id: PolicyBufferId; readonly scalar: 'f32'; readonly lanes: readonly ['left', 'top'] };
     readonly size: {
-      readonly id: typeof GLYPH_EXAMPLE_SIZE_BUFFER_ID;
+      readonly id: PolicyBufferId;
       readonly scalar: 'f32';
       readonly lanes: readonly ['widthX', 'heightY'];
     };
     readonly color: {
-      readonly id: typeof GLYPH_EXAMPLE_COLOR_BUFFER_ID;
+      readonly id: PolicyBufferId;
       readonly scalar: 'f32';
       readonly lanes: readonly ['red', 'green', 'blue', 'alpha'];
     };
   },
+  { readonly f32: readonly ['inset', 'red', 'green', 'blue', 'alpha'] },
   {
-    readonly f32: readonly ['inset', 'red', 'green', 'blue', 'alpha'];
+    readonly glyphGeometry: {
+      readonly kind: 'geometry';
+      readonly attributes: readonly [
+        { readonly semantic: 'position'; readonly componentType: 'f32'; readonly components: 3 },
+        { readonly semantic: 'uv'; readonly componentType: 'f32'; readonly components: 2 },
+      ];
+    };
   },
-  { readonly glyphColors: { readonly kind: 'buffer' } },
-  typeof glyphExample.id
+  typeof glyphExample.id,
+  typeof glyphExampleSuppliedGeometryDeclaration
 > = defineTechniqueSchema({
   technique: glyphExample.id,
   scope: 'glyph',
@@ -44,8 +50,16 @@ export const glyphExampleSchema: TechniqueSchema<
     size: { id: GLYPH_EXAMPLE_SIZE_BUFFER_ID, scalar: 'f32', lanes: ['widthX', 'heightY'] },
     color: { id: GLYPH_EXAMPLE_COLOR_BUFFER_ID, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
   },
-  resources: { glyphColors: { kind: 'buffer' } },
-  render: { geometry: { kind: 'synthetic-quad' } },
+  resources: {
+    glyphGeometry: {
+      kind: 'geometry',
+      attributes: [
+        { semantic: 'position', componentType: 'f32', components: 3 },
+        { semantic: 'uv', componentType: 'f32', components: 2 },
+      ],
+    },
+  },
+  render: { resource: 'glyphGeometry', geometry: glyphExampleSuppliedGeometryDeclaration },
   glyphOrigin: { buffer: 'origin' },
 });
 
@@ -78,11 +92,7 @@ export const glyphExamplePlanProgramDefinition: RasterPlanProgram<typeof glyphEx
   },
   compileFont(compiler) {
     const data = compiler.font.data;
-    compiler.retain('glyphColors', data.resource, {
-      kind: 'buffer',
-      bytes: data.colors,
-      stride: 4,
-    });
+    compiler.retain('glyphGeometry', data.resource, glyphExampleIndexedQuadGeometry);
     return compiler.compile({
       strikes: [0],
       resource: () => data.resource,

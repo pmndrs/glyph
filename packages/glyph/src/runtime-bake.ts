@@ -22,7 +22,7 @@ const host = new SerialWorkerHost<
   BakeProgressMessage
 >({
   name: 'pmndrs-glyph-font-baker',
-  workerUrl: new URL('./runtime-bake-worker.js', import.meta.url),
+  workerUrl: new URL('../dist/runtime-bake-worker.js', import.meta.url),
   prepare(request, id) {
     const source = copyToOwnedArrayBuffer(request.source);
     return {

@@ -5,7 +5,7 @@ description: Route resumable external-model work through the pinned ai-cli-mcp s
 
 # Agent router
 
-Use the repository's pinned `ai-cli-mcp@2.21.0` server for external-model work. Do not launch provider CLIs directly when the MCP server can do the job: the server owns background process tracking, session IDs, result retrieval, and provider-specific argument validation.
+Use the repository's pinned `ai-cli-mcp@2.22.0` server for external-model work. Do not launch provider CLIs directly when the MCP server can do the job: the server owns background process tracking, session IDs, result retrieval, and provider-specific argument validation.
 
 Every run is resumable. Start it with `run`, retain the returned PID, use `peek` only for a bounded progress sample, use `wait` or `get_result` for the authoritative outcome, and resume with the returned `session_id` when a provider fails or the user asks for another pass. A one-off task is still started in the background; `wait` immediately afterward is the blocking recipe.
 
@@ -39,12 +39,12 @@ This fallback is resumable and uses the same server-side process state. Capture 
 
 An explicit user model choice always wins over a task-based preference. The router may recommend a model when the user leaves it open, but it must not substitute a preferred model after the user names one. It still validates the requested name against the live catalog and reports an unavailable or malformed route instead of silently changing providers.
 
-Before selecting a model, call the server's `models` tool (or run `pnpm exec ai-cli models` while diagnosing the server). Treat its structured response as the catalog. The current `2.21.0` shape is:
+Before selecting a model, call the server's `models` tool (or run `pnpm exec ai-cli models` while diagnosing the server). Treat its structured response as the catalog. The current `2.22.0` shape is:
 
 ```json
 {
-  "claude": ["sonnet", "sonnet[1m]", "opus", "opusplan", "haiku"],
-  "codex": ["gpt-5.4", "gpt-5.5", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.3-codex-spark", "gpt-5.2"],
+  "claude": ["sonnet", "sonnet[1m]", "opus", "opusplan", "fable", "haiku"],
+  "codex": ["gpt-5.4", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.3-codex-spark", "gpt-5.2"],
   "opencode": ["opencode"],
   "dynamicModelBackends": {
     "opencode": {
@@ -62,15 +62,17 @@ Apply these mappings only after checking the live catalog:
 | --- | --- | --- |
 | `0x`, `0x alpha`, `0xAlpha` | `oc-opencode/x-preview-f-free` | OpenCode explicit model; omit `reasoning_effort`. |
 | `opus` | `opus` | Claude; use `reasoning_effort: high` by default. |
-| `fable` | `fable` | Explicit Claude pass-through accepted by the installed Claude CLI; use `reasoning_effort: high` and do not auto-select it. |
-| `luna`, `tera`, `sol` | the explicit provider model name | Codex model pass-through after host validation; use `reasoning_effort: high` for each. |
+| `fable` | `fable` | Catalogued Claude model; use `reasoning_effort: high` and do not auto-select it. |
+| `luna` | `gpt-5.6-luna` | Catalogued Codex model; use `reasoning_effort: high`. |
+| `tera`, `terra` | `gpt-5.6-terra` | Catalogued Codex model; accept the user's established `tera` shorthand and use `reasoning_effort: high`. |
+| `sol` | `gpt-5.6-sol` | Catalogued Codex model; use `reasoning_effort: high`. |
 | `claude:<catalog-model>` | the suffix | Claude; validate the suffix against `models`. |
 | `codex:<catalog-model>` | the suffix | Codex; validate the suffix against `models` and use `reasoning_effort: high`. |
 | `opencode:<provider>/<model>` | `oc-<provider>/<model>` | Validate the backend with `opencode models`; omit `reasoning_effort`. |
 
-`fable` is not advertised by `ai-cli models` in version `2.21.0`, but the installed Claude CLI explicitly documents `fable` and `claude-fable-5` model values, and `ai-cli` passes explicit non-OpenCode/non-Codex/non-Gemini names through to Claude. Treat `fable` as an explicit high-rigor model choice: use the `fable` model with `reasoning_effort: high`, keep the request direct, never alias it to Opus, and verify it with the host Claude help/auth surface before launching.
+Treat Fable as an explicit high-rigor choice: use the catalogued `fable` model with `reasoning_effort: high`, keep the request direct, and never alias it to Opus.
 
-Effort invariant: every Claude and Codex model route defaults to `reasoning_effort: high`, including Opus, Fable, Luna, Tera, Sol, and any future explicitly validated model from either provider. Use a higher tier only when the user explicitly requests that effort; choosing an expensive model or asking for a difficult review does not imply it. Validate an explicit higher tier against the selected provider and never substitute or silently retry with one. OpenCode routes omit `reasoning_effort` because that provider does not accept it through this integration.
+Effort invariant: every Claude and Codex model route defaults to `reasoning_effort: high`, including Opus, Fable, Luna, Tera/Terra, Sol, and any future explicitly validated model from either provider. Use a higher tier only when the user explicitly requests that effort; choosing an expensive model or asking for a difficult review does not imply it. The catalogued `claude-ultra` and `codex-ultra` aliases raise effort automatically, so never use them unless the user explicitly requests that higher effort. Validate an explicit higher tier against the selected provider and never substitute or silently retry with one. OpenCode routes omit `reasoning_effort` because that provider does not accept it through this integration.
 
 The `oc-` prefix is required by `ai-cli-mcp`; `opencode/x-preview-f-free` is the provider-native identifier, not the value passed to `ai-cli`. The router must translate it to `oc-opencode/x-preview-f-free`.
 

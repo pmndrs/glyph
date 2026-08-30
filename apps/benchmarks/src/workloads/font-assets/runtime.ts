@@ -1,13 +1,11 @@
 import {
   type AnyRasterTechnique,
   type BakeProgressListener,
-  type FontRegistry,
-  type LoadedFont,
-  type LoadedFontRequest,
-  type RasterBakeArtifact,
+  type FontLibrary,
+  type Font,
   type RuntimeFontBake,
   type RuntimeFontBakeRequest,
-  type RuntimeRasterBakerModule,
+  type RasterTechniqueInput,
 } from '@pmndrs/glyph';
 import { FontLoader } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -75,12 +73,11 @@ export function measuredRuntimeFontBake(
 }
 
 /**
- * The Three font loader keys one text runtime per loading manager, and every `Text` in a paragraph batch must share a
- * runtime, so loads that do not name a registry share one manager. A caller-supplied registry is how a benchmark
- * surface isolates font ownership today; each such registry therefore keeps its own manager, runtime, and loader.
+ * The Three font loader keys one text engine per loading manager, and every `Text` in a paragraph batch must share one
+ * engine. A caller-supplied immutable library gives an isolated benchmark surface one manager and loader domain.
  */
 const sharedLoadingManager = new THREE.LoadingManager();
-const isolatedLoadingManagers = new WeakMap<FontRegistry, THREE.LoadingManager>();
+const isolatedLoadingManagers = new WeakMap<FontLibrary, THREE.LoadingManager>();
 const fontLoaders = new WeakMap<THREE.LoadingManager, FontLoader>();
 
 /**
@@ -90,17 +87,17 @@ const fontLoaders = new WeakMap<THREE.LoadingManager, FontLoader>();
 export async function loadBakedFont<Technique extends AnyRasterTechnique>({
   artifact,
   raster,
-  registry,
+  library,
   signal,
 }: {
   readonly artifact: Uint8Array<ArrayBuffer>;
-  readonly raster: LoadedFontRequest<Technique>['raster'];
-  readonly registry?: FontRegistry | undefined;
+  readonly raster: RasterTechniqueInput<Technique>;
+  readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
-}): Promise<LoadedFont<Technique>> {
+}): Promise<Font<Technique>> {
   const url = URL.createObjectURL(new Blob([artifact], { type: 'model/gltf-binary' }));
   try {
-    return await fontLoader(registry).loadAsync({
+    return await fontLoader(library).loadAsync({
       input: { baked: url },
       raster,
       ...(signal === undefined ? {} : { signal }),
@@ -115,83 +112,38 @@ export function loadSourceFont<Technique extends AnyRasterTechnique>({
   source,
   raster,
   runtimeBake,
-  registry,
+  library,
   signal,
 }: {
   readonly source: string;
-  readonly raster: LoadedFontRequest<Technique>['raster'];
+  readonly raster: RasterTechniqueInput<Technique>;
   readonly runtimeBake: RuntimeFontBake;
-  readonly registry?: FontRegistry | undefined;
+  readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
-}): Promise<LoadedFont<Technique>> {
-  return fontLoader(registry).loadAsync({
+}): Promise<Font<Technique>> {
+  return fontLoader(library).loadAsync({
     input: { source, runtimeBake },
     raster,
     ...(signal === undefined ? {} : { signal }),
   });
 }
 
-function fontLoader(registry: FontRegistry | undefined): FontLoader {
-  const manager = loadingManager(registry);
+function fontLoader(library: FontLibrary | undefined): FontLoader {
+  const manager = loadingManager(library);
   let loader = fontLoaders.get(manager);
   if (loader === undefined) {
-    // Naming the caller's registry keeps `LoadedFont.font` reachable through the registry the surface already owns.
-    loader = new FontLoader(manager, registry === undefined ? {} : { registry });
+    loader = new FontLoader(manager, library === undefined ? {} : { library });
     fontLoaders.set(manager, loader);
   }
   return loader;
 }
 
-function loadingManager(registry: FontRegistry | undefined): THREE.LoadingManager {
-  if (registry === undefined) return sharedLoadingManager;
-  let manager = isolatedLoadingManagers.get(registry);
+function loadingManager(library: FontLibrary | undefined): THREE.LoadingManager {
+  if (library === undefined) return sharedLoadingManager;
+  let manager = isolatedLoadingManagers.get(library);
   if (manager === undefined) {
     manager = new THREE.LoadingManager();
-    isolatedLoadingManagers.set(registry, manager);
+    isolatedLoadingManagers.set(library, manager);
   }
   return manager;
-}
-
-export function measuredRuntimeRaster<Kind extends string, Options>(
-  load:
-    | (() => Promise<
-        RuntimeRasterBakerModule<Kind, Options> | { readonly default: RuntimeRasterBakerModule<Kind, Options> }
-      >)
-    | undefined,
-  metrics: FontDeliveryMetrics,
-  onProgress?: BakeProgressListener,
-) {
-  if (load === undefined) return undefined;
-  return async (): Promise<RuntimeRasterBakerModule<Kind, Options>> => {
-    const started = performance.now();
-    const imported = await load();
-    const baker = isDefaultRasterBaker<Kind, Options>(imported) ? imported.default : imported;
-    if (!isRuntimeRasterBaker<Kind, Options>(baker)) throw new TypeError('runtime raster baker module is invalid');
-    return {
-      kind: baker.kind,
-      async bake(request) {
-        const artifact = await baker.bake({ ...request, ...(onProgress === undefined ? {} : { onProgress }) });
-        metrics.rasterBakeMs = performance.now() - started;
-        metrics.rasterArtifactBytes = rasterArtifactBytes(artifact);
-        metrics.rasterGpuBytes = artifact.report.gpuBytes;
-        return artifact;
-      },
-    };
-  };
-}
-
-function isDefaultRasterBaker<Kind extends string, Options>(
-  value: unknown,
-): value is { readonly default: RuntimeRasterBakerModule<Kind, Options> } {
-  return typeof value === 'object' && value !== null && 'default' in value;
-}
-
-function isRuntimeRasterBaker<Kind extends string, Options>(
-  value: unknown,
-): value is RuntimeRasterBakerModule<Kind, Options> {
-  return typeof value === 'object' && value !== null && 'kind' in value && 'bake' in value;
-}
-
-function rasterArtifactBytes(artifact: RasterBakeArtifact<string>): number {
-  return artifact.artifacts.reduce((total, entry) => total + entry.bytes.byteLength, 0);
 }

@@ -1,12 +1,7 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { PolicyInput, PolicyInputScope, PolicyOperation } from './render-policy.js';
-import type {
-  PolicyBufferDeclaration,
-  TechniqueBindingDeclaration,
-  TechniqueResourceDeclarations,
-  TechniqueSchema,
-  AnyTechniqueSchema,
-} from './technique-schema.js';
+import type { RasterTextEffect } from '../raster-technique.js';
+import type { PolicyBufferId, PolicyInput, PolicyInputScope, PolicyOperation } from './render-policy.js';
+import type { PolicyBufferDeclaration, AnyTechniqueSchema } from './technique-schema.js';
 import { isTechniqueSchema } from './technique-schema.js';
 
 /**
@@ -20,18 +15,18 @@ import { isTechniqueSchema } from './technique-schema.js';
 const MAX_REGISTERS = 32;
 
 type Node =
-  | { readonly kind: 'loadF32'; readonly input: number; readonly label: string; readonly session: object }
-  | { readonly kind: 'loadU32'; readonly input: number; readonly label: string; readonly session: object }
+  | { readonly kind: 'loadF32'; readonly input: number; readonly label: string; readonly authoringScope: object }
+  | { readonly kind: 'loadU32'; readonly input: number; readonly label: string; readonly authoringScope: object }
   | {
       readonly kind: 'binary';
       readonly op: 'addF32' | 'subtractF32' | 'multiplyF32';
       readonly left: Node;
       readonly right: Node;
-      readonly session: object | undefined;
+      readonly authoringScope: object | undefined;
     }
-  | { readonly kind: 'constantF32'; readonly value: number; readonly session: undefined }
-  | { readonly kind: 'constantU32'; readonly value: number; readonly session: undefined }
-  | { readonly kind: 'convertU32ToF32'; readonly source: Node; readonly session: object | undefined };
+  | { readonly kind: 'constantF32'; readonly value: number; readonly authoringScope: undefined }
+  | { readonly kind: 'constantU32'; readonly value: number; readonly authoringScope: undefined }
+  | { readonly kind: 'convertU32ToF32'; readonly source: Node; readonly authoringScope: object | undefined };
 
 declare const f32Brand: unique symbol;
 declare const u32Brand: unique symbol;
@@ -62,7 +57,7 @@ function u32Value(node: Node): PolicyU32Value {
 
 function nodeOf(value: PolicyF32Value | PolicyU32Value): Node {
   const node = nodes.get(value);
-  if (node === undefined) throw new TypeError('policy value does not belong to this authoring session');
+  if (node === undefined) throw new TypeError('policy value does not belong to this authoring scope');
   return node;
 }
 
@@ -71,18 +66,22 @@ function nodeOf(value: PolicyF32Value | PolicyU32Value): Node {
  * created it; storing it elsewhere would silently read a different field.
  * Provenance is stamped at construction and combined in O(1) per node, so
  * shared expression DAGs never require a graph walk: constants stay
- * session-free, and mixing two sessions fails at the combinator itself.
+ * scope-free, and mixing two authoring scopes fails at the combinator itself.
  */
-function combinedSession(left: Node, right: Node): object | undefined {
-  if (left.session !== undefined && right.session !== undefined && left.session !== right.session) {
-    throw new TypeError('policy values from different authoring sessions cannot combine');
+function combinedAuthoringScope(left: Node, right: Node): object | undefined {
+  if (
+    left.authoringScope !== undefined &&
+    right.authoringScope !== undefined &&
+    left.authoringScope !== right.authoringScope
+  ) {
+    throw new TypeError('policy values from different authoring scopes cannot combine');
   }
-  return left.session ?? right.session;
+  return left.authoringScope ?? right.authoringScope;
 }
 
-function assertSession(node: Node, session: object): void {
-  if (node.session !== undefined && node.session !== session) {
-    throw new TypeError('policy value belongs to a different authoring session');
+function assertAuthoringScope(node: Node, authoringScope: object): void {
+  if (node.authoringScope !== undefined && node.authoringScope !== authoringScope) {
+    throw new TypeError('policy value belongs to a different authoring scope');
   }
 }
 
@@ -99,7 +98,7 @@ function addF32(left: PolicyF32Value, right: PolicyF32Value): PolicyF32Value {
     op: 'addF32',
     left: leftNode,
     right: rightNode,
-    session: combinedSession(leftNode, rightNode),
+    authoringScope: combinedAuthoringScope(leftNode, rightNode),
   });
 }
 
@@ -111,7 +110,7 @@ function subtractF32(left: PolicyF32Value, right: PolicyF32Value): PolicyF32Valu
     op: 'subtractF32',
     left: leftNode,
     right: rightNode,
-    session: combinedSession(leftNode, rightNode),
+    authoringScope: combinedAuthoringScope(leftNode, rightNode),
   });
 }
 
@@ -123,25 +122,25 @@ function multiplyF32(left: PolicyF32Value, right: PolicyF32Value): PolicyF32Valu
     op: 'multiplyF32',
     left: leftNode,
     right: rightNode,
-    session: combinedSession(leftNode, rightNode),
+    authoringScope: combinedAuthoringScope(leftNode, rightNode),
   });
 }
 
 function u32ToF32(source: PolicyU32Value): PolicyF32Value {
   const sourceNode = nodeOf(source);
-  return f32Value({ kind: 'convertU32ToF32', source: sourceNode, session: sourceNode.session });
+  return f32Value({ kind: 'convertU32ToF32', source: sourceNode, authoringScope: sourceNode.authoringScope });
 }
 
 function constantF32(value: number): PolicyF32Value {
   if (!Number.isFinite(value)) throw new RangeError('policy f32 constants must be finite');
-  return f32Value({ kind: 'constantF32', value, session: undefined });
+  return f32Value({ kind: 'constantF32', value, authoringScope: undefined });
 }
 
 function constantU32(value: number): PolicyU32Value {
   if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) {
     throw new RangeError('policy u32 constants must be u32');
   }
-  return u32Value({ kind: 'constantU32', value, session: undefined });
+  return u32Value({ kind: 'constantU32', value, authoringScope: undefined });
 }
 
 /** Typed f32 expression constructors for portable policy programs. */
@@ -183,6 +182,14 @@ export interface PolicyProgramSemantics {
   readonly blockOrigin: PolicyF32Value;
   readonly fontSize: PolicyF32Value;
   readonly color: PolicyColorChannels;
+  readonly outline: Readonly<{ readonly color: PolicyU32Value; readonly widthEm: PolicyF32Value }> | undefined;
+  readonly shadow:
+    | Readonly<{
+        readonly color: PolicyU32Value;
+        readonly offsetXEm: PolicyF32Value;
+        readonly offsetYEm: PolicyF32Value;
+      }>
+    | undefined;
   readonly inverseFontSize: PolicyF32Value | undefined;
   readonly transformIndex: PolicyU32Value;
   readonly stableGlyphId: PolicyU32Value;
@@ -196,13 +203,14 @@ export interface PolicyProgramOptions<
   readonly bindingF32?: F32;
   readonly bindingU32?: U32;
   readonly inverseFontSize?: boolean;
+  readonly textEffects?: readonly RasterTextEffect[];
 }
 
 declare const compiledPolicySchemaBrand: unique symbol;
 interface CompiledPolicyMetadata {
   readonly schema: AnyTechniqueSchema;
-  readonly stableGlyphId: number | undefined;
-  readonly transformIndex: number | undefined;
+  readonly stableGlyphId: PolicyBufferId | undefined;
+  readonly transformIndex: PolicyBufferId | undefined;
 }
 
 const compiledPolicyMetadata = new WeakMap<object, CompiledPolicyMetadata>();
@@ -223,8 +231,8 @@ export interface PolicyProgramBuilder<F32 extends readonly string[], U32 extends
     buffer: Buffer,
     lanes: Buffer['scalar'] extends 'f32' ? readonly PolicyF32Value[] : readonly PolicyU32Value[],
   ): void;
-  storeF32(buffer: number, lanes: readonly PolicyF32Value[]): void;
-  storeU32(buffer: number, lanes: readonly PolicyU32Value[]): void;
+  storeF32(buffer: PolicyBufferId, lanes: readonly PolicyF32Value[]): void;
+  storeU32(buffer: PolicyBufferId, lanes: readonly PolicyU32Value[]): void;
   compile(): CompiledPolicyProgramBody;
 }
 
@@ -265,25 +273,24 @@ type BindingNames<Names> = Names extends readonly string[] ? Names : readonly []
 
 interface StoreRecord {
   readonly opcode: number;
-  readonly buffer: number;
+  readonly buffer: PolicyBufferId;
   readonly lane: number;
   readonly node: Node;
 }
 
 /** Build a program against one technique's authoritative schema. */
-export function techniqueProgram<
-  const Buffers extends import('./technique-schema.js').PolicyBufferDeclarations,
-  const Binding extends TechniqueBindingDeclaration,
-  const Resources extends TechniqueResourceDeclarations,
-  const TechniqueId extends string,
->(
-  schema: TechniqueSchema<Buffers, Binding, Resources, TechniqueId>,
-  options: { readonly inverseFontSize?: boolean; readonly system?: PolicyProgramSystemBuffers } = {},
+export function techniqueProgram<const Schema extends AnyTechniqueSchema>(
+  schema: Schema,
+  options: {
+    readonly inverseFontSize?: boolean;
+    readonly textEffects?: readonly RasterTextEffect[];
+    readonly system?: PolicyProgramSystemBuffers;
+  } = {},
 ): TechniquePolicyProgramBuilder<
-  TechniqueSchema<Buffers, Binding, Resources, TechniqueId>,
-  Buffers,
-  BindingNames<Binding['f32']>,
-  BindingNames<Binding['u32']>
+  Schema,
+  Schema['buffers'],
+  BindingNames<Schema['binding']['f32']>,
+  BindingNames<Schema['binding']['u32']>
 > {
   if (!isTechniqueSchema(schema)) throw new TypeError('technique policy programs need a defined technique schema');
   if (!isNonArrayObject(options)) throw new TypeError('technique policy options need an object');
@@ -294,15 +301,16 @@ export function techniqueProgram<
     options.system === undefined ? undefined : normalizePolicyProgramSystemBuffers(schema.buffers, options.system);
   const program = policyProgram({
     scope: schema.scope,
-    bindingF32: (schema.binding.f32 ?? []) as BindingNames<Binding['f32']>,
-    bindingU32: (schema.binding.u32 ?? []) as BindingNames<Binding['u32']>,
+    bindingF32: (schema.binding.f32 ?? []) as BindingNames<Schema['binding']['f32']>,
+    bindingU32: (schema.binding.u32 ?? []) as BindingNames<Schema['binding']['u32']>,
     ...(options.inverseFontSize === undefined ? {} : { inverseFontSize: options.inverseFontSize }),
+    ...(options.textEffects === undefined ? {} : { textEffects: options.textEffects }),
   });
   let compiled = false;
   return Object.freeze({
     semantics: program.semantics,
     binding: program.binding,
-    compile(stores: TechniquePolicyStores<Buffers>) {
+    compile(stores: TechniquePolicyStores<Schema['buffers']>) {
       if (compiled) throw new Error('technique policy program already compiled');
       compiled = true;
       if (typeof stores !== 'object' || stores === null || Array.isArray(stores)) {
@@ -317,7 +325,7 @@ export function techniqueProgram<
       for (const name of expected) {
         if (!Object.hasOwn(stores, name)) throw new TypeError(`technique policy omits declared buffer "${name}"`);
         const buffer = schema.buffers[name]!;
-        const lanes = stores[name as keyof Buffers];
+        const lanes = stores[name as keyof Schema['buffers']];
         if (!Array.isArray(lanes)) throw new TypeError(`technique policy buffer "${name}" needs a value tuple`);
         if (lanes.length !== buffer.lanes.length) {
           throw new RangeError(
@@ -339,7 +347,7 @@ export function techniqueProgram<
         stableGlyphId: system?.stableGlyphId.id,
         transformIndex: system?.transformIndex?.id,
       });
-      return body as unknown as CompiledPolicyProgramBody<TechniqueSchema<Buffers, Binding, Resources, TechniqueId>>;
+      return body as unknown as CompiledPolicyProgramBody<Schema>;
     },
   });
 }
@@ -405,6 +413,7 @@ export function policyProgram<
   if (options.inverseFontSize !== undefined && typeof options.inverseFontSize !== 'boolean') {
     throw new TypeError('policy inverseFontSize needs a boolean');
   }
+  const textEffects = normalizeTextEffects(options.textEffects);
   const semanticF32 = textShaperAbi.engine.semanticF32Fields;
   const semanticU32 = textShaperAbi.engine.semanticU32Fields;
   const bindingF32Names = [...(options.bindingF32 ?? [])];
@@ -418,15 +427,22 @@ export function policyProgram<
   if (uniqueNames.size !== bindingF32Names.length + bindingU32Names.length) {
     throw new TypeError('policy binding field names must be unique');
   }
-  const f32InputCount = 7 + (options.inverseFontSize === true ? 1 : 0) + bindingF32Names.length;
-  const u32InputCount = 2 + bindingU32Names.length;
+  const hasOutline = textEffects.includes('outline');
+  const hasShadow = textEffects.includes('shadow');
+  const f32InputCount =
+    7 +
+    (hasOutline ? 1 : 0) +
+    (hasShadow ? 2 : 0) +
+    (options.inverseFontSize === true ? 1 : 0) +
+    bindingF32Names.length;
+  const u32InputCount = 2 + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0) + bindingU32Names.length;
   if (f32InputCount > MAX_REGISTERS || u32InputCount > MAX_REGISTERS) {
     throw new RangeError(`policy input fields exceed the ${MAX_REGISTERS}-slot register file`);
   }
 
   // The input table mirrors the canonical order the engine validated all along:
-  // seven semantic f32 fields, optional inverseFontSize, then the binding's f32
-  // fields; transformIndex and stableGlyphId, then the binding's u32 fields.
+  // Semantic geometry and paint precede binding fields; system identities precede
+  // packed effect colors and binding u32 fields.
   const inputs: PolicyInput[] = [
     { scope: 'semantic', field: semanticF32.inlineOrigin },
     { scope: 'semantic', field: semanticF32.blockOrigin },
@@ -435,15 +451,25 @@ export function policyProgram<
     { scope: 'semantic', field: semanticF32.foregroundGreen },
     { scope: 'semantic', field: semanticF32.foregroundBlue },
     { scope: 'semantic', field: semanticF32.foregroundAlpha },
+    ...(hasOutline ? [{ scope: 'semantic' as const, field: semanticF32.outlineWidthEm }] : []),
+    ...(hasShadow
+      ? [
+          { scope: 'semantic' as const, field: semanticF32.shadowOffsetXEm },
+          { scope: 'semantic' as const, field: semanticF32.shadowOffsetYEm },
+        ]
+      : []),
     ...(options.inverseFontSize === true ? [{ scope: 'semantic' as const, field: semanticF32.inverseFontSize }] : []),
     ...bindingF32Names.map((_, field) => ({ scope: options.scope, field })),
     { scope: 'semantic', field: semanticU32.transformIndex },
     { scope: 'semantic', field: semanticU32.stableGlyphId },
+    ...(hasOutline ? [{ scope: 'semantic' as const, field: semanticU32.outlineRgba }] : []),
+    ...(hasShadow ? [{ scope: 'semantic' as const, field: semanticU32.shadowRgba }] : []),
     ...bindingU32Names.map((_, field) => ({ scope: options.scope, field })),
   ];
-  const session = {};
+  const authoringScope = {};
   let nextF32 = 0;
-  const loadF32 = (label: string): PolicyF32Value => f32Value({ kind: 'loadF32', input: nextF32++, label, session });
+  const loadF32 = (label: string): PolicyF32Value =>
+    f32Value({ kind: 'loadF32', input: nextF32++, label, authoringScope });
   const semantics: PolicyProgramSemantics = {
     inlineOrigin: loadF32('inlineOrigin'),
     blockOrigin: loadF32('blockOrigin'),
@@ -454,14 +480,28 @@ export function policyProgram<
       blue: loadF32('color.blue'),
       alpha: loadF32('color.alpha'),
     },
+    outline: hasOutline
+      ? {
+          color: u32Value({ kind: 'loadU32', input: 2, label: 'outline.color', authoringScope }),
+          widthEm: loadF32('outline.widthEm'),
+        }
+      : undefined,
+    shadow: hasShadow
+      ? {
+          color: u32Value({ kind: 'loadU32', input: hasOutline ? 3 : 2, label: 'shadow.color', authoringScope }),
+          offsetXEm: loadF32('shadow.offsetXEm'),
+          offsetYEm: loadF32('shadow.offsetYEm'),
+        }
+      : undefined,
     inverseFontSize: options.inverseFontSize === true ? loadF32('inverseFontSize') : undefined,
-    transformIndex: u32Value({ kind: 'loadU32', input: 0, label: 'transformIndex', session }),
-    stableGlyphId: u32Value({ kind: 'loadU32', input: 1, label: 'stableGlyphId', session }),
+    transformIndex: u32Value({ kind: 'loadU32', input: 0, label: 'transformIndex', authoringScope }),
+    stableGlyphId: u32Value({ kind: 'loadU32', input: 1, label: 'stableGlyphId', authoringScope }),
   };
   const binding: Record<string, PolicyF32Value | PolicyU32Value> = {};
   for (const name of bindingF32Names) binding[name] = loadF32(name);
+  const bindingU32Offset = 2 + (hasOutline ? 1 : 0) + (hasShadow ? 1 : 0);
   for (const [index, name] of bindingU32Names.entries()) {
-    binding[name] = u32Value({ kind: 'loadU32', input: 2 + index, label: name, session });
+    binding[name] = u32Value({ kind: 'loadU32', input: bindingU32Offset + index, label: name, authoringScope });
   }
 
   const stores: StoreRecord[] = [];
@@ -479,7 +519,7 @@ export function policyProgram<
       const opcode = buffer.scalar === 'f32' ? opcodes.storeF32 : opcodes.storeU32;
       for (const [lane, value] of lanes.entries()) {
         const node = nodeOf(value);
-        assertSession(node, session);
+        assertAuthoringScope(node, authoringScope);
         assertNodeScalar(node, buffer.scalar, buffer.id, lane);
         stores.push({ opcode, buffer: buffer.id, lane, node });
       }
@@ -487,7 +527,7 @@ export function policyProgram<
     storeF32(buffer, lanes) {
       for (const [lane, value] of lanes.entries()) {
         const node = nodeOf(value);
-        assertSession(node, session);
+        assertAuthoringScope(node, authoringScope);
         assertNodeScalar(node, 'f32', buffer, lane);
         stores.push({ opcode: opcodes.storeF32, buffer, lane, node });
       }
@@ -495,7 +535,7 @@ export function policyProgram<
     storeU32(buffer, lanes) {
       for (const [lane, value] of lanes.entries()) {
         const node = nodeOf(value);
-        assertSession(node, session);
+        assertAuthoringScope(node, authoringScope);
         assertNodeScalar(node, 'u32', buffer, lane);
         stores.push({ opcode: opcodes.storeU32, buffer, lane, node });
       }
@@ -503,6 +543,47 @@ export function policyProgram<
     compile() {
       const operations: PolicyOperation[] = [];
       const registers = new Map<Node, number>();
+      const remainingUses = new Map<Node, number>();
+      const visited = new Set<Node>();
+      const addUse = (node: Node): void => {
+        remainingUses.set(node, (remainingUses.get(node) ?? 0) + 1);
+      };
+      const visit = (node: Node): void => {
+        if (visited.has(node)) return;
+        visited.add(node);
+        if (node.kind === 'binary') {
+          addUse(node.left);
+          addUse(node.right);
+          visit(node.left);
+          visit(node.right);
+        } else if (node.kind === 'convertU32ToF32') {
+          addUse(node.source);
+          visit(node.source);
+        }
+      };
+      for (const store of stores) {
+        addUse(store.node);
+        visit(store.node);
+      }
+      const freeRegisters: number[] = [];
+      let registerCount = 0;
+      const allocateRegister = (): number => {
+        const reused = freeRegisters.pop();
+        if (reused !== undefined) return reused;
+        if (registerCount >= MAX_REGISTERS) {
+          throw new RangeError(`policy program needs more than ${MAX_REGISTERS} simultaneously live registers`);
+        }
+        return registerCount++;
+      };
+      const release = (node: Node): void => {
+        const remaining = (remainingUses.get(node) ?? 0) - 1;
+        remainingUses.set(node, remaining);
+        if (remaining !== 0) return;
+        const register = registers.get(node);
+        if (register === undefined) throw new Error('policy register liveness is inconsistent');
+        registers.delete(node);
+        freeRegisters.push(register);
+      };
       const emit = (node: Node): number => {
         const assigned = registers.get(node);
         if (assigned !== undefined) return assigned;
@@ -532,23 +613,37 @@ export function policyProgram<
             break;
           }
         }
-        const register = registers.size;
-        if (register >= MAX_REGISTERS) {
-          throw new RangeError(
-            `policy program needs more than ${MAX_REGISTERS} registers; name intermediate values and reuse them`,
-          );
-        }
+        const register = allocateRegister();
         registers.set(node, register);
         operations.push({ ...operation, target: register });
+        if (node.kind === 'binary') {
+          release(node.left);
+          release(node.right);
+        } else if (node.kind === 'convertU32ToF32') {
+          release(node.source);
+        }
         return register;
       };
       for (const store of stores) {
         const register = emit(store.node);
         operations.push({ opcode: store.opcode, operand0: register, operand1: store.lane, immediate0: store.buffer });
+        release(store.node);
       }
       return { inputs, operations, f32InputCount, u32InputCount } as unknown as CompiledPolicyProgramBody;
     },
   };
+}
+
+function normalizeTextEffects(value: readonly RasterTextEffect[] | undefined): readonly RasterTextEffect[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new TypeError('policy textEffects must be an array');
+  for (const effect of value) {
+    if (effect !== 'outline' && effect !== 'shadow') {
+      throw new TypeError(`policy text effect "${String(effect)}" is not supported`);
+    }
+  }
+  if (new Set(value).size !== value.length) throw new TypeError('policy textEffects must not contain duplicates');
+  return value;
 }
 
 /** @internal Reject a compiled body that was not produced from this exact schema witness. */

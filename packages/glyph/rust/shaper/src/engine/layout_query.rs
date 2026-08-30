@@ -351,6 +351,7 @@ pub(crate) fn append_measurement(
                 text_start: glyph.cluster,
                 text_end: glyph.font_handle,
                 item_start: u32::from(glyph.glyph_id),
+                item_count: u32::from(glyph.bidi_level),
                 inline_start: glyph.inline_origin,
                 block_start: glyph.block_origin,
                 inline_extent: glyph.font_size,
@@ -580,6 +581,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -641,6 +643,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -744,6 +747,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 6.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -810,6 +814,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 140.64,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -927,6 +932,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()
@@ -1013,6 +1019,7 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                flexible_end: false,
                 boundary_index: NO_BOUNDARY,
             }],
             ..FlowLayoutArena::default()

@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "glyph:kernel-lab",
   "summary": "Compares scalar, auto-vectorized, and explicit SIMD retained-engine kernels over real paragraph arrays.",
-  "requirements": "Built package and kernel-lab artifacts: node ./scripts/build-engine-kernel-lab.mjs. Accepts --json.",
+  "requirements": "Built package and glyph:kernel-lab-build artifacts. Accepts --json.",
   "writes": "stdout only, or the JSON report path passed to --json"
 } */
 import { readFile, writeFile } from 'node:fs/promises';

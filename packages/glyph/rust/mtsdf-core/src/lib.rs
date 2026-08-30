@@ -494,6 +494,10 @@ mod tests {
         let outside = 3;
         assert!(first[center] > 128);
         assert!(first[outside] < 128);
+        let hash = first.iter().fold(0x811c_9dc5_u32, |hash, byte| {
+            (hash ^ u32::from(*byte)).wrapping_mul(0x0100_0193)
+        });
+        assert_eq!(hash, 0x4f1d_e5a5);
     }
 
     #[test]

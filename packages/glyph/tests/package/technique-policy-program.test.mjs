@@ -1,20 +1,25 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { definePolicyBuffers, defineTechniqueSchema, techniqueProgram } from '../../dist/core.js';
+import { definePolicyBuffers, defineTechniqueSchema, techniqueProgram, id } from '../../dist/core.js';
+
+const ORIGIN_BUFFER_ID = id.buffer('test.policy-contract/origin');
+const PAGE_BUFFER_ID = id.buffer('test.policy-contract/page');
+const SYSTEM_BUFFER_ID = id.buffer('test.policy-contract/system/stable-glyph-id');
+const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.policy-contract/system/other-stable-glyph-id');
 
 const schema = defineTechniqueSchema({
   technique: 'test.policy-contract',
   scope: 'glyph',
   binding: {},
   buffers: {
-    origin: { id: 1, scalar: 'f32', lanes: ['x', 'y'] },
-    page: { id: 2, scalar: 'u32', lanes: ['page'] },
+    origin: { id: ORIGIN_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] },
+    page: { id: PAGE_BUFFER_ID, scalar: 'u32', lanes: ['page'] },
   },
 });
 
 const system = definePolicyBuffers({
-  stableGlyphId: { id: 20, scalar: 'u32', lanes: ['stableGlyphId'] },
+  stableGlyphId: { id: SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 
 function program() {
@@ -62,14 +67,14 @@ test('host system lanes are exact and disjoint from technique buffers', () => {
   assert.throws(
     () =>
       techniqueProgram(schema, {
-        system: { stableGlyphId: { id: 1, scalar: 'u32', lanes: ['stableGlyphId'] } },
+        system: { stableGlyphId: { id: ORIGIN_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] } },
       }),
     /collides with a technique buffer/,
   );
   assert.throws(
     () =>
       techniqueProgram(schema, {
-        system: { stableGlyphId: { id: 20, scalar: 'f32', lanes: ['stableGlyphId'] } },
+        system: { stableGlyphId: { id: OTHER_SYSTEM_BUFFER_ID, scalar: 'f32', lanes: ['stableGlyphId'] } },
       }),
     /needs one u32/,
   );
