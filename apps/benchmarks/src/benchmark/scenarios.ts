@@ -382,7 +382,10 @@ const RICH_TEXT_SPAN_EVIDENCE = {
   // break positions — held while the composed origins quantized. Re-pinned again
   // for the hanging terminating space (D-257), where only `lineThroughCount`
   // moved among the structural pins, for the reason recorded beside it.
-  hash: 'afe3792b',
+  // Re-pinned for the F16.16 layout-unit migration. All structural evidence below
+  // remains exact; the digest changed because its per-case x origins intentionally
+  // retain sub-unit precision that F26.6 previously quantized away.
+  hash: 'd666d3ac',
   glyphCount: 175,
   renderedGlyphCount: 149,
   drawCount: 7,
