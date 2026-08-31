@@ -43,7 +43,7 @@ export function decorationDraws(
 }
 
 /** An independently rendered copy of one committed paragraph's decorations. */
-export class Decorations extends THREE.Group {
+export class Decorations extends THREE.Object3D {
   readonly #target: ThreeTextRenderPlanExecutor;
   readonly #domain: ThreeEngineDomainLease;
   #disposed = false;
@@ -55,8 +55,10 @@ export class Decorations extends THREE.Group {
       const under: THREE.Mesh[] = [];
       const over: THREE.Mesh[] = [];
       for (const draw of decorations.#target.draws) {
-        if (draw.userData.pmndrsGlyphDepthKey === 2) over.push(draw);
-        else under.push(draw);
+        const depthKey = draw.userData.pmndrsGlyphDepthKey;
+        if (depthKey === 0) under.push(draw);
+        else if (depthKey === 2) over.push(draw);
+        else throw new Error(`detached decoration draw has unsupported depth key ${String(depthKey)}`);
       }
       return Object.freeze({ under: Object.freeze(under), over: Object.freeze(over) });
     };

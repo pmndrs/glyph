@@ -11,11 +11,15 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
   registerPolicy(exports, input.policy);
   const aligned = createMemoryFixture(exports, input, 0);
   const unaligned = createMemoryFixture(exports, input, 4);
+  const uniform = createMemoryFixture(exports, { ...input, levels: new Uint8Array(input.glyphs) }, 0);
+  const mixed = createMemoryFixture(exports, { ...input, levels: input.mixedLevels }, 0);
   const memoryBefore = exports.memory.buffer;
   const alignedHash = await executeAndHash(exports, aligned, false);
   const verticalHash = await executeAndHash(exports, aligned, true);
   const unalignedHash = await executeAndHash(exports, unaligned, false);
   if (alignedHash !== unalignedHash) throw new Error(`${name} aligned and unaligned outputs differ`);
+  validateTransitionScan(exports, uniform);
+  validateTransitionScan(exports, mixed);
 
   const iterations = input.glyphs < 50_000 ? 16 : 8;
   const timings = {
@@ -52,6 +56,30 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
       iterations * 4,
       options,
     ),
+    transitionUniformX1: measure(
+      () => checkedCall(() => callTransitionScan(exports, uniform, 1)),
+      iterations * 4,
+      options,
+    ),
+    transitionUniformX2: measure(
+      () => checkedCall(() => callTransitionScan(exports, uniform, 2)),
+      iterations * 4,
+      options,
+    ),
+    transitionUniformX4: measure(
+      () => checkedCall(() => callTransitionScan(exports, uniform, 4)),
+      iterations * 4,
+      options,
+    ),
+    transitionUniformX8: measure(
+      () => checkedCall(() => callTransitionScan(exports, uniform, 8)),
+      iterations * 4,
+      options,
+    ),
+    transitionMixedX1: measure(() => checkedCall(() => callTransitionScan(exports, mixed, 1)), iterations * 4, options),
+    transitionMixedX2: measure(() => checkedCall(() => callTransitionScan(exports, mixed, 2)), iterations * 4, options),
+    transitionMixedX4: measure(() => checkedCall(() => callTransitionScan(exports, mixed, 4)), iterations * 4, options),
+    transitionMixedX8: measure(() => checkedCall(() => callTransitionScan(exports, mixed, 8)), iterations * 4, options),
     policy: measure(() => checkedCall(() => callPolicy(exports, aligned, false)), iterations, options),
     chunk32: measure(() => checkedCall(() => callSummaries(exports, aligned, 32)), iterations * 2, options),
     chunk64: measure(() => checkedCall(() => callSummaries(exports, aligned, 64)), iterations * 2, options),
@@ -64,6 +92,8 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
   if (exports.memory.buffer !== memoryBefore) throw new Error(`${name} grew memory during a warm kernel`);
   exports.pmndrs_glyph_shaper_dealloc(aligned.allocationPointer, aligned.allocationLength);
   exports.pmndrs_glyph_shaper_dealloc(unaligned.allocationPointer, unaligned.allocationLength);
+  exports.pmndrs_glyph_shaper_dealloc(uniform.allocationPointer, uniform.allocationLength);
+  exports.pmndrs_glyph_shaper_dealloc(mixed.allocationPointer, mixed.allocationLength);
   return {
     label: input.label,
     glyphs: input.glyphs,
@@ -74,6 +104,18 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
     warmMemoryGrowth: false,
     timings,
   };
+}
+
+function validateTransitionScan(exports, fixture) {
+  let oracle;
+  for (const groupCount of [1, 2, 4, 8]) {
+    checkedCall(() => callTransitionScan(exports, fixture, groupCount));
+    const current = bytes(fixture, fixture.scanChecksum, 8);
+    if (oracle === undefined) oracle = current;
+    else if (!bytesEqual(current, oracle)) {
+      throw new Error(`uniform transition scan x${groupCount} differs from the x1 oracle`);
+    }
+  }
 }
 
 function createMemoryFixture(exports, input, skew) {

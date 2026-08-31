@@ -99,6 +99,7 @@ interface OriginSegment {
   readonly geometry: ThreeGlyphGeometrySource | undefined;
   readonly start: number;
   readonly count: number;
+  readonly drawIndex: number;
 }
 
 interface OriginRecord {
@@ -106,6 +107,7 @@ interface OriginRecord {
   readonly storageKey: string;
   readonly index: number;
   readonly geometry: ThreeGlyphGeometrySource | undefined;
+  readonly drawIndex: number;
   /** The lane's value with the glyph at rest. Displacement from it is the technique-free bridge. */
   targetX: number;
   targetY: number;
@@ -364,6 +366,19 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   /** Material instances owned exclusively by this executor's current draw branch. */
   get materials(): readonly THREE.NodeMaterial[] {
     return Object.freeze([...new Set(this.#draws.map((draw) => draw.material as THREE.NodeMaterial))]);
+  }
+
+  /** Returns the first realized draw order containing any selected stable glyph. */
+  renderOrderBaseForGlyphs(stableIds: Uint32Array): number | undefined {
+    this.#ensureOriginRecords();
+    let base: number | undefined;
+    for (const stableId of stableIds) {
+      const drawIndex = this.#originRecords.get(stableId)?.drawIndex;
+      const renderOrder = drawIndex === undefined ? undefined : this.#draws[drawIndex]?.renderOrder;
+      if (renderOrder === undefined) continue;
+      base = base === undefined ? renderOrder : Math.min(base, renderOrder);
+    }
+    return base;
   }
 
   /** Upload changed scene transforms without crossing into Wasm or invalidating text measure. */
@@ -922,6 +937,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
             geometry: createGeometrySource(drawGeometry),
             start: recordIndex,
             count: recordCount,
+            drawIndex: index,
           });
         }
         const key = drawRealizationKey(
@@ -1026,6 +1042,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
           storageKey: segment.storageKey,
           index: recordIndex,
           geometry: segment.geometry,
+          drawIndex: segment.drawIndex,
           targetX: segment.origins.array[offset]!,
           targetY: segment.origins.array[offset + 1]!,
         });

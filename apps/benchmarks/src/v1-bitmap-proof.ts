@@ -52,7 +52,15 @@ async function render(): Promise<TargetV1BitmapResult> {
     parent.rotation.z = 0.07;
     parent.scale.set(1.08, 0.92, 1);
     scene.add(parent);
-    text = new Text({ font, text: 'Target v1 Bitmap', style: { fontSize: 28, color: '#ffffff' } });
+    text = new Text({
+      font,
+      text: 'Target v1 Bitmap',
+      style: {
+        fontSize: 28,
+        color: '#ffffff',
+        decoration: { underline: true, lineThrough: true, color: '#7dd3fc' },
+      },
+    });
     text.position.set(-112, 24, 0);
     parent.add(text);
     renderer.setRenderTarget(target);

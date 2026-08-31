@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:7f99c26988ac8e27c7a4846c8c2ad64a888daa0216d0188281d21384a9cda851'
+source_digest: 'sha256:bc373d3620571bc1b40776b3590668d5c9a8e2eac3a1f950d8660a1afba03f56'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -431,8 +431,9 @@ Three's `Text.breakApart()` uses both planner requests and returns the frozen tu
 `[Glyphs, Decorations | undefined]`. It preserves the source transform, planner-defined batching, fallback techniques,
 shared immutable atlas/page leases, and supplied geometry while adding one full affine matrix per drawable record. Its
 local methods mirror `InstancedMesh`; world methods bridge physics state to root-relative storage. Bulk world-space
-callers update the detached root once, convert each body matrix with `worldToLocalMatrix()`, and use `setMatrixAt()` so
-ancestor traversal stays outside the per-glyph loop. Materials and engine domain leases belong to each detached object,
+callers update the detached root once, invert its world matrix once, convert each body matrix with
+`worldToLocalMatrix()`, and use `setMatrixAt()` so traversal and inversion stay outside the per-glyph loop. Materials and
+engine domain leases belong to each detached object,
 so the pair may outlive the source `Text`, font, and loader without sharing mutable presentation state. The source `Text`
 stays live and may continue publishing while detached objects remain unchanged.
 

@@ -338,9 +338,9 @@ space; `getWorldMatrixAt()` and `setWorldMatrixAt()` bridge world-space physics 
 reads or writes a complete affine matrix, so translation, quaternion rotation, scale, and depth are all supported.
 `measurements` retains each original local matrix, local ink and advance bounds, anchor lookup, and the metric or supplied
 geometry used by the renderer. It never traverses or caches scene ancestors. World-space callers update the `Glyphs`
-root once and cross that boundary through `worldToLocalMatrix()` plus `setMatrixAt()` for bulk writes. The convenience
-`setWorldMatrixAt()` remains correct for individual writes but updates the ancestor chain on every call. These are
-rendering facts, not prescribed collision bodies.
+root once, invert its `matrixWorld` once, and cross that boundary through `worldToLocalMatrix(inverse, world, target)`
+plus `setMatrixAt()` for bulk writes. The convenience `setWorldMatrixAt()` remains correct for individual writes but
+updates and inverts the ancestor chain on every call. These are rendering facts, not prescribed collision bodies.
 
 Materials are cloned into each detached branch and exposed through `materials`; changing one cannot mutate the source
 `Text` or its sibling detached branch. Immutable atlas/page GPU resources are leased from the existing Three engine domain

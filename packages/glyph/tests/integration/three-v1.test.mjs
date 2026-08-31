@@ -9,7 +9,14 @@ import { PlanTransport } from '../../dist/core/backend.js';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
-import { defineTextMaterial, FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
+import {
+  defineTextMaterial,
+  FontLoader,
+  localToWorldMatrix,
+  Text,
+  TextGroup,
+  worldToLocalMatrix,
+} from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { bitmapSchema } from '../../dist/raster/bitmap-technique.js';
 import { msdfSchema } from '../../dist/raster/msdf.js';
@@ -45,6 +52,28 @@ test('text property registries validate and freeze reusable rules', () => {
     assert.ok(Object.isFrozen(Object.values(created)[0]));
   }
   assert.throws(() => Constraints.create({ broken: { width: { mode: 'exact', size: Number.NaN } } }), /size/);
+});
+
+test('detached matrix helpers round-trip aliased and independent targets with a hoisted inverse', () => {
+  const rootWorld = new THREE.Matrix4().compose(
+    new THREE.Vector3(4, -3, 2),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(0.2, -0.4, 0.1)),
+    new THREE.Vector3(1.5, 0.75, 2),
+  );
+  const rootWorldInverse = rootWorld.clone().invert();
+  const local = new THREE.Matrix4().compose(
+    new THREE.Vector3(-2, 5, 1),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.1, 0.3, 0.6)),
+    new THREE.Vector3(0.5, 1.25, 0.8),
+  );
+  const world = localToWorldMatrix(rootWorld, local, new THREE.Matrix4());
+  const independent = worldToLocalMatrix(rootWorldInverse, world, new THREE.Matrix4());
+  const aliased = world.clone();
+  worldToLocalMatrix(rootWorldInverse, aliased, aliased);
+  for (let lane = 0; lane < 16; lane += 1) {
+    assert.ok(Math.abs(independent.elements[lane] - local.elements[lane]) < 1e-6);
+    assert.ok(Math.abs(aliased.elements[lane] - local.elements[lane]) < 1e-6);
+  }
 });
 
 test('Text.breakApart imports a planner-assisted copy with exact world alignment and full matrices', async () => {
@@ -380,7 +409,10 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
   const scene = new THREE.Scene();
+  const layer = new THREE.Group();
+  layer.renderOrder = 3;
   const group = new TextGroup({ renderOrder: 20 });
+  const before = new Text({ font, text: 'earlier sibling', style: { fontSize: 16, color: '#f97316' } });
   const label = new Text({
     font,
     text: 'layered decorations',
@@ -389,8 +421,10 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
       fontSize: 16,
     },
   });
+  group.add(before);
   group.add(label);
-  scene.add(group);
+  layer.add(group);
+  scene.add(layer);
   scene.updateMatrixWorld(true);
 
   let glyphs;
@@ -398,12 +432,32 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
   try {
     [glyphs, decorations] = label.breakApart();
     assert.ok(decorations);
-    assert.equal(glyphs.renderOrder, 0, 'the detached root must not create a Three group-order bucket');
-    assert.equal(decorations.renderOrder, 0, 'the decoration root must not create a Three group-order bucket');
+    group.add(glyphs, decorations);
+    assert.equal(glyphs.isGroup, undefined, 'the detached root must not create a Three group-order bucket');
+    assert.equal(decorations.isGroup, undefined, 'the decoration root must not create a Three group-order bucket');
     const glyphDraws = glyphs.children.filter((child) => child.isMesh);
     const under = decorations.children.filter((child) => child.isMesh && child.userData.pmndrsGlyphDepthKey === 0);
     const over = decorations.children.filter((child) => child.isMesh && child.userData.pmndrsGlyphDepthKey === 2);
     assert.ok(glyphDraws.length > 0 && under.length > 0 && over.length > 0);
+    const labelStableIds = new Set(label.glyphs().glyphStableIds);
+    const sourceGlyphOrders = group.children
+      .filter((child) => child.isMesh && child.userData.pmndrsGlyphPrimitiveKind === 'glyph')
+      .filter((draw) => {
+        const stableIds = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.stableGlyphId.id));
+        if (stableIds === undefined) return false;
+        const start = draw.userData.pmndrsGlyphRunStart;
+        for (let index = 0; index < draw.geometry.instanceCount; index += 1) {
+          if (labelStableIds.has(stableIds.getX(start + index))) return true;
+        }
+        return false;
+      })
+      .map((draw) => draw.renderOrder);
+    assert.ok(sourceGlyphOrders.length > 0);
+    assert.equal(
+      Math.min(...glyphDraws.map((draw) => draw.renderOrder)),
+      Math.min(...sourceGlyphOrders),
+      'a later text must retain its actual live draw offset inside a shared TextGroup batch',
+    );
     assert.ok(under.every((draw) => draw.renderOrder >= 20));
     assert.ok(
       Math.max(...under.map((draw) => draw.renderOrder)) < Math.min(...glyphDraws.map((draw) => draw.renderOrder)),
@@ -416,6 +470,7 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
   } finally {
     decorations?.dispose();
     glyphs?.dispose();
+    before.dispose();
     label.dispose();
     group.dispose();
     font.dispose();

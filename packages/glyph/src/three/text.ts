@@ -390,34 +390,38 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     }
     if (stableIds.length === 0) throw new Error('cannot break apart text with no drawable glyphs');
     const source = this as unknown as Text<AnyRasterTechnique>;
-    const renderOrderBase = nearestTextGroup(this)?.renderOrder ?? this.renderOrder;
+    const glyphRenderOrderBase = binding.glyphRenderOrderBase(source, stableIds);
     const glyphs = createGlyphs({
       source,
       placements,
       geometry: this.#glyphGeometry(placements),
       domain: this.#acquireDomain(),
-      renderOrderBase,
+      renderOrderBase: glyphRenderOrderBase,
       copy: (target) => binding.copyGlyphs(eraseTextTechnique(this), stableIds, target),
     });
+    let decorations: Decorations | undefined;
     try {
-      const decorations = createDecorations({
+      decorations = createDecorations({
         source,
         domain: this.#acquireDomain(),
-        renderOrderBase,
+        renderOrderBase: glyphRenderOrderBase,
         copy: (target) => binding.copyDecorations(eraseTextTechnique(this), target),
       });
       if (decorations === undefined) {
-        setGlyphDrawOrder(glyphs, renderOrderBase);
+        setGlyphDrawOrder(glyphs, glyphRenderOrderBase);
       } else {
         const { under, over } = decorationDraws(decorations);
-        for (const [index, draw] of under.entries()) draw.renderOrder = renderOrderBase + index;
-        const glyphDrawCount = setGlyphDrawOrder(glyphs, renderOrderBase + under.length);
+        for (const [index, draw] of under.entries()) {
+          draw.renderOrder = glyphRenderOrderBase - under.length + index;
+        }
+        const glyphDrawCount = setGlyphDrawOrder(glyphs, glyphRenderOrderBase);
         for (const [index, draw] of over.entries()) {
-          draw.renderOrder = renderOrderBase + under.length + glyphDrawCount + index;
+          draw.renderOrder = glyphRenderOrderBase + glyphDrawCount + index;
         }
       }
       return Object.freeze([glyphs, decorations] as const);
     } catch (error) {
+      decorations?.dispose();
       glyphs.dispose();
       throw error;
     }
@@ -862,6 +866,12 @@ class ThreeTextBatchBinding {
 
   glyphGeometry(stableIds: Uint32Array): ReadonlyMap<number, ThreeGlyphGeometrySource> {
     return this.#target.glyphGeometry(stableIds);
+  }
+
+  glyphRenderOrderBase(text: Text<AnyRasterTechnique>, stableIds: Uint32Array): number {
+    this.#assertActive();
+    if (!this.#entries.has(text)) throw new Error('cannot inspect draw order for an unbound text paragraph');
+    return this.#target.renderOrderBaseForGlyphs(stableIds) ?? this.#group?.renderOrder ?? text.renderOrder;
   }
 
   copyGlyphs(text: Text<AnyRasterTechnique>, stableIds: Uint32Array, target: PlanTarget) {

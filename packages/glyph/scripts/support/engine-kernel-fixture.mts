@@ -21,6 +21,7 @@ export interface CapturedKernelInput {
   readonly advances: Int32Array;
   readonly flags: Uint8Array;
   readonly levels: Uint8Array;
+  readonly mixedLevels: Uint8Array;
   readonly policy: Uint8Array;
 }
 
@@ -71,6 +72,7 @@ function captureWorkload(
     const advances = new Int32Array(glyphs);
     const flags = new Uint8Array(glyphs);
     const levels = new Uint8Array(glyphs);
+    const mixedLevels = new Uint8Array(glyphs);
     let cursor = 0;
     for (const { layout, text } of captures) {
       x.set(layout.x, cursor);
@@ -92,8 +94,9 @@ function captureWorkload(
         const cluster = layout.clusters[index]!;
         const codeUnit = text.charCodeAt(cluster);
         flags[target] = codeUnit === 0x20 || codeUnit === 0x0a || codeUnit === 0x2d ? 1 : 0;
-        // Preserve real boundaries while injecting mixed-direction transitions into the resolved-level kernel input.
-        levels[target] = ((Math.floor(cluster / 53) % 5) & 1) === 0 ? 0 : 1 + (glyphId & 1);
+        levels[target] = layout.glyphBidiLevels[index]!;
+        // Adversarial short runs remain a separate lane instead of replacing the captured paragraph levels.
+        mixedLevels[target] = ((Math.floor(cluster / 53) % 5) & 1) === 0 ? 0 : 1 + (glyphId & 1);
       }
       cursor += layout.glyphIds.length;
     }
@@ -110,6 +113,7 @@ function captureWorkload(
       advances,
       flags,
       levels,
+      mixedLevels,
       policy,
     };
   } finally {

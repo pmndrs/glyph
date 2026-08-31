@@ -84,7 +84,11 @@ describe('detached glyph-origin transitions', () => {
 
   it('interpolates full world transforms on Glyphs and restores source ownership on finish', () => {
     const parent = new THREE.Group();
-    const target = new THREE.Matrix4().compose(
+    parent.position.set(3, -2, 1);
+    parent.rotation.set(0, 0, 0.25);
+    parent.scale.setScalar(1.5);
+    parent.updateMatrixWorld(true);
+    const targetLocal = new THREE.Matrix4().compose(
       new THREE.Vector3(10, 6, -2),
       new THREE.Quaternion().setFromEuler(new THREE.Euler(0.2, 0.4, 0.6)),
       new THREE.Vector3(2, 3, 4),
@@ -96,10 +100,12 @@ describe('detached glyph-origin transitions', () => {
     );
     let written: THREE.Matrix4 | undefined;
     let disposed = 0;
-    const detached = new THREE.Group() as unknown as Glyphs;
+    const detached = new THREE.Object3D() as unknown as Glyphs;
+    detached.position.set(-5, 1, 2);
+    detached.rotation.set(0.1, -0.2, 0.15);
     Object.defineProperties(detached, {
       count: { value: 1 },
-      measurements: { value: [measurement(target)] },
+      measurements: { value: [measurement(targetLocal)] },
       glyphAt: { value: () => ({ key }) },
       setMatrixAt: { value: (_index: number, matrix: THREE.Matrix4) => (written = matrix.clone()) },
       dispose: {
@@ -114,7 +120,7 @@ describe('detached glyph-origin transitions', () => {
       matrixWorld: new THREE.Matrix4(),
       visible: true,
       updateWorldMatrix: () => undefined,
-      measureGlyphs: () => [measurement(target)],
+      measureGlyphs: () => [measurement(targetLocal)],
       breakApart: () => [detached, undefined] as const,
     } satisfies TransitionableText;
 
@@ -123,12 +129,19 @@ describe('detached glyph-origin transitions', () => {
     expect(detached.parent).toBe(parent);
     expect(transition.matchedGlyphs).toBe(1);
     transition.setProgress(0.5);
+    detached.updateWorldMatrix(true, false, true);
+    const targetWorld = detached.matrixWorld.clone().multiply(targetLocal);
+    const targetPosition = new THREE.Vector3();
+    const targetQuaternion = new THREE.Quaternion();
+    const targetScale = new THREE.Vector3();
+    targetWorld.decompose(targetPosition, targetQuaternion, targetScale);
+    const writtenWorld = detached.matrixWorld.clone().multiply(written!);
     const position = new THREE.Vector3();
     const quaternion = new THREE.Quaternion();
     const scale = new THREE.Vector3();
-    written!.decompose(position, quaternion, scale);
-    expect(position.distanceTo(new THREE.Vector3(3, 4, 3))).toBeLessThan(1e-6);
-    expect(scale.distanceTo(new THREE.Vector3(1.25, 1.875, 2.625))).toBeLessThan(1e-6);
+    writtenWorld.decompose(position, quaternion, scale);
+    expect(position.distanceTo(startPosition(start).lerp(targetPosition, 0.5))).toBeLessThan(1e-5);
+    expect(scale.distanceTo(matrixScale(start).lerp(targetScale, 0.5))).toBeLessThan(1e-5);
     expect(Math.abs(quaternion.length() - 1)).toBeLessThan(1e-6);
 
     transition.finish();
@@ -141,4 +154,12 @@ describe('detached glyph-origin transitions', () => {
 
 function measurement(matrix: THREE.Matrix4): ThreeGlyphMeasurement {
   return { key, originalMatrix: matrix } as ThreeGlyphMeasurement;
+}
+
+function startPosition(matrix: THREE.Matrix4): THREE.Vector3 {
+  return new THREE.Vector3().setFromMatrixPosition(matrix);
+}
+
+function matrixScale(matrix: THREE.Matrix4): THREE.Vector3 {
+  return new THREE.Vector3().setFromMatrixScale(matrix);
 }

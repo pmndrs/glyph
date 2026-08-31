@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:c423aeb2e391e546692bfc878783e24067e56ee76f2dedd65778bf2114bc9900'
+source_digest: 'sha256:64d4fc3c17c1141d0626b1f90410d82792de53ed0ec803c472ed8968e58122bf'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -260,7 +260,8 @@ Their presentation transitions are application-owned consumers of the detached-c
 overrides for Bitmap only. `techniques/shared/glyph-origin-transition.ts` now reads local matrices through
 `measureGlyphs()`, refreshes the source world matrix once at that explicit boundary, composes committed world matrices,
 updates the source layout, calls `breakApart()` for one independently rendered `Glyphs` branch, hides
-the live source, and interpolates complete position/quaternion/scale matrices through `setWorldMatrixAt()`. It matches
+the live source, updates the detached root once per frame, converts each interpolated world matrix through a hoisted
+world inverse, and writes complete position/quaternion/scale matrices through `setMatrixAt()`. It matches
 records by the package-owned `GlyphKey`, disposes the copy at settle, and restores source visibility. No benchmark keeps a
 mutable glyph snapshot applied to live text, and no benchmark depends on the removed `snapshotGlyphs()` / `applyGlyphs()` /
 `restoreGlyphs()` API. Bitmap keeps host-driven progress; MTSDF and Slug advance the same smoothstep on their frame clock.
@@ -565,6 +566,15 @@ program and includes its F32×4, U32, and U16 buffers in the scalar/auto/SIMD by
 explicit SIMD measures 0.438 ms p95 versus 1.113 ms scalar; at 100,602 it measures 1.750 versus 4.350 ms. Browser timer
 quantization is visible in those figures, so Node retains the finer candidate ranking while Chromium supplies the
 independent engine-admission check.
+
+The bidi transition-scan lane keeps three inputs distinct. `transitionScanX*` uses the captured resolved levels,
+`transitionUniformX*` isolates the common single-level paragraph, and `transitionMixedX*` is an adversarial synthetic
+short-run sequence. On the recorded Darwin arm64 Node run, the production one-block SIMD scan reduced the captured
+25,515-glyph median from 0.00828 ms scalar to 0.00128 ms and the 100,602-glyph median from 0.03262 ms to 0.00484 ms;
+the uniform lane was comparable. The adversarial mixed lane regressed from 0.01062 ms to 0.04718 ms and from 0.04286 ms
+to 0.18971 ms respectively. Production therefore uses the conservative one-block scan for the measured real workload,
+retains scalar as the correctness oracle and tail, and records the mixed-direction cost explicitly rather than presenting
+the synthetic lane as representative. These host-local measurements are admission evidence, not a portability claim.
 
 The bake-host report separates the consumer phases without timing conformance work. Each offline sample creates a fresh Wasm baker and records initialization plus first bake as cold, then records a second bake on that instance as warm. Each isolated Chromium context queues two requests onto one Worker: first completion contains Worker/Wasm startup plus its bake, while the interval to second completion is the warm reused-instance bake. Three captured arm64/Chromium 149 samples preserve complete artifact parity; medians were 4.16 ms cold / 2.94 ms warm offline and 21.70 ms cold / 3.50 ms warm in the Worker. These are observations, not cross-host thresholds.
 

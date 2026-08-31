@@ -1828,7 +1828,7 @@ fn justification_adjustment(
     );
     if deficit_units >= 0 {
         // Expansion: word spaces grow up to the declared cap — the excess ratio
-        // applied by Q16 mul/shift like the fit applies its shrink budget — then
+        // is applied once with the shared half-up layout-unit contract — then
         // the remainder spills into inter-cluster gaps bounded per gap; any
         // residue stays unfilled and the line reads as under-full.
         let space_growth = if controls.maximum_word_space_ratio > 0.0 {

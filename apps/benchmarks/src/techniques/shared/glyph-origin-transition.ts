@@ -174,6 +174,7 @@ export function createGlyphOriginTransition(
   const quaternion = new THREE.Quaternion();
   const scale = new THREE.Vector3();
   const matrix = new THREE.Matrix4();
+  const detachedWorldInverse = new THREE.Matrix4();
   let progress = 1;
   let disposed = false;
   const cleanup = (): void => {
@@ -189,13 +190,14 @@ export function createGlyphOriginTransition(
     }
     if (disposed) throw new DOMException('The glyph-origin transition is stale', 'AbortError');
     detached.updateWorldMatrix(true, false, true);
+    detachedWorldInverse.copy(detached.matrixWorld).invert();
     for (let index = 0; index < transitions.length; index += 1) {
       const transition = transitions[index]!;
       position.lerpVectors(transition.startPosition, transition.targetPosition, nextProgress);
       quaternion.copy(transition.startQuaternion).slerp(transition.targetQuaternion, nextProgress);
       scale.lerpVectors(transition.startScale, transition.targetScale, nextProgress);
       matrix.compose(position, quaternion, scale);
-      worldToLocalMatrix(detached.matrixWorld, matrix, matrix);
+      worldToLocalMatrix(detachedWorldInverse, matrix, matrix);
       detached.setMatrixAt(index, matrix);
     }
     progress = nextProgress;

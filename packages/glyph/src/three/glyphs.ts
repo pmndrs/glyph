@@ -15,19 +15,20 @@ import type { Text } from './text.js';
 import { copyCurrentLocalTransform } from './detached-object.js';
 
 /**
- * Converts an instance matrix from the `Glyphs` object's world space into its local space.
+ * Converts an instance matrix from world space into one `Glyphs` object's local space without
+ * allocating or recomputing its inverse.
  *
- * @param glyphsMatrixWorld - Current `matrixWorld` of the `Glyphs` object that owns the instance.
+ * @param glyphsMatrixWorldInverse - Precomputed inverse of the owning `Glyphs` object's current `matrixWorld`.
  * @param matrixWorld - Instance transform expressed in world space.
  * @param target - Matrix that receives the local transform; it may alias `matrixWorld`.
  */
 export function worldToLocalMatrix(
-  glyphsMatrixWorld: THREE.Matrix4,
+  glyphsMatrixWorldInverse: THREE.Matrix4,
   matrixWorld: THREE.Matrix4,
   target: THREE.Matrix4,
 ): THREE.Matrix4 {
-  if (matrixWorld === target) return target.premultiply(glyphsMatrixWorld.clone().invert());
-  return target.copy(glyphsMatrixWorld).invert().multiply(matrixWorld);
+  if (matrixWorld === target) return target.premultiply(glyphsMatrixWorldInverse);
+  return target.copy(glyphsMatrixWorldInverse).multiply(matrixWorld);
 }
 
 /**
@@ -108,7 +109,7 @@ interface DetachedGlyphRecordAddress {
  * Per-glyph matrices are an additional Three-side instance attribute; the live paragraph never
  * receives them and continues to shape normally.
  */
-export class Glyphs extends THREE.Group {
+export class Glyphs extends THREE.Object3D {
   readonly #target: ThreeTextRenderPlanExecutor;
   readonly #domain: ThreeEngineDomainLease;
   readonly #owner: ThreeTextEnginePlanOwner;
@@ -118,6 +119,7 @@ export class Glyphs extends THREE.Group {
   readonly #recordAddresses: readonly DetachedGlyphRecordAddress[];
   readonly #storages = new Map<string, DetachedGlyphStorage>();
   readonly #worldLocal = new THREE.Matrix4();
+  readonly #worldInverse = new THREE.Matrix4();
   #disposed = false;
 
   static {
@@ -264,12 +266,14 @@ export class Glyphs extends THREE.Group {
    * Writes a full affine instance transform expressed in world space.
    *
    * This single-record convenience updates the detached root's ancestor chain. Bulk callers should
-   * update that chain once, convert with `worldToLocalMatrix()`, and call `setMatrixAt()` per glyph.
+   * update that chain once, invert `matrixWorld` once, convert with `worldToLocalMatrix()`, and call
+   * `setMatrixAt()` per glyph.
    */
   setWorldMatrixAt(index: number, matrixWorld: THREE.Matrix4): void {
     this.#assertActive();
     this.updateWorldMatrix(true, false, true);
-    worldToLocalMatrix(this.matrixWorld, matrixWorld, this.#worldLocal);
+    this.#worldInverse.copy(this.matrixWorld).invert();
+    worldToLocalMatrix(this.#worldInverse, matrixWorld, this.#worldLocal);
     this.setMatrixAt(index, this.#worldLocal);
   }
 

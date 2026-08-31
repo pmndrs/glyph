@@ -57,8 +57,8 @@ fn summarize_unit_chunks(
 fn sum_advance_units(advances: &[i64]) -> i64 {
     use core::arch::wasm32::{i64x2_add, i64x2_extract_lane, i64x2_splat, v128, v128_load};
 
-    // A summary contains at most LAYOUT_CHUNK i32-derived F16.16 values, so every
-    // lane and the final reduction remain far below i64::MAX without saturating adds.
+    // A summary contains at most LAYOUT_CHUNK layout-unit values bounded to ±2^53, so every lane
+    // and the final reduction remain within ±2^59 and cannot overflow i64.
     const ACCUMULATORS: usize = 4;
     const VALUES_PER_GROUP: usize = ACCUMULATORS * 2;
     let completed = advances.len() / VALUES_PER_GROUP * VALUES_PER_GROUP;
@@ -87,7 +87,7 @@ fn sum_advance_units(advances: &[i64]) -> i64 {
 
 #[cfg(not(all(target_arch = "wasm32", feature = "simd128")))]
 fn sum_advance_units(advances: &[i64]) -> i64 {
-    // LAYOUT_CHUNK bounds this sum to 64 i32-derived F16.16 values.
+    // LAYOUT_CHUNK bounds this sum to 64 layout-unit values, each bounded to ±2^53.
     advances.iter().sum()
 }
 

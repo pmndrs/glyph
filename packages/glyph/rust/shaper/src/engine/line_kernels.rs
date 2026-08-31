@@ -1,6 +1,6 @@
 //! Production and laboratory kernels for segmentation and line planning.
 //!
-//! Production keeps the early-exit bidi transition scan scalar and visits
+//! Production scans bidi transitions one `v128` block at a time and visits
 //! justification flags four `v128` blocks at a time. The four-block limit is a
 //! measured, deterministic unroll choice; wider candidates remain behind the
 //! `kernel-lab` feature until representative mobile browser evidence justifies
@@ -11,7 +11,12 @@
 /// or `levels.len()` when the run extends to the end.
 pub(crate) fn next_transition(levels: &[u8], start: usize) -> usize {
     let level = levels[start];
+    #[allow(unused_mut)]
     let mut index = start + 1;
+    #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
+    {
+        index = next_transition_simd::<1>(levels, index, level);
+    }
     while index < levels.len() && levels[index] == level {
         index += 1;
     }
@@ -33,7 +38,7 @@ fn next_transition_grouped<const GROUPS: usize>(levels: &[u8], start: usize) -> 
     index
 }
 
-#[cfg(all(target_arch = "wasm32", feature = "simd128", feature = "kernel-lab"))]
+#[cfg(all(target_arch = "wasm32", feature = "simd128"))]
 fn next_transition_simd<const GROUPS: usize>(levels: &[u8], mut index: usize, level: u8) -> usize {
     use core::arch::wasm32::{i8x16_bitmask, i8x16_ne, u8x16_splat, v128, v128_load};
 
