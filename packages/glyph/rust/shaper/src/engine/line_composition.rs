@@ -306,9 +306,10 @@ pub(crate) fn layout_next_line_integer(
                 let next_advance = advance.saturating_add(clusters.chunk_advance_sums[chunk]);
                 let next_space_units = space_units.saturating_add(clusters.chunk_space_sums[chunk]);
                 let fits = max_width_units.is_none_or(|units| {
-                    next_advance
-                        - super::layout_units::apply_ratio(next_space_units, word_space_shrink)
-                        <= units
+                    next_advance.saturating_sub(super::layout_units::apply_ratio(
+                        next_space_units,
+                        word_space_shrink,
+                    )) <= units
                 });
                 if fits {
                     if flags_or & CLUSTER_ALLOWED_BREAK != 0 {
@@ -356,10 +357,9 @@ pub(crate) fn layout_next_line_integer(
         if wrap != WRAP_NONE
             && !cluster_is_space
             && max_width_units.is_some_and(|units| {
-                next_advance
-                    - hanging_units
-                    - super::layout_units::apply_ratio(next_space_units, word_space_shrink)
-                    > units
+                next_advance.saturating_sub(hanging_units).saturating_sub(
+                    super::layout_units::apply_ratio(next_space_units, word_space_shrink),
+                ) > units
             })
             && index > line_start
         {

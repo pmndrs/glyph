@@ -312,7 +312,12 @@ if (decorations !== undefined) label.parent!.add(decorations);
 label.visible = false;
 
 const matrix = new THREE.Matrix4();
+const position = new THREE.Vector3();
+const quaternion = new THREE.Quaternion();
+const scale = new THREE.Vector3();
 glyphs.getWorldMatrixAt(0, matrix);
+matrix.decompose(position, quaternion, scale);
+position.x += 1;
 matrix.compose(position, quaternion, scale);
 glyphs.setWorldMatrixAt(0, matrix);
 
@@ -333,8 +338,9 @@ space; `getWorldMatrixAt()` and `setWorldMatrixAt()` bridge world-space physics 
 reads or writes a complete affine matrix, so translation, quaternion rotation, scale, and depth are all supported.
 `measurements` retains each original local matrix, local ink and advance bounds, anchor lookup, and the metric or supplied
 geometry used by the renderer. It never traverses or caches scene ancestors. World-space callers update the `Glyphs`
-root once and cross that boundary through `getWorldMatrixAt()` or `setWorldMatrixAt()`; these are rendering facts, not
-prescribed collision bodies.
+root once and cross that boundary through `worldToLocalMatrix()` plus `setMatrixAt()` for bulk writes. The convenience
+`setWorldMatrixAt()` remains correct for individual writes but updates the ancestor chain on every call. These are
+rendering facts, not prescribed collision bodies.
 
 Materials are cloned into each detached branch and exposed through `materials`; changing one cannot mutate the source
 `Text` or its sibling detached branch. Immutable atlas/page GPU resources are leased from the existing Three engine domain
@@ -345,7 +351,8 @@ at creation.
 
 Decorations have independent topology and lifetime. Core copies them through the separate
 `RetainedText.copyDecorations()` planner request; Three coordinates that request with glyph copying but returns the
-result separately in tuple slot two:
+result separately in tuple slot two. The detached roots keep Three's default group order while their draw ranges preserve
+the source boundary's under-decoration, glyph, then line-through paint order:
 
 ```ts
 const [glyphs, decorations] = label.breakApart();

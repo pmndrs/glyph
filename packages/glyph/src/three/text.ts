@@ -44,8 +44,8 @@ import {
   type ThreeGlyphGeometrySource,
   type ThreeGlyphMeasurement,
 } from './glyph-measurement.js';
-import { createGlyphs, type Glyphs } from './glyphs.js';
-import { createDecorations, type Decorations } from './decorations.js';
+import { createGlyphs, setGlyphDrawOrder, type Glyphs } from './glyphs.js';
+import { createDecorations, decorationDraws, type Decorations } from './decorations.js';
 
 const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const MAX_TEXT_UNITS = 65_536;
@@ -390,19 +390,32 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     }
     if (stableIds.length === 0) throw new Error('cannot break apart text with no drawable glyphs');
     const source = this as unknown as Text<AnyRasterTechnique>;
+    const renderOrderBase = nearestTextGroup(this)?.renderOrder ?? this.renderOrder;
     const glyphs = createGlyphs({
       source,
       placements,
       geometry: this.#glyphGeometry(placements),
       domain: this.#acquireDomain(),
+      renderOrderBase,
       copy: (target) => binding.copyGlyphs(eraseTextTechnique(this), stableIds, target),
     });
     try {
       const decorations = createDecorations({
         source,
         domain: this.#acquireDomain(),
+        renderOrderBase,
         copy: (target) => binding.copyDecorations(eraseTextTechnique(this), target),
       });
+      if (decorations === undefined) {
+        setGlyphDrawOrder(glyphs, renderOrderBase);
+      } else {
+        const { under, over } = decorationDraws(decorations);
+        for (const [index, draw] of under.entries()) draw.renderOrder = renderOrderBase + index;
+        const glyphDrawCount = setGlyphDrawOrder(glyphs, renderOrderBase + under.length);
+        for (const [index, draw] of over.entries()) {
+          draw.renderOrder = renderOrderBase + under.length + glyphDrawCount + index;
+        }
+      }
       return Object.freeze([glyphs, decorations] as const);
     } catch (error) {
       glyphs.dispose();

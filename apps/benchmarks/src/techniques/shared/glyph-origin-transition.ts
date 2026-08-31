@@ -1,5 +1,11 @@
 import type { FontFeature } from '@pmndrs/glyph';
-import type { Decorations, GlyphKey, Glyphs, ThreeGlyphMeasurement } from '@pmndrs/glyph/three';
+import {
+  worldToLocalMatrix,
+  type Decorations,
+  type GlyphKey,
+  type Glyphs,
+  type ThreeGlyphMeasurement,
+} from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 /** The committed Three text surface needed to animate an independently copied glyph branch. */
@@ -182,13 +188,15 @@ export function createGlyphOriginTransition(
       throw new RangeError('glyph-origin transition progress must be in [0, 1]');
     }
     if (disposed) throw new DOMException('The glyph-origin transition is stale', 'AbortError');
+    detached.updateWorldMatrix(true, false, true);
     for (let index = 0; index < transitions.length; index += 1) {
       const transition = transitions[index]!;
       position.lerpVectors(transition.startPosition, transition.targetPosition, nextProgress);
       quaternion.copy(transition.startQuaternion).slerp(transition.targetQuaternion, nextProgress);
       scale.lerpVectors(transition.startScale, transition.targetScale, nextProgress);
       matrix.compose(position, quaternion, scale);
-      detached.setWorldMatrixAt(index, matrix);
+      worldToLocalMatrix(detached.matrixWorld, matrix, matrix);
+      detached.setMatrixAt(index, matrix);
     }
     progress = nextProgress;
   };

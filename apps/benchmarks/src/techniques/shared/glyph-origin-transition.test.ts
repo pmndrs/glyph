@@ -101,7 +101,7 @@ describe('detached glyph-origin transitions', () => {
       count: { value: 1 },
       measurements: { value: [measurement(target)] },
       glyphAt: { value: () => ({ key }) },
-      setWorldMatrixAt: { value: (_index: number, matrix: THREE.Matrix4) => (written = matrix.clone()) },
+      setMatrixAt: { value: (_index: number, matrix: THREE.Matrix4) => (written = matrix.clone()) },
       dispose: {
         value: () => {
           disposed += 1;

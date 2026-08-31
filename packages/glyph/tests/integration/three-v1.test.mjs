@@ -63,6 +63,12 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
   label.position.set(7, -3, 2);
   sourceParent.add(label);
   scene.updateMatrixWorld(true);
+  const traversedSourceMatrix = label.matrix.clone();
+  label.position.x += 2;
+  assert.ok(
+    label.matrix.equals(traversedSourceMatrix),
+    'the fixture must leave the source local matrix stale before breakApart',
+  );
 
   let detached;
   try {
@@ -77,8 +83,9 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     assert.deepEqual(
       detached.matrix.elements,
       label.matrix.elements,
-      'the detached root must copy the source local matrix without an inverse round trip',
+      'the detached root must compose and copy the current source-local transform without ancestor traversal',
     );
+    assert.equal(detached.position.x, 9, 'the copy must include local TRS changes made after the last traversal');
     sourceParent.add(detached);
     label.visible = false;
 
@@ -361,6 +368,56 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
     decorations?.dispose();
     detached?.dispose();
     label.dispose();
+    font.dispose();
+    loader.dispose();
+  }
+});
+
+test('Text.breakApart preserves TextGroup paint order across detached roots', async () => {
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const group = new TextGroup({ renderOrder: 20 });
+  const label = new Text({
+    font,
+    text: 'layered decorations',
+    style: {
+      decoration: { underline: true, overline: true, lineThrough: true, color: '#38bdf8' },
+      fontSize: 16,
+    },
+  });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  let glyphs;
+  let decorations;
+  try {
+    [glyphs, decorations] = label.breakApart();
+    assert.ok(decorations);
+    assert.equal(glyphs.renderOrder, 0, 'the detached root must not create a Three group-order bucket');
+    assert.equal(decorations.renderOrder, 0, 'the decoration root must not create a Three group-order bucket');
+    const glyphDraws = glyphs.children.filter((child) => child.isMesh);
+    const under = decorations.children.filter((child) => child.isMesh && child.userData.pmndrsGlyphDepthKey === 0);
+    const over = decorations.children.filter((child) => child.isMesh && child.userData.pmndrsGlyphDepthKey === 2);
+    assert.ok(glyphDraws.length > 0 && under.length > 0 && over.length > 0);
+    assert.ok(under.every((draw) => draw.renderOrder >= 20));
+    assert.ok(
+      Math.max(...under.map((draw) => draw.renderOrder)) < Math.min(...glyphDraws.map((draw) => draw.renderOrder)),
+      'underline and overline draws must remain beneath copied glyph draws',
+    );
+    assert.ok(
+      Math.max(...glyphDraws.map((draw) => draw.renderOrder)) < Math.min(...over.map((draw) => draw.renderOrder)),
+      'line-through draws must remain above copied glyph draws',
+    );
+  } finally {
+    decorations?.dispose();
+    glyphs?.dispose();
+    label.dispose();
+    group.dispose();
     font.dispose();
     loader.dispose();
   }

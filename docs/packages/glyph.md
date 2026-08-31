@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:9efd4b04f1fe31381ca2bb6a485c7c3b75f48a116e58bdf97f1a4ea09236073b'
+source_digest: 'sha256:7f99c26988ac8e27c7a4846c8c2ad64a888daa0216d0188281d21384a9cda851'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -430,15 +430,18 @@ revisions, publication generation, or A/B output ownership.
 Three's `Text.breakApart()` uses both planner requests and returns the frozen tuple
 `[Glyphs, Decorations | undefined]`. It preserves the source transform, planner-defined batching, fallback techniques,
 shared immutable atlas/page leases, and supplied geometry while adding one full affine matrix per drawable record. Its
-local methods mirror `InstancedMesh`; world methods bridge physics state to root-relative storage. Materials and engine
-domain leases belong to each detached object, so the pair may outlive the source `Text`, font, and loader without sharing
-mutable presentation state. The source `Text` stays live and may continue publishing while detached objects remain
-unchanged.
+local methods mirror `InstancedMesh`; world methods bridge physics state to root-relative storage. Bulk world-space
+callers update the detached root once, convert each body matrix with `worldToLocalMatrix()`, and use `setMatrixAt()` so
+ancestor traversal stays outside the per-glyph loop. Materials and engine domain leases belong to each detached object,
+so the pair may outlive the source `Text`, font, and loader without sharing mutable presentation state. The source `Text`
+stays live and may continue publishing while detached objects remain unchanged.
 
 Decoration passes are not glyph records and retain an independent object and lifetime; tuple slot two is `undefined`
-when the committed paragraph has no decoration draws. If either import fails, `breakApart()` releases everything it
-created before throwing. Neither path reconstructs child `Text` objects, installs mutable presentation overrides,
-creates physics bodies, or infers collision shapes. The detailed ownership and evidence contract is in
+when the committed paragraph has no decoration draws. Three coordinates both roots' draw ranges so underline/overline
+remain below glyphs and line-through remains above them without assigning a group-level render order. If either import
+fails, `breakApart()` releases everything it created before throwing. Neither path reconstructs child `Text` objects,
+installs mutable presentation overrides, creates physics bodies, or infers collision shapes. The detailed ownership and
+evidence contract is in
 [Planner-assisted detached glyph slices](../planning/detached-glyph-slice.md).
 
 ## Wasm memory and copying

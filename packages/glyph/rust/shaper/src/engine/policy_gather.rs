@@ -617,7 +617,10 @@ impl PolicyGatherWorkspace {
                 transform_id,
                 material_id: record.color,
                 clip_id: record.clip_id,
-                depth_key: 0,
+                depth_key: match pass {
+                    DecorationPass::Under => 0,
+                    DecorationPass::Over => 2,
+                },
                 inline_start: record.inline_start,
                 block_start: record.block_start,
                 inline_extent: record.inline_extent,
@@ -2180,6 +2183,7 @@ mod tests {
         assert_eq!(row.resource_generation, 0);
         assert_eq!(row.resource_kind, 0);
         assert_eq!(row.clip_id, 9);
+        assert_eq!(row.depth_key, 0);
         assert_eq!(view.f32_fields[0][0], 4.0);
         assert_eq!(view.f32_fields[1][0], 9.0);
         assert_eq!(view.f32_fields[2][0], 12.0);
@@ -2216,7 +2220,9 @@ mod tests {
                 )
                 .unwrap()
         );
-        assert_eq!(workspace.view().glyphs.len(), 2);
+        let view = workspace.view();
+        assert_eq!(view.glyphs.len(), 2);
+        assert_eq!(view.glyphs[1].depth_key, 2);
 
         let plain = policy();
         let mut plain_workspace = PolicyGatherWorkspace::default();

@@ -12,25 +12,38 @@ import {
 import type { ThreeGlyphGeometrySource, ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { measureGlyphPlacements } from './glyph-measurement.js';
 import type { Text } from './text.js';
+import { copyCurrentLocalTransform } from './detached-object.js';
 
-/** Converts an instance matrix from the `Glyphs` object's world space into its local space. */
+/**
+ * Converts an instance matrix from the `Glyphs` object's world space into its local space.
+ *
+ * @param glyphsMatrixWorld - Current `matrixWorld` of the `Glyphs` object that owns the instance.
+ * @param matrixWorld - Instance transform expressed in world space.
+ * @param target - Matrix that receives the local transform; it may alias `matrixWorld`.
+ */
 export function worldToLocalMatrix(
-  parentMatrixWorld: THREE.Matrix4,
+  glyphsMatrixWorld: THREE.Matrix4,
   matrixWorld: THREE.Matrix4,
   target: THREE.Matrix4,
 ): THREE.Matrix4 {
-  if (matrixWorld === target) return target.premultiply(parentMatrixWorld.clone().invert());
-  return target.copy(parentMatrixWorld).invert().multiply(matrixWorld);
+  if (matrixWorld === target) return target.premultiply(glyphsMatrixWorld.clone().invert());
+  return target.copy(glyphsMatrixWorld).invert().multiply(matrixWorld);
 }
 
-/** Converts an instance matrix from `Glyphs`-local space into world space. */
+/**
+ * Converts an instance matrix from `Glyphs`-local space into world space.
+ *
+ * @param glyphsMatrixWorld - Current `matrixWorld` of the `Glyphs` object that owns the instance.
+ * @param matrixLocal - Instance transform expressed in the owning `Glyphs` object's local space.
+ * @param target - Matrix that receives the world transform; it may alias `matrixLocal`.
+ */
 export function localToWorldMatrix(
-  parentMatrixWorld: THREE.Matrix4,
+  glyphsMatrixWorld: THREE.Matrix4,
   matrixLocal: THREE.Matrix4,
   target: THREE.Matrix4,
 ): THREE.Matrix4 {
-  if (matrixLocal === target) return target.premultiply(parentMatrixWorld);
-  return target.copy(parentMatrixWorld).multiply(matrixLocal);
+  if (matrixLocal === target) return target.premultiply(glyphsMatrixWorld);
+  return target.copy(glyphsMatrixWorld).multiply(matrixLocal);
 }
 
 /** @internal Constructed only by `Text.breakApart()`. */
@@ -40,10 +53,12 @@ interface GlyphsOptions<Technique extends AnyRasterTechnique> {
   readonly geometry?: ReadonlyMap<number, ThreeGlyphGeometrySource>;
   readonly copy: (target: PlanTarget) => PlanAcceptance;
   readonly domain: ThreeEngineDomainLease;
+  readonly renderOrderBase: number;
 }
 
 const glyphsConstructorToken: unique symbol = Symbol('pmndrs.glyph.Glyphs');
 let constructGlyphs: ((options: GlyphsOptions<AnyRasterTechnique>) => Glyphs) | undefined;
+let configureGlyphDrawOrder: ((glyphs: Glyphs, start: number) => number) | undefined;
 
 /** @internal Constructs the detached branch while keeping the public class receive-only. */
 export function createGlyphs(options: GlyphsOptions<AnyRasterTechnique>): Glyphs {
@@ -52,6 +67,12 @@ export function createGlyphs(options: GlyphsOptions<AnyRasterTechnique>): Glyphs
     throw new Error('Glyphs constructor is unavailable');
   }
   return constructGlyphs(options);
+}
+
+/** @internal Assigns the detached glyph draw range and returns its draw count. */
+export function setGlyphDrawOrder(glyphs: Glyphs, start: number): number {
+  if (configureGlyphDrawOrder === undefined) throw new Error('Glyphs draw-order coordinator is unavailable');
+  return configureGlyphDrawOrder(glyphs, start);
 }
 
 /** Immutable identity and grouping metadata for one drawable record in a detached `Glyphs` object. */
@@ -101,6 +122,10 @@ export class Glyphs extends THREE.Group {
 
   static {
     constructGlyphs = (options) => new Glyphs(glyphsConstructorToken, options);
+    configureGlyphDrawOrder = (glyphs, start) => {
+      for (const [index, draw] of glyphs.#target.draws.entries()) draw.renderOrder = start + index;
+      return glyphs.#target.draws.length;
+    };
   }
 
   private constructor(token: typeof glyphsConstructorToken, options: GlyphsOptions<AnyRasterTechnique>) {
@@ -130,18 +155,16 @@ export class Glyphs extends THREE.Group {
           .filter((_, index) => !incomplete.has(index))
           .map((measurement, index) => Object.freeze({ ...measurement, index })),
       );
-      this.matrix.copy(options.source.matrix);
-      this.matrix.decompose(this.position, this.quaternion, this.scale);
+      copyCurrentLocalTransform(options.source, this);
       // A Glyphs object may receive world-space instance writes in the first useFrame after it is
       // attached, before the renderer has traversed the scene once.
       this.matrixWorldNeedsUpdate = true;
-      this.renderOrder = options.source.renderOrder;
 
       const owner = this;
       this.#owner = {
         drawRoot: this,
         pixelSnapping: options.source.pixelSnapping,
-        renderOrderBase: options.source.renderOrder,
+        renderOrderBase: options.renderOrderBase,
         objectForTransform() {
           return owner;
         },
@@ -237,7 +260,12 @@ export class Glyphs extends THREE.Group {
     markStorageAttributeUpdated(storage.transforms, offset, 16);
   }
 
-  /** Writes a full affine instance transform expressed in world space. */
+  /**
+   * Writes a full affine instance transform expressed in world space.
+   *
+   * This single-record convenience updates the detached root's ancestor chain. Bulk callers should
+   * update that chain once, convert with `worldToLocalMatrix()`, and call `setMatrixAt()` per glyph.
+   */
   setWorldMatrixAt(index: number, matrixWorld: THREE.Matrix4): void {
     this.#assertActive();
     this.updateWorldMatrix(true, false, true);

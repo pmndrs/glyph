@@ -138,6 +138,7 @@ interface ReusedDrawUpdate {
   readonly primitiveKind: 'decoration' | 'glyph';
   readonly matrixAutoUpdate: boolean;
   readonly renderOrder: number;
+  readonly depthKey: number;
 }
 
 type StagedBufferOperation =
@@ -946,6 +947,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
             primitiveKind: decoration ? 'decoration' : 'glyph',
             matrixAutoUpdate: transform.kind !== 'direct',
             renderOrder: this.#owner.renderOrderBase + index,
+            depthKey: draw.depthKey,
           });
           reused.add(reusable);
           next.push(reusable);
@@ -968,6 +970,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
         mesh.userData.pmndrsGlyphRunStart = recordIndex;
         mesh.userData.pmndrsGlyphTransformId = transformId;
         mesh.userData.pmndrsGlyphPrimitiveKind = decoration ? 'decoration' : 'glyph';
+        mesh.userData.pmndrsGlyphDepthKey = draw.depthKey;
         mesh.matrixAutoUpdate = transform.kind !== 'direct';
         mesh.frustumCulled = false;
         mesh.renderOrder = this.#owner.renderOrderBase + index;
@@ -2436,6 +2439,7 @@ function applyReusedDrawUpdate(update: ReusedDrawUpdate): void {
   update.mesh.userData.pmndrsGlyphRunStart = update.recordIndex;
   update.mesh.userData.pmndrsGlyphTransformId = update.transformId;
   update.mesh.userData.pmndrsGlyphPrimitiveKind = update.primitiveKind;
+  update.mesh.userData.pmndrsGlyphDepthKey = update.depthKey;
   update.mesh.matrixAutoUpdate = update.matrixAutoUpdate;
   update.mesh.renderOrder = update.renderOrder;
 }

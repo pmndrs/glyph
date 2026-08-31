@@ -695,6 +695,9 @@ impl TextEngine {
                 continue;
             }
             let mut glyph = *source;
+            // Detached decoration plans use 0/2 for CSS under/over passes. Keep copied glyphs in
+            // the middle so renderers can restore the original paint order across both objects.
+            glyph.depth_key = 1;
             let semantic_index = usize::try_from(source.semantic_glyph_index)
                 .map_err(|_| EngineError::InvalidRequest)?;
             let semantic = source_semantic
