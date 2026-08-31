@@ -13,13 +13,13 @@
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm build:docs-components && pnpm check:docs && pnpm build:landing",
     "check:docs": "npm_config_cache=.npx-cache npx -y @pmndrs/docs@4.1.2 build docs dist/.mdx-check",
     "dev": "vite",
-    "format:check": "oxfmt --check docs/components landing/src scripts package.json tsconfig.json vite.config.ts",
-    "lint": "oxlint --deny-warnings .",
+    "format:check": "oxfmt --check docs/components landing/src scripts .oxlintrc.json package.json tsconfig.json vite.config.ts",
+    "lint": "oxlint --deny-warnings --config .oxlintrc.json docs/components",
     "preview": "node ./scripts/preview.mts",
     "preview:landing": "vite preview --host 127.0.0.1 --port 5173 --strictPort",
     "test": "vitest run --root . docs/components",
     "typecheck": "tsc --noEmit",
-    "format": "oxfmt docs/components landing/src scripts package.json tsconfig.json vite.config.ts"
+    "format": "oxfmt docs/components landing/src scripts .oxlintrc.json package.json tsconfig.json vite.config.ts"
   },
   "dependencies": {
     "@pmndrs/glyph": "workspace:*",
@@ -31,11 +31,13 @@
     "three": "0.185.1"
   },
   "devDependencies": {
+    "@rolldown/plugin-babel": "0.2.3",
     "@types/node": "24.13.3",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@types/three": "0.185.4",
     "@vitejs/plugin-react": "6.0.1",
+    "babel-plugin-react-compiler": "1.0.0",
     "leva": "^0.10.1",
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",

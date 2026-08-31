@@ -1,4 +1,5 @@
-import react from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
@@ -6,8 +7,9 @@ import { defineConfig } from 'vite';
 const generatedRootFiles = [
   'font-awesome-icons-msdf.font.glb',
   'geist-msdf.font.glb',
-  'glyph-explainer.css',
-  'glyph-explainer.js',
+  'explainer.css',
+  'explainer.js',
+  'introduction.css',
   'lovers-quarrel-slug.font.glb',
   'mplus1p-japanese.font.glb',
   'runtime-bake-worker.js',
@@ -31,15 +33,15 @@ export default defineConfig({
     emptyOutDir: false,
     outDir: 'docs/assets',
     rollupOptions: {
-      input: 'docs/components/glyph-explainer.tsx',
+      input: 'docs/components/load-explainers.ts',
       output: {
-        assetFileNames: '[name][extname]',
-        entryFileNames: 'glyph-explainer.js',
+        assetFileNames: (asset) => (asset.name?.endsWith('.css') ? 'explainer.css' : '[name][extname]'),
+        entryFileNames: 'explainer.js',
       },
     },
     target: 'es2022',
   },
-  plugins: [cleanGeneratedDocsAssets, react()],
+  plugins: [cleanGeneratedDocsAssets, react(), babel({ presets: [reactCompilerPreset()] })],
   resolve: {
     dedupe: ['react', 'react-dom', 'three', '@react-three/fiber'],
   },

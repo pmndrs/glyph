@@ -9,7 +9,7 @@
     "dev": "pnpm --filter @pmndrs/glyph-benchmarks dev",
     "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build",
     "test": "pnpm --filter './packages/*' --if-present test && pnpm --filter './apps/*' --if-present test",
-    "check": "tsc -p .claude/tsconfig.json && node --test .claude/hooks/sync-agent-config.test.ts && pnpm --filter './packages/*' check && pnpm --workspace-concurrency=1 --filter './apps/*' check && oxfmt --check .claude/hooks .claude/settings.json .claude/tsconfig.json package.json .agents/docs/log.md && ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb .agents/docs --workspace-root .",
+    "check": "tsc -p .claude/tsconfig.json && node --test .claude/hooks/sync-agent-config.test.ts && pnpm --filter './packages/*' check && pnpm --workspace-concurrency=1 --filter './apps/*' check && pnpm --filter @pmndrs/glyph-site check && oxfmt --check .claude/hooks .claude/settings.json .claude/tsconfig.json package.json .agents/docs/log.md && ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb .agents/docs --workspace-root .",
     "scripts": "node apps/benchmarks/scripts/workflows.mts"
   },
   "devDependencies": {

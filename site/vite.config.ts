@@ -29,7 +29,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: new URL('./landing/index.html', import.meta.url).pathname,
-        'glyph-physics': new URL('./landing/glyph-physics.html', import.meta.url).pathname,
       },
     },
     target: 'es2022',
