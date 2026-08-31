@@ -16,7 +16,9 @@ pub use outline::{Bounds, OutlineSink, OutlineSource};
 use crate::{
     color::color_edges,
     distance::{ContourDistance, Distance4},
-    error_correction::correct_interpolation_artifacts,
+    error_correction::{
+        correct_interpolation_artifacts, mark_protected_corners, mark_protected_edges,
+    },
     math::Point,
     outline::{BuildFailure, Edge, EdgeSoa, OutlineStorage},
 };
@@ -164,6 +166,7 @@ struct GeneratorScratch {
     contour_distances_tile: [Vec<ContourDistance>; 4],
     output: Vec<u8>,
     error_stencil: Vec<u8>,
+    corner_protection: Vec<u8>,
 }
 
 pub struct MtsdfGenerator {
@@ -420,6 +423,24 @@ impl GlyphOutline<'_> {
         let vertical_distance_delta = f64::from(bounds.height())
             / region.inner_height as f64
             / f64::from(transform.full_distance_range);
+        mark_protected_corners(
+            &self.generator.scratch.colored_edges,
+            &self.generator.scratch.colored_contours,
+            bounds,
+            region,
+            total_width,
+            total_height,
+            &mut self.generator.scratch.corner_protection,
+        )
+        .map_err(|()| GenerateError::Allocation)?;
+        mark_protected_edges(
+            output,
+            total_width,
+            total_height,
+            horizontal_distance_delta,
+            vertical_distance_delta,
+            &mut self.generator.scratch.corner_protection,
+        );
         correct_interpolation_artifacts(
             output,
             total_width,
@@ -427,6 +448,7 @@ impl GlyphOutline<'_> {
             horizontal_distance_delta,
             vertical_distance_delta,
             &mut self.generator.scratch.error_stencil,
+            &self.generator.scratch.corner_protection,
         )
         .map_err(|()| GenerateError::Allocation)?;
         Ok(output)
@@ -497,7 +519,7 @@ mod tests {
         let hash = first.iter().fold(0x811c_9dc5_u32, |hash, byte| {
             (hash ^ u32::from(*byte)).wrapping_mul(0x0100_0193)
         });
-        assert_eq!(hash, 0x4f1d_e5a5);
+        assert_eq!(hash, 0xe2a5_a9a1);
     }
 
     #[test]

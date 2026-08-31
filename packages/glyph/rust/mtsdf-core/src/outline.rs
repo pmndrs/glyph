@@ -150,6 +150,14 @@ impl Edge {
         }
     }
 
+    pub(crate) fn color(self) -> u8 {
+        match self {
+            Self::Line { color, .. } | Self::Quadratic { color, .. } | Self::Cubic { color, .. } => {
+                color
+            }
+        }
+    }
+
     pub(crate) fn set_color(&mut self, value: u8) {
         match self {
             Self::Line { color, .. }

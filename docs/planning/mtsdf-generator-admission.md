@@ -59,6 +59,56 @@ The shipped core must remain `no_std + alloc`, accept the package-selected alloc
 
 The owned boundary now separates those responsibilities concretely: `mtsdf-core` contains only geometry and reusable allocation-backed scratch, while `mtsdf-baker` owns the package-selected dynamic Talc allocator, the generated contract, and the direct-memory C ABI. Its fixed request header points at fixed-size move/line/quadratic/cubic/close records in the same allocation. The Wasm validates exact request length and command framing before outline construction, returns status codes rather than crossing the ABI with Rust errors, and lends its RGBA8 result until the next generation call. A separate checked transform lets the fixed baker quantize bounds to a global plane grid and declare one distance range without changing the exact legacy oracle path. The generated-contract command is named `generate-mtsdf-abi` for the artifact it produces. A feature-minimal admission build produces the optimized generator Wasm and JSON contract for reproducible evidence; the package publishes one full baker module containing the same kernel instead of duplicating a standalone generator resource. A dependency-free TypeScript host validates both contract and requests, copies borrowed output, and releases every request transactionally. Seven native-oracle identities plus malformed values, invalid outline state, forged/stale ownership, ABI drift, and output cleanup pass through that host. The feature-minimal zero-import boundary is 69,731 bytes, 30,131 gzip bytes, and 25,327 Brotli bytes; its host is 8,466 minified and 2,364 Brotli bytes.
 
+## Error-correction protection
+
+The owned port carried msdfgen's correction stencils but not its protection stencils. msdfgen's
+default `EDGE_PRIORITY` mode calls `protectCorners` and `protectEdges` before it looks for
+interpolation artifacts; the port called neither, and added a repository-local second stage that
+flattened RGB to the true-distance alpha wherever `median(rgb)` and `alpha` disagreed about
+inside/outside. At a corner that disagreement is not a fault — it is the mechanism by which
+multi-channel encoding reconstructs a sharp corner from a rounded distance field — so the stage
+fired at every corner and collapsed the field to a plain SDF exactly where sharpness is the point.
+
+The native oracle could not observe this. Its corpus is framed with a distance range of 1,000 font
+units over a 32x32 inner region at scale 0.04, which is 40 texels of range; production bakes 8. In
+that regime the median and the true distance stay close enough that the stage rarely engages, and
+the gates cover alpha and coverage rather than the median.
+
+Reconstructed coverage is now measured against an independent scanline rasterization of the same
+outline, exact in x and subsampled sixteen times per row in y, decoded exactly as the production
+fragment graph decodes it. Over Inter at the production 64/8 framing, magnified eight times,
+counting samples whose coverage misses the reference by more than a quarter:
+
+| glyph | before | after | native `msdfgen` |
+| ----- | -----: | ----: | ---------------: |
+| `I`   |     52 |     0 |                0 |
+| `H`   |    173 |     1 |                1 |
+| `n`   |    131 |    31 |               13 |
+| `o`   |      0 |     0 |                0 |
+| `M`   |    415 |    31 |                4 |
+| `A`   |    203 |     1 |                1 |
+| `4`   |    218 |    31 |               25 |
+| `8`   |     66 |    63 |               32 |
+| `&`   |    212 |     3 |               25 |
+
+`o` carries no corner, never engages correction, and is the control: its numbers are unchanged. The
+totalled count falls from 1,250 to 161 against 101 for native `msdfgen`, so the port moves from
+12.4x the reference artifact count to 1.6x. On the seven native-oracle cases the median maximum
+error against `msdfgen` falls from 2, 1, and 1 byte levels on the acute-corner, overlapping-contour,
+and complex-counter cases to zero on every case.
+
+Correction is not disabled. Removing the alpha stage outright reaches parity or better on eight of
+those nine glyphs but regresses `8`, whose waist is the pinch point the stage exists to repair.
+Protection keeps the repair and removes the corner damage.
+
+Whole-font bake time improves rather than regresses, because protected texels are never marked and
+the stage's bounded repeat loop converges sooner: Inter -6.0%, Font Awesome -7.8%, and Dancing
+Script -0.4% on warm medians over five passes.
+
+`pnpm scripts run glyph:mtsdf-quality:check` is the standing gate. It measures the same
+reconstruction over Inter, Source Serif, Dancing Script, and Font Awesome and fails when any glyph's
+over-quarter sample count rises more than 35% above its checked-in baseline.
+
 ## Admission evidence
 
 Correctness precedes timing:
