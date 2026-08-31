@@ -98,10 +98,16 @@ export const packageSizeBudgets = {
     gzipBytes: 570_000,
     brotliBytes: 430_000,
   },
+  // Corner protection stopped error correction from flattening corner texels to a single channel.
+  // Those flattened texels held four identical bytes and compressed almost for free; genuine
+  // multi-channel corner data does not. Inter's MTSDF asset grew 8,007,071 to 8,167,575 gzip
+  // (+2.0%) for a fall from 161 to 97 samples missing ground-truth coverage by more than a quarter,
+  // which is fewer than native msdfgen's 101 on the same glyphs. Raw and Brotli both still fit the
+  // reviewed ceiling; only gzip needed re-pricing. See D-293.
   'font-inter-mtsdf': {
     rawBytes: 40_000_000,
     minifiedBytes: 40_000_000,
-    gzipBytes: 8_100_000,
+    gzipBytes: 8_300_000,
     brotliBytes: 4_200_000,
   },
   'font-inter-slug': {
