@@ -1,0 +1,248 @@
+---
+title: Introduction
+description: Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for every Canvas.
+nav: 0
+---
+
+<Intro>
+  `@pmndrs/glyph` shapes and lays out text in Rust/Wasm, then publishes a retained render plan for the active renderer.
+  The maintained Three.js integration supports Bitmap, MSDF, and Slug through WebGPU and Three's WebGL fallback.
+</Intro>
+
+## Install
+
+```sh
+npm install @pmndrs/glyph
+```
+
+## Render text with React Three Fiber
+
+```tsx
+import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+
+const fontRequest = {
+  input: { baked: '/fonts/Inter.font.glb' },
+  technique: msdf,
+} as const;
+
+useFont.preload(fontRequest.input, fontRequest.technique);
+
+function Labels() {
+  const inter = useFont(fontRequest.input, fontRequest.technique);
+
+  return (
+    <TextGroup compositing="independent">
+      <Text
+        font={inter}
+        constraints={{ width: { mode: 'at-most', size: 480 } }}
+        layout={{ wrap: 'word' }}
+        style={{ color: '#f4f7ff', fontSize: 32, lineHeight: 1.2 }}
+      >
+        Hello <Text style={{ color: '#70d6ff' }}>world</Text>
+      </Text>
+    </TextGroup>
+  );
+}
+```
+
+`Text` is a retained paragraph and a Three `Object3D`. A nested `Text` is a span, and inherits the surrounding
+font, style, paint, and material unless it overrides them.
+
+`TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the
+ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text
+semantics and lazily owns an implicit batch of one.
+
+## An inline scene proxy
+
+The docs page can host a Three scene without making the docs application an R3F application. The root is a custom
+element that owns a bounded pool of R3F roots and offscreen surfaces on one shared GPU device; each proxy is an ordinary page
+element that receives copied frames. Proxies can be placed anywhere in the MDX document and bind to the root by id.
+
+<link rel="stylesheet" href="/docs/assets/glyph-explainer.css" />
+<script type="module" src="/docs/assets/glyph-explainer.js"></script>
+
+<glyph-introduction-root id="introduction-glyph-scene" max-slots="2" idle-ttl="5000" />
+
+<glyph-proxy
+  id="introduction-glyph-proxy"
+  height="18rem"
+  root="introduction-glyph-scene"
+  data-scene="glyph"
+  role="button"
+  aria-label="The glyph scene rendered by one offscreen Three host"
+/>
+
+<glyph-scene-control
+  root="introduction-glyph-scene"
+  proxy="introduction-glyph-proxy"
+  data-scene="glyph"
+>
+  Glyph
+</glyph-scene-control>
+<glyph-scene-control
+  root="introduction-glyph-scene"
+  proxy="introduction-glyph-proxy"
+  data-scene="shaping"
+>
+  Shaping
+</glyph-scene-control>
+
+Both targets may be visible together: the controller leases one pooled offscreen root to each visible proxy, then
+recycles idle roots after the TTL. Scroll to move them in and out of the pool. Click either proxy to send a targeted
+pointerdown through the root's ordered page-local stream and change only that scene's word color. Pointer motion is
+coalesced to one update per 30 ms; clicks, keys, controls, and scene changes flush immediately in occurrence order.
+
+<glyph-proxy
+  id="introduction-canvas-proxy"
+  height="18rem"
+  root="introduction-glyph-scene"
+  data-scene="shaping"
+  role="button"
+  aria-label="The canvas scene rendered by the same offscreen Three host"
+/>
+
+The component is just HTML from the MDX compiler. Its JavaScript class is registered with
+`customElements.define`, so this remains compatible with the React components supplied by `pmndrs/docs` while
+keeping the WebGPU renderer, font cache, and animation loop outside the docs React tree.
+
+## Explainer scenes
+
+Each feature below is a normal MDX proxy with its own declarative `data-scene`. The root can keep several scenes
+warm, pauses scenes whose proxies leave the viewport, and recycles idle roots when the pool limit is reached.
+
+### Bitmap, MSDF, and Slug
+
+The title uses Lovers+Quarrel Slug, the subtitle uses Geist MSDF, and the small copy uses VT323 bitmap. They are
+three independent text objects in one scene, so the demo makes the technique choice visible instead of changing a
+CSS font.
+
+<glyph-proxy
+  id="introduction-techniques-proxy"
+  height="18rem"
+  root="introduction-glyph-scene"
+  data-scene="techniques"
+  aria-label="Slug, MSDF, and bitmap text techniques"
+/>
+
+### Styling and spans
+
+Nested `Text` keeps one paragraph while letting each inline run carry its own style. The scene gently floats so the
+material and the retained text remain visibly live.
+
+<glyph-proxy
+  id="introduction-styling-proxy"
+  height="14rem"
+  root="introduction-glyph-scene"
+  data-scene="styling"
+  aria-label="Styled glyph spans"
+/>
+
+### Positioning
+
+Glyphs are regular Three objects, so they can sit at different positions and depths while a parent group animates.
+
+<glyph-proxy
+  id="introduction-positioning-proxy"
+  height="14rem"
+  root="introduction-glyph-scene"
+  data-scene="positioning"
+  aria-label="Positioned glyph objects"
+/>
+
+### Columns
+
+The column example uses one paragraph with an exact content box and two ordered columns. Its small animated drift
+helps distinguish a live layout from a static screenshot.
+
+<glyph-proxy
+  id="introduction-columns-proxy"
+  height="18rem"
+  root="introduction-glyph-scene"
+  data-scene="columns"
+  aria-label="A two-column glyph paragraph"
+/>
+
+### A multilingual font stack
+
+The Latin MSDF face is primary and the bundled M PLUS 1p Japanese face is a fallback. The same paragraph therefore
+shapes `glyph`, `文字`, and `字形` through one `createFontStack` selection.
+
+<glyph-proxy
+  id="introduction-font-stack-proxy"
+  height="14rem"
+  root="introduction-glyph-scene"
+  data-scene="font-stack"
+  aria-label="A Latin and Japanese font stack"
+/>
+
+### Icons
+
+Font Awesome Solid is baked as a small MSDF subset. These icons are glyphs too, so they share the same layout and
+proxy path while the group rotates slowly.
+
+<glyph-proxy
+  id="introduction-icons-proxy"
+  height="14rem"
+  root="introduction-glyph-scene"
+  data-scene="icons"
+  aria-label="Animated Font Awesome icon glyphs"
+/>
+
+### Editing with `glyphs()`
+
+Focus the proxy and type to edit text. Click to move the caret, or drag across the line to select a range. The proxy
+raycasts the page-space pointer onto the `Text` plane, converts the hit to paragraph-local coordinates, and then uses
+`caretAt()` and `selectionRects()` to paint a line-height caret and selection in the same offscreen scene.
+
+<glyph-proxy
+  id="introduction-editing-proxy"
+  height="14rem"
+  root="introduction-glyph-scene"
+  data-scene="editing"
+  role="textbox"
+  aria-multiline="false"
+  aria-label="Editable glyph text region"
+/>
+
+### Break apart and pulse
+
+Click the explainer to create two detached `Glyphs` branches: a Geist MSDF title and a tight VT323 bitmap copy block.
+Every glyph gets its own sleeping Box3D body, so a click wakes only the nearby glyphs and leaves the rest floating in
+place. Reset disposes the branches and makes the live `Text` objects visible again. Physics remains application-owned;
+`Glyphs.measurements` is the data a physics adapter can use to choose its own body shapes.
+
+<glyph-proxy
+  id="introduction-physics-proxy"
+  height="24rem"
+  root="introduction-glyph-scene"
+  data-scene="physics"
+  role="button"
+  aria-label="Glyph break-apart impulse and reset demo"
+/>
+<glyph-scene-control
+  root="introduction-glyph-scene"
+  proxy="introduction-physics-proxy"
+  data-action="reset"
+>
+Reset physics
+</glyph-scene-control>
+
+This example uses Isaac Mason's `box3d.js` WebAssembly bindings to create one sleeping rigid body per
+detached glyph and a six-sided boundary aligned to the proxy viewport. The physics adapter chooses
+box bodies from each glyph's `localInkBounds` transformed by the detached root's `matrixWorld`, applies a gentle
+world-space radial impulse from the click point, then hoists one inverse per detached root and writes each Box3D world
+transform through `worldToLocalMatrix()` and `Glyphs.setMatrixAt()`;
+the glyph package does not own the physics world. `box3d.js` and the Box3D engine are MIT licensed;
+their license notices remain in the installed package.
+
+## Bake a font
+
+Fonts are baked ahead of time into a `.font.glb` carrying the shaping data and every raster you ask for.
+
+```sh
+npx glyph bake --input Inter-Regular.ttf --output inter.font.glb \
+  --unicodes U+0020-007E --bitmap 32 --msdf --slug
+```
+
+`--unicodes` subsets the shaping font, so an artifact only carries the coverage you render.
