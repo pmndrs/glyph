@@ -263,8 +263,15 @@ One `TextGroup` owns one Rust render planner. A traversal sends only changed par
 - text replacement sends text plus any dependent style/geometry state;
 - font, spans, shaping style, paint, raster ratio, or material send style state;
 - content-box changes send geometry;
+- `RenderPlanner.reorderTexts()` atomically publishes one exact permutation of every live retained text as lifecycle-only
+  paragraph records, without resending text, style, or geometry;
 - transform and visibility changes update Three's renderer-local sidecar without calling Wasm;
 - an empty or normalized-equal update sends nothing.
+
+`TextGroup` uses that atomic reorder whenever child `renderOrder` changes. Sequential per-child order updates are invalid
+because a swap briefly assigns two live paragraphs the same order; the planner therefore accepts the complete permutation
+or leaves the previous order untouched. The Three integration regression repeatedly reverses two paragraphs while rotating
+them through a nested parent, verifies physical transform-index ownership, and verifies WebGL2 PBO invalidation.
 
 Three's ordinary scene traversal owns world-matrix composition. `TextGroup` tracks local matrices, visibility, and
 parent identity only below its shared draw root, then gives the executor the paragraph IDs whose relative transform

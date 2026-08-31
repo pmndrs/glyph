@@ -1331,12 +1331,109 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   assert.equal(transforms.array[2 * 16 + 12], 7);
   assert.equal(forcedTextWorldUpdates, 0, 'the normal Three traversal supplies current matrices to transform patches');
 
+  right.renderOrder = 0;
+  left.renderOrder = 1;
+  scene.updateMatrixWorld();
+  const reorderedParagraphs = instrumented.latestParagraphMutations();
+  assert.deepEqual(
+    reorderedParagraphs.map(({ opcode, order }) => ({ opcode, order })),
+    [
+      { opcode: 1, order: 1 },
+      { opcode: 1, order: 0 },
+    ],
+  );
+  assert.notEqual(reorderedParagraphs[0].paragraphId, reorderedParagraphs[1].paragraphId);
+  assert.deepEqual(
+    instrumented.latestMutationCounts(),
+    {
+      paragraph: 2,
+      text: 0,
+      style: 0,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'an order-only transaction must not republish semantic paragraph payloads',
+  );
+  assert.equal(group.error, undefined, 'TextGroup must reorder retained paragraphs without transient order collisions');
+  const reorderedDraw = group.children.filter((child) => child.isMesh)[0];
+  const reorderedStart = reorderedDraw.userData.pmndrsGlyphRunStart;
+  const reorderedIndices = reorderedDraw.geometry.getAttribute(
+    glyphAttribute(threeSystemBuffers.transformIndex.id),
+  ).array;
+  assert.deepEqual(
+    Array.from(reorderedIndices.subarray(reorderedStart, reorderedStart + 4)),
+    [2, 2, 1, 1],
+    'TextGroup reorder moves physical records without changing their paragraph transform ids',
+  );
+  assert.equal(transforms.array[1 * 16 + 12], 2);
+  assert.equal(transforms.array[2 * 16 + 12], 7);
+
+  const reorderedRotationVersion = transforms.version;
+  right.rotation.z = Math.PI / 4;
+  scene.updateMatrixWorld();
+  const reorderedRightExpected = new THREE.Matrix4()
+    .copy(group.matrixWorld)
+    .invert()
+    .multiply(right.matrixWorld).elements;
+  assert.equal(transforms.version, reorderedRotationVersion + 1);
+  for (let lane = 0; lane < 16; lane += 1) {
+    assert.ok(
+      Math.abs(transforms.array[2 * 16 + lane] - reorderedRightExpected[lane]) < 1e-6,
+      `actively reordered right paragraph preserves transform lane ${lane}`,
+    );
+  }
+
+  right.renderOrder = 1;
+  left.renderOrder = 0;
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined, 'reversing TextGroup order must remain collision free');
+  const restoredDraw = group.children.filter((child) => child.isMesh)[0];
+  const restoredStart = restoredDraw.userData.pmndrsGlyphRunStart;
+  const restoredIndices = restoredDraw.geometry.getAttribute(
+    glyphAttribute(threeSystemBuffers.transformIndex.id),
+  ).array;
+  assert.deepEqual(
+    Array.from(restoredIndices.subarray(restoredStart, restoredStart + 4)),
+    [1, 1, 2, 2],
+    'repeated TextGroup reorder cannot drift paragraph-to-transform indexing',
+  );
+
+  const leftRotationVersion = transforms.version;
+  left.rotation.z = -Math.PI / 3;
+  scene.updateMatrixWorld();
+  const leftExpected = new THREE.Matrix4().copy(group.matrixWorld).invert().multiply(left.matrixWorld).elements;
+  assert.equal(transforms.version, leftRotationVersion + 1);
+  for (let lane = 0; lane < 16; lane += 1) {
+    assert.ok(
+      Math.abs(transforms.array[1 * 16 + lane] - leftExpected[lane]) < 1e-6,
+      `reordered left paragraph preserves transform lane ${lane}`,
+    );
+  }
+  assert.equal(transforms.array[2 * 16 + 12], 7, 'rotating one reordered paragraph cannot patch its sibling');
+
   const nestedParent = new THREE.Group();
   group.add(nestedParent);
   nestedParent.add(right);
   nestedParent.position.x = 3;
   scene.updateMatrixWorld();
   assert.equal(transforms.array[2 * 16 + 12], 10, 'nested parent motion patches only the affected transform path');
+  const nestedRotationVersion = transforms.version;
+  const transformPbo = { needsUpdate: false };
+  transforms.pbo = transformPbo;
+  nestedParent.rotation.z = Math.PI / 2;
+  scene.updateMatrixWorld();
+  const nestedExpected = new THREE.Matrix4().copy(group.matrixWorld).invert().multiply(right.matrixWorld).elements;
+  assert.equal(transforms.version, nestedRotationVersion + 1, 'nested parent rotation uploads the indexed transform');
+  for (let lane = 0; lane < 16; lane += 1) {
+    assert.ok(
+      Math.abs(transforms.array[2 * 16 + lane] - nestedExpected[lane]) < 1e-6,
+      `indexed text preserves inherited transform lane ${lane}`,
+    );
+  }
+  assert.equal(transformPbo.needsUpdate, true, 'nested parent rotation invalidates the WebGL2 PBO mirror');
+  delete transforms.pbo;
   nestedParent.visible = false;
   scene.updateMatrixWorld();
   assert.deepEqual(
@@ -1490,6 +1587,36 @@ async function createInstrumentedEngine() {
           insert,
         };
       });
+    },
+    latestParagraphMutations() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const mutation = abi.layouts.engineParagraphMutation;
+      const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+      const offset = view.getUint32(request.paragraphMutationsOffset, true);
+      const count = view.getUint32(request.paragraphMutationCount, true);
+      return Array.from({ length: count }, (_recordValue, index) => {
+        const record = offset + index * mutation.size;
+        return {
+          opcode: view.getUint8(record + mutation.opcode),
+          paragraphId: view.getUint32(record + mutation.paragraphId, true),
+          order: view.getUint32(record + mutation.order, true),
+        };
+      });
+    },
+    latestMutationCounts() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+      return {
+        paragraph: view.getUint32(request.paragraphMutationCount, true),
+        text: view.getUint32(request.textMutationCount, true),
+        style: view.getUint32(request.styleMutationCount, true),
+        constraint: view.getUint32(request.constraintCount, true),
+        region: view.getUint32(request.regionCount, true),
+        exclusion: view.getUint32(request.exclusionCount, true),
+        inlineObject: view.getUint32(request.inlineObjectCount, true),
+      };
     },
   };
 }

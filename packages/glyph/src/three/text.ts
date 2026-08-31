@@ -789,6 +789,27 @@ class ThreeTextBatchBinding {
     for (const text of [...this.#entries.keys()]) {
       if (!desired.has(text)) this.removeText(text);
     }
+    const temporaryBase = Math.max(
+      ordered.length,
+      1 + Math.max(-1, ...[...this.#entries.values()].map((entry) => entry.stagedOrder)),
+    );
+    for (const [index, text] of ordered.entries()) {
+      if (!this.#entries.has(text)) {
+        this.#stage(
+          text,
+          reconciler.desired(text),
+          reconciler.fontBindings(text),
+          reconciler.desiredRevision(text),
+          temporaryBase + index,
+        );
+      }
+    }
+    const handles = ordered.map((text) => this.#entries.get(text)!.handle);
+    if (ordered.some((text, order) => this.#entries.get(text)!.stagedOrder !== order)) {
+      this.#planner.reorderTexts(handles);
+      this.#pendingPublication = true;
+      for (const [order, text] of ordered.entries()) this.#entries.get(text)!.stagedOrder = order;
+    }
     for (const [order, text] of ordered.entries()) {
       const entry = this.#entries.get(text);
       const revision = reconciler.desiredRevision(text);
