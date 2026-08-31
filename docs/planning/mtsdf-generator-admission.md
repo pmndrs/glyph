@@ -63,51 +63,45 @@ The owned boundary now separates those responsibilities concretely: `mtsdf-core`
 
 The owned port carried msdfgen's correction stencils but not its protection stencils. msdfgen's
 default `EDGE_PRIORITY` mode calls `protectCorners` and `protectEdges` before it looks for
-interpolation artifacts; the port called neither, and added a repository-local second stage that
-flattened RGB to the true-distance alpha wherever `median(rgb)` and `alpha` disagreed about
-inside/outside. At a corner that disagreement is not a fault — it is the mechanism by which
-multi-channel encoding reconstructs a sharp corner from a rounded distance field — so the stage
-fired at every corner and collapsed the field to a plain SDF exactly where sharpness is the point.
+interpolation artifacts; the port called neither. Unprotected, that scan over-fires, so residual
+artifacts remained and a second stage was added that flattened RGB to the true-distance alpha
+wherever `median(rgb)` and `alpha` disagreed about inside/outside.
 
-The native oracle could not observe this. Its corpus is framed with a distance range of 1,000 font
-units over a 32x32 inner region at scale 0.04, which is 40 texels of range; production bakes 8. In
-that regime the median and the true distance stay close enough that the stage rarely engages, and
-the gates cover alpha and coverage rather than the median.
+That stage broke the format's own contract. In MTSDF the alpha channel is a passenger carried for
+effects, and the reference implementation never reads it while correcting:
+`MSDFErrorCorrection::apply` writes channels 0..2 only. Coupling RGB to alpha also destroyed the
+mechanism the multi-channel encoding exists for, because the median disagreeing with the true
+distance at a corner is exactly how a sharp corner is reconstructed from a rounded field.
 
-Reconstructed coverage is now measured against an independent scanline rasterization of the same
-outline, exact in x and subsampled sixteen times per row in y, decoded exactly as the production
-fragment graph decodes it. Over Inter at the production 64/8 framing, magnified eight times,
-counting samples whose coverage misses the reference by more than a quarter:
+Both protection stencils are now ported and the compensating stage is removed. Reconstructed
+coverage is measured against an independent scanline rasterization of the same outline, exact in x
+and subsampled sixteen times per row in y, decoded exactly as the production fragment graph decodes
+it. Counting samples whose coverage misses the reference by more than a quarter for Inter `M`,
+against native `msdfgen` on the same outline through the same reconstruction:
 
-| glyph | before | after | native `msdfgen` |
-| ----- | -----: | ----: | ---------------: |
-| `I`   |     52 |     0 |                0 |
-| `H`   |    173 |     1 |                1 |
-| `n`   |    131 |    31 |               13 |
-| `o`   |      0 |     0 |                0 |
-| `M`   |    415 |    31 |                4 |
-| `A`   |    203 |     1 |                1 |
-| `4`   |    218 |    31 |               25 |
-| `8`   |     66 |    63 |               32 |
-| `&`   |    212 |     3 |               25 |
+| px/em | before | after | native `msdfgen` |
+| ----: | -----: | ----: | ---------------: |
+|    64 |      2 |     2 |                2 |
+|   192 |      5 |     2 |                2 |
+|   384 |      9 |     3 |                3 |
+|   512 |     31 |     4 |                4 |
+|  1024 |     99 |     1 |                1 |
 
-`o` carries no corner, never engages correction, and is the control: its numbers are unchanged. The
-totalled count falls from 1,250 to 161 against 101 for native `msdfgen`, so the port moves from
-12.4x the reference artifact count to 1.6x. On the seven native-oracle cases the median maximum
-error against `msdfgen` falls from 2, 1, and 1 byte levels on the acute-corner, overlapping-contour,
-and complex-counter cases to zero on every case.
+Every figure now matches `msdfgen` exactly, including maximum error to three decimals, and the
+scale-dependent growth disappears. Across the four-font corpus the count falls from 1,157 to 956;
+Inter alone falls from 161 to 97, fewer than `msdfgen`'s 101 on the same glyphs. On the seven
+native-oracle cases the median maximum error against `msdfgen` falls from 2, 1 and 1 byte levels on
+the acute-corner, overlapping-contour and complex-counter cases to zero on every case.
 
-Correction is not disabled. Removing the alpha stage outright reaches parity or better on eight of
-those nine glyphs but regresses `8`, whose waist is the pinch point the stage exists to repair.
-Protection keeps the repair and removes the corner damage.
+A true right-angle corner reconstructs exactly at every scale: Inter `I` records zero over-quarter
+samples from 64 to 1024 px/em. The residual on `M` is sub-pixel softness at an acute apex, which is
+the genuine limit of a three-channel encoding rather than an atlas-resolution limit.
 
-Whole-font bake time improves rather than regresses, because protected texels are never marked and
-the stage's bounded repeat loop converges sooner: Inter -6.0%, Font Awesome -7.8%, and Dancing
-Script -0.4% on warm medians over five passes.
-
-`pnpm scripts run glyph:mtsdf-quality:check` is the standing gate. It measures the same
-reconstruction over Inter, Source Serif, Dancing Script, and Font Awesome and fails when any glyph's
-over-quarter sample count rises more than 35% above its checked-in baseline.
+The native oracle could not observe any of this. Its corpus is framed with a distance range of
+1,000 font units over a 32x32 inner region at scale 0.04, which is 40 texels of range; production
+bakes 8. Its gates also cover alpha and coverage rather than the median.
+`pnpm scripts run glyph:mtsdf-quality:check` is the standing gate against ground truth, and fails
+when any glyph's over-quarter count rises more than 35% above its checked-in baseline.
 
 ## Admission evidence
 
