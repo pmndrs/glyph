@@ -331,8 +331,10 @@ paragraph. The source continues shaping normally; later source publications cann
 `Glyphs` follows the familiar instanced-mesh matrix surface. `getMatrixAt()` and `setMatrixAt()` use `Glyphs`-local
 space; `getWorldMatrixAt()` and `setWorldMatrixAt()` bridge world-space physics through the root transform. Every method
 reads or writes a complete affine matrix, so translation, quaternion rotation, scale, and depth are all supported.
-`measurements` retains each original local/world matrix, ink and advance AABBs, anchor lookup, and the metric or supplied
-geometry used by the renderer. These are rendering facts, not prescribed collision bodies.
+`measurements` retains each original local matrix, local ink and advance bounds, anchor lookup, and the metric or supplied
+geometry used by the renderer. It never traverses or caches scene ancestors. World-space callers update the `Glyphs`
+root once and cross that boundary through `getWorldMatrixAt()` or `setWorldMatrixAt()`; these are rendering facts, not
+prescribed collision bodies.
 
 Materials are cloned into each detached branch and exposed through `materials`; changing one cannot mutate the source
 `Text` or its sibling detached branch. Immutable atlas/page GPU resources are leased from the existing Three engine domain
