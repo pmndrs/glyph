@@ -14,6 +14,26 @@ pub use fontations::{
     FontPassEvidence, FontationsOutlineSource, font_outline_source, glyph_count, measure_font_pass,
 };
 
+#[cfg(feature = "full-font-evidence")]
+mod quality;
+
+#[cfg(feature = "full-font-evidence")]
+pub use quality::{
+    Channel, FlatteningPen, QualityMeasurement, ReferenceOutline, ShapePen, compare,
+    reconstruct_coverage, write_triptych,
+};
+
+/// Reference rasterizer subsample rows per output pixel row.
+///
+/// Coverage is exact in x, so only the y axis is sampled. Sixteen rows put the reference's own
+/// quantization at 1/16 of a pixel edge, an order of magnitude below the artifacts being measured.
+#[cfg(feature = "full-font-evidence")]
+pub const REFERENCE_SUBSAMPLES_PER_ROW: usize = 16;
+
+/// Chords per curve when flattening an outline for the reference rasterizer.
+#[cfg(feature = "full-font-evidence")]
+pub const REFERENCE_CHORDS_PER_CURVE: usize = 64;
+
 #[cfg(feature = "fuzzing")]
 mod fuzzing;
 
