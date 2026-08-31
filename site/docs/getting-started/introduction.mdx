@@ -62,10 +62,16 @@ Each proxy centers that complete frame and lets its own HTML bounds clip it, so 
 directly without a pixel crop. The same path uses one WebGPU device or one WebGL context. Proxies can be placed anywhere
 in the MDX document and bind to the root by id.
 
-<link rel="stylesheet" href="/docs/assets/glyph-explainer.css" />
-<script type="module" src="/docs/assets/glyph-explainer.js"></script>
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
 
-<glyph-introduction-root id="introduction-glyph-scene" max-slots="2" idle-ttl="5000" opaque />
+<glyph-explainer-root
+  id="introduction-glyph-scene"
+  data-explainer-page="introduction"
+  max-slots="4"
+  idle-ttl="5000"
+  opaque
+/>
 
 <glyph-proxy
   id="introduction-glyph-proxy"
@@ -91,9 +97,10 @@ in the MDX document and bind to the root by id.
   Shaping
 </glyph-scene-control>
 
-Both targets may be visible together: the controller leases one pooled offscreen root to each visible proxy, then
-recycles idle roots after the TTL. Scroll to move them in and out of the pool. Click either proxy to send a targeted
-pointerdown through the root's ordered page-local stream and change only that scene's word color. Pointer motion is
+Several targets may be visible together: the controller grows its pooled offscreen roots to the page's four-slot cap,
+then recycles idle roots after the TTL. If more than four proxies intersect, the proxies nearest the viewport center keep
+their leases while the farthest retained frame fades out. Scroll to move them in and out of the pool. Click either proxy
+to send a targeted pointerdown through the root's ordered page-local stream and change only that scene's word color. Pointer motion is
 coalesced to one update per 30 ms; clicks, keys, controls, and scene changes flush immediately in occurrence order.
 
 <glyph-proxy
@@ -151,6 +158,21 @@ Glyphs are regular Three objects, so they can sit at different positions and dep
   root="introduction-glyph-scene"
   data-scene="positioning"
   aria-label="Positioned glyph objects"
+/>
+
+### Labels in a 3D scene
+
+This reusable explainer composes scene labels and interface text over a lightweight archviz environment. Drag to orbit
+six deterministic object types: their rounded forms share an instanced batch, while the centered icon and MSDF labels
+share a billboarded world-label layer.
+
+<glyph-proxy
+  id="introduction-object-showcase-proxy"
+  height="22rem"
+  root="introduction-glyph-scene"
+  data-scene="object-showcase"
+  role="application"
+  aria-label="Interactive labeled objects in a three-quarter 3D scene"
 />
 
 ### Columns
@@ -217,7 +239,7 @@ place. Reset disposes the branches and makes the live `Text` objects visible aga
 
 <glyph-proxy
   id="introduction-physics-proxy"
-  height="24rem"
+  height="22rem"
   root="introduction-glyph-scene"
   data-scene="physics"
   role="button"
