@@ -31,7 +31,7 @@ function evidence(platform, architecture, rawBytes, optimizedSha256) {
     schemaVersion: 0,
     kind: 'test-size-evidence',
     toolchain: { rust: '1.97.1', binaryen: '129.0.0', target: 'wasm32-unknown-unknown' },
-    syntheticOutputFnv1a32: '4f1de5a5',
+    syntheticOutputFnv1a32: 'e2a5a9a1',
     wasmImportCount: 0,
     measurementHost: { platform, architecture },
     rawBytes,

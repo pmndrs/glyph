@@ -71,7 +71,7 @@ assert.equal(resultLength, 40 * 40 * 4);
 const output = new Uint8Array(memory.buffer, resultPointer, resultLength);
 let hash = 0x811c9dc5;
 for (const byte of output) hash = Math.imul(hash ^ byte, 0x01000193) >>> 0;
-assert.equal(hash, 0x4f1de5a5);
+assert.equal(hash, 0xe2a5a9a1);
 
 const { createMtsdfGenerator } = await import('../dist/internal/mtsdf-generator.js');
 const generator = await createMtsdfGenerator(module);

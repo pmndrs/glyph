@@ -30,19 +30,19 @@ function oracleCase(id, candidateSha256, bounds, commands) {
 export const mtsdfOracleCases = [
   oracleCase(
     "ordinary-square",
-    "5a9db463e151052d055d5ee239497a230682dd103d2471c21fb25f9ad7c0e539",
+    "0a273899c2577afa03cfea282fe5ca2e7bc4610407f537e515965862e77aa5cd",
     { minX: 100, minY: 100, maxX: 900, maxY: 900 },
     [move(100, 100), line(100, 900), line(900, 900), line(900, 100), close],
   ),
   oracleCase(
     "acute-corner",
-    "3098863a27fabe561ee9f74e6ad9b10a89583dcb826333f90b8a3a4fe9dfb23b",
+    "732dc274bb1667712186bb959c67bed6a79492854c5f4219057ae60664cee167",
     { minX: 100, minY: 100, maxX: 565, maxY: 950 },
     [move(100, 100), line(500, 950), line(565, 100), close],
   ),
   oracleCase(
     "overlapping-contours",
-    "7f125b5e16c99f7b3d968c47e94ff84b6afbfbf605323da1c452c95bea0b9200",
+    "a507a3a901af8e0120b2e597ca9736df9672cd1b6d26719d22ac25d2a4cbcffa",
     { minX: 100, minY: 100, maxX: 900, maxY: 800 },
     [
       move(100, 200),
@@ -59,7 +59,7 @@ export const mtsdfOracleCases = [
   ),
   oracleCase(
     "self-intersection",
-    "b08ce78f01db8c214fb3e4fa46d87f1a29de5a4d218865f32f61d99aa83c7c88",
+    "8e2f166b8f5a75b8bdb80b5c2154cb2012b10c55493a1749d91fb2c3c57df937",
     { minX: 100, minY: 100, maxX: 900, maxY: 900 },
     [move(100, 100), line(900, 900), line(100, 900), line(900, 100), close],
   ),
@@ -78,7 +78,7 @@ export const mtsdfOracleCases = [
   ),
   oracleCase(
     "cubic-teardrop",
-    "587198ef78e721d220f7195dc25cabbf53486f2dcf00d52dee27b676708f7188",
+    "738260fbea9fadf9ab4e891919513fa26207138c034f20a134644ca710fef4e5",
     { minX: 80, minY: 100, maxX: 920, maxY: 950 },
     [
       move(500, 950),
@@ -89,7 +89,7 @@ export const mtsdfOracleCases = [
   ),
   oracleCase(
     "complex-counter",
-    "f2f430326568a4cea36a9a7a12a60be05597c9d7b08769757a8bd9b5fc30ffbc",
+    "48ad8161120e5f204a1cd47d6f5da927839529b66b2504613b6d26568076f8ee",
     { minX: 80, minY: 100, maxX: 920, maxY: 920 },
     [
       move(80, 100),

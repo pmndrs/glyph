@@ -1,0 +1,22 @@
+0 verbose cli /Users/tjw/.local/share/mise/installs/node/24.18.0/bin/node /Users/tjw/.local/share/mise/installs/node/24.18.0/lib/node_modules/npm/bin/npm-cli.js
+1 info using npm@11.16.0
+2 info using node@v24.18.0
+3 silly config load:file:/Users/tjw/.local/share/mise/installs/node/24.18.0/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/tjw/Developer/text/.claude/worktrees/docs-site-bootstrap-ac8db7/site/.npmrc
+5 silly config load:file:/Users/tjw/.npmrc
+6 silly config load:file:/Users/tjw/.local/share/mise/installs/node/24.18.0/etc/npmrc
+7 verbose title npm exec @pmndrs/docs@4.1.2 build docs dist/docs --format website --libname @pmndrs/glyph --libname-short glyph --libname-dotsuffix-label docs --libname-dotsuffix-href https://docs.pmnd.rs --icon ♠️ --github https://github.com/pmndrs/glyph --discord https://discord.gg/poimandres --home-redirect /getting-started/introduction --theme-primary #0a0c12 --theme-scheme neutral --theme-contrast 0
+8 verbose argv "exec" "--yes" "--" "@pmndrs/docs@4.1.2" "build" "docs" "dist/docs" "--format" "website" "--libname" "@pmndrs/glyph" "--libname-short" "glyph" "--libname-dotsuffix-label" "docs" "--libname-dotsuffix-href" "https://docs.pmnd.rs" "--icon" "♠️" "--github" "https://github.com/pmndrs/glyph" "--discord" "https://discord.gg/poimandres" "--home-redirect" "/getting-started/introduction" "--theme-primary" "#0a0c12" "--theme-scheme" "neutral" "--theme-contrast" "0"
+9 verbose logfile logs-max:10 dir:/Users/tjw/Developer/text/.claude/worktrees/docs-site-bootstrap-ac8db7/site/.npx-cache/_logs/2026-08-25T20_15_08_165Z-
+10 verbose logfile /Users/tjw/Developer/text/.claude/worktrees/docs-site-bootstrap-ac8db7/site/.npx-cache/_logs/2026-08-25T20_15_08_165Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 http fetch GET 200 https://registry.npmjs.org/@pmndrs%2fdocs 92ms (cache revalidated)
+14 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+15 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+16 verbose cwd /Users/tjw/Developer/text/.claude/worktrees/docs-site-bootstrap-ac8db7/site
+17 verbose os Darwin 27.0.0
+18 verbose node v24.18.0
+19 verbose npm  v11.16.0
+20 verbose exit 0
+21 info ok
