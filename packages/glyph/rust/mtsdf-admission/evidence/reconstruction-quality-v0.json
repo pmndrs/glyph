@@ -22,7 +22,7 @@
       "glyph": 197,
       "width": 120,
       "height": 440,
-      "meanAbsoluteError": 0.00168,
+      "meanAbsoluteError": 0.00166,
       "maximumAbsoluteError": 0.1402,
       "worstX": 84,
       "worstY": 35,
@@ -35,7 +35,7 @@
       "glyph": 161,
       "width": 360,
       "height": 440,
-      "meanAbsoluteError": 0.00087,
+      "meanAbsoluteError": 0.00086,
       "maximumAbsoluteError": 0.29706,
       "worstX": 84,
       "worstY": 238,
@@ -48,12 +48,12 @@
       "glyph": 773,
       "width": 296,
       "height": 352,
-      "meanAbsoluteError": 0.00101,
-      "maximumAbsoluteError": 1,
-      "worstX": 88,
-      "worstY": 79,
-      "samplesOverQuarter": 31,
-      "samplesOverHalf": 20
+      "meanAbsoluteError": 0.00082,
+      "maximumAbsoluteError": 0.23431,
+      "worstX": 39,
+      "worstY": 40,
+      "samplesOverQuarter": 0,
+      "samplesOverHalf": 0
     },
     {
       "font": "inter-v4.1/Inter-Regular.ttf",
@@ -74,12 +74,12 @@
       "glyph": 292,
       "width": 448,
       "height": 440,
-      "meanAbsoluteError": 0.00096,
-      "maximumAbsoluteError": 0.81353,
-      "worstX": 89,
-      "worstY": 115,
-      "samplesOverQuarter": 31,
-      "samplesOverHalf": 12
+      "meanAbsoluteError": 0.00088,
+      "maximumAbsoluteError": 0.46418,
+      "worstX": 364,
+      "worstY": 86,
+      "samplesOverQuarter": 4,
+      "samplesOverHalf": 0
     },
     {
       "font": "inter-v4.1/Inter-Regular.ttf",
@@ -100,11 +100,11 @@
       "glyph": 1346,
       "width": 344,
       "height": 440,
-      "meanAbsoluteError": 0.00102,
+      "meanAbsoluteError": 0.00099,
       "maximumAbsoluteError": 1,
       "worstX": 89,
       "worstY": 288,
-      "samplesOverQuarter": 31,
+      "samplesOverQuarter": 25,
       "samplesOverHalf": 11
     },
     {
@@ -139,11 +139,11 @@
       "glyph": 2,
       "width": 400,
       "height": 416,
-      "meanAbsoluteError": 0.00048,
-      "maximumAbsoluteError": 0.44248,
-      "worstX": 104,
-      "worstY": 350,
-      "samplesOverQuarter": 6,
+      "meanAbsoluteError": 0.00045,
+      "maximumAbsoluteError": 0.17102,
+      "worstX": 186,
+      "worstY": 38,
+      "samplesOverQuarter": 0,
       "samplesOverHalf": 0
     },
     {
@@ -152,12 +152,12 @@
       "glyph": 14,
       "width": 488,
       "height": 408,
-      "meanAbsoluteError": 0.00094,
-      "maximumAbsoluteError": 1,
-      "worstX": 111,
-      "worstY": 103,
-      "samplesOverQuarter": 46,
-      "samplesOverHalf": 21
+      "meanAbsoluteError": 0.00079,
+      "maximumAbsoluteError": 0.3462,
+      "worstX": 359,
+      "worstY": 87,
+      "samplesOverQuarter": 3,
+      "samplesOverHalf": 0
     },
     {
       "font": "source-serif-4.005/SourceSerif4-Regular.ttf",
@@ -165,11 +165,11 @@
       "glyph": 50,
       "width": 456,
       "height": 320,
-      "meanAbsoluteError": 0.00088,
-      "maximumAbsoluteError": 0.35906,
-      "worstX": 156,
-      "worstY": 203,
-      "samplesOverQuarter": 3,
+      "meanAbsoluteError": 0.00087,
+      "maximumAbsoluteError": 0.3176,
+      "worstX": 161,
+      "worstY": 219,
+      "samplesOverQuarter": 1,
       "samplesOverHalf": 0
     },
     {
@@ -191,12 +191,12 @@
       "glyph": 34,
       "width": 304,
       "height": 448,
-      "meanAbsoluteError": 0.00142,
+      "meanAbsoluteError": 0.00136,
       "maximumAbsoluteError": 1,
       "worstX": 88,
       "worstY": 204,
-      "samplesOverQuarter": 45,
-      "samplesOverHalf": 10
+      "samplesOverQuarter": 32,
+      "samplesOverHalf": 3
     },
     {
       "font": "source-serif-4.005/SourceSerif4-Regular.ttf",
@@ -221,8 +221,8 @@
       "maximumAbsoluteError": 1,
       "worstX": 335,
       "worstY": 328,
-      "samplesOverQuarter": 67,
-      "samplesOverHalf": 19
+      "samplesOverQuarter": 69,
+      "samplesOverHalf": 23
     },
     {
       "font": "dancing-script-3.000/DancingScript-Regular.otf",
@@ -230,12 +230,12 @@
       "glyph": 173,
       "width": 464,
       "height": 488,
-      "meanAbsoluteError": 0.00099,
-      "maximumAbsoluteError": 0.99642,
-      "worstX": 249,
-      "worstY": 324,
-      "samplesOverQuarter": 93,
-      "samplesOverHalf": 23
+      "meanAbsoluteError": 0.0009,
+      "maximumAbsoluteError": 0.58194,
+      "worstX": 204,
+      "worstY": 63,
+      "samplesOverQuarter": 62,
+      "samplesOverHalf": 5
     },
     {
       "font": "dancing-script-3.000/DancingScript-Regular.otf",
@@ -243,12 +243,12 @@
       "glyph": 688,
       "width": 400,
       "height": 264,
-      "meanAbsoluteError": 0.00201,
+      "meanAbsoluteError": 0.00189,
       "maximumAbsoluteError": 1,
       "worstX": 94,
       "worstY": 63,
-      "samplesOverQuarter": 215,
-      "samplesOverHalf": 49
+      "samplesOverQuarter": 193,
+      "samplesOverHalf": 35
     },
     {
       "font": "dancing-script-3.000/DancingScript-Regular.otf",
@@ -256,12 +256,12 @@
       "glyph": 440,
       "width": 264,
       "height": 280,
-      "meanAbsoluteError": 0.00153,
+      "meanAbsoluteError": 0.00157,
       "maximumAbsoluteError": 1,
       "worstX": 71,
       "worstY": 158,
-      "samplesOverQuarter": 62,
-      "samplesOverHalf": 18
+      "samplesOverQuarter": 69,
+      "samplesOverHalf": 25
     },
     {
       "font": "dancing-script-3.000/DancingScript-Regular.otf",
@@ -269,12 +269,12 @@
       "glyph": 474,
       "width": 296,
       "height": 392,
-      "meanAbsoluteError": 0.00214,
+      "meanAbsoluteError": 0.00201,
       "maximumAbsoluteError": 1,
       "worstX": 161,
       "worstY": 159,
-      "samplesOverQuarter": 230,
-      "samplesOverHalf": 73
+      "samplesOverQuarter": 201,
+      "samplesOverHalf": 67
     },
     {
       "font": "dancing-script-3.000/DancingScript-Regular.otf",

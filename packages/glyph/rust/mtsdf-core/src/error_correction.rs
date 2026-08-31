@@ -5,9 +5,6 @@ use crate::{AtlasRegion, outline::Bounds, outline::Edge};
 use core_maths::CoreFloat as _;
 
 const ARTIFACT_T_EPSILON: f64 = 0.01;
-const ALPHA_CONFIRMATION_SUBDIVISIONS: usize = 32;
-const ALPHA_EDGE_MARGIN: f64 = 4.0 / 255.0;
-const MAX_ALPHA_CONFIRMATION_PASSES: usize = 4;
 const ERROR: u8 = 1;
 pub(crate) const PROTECTED: u8 = 2;
 const PROTECTION_RADIUS_TOLERANCE: f64 = 1.001;
@@ -65,17 +62,7 @@ pub(crate) fn correct_interpolation_artifacts(
         }
     }
 
-    let mut corrected = apply_median_stencil(rgba, stencil);
-    for _ in 0..MAX_ALPHA_CONFIRMATION_PASSES {
-        stencil.fill(0);
-        if mark_alpha_disagreements(rgba, width, height, stencil, protection) == 0 {
-            break;
-        }
-        corrected = corrected
-            .checked_add(apply_true_distance_stencil(rgba, stencil))
-            .ok_or(())?;
-    }
-    Ok(corrected)
+    Ok(apply_median_stencil(rgba, stencil))
 }
 
 fn apply_median_stencil(rgba: &mut [u8], stencil: &[u8]) -> usize {
@@ -93,110 +80,6 @@ fn apply_median_stencil(rgba: &mut [u8], stencil: &[u8]) -> usize {
         corrected += 1;
     }
     corrected
-}
-
-fn apply_true_distance_stencil(rgba: &mut [u8], stencil: &[u8]) -> usize {
-    let mut corrected = 0;
-    for (index, mask) in stencil.iter().copied().enumerate() {
-        if mask & ERROR == 0 {
-            continue;
-        }
-        // Alpha stores the true signed distance in MTSDF. Once the denser pass proves that
-        // interpolated RGB disagrees with it at the coverage boundary, copying that distance
-        // removes both the inversion and its wrong magnitude. The edge-fast pass above keeps
-        // median correction for ordinary MSDF channel collisions.
-        let offset = index * 4;
-        let true_distance = rgba[offset + 3];
-        rgba[offset] = true_distance;
-        rgba[offset + 1] = true_distance;
-        rgba[offset + 2] = true_distance;
-        corrected += 1;
-    }
-    corrected
-}
-
-fn mark_alpha_disagreements(
-    rgba: &[u8],
-    width: usize,
-    height: usize,
-    stencil: &mut [u8],
-    protection: &[u8],
-) -> usize {
-    if width < 2 || height < 2 {
-        return 0;
-    }
-    let mut marked = 0;
-    for y in 0..height - 1 {
-        for x in 0..width - 1 {
-            let indices = [
-                y * width + x,
-                y * width + x + 1,
-                (y + 1) * width + x,
-                (y + 1) * width + x + 1,
-            ];
-            let corners = indices.map(|index| pixel4(rgba, index));
-            let minimum_alpha = corners
-                .iter()
-                .map(|corner| corner[3])
-                .fold(f64::INFINITY, f64::min);
-            let maximum_alpha = corners
-                .iter()
-                .map(|corner| corner[3])
-                .fold(f64::NEG_INFINITY, f64::max);
-            // Edge-fast owns far-field inversions. Restrict the denser MTSDF-specific pass to
-            // cells whose true-distance alpha reaches the coverage boundary within four byte steps.
-            if maximum_alpha < 0.5 - ALPHA_EDGE_MARGIN || minimum_alpha > 0.5 + ALPHA_EDGE_MARGIN {
-                continue;
-            }
-            let spreads = corners.map(|corner| {
-                corner[0].max(corner[1]).max(corner[2]) - corner[0].min(corner[1]).min(corner[2])
-            });
-            for sample_y in 1..ALPHA_CONFIRMATION_SUBDIVISIONS {
-                let y_ratio = sample_y as f64 / ALPHA_CONFIRMATION_SUBDIVISIONS as f64;
-                for sample_x in 1..ALPHA_CONFIRMATION_SUBDIVISIONS {
-                    let x_ratio = sample_x as f64 / ALPHA_CONFIRMATION_SUBDIVISIONS as f64;
-                    let sample: [f64; 4] = core::array::from_fn(|channel| {
-                        bilinear_channel(corners, channel, x_ratio, y_ratio)
-                    });
-                    if (median3([sample[0], sample[1], sample[2]]) >= 0.5) == (sample[3] >= 0.5) {
-                        continue;
-                    }
-                    let weights = [
-                        (1.0 - x_ratio) * (1.0 - y_ratio),
-                        x_ratio * (1.0 - y_ratio),
-                        (1.0 - x_ratio) * y_ratio,
-                        x_ratio * y_ratio,
-                    ];
-                    let mut selected = 0;
-                    let mut selected_score = 0.0;
-                    for corner in 0..4 {
-                        let score = spreads[corner] * weights[corner];
-                        if score > selected_score {
-                            selected = corner;
-                            selected_score = score;
-                        }
-                    }
-                    // A texel enveloping a real corner is never an error: the median disagreeing
-                    // with the true distance there is exactly how multi-channel encoding
-                    // reconstructs the corner, not an interpolation fault to be flattened.
-                    if protection.get(indices[selected]).copied().unwrap_or(0) & PROTECTED != 0 {
-                        continue;
-                    }
-                    if selected_score > 0.0 && stencil[indices[selected]] & ERROR == 0 {
-                        stencil[indices[selected]] |= ERROR;
-                        marked += 1;
-                    }
-                }
-            }
-        }
-    }
-    marked
-}
-
-fn bilinear_channel(corners: [[f64; 4]; 4], channel: usize, x_ratio: f64, y_ratio: f64) -> f64 {
-    let bottom = corners[0][channel] * (1.0 - x_ratio) + corners[1][channel] * x_ratio;
-    let top = corners[2][channel] * (1.0 - x_ratio) + corners[3][channel] * x_ratio;
-    bottom * (1.0 - y_ratio) + top * y_ratio
 }
 
 fn pixel4(rgba: &[u8], index: usize) -> [f64; 4] {
@@ -610,7 +493,6 @@ fn libm_floor(value: f32) -> i64 {
     }
 }
 
-
 /// Protect texels that straddle a real edge from correction.
 ///
 /// Ported from msdfgen's `MSDFErrorCorrection::protectEdges`. Where two neighbouring texels bracket
@@ -736,9 +618,10 @@ mod tests {
             },
         ];
         let mut protection = Vec::new();
+        let contour = 0..2;
         mark_protected_corners(
             &edges,
-            &[0..2],
+            core::slice::from_ref(&contour),
             bounds,
             region,
             width,
@@ -787,9 +670,10 @@ mod tests {
             },
         ];
         let mut protection = Vec::new();
+        let contour = 0..2;
         mark_protected_corners(
             &edges,
-            &[0..2],
+            core::slice::from_ref(&contour),
             bounds,
             region,
             width,
@@ -801,34 +685,33 @@ mod tests {
     }
 
     #[test]
-    fn protected_corner_survives_the_alpha_confirmation_pass() {
-        // A 2x2 cell whose median crosses the coverage boundary opposite its true distance is
-        // exactly the configuration the alpha pass flattens. Protecting the target texel must
-        // leave all three channels intact.
-        let rgba: [u8; 16] = [
-            200, 40, 40, 120, 40, 200, 40, 130, 40, 40, 200, 125, 200, 200, 40, 135,
-        ];
-        let mut unprotected = rgba;
-        let mut stencil = Vec::new();
-        correct_interpolation_artifacts(&mut unprotected, 2, 2, 0.125, 0.125, &mut stencil, &[])
-            .expect("correction");
+    fn a_protected_texel_is_never_rewritten_by_correction() {
+        // This pair is the inversion case `corrects_interpolation_inversions_without_changing_alpha`
+        // relies on, so the unprotected control is known to be rewritten. Protecting both texels
+        // must leave the field untouched: that is what keeps a real corner sharp.
+        let source = [255_u8, 230, 0, 17, 0, 230, 255, 23];
 
-        let mut protected = rgba;
-        correct_interpolation_artifacts(
+        let mut unprotected = source.to_vec();
+        let rewritten =
+            correct_interpolation_artifacts(&mut unprotected, 2, 1, 0.05, 0.05, &mut Vec::new(), &[])
+                .expect("correction");
+
+        let mut protected = source.to_vec();
+        let untouched = correct_interpolation_artifacts(
             &mut protected,
             2,
-            2,
-            0.125,
-            0.125,
-            &mut stencil,
-            &[PROTECTED; 4],
+            1,
+            0.05,
+            0.05,
+            &mut Vec::new(),
+            &[PROTECTED; 2],
         )
         .expect("correction");
-        assert_eq!(protected, rgba, "protected texels must not be rewritten");
-        assert_ne!(
-            unprotected, rgba,
-            "the unprotected control must actually be rewritten, or this proves nothing"
-        );
+
+        assert_eq!(rewritten, 2, "the control must actually correct, or this proves nothing");
+        assert_ne!(unprotected.as_slice(), source.as_slice());
+        assert_eq!(untouched, 0);
+        assert_eq!(protected.as_slice(), source.as_slice());
     }
 
     #[test]
@@ -897,28 +780,4 @@ mod tests {
         assert_eq!(wide_span, vec![255, 230, 0, 17, 0, 230, 255, 23]);
     }
 
-    #[test]
-    fn uses_true_distance_alpha_to_remove_residual_bilinear_holes() {
-        let mut rgba = vec![
-            110, 110, 107, 110, 130, 130, 161, 130, 130, 140, 130, 130, 155, 155, 157, 155,
-        ];
-        let alpha = [rgba[3], rgba[7], rgba[11], rgba[15]];
-        let corrected =
-            correct_interpolation_artifacts(&mut rgba, 2, 2, 0.125, 0.125, &mut Vec::new(),
-                &[])
-                .expect("correction");
-        assert!(corrected > 0);
-        assert_eq!([rgba[3], rgba[7], rgba[11], rgba[15]], alpha);
-        for pixel in rgba.chunks_exact(4) {
-            if pixel[0] == pixel[1] && pixel[1] == pixel[2] {
-                assert_eq!(pixel[0], pixel[3]);
-            }
-        }
-        assert_eq!(mark_alpha_disagreements(&rgba, 2, 2, &mut [0; 4], &[]), 0);
-        assert_eq!(
-            correct_interpolation_artifacts(&mut rgba, 2, 2, 0.125, 0.125, &mut Vec::new(), &[])
-                .expect("idempotent correction"),
-            0,
-        );
     }
-}
