@@ -207,6 +207,12 @@
   cache leases without invalidating independently bound Fonts. The planned direct CLI zero-flag default changes from
   shaping-only to embedded Bitmap 8/16, MSDF, and Slug.
 
+## 2026-08-31
+
+- **Added direct-bake glyph lookups** — `glyph bake --glyph-map <path>` emits a deterministic JSON name-to-code-point
+  lookup from the same font face and Unicode selection as the GLB. The lookup and font publish together with rollback,
+  `--check` verifies both outputs byte-for-byte, and ambiguous selected aliases fail before either output is written.
+
 ## 2026-08-30
 
 - **Implemented planner-assisted detached glyph slices** — A committed `RetainedText` can synchronously emit a complete

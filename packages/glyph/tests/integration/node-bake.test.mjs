@@ -321,6 +321,73 @@ test('the CLI directly bakes and checks one known font from arguments', async (t
   );
 });
 
+test('direct bake writes and checks a glyph-name lookup for its selected Unicode set', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-map-cli-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = join(root, 'fa-solid-900.ttf');
+  const output = join(root, 'icons.font.glb');
+  const glyphMap = join(root, 'icons.json');
+  await writeFile(input, await readFile(iconFontUrl));
+
+  const bake = captureIo();
+  assert.equal(
+    await runCli(
+      ['bake', '--input', input, '--output', output, '--unicodes', 'U+F0AC,U+F57D', '--glyph-map', glyphMap, '--json'],
+      bake.io,
+    ),
+    0,
+    bake.stderr(),
+  );
+  assert.deepEqual(JSON.parse(await readFile(glyphMap, 'utf8')), {
+    'earth-americas': 0xf57d,
+    globe: 0xf0ac,
+  });
+  assert.equal(JSON.parse(bake.stdout()).execution.outputs[0].file, output);
+
+  const check = captureIo();
+  assert.equal(
+    await runCli(
+      ['bake', '--input', input, '--output', output, '--unicodes', 'U+F0AC,U+F57D', '--glyph-map', glyphMap, '--check'],
+      check.io,
+    ),
+    0,
+    check.stderr(),
+  );
+
+  await writeFile(glyphMap, '{}\n');
+  const stale = captureIo();
+  assert.equal(
+    await runCli(
+      ['bake', '--input', input, '--output', output, '--unicodes', 'U+F0AC,U+F57D', '--glyph-map', glyphMap, '--check'],
+      stale.io,
+    ),
+    1,
+  );
+  assert.match(stale.stderr(), /^STALE_GLYPH_MAP:/);
+  assert.equal(await readFile(glyphMap, 'utf8'), '{}\n');
+});
+
+test('glyph-map aliases fail before either direct bake output is published', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-map-alias-cli-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = join(root, 'fa-solid-900.ttf');
+  const output = join(root, 'icons.font.glb');
+  const glyphMap = join(root, 'icons.json');
+  await writeFile(input, await readFile(iconFontUrl));
+
+  const ambiguous = captureIo();
+  assert.equal(
+    await runCli(
+      ['bake', '--input', input, '--output', output, '--unicodes', 'U+F0AC,U+1F310', '--glyph-map', glyphMap],
+      ambiguous.io,
+    ),
+    1,
+  );
+  assert.match(ambiguous.stderr(), /^AMBIGUOUS_GLYPH_NAME:/);
+  await assert.rejects(readFile(output), { code: 'ENOENT' });
+  await assert.rejects(readFile(glyphMap), { code: 'ENOENT' });
+});
+
 test('pre-cancellation and source/output overlap fail before filesystem mutation', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-node-errors-'));
   t.after(() => rm(root, { recursive: true, force: true }));
