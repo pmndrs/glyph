@@ -15,6 +15,12 @@
       "output": "geist-msdf.font.glb"
     },
     {
+      "id": "geist-slug-alphanumeric",
+      "source": "geist-regular.ttf",
+      "license": "geist-OFL.txt",
+      "output": "geist-slug-alphanumeric.font.glb"
+    },
+    {
       "id": "vt323-bitmap",
       "source": "vt323-regular.ttf",
       "license": "vt323-OFL.txt",
