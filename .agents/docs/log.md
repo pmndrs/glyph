@@ -229,6 +229,12 @@
   cache leases without invalidating independently bound Fonts. The planned direct CLI zero-flag default changes from
   shaping-only to embedded Bitmap 8/16, MSDF, and Slug.
 
+## 2026-08-31
+
+- **Added direct-bake glyph lookups** — `glyph bake --glyph-map <path>` emits a deterministic JSON name-to-code-point
+  lookup from the same font face and Unicode selection as the GLB. The lookup and font publish together with rollback,
+  `--check` verifies both outputs byte-for-byte, and ambiguous selected aliases fail before either output is written.
+
 ## 2026-08-30
 
 - **TypeGPU is the shader authority** — Moved the remaining Slug shader modules under `/typegpu`, added canonical TypeGPU Bitmap, MTSDF, and decoration stages, and replaced native TSL formulas with `@typegpu/three` adapters. Resource operations are specialized through slots and schema-aware accessors, so direct TypeGPU hosts, procedural consumers, raw WebGPU-backed resources, and Three data textures share the same algorithms. Device-free WGSL/GLSL tests cover every first-party adapter, and direct TypeGPU resolution tests prove texture-free function sources.

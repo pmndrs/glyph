@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 import type { RasterBakePlan } from '../bake.js';
 import type { UnicodeRange } from '../font-baker/index.js';
 import { normalizeUnicodeRanges } from '../internal/font-selection.js';
+import { assertDistinctInputOutputs, publishFilesWithRollback } from '../internal/node-file-publication.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import {
   bakeFont,
@@ -245,6 +246,7 @@ interface ParsedBakeArguments {
 interface DirectBakeArguments {
   readonly input: string;
   readonly output: string;
+  readonly glyphMap?: string;
   readonly fontFaceIndex: number;
   readonly bitmapStrikes?: readonly [number, ...number[]];
   readonly msdf: boolean;
@@ -285,6 +287,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   const assetRoots: string[] = [];
   let input: string | undefined;
   let output: string | undefined;
+  let glyphMap: string | undefined;
   let fontFaceIndex = 0;
   let fontFaceIndexSet = false;
   let split = false;
@@ -317,6 +320,8 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
       input = uniqueValue(input, valueAfter(argv, ++index, argument), argument);
     } else if (argument === '--output') {
       output = uniqueValue(output, valueAfter(argv, ++index, argument), argument);
+    } else if (argument === '--glyph-map') {
+      glyphMap = uniqueValue(glyphMap, valueAfter(argv, ++index, argument), argument);
     } else if (argument === '--font-face-index') {
       if (fontFaceIndexSet) throw new TypeError('--font-face-index may be provided only once');
       fontFaceIndexSet = true;
@@ -360,6 +365,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   const directSelected =
     input !== undefined ||
     output !== undefined ||
+    glyphMap !== undefined ||
     bitmapStrikes !== undefined ||
     msdf ||
     slug ||
@@ -388,6 +394,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
           direct: {
             input: input!,
             output: output ?? derivedOutputPath(input!),
+            ...(glyphMap === undefined ? {} : { glyphMap }),
             fontFaceIndex,
             ...(bitmapStrikes === undefined ? {} : { bitmapStrikes }),
             msdf,
@@ -465,7 +472,13 @@ async function bakeDirect(
   }
   const temporaryDirectory = await mkdtemp(join(tmpdir(), 'text-bake-'));
   try {
-    const output = options.check ? join(temporaryDirectory, 'checked.font.glb') : options.output;
+    const staged = options.check || options.glyphMap !== undefined;
+    const output = staged ? join(temporaryDirectory, 'checked.font.glb') : options.output;
+    let glyphMapBytes: Uint8Array | undefined;
+    if (options.glyphMap !== undefined) {
+      await assertDistinctInputOutputs(options.input, [options.output, options.glyphMap]);
+      glyphMapBytes = await createGlyphMap(options);
+    }
     const report = await bakeFont({
       input: options.input,
       output,
@@ -482,11 +495,76 @@ async function bakeDirect(
           options.output,
         );
       }
+      if (options.glyphMap !== undefined && glyphMapBytes !== undefined) {
+        const expectedGlyphMap = await readFile(options.glyphMap);
+        if (!expectedGlyphMap.equals(glyphMapBytes)) {
+          throw new NodeBakeError(
+            'STALE_GLYPH_MAP',
+            'generated glyph map is not byte-identical to the requested output',
+            options.glyphMap,
+          );
+        }
+      }
+    } else if (options.glyphMap !== undefined && glyphMapBytes !== undefined) {
+      const fontBytes = await readFile(output);
+      const started = performance.now();
+      await publishFilesWithRollback([
+        { bytes: fontBytes, file: options.output },
+        { bytes: glyphMapBytes, file: options.glyphMap },
+      ]);
+      return reportWithPublishedOutput(report, output, options.output, performance.now() - started);
     }
-    return report;
+    return staged ? reportWithPublishedOutput(report, output, options.output, 0) : report;
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }
+}
+
+async function createGlyphMap(options: DirectBakeArguments): Promise<Uint8Array> {
+  const inspection = await inspectFont({ input: options.input, fontFaceIndex: options.fontFaceIndex });
+  const names = new Map<string, number>();
+  for (const { codePoint, name } of inspection.glyphs) {
+    if (name === undefined || name.length === 0 || !selectedCodePoint(codePoint, options.unicodeRanges)) continue;
+    const previous = names.get(name);
+    if (previous !== undefined && previous !== codePoint) {
+      throw new NodeBakeError(
+        'AMBIGUOUS_GLYPH_NAME',
+        `${name} maps to both ${formatCodePoint(previous)} and ${formatCodePoint(codePoint)} in the selected Unicode set`,
+        options.input,
+      );
+    }
+    names.set(name, codePoint);
+  }
+  return new TextEncoder().encode(
+    `${JSON.stringify(Object.fromEntries([...names].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))), null, 2)}\n`,
+  );
+}
+
+function selectedCodePoint(codePoint: number, ranges: readonly UnicodeRange[] | undefined): boolean {
+  return ranges === undefined || ranges.some(({ start, end }) => codePoint >= start && codePoint <= end);
+}
+
+function reportWithPublishedOutput(
+  report: NodeFontBakeReport,
+  stagedOutput: string,
+  publishedOutput: string,
+  publishDuration: number,
+): NodeFontBakeReport {
+  return {
+    ...report,
+    execution: {
+      ...report.execution,
+      timingsMs: {
+        ...report.execution.timingsMs,
+        write: report.execution.timingsMs.write + publishDuration,
+        total: report.execution.timingsMs.total + publishDuration,
+      },
+      outputs: report.execution.outputs.map((output) => ({
+        ...output,
+        file: output.file === stagedOutput ? publishedOutput : output.file,
+      })),
+    },
+  };
 }
 
 type DirectRasterBakePlan =
@@ -669,6 +747,7 @@ Direct font options:
   --input <path>         Source TTF, OTF, TTC, or OTC font
   --output <path>        Output GLB (default: the input name, beside it, url-safe)
                         Example: "My Font.ttf" bakes to my-font.glb
+  --glyph-map <path>     Write name-to-code-point JSON for the selected Unicode set
   --font-face-index <n>  Collection face to bake (default: 0)
   --unicodes <set>       Unicode set used to prepare a smaller source font
                         Example: U+0020-007E,U+00A0-00FF,U+4E00-9FFF
@@ -704,6 +783,7 @@ Output options:
 Examples:
   glyph bake --input Inter-Regular.ttf --output inter.font.glb --bitmap 16,32 --msdf --slug
   glyph bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --msdf
+  glyph bake --input fa-solid-900.ttf --output icons.font.glb --unicodes U+F000-F8FF --glyph-map icons.json --msdf
   glyph bake --input Inter-Regular.ttf --output inter-small.font.glb --msdf em-size=32
   glyph bake --project-root . --output-root public/generated
   glyph bake --input Inter-Regular.ttf --output inter.font.glb --msdf --check

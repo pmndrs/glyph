@@ -1,5 +1,4 @@
-import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -15,7 +14,6 @@ import {
 } from '../font-baker/index.js';
 import { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
 import { validateFontArtifact } from '../font-baker/validator.js';
-import { GlyphError } from '../glyph-error.js';
 
 export {
   FontBakeError,
@@ -44,6 +42,8 @@ import type {
 } from '../discovery.js';
 import { fontBakeDescriptor } from '../internal/core-bake-policy.js';
 import { bakeFontPipeline } from '../internal/font-bake-pipeline.js';
+import { NodeBakeError } from '../internal/node-bake-error.js';
+import { assertDistinctInputOutputs, publishFilesWithRollback } from '../internal/node-file-publication.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
 import { fingerprint128, fingerprintDomain } from '../internal/fingerprint.js';
@@ -125,17 +125,7 @@ export interface ProjectBakeReport {
   readonly diagnostics: readonly ProjectBakeDiagnostic[];
 }
 
-export class NodeBakeError extends GlyphError<'bake-failed'> {
-  readonly reason: string;
-  readonly path: string | undefined;
-
-  constructor(reason: string, message: string, path?: string, options?: ErrorOptions) {
-    super('bake-failed', message, options);
-    this.name = 'NodeBakeError';
-    this.reason = reason;
-    this.path = path;
-  }
-}
+export { NodeBakeError } from '../internal/node-bake-error.js';
 
 const defaultFontBaker = cacheSuccessfulPromise(async () => createFontBaker(await readFile(new URL(fontBakerWasmUrl))));
 
@@ -172,7 +162,7 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
   options.signal?.throwIfAborted();
   const input = filePath(options.input, 'input');
   const output = filePath(options.output, 'output');
-  await assertDistinctInputOutput(input, output);
+  await assertDistinctInputOutputs(input, [output]);
 
   let phase = performance.now();
   const originalSource = new Uint8Array(await readFile(input));
@@ -208,7 +198,10 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
 
   phase = performance.now();
   const outputs = outputTargets(output, composed.artifacts);
-  await publishArtifactsWithRollback(outputs, options.signal);
+  await publishFilesWithRollback(
+    outputs.map(({ artifact, file }) => ({ bytes: artifact.bytes, file })),
+    options.signal,
+  );
   timings.write = performance.now() - phase;
   const rssAfterBytes = process.memoryUsage.rss();
   return {
@@ -410,124 +403,6 @@ function outputTargets(
     files.add(canonical);
   }
   return targets;
-}
-
-interface StagedArtifactOutput {
-  readonly temporaryFile: string;
-  readonly target: string;
-  backupFile?: string;
-  published: boolean;
-}
-
-async function publishArtifactsWithRollback(
-  outputs: readonly { artifact: BakeArtifact; file: string }[],
-  signal?: AbortSignal,
-): Promise<void> {
-  const staged: StagedArtifactOutput[] = [];
-  let publicationCompleted = false;
-  let rollbackCompleted = false;
-  try {
-    for (const { artifact, file } of outputs) {
-      signal?.throwIfAborted();
-      await mkdir(dirname(file), { recursive: true });
-      const temporaryFile = join(dirname(file), `.${file.split(sep).at(-1)}.${randomUUID()}.tmp`);
-      staged.push({ temporaryFile, target: file, published: false });
-      const handle = await open(temporaryFile, 'wx');
-      try {
-        await handle.writeFile(artifact.bytes);
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
-    }
-    signal?.throwIfAborted();
-    for (const entry of staged) await preservePreviousTarget(entry);
-    for (const entry of staged) {
-      await rename(entry.temporaryFile, entry.target);
-      entry.published = true;
-    }
-    publicationCompleted = true;
-  } catch (error) {
-    try {
-      await rollbackPublication(staged);
-      rollbackCompleted = true;
-    } catch (rollbackError) {
-      throw new Error(
-        `artifact publication failed (${error instanceof Error ? error.message : String(error)}) ` +
-          `and rollback was incomplete: ${
-            rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
-          }`,
-        { cause: rollbackError },
-      );
-    }
-    throw error;
-  } finally {
-    await Promise.all(
-      staged.flatMap(({ temporaryFile, backupFile }) => [
-        rm(temporaryFile, { force: true }),
-        ...(backupFile === undefined || (!publicationCompleted && !rollbackCompleted)
-          ? []
-          : [rm(backupFile, { force: true })]),
-      ]),
-    );
-  }
-}
-
-async function preservePreviousTarget(entry: StagedArtifactOutput): Promise<void> {
-  try {
-    const previous = await lstat(entry.target);
-    if (!previous.isFile()) {
-      throw new NodeBakeError('OUTPUT_TARGET_TYPE', 'existing artifact output must be a regular file', entry.target);
-    }
-    const backupFile = join(dirname(entry.target), `.${entry.target.split(sep).at(-1)}.${randomUUID()}.bak`);
-    await rename(entry.target, backupFile);
-    entry.backupFile = backupFile;
-  } catch (error) {
-    if (isMissing(error)) return;
-    throw error;
-  }
-}
-
-async function assertDistinctInputOutput(input: string, output: string): Promise<void> {
-  if (resolve(input) === resolve(output)) {
-    throw new NodeBakeError('OUTPUT_OVERLAPS_INPUT', 'font output must not overwrite its source', output);
-  }
-  const inputIdentity = await stat(input);
-  let outputIdentity;
-  try {
-    outputIdentity = await stat(output);
-  } catch (error) {
-    if (isMissing(error)) return;
-    throw error;
-  }
-  if (inputIdentity.dev === outputIdentity.dev && inputIdentity.ino === outputIdentity.ino) {
-    throw new NodeBakeError('OUTPUT_OVERLAPS_INPUT', 'font output must not alias its source', output);
-  }
-  if (!outputIdentity.isFile()) {
-    throw new NodeBakeError('OUTPUT_TARGET_TYPE', 'existing artifact output must be a regular file', output);
-  }
-}
-
-async function rollbackPublication(staged: readonly StagedArtifactOutput[]): Promise<void> {
-  const failures: unknown[] = [];
-  for (const entry of [...staged].reverse()) {
-    try {
-      if (entry.published) await rm(entry.target, { force: true });
-      if (entry.backupFile !== undefined) {
-        await rename(entry.backupFile, entry.target);
-        delete entry.backupFile;
-      }
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (failures.length !== 0) {
-    throw new AggregateError(failures, 'failed to restore pre-existing artifact outputs');
-  }
-}
-
-function isMissing(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
 
 function finalizeTransport(report: FontPayloadReport, artifacts: readonly BakeArtifact[]): FontPayloadReport {

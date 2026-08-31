@@ -252,6 +252,15 @@ pnpm exec glyph bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 
 ```
 
 Add `--unicodes U+0020-007E` to bake a subset, or `--check` to rebuild temporarily and require byte-identical output.
+For an icon font, `--glyph-map <path>` writes a directly importable JSON lookup from each authored glyph name in that
+same Unicode selection to its code point:
+
+```sh
+pnpm exec glyph bake --input fa-solid-900.ttf --output icons.font.glb --unicodes U+F000-F8FF --glyph-map icons.json --msdf
+```
+
+Names with multiple code points inside the selected set are rejected as ambiguous; narrow `--unicodes` rather than
+letting the generator silently choose an alias.
 
 Or let the CLI discover every `glyph.fontFace()` declaration in a project and write each artifact beside its source asset:
 
