@@ -161,13 +161,6 @@ type StagedBufferOperation =
       source: RetainedBuffer;
       sourceOffset: number;
       byteLength: number;
-    }>
-  | Readonly<{
-      kind: 'restore-origin';
-      buffer: RetainedBuffer;
-      scalarOffset: number;
-      x: number;
-      y: number;
     }>;
 
 interface StagedBufferUpload {
@@ -738,30 +731,6 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
       staged.set(buffer, upload);
       return upload;
     };
-    for (const origin of this.#originRecords.values()) {
-      const buffer = buffers.get(origin.buffer.id);
-      if (buffer !== origin.buffer || !(buffer.array instanceof Float32Array)) continue;
-      const offset = origin.index * buffer.vectorWidth;
-      assertByteRange(
-        offset * Float32Array.BYTES_PER_ELEMENT,
-        2 * Float32Array.BYTES_PER_ELEMENT,
-        buffer.array.byteLength,
-        'glyph origin record exceeds its retained buffer',
-      );
-      operations.push({
-        kind: 'restore-origin',
-        buffer,
-        scalarOffset: offset,
-        x: origin.targetX,
-        y: origin.targetY,
-      });
-      includeMutationRange(
-        mutable(buffer),
-        offset * Float32Array.BYTES_PER_ELEMENT,
-        2 * Float32Array.BYTES_PER_ELEMENT,
-      );
-    }
-
     for (let index = 0; index < table.count; index += 1) {
       const patch = readRenderPlanPatch(plan, table, index);
       const buffer = retainedBuffer(buffers, patch.bufferId, patch.bufferGeneration);
@@ -2437,10 +2406,6 @@ function commitBufferOperation(operation: StagedBufferOperation): void {
     }
     return;
   }
-  const target = operation.buffer.array;
-  if (!(target instanceof Float32Array)) throw new TypeError('glyph origin buffer changed scalar type before commit');
-  target[operation.scalarOffset] = operation.x;
-  target[operation.scalarOffset + 1] = operation.y;
 }
 
 function commitBufferUpload(uploadRange: StagedBufferUpload): void {

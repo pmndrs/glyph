@@ -369,7 +369,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined {
     const placements = this.#glyphPlacements();
     if (placements === undefined) return undefined;
-    this.updateWorldMatrix(true, false);
+    this.updateWorldMatrix(true, false, true);
     return measureGlyphPlacements(placements, this.matrixWorld, this.#glyphGeometry(placements));
   }
 

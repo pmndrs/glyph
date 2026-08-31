@@ -43,7 +43,8 @@ fn summarize_unit_chunks(
         let mut space_sum = 0_i64;
         let mut flags_or = 0_u8;
         for (advance, flag) in advances.iter().zip(flags) {
-            space_sum += *advance & -i64::from((*flag & CLUSTER_SPACE) >> 4);
+            space_sum =
+                space_sum.saturating_add(*advance & -i64::from((*flag & CLUSTER_SPACE) >> 4));
             flags_or |= *flag;
         }
         chunk_advance_sums.push(advance_sum);

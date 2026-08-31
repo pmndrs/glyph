@@ -2180,7 +2180,7 @@ mod tests {
         // Deficit 10 + 1/65,536px = 655,361 units over 2 spaces: euclidean split gives
         // 327,680 units + one extra leading unit, and the fragment advance fills
         // the slot exactly.
-        fragment.slot_end = 17.000_015_258_789_062_5;
+        fragment.slot_end = 17.000_015_258_789_063;
         let controls = JustifyControls::default();
         let distribution =
             justification_adjustment(line, fragment, false, &clusters, 0, 7, 0.0, controls);
@@ -2190,7 +2190,7 @@ mod tests {
         assert_eq!(distribution.total_units(), 655_361);
         let advance =
             positioned_fragment_advance(line, fragment, false, &clusters, 0.0, controls).unwrap();
-        assert_eq!(advance, 17.000_015_258_789_062_5);
+        assert_eq!(advance, 17.000_015_258_789_063);
     }
 
     fn justify_fixture() -> (Vec<u16>, ClusterArena, FlowLine, FlowFragment) {

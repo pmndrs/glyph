@@ -56,6 +56,16 @@ test('measureGlyphs publishes local and world geometry for the committed display
       assert.ok(measurement.localInkBounds.getSize(new THREE.Vector3()).x >= 0);
       assert.ok(measurement.geometry.positions.length >= 4);
     }
+
+    const initialWorldX = measurements[0].worldDrawnOrigin.x;
+    mounted.group.position.x += 11;
+    const moved = mounted.node.measureGlyphs();
+    assert.ok(moved !== undefined);
+    assert.equal(
+      moved[0].worldDrawnOrigin.x,
+      initialWorldX + 11,
+      'measurement must force a dirty ancestor through the Text world matrix without a scene traversal',
+    );
   } finally {
     unmount(mounted);
   }
@@ -167,14 +177,63 @@ test('breakApart carries stable line and word metadata without presentation over
     mounted.scene.add(glyphs);
     mounted.scene.updateMatrixWorld(true);
     assert.ok(glyphs.count > 0);
+    assert.ok(mounted.node.glyphs().lineCount > 1, 'the fixture must wrap so line membership is not trivial');
+    const linesByWord = new Map();
     for (let index = 0; index < glyphs.count; index += 1) {
       const glyph = glyphs.glyphAt(index);
       assert.equal(glyph?.index, index);
       assert.ok((glyph?.line ?? -1) >= 0);
       assert.ok((glyph?.word ?? -2) >= -1);
+      if (glyph !== undefined && glyph.word >= 0) {
+        const lines = linesByWord.get(glyph.word) ?? new Set();
+        lines.add(glyph.line);
+        linesByWord.set(glyph.word, lines);
+      }
     }
+    assert.equal(linesByWord.size, 3, 'three space-separated runs remain three words');
+    assert.ok(
+      [...linesByWord.values()].every((lines) => lines.size === 1),
+      'no word may straddle a line',
+    );
   } finally {
     glyphs?.dispose();
+    unmount(mounted);
+  }
+});
+
+test('detached glyph keys survive movement-only reflow and change when text reshapes', async () => {
+  const mounted = mount(await loadFont(), 'ABCD');
+  let before;
+  let resized;
+  let reshaped;
+  try {
+    [before] = mounted.node.breakApart();
+    const beforeKeys = Array.from({ length: before.count }, (_, index) => before.glyphAt(index)?.key);
+    const beforeX = before.measurements.map((measurement) => measurement.originalMatrix.elements[12]);
+
+    mounted.node.style = { fontSize: 32 };
+    mounted.scene.updateMatrixWorld(true);
+    [resized] = mounted.node.breakApart();
+    const resizedKeys = Array.from({ length: resized.count }, (_, index) => resized.glyphAt(index)?.key);
+    assert.deepEqual(resizedKeys, beforeKeys, 'a font-size reflow moves the same glyph identities');
+    assert.ok(
+      resized.measurements.some((measurement, index) => measurement.originalMatrix.elements[12] !== beforeX[index]),
+      'the movement-only reflow must actually reposition at least one glyph',
+    );
+
+    mounted.node.text = 'WXYZ';
+    mounted.scene.updateMatrixWorld(true);
+    [reshaped] = mounted.node.breakApart();
+    const reshapedKeys = new Set(Array.from({ length: reshaped.count }, (_, index) => reshaped.glyphAt(index)?.key));
+    assert.equal(
+      beforeKeys.filter((key) => reshapedKeys.has(key)).length,
+      0,
+      'reshaping different text must replace every detached glyph identity',
+    );
+  } finally {
+    before?.dispose();
+    resized?.dispose();
+    reshaped?.dispose();
     unmount(mounted);
   }
 });

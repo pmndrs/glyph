@@ -25,9 +25,11 @@ export async function proveDetachedRasterParity(
   const parent = text.parent;
   if (parent === null) throw new TypeError('detached raster parity requires an attached text object');
   let detached: Glyphs | undefined;
+  let decorations: Decorations | undefined;
   try {
-    [detached] = text.breakApart();
+    [detached, decorations] = text.breakApart();
     parent.add(detached);
+    if (decorations !== undefined) parent.add(decorations);
     text.visible = false;
     await renderer.renderAsync(scene, camera);
     const firstFrame = await renderer.readRenderTargetPixelsAsync(target, 0, 0, target.width, target.height);
@@ -43,6 +45,7 @@ export async function proveDetachedRasterParity(
     };
   } finally {
     detached?.dispose();
+    decorations?.dispose();
     text.visible = sourceVisible;
   }
 }

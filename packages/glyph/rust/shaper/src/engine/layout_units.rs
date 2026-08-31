@@ -23,7 +23,7 @@ pub(crate) const LAYOUT_UNITS_PER_PIXEL: f64 = (1_i64 << LAYOUT_UNIT_BITS) as f6
 
 /// Converts a scaled caller-space value into F16.16 layout units under the rounding
 /// contract. Values saturate at ±2^53 units so conversion to f64 remains exact for
-/// ratio calculations; aggregate overflow is rejected by the composing stage.
+/// ratio calculations; composing-stage additions saturate at the i64 accumulator boundary.
 pub(crate) fn layout_units_from_scaled(value: f64) -> i64 {
     let scaled = value * LAYOUT_UNITS_PER_PIXEL + 0.5;
     saturating_floor_units(scaled)

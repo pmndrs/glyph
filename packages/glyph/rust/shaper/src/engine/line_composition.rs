@@ -303,8 +303,8 @@ pub(crate) fn layout_next_line_integer(
             let chunk = index / super::cluster_state::LAYOUT_CHUNK;
             let flags_or = clusters.chunk_flags_or[chunk];
             if flags_or & (CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) == 0 {
-                let next_advance = advance + clusters.chunk_advance_sums[chunk];
-                let next_space_units = space_units + clusters.chunk_space_sums[chunk];
+                let next_advance = advance.saturating_add(clusters.chunk_advance_sums[chunk]);
+                let next_space_units = space_units.saturating_add(clusters.chunk_space_sums[chunk]);
                 let fits = max_width_units.is_none_or(|units| {
                     next_advance
                         - super::layout_units::apply_ratio(next_space_units, word_space_shrink)
@@ -332,9 +332,9 @@ pub(crate) fn layout_next_line_integer(
         }
         let required_break = flags & CLUSTER_REQUIRED_BREAK != 0;
         let cluster_advance = clusters.advance_units[index];
-        let next_advance = advance + cluster_advance;
+        let next_advance = advance.saturating_add(cluster_advance);
         let next_space_units = if flags & CLUSTER_SPACE != 0 {
-            space_units + cluster_advance
+            space_units.saturating_add(cluster_advance)
         } else {
             space_units
         };
@@ -396,7 +396,7 @@ pub(crate) fn layout_next_line_integer(
         advance = next_advance;
         space_units = next_space_units;
         trailing_space_units = if cluster_is_space {
-            trailing_space_units + cluster_advance
+            trailing_space_units.saturating_add(cluster_advance)
         } else {
             0
         };
@@ -442,8 +442,8 @@ pub(crate) fn layout_next_line_integer(
     let mut hung_units = 0_i64;
     while visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_SPACE != 0 {
         let trimmed = clusters.advance_units[visible_end - 1];
-        selected_advance -= trimmed;
-        hung_units += trimmed;
+        selected_advance = selected_advance.saturating_sub(trimmed);
+        hung_units = hung_units.saturating_add(trimmed);
         visible_end -= 1;
     }
     let last = selected_end - 1;
@@ -490,7 +490,7 @@ fn resolve_last_flagged(
         position + 1
     };
     for index in start..prefix_end {
-        advance += clusters.advance_units[index];
+        advance = advance.saturating_add(clusters.advance_units[index]);
     }
     let break_at = if flag == CLUSTER_SAFE_BEFORE {
         position
@@ -659,6 +659,22 @@ mod tests {
     }
 
     #[test]
+    fn integer_fit_saturates_extreme_caller_derived_advance_sums() {
+        let count = 1_025;
+        let clusters = make_clusters(&vec![f64::MAX; count], &vec![0; count]);
+        for wrap in [WRAP_NONE, WRAP_WORD] {
+            let lines = fit_all_integer(&clusters, None, wrap, 0.0);
+            assert_eq!(lines.len(), 1);
+            assert_eq!(lines[0].cluster_end, count as u32);
+            assert_eq!(
+                lines[0].advance,
+                scaled_from_layout_units(i64::MAX),
+                "wrap {wrap} must saturate instead of wrapping the accumulated line advance",
+            );
+        }
+    }
+
+    #[test]
     fn integer_shrink_matches_f64_shrink_for_odd_units_and_non_dyadic_ratios() {
         use super::super::layout_units::{LAYOUT_UNITS_PER_PIXEL, layout_units_from_scaled};
         // The Sol review's counterexample: one-unit spaces at width 65,536 units with a
@@ -782,9 +798,7 @@ mod tests {
         let integer = layout_next_line_integer(
             &clusters,
             &mut integer_cursor,
-            Some(i64::from(
-                super::super::layout_units::layout_units_from_scaled(4.0),
-            )),
+            Some(super::super::layout_units::layout_units_from_scaled(4.0)),
             WRAP_WORD,
             0.0,
         )
@@ -837,9 +851,7 @@ mod tests {
         // The integer fit is authoritative and must agree exactly.
         let integer = fit_all_integer(
             &clusters,
-            Some(i64::from(
-                super::super::layout_units::layout_units_from_scaled(4.0),
-            )),
+            Some(super::super::layout_units::layout_units_from_scaled(4.0)),
             WRAP_WORD,
             0.0,
         );
