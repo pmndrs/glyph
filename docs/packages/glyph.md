@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:871792fb3f57159e7e252cca1acffda3b7da5d9b469e770f81a2b6af090731a3'
+source_digest: 'sha256:eeb1b585d9c75146509c0e58a1657ec7499b93c65484a3c75aef69e7124d9bb7'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -584,7 +584,7 @@ proves exact canonical/upload equality with untouched padding. The complete 48-c
 Bitmap, MTSDF, and Slug workload visible on WebGPU and forced WebGL2; this is the deliberate one-copy WebGL2 fallback,
 not another renderer-side layout or packing path.
 The corrected complete MTSDF baker is 556,619 raw / 218,279 gzip / 171,376 Brotli bytes. A fresh isolated build of the
-zero-import feature-minimal admission module is 69,731 optimized / 30,131 gzip / 25,327 Brotli bytes; release evidence
+zero-import feature-minimal admission module is 69,736 optimized / 30,418 gzip / 25,717 Brotli bytes; release evidence
 reads that fresh-build record rather than the superseded SIMD-experiment snapshot.
 Correcting channel selection changes pixel identities without changing atlas dimensions or GPU residency, but the new
 channel data is less compressible: canonical Inter moves from 6,798,458 to 8,007,071 gzip bytes and Font Awesome from

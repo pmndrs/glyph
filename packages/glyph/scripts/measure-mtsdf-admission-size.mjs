@@ -53,7 +53,9 @@ try {
   const { exports } = await WebAssembly.instantiate(module, {});
   const current = {
     ...recorded,
-    syntheticOutputFnv1a32: exports.pmndrs_mtsdf_admission_checksum().toString(16).padStart(8, '0'),
+    // The Wasm export returns an i32, so a checksum with the high bit set arrives negative and
+    // formats as a signed hex string. Coerce to unsigned before rendering the identity.
+    syntheticOutputFnv1a32: (exports.pmndrs_mtsdf_admission_checksum() >>> 0).toString(16).padStart(8, '0'),
     wasmImportCount: WebAssembly.Module.imports(module).length,
     measurementHost: { platform: platform(), architecture: arch() },
     rawBytes: raw.byteLength,
