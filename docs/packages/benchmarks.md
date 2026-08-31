@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:a3f98c5e05a6f550e085bcfdb9374c6171141ab9cf9568d84c72359fff3eeae8'
+source_digest: 'sha256:b65be7bef2cfc62d4c04150ff6448516b8db0f86341df89f9869f5a9d637fe08'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -567,14 +567,17 @@ explicit SIMD measures 0.438 ms p95 versus 1.113 ms scalar; at 100,602 it measur
 quantization is visible in those figures, so Node retains the finer candidate ranking while Chromium supplies the
 independent engine-admission check.
 
-The bidi transition-scan lane keeps three inputs distinct. `transitionScanX*` uses the captured resolved levels,
-`transitionUniformX*` isolates the common single-level paragraph, and `transitionMixedX*` is an adversarial synthetic
-short-run sequence. On the recorded Darwin arm64 Node run, the production one-block SIMD scan reduced the captured
+The bidi transition-scan lane records three named inputs. `transitionScanX*` uses the captured resolved levels, but the
+current captured corpus is pure LTR Latin and therefore resolves to the same all-zero levels as the explicit
+`transitionUniformX*` control; no natural mixed-direction corpus is measured yet. `transitionMixedX*` is an adversarial
+synthetic short-run sequence and is the run's only non-uniform input. On the recorded Darwin arm64 Node run, the
+production one-block SIMD scan reduced the captured
 25,515-glyph median from 0.00828 ms scalar to 0.00128 ms and the 100,602-glyph median from 0.03262 ms to 0.00484 ms;
-the uniform lane was comparable. The adversarial mixed lane regressed from 0.01062 ms to 0.04718 ms and from 0.04286 ms
-to 0.18971 ms respectively. Production therefore uses the conservative one-block scan for the measured real workload,
-retains scalar as the correctness oracle and tail, and records the mixed-direction cost explicitly rather than presenting
-the synthetic lane as representative. These host-local measurements are admission evidence, not a portability claim.
+the uniform lane necessarily reproduced it within timing noise. The adversarial mixed lane regressed from 0.01062 ms to
+0.04718 ms and from 0.04286 ms to 0.18971 ms respectively. Production therefore uses the conservative one-block scan
+for the measured LTR workload, retains scalar as the correctness oracle and tail, and records the mixed-direction cost
+explicitly rather than presenting the synthetic lane as representative. These host-local measurements are admission
+evidence, not a portability claim; a natural bidi-bearing corpus remains required before making a broader claim.
 
 The bake-host report separates the consumer phases without timing conformance work. Each offline sample creates a fresh Wasm baker and records initialization plus first bake as cold, then records a second bake on that instance as warm. Each isolated Chromium context queues two requests onto one Worker: first completion contains Worker/Wasm startup plus its bake, while the interval to second completion is the warm reused-instance bake. Three captured arm64/Chromium 149 samples preserve complete artifact parity; medians were 4.16 ms cold / 2.94 ms warm offline and 21.70 ms cold / 3.50 ms warm in the Worker. These are observations, not cross-host thresholds.
 

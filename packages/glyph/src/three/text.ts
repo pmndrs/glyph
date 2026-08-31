@@ -421,8 +421,11 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
       }
       return Object.freeze([glyphs, decorations] as const);
     } catch (error) {
-      decorations?.dispose();
-      glyphs.dispose();
+      try {
+        decorations?.dispose();
+      } finally {
+        glyphs.dispose();
+      }
       throw error;
     }
   }
