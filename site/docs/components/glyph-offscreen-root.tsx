@@ -1,5 +1,5 @@
-import { createRoot } from '@react-three/fiber/webgpu';
-import { createElement, Suspense, type ReactNode } from 'react';
+import { createRoot, useFrame } from '@react-three/fiber/webgpu';
+import { createElement, Fragment, Suspense, type ReactNode } from 'react';
 import { WebGPURenderer } from 'three/webgpu';
 
 import {
@@ -14,6 +14,7 @@ import {
 import { advancePooledRoots } from './glyph-frame-scheduler';
 import { GlyphRenderPool, type GlyphPoolSlot } from './glyph-render-pool';
 import { beginGlyphRender, completeGlyphRender } from './glyph-render-readiness';
+import { largestGlyphSurface, type GlyphSurfaceSize } from './glyph-shared-surface';
 
 const RESIZE_SETTLE_MS = 120;
 const STATS_INTERVAL_MS = 250;
@@ -37,7 +38,7 @@ export type GlyphSceneProps = {
 
 type GlyphProxyHandle = HTMLElement & {
   bind(root: GlyphOffscreenRootElement): void;
-  copy(surface: OffscreenCanvas | HTMLCanvasElement): void;
+  copy(surface: OffscreenCanvas | HTMLCanvasElement, region: GlyphSurfaceRegion): void;
   rootId: string | undefined;
   scene: string;
   setActive(active: boolean): void;
@@ -45,12 +46,14 @@ type GlyphProxyHandle = HTMLElement & {
 
 type GlyphR3fRoot = ReturnType<typeof createRoot>;
 type GlyphR3fStore = ReturnType<GlyphR3fRoot['render']>;
+type GlyphPresentationState = Readonly<{
+  camera: Parameters<WebGPURenderer['render']>[1];
+  scene: Parameters<WebGPURenderer['render']>[0];
+}>;
 
 type GlyphRenderSlot = {
   pool: GlyphPoolSlot<GlyphProxyHandle>;
-  surface: OffscreenCanvas | HTMLCanvasElement;
   r3f: GlyphR3fRoot;
-  renderer: WebGPURenderer;
   store: GlyphR3fStore | undefined;
   proxy: GlyphProxyHandle | undefined;
   scene: string | undefined;
@@ -59,17 +62,31 @@ type GlyphRenderSlot = {
   resizing: boolean;
   resizeToken: number;
   renderToken: number;
+  size: GlyphSurfaceSize;
 };
+
+type GlyphSurfaceRegion = Readonly<{
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}>;
 
 const roots = new Map<string, GlyphOffscreenRootElement>();
 let rootInstanceId = 0;
 
+function GlyphSlotPresenter({ present }: { present: (state: GlyphPresentationState) => void }) {
+  useFrame((state) => present(state), { phase: 'render' });
+  return null;
+}
+
 /**
  * Shared controller for a page's virtual explainer canvases.
  *
- * The custom element is the only DOM root. Internally it owns a bounded pool of R3F roots and
- * offscreen surfaces. Each slot has its own renderer and size-dependent attachments while all
- * WebGPU renderers share the first slot's GPUDevice. A single page RAF advances ready, visible slots.
+ * The custom element is the only DOM root. Internally it owns a bounded pool of logical R3F roots.
+ * Every root shares one renderer, one offscreen surface, and therefore one
+ * WebGPU device or WebGL context. A single page RAF advances all ready, visible roots; each root is
+ * rendered and copied before the following root can overwrite the shared surface.
  */
 export abstract class GlyphOffscreenRootElement extends HTMLElement {
   static observedAttributes = ['id', 'max-slots', 'idle-ttl'];
@@ -97,7 +114,10 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   #lastFrame = -Infinity;
   #registeredId: string | undefined;
   #instanceId = `glyph-root-${++rootInstanceId}`;
-  #gpuDevice: GPUDevice | undefined;
+  #renderer: WebGPURenderer | undefined;
+  #surface: OffscreenCanvas | HTMLCanvasElement | undefined;
+  #hostSize: GlyphSurfaceSize = { dpr: 0, height: 0, width: 0 };
+  #hostSizeDirty = true;
   #reconcilePending = false;
   #reconciling = false;
   #readyEventSent = false;
@@ -148,15 +168,17 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.#outbound.dispose();
     const slots = [...this.#slots.values()];
     for (const slot of slots) slot.r3f.unmount();
-    // R3F unregisters scheduler jobs after its deferred unmount cleanup. Dispose the
-    // externally-device-backed renderers first, then let the primary renderer destroy
-    // the device it created after every slot has released its own GPU resources.
+    // R3F unregisters scheduler jobs after its deferred unmount cleanup. All logical roots
+    // share this renderer, so dispose it once after every scene has released its resources.
+    const renderer = this.#renderer;
     window.setTimeout(() => {
-      for (const slot of slots.filter(({ pool }) => pool.index !== 0)) slot.renderer.dispose();
-      slots.find(({ pool }) => pool.index === 0)?.renderer.dispose();
+      renderer?.dispose();
     }, 600);
     this.#slots.clear();
-    this.#gpuDevice = undefined;
+    this.#renderer = undefined;
+    this.#surface = undefined;
+    this.#hostSize = { dpr: 0, height: 0, width: 0 };
+    this.#hostSizeDirty = true;
     this.#proxies.clear();
     this.#visible.clear();
     this.#sceneOverrides.clear();
@@ -309,14 +331,21 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   }
 
   async #createSlot(pool: GlyphPoolSlot<GlyphProxyHandle>) {
-    const surface =
+    const rootSurface =
       typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(1, 1) : document.createElement('canvas');
-    const renderer = new WebGPURenderer({
-      antialias: true,
-      canvas: surface,
-      ...(this.#gpuDevice ? { device: this.#gpuDevice } : {}),
-    });
-    const r3f = createRoot(surface);
+    const ownsRenderer = this.#renderer === undefined;
+    if (ownsRenderer) {
+      this.#surface = rootSurface;
+      this.#renderer = new WebGPURenderer({
+        antialias: true,
+        canvas: rootSurface,
+        forceWebGL:
+          this.hasAttribute('force-webgl') || new URLSearchParams(window.location.search).get('renderer') === 'webgl',
+      });
+    }
+    const renderer = this.#renderer;
+    if (!renderer) return undefined;
+    const r3f = createRoot(rootSurface);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     await r3f.configure({
       camera: { fov: 35, far: 100, near: 0.01, position: [0, 0, 7] },
@@ -328,24 +357,18 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
       scene: { background: null },
     });
 
-    const backend = renderer.backend as typeof renderer.backend & {
-      device?: GPUDevice;
-      isWebGPUBackend?: boolean;
-    };
-    if (!this.#gpuDevice && backend.isWebGPUBackend && backend.device) {
-      this.#gpuDevice = backend.device;
-    }
+    const backend = renderer.backend as typeof renderer.backend & { isWebGPUBackend?: boolean };
+    this.setAttribute('data-glyph-backend', backend.isWebGPUBackend ? 'webgpu' : 'webgl');
 
     if (!this.isConnected) {
       r3f.unmount();
+      if (ownsRenderer) renderer.dispose();
       return undefined;
     }
 
     const slot: GlyphRenderSlot = {
       pool,
       r3f,
-      renderer,
-      surface,
       store: undefined,
       proxy: undefined,
       scene: undefined,
@@ -354,6 +377,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
       resizing: false,
       resizeToken: 0,
       renderToken: 0,
+      size: { dpr, height: 1, width: 1 },
     };
     this.#slots.set(pool.index, slot);
     this.setAttribute('data-glyph-slot-count', String(this.#slots.size));
@@ -386,7 +410,6 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     for (const poolSlot of retired) {
       const slot = this.#slots.get(poolSlot.index);
       slot?.r3f.unmount();
-      if (slot) window.setTimeout(() => slot.renderer.dispose(), 600);
       this.#slots.delete(poolSlot.index);
     }
     this.setAttribute('data-glyph-slot-count', String(this.#slots.size));
@@ -408,13 +431,18 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     slot.proxy?.setActive(false);
     slot.store = slot.r3f.render(
       createElement(
-        Suspense,
-        { fallback: null },
-        this.createScene({
-          inputs: slot.inputs,
-          onReady: () => this.#markReady(slot, token),
-          scene,
-        }),
+        Fragment,
+        null,
+        createElement(GlyphSlotPresenter, { present: (state) => this.#presentSlot(slot, state) }),
+        createElement(
+          Suspense,
+          { fallback: null },
+          this.createScene({
+            inputs: slot.inputs,
+            onReady: () => this.#markReady(slot, token),
+            scene,
+          }),
+        ),
       ),
     );
     this.#resizeSlot(slot);
@@ -446,20 +474,48 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     const width = Math.max(1, Math.round(size?.width ?? 640));
     const height = Math.max(1, Math.round(size?.height ?? 360));
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const pixelWidth = Math.max(1, Math.round(width * dpr));
-    const pixelHeight = Math.max(1, Math.round(height * dpr));
-    // Assigning either canvas dimension clears its presented frame, even when the
-    // assigned number is unchanged. Preserve the bitmap during scene updates and
-    // resize settling unless the backing dimensions genuinely changed.
-    if (slot.surface.width === pixelWidth && slot.surface.height === pixelHeight) return;
+    if (slot.size.width === width && slot.size.height === height && slot.size.dpr === dpr) return;
+    slot.size = { dpr, height, width };
+    this.#hostSizeDirty = true;
     const token = ++slot.resizeToken;
     slot.resizing = true;
-    slot.surface.width = pixelWidth;
-    slot.surface.height = pixelHeight;
     void slot.r3f.configure({ dpr, frameloop: 'never', size: { height, left: 0, top: 0, width } }).finally(() => {
       if (token !== slot.resizeToken) return;
       slot.resizing = false;
+      this.#hostSizeDirty = true;
       this.#updateLoop();
+    });
+  }
+
+  #prepareHost(activeSlots: readonly GlyphRenderSlot[]) {
+    const renderer = this.#renderer;
+    if (!renderer) return;
+    const next = largestGlyphSurface(activeSlots.map(({ size }) => size));
+    if (
+      !this.#hostSizeDirty &&
+      this.#hostSize.width === next.width &&
+      this.#hostSize.height === next.height &&
+      this.#hostSize.dpr === next.dpr
+    ) {
+      return;
+    }
+    renderer.setDrawingBufferSize(next.width, next.height, next.dpr);
+    this.#hostSize = next;
+    this.#hostSizeDirty = false;
+  }
+
+  #presentSlot(slot: GlyphRenderSlot, state: GlyphPresentationState) {
+    const renderer = this.#renderer;
+    const surface = this.#surface;
+    const proxy = slot.proxy;
+    if (!renderer || !surface || !proxy || !slot.ready || slot.resizing) return;
+    renderer.setViewport(0, 0, slot.size.width, slot.size.height);
+    renderer.render(state.scene, state.camera);
+    proxy.copy(surface, {
+      height: Math.max(1, Math.round(slot.size.height * slot.size.dpr)),
+      width: Math.max(1, Math.round(slot.size.width * slot.size.dpr)),
+      x: 0,
+      y: 0,
     });
   }
 
@@ -494,15 +550,13 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
         (slot): slot is GlyphRenderSlot & { store: GlyphR3fStore } =>
           slot.proxy !== undefined && slot.store !== undefined,
       );
-      // Store advance is the global scheduler step in R3F WebGPU. One call advances
-      // every mounted root even though each slot owns its canvas-sized renderer.
+      this.#prepareHost(activeSlots);
+      // One global scheduler step updates every logical root. Each root owns a render-phase
+      // presenter which renders and copies immediately, before the next root overwrites the host.
       advancePooledRoots(
         activeSlots.map((slot) => slot.store),
         timestamp,
       );
-      for (const slot of activeSlots) {
-        if (slot.ready && !slot.resizing) slot.proxy?.copy(slot.surface);
-      }
     }
     this.#publishStats(timestamp);
     this.#running = false;
@@ -656,9 +710,9 @@ export class GlyphProxyElement extends HTMLElement {
   static observedAttributes = ['root', 'data-scene'];
 
   #canvas: HTMLCanvasElement | undefined;
-  #presenter: ImageBitmapRenderingContext | CanvasRenderingContext2D | undefined;
+  #presenter: CanvasRenderingContext2D | undefined;
   #pendingCanvas: HTMLCanvasElement | undefined;
-  #pendingPresenter: ImageBitmapRenderingContext | CanvasRenderingContext2D | undefined;
+  #pendingPresenter: CanvasRenderingContext2D | undefined;
   #presented = false;
   #root: GlyphOffscreenRootElement | undefined;
   #resizeObserver: ResizeObserver | undefined;
@@ -736,11 +790,11 @@ export class GlyphProxyElement extends HTMLElement {
     this.style.opacity = active ? '1' : '0';
   }
 
-  copy(surface: OffscreenCanvas | HTMLCanvasElement) {
+  copy(surface: OffscreenCanvas | HTMLCanvasElement, region: GlyphSurfaceRegion) {
     const canvas = this.#pendingCanvas ?? this.#canvas;
     if (!canvas) return;
     const presenter = this.#pendingCanvas ? this.#pendingPresenter : this.#presenter;
-    const resolved = presentSurface(canvas, presenter, surface);
+    const resolved = presentSurface(canvas, presenter, surface, region);
     if (!resolved) return;
     if (this.#pendingCanvas === canvas) {
       this.#canvas?.replaceWith(canvas);
@@ -870,24 +924,27 @@ function styleProxyCanvas(canvas: HTMLCanvasElement) {
 
 function presentSurface(
   canvas: HTMLCanvasElement,
-  presenter: ImageBitmapRenderingContext | CanvasRenderingContext2D | undefined,
+  presenter: CanvasRenderingContext2D | undefined,
   surface: OffscreenCanvas | HTMLCanvasElement,
-): ImageBitmapRenderingContext | CanvasRenderingContext2D | undefined {
+  region: GlyphSurfaceRegion,
+): CanvasRenderingContext2D | undefined {
   const transferable =
     typeof OffscreenCanvas === 'function' &&
     surface instanceof OffscreenCanvas &&
     typeof surface.transferToImageBitmap === 'function';
-  const resolved =
-    presenter ??
-    (transferable ? canvas.getContext('bitmaprenderer') : null) ??
-    canvas.getContext('2d', { alpha: true }) ??
-    undefined;
+  // A shared host can be larger than this proxy, so presentation must crop the slot's
+  // viewport. bitmaprenderer cannot crop; a synchronous 2D blit preserves frame ordering.
+  const resolved = presenter ?? canvas.getContext('2d', { alpha: true }) ?? undefined;
   if (resolved === undefined) return undefined;
-  if ('transferFromImageBitmap' in resolved && transferable) {
-    resolved.transferFromImageBitmap(surface.transferToImageBitmap());
-  } else if ('drawImage' in resolved) {
+  if ('drawImage' in resolved) {
     resolved.imageSmoothingEnabled = false;
-    resolved.drawImage(surface, 0, 0, canvas.width, canvas.height);
+    if (transferable) {
+      const bitmap = surface.transferToImageBitmap();
+      resolved.drawImage(bitmap, region.x, region.y, region.width, region.height, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+    } else {
+      resolved.drawImage(surface, region.x, region.y, region.width, region.height, 0, 0, canvas.width, canvas.height);
+    }
   }
   return resolved;
 }
