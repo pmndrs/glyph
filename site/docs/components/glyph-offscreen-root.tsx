@@ -14,7 +14,12 @@ import {
 import { advancePooledRoots } from './glyph-frame-scheduler';
 import { GlyphRenderPool, type GlyphPoolSlot } from './glyph-render-pool';
 import { beginGlyphRender, completeGlyphRender } from './glyph-render-readiness';
-import { largestGlyphSurface, type GlyphSurfaceSize } from './glyph-shared-surface';
+import {
+  largestGlyphSurface,
+  proxyPointToVirtualFrame,
+  type GlyphPoint,
+  type GlyphSurfaceSize,
+} from './glyph-shared-surface';
 
 const RESIZE_SETTLE_MS = 120;
 const STATS_INTERVAL_MS = 250;
@@ -24,6 +29,7 @@ export type GlyphRenderStats = Readonly<{
   idle: number;
   poolSize: number;
   poolLimit: number;
+  copyMs: number;
   frameMs: number;
   fps: number;
 }>;
@@ -38,7 +44,8 @@ export type GlyphSceneProps = {
 
 type GlyphProxyHandle = HTMLElement & {
   bind(root: GlyphOffscreenRootElement): void;
-  copy(surface: OffscreenCanvas | HTMLCanvasElement, region: GlyphSurfaceRegion): void;
+  copy(surface: OffscreenCanvas | HTMLCanvasElement, frame: GlyphSurfaceSize, opaque: boolean): void;
+  releaseFrame(): void;
   rootId: string | undefined;
   scene: string;
   setActive(active: boolean): void;
@@ -46,6 +53,7 @@ type GlyphProxyHandle = HTMLElement & {
 
 type GlyphR3fRoot = ReturnType<typeof createRoot>;
 type GlyphR3fStore = ReturnType<GlyphR3fRoot['render']>;
+type GlyphPresenter = CanvasRenderingContext2D | ImageBitmapRenderingContext;
 type GlyphPresentationState = Readonly<{
   camera: Parameters<WebGPURenderer['render']>[1];
   scene: Parameters<WebGPURenderer['render']>[0];
@@ -65,13 +73,6 @@ type GlyphRenderSlot = {
   size: GlyphSurfaceSize;
 };
 
-type GlyphSurfaceRegion = Readonly<{
-  height: number;
-  width: number;
-  x: number;
-  y: number;
-}>;
-
 const roots = new Map<string, GlyphOffscreenRootElement>();
 let rootInstanceId = 0;
 
@@ -86,7 +87,8 @@ function GlyphSlotPresenter({ present }: { present: (state: GlyphPresentationSta
  * The custom element is the only DOM root. Internally it owns a bounded pool of logical R3F roots.
  * Every root shares one renderer, one offscreen surface, and therefore one
  * WebGPU device or WebGL context. A single page RAF advances all ready, visible roots; each root is
- * rendered and copied before the following root can overwrite the shared surface.
+ * rendered and copied before the following root can overwrite the shared surface. Every logical
+ * root uses one page-level virtual frame; each proxy is a centered HTML clipping window over it.
  */
 export abstract class GlyphOffscreenRootElement extends HTMLElement {
   static observedAttributes = ['id', 'max-slots', 'idle-ttl'];
@@ -105,6 +107,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   #lastStatsAt = -Infinity;
   #previousTickAt = -Infinity;
   #frameMs = 0;
+  #copyMs = 0;
   #eventQueue: GlyphChannelMessage[] = [];
   #outbound = new GlyphOutboundDispatcher((messages) => this.#deliverOutbound(messages));
   #sequence = 0;
@@ -116,8 +119,8 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   #instanceId = `glyph-root-${++rootInstanceId}`;
   #renderer: WebGPURenderer | undefined;
   #surface: OffscreenCanvas | HTMLCanvasElement | undefined;
-  #hostSize: GlyphSurfaceSize = { dpr: 0, height: 0, width: 0 };
-  #hostSizeDirty = true;
+  #frameSize: GlyphSurfaceSize = { dpr: 1, height: 1, width: 1 };
+  #frameSizeDirty = true;
   #reconcilePending = false;
   #reconciling = false;
   #readyEventSent = false;
@@ -177,11 +180,13 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.#slots.clear();
     this.#renderer = undefined;
     this.#surface = undefined;
-    this.#hostSize = { dpr: 0, height: 0, width: 0 };
-    this.#hostSizeDirty = true;
+    this.#frameSize = { dpr: 1, height: 1, width: 1 };
+    this.#frameSizeDirty = true;
+    for (const proxy of this.#proxies) proxy.releaseFrame();
     this.#proxies.clear();
     this.#visible.clear();
     this.#sceneOverrides.clear();
+    this.#copyMs = 0;
     this.#readyEventSent = false;
     if (this.#registeredId) roots.delete(this.#registeredId);
     this.#registeredId = undefined;
@@ -204,6 +209,12 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.#outbound.publish({ type: 'input', payload: input, target });
   }
 
+  /** Map a proxy-local point into the centered page-level virtual frame. */
+  mapProxyPoint(proxy: GlyphProxyHandle, point: GlyphPoint): GlyphPoint {
+    const rect = proxy.getBoundingClientRect();
+    return proxyPointToVirtualFrame(this.#frameSize, rect, point);
+  }
+
   /** Publish a custom message to this root or one of its proxies on the same page. */
   postMessage<Payload>(type: string, payload: Payload, target: GlyphChannelTarget = 'all') {
     this.#outbound.publish({ type, payload, target });
@@ -215,6 +226,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
       proxy.bind(this);
     }
     this.#observer?.observe(proxy);
+    this.#frameSizeDirty = true;
     this.setAttribute('data-glyph-proxy-count', String(this.#proxies.size));
     this.#scheduleReconcile();
   }
@@ -224,6 +236,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.#visible.delete(proxy);
     this.#observer?.unobserve(proxy);
     this.#sceneOverrides.delete(proxy);
+    this.#frameSizeDirty = true;
     this.setAttribute('data-glyph-proxy-count', String(this.#proxies.size));
     this.#scheduleReconcile();
   }
@@ -285,6 +298,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   }
 
   async #reconcileVisible() {
+    this.#refreshVirtualFrame();
     const now = performance.now();
     const assignments = this.#pool.reconcile(
       this.#rankVisible().map(([key, priority]) => ({ key, priority })),
@@ -315,7 +329,6 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
       }
       const scene = this.#sceneFor(proxy);
       if (isNewProxy || slot.scene !== scene) {
-        this.#resizeSlot(slot);
         this.#render(slot, scene);
       } else if (slot.ready) {
         proxy.setActive(true);
@@ -323,7 +336,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     }
 
     for (const proxy of this.#proxies) {
-      if (!desired.has(proxy)) proxy.setActive(false);
+      if (!desired.has(proxy)) proxy.releaseFrame();
     }
     this.#retireIdle(now);
     this.#updateDebugAttributes();
@@ -331,12 +344,14 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   }
 
   async #createSlot(pool: GlyphPoolSlot<GlyphProxyHandle>) {
+    this.#refreshVirtualFrame();
     const rootSurface =
       typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(1, 1) : document.createElement('canvas');
     const ownsRenderer = this.#renderer === undefined;
     if (ownsRenderer) {
       this.#surface = rootSurface;
       this.#renderer = new WebGPURenderer({
+        alpha: !this.hasAttribute('opaque'),
         antialias: true,
         canvas: rootSurface,
         forceWebGL:
@@ -346,14 +361,14 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     const renderer = this.#renderer;
     if (!renderer) return undefined;
     const r3f = createRoot(rootSurface);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const { dpr, height, width } = this.#frameSize;
     await r3f.configure({
       camera: { fov: 35, far: 100, near: 0.01, position: [0, 0, 7] },
       dpr,
       frameloop: 'never',
       orthographic: false,
       renderer,
-      size: { height: 1, left: 0, top: 0, width: 1 },
+      size: { height, left: 0, top: 0, width },
       scene: { background: null },
     });
 
@@ -377,7 +392,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
       resizing: false,
       resizeToken: 0,
       renderToken: 0,
-      size: { dpr, height: 1, width: 1 },
+      size: this.#frameSize,
     };
     this.#slots.set(pool.index, slot);
     this.setAttribute('data-glyph-slot-count', String(this.#slots.size));
@@ -390,7 +405,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
 
   #release(slot: GlyphRenderSlot, now: number) {
     const proxy = slot.proxy;
-    proxy?.setActive(false);
+    proxy?.releaseFrame();
     slot.proxy = undefined;
     slot.scene = undefined;
     slot.inputs.clear();
@@ -445,7 +460,6 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
         ),
       ),
     );
-    this.#resizeSlot(slot);
     this.#updateDebugAttributes();
   }
 
@@ -461,7 +475,8 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
       this.#resizeTimer = undefined;
       this.removeAttribute('data-glyph-resizing');
       if (!this.isConnected) return;
-      for (const slot of this.#slots.values()) if (slot.proxy) this.#resizeSlot(slot);
+      this.#frameSizeDirty = true;
+      this.#refreshVirtualFrame();
     }, RESIZE_SETTLE_MS);
   }
 
@@ -469,39 +484,54 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.#resize();
   };
 
-  #resizeSlot(slot: GlyphRenderSlot) {
-    const size = slot.proxy?.getBoundingClientRect();
-    const width = Math.max(1, Math.round(size?.width ?? 640));
-    const height = Math.max(1, Math.round(size?.height ?? 360));
+  #measureVirtualFrame() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    if (slot.size.width === width && slot.size.height === height && slot.size.dpr === dpr) return;
-    slot.size = { dpr, height, width };
-    this.#hostSizeDirty = true;
-    const token = ++slot.resizeToken;
-    slot.resizing = true;
-    void slot.r3f.configure({ dpr, frameloop: 'never', size: { height, left: 0, top: 0, width } }).finally(() => {
-      if (token !== slot.resizeToken) return;
-      slot.resizing = false;
-      this.#hostSizeDirty = true;
-      this.#updateLoop();
-    });
+    return largestGlyphSurface(
+      [...this.#proxies].map((proxy) => {
+        const rect = proxy.getBoundingClientRect();
+        return {
+          dpr,
+          height: Math.max(1, Math.round(rect.height)),
+          width: Math.max(1, Math.round(rect.width)),
+        };
+      }),
+    );
   }
 
-  #prepareHost(activeSlots: readonly GlyphRenderSlot[]) {
-    const renderer = this.#renderer;
-    if (!renderer) return;
-    const next = largestGlyphSurface(activeSlots.map(({ size }) => size));
+  #configureSlot(slot: GlyphRenderSlot, size: GlyphSurfaceSize) {
+    if (slot.size.width === size.width && slot.size.height === size.height && slot.size.dpr === size.dpr) return;
+    slot.size = size;
+    const token = ++slot.resizeToken;
+    slot.resizing = true;
+    void slot.r3f
+      .configure({
+        dpr: size.dpr,
+        frameloop: 'never',
+        size: { height: size.height, left: 0, top: 0, width: size.width },
+      })
+      .finally(() => {
+        if (token !== slot.resizeToken) return;
+        slot.resizing = false;
+        this.#updateLoop();
+      });
+  }
+
+  #refreshVirtualFrame() {
+    if (!this.#frameSizeDirty) return;
+    const next = this.#measureVirtualFrame();
     if (
-      !this.#hostSizeDirty &&
-      this.#hostSize.width === next.width &&
-      this.#hostSize.height === next.height &&
-      this.#hostSize.dpr === next.dpr
+      this.#frameSize.width === next.width &&
+      this.#frameSize.height === next.height &&
+      this.#frameSize.dpr === next.dpr
     ) {
+      this.#frameSizeDirty = false;
       return;
     }
-    renderer.setDrawingBufferSize(next.width, next.height, next.dpr);
-    this.#hostSize = next;
-    this.#hostSizeDirty = false;
+    this.#frameSize = next;
+    this.#frameSizeDirty = false;
+    this.#renderer?.setDrawingBufferSize(next.width, next.height, next.dpr);
+    for (const slot of this.#slots.values()) this.#configureSlot(slot, next);
+    this.setAttribute('data-glyph-frame', `${next.width}x${next.height}@${next.dpr}`);
   }
 
   #presentSlot(slot: GlyphRenderSlot, state: GlyphPresentationState) {
@@ -509,14 +539,12 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     const surface = this.#surface;
     const proxy = slot.proxy;
     if (!renderer || !surface || !proxy || !slot.ready || slot.resizing) return;
-    renderer.setViewport(0, 0, slot.size.width, slot.size.height);
+    renderer.setViewport(0, 0, this.#frameSize.width, this.#frameSize.height);
     renderer.render(state.scene, state.camera);
-    proxy.copy(surface, {
-      height: Math.max(1, Math.round(slot.size.height * slot.size.dpr)),
-      width: Math.max(1, Math.round(slot.size.width * slot.size.dpr)),
-      x: 0,
-      y: 0,
-    });
+    const copyStartedAt = performance.now();
+    proxy.copy(surface, this.#frameSize, this.hasAttribute('opaque'));
+    const copyElapsed = performance.now() - copyStartedAt;
+    this.#copyMs = this.#copyMs === 0 ? copyElapsed : this.#copyMs * 0.8 + copyElapsed * 0.2;
   }
 
   #updateLoop() {
@@ -550,7 +578,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
         (slot): slot is GlyphRenderSlot & { store: GlyphR3fStore } =>
           slot.proxy !== undefined && slot.store !== undefined,
       );
-      this.#prepareHost(activeSlots);
+      this.#refreshVirtualFrame();
       // One global scheduler step updates every logical root. Each root owns a render-phase
       // presenter which renders and copies immediately, before the next root overwrites the host.
       advancePooledRoots(
@@ -610,6 +638,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
       idle: this.#slots.size - active,
       poolSize: this.#slots.size,
       poolLimit: this.#maxSlots(),
+      copyMs: this.#copyMs,
       frameMs: this.#frameMs,
       fps: this.#frameMs > 0 ? 1000 / this.#frameMs : 0,
     });
@@ -622,6 +651,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
         `active     ${stats.active}`,
         `idle       ${stats.idle}`,
         `pool       ${stats.poolSize}/${stats.poolLimit}`,
+        `copy       ${stats.copyMs.toFixed(2)} ms`,
         `frame      ${stats.frameMs.toFixed(1)} ms`,
         `fps        ${stats.fps.toFixed(0)}`,
         '',
@@ -710,14 +740,13 @@ export class GlyphProxyElement extends HTMLElement {
   static observedAttributes = ['root', 'data-scene'];
 
   #canvas: HTMLCanvasElement | undefined;
-  #presenter: CanvasRenderingContext2D | undefined;
-  #pendingCanvas: HTMLCanvasElement | undefined;
-  #pendingPresenter: CanvasRenderingContext2D | undefined;
-  #presented = false;
+  #presenter: GlyphPresenter | undefined;
   #root: GlyphOffscreenRootElement | undefined;
-  #resizeObserver: ResizeObserver | undefined;
-  #resizeTimer: ReturnType<typeof setTimeout> | undefined;
   #onRootReady = () => this.#bind();
+  #onFadeOut = (event: TransitionEvent) => {
+    if (event.target !== this || event.propertyName !== 'opacity' || this.style.opacity !== '0') return;
+    this.#clearFrame();
+  };
 
   get rootId() {
     return this.getAttribute('root') ?? this.closest('[data-glyph-root]')?.id;
@@ -731,6 +760,8 @@ export class GlyphProxyElement extends HTMLElement {
     this.setAttribute('data-glyph-proxy', '');
     if (!this.hasAttribute('role')) this.setAttribute('role', 'img');
     this.style.display = 'block';
+    this.style.position = 'relative';
+    this.style.overflow = 'hidden';
     this.style.opacity = '0';
     this.style.transition = `opacity ${this.getAttribute('fade') ?? '180'}ms ease`;
     this.style.contain = 'layout paint';
@@ -742,9 +773,6 @@ export class GlyphProxyElement extends HTMLElement {
     this.#canvas = this.querySelector('canvas') ?? document.createElement('canvas');
     styleProxyCanvas(this.#canvas);
     if (!this.#canvas.parentElement) this.append(this.#canvas);
-    this.#resizeObserver = new ResizeObserver(() => this.#resize());
-    this.#resizeObserver.observe(this);
-    this.#resize();
     this.addEventListener('pointermove', this.#sendPointer);
     this.addEventListener('pointerdown', this.#sendPointerDown);
     this.addEventListener('pointerup', this.#sendPointerUp);
@@ -763,14 +791,12 @@ export class GlyphProxyElement extends HTMLElement {
   disconnectedCallback() {
     this.#root?.unregister(this);
     this.#root = undefined;
-    this.#resizeObserver?.disconnect();
-    if (this.#resizeTimer !== undefined) clearTimeout(this.#resizeTimer);
-    this.#resizeTimer = undefined;
     this.removeEventListener('pointermove', this.#sendPointer);
     this.removeEventListener('pointerdown', this.#sendPointerDown);
     this.removeEventListener('pointerup', this.#sendPointerUp);
     this.removeEventListener('pointercancel', this.#sendPointerUp);
     this.removeEventListener('keydown', this.#sendKeyDown);
+    this.removeEventListener('transitionend', this.#onFadeOut);
     window.removeEventListener('glyph-root-ready', this.#onRootReady);
   }
 
@@ -787,25 +813,23 @@ export class GlyphProxyElement extends HTMLElement {
   }
 
   setActive(active: boolean) {
+    if (active) this.removeEventListener('transitionend', this.#onFadeOut);
     this.style.opacity = active ? '1' : '0';
   }
 
-  copy(surface: OffscreenCanvas | HTMLCanvasElement, region: GlyphSurfaceRegion) {
-    const canvas = this.#pendingCanvas ?? this.#canvas;
+  releaseFrame() {
+    this.removeEventListener('transitionend', this.#onFadeOut);
+    this.setActive(false);
+    if (getComputedStyle(this).opacity === '0') this.#clearFrame();
+    else this.addEventListener('transitionend', this.#onFadeOut);
+  }
+
+  copy(surface: OffscreenCanvas | HTMLCanvasElement, frame: GlyphSurfaceSize, opaque: boolean) {
+    const canvas = this.#canvas;
     if (!canvas) return;
-    const presenter = this.#pendingCanvas ? this.#pendingPresenter : this.#presenter;
-    const resolved = presentSurface(canvas, presenter, surface, region);
+    const resolved = presentSurface(canvas, this.#presenter, surface, frame, opaque);
     if (!resolved) return;
-    if (this.#pendingCanvas === canvas) {
-      this.#canvas?.replaceWith(canvas);
-      this.#canvas = canvas;
-      this.#presenter = resolved;
-      this.#pendingCanvas = undefined;
-      this.#pendingPresenter = undefined;
-    } else {
-      this.#presenter = resolved;
-    }
-    this.#presented = true;
+    this.#presenter = resolved;
     this.setActive(true);
   }
 
@@ -818,51 +842,30 @@ export class GlyphProxyElement extends HTMLElement {
     }
   }
 
-  #resize() {
-    if (!this.#canvas) return;
-    const rect = this.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const width = Math.max(1, Math.round(rect.width * dpr));
-    const height = Math.max(1, Math.round(rect.height * dpr));
-    if (!this.#presented) {
-      this.#resizeCanvas(width, height);
-      return;
-    }
-    const target = this.#pendingCanvas ?? this.#canvas;
-    if (target.width === width && target.height === height) return;
-    if (this.#resizeTimer !== undefined) clearTimeout(this.#resizeTimer);
-    this.#resizeTimer = setTimeout(() => {
-      this.#resizeTimer = undefined;
-      this.#resizeCanvas(width, height);
-    }, RESIZE_SETTLE_MS);
-  }
-
-  #resizeCanvas(width: number, height: number) {
-    if (!this.#canvas) return;
-    if (!this.#presented) {
-      this.#canvas.width = width;
-      this.#canvas.height = height;
-      this.#presenter = undefined;
-      return;
-    }
-    const pending = document.createElement('canvas');
-    pending.width = width;
-    pending.height = height;
-    styleProxyCanvas(pending);
-    this.#pendingCanvas = pending;
-    this.#pendingPresenter = undefined;
+  #clearFrame() {
+    const canvas = this.#canvas;
+    if (!canvas) return;
+    if (canvas.width === 1 && canvas.height === 1) return;
+    canvas.width = 1;
+    canvas.height = 1;
+    canvas.style.width = '1px';
+    canvas.style.height = '1px';
   }
 
   #sendPointer = (event: PointerEvent) => {
     const rect = this.getBoundingClientRect();
+    const point = this.#root?.mapProxyPoint(this, {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
     this.#root?.sendInput(
       {
         type: 'pointermove',
         buttons: event.buttons,
         pointerId: event.pointerId,
         value: event.pointerType,
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
+        x: point?.x ?? event.clientX - rect.left,
+        y: point?.y ?? event.clientY - rect.top,
       },
       this.id ? { proxyId: this.id } : 'root',
     );
@@ -872,14 +875,18 @@ export class GlyphProxyElement extends HTMLElement {
     this.focus({ preventScroll: true });
     this.setPointerCapture(event.pointerId);
     const rect = this.getBoundingClientRect();
+    const point = this.#root?.mapProxyPoint(this, {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
     this.#root?.sendInput(
       {
         type: 'pointerdown',
         buttons: event.buttons,
         pointerId: event.pointerId,
         value: event.pointerType,
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
+        x: point?.x ?? event.clientX - rect.left,
+        y: point?.y ?? event.clientY - rect.top,
       },
       this.id ? { proxyId: this.id } : 'root',
     );
@@ -888,14 +895,18 @@ export class GlyphProxyElement extends HTMLElement {
   #sendPointerUp = (event: PointerEvent) => {
     if (this.hasPointerCapture(event.pointerId)) this.releasePointerCapture(event.pointerId);
     const rect = this.getBoundingClientRect();
+    const point = this.#root?.mapProxyPoint(this, {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
     this.#root?.sendInput(
       {
         type: event.type,
         buttons: event.buttons,
         pointerId: event.pointerId,
         value: event.pointerType,
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
+        x: point?.x ?? event.clientX - rect.left,
+        y: point?.y ?? event.clientY - rect.top,
       },
       this.id ? { proxyId: this.id } : 'root',
     );
@@ -905,8 +916,14 @@ export class GlyphProxyElement extends HTMLElement {
     if (['ArrowLeft', 'ArrowRight', 'Backspace', ' '].includes(event.key)) event.preventDefault();
     if (this.getAttribute('role') === 'button' && (event.key === 'Enter' || event.key === ' ')) {
       const rect = this.getBoundingClientRect();
+      const point = this.#root?.mapProxyPoint(this, { x: rect.width / 2, y: rect.height / 2 });
       this.#root?.sendInput(
-        { type: 'pointerdown', value: 'keyboard', x: rect.width / 2, y: rect.height / 2 },
+        {
+          type: 'pointerdown',
+          value: 'keyboard',
+          x: point?.x ?? rect.width / 2,
+          y: point?.y ?? rect.height / 2,
+        },
         this.id ? { proxyId: this.id } : 'root',
       );
       return;
@@ -917,33 +934,52 @@ export class GlyphProxyElement extends HTMLElement {
 
 function styleProxyCanvas(canvas: HTMLCanvasElement) {
   canvas.setAttribute('aria-hidden', 'true');
+  canvas.style.position = 'absolute';
+  canvas.style.left = '50%';
+  canvas.style.top = '50%';
   canvas.style.display = 'block';
-  canvas.style.height = '100%';
-  canvas.style.width = '100%';
+  canvas.style.maxWidth = 'none';
+  canvas.style.transform = 'translate(-50%, -50%)';
 }
 
 function presentSurface(
   canvas: HTMLCanvasElement,
-  presenter: CanvasRenderingContext2D | undefined,
+  presenter: GlyphPresenter | undefined,
   surface: OffscreenCanvas | HTMLCanvasElement,
-  region: GlyphSurfaceRegion,
-): CanvasRenderingContext2D | undefined {
+  frame: GlyphSurfaceSize,
+  opaque: boolean,
+): GlyphPresenter | undefined {
   const transferable =
     typeof OffscreenCanvas === 'function' &&
     surface instanceof OffscreenCanvas &&
     typeof surface.transferToImageBitmap === 'function';
-  // A shared host can be larger than this proxy, so presentation must crop the slot's
-  // viewport. bitmaprenderer cannot crop; a synchronous 2D blit preserves frame ordering.
-  const resolved = presenter ?? canvas.getContext('2d', { alpha: true }) ?? undefined;
+  const pixelWidth = Math.max(1, Math.round(frame.width * frame.dpr));
+  const pixelHeight = Math.max(1, Math.round(frame.height * frame.dpr));
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+  }
+  canvas.style.width = `${frame.width}px`;
+  canvas.style.height = `${frame.height}px`;
+
+  // Every proxy consumes the same complete frame. The bitmap-renderer path transfers
+  // ownership directly; HTML performs the centered crop without another pixel blit.
+  const resolved =
+    presenter ??
+    (transferable
+      ? (canvas.getContext('bitmaprenderer', { alpha: !opaque }) ?? undefined)
+      : (canvas.getContext('2d', { alpha: !opaque }) ?? undefined));
   if (resolved === undefined) return undefined;
-  if ('drawImage' in resolved) {
+  if (transferable && 'transferFromImageBitmap' in resolved) {
+    resolved.transferFromImageBitmap(surface.transferToImageBitmap());
+  } else if ('drawImage' in resolved) {
     resolved.imageSmoothingEnabled = false;
     if (transferable) {
       const bitmap = surface.transferToImageBitmap();
-      resolved.drawImage(bitmap, region.x, region.y, region.width, region.height, 0, 0, canvas.width, canvas.height);
+      resolved.drawImage(bitmap, 0, 0);
       bitmap.close();
     } else {
-      resolved.drawImage(surface, region.x, region.y, region.width, region.height, 0, 0, canvas.width, canvas.height);
+      resolved.drawImage(surface, 0, 0);
     }
   }
   return resolved;

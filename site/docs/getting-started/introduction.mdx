@@ -57,13 +57,15 @@ semantics and lazily owns an implicit batch of one.
 
 The docs page can host a Three scene without making the docs application an R3F application. The root is a custom
 element that owns a bounded pool of logical R3F roots on one physical offscreen renderer; each proxy is an ordinary page
-element that receives a copied frame. The same path uses one WebGPU device or one WebGL context. Proxies can be placed
-anywhere in the MDX document and bind to the root by id.
+element that receives a copied frame. Every scene uses one fixed virtual frame sized from the page's registered proxies.
+Each proxy centers that complete frame and lets its own HTML bounds clip it, so presentation can transfer the bitmap
+directly without a pixel crop. The same path uses one WebGPU device or one WebGL context. Proxies can be placed anywhere
+in the MDX document and bind to the root by id.
 
 <link rel="stylesheet" href="/docs/assets/glyph-explainer.css" />
 <script type="module" src="/docs/assets/glyph-explainer.js"></script>
 
-<glyph-introduction-root id="introduction-glyph-scene" max-slots="2" idle-ttl="5000" />
+<glyph-introduction-root id="introduction-glyph-scene" max-slots="2" idle-ttl="5000" opaque />
 
 <glyph-proxy
   id="introduction-glyph-proxy"
