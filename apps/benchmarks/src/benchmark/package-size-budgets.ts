@@ -83,9 +83,11 @@ export const packageSizeBudgets = {
   },
   // Three realization, engine-owned backend/plan mapping, first-frame measurement and bounds,
   // exact-generation resource transactions, final planner names, bounded candidate leases,
-  // and detached Glyphs/Decorations objects with independent materials and full matrices.
+  // and detached Glyphs/Decorations objects with independent materials and full matrices. The
+  // final detached cleanup and live draw-order closure measure 742,195 raw bytes; the raw ceiling
+  // is rounded to the next 1 KB while compressed ceilings remain unchanged.
   'three-runtime-js': {
-    rawBytes: 742_000,
+    rawBytes: 743_000,
     minifiedBytes: 478_000,
     gzipBytes: 121_000,
     brotliBytes: 100_000,
