@@ -47,6 +47,14 @@ export function threeEngineDomainReport(): Readonly<{
     : { active: true, loaders: domain.loaderCount, fonts: domain.fontCount, leases: domain.leaseCount };
 }
 
+/** @internal Deterministic evidence for coordinator-shared atlas/page lifetime. */
+export function threeSharedRenderResourceCount(): number {
+  const domain = sharedDomain?.deref();
+  return domain === undefined || domain.disposed || domain.value === undefined
+    ? 0
+    : domain.value.coordinator.sharedRenderResourceCount;
+}
+
 export function acquireThreeLoaderDomain(manager: THREE.LoadingManager): Readonly<{
   readonly ready: Promise<void>;
   associate(font: Font<AnyRasterTechnique>): void;

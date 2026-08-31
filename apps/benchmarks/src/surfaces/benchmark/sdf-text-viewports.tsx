@@ -117,8 +117,18 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
     publish: publishBakeProgress,
     value: bakeProgressValue,
   } = useBakeProgress('MSDF');
-  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign, timelineTick } =
-    textConfiguration;
+  const {
+    anchor,
+    animatePresentation,
+    direction,
+    features,
+    fontFixture,
+    language,
+    layoutWidthRatio,
+    text,
+    textAlign,
+    timelineTick,
+  } = textConfiguration;
   const publishStats = useEffectEvent((next: MtsdfTextLiveStats) => {
     finishBakeProgress();
     onStats(next);
@@ -136,6 +146,7 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
   });
   const sceneConfiguration = useEffectEvent(() => ({
     anchor,
+    animatePresentation,
     direction,
     features,
     fontFixture,
@@ -239,6 +250,7 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
       scene,
       {
         anchor,
+        animatePresentation,
         direction,
         features,
         fontFixture,
@@ -254,6 +266,7 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
     );
   }, [
     anchor,
+    animatePresentation,
     direction,
     dpr,
     features,
@@ -443,8 +456,18 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
     publish: publishBakeProgress,
     value: bakeProgressValue,
   } = useBakeProgress('Slug');
-  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign, timelineTick } =
-    textConfiguration;
+  const {
+    anchor,
+    animatePresentation,
+    direction,
+    features,
+    fontFixture,
+    language,
+    layoutWidthRatio,
+    text,
+    textAlign,
+    timelineTick,
+  } = textConfiguration;
   const publishStats = useEffectEvent((next: SlugTextLiveStats) => {
     finishBakeProgress();
     onStats(next);
@@ -462,6 +485,7 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
   });
   const sceneConfiguration = useEffectEvent(() => ({
     anchor,
+    animatePresentation,
     direction,
     features,
     fontFixture,
@@ -564,6 +588,7 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
       scene,
       {
         anchor,
+        animatePresentation,
         direction,
         features,
         fontFixture,
@@ -579,6 +604,7 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
     );
   }, [
     anchor,
+    animatePresentation,
     direction,
     dpr,
     features,

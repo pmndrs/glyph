@@ -60,9 +60,15 @@ test('integrations re-export root names only when their own signatures use them'
       entry: await declaration('three.d.ts'),
       body: (
         await Promise.all(
-          ['three/text.d.ts', 'three/font-loader.d.ts', 'three/material.d.ts', 'three/frame-error.d.ts'].map(
-            declaration,
-          ),
+          [
+            'three/text.d.ts',
+            'three/glyphs.d.ts',
+            'three/decorations.d.ts',
+            'three/glyph-measurement.d.ts',
+            'three/font-loader.d.ts',
+            'three/material.d.ts',
+            'three/frame-error.d.ts',
+          ].map(declaration),
         )
       ).join('\n'),
     },

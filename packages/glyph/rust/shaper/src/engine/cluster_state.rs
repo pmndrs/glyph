@@ -31,16 +31,72 @@ const NO_SOURCE_RUN: u32 = u32::MAX;
 /// Cluster count per chunk summary (D-245).
 pub(crate) const LAYOUT_CHUNK: usize = 64;
 
+fn summarize_unit_chunks(
+    units: &[i64],
+    flags: &[u8],
+    chunk_advance_sums: &mut Vec<i64>,
+    chunk_space_sums: &mut Vec<i64>,
+    chunk_flags_or: &mut Vec<u8>,
+) {
+    for (advances, flags) in units.chunks(LAYOUT_CHUNK).zip(flags.chunks(LAYOUT_CHUNK)) {
+        let advance_sum = sum_advance_units(advances);
+        let mut space_sum = 0_i64;
+        let mut flags_or = 0_u8;
+        for (advance, flag) in advances.iter().zip(flags) {
+            space_sum += *advance & -i64::from((*flag & CLUSTER_SPACE) >> 4);
+            flags_or |= *flag;
+        }
+        chunk_advance_sums.push(advance_sum);
+        chunk_space_sums.push(space_sum);
+        chunk_flags_or.push(flags_or);
+    }
+}
+
+#[cfg(all(target_arch = "wasm32", feature = "simd128"))]
+fn sum_advance_units(advances: &[i64]) -> i64 {
+    use core::arch::wasm32::{i64x2_add, i64x2_extract_lane, i64x2_splat, v128, v128_load};
+
+    const ACCUMULATORS: usize = 4;
+    const VALUES_PER_GROUP: usize = ACCUMULATORS * 2;
+    let completed = advances.len() / VALUES_PER_GROUP * VALUES_PER_GROUP;
+    let mut sums = [i64x2_splat(0); ACCUMULATORS];
+    for start in (0..completed).step_by(VALUES_PER_GROUP) {
+        for (accumulator, sum) in sums.iter_mut().enumerate() {
+            // SAFETY: `completed` contains only complete eight-value groups.
+            let values = unsafe {
+                v128_load(
+                    advances
+                        .as_ptr()
+                        .add(start + accumulator * 2)
+                        .cast::<v128>(),
+                )
+            };
+            *sum = i64x2_add(*sum, values);
+        }
+    }
+    let vector_sum = sums.into_iter().fold(0_i64, |total, sum| {
+        total + i64x2_extract_lane::<0>(sum) + i64x2_extract_lane::<1>(sum)
+    });
+    advances[completed..]
+        .iter()
+        .fold(vector_sum, |total, advance| total + *advance)
+}
+
+#[cfg(not(all(target_arch = "wasm32", feature = "simd128")))]
+fn sum_advance_units(advances: &[i64]) -> i64 {
+    advances.iter().sum()
+}
+
 #[derive(Default)]
 pub(crate) struct ClusterArena {
     pub starts: Vec<u32>,
     pub ends: Vec<u32>,
     pub advances: Vec<f64>,
-    /// F26.6 quantization of `advances` under the layout-unit rounding contract,
+    /// F16.16 quantization of `advances` under the layout-unit rounding contract,
     /// refreshed at the end of every build. Slice 2a keeps the f64 stream
     /// authoritative; the integer fit consumes this stream and must match.
-    pub advances_f26: Vec<i32>,
-    /// Chunk-64 summaries over `advances_f26`/`flags`, refreshed with them: total
+    pub advance_units: Vec<i64>,
+    /// Chunk-64 summaries over `advance_units`/`flags`, refreshed with them: total
     /// advance, shrinkable-space advance, and OR-folded flags per chunk.
     pub chunk_advance_sums: Vec<i64>,
     pub chunk_space_sums: Vec<i64>,
@@ -88,7 +144,7 @@ impl ClusterArena {
         reserve(&mut self.starts, capacity)?;
         reserve(&mut self.ends, capacity)?;
         reserve(&mut self.advances, capacity)?;
-        reserve(&mut self.advances_f26, capacity)?;
+        reserve(&mut self.advance_units, capacity)?;
         reserve(&mut self.units_per_em, capacity)?;
         reserve(&mut self.flags, capacity)?;
         reserve(&mut self.style_indexes, capacity)?;
@@ -418,13 +474,13 @@ impl ClusterArena {
         Ok(Some((cluster_start, cluster_end)))
     }
 
-    /// Re-derives the F26.6 advance stream from the f64 advances. Both public build
+    /// Re-derives the F16.16 advance stream from the f64 advances. Both public build
     /// paths end here, so the streams can never disagree outside the rounding
     /// contract.
     pub(crate) fn refresh_layout_units(&mut self) -> Result<(), EngineError> {
-        self.advances_f26.clear();
-        reserve(&mut self.advances_f26, self.advances.len())?;
-        self.advances_f26.extend(
+        self.advance_units.clear();
+        reserve(&mut self.advance_units, self.advances.len())?;
+        self.advance_units.extend(
             self.advances
                 .iter()
                 .map(|advance| super::layout_units::layout_units_from_scaled(*advance)),
@@ -435,32 +491,20 @@ impl ClusterArena {
         // integer addition is associative — and resolves the last break position
         // inside a chunk only when a break is actually needed. The tail chunk is
         // summarized too; consumers gate on full-chunk availability themselves.
-        let chunk_count = self.advances_f26.len().div_ceil(LAYOUT_CHUNK);
+        let chunk_count = self.advance_units.len().div_ceil(LAYOUT_CHUNK);
         self.chunk_advance_sums.clear();
         self.chunk_space_sums.clear();
         self.chunk_flags_or.clear();
         reserve(&mut self.chunk_advance_sums, chunk_count)?;
         reserve(&mut self.chunk_space_sums, chunk_count)?;
         reserve(&mut self.chunk_flags_or, chunk_count)?;
-        for (advances, flags) in self
-            .advances_f26
-            .chunks(LAYOUT_CHUNK)
-            .zip(self.flags.chunks(LAYOUT_CHUNK))
-        {
-            let mut advance_sum = 0_i64;
-            let mut space_sum = 0_i64;
-            let mut flags_or = 0_u8;
-            for (advance, flag) in advances.iter().zip(flags) {
-                let advance = i64::from(*advance);
-                advance_sum += advance;
-                // Branchless select keeps this loop a straight vectorizable stream.
-                space_sum += advance & -i64::from((*flag & CLUSTER_SPACE) >> 4);
-                flags_or |= *flag;
-            }
-            self.chunk_advance_sums.push(advance_sum);
-            self.chunk_space_sums.push(space_sum);
-            self.chunk_flags_or.push(flags_or);
-        }
+        summarize_unit_chunks(
+            &self.advance_units,
+            &self.flags,
+            &mut self.chunk_advance_sums,
+            &mut self.chunk_space_sums,
+            &mut self.chunk_flags_or,
+        );
         Ok(())
     }
 
@@ -758,7 +802,7 @@ impl ClusterArena {
         self.starts.clear();
         self.ends.clear();
         self.advances.clear();
-        self.advances_f26.clear();
+        self.advance_units.clear();
         self.chunk_advance_sums.clear();
         self.chunk_space_sums.clear();
         self.chunk_flags_or.clear();
@@ -1212,10 +1256,13 @@ mod tests {
         assert_eq!(clusters.starts, [0, 1, 2, 3]);
         assert_eq!(clusters.ends, [1, 2, 3, 4]);
         assert_eq!(clusters.advances, [9.0, 7.0, 9.0, 0.0]);
-        // The F26.6 stream must quantize the COMPLETE advances — including the
+        // The F16.16 stream must quantize the COMPLETE advances — including the
         // shape aggregation that runs after the initial spacing fill — or the
         // integer fit sees spacing-only widths and stops wrapping.
-        assert_eq!(clusters.advances_f26, [9 * 64, 7 * 64, 9 * 64, 0]);
+        assert_eq!(
+            clusters.advance_units,
+            [9 * 65_536, 7 * 65_536, 9 * 65_536, 0]
+        );
         assert_eq!(clusters.style_indexes, [0; 4]);
         assert_eq!(clusters.source_runs, [0, 0, 0, NO_SOURCE_RUN]);
         assert_eq!(clusters.font_handles, [9, 9, 9, 0]);
@@ -1743,7 +1790,7 @@ mod tests {
         assert_lane!(starts);
         assert_lane!(ends);
         assert_lane!(advances);
-        assert_lane!(advances_f26);
+        assert_lane!(advance_units);
         assert_lane!(units_per_em);
         assert_lane!(flags);
         assert_lane!(style_indexes);
@@ -1889,7 +1936,7 @@ mod tests {
         assert_lane!(starts);
         assert_lane!(ends);
         assert_lane!(advances);
-        assert_lane!(advances_f26);
+        assert_lane!(advance_units);
         assert_lane!(chunk_advance_sums);
         assert_lane!(chunk_space_sums);
         assert_lane!(chunk_flags_or);
@@ -1985,5 +2032,32 @@ mod tests {
         // the end of text (9). No soft breaks exist under none, so both agree.
         assert_eq!(widths.max_content_width, 27.0);
         assert_eq!(widths.min_content_width, 27.0);
+    }
+
+    #[test]
+    fn fixed_wide_lane_preserves_large_advances_and_chunk_summary_semantics() {
+        let mut arena = ClusterArena {
+            advances: vec![1.0; LAYOUT_CHUNK + 1],
+            flags: vec![CLUSTER_ALLOWED_BREAK; LAYOUT_CHUNK + 1],
+            ..ClusterArena::default()
+        };
+        arena.flags[3] |= CLUSTER_SPACE;
+        arena.refresh_layout_units().unwrap();
+        assert_eq!(arena.chunk_advance_sums, [64 * 65_536, 65_536]);
+        assert_eq!(arena.chunk_space_sums, [65_536, 0]);
+        assert_eq!(
+            arena.chunk_flags_or,
+            [CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE, CLUSTER_ALLOWED_BREAK]
+        );
+
+        arena.advances[LAYOUT_CHUNK] = 32_768.0;
+        arena.refresh_layout_units().unwrap();
+        assert_eq!(arena.chunk_advance_sums[0], 64 * 65_536);
+        assert_eq!(arena.chunk_advance_sums[1], 2_147_483_648);
+        assert_eq!(arena.chunk_space_sums, [65_536, 0]);
+        assert_eq!(
+            arena.chunk_flags_or,
+            [CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE, CLUSTER_ALLOWED_BREAK]
+        );
     }
 }

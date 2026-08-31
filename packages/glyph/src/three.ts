@@ -25,7 +25,16 @@ export type {
   TextSpan,
   TextUpdate,
 } from './three/text.js';
-// `measure()`, `glyphs()`, and `snapshotGlyphs()` return these, so a `/three` importer
-// has to be able to name them without reaching for a second subpath.
+export { Glyphs, localToWorldMatrix, worldToLocalMatrix } from './three/glyphs.js';
+export type { DetachedGlyph } from './three/glyphs.js';
+export { Decorations } from './three/decorations.js';
+export type {
+  GlyphAnchor,
+  GlyphAnchorAxis,
+  ThreeGlyphGeometryCoordinates,
+  ThreeGlyphGeometrySource,
+  ThreeGlyphMeasurement,
+} from './three/glyph-measurement.js';
+// `measure()`, `glyphs()`, caret helpers, and detached measurements return these.
 export type { LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary } from './layout.js';
-export type { GlyphApplication, GlyphCaret, GlyphPlacements } from './glyph-placement.js';
+export type { GlyphCaret, GlyphKey } from './glyph-placement.js';

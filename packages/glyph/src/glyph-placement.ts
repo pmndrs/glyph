@@ -6,11 +6,9 @@ import type { LayoutBox, GlyphLayoutInspection } from './layout.js';
  * positive Y down. It is the space the engine positioned the glyphs in and the space
  * `GlyphLayout` reports.
  *
- * It is a stated field rather than a convention because the surface this replaces did not have one.
- * `snapshotGlyphOrigins` returned a `Float32Array` seeded from shaped space and then overwritten
- * from displayed space wherever a GPU record existed, so one array held two spaces with nothing
- * marking the boundary. Here a snapshot names its space once and no value in it is ever from
- * another; a position that could not be read is reported by `GlyphPlacements.incomplete`, not
+ * It is a stated field rather than a convention because renderer records may encode their origin
+ * differently. The internal committed-display view normalizes every value into paragraph space;
+ * a position that could not be read is named by `GlyphPlacements.incomplete` rather than silently
  * substituted.
  */
 export type GlyphSpace = 'paragraph';
@@ -53,9 +51,9 @@ export interface GlyphPlacement {
   /** Where the committed layout put this glyph's origin. A manipulation never changes it. */
   readonly shapedX: number;
   readonly shapedY: number;
-  /** Where the glyph is drawn. Assign these to animate; `GlyphPlacements` is applied as a whole. */
-  x: number;
-  y: number;
+  /** Where the committed renderer record draws the glyph. */
+  readonly x: number;
+  readonly y: number;
   /** Ink box of the glyph as currently placed. A glyph with no outline reports zero extents. */
   readonly ink: LayoutBox;
   /** Advance box of the glyph as currently placed: `advance` wide, its line's box tall. */
@@ -82,10 +80,6 @@ export interface GlyphRun {
   readonly bounds: LayoutBox;
   /** Ink box of the run as currently placed. Use it to scale or rotate about what the eye sees. */
   readonly ink: LayoutBox;
-  /** Moves every glyph in the run. */
-  translate(dx: number, dy: number): void;
-  /** Returns every glyph in the run to where the layout put it. */
-  reset(): void;
 }
 
 /** A line run, with the vertical metrics that let a caller align to its baseline. */
@@ -96,16 +90,6 @@ export interface GlyphLine extends GlyphRun {
   readonly ascent: number;
   readonly descent: number;
   readonly lineHeight: number;
-}
-
-/** What `GlyphPlacements.adopt` recovered, so a caller never has to infer it from a diff. */
-export interface GlyphAdoption {
-  /** Glyphs whose drawn position was recovered from the previous snapshot by identity. */
-  readonly matched: number;
-  /** Glyphs in this snapshot that the previous one did not contain. They stay at their shaped origin. */
-  readonly unmatched: number;
-  /** Glyphs the previous snapshot held that this one does not. They have nowhere to go. */
-  readonly dropped: number;
 }
 
 /**
@@ -128,27 +112,9 @@ export interface GlyphCaret {
 }
 
 /**
- * What one `apply` did.
- *
- * A write either lands on every glyph or says exactly which ones it did not reach. The surface this
- * replaces silently skipped any glyph whose GPU record was missing, so a frame writing two hundred
- * origins could land forty with no error and no count.
- */
-export interface GlyphApplication {
-  readonly requested: number;
-  readonly applied: number;
-  /** Indices into `GlyphPlacements.glyphs` that had no retained record. Empty when `applied === requested`. */
-  readonly unapplied: readonly number[];
-}
-
-/**
- * One paragraph's glyphs, addressable as glyphs, words, and lines, in one stated coordinate space.
- *
- * The cycle is explicit: **snapshot, manipulate, restore.** `Text.snapshotGlyphs()` produces one,
- * assignments to `GlyphPlacement.x`/`y` (or `GlyphRun.translate`) manipulate it,
- * `Text.applyGlyphs(placements)` writes it to the retained GPU buffer without a reshape or a CPU
- * re-upload, and `Text.restoreGlyphs()` hands authority back to the measure. Restore is a step of the
- * cycle rather than a call discovered by observing corruption.
+ * Internal read-only view of one paragraph's committed renderer records, addressable as glyphs,
+ * words, and lines in one stated coordinate space. Public mutation happens only on the detached
+ * `Glyphs` object returned by the Three adapter.
  *
  * Every array here is internally consistent by construction. There are no parallel columns for a
  * caller to keep aligned.
@@ -182,15 +148,6 @@ export interface GlyphPlacements {
    * unmovable one.
    */
   readonly incomplete: readonly number[];
-  glyphForKey(key: GlyphKey): GlyphPlacement | undefined;
-  /**
-   * Copies drawn positions from `previous` onto the glyphs the two snapshots share by identity.
-   * Glyphs with no match keep their shaped origin, which is the honest place for a glyph that did
-   * not exist a moment ago.
-   */
-  adopt(previous: GlyphPlacements): GlyphAdoption;
-  /** Returns every glyph to where the layout put it, without touching the paragraph. */
-  reset(): void;
   /** Nearest cluster boundary to a point, in this snapshot's space. */
   caretAt(x: number, y: number): GlyphCaret;
   /** Line-clipped rectangles covering the clusters in a UTF-16 range. */
@@ -243,11 +200,6 @@ function unionBox(left: LayoutBox | undefined, right: LayoutBox): LayoutBox {
   );
 }
 
-interface MutableGlyph extends GlyphPlacement {
-  x: number;
-  y: number;
-}
-
 /**
  * Builds the placement snapshot for one committed layout.
  *
@@ -277,7 +229,7 @@ export function createGlyphPlacements(
   const wordOfGlyph = new Int32Array(glyphCount).fill(-1);
   const wordSpans = wordsOf(layout, text, lineOfGlyph, wordOfGlyph, clusterEnds);
 
-  const glyphs: MutableGlyph[] = [];
+  const glyphs: GlyphPlacement[] = [];
   const keyCounts = new Map<string, number>();
   for (let index = 0; index < glyphCount; index += 1) {
     const fontHandle = layout.fontHandles[layout.glyphFontSlots[index]!];
@@ -322,9 +274,6 @@ export function createGlyphPlacements(
     glyphRun('word', index, span.glyphStart, span.glyphCount, span.textStart, span.textEnd, glyphs, undefined),
   );
 
-  const byKey = new Map<GlyphKey, MutableGlyph>();
-  for (const glyph of glyphs) byKey.set(glyph.key, glyph);
-
   const placements: GlyphPlacements = {
     space: 'paragraph',
     layout,
@@ -332,28 +281,6 @@ export function createGlyphPlacements(
     words: Object.freeze(words),
     lines: Object.freeze(lines),
     incomplete: Object.freeze([...incomplete]),
-    glyphForKey: (key: GlyphKey) => byKey.get(key),
-    adopt(previous: GlyphPlacements): GlyphAdoption {
-      let matched = 0;
-      for (const glyph of glyphs) {
-        const before = previous.glyphForKey(glyph.key);
-        if (before === undefined) continue;
-        glyph.x = before.x;
-        glyph.y = before.y;
-        matched += 1;
-      }
-      return Object.freeze({
-        matched,
-        unmatched: glyphs.length - matched,
-        dropped: previous.glyphs.length - matched,
-      });
-    },
-    reset(): void {
-      for (const glyph of glyphs) {
-        glyph.x = glyph.shapedX;
-        glyph.y = glyph.shapedY;
-      }
-    },
     caretAt: (x: number, y: number) => caretAt(lines, clusterEnds, x, y),
     selectionRects: (start: number, end: number) => selectionRects(lines, clusterEnds, start, end),
   };
@@ -370,7 +297,7 @@ function glyphPlacement(
   word: number,
   drawnX: number,
   drawnY: number,
-): MutableGlyph {
+): GlyphPlacement {
   const shapedX = layout.x[index]!;
   const shapedY = layout.y[index]!;
   const advance = layout.glyphAdvances[index]!;
@@ -413,7 +340,7 @@ function glyphRun(
   glyphCount: number,
   textStart: number,
   textEnd: number,
-  all: readonly MutableGlyph[],
+  all: readonly GlyphPlacement[],
   lineMetrics: Readonly<{ baseline: number; ascent: number; descent: number; lineHeight: number }> | undefined,
 ): GlyphRun {
   const glyphs = all.slice(glyphStart, glyphStart + glyphCount);
@@ -434,18 +361,6 @@ function glyphRun(
       let bounds: LayoutBox | undefined;
       for (const glyph of glyphs) bounds = unionBox(bounds, glyph.ink);
       return bounds ?? EMPTY_BOX;
-    },
-    translate(dx: number, dy: number): void {
-      for (const glyph of glyphs) {
-        glyph.x += dx;
-        glyph.y += dy;
-      }
-    },
-    reset(): void {
-      for (const glyph of glyphs) {
-        glyph.x = glyph.shapedX;
-        glyph.y = glyph.shapedY;
-      }
     },
   };
   return lineMetrics === undefined ? run : Object.assign(run, lineMetrics);

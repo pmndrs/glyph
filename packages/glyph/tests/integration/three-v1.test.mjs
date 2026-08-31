@@ -14,8 +14,8 @@ import * as THREE from 'three/webgpu';
 import { bitmapSchema } from '../../dist/raster/bitmap-technique.js';
 import { msdfSchema } from '../../dist/raster/msdf.js';
 import { slugSchema } from '../../dist/raster/slug-technique.js';
-import { threeEngineDomainReport } from '../../dist/three/engine-domain.js';
-import { threeSystemBuffers } from '../../dist/three/render-policy.js';
+import { threeEngineDomainReport, threeSharedRenderResourceCount } from '../../dist/three/engine-domain.js';
+import { decorationSchema, threeSystemBuffers } from '../../dist/three/render-policy.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -45,6 +45,374 @@ test('text property registries validate and freeze reusable rules', () => {
     assert.ok(Object.isFrozen(Object.values(created)[0]));
   }
   assert.throws(() => Constraints.create({ broken: { width: { mode: 'exact', size: Number.NaN } } }), /size/);
+});
+
+test('Text.breakApart imports a planner-assisted copy with exact world alignment and full matrices', async () => {
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const sourceParent = new THREE.Group();
+  sourceParent.position.set(-4, 2, 3);
+  sourceParent.rotation.set(0.15, -0.3, 0.25);
+  sourceParent.scale.set(1.2, 0.8, 1.1);
+  scene.add(sourceParent);
+  const label = new Text({ font, text: 'Glyphs move', style: { fontSize: 16 } });
+  label.position.set(7, -3, 2);
+  sourceParent.add(label);
+  scene.updateMatrixWorld(true);
+
+  let detached;
+  try {
+    const sourceResourceCount = threeSharedRenderResourceCount();
+    assert.ok(sourceResourceCount > 0, 'the committed source realizes its atlas resource');
+    [detached] = label.breakApart();
+    assert.equal(
+      threeSharedRenderResourceCount(),
+      sourceResourceCount,
+      'the detached executor leases the source atlas instead of uploading a duplicate',
+    );
+    assert.deepEqual(
+      detached.matrix.elements,
+      label.matrix.elements,
+      'the detached root must copy the source local matrix without an inverse round trip',
+    );
+    sourceParent.add(detached);
+    label.visible = false;
+
+    assert.ok(detached.count > 0);
+    assert.ok(detached.count < label.glyphs().glyphCount, 'the non-drawing space remains semantic-only');
+    assert.ok(
+      detached.children.some((child) => child.isMesh),
+      'the copied checkpoint must realize Three draws',
+    );
+    const firstMeasurement = detached.measurements[0];
+    assert.equal(firstMeasurement.geometry.kind, 'metric-quad');
+    assert.equal(firstMeasurement.geometry.coordinates, 'glyph-local');
+    const anchorBeforeSourceMove = firstMeasurement.anchorPoint({ x: 'center', y: 'center' }, 'ink', 'world');
+    label.position.x += 100;
+    scene.updateMatrixWorld(true);
+    assert.ok(
+      firstMeasurement.anchorPoint({ x: 'center', y: 'center' }, 'ink', 'world').equals(anchorBeforeSourceMove),
+      'detached measurement anchors cannot retain the live source matrixWorld object',
+    );
+    label.position.x -= 100;
+    scene.updateMatrixWorld(true);
+    for (const [vertexIndex, position] of firstMeasurement.geometry.positions.entries()) {
+      assert.ok(
+        position
+          .clone()
+          .applyMatrix4(firstMeasurement.originalMatrix)
+          .distanceTo(firstMeasurement.localQuad[vertexIndex]) < 1e-6,
+        `metric geometry vertex ${vertexIndex} must compose with the original glyph matrix exactly once`,
+      );
+    }
+    // A first-frame physics write can happen after attachment but before the renderer's first
+    // scene traversal. Directly assigned Glyphs matrices must already produce current world space.
+    for (let index = 0; index < detached.count; index += 1) {
+      const matrix = new THREE.Matrix4();
+      detached.getWorldMatrixAt(index, matrix);
+      const position = new THREE.Vector3().setFromMatrixPosition(matrix);
+      const expected = detached.measurements[index].worldDrawnOrigin;
+      assert.ok(position.distanceTo(expected) < 1e-5, `glyph ${index} must begin at its source world origin`);
+      for (let lane = 0; lane < 16; lane += 1) {
+        assert.ok(
+          Math.abs(matrix.elements[lane] - detached.measurements[index].originalWorldMatrix.elements[lane]) < 1e-5,
+          `glyph ${index} world matrix lane ${lane} must match its retained original transform`,
+        );
+      }
+    }
+    scene.updateMatrixWorld(true);
+
+    const draw = detached.children.find((child) => child.isMesh);
+    const sourceDraw = label.children.find(
+      (child) => child.isMesh && child.userData.pmndrsGlyphPrimitiveKind === 'glyph',
+    );
+    assert.ok(sourceDraw);
+    const sourceStableIds = sourceDraw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.stableGlyphId.id));
+    const detachedStableIds = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.stableGlyphId.id));
+    const sourceOrigins = sourceDraw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
+    const detachedOrigins = draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
+    const sourceSizes = sourceDraw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.size.id));
+    const detachedSizes = draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.size.id));
+    assert.ok(sourceStableIds && detachedStableIds && sourceOrigins && detachedOrigins && sourceSizes && detachedSizes);
+    const detachedTransformIndices = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const detachedTransformTable = draw.geometry.getAttribute('_pmndrsGlyphTransforms');
+    assert.ok(detachedTransformIndices && detachedTransformTable);
+    const firstRecord = draw.userData.pmndrsGlyphRunStart;
+    const detachedTransformIndex = detachedTransformIndices.getX(firstRecord);
+    const detachedRelativeTransform = detachedTransformTable.array.subarray(
+      detachedTransformIndex * 16,
+      detachedTransformIndex * 16 + 16,
+    );
+    const identity = new THREE.Matrix4();
+    assert.deepEqual(
+      [...detachedRelativeTransform],
+      identity.elements,
+      'the detached root transform must realize as exact identity without an inverse round trip',
+    );
+    assert.ok(
+      Array.from({ length: detached.count }, (_, index) => detached.glyphAt(index)).some(
+        (glyph) => glyph.sourceIndex > glyph.index,
+      ),
+      'the fixture must include drawable glyphs after a semantic-only space',
+    );
+    let comparedRecords = 0;
+    for (let detachedRecord = 0; detachedRecord < detachedStableIds.count; detachedRecord += 1) {
+      const stableId = detachedStableIds.getX(detachedRecord);
+      if (stableId === 0) continue;
+      let sourceRecord = -1;
+      for (let candidate = 0; candidate < sourceStableIds.count; candidate += 1) {
+        if (sourceStableIds.getX(candidate) === stableId) {
+          sourceRecord = candidate;
+          break;
+        }
+      }
+      assert.notEqual(sourceRecord, -1, `copied stable glyph ${stableId} must exist in the source plan`);
+      assert.deepEqual(
+        [
+          detachedOrigins.getX(detachedRecord),
+          detachedOrigins.getY(detachedRecord),
+          detachedSizes.getX(detachedRecord),
+          detachedSizes.getY(detachedRecord),
+        ],
+        [
+          sourceOrigins.getX(sourceRecord),
+          sourceOrigins.getY(sourceRecord),
+          sourceSizes.getX(sourceRecord),
+          sourceSizes.getY(sourceRecord),
+        ],
+        `copied stable glyph ${stableId} must preserve its drawable geometry across semantic-only records`,
+      );
+      comparedRecords += 1;
+    }
+    assert.equal(comparedRecords, detached.count);
+    assert.notEqual(draw.material, sourceDraw.material, 'the detached branch owns independent material state');
+    const sourceOpacity = sourceDraw.material.opacity;
+    detached.materials[0].opacity = 0.35;
+    assert.equal(sourceDraw.material.opacity, sourceOpacity, 'detached material edits cannot mutate the live Text');
+    const detachedInstanceCount = draw.geometry.instanceCount;
+    const detachedStableIdsBeforeSourceEdit = Array.from(detachedStableIds.array);
+    const detachedOriginsBeforeSourceEdit = Array.from(detachedOrigins.array);
+    label.text = 'the source keeps shaping';
+    scene.updateMatrixWorld(true);
+    assert.equal(
+      detached.children.find((child) => child.isMesh),
+      draw,
+      'source publications cannot replace a detached draw',
+    );
+    assert.equal(draw.geometry.instanceCount, detachedInstanceCount);
+    assert.deepEqual(Array.from(detachedStableIds.array), detachedStableIdsBeforeSourceEdit);
+    assert.deepEqual(Array.from(detachedOrigins.array), detachedOriginsBeforeSourceEdit);
+    const transforms = draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms');
+    assert.ok(transforms.count / 4 >= detached.count, 'storage covers the copied plan physical record capacity');
+    const pbo = { needsUpdate: false };
+    transforms.pbo = pbo;
+    const version = transforms.version;
+    for (let index = 0; index < detached.count; index += 1) {
+      const local = new THREE.Matrix4();
+      detached.getMatrixAt(index, local);
+      detached.setMatrixAt(index, local);
+    }
+    assert.ok(transforms.version > version, 'glyph writes must advance the storage version');
+    assert.equal(transforms.updateRanges.length, 1, 'per-glyph writes should coalesce into one upload range');
+    assert.equal(pbo.needsUpdate, true, 'the WebGL2 PBO mirror must be dirtied with the canonical storage');
+
+    const world = new THREE.Matrix4().compose(
+      new THREE.Vector3(11, 4, -5),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(0.2, -0.4, 0.7)),
+      new THREE.Vector3(1.25, 0.75, 1.5),
+    );
+    detached.setWorldMatrixAt(0, world);
+    const roundTrip = new THREE.Matrix4();
+    detached.getWorldMatrixAt(0, roundTrip);
+    for (let lane = 0; lane < 16; lane += 1) {
+      assert.ok(Math.abs(roundTrip.elements[lane] - world.elements[lane]) < 1e-5);
+    }
+    const rootX = detached.position.x;
+    detached.position.x += 3;
+    scene.updateMatrixWorld(true);
+    assert.equal(detached.matrix.elements[12], rootX + 3, 'ordinary Three TRS edits must update the detached root');
+    detached.dispose();
+    assert.equal(
+      threeSharedRenderResourceCount(),
+      sourceResourceCount,
+      'disposing the detached lease must retain the source atlas',
+    );
+    assert.throws(() => detached.getMatrixAt(0, new THREE.Matrix4()), /disposed/u);
+    assert.throws(() => detached.setMatrixAt(0, new THREE.Matrix4()), /disposed/u);
+    detached = undefined;
+  } finally {
+    detached?.dispose();
+    label.dispose();
+    font.dispose();
+    loader.dispose();
+  }
+});
+
+test('detached glyphs retain their engine domain after the source and font owners are disposed', async () => {
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const label = new Text({ font, text: 'outlives source', style: { fontSize: 16 } });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+  const [detached] = label.breakApart();
+  scene.add(detached);
+  label.dispose();
+  font.dispose();
+  loader.dispose();
+  try {
+    assert.equal(threeEngineDomainReport().active, true, 'the detached object owns a domain lease');
+    assert.ok(threeSharedRenderResourceCount() > 0);
+    assert.ok(detached.materials.length > 0);
+    detached.getMatrixAt(0, new THREE.Matrix4());
+  } finally {
+    detached.dispose();
+  }
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(threeSharedRenderResourceCount(), 0);
+});
+
+test('Text.breakApart returns a paragraph-scoped independent decoration plan when one exists', async () => {
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const label = new Text({
+    font,
+    text: 'decorated text',
+    style: { decoration: { underline: true, color: '#38bdf8' }, fontSize: 16 },
+  });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+
+  let decorations;
+  let detached;
+  let plain;
+  let plainGlyphs;
+  try {
+    [detached, decorations] = label.breakApart();
+    assert.ok(decorations, 'the tuple includes decorations when the committed paragraph draws them');
+    scene.add(decorations);
+    scene.updateMatrixWorld();
+    const copiedDraws = decorations.children.filter((child) => child.isMesh);
+    assert.ok(copiedDraws.length > 0);
+    assert.ok(copiedDraws.every((draw) => draw.userData.pmndrsGlyphPrimitiveKind === 'decoration'));
+    const sourceDraw = label.children.find(
+      (child) => child.isMesh && child.userData.pmndrsGlyphPrimitiveKind === 'decoration',
+    );
+    assert.ok(sourceDraw);
+    assert.equal(copiedDraws.length, 1);
+    assert.equal(copiedDraws[0].geometry.instanceCount, sourceDraw.geometry.instanceCount);
+    for (const buffer of [decorationSchema.buffers.rect, decorationSchema.buffers.packed]) {
+      const source = sourceDraw.geometry.getAttribute(glyphAttribute(buffer.id));
+      const copied = copiedDraws[0].geometry.getAttribute(glyphAttribute(buffer.id));
+      assert.ok(source && copied);
+      const sourceStart = sourceDraw.userData.pmndrsGlyphRunStart * source.itemSize;
+      const copiedStart = copiedDraws[0].userData.pmndrsGlyphRunStart * copied.itemSize;
+      const scalarCount = sourceDraw.geometry.instanceCount * source.itemSize;
+      assert.deepEqual(
+        Array.from(copied.array.subarray(copiedStart, copiedStart + scalarCount)),
+        Array.from(source.array.subarray(sourceStart, sourceStart + scalarCount)),
+        `the copied decoration ${buffer === decorationSchema.buffers.rect ? 'rectangle' : 'paint'} data must be exact`,
+      );
+    }
+    assert.notEqual(copiedDraws[0].material, sourceDraw.material);
+    const copiedMaterial = decorations.materials[0];
+    const sourceOpacity = sourceDraw.material.opacity;
+    copiedMaterial.opacity = 0.2;
+    assert.equal(sourceDraw.material.opacity, sourceOpacity);
+
+    const copiedCount = copiedDraws[0].geometry.instanceCount;
+    label.text = 'the live paragraph changed';
+    scene.updateMatrixWorld();
+    assert.equal(
+      copiedDraws[0].geometry.instanceCount,
+      copiedCount,
+      'source edits cannot reshape the copied decorations',
+    );
+    decorations.dispose();
+    decorations.dispose();
+    assert.throws(() => decorations.materials, /disposed/u);
+    decorations = undefined;
+    detached.dispose();
+    detached = undefined;
+
+    plain = new Text({ font, text: 'plain text', style: { fontSize: 16 } });
+    scene.add(plain);
+    scene.updateMatrixWorld(true);
+    const plainParts = plain.breakApart();
+    assert.equal(plainParts.length, 2);
+    assert.ok(Object.isFrozen(plainParts));
+    [plainGlyphs] = plainParts;
+    assert.equal(plainParts[1], undefined, 'the tuple uses undefined instead of an empty decoration object');
+  } finally {
+    plainGlyphs?.dispose();
+    plain?.dispose();
+    decorations?.dispose();
+    detached?.dispose();
+    label.dispose();
+    font.dispose();
+    loader.dispose();
+  }
+});
+
+test('Text.breakApart preserves per-span material routing with independently owned instances', async () => {
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const namedMaterial = (name) =>
+    defineTextMaterial((context) => {
+      const material = context.createDefaultMaterial();
+      material.name = name;
+      return material;
+    });
+  const base = namedMaterial('detached-base');
+  const accent = namedMaterial('detached-accent');
+  const scene = new THREE.Scene();
+  const label = new Text({
+    font,
+    text: 'AB',
+    material: base,
+    spans: [{ start: 1, end: 2, material: accent }],
+  });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+
+  let detached;
+  try {
+    const sourceNames = new Set(label.children.filter((child) => child.isMesh).map((draw) => draw.material.name));
+    assert.deepEqual(sourceNames, new Set(['detached-base', 'detached-accent']));
+    [detached] = label.breakApart();
+    scene.add(detached);
+    scene.updateMatrixWorld(true);
+    assert.deepEqual(
+      new Set(detached.materials.map((material) => material.name)),
+      new Set(['detached-base', 'detached-accent']),
+      'the detached plan must resolve each copied material id rather than substituting the root material',
+    );
+    for (const material of detached.materials) {
+      assert.ok(
+        !label.children.some((child) => child.isMesh && child.material === material),
+        'each detached material must be a fresh owned instance',
+      );
+    }
+  } finally {
+    detached?.dispose();
+    label.dispose();
+    font.dispose();
+    loader.dispose();
+  }
 });
 
 test('one portable request returns typed resources for every declared technique', async () => {
@@ -277,46 +645,10 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(repeatedInspection.x[0], expectedFirstX, 'caller mutation cannot corrupt the retained inspection');
   assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
 
-  const placements = label.snapshotGlyphs();
-  assert.notEqual(placements.layout, repeatedInspection);
-  assert.deepEqual(placements.layout.x, repeatedInspection.x);
-  assert.equal(placements.space, 'paragraph');
-  // A glyph the GPU plan omits — the non-rendering space here — has no retained record, so its
-  // drawn position cannot be read. That is reported, not substituted, and the count is pinned
-  // against the plan's own instance count rather than restated.
-  assert.equal(
-    placements.incomplete.length,
-    measurement.glyphCount - firstDraws[0].geometry.instanceCount,
-    'incomplete must name exactly the glyphs the render plan does not draw',
-  );
-  assert.equal(inspection.glyphIds[placements.incomplete[0]], inspection.glyphIds[5]);
-  for (const glyph of placements.glyphs) {
-    assert.equal(glyph.x, glyph.shapedX, 'a freshly committed paragraph draws where it shaped');
-    assert.equal(glyph.y, glyph.shapedY, 'a freshly committed paragraph draws where it shaped');
-  }
-  const shapedX = placements.glyphs.map((glyph) => glyph.shapedX);
-  placements.glyphs[0].x += 3;
-  const application = label.applyGlyphs(placements);
-  // A write that cannot reach a glyph says so. The unreachable set is exactly the unreadable one,
-  // because both are the glyphs the plan never gave a record.
-  assert.equal(application.requested, measurement.glyphCount);
-  assert.equal(application.applied, application.requested - placements.incomplete.length);
-  assert.deepEqual([...application.unapplied], [...placements.incomplete]);
-  const presented = label.snapshotGlyphs();
-  assert.equal(presented.glyphs[0].shapedX, shapedX[0], 'presentation must not mutate authoritative layout');
-  assert.equal(presented.glyphs[0].x, shapedX[0] + 3);
-  label.restoreGlyphs();
-  assert.deepEqual(
-    label.snapshotGlyphs().glyphs.map((glyph) => glyph.x),
-    shapedX,
-  );
-
-  // The units a caller animates, and the extents that make them addressable at all.
-  assert.ok(placements.lines.length >= 1);
-  assert.ok(placements.words.length >= 1);
-  assert.equal(placements.lines[0].ascent + placements.lines[0].descent, placements.lines[0].lineHeight);
-  assert.ok(placements.glyphs[0].advance > 0, 'a shaped glyph must report the advance the pen moved by');
-  assert.ok(placements.lines[0].bounds.width > 0);
+  const displayedGlyphs = label.measureGlyphs();
+  assert.equal(displayedGlyphs?.length, measurement.glyphCount);
+  assert.ok(displayedGlyphs?.every((glyph) => glyph.drawnOrigin.equals(glyph.shapedOrigin)));
+  assert.ok(displayedGlyphs?.[0].localAdvanceBounds.getSize(new THREE.Vector3()).x > 0);
 
   group.renderOrder = 20;
   scene.updateMatrixWorld();
@@ -533,9 +865,14 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   assert.match(String(group.error), /deliberate material realization failure/u);
   assert.ok(label.glyphs().glyphCount > 0, 'renderer-free positioned inspection survives renderer rejection');
   assert.equal(
-    label.snapshotGlyphs(),
+    label.measureGlyphs(),
     undefined,
-    'drawn placement is unavailable while the renderer update is rejected',
+    'drawn measurements are unavailable while renderer realization failed',
+  );
+  assert.throws(
+    () => label.breakApart(),
+    /after renderer realization failed/,
+    'a failed renderer publication cannot be presented as a committed detached copy',
   );
   assert.equal(instrumented.crossings, 1, 'inspection must not turn a rejected unchanged frame into a retry');
 
@@ -730,6 +1067,40 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () 
     'Bitmap vec2 and Slug vec4 records must coexist without a user technique selector',
   );
 
+  const [detached] = label.breakApart();
+  scene.add(detached);
+  label.visible = false;
+  scene.updateMatrixWorld(true);
+  const detachedDraws = detached.children.filter((child) => child.isMesh);
+  assert.equal(detachedDraws.length, 2, 'the detached copy must preserve both renderer-program batches');
+  const transformStorages = detachedDraws.map((draw) => draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms'));
+  assert.ok(transformStorages.every(Boolean));
+  assert.equal(
+    new Set(transformStorages).size,
+    2,
+    'each physical batch index space must own independent detached transform storage',
+  );
+  const firstBefore = new THREE.Matrix4();
+  const lastBefore = new THREE.Matrix4();
+  detached.getMatrixAt(0, firstBefore);
+  detached.getMatrixAt(detached.count - 1, lastBefore);
+  const movedFirst = firstBefore.clone();
+  movedFirst.elements[12] += 13;
+  detached.setMatrixAt(0, movedFirst);
+  const lastAfterFirstWrite = new THREE.Matrix4();
+  detached.getMatrixAt(detached.count - 1, lastAfterFirstWrite);
+  assert.ok(
+    lastAfterFirstWrite.equals(lastBefore),
+    'record zero in a later renderer batch cannot alias record zero in the first batch',
+  );
+  const movedLast = lastBefore.clone();
+  movedLast.elements[13] -= 7;
+  detached.setMatrixAt(detached.count - 1, movedLast);
+  const firstAfterLastWrite = new THREE.Matrix4();
+  detached.getMatrixAt(0, firstAfterLastWrite);
+  assert.ok(firstAfterLastWrite.equals(movedFirst), 'later-batch writes cannot overwrite the first batch');
+  detached.dispose();
+
   label.dispose();
   latin.dispose();
   icon.dispose();
@@ -828,40 +1199,6 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 1, 'mutation, render plan, and demanded measurement must share one text_update');
 
-  const leftOrigins = left.snapshotGlyphs();
-  const rightOrigins = right.snapshotGlyphs();
-  assert.equal(leftOrigins.glyphs.length, 2);
-  assert.equal(rightOrigins.glyphs.length, 2);
-  const leftShapedX = leftOrigins.glyphs.map((glyph) => glyph.shapedX);
-  const rightShapedX = rightOrigins.glyphs.map((glyph) => glyph.shapedX);
-  leftOrigins.glyphs[0].x += 2;
-  rightOrigins.glyphs[0].x += 4;
-  const originsAttribute = draws[0].geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
-  const canonicalOrigins = originsAttribute.array;
-  const pboUploadOrigins = new Float32Array(canonicalOrigins.length + 4);
-  pboUploadOrigins.set(canonicalOrigins);
-  originsAttribute.array = pboUploadOrigins;
-  originsAttribute.clearUpdateRanges();
-  left.applyGlyphs(leftOrigins);
-  const leftUploadRanges = originsAttribute.updateRanges.map((range) => ({ ...range }));
-  right.applyGlyphs(rightOrigins);
-  assert.ok(
-    leftUploadRanges.every(({ start: rangeStart, count }) =>
-      originsAttribute.updateRanges.some(
-        (range) => range.start <= rangeStart && range.start + range.count >= rangeStart + count,
-      ),
-    ),
-    'separate presentation edits may coalesce but must retain every earlier upload range',
-  );
-  assert.equal(left.snapshotGlyphs().glyphs[0].x, leftShapedX[0] + 2);
-  assert.equal(right.snapshotGlyphs().glyphs[0].x, rightShapedX[0] + 4);
-  assert.deepEqual(
-    pboUploadOrigins.subarray(0, canonicalOrigins.length),
-    canonicalOrigins,
-    'WebGL2 PBO replacement storage must receive the same dirty ranges as canonical plan storage',
-  );
-  assert.deepEqual(pboUploadOrigins.subarray(canonicalOrigins.length), new Float32Array(4));
-
   const version = transforms.version;
   let forcedTextWorldUpdates = 0;
   const updateRightWorldMatrix = right.updateWorldMatrix.bind(right);
@@ -896,36 +1233,12 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   );
   nestedParent.visible = true;
   scene.updateMatrixWorld();
-  assert.equal(
-    right.snapshotGlyphs().glyphs[0].x,
-    rightShapedX[0] + 4,
-    'transform-only updates must not cross into Rust or discard presentation overrides',
-  );
-
-  originsAttribute.clearUpdateRanges();
-  left.restoreGlyphs();
-  const clearedOriginRanges = originsAttribute.updateRanges.map((range) => ({ ...range }));
-  assert.ok(clearedOriginRanges.length > 0);
   right.style = { ...right.style, color: '#00ff00' };
   scene.updateMatrixWorld();
-  assert.ok(
-    clearedOriginRanges.every(({ start: rangeStart, count }) =>
-      originsAttribute.updateRanges.some(
-        (range) => range.start <= rangeStart && range.start + range.count >= rangeStart + count,
-      ),
-    ),
-    'a second plan before rendering must retain every earlier pending upload range',
-  );
 
   right.style = { ...right.style, fontSize: 20 };
   scene.updateMatrixWorld();
-  const resizedOrigins = right.snapshotGlyphs();
-  assert.notEqual(resizedOrigins.layout, rightOrigins.layout);
-  assert.deepEqual(
-    resizedOrigins.glyphs.map((glyph) => glyph.x),
-    resizedOrigins.glyphs.map((glyph) => glyph.shapedX),
-    'an authoritative command-buffer update must retire the previous presentation override',
-  );
+  assert.equal(right.glyphs().glyphFontSizes[0], 20);
 
   instrumented.reset();
   left.text = 'ABC';
@@ -936,6 +1249,35 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   const replacedDraws = group.children.filter((child) => child.isMesh);
   assert.equal(replacedDraws.length, 1);
   assert.equal(replacedDraws[0].geometry.instanceCount, 5, 'the published command buffer must include the new glyph');
+
+  const rightStableIdsBeforeCopy = Array.from(right.glyphs().glyphStableIds);
+  const rightWorldMatricesBeforeCopy = right
+    .measureGlyphs()
+    ?.map((measurement) => measurement.originalWorldMatrix.clone());
+  const [leftDetached] = left.breakApart();
+  group.add(leftDetached);
+  const moved = new THREE.Matrix4();
+  leftDetached.getMatrixAt(0, moved);
+  moved.elements[12] += 17;
+  leftDetached.setMatrixAt(0, moved);
+  scene.updateMatrixWorld(true);
+  assert.deepEqual(
+    Array.from(right.glyphs().glyphStableIds),
+    rightStableIdsBeforeCopy,
+    'the copied publication cannot replace or re-key a sibling paragraph',
+  );
+  assert.ok(
+    right
+      .measureGlyphs()
+      ?.every((measurement, index) => measurement.originalWorldMatrix.equals(rightWorldMatricesBeforeCopy?.[index])),
+    'detached instance transforms cannot alias the sibling Text transform',
+  );
+  assert.equal(
+    group.children.find((child) => child.isMesh),
+    replacedDraws[0],
+    'the live TextGroup draw remains installed after a detached copy',
+  );
+  leftDetached.dispose();
 
   group.dispose();
   left.dispose();
@@ -1254,12 +1596,10 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () =
   assert.equal(inspection.clusters.at(-1), 3, 'the ellipsis is anchored at the truncation boundary');
   assert.deepEqual([...inspection.glyphIds], [61, 2613, 2598, 6597]);
   assert.deepEqual([...inspection.clusters], [2, 1, 0, 3]);
-  // Re-pinned under the F26.6 layout-unit contract (integer-units slice 2b): the
-  // RTL line's alignment offset derives from the quantized line advance, shifting
-  // every glyph by one uniform sub-unit amount (+0.0134 px < 1/64). Deterministic
-  // exactness holds under the new contract; the full-corpus re-derivation is the
-  // plan's slice 5.
-  assert.deepEqual([...inspection.x], [0.24537500739097595, 10.821374893188477, 18.389375686645508, 23.92537498474121]);
+  // Re-pinned under the F16.16 layout-unit contract: the RTL alignment origin is
+  // derived from the higher-resolution quantized line advance. Relative glyph
+  // advances remain unchanged; only the uniform line origin moved by 0.01337 units.
+  assert.deepEqual([...inspection.x], [0.23200830817222595, 10.808008193969727, 18.376008987426758, 23.91200828552246]);
 
   label.dispose();
   font.dispose();

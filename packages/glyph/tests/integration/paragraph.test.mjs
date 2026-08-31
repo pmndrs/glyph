@@ -366,6 +366,35 @@ test('update invalidates cached measurements, and meaningless input throws where
   }
 });
 
+test('exact justified columns remain exact for sub-unit renderer-local font sizes', async () => {
+  await using boot = await bootstrap();
+  const text = `${TEXT}. ${TEXT}. ${TEXT}. ${TEXT}.`;
+  const width = 6.317474909879962;
+  const constraints = { width: { mode: 'exact', size: width } };
+  const paragraph = await createParagraph({
+    font: boot.font,
+    text,
+    layout: { align: 'justify', wrap: 'word' },
+    style: { fontSize: 0.15625, lineHeight: 1.2 },
+  });
+  try {
+    paragraph.glyphs(constraints);
+    paragraph.update({ style: { fontSize: 0.1731052166223526, lineHeight: 1.2 } });
+    const layout = paragraph.glyphs(constraints);
+
+    assert.ok(layout.lineCount > 1, 'the fixture must exercise justified non-final lines');
+    for (const line of layout.lines.slice(0, -1)) {
+      assert.ok(
+        line.inkBounds !== undefined && line.inkBounds.width <= width + 1 / 4_096,
+        `justified ink ${line.inkBounds?.width} must fit exact width ${width}`,
+      );
+      assert.ok(Math.abs(line.advance - width) <= 1 / 4_096, 'the justified advance must fill the exact column');
+    }
+  } finally {
+    paragraph.dispose();
+  }
+});
+
 test('positioned arrays are caller-owned and cannot corrupt the cached answer', async () => {
   await using boot = await bootstrap();
   const paragraph = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });

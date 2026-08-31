@@ -5,6 +5,7 @@
 - [Project brief](project-brief.md) — product intent, merged v0, target v1, and later horizon.
 - [Merged v0 runtime and bake API](api-shapes.md) — superseded migration fixture; describes the merged v0 surface deleted by the Rust render-plan cutover.
 - [Three.js text API](three-api.md) — authoritative `FontLoader`, `TextGroup`, and `Text` surface, including late binding, group disposal/rebinding, font leases, retained non-throwing errors, ordering, and render-loop synchronization.
+- [Planner-assisted detached glyph slices](detached-glyph-slice.md) — synchronous committed-record copies, independent Three.js `Glyphs` and decoration objects, matrix ownership, and first-frame upload invariants.
 - [Core text API](core-api.md) — authoritative application and integration API for fonts, measurement, engines, backends, render planners, render plans, and renderer targets.
 - [Font and engine ownership plan](font-runtime-ownership.md) — accepted breaking migration from runtime-bound loaded fonts and raw shaper hosts to immutable font assets, engine-owned backends, target-bound render planners, deterministic leases, and renderer-owned device pools.
 - [Rust layout engine contract](rust-layout-engine.md) — authoritative engine ABI, render-plan policy, and publication boundary for custom renderers.

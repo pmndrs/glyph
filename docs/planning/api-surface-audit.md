@@ -47,8 +47,8 @@ Findings worth keeping, because they answer questions that would otherwise be re
 - **Our cluster resolution matches the normative rule.** Rounding a style boundary outward to the containing cluster is CSSOM View's normative behaviour and Skia's painting behaviour. troika's `colorRanges` has no cluster logic at all; ProseMirror, Lexical, and React Native split blindly; Unreal snaps clusters for the caret but **not** at style boundaries. Our previous behaviour — rejecting the whole frame — was harsher than every system surveyed.
 - **Our React tree is the strongest rich-text story in the three.js ecosystem.** drei's `Text` has no styled-run model; non-string children become scene children parked at the mesh origin. troika's `colorRanges` is colour-only in the published version.
 - **Nobody hands out offsets the caller must maintain.** The DOM adjusts every live `Range` on mutation; ProseMirror gives a `Mapping` per transaction; Lexical never issues a document offset. Unity invalidates everything on each regeneration and signals through an event; Unreal re-offsets run ranges itself but leaves highlight ranges to the caller to rebuild.
-- **Per-glyph write is where we are genuinely ahead.** `applyGlyphs()` patches a retained GPU buffer with no CPU re-upload and no reshape, and `restoreGlyphs()` explicitly returns authority to layout. troika's route fights `sync()`, Skia's `RSXform` requires rebuilding the blob, Unreal has no per-glyph placement at all, and Unity makes the application mutate and re-snapshot arrays.
-- **Per-glyph read shares one source and stays on cluster boundaries.** Positioned glyph advances, ink boxes, and resolved bidi levels come from the engine's semantic view, not technique-specific packed records. `snapshotGlyphs()`, `caretAt()`, and `selectionRects()` build on that data. Word and selection ranges use the next published cluster boundary, while caret edges use bidi parity rather than assuming left-to-right placement.
+- **Per-glyph write is now explicit object ownership.** `Text.breakApart()` imports a planner-assisted copy as one independently disposable `Glyphs` group with full local/world affine matrices. It never fights the source `Text` synchronization loop or requires a restore call; troika's route fights `sync()`, Skia's `RSXform` requires rebuilding the blob, Unreal has no per-glyph placement at all, and Unity makes the application mutate and re-snapshot arrays.
+- **Per-glyph read shares one source and stays on cluster boundaries.** Positioned glyph advances, ink boxes, and resolved bidi levels come from the engine's semantic view, not technique-specific packed records. `glyphs()`, `measureGlyphs()`, `caretAt()`, and `selectionRects()` build on that data. Word and selection ranges use the next published cluster boundary, while caret edges use bidi parity rather than assuming left-to-right placement.
 
 ## Delete
 
@@ -245,7 +245,7 @@ The production report was accurate: positioning was hard because the package com
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------: |
 | Paragraph and line baselines  | `ParagraphMeasurement` and each `ParagraphLineMetrics` publish `ascent`, `descent`, and `lineHeight`, with `ascent + descent === lineHeight`. `firstBaseline` and `lastBaseline` remain box-relative.                                                                                   |    ✅    |
 | Advance versus visible extent | `contentWidth`/`contentHeight` are advance extents for layout hosts. `inkBounds` is the outline union for visual positioning. The names prevent silently substituting one for the other.                                                                                                |    ✅    |
-| Per-glyph geometry            | `Paragraph.glyphs()` returns caller-owned, internally consistent columns with shaped advances, glyph ink boxes, and resolved bidi levels. Three's `snapshotGlyphs()`, `caretAt()`, and `selectionRects()` use that same engine geometry and preserve logical cluster boundaries.        |    ✅    |
+| Per-glyph geometry            | `Paragraph.glyphs()` returns caller-owned, internally consistent columns with shaped advances, glyph ink boxes, and resolved bidi levels. Three's `measureGlyphs()`, `breakApart()`, caret, and selection surfaces add world transforms and preserve logical cluster boundaries.        |    ✅    |
 | Detached measurement          | `await createParagraph(...)` initializes renderer-free measurement once; later `measure(constraints)` calls are synchronous, scene-free, and leave authored state unchanged. `glyphs(constraints)` is a separate positioned query so a sizing probe does not allocate per-glyph arrays. |    ✅    |
 | Pre-frame `Text` measurement  | `text.measure()` measures current desired state immediately, attached or detached. It does not call `updateMatrixWorld()`, publish a render plan, realize materials/resources, or change `commitState()` from `pending`.                                                                | ✅ D-282 |
 | Positive render state         | `text.commitState()` returns `unbound`, `pending`, `committed`, or `failed`; callers no longer infer success from the absence of `error`.                                                                                                                                               |    ✅    |
@@ -370,7 +370,7 @@ Sequencing. The uikit fork is downstream of items 1 through 23 for anything that
 
 ### What was wrong with the previous surface
 
-`snapshotGlyphOrigins` / `setGlyphOrigins` / `clearGlyphOriginOverrides` had one real consumer, and that consumer demonstrated every flaw below. D-273 through D-276 replaced this surface with `snapshotGlyphs()` → `applyGlyphs()` → `restoreGlyphs()`; the list remains as the rationale and regression checklist.
+`snapshotGlyphOrigins` / `setGlyphOrigins` / `clearGlyphOriginOverrides` had one real consumer, and that consumer demonstrated every flaw below. D-273 through D-276 first replaced it with `snapshotGlyphs()` → `applyGlyphs()` → `restoreGlyphs()`. D-292 then removed that live-override contract in favor of planner-assisted `breakApart()` ownership; the list remains as historical rationale and a regression checklist.
 
 - **The identity we thread through is not the identity it needs.** It ignores `glyphStableIds` and builds its own `${fontHandle}:${glyphId}:${cluster}:${occurrence}` key, because the stable id does not survive the reflow it exists to animate across.
 - **It re-asserts invariants the API should carry**, hand-checking six public arrays for equal length and re-checking that the snapshot's `layout` is identical to the one it holds.
@@ -378,11 +378,15 @@ Sequencing. The uikit fork is downstream of items 1 through 23 for anything that
 - **It cannot tell how much of its write landed**, because both write and read skip missing records silently.
 - **Two coordinate spaces arrive in one array** with no discriminant.
 
-### Landed replacement contract
+### Superseded first replacement contract
 
 Animation targets what _looks_ like a unit on screen — a glyph, a word, a line — not a position in a string. The structure is ours to define and need not be derived from text offsets at all. The shape is an explicit cycle:
 
 > **snapshot → manipulate a structure we define → restore**
+
+This section records the intermediate D-273–D-276 design. The current landed contract is
+`measureGlyphs()` for read-only geometry and `breakApart()` for an independently owned render object; it has no apply or
+restore operation on live text. See [Planner-assisted detached glyph slices](detached-glyph-slice.md).
 
 Requirements the evidence sets:
 

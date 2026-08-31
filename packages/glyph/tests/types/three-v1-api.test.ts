@@ -1,7 +1,7 @@
 import { Constraints, ParagraphLayout, span, TextStyle, txt, type Font } from '../../src/index.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
 import { msdf } from '../../src/raster/msdf.js';
-import { FontLoader, Text, TextGroup } from '../../src/three.js';
+import { Decorations, FontLoader, Glyphs, Text, TextGroup } from '../../src/three.js';
 
 declare const bitmapFont: Font<typeof bitmap>;
 declare const mtsdfFont: Font<typeof msdf>;
@@ -33,6 +33,22 @@ void measurement.contentWidth;
 labels.setCapacity({ size: 4_096, policy: 'chunk' });
 
 labels.add(new Text({ font: mtsdfFont, text: 'Mixed technique' }));
+
+const [detachedGlyphs, detachedDecorations] = label.breakApart();
+detachedGlyphs satisfies Glyphs;
+detachedDecorations satisfies Decorations | undefined;
+void detachedGlyphs;
+void detachedDecorations;
+// @ts-expect-error Detached glyph branches are created only by Text.breakApart().
+const invalidGlyphs = new Glyphs();
+void invalidGlyphs;
+// @ts-expect-error No source-condition-only factory may leak through the public class.
+Glyphs.create({});
+// @ts-expect-error Detached decoration branches are created only by Text.breakApart().
+const invalidDecorations = new Decorations();
+void invalidDecorations;
+// @ts-expect-error No source-condition-only factory may leak through the public class.
+Decorations.create({});
 
 TextStyle.create({
   // @ts-expect-error Paragraph flow belongs to ParagraphLayout.create.

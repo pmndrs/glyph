@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:01de613e24d913365e310eda9efcfc89f810eb1e67bef5029a8e64b7ecddaed1'
+source_digest: 'sha256:4468bb8062462ba206bffe78b259983fff2d6139bb442ff04f487f4f1a312895'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -255,22 +255,20 @@ resolves through the same transfer function as the numeric constant it replaces.
 `Text.set()`: a rejected update leaves current desired state untouched, while renderer failures surface without restoring
 stale authored inputs.
 
-Their presentation transitions are now owned by the application. Merged v0 exported `captureBitmapGlyphPositions` and
-`createBitmapGlyphPositionTransition`, which packaged glyph identity matching and interpolation together for Bitmap only.
-Target-v1 exposes the `GlyphPlacements` snapshot and its topology-guarded write, so
-`techniques/shared/glyph-origin-transition.ts` owns only the application policy, once for all three techniques: it calls
-`snapshotGlyphs()`, hands the previous snapshot to `adopt` — which recovers each glyph's drawn position by the identity
-the package owns rather than one the application reconstructs from six parallel arrays — interpolates toward the shaped
-origins rather than the current displayed ones, writes through `applyGlyphs`, calls `restoreGlyphs` when settled, and
-reports `matchedGlyphs` so the existing viewport telemetry keeps its meaning. Bitmap keeps its host-driven
-progress because its React viewport already animates the timeline; MTSDF and Slug, whose surfaces do not drive progress,
-advance the same smoothstep from their own frame clock and gain the transition they previously lacked.
+Their presentation transitions are application-owned consumers of the detached-copy API. Merged v0 exported
+`captureBitmapGlyphPositions` and `createBitmapGlyphPositionTransition`, which combined identity matching and live-buffer
+overrides for Bitmap only. `techniques/shared/glyph-origin-transition.ts` now captures committed world matrices through
+`measureGlyphs()`, updates the source layout, calls `breakApart()` for one independently rendered `Glyphs` branch, hides
+the live source, and interpolates complete position/quaternion/scale matrices through `setWorldMatrixAt()`. It matches
+records by the package-owned `GlyphKey`, disposes the copy at settle, and restores source visibility. No benchmark keeps a
+mutable glyph snapshot applied to live text, and no benchmark depends on the removed `snapshotGlyphs()` / `applyGlyphs()` /
+`restoreGlyphs()` API. Bitmap keeps host-driven progress; MTSDF and Slug advance the same smoothstep on their frame clock.
 
 Whether a reflow may interpolate at all is decided once, in `glyphOriginPolicy`, and keyed to the kind of change rather
 than the technique. `GlyphKey` survives a reflow that moves glyphs and not one that reshapes them, and its cluster
 component says nothing about visual order: under bidi, inserting one character reorders a whole run, so a typewriter reveal that kept matching
 slid glyphs across their neighbours toward positions they never travelled through. A change to the source text — or to
-the fixture, script, or features that decide which glyphs the text shapes into — therefore snaps, clearing the overrides
+the fixture, script, or features that decide which glyphs the text shapes into — therefore snaps without creating a copy
 so the committed layout stays authoritative and reporting zero matches rather than a count it did not animate. Geometry
 and style changes leave the shaped run and its visual order intact, so font size, layout width, anchor, and device pixel
 ratio still interpolate. A snapping reflow also skips `captureGlyphOrigins` entirely, so it never builds the snapshot

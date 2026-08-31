@@ -54,17 +54,7 @@ export type {
 export type { ParagraphOptions, ParagraphUpdate } from './paragraph.js';
 export { createParagraph, Paragraph } from './paragraph.js';
 
-export type {
-  GlyphAdoption,
-  GlyphApplication,
-  GlyphCaret,
-  GlyphKey,
-  GlyphLine,
-  GlyphPlacement,
-  GlyphPlacements,
-  GlyphRun,
-  GlyphSpace,
-} from './glyph-placement.js';
+export type { GlyphCaret, GlyphKey } from './glyph-placement.js';
 
 export type {
   FontLoadDiagnostic,

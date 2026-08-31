@@ -39,9 +39,8 @@ import {
 import { createPersistentSceneActivation } from '../../renderer/persistent-scene-activation';
 import { loadMtsdfFontAsset, MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT } from '../../workloads/font-assets/mtsdf';
 import {
-  captureGlyphOrigins,
+  captureGlyphOriginsForPresentation,
   createFrameDrivenGlyphTransition,
-  glyphOriginPolicy,
   snapGlyphOrigins,
   transitionPresentation,
   type FrameDrivenGlyphTransition,
@@ -116,6 +115,7 @@ export interface MtsdfTextLiveStats {
 }
 
 export interface MtsdfTextSceneUpdate extends LiveFontFixtureUpdate {
+  readonly animatePresentation: boolean;
   readonly anchor: LiveTextAnchor;
   readonly direction: 'ltr' | 'rtl';
   readonly features: readonly FontFeature[];
@@ -261,9 +261,9 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
   const originsToInterpolate = (
     resources: MtsdfPersistentActivation,
     next: ShapedTextIdentity,
+    animatePresentation = true,
   ): GlyphOriginSnapshot | undefined => {
-    if (glyphOriginPolicy(resources.state.identity, next) === 'snap') return undefined;
-    return captureGlyphOrigins(resources.line);
+    return captureGlyphOriginsForPresentation(resources.line, resources.state.identity, next, animatePresentation);
   };
 
   const applyViewport = (viewport: PersistentRenderViewport): void => {
@@ -531,7 +531,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         direction: next.direction,
         features: next.features,
       };
-      const before = originsToInterpolate(resources, identity);
+      const before = originsToInterpolate(resources, identity, next.animatePresentation);
       resources.fontFixture.commit(nextFixture, (fontFixture) => {
         if (next.text.length === 0) resources.line.visible = false;
         commitState(resources, {

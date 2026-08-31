@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:f2cb93292aa099f3f37ef1383f15b0761b57852fb482241f87456720d0a21c89'
+source_digest: 'sha256:1e0b6459287295d6383bcf3661a3ddf6a84e57e0cd427a4f5e57479365ace050'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -56,6 +56,12 @@ sources:
   - id: three-plan
     resource: ../../packages/glyph/src/three/engine-plan-target.ts
     title: Three.js render-plan executor
+  - id: three-glyphs
+    resource: ../../packages/glyph/src/three/glyphs.ts
+    title: Three.js detached Glyphs object
+  - id: three-decorations
+    resource: ../../packages/glyph/src/three/decorations.ts
+    title: Three.js detached Decorations object
   - id: three-policy
     resource: ../../packages/glyph/src/three/plan-program-registry.ts
     title: Three.js policy-program registry
@@ -71,6 +77,9 @@ sources:
   - id: three-api-reference
     resource: ../planning/three-api.md
     title: Three.js text API reference
+  - id: detached-glyph-slice
+    resource: ../planning/detached-glyph-slice.md
+    title: Planner-assisted detached glyph slice
 generated:
   by: openai-codex/gpt-5.6
   at: '2026-08-28T20:10:29Z'
@@ -408,7 +417,29 @@ The semantic values preserve information useful to callers:
 - semantic truncation retains visible positioned lines while reporting intrinsic overflow;
 - glyph/font identity, UTF-16 clusters, stable IDs, flags, line membership, and positioned origins remain available on
   explicit inspection;
-- presentation origin overrides never mutate authoritative Rust layout.
+- detached copy requests never mutate authoritative Rust layout or the source planner's acceptance frontier.
+
+## Planner-assisted detached glyph copies
+
+`RetainedText.copyGlyphs(stableIds, target)` and `copyDecorations(target)` are synchronous committed-state queries over
+the existing render planner. Rust compacts the selected paragraph records through the installed policy into complete
+checkpoints; it does not expose planner buffer offsets for each renderer to reconstruct. The supplied borrowed target
+must import the checkpoint before returning. The query neither acknowledges renderer acceptance nor advances source
+revisions, publication generation, or A/B output ownership.
+
+Three's `Text.breakApart()` uses both planner requests and returns the frozen tuple
+`[Glyphs, Decorations | undefined]`. It preserves the source transform, planner-defined batching, fallback techniques,
+shared immutable atlas/page leases, and supplied geometry while adding one full affine matrix per drawable record. Its
+local methods mirror `InstancedMesh`; world methods bridge physics state to root-relative storage. Materials and engine
+domain leases belong to each detached object, so the pair may outlive the source `Text`, font, and loader without sharing
+mutable presentation state. The source `Text` stays live and may continue publishing while detached objects remain
+unchanged.
+
+Decoration passes are not glyph records and retain an independent object and lifetime; tuple slot two is `undefined`
+when the committed paragraph has no decoration draws. If either import fails, `breakApart()` releases everything it
+created before throwing. Neither path reconstructs child `Text` objects, installs mutable presentation overrides,
+creates physics bodies, or infers collision shapes. The detailed ownership and evidence contract is in
+[Planner-assisted detached glyph slices](../planning/detached-glyph-slice.md).
 
 ## Wasm memory and copying
 

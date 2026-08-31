@@ -224,9 +224,6 @@ interface TypeGpuParagraph<Technique extends AnyRasterTechnique, Variant> {
 
   set(properties: TypeGpuParagraphUpdate<Technique, Variant>): void;
   setTransform(columnMajorMatrix4: ArrayLike<number>): void;
-  snapshotGlyphs(): GlyphPlacements | undefined;
-  applyGlyphs(placements: GlyphPlacements): GlyphApplication;
-  restoreGlyphs(): void;
   snapshotProperties(): TypeGpuParagraphSnapshot<Technique, Variant>;
   dispose(): void;
 }
@@ -251,6 +248,11 @@ an index-addressed writer buys nothing a caller cannot express and reintroduces 
 removed by dropping `setSpan`/`removeSpan` -- an offset handed straight to the engine without the surrounding document
 that would have shown what it meant. Span offsets resolve onto the extended grapheme cluster grid here exactly as they do
 on the Three surface (D-265).
+
+The planned adapter does not expose a mutable glyph snapshot that writes back into live paragraph storage. Detached
+per-glyph manipulation must consume `RetainedText.copyGlyphs()` into an independently owned TypeGPU render object, just
+as Three imports the same planner-assisted checkpoint into `Glyphs`. That renderer-specific object remains future work;
+the superseded `snapshotGlyphs()` / `applyGlyphs()` / `restoreGlyphs()` surface is not reserved here.
 
 `setTransform()` copies exactly 16 finite column-major values into retained engine state. Transform and visibility changes
 dirty only the target's transform/visibility storage; they do not call core shaping. The program may repeat matrices per

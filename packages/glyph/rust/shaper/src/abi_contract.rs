@@ -1920,7 +1920,9 @@ pub fn json() -> String {
             "requestPointer": "pmndrs_glyph_engine_request_ptr",
             "requestCapacity": "pmndrs_glyph_engine_request_capacity",
             "textUpdate": "pmndrs_glyph_engine_update",
-            "measureParagraph": "pmndrs_glyph_engine_measure_paragraph"
+            "measureParagraph": "pmndrs_glyph_engine_measure_paragraph",
+            "copyGlyphs": "pmndrs_glyph_engine_copy_glyphs",
+            "copyDecorations": "pmndrs_glyph_engine_copy_decorations"
         },
         "layouts": {
             "policyRequest": {

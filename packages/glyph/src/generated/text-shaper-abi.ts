@@ -204,6 +204,8 @@ export const textShaperAbi = {
   },
   "functions": {
     "allocate": "pmndrs_glyph_shaper_alloc",
+    "copyDecorations": "pmndrs_glyph_engine_copy_decorations",
+    "copyGlyphs": "pmndrs_glyph_engine_copy_glyphs",
     "createPlanner": "pmndrs_glyph_engine_create_planner",
     "deallocate": "pmndrs_glyph_shaper_dealloc",
     "disposeFont": "pmndrs_glyph_shaper_dispose_font",

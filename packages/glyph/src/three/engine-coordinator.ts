@@ -53,6 +53,21 @@ interface RetainedThreeMaterialBinding {
   references: number;
 }
 
+interface DisposableThreeRenderResource {
+  dispose(): void;
+}
+
+interface RetainedThreeRenderResource {
+  readonly resource: DisposableThreeRenderResource;
+  references: number;
+}
+
+/** @internal Counted lease for a coordinator-shared GPU resource. */
+export interface ThreeRenderResourceLease<Resource extends DisposableThreeRenderResource> {
+  readonly resource: Resource;
+  dispose(): void;
+}
+
 /** Three-owned backend, policy, and opaque renderer-binding domain over one glyph engine. */
 export class ThreeTextEngineCoordinator {
   readonly backend: GlyphBackend;
@@ -69,6 +84,7 @@ export class ThreeTextEngineCoordinator {
   readonly #materialBindings = new WeakMap<ThreeTextMaterial, RetainedThreeMaterialBinding>();
   readonly #materials = new WeakMap<BackendMaterialBinding, ThreeTextMaterial>();
   readonly #transforms = new WeakMap<BackendTransformBinding, THREE.Object3D>();
+  readonly #renderResources = new Map<string, RetainedThreeRenderResource>();
   #applyingPlan = false;
   #disposed = false;
 
@@ -179,6 +195,40 @@ export class ThreeTextEngineCoordinator {
     return object;
   }
 
+  /** @internal Shares immutable atlas/page GPU resources across live plan executors. */
+  acquireRenderResource<Resource extends DisposableThreeRenderResource>(
+    key: string,
+    create: () => Resource,
+  ): ThreeRenderResourceLease<Resource> {
+    this.#assertActive();
+    let retained = this.#renderResources.get(key);
+    if (retained === undefined) {
+      retained = { resource: create(), references: 0 };
+      this.#renderResources.set(key, retained);
+    }
+    retained.references += 1;
+    let disposed = false;
+    const exact = retained;
+    return Object.freeze({
+      // The key is authored by the renderer integration and partitions resource kinds. A key is
+      // acquired through one factory type for the coordinator's lifetime.
+      resource: exact.resource as Resource,
+      dispose: () => {
+        if (disposed) return;
+        disposed = true;
+        exact.references -= 1;
+        if (exact.references !== 0 || this.#renderResources.get(key) !== exact) return;
+        this.#renderResources.delete(key);
+        exact.resource.dispose();
+      },
+    });
+  }
+
+  /** @internal Test evidence for shared renderer-resource lifetime. */
+  get sharedRenderResourceCount(): number {
+    return this.#renderResources.size;
+  }
+
   planProgram(techniqueId: string): CompiledThreeRasterPlanProgram | undefined {
     return this.#planPrograms.get(techniqueId);
   }
@@ -223,6 +273,14 @@ export class ThreeTextEngineCoordinator {
     } catch (error) {
       failure ??= error;
     }
+    for (const retained of this.#renderResources.values()) {
+      try {
+        retained.resource.dispose();
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    this.#renderResources.clear();
     releaseThreeRasterPlanProgramSnapshot(this.identities);
     if (failure !== undefined) throw failure;
   }

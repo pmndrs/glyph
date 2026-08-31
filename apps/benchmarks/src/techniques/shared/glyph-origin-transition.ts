@@ -1,21 +1,17 @@
 import type { FontFeature } from '@pmndrs/glyph';
-import type { GlyphPlacements } from '@pmndrs/glyph/three';
+import type { Decorations, GlyphKey, Glyphs, ThreeGlyphMeasurement } from '@pmndrs/glyph/three';
+import * as THREE from 'three/webgpu';
 
-/**
- * The part of a committed target-v1 `Text` this helper needs.
- *
- * Core owns the snapshot, its identity, and the topology-guarded write; interpolation and the policy
- * that decides whether a reflow may interpolate at all stay here, in the application, because they
- * are presentation choices rather than layout facts.
- */
+/** The committed Three text surface needed to animate an independently copied glyph branch. */
 export interface TransitionableText {
-  snapshotGlyphs(): GlyphPlacements | undefined;
-  applyGlyphs(placements: GlyphPlacements): { readonly applied: number; readonly requested: number };
-  restoreGlyphs(): void;
+  readonly parent: THREE.Object3D | null;
+  visible: boolean;
+  measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined;
+  breakApart(): readonly [Glyphs, Decorations | undefined];
 }
 
 /**
- * The paragraph inputs that decide which glyphs exist and in what visual order. Font size, layout width, anchor, and
+ * Paragraph inputs that decide which glyphs exist and in what visual order. Font size, layout width, anchor, and
  * device pixel ratio are deliberately absent: they move the same glyphs rather than replacing or reordering them.
  */
 export interface ShapedTextIdentity {
@@ -29,44 +25,65 @@ export interface ShapedTextIdentity {
 export type GlyphOriginPolicy = 'snap' | 'transition';
 
 /**
- * The one place every live technique scene decides whether a reflow may interpolate glyph identities.
- *
- * This mirrors the durability `GlyphKey` documents. A key survives a reflow that moves glyphs and not one that reshapes
- * them, so a change to the source text — or to the fixture, script, or features that decide which glyphs the text shapes
- * into — snaps. Under bidi, inserting one character reorders a whole run, so a typewriter reveal that kept matching
- * would slide glyphs across their neighbours to reach positions they never travelled through. Geometry and style changes
- * leave the shaped run and its visual order intact, so their glyphs really do move continuously.
+ * Decides whether one committed reflow may interpolate glyph identities. `GlyphKey` survives movement but not a
+ * reshape, so text, font, language, direction, or feature changes snap while geometry-only changes may transition.
  */
-export function glyphOriginPolicy(previous: ShapedTextIdentity, next: ShapedTextIdentity): GlyphOriginPolicy {
+export function glyphOriginPolicy(
+  previous: ShapedTextIdentity,
+  next: ShapedTextIdentity,
+  animatePresentation = true,
+): GlyphOriginPolicy {
+  if (!animatePresentation) return 'snap';
   if (previous.text !== next.text) return 'snap';
   if (previous.fontFixture !== next.fontFixture) return 'snap';
   if (previous.language !== next.language || previous.direction !== next.direction) return 'snap';
   return sameFontFeatures(previous.features, next.features) ? 'transition' : 'snap';
 }
 
-/** What one committed reflow did with glyph identities, so a snapped update cannot report a match it never made. */
+/** What one committed reflow did with glyph identities. */
 export interface GlyphOriginPresentation {
   readonly transitioned: boolean;
-  /** Glyphs whose previous displayed origin was recovered by identity. Always `0` when the reflow snapped. */
   readonly matchedGlyphs: number;
   readonly targetGlyphs: number;
 }
 
-/**
- * Presents a reflow with no interpolation, returning displayed origins to the layout that just committed. A change
- * that replaces or reorders glyphs has no correspondence to animate, so zero matches is the honest report.
- */
+/** Reports a reflow with no interpolation. It never installs state on the live `Text`. */
 export function snapGlyphOrigins(text: TransitionableText): GlyphOriginPresentation {
-  text.restoreGlyphs();
-  return { transitioned: false, matchedGlyphs: 0, targetGlyphs: text.snapshotGlyphs()?.glyphs.length ?? 0 };
+  return { transitioned: false, matchedGlyphs: 0, targetGlyphs: text.measureGlyphs()?.length ?? 0 };
 }
 
-/** Displayed glyph origins copied out of one committed paragraph. It retains no renderer or core resources. */
-export type GlyphOriginSnapshot = GlyphPlacements;
+export interface GlyphOriginSnapshotRecord {
+  readonly key: GlyphKey;
+  readonly worldMatrix: THREE.Matrix4;
+}
 
-/** Presentation-only motion toward one authoritative layout. Progress never changes what the layout committed. */
+/** Caller-owned world transforms copied from one committed paragraph. */
+export type GlyphOriginSnapshot = readonly GlyphOriginSnapshotRecord[];
+
+/** Copies committed world transforms without retaining renderer or planner resources. */
+export function captureGlyphOrigins(text: TransitionableText): GlyphOriginSnapshot | undefined {
+  const measurements = text.measureGlyphs();
+  if (measurements === undefined) return undefined;
+  return Object.freeze(
+    measurements.map((measurement) =>
+      Object.freeze({ key: measurement.key, worldMatrix: measurement.originalWorldMatrix.clone() }),
+    ),
+  );
+}
+
+/** Captures origins only when the caller explicitly permits presentation interpolation. */
+export function captureGlyphOriginsForPresentation(
+  text: TransitionableText,
+  previous: ShapedTextIdentity,
+  next: ShapedTextIdentity,
+  animatePresentation: boolean,
+): GlyphOriginSnapshot | undefined {
+  if (glyphOriginPolicy(previous, next, animatePresentation) === 'snap') return undefined;
+  return captureGlyphOrigins(text);
+}
+
+/** Presentation-only motion on one independently owned `Glyphs` branch. */
 export interface GlyphOriginTransition {
-  /** Glyphs whose previous displayed origin was recovered by identity; the rest start already placed. */
   readonly matchedGlyphs: number;
   readonly targetGlyphs: number;
   readonly progress: number;
@@ -75,53 +92,100 @@ export interface GlyphOriginTransition {
   dispose(): void;
 }
 
-/**
- * Copies the displayed origins of the currently committed paragraph. An uncommitted `Text` has nothing to move from,
- * which is a normal first-frame state rather than a failure, so it yields `undefined` and matches nothing.
- */
-export function captureGlyphOrigins(text: TransitionableText): GlyphOriginSnapshot | undefined {
-  return text.snapshotGlyphs();
+interface MatrixTransition {
+  readonly startPosition: THREE.Vector3;
+  readonly startQuaternion: THREE.Quaternion;
+  readonly startScale: THREE.Vector3;
+  readonly targetPosition: THREE.Vector3;
+  readonly targetQuaternion: THREE.Quaternion;
+  readonly targetScale: THREE.Vector3;
 }
 
 /**
- * Moves the committed paragraph's displayed origins from where the matching glyphs used to be toward where the new
- * layout puts them. The target is the shaped origin rather than the current displayed one, so restarting a transition
- * mid-flight still converges on the authoritative layout instead of on a partially interpolated position.
+ * Copies the new committed draw into `Glyphs`, hides the live source, and interpolates full world matrices from the
+ * prior committed transforms. Finishing or disposing releases the copy and restores the source visibility.
  */
 export function createGlyphOriginTransition(
   text: TransitionableText,
   from: GlyphOriginSnapshot | undefined,
 ): GlyphOriginTransition {
-  const placements = text.snapshotGlyphs();
-  if (placements === undefined) throw new TypeError('glyph-origin transition requires a committed paragraph');
-  const adoption = from === undefined ? undefined : placements.adopt(from);
-  const glyphs = placements.glyphs;
-  const targetGlyphs = glyphs.length;
-  // `adopt` left each matched glyph at its previous drawn position and each unmatched glyph at its shaped one, so the
-  // snapshot itself is the start of the interpolation and only the two start columns need retaining.
-  const startX = Float64Array.from(glyphs, (glyph) => glyph.x);
-  const startY = Float64Array.from(glyphs, (glyph) => glyph.y);
+  const parent = text.parent;
+  if (parent === null) throw new TypeError('glyph-origin transition requires an attached text object');
+  const [detached, decorations] = text.breakApart();
+  parent.add(detached);
+  if (decorations !== undefined) parent.add(decorations);
+  const sourceWasVisible = text.visible;
+  text.visible = false;
+
+  const previous = new Map(from?.map((record) => [record.key, record.worldMatrix] as const));
+  const transitions = new Array<MatrixTransition>(detached.count);
+  let matchedGlyphs = 0;
+  try {
+    for (let index = 0; index < detached.count; index += 1) {
+      const glyph = detached.glyphAt(index);
+      const measurement = detached.measurements[index];
+      if (glyph === undefined || measurement === undefined) {
+        throw new Error(`detached glyph ${index} has no identity or measurement`);
+      }
+      const target = measurement.originalWorldMatrix;
+      const prior = previous.get(glyph.key);
+      const start = prior ?? target;
+      if (prior !== undefined) matchedGlyphs += 1;
+      const startPosition = new THREE.Vector3();
+      const startQuaternion = new THREE.Quaternion();
+      const startScale = new THREE.Vector3();
+      const targetPosition = new THREE.Vector3();
+      const targetQuaternion = new THREE.Quaternion();
+      const targetScale = new THREE.Vector3();
+      start.decompose(startPosition, startQuaternion, startScale);
+      target.decompose(targetPosition, targetQuaternion, targetScale);
+      transitions[index] = {
+        startPosition,
+        startQuaternion,
+        startScale,
+        targetPosition,
+        targetQuaternion,
+        targetScale,
+      };
+    }
+  } catch (error) {
+    detached.dispose();
+    decorations?.dispose();
+    text.visible = sourceWasVisible;
+    throw error;
+  }
+
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  const matrix = new THREE.Matrix4();
   let progress = 1;
   let disposed = false;
+  const cleanup = (): void => {
+    if (disposed) return;
+    disposed = true;
+    detached.dispose();
+    decorations?.dispose();
+    text.visible = sourceWasVisible;
+  };
   const setProgress = (nextProgress: number): void => {
     if (!Number.isFinite(nextProgress) || nextProgress < 0 || nextProgress > 1) {
       throw new RangeError('glyph-origin transition progress must be in [0, 1]');
     }
-    // A reflow publishes a new layout together with a new topology, which is exactly when interpolating between the old
-    // and new glyph sets would be meaningless. `applyGlyphs` refuses a superseded snapshot, so staleness is reported
-    // rather than written; disposal reads the same way.
     if (disposed) throw new DOMException('The glyph-origin transition is stale', 'AbortError');
-    for (let index = 0; index < targetGlyphs; index += 1) {
-      const glyph = glyphs[index]!;
-      glyph.x = startX[index]! + (glyph.shapedX - startX[index]!) * nextProgress;
-      glyph.y = startY[index]! + (glyph.shapedY - startY[index]!) * nextProgress;
+    for (let index = 0; index < transitions.length; index += 1) {
+      const transition = transitions[index]!;
+      position.lerpVectors(transition.startPosition, transition.targetPosition, nextProgress);
+      quaternion.copy(transition.startQuaternion).slerp(transition.targetQuaternion, nextProgress);
+      scale.lerpVectors(transition.startScale, transition.targetScale, nextProgress);
+      matrix.compose(position, quaternion, scale);
+      detached.setWorldMatrixAt(index, matrix);
     }
-    text.applyGlyphs(placements);
     progress = nextProgress;
   };
   return {
-    matchedGlyphs: adoption?.matched ?? 0,
-    targetGlyphs,
+    matchedGlyphs,
+    targetGlyphs: detached.count,
     get progress() {
       return progress;
     },
@@ -129,33 +193,23 @@ export function createGlyphOriginTransition(
     finish() {
       if (disposed) return;
       setProgress(1);
-      // Settled motion hands authority back to the layout. This is a step of the snapshot/manipulate/restore cycle
-      // rather than a call discovered by watching an override outlive the motion that set it.
-      text.restoreGlyphs();
-      disposed = true;
+      cleanup();
     },
-    dispose() {
-      disposed = true;
-    },
+    dispose: cleanup,
   };
 }
 
-/** Duration the live technique scenes present a reflow over, matching the bitmap viewport's host-driven timeline. */
+/** Duration the live technique scenes present a reflow over. */
 export const GLYPH_ORIGIN_TRANSITION_MS = 110;
 
-/** A transition advanced by the host frame clock, for scenes whose surface does not drive progress itself. */
+/** A transition advanced by the host frame clock. */
 export interface FrameDrivenGlyphTransition {
   readonly matchedGlyphs: number;
   readonly targetGlyphs: number;
-  /** Applies the eased progress for `timestamp` and returns it; `1` means the transition has settled. */
   advance(timestamp: number): number;
   dispose(): void;
 }
 
-/**
- * Wraps one transition in the smoothstep timeline the bitmap viewport applies from React. The first advanced frame
- * starts the clock rather than the constructor, so a reflow that commits between two frames still presents in full.
- */
 export function createFrameDrivenGlyphTransition(
   text: TransitionableText,
   from: GlyphOriginSnapshot | undefined,
@@ -187,7 +241,7 @@ export function createFrameDrivenGlyphTransition(
   };
 }
 
-/** Reports a reflow the scene chose to interpolate, keeping the snapped and transitioned reports one shape. */
+/** Reports a reflow the scene chose to interpolate. */
 export function transitionPresentation(transition: {
   readonly matchedGlyphs: number;
   readonly targetGlyphs: number;

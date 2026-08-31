@@ -456,14 +456,14 @@ impl FlowLayoutArena {
                     0.0
                 };
                 // Slice 2b of the integer-layout-units plan: the available width
-                // quantizes to F26.6 once at this boundary and the integer fit is
+                // quantizes to F16.16 once at this boundary and the integer fit is
                 // authoritative; the f64 twin remains only as the parity reference.
                 let Some(line) = layout_next_line_integer(
                     clusters,
                     cursor,
-                    Some(i64::from(super::layout_units::layout_units_from_scaled(
+                    Some(super::layout_units::layout_units_from_scaled(
                         (slot.end - slot.start - indent).max(0.0),
-                    ))),
+                    )),
                     wrap,
                     word_space_shrink,
                 )?
@@ -1116,7 +1116,7 @@ mod tests {
     }
 
     /// Mirrors the production build-path invariant for literal test arenas: every
-    /// consumer of the integer fit sees an F26.6 stream coherent with the f64
+    /// consumer of the integer fit sees an F16.16 stream coherent with the f64
     /// advances under the rounding contract.
     fn quantized(mut clusters: ClusterArena) -> ClusterArena {
         clusters.refresh_layout_units().unwrap();

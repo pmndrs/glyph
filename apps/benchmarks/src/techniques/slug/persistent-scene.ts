@@ -39,9 +39,8 @@ import {
 } from '../../renderer/retained-font-fixture';
 import type { RendererBackend } from '../../renderer/webgpu-renderer';
 import {
-  captureGlyphOrigins,
+  captureGlyphOriginsForPresentation,
   createFrameDrivenGlyphTransition,
-  glyphOriginPolicy,
   snapGlyphOrigins,
   transitionPresentation,
   type FrameDrivenGlyphTransition,
@@ -121,6 +120,7 @@ export interface SlugTextLiveStats {
 }
 
 export interface SlugTextSceneUpdate extends LiveFontFixtureUpdate {
+  readonly animatePresentation: boolean;
   readonly anchor: LiveTextAnchor;
   readonly direction: 'ltr' | 'rtl';
   readonly features: readonly FontFeature[];
@@ -291,9 +291,9 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
     activeLine: Text<typeof slug>,
     committed: SlugTextState,
     next: ShapedTextIdentity,
+    animatePresentation = true,
   ): GlyphOriginSnapshot | undefined => {
-    if (glyphOriginPolicy(committed.identity, next) === 'snap') return undefined;
-    return captureGlyphOrigins(activeLine);
+    return captureGlyphOriginsForPresentation(activeLine, committed.identity, next, animatePresentation);
   };
 
   /**
@@ -570,7 +570,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         direction: next.direction,
         features: next.features,
       };
-      const before = originsToInterpolate(activeLine, active.state, identity);
+      const before = originsToInterpolate(activeLine, active.state, identity, next.animatePresentation);
       activeFontFixture.commit(nextFixture, (fixture) => {
         if (next.text.length === 0) activeLine.visible = false;
         commitState(activeLine, {

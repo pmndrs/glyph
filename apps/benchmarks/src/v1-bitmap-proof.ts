@@ -2,6 +2,7 @@ import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import type { Font } from '@pmndrs/glyph';
 import { FontLoader, Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
+import { proveDetachedRasterParity } from './v1-detached-proof';
 
 declare global {
   interface Window {
@@ -16,6 +17,8 @@ interface TargetV1BitmapResult {
   readonly litPixels: number;
   readonly retainedDraw: boolean;
   readonly retainedStorage: boolean;
+  readonly detachedFirstFrameMatches: boolean;
+  readonly detachedSameFrameWriteMatches: boolean;
   readonly gpuBytes: number;
 }
 
@@ -44,15 +47,28 @@ async function render(): Promise<TargetV1BitmapResult> {
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-128, 128, 64, -64, 0.1, 10);
     camera.position.z = 1;
+    const parent = new THREE.Group();
+    parent.position.set(3, -2, 0);
+    parent.rotation.z = 0.07;
+    parent.scale.set(1.08, 0.92, 1);
+    scene.add(parent);
     text = new Text({ font, text: 'Target v1 Bitmap', style: { fontSize: 28, color: '#ffffff' } });
     text.position.set(-112, 24, 0);
-    scene.add(text);
+    parent.add(text);
     renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 1);
     await renderer.renderAsync(scene, camera);
     const firstDraw = text.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
     if (firstDraw === undefined) throw new Error('target-v1 Bitmap created no draw');
     const firstStorage = firstDraw.geometry.getAttribute('_pmndrsGlyphOrigins');
+    const { detachedFirstFrameMatches, detachedSameFrameWriteMatches } = await proveDetachedRasterParity(
+      renderer,
+      scene,
+      camera,
+      target,
+      text,
+    );
+
     text.text = 'Target v1 Bitmop';
     await renderer.renderAsync(scene, camera);
     const retainedDraw = text.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
@@ -68,6 +84,8 @@ async function render(): Promise<TargetV1BitmapResult> {
       litPixels,
       retainedDraw: retainedDraw === firstDraw,
       retainedStorage: retainedDraw?.geometry.getAttribute('_pmndrsGlyphOrigins') === firstStorage,
+      detachedFirstFrameMatches,
+      detachedSameFrameWriteMatches,
       gpuBytes: text.gpuBytes,
     };
   } finally {

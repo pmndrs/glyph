@@ -159,6 +159,34 @@ if (!acceptance.accepted) reportRendererError(acceptance.error);</code></pre>
 
 Use another render planner for an independently accepted scene, viewport, render target, or worker. Render planners may share their backend's policies and font bindings but never share revision cursors.
 
+### Copy committed records into an independent target
+
+Renderer integrations may request a complete one-shot checkpoint from one committed retained text:
+
+```ts
+const result = title.copyGlyphs(drawableStableIds, detachedTarget);
+if (!result.accepted) throw result.error;
+
+const decorationResult = title.copyDecorations(detachedDecorationTarget);
+if (!decorationResult.accepted) throw decorationResult.error;
+```
+
+`copyGlyphs()` accepts unique non-zero stable IDs that the renderer observed on drawable physical records in that
+paragraph's accepted plan. It is not a second publication stream and does not mutate desired text, source plan buffers,
+revisions, A/B slots, publication generation, or the source planner's acceptance frontier. Rust re-runs the installed
+policy over those committed records and emits one complete compact checkpoint. `copyDecorations()` does the same for the
+paragraph's complete under/over decoration set.
+
+Both calls require a synchronous borrowed `PlanTarget`. The target must import every buffer, draw, payload lease,
+material, transform, and resource relationship before `accept()` returns; borrowed Wasm bytes expire immediately after
+that return. A successful renderer import is self-contained and independently disposable. No Promise resolution or
+asynchronous readiness state exists in this hot path.
+
+The copy is planner-assisted because only the planner has authoritative semantic-to-physical record, buffer, resource,
+program, and draw relationships. A renderer should not reverse-engineer those relationships from current GPU objects.
+The complete contract and Three.js realization are recorded in
+[Planner-assisted detached glyph slices](detached-glyph-slice.md).
+
 ## PlanTarget: normal borrowed delivery
 
 <code>PlanTarget</code> is the default same-thread renderer contract:

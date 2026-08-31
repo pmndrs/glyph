@@ -51,6 +51,7 @@ import {
 import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
 import type { PortableResource } from './portable-resources.js';
 import {
+  policyCapabilitySetSelectionId,
   selectPolicyCapabilitySet,
   type MaterialHandle,
   type ParagraphId,
@@ -277,6 +278,10 @@ export interface RetainedText {
   measure(): ParagraphLayoutSummary;
   /** Returns caller-owned columns; a cache miss may synchronously incur glyph lookup and positioning work. */
   glyphs(): GlyphLayoutInspection;
+  /** Offers a complete checkpoint containing selected committed stable glyph ids to one renderer target. */
+  copyGlyphs(stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance;
+  /** Offers a complete checkpoint containing this paragraph's committed decorations. */
+  copyDecorations(target: PlanTarget): PlanAcceptance;
   dispose(): void;
 }
 
@@ -627,6 +632,31 @@ class RenderPlannerImpl {
     const cached = state.inspection;
     if (cached !== undefined) return copyGlyphLayoutInspection(cached);
     return copyGlyphLayoutInspection(this.#queryText(state, true));
+  }
+
+  /** @internal */
+  _copyGlyphs(state: RetainedTextState, stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance {
+    this.#assertCopyable(state, target);
+    const publication = this.#transport.copyGlyphs(
+      state.paragraphId,
+      stableIds,
+      this.#policy.handle,
+      this.#capabilitySetId(),
+      this.#limits.maxOutputBytes,
+    );
+    return this.#offerCopy(publication, target);
+  }
+
+  /** @internal */
+  _copyDecorations(state: RetainedTextState, target: PlanTarget): PlanAcceptance {
+    this.#assertCopyable(state, target);
+    const publication = this.#transport.copyDecorations(
+      state.paragraphId,
+      this.#policy.handle,
+      this.#capabilitySetId(),
+      this.#limits.maxOutputBytes,
+    );
+    return this.#offerCopy(publication, target);
   }
 
   /** @internal */
@@ -1092,6 +1122,35 @@ class RenderPlannerImpl {
     });
   }
 
+  #offerCopy(publication: PlanPublication, target: PlanTarget): PlanAcceptance {
+    const lease = new BorrowedPlanLease(publication, this.#transport);
+    const leaveBorrow = this.#backend._enterBorrowedPlan();
+    try {
+      const answer = target.accept(this.#candidate(lease), this.#targetController.signal);
+      if (isPromiseLike(answer)) throw new TypeError('a detached plan target must answer synchronously');
+      return assertAcceptance(answer);
+    } finally {
+      lease.expire();
+      leaveBorrow();
+    }
+  }
+
+  #assertCopyable(state: RetainedTextState, target: PlanTarget): void {
+    this.#assertTextQueryable(state);
+    if (!state.published || state.committed === undefined) {
+      throw new Error('retained text must have a committed render publication before it can be copied');
+    }
+    if (typeof target !== 'object' || target === null || target.delivery !== 'borrowed') {
+      throw new TypeError('detached plan copies require a synchronous borrowed plan target');
+    }
+  }
+
+  #capabilitySetId(): number {
+    return this.#capabilitySet === undefined
+      ? 1
+      : policyCapabilitySetSelectionId(this.#capabilitySet, this.#policy.handle);
+  }
+
   #portablePayload(referenceId: ResourceHandle): PortablePayloadLease {
     const lease = this.#backend._acquirePortablePayload(referenceId);
     let disposed = false;
@@ -1280,6 +1339,14 @@ class RetainedTextImpl implements RetainedText {
 
   glyphs(): GlyphLayoutInspection {
     return this.#planner._inspectText(this.#state);
+  }
+
+  copyGlyphs(stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance {
+    return this.#planner._copyGlyphs(this.#state, stableIds, target);
+  }
+
+  copyDecorations(target: PlanTarget): PlanAcceptance {
+    return this.#planner._copyDecorations(this.#state, target);
   }
 
   dispose(): void {

@@ -132,6 +132,40 @@ impl FrameTransport {
         })
     }
 
+    /// Encodes a complete detached checkpoint without advancing publication state.
+    pub fn stage_detached_plan(
+        &mut self,
+        planner_id: u32,
+        revision: PlannerRevision,
+        plan: RenderPlanView<'_>,
+        max_output_bytes: u32,
+    ) -> Result<usize, u32> {
+        let slot = self.inactive_slot();
+        let layout = encode_publication(plan, &[], self.outputs[slot].bytes_mut())?;
+        if layout.byte_length > max_output_bytes {
+            return Err(STATUS_RESULT_TOO_LARGE);
+        }
+        self.write_header(
+            slot,
+            HeaderValues {
+                status: 0,
+                fault: FrameFault::default(),
+                flags: RESULT_FLAG_CHECKPOINT,
+                planner_id,
+                revision,
+                required_base_revision: 0,
+                publication_generation: self.publication_generation,
+                required_request_capacity: 0,
+                required_result_capacity: 0,
+                policy_handle: plan.policy_handle,
+                capability_set: plan.capability_set,
+                policy_fingerprint: plan.policy_fingerprint,
+                layout,
+            },
+        );
+        Ok(self.outputs[slot].pointer())
+    }
+
     pub fn publish_success(&mut self, commit: CommittedUpdate, staged: StagedPlan) -> usize {
         debug_assert_eq!(staged.slot, self.inactive_slot());
         let generation = self.publication_generation + 1;
@@ -510,6 +544,47 @@ mod tests {
             read_u32(second_bytes, ENGINE_RESULT_PUBLICATION_GENERATION).unwrap(),
             2
         );
+    }
+
+    #[test]
+    fn detached_checkpoints_do_not_advance_or_alternate_source_publication_state() {
+        let mut transport = FrameTransport::new(256, 1024).unwrap();
+        let first_plan = transport.stage_plan(plan()).unwrap();
+        transport.publish_success(commit(1), first_plan);
+
+        let revision = PlannerRevision { engine: 7, plan: 5 };
+        let detached = transport
+            .stage_detached_plan(3, revision, plan(), 1024)
+            .unwrap();
+        assert_eq!(detached, transport.outputs[1].pointer());
+        assert_eq!(transport.active_slot, Some(0));
+        assert_eq!(transport.publication_generation, 1);
+        assert_eq!(transport.next_publication_generation().unwrap(), 2);
+
+        let bytes = transport.outputs[1].bytes();
+        assert_eq!(
+            read_u32(bytes, ENGINE_RESULT_FLAGS).unwrap(),
+            RESULT_FLAG_CHECKPOINT
+        );
+        assert_eq!(read_u32(bytes, ENGINE_RESULT_ENGINE_REVISION).unwrap(), 7);
+        assert_eq!(read_u32(bytes, ENGINE_RESULT_PLAN_REVISION).unwrap(), 5);
+        assert_eq!(
+            read_u32(bytes, ENGINE_RESULT_REQUIRED_BASE_REVISION).unwrap(),
+            0
+        );
+        assert_eq!(
+            read_u32(bytes, ENGINE_RESULT_PUBLICATION_GENERATION).unwrap(),
+            1
+        );
+
+        let second_plan = transport.stage_plan(plan()).unwrap();
+        let second = transport.publish_success(commit(2), second_plan);
+        assert_eq!(
+            second, detached,
+            "the next source publication still uses the inactive slot"
+        );
+        assert_eq!(transport.active_slot, Some(1));
+        assert_eq!(transport.publication_generation, 2);
     }
 
     #[test]

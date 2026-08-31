@@ -2,18 +2,19 @@ export const packageSizeBudgets = {
   'browser-core': {
     // Root Paragraph now ships its real private measurement engine instead of a detached constructor sketch.
     // Final planner vocabulary and typed font requests add raw names while compressed sizes remain below budget.
-    rawBytes: 450_000,
-    minifiedBytes: 292_000,
+    // Planner-assisted detached copies add the synchronous copy boundary to the root graph.
+    rawBytes: 456_000,
+    minifiedBytes: 295_000,
     gzipBytes: 82_400,
     brotliBytes: 63_500,
   },
   // Backends, planners, semantic plan readers, portable resources, and call-time validation.
   // Includes branded ID provenance and the zero-copy compiled-font view used by renderer integrations.
   'core-subpath-js': {
-    rawBytes: 430_000,
-    minifiedBytes: 282_000,
-    gzipBytes: 70_500,
-    brotliBytes: 59_000,
+    rawBytes: 437_000,
+    minifiedBytes: 286_000,
+    gzipBytes: 71_500,
+    brotliBytes: 60_000,
   },
   'tsl-subpath-js': {
     rawBytes: 27_000,
@@ -72,19 +73,22 @@ export const packageSizeBudgets = {
   // +12,071 raw / +4,949 gzip / +8,451 Brotli of Rust shaping and planning code but left
   // the gate un-repinned; this branch changed no Rust behaviour (formatting only), and the
   // measured artifact is byte-identical to its base commit.
+  // Planner-assisted detached glyph copies add paragraph-scoped stable-ID selection and a
+  // one-shot publication checkpoint without changing the retained A/B publication state.
   'text-shaper-wasm': {
-    rawBytes: 1_176_000,
-    minifiedBytes: 1_176_000,
-    gzipBytes: 459_000,
-    brotliBytes: 362_000,
+    rawBytes: 1_200_000,
+    minifiedBytes: 1_200_000,
+    gzipBytes: 468_000,
+    brotliBytes: 368_000,
   },
   // Three realization, engine-owned backend/plan mapping, first-frame measurement and bounds,
-  // exact-generation resource transactions, final planner names, and bounded candidate leases.
+  // exact-generation resource transactions, final planner names, bounded candidate leases,
+  // and detached Glyphs/Decorations objects with independent materials and full matrices.
   'three-runtime-js': {
-    rawBytes: 714_000,
-    minifiedBytes: 461_000,
-    gzipBytes: 117_000,
-    brotliBytes: 97_000,
+    rawBytes: 742_000,
+    minifiedBytes: 478_000,
+    gzipBytes: 121_000,
+    brotliBytes: 100_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
@@ -126,21 +130,21 @@ export const packageSizeBudgets = {
   // Shader subpaths remain outside these runtime graphs.
   'bitmap-runtime-js': {
     rawBytes: 430_000,
-    minifiedBytes: 267_000,
+    minifiedBytes: 274_000,
     gzipBytes: 72_500,
-    brotliBytes: 60_500,
+    brotliBytes: 62_000,
   },
   'mtsdf-runtime-js': {
     rawBytes: 430_000,
-    minifiedBytes: 267_000,
+    minifiedBytes: 274_000,
     gzipBytes: 72_500,
-    brotliBytes: 60_500,
+    brotliBytes: 62_000,
   },
   'slug-runtime-js': {
     rawBytes: 430_000,
-    minifiedBytes: 267_000,
+    minifiedBytes: 274_000,
     gzipBytes: 72_500,
-    brotliBytes: 60_500,
+    brotliBytes: 62_000,
   },
   'bitmap-baker-wasm': {
     rawBytes: 626_000,

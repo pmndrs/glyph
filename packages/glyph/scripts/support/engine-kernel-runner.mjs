@@ -20,15 +20,35 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
   const iterations = input.glyphs < 50_000 ? 16 : 8;
   const timings = {
     pack: measure(() => checkedCall(() => callPack(exports, aligned, false)), iterations, options),
-    breakMasks: measure(
-      () =>
-        checkedCall(() => exports.pmndrs_glyph_kernel_lab_break_masks(input.glyphs, aligned.flags, aligned.breakMasks)),
+    breakMasksX1: measure(() => checkedCall(() => callBreakMasks(exports, aligned, 1)), iterations * 4, options),
+    breakMasksX2: measure(() => checkedCall(() => callBreakMasks(exports, aligned, 2)), iterations * 4, options),
+    breakMasksX4: measure(() => checkedCall(() => callBreakMasks(exports, aligned, 4)), iterations * 4, options),
+    breakMasksX8: measure(() => checkedCall(() => callBreakMasks(exports, aligned, 8)), iterations * 4, options),
+    bidiMasksX1: measure(() => checkedCall(() => callBidiMasks(exports, aligned, 1)), iterations * 4, options),
+    bidiMasksX2: measure(() => checkedCall(() => callBidiMasks(exports, aligned, 2)), iterations * 4, options),
+    bidiMasksX4: measure(() => checkedCall(() => callBidiMasks(exports, aligned, 4)), iterations * 4, options),
+    bidiMasksX8: measure(() => checkedCall(() => callBidiMasks(exports, aligned, 8)), iterations * 4, options),
+    flaggedScanX1: measure(() => checkedCall(() => callFlaggedScan(exports, aligned, 1)), iterations * 4, options),
+    flaggedScanX2: measure(() => checkedCall(() => callFlaggedScan(exports, aligned, 2)), iterations * 4, options),
+    flaggedScanX4: measure(() => checkedCall(() => callFlaggedScan(exports, aligned, 4)), iterations * 4, options),
+    flaggedScanX8: measure(() => checkedCall(() => callFlaggedScan(exports, aligned, 8)), iterations * 4, options),
+    transitionScanX1: measure(
+      () => checkedCall(() => callTransitionScan(exports, aligned, 1)),
       iterations * 4,
       options,
     ),
-    bidiMasks: measure(
-      () =>
-        checkedCall(() => exports.pmndrs_glyph_kernel_lab_bidi_masks(input.glyphs, aligned.levels, aligned.bidiMasks)),
+    transitionScanX2: measure(
+      () => checkedCall(() => callTransitionScan(exports, aligned, 2)),
+      iterations * 4,
+      options,
+    ),
+    transitionScanX4: measure(
+      () => checkedCall(() => callTransitionScan(exports, aligned, 4)),
+      iterations * 4,
+      options,
+    ),
+    transitionScanX8: measure(
+      () => checkedCall(() => callTransitionScan(exports, aligned, 8)),
       iterations * 4,
       options,
     ),
@@ -36,6 +56,10 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
     chunk32: measure(() => checkedCall(() => callSummaries(exports, aligned, 32)), iterations * 2, options),
     chunk64: measure(() => checkedCall(() => callSummaries(exports, aligned, 64)), iterations * 2, options),
     chunk128: measure(() => checkedCall(() => callSummaries(exports, aligned, 128)), iterations * 2, options),
+    i64Chunk64x1: measure(() => checkedCall(() => callI64Summaries(exports, aligned, 64, 1)), iterations * 2, options),
+    i64Chunk64x2: measure(() => checkedCall(() => callI64Summaries(exports, aligned, 64, 2)), iterations * 2, options),
+    i64Chunk64x4: measure(() => checkedCall(() => callI64Summaries(exports, aligned, 64, 4)), iterations * 2, options),
+    i64Chunk64x8: measure(() => checkedCall(() => callI64Summaries(exports, aligned, 64, 8)), iterations * 2, options),
   };
   if (exports.memory.buffer !== memoryBefore) throw new Error(`${name} grew memory during a warm kernel`);
   exports.pmndrs_glyph_shaper_dealloc(aligned.allocationPointer, aligned.allocationLength);
@@ -53,7 +77,7 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
 }
 
 function createMemoryFixture(exports, input, skew) {
-  const allocationLength = input.glyphs * 96 + 4_096;
+  const allocationLength = input.glyphs * 112 + 4_096;
   const allocationPointer = exports.pmndrs_glyph_shaper_alloc(allocationLength);
   if (allocationPointer === 0) throw new Error('kernel-lab allocation failed');
   let cursor = alignWithSkew(allocationPointer, 16, skew);
@@ -73,6 +97,7 @@ function createMemoryFixture(exports, input, skew) {
   const planeRight = reserve(count, 4, 4);
   const planeTop = reserve(count, 4, 4);
   const advances = reserve(count, 4, 4);
+  const advancesI64 = reserve(count, 8, 8);
   const flags = reserve(count, 1, 1);
   const levels = reserve(count, 1, 1);
   const origins = reserve(count * 2, 4, 4);
@@ -82,7 +107,9 @@ function createMemoryFixture(exports, input, skew) {
   const bidiMasks = reserve(maskCount, 2, 2);
   const summaryCapacity = Math.ceil(count / 32);
   const advanceSums = reserve(summaryCapacity, 8, 8);
-  const breakCounts = reserve(summaryCapacity, 4, 4);
+  const spaceSums = reserve(summaryCapacity, 8, 8);
+  const flagsOr = reserve(summaryCapacity, 1, 1);
+  const scanChecksum = reserve(1, 8, 8);
   const policyF32 = reserve(count * 4, 4, 4);
   const policyU32 = reserve(count, 4, 4);
   const policyU16 = reserve(count, 2, 2);
@@ -96,6 +123,10 @@ function createMemoryFixture(exports, input, skew) {
   new Float32Array(exports.memory.buffer, planeRight, count).set(input.planeRight);
   new Float32Array(exports.memory.buffer, planeTop, count).set(input.planeTop);
   new Int32Array(exports.memory.buffer, advances, count).set(input.advances);
+  const i64Values = new BigInt64Array(exports.memory.buffer, advancesI64, count);
+  for (let index = 0; index < count; index += 1) {
+    i64Values[index] = BigInt(input.advances[index]) * 1_024n;
+  }
   new Uint8Array(exports.memory.buffer, flags, count).set(input.flags);
   new Uint8Array(exports.memory.buffer, levels, count).set(input.levels);
   return {
@@ -110,6 +141,7 @@ function createMemoryFixture(exports, input, skew) {
     planeRight,
     planeTop,
     advances,
+    advancesI64,
     flags,
     levels,
     origins,
@@ -117,7 +149,9 @@ function createMemoryFixture(exports, input, skew) {
     breakMasks,
     bidiMasks,
     advanceSums,
-    breakCounts,
+    spaceSums,
+    flagsOr,
+    scanChecksum,
     policyF32,
     policyU32,
     policyU16,
@@ -128,14 +162,28 @@ function createMemoryFixture(exports, input, skew) {
 
 async function executeAndHash(exports, fixture, vertical) {
   checkedCall(() => callPack(exports, fixture, vertical));
-  checkedCall(() => exports.pmndrs_glyph_kernel_lab_break_masks(fixture.count, fixture.flags, fixture.breakMasks));
-  checkedCall(() => exports.pmndrs_glyph_kernel_lab_bidi_masks(fixture.count, fixture.levels, fixture.bidiMasks));
+  const breakOracle = [];
+  const bidiOracle = [];
+  for (const groupCount of [1, 2, 4, 8]) {
+    checkedCall(() => callBreakMasks(exports, fixture, groupCount));
+    const currentBreaks = bytes(fixture, fixture.breakMasks, Math.ceil(fixture.count / 16) * 2);
+    if (breakOracle.length === 0) breakOracle.push(currentBreaks);
+    else if (!bytesEqual(currentBreaks, breakOracle[0])) {
+      throw new Error(`break-mask x${groupCount} output differs from the x1 oracle`);
+    }
+    checkedCall(() => callBidiMasks(exports, fixture, groupCount));
+    const currentBidi = bytes(fixture, fixture.bidiMasks, Math.ceil(fixture.count / 16) * 2);
+    if (bidiOracle.length === 0) bidiOracle.push(currentBidi);
+    else if (!bytesEqual(currentBidi, bidiOracle[0])) {
+      throw new Error(`bidi-mask x${groupCount} output differs from the x1 oracle`);
+    }
+  }
   checkedCall(() => callPolicy(exports, fixture, vertical));
   const parts = [
     bytes(fixture, fixture.origins, fixture.count * 2 * 4),
     bytes(fixture, fixture.sizes, fixture.count * 2 * 4),
-    bytes(fixture, fixture.breakMasks, Math.ceil(fixture.count / 16) * 2),
-    bytes(fixture, fixture.bidiMasks, Math.ceil(fixture.count / 16) * 2),
+    ...breakOracle,
+    ...bidiOracle,
     bytes(fixture, fixture.policyF32, fixture.count * 4 * 4),
     bytes(fixture, fixture.policyU32, fixture.count * 4),
     bytes(fixture, fixture.policyU16, fixture.count * 2),
@@ -144,8 +192,38 @@ async function executeAndHash(exports, fixture, vertical) {
     checkedCall(() => callSummaries(exports, fixture, chunkSize));
     const summaryCount = Math.ceil(fixture.count / chunkSize);
     parts.push(bytes(fixture, fixture.advanceSums, summaryCount * 8));
-    parts.push(bytes(fixture, fixture.breakCounts, summaryCount * 4));
+    parts.push(bytes(fixture, fixture.spaceSums, summaryCount * 8));
+    parts.push(bytes(fixture, fixture.flagsOr, summaryCount));
   }
+  const i64Oracle = [];
+  for (const accumulatorCount of [1, 2, 4, 8]) {
+    checkedCall(() => callI64Summaries(exports, fixture, 64, accumulatorCount));
+    const summaryCount = Math.ceil(fixture.count / 64);
+    const current = bytes(fixture, fixture.advanceSums, summaryCount * 8);
+    const currentSpaces = bytes(fixture, fixture.spaceSums, summaryCount * 8);
+    const currentFlags = bytes(fixture, fixture.flagsOr, summaryCount);
+    if (i64Oracle.length === 0) i64Oracle.push(current, currentSpaces, currentFlags);
+    else if (
+      !bytesEqual(current, i64Oracle[0]) ||
+      !bytesEqual(currentSpaces, i64Oracle[1]) ||
+      !bytesEqual(currentFlags, i64Oracle[2])
+    ) {
+      throw new Error(`i64 x${accumulatorCount} summaries differ from the x1 oracle`);
+    }
+  }
+  parts.push(...i64Oracle);
+  const scanOracles = [];
+  for (const groupCount of [1, 2, 4, 8]) {
+    checkedCall(() => callFlaggedScan(exports, fixture, groupCount));
+    const flagged = bytes(fixture, fixture.scanChecksum, 8);
+    checkedCall(() => callTransitionScan(exports, fixture, groupCount));
+    const transitions = bytes(fixture, fixture.scanChecksum, 8);
+    if (scanOracles.length === 0) scanOracles.push(flagged, transitions);
+    else if (!bytesEqual(flagged, scanOracles[0]) || !bytesEqual(transitions, scanOracles[1])) {
+      throw new Error(`production scan x${groupCount} output differs from the x1 oracle`);
+    }
+  }
+  parts.push(...scanOracles);
   return hashParts(parts);
 }
 
@@ -172,7 +250,42 @@ function callSummaries(exports, fixture, chunkSize) {
     fixture.advances,
     fixture.flags,
     fixture.advanceSums,
-    fixture.breakCounts,
+    fixture.spaceSums,
+    fixture.flagsOr,
+  );
+}
+
+function callI64Summaries(exports, fixture, chunkSize, accumulatorCount) {
+  return exports.pmndrs_glyph_kernel_lab_chunk_summaries_i64(
+    fixture.count,
+    chunkSize,
+    accumulatorCount,
+    fixture.advancesI64,
+    fixture.flags,
+    fixture.advanceSums,
+    fixture.spaceSums,
+    fixture.flagsOr,
+  );
+}
+
+function callBreakMasks(exports, fixture, groupCount) {
+  return exports.pmndrs_glyph_kernel_lab_break_masks(fixture.count, groupCount, fixture.flags, fixture.breakMasks);
+}
+
+function callBidiMasks(exports, fixture, groupCount) {
+  return exports.pmndrs_glyph_kernel_lab_bidi_masks(fixture.count, groupCount, fixture.levels, fixture.bidiMasks);
+}
+
+function callFlaggedScan(exports, fixture, groupCount) {
+  return exports.pmndrs_glyph_kernel_lab_flagged_scan(fixture.count, groupCount, fixture.flags, fixture.scanChecksum);
+}
+
+function callTransitionScan(exports, fixture, groupCount) {
+  return exports.pmndrs_glyph_kernel_lab_transition_scan(
+    fixture.count,
+    groupCount,
+    fixture.levels,
+    fixture.scanChecksum,
   );
 }
 
@@ -218,6 +331,10 @@ function checkedCall(operation) {
 
 function bytes(fixture, pointer, length) {
   return new Uint8Array(fixture.memory.buffer, pointer, length).slice();
+}
+
+function bytesEqual(left, right) {
+  return left.byteLength === right.byteLength && left.every((value, index) => value === right[index]);
 }
 
 async function hashParts(parts) {

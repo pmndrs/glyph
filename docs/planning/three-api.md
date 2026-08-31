@@ -53,7 +53,7 @@ material implementation.
 ```ts
 const loader = new FontLoader();
 const font = await loader.loadAsync({
-  input: { baked: '/fonts/inter-msdf.font.glb' },
+  input: '/fonts/inter-msdf.font.glb',
   raster: {
     technique: msdf,
     options: {
@@ -250,8 +250,8 @@ prepared work. Repeating an unchanged measurement returns the retained result ob
 
 `glyphs()` is intentionally different: it positions current desired text and copies per-line and per-glyph arrays. It
 still does not publish or realize renderer resources. Ordinary rendering never materializes either semantic view merely
-to draw. `snapshotGlyphs()`, caret lookup, and selection lookup remain renderer-accepted-state APIs and may return
-`undefined` while desired state is pending or a renderer candidate was rejected.
+to draw. Caret and selection lookup use renderer-accepted placement state and may return `undefined` while desired state
+is pending or a renderer candidate was rejected.
 
 The complete field semantics are defined by the [core layout-query reference](core-api.md#layout-query-values).
 
@@ -283,11 +283,11 @@ the Three executor decides which GPU resources can be shared safely.
 
 ```ts
 const prose = await loader.loadAsync({
-  input: { baked: '/fonts/inter-msdf.font.glb' },
+  input: '/fonts/inter-msdf.font.glb',
   raster: { technique: msdf, options: {} },
 });
 const emoji = await loader.loadAsync({
-  input: { baked: '/fonts/emoji-slug.font.glb' },
+  input: '/fonts/emoji-slug.font.glb',
   raster: { technique: slug, options: {} },
 });
 
@@ -299,38 +299,68 @@ The font stack carries resource and technique identity. The user-facing text API
 Rust resolves missing-glyph fallback, and the render plan partitions the selected glyphs by the capabilities and resources
 declared by the active Three policy.
 
-## Directed glyph presentation
+## Break committed glyphs into an independent object
 
-The cycle is snapshot, manipulate, restore.
+`breakApart()` copies the source paragraph's committed drawable records and any committed decoration draws into independently
+owned groups. The copy is synchronous, is available only when `commitState().status === 'committed'`, and returns a frozen
+two-entry tuple whose decoration slot is `undefined` when the paragraph has no decoration draws.
 
 ```ts
-const placements = label.snapshotGlyphs();
-if (placements !== undefined) {
-  // Units people animate, addressable directly.
-  for (const [index, word] of placements.words.entries()) word.translate(0, Math.sin(index) * 4);
-  const applied = label.applyGlyphs(placements);
-  if (applied.applied !== applied.requested) reportUnmoved(applied.unapplied);
-}
-label.restoreGlyphs();
+const [glyphs, decorations] = label.breakApart();
+label.parent!.add(glyphs); // sibling attachment preserves the source transform
+if (decorations !== undefined) label.parent!.add(decorations);
+label.visible = false;
+
+const matrix = new THREE.Matrix4();
+glyphs.getWorldMatrixAt(0, matrix);
+matrix.compose(position, quaternion, scale);
+glyphs.setWorldMatrixAt(0, matrix);
+
+glyphs.materials[0].opacity = 0.65;
+
+glyphs.dispose();
+decorations?.dispose();
+label.visible = true;
 ```
 
-Placements are presentation-only: they never mutate authoritative Rust shaping or layout, and a semantic
-text/style/geometry revision retires incompatible overrides. `applyGlyphs` refuses a snapshot whose layout the
-paragraph has since replaced, because the identities in it no longer address the same glyphs.
+The planner emits a complete checkpoint for the selected committed stable glyph IDs. Three imports it through its normal
+plan executor, preserving fallback techniques, atlas/resource relationships, supplied geometry, batching, and draw
+ordering. It does not reconstruct one child `Text` per glyph and it does not install mutable overrides on the live
+paragraph. The source continues shaping normally; later source publications cannot mutate the detached copy.
 
-Every position and box in a snapshot is in one stated space, `space: 'paragraph'`. `GlyphPlacement` carries the
-shaped origin, the drawn position, the shaped advance, and the ink box; `GlyphRun` carries the advance box and the ink
-box of a word or a line, and a line adds its baseline, ascent, and descent. `incomplete` names any glyph with no
-retained render record — a space, ordinarily — whose position therefore cannot be read or written.
+`Glyphs` follows the familiar instanced-mesh matrix surface. `getMatrixAt()` and `setMatrixAt()` use `Glyphs`-local
+space; `getWorldMatrixAt()` and `setWorldMatrixAt()` bridge world-space physics through the root transform. Every method
+reads or writes a complete affine matrix, so translation, quaternion rotation, scale, and depth are all supported.
+`measurements` retains each original local/world matrix, ink and advance AABBs, anchor lookup, and the metric or supplied
+geometry used by the renderer. These are rendering facts, not prescribed collision bodies.
 
-`GlyphKey` is the package's identity for a glyph: font, glyph id, cluster, and occurrence. It survives a reflow that
-MOVES glyphs (content box, font size, anchor, pixel ratio) and deliberately not one that RESHAPES them (text, font,
-language, direction, features). `placements.adopt(previous)` recovers each matching glyph's previous drawn position and
-reports how many matched, so a caller never rebuilds the key itself.
+Materials are cloned into each detached branch and exposed through `materials`; changing one cannot mutate the source
+`Text` or its sibling detached branch. Immutable atlas/page GPU resources are leased from the existing Three engine domain
+instead of uploaded again. Each returned object retains that domain until its own disposal, so the detached rendering may
+outlive the source `Text`, `Font`, and `FontLoader`. The caller owns scene attachment, source visibility, animation,
+physics bodies, reset timing, and disposal. Adding the returned groups to the source `Text` parent overlays them exactly
+at creation.
 
-`caretAt(x, y)` and `selectionRects(start, end)` are built on the same extents and resolve to clusters, not to
-JavaScript characters: a ligature is one glyph over several characters, and under bidi the character after an offset can
-be drawn to its left.
+Decorations have independent topology and lifetime. Core copies them through the separate
+`RetainedText.copyDecorations()` planner request; Three coordinates that request with glyph copying but returns the
+result separately in tuple slot two:
+
+```ts
+const [glyphs, decorations] = label.breakApart();
+if (decorations !== undefined) {
+  label.parent!.add(decorations);
+  decorations.materials[0].opacity = 0.5;
+  decorations.dispose();
+}
+glyphs.dispose();
+```
+
+`caretAt(x, y)` and `selectionRects(start, end)` remain read-only interaction helpers over accepted glyph extents. They
+resolve to clusters, not JavaScript characters: a ligature is one glyph over several characters, and under bidi the
+character after an offset can be drawn to its left.
+
+The complete copy and ownership contract is recorded in
+[Planner-assisted detached glyph slices](detached-glyph-slice.md).
 
 ## Ownership and disposal
 

@@ -87,6 +87,22 @@ interface ShaperExports {
   readonly requestCapacity: (handle: number) => number;
   readonly textUpdate: (handle: number, pointer: number, length: number) => number;
   readonly measureParagraph: (handle: number, pointer: number, length: number, paragraphId: number) => number;
+  readonly copyGlyphs: (
+    handle: number,
+    paragraphId: number,
+    policyHandle: number,
+    capabilitySet: number,
+    maxOutputBytes: number,
+    stableIdsPointer: number,
+    stableIdsCount: number,
+  ) => number;
+  readonly copyDecorations: (
+    handle: number,
+    policyHandle: number,
+    capabilitySet: number,
+    paragraphId: number,
+    maxOutputBytes: number,
+  ) => number;
 }
 
 interface ShaperModule {
@@ -257,6 +273,8 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       requestCapacity: exportedFunction(instance, functions.requestCapacity),
       textUpdate: exportedFunction(instance, functions.textUpdate),
       measureParagraph: exportedFunction(instance, functions.measureParagraph),
+      copyGlyphs: exportedFunction(instance, functions.copyGlyphs),
+      copyDecorations: exportedFunction(instance, functions.copyDecorations),
     },
   };
 }

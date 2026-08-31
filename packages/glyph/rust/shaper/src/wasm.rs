@@ -11,6 +11,8 @@ use crate::{
         font_binding_wire::parse_font_binding,
         frame::PlannerRevision,
         frame_wire::parse_update_request,
+        policy::CapabilitySetId,
+        render_plan_compiler::RenderPlanCompilerError,
         render_plan_wire::{publication_layout, query_layout},
         transport::FrameTransport,
         wire::parse_policy,
@@ -395,22 +397,76 @@ pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_pack(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_break_masks(
     count: u32,
+    group_count: u32,
     flags_pointer: u32,
     output_pointer: u32,
 ) -> u32 {
     // SAFETY: the test-only kernel validates every direct-memory region before creating slices.
-    unsafe { crate::engine::kernel_lab::exported_break_masks(count, flags_pointer, output_pointer) }
+    unsafe {
+        crate::engine::kernel_lab::exported_break_masks(
+            count,
+            group_count,
+            flags_pointer,
+            output_pointer,
+        )
+    }
 }
 
 #[cfg(feature = "kernel-lab")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_bidi_masks(
     count: u32,
+    group_count: u32,
     levels_pointer: u32,
     output_pointer: u32,
 ) -> u32 {
     // SAFETY: the test-only kernel validates every direct-memory region before creating slices.
-    unsafe { crate::engine::kernel_lab::exported_bidi_masks(count, levels_pointer, output_pointer) }
+    unsafe {
+        crate::engine::kernel_lab::exported_bidi_masks(
+            count,
+            group_count,
+            levels_pointer,
+            output_pointer,
+        )
+    }
+}
+
+#[cfg(feature = "kernel-lab")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_flagged_scan(
+    count: u32,
+    group_count: u32,
+    flags_pointer: u32,
+    checksum_pointer: u32,
+) -> u32 {
+    // SAFETY: the test-only kernel validates every direct-memory region before creating slices.
+    unsafe {
+        crate::engine::kernel_lab::exported_flagged_scan(
+            count,
+            group_count,
+            flags_pointer,
+            checksum_pointer,
+        )
+    }
+}
+
+#[cfg(feature = "kernel-lab")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_transition_scan(
+    count: u32,
+    group_count: u32,
+    levels_pointer: u32,
+    checksum_pointer: u32,
+) -> u32 {
+    // SAFETY: the test-only kernel validates every direct-memory region before creating slices.
+    unsafe {
+        crate::engine::kernel_lab::exported_transition_scan(
+            count,
+            group_count,
+            levels_pointer,
+            checksum_pointer,
+        )
+    }
 }
 
 #[cfg(feature = "kernel-lab")]
@@ -421,7 +477,8 @@ pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_chunk_summaries(
     advances_pointer: u32,
     flags_pointer: u32,
     advance_sums_pointer: u32,
-    break_counts_pointer: u32,
+    space_sums_pointer: u32,
+    flags_or_pointer: u32,
 ) -> u32 {
     // SAFETY: the test-only kernel validates every direct-memory region before creating slices.
     unsafe {
@@ -431,7 +488,35 @@ pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_chunk_summaries(
             advances_pointer,
             flags_pointer,
             advance_sums_pointer,
-            break_counts_pointer,
+            space_sums_pointer,
+            flags_or_pointer,
+        )
+    }
+}
+
+#[cfg(feature = "kernel-lab")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_chunk_summaries_i64(
+    count: u32,
+    chunk_size: u32,
+    accumulator_count: u32,
+    advances_pointer: u32,
+    flags_pointer: u32,
+    advance_sums_pointer: u32,
+    space_sums_pointer: u32,
+    flags_or_pointer: u32,
+) -> u32 {
+    // SAFETY: the test-only kernel validates every direct-memory region before creating slices.
+    unsafe {
+        crate::engine::kernel_lab::exported_chunk_summaries_i64(
+            count,
+            chunk_size,
+            accumulator_count,
+            advances_pointer,
+            flags_pointer,
+            advance_sums_pointer,
+            space_sums_pointer,
+            flags_or_pointer,
         )
     }
 }
@@ -661,6 +746,127 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
             Some(publication_generation)
         );
         u32::try_from(transport.publish_success(commit, staged)).unwrap_or(0)
+    })
+}
+
+/// Publishes a complete checkpoint containing only the requested committed glyph records.
+/// The planner and renderer fence are not mutated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
+    planner_id: u32,
+    paragraph_id: u32,
+    policy_handle: u32,
+    capability_set: u32,
+    max_output_bytes: u32,
+    stable_ids_pointer: u32,
+    stable_ids_count: u32,
+) -> u32 {
+    with_state(|state| {
+        let revision = match state.engine.planner_revision(planner_id) {
+            Ok(revision) => revision,
+            Err(_) => return 0,
+        };
+        let byte_length = match stable_ids_count.checked_mul(4) {
+            Some(length) => length,
+            None => {
+                return publish_failure(state, planner_id, revision, STATUS_INVALID_REQUEST, 0, 0);
+            }
+        };
+        let Some(bytes) = owned_bytes(&state.allocations, stable_ids_pointer, byte_length) else {
+            return publish_failure(state, planner_id, revision, STATUS_INVALID_REQUEST, 0, 0);
+        };
+        let stable_ids: Vec<u32> = bytes
+            .chunks_exact(4)
+            .map(|bytes| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+            .collect();
+        let plan = match state.engine.copy_glyphs(
+            planner_id,
+            paragraph_id,
+            policy_handle,
+            capability_set,
+            &stable_ids,
+        ) {
+            Ok(plan) => plan,
+            Err(error) => return publish_engine_failure(state, planner_id, revision, error),
+        };
+        let view = match plan.plan_view(
+            policy_handle,
+            CapabilitySetId(capability_set),
+            state
+                .engine
+                .policy(policy_handle)
+                .map(|policy| policy.fingerprint())
+                .unwrap_or(0),
+        ) {
+            Ok(view) => view,
+            Err(error) => {
+                return publish_engine_failure(
+                    state,
+                    planner_id,
+                    revision,
+                    detached_plan_error(error),
+                );
+            }
+        };
+        let Some(transport) = state.frames.get_mut(&planner_id) else {
+            return 0;
+        };
+        match transport.stage_detached_plan(planner_id, revision, view, max_output_bytes) {
+            Ok(pointer) => u32::try_from(pointer).unwrap_or(0),
+            Err(status) => publish_failure(state, planner_id, revision, status, 0, 0),
+        }
+    })
+}
+
+/// Publishes a complete checkpoint containing one paragraph's committed decorations.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_glyph_engine_copy_decorations(
+    planner_id: u32,
+    policy_handle: u32,
+    capability_set: u32,
+    paragraph_id: u32,
+    max_output_bytes: u32,
+) -> u32 {
+    with_state(|state| {
+        let revision = match state.engine.planner_revision(planner_id) {
+            Ok(revision) => revision,
+            Err(_) => return 0,
+        };
+        let plan = match state.engine.copy_decorations(
+            planner_id,
+            policy_handle,
+            capability_set,
+            paragraph_id,
+        ) {
+            Ok(plan) => plan,
+            Err(error) => return publish_engine_failure(state, planner_id, revision, error),
+        };
+        let view = match plan.plan_view(
+            policy_handle,
+            CapabilitySetId(capability_set),
+            state
+                .engine
+                .policy(policy_handle)
+                .map(|policy| policy.fingerprint())
+                .unwrap_or(0),
+        ) {
+            Ok(view) => view,
+            Err(error) => {
+                return publish_engine_failure(
+                    state,
+                    planner_id,
+                    revision,
+                    detached_plan_error(error),
+                );
+            }
+        };
+        let Some(transport) = state.frames.get_mut(&planner_id) else {
+            return 0;
+        };
+        match transport.stage_detached_plan(planner_id, revision, view, max_output_bytes) {
+            Ok(pointer) => u32::try_from(pointer).unwrap_or(0),
+            Err(status) => publish_failure(state, planner_id, revision, status, 0, 0),
+        }
     })
 }
 
@@ -909,6 +1115,14 @@ fn publish_engine_failure(
         0,
         0,
     )
+}
+
+fn detached_plan_error(error: RenderPlanCompilerError) -> EngineError {
+    if error.is_result_too_large() {
+        EngineError::ResultTooLarge
+    } else {
+        EngineError::InvalidRequest
+    }
 }
 
 fn publish_attributed_failure(

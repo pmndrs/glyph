@@ -21,7 +21,7 @@ use super::{
         DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput, PolicyGatherWorkspace,
         RetainedGather,
     },
-    positioning::PositionedGlyphArena,
+    positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
@@ -628,6 +628,206 @@ impl TextEngine {
         publication_generation: u32,
     ) -> Result<PreparedUpdate, EngineError> {
         self.prepare_update_inner(Some(shaper), request, publication_generation)
+    }
+
+    /// Builds a complete independent render plan for selected committed glyph records.
+    ///
+    /// This query leaves the planner revisions, publication generation, active output slot, and
+    /// acknowledgement fence untouched. The returned compiler owns compacted policy buffers that
+    /// the transport can encode as a one-shot checkpoint for a renderer to import.
+    pub(crate) fn copy_glyphs(
+        &self,
+        planner_id: u32,
+        paragraph_id: u32,
+        policy_handle: u32,
+        capability_set_id: u32,
+        stable_ids: &[u32],
+    ) -> Result<RenderPlanCompiler, EngineError> {
+        if stable_ids.is_empty() || stable_ids.contains(&0) {
+            return Err(EngineError::InvalidRequest);
+        }
+        let mut requested = stable_ids.to_vec();
+        requested.sort_unstable();
+        if requested.windows(2).any(|ids| ids[0] == ids[1]) {
+            return Err(EngineError::InvalidRequest);
+        }
+        let planner = self
+            .planners
+            .get(&planner_id)
+            .ok_or(EngineError::PlannerMissing)?;
+        let binding = planner.policy_binding.ok_or(EngineError::InvalidRequest)?;
+        if binding.handle != policy_handle {
+            return Err(EngineError::InvalidRequest);
+        }
+        let policy = self
+            .policies
+            .get(&policy_handle)
+            .ok_or(EngineError::PolicyMissing)?;
+        if binding.fingerprint != policy.fingerprint() {
+            return Err(EngineError::InvalidRequest);
+        }
+        let capability_set = CapabilitySetId(capability_set_id);
+        if policy.capability_set(capability_set).is_none() {
+            return Err(EngineError::InvalidRequest);
+        }
+
+        let mut gather = PolicyGatherWorkspace::default();
+        gather
+            .begin(policy, requested.len())
+            .map_err(gather_error)?;
+        let paragraph = planner
+            .paragraph(paragraph_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        let positioned = paragraph.state.positioned.committed();
+        let source_glyphs = positioned.glyphs();
+        let source_semantic = positioned.semantic_glyphs();
+        let source_f32 = positioned.semantic_f32();
+        let source_u32 = positioned.semantic_u32();
+        let mut glyphs = Vec::new();
+        let mut semantic_glyphs = Vec::new();
+        let mut semantic_f32: [Vec<f32>; SEMANTIC_F32_FIELD_COUNT] =
+            core::array::from_fn(|_| Vec::new());
+        let mut semantic_u32: [Vec<u32>; SEMANTIC_U32_FIELD_COUNT] =
+            core::array::from_fn(|_| Vec::new());
+        let mut found = 0usize;
+        for (glyph_index, source) in source_glyphs.iter().enumerate() {
+            if requested.binary_search(&source.stable_id).is_err() {
+                continue;
+            }
+            let mut glyph = *source;
+            let semantic_index = usize::try_from(source.semantic_glyph_index)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let semantic = source_semantic
+                .get(semantic_index)
+                .ok_or(EngineError::InvalidRequest)?;
+            glyph.semantic_glyph_index = semantic_glyphs
+                .len()
+                .try_into()
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            semantic_glyphs.push(*semantic);
+            glyphs.push(glyph);
+            for (destination, values) in semantic_f32.iter_mut().zip(source_f32.iter()) {
+                if values.is_empty() {
+                    continue;
+                }
+                destination.push(*values.get(glyph_index).ok_or(EngineError::InvalidRequest)?);
+            }
+            for (destination, values) in semantic_u32.iter_mut().zip(source_u32.iter()) {
+                if values.is_empty() {
+                    continue;
+                }
+                destination.push(*values.get(glyph_index).ok_or(EngineError::InvalidRequest)?);
+            }
+            found += 1;
+        }
+        if found != requested.len() {
+            return Err(EngineError::InvalidRequest);
+        }
+        let semantic_f32_refs: Vec<&[f32]> = semantic_f32.iter().map(Vec::as_slice).collect();
+        let semantic_u32_refs: Vec<&[u32]> = semantic_u32.iter().map(Vec::as_slice).collect();
+        gather
+            .append(
+                policy,
+                capability_set,
+                LayoutPlanInput {
+                    transform_id: paragraph_id,
+                    glyphs: &glyphs,
+                    semantic_glyphs: &semantic_glyphs,
+                    semantic_change_masks: &[],
+                    semantic_f32: &semantic_f32_refs,
+                    semantic_u32: &semantic_u32_refs,
+                },
+                |handle| {
+                    self.font_bindings
+                        .iter()
+                        .find(|registered| registered.handle == handle)
+                        .map(|registered| &registered.binding)
+                },
+            )
+            .map_err(gather_error)?;
+        let mut compiler = RenderPlanCompiler::default();
+        compiler
+            .prepare(
+                policy,
+                capability_set,
+                gather.view().plan_input(),
+                true,
+                1,
+                0,
+            )
+            .map_err(plan_error)?;
+        Ok(compiler)
+    }
+
+    /// Builds a complete independent plan for one committed paragraph's decorations.
+    pub(crate) fn copy_decorations(
+        &self,
+        planner_id: u32,
+        policy_handle: u32,
+        capability_set_id: u32,
+        paragraph_id: u32,
+    ) -> Result<RenderPlanCompiler, EngineError> {
+        let planner = self
+            .planners
+            .get(&planner_id)
+            .ok_or(EngineError::PlannerMissing)?;
+        let binding = planner.policy_binding.ok_or(EngineError::InvalidRequest)?;
+        if binding.handle != policy_handle {
+            return Err(EngineError::InvalidRequest);
+        }
+        let policy = self
+            .policies
+            .get(&policy_handle)
+            .ok_or(EngineError::PolicyMissing)?;
+        if binding.fingerprint != policy.fingerprint() {
+            return Err(EngineError::InvalidRequest);
+        }
+        let capability_set = CapabilitySetId(capability_set_id);
+        if policy.capability_set(capability_set).is_none() {
+            return Err(EngineError::InvalidRequest);
+        }
+        let paragraph = planner
+            .paragraph(paragraph_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        let positioned = paragraph.state.positioned.committed();
+
+        let mut gather = PolicyGatherWorkspace::default();
+        gather
+            .begin(policy, positioned.decorations().len())
+            .map_err(gather_error)?;
+        let content_revision = planner.revision.engine.max(1);
+        gather
+            .append_decorations(
+                policy,
+                capability_set,
+                positioned.decorations(),
+                paragraph_id,
+                content_revision,
+                super::policy_gather::DecorationPass::Under,
+            )
+            .map_err(gather_error)?;
+        gather
+            .append_decorations(
+                policy,
+                capability_set,
+                positioned.decorations(),
+                paragraph_id,
+                content_revision,
+                super::policy_gather::DecorationPass::Over,
+            )
+            .map_err(gather_error)?;
+        let mut compiler = RenderPlanCompiler::default();
+        compiler
+            .prepare(
+                policy,
+                capability_set,
+                gather.view().plan_input(),
+                true,
+                1,
+                0,
+            )
+            .map_err(plan_error)?;
+        Ok(compiler)
     }
 
     /// Answers a paragraph-scoped measurement synchronously: validation and speculative

@@ -1,12 +1,7 @@
 import * as THREE from 'three/webgpu';
 
 import { alignSpansToClusters, type FormattedText, type ParagraphSpan, type TextInput } from '../formatted-text.js';
-import {
-  createGlyphPlacements,
-  type GlyphApplication,
-  type GlyphCaret,
-  type GlyphPlacements,
-} from '../glyph-placement.js';
+import { createGlyphPlacements, type GlyphCaret, type GlyphPlacements } from '../glyph-placement.js';
 import {
   copyGlyphLayoutInspection,
   type LayoutBox,
@@ -35,6 +30,7 @@ import type {
   BackendFontStackBinding,
   BackendTransformBinding,
   RenderPlanner,
+  PlanTarget,
   RetainedFormattedText,
   RetainedText,
   RetainedTextOptions,
@@ -43,6 +39,13 @@ import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
 import { type ThreeMaterialBindingLease, type ThreeTextEngineCoordinator } from './engine-coordinator.js';
 import type { ThreeTextMaterial } from './material.js';
 import { acquireThreeTextDomain, type ThreeEngineDomainLease } from './engine-domain.js';
+import {
+  measureGlyphPlacements,
+  type ThreeGlyphGeometrySource,
+  type ThreeGlyphMeasurement,
+} from './glyph-measurement.js';
+import { createGlyphs, type Glyphs } from './glyphs.js';
+import { createDecorations, type Decorations } from './decorations.js';
 
 const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const MAX_TEXT_UNITS = 65_536;
@@ -357,28 +360,85 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     return this.#boundingBox;
   }
 
-  snapshotGlyphs(): GlyphPlacements | undefined {
+  #glyphPlacements(): GlyphPlacements | undefined {
     this.#assertActive();
     return this.#binding?.glyphPlacements(eraseTextTechnique(this));
   }
 
-  applyGlyphs(placements: GlyphPlacements): GlyphApplication {
-    this.#assertActive();
-    if (this.#binding === undefined) throw new Error('glyph placements require a bound Text');
-    return this.#binding.applyGlyphPlacements(eraseTextTechnique(this), placements);
+  /** Measures each currently displayed glyph in Text-local and world space. */
+  measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined {
+    const placements = this.#glyphPlacements();
+    if (placements === undefined) return undefined;
+    this.updateWorldMatrix(true, false);
+    return measureGlyphPlacements(placements, this.matrixWorld, this.#glyphGeometry(placements));
   }
 
-  restoreGlyphs(): void {
+  /** Copies the committed glyphs and optional decorations into independently rendered Three objects. */
+  breakApart(): readonly [glyphs: Glyphs, decorations: Decorations | undefined] {
     this.#assertActive();
-    this.#binding?.clearGlyphOrigins(eraseTextTechnique(this));
+    this.#assertDetachedCopyAvailable('break apart');
+    const placements = this.#glyphPlacements();
+    if (placements === undefined) throw new Error('cannot break apart text before a committed layout is available');
+    const binding = this.#binding;
+    if (binding === undefined) throw new Error('cannot break apart an unbound text paragraph');
+    const incomplete = new Set(placements.incomplete);
+    const drawable = placements.glyphs.filter((placement) => !incomplete.has(placement.index));
+    const stableIds = new Uint32Array(drawable.length);
+    for (const [index, placement] of drawable.entries()) {
+      const stableId = placements.layout.glyphStableIds[placement.index];
+      if (stableId === undefined) throw new Error(`drawable glyph ${placement.index} has no stable id`);
+      stableIds[index] = stableId;
+    }
+    if (stableIds.length === 0) throw new Error('cannot break apart text with no drawable glyphs');
+    this.updateWorldMatrix(true, false, true);
+    const source = this as unknown as Text<AnyRasterTechnique>;
+    const glyphs = createGlyphs({
+      source,
+      placements,
+      matrixWorld: this.matrixWorld,
+      geometry: this.#glyphGeometry(placements),
+      domain: this.#acquireDomain(),
+      copy: (target) => binding.copyGlyphs(eraseTextTechnique(this), stableIds, target),
+    });
+    try {
+      const decorations = createDecorations({
+        source,
+        domain: this.#acquireDomain(),
+        copy: (target) => binding.copyDecorations(eraseTextTechnique(this), target),
+      });
+      return Object.freeze([glyphs, decorations] as const);
+    } catch (error) {
+      glyphs.dispose();
+      throw error;
+    }
+  }
+
+  #assertDetachedCopyAvailable(operation: string): void {
+    const state = this.commitState();
+    if (state.status === 'committed') return;
+    if (state.status === 'failed')
+      throw new Error(`cannot ${operation} text after renderer realization failed`, { cause: state.error });
+    throw new Error(`cannot ${operation} text before its renderer state is committed`);
+  }
+
+  #glyphGeometry(placements: GlyphPlacements): ReadonlyMap<number, ThreeGlyphGeometrySource> {
+    const sourceByStableId = this.#binding?.glyphGeometry(placements.layout.glyphStableIds);
+    if (sourceByStableId === undefined) return new Map();
+    const sourceByIndex = new Map<number, ThreeGlyphGeometrySource>();
+    for (let index = 0; index < placements.glyphs.length; index += 1) {
+      const stableId = placements.layout.glyphStableIds[index];
+      const source = stableId === undefined ? undefined : sourceByStableId.get(stableId);
+      if (source !== undefined) sourceByIndex.set(index, source);
+    }
+    return sourceByIndex;
   }
 
   caretAt(x: number, y: number): GlyphCaret | undefined {
-    return this.snapshotGlyphs()?.caretAt(x, y);
+    return this.#glyphPlacements()?.caretAt(x, y);
   }
 
   selectionRects(start: number, end: number): readonly LayoutBox[] | undefined {
-    return this.snapshotGlyphs()?.selectionRects(start, end);
+    return this.#glyphPlacements()?.selectionRects(start, end);
   }
 
   override updateMatrixWorld(force?: boolean): void {
@@ -635,7 +695,6 @@ class ThreeTextBatchBinding {
   readonly #planner: RenderPlanner;
   readonly #target: ThreeTextRenderPlanExecutor;
   readonly #entries = new Map<Text<AnyRasterTechnique>, BoundTextEntry>();
-  readonly #placementLayouts = new WeakMap<GlyphPlacements, GlyphLayoutInspection>();
   readonly #inspections = new Map<Text<AnyRasterTechnique>, CanonicalInspection>();
   #capacity: GlyphBufferCapacity;
   #pendingPublication = false;
@@ -681,6 +740,9 @@ class ThreeTextBatchBinding {
 
   get textCount(): number {
     return this.#entries.size;
+  }
+  get coordinator(): ThreeTextEngineCoordinator {
+    return this.#coordinator;
   }
   get gpuBytes(): number {
     return this.#target.gpuBytes;
@@ -785,35 +847,25 @@ class ThreeTextBatchBinding {
       drawn.drawnY,
       drawn.incomplete,
     );
-    this.#placementLayouts.set(placements, layout);
     return placements;
   }
 
-  applyGlyphPlacements(text: Text<AnyRasterTechnique>, placements: GlyphPlacements): GlyphApplication {
-    const layout = this.#canonicalInspection(text);
-    if (layout === undefined || this.#placementLayouts.get(placements) !== layout) {
-      throw new TypeError('glyph placements do not match the committed layout inspection');
-    }
-    if (placements.glyphs.length !== layout.glyphCount) {
-      throw new RangeError('glyph placements do not match the inspected glyph count');
-    }
-    const x = new Float32Array(layout.glyphCount);
-    const y = new Float32Array(layout.glyphCount);
-    for (let index = 0; index < layout.glyphCount; index += 1) {
-      x[index] = placements.glyphs[index]!.x;
-      y[index] = placements.glyphs[index]!.y;
-    }
-    const unapplied = this.#target.setGlyphOriginOverrides(layout.glyphStableIds, layout.x, layout.y, x, y);
-    return Object.freeze({
-      requested: layout.glyphCount,
-      applied: layout.glyphCount - unapplied.length,
-      unapplied: Object.freeze(unapplied),
-    });
+  glyphGeometry(stableIds: Uint32Array): ReadonlyMap<number, ThreeGlyphGeometrySource> {
+    return this.#target.glyphGeometry(stableIds);
   }
 
-  clearGlyphOrigins(text: Text<AnyRasterTechnique>): void {
-    const layout = this.#canonicalInspection(text);
-    if (layout !== undefined) this.#target.clearGlyphOriginOverrides(layout.glyphStableIds);
+  copyGlyphs(text: Text<AnyRasterTechnique>, stableIds: Uint32Array, target: PlanTarget) {
+    this.#assertActive();
+    const entry = this.#entries.get(text);
+    if (entry === undefined) throw new Error('cannot copy an unbound text paragraph');
+    return entry.handle.copyGlyphs(stableIds, target);
+  }
+
+  copyDecorations(text: Text<AnyRasterTechnique>, target: PlanTarget) {
+    this.#assertActive();
+    const entry = this.#entries.get(text);
+    if (entry === undefined) throw new Error('cannot copy decorations from an unbound text paragraph');
+    return entry.handle.copyDecorations(target);
   }
 
   synchronize(worldMatricesCurrent: boolean): void {

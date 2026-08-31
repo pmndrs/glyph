@@ -256,6 +256,7 @@ export function BitmapTextViewport({
   });
   const sceneConfiguration = useEffectEvent(() => ({
     anchor,
+    animatePresentation,
     direction,
     expectedGlyphCount,
     features,
@@ -380,6 +381,7 @@ export function BitmapTextViewport({
       scene,
       {
         anchor,
+        animatePresentation,
         fontFixture,
         fontSize,
         layoutWidthRatio,

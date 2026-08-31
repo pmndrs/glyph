@@ -1121,7 +1121,7 @@ test('resize equivalence adopts committed positioning and still relayouts on bre
   const widened = update(220, seeded, false);
   assert.equal(widened.status, abi.status.ok);
   assert.equal(widened.measurement?.lineCount, 1);
-  assert.equal(widened.measurement?.inlineExtent, 181.375);
+  assert.equal(widened.measurement?.inlineExtent, 181.3671875);
   // 220 -> 96 moves breaks: the full path must relayout from the retained
   // committed state the short-circuit preserved.
   const narrowed = update(96, widened, false);
@@ -1131,19 +1131,19 @@ test('resize equivalence adopts committed positioning and still relayouts on bre
   // longer charges its terminating space, so this drops by exactly one 4.5 px
   // space. The 300 and 220 extents, whose lines end in ink, are unchanged —
   // which is what makes this a layout-contract change rather than drift.
-  assert.equal(narrowed.measurement?.inlineExtent, 79.03125);
+  assert.equal(narrowed.measurement?.inlineExtent, 79.0234375);
   // And back out again across the equivalence boundary.
   const restored = update(300, narrowed, false);
   assert.equal(restored.status, abi.status.ok);
   assert.equal(restored.measurement?.lineCount, 1);
-  assert.equal(restored.measurement?.inlineExtent, 181.375);
+  assert.equal(restored.measurement?.inlineExtent, 181.3671875);
   assert.equal(fn.disposePlanner(41), abi.status.ok);
 });
 
 /**
  * Integer layout-units slice 5: the packaged artifact's measured f32 extents
  * are pinned EXACTLY at several widths. Every stage between text and extent
- * runs on the F26.6 rounding contract (`layout_units.rs`), whose integer
+ * runs on the F16.16 rounding contract (`layout_units.rs`), whose integer
  * arithmetic and IEEE f64 scaling are deterministic across native and Wasm
  * builds and across hosts; the linux CI runner reproducing these exact
  * values is the cross-build half of the bit-exactness evidence, alongside
@@ -1225,21 +1225,21 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
   );
   assert.equal(seeded.status, abi.status.ok);
 
-  // Every pinned extent sits on a 1/64 boundary — the F26.6 signature of the
-  // authoritative integer fit, exact in f32.
+  // Every pinned extent is the exact f32 publication of the authoritative
+  // F16.16 integer fit.
   // Re-derived once when the line-terminating word space began to hang (D-257).
   // The derivation is exact and was predicted before it was measured: a wrapped
   // line no longer charges the space that terminates it, so every multi-line
   // width loses exactly one space advance — 4.50000 px, Inter's space at 16 px —
   // while the single-line widths, whose text ends in ink, do not move at all.
-  // Line counts are unchanged at every width, and every value remains on a 1/64
-  // boundary (8918/64, 5058/64, 3572/64), so the F26.6 signature this test exists
-  // to protect still holds.
+  // Line counts are unchanged at every width. These values were re-pinned when
+  // D-291 increased the internal layout precision from F26.6 to F16.16; the test
+  // continues to protect exact native/Wasm publication rather than a tolerance.
   const pinned = [
-    [300, 1, 181.375],
-    [220, 1, 181.375],
-    [150, 2, 139.34375],
-    [96, 3, 79.03125],
+    [300, 1, 181.3671875],
+    [220, 1, 181.3671875],
+    [150, 2, 139.3359375],
+    [96, 3, 79.0234375],
     [73, 4, 55.8125],
   ];
   for (const [width, lineCount, inlineExtent] of pinned) {

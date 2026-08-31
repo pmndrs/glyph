@@ -1577,6 +1577,94 @@ export class PlanTransport {
     }
   }
 
+  /** @internal Copies selected committed glyph records into a complete query checkpoint. */
+  copyGlyphs(
+    paragraphId: ParagraphId,
+    stableIds: ArrayLike<number>,
+    policyHandle: PolicyHandle,
+    capabilitySet: number,
+    maxOutputBytes: number,
+  ): PlanPublication {
+    this.#assertActive();
+    assertGlyphId(paragraphId, 'paragraph', 'paragraph id');
+    if (stableIds === null || stableIds === undefined || stableIds.length === 0) {
+      throw new TypeError('glyph copy needs at least one stable glyph id');
+    }
+    const byteLength = checkedProduct(stableIds.length, Uint32Array.BYTES_PER_ELEMENT, 'glyph copy stable ids');
+    const encoded = new Uint8Array(byteLength);
+    const view = new DataView(encoded.buffer);
+    const seen = new Set<number>();
+    for (let index = 0; index < stableIds.length; index += 1) {
+      const stableId = stableIds[index];
+      if (stableId === undefined) throw new RangeError(`glyph stable id ${index} is missing`);
+      const validated = uint32Handle(stableId, `glyph stable id ${index}`);
+      if (seen.has(validated)) throw new RangeError(`glyph stable id ${index} duplicates ${validated}`);
+      seen.add(validated);
+      view.setUint32(index * Uint32Array.BYTES_PER_ELEMENT, validated, true);
+    }
+    this.#invalidate();
+    const initialMemoryBuffer = this.#exports.memory.buffer;
+    const pointer = this.#exports.allocate(byteLength);
+    if (pointer === 0) throw engineStatusError('allocate glyph copy ids', textShaperAbi.status.resultTooLarge);
+    try {
+      new Uint8Array(this.#exports.memory.buffer, pointer, byteLength).set(encoded);
+      const resultPointer = this.#exports.copyGlyphs(
+        this.#handle,
+        paragraphId,
+        policyHandle,
+        uint32(capabilitySet, 'glyph copy capability set'),
+        uint32(maxOutputBytes, 'glyph copy max output bytes'),
+        pointer,
+        stableIds.length,
+      );
+      return this.#decodeStatusPointer(resultPointer, initialMemoryBuffer, 'copy glyphs');
+    } finally {
+      this.#exports.deallocate(pointer, byteLength);
+    }
+  }
+
+  /** @internal Copies one committed paragraph's decorations into a complete query checkpoint. */
+  copyDecorations(
+    paragraphId: ParagraphId,
+    policyHandle: PolicyHandle,
+    capabilitySet: number,
+    maxOutputBytes: number,
+  ): PlanPublication {
+    this.#assertActive();
+    assertGlyphId(paragraphId, 'paragraph', 'paragraph id');
+    this.#invalidate();
+    const initialMemoryBuffer = this.#exports.memory.buffer;
+    const resultPointer = this.#exports.copyDecorations(
+      this.#handle,
+      policyHandle,
+      uint32(capabilitySet, 'decoration copy capability set'),
+      paragraphId,
+      uint32(maxOutputBytes, 'decoration copy max output bytes'),
+    );
+    return this.#decodeStatusPointer(resultPointer, initialMemoryBuffer, 'copy decorations');
+  }
+
+  #decodeStatusPointer(resultPointer: number, initialMemoryBuffer: ArrayBuffer, operation: string): PlanPublication {
+    if (resultPointer === 0) throw engineStatusError(operation, textShaperAbi.status.resultTooLarge);
+    const memoryBuffer = this.#exports.memory.buffer;
+    const layout = textShaperAbi.layouts.engineResult;
+    if (resultPointer + layout.size > memoryBuffer.byteLength) {
+      throw new RangeError(`${operation} returned an out-of-bounds result header`);
+    }
+    const header = new DataView(memoryBuffer, resultPointer, layout.size);
+    const status = header.getUint32(layout.status, true);
+    if (status !== textShaperAbi.status.ok) {
+      throw engineStatusError(
+        operation,
+        status,
+        header.getUint32(layout.requiredRequestCapacity, true),
+        header.getUint32(layout.requiredResultCapacity, true),
+        headerFault(header),
+      );
+    }
+    return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
+  }
+
   #decodeResult(
     header: DataView,
     resultPointer: number,

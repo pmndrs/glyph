@@ -961,15 +961,15 @@
       "layouts": {
         "natural": {
           "measurement": {
-            "width": 1147.84375,
+            "width": 1147.8399658203125,
             "height": 46.336,
-            "contentWidth": 1147.84375,
+            "contentWidth": 1147.8399658203125,
             "contentHeight": 46.336,
             "firstBaseline": 37.119998931884766,
             "lastBaseline": 37.119998931884766,
             "overflowed": false
           },
-          "hash": "78d77a12",
+          "hash": "85a2f640",
           "glyphFontSlots": [
             0,
             0,
@@ -1252,7 +1252,7 @@
             37.119998931884766
           ],
           "lineAdvances": [
-            1147.84375
+            1147.8399658203125
           ]
         },
         "wide": {
@@ -1265,7 +1265,7 @@
             "lastBaseline": 129.79200744628906,
             "overflowed": false
           },
-          "hash": "da25681c",
+          "hash": "3dfbd782",
           "glyphFontSlots": [
             0,
             0,
@@ -1558,9 +1558,9 @@
             129.79200744628906
           ],
           "lineAdvances": [
-            447.046875,
+            447.03997802734375,
             480,
-            220.796875
+            220.8000030517578
           ]
         },
         "narrow": {
@@ -1573,7 +1573,7 @@
             "lastBaseline": 222.46400451660156,
             "overflowed": false
           },
-          "hash": "eb17b2bb",
+          "hash": "53d8ec89",
           "glyphFontSlots": [
             0,
             0,
@@ -1877,10 +1877,10 @@
           ],
           "lineAdvances": [
             256,
-            255.046875,
+            255.0399932861328,
             256,
             256,
-            124.796875
+            124.80000305175781
           ]
         }
       },
@@ -1900,15 +1900,15 @@
       "layouts": {
         "natural": {
           "measurement": {
-            "width": 694.875,
+            "width": 694.97607421875,
             "height": 46.336,
-            "contentWidth": 694.875,
+            "contentWidth": 694.97607421875,
             "contentHeight": 46.336,
             "firstBaseline": 37.119998931884766,
             "lastBaseline": 37.119998931884766,
             "overflowed": false
           },
-          "hash": "042aac0d",
+          "hash": "723926cf",
           "glyphFontSlots": [
             0,
             0,
@@ -2142,20 +2142,20 @@
             37.119998931884766
           ],
           "lineAdvances": [
-            694.875
+            694.97607421875
           ]
         },
         "wide": {
           "measurement": {
             "width": 480,
             "height": 92.672,
-            "contentWidth": 470.9375,
+            "contentWidth": 471.008056640625,
             "contentHeight": 92.672,
             "firstBaseline": 37.119998931884766,
             "lastBaseline": 83.45600128173828,
             "overflowed": false
           },
-          "hash": "61b4239a",
+          "hash": "9ba68134",
           "glyphFontSlots": [
             0,
             0,
@@ -2394,21 +2394,21 @@
             83.45600128173828
           ],
           "lineAdvances": [
-            470.9375,
-            223.9375
+            471.008056640625,
+            223.968017578125
           ]
         },
         "narrow": {
           "measurement": {
             "width": 260,
             "height": 139.00799999999998,
-            "contentWidth": 258.53125,
+            "contentWidth": 258.5600280761719,
             "contentHeight": 139.00799999999998,
             "firstBaseline": 37.119998931884766,
             "lastBaseline": 129.79200744628906,
             "overflowed": false
           },
-          "hash": "132b42c2",
+          "hash": "9fe610f5",
           "glyphFontSlots": [
             0,
             0,
@@ -2652,9 +2652,9 @@
             129.79200744628906
           ],
           "lineAdvances": [
-            232.890625,
-            258.53125,
-            194.5
+            232.9280242919922,
+            258.5600280761719,
+            194.52801513671875
           ]
         }
       },
@@ -2674,15 +2674,15 @@
       "layouts": {
         "natural": {
           "measurement": {
-            "width": 582.109375,
+            "width": 582.1119995117188,
             "height": 46.336,
-            "contentWidth": 582.109375,
+            "contentWidth": 582.1119995117188,
             "contentHeight": 46.336,
             "firstBaseline": 37.119998931884766,
             "lastBaseline": 37.119998931884766,
             "overflowed": false
           },
-          "hash": "42a7a021",
+          "hash": "06cc2916",
           "glyphFontSlots": [
             0,
             0,
@@ -2888,20 +2888,20 @@
             37.119998931884766
           ],
           "lineAdvances": [
-            582.109375
+            582.1119995117188
           ]
         },
         "wide": {
           "measurement": {
             "width": 480,
             "height": 92.672,
-            "contentWidth": 393.203125,
+            "contentWidth": 393.21600341796875,
             "contentHeight": 92.672,
             "firstBaseline": 37.119998931884766,
             "lastBaseline": 83.45600128173828,
             "overflowed": false
           },
-          "hash": "e2e8fd70",
+          "hash": "138ea4ea",
           "glyphFontSlots": [
             0,
             0,
@@ -3112,21 +3112,21 @@
             83.45600128173828
           ],
           "lineAdvances": [
-            393.203125,
-            188.90625
+            393.21600341796875,
+            188.89599609375
           ]
         },
         "narrow": {
           "measurement": {
             "width": 260,
             "height": 139.00799999999998,
-            "contentWidth": 247.78125,
+            "contentWidth": 247.7760009765625,
             "contentHeight": 139.00799999999998,
             "firstBaseline": 37.119998931884766,
             "lastBaseline": 129.79200744628906,
             "overflowed": false
           },
-          "hash": "fdb5ac8b",
+          "hash": "9110de30",
           "glyphFontSlots": [
             0,
             0,
@@ -3342,8 +3342,8 @@
             129.79200744628906
           ],
           "lineAdvances": [
-            238.328125,
-            247.78125,
+            238.3359832763672,
+            247.7760009765625,
             96
           ]
         }

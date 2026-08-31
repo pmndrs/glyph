@@ -22,7 +22,7 @@ import {
 import { FontRegistry } from '../../dist/loader.js';
 import { defineRasterResourceId, defineRasterTechnique } from '../../dist/raster-technique.js';
 import { createGlyphEngine } from '../../dist/glyph-engine.js';
-import { ThreeTextRenderPlanExecutor } from '../../dist/three/engine-plan-target.js';
+import { markStorageAttributeUpdated, ThreeTextRenderPlanExecutor } from '../../dist/three/engine-plan-target.js';
 import { ThreeTextEngineCoordinator } from '../../dist/three/engine-coordinator.js';
 import { registerThreeRasterPlanProgram } from '../../dist/three.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
@@ -58,6 +58,7 @@ const suppliedGeometrySchema = defineTechniqueSchema({
       ],
     },
   },
+  glyphOrigin: { buffer: 'origin' },
   render: { resource: 'mesh', geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
 });
 
@@ -100,6 +101,17 @@ const limits = Object.freeze({
   maxInlineObjects: 1,
   maxSlotsPerBand: 4,
   maxOutputBytes: 4 * 1024 * 1024,
+});
+
+test('sparse detached writes cap upload-range bookkeeping', () => {
+  const attribute = new THREE.StorageInstancedBufferAttribute(new Float32Array(160 * 16), 4);
+  for (let record = 0; record < 80; record += 2) markStorageAttributeUpdated(attribute, record * 16, 16);
+  assert.ok(attribute.updateRanges.length <= 32, 'range merging must stay bounded for sparse physics writes');
+  const coveredStart = Math.min(...attribute.updateRanges.map((range) => range.start));
+  const coveredEnd = Math.max(...attribute.updateRanges.map((range) => range.start + range.count));
+  assert.equal(coveredStart, 0);
+  assert.ok(coveredEnd >= 79 * 16, 'the capped range set must retain every dirty record');
+  attribute.dispose();
 });
 
 async function fontBacking() {
@@ -202,6 +214,112 @@ test('records-sourced Three geometry renders and retains topology across text up
     binding?.dispose();
     renderer.dispose();
     invalidFont.dispose();
+    font.dispose();
+  }
+});
+
+test('planner-assisted glyph copies stay paragraph-scoped and synchronously borrowed', async () => {
+  const backing = await fontBacking();
+  const resource = defineRasterResourceId('test/three-detached-copy/mesh');
+  const font = fontVariant(backing, resource, indexedQuadGeometry());
+  const renderer = await rendererHarness();
+  let binding;
+  let first;
+  let second;
+  let detachedTarget;
+  try {
+    binding = renderer.coordinator.bindFontStack(font);
+    first = renderer.planner.createText({
+      font: binding,
+      transform: renderer.transform,
+      text: 'A',
+      style: { fontSize: 16 },
+    });
+    second = renderer.planner.createText({
+      font: binding,
+      transform: renderer.transform,
+      text: 'W',
+      style: { fontSize: 16 },
+    });
+    assert.deepEqual(renderer.planner.publish(), { accepted: true });
+
+    const firstStableId = first.glyphs().glyphStableIds[0];
+    const secondStableId = second.glyphs().glyphStableIds[0];
+    assert.notEqual(
+      firstStableId,
+      secondStableId,
+      'stable glyph ids are unique within one planner, but paragraph ownership remains independently enforced',
+    );
+
+    let borrowedPlan;
+    const target = {
+      delivery: 'borrowed',
+      accept(candidate) {
+        assert.equal(candidate.checkpoint, true);
+        assert.ok(candidate.plan.table('draws').count > 0);
+        borrowedPlan = candidate.plan;
+        return { accepted: true };
+      },
+      dispose() {},
+    };
+    assert.deepEqual(first.copyGlyphs([firstStableId], target), { accepted: true });
+    assert.throws(() => borrowedPlan.table('draws'), /expired/u, 'borrowed copy bytes expire when accept returns');
+
+    const detachedRoot = new THREE.Group();
+    detachedTarget = new ThreeTextRenderPlanExecutor(renderer.coordinator, {
+      drawRoot: detachedRoot,
+      pixelSnapping: false,
+      renderOrderBase: 0,
+    });
+    assert.deepEqual(first.copyGlyphs([firstStableId], detachedTarget), { accepted: true });
+    assert.equal(detachedTarget.draws.length, 1);
+    assert.deepEqual(
+      [...detachedTarget.draws[0].geometry.index.array],
+      [0, 1, 2, 0, 2, 3],
+      'the copied plan must retain supplied topology rather than substituting a metric quad',
+    );
+    const copiedGeometry = detachedTarget.glyphGeometry(Uint32Array.of(firstStableId)).get(firstStableId);
+    assert.equal(copiedGeometry?.kind, 'supplied');
+    assert.equal(copiedGeometry?.geometryKind, 'quad');
+    assert.equal(copiedGeometry?.coordinates, 'unit-square');
+    assert.deepEqual(copiedGeometry?.indices, [0, 1, 2, 0, 2, 3]);
+
+    assert.throws(() => first.copyGlyphs([], target), /at least one stable glyph id/u);
+    assert.throws(() => first.copyGlyphs([firstStableId, firstStableId], target), /duplicates/u);
+    assert.throws(
+      () => first.copyGlyphs([secondStableId], target),
+      (error) => error.code === 'invalid-request',
+      "another paragraph's valid committed record id must not cross the RetainedText boundary",
+    );
+    assert.throws(
+      () => first.copyGlyphs([0xffff_ffff], target),
+      (error) => error.code === 'invalid-request',
+    );
+    assert.throws(
+      () =>
+        first.copyGlyphs([firstStableId], {
+          delivery: 'borrowed',
+          accept: async () => ({ accepted: true }),
+          dispose() {},
+        }),
+      /must answer synchronously/u,
+    );
+
+    first.update({ text: 'Z' });
+    assert.deepEqual(renderer.planner.publish(), { accepted: true });
+    const replacementStableId = first.glyphs().glyphStableIds[0];
+    assert.notEqual(replacementStableId, firstStableId, 'a reshaped record receives a fresh monotonic identity');
+    assert.throws(
+      () => first.copyGlyphs([firstStableId], target),
+      (error) => error.code === 'invalid-request',
+      'an identity from a superseded glyph stream must not resolve to a replacement record',
+    );
+  } finally {
+    detachedTarget?.dispose();
+    second?.dispose();
+    first?.dispose();
+    binding?.dispose();
+    renderer.dispose();
     font.dispose();
   }
 });

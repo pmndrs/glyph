@@ -785,7 +785,8 @@ Deliver:
 - core-owned raster-resource partitioning, typed technique bindings, stable instance slots, overflow chunks, technique packing, dirty ranges, resolved variants, and ordered glyph runs;
 - canonical technique-defined CPU instance storage with adjacent dirty ranges and live glyph-run ranges for engine-owned buffer synchronization;
 - atomic runtime revisions spanning every paragraph batch touched at one synchronization point;
-- owned glyph snapshots and topology-guarded displayed-origin writes without animation or physics policy in core;
+- planner-assisted committed glyph and decoration checkpoints that import as independently owned renderer objects,
+  without animation, physics-body, collision, or live presentation-override policy in core;
 - one target staging contract whose fallible work preserves the live revision and whose commit is synchronous
   at an engine-owned safe frame boundary;
 - Three.js/TSL and React Three Fiber rebuilt as adapters with reusable canonical technique shaders, custom programs,

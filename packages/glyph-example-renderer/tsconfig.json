@@ -4,7 +4,8 @@
     "lib": ["ES2025"],
     "noEmit": true,
     "rootDir": ".",
-    "types": ["node", "vitest/globals", "@webgpu/types"]
+    "types": ["node", "vitest/globals", "@webgpu/types"],
+    "customConditions": ["source"]
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

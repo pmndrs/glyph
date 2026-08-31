@@ -4,7 +4,8 @@
     "lib": ["ES2025", "DOM"],
     "noEmit": true,
     "rootDir": ".",
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals"],
+    "customConditions": ["source"]
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"]
 }
