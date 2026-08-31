@@ -29,20 +29,28 @@ describe('detached glyph-origin transitions', () => {
     expect(glyphOriginPolicy(current, { ...current, features: [] })).toBe('snap');
   });
 
-  it('captures caller-owned committed world matrices', () => {
+  it('refreshes the source world matrix once before composing caller-owned glyph matrices', () => {
     const original = new THREE.Matrix4().makeTranslation(3, 4, 5);
+    const matrixWorld = new THREE.Matrix4();
+    let worldUpdates = 0;
     const text = {
       parent: new THREE.Group(),
+      matrixWorld,
       visible: true,
+      updateWorldMatrix: () => {
+        worldUpdates += 1;
+        matrixWorld.makeTranslation(10, 20, 30);
+      },
       measureGlyphs: () => [measurement(original)],
       breakApart: () => {
         throw new Error('not used');
       },
     } satisfies TransitionableText;
     const captured = captureGlyphOrigins(text);
+    expect(worldUpdates).toBe(1);
     expect(captured?.[0]?.worldMatrix).not.toBe(original);
     original.makeTranslation(9, 9, 9);
-    expect(new THREE.Vector3().setFromMatrixPosition(captured![0]!.worldMatrix)).toEqual(new THREE.Vector3(3, 4, 5));
+    expect(new THREE.Vector3().setFromMatrixPosition(captured![0]!.worldMatrix)).toEqual(new THREE.Vector3(13, 24, 35));
   });
 
   it('does not measure or copy origins when presentation animation is disabled', () => {
@@ -56,7 +64,9 @@ describe('detached glyph-origin transitions', () => {
     let measurements = 0;
     const text = {
       parent: new THREE.Group(),
+      matrixWorld: new THREE.Matrix4(),
       visible: true,
+      updateWorldMatrix: () => undefined,
       measureGlyphs: () => {
         measurements += 1;
         return [measurement(new THREE.Matrix4())];
@@ -101,7 +111,9 @@ describe('detached glyph-origin transitions', () => {
     });
     const text = {
       parent,
+      matrixWorld: new THREE.Matrix4(),
       visible: true,
+      updateWorldMatrix: () => undefined,
       measureGlyphs: () => [measurement(target)],
       breakApart: () => [detached, undefined] as const,
     } satisfies TransitionableText;
@@ -128,5 +140,5 @@ describe('detached glyph-origin transitions', () => {
 });
 
 function measurement(matrix: THREE.Matrix4): ThreeGlyphMeasurement {
-  return { key, originalWorldMatrix: matrix } as ThreeGlyphMeasurement;
+  return { key, originalMatrix: matrix } as ThreeGlyphMeasurement;
 }

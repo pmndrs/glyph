@@ -12,7 +12,10 @@ import { ADVANCED_SHAPING_CASES } from '../workloads/advanced-shaping/scene';
 // matrix asserts is unchanged (709 glyphs, 625 rendered, 63 draws, 17,362 output bytes,
 // 68 frames, zero missing), and `a_hung_terminating_space_does_not_move_rtl_ink` pins the
 // LTR pen as unmoved, so the delta is confined to the RTL and mixed-direction cases.
-const ADVANCED_SHAPING_HASH = 'b947b219';
+// Re-pinned when line composition moved to wide F16.16 accumulation and exact justified
+// remainder distribution. Every structural pin below stayed unchanged, so this remains a
+// pure geometry hash rather than a shaping, draw-count, or publication-lifecycle change.
+const ADVANCED_SHAPING_HASH = 'ae66ee48';
 const UPDATED_EXTERNAL_RASTER_GLYPHS = 13;
 
 function deterministicValidation(hashes: readonly string[]): string {

@@ -365,12 +365,11 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     return this.#binding?.glyphPlacements(eraseTextTechnique(this));
   }
 
-  /** Measures each currently displayed glyph in Text-local and world space. */
+  /** Measures each currently displayed glyph in Text-local space. */
   measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined {
     const placements = this.#glyphPlacements();
     if (placements === undefined) return undefined;
-    this.updateWorldMatrix(true, false, true);
-    return measureGlyphPlacements(placements, this.matrixWorld, this.#glyphGeometry(placements));
+    return measureGlyphPlacements(placements, this.#glyphGeometry(placements));
   }
 
   /** Copies the committed glyphs and optional decorations into independently rendered Three objects. */
@@ -390,12 +389,10 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
       stableIds[index] = stableId;
     }
     if (stableIds.length === 0) throw new Error('cannot break apart text with no drawable glyphs');
-    this.updateWorldMatrix(true, false, true);
     const source = this as unknown as Text<AnyRasterTechnique>;
     const glyphs = createGlyphs({
       source,
       placements,
-      matrixWorld: this.matrixWorld,
       geometry: this.#glyphGeometry(placements),
       domain: this.#acquireDomain(),
       copy: (target) => binding.copyGlyphs(eraseTextTechnique(this), stableIds, target),

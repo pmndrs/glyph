@@ -90,13 +90,13 @@ The public manipulation surface follows `InstancedMesh` conventions:
 - `glyphAt(index)` returns immutable source identity and grouping metadata;
 - `getMatrixAt()` and `setMatrixAt()` read and write full affine matrices in `Glyphs`-local space;
 - `getWorldMatrixAt()` and `setWorldMatrixAt()` bridge world-space physics to local instance storage;
-- `measurements` retains the original local/world transforms, ink and advance AABBs, anchor lookup, and the retained metric or supplied geometry source;
+- `measurements` retains the original local transforms, ink and advance bounds, anchor lookup, and the retained metric or supplied geometry source without traversing scene ancestors;
 - `materials` exposes only material instances owned by that detached branch;
 - immutable atlas/page GPU resources are coordinator-shared by authenticated resource identity, while mutable materials and per-glyph transform storage are never shared;
 - each returned object retains the engine domain it needs, so source `Text`, `Font`, and `FontLoader` owners may be disposed first;
 - `dispose()` releases the imported plan, transform storage, materials, shared-resource leases, and engine-domain lease and removes the group from its parent.
 
-The `Glyphs` root starts with the same local transform as the source `Text`. Adding it to the source parent overlays the committed glyphs exactly. Its per-record transform starts at each glyph's committed drawn origin. Parent translation, rotation, and scale therefore remain on the root while physics may operate in world space through the world-matrix methods.
+The `Glyphs` root starts with the same local transform as the source `Text`. Adding it to the source parent overlays the committed glyphs exactly. Its per-record transform starts at each glyph's committed drawn origin. Parent translation, rotation, and scale therefore remain on the root. `measureGlyphs()` and `Glyphs.measurements` stay local and cannot cache a stale ancestor transform; callers that need world-space physics cross that boundary explicitly through `getWorldMatrixAt()` and `setWorldMatrixAt()`.
 
 The source-to-copy handoff must be atomic at draw time. Direct matrix assignment re-dirties the root after plan realization, every transform write marks both Three storage and the WebGL2 PBO mirror, and the renderer uploads those buffers before drawing. First-frame and same-render writes are pixel-compared on WebGPU and WebGL2.
 

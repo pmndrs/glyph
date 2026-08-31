@@ -41,30 +41,23 @@ export interface ThreeGlyphMeasurement {
   readonly sourceIndex: number;
   readonly shapedOrigin: THREE.Vector3;
   readonly drawnOrigin: THREE.Vector3;
-  readonly worldShapedOrigin: THREE.Vector3;
-  readonly worldDrawnOrigin: THREE.Vector3;
   /** Caller-owned glyph-transform snapshot in the source Text's local space. */
   readonly originalMatrix: THREE.Matrix4;
-  /** Caller-owned glyph-transform snapshot in world space. */
-  readonly originalWorldMatrix: THREE.Matrix4;
   readonly localQuad: readonly [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3];
   readonly localInkBounds: THREE.Box3;
   readonly localAdvanceBounds: THREE.Box3;
-  readonly worldInkAabb: THREE.Box3;
-  readonly worldAdvanceAabb: THREE.Box3;
   /** Exact metric fallback or retained supplied source geometry for this glyph's draw. */
   readonly geometry: ThreeGlyphGeometrySource;
-  anchorPoint(anchor: GlyphAnchor, bounds?: 'ink' | 'advance', space?: 'local' | 'world'): THREE.Vector3;
+  anchorPoint(anchor: GlyphAnchor, bounds?: 'ink' | 'advance'): THREE.Vector3;
 }
 
-/** Builds Three-local and world measurements from one detached paragraph snapshot. */
+/** Builds Three-local measurements from one committed paragraph snapshot. */
 export function measureGlyphPlacements(
   placements: GlyphPlacements,
-  matrixWorld: THREE.Matrix4,
   geometryByIndex: ReadonlyMap<number, ThreeGlyphGeometrySource> = new Map(),
 ): readonly ThreeGlyphMeasurement[] {
   const measurements = placements.glyphs.map((placement) =>
-    measureGlyph(placement, matrixWorld, geometryByIndex.get(placement.index)),
+    measureGlyph(placement, geometryByIndex.get(placement.index)),
   );
   return Object.freeze(measurements);
 }
@@ -116,26 +109,16 @@ export function createSuppliedGlyphGeometrySource(
 
 function measureGlyph(
   placement: GlyphPlacement,
-  matrixWorld: THREE.Matrix4,
   suppliedGeometry: ThreeGlyphGeometrySource | undefined,
 ): ThreeGlyphMeasurement {
-  const snapshotMatrixWorld = matrixWorld.clone();
   const localInkBounds = paragraphBox(placement.ink);
   const localAdvanceBounds = paragraphBox(placement.bounds);
   const localQuad = quadFromBox(localInkBounds);
-  const worldInkAabb = new THREE.Box3().setFromPoints([...localQuad]).applyMatrix4(snapshotMatrixWorld);
-  const worldAdvanceAabb = new THREE.Box3()
-    .setFromPoints([...quadFromBox(localAdvanceBounds)])
-    .applyMatrix4(snapshotMatrixWorld);
   const shapedOrigin = new THREE.Vector3(placement.shapedX, -placement.shapedY, 0);
   const drawnOrigin = new THREE.Vector3(placement.x, -placement.y, 0);
-  const worldShapedOrigin = shapedOrigin.clone().applyMatrix4(snapshotMatrixWorld);
-  const worldDrawnOrigin = drawnOrigin.clone().applyMatrix4(snapshotMatrixWorld);
   const originalMatrix = new THREE.Matrix4().makeTranslation(drawnOrigin.x, drawnOrigin.y, drawnOrigin.z);
-  const originalWorldMatrix = snapshotMatrixWorld.clone().multiply(originalMatrix);
   const anchorInkBounds = localInkBounds.clone();
   const anchorAdvanceBounds = localAdvanceBounds.clone();
-  const anchorMatrixWorld = snapshotMatrixWorld.clone();
   const glyphLocalInkBounds = localInkBounds.clone().translate(drawnOrigin.clone().multiplyScalar(-1));
   const geometry =
     suppliedGeometry === undefined
@@ -151,14 +134,13 @@ function measureGlyph(
           positions: Object.freeze(suppliedGeometry.positions.map((position) => position.clone())),
           bounds: suppliedGeometry.bounds.clone(),
         });
-  const point = (anchor: GlyphAnchor, bounds: 'ink' | 'advance' = 'ink', space: 'local' | 'world' = 'local') => {
+  const point = (anchor: GlyphAnchor, bounds: 'ink' | 'advance' = 'ink') => {
     const box = bounds === 'ink' ? anchorInkBounds : anchorAdvanceBounds;
-    const result = new THREE.Vector3(
+    return new THREE.Vector3(
       axisPoint(box.min.x, box.max.x, anchor.x),
       axisPoint(box.min.y, box.max.y, anchor.y),
       axisPoint(box.min.z, box.max.z, anchor.z ?? 'center'),
     );
-    return space === 'world' ? result.applyMatrix4(anchorMatrixWorld) : result;
   };
   return Object.freeze({
     key: placement.key,
@@ -166,15 +148,10 @@ function measureGlyph(
     sourceIndex: placement.index,
     shapedOrigin,
     drawnOrigin,
-    worldShapedOrigin,
-    worldDrawnOrigin,
     originalMatrix,
-    originalWorldMatrix,
     localQuad,
     localInkBounds,
     localAdvanceBounds,
-    worldInkAabb,
-    worldAdvanceAabb,
     geometry,
     anchorPoint: point,
   });

@@ -91,12 +91,12 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     const firstMeasurement = detached.measurements[0];
     assert.equal(firstMeasurement.geometry.kind, 'metric-quad');
     assert.equal(firstMeasurement.geometry.coordinates, 'glyph-local');
-    const anchorBeforeSourceMove = firstMeasurement.anchorPoint({ x: 'center', y: 'center' }, 'ink', 'world');
+    const anchorBeforeSourceMove = firstMeasurement.anchorPoint({ x: 'center', y: 'center' });
     label.position.x += 100;
     scene.updateMatrixWorld(true);
     assert.ok(
-      firstMeasurement.anchorPoint({ x: 'center', y: 'center' }, 'ink', 'world').equals(anchorBeforeSourceMove),
-      'detached measurement anchors cannot retain the live source matrixWorld object',
+      firstMeasurement.anchorPoint({ x: 'center', y: 'center' }).equals(anchorBeforeSourceMove),
+      'detached measurement anchors remain in the copied glyph root local space',
     );
     label.position.x -= 100;
     scene.updateMatrixWorld(true);
@@ -115,11 +115,12 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
       const matrix = new THREE.Matrix4();
       detached.getWorldMatrixAt(index, matrix);
       const position = new THREE.Vector3().setFromMatrixPosition(matrix);
-      const expected = detached.measurements[index].worldDrawnOrigin;
+      const expectedMatrix = detached.matrixWorld.clone().multiply(detached.measurements[index].originalMatrix);
+      const expected = new THREE.Vector3().setFromMatrixPosition(expectedMatrix);
       assert.ok(position.distanceTo(expected) < 1e-5, `glyph ${index} must begin at its source world origin`);
       for (let lane = 0; lane < 16; lane += 1) {
         assert.ok(
-          Math.abs(matrix.elements[lane] - detached.measurements[index].originalWorldMatrix.elements[lane]) < 1e-5,
+          Math.abs(matrix.elements[lane] - expectedMatrix.elements[lane]) < 1e-5,
           `glyph ${index} world matrix lane ${lane} must match its retained original transform`,
         );
       }
@@ -1251,9 +1252,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   assert.equal(replacedDraws[0].geometry.instanceCount, 5, 'the published command buffer must include the new glyph');
 
   const rightStableIdsBeforeCopy = Array.from(right.glyphs().glyphStableIds);
-  const rightWorldMatricesBeforeCopy = right
-    .measureGlyphs()
-    ?.map((measurement) => measurement.originalWorldMatrix.clone());
+  const rightLocalMatricesBeforeCopy = right.measureGlyphs()?.map((measurement) => measurement.originalMatrix.clone());
   const [leftDetached] = left.breakApart();
   group.add(leftDetached);
   const moved = new THREE.Matrix4();
@@ -1269,7 +1268,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   assert.ok(
     right
       .measureGlyphs()
-      ?.every((measurement, index) => measurement.originalWorldMatrix.equals(rightWorldMatricesBeforeCopy?.[index])),
+      ?.every((measurement, index) => measurement.originalMatrix.equals(rightLocalMatricesBeforeCopy?.[index])),
     'detached instance transforms cannot alias the sibling Text transform',
   );
   assert.equal(

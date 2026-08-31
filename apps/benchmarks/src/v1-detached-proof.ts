@@ -35,7 +35,7 @@ export async function proveDetachedRasterParity(
     const firstFrame = await renderer.readRenderTargetPixelsAsync(target, 0, 0, target.width, target.height);
 
     for (const [index, measurement] of detached.measurements.entries()) {
-      detached.setWorldMatrixAt(index, measurement.originalWorldMatrix);
+      detached.setMatrixAt(index, measurement.originalMatrix);
     }
     await renderer.renderAsync(scene, camera);
     const sameFrameWrite = await renderer.readRenderTargetPixelsAsync(target, 0, 0, target.width, target.height);

@@ -37,7 +37,6 @@ export function localToWorldMatrix(
 interface GlyphsOptions<Technique extends AnyRasterTechnique> {
   readonly source: Text<Technique>;
   readonly placements: GlyphPlacements;
-  readonly matrixWorld: THREE.Matrix4;
   readonly geometry?: ReadonlyMap<number, ThreeGlyphGeometrySource>;
   readonly copy: (target: PlanTarget) => PlanAcceptance;
   readonly domain: ThreeEngineDomainLease;
@@ -127,7 +126,7 @@ export class Glyphs extends THREE.Group {
         ),
       );
       this.#measurements = Object.freeze(
-        measureGlyphPlacements(options.placements, options.matrixWorld, options.geometry)
+        measureGlyphPlacements(options.placements, options.geometry)
           .filter((_, index) => !incomplete.has(index))
           .map((measurement, index) => Object.freeze({ ...measurement, index })),
       );

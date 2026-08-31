@@ -5,7 +5,9 @@ import * as THREE from 'three/webgpu';
 /** The committed Three text surface needed to animate an independently copied glyph branch. */
 export interface TransitionableText {
   readonly parent: THREE.Object3D | null;
+  readonly matrixWorld: THREE.Matrix4;
   visible: boolean;
+  updateWorldMatrix(updateParents: boolean, updateChildren: boolean, force?: boolean): void;
   measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined;
   breakApart(): readonly [Glyphs, Decorations | undefined];
 }
@@ -64,9 +66,14 @@ export type GlyphOriginSnapshot = readonly GlyphOriginSnapshotRecord[];
 export function captureGlyphOrigins(text: TransitionableText): GlyphOriginSnapshot | undefined {
   const measurements = text.measureGlyphs();
   if (measurements === undefined) return undefined;
+  text.updateWorldMatrix(true, false, true);
+  const sourceMatrixWorld = text.matrixWorld.clone();
   return Object.freeze(
     measurements.map((measurement) =>
-      Object.freeze({ key: measurement.key, worldMatrix: measurement.originalWorldMatrix.clone() }),
+      Object.freeze({
+        key: measurement.key,
+        worldMatrix: sourceMatrixWorld.clone().multiply(measurement.originalMatrix),
+      }),
     ),
   );
 }
@@ -116,6 +123,8 @@ export function createGlyphOriginTransition(
   if (decorations !== undefined) parent.add(decorations);
   const sourceWasVisible = text.visible;
   text.visible = false;
+  detached.updateWorldMatrix(true, false, true);
+  const detachedMatrixWorld = detached.matrixWorld.clone();
 
   const previous = new Map(from?.map((record) => [record.key, record.worldMatrix] as const));
   const transitions = new Array<MatrixTransition>(detached.count);
@@ -127,7 +136,7 @@ export function createGlyphOriginTransition(
       if (glyph === undefined || measurement === undefined) {
         throw new Error(`detached glyph ${index} has no identity or measurement`);
       }
-      const target = measurement.originalWorldMatrix;
+      const target = detachedMatrixWorld.clone().multiply(measurement.originalMatrix);
       const prior = previous.get(glyph.key);
       const start = prior ?? target;
       if (prior !== undefined) matchedGlyphs += 1;

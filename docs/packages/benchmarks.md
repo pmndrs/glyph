@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:d00fe80e638a50e44c2477dd93906fdfcbcf844e53bc7f5aaf8dcdbc92036e2f'
+source_digest: 'sha256:4defaa7bcff36896e72036b6de9e73e48b50e6ff0253e6c95439eca640f1c277'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -257,8 +257,9 @@ stale authored inputs.
 
 Their presentation transitions are application-owned consumers of the detached-copy API. Merged v0 exported
 `captureBitmapGlyphPositions` and `createBitmapGlyphPositionTransition`, which combined identity matching and live-buffer
-overrides for Bitmap only. `techniques/shared/glyph-origin-transition.ts` now captures committed world matrices through
-`measureGlyphs()`, updates the source layout, calls `breakApart()` for one independently rendered `Glyphs` branch, hides
+overrides for Bitmap only. `techniques/shared/glyph-origin-transition.ts` now reads local matrices through
+`measureGlyphs()`, refreshes the source world matrix once at that explicit boundary, composes committed world matrices,
+updates the source layout, calls `breakApart()` for one independently rendered `Glyphs` branch, hides
 the live source, and interpolates complete position/quaternion/scale matrices through `setWorldMatrixAt()`. It matches
 records by the package-owned `GlyphKey`, disposes the copy at settle, and restores source visibility. No benchmark keeps a
 mutable glyph snapshot applied to live text, and no benchmark depends on the removed `snapshotGlyphs()` / `applyGlyphs()` /

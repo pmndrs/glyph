@@ -42,7 +42,7 @@ function unmount({ group, node }) {
   group.dispose();
 }
 
-test('measureGlyphs publishes local and world geometry for the committed display', async () => {
+test('measureGlyphs publishes local geometry without traversing world matrices', async () => {
   const mounted = mount(await loadFont(), 'Wavy');
   try {
     mounted.node.position.set(7, -3, 2);
@@ -50,21 +50,23 @@ test('measureGlyphs publishes local and world geometry for the committed display
     const measurements = mounted.node.measureGlyphs();
     assert.ok(measurements !== undefined && measurements.length === mounted.node.measure().glyphCount);
     for (const measurement of measurements) {
-      assert.equal(measurement.originalWorldMatrix.elements[12], measurement.worldDrawnOrigin.x);
-      assert.equal(measurement.originalWorldMatrix.elements[13], measurement.worldDrawnOrigin.y);
-      assert.equal(measurement.originalWorldMatrix.elements[14], measurement.worldDrawnOrigin.z);
+      assert.equal(measurement.originalMatrix.elements[12], measurement.drawnOrigin.x);
+      assert.equal(measurement.originalMatrix.elements[13], measurement.drawnOrigin.y);
+      assert.equal(measurement.originalMatrix.elements[14], measurement.drawnOrigin.z);
       assert.ok(measurement.localInkBounds.getSize(new THREE.Vector3()).x >= 0);
       assert.ok(measurement.geometry.positions.length >= 4);
     }
 
-    const initialWorldX = measurements[0].worldDrawnOrigin.x;
+    const initialMatrix = measurements[0].originalMatrix.clone();
+    const staleGroupWorldX = mounted.group.matrixWorld.elements[12];
     mounted.group.position.x += 11;
     const moved = mounted.node.measureGlyphs();
     assert.ok(moved !== undefined);
+    assert.ok(moved[0].originalMatrix.equals(initialMatrix), 'world movement cannot alter Text-local measurements');
     assert.equal(
-      moved[0].worldDrawnOrigin.x,
-      initialWorldX + 11,
-      'measurement must force a dirty ancestor through the Text world matrix without a scene traversal',
+      mounted.group.matrixWorld.elements[12],
+      staleGroupWorldX,
+      'measurement cannot traverse dirty ancestors',
     );
   } finally {
     unmount(mounted);
