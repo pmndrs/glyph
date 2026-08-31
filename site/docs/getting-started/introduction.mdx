@@ -56,8 +56,9 @@ semantics and lazily owns an implicit batch of one.
 ## An inline scene proxy
 
 The docs page can host a Three scene without making the docs application an R3F application. The root is a custom
-element that owns a bounded pool of R3F roots and offscreen surfaces on one shared GPU device; each proxy is an ordinary page
-element that receives copied frames. Proxies can be placed anywhere in the MDX document and bind to the root by id.
+element that owns a bounded pool of logical R3F roots on one physical offscreen renderer; each proxy is an ordinary page
+element that receives a copied frame. The same path uses one WebGPU device or one WebGL context. Proxies can be placed
+anywhere in the MDX document and bind to the root by id.
 
 <link rel="stylesheet" href="/docs/assets/glyph-explainer.css" />
 <script type="module" src="/docs/assets/glyph-explainer.js"></script>
@@ -104,7 +105,7 @@ coalesced to one update per 30 ms; clicks, keys, controls, and scene changes flu
 
 The component is just HTML from the MDX compiler. Its JavaScript class is registered with
 `customElements.define`, so this remains compatible with the React components supplied by `pmndrs/docs` while
-keeping the WebGPU renderer, font cache, and animation loop outside the docs React tree.
+keeping the Three renderer, font cache, and animation loop outside the docs React tree.
 
 ## Explainer scenes
 
