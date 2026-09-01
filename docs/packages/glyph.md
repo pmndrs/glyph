@@ -273,7 +273,7 @@ because a swap briefly assigns two live paragraphs the same order; the planner t
 or leaves the previous order untouched. The Three integration regression repeatedly reverses two paragraphs while rotating
 them through a nested parent, verifies physical transform-index ownership, and verifies WebGL2 PBO invalidation.
 Planner limits bound the complete pending publication rather than reserving their maximum up front. A reorder therefore
-preflights queued removals plus every live lifecycle upsert against `maxParagraphs`, while semantic updates count both
+preflights queued removals plus every live lifecycle upsert against `maxParagraphs`, while content updates count both
 pending style removals and upserts against `maxClusters`; either overflow throws at the originating call without changing
 the previously accepted desired state.
 

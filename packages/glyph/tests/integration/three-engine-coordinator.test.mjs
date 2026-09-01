@@ -178,7 +178,7 @@ const nestedStyleSpans = Object.freeze([
   { start: 0, end: 1, style: { color: '#ffffff' } },
 ]);
 
-test('pending style limits count every semantic update before mutating planner state', async () => {
+test('pending style limits count every content update before mutating planner state', async () => {
   const backing = await fontBacking();
   const resource = defineRasterResourceId('test/three-style-limit/mesh');
   const font = fontVariant(backing, resource, indexedQuadGeometry());
