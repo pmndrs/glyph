@@ -1,8 +1,10 @@
 packages:
   - apps/*
   - packages/*
+  - site
 
 minimumReleaseAgeExclude:
+  - '@pmndrs/scheduler@0.2.0'
   - typegpu@0.12.3
 
 onlyBuiltDependencies: []
