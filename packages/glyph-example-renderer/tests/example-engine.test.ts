@@ -2,9 +2,11 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 
 import { createGlyphEngine, type PlanTarget, type RenderPlanner, type RenderPlanReader } from '@pmndrs/glyph/core';
+import { glyph } from '@pmndrs/glyph';
 import { describe, expect, test } from 'vitest';
 
 import { ExampleTextEngine } from '../src/engine.js';
+import { defineExampleConfig, type ExampleGlyphConfig } from '../src/config.js';
 import { exampleRenderPolicyDescriptor } from '../src/policy.js';
 
 const require = createRequire(import.meta.url);
@@ -31,6 +33,44 @@ const CAPACITIES = Object.freeze({
 });
 
 describe('a retained engine driven through the published core surface', () => {
+  test('uses the root Glyph handle and the same configured publication phases as Three', async () => {
+    await glyph.init({ wasm: await wasmBytes() });
+    const base = defineExampleConfig();
+    let decodeCalls = 0;
+    let rendererFactories = 0;
+    let prepareCalls = 0;
+    const config: ExampleGlyphConfig = {
+      ...base,
+      decode(source, context) {
+        decodeCalls += 1;
+        return base.decode(source, context);
+      },
+      renderer(context) {
+        rendererFactories += 1;
+        const renderer = base.renderer(context);
+        return {
+          prepare(frame) {
+            prepareCalls += 1;
+            expect(frame.delivery).toBe('borrowed-bound');
+            return renderer.prepare(frame);
+          },
+          syncTransforms: (updates) => renderer.syncTransforms(updates),
+          dispose: () => renderer.dispose(),
+        };
+      },
+    };
+    const handle = glyph.handle('example:configured-test', config);
+    try {
+      expect(handle.publish().publicationGeneration).toBe(1);
+      expect(handle.publish().publicationGeneration).toBe(2);
+      expect(rendererFactories).toBe(1);
+      expect(decodeCalls).toBe(2);
+      expect(prepareCalls).toBe(2);
+    } finally {
+      handle.dispose();
+    }
+  });
+
   test('publishes synchronously without exposing raw revisions or frame bytes', async () => {
     const glyphEngine = await createGlyphEngine({ wasm: await wasmBytes() });
     const engine = new ExampleTextEngine(glyphEngine);

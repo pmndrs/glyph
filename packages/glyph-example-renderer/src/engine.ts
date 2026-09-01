@@ -11,12 +11,29 @@ import {
   type RenderPlanner,
   type RetainedText,
   type GlyphEngine,
+  applyGlyphPublication,
+  type BorrowedBoundCommandBuffer,
+  type GlyphRenderer,
 } from '@pmndrs/glyph/core';
 
 import type { ExampleDrawList } from './draw-list.js';
 import type { ExampleRendererDevice, ExampleRendererResourceInput } from './device.js';
 import { readCandidate } from './plan-reader.js';
 import { exampleCapabilitySet, exampleRenderPolicyDescriptor } from './policy.js';
+import { ExampleCommandBufferBinder, exampleFrameState } from './command-buffer.js';
+import type { ExampleBindings, ExampleGlyphConfig, ExampleRendererContext } from './config.js';
+
+const exampleDrawRoot = Object.freeze({}) as ExampleBindings['transform'];
+type ExampleAbortSignal = ExampleRendererContext['signal'];
+interface ExampleAbortController {
+  readonly signal: ExampleAbortSignal;
+  abort(reason?: unknown): void;
+}
+const ExampleAbortController = (
+  globalThis as unknown as {
+    readonly AbortController: new () => ExampleAbortController;
+  }
+).AbortController;
 
 const EXAMPLE_LIMITS = Object.freeze({
   maxParagraphs: 64,
@@ -61,12 +78,16 @@ export class ExampleTextEngine {
   #planner: RenderPlanner | undefined;
   #disposed = false;
 
-  constructor(glyphEngine: GlyphEngine, device?: ExampleRendererDevice) {
+  constructor(glyphEngine: GlyphEngine, device?: ExampleRendererDevice, config?: ExampleGlyphConfig) {
     if (device !== undefined) assertExampleRendererDevice(device);
     this.#backend = glyphEngine.createBackend({ integration: '@pmndrs/glyph-example-renderer' });
-    this.#target = new ExamplePlanTarget(device);
+    this.#target = new ExamplePlanTarget(device, config);
     try {
-      this.#policy = this.#backend.installPolicy(exampleRenderPolicyDescriptor);
+      this.#policy = this.#backend.installPolicy(
+        (ids) =>
+          config?.encode({ integration: '@pmndrs/glyph-example-renderer', ids }).descriptor ??
+          exampleRenderPolicyDescriptor(ids),
+      );
     } catch (error) {
       this.#backend.dispose();
       throw error;
@@ -217,10 +238,29 @@ class ExamplePlanTarget implements PlanTarget {
     Readonly<{ generation: number; referenceId: ResourceHandle }>
   >();
   #lastDrawList: ExampleDrawList | undefined;
+  readonly #config: ExampleGlyphConfig | undefined;
+  readonly #binder: ExampleCommandBufferBinder | undefined;
+  readonly #renderer: GlyphRenderer<ExampleBindings, void> | undefined;
+  readonly #rendererAbort = new ExampleAbortController();
   #disposed = false;
 
-  constructor(device: ExampleRendererDevice | undefined) {
+  constructor(device: ExampleRendererDevice | undefined, config: ExampleGlyphConfig | undefined) {
     this.#device = device;
+    this.#config = config;
+    if (config !== undefined) {
+      this.#binder = new ExampleCommandBufferBinder(config);
+      const defaultRenderer: GlyphRenderer<ExampleBindings, void> = Object.freeze({
+        prepare: (frame: BorrowedBoundCommandBuffer<ExampleBindings>) => this.#prepareBoundFrame(frame),
+        syncTransforms: () => undefined,
+        dispose: () => undefined,
+      });
+      const context: ExampleRendererContext = Object.freeze({
+        drawRoot: exampleDrawRoot,
+        signal: this.#rendererAbort.signal,
+        defaultRenderer,
+      });
+      this.#renderer = config.renderer(context);
+    }
   }
 
   get shader(): ExampleRendererDevice['shader'] | undefined {
@@ -252,9 +292,15 @@ class ExamplePlanTarget implements PlanTarget {
     this.#device = device;
   }
 
-  accept(candidate: PlanCandidate) {
+  accept(candidate: PlanCandidate, signal: Parameters<PlanTarget['accept']>[1]) {
     if (this.#disposed) return { accepted: false as const, error: new Error('example plan target is disposed') };
-    const list = readCandidate(candidate);
+    if (this.#config !== undefined && this.#binder !== undefined && this.#renderer !== undefined) {
+      return applyGlyphPublication(candidate, signal, this.#config.decode, this.#binder, this.#renderer);
+    }
+    return this.#acceptCandidate(candidate, readCandidate(candidate));
+  }
+
+  #acceptCandidate(candidate: PlanCandidate, list: ExampleDrawList) {
     const device = this.#device;
     if (device === undefined) {
       this.#lastDrawList = list;
@@ -335,6 +381,7 @@ class ExamplePlanTarget implements PlanTarget {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#rendererAbort.abort(new Error('example publication boundary disposed'));
     let failure: unknown;
     const attempt = (release: () => void): void => {
       try {
@@ -344,12 +391,31 @@ class ExamplePlanTarget implements PlanTarget {
       }
     };
     const referenceIds = [...this.#payloads.keys()];
+    attempt(() => this.#renderer?.dispose());
+    attempt(() => this.#binder?.dispose());
     if (referenceIds.length !== 0) attempt(() => this.#device?.releaseResources(referenceIds));
     for (const payload of this.#payloads.values()) attempt(() => payload.dispose());
     this.#payloads.clear();
     this.#resourcePayloads.clear();
     this.#control = undefined;
     if (failure !== undefined) throw failure;
+  }
+
+  #prepareBoundFrame(frame: BorrowedBoundCommandBuffer<ExampleBindings>) {
+    const state = exampleFrameState(frame);
+    let settled = false;
+    return Object.freeze({
+      result: undefined,
+      commit: () => {
+        if (settled) throw new Error('example renderer preparation is already settled');
+        settled = true;
+        const result = this.#acceptCandidate(state.candidate, state.list);
+        if (!result.accepted) throw result.error;
+      },
+      discard: () => {
+        settled = true;
+      },
+    });
   }
 }
 
