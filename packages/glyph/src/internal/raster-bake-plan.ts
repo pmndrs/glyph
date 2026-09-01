@@ -21,6 +21,8 @@ export interface ResolvedRasterBakePlan {
   readonly packaging: RasterPackaging;
   readonly descriptor: JsonValue;
   readonly rasterKey: RasterKey;
+  /** Filename for an external companion; only a caller that writes files can know it. */
+  readonly companionName?: string;
 }
 
 /** Package one concrete baker/descriptor association for the heterogeneous pipeline queue. */

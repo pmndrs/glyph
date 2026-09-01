@@ -1,15 +1,14 @@
 import type {
   JsonValue,
-  Fingerprint,
   RasterResourceId,
   RasterResourceSource,
   RasterDecodeArtifact,
   RasterDecodeFont,
   RasterFormat,
   RasterFormatId,
-  Fingerprint,
 } from '@pmndrs/glyph';
 import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
+import { compatibilityFingerprint } from '@pmndrs/glyph';
 
 import { isGlyphExampleHeader, type GlyphExampleExtension } from './artifact.js';
 import {
@@ -82,9 +81,15 @@ function decodeExtension(
   if (
     extension.version !== GLYPH_EXAMPLE_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingFingerprint !== font.shapingFingerprint ||
-    extension.glyphCount !== font.glyphCount ||
-    extension.glyphIdWidth !== 16 ||
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: font.glyphCount,
+        glyphIdWidth: 16,
+        kind: GLYPH_EXAMPLE_KIND,
+        rasterKey: raster.rasterKey,
+        shaping: font.shapingFingerprint,
+        version: GLYPH_EXAMPLE_FORMAT_VERSION,
+      }) ||
     extension.recordStride !== RECORD_STRIDE
   ) {
     throw new TypeError('glyph-example extension identity does not match its registered font');
@@ -99,9 +104,14 @@ function decodeExtension(
   return {
     version: 0,
     rasterKey: raster.rasterKey,
-    shapingFingerprint: font.shapingFingerprint,
-    glyphCount: font.glyphCount,
-    glyphIdWidth: 16,
+    fingerprint: compatibilityFingerprint({
+      glyphCount: font.glyphCount,
+      glyphIdWidth: 16,
+      kind: GLYPH_EXAMPLE_KIND,
+      rasterKey: raster.rasterKey,
+      shaping: font.shapingFingerprint,
+      version: GLYPH_EXAMPLE_FORMAT_VERSION,
+    }),
     descriptor,
     headerBufferView,
     records,
@@ -111,24 +121,11 @@ function decodeExtension(
 
 function resourceSource(value: unknown): RasterResourceSource {
   const source = objectValue(value, 'glyph-example records');
-  if (source.type === 'bufferView') {
-    return {
-      type: 'bufferView',
-      bufferView: nonnegativeInteger(source.bufferView, 'glyph-example records.bufferView'),
-    };
-  }
-  if (source.type !== 'external') throw new TypeError('glyph-example record source has an unsupported type');
-  if (typeof source.uri !== 'string' || source.uri.length === 0) {
-    throw new TypeError('glyph-example external record source must have a URI');
-  }
-  if (typeof source.artifactFingerprint !== 'string' || !/^[0-9a-f]{32}$/.test(source.artifactFingerprint)) {
-    throw new TypeError('glyph-example external record source must have a 128-bit fingerprint');
-  }
+  // Pages always travel inside the artifact that declares them.
+  if (source.type !== 'bufferView') throw new TypeError('glyph-example record source must be a bufferView');
   return {
-    type: 'external',
-    uri: source.uri,
-    byteLength: nonnegativeInteger(source.byteLength, 'glyph-example records.byteLength'),
-    artifactFingerprint: source.artifactFingerprint as Fingerprint,
+    type: 'bufferView',
+    bufferView: nonnegativeInteger(source.bufferView, 'glyph-example records.bufferView'),
   };
 }
 

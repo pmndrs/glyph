@@ -51,6 +51,7 @@ import {
   slugDescriptorRasterKey,
   type SlugDescriptor,
 } from '../internal/slug-contract.js';
+import { compatibilityFingerprint } from '../internal/raster-identity.js';
 
 const CURVE_BYTES_PER_TEXEL = 8;
 const HEADER_BYTES_PER_TEXEL = 4;
@@ -83,7 +84,6 @@ export interface SlugArtifactValidationContext {
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
   readonly descriptor: SlugDescriptor;
-  readonly externalPages?: ReadonlyMap<string, Uint8Array>;
   readonly limits?: Partial<SlugArtifactValidationLimits>;
 }
 
@@ -194,9 +194,15 @@ async function validateSlugSemantics(
   if (
     extension.version !== SLUG_FORMAT_VERSION ||
     extension.rasterKey !== context.rasterKey ||
-    extension.shapingFingerprint !== context.shapingFingerprint ||
-    extension.glyphCount !== context.glyphCount ||
-    extension.glyphIdWidth !== context.glyphIdWidth
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: context.glyphCount,
+        glyphIdWidth: context.glyphIdWidth,
+        kind: 'slug',
+        rasterKey: context.rasterKey,
+        shaping: context.shapingFingerprint as string,
+        version: SLUG_FORMAT_VERSION,
+      })
   ) {
     fail(
       'RECIPROCAL_IDENTITY',
@@ -236,7 +242,7 @@ async function validateSlugSemantics(
   for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
     const pagePath = `${extensionPath}/pages/${pageIndex}`;
     const page = requireNonArrayObject(pageValues[pageIndex], pagePath);
-    const validated = await validatePage(page, pagePath, parsed, views, claimedViews, context.externalPages, limits);
+    const validated = await validatePage(page, pagePath, parsed, views, claimedViews, limits);
     gpuBytes = checkedSum(gpuBytes, pageGpuBytes(validated, pagePath), pagePath);
     if (gpuBytes > limits.maxGpuBytes) {
       fail('GPU_BUDGET', 'Slug pages exceed the configured GPU byte budget', pagePath);
@@ -294,7 +300,6 @@ async function validatePage(
   parsed: ParsedGlb,
   views: readonly RasterBufferView[],
   claimedViews: Set<number>,
-  externalPages: ReadonlyMap<string, Uint8Array> | undefined,
   limits: SlugArtifactValidationLimits,
 ): Promise<ValidatedSlugPage> {
   const curve = requireNonArrayObject(page.curve, `${pagePath}/curve`);
@@ -324,7 +329,6 @@ async function validatePage(
     parsed,
     views,
     claimedViews,
-    externalPages,
     'Slug curve',
   );
   validateNativeKtx2(curveResource.bytes, curveWidth, curveHeight, CURVE_FORMAT, variantPath);
@@ -339,7 +343,6 @@ async function validatePage(
     parsed,
     views,
     claimedViews,
-    externalPages,
     'Slug headers',
   );
   validateIntegerGrid(
@@ -365,7 +368,6 @@ async function validatePage(
     parsed,
     views,
     claimedViews,
-    externalPages,
     'Slug references',
   );
   validateIntegerGrid(
@@ -397,12 +399,11 @@ async function resolveBinaryResource(
   parsed: ParsedGlb,
   views: readonly RasterBufferView[],
   claimedViews: Set<number>,
-  externalPages: ReadonlyMap<string, Uint8Array> | undefined,
   label: string,
 ): Promise<ResolvedRasterPageSource> {
   const resource = requireNonArrayObject(value, path);
   const source = requireNonArrayObject(resource.source, `${path}/source`);
-  return resolveRasterPageSource(source, path, parsed, views, claimedViews, externalPages, label);
+  return resolveRasterPageSource(source, path, parsed, views, claimedViews, label);
 }
 
 function validateIntegerGrid(

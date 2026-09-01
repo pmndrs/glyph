@@ -7,8 +7,6 @@ import {
 } from 'ktx-parse';
 
 import type { RasterDecodeFont } from '../../font.js';
-import type { Fingerprint } from '../../identity.js';
-import { isFingerprint } from '../../internal/fingerprint.js';
 import { jsonArray, jsonObject, nonnegativeSafeInteger, positiveSafeInteger } from '../../internal/raster-atlas.js';
 import { validateNativeKtx2 } from '../../internal/raster-ktx.js';
 import {
@@ -21,6 +19,7 @@ import {
 import type { JsonValue, RasterDecodeArtifact, RasterResourceSource } from '../../raster.js';
 import { defineRasterResourceId } from '../../config/raster-format.js';
 import type { SlugData, SlugPageData } from '../slug.js';
+import { compatibilityFingerprint } from '../../internal/raster-identity.js';
 
 const ABSENT_PAGE = 0xffff;
 const MAX_TEXTURE_DIMENSION = 16_384;
@@ -38,9 +37,15 @@ export async function decodeSlugData(
   if (
     extension.version !== SLUG_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingFingerprint !== font.shapingFingerprint ||
-    extension.glyphCount !== font.glyphCount ||
-    extension.glyphIdWidth !== 16 ||
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: font.glyphCount,
+        glyphIdWidth: 16,
+        kind: 'slug',
+        rasterKey: raster.rasterKey,
+        shaping: font.shapingFingerprint,
+        version: SLUG_FORMAT_VERSION,
+      }) ||
     extension.planeUnitsPerEm !== SLUG_PLANE_UNITS_PER_EM ||
     extension.recordStride !== SLUG_GLYPH_RECORD_STRIDE
   ) {
@@ -155,19 +160,11 @@ async function rasterResourceBytes(
   signal?: AbortSignal,
 ): Promise<Uint8Array> {
   const source = jsonObject(value, path);
-  let resource: RasterResourceSource;
-  if (source.type === 'bufferView') {
-    resource = { type: 'bufferView', bufferView: nonnegativeSafeInteger(source.bufferView, `${path} bufferView`) };
-  } else if (source.type === 'external') {
-    resource = {
-      type: 'external',
-      uri: nonemptyString(source.uri, `${path} uri`),
-      byteLength: positiveSafeInteger(source.byteLength, `${path} byteLength`),
-      artifactFingerprint: fingerprint(source.artifactFingerprint, `${path} artifactFingerprint`),
-    };
-  } else {
-    throw new TypeError(`${path} must be a bufferView or fingerprint-addressed external resource`);
-  }
+  if (source.type !== 'bufferView') throw new TypeError(`${path} must be a bufferView`);
+  const resource: RasterResourceSource = {
+    type: 'bufferView',
+    bufferView: nonnegativeSafeInteger(source.bufferView, `${path} bufferView`),
+  };
   return raster.resource(resource, signal);
 }
 
@@ -238,17 +235,6 @@ function assertAddressRange(base: number, count: number, capacity: number, label
   if (count === 0 || base > capacity - count) {
     throw new TypeError(`${label} range is empty or outside its page resource`);
   }
-}
-
-function nonemptyString(value: JsonValue | undefined, path: string): string {
-  if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${path} must be a nonempty string`);
-  return value;
-}
-
-function fingerprint(value: JsonValue | undefined, path: string): Fingerprint {
-  const text = nonemptyString(value, path);
-  if (!isFingerprint(text)) throw new TypeError(`${path} must be a lowercase 128-bit fingerprint`);
-  return text as Fingerprint;
 }
 
 function textureDimension(value: JsonValue | undefined, path: string): number {

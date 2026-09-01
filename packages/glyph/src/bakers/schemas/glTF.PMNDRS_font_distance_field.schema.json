@@ -2,36 +2,94 @@
   "$schema": "http://json-schema.org/draft-04/schema",
   "title": "PMNDRS_font_distance_field glTF Document Extension",
   "type": "object",
-  "allOf": [{ "$ref": "glTFProperty.schema.json" }],
+  "allOf": [
+    {
+      "$ref": "glTFProperty.schema.json"
+    }
+  ],
   "properties": {
-    "version": { "type": "integer", "enum": [0] },
-    "rasterKey": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
-    "shapingFingerprint": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
-    "glyphCount": { "type": "integer", "minimum": 1, "maximum": 65535 },
-    "glyphIdWidth": { "type": "integer", "enum": [16] },
-    "coverage": { "$ref": "#/definitions/rasterCoverage" },
-    "coverageBufferView": { "type": "integer", "minimum": 0 },
-    "encoding": { "type": "string", "enum": ["mtsdf"] },
-    "emSize": { "type": "integer", "minimum": 1, "maximum": 65535 },
-    "pixelRange": { "type": "number", "exclusiveMinimum": true, "minimum": 0 },
-    "planeUnitsPerEm": { "type": "integer", "minimum": 1, "maximum": 32767 },
-    "recordBufferView": { "type": "integer", "minimum": 0 },
-    "recordStride": { "type": "integer", "enum": [20] },
+    "version": {
+      "type": "integer",
+      "enum": [
+        0
+      ]
+    },
+    "rasterKey": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "fingerprint": {
+      "description": "Single value this raster and its core font compare to decide they belong together.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "coverage": {
+      "$ref": "#/definitions/rasterCoverage"
+    },
+    "coverageBufferView": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "encoding": {
+      "type": "string",
+      "enum": [
+        "mtsdf"
+      ]
+    },
+    "emSize": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "pixelRange": {
+      "type": "number",
+      "exclusiveMinimum": true,
+      "minimum": 0
+    },
+    "planeUnitsPerEm": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 32767
+    },
+    "recordBufferView": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "recordStride": {
+      "type": "integer",
+      "enum": [
+        20
+      ]
+    },
     "pages": {
       "type": "array",
       "minItems": 1,
       "maxItems": 65535,
       "items": {
         "allOf": [
-          { "$ref": "../../schema/textureResource.PMNDRS_font.schema.json" },
+          {
+            "$ref": "../../schema/textureResource.PMNDRS_font.schema.json"
+          },
           {
             "properties": {
-              "colorSpace": { "enum": ["linear"] },
+              "colorSpace": {
+                "enum": [
+                  "linear"
+                ]
+              },
               "variants": {
                 "items": {
                   "properties": {
-                    "gpuFormat": { "enum": ["rgba8unorm"] },
-                    "quality": { "enum": ["lossless"] }
+                    "gpuFormat": {
+                      "enum": [
+                        "rgba8unorm"
+                      ]
+                    },
+                    "quality": {
+                      "enum": [
+                        "lossless"
+                      ]
+                    }
                   }
                 }
               }
@@ -44,9 +102,7 @@
   "required": [
     "version",
     "rasterKey",
-    "shapingFingerprint",
-    "glyphCount",
-    "glyphIdWidth",
+    "fingerprint",
     "encoding",
     "emSize",
     "pixelRange",
@@ -67,19 +123,37 @@
           "items": {
             "type": "object",
             "properties": {
-              "start": { "type": "integer", "minimum": 0, "maximum": 1114111 },
-              "end": { "type": "integer", "minimum": 0, "maximum": 1114111 }
+              "start": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1114111
+              },
+              "end": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1114111
+              }
             },
-            "required": ["start", "end"],
+            "required": [
+              "start",
+              "end"
+            ],
             "additionalProperties": false
           }
         },
-        "text": { "type": "string", "minLength": 1 },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
         "glyphIds": {
           "type": "array",
           "minItems": 1,
           "maxItems": 65535,
-          "items": { "type": "integer", "minimum": 0, "maximum": 65535 },
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
           "uniqueItems": true
         }
       },

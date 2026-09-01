@@ -41,7 +41,7 @@ import {
   withSchemaId,
   type RasterArtifactValidationIssue,
 } from '../internal/raster-artifact-validation.js';
-import { canonicalJson } from '../internal/raster-identity.js';
+import { canonicalJson, compatibilityFingerprint } from '../internal/raster-identity.js';
 import { normalizeRasterCoverage } from '../raster-coverage.js';
 import {
   MSDF_EXTENSION,
@@ -81,7 +81,6 @@ export interface MsdfArtifactValidationContext {
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
   readonly descriptor: MsdfDescriptor;
-  readonly externalPages?: ReadonlyMap<string, Uint8Array>;
   readonly limits?: Partial<MsdfArtifactValidationLimits>;
 }
 
@@ -208,9 +207,15 @@ async function validateMsdfSemantics(
   if (
     extension.version !== MSDF_FORMAT_VERSION ||
     extension.rasterKey !== context.rasterKey ||
-    extension.shapingFingerprint !== context.shapingFingerprint ||
-    extension.glyphCount !== context.glyphCount ||
-    extension.glyphIdWidth !== context.glyphIdWidth
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: context.glyphCount,
+        glyphIdWidth: context.glyphIdWidth,
+        kind: 'msdf',
+        rasterKey: context.rasterKey,
+        shaping: context.shapingFingerprint as string,
+        version: MSDF_FORMAT_VERSION,
+      })
   ) {
     fail(
       'RECIPROCAL_IDENTITY',
@@ -284,15 +289,7 @@ async function validateMsdfSemantics(
       fail('VARIANT_CONTRACT', 'MSDF V0 requires one lossless native RGBA8 KTX2 variant', variantPath);
     }
     const source = requireNonArrayObject(variant.source, `${variantPath}/source`);
-    const resource = await resolveRasterPageSource(
-      source,
-      variantPath,
-      parsed,
-      views,
-      claimedViews,
-      context.externalPages,
-      'MSDF',
-    );
+    const resource = await resolveRasterPageSource(source, variantPath, parsed, views, claimedViews, 'MSDF');
     validateNativeKtx2(resource.bytes, width, height, RGBA8_FORMAT, variantPath);
     pages.push({
       width,

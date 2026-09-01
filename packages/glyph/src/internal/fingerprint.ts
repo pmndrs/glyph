@@ -3,12 +3,14 @@ import type { Fingerprint } from '../identity.js';
 export const fingerprintDomain: Readonly<{
   artifact: number;
   cache: number;
+  compatibility: number;
   descriptor: number;
   shaping: number;
   source: number;
 }> = Object.freeze({
   artifact: 0x6172_7430,
   cache: 0x6361_6330,
+  compatibility: 0x636d_7030,
   descriptor: 0x6473_6330,
   shaping: 0x7368_7030,
   source: 0x736f_7572,
