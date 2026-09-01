@@ -18,16 +18,18 @@
     "licenseFile": "OFL.txt",
     "licenseSha256": "72de68e5954f4fdd24702292ef5a32f003ca960ec9330dc86e5eefb5dffb9b22"
   },
-  "face": { "fontIndex": 0, "variations": {} },
+  "face": {
+    "fontIndex": 0,
+    "variations": {}
+  },
   "glyphIds": "source",
   "bake": {
     "bakerVersion": "0.0.0",
     "formatVersion": 0,
-    "descriptorFingerprint": "b7ce185ebb8b55f9077237a24bb9d93b",
     "expectedCore": {
-      "artifactBytes": 179072,
-      "artifactFingerprint": "3040131ebab92ecf178a2f45810f1a83",
-      "artifactSha256": "a387402bf4743cf3e1acaa5f4a149b3c9f4322f90a3dbe3c4458d36c837bc9fa",
+      "artifactBytes": 179012,
+      "artifactFingerprint": "d6250111eaeddb00432e09638797b9d5",
+      "artifactSha256": "bc50fd95749b3e0355c806f460a478ae9bf4c5ef3b1fb9acacde1905f2538da4",
       "shapingFingerprint": "99702628e4719fb94807a41bcff9dc69",
       "shapingSfntBytes": 123444,
       "extentsBytes": 53680,
@@ -42,15 +44,51 @@
       "strikeoutPosition": 260,
       "strikeoutSize": 50,
       "tables": [
-        { "tag": "GDEF", "rawBytes": 832, "paddedBytes": 832 },
-        { "tag": "GPOS", "rawBytes": 55080, "paddedBytes": 55080 },
-        { "tag": "GSUB", "rawBytes": 35972, "paddedBytes": 35972 },
-        { "tag": "OS/2", "rawBytes": 96, "paddedBytes": 96 },
-        { "tag": "cmap", "rawBytes": 4386, "paddedBytes": 4388 },
-        { "tag": "head", "rawBytes": 54, "paddedBytes": 56 },
-        { "tag": "hhea", "rawBytes": 36, "paddedBytes": 36 },
-        { "tag": "hmtx", "rawBytes": 26794, "paddedBytes": 26796 },
-        { "tag": "maxp", "rawBytes": 32, "paddedBytes": 32 }
+        {
+          "tag": "GDEF",
+          "rawBytes": 832,
+          "paddedBytes": 832
+        },
+        {
+          "tag": "GPOS",
+          "rawBytes": 55080,
+          "paddedBytes": 55080
+        },
+        {
+          "tag": "GSUB",
+          "rawBytes": 35972,
+          "paddedBytes": 35972
+        },
+        {
+          "tag": "OS/2",
+          "rawBytes": 96,
+          "paddedBytes": 96
+        },
+        {
+          "tag": "cmap",
+          "rawBytes": 4386,
+          "paddedBytes": 4388
+        },
+        {
+          "tag": "head",
+          "rawBytes": 54,
+          "paddedBytes": 56
+        },
+        {
+          "tag": "hhea",
+          "rawBytes": 36,
+          "paddedBytes": 36
+        },
+        {
+          "tag": "hmtx",
+          "rawBytes": 26794,
+          "paddedBytes": 26796
+        },
+        {
+          "tag": "maxp",
+          "rawBytes": 32,
+          "paddedBytes": 32
+        }
       ]
     }
   },
