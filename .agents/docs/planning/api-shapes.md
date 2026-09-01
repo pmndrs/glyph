@@ -371,8 +371,8 @@ declare function defineFont<const Input extends FontInput, const Module extends 
 
 type RasterSource =
   | { type: 'embedded' }
-  | { type: 'external'; uri: string; artifactFingerprint: Fingerprint }
-  | { type: 'external'; artifactFingerprint?: Fingerprint };
+  | { type: 'external'; uri: string }
+  | { type: 'external' };
 
 interface RasterReference<Kind extends string = string> {
   rasterKey: RasterKey;
@@ -600,7 +600,7 @@ interface FontBakeDescriptor {
 }
 
 interface BakeArtifact {
-  role: 'font' | 'raster' | 'raster-page';
+  role: 'font' | 'raster';
   id: string;
   bytes: Uint8Array;
   fingerprint: Fingerprint;
@@ -1273,7 +1273,7 @@ Core resolves root/span paint into a palette and a per-glyph `paintIndices` arra
 
 First-party adapters allocate bounded deterministic instance slack and keep logical glyph count separate from capacity. A retained stage may replace every glyph identity and parallel field without replacing its batch, geometry, material, texture, attribute, or backing array when the compatible ordered page-run topology fits. Shrink and growth publish an authoritative draw count; overflow and incompatible Bitmap or Slug page-run topology return a replacement stage. Dirty instances are bucketed into bounded upload ranges, with fragmented updates falling back to one logical full-range upload. Pending Three.js upload ranges are part of the live adapter state and must be carried into a later stage until the renderer consumes them. This is per-batch storage reuse, not renderer-wide batching across independent `Text` objects.
 
-The Node host receives explicit `RasterBakePlan` values and imports no unselected baker. Matching literal kinds make incorrect pairings visible to TypeScript without merging runtime and Node dependency graphs. External page packaging produces one companion index artifact plus deterministic `raster-page` artifacts whose IDs become relative URIs in the page directory; runtime fallback may request embedded pages while using the same generator and records. Raster-specific descriptor fields do not appear in core. Shader systems also do not appear here: first-party packages use TSL internally, while external packages may use TypeGPU or another implementation.
+The Node host receives explicit `RasterBakePlan` values and imports no unselected baker. Matching literal kinds make incorrect pairings visible to TypeScript without merging runtime and Node dependency graphs. A raster bake publishes exactly one artifact whose pages travel inside it; a split writes that companion beside the core font under a name derived from it. Runtime fallback uses the same generator and records. Raster-specific descriptor fields do not appear in core. Shader systems also do not appear here: first-party packages use TSL internally, while external packages may use TypeGPU or another implementation.
 
 ## Type-contract fixtures
 

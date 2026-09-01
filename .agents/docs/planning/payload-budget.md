@@ -253,7 +253,7 @@ interface FontPayloadReport {
   }>;
   containers: Array<{
     artifactId: string;
-    role: 'font' | 'raster' | 'raster-page';
+    role: 'font' | 'raster';
     jsonBytes: number;
     paddingBytes: number;
     totalBytes: number;

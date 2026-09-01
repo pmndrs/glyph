@@ -99,7 +99,7 @@ interface RasterBakeArtifact<Kind extends string> {
 }
 
 interface BakeArtifact {
-  readonly role: 'raster' | 'raster-page';
+  readonly role: 'raster';
   readonly id: string;
   readonly bytes: Uint8Array;
   readonly fingerprint: Fingerprint;
@@ -134,18 +134,12 @@ interface RegisteredRaster<Kind extends string> {
   resource(source: RasterResourceSource, signal?: AbortSignal): Promise<Uint8Array>;
 }
 
-type RasterResourceSource =
-  | { readonly type: 'bufferView'; readonly bufferView: number }
-  | {
-      readonly type: 'external';
-      readonly uri: string;
-      readonly byteLength: number;
-      readonly artifactFingerprint: Fingerprint;
-    };
+type RasterResourceSource = { readonly type: 'bufferView'; readonly bufferView: number };
 ```
 
-Raster authors use `view()` for embedded bytes and `resource()` for either embedded or fingerprint-addressed external page
-bytes. Applications normally do not call either method; the selected technique's `decode()` does.
+Raster authors use `view()` for embedded bytes and `resource()` for a declared page payload. A page always travels inside
+the artifact that declares it, so both read from the same GLB. Applications normally do not call either method; the
+selected technique's `decode()` does.
 
 ```ts
 interface LoadedFont<Technique extends AnyRasterTechnique> {

@@ -118,8 +118,9 @@ Required tables are `head`, `maxp`, `cmap`, `hhea`, `hmtx`, and `OS/2`. `GDEF`, 
 The exact whitelist, metric policy, checksums, and validation rules are normative in the [V0 shaping contract](../../shaping-data-contract.md) while this extension is incubated in `pmndrs/glyph`.
 
 `shaping.fingerprint` is the lowercase 128-bit MurmurHash3 fingerprint over the length-prefixed SFNT, glyph-extents,
-and extents-availability bytes defined by the shaping contract. Companion raster artifacts MUST repeat this fingerprint.
-It identifies compatible bake outputs; it is not a cryptographic integrity claim.
+and extents-availability bytes defined by the shaping contract. A companion raster artifact does not repeat it: the
+single `fingerprint` each raster extension carries folds it in along with the source, raster key, kind, version, and
+glyph metrics that must agree. It identifies compatible bake outputs; it is not a cryptographic integrity claim.
 
 ### Metrics
 
@@ -133,7 +134,7 @@ Raster keys MUST be unique within the font. A key is the deterministic 128-bit d
 
 An embedded raster is stored at the root `extensions` object in the same GLB. A font MUST declare at most one raster per companion extension: additional strikes or settings belong to that raster's options, not to a second raster. A raster is external only when the caller asks for a split. An external source URI resolves relative to the core GLB and names a self-contained companion; page payloads always travel inside the artifact that declares them and are never separate files. A companion is matched to its core by the `fingerprint` each raster extension carries, so the directory entry restates no identity of its own. When an external source omits `uri`, the application supplies bytes through its resolver.
 
-Companion extensions own a logical raster-page directory. Page payloads may remain embedded in the companion asset or use independently addressed URI, byte-length, and fingerprint sources relative to that companion asset. Core does not interpret those pages or equate their indexes with GPU binding state.
+Companion extensions own a logical raster-page directory. Page payloads always travel inside the artifact that declares them; a page is never independently addressed. Core does not interpret those pages or equate their indexes with GPU binding state.
 
 The top-level glTF `extensionsRequired` array is the sole required-extension mechanism. Raster entries do not duplicate it.
 
