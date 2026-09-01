@@ -605,6 +605,9 @@ class RenderPlannerImpl {
       states.push(owned.state);
     }
     if (states.every((state, order) => state.metrics.order === order)) return;
+    if (this.#removed.size + this.#liveTextCount > this.#limits.maxParagraphs) {
+      throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
+    }
     const reordered: ResolvedTextOptions[] = [];
     try {
       for (const [order, state] of states.entries()) {
@@ -1109,7 +1112,7 @@ class RenderPlannerImpl {
     this.#liveExclusionCount += metrics.exclusionCount - state.metrics.exclusionCount;
     this.#liveInlineObjectCount += metrics.inlineObjectCount - state.metrics.inlineObjectCount;
     if (state.dirty) this.#pendingStyleCount -= pendingStyleMutationCount(state);
-    const candidate = { ...state, metrics, dirty: true };
+    const candidate = { ...state, metrics, dirty: true, semanticDirty: true };
     this.#dirtyTextCount += Number(!state.dirty);
     this.#pendingStyleCount += pendingStyleMutationCount(candidate);
   }

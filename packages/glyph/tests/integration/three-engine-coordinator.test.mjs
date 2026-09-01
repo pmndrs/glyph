@@ -131,7 +131,7 @@ function fontVariant(backing, resource, geometry) {
   );
 }
 
-async function rendererHarness() {
+async function rendererHarness(limitOverrides = {}) {
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(wasmUrl) });
   const coordinator = new ThreeTextEngineCoordinator(glyphEngine);
   const drawRoot = new THREE.Object3D();
@@ -150,7 +150,7 @@ async function rendererHarness() {
       });
       return target;
     },
-    limits,
+    limits: { ...limits, ...limitOverrides },
     requestCapacity: 64 * 1024,
     resultCapacity: 256 * 1024,
     textCapacity: 64,
@@ -170,6 +170,102 @@ async function rendererHarness() {
     },
   };
 }
+
+const nestedStyleSpans = Object.freeze([
+  { start: 0, end: 4, style: { color: '#ff0000' } },
+  { start: 0, end: 3, style: { color: '#00ff00' } },
+  { start: 0, end: 2, style: { color: '#0000ff' } },
+  { start: 0, end: 1, style: { color: '#ffffff' } },
+]);
+
+test('pending style limits count every semantic update before mutating planner state', async () => {
+  const backing = await fontBacking();
+  const resource = defineRasterResourceId('test/three-style-limit/mesh');
+  const font = fontVariant(backing, resource, indexedQuadGeometry());
+  const renderer = await rendererHarness({ maxClusters: 6 });
+  const texts = [];
+  let binding;
+  try {
+    binding = renderer.coordinator.bindFontStack(font);
+    texts.push(
+      renderer.planner.createText({
+        font: binding,
+        transform: renderer.transform,
+        text: { text: 'abcd', spans: nestedStyleSpans },
+        style: { fontSize: 16 },
+      }),
+      renderer.planner.createText({
+        font: binding,
+        transform: renderer.transform,
+        text: 'abcd',
+        style: { fontSize: 16 },
+      }),
+    );
+    assert.deepEqual(renderer.planner.publish(), { accepted: true });
+
+    texts[0].update({ text: 'abcd' });
+    assert.throws(
+      () => texts[1].update({ text: { text: 'abcd', spans: nestedStyleSpans } }),
+      /pending style mutations exceed limits\.maxClusters/u,
+    );
+
+    assert.deepEqual(renderer.planner.publish(), { accepted: true }, 'the rejected update must not poison the frame');
+    texts[1].update({ text: { text: 'abcd', spans: nestedStyleSpans } });
+    assert.deepEqual(renderer.planner.publish(), { accepted: true });
+  } finally {
+    for (const text of texts) text.dispose();
+    binding?.dispose();
+    renderer.dispose();
+    font.dispose();
+  }
+});
+
+test('reordering accounts for pending removals before mutating planner state', async () => {
+  const backing = await fontBacking();
+  const resource = defineRasterResourceId('test/three-reorder-limit/mesh');
+  const font = fontVariant(backing, resource, indexedQuadGeometry());
+  const renderer = await rendererHarness({ maxParagraphs: 4 });
+  const texts = [];
+  let binding;
+  try {
+    binding = renderer.coordinator.bindFontStack(font);
+    for (const text of ['a', 'b', 'c', 'd']) {
+      texts.push(
+        renderer.planner.createText({
+          font: binding,
+          transform: renderer.transform,
+          text,
+          style: { fontSize: 16 },
+        }),
+      );
+    }
+    assert.deepEqual(renderer.planner.publish(), { accepted: true });
+
+    texts[0].dispose();
+    texts[1].dispose();
+    const replacement = renderer.planner.createText({
+      font: binding,
+      transform: renderer.transform,
+      text: 'e',
+      style: { fontSize: 16 },
+    });
+    texts.push(replacement);
+    const reordered = [replacement, texts[2], texts[3]];
+    assert.throws(
+      () => renderer.planner.reorderTexts(reordered),
+      /pending paragraph mutations exceed limits\.maxParagraphs/u,
+    );
+
+    assert.deepEqual(renderer.planner.publish(), { accepted: true }, 'the rejected reorder must not poison the frame');
+    renderer.planner.reorderTexts(reordered);
+    assert.deepEqual(renderer.planner.publish(), { accepted: true });
+  } finally {
+    for (const text of texts) text.dispose();
+    binding?.dispose();
+    renderer.dispose();
+    font.dispose();
+  }
+});
 
 test('records-sourced Three geometry renders and retains topology across text updates', async () => {
   const backing = await fontBacking();

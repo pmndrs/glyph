@@ -272,6 +272,10 @@ One `TextGroup` owns one Rust render planner. A traversal sends only changed par
 because a swap briefly assigns two live paragraphs the same order; the planner therefore accepts the complete permutation
 or leaves the previous order untouched. The Three integration regression repeatedly reverses two paragraphs while rotating
 them through a nested parent, verifies physical transform-index ownership, and verifies WebGL2 PBO invalidation.
+Planner limits bound the complete pending publication rather than reserving their maximum up front. A reorder therefore
+preflights queued removals plus every live lifecycle upsert against `maxParagraphs`, while semantic updates count both
+pending style removals and upserts against `maxClusters`; either overflow throws at the originating call without changing
+the previously accepted desired state.
 
 Three's ordinary scene traversal owns world-matrix composition. `TextGroup` tracks local matrices, visibility, and
 parent identity only below its shared draw root, then gives the executor the paragraph IDs whose relative transform
