@@ -3,15 +3,17 @@
 import type { MsdfOptions } from '../internal/msdf-contract.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { RasterBakePlan } from '../bake.js';
 import type { UnicodeRange } from '../font-baker/index.js';
 import { normalizeUnicodeRanges } from '../internal/font-selection.js';
+import { resolveRasterBakePlan } from '../internal/raster-bake-plan.js';
 import {
   bakeFont,
   bakeProject,
+  fontIsUpToDate,
   inspectFont,
   NodeBakeError,
   type NodeFontBakeReport,
@@ -60,7 +62,8 @@ export async function runCli(
   }
   try {
     if (parsed.direct !== undefined) {
-      const report = await bakeDirect(parsed.direct);
+      const report = await bakeDirect(parsed.direct, io);
+      if (report === undefined) return 0;
       if (parsed.json) io.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
       else {
         io.stdout.write(`${parsed.direct.input} -> ${parsed.direct.output}\n`);
@@ -248,6 +251,29 @@ interface DirectBakeArguments {
   readonly slug: boolean;
   readonly unicodeRanges?: readonly UnicodeRange[];
   readonly check: boolean;
+  readonly split: boolean;
+  readonly force: boolean;
+  readonly yes: boolean;
+}
+
+/**
+ * `My Font.ttf` -> `my-font.glb`.
+ *
+ * Companions sit beside the core and are named from it, so the derived stem has to be safe in a
+ * URL without escaping: a viewer resolves `my-font.msdf.glb` relative to the page that loaded the
+ * core.
+ */
+function derivedOutputPath(input: string): string {
+  const base = input.split(/[\\/]/).at(-1) ?? input;
+  const stem = base.replace(/\.(?:ttf|otf|ttc|otc|woff2?)$/i, '');
+  const safe = stem
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (safe === '') throw new TypeError(`could not derive an output name from ${input}; pass --output`);
+  return `${join(dirname(input), safe)}.glb`;
 }
 
 function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
@@ -259,6 +285,9 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   let output: string | undefined;
   let fontFaceIndex = 0;
   let fontFaceIndexSet = false;
+  let split = false;
+  let force = false;
+  let yes = false;
   let bitmapStrikes: readonly [number, ...number[]] | undefined;
   let msdf = false;
   let msdfOptions: MsdfOptions | undefined;
@@ -309,6 +338,12 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
       unicodeRanges = parseUnicodeSet(valueAfter(argv, ++index, argument));
     } else if (argument === '--check') {
       check = true;
+    } else if (argument === '--split') {
+      split = true;
+    } else if (argument === '--force') {
+      force = true;
+    } else if (argument === '--yes') {
+      yes = true;
     } else {
       throw new TypeError(`Unknown argument: ${argument}`);
     }
@@ -321,13 +356,16 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
     slug ||
     unicodeRanges !== undefined ||
     check ||
+    split ||
+    force ||
+    yes ||
     fontFaceIndexSet;
   const projectSelected =
     projectRoot !== undefined || outputRoot !== undefined || entries.length !== 0 || assetRoots.length !== 0;
   if (directSelected && projectSelected)
     throw new TypeError('direct font options cannot be mixed with project discovery');
-  if (directSelected && (input === undefined || output === undefined)) {
-    throw new TypeError('direct font baking requires both --input and --output');
+  if (directSelected && input === undefined) {
+    throw new TypeError('direct font baking requires --input');
   }
   return {
     project: {
@@ -340,7 +378,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
       ? {
           direct: {
             input: input!,
-            output: output!,
+            output: output ?? derivedOutputPath(input!),
             fontFaceIndex,
             ...(bitmapStrikes === undefined ? {} : { bitmapStrikes }),
             msdf,
@@ -348,6 +386,9 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
             slug,
             ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
             check,
+            split,
+            force,
+            yes,
           },
         }
       : {}),
@@ -389,7 +430,29 @@ function parseUnicodeSet(value: string): readonly UnicodeRange[] {
   return normalizeUnicodeRanges(ranges);
 }
 
-async function bakeDirect(options: DirectBakeArguments): Promise<NodeFontBakeReport> {
+async function bakeDirect(
+  options: DirectBakeArguments,
+  io: { readonly stdout: { write(text: string): unknown } },
+): Promise<NodeFontBakeReport | undefined> {
+  const plans = await directRasterPlans(options);
+  if (!options.check && !options.force) {
+    const resolved = await Promise.all(plans.map(resolveRasterBakePlan));
+    const freshness = await fontIsUpToDate({
+      output: options.output,
+      input: options.input,
+      fontFaceIndex: options.fontFaceIndex,
+      ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
+      rasters: resolved.map((plan) => ({
+        rasterKey: plan.rasterKey,
+        kind: plan.baker.kind,
+        version: plan.baker.version,
+      })),
+    });
+    if (freshness.fresh) {
+      io.stdout.write(`${options.output} is up to date — ${freshness.reason}\n`);
+      return undefined;
+    }
+  }
   const temporaryDirectory = await mkdtemp(join(tmpdir(), 'text-bake-'));
   try {
     const output = options.check ? join(temporaryDirectory, 'checked.font.glb') : options.output;
@@ -398,7 +461,7 @@ async function bakeDirect(options: DirectBakeArguments): Promise<NodeFontBakeRep
       output,
       font: { fontFaceIndex: options.fontFaceIndex },
       ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
-      rasters: await directRasterPlans(options),
+      rasters: plans,
     });
     if (options.check) {
       const [expected, actual] = await Promise.all([readFile(options.output), readFile(output)]);
@@ -422,8 +485,14 @@ type DirectRasterBakePlan =
   | RasterBakePlan<typeof import('../bakers/slug.js').slugBaker>;
 
 async function directRasterPlans(options: DirectBakeArguments): Promise<DirectRasterBakePlan[]> {
-  const packaging = { artifact: 'embedded', pages: 'embedded' } as const;
+  const packaging = { artifact: options.split ? 'external' : 'embedded' } as const;
   const rasters: DirectRasterBakePlan[] = [];
+  // Naming no format is not a request for a font that cannot render; it is not having chosen.
+  if (options.bitmapStrikes === undefined && !options.msdf && !options.slug) {
+    const { msdfBaker } = await import('../bakers/msdf.js');
+    rasters.push({ baker: msdfBaker, packaging, options: undefined });
+    return rasters;
+  }
   if (options.bitmapStrikes !== undefined) {
     const { bitmapBaker } = await import('../bakers/bitmap.js');
     rasters.push({ baker: bitmapBaker, packaging, options: { strikes: options.bitmapStrikes } });
@@ -537,7 +606,7 @@ Examples:
 function bakeUsage(): string {
   return `Usage:
   glyph bake [discovery options]
-  glyph bake --input <font> --output <font.glb> [options]
+  glyph bake --input <font> [--output <font.glb>] [options]
 
 Bake one known font directly, or discover glyph.fontFace() declarations in a project.
 Direct options and discovery options cannot be mixed. With no bake options, discovery
@@ -545,7 +614,8 @@ scans the current project and writes beside each source asset.
 
 Direct font options:
   --input <path>         Source TTF, OTF, TTC, or OTC font
-  --output <path>        Output GLB containing shaping data and selected rasters
+  --output <path>        Output GLB (default: the input name, beside it, url-safe)
+                        Example: "My Font.ttf" bakes to my-font.glb
   --font-face-index <n>  Collection face to bake (default: 0)
   --unicodes <set>       Unicode set used to prepare a smaller source font
                         Example: U+0020-007E,U+00A0-00FF,U+4E00-9FFF
@@ -557,7 +627,13 @@ Raster options:
                         Settings: em-size (default 64), pixel-range (default 8)
                         Example: --msdf em-size=32,pixel-range=6
   --slug                 Embed the default Slug raster
-                        With none selected, emit a shaping-only GLB
+                        With none selected, MSDF is baked
+
+Packaging options:
+  --split                Write each raster beside the core as <name>.<technique>.glb
+                        Default packs every raster into the one output file
+  --force                Always bake, skipping the up-to-date check
+  --yes                  Do not prompt before replacing an existing font
 
 Discovery options:
   --project-root <path>  Project root (default: current directory)

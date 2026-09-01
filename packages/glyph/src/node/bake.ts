@@ -45,6 +45,9 @@ import { fontBakeDescriptor } from '../internal/core-bake-policy.js';
 import { bakeFontPipeline } from '../internal/font-bake-pipeline.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
+import { fingerprint128, fingerprintDomain } from '../internal/fingerprint.js';
+import { compatibilityFingerprint } from '../internal/raster-identity.js';
+import { parseGlb } from '../font-baker/validator.js';
 
 export interface NodeBakeOptions<Rasters extends readonly object[] = readonly []> {
   readonly input: string | URL;
@@ -304,7 +307,7 @@ async function loadRasterPlan(raster: ResolvedRasterBaker): Promise<ResolvedRast
   }
   return resolveRasterBakePlan({
     baker,
-    packaging: { artifact: 'embedded', pages: 'embedded' },
+    packaging: { artifact: 'embedded' },
     options: raster.options,
   });
 }
@@ -315,13 +318,22 @@ async function loadProjectPlans(rasters: readonly ResolvedRasterBaker[]): Promis
     (left, right) =>
       left.baker.extension.localeCompare(right.baker.extension) || left.rasterKey.localeCompare(right.rasterKey),
   );
-  const embeddedExtensions = new Set<string>();
+  // One raster per technique: more strikes or different settings belong to a single raster's
+  // options, not a second raster of the same extension. External packaging is something a caller
+  // asks for, never a fallback for a collision.
+  const declared = new Set<string>();
   return resolved.map((plan) => {
-    const embedded = !embeddedExtensions.has(plan.baker.extension);
-    embeddedExtensions.add(plan.baker.extension);
+    if (declared.has(plan.baker.extension)) {
+      throw new NodeBakeError(
+        'RASTER_EXTENSION_DUPLICATE',
+        `a font may declare one ${plan.baker.kind} raster; combine the declarations into a single one whose options cover both`,
+        plan.baker.extension,
+      );
+    }
+    declared.add(plan.baker.extension);
     return {
       ...plan,
-      packaging: { artifact: embedded ? 'embedded' : 'external', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
     };
   });
 }
@@ -506,9 +518,8 @@ function isMissing(error: unknown): boolean {
 function finalizeTransport(report: FontPayloadReport, artifacts: readonly BakeArtifact[]): FontPayloadReport {
   return {
     ...report,
-    transport: artifacts.flatMap(({ id, role, bytes }) => {
+    transport: artifacts.flatMap(({ id, bytes }) => {
       const raw = { artifactId: id, format: 'raw', bytes: bytes.byteLength };
-      if (role === 'raster-page') return [raw];
       return [
         raw,
         { artifactId: id, format: 'gzip', bytes: gzipSync(bytes, { level: 9 }).byteLength },
@@ -547,4 +558,82 @@ function filePath(value: string | URL, field: string): string {
     return fileURLToPath(value);
   }
   return value;
+}
+
+export interface FontFreshness {
+  readonly fresh: boolean;
+  readonly reason: string;
+}
+
+/**
+ * Decide whether an existing font already contains exactly what a bake would produce.
+ *
+ * Rasterizing is the expensive half of a bake and preparing the source is the cheap half, so the
+ * check pays only the cheap half: the artifact records a fingerprint over its prepared source, and
+ * every raster records the single value that has to agree for it to be usable. Matching both means
+ * the bake would reproduce what is already on disk.
+ */
+export async function fontIsUpToDate(request: {
+  readonly output: string;
+  readonly input: string;
+  readonly fontFaceIndex: number;
+  readonly unicodeRanges?: readonly UnicodeRange[];
+  readonly rasters: readonly { readonly rasterKey: string; readonly kind: string; readonly version: number }[];
+}): Promise<FontFreshness> {
+  let existing: Uint8Array;
+  try {
+    existing = await readFile(request.output);
+  } catch {
+    return { fresh: false, reason: 'no font at the output path' };
+  }
+
+  const baker = await defaultFontBaker();
+  const source = await readFile(request.input);
+  const prepared = baker.prepare({
+    source,
+    selection: {
+      formatVersion: 0,
+      fontFaceIndex: request.fontFaceIndex,
+      ...(request.unicodeRanges === undefined ? { unicodeRanges: [] } : { unicodeRanges: request.unicodeRanges }),
+    },
+  });
+  const sourceFingerprint = fingerprint128(prepared.bytes, fingerprintDomain.source);
+
+  let document: Readonly<Record<string, unknown>>;
+  try {
+    document = parseGlb(existing).document;
+  } catch {
+    return { fresh: false, reason: 'the existing font could not be parsed' };
+  }
+  const font = (document.extensions as Record<string, Record<string, Record<string, unknown>>> | undefined)
+    ?.PMNDRS_font;
+  if (font === undefined) return { fresh: false, reason: 'the existing font is not a glyph font' };
+  if (font.provenance?.sourceFingerprint !== sourceFingerprint) {
+    return { fresh: false, reason: 'the source font, face, or unicode ranges changed' };
+  }
+
+  // Comparing raster keys alone would call an artifact fresh after the format changed, because a
+  // key describes the request and not what was written. Compare the digest each raster actually
+  // carries, which no artifact predating the field can satisfy.
+  const metrics = font.metrics ?? {};
+  const glyphCount = Number(metrics.glyphCount);
+  const glyphIdWidth = Number(metrics.glyphIdWidth);
+  const shaping = String((font.shaping ?? {}).fingerprint);
+  const directory = Array.isArray(font.rasters) ? (font.rasters as Record<string, unknown>[]) : [];
+  const extensions = (document.extensions ?? {}) as Record<string, Record<string, unknown> | undefined>;
+  for (const raster of request.rasters) {
+    const entry = directory.find((candidate) => candidate.rasterKey === raster.rasterKey);
+    if (entry === undefined) return { fresh: false, reason: `${raster.kind} is not in the font` };
+    const carried = extensions[String(entry.extension)]?.fingerprint;
+    const expected = compatibilityFingerprint({
+      glyphCount,
+      glyphIdWidth,
+      kind: raster.kind,
+      rasterKey: raster.rasterKey,
+      shaping,
+      version: raster.version,
+    });
+    if (carried !== expected) return { fresh: false, reason: `${raster.kind} was baked by a different contract` };
+  }
+  return { fresh: true, reason: 'every requested raster is already baked from this exact source' };
 }
