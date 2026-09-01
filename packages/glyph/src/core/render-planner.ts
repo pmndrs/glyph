@@ -380,6 +380,16 @@ interface ResolvedTextOptions {
   readonly inlineResources: readonly BackendOpaqueBindingLease[];
 }
 
+const PendingChange = {
+  None: 0,
+  ParagraphRecord: 1 << 0,
+  Content: 1 << 1,
+} as const;
+
+type PendingChangeMask = number;
+
+const FullContentUpdate = PendingChange.ParagraphRecord | PendingChange.Content;
+
 interface RetainedTextState {
   readonly paragraphId: ParagraphId;
   readonly ordinal: number;
@@ -389,8 +399,7 @@ interface RetainedTextState {
   publishedStyleCount: number;
   geometryRevision: number;
   published: boolean;
-  dirty: boolean;
-  semanticDirty: boolean;
+  pendingChanges: PendingChangeMask;
   removed: boolean;
   disposed: boolean;
   desiredReleased: boolean;
@@ -563,8 +572,7 @@ class RenderPlannerImpl {
       publishedStyleCount: 0,
       geometryRevision: 0,
       published: false,
-      dirty: true,
-      semanticDirty: true,
+      pendingChanges: FullContentUpdate,
       removed: false,
       disposed: false,
       desiredReleased: false,
@@ -619,14 +627,14 @@ class RenderPlannerImpl {
     }
     this.#textsByOrder.clear();
     for (const [order, state] of states.entries()) {
-      if (!state.dirty) {
+      if (!hasPendingChanges(state)) {
         this.#dirtyTextCount += 1;
         this.#pendingStyleCount += pendingStyleMutationCount(state);
       }
       const previous = state.desired;
       state.desired = reordered[order]!;
       state.metrics = retainedTextMetrics(state.desired, state.ordinal);
-      state.dirty = true;
+      state.pendingChanges |= PendingChange.ParagraphRecord;
       this.#textsByOrder.set(order, state);
       releaseResolvedText(previous);
     }
@@ -651,8 +659,7 @@ class RenderPlannerImpl {
       ...state,
       desired,
       metrics: retainedTextMetrics(desired, state.ordinal),
-      dirty: true,
-      semanticDirty: true,
+      pendingChanges: FullContentUpdate,
     };
     try {
       this.#validateState(candidate, state);
@@ -666,8 +673,7 @@ class RenderPlannerImpl {
     releaseResolvedText(state.desired);
     state.desired = desired;
     state.metrics = candidate.metrics;
-    state.dirty = true;
-    state.semanticDirty = true;
+    state.pendingChanges = FullContentUpdate;
     state.measurement = undefined;
     state.inspection = undefined;
     if (previousOrder !== nextOrder) {
@@ -730,7 +736,7 @@ class RenderPlannerImpl {
       return;
     }
     state.removed = true;
-    state.dirty = true;
+    state.pendingChanges = PendingChange.ParagraphRecord;
     this.#removed.add(state);
   }
 
@@ -968,7 +974,7 @@ class RenderPlannerImpl {
     const paragraphMutations = [
       ...[...this.#removed].map((state) => ({ opcode: 'remove' as const, paragraphId: state.paragraphId })),
       ...[...this.#texts]
-        .filter((state) => !state.removed && state.dirty)
+        .filter((state) => !state.removed && hasPendingChanges(state))
         .map((state) => ({
           opcode: 'upsert' as const,
           paragraphId: state.paragraphId,
@@ -976,7 +982,7 @@ class RenderPlannerImpl {
         })),
     ];
     const textMutations = [...this.#texts].flatMap((state) => {
-      if (state.removed || !state.semanticDirty) return [];
+      if (state.removed || !hasPendingChange(state, PendingChange.Content)) return [];
       const mutation = minimalTextMutation(state.publishedText, state.desired.text);
       return mutation === undefined ? [] : [{ paragraphId: state.paragraphId, ...mutation }];
     });
@@ -986,7 +992,7 @@ class RenderPlannerImpl {
     const exclusions: PlannerExclusion[] = [];
     const inlineObjects: PlannerInlineObject[] = [];
     for (const state of this.#texts) {
-      if (state.removed || !state.semanticDirty) continue;
+      if (state.removed || !hasPendingChange(state, PendingChange.Content)) continue;
       const styles = compileStyles(this.#backend, state);
       styleMutations.push(...styles);
       for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
@@ -1060,10 +1066,11 @@ class RenderPlannerImpl {
       this.#liveExclusionCount - (previous?.exclusionCount ?? 0) + candidate.metrics.exclusionCount;
     const inlineObjectCount =
       this.#liveInlineObjectCount - (previous?.inlineObjectCount ?? 0) + candidate.metrics.inlineObjectCount;
-    const dirtyTextCount = this.#dirtyTextCount - Number(replacing?.dirty ?? false) + 1;
+    const replacingHasPendingChanges = replacing !== undefined && hasPendingChanges(replacing);
+    const dirtyTextCount = this.#dirtyTextCount - Number(replacingHasPendingChanges) + 1;
     const pendingStyleCount =
       this.#pendingStyleCount -
-      (replacing?.dirty ? pendingStyleMutationCount(replacing) : 0) +
+      (replacingHasPendingChanges ? pendingStyleMutationCount(replacing) : 0) +
       pendingStyleMutationCount(candidate);
     if (liveTextCount > this.#limits.maxParagraphs) {
       throw new RangeError('retained texts exceed limits.maxParagraphs');
@@ -1098,8 +1105,8 @@ class RenderPlannerImpl {
     this.#liveRegionCount += state.metrics.regionCount;
     this.#liveExclusionCount += state.metrics.exclusionCount;
     this.#liveInlineObjectCount += state.metrics.inlineObjectCount;
-    this.#dirtyTextCount += Number(state.dirty);
-    if (state.dirty) this.#pendingStyleCount += pendingStyleMutationCount(state);
+    this.#dirtyTextCount += Number(hasPendingChanges(state));
+    if (hasPendingChanges(state)) this.#pendingStyleCount += pendingStyleMutationCount(state);
   }
 
   #replaceLiveState(state: RetainedTextState, metrics: RetainedTextMetrics): void {
@@ -1111,9 +1118,9 @@ class RenderPlannerImpl {
     this.#liveRegionCount += metrics.regionCount - state.metrics.regionCount;
     this.#liveExclusionCount += metrics.exclusionCount - state.metrics.exclusionCount;
     this.#liveInlineObjectCount += metrics.inlineObjectCount - state.metrics.inlineObjectCount;
-    if (state.dirty) this.#pendingStyleCount -= pendingStyleMutationCount(state);
-    const candidate = { ...state, metrics, dirty: true, semanticDirty: true };
-    this.#dirtyTextCount += Number(!state.dirty);
+    if (hasPendingChanges(state)) this.#pendingStyleCount -= pendingStyleMutationCount(state);
+    const candidate = { ...state, metrics, pendingChanges: FullContentUpdate };
+    this.#dirtyTextCount += Number(!hasPendingChanges(state));
     this.#pendingStyleCount += pendingStyleMutationCount(candidate);
   }
 
@@ -1124,8 +1131,8 @@ class RenderPlannerImpl {
     this.#liveRegionCount -= state.metrics.regionCount;
     this.#liveExclusionCount -= state.metrics.exclusionCount;
     this.#liveInlineObjectCount -= state.metrics.inlineObjectCount;
-    this.#dirtyTextCount -= Number(state.dirty);
-    if (state.dirty) this.#pendingStyleCount -= pendingStyleMutationCount(state);
+    this.#dirtyTextCount -= Number(hasPendingChanges(state));
+    if (hasPendingChanges(state)) this.#pendingStyleCount -= pendingStyleMutationCount(state);
   }
 
   #commitDesiredState(): void {
@@ -1139,22 +1146,21 @@ class RenderPlannerImpl {
     }
     this.#removed.clear();
     for (const state of this.#texts) {
-      if (!state.dirty) continue;
+      if (!hasPendingChanges(state)) continue;
       if (state.committed !== state.desired) {
         retainResolvedText(state.desired);
         if (state.committed !== undefined) releaseResolvedText(state.committed);
         state.committed = state.desired;
       }
       state.published = true;
-      if (state.semanticDirty) {
+      if (hasPendingChange(state, PendingChange.Content)) {
         state.publishedText = state.desired.text;
         state.geometryRevision += 1;
       }
       this.#dirtyTextCount -= 1;
       this.#pendingStyleCount -= pendingStyleMutationCount(state);
-      if (state.semanticDirty) state.publishedStyleCount = compiledStyleCount(state);
-      state.dirty = false;
-      state.semanticDirty = false;
+      if (hasPendingChange(state, PendingChange.Content)) state.publishedStyleCount = compiledStyleCount(state);
+      state.pendingChanges = PendingChange.None;
     }
   }
 
@@ -1832,8 +1838,16 @@ function retainedTextMetrics(desired: ResolvedTextOptions, ordinal: number): Ret
 }
 
 function pendingStyleMutationCount(state: RetainedTextState): number {
-  if (!state.semanticDirty) return 0;
+  if (!hasPendingChange(state, PendingChange.Content)) return 0;
   return state.metrics.styleCount + Math.max(0, state.publishedStyleCount - state.metrics.styleCount);
+}
+
+function hasPendingChanges(state: RetainedTextState): boolean {
+  return state.pendingChanges !== PendingChange.None;
+}
+
+function hasPendingChange(state: RetainedTextState, change: number): boolean {
+  return (state.pendingChanges & change) !== 0;
 }
 
 function compileGeometry(
