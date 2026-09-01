@@ -2,6 +2,15 @@
 
 ## 2026-09-01
 
+- **Collapsed the planned FontFace cache surfaces into Glyph** — D-298 records that Three's base `Loader` supplies no
+  cache or dependency discovery, Three's URL-only `FileLoader` cache is not used by Glyph's current loader, and current R3F
+  adds a separate `useLoader`/`suspend-react` cache. The FontFace path instead makes `handle.load()` enter the sole Glyph
+  resource graph; Three may observe work through `LoadingManager`, while React only suspends on the same stable promise.
+  The selected format is resolved solely through the authenticated core GLB raster directory, and an external raster plus
+  every resource required by its decoder must finish before the selection becomes loaded. Missing formats throw without
+  filename guessing or GLB runtime baking. Generated sidecar patterns remain producer conveniences: a sidecar cannot
+  independently assert technique support or serve as a FontFace root.
+
 - **Required a content-addressed FontFace dependency graph** — D-297 makes family names catalog aliases and transport URLs
   locators rather than cache identities. One Glyph-owned lease graph deduplicates the core GLB by content hash, lazily
   selected external raster artifacts by their authenticated hash, external raster resources by SHA-256 plus byte length,
