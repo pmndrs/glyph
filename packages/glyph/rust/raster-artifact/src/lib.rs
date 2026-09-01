@@ -244,6 +244,16 @@ pub(crate) fn zeroed_bytes(byte_length: usize) -> Result<std::vec::Vec<u8>, Rast
 mod fingerprint_tests {
     use super::*;
 
+    /// Reference vectors produced by mmh3, a MurmurHash3 implementation outside this
+    /// repository.
+    ///
+    /// This hash is implemented twice: here, and in TypeScript at
+    /// `packages/glyph/src/internal/fingerprint.ts`. Rust stamps external page filenames at
+    /// bake time and TypeScript recomputes them at load time, so a single divergent bit makes
+    /// every external page 404. Holding both ports against an outside implementation catches a
+    /// bug the two share, which comparing them only to each other cannot.
+    const REFERENCE_VECTORS: &str = include_str!("../evidence/fingerprint-vectors-v0.json");
+
     #[test]
     fn fingerprint_vectors_are_stable() {
         assert_eq!(fingerprint128(b"", 0), "00000000000000000000000000000000");
@@ -251,5 +261,81 @@ mod fingerprint_tests {
             fingerprint128(b"foo", 0),
             "251b7c576525b6606525b6606525b660"
         );
+    }
+
+    /// The corpus is only evidence about this crate while its seeds are this crate's seeds.
+    #[test]
+    fn domain_seeds_match_the_reference_corpus() {
+        let document: serde_json::Value =
+            serde_json::from_str(REFERENCE_VECTORS).expect("corpus parses");
+        for (name, constant) in [
+            ("artifact", ARTIFACT_FINGERPRINT_V0),
+            ("cache", CACHE_FINGERPRINT_V0),
+            ("descriptor", DESCRIPTOR_FINGERPRINT_V0),
+            ("shaping", SHAPING_FINGERPRINT_V0),
+            ("source", SOURCE_FINGERPRINT_V0),
+        ] {
+            assert_eq!(
+                document["seeds"][name].as_u64(),
+                Some(u64::from(constant)),
+                "{name} seed drifted from the corpus"
+            );
+        }
+    }
+
+    #[test]
+    fn fingerprint_matches_independent_reference_vectors() {
+        let document: serde_json::Value =
+            serde_json::from_str(REFERENCE_VECTORS).expect("corpus parses");
+        let seeds = document["seeds"].as_object().expect("corpus seeds");
+        let cases = document["cases"].as_array().expect("corpus cases");
+
+        let mut lengths = std::collections::BTreeSet::new();
+        let mut checked = 0usize;
+        for case in cases {
+            let input = decode_hex(case["input"].as_str().expect("case payload"));
+            let length = usize::try_from(case["length"].as_u64().expect("case length"))
+                .expect("length fits");
+            assert_eq!(
+                input.len(),
+                length,
+                "case length disagrees with its payload"
+            );
+            lengths.insert(length);
+            for (name, expected) in case["fingerprints"].as_object().expect("case fingerprints") {
+                let seed =
+                    u32::try_from(seeds[name].as_u64().expect("corpus seed")).expect("seed fits");
+                assert_eq!(
+                    fingerprint128(&input, seed).as_str(),
+                    expected.as_str().expect("expected fingerprint"),
+                    "length {length} seed {name}"
+                );
+                checked += 1;
+            }
+        }
+
+        // Lengths 0..=32 walk every arm of the 15-branch tail switch and both block
+        // boundaries. Without this the corpus can pass while one arm is wrong.
+        for length in 0..=32usize {
+            assert!(
+                lengths.contains(&length),
+                "corpus is missing length {length}"
+            );
+        }
+        assert!(
+            lengths.iter().any(|length| *length > 32),
+            "corpus must cover multi-block accumulation"
+        );
+        assert_eq!(checked, cases.len() * seeds.len(), "corpus is ragged");
+    }
+
+    fn decode_hex(value: &str) -> Vec<u8> {
+        assert!(value.len().is_multiple_of(2), "hex payload must be even");
+        (0..value.len())
+            .step_by(2)
+            .map(|index| {
+                u8::from_str_radix(&value[index..index + 2], 16).expect("hex payload byte")
+            })
+            .collect()
     }
 }
