@@ -39,8 +39,9 @@ generated:
 
 This is the pre-implementation design brief and intentionally preserves alternatives that were investigated. The
 verified implementation outcome is recorded in [the investigation report](glyph-api-investigation-report.md), with the
-ordinary adapter contract in D-293 and the final R3F default-or-provider selection contract in D-294. In particular,
-the implemented R3F components expose no handle prop.
+ordinary adapter contract in D-293, the R3F default-or-provider selection contract in D-294, and the approved but not yet
+implemented FontFace/source/readiness direction in D-295. In particular, the implemented R3F components expose no handle
+prop; provider font maps and deferred FontFace selection remain planned work.
 
 This document preserves the API investigation so it can continue in a fresh context. It is a design brief, not an implementation plan that has been approved. The current code remains the evidence for what exists today.
 
@@ -178,15 +179,15 @@ Phase-separated arrays are preferable to one arbitrary `commands[]` array becaus
 
 The renderer factory can hide the stores that make this readable:
 
-| Internal component | Owns | Must not be owned by `Text` or `TextGroup` |
-| --- | --- | --- |
-| `PlanDecoder` | Bounds-checked table reads and typed command creation | Three meshes or scene hierarchy |
-| `ResourceStore` | Resource generations, payload leases, texture/atlas/page bindings | Text content or React state |
-| `BufferStore` | Buffer allocation, patch application, dirty upload ranges | Layout and paragraph constraints |
-| `MaterialStore` | Technique/program/material selection and binding | Scene traversal |
-| `TransformStore` | Opaque transform bindings and matrix upload targets | Font shaping |
-| `DrawStore` | Primitive/draw records mapped to retained host draw objects | Policy encoding |
-| `RendererCommit` | Prepare, commit, rollback/discard, and retirement ordering | React reconciliation |
+| Internal component | Owns                                                              | Must not be owned by `Text` or `TextGroup` |
+| ------------------ | ----------------------------------------------------------------- | ------------------------------------------ |
+| `PlanDecoder`      | Bounds-checked table reads and typed command creation             | Three meshes or scene hierarchy            |
+| `ResourceStore`    | Resource generations, payload leases, texture/atlas/page bindings | Text content or React state                |
+| `BufferStore`      | Buffer allocation, patch application, dirty upload ranges         | Layout and paragraph constraints           |
+| `MaterialStore`    | Technique/program/material selection and binding                  | Scene traversal                            |
+| `TransformStore`   | Opaque transform bindings and matrix upload targets               | Font shaping                               |
+| `DrawStore`        | Primitive/draw records mapped to retained host draw objects       | Policy encoding                            |
+| `RendererCommit`   | Prepare, commit, rollback/discard, and retirement ordering        | React reconciliation                       |
 
 This is the missing component in the current design: not another public “realizer,” but a renderer-owned retained-resource transaction that consumes the canonical plan.
 
@@ -227,7 +228,7 @@ sequenceDiagram
 The public name can remain `shape()` if that is the agreed vocabulary, but its semantic role should be “publish the current retained state and update the renderer.” It should not mean “return a mesh array” or “return a borrowed plan.” A useful internal split is:
 
 ```ts
-session.publish();       // semantic changes: encode, plan, decode, resource/buffer/draw update
+session.publish(); // semantic changes: encode, plan, decode, resource/buffer/draw update
 session.syncTransforms(); // matrix-only changes: no shaping or Wasm crossing
 ```
 
@@ -287,18 +288,18 @@ flowchart TD
 
 Evidence in the current source:
 
-| Location | Current behavior |
-| --- | --- |
-| `packages/glyph/src/three/engine-domain.ts:58-105` | Loader and text domain leases select a shared domain; fonts must be initialized by `FontLoader` before constructing `Text`. |
-| `packages/glyph/src/three/engine-domain.ts:126-149` | The domain asynchronously creates one `GlyphEngine` and one `ThreeTextEngineCoordinator`. |
-| `packages/glyph/src/three/engine-coordinator.ts:185-196` | `Object3D` instances are associated with opaque transform bindings through a `WeakMap`. |
-| `packages/glyph/src/three/text.ts:184-204` | `Text` acquires a domain, binds its transform and fonts, and retains desired state. |
-| `packages/glyph/src/three/text.ts:461-480` | A standalone `Text.updateMatrixWorld()` reconciles and synchronizes its implicit one-text binding. |
-| `packages/glyph/src/three/text.ts:639-668` | `TextGroup.updateMatrixWorld()` collects descendant text, reconciles one group binding, and synchronizes it. |
-| `packages/glyph/src/three/text.ts:708-756` | A `ThreeTextBatchBinding` owns a planner and a `ThreeTextRenderPlanExecutor`; the target is created through the planner target callback. |
-| `packages/glyph/src/three/text.ts:894-925` | `synchronize()` skips publication when only transforms changed; otherwise it publishes, marks text committed, and syncs transforms. |
-| `packages/glyph/src/three/engine-plan-target.ts:250-310` | The target accepts a plan candidate and performs preparation/commit through the coordinator. |
-| `packages/glyph/src/three/engine-plan-target.ts:384-430` | `syncTransforms()` updates retained Three transforms and storage attributes without crossing into Wasm. |
+| Location                                                 | Current behavior                                                                                                                         |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/glyph/src/three/engine-domain.ts:58-105`       | Loader and text domain leases select a shared domain; fonts must be initialized by `FontLoader` before constructing `Text`.              |
+| `packages/glyph/src/three/engine-domain.ts:126-149`      | The domain asynchronously creates one `GlyphEngine` and one `ThreeTextEngineCoordinator`.                                                |
+| `packages/glyph/src/three/engine-coordinator.ts:185-196` | `Object3D` instances are associated with opaque transform bindings through a `WeakMap`.                                                  |
+| `packages/glyph/src/three/text.ts:184-204`               | `Text` acquires a domain, binds its transform and fonts, and retains desired state.                                                      |
+| `packages/glyph/src/three/text.ts:461-480`               | A standalone `Text.updateMatrixWorld()` reconciles and synchronizes its implicit one-text binding.                                       |
+| `packages/glyph/src/three/text.ts:639-668`               | `TextGroup.updateMatrixWorld()` collects descendant text, reconciles one group binding, and synchronizes it.                             |
+| `packages/glyph/src/three/text.ts:708-756`               | A `ThreeTextBatchBinding` owns a planner and a `ThreeTextRenderPlanExecutor`; the target is created through the planner target callback. |
+| `packages/glyph/src/three/text.ts:894-925`               | `synchronize()` skips publication when only transforms changed; otherwise it publishes, marks text committed, and syncs transforms.      |
+| `packages/glyph/src/three/engine-plan-target.ts:250-310` | The target accepts a plan candidate and performs preparation/commit through the coordinator.                                             |
+| `packages/glyph/src/three/engine-plan-target.ts:384-430` | `syncTransforms()` updates retained Three transforms and storage attributes without crossing into Wasm.                                  |
 
 The current target is doing too many jobs in one class. It retains buffers, resources, materials, transforms, origin records, draws, preparation state, and retirement bookkeeping. This is the concrete reason the proposed decomposition is needed.
 
@@ -341,7 +342,7 @@ const three = glyph.handle('three-1', ThreeConfig);
   <TextGroup>
     <Text font={font}>Batched</Text>
   </TextGroup>
-</GlyphProvider>
+</GlyphProvider>;
 ```
 
 The provider does not own the engine singleton. It only supplies the selected handle/session to components. The R3F `Text` component reads the context before the Three object is constructed and passes an opaque handle/session binding into the constructor. Nested inline `Text` spans should not create separate renderer objects; the existing flattening behavior remains appropriate.
@@ -349,7 +350,9 @@ The provider does not own the engine singleton. It only supplies the selected ha
 An explicit prop can supplement context for escape hatches:
 
 ```tsx
-<Text handle={three} font={font}>Explicit selection</Text>
+<Text handle={three} font={font}>
+  Explicit selection
+</Text>
 ```
 
 The precedence should be explicit: an explicit prop overrides the nearest provider; absent both, either throw a useful error or use a documented default handle. Silent global fallback is convenient for the single-handle case but makes multiple handles and tests difficult to reason about.
@@ -456,12 +459,12 @@ flowchart LR
 
 Evidence:
 
-| Location | Current behavior |
-| --- | --- |
-| `packages/glyph-example-renderer/src/engine.ts:106-122` | `openPlanner()` installs the policy, capability set, target, limits, and capacities. |
-| `packages/glyph-example-renderer/src/engine.ts:125-135` | `createText()` creates retained text; `publish()` publishes and returns the target’s decoded draw list. |
-| `packages/glyph-example-renderer/src/plan-reader.ts:16-71` | `readCandidate()` reads plan tables into an owned `ExampleDrawList`; borrowed write payloads are copied only when they escape. |
-| `packages/glyph-example-renderer/src/engine.ts:255-333` | The target resolves payloads, prepares/commits resources, prepares/commits submission, tracks generations, and retires payloads. |
+| Location                                                   | Current behavior                                                                                                                 |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/glyph-example-renderer/src/engine.ts:106-122`    | `openPlanner()` installs the policy, capability set, target, limits, and capacities.                                             |
+| `packages/glyph-example-renderer/src/engine.ts:125-135`    | `createText()` creates retained text; `publish()` publishes and returns the target’s decoded draw list.                          |
+| `packages/glyph-example-renderer/src/plan-reader.ts:16-71` | `readCandidate()` reads plan tables into an owned `ExampleDrawList`; borrowed write payloads are copied only when they escape.   |
+| `packages/glyph-example-renderer/src/engine.ts:255-333`    | The target resolves payloads, prepares/commits resources, prepares/commits submission, tracks generations, and retires payloads. |
 
 The proposed config/handle API should make this lifecycle reusable: the engine supplies the canonical plan and publication protocol; the example renderer supplies `resolve` and renderer/device consumption. It should not need a Three-specific command buffer.
 
