@@ -40,19 +40,19 @@ const [embedded, external] = await Promise.all([
   baker.bake({
     font,
     rasterKey,
-    packaging: { artifact: 'embedded', pages: 'embedded' },
+    packaging: { artifact: 'embedded' },
     descriptor,
   }),
   baker.bake({
     font,
     rasterKey,
-    packaging: { artifact: 'external', pages: 'external' },
+    packaging: { artifact: 'external' },
     descriptor,
   }),
 ]);
 const [combinedEmbedded, combinedExternal, empty] = await Promise.all([
-  composeFontBake(core, [{ raster: embedded, packaging: { artifact: 'embedded', pages: 'embedded' } }]),
-  composeFontBake(core, [{ raster: external, packaging: { artifact: 'external', pages: 'external' } }]),
+  composeFontBake(core, [{ raster: embedded, packaging: { artifact: 'embedded' } }]),
+  composeFontBake(core, [{ raster: external, packaging: { artifact: 'external' } }]),
   composeFontBake(core, []),
 ]);
 const context = {
@@ -63,13 +63,8 @@ const context = {
   descriptor,
 };
 const embeddedValidation = await validateBitmapArtifact(embedded.artifacts[0].bytes, context);
-const externalPages = new Map(
-  external.artifacts.filter(({ role }) => role === 'raster-page').map(({ id, bytes }) => [id, bytes]),
-);
-const externalValidation = await validateBitmapArtifact(external.artifacts[0].bytes, {
-  ...context,
-  externalPages,
-});
+// A companion carries its pages inside it, so it validates against the same context.
+const externalValidation = await validateBitmapArtifact(external.artifacts[0].bytes, context);
 const records = embeddedValidation.strikes[0].records;
 if (!records.every((value, index) => value === externalValidation.strikes[0].records[index])) {
   throw new Error('embedded and external packaging changed authoritative record bytes');

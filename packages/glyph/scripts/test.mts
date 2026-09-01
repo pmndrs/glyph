@@ -37,6 +37,7 @@ export async function runGlyphTest(): Promise<void> {
   }
   await runNode('scripts/test-mtsdf-core-wasm.mjs');
   await runNode('scripts/generate-mtsdf-oracle-evidence.mjs', ['--check']);
+  await runNode('scripts/repin-font-manifests.mjs', ['--check']);
   await runNode('scripts/sync-unicode-test-data.mjs', ['--check']);
   await runNodeTests(['tests/package/*.test.mjs', 'tests/integration/*.test.mjs']);
   await runNodeTests(['tests/fuzz/*.test.mjs']);

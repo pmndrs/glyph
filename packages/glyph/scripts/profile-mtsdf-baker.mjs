@@ -167,7 +167,7 @@ async function runDirectProfile(profileCase, source) {
       sourceFingerprint,
       shapingFingerprint,
       rasterKey,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       descriptor,
     },
   });
