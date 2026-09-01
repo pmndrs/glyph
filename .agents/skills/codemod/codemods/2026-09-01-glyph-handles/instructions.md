@@ -21,9 +21,33 @@ const group = three.createTextGroup();
 Do not choose a handle from a font. Immutable root `Font` values may be bound independently by multiple handles. Keep
 scene insertion unchanged: applications still call `scene.add(text)` or parent objects through normal Three APIs.
 
-For R3F, pass the already-created handle through `GlyphProvider`, or use the explicit `handle` prop on an outer `Text`
-or `TextGroup`. The provider is dependency injection only and must not call `glyph.init()`, create a handle, or dispose an
-externally owned handle. Nested `Text` elements remain inline semantic spans and do not select a handle independently.
+For ordinary R3F, remove per-object handle wiring. `<Text>` and `<TextGroup>` lazily initialize Glyph and use the built-in
+Three config when no provider is present:
+
+```tsx
+<Canvas>
+  <Text font={font}>Hello</Text>
+</Canvas>
+```
+
+When a subtree needs a custom or independently configured handle, select it once at the shared ownership boundary:
+
+```tsx
+await glyph.init();
+const three = glyph.handle('labels', ThreeConfig);
+
+<GlyphProvider handle={three}>
+  <TextGroup>
+    <Text font={font}>Hello</Text>
+  </TextGroup>
+</GlyphProvider>;
+```
+
+Move an old `handle` prop on `Text` or `TextGroup` to the nearest boundary that owns all objects using that handle. If
+siblings deliberately used different handles, wrap each subtree in its own provider. A provider captures its initial
+handle and never updates its context value; remount it with a new `key` to select another handle and reconstruct the
+subtree. The provider neither creates nor disposes its externally owned handle. Nested `Text` elements remain inline
+semantic spans and never select a handle independently.
 
 One `TextGroup` may contain only objects created by the same handle. Reconstruct an object when changing handles; do not
 mutate a live object's ownership. Multiple handles may coexist in one scene, and one handle may create distinct objects
@@ -41,6 +65,6 @@ rg -n "createElement\\((Text|TextGroup)" packages apps --glob '*.{ts,tsx,mts}'
 ```
 
 After mechanical sites are gone, inspect factories, subclass constructors, tests that intentionally prove legacy
-behavior, and generated files separately. A successful migration proves that root initialization precedes handle
-creation, every retained Three object has exactly one handle, provider changes reconstruct R3F objects, and disposal
-settles each handle-owned domain once.
+behavior, and generated files separately. A successful migration proves that root initialization precedes explicit
+handle creation, every retained Three object has exactly one provider-or-default handle, provider selection is immutable
+for one mount, provider remounts reconstruct R3F objects, and disposal settles each explicitly owned handle domain once.

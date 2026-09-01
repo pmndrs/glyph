@@ -420,8 +420,16 @@ are moved into another group.
 
 ## React Three Fiber
 
-`@pmndrs/glyph/react` exports `GlyphProvider`, `<Text>`, `<TextGroup>`, and `useFont`. Provide a previously created Three
-handle, or pass the handle directly to an outer component:
+`@pmndrs/glyph/react` exports `GlyphProvider`, `<Text>`, `<TextGroup>`, and `useFont`. Ordinary R3F uses one lazily
+initialized built-in Three handle without configuration at each component:
+
+```tsx
+<TextGroup>
+  <Text font={font}>Hello</Text>
+</TextGroup>
+```
+
+Use a provider only when a subtree needs a previously created custom handle:
 
 ```tsx
 <GlyphProvider handle={three}>
@@ -431,13 +439,14 @@ handle, or pass the handle directly to an outer component:
 </GlyphProvider>
 ```
 
-Context carries only the selected handle into R3F host-object construction. It does not initialize Glyph or own a second
-engine, resolver, renderer, scene, canvas, or publication boundary. Changing the handle remounts the retained Three
-object. Nested R3F `<Text>` values flatten into formatted spans and create no Three object of their own; an outer text
-requires a font, while nested spans may override it. React commit applies desired properties in layout effects and calls
-R3F `invalidate()`. The subsequent Three scene traversal performs `shape()`-equivalent publication or cheap transform
-synchronization before the host renderer builds its render list. The maintained renderer target is
-`@react-three/fiber/webgpu`, which inherits Three's WebGL fallback.
+The provider captures its initial handle and context carries only that immutable selection into R3F host-object
+construction. It does not own a second engine, resolver, renderer, scene, canvas, publication boundary, or the supplied
+handle's disposal. Remount the provider to select another handle and reconstruct its retained Three subtree. `<Text>` and
+`<TextGroup>` intentionally expose no handle prop. Nested R3F `<Text>` values flatten into formatted spans and create no
+Three object of their own; an outer text requires a font, while nested spans may override it. React commit applies desired
+properties in layout effects and calls R3F `invalidate()`. The subsequent Three scene traversal performs
+`shape()`-equivalent publication or cheap transform synchronization before the host renderer builds its render list. The
+maintained renderer target is `@react-three/fiber/webgpu`, which inherits Three's WebGL fallback.
 
 ## Deliberately absent surfaces
 

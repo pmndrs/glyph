@@ -40,11 +40,10 @@ import { createElement } from 'react';
 
 import '../support/browser-globals.mjs';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { glyph, txt } from '@pmndrs/glyph';
+import { txt } from '@pmndrs/glyph';
 import { alignSpansToClusters } from '../../dist/formatted-text.js';
 import { span } from '@pmndrs/glyph';
 import { Text as R3fText } from '@pmndrs/glyph/react';
-import { ThreeConfig } from '@pmndrs/glyph/three';
 
 import { createFontCache, mount, seededRandom, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { findGraphemeBoundaries } from '../../dist/internal/unicode.js';
@@ -60,11 +59,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const bitmap16 = { technique: bitmap, options: { strikes: [16] } };
 const fonts = createFontCache({ inter: { file: 'inter-bitmap-16.font.glb', raster: bitmap16 } });
-await glyph.init();
-const r3fHandle = glyph.handle('three:text-mutation-span-tests', ThreeConfig);
 after(() => {
   fonts.dispose();
-  r3fHandle.dispose();
 });
 
 const ACUTE = '́';
@@ -531,7 +527,6 @@ test('a nested React Text whose flattened span splits a cluster mounts and publi
     createElement(
       R3fText,
       {
-        handle: r3fHandle,
         font,
         style: [latin, paint],
         constraints,
@@ -572,7 +567,6 @@ test('a nested React Text opening with a combining mark compiles onto its base c
     createElement(
       R3fText,
       {
-        handle: r3fHandle,
         font,
         style: [latin, paint],
         constraints,
@@ -606,7 +600,7 @@ test('a nested React Text rejects box-only props before constructing a paragraph
       create(
         createElement(
           R3fText,
-          { font, handle: r3fHandle, style: latin, constraints, layout },
+          { font, style: latin, constraints, layout },
           createElement(R3fText, { position: [1, 2, 3] }, 'invalid inline box'),
         ),
       ),

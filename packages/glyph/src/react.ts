@@ -4,7 +4,7 @@ import {
   createContext,
   forwardRef,
   isValidElement,
-  useContext,
+  use,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -17,6 +17,7 @@ import {
 
 import { resolveRangesToClusters } from './formatted-text.js';
 import type { Font } from './font.js';
+import { glyph } from './glyph.js';
 import { immutableFontRequestKey, loadFont, type LoadFontInput } from './loader.js';
 import { cloneImmutableFont, type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
@@ -25,6 +26,7 @@ import type { AnyRasterTechnique, RasterOptionsOf } from './raster-technique.js'
 import { threeHandleDomain } from './three/handle.js';
 import {
   FontLoader as ThreeFontLoader,
+  ThreeConfig,
   Text as ThreeText,
   TextGroup as ThreeTextGroup,
   type StandaloneTextProperties,
@@ -60,8 +62,6 @@ type FontSelectionTechnique<Selection> =
       : never;
 
 export type R3fTextProps<Technique extends AnyRasterTechnique> = Object3DProps & {
-  /** Explicit construction handle; otherwise the nearest GlyphProvider is used. */
-  readonly handle?: ThreeHandle;
   readonly font?: R3fFontSelection<Technique>;
   readonly children?: R3fTextChild<Technique>;
   /** Text shaping and presentation properties inherited by nested Text spans. */
@@ -80,8 +80,6 @@ export type R3fTextProps<Technique extends AnyRasterTechnique> = Object3DProps &
 
 export type R3fTextGroupProps = Object3DProps &
   TextGroupOptions & {
-    /** Explicit construction handle; otherwise the nearest GlyphProvider is used. */
-    readonly handle?: ThreeHandle;
     readonly children?: ReactNode;
     readonly onError?: ((error: unknown) => void) | undefined;
     readonly ref?: Ref<ThreeTextGroup>;
@@ -134,27 +132,46 @@ export interface UseFont {
 const ThreeTextElement = extend(ThreeText);
 const ThreeTextGroupElement = extend(ThreeTextGroup);
 const GlyphHandleContext = createContext<ThreeHandle | undefined>(undefined);
+const defaultThreeHandleName = '@pmndrs/glyph/react:default';
 const handleIds = new WeakMap<ThreeHandle, number>();
 let nextHandleId = 1;
+let defaultThreeHandlePromise: Promise<ThreeHandle> | undefined;
 
 export interface GlyphProviderProps {
   readonly handle: ThreeHandle;
   readonly children?: ReactNode;
 }
 
-/** Selects the already-created Three handle used by descendant retained objects. */
+/** Selects one already-created Three handle for the lifetime of this provider mount. */
 export function GlyphProvider({ handle, children }: GlyphProviderProps): ReactElement {
-  return createElement(GlyphHandleContext.Provider, { value: handle }, children);
+  const [selected] = useState(() => handle);
+  if (handle !== selected) {
+    throw new Error('GlyphProvider handle is immutable; remount the provider to select another handle');
+  }
+  assertUsableHandle(selected);
+  return createElement(GlyphHandleContext.Provider, { value: selected }, children);
 }
 
-function useSelectedHandle(explicit: ThreeHandle | undefined): ThreeHandle {
-  const provided = useContext(GlyphHandleContext);
-  const handle = explicit ?? provided;
-  if (handle === undefined) {
-    throw new Error('R3F Text and TextGroup require a Three handle prop or a surrounding GlyphProvider');
-  }
-  if (handle.disposed) throw new Error('R3F cannot construct Text or TextGroup from a disposed Three handle');
+function useSelectedHandle(): ThreeHandle {
+  const provided = use(GlyphHandleContext);
+  const handle = provided ?? use(defaultThreeHandle());
+  assertUsableHandle(handle);
   return handle;
+}
+
+function defaultThreeHandle(): Promise<ThreeHandle> {
+  if (defaultThreeHandlePromise !== undefined) return defaultThreeHandlePromise;
+  const initialization = glyph.init().then(() => glyph.handle(defaultThreeHandleName, ThreeConfig));
+  const retryable = initialization.catch((error: unknown) => {
+    if (defaultThreeHandlePromise === retryable) defaultThreeHandlePromise = undefined;
+    throw error;
+  });
+  defaultThreeHandlePromise = retryable;
+  return retryable;
+}
+
+function assertUsableHandle(handle: ThreeHandle): void {
+  if (handle.disposed) throw new Error('R3F cannot construct Text or TextGroup from a disposed Three handle');
 }
 
 function handleId(handle: ThreeHandle): number {
@@ -180,7 +197,8 @@ export const Text = forwardRef(function Text<Technique extends AnyRasterTechniqu
   properties: Omit<R3fTextProps<Technique>, 'ref'>,
   forwardedRef: Ref<ThreeText<Technique>>,
 ): ReactElement | null {
-  const handle = useSelectedHandle(properties.handle);
+  assertNoHandleProp(properties, 'Text');
+  const handle = useSelectedHandle();
   const flattened = useMemo(() => flattenText<Technique>(properties.children), [properties.children]);
   const desired = textProperties(properties, flattened);
   const [object, publishObject] = useState<ThreeText<Technique> | null>(null);
@@ -250,7 +268,8 @@ export const TextGroup: (input: R3fTextGroupProps) => ReactElement | null = forw
   properties: Omit<R3fTextGroupProps, 'ref'>,
   forwardedRef: Ref<ThreeTextGroup>,
 ): ReactElement | null {
-  const handle = useSelectedHandle(properties.handle);
+  assertNoHandleProp(properties, 'TextGroup');
+  const handle = useSelectedHandle();
   const [object, publishObject] = useState<ThreeTextGroup | null>(null);
   useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
   return createElement(TextGroupObject, {
@@ -579,7 +598,6 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
   const object = { ...properties } as Record<string, unknown>;
   for (const key of [
     'font',
-    'handle',
     'children',
     'style',
     'layout',
@@ -597,9 +615,15 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
 
 function groupObjectProperties(properties: R3fTextGroupProps): TextGroupElementProps {
   const object = { ...properties } as Record<string, unknown>;
-  for (const key of ['handle', 'capacity', 'compositing', 'material', 'pixelSnapping', 'children', 'onError', 'ref'])
+  for (const key of ['capacity', 'compositing', 'material', 'pixelSnapping', 'children', 'onError', 'ref'])
     delete object[key];
   return object as TextGroupElementProps;
+}
+
+function assertNoHandleProp(properties: object, owner: 'Text' | 'TextGroup'): void {
+  if (Object.hasOwn(properties, 'handle')) {
+    throw new TypeError(`R3F ${owner} does not accept a handle prop; select custom handles with GlyphProvider`);
+  }
 }
 
 function sameCapacity(

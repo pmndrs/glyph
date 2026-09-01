@@ -5,7 +5,7 @@
   "package": "@pmndrs/glyph",
   "from": "canary before the root Glyph handle API",
   "to": "canary at or after the root Glyph handle API",
-  "summary": "Initialize the root Glyph runtime, construct Three objects through named handles, and inject a selected handle into R3F.",
+  "summary": "Initialize the root Glyph runtime, construct imperative Three objects through named handles, and use provider-or-default handle selection in R3F.",
   "instructions": "./instructions.md",
   "transform": "./transform.mjs",
   "changes": [
@@ -30,7 +30,13 @@
     {
       "kind": "manual",
       "from": "R3F Text without an adapter selection",
-      "to": "GlyphProvider handle selection or an explicit handle prop",
+      "to": "the lazily initialized built-in Three handle, or stable GlyphProvider selection",
+      "automatic": false
+    },
+    {
+      "kind": "remove",
+      "from": "handle prop on R3F Text or TextGroup",
+      "to": "GlyphProvider at the shared ownership boundary",
       "automatic": false
     }
   ],
