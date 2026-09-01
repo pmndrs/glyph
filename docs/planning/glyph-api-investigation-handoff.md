@@ -37,6 +37,11 @@ generated:
 
 # Glyph API investigation handoff
 
+This is the pre-implementation design brief and intentionally preserves alternatives that were investigated. The
+verified implementation outcome is recorded in [the investigation report](glyph-api-investigation-report.md), with the
+ordinary adapter contract in D-293 and the final R3F default-or-provider selection contract in D-294. In particular,
+the implemented R3F components expose no handle prop.
+
 This document preserves the API investigation so it can continue in a fresh context. It is a design brief, not an implementation plan that has been approved. The current code remains the evidence for what exists today.
 
 ## 1. Direction agreed so far

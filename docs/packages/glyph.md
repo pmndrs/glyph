@@ -189,10 +189,12 @@ IDs, and names retained in a font's `post` or CFF data. Exact repeatable `--name
 compressed `--unicode-set` accepted by `glyph bake --unicodes`. Fonts without authored names still expose exact IDs rather
 than invented semantic labels. Rich vendor labels and aliases remain external catalog data.
 
-R3F receives one selected `ThreeHandle` through `GlyphProvider` or an explicit outer `handle` prop. Context is only
-constructor dependency injection: it owns no engine, runtime, scene, renderer, canvas, publication cursor, or resource
-pool. Changing the selected handle remounts the Three host object so an object never migrates between handle domains.
-Imperative construction uses `handle.createText()` and `handle.createTextGroup()` directly.
+R3F `<Text>` and `<TextGroup>` expose no handle prop. They read a selected `ThreeHandle` from the nearest
+`GlyphProvider`, or suspend on one module-owned default Three handle that calls idempotent `glyph.init()` and installs
+`ThreeConfig` once. A provider captures its initial handle and never updates the context value; selecting another handle
+requires remounting the provider. Context is constructor dependency injection only: it owns no engine, runtime, scene,
+renderer, canvas, publication cursor, or resource pool, and it never disposes an externally owned handle. Imperative
+construction uses `handle.createText()` and `handle.createTextGroup()` directly.
 
 The R3F `Text` component infers the technique union from a required outer font selection, including a font stack chosen
 from runtime state. Callers do not widen dynamic selections to `AnyRasterTechnique`. A nested `Text` is flattened into

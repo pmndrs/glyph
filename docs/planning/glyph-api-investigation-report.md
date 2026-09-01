@@ -133,17 +133,19 @@ runtime:
   `TextGroup` is the draw root, and committed Three `Mesh` values become its children;
 - `Text.shape()` and `TextGroup.shape()` synchronously flush semantic state. Clean boundaries route only through the
   extracted `ThreeTransformSynchronizer`, which has no engine, Codec, decoder, resolver, or publication dependency;
-- R3F `GlyphProvider` stores only a selected `ThreeHandle`. An explicit outer `handle` prop is equivalent. Handle changes
-  remount the Three object; nested inline `<Text>` continues to flatten into the outer paragraph;
+- R3F `<Text>` and `<TextGroup>` use the nearest immutable `GlyphProvider` selection or one lazily initialized default
+  `ThreeConfig` handle. They expose no handle prop; provider remounts select another handle, while nested inline `<Text>`
+  continues to flatten into the outer paragraph;
 - the example renderer implements the same config/binder/publication contract, retaining a private numeric draw-list
   bridge only for its existing concrete device oracle.
 
 The implementation tests cover repeated/concurrent initialization, two named Three handles over one immutable font,
 spread config hooks, explicit decode and resolve calls, standalone and grouped draw-root attachment, multiple scenes on
 one handle, cross-handle group rejection, name reuse after disposal, explicit `shape()`, transform-only bypass of semantic
-phases, R3F provider/explicit-handle construction, React lease balance, and the configured example-renderer path. The full
-Glyph behavioral run passed 935 TypeScript tests plus its Rust suites; the focused post-refactor Three/R3F run passed 71
-tests, and the example renderer passed 13 tests.
+phases, R3F provider/default-handle construction, immutable provider selection, React lease balance, and the configured
+example-renderer path. The final full Glyph behavioral run passed 938 TypeScript tests plus its Rust suites, declarations,
+lint, and formatting. The focused React lifecycle run passed 11 tests, the combined R3F/span run passed 45 tests, and the
+example renderer passed 13 tests.
 
 ## Pre-change evidence status of the handoff
 
@@ -507,7 +509,16 @@ The phases are ordered by contract: resources -> buffers -> patches -> primitive
 
 ## 7. R3F injection without a second runtime
 
-The implemented React boundary carries exactly one already-created Three handle:
+Ordinary R3F carries no adapter configuration at each object:
+
+```tsx
+<Text font={font}>Default Three text</Text>
+<TextGroup>
+  <Text font={font}>One group publication boundary</Text>
+</TextGroup>
+```
+
+When a subtree needs a custom handle, the implemented React boundary carries exactly one already-created Three handle:
 
 ```tsx
 <GlyphProvider handle={threeHandle}>
@@ -518,7 +529,12 @@ The implemented React boundary carries exactly one already-created Three handle:
 </GlyphProvider>
 ```
 
-The provider does not call `useThree()` to capture a renderer, scene, root store, or canvas. R3F already owns those presentation concerns. The only R3F host value Glyph still needs is the existing `invalidate()` callback after desired properties change; that is scheduling coordination performed by the wrapper, not part of `GlyphConfig`, the handle, or resource resolution.
+The wrapper reads context with React `use(Context)`. When the result is absent, it conditionally `use()`s one module-owned
+promise that calls idempotent `glyph.init()` and creates the built-in `ThreeConfig` handle once. The provider captures its
+initial handle and rejects a later handle prop change, so its context value is immutable for that mount. It does not call
+`useThree()` to capture a renderer, scene, root store, or canvas. R3F already owns those presentation concerns. The only
+R3F host value Glyph still needs is the existing `invalidate()` callback after desired properties change; that is
+scheduling coordination performed by the wrapper, not part of `GlyphConfig`, the handle, or resource resolution.
 
 ### The concrete R3F construction seam
 
@@ -528,17 +544,20 @@ The current wrapper already shows exactly where the handle enters. `extend(Three
 [desiredProperties];
 ```
 
-to:
+to the actual retained constructor arguments:
 
 ```ts
-[opaqueHandleTextBinding, desiredProperties];
+[desiredProperties, opaqueHandleDomain];
 ```
 
 The React `<Text>` wrapper reads `opaqueHandleTextBinding` from context before it creates the R3F element. R3F then constructs the Three object at its normal host-commit point. Imperative code uses `handle.createText(properties)` with the same internal factory/binding. The opaque binding is not a numeric ID and is not exposed for ordinary application construction.
 
 This seam still requires an approved constructor policy. The clean API makes `handle.createText()` the imperative application constructor and keeps the handle-bearing `Text` constructor package-private. If backward compatibility requires `new Text(properties)`, its runtime selection must be specified explicitly; silently reaching for a process-global default handle would reintroduce ambiguity.
 
-The handle is captured for the retained object's lifetime. When provider selection changes, the wrapper changes its R3F key so the old object is disposed and a new object is commit-constructed with the new binding. It must not mutate a live Three object's handle owner.
+The handle is captured for the retained object's lifetime. A mounted provider cannot change its selection. To switch,
+the application remounts the provider (normally with a new React `key`), which disposes the old subtree and
+commit-constructs new objects with the new binding. The wrapper's internal key also includes handle identity so changing
+between a provider and the default cannot migrate a live Three object's handle owner.
 
 ### The concrete synchronization seam
 
@@ -564,14 +583,22 @@ The first implementation should therefore keep one shape decision per current pu
 
 The contract should be:
 
-1. `glyph` owns initialization and the named handle registry. `GlyphProvider` never calls `glyph.init()`, registers a handle, clones config, creates a renderer, or owns global disposal.
-2. The provider value is an already-created handle. An explicit `handle` prop on outer `Text`/`TextGroup` may override the nearest provider; absence of both throws during outer construction. There is no silent process-global Three handle or canvas fallback.
-3. `Text` reads the handle before its R3F constructor arguments are captured. The handle creates the retained Three `Text` and gives it a direct opaque binding. Context never supplies a numeric ID.
-4. A handle change remounts/reconstructs the Three `Text` or `TextGroup`; it does not rebind a live object. The current wrapper already uses React keys to reconstruct when immutable construction choices change ([react.ts:148-154](../../packages/glyph/src/react.ts#L148-L154), [211-216](../../packages/glyph/src/react.ts#L211-L216)). The new key must include opaque handle identity.
+1. `glyph` owns initialization and the named handle registry. The no-provider path calls idempotent `glyph.init()` and
+   creates one internal default `ThreeConfig` handle. `GlyphProvider` itself never registers a handle, clones config,
+   creates a renderer, or owns global disposal.
+2. `Text` and `TextGroup` expose no handle prop. The nearest provider supplies an already-created handle; absent a
+   provider, both use the shared default handle. No renderer, scene, canvas, or GPU context is captured by either path.
+3. `Text` reads the handle before its R3F constructor arguments are captured. The handle creates the retained Three
+   `Text` and gives it a direct opaque binding. Context never supplies a numeric ID.
+4. A provider captures its initial handle and rejects a changed handle prop. Selecting another handle requires a provider
+   remount, which reconstructs `Text` and `TextGroup`; it never rebinds a live object. The wrapper's internal key includes
+   opaque handle identity as a second guard.
 5. Nested inline `<Text>` is still flattened before host construction, so it inherits the outer paragraph's selected handle and creates no separate renderer object.
 6. `TextGroup` does not create a Glyph runtime or handle. It creates/owns a private publication boundary for descendants selected from the same handle. A nested `TextGroup` remains a terminal boundary, matching current traversal.
 7. React render and layout effects only publish desired state and invalidate R3F. Three scene traversal calls boundary `shape()` or `syncTransforms()` after matrices are current.
-8. Provider unmount does not dispose an externally supplied handle. Retained Three objects and the handle's normal disposal rules own their leases; context owns only the reference.
+8. Provider unmount does not dispose an externally supplied handle. Retained Three objects and the handle's normal
+   disposal rules own their leases; context owns only the immutable reference. The internal default handle has module
+   lifetime and is not exposed for application disposal.
 
 This is not a second runtime because context contains no mutable runtime state. It is equivalent to dependency injection of one object reference at construction time.
 
@@ -609,7 +636,8 @@ The implemented rule is that a **handle owns configuration, shared adapter bookk
 | Scenario                                               | Implemented rule                                                                                                                                                        | Why                                                                                                                        | Required guard                                                                                                                                                       |
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Imperative `handle.createText()`                       | Construct one Three `Text` with an opaque handle binding and a private standalone publication boundary.                                                                 | No renderer, scene, or canvas is needed to construct it or resolve Three objects.                                          | The handle-bearing constructor remains package-private; the public factory rejects disposed handles.                                                                 |
-| R3F provider                                           | Context supplies the handle directly to outer `<Text>` and `<TextGroup>` construction.                                                                                  | React needs dependency injection only because JSX does not call `handle.createText()` directly.                            | Missing selection throws; provider unmount does not dispose an externally owned handle.                                                                              |
+| R3F default                                            | With no provider, `<Text>` and `<TextGroup>` share one lazily initialized built-in `ThreeConfig` handle.                                                                | Ordinary R3F is already renderer-specific and needs no repeated adapter configuration.                                     | Initialization is one retryable Suspense promise; the internal handle has module lifetime and is not exposed.                                                        |
+| R3F provider                                           | Context supplies one immutable custom handle directly to outer `<Text>` and `<TextGroup>` construction.                                                                 | React needs dependency injection only because JSX does not call `handle.createText()` directly.                            | Components expose no handle prop; a changed provider prop throws; keyed remount selects another handle; unmount does not dispose the externally owned handle.        |
 | `TextGroup`                                            | Own one private publication boundary; descendant `Text` objects from the same handle share one planner/decode/renderer transaction.                                     | Matches current one-group/one-publication behavior and batching evidence.                                                  | Nested groups terminate collection and own separate boundaries; no descendant is published twice.                                                                    |
 | Standalone `Text`                                      | Own a private boundary until it joins a `TextGroup`.                                                                                                                    | Current standalone text has its own draw root and planner.                                                                 | Do not globally coalesce standalone texts without proving traversal and failure isolation.                                                                           |
 | Multiple `TextGroup`s on one handle                    | Keep separate publication streams while sharing only documented handle-owned resource/config caches.                                                                    | Current groups have independent planners/draw roots, while coordinator resources can be shared above them.                 | Dirty state, acceptance cursor, errors, and retries remain per boundary.                                                                                             |
@@ -624,14 +652,14 @@ The implemented rule is that a **handle owns configuration, shared adapter bookk
 ## 10. Remaining questions, risks, and smallest decisive experiments
 
 The implemented tests settle initialization, live-name reuse, two Three handles over one immutable font, standalone and
-group boundary ownership, multiple scenes, missing-provider behavior, spread config wrapping, transform-only bypass, and
+group boundary ownership, multiple scenes, default-handle behavior, spread config wrapping, transform-only bypass, and
 example-renderer portability. These narrower questions remain:
 
 | Question or risk                  | Why still material                                                                                                                        | Smallest experiment or test                                                                                                                                                 |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Failed root initialization policy | Success is idempotent and concurrent-safe; retry after a failed Wasm load is implemented but not yet isolated in a root-runtime test.     | Inject one rejected `createGlyphEngine`, retry with valid bytes, and assert exactly one live engine and no leaked backend.                                                  |
 | R3F multiple-render timing        | Traversal suppresses duplicate semantic work, but two cameras/render passes in one R3F frame have not been instrumented directly.         | Commit two prop updates, invalidate once, render two cameras, and assert one semantic prepare plus cheap synchronization on the second traversal.                           |
-| Provider handle replacement       | The key forces remount by handle identity, but StrictMode lease settlement across a live provider switch needs a dedicated test.          | Switch A → B under StrictMode and assert one old-object disposal, distinct new object identity, retained desired props, and no cross-handle group.                          |
+| Provider handle replacement       | A mounted provider now rejects a changed handle prop; keyed remount settlement under StrictMode still needs a dedicated test.             | Remount keyed provider A as keyed provider B under StrictMode and assert one old-object disposal, distinct new object identity, retained desired props, and no cross-handle group. |
 | Two real Three renderer backends  | `resolve` deliberately creates renderer-agnostic Three objects; actual WebGPU/WebGL renderer-local realization is late-bound by Three.    | Render separate objects from one handle through two real renderers and observe texture/buffer creation and final disposal without adding canvas identity to resolve.        |
 | Resolver cache identity           | The current built-in resolver returns fresh binding leases; safe sharing across boundaries must use authenticated payload/config keys.    | Resolve one payload in two boundaries and handles, add a counted cache experimentally, and prove exact sharing plus final release under rejection and retirement.           |
 | Async-only GPU resource creation  | Borrowed decode/prepare is synchronous; a future adapter may require asynchronous device initialization or uploads.                       | Build a raw WebGPU adapter that captures an initialized device. If resource creation cannot remain synchronous, add explicit handle prefetch/init rather than async decode. |
@@ -669,7 +697,15 @@ renderer.render(scene, camera); // traversal shapes or synchronizes as needed
 
 `three.createText()` is host-neutral. It creates a retained Three object and private publication boundary; attaching that object to a scene and rendering it are ordinary Three responsibilities. The handle does not guess or retain a renderer, scene, or canvas.
 
-The matching R3F construction uses context only to select the same handle:
+Ordinary R3F uses the built-in handle without a provider:
+
+```tsx
+<Canvas>
+  <Text font={font}>Hello Glyph</Text>
+</Canvas>
+```
+
+The optional provider selects the same explicit handle for a custom subtree:
 
 ```tsx
 <Canvas>
@@ -1077,7 +1113,7 @@ If that adapter also owns presentation, its host renderer can separately capture
 ### Exact Three and R3F flow
 
 ```text
-React context selects handle (R3F only)
+R3F selects nearest immutable context handle or suspends on built-in default
   -> handle.createText() or R3F constructor args create retained Text/TextGroup
   -> application/R3F attaches it anywhere in an Object3D hierarchy
   -> React layout effect updates desired state and calls invalidate()
@@ -1094,12 +1130,15 @@ React context selects handle (R3F only)
 
 1. Construct and shape a Three `Text` with `DataArrayTexture` resources in a headless test with no renderer, scene, or canvas. Assert the retained Three objects exist and no backend allocation was attempted.
 2. Render distinct text branches from one handle through two independent `WebGPURenderer`s. Verify each renderer realizes its own backend resources and that disposing one branch/renderer does not invalidate the other. This decides whether handle caches may safely share resolved Three objects across renderers.
-3. Mount the R3F provider with only a handle, switch handle A to B under StrictMode, and assert reconstruction plus exactly-once lease settlement. No test should need to inspect R3F's renderer, scene, root store, or canvas target for construction.
+3. Mount ordinary R3F text with no provider and assert one default handle initializes through Suspense. Separately remount
+   keyed provider A as keyed provider B under StrictMode and assert reconstruction plus exactly-once lease settlement.
+   No test should inspect R3F's renderer, scene, root store, or canvas target for construction.
 4. Create a raw-WebGPU config from a device with no canvas, resolve a buffer/texture successfully, then add and configure a canvas context only for presentation. Separately test device loss and reject further synchronous resource creation at the call site.
 
 ## Approved contract outcome
 
-The user explicitly approved implementation in this task, and D-293 records the resulting contract:
+The user explicitly approved implementation in this task. D-293 records the adapter contract and D-294 records the
+refined R3F default-or-provider selection contract:
 
 1. `glyph` is the sole root `Glyph` instance and `glyph.init()` is the sole runtime initialization path for the application-facing API.
 2. `glyph.handle(name, config)` creates an independently disposable, host-neutral configured adapter handle; `/three` exports the spreadable `ThreeConfig`.

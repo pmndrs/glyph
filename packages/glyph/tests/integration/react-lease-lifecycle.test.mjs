@@ -25,7 +25,7 @@ import { glyph } from '@pmndrs/glyph';
 import { FontLoader, ThreeConfig } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
 
-import { GlyphProvider, Text, useFont } from '@pmndrs/glyph/react';
+import { GlyphProvider, Text, TextGroup, useFont } from '@pmndrs/glyph/react';
 import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
 import { threeEngineDomainReport } from '../../dist/three/engine-domain.js';
 
@@ -88,6 +88,71 @@ test('mounting and unmounting a React Text returns every paragraph lease', async
   }
 });
 
+test('Text and TextGroup share the built-in Three handle without a provider', async () => {
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const fixture = await loadFixture();
+  const mountedText = [];
+  const mountedGroup = [];
+  try {
+    const renderer = await create(
+      createElement(
+        TextGroup,
+        { ref: (object) => void (object != null && mountedGroup.push(object)) },
+        createElement(
+          Text,
+          { font: fixture.font, ref: (object) => void (object != null && mountedText.push(object)) },
+          'default',
+        ),
+      ),
+    );
+    assert.equal(mountedGroup.length > 0, true, 'the default handle must construct the retained Three group');
+    assert.equal(mountedText.length > 0, true, 'the default handle must construct the retained Three text');
+    await renderer.unmount();
+
+    fixture.dispose();
+    assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  } finally {
+    fixture.dispose();
+  }
+});
+
+test('Text and TextGroup reject untyped object-level handle selection', async () => {
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const fixture = await loadFixture();
+  try {
+    await assert.rejects(
+      () => create(createElement(Text, { font: fixture.font, handle: r3fHandle }, 'invalid')),
+      /R3F Text does not accept a handle prop/,
+    );
+    await assert.rejects(
+      () => create(createElement(TextGroup, { handle: r3fHandle })),
+      /R3F TextGroup does not accept a handle prop/,
+    );
+  } finally {
+    fixture.dispose();
+  }
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+});
+
+test('GlyphProvider rejects a handle change instead of rebinding mounted objects', async () => {
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const replacement = glyph.handle('three:react-provider-replacement-test', ThreeConfig);
+  const fixture = await loadFixture();
+  const child = createElement(Text, { font: fixture.font }, 'stable provider');
+  const renderer = await create(createElement(GlyphProvider, { handle: r3fHandle }, child));
+  try {
+    await assert.rejects(
+      () => renderer.update(createElement(GlyphProvider, { handle: replacement }, child)),
+      /GlyphProvider handle is immutable/,
+    );
+  } finally {
+    await renderer.unmount();
+    fixture.dispose();
+    replacement.dispose();
+  }
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+});
+
 test('StrictMode remount cycles balance their paragraph leases', async () => {
   const { create } = (await import('@react-three/test-renderer/webgpu')).default;
   const fixture = await loadFixture();
@@ -103,15 +168,18 @@ test('StrictMode remount cycles balance their paragraph leases', async () => {
           StrictMode,
           null,
           createElement(
-            Text,
-            {
-              handle: r3fHandle,
-              font,
-              style: { fontSize: 20, lineHeight: 1.25 },
-              constraints: { width: { mode: 'exact', size: 300 } },
-              layout: { wrap: 'word' },
-            },
-            `cycle ${cycle}`,
+            GlyphProvider,
+            { handle: r3fHandle },
+            createElement(
+              Text,
+              {
+                font,
+                style: { fontSize: 20, lineHeight: 1.25 },
+                constraints: { width: { mode: 'exact', size: 300 } },
+                layout: { wrap: 'word' },
+              },
+              `cycle ${cycle}`,
+            ),
           ),
         ),
       );
@@ -131,15 +199,18 @@ test('user font and loader handles may dispose before React releases its Text le
   const { font } = fixture;
   const renderer = await create(
     createElement(
-      Text,
-      {
-        handle: r3fHandle,
-        font,
-        style: { fontSize: 20, lineHeight: 1.25 },
-        constraints: { width: { mode: 'exact', size: 300 } },
-        layout: { wrap: 'word' },
-      },
-      'still mounted',
+      GlyphProvider,
+      { handle: r3fHandle },
+      createElement(
+        Text,
+        {
+          font,
+          style: { fontSize: 20, lineHeight: 1.25 },
+          constraints: { width: { mode: 'exact', size: 300 } },
+          layout: { wrap: 'word' },
+        },
+        'still mounted',
+      ),
     ),
   );
 
@@ -283,7 +354,6 @@ function HookFontText({ name, observed, request }) {
     Text,
     {
       font,
-      handle: r3fHandle,
       name,
       style: { fontSize: 20, lineHeight: 1.25 },
       constraints: { width: { mode: 'exact', size: 300 } },
@@ -344,5 +414,5 @@ function BitmapFontText({ input, name, observed, options }) {
       if (observed.get(name) === font) observed.delete(name);
     };
   }, [font, name, observed]);
-  return createElement(Text, { font, handle: r3fHandle, name }, name);
+  return createElement(Text, { font, name }, name);
 }

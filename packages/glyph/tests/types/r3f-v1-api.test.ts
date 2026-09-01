@@ -25,6 +25,11 @@ const labels = createElement(TextGroup, { compositing: 'independent', material, 
 const selected = createElement(Text, { font: selectedStack }, 'Selected at runtime');
 const provided = createElement(GlyphProvider, { handle: three }, labels);
 
+// @ts-expect-error Handle selection is internal to Text and comes from GlyphProvider or the built-in default.
+createElement(Text, { font: bitmapFont, handle: three }, 'no per-object handle');
+// @ts-expect-error TextGroup uses the same provider-or-default selection boundary.
+createElement(TextGroup, { handle: three }, label);
+
 function FontConsumer(): null {
   const loaded: Font<typeof bitmap> = useFont({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] });
   useBitmapFont({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Font<typeof bitmap>;
