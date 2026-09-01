@@ -64,8 +64,8 @@ interface RasterReference {
   version: number;
   source:
     | { type: 'embedded' }
-    | { type: 'external'; uri: string; artifactFingerprint: Fingerprint }
-    | { type: 'external'; artifactFingerprint?: Fingerprint };
+    | { type: 'external'; uri: string }
+    | { type: 'external' };
 }
 ```
 
@@ -83,9 +83,9 @@ interface RasterReference {
 
 The package supplies the actual `descriptor`. It MUST include every non-default option that changes required payload content and its generator compatibility version; a generator-versioned canonical default may remain implicit only when every producer and consumer resolves it identically. It MUST contain only JSON values and MUST reject non-finite numbers before canonicalization. For bitmap it includes the complete canonical strike tuple. For MTSDF, the legacy fieldless descriptor means 64 px/em with a full eight-pixel range; any non-default descriptor contains both effective `emSize` and `pixelRange` values, including a default filled for an omitted field. Explicit effective 64/8 canonicalizes back to the legacy descriptor. Object member order in source code is irrelevant because RFC 8785 defines the fingerprinted serialization. Callers do not author keys. A baker, runtime module, and static source analyzer given the same definition MUST derive the same key. `kind` is an open module-owned identifier; core does not enumerate first-party or external raster techniques. `extension` names the companion glTF extension that defines that raster's payload, and `version` selects that companion contract. The three companion extensions below are the packages currently planned by this project, not a closed registry.
 
-An external `uri` uses RFC 3986 URI syntax and glTF's relative-URI resolution rules, but remains a custom extension field rather than a core glTF resource property. Every URI-addressed artifact carries an `artifactFingerprint` calculated from the complete external artifact at bake time, and its URI SHOULD be content-addressed by that value. If `uri` is absent, the application must provide the raster through its resolver API and MAY still declare a fingerprint for identity matching. Normal loading compares declared fingerprints and byte lengths; it does not hash payload bytes. glTF `extensionsRequired`, not a duplicated raster flag, determines whether unsupported embedded extensions invalidate a combined asset.
+An external `uri` uses RFC 3986 URI syntax and glTF's relative-URI resolution rules, but remains a custom extension field rather than a core glTF resource property. It names a companion beside its core font and carries no content hash: the companion is matched by the `fingerprint` its raster extension already stamps, so nothing here restates identity and no filename encodes a digest. If `uri` is absent, the application must provide the raster through its resolver API. Loading compares that one digest; it does not hash payload bytes. glTF `extensionsRequired`, not a duplicated raster flag, determines whether unsupported embedded extensions invalidate a combined asset.
 
-A combined GLB may embed at most one raster for a given companion extension name because a glTF root has only one value for each extension key. Additional raster definitions using that extension MUST be external. Registration verifies that the embedded extension root's `rasterKey` equals the elected directory entry; an unrelated root object never satisfies an embedded reference.
+A font declares at most one raster per companion extension, because a glTF root has one value for each extension key and additional strikes or settings belong to that raster's options. A second definition using the same extension is an error, not a reason to write an external file: a raster is external only when the caller explicitly asks for a split. Registration verifies that the embedded extension root's `rasterKey` equals the elected directory entry; an unrelated root object never satisfies an embedded reference.
 
 Every raster extension root contains the reciprocal binding:
 
@@ -93,9 +93,7 @@ Every raster extension root contains the reciprocal binding:
 interface RasterBinding {
   version: 0;
   rasterKey: string;
-  shapingFingerprint: Fingerprint;
-  glyphCount: number;
-  glyphIdWidth: 16;
+  fingerprint: Fingerprint;
 }
 ```
 
@@ -126,14 +124,7 @@ interface TextureResource {
   variants: readonly TextureVariant[];
 }
 
-type ResourceSource =
-  | { type: 'bufferView'; bufferView: number }
-  | {
-      type: 'external';
-      uri: string;
-      byteLength: number;
-      artifactFingerprint: Fingerprint;
-    };
+type ResourceSource = { type: 'bufferView'; bufferView: number };
 
 interface BinaryResource {
   source: ResourceSource;
@@ -363,7 +354,7 @@ The caller explicitly selects a configured raster definition, normally through a
 1. loads and registers the core font GLB;
 2. locates an embedded raster or resolves/fetches an external artifact;
 3. dynamically imports only that raster's decoder/renderer module;
-4. verifies `shapingFingerprint`, glyph count, ID width, extension version, ranges, and texture capabilities;
+4. compares the single `fingerprint`, then verifies ranges and texture capabilities;
 5. selects a supported texture variant;
 6. creates GPU resources in bulk without per-glyph object reconstruction;
 7. attaches the resource to `(FontHandle, rasterKey)`.
@@ -379,7 +370,6 @@ Every raster format requires golden-byte, range, and GPU-readback fixtures cover
 - bundled and external packaging producing identical records;
 - rejecting two embedded raster references with the same companion extension name or an embedded root with the wrong `rasterKey`;
 - application-resolved external bytes with no URI;
-- missing or mismatched required external `artifactFingerprint`;
 - wrong shaping fingerprint, glyph count, ID width, and raster key;
 - bitmap artifacts missing a declared strike, containing an undeclared strike, or ordering a non-canonical strike tuple;
 - missing pages and the `0xffff` sentinel;

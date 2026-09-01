@@ -163,12 +163,12 @@ export async function bakeExampleArtifact(
 
 The returned artifact must satisfy these boundaries:
 
-- `kind`, extension name, format version, raster key, shaping fingerprint, and glyph count agree everywhere;
-- the companion uses the `raster` role and independently delivered payloads use `raster-page`;
+- `kind`, extension name, format version, raster key, and the single compatibility `fingerprint` agree everywhere;
+- a raster bake publishes exactly one artifact, in the `raster` role; pages travel inside it;
 - every artifact has deterministic bytes, ID, and bake-time fingerprint;
 - the payload report states exact serialized, metadata, page, and decoded GPU bytes;
 - embedded and external packaging preserve the same semantic extension data;
-- external resources declare a content-addressed URI, byte length, and fingerprint;
+- a split companion is named from its core font and its URI carries no digest;
 - abort is checked before expensive work, after awaited work, and before publication.
 
 A standalone companion is still an ordinary valid GLB. If the Node composer must embed it into the core font artifact,

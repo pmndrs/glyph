@@ -200,11 +200,11 @@
           },
           "kind": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^[A-Za-z][A-Za-z0-9]*(?:[.-][A-Za-z0-9]+)*$"
           },
           "extension": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^[A-Z][A-Z0-9]*(?:_[A-Za-z0-9]+)+$"
           },
           "version": {
             "type": "integer",

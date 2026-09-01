@@ -6,12 +6,12 @@
       "file": "inter-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 3444792,
-        "sha256": "e492cea1d736e8a2faa2d557572eca1be15de108d694c0cca6ad61d30cd05819"
+        "bytes": 3444732,
+        "sha256": "b9326ba7c5c79e30e9823bb39990dd77155f49bc93c634229f18d94be9745e12"
       },
       "compressed": {
-        "bytes": 618387,
-        "sha256": "91986584b17d72ee8d42c8599477c7858fb50caa9230d6c29f8daadf190679b8"
+        "bytes": 618310,
+        "sha256": "1f6b3f51c1e9a1c598e43c83e4430cafd437a1e3642c3d97a7c1d6e2fcc7f5ee"
       },
       "raster": {
         "kind": "slug",
@@ -35,12 +35,12 @@
       "file": "amiri-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 12081344,
-        "sha256": "155b1573bd61c98e8462ccf37a3f17fb5f51bc0362e84d3dd30713ef07d28663"
+        "bytes": 12081284,
+        "sha256": "7022d0069f6cd213ab2697afb93343db711ef5d6ed59ea4cf759b95502cf6f00"
       },
       "compressed": {
-        "bytes": 1955041,
-        "sha256": "3572c7c952fdabe7b022df8b64aa4513409a5dbc8c399dabe722db0a5dd60f9c"
+        "bytes": 1955013,
+        "sha256": "194afe9cf7a382f040465e85de1773924c97c751a297169edb86853b537fbd2a"
       },
       "raster": {
         "kind": "slug",
@@ -64,12 +64,12 @@
       "file": "noto-sans-devanagari-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 1613636,
-        "sha256": "82aa36a7ee2ef3e3bdf39bbca9ca8a28988c04215b35c71703ed2c3a45d23b8a"
+        "bytes": 1613576,
+        "sha256": "4a7990355215fd4088f7e49ea91f79bddeae7a37e81976b4404a5a661b803cf6"
       },
       "compressed": {
-        "bytes": 296629,
-        "sha256": "8790b7d70c6f05a3aae1bd4d2d48e396afd0752c7c5f5b63f76f7a8fbc4e97d2"
+        "bytes": 296579,
+        "sha256": "a16a1b3b1e83c37bb83bc424e8793e11bb830298fce0880b366d423ff036bc15"
       },
       "raster": {
         "kind": "slug",
@@ -93,12 +93,12 @@
       "file": "dot-gothic-16-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 22643216,
-        "sha256": "bc46f645e12eebc7c2ff1067cb44f7c50463f02fdc5a7ffe5db4959581047f9d"
+        "bytes": 22643160,
+        "sha256": "d37fcd9e3c2d4e68cc02e0bc2ffa9bba9f835a4af41b0fd704c314271597a863"
       },
       "compressed": {
-        "bytes": 3639739,
-        "sha256": "0b3c3be3a9b06104cd55f77a80851d2b23ea7040448ef991d1460a582027bc6f"
+        "bytes": 3639700,
+        "sha256": "cf7f584bbbde99ca151221c6542692d555b01d2ce4e7b625eeaba9a17e96b9d3"
       },
       "raster": {
         "kind": "slug",
@@ -122,12 +122,12 @@
       "file": "font-awesome-free-6.7.2-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 2945284,
-        "sha256": "9776251ca68360d222b29f4043276495d6f651a8b339281867fea37635ba744e"
+        "bytes": 2945224,
+        "sha256": "f4c54160e943c1bc72a25c357429476b3a4b21c985368c5c3b7a2bc7d385e4a0"
       },
       "compressed": {
-        "bytes": 657967,
-        "sha256": "0e23b0a6ccc8ca8196ef358594b2fcb5095ad4768a91203e3f5317fd3476897c"
+        "bytes": 657922,
+        "sha256": "51ffcc031a4d2dd2f36f82af12cc9574fffd06fedf855a61159b7752c5d82642"
       },
       "raster": {
         "kind": "slug",
@@ -151,12 +151,12 @@
       "file": "noto-sans-cjk-showcase-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 382548,
-        "sha256": "0936da54a85ccc35e7c357c3751d734a45ecff09f9d3c7bbc85abe0f7d742012"
+        "bytes": 382492,
+        "sha256": "593a2fd093136a4e35e86b2a92fa64583d1fa64596a90841e8be5d237bcec9fe"
       },
       "compressed": {
-        "bytes": 96092,
-        "sha256": "4add0523a3d18350ed9012b9aeaf837a1cc207e66069f3f3047334676854911a"
+        "bytes": 96059,
+        "sha256": "5d4c74ab891479da4bc18dabe5f7e2e42a0bfbd87383e03fcd39b666c6e03d98"
       },
       "raster": {
         "kind": "slug",
@@ -180,12 +180,12 @@
       "file": "source-serif-4-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 1875604,
-        "sha256": "62d6c21a1afaaac7537a92c7fe9dd418d816bfde37f31eb34822a12939f4b096"
+        "bytes": 1875544,
+        "sha256": "977906dccea09fabe5e2c4f4414025813717276109ed48dd7557ec51759a9a69"
       },
       "compressed": {
-        "bytes": 407550,
-        "sha256": "198232093009048754cf8c755bab9c21f0228c7e0bb6cf3cfba20b068ad72738"
+        "bytes": 407507,
+        "sha256": "eada0d61f3a47b36cf8e352b479e2df18b77647e5418d4d3a63e2a35fee9842e"
       },
       "raster": {
         "kind": "slug",
@@ -209,12 +209,12 @@
       "file": "dancing-script-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 1658716,
-        "sha256": "23faa450b366953b0d1437e1ebd7faf5cc2927311f0cdc4bbc647f1a485b985e"
+        "bytes": 1658660,
+        "sha256": "16c2441dc66f63b70627e0c3cf29d27f3d98342765b0fd431f6315f48728dad3"
       },
       "compressed": {
-        "bytes": 288175,
-        "sha256": "3cee8ab0f9ee59307d4b156484ed016009b972c204e83aa003baf5ad64b2870a"
+        "bytes": 288130,
+        "sha256": "cc059b0fa7f7ffa3aff46638340f076303ca6c31ffd800a131e02741faec5fad"
       },
       "raster": {
         "kind": "slug",
