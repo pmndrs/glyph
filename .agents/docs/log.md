@@ -157,6 +157,15 @@
 
 ## 2026-09-01
 
+- **A raster and its core font agree through one fingerprint** — Every raster extension carries a single
+  domain-separated MurmurHash3 x86 128 digest over the compatibility tuple it must share with its core, replacing eight
+  hand-written multi-field identity checks and retiring the `shapingFingerprint`, `glyphCount`, `glyphIdWidth`, and
+  `descriptorFingerprint` fields that existed only to be compared. The canonical form is published contract, so a
+  consumer may keep its own fingerprint-to-metadata manifest, and a third-party technique stamps it through the exported
+  helper. Page payloads are never external, a font declares one raster per technique, splitting is an explicit request
+  rather than a duplicate-extension fallback, and no filename carries a content hash. Baking defaults to MSDF, derives a
+  url-safe output name, and skips work whose artifact is already current.
+
 - **Kept policy identifiers out of the Three material API** — D-305 makes `ThreeTextMaterialContext` a closed
   `kind: 'glyph' | 'decoration'` union. Glyph branches carry the concrete built-in raster technique; decoration has no
   technique, while the reserved `pmndrs.decoration` name remains internal to the policy and command-buffer ABI.
@@ -246,10 +255,9 @@
 
 - **Baked identities no longer depend on Web Crypto** — Bake and runtime-bake producers stamp related font, raster, and
   page artifacts with domain-separated MurmurHash3 x86 128 fingerprints. Normal loading compares those fingerprints and
-  declared lengths without hashing payload bytes, while content-addressed external references prevent ordinary stale
-  cache collisions. Build-time composition still recomputes fingerprints before publication. The contract detects
-  accidentally mixed or stale bake outputs and leaves damaged containers to decode or upload validation; it does not
-  claim cryptographic integrity.
+  declared lengths without hashing payload bytes. Build-time composition still recomputes fingerprints before
+  publication. The contract detects accidentally mixed or stale bake outputs and leaves damaged containers to decode or
+  upload validation; it does not claim cryptographic integrity.
 
 ## 2026-08-28
 
