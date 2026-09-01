@@ -17,6 +17,14 @@ export type { ThreeFontLoaderOptions, ThreeFontLoadRequest } from './three/font-
 export { TextFrameError } from './three/frame-error.js';
 export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.js';
 export { Text, TextGroup } from './three/text.js';
+export {
+  ThreeConfig,
+  defineThreeConfig,
+  type ThreeBindings,
+  type ThreeConfigOptions,
+  type ThreeGlyphConfig,
+  type ThreeHandle,
+} from './three/handle.js';
 export type {
   StandaloneTextProperties,
   TextCommitState,

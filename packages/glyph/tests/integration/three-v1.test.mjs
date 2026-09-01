@@ -3,7 +3,15 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
-import { Constraints, createFontLibrary, createFontStack, loadFont, ParagraphLayout, TextStyle } from '@pmndrs/glyph';
+import {
+  Constraints,
+  createFontLibrary,
+  createFontStack,
+  glyph,
+  loadFont,
+  ParagraphLayout,
+  TextStyle,
+} from '@pmndrs/glyph';
 import { GlyphBackend } from '@pmndrs/glyph/core';
 import { PlanTransport } from '../../dist/core/backend.js';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
@@ -15,6 +23,7 @@ import {
   localToWorldMatrix,
   Text,
   TextGroup,
+  ThreeConfig,
   worldToLocalMatrix,
 } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -40,6 +49,115 @@ const iconSlugFontUrl = new URL(
 );
 const multiTechniqueFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
 const glyphAttribute = (bufferId) => `_pmndrsGlyph_${bufferId}`;
+
+test('one initialized Glyph runtime creates independent named Three handles over immutable root fonts', async () => {
+  const firstInit = glyph.init();
+  const secondInit = glyph.init();
+  assert.equal(firstInit, secondInit, 'concurrent initialization shares one operation');
+  await firstInit;
+
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
+  const first = glyph.handle('three:integration:first', ThreeConfig);
+  let wrappedEncodeCalls = 0;
+  let wrappedDecodeCalls = 0;
+  let wrappedResolveCalls = 0;
+  let wrappedRendererFactories = 0;
+  let wrappedPrepareCalls = 0;
+  let wrappedTransformSyncCalls = 0;
+  const second = glyph.handle('three:integration:second', {
+    ...ThreeConfig,
+    encode(context) {
+      wrappedEncodeCalls += 1;
+      return ThreeConfig.encode(context);
+    },
+    decode(source, context) {
+      wrappedDecodeCalls += 1;
+      return ThreeConfig.decode(source, context);
+    },
+    resolve(context) {
+      wrappedResolveCalls += 1;
+      return ThreeConfig.resolve(context);
+    },
+    renderer(context) {
+      wrappedRendererFactories += 1;
+      const renderer = ThreeConfig.renderer(context);
+      return {
+        prepare(frame) {
+          wrappedPrepareCalls += 1;
+          assert.equal(frame.delivery, 'borrowed-bound');
+          assert.ok(frame.draws.kind === 'unchanged' || frame.draws.kind === 'replace');
+          return renderer.prepare(frame);
+        },
+        syncTransforms(updates) {
+          wrappedTransformSyncCalls += 1;
+          renderer.syncTransforms(updates);
+        },
+        dispose: () => renderer.dispose(),
+      };
+    },
+  });
+  const scene = new THREE.Scene();
+  const secondScene = new THREE.Scene();
+  const label = first.createText({ font, text: 'Handle owned', style: { fontSize: 16 } });
+  const secondSceneLabel = first.createText({ font, text: 'Same handle, other scene', style: { fontSize: 16 } });
+  const group = second.createTextGroup();
+  const grouped = second.createText({ font, text: 'Independent', style: { fontSize: 16 } });
+  group.add(grouped);
+  scene.add(label, group);
+  secondScene.add(secondSceneLabel);
+
+  try {
+    label.shape();
+    secondSceneLabel.shape();
+    group.shape();
+    assert.equal(wrappedEncodeCalls, 1, 'a spread config participates in its handle backend construction');
+    assert.equal(wrappedRendererFactories, 1, 'one config renderer is created for the TextGroup boundary');
+    assert.ok(wrappedDecodeCalls > 0, 'the selected decoder handles semantic publications');
+    assert.ok(wrappedResolveCalls > 0, 'the selected resolver binds acquired portable resources');
+    assert.ok(wrappedPrepareCalls > 0, 'the selected renderer prepares the bound command buffer');
+    assert.ok(wrappedTransformSyncCalls > 0, 'transform synchronization uses the renderer side path');
+    const semanticCounts = {
+      decode: wrappedDecodeCalls,
+      resolve: wrappedResolveCalls,
+      prepare: wrappedPrepareCalls,
+      transforms: wrappedTransformSyncCalls,
+    };
+    grouped.position.x += 1;
+    group.shape();
+    assert.equal(wrappedDecodeCalls, semanticCounts.decode, 'transform-only shape does not decode');
+    assert.equal(wrappedResolveCalls, semanticCounts.resolve, 'transform-only shape does not resolve');
+    assert.equal(wrappedPrepareCalls, semanticCounts.prepare, 'transform-only shape does not prepare semantic state');
+    assert.ok(wrappedTransformSyncCalls > semanticCounts.transforms, 'transform-only shape synchronizes the renderer');
+    assert.ok(
+      label.children.some((child) => child.isMesh),
+      'standalone draws attach beneath the handle-created Text',
+    );
+    assert.ok(
+      secondSceneLabel.children.some((child) => child.isMesh),
+      'one handle creates an independent publication boundary in another scene',
+    );
+    assert.ok(
+      group.children.some((child) => child.isMesh),
+      'group draws attach beneath the handle-created TextGroup',
+    );
+    assert.throws(() => group.add(label), /different Glyph handles/);
+    assert.throws(() => glyph.handle('three:integration:first', ThreeConfig), /already exists/);
+  } finally {
+    label.dispose();
+    secondSceneLabel.dispose();
+    grouped.dispose();
+    group.dispose();
+    first.dispose();
+    second.dispose();
+    font.dispose();
+  }
+
+  const reused = glyph.handle('three:integration:first', ThreeConfig);
+  reused.dispose();
+});
 
 test('text property registries validate and freeze reusable rules', () => {
   for (const [registry, rules] of [
@@ -192,7 +310,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     );
     assert.ok(
       Array.from({ length: detached.count }, (_, index) => detached.glyphAt(index)).some(
-        (glyph) => glyph.sourceIndex > glyph.index,
+        (entry) => entry.sourceIndex > entry.index,
       ),
       'the fixture must include drawable glyphs after a semantic-only space',
     );
@@ -760,7 +878,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
 
   const displayedGlyphs = label.measureGlyphs();
   assert.equal(displayedGlyphs?.length, measurement.glyphCount);
-  assert.ok(displayedGlyphs?.every((glyph) => glyph.drawnOrigin.equals(glyph.shapedOrigin)));
+  assert.ok(displayedGlyphs?.every((entry) => entry.drawnOrigin.equals(entry.shapedOrigin)));
   assert.ok(displayedGlyphs?.[0].localAdvanceBounds.getSize(new THREE.Vector3()).x > 0);
 
   group.renderOrder = 20;

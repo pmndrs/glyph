@@ -1,13 +1,13 @@
 import { createElement, type ReactElement } from 'react';
 
-import { type Font, type FontStack } from '../../src/index.js';
+import { glyph, type Font, type FontStack } from '../../src/index.js';
 import * as ReactApi from '../../src/react.js';
-import { Text, TextGroup, useFont } from '../../src/react.js';
+import { GlyphProvider, Text, TextGroup, useFont } from '../../src/react.js';
 import { useBitmapFont } from '../../src/react/bitmap.js';
 import { useMSDF } from '../../src/react/msdf.js';
 import { useSlug } from '../../src/react/slug.js';
 import type { R3fTextChild, R3fTextProps } from '../../src/react.js';
-import type { ThreeTextMaterial } from '../../src/three.js';
+import { ThreeConfig, type ThreeHandle, type ThreeTextMaterial } from '../../src/three.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
 import { msdf } from '../../src/raster/msdf.js';
 import { slug } from '../../src/raster/slug-technique.js';
@@ -17,11 +17,13 @@ declare const mtsdfFont: Font<typeof msdf>;
 declare const slugFont: Font<typeof slug>;
 declare const selectedStack: FontStack<typeof bitmap> | FontStack<typeof msdf> | FontStack<typeof slug>;
 declare const material: ThreeTextMaterial;
+const three: ThreeHandle = glyph.handle('three:r3f-type-fixture', ThreeConfig);
 
 const inline = createElement(Text, { style: { color: '#ff00ff' } }, 'span');
 const label = createElement(Text<typeof bitmap>, { font: bitmapFont, material, pixelSnapping: true }, 'Typed ', inline);
 const labels = createElement(TextGroup, { compositing: 'independent', material, pixelSnapping: true }, label);
 const selected = createElement(Text, { font: selectedStack }, 'Selected at runtime');
+const provided = createElement(GlyphProvider, { handle: three }, labels);
 
 function FontConsumer(): null {
   const loaded: Font<typeof bitmap> = useFont({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] });
@@ -51,8 +53,7 @@ useSlug.clear({ baked: '/fonts/Inter.font.glb' });
 
 // @ts-expect-error React uses R3F's shared loader cache; no hook factory is public.
 void ReactApi.createUseFont;
-// @ts-expect-error React needs no Glyph-specific provider.
-void ReactApi.GlyphProvider;
+GlyphProvider satisfies typeof ReactApi.GlyphProvider;
 // @ts-expect-error Nested Text is the public inline-run syntax.
 void ReactApi.TextSpan;
 
@@ -69,6 +70,7 @@ paragraphElement satisfies R3fTextChild<typeof bitmap>;
 
 void labels;
 void selected;
+void provided;
 void slugFont;
 void FontConsumer;
 void consumer;
