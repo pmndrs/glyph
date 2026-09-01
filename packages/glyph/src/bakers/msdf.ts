@@ -37,7 +37,6 @@ export interface MsdfBakerRequest {
   readonly rasterKey: RasterKey;
   readonly packaging: {
     readonly artifact: 'embedded' | 'external';
-    readonly pages: 'embedded' | 'external';
   };
   readonly descriptor: MsdfDescriptor;
 }

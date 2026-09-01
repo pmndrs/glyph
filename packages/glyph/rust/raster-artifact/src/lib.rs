@@ -33,13 +33,6 @@ pub enum ArtifactPackaging {
     External,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PagePackaging {
-    Embedded,
-    External,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RasterArtifactError {
     Allocation,
@@ -61,9 +54,30 @@ impl fmt::Display for RasterArtifactError {
 
 pub const ARTIFACT_FINGERPRINT_V0: u32 = 0x6172_7430;
 pub const CACHE_FINGERPRINT_V0: u32 = 0x6361_6330;
+pub const COMPATIBILITY_FINGERPRINT_V0: u32 = 0x636d_7030;
 pub const DESCRIPTOR_FINGERPRINT_V0: u32 = 0x6473_6330;
 pub const SHAPING_FINGERPRINT_V0: u32 = 0x7368_7030;
 pub const SOURCE_FINGERPRINT_V0: u32 = 0x736f_7572;
+
+/// The single value a raster and its core font compare to decide they belong together.
+///
+/// Every dimension that must agree is folded in here, so a consumer performs one comparison
+/// instead of re-deriving the list at each call site and forgetting a dimension when the format
+/// grows. Keys are emitted in the sorted order RFC 8785 requires, matching `canonicalJson` in
+/// `src/internal/raster-identity.ts`.
+pub fn compatibility_fingerprint(
+    shaping_fingerprint: &str,
+    raster_key: &str,
+    kind: &str,
+    version: u32,
+    glyph_count: u16,
+    glyph_id_width: u16,
+) -> String {
+    let canonical = std::format!(
+        "{{\"glyphCount\":{glyph_count},\"glyphIdWidth\":{glyph_id_width},\"kind\":\"{kind}\",\"rasterKey\":\"{raster_key}\",\"shaping\":\"{shaping_fingerprint}\",\"version\":{version}}}"
+    );
+    fingerprint128(canonical.as_bytes(), COMPATIBILITY_FINGERPRINT_V0)
+}
 
 /// MurmurHash3 x86 128 serialized as four little-endian u32 lanes.
 pub fn fingerprint128(bytes: &[u8], seed: u32) -> String {
@@ -263,6 +277,23 @@ mod fingerprint_tests {
         );
     }
 
+    /// The canonical form is published contract, so it is pinned against a value produced
+    /// outside this repository rather than by re-running the implementation under test.
+    #[test]
+    fn compatibility_fingerprint_matches_its_published_canonical_form() {
+        assert_eq!(
+            compatibility_fingerprint(
+                "0c522d6ea0db73ba74bcc389dc50263b",
+                "d1dcd31304f795b5f2c497c579aa29f0",
+                "bitmap",
+                0,
+                2937,
+                16,
+            ),
+            "8b23c028dd6cd2d31a61b00c35bbcbe0"
+        );
+    }
+
     /// The corpus is only evidence about this crate while its seeds are this crate's seeds.
     #[test]
     fn domain_seeds_match_the_reference_corpus() {
@@ -271,6 +302,7 @@ mod fingerprint_tests {
         for (name, constant) in [
             ("artifact", ARTIFACT_FINGERPRINT_V0),
             ("cache", CACHE_FINGERPRINT_V0),
+            ("compatibility", COMPATIBILITY_FINGERPRINT_V0),
             ("descriptor", DESCRIPTOR_FINGERPRINT_V0),
             ("shaping", SHAPING_FINGERPRINT_V0),
             ("source", SOURCE_FINGERPRINT_V0),
