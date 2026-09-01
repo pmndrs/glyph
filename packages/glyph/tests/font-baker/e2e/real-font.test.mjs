@@ -101,7 +101,6 @@ test('the canonical Inter fixture bakes deterministically and retains HarfRust s
   assert.equal(extension.metrics.strikeoutPosition, 671);
   assert.equal(extension.metrics.strikeoutSize, 140);
   assert.equal(extension.provenance.sourceFingerprint, manifest.source.fontFingerprint);
-  assert.equal(extension.provenance.descriptorFingerprint, manifest.bake.descriptorFingerprint);
   assert.equal(inspected.khronos.validatorVersion, manifest.versions.gltfValidator);
 
   assert.deepEqual(
@@ -234,7 +233,6 @@ test('the authenticated Noto CJK fixture retains the closed shaping profile at t
     strikeoutSize: expected.strikeoutSize,
   });
   assert.equal(extension.provenance.sourceFingerprint, manifest.source.fontFingerprint);
-  assert.equal(extension.provenance.descriptorFingerprint, manifest.bake.descriptorFingerprint);
   assert.equal(inspected.khronos.validatorVersion, manifest.versions.gltfValidator);
 
   assert.deepEqual(

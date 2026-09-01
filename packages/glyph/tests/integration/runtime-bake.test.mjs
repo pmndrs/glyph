@@ -440,7 +440,7 @@ test('external techniques bake through their own declared baker, never the Worke
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options: { strikes: [32] },
       },
     ],
@@ -498,7 +498,7 @@ test('external techniques bake through their own declared baker, never the Worke
   );
 });
 
-test('runtime technique artifacts are rejected when bytes contradict their stamp', async (t) => {
+test('runtime technique artifacts are rejected when bytes contradict their stamp', async () => {
   const { source, artifact } = await fixturePromise;
   const { defineRasterTechnique } = await import('@pmndrs/glyph');
   const external = defineRasterTechnique({
@@ -506,6 +506,7 @@ test('runtime technique artifacts are rejected when bytes contradict their stamp
     kind: 'testInvalidFingerprint',
     extension: 'TEST_invalid_runtime_fingerprint',
     version: 0,
+    textEffects: [],
     runtimeBaker: () =>
       Promise.resolve({
         kind: 'testInvalidFingerprint',
@@ -535,19 +536,14 @@ test('runtime technique artifacts are rejected when bytes contradict their stamp
     },
     dispose() {},
   });
-  const runtime = await createTextRuntime({
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  t.after(() => runtime.dispose());
-
   await assert.rejects(
-    runtime.loadFont({
-      input: {
+    loadFont(
+      {
         source: `data:font/ttf;base64,${Buffer.from(source).toString('base64')}`,
         runtimeBake: () => Promise.resolve(new Uint8Array(artifact)),
       },
-      rasters: [{ technique: external }],
-    }),
+      [{ technique: external }],
+    ),
     (error) =>
       error?.code === 'INVALID_RASTER_ASSET' &&
       error.message === 'runtime raster bytes do not match their stamped fingerprint',
@@ -616,5 +612,5 @@ function restoreGlobal(key, value) {
 }
 
 function embeddedPackaging() {
-  return { artifact: 'embedded', pages: 'embedded' };
+  return { artifact: 'embedded' };
 }

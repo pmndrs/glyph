@@ -11,6 +11,7 @@ import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/glyph/raster/bitmap';
 
 import { BakeCompositionError, composeFontBake } from '../../dist/internal/compose-bake.js';
 import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { compatibilityFingerprint } from '../../dist/internal/raster-identity.js';
 
 let core;
 let bitmapEmbedded;
@@ -51,20 +52,20 @@ before(async () => {
     bitmapBaker.bake({
       font,
       rasterKey,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       descriptor,
     }),
     bitmapBaker.bake({
       font,
       rasterKey,
-      packaging: { artifact: 'external', pages: 'external' },
+      packaging: { artifact: 'external' },
       descriptor,
     }),
   ]);
 });
 
 test('deterministically embeds a companion while preserving both validated payloads', async () => {
-  const input = [{ raster: bitmapEmbedded, packaging: { artifact: 'embedded', pages: 'embedded' } }];
+  const input = [{ raster: bitmapEmbedded, packaging: { artifact: 'embedded' } }];
   const first = await composeFontBake(core, input);
   const second = await composeFontBake(core, input);
   assert.deepEqual(second, first);
@@ -107,8 +108,8 @@ test('preserves the exact shaping-only artifact for the identity-neutral empty r
 test('rebases opaque buffer-view references for multiple distinct embedded extensions', async () => {
   const custom = customRaster(bitmapEmbedded, '1'.repeat(32), 'STUDIO_font_custom');
   const result = await composeFontBake(core, [
-    { raster: bitmapEmbedded, packaging: { artifact: 'embedded', pages: 'embedded' } },
-    { raster: custom, packaging: { artifact: 'embedded', pages: 'embedded' } },
+    { raster: bitmapEmbedded, packaging: { artifact: 'embedded' } },
+    { raster: custom, packaging: { artifact: 'embedded' } },
   ]);
   const parsed = parseGlb(result.artifacts[0].bytes);
   const customData = parsed.document.extensions.STUDIO_font_custom;
@@ -122,14 +123,13 @@ test('rebases opaque buffer-view references for multiple distinct embedded exten
   await validateBitmapArtifact(result.artifacts[0].bytes, context);
 });
 
-test('emits a fingerprint-addressed external companion and independently addressable pages', async () => {
-  const result = await composeFontBake(core, [
-    { raster: bitmapExternal, packaging: { artifact: 'external', pages: 'external' } },
-  ]);
+test('emits an external companion that carries every page inside it', async () => {
+  const result = await composeFontBake(core, [{ raster: bitmapExternal, packaging: { artifact: 'external' } }]);
   assert.deepEqual(summarize(result), golden.composed.external);
+  // A companion is one file: pages travel inside it, never beside it.
   assert.deepEqual(
     result.artifacts.map(({ role }) => role),
-    ['font', 'raster', 'raster-page'],
+    ['font', 'raster'],
   );
   const font = await validateFontArtifact(result.artifacts[0].bytes);
   assert.deepEqual(font.document.extensions.PMNDRS_font.rasters, [
@@ -138,17 +138,10 @@ test('emits a fingerprint-addressed external companion and independently address
       kind: 'bitmap',
       extension: 'PMNDRS_font_bitmap',
       version: 0,
-      source: {
-        type: 'external',
-        uri: bitmapExternal.artifacts[0].id,
-        artifactFingerprint: bitmapExternal.artifacts[0].fingerprint,
-      },
+      source: { type: 'external', uri: bitmapExternal.artifacts[0].id },
     },
   ]);
-  const pages = new Map(
-    result.artifacts.filter(({ role }) => role === 'raster-page').map(({ id, bytes }) => [id, bytes]),
-  );
-  await validateBitmapArtifact(result.artifacts[1].bytes, { ...context, externalPages: pages });
+  await validateBitmapArtifact(result.artifacts[1].bytes, context);
   assert.deepEqual(
     result.report.transport,
     result.artifacts.map(({ id, bytes }) => ({
@@ -164,7 +157,7 @@ test('rejects tampered artifacts, reciprocal mismatches, and duplicate raster ke
   tampered.artifacts[0].bytes = tampered.artifacts[0].bytes.slice();
   tampered.artifacts[0].bytes[tampered.artifacts[0].bytes.byteLength - 1] ^= 1;
   await assert.rejects(
-    composeFontBake(core, [{ raster: tampered, packaging: { artifact: 'embedded', pages: 'embedded' } }]),
+    composeFontBake(core, [{ raster: tampered, packaging: { artifact: 'embedded' } }]),
     (error) => error instanceof BakeCompositionError && error.reason === 'ARTIFACT_FINGERPRINT',
   );
 
@@ -172,7 +165,7 @@ test('rejects tampered artifacts, reciprocal mismatches, and duplicate raster ke
     composeFontBake(core, [
       {
         raster: { ...bitmapEmbedded, rasterKey: '0'.repeat(32) },
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
       },
     ]),
     (error) => error instanceof BakeCompositionError && error.reason === 'RASTER_RECIPROCAL_IDENTITY',
@@ -180,8 +173,8 @@ test('rejects tampered artifacts, reciprocal mismatches, and duplicate raster ke
 
   await assert.rejects(
     composeFontBake(core, [
-      { raster: bitmapEmbedded, packaging: { artifact: 'embedded', pages: 'embedded' } },
-      { raster: bitmapEmbedded, packaging: { artifact: 'external', pages: 'embedded' } },
+      { raster: bitmapEmbedded, packaging: { artifact: 'embedded' } },
+      { raster: bitmapEmbedded, packaging: { artifact: 'external' } },
     ]),
     (error) => error instanceof BakeCompositionError && error.reason === 'RASTER_KEY_DUPLICATE',
   );
@@ -194,6 +187,16 @@ function customRaster(source, rasterKey, extension) {
   const data = document.extensions.PMNDRS_font_bitmap;
   delete document.extensions.PMNDRS_font_bitmap;
   data.rasterKey = rasterKey;
+  // The digest folds in identity this helper is rewriting, so it has to be restamped; leaving the
+  // bitmap raster's value here is exactly the mismatch composition is meant to reject.
+  data.fingerprint = compatibilityFingerprint({
+    glyphCount: context.glyphCount,
+    glyphIdWidth: context.glyphIdWidth,
+    kind: 'studio.custom',
+    rasterKey,
+    shaping: context.shapingFingerprint,
+    version: 0,
+  });
   document.extensions[extension] = data;
   document.extensionsUsed = [extension];
   document.extensionsRequired = [extension];

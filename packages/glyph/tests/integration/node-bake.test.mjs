@@ -39,7 +39,7 @@ test('bakeFont writes exact combined embedded and external artifacts with comple
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options: { strikes: [16] },
       },
     ],
@@ -67,7 +67,7 @@ test('bakeFont writes exact combined embedded and external artifacts with comple
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'external', pages: 'external' },
+        packaging: { artifact: 'external' },
         options: { strikes: [16] },
       },
     ],
@@ -82,7 +82,8 @@ test('bakeFont writes exact combined embedded and external artifacts with comple
     external.execution.outputs.map(({ role, bytes, fingerprint }) => ({ role, bytes, fingerprint })),
     golden.composed.external.artifacts.map(({ role, bytes, fingerprint }) => ({ role, bytes, fingerprint })),
   );
-  assert.equal(external.transport.filter(({ artifactId }) => artifactId.endsWith('.ktx2')).length, 1);
+  // A split bake writes the core and one companion; no page is ever its own file.
+  assert.equal(external.transport.filter(({ artifactId }) => artifactId.endsWith('.ktx2')).length, 0);
   assert.ok((await readdir(join(root, 'external'))).every((name) => !name.endsWith('.tmp')));
 });
 
@@ -100,7 +101,7 @@ test('bakeFont preserves bounded raster options through the Node composition pat
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options,
       },
     ],
@@ -133,7 +134,7 @@ test('rolls back every earlier artifact when a later publication fails', async (
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'external', pages: 'external' },
+        packaging: { artifact: 'external' },
         options: { strikes: [16] },
       },
     ],
@@ -169,8 +170,18 @@ test('rolls back every earlier artifact when a later publication fails', async (
   assert.ok((await readdir(dirname(output))).every((name) => !name.endsWith('.tmp') && !name.endsWith('.bak')));
 });
 
-test('bakeProject groups static definitions, imports only the resolved baker, and mirrors outputs', async (t) => {
+test('bakeProject rejects one font declaring the same technique twice', async (t) => {
   const root = await projectFixture(32);
+  t.after(() => rm(root, { recursive: true, force: true }));
+  // Two strike sets belong to one raster's options, not to two rasters of one technique.
+  await assert.rejects(
+    bakeProject({ projectRoot: root, outputRoot: join(root, 'generated') }),
+    (error) => error instanceof NodeBakeError && error.code === 'RASTER_EXTENSION_DUPLICATE',
+  );
+});
+
+test('bakeProject groups static definitions, imports only the resolved baker, and mirrors outputs', async (t) => {
+  const root = await projectFixture(16);
   t.after(() => rm(root, { recursive: true, force: true }));
   const outputRoot = join(root, 'generated');
   const report = await bakeProject({ projectRoot: root, outputRoot });
@@ -181,7 +192,7 @@ test('bakeProject groups static definitions, imports only the resolved baker, an
   assert.ok(report.mappings.every(({ outputFile }) => outputFile === output));
   assert.deepEqual(
     report.fonts[0].execution.outputs.map(({ role }) => role),
-    ['font', 'raster'],
+    ['font'],
   );
   const outputBytes = await readFile(output);
   assert.equal(
@@ -189,9 +200,10 @@ test('bakeProject groups static definitions, imports only the resolved baker, an
     fingerprint128(outputBytes, fingerprintDomain.artifact),
   );
   const validated = await validateFontArtifact(outputBytes);
+  // Two declarations of one font with identical options resolve to a single embedded raster.
   assert.deepEqual(
     validated.document.extensions.PMNDRS_font.rasters.map(({ source }) => source.type),
-    ['embedded', 'external'],
+    ['embedded'],
   );
 
   const repeated = await bakeProject({ projectRoot: root, outputRoot });
@@ -361,7 +373,7 @@ test('rejects unsafe package-owned artifact IDs before writing any output', asyn
       rasters: [
         {
           baker: unsafeBaker,
-          packaging: { artifact: 'external', pages: 'embedded' },
+          packaging: { artifact: 'external' },
           options: { strikes: [16] },
         },
       ],
@@ -394,7 +406,7 @@ test('rejects a lying plugin descriptor before calling its baker or publishing o
       rasters: [
         {
           baker: invalidBaker,
-          packaging: { artifact: 'embedded', pages: 'embedded' },
+          packaging: { artifact: 'embedded' },
           options: { strikes: [16] },
         },
       ],

@@ -68,7 +68,6 @@ describe('checked raster fixture manifests', () => {
         'PMNDRS_font_bitmap',
         artifact.file,
       );
-      expect(integerProperty(raster, 'glyphCount', artifact.file)).toBe(identity.glyphCount);
       const strikes = arrayProperty(raster, 'strikes', artifact.file);
       expect(strikes).toHaveLength(manifest.strikePpems.length);
       expect(
@@ -118,7 +117,6 @@ describe('checked raster fixture manifests', () => {
     expect(integerProperty(raster, 'emSize', artifact.file)).toBe(artifact.configuration.emSize);
     expect(integerProperty(raster, 'planeUnitsPerEm', artifact.file)).toBe(artifact.configuration.emSize);
     expect(integerProperty(raster, 'pixelRange', artifact.file)).toBe(artifact.configuration.pixelRange);
-    expect(integerProperty(raster, 'glyphCount', artifact.file)).toBe(identity.glyphCount);
     expect(arrayProperty(raster, 'pages', artifact.file)).toHaveLength(artifact.raster.pages.length);
     expect(sum(artifact.raster.pages.map(({ decodedGpuBytes }) => decodedGpuBytes))).toBe(
       artifact.raster.decodedGpuBytes,

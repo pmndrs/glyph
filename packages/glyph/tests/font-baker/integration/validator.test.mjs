@@ -192,7 +192,6 @@ test('covers every PMNDRS_font required field and raster-source union one field 
     ].map((name) => [...fontPath, 'metrics', name]),
     ...[
       'sourceFingerprint',
-      'descriptorFingerprint',
       'fontFaceIndex',
       'bakerVersion',
       'harfrustVersion',
@@ -227,7 +226,7 @@ test('covers every PMNDRS_font required field and raster-source union one field 
     { type: 'unknown' },
     { type: 'embedded', uri: 'forbidden.glb' },
     { type: 'external', uri: '' },
-    { type: 'external', uri: 'raster.glb' },
+    { type: 'external', uri: 'raster.glb', artifactFingerprint: '0'.repeat(32) },
   ]) {
     const document = structuredClone(rasterBase);
     document.extensions.PMNDRS_font.rasters[0].source = source;
