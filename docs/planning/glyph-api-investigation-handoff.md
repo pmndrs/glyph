@@ -40,12 +40,19 @@ generated:
 This is the pre-implementation design brief and intentionally preserves alternatives that were investigated. The
 verified implementation outcome is recorded in [the investigation report](glyph-api-investigation-report.md), with the
 ordinary adapter contract in D-293, the R3F default-or-provider selection contract in D-294, and the latest approved but
-not yet implemented canonical FontFace/handle-loading direction in D-296. In particular, the implemented R3F components
-expose no handle prop; provider font maps and FontFace loading remain planned work.
+not yet implemented canonical FontFace/handle-loading direction in D-296. D-297 adds the required content-addressed,
+lease-counted internal resource graph and restricts runtime baking to authenticated TTF/OTF source bytes. In particular,
+the implemented R3F components expose no handle prop; provider font maps and FontFace loading remain planned work.
 
 D-296's omitted FontFace `format` is deliberately handle-relative. It does not imply Slug or any other root-owned
 technique: built-in `ThreeConfig` defaults its typed technique map to MSDF, and a wrapped config may select another
 registered default. An explicit `format` on `glyph.fontFace(source, config?)` still overrides that handle default.
+
+D-297 forbids family names and raw URL strings from serving as resource identities. Names are lookup aliases; URLs and
+Requests are transport locators; authenticated content hashes, exact raster descriptors, and technique witness identity
+own reusable nodes. The core GLB, each selected external raster artifact, each requested external raster resource, decoded
+technique state, and handle-local binding are separate leased generations. Disposal releases reachability rather than
+mutating live resources, and a GLB format miss never falls through to runtime baking.
 
 This document preserves the API investigation so it can continue in a fresh context. It is a design brief, not an implementation plan that has been approved. The current code remains the evidence for what exists today.
 
