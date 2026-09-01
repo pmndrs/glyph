@@ -103,7 +103,7 @@ generated:
 
 # Glyph handle and renderer-bound command-buffer investigation
 
-Status: handle/config investigation implemented; D-295 FontFace direction approved with implementation pending
+Status: handle/config investigation implemented; D-296 FontFace direction approved with implementation pending
 
 ## Conclusion
 
@@ -1166,39 +1166,39 @@ own transport and target mechanics. The root handle surface is authoritative for
 
 ## Approved FontFace direction after the handle implementation
 
-D-295 extends the implemented handle/config contract with a root font-family declaration and load-before-use selection.
-This section records the intended contract and explicitly distinguishes it from current behavior. No FontFace public
-surface, fail-fast Three binding, provider font catalog, or new CLI default described here is implemented yet.
+D-296 supersedes D-295's source-list and root-relative loading sketches with one canonical two-argument declaration and
+handle-relative format resolution. This section records the intended contract and explicitly distinguishes it from current
+behavior. No FontFace public surface, fail-fast Three binding, provider font catalog, typed handle technique map, or new
+CLI default described here is implemented yet.
 
 ### Simplest form
 
-The smallest explicit declaration needs only a family and one source. Omitted format and default declarations mean MSDF:
+The smallest declaration is the source itself. Glyph generates a monotonic unused family name such as `Font1`. Omitting
+`format` means “use the consuming handle's configured default”; the root Glyph API does not select a renderer technique:
 
 ```ts
-const Inter = glyph.fontFace({
-  family: 'Inter',
-  src: [{ url: interUrl }],
-});
+const MyFont = glyph.fontFace('./my-font.glb');
 
-await Inter.load();
+await three.load(MyFont);
 
 const label = three.createText({
-  font: Inter,
+  font: MyFont,
   text: 'Hello',
 });
 
 scene.add(label);
 ```
 
-`Inter`, `Inter.default`, and `Inter.msdf` identify the same default format contract. `load()` is idempotent and resolves
-to the same selection, so `font: await Inter.load()` is equivalent. Constructing or updating imperative `Text` with an
-unloaded face throws synchronously instead of creating a temporarily empty object.
+`MyFont` and `MyFont.default` identify the same default selection. Built-in `ThreeConfig` resolves that selection to MSDF,
+while a spread/wrapped config may choose another key from its own typed technique map. `handle.load()` is idempotent and
+resolves to that same selection, so `font: await three.load(MyFont)` is equivalent. Constructing or updating imperative
+`Text` with an unloaded face throws synchronously instead of creating a temporarily empty object.
 
 The corresponding minimal R3F form uses the provider key as the local family name and authorizes automatic loading:
 
 ```tsx
-<GlyphProvider fonts={{ Inter: interUrl }} fallback={<LoadingFonts />}>
-  <Text font="Inter">Hello</Text>
+<GlyphProvider fonts={{ MyFont: './my-font.glb' }} fallback={<LoadingFonts />}>
+  <Text font="MyFont">Hello</Text>
 </GlyphProvider>
 ```
 
@@ -1206,47 +1206,36 @@ The provider value is captured once. A raw source shorthand creates a provider-o
 borrowed. The provider releases only faces it created when it unmounts and never disposes an externally supplied handle or
 FontFace. `fallback` is the provider's Suspense fallback; omitting it may use `null` without changing load ownership.
 
-### Complete ordinary declaration
+### Canonical declaration and inferred identity
 
-One GLB can contain several raster formats, and its authenticated raster directory is the runtime authority. The source
-declaration supplies the static type information and states what each ordered candidate is expected to provide:
+The canonical overload always keeps the source first and one optional `FontFaceConfig` second:
 
 ```ts
-const Inter = glyph.fontFace({
+const MyFont = glyph.fontFace('./my-font.glb', {
+  format: ['slug', 'msdf'],
+});
+
+MyFont.default === MyFont.slug;
+MyFont.slug === MyFont;
+MyFont.msdf !== MyFont;
+```
+
+`family` is optional. An omitted family becomes `Font{id++}` using a realm-local monotonic counter that skips an occupied
+name and never rewinds on disposal. An explicit family supplies the catalog name:
+
+```ts
+const Inter = glyph.fontFace('./Inter.font.glb', {
   family: 'Inter',
-  src: [
-    { url: './Inter.font.glb', format: [bitmap({ strikes: [8, 16] }), msdf, slug] },
-    { url: './Inter.slug.font.glb', format: slug },
-    { blob: FONT_BLOB, format: slug },
-  ],
-});
-
-const Body = Inter.bitmap;
-const Title = Inter.slug;
-```
-
-`src` remains an array instead of a format-keyed record because source identity and ordered fallback are real authoring
-information. Several techniques may share one fetched/parsed GLB, and several sources may be candidates for one technique.
-The const-generic result projects the union of declared technique kinds into typed properties without a separate
-`defineFont()` token. Third-party raster techniques participate through the same technique witness and acquire a property
-from their literal `kind`.
-
-The FontFace object itself implements the default selection contract. `.default` remains useful when code wants to state
-that choice explicitly, while `.bitmap`, `.msdf`, `.slug`, and inferred custom members select one declared technique. A
-family with no explicit default uses MSDF. A different default is a technique request, not a renderer setting:
-
-```ts
-const InterXSmall = glyph.fontFace({
-  family: 'Inter X-Small',
-  default: bitmap({ strikes: [8, 16] }),
-  src: [{ url: './Inter-x-small.font.glb', format: bitmap({ strikes: [8, 16] }) }],
+  format: ['slug', 'msdf'],
 });
 ```
 
-`InterXSmall` is a different face, not a second Bitmap member keyed by strike size inside `Inter`. Bitmap owns one ordered
-strike set and selects the appropriate baked strike for the requested CSS size and raster pixel ratio. MSDF is the normal
-scalable default, Bitmap covers intentionally baked small sizes, and Slug covers extra-large or otherwise high-fidelity
-use. The ordinary family can therefore expose all three while higher-level aliases remain plain selections:
+`format` accepts a string key, an imported renderer-neutral technique, an exact technique request, or a nonempty array of
+those forms. The first entry is the default. The const-generic result projects every literal key/kind into typed members;
+the default member aliases the FontFace object itself, while later members are distinct selections. Third-party techniques
+participate through the same imported witness or a key understood by the eventual handle.
+
+The ordinary aliases remain plain selections:
 
 ```ts
 const Body = Inter.bitmap;
@@ -1258,52 +1247,78 @@ const Title = Inter.slug;
 
 The current immutable loader derives an exact raster key from the technique descriptor and first asks the GLB for that
 reference. It runtime-bakes only after an exact miss and only when retained source bytes plus a matching runtime baker are
-available. D-295 preserves and raises that invariant to FontFace:
+available. D-296 preserves and raises that invariant to FontFace:
 
-- a baked GLB candidate declaring `bitmap({ strikes: [8, 16] })` must contain that exact descriptor;
+- a baked GLB declaring `bitmap({ strikes: [8, 16] })` must contain that exact descriptor;
 - a GLB cannot be silently re-baked because it contains no TTF/OTF source bytes;
-- a TTF/OTF candidate may be runtime-baked with stated options or the technique's documented defaults;
-- a source declaration that promises several formats is validated against the artifact directory when that source is
-  opened;
-- ordered fallback may continue to the next candidate, but the failed candidate remains a precise diagnostic and the load
-  rejects if no candidate satisfies the selected contract.
+- a TTF/OTF source may be runtime-baked with stated options or the technique's documented defaults;
+- one source declaration that promises several formats is validated against the artifact directory when that source is
+  opened; and
+- an external raster reference in that directory is the sidecar to load, not a second author-declared source candidate.
+
+A URL or Request supplies the base needed to resolve a relative sidecar. A bare Blob or byte source has no such base, so
+its sidecars must be embedded or named by absolute references. Failure to authenticate the requested descriptor or load
+its declared sidecar rejects that exact selection with source and technique provenance; there is no ordered fallback list
+inside one FontFace.
 
 Production should normally receive pre-baked GLBs. A Vite integration may discover FontFace declarations and build the
 exact source/format graph ahead of time; runtime baking remains the source-font fallback, not the normal production path.
 
 ### One load boundary and fail-fast Text
 
-There is no separate preload operation and no public readiness subscription. Each default or technique-specific selection
-has one idempotent `load()` operation, and the face retains the resulting cache lease:
+There is no separate preload operation and no public readiness subscription. Loading is handle-relative because only a
+GlyphConfig can give a string key its technique implementation and associated types. The relevant contract is:
 
 ```ts
-interface FontFaceSelection<Technique extends AnyRasterTechnique> {
-  readonly loaded: boolean;
-  load(): Promise<this>;
+interface GlyphConfig<Formats extends TechniqueMap, Default extends keyof Formats> {
+  readonly formats: Formats;
+  readonly defaultFormat: Default;
+  // encode, decode, resolve, renderer, and constructors omitted here
+}
+
+interface GlyphHandle<Formats extends TechniqueMap, Default extends keyof Formats> {
+  load<Selection extends CompatibleSelection<Formats>>(selection: Selection): Promise<Selection>;
+  isLoaded(selection: CompatibleSelection<Formats>): boolean;
 }
 ```
 
-`Inter.loaded` inspects the default selection, while `Inter.bitmap.loaded` and `Inter.slug.loaded` inspect exact members;
-family-level `isLoaded()` answers the default and `isLoaded(technique)` answers a declared technique without starting
-work. `Inter.load()` loads the default, `Inter.bitmap.load()` loads Bitmap, and loading all declared formats is explicit:
+The names `formats` and `defaultFormat` are candidate field names, not a request to rename any settled concept. Their
+type-level invariant is required: the default is a key of the same map. An omitted FontFace format resolves to that key;
+an explicit literal key must exist in the map; an imported technique/request brings its own associated types but still
+must be supported by the handle. Built-in `ThreeConfig` supplies Bitmap, MSDF, and Slug and defaults to MSDF:
 
 ```ts
-await Promise.all([Inter.bitmap.load(), Inter.msdf.load(), Inter.slug.load()]);
+const SlugFirstConfig = {
+  ...ThreeConfig,
+  defaultFormat: 'slug',
+} satisfies GlyphConfig<typeof ThreeConfig.formats, 'slug'>;
+
+const three = glyph.handle('three-slug', SlugFirstConfig);
+await three.load(Inter); // omitted face format resolves to Slug for this handle
+
+await Promise.all([three.load(Inter.bitmap), three.load(Inter.msdf), three.load(Inter.slug)]);
 ```
+
+`handle.isLoaded(Inter)` checks that handle's configured default without starting work. Technique members check exact
+selections. The stable operation resolves to the same selection object, and the FontFace retains the resulting cache
+lease. Different handles may map a key differently, so readiness cannot be a truthful single boolean on the root face.
 
 Imperative Three remains synchronous. Its constructor and `Text.set({ font })` validate that every root, fallback, and span
 selection is loaded before acquiring private immutable Font bindings. An unloaded face or named lookup throws at that call
 without mutating desired state, creating a planner entry, or changing the last accepted draw. Callers therefore write:
 
 ```ts
-await Inter.load();
+await three.load(Inter);
 const label = three.createText({ font: Inter, text: 'Hello' });
 ```
 
 or select another format directly:
 
 ```ts
-const title = three.createText({ font: await Inter.slug.load(), text: 'Title' });
+const title = three.createText({
+  font: await three.load(Inter.slug),
+  text: 'Title',
+});
 ```
 
 This removes the frame-scheduling problem rather than adding a second synchronization protocol. There is no pending `Text`
@@ -1312,9 +1327,9 @@ text intact.
 
 R3F accepts FontFace selections and strings at its declarative boundary, but automatic loading is an explicit provider
 capability. The nearest immutable `GlyphProvider fonts` map supplies aliases and the set of faces whose `load()` operations
-the subtree may start. For one of those mapped selections, React calls `use(selection.load())` and constructs or updates
-the Three object only after the stable Promise resolves. Calling `void Inter.load()` before rendering starts the same
-operation early; there is no separate preload cache or API.
+the subtree may start. For one of those mapped selections, React calls `use(handle.load(selection))` and constructs or
+updates the Three object only after the stable Promise resolves. Calling `void handle.load(selection)` before rendering
+starts the same operation early; there is no separate preload cache or API.
 
 Without a provider font map, R3F may use a loaded direct selection or loaded root-catalog name, but it does not initiate a
 load. An unloaded selection throws the same load-before-use error as imperative Three. This keeps hidden network and
@@ -1347,7 +1362,10 @@ provide UI boundaries, but it authorizes no font loads.
 FontFace adds a cache owner without replacing D-286's immutable loaded `Font` ownership:
 
 - the FontFace strongly owns each successfully loaded format's cache lease so named lookup remains deterministic;
-- `load()` resolves to the same stable default or technique-specific selection and does not create a caller-owned lease;
+- `handle.load()` resolves to the same stable default or technique-specific selection and does not create a caller-owned
+  lease;
+- loading state and stable promises are indexed by the handle's authenticated technique identity, so two handles can
+  coexist without pretending that equal string keys necessarily mean equal implementations;
 - each mounted/bound `Text` acquires its own private engine/renderer binding lease;
 - `FontFace.dispose()` aborts pending source work, removes its catalog registration, publishes `disposed`, and releases all
   face-owned cache leases;
@@ -1358,30 +1376,34 @@ FontFace adds a cache owner without replacing D-286's immutable loaded `Font` ow
 
 ### Review against the original plan
 
-| Original plan or current evidence                                                                 | D-295 result                                                                                                                           | Consequence                                                                                               |
-| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| D-286 makes loaded `Font<Technique>` immutable and independently leased.                          | Preserved internally and in low-level `loadFont()`. FontFace owns its cache lease, while Text acquires a private binding lease.        | Face disposal releases its cache without invalidating mounted text.                                       |
-| D-293 lets immutable fonts bind into multiple handles.                                            | Preserved. FontFace is root-owned and renderer-neutral; each handle binds the resolved Font independently.                             | A named family is not owned by Three, R3F, a scene, or a renderer.                                        |
-| D-294 makes React context immutable constructor injection.                                        | Extended from a bare handle to `{ handle, fonts }`, captured once; the map also authorizes automatic loading.                          | Provider aliases and loading policy do not create another runtime or mutable context.                     |
-| D-287 uses R3F `useLoader` as the existing font promise cache.                                    | Superseded for FontFace selections by the root idempotent load promise; the existing `useFont` hooks may remain compatibility loaders. | React suspends on the same operation imperative callers await.                                            |
-| `loadFont()` currently requires exact technique options and can runtime-bake after a raster miss. | Preserved as the low-level invariant behind format declarations.                                                                       | Declared options validate baked artifacts and drive source-font runtime/unplugin baking.                  |
-| `defineFont()` is the current static discovery token.                                             | Not required for FontFace declarations; discovery can read `glyph.fontFace()` calls and their source/format graph.                     | Ordinary named-font authoring has no duplicate token ceremony.                                            |
-| The current direct CLI emits shaping-only output when no raster flags are supplied.               | Intentionally changed: no raster flags mean embedded Bitmap 8/16, default MSDF, and Slug; explicit flags replace the defaults.         | The default artifact covers small, normal, and extra-large rendering while string selection remains MSDF. |
+| Original plan or current evidence                                                                 | D-296 result                                                                                                                         | Consequence                                                                                                    |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| D-286 makes loaded `Font<Technique>` immutable and independently leased.                          | Preserved internally and in low-level `loadFont()`. FontFace owns its cache lease, while Text acquires a private binding lease.      | Face disposal releases its cache without invalidating mounted text.                                            |
+| D-293 lets immutable fonts bind into multiple handles.                                            | Preserved. The root face is renderer-neutral; each handle resolves its configured default/key and independently binds the Font.      | Readiness and key meaning are handle-relative; a family is not owned by Three, R3F, a scene, or a renderer.    |
+| D-294 makes React context immutable constructor injection.                                        | Extended from a bare handle to `{ handle, fonts }`, captured once; the map also authorizes automatic loading through that handle.    | Provider aliases and loading policy do not create another runtime or mutable context.                          |
+| D-287 uses R3F `useLoader` as the existing font promise cache.                                    | Superseded for FontFace selections by the handle-indexed idempotent load promise; existing hooks may remain compatibility loaders.   | React suspends on the same handle operation imperative callers await.                                          |
+| `loadFont()` currently requires exact technique options and can runtime-bake after a raster miss. | Preserved as the low-level invariant behind format declarations.                                                                     | Declared options validate baked artifacts and drive source-font runtime/unplugin baking.                       |
+| `defineFont()` is the current static discovery token.                                             | Not required for FontFace declarations; discovery can read `glyph.fontFace()` calls and their source/format graph.                   | Ordinary named-font authoring has no duplicate token ceremony.                                                 |
+| The current direct CLI emits shaping-only output when no raster flags are supplied.               | Intentionally changed: zero flags bake Bitmap 8/16, MSDF, and Slug. Built-in `ThreeConfig` uses MSDF as its overridable default key. | The artifact covers small, normal, and extra-large rendering without making a renderer choice in the root API. |
 
 ### Smallest implementation proofs
 
-1. Bake with no raster flags and authenticate one embedded Bitmap descriptor with strikes 8/16, one default MSDF
-   descriptor, and one Slug descriptor; prove any explicit raster flag set replaces that default set.
-2. Infer `Inter`/`.default` as MSDF and `.bitmap`/`.slug` from one multi-format source plus ordered Slug fallbacks; infer one
-   custom technique member without `defineFont()`.
-3. Reject a baked source whose declared Bitmap options do not match its raster directory; feed the same declaration a
-   TTF and prove the exact runtime baker request receives those options.
-4. Construct and update imperative Three `Text` with an unloaded face and prove each call throws before shaping, desired
-   state mutation, or draw retirement; await `load()` and prove the same selection then succeeds.
-5. Mount provider shorthand plus `font="Inter"` under Suspense and StrictMode, prove one stable load, immutable context,
-   balanced leases, and no Three `Text` construction before resolution; omit `fonts` and prove the same unloaded
+1. Bake with no raster flags and authenticate one embedded Bitmap descriptor with strikes 8/16, one MSDF descriptor, and
+   one Slug descriptor; prove any explicit raster flag set replaces that bake set.
+2. Type-check `glyph.fontFace(source)` and `{ family, format }` forms, generated family uniqueness, explicit-default object
+   identity, exact custom-technique members, and rejection of an empty format array.
+3. Resolve the same omitted-format face through built-in MSDF-default `ThreeConfig` and an otherwise identical Slug-default
+   config; prove each handle gets exact style capabilities and independent load state without changing the root face.
+4. Load an external GLB raster sidecar relative to a URL/Request, then reject the same relative reference from a bare Blob;
+   prove an embedded or absolute Blob reference succeeds.
+5. Reject a baked source whose declared Bitmap options do not match its raster directory; feed a TTF declaration to the
+   runtime baker and prove the exact request receives those options.
+6. Construct and update imperative Three `Text` with an unloaded face and prove each call throws before shaping, desired
+   state mutation, or draw retirement; await `handle.load()` and prove the same selection then succeeds.
+7. Mount provider shorthand plus `font="Inter"` under Suspense and StrictMode, prove one stable handle load, immutable
+   context, balanced leases, and no Three `Text` construction before resolution; omit `fonts` and prove the same unloaded
    selection throws without starting a request.
-6. Reject one mapped font load through the provider's font fallback, then throw an unrelated child/renderer error and
+8. Reject one mapped font load through the provider's font fallback, then throw an unrelated child/renderer error and
    prove the provider rethrows it to an outer boundary.
-7. Load several formats, acquire one low-level independent Font and one mounted Text binding, dispose the FontFace, and
-   prove its cache leases release while the independent Font and committed draw remain valid.
+9. Load several formats through two handles, acquire one low-level independent Font and one mounted Text binding, dispose
+   the FontFace, and prove its cache leases release while the independent Font and committed draw remain valid.
