@@ -8,10 +8,13 @@ import { slugSchema } from '../raster/slug-technique.js';
 import type { AnyTechniqueSchema, PolicyBufferDeclaration, PolicyBufferDeclarations, PolicyBufferId } from '../core.js';
 import {
   type PlanAcceptance,
+  applyGlyphPublication,
+  type BorrowedBoundCommandBuffer,
+  type BoundTransformUpdate,
+  type GlyphRenderer,
   type PlanCandidate,
   type PlanTarget,
   type PortableGeometryPayload,
-  type PortablePayloadLease,
   type PortableResourceGroupPayload,
   type PortableTextureArrayPayload,
   type PortableTexturePayload,
@@ -40,6 +43,9 @@ import type {
 import type { ThreeTextMaterial, ThreeTextMaterialContext } from './material.js';
 import { assertThreeGeometryPayload, type ThreePlanProgramBuffer } from './plan-program-registry.js';
 import { createSuppliedGlyphGeometrySource, type ThreeGlyphGeometrySource } from './glyph-measurement.js';
+import { ThreeCommandBufferBinder, threeCandidateForBoundFrame, threeResourceForBoundFrame } from './command-buffer.js';
+import type { ThreeBindings, ThreeRendererContext } from './handle.js';
+import { ThreeTransformSynchronizer } from './transform-synchronizer.js';
 
 type ScalarArray = Float32Array | Uint32Array | Uint16Array;
 type PlanMaterialId = Parameters<PlanCandidate['resolveMaterial']>[0];
@@ -70,7 +76,7 @@ interface RetainedResource {
   readonly techniqueId: number;
   readonly resourceKind: number;
   readonly referenceId: number;
-  readonly lease: PortablePayloadLease;
+  readonly lease: Readonly<{ dispose(): void }>;
   readonly resolved: ThreeTextEngineResource;
 }
 
@@ -263,19 +269,41 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   readonly #directDrawsByTransform = new Map<number, THREE.Mesh[]>();
   #transforms = new Map<number, THREE.Object3D>();
   readonly #originRecords = new Map<number, OriginRecord>();
-  readonly #rootInverse = new THREE.Matrix4();
-  readonly #relativeTransform = new THREE.Matrix4();
+  readonly #transformSynchronizer = new ThreeTransformSynchronizer();
   #transformAttribute = transformAttribute(0);
   #transformGeneration = 1;
   #draws: THREE.Mesh[] = [];
   #drawKeys: string[] = [];
   #originSegments: OriginSegment[] = [];
   #preparation: PreparationContext | undefined;
+  readonly #binder: ThreeCommandBufferBinder | undefined;
+  readonly #renderer: GlyphRenderer<ThreeBindings, void> | undefined;
+  readonly #rendererAbort = new AbortController();
+  #pendingTransformSync:
+    | Readonly<{ ids: readonly number[]; worldMatricesCurrent: boolean; changed: number }>
+    | undefined;
+  #disposing = false;
   #disposed = false;
 
   constructor(coordinator: ThreeTextEngineCoordinator, owner: ThreeTextEnginePlanOwner) {
     this.#coordinator = coordinator;
     this.#owner = owner;
+    const config = coordinator.config;
+    if (config !== undefined) {
+      this.#binder = new ThreeCommandBufferBinder(coordinator, owner, config);
+      const defaultRenderer: GlyphRenderer<ThreeBindings, void> = Object.freeze({
+        prepare: (frame: BorrowedBoundCommandBuffer<ThreeBindings>) => this.#prepareRendererCommit(frame),
+        syncTransforms: (updates: readonly BoundTransformUpdate<THREE.Object3D>[]) =>
+          this.#syncBoundTransforms(updates),
+        dispose: () => this.#disposeRendererState(),
+      });
+      const context: ThreeRendererContext = Object.freeze({
+        drawRoot: owner.drawRoot,
+        signal: this.#rendererAbort.signal,
+        defaultRenderer,
+      });
+      this.#renderer = config.renderer(context);
+    }
   }
 
   get draws(): readonly THREE.Mesh[] {
@@ -301,9 +329,21 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   accept(candidate: PlanCandidate, signal: AbortSignal): PlanAcceptance {
     if (this.#disposed) throw new Error('Three text-engine plan target has been disposed');
     if (signal.aborted) return { accepted: false, error: signal.reason };
+    const config = this.#coordinator.config;
+    const binder = this.#binder;
+    const renderer = this.#renderer;
+    if (config === undefined || binder === undefined || renderer === undefined) {
+      try {
+        const failure = this.#coordinator.applyPlan(() => this.#commit(this.#prepare(candidate)));
+        return failure === undefined ? { accepted: true } : { accepted: false, error: failure };
+      } catch (error) {
+        return { accepted: false, error };
+      }
+    }
     try {
-      const failure = this.#coordinator.applyPlan(() => this.#commit(this.#prepare(candidate)));
-      return failure === undefined ? { accepted: true } : { accepted: false, error: failure };
+      return this.#coordinator.applyPlan(() =>
+        applyGlyphPublication(candidate, signal, config.decode, binder, renderer),
+      );
     } catch (error) {
       return { accepted: false, error };
     }
@@ -383,72 +423,64 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
 
   /** Upload changed scene transforms without crossing into Wasm or invalidating text measure. */
   syncTransforms(transformIds: Iterable<number> = this.#transforms.keys(), worldMatricesCurrent = false): number {
-    for (const [index, draw] of this.#draws.entries()) {
-      draw.renderOrder = this.#owner.renderOrderBase + index;
+    const ids = [...transformIds];
+    const renderer = this.#renderer;
+    if (renderer === undefined) return this.#syncTransformsCore(ids, worldMatricesCurrent);
+    const updates = ids.flatMap((id) => {
+      const transform = this.#transforms.get(id);
+      return transform === undefined ? [] : [Object.freeze({ transform })];
+    });
+    this.#pendingTransformSync = { ids, worldMatricesCurrent, changed: 0 };
+    try {
+      renderer.syncTransforms(updates);
+      return this.#pendingTransformSync.changed;
+    } finally {
+      this.#pendingTransformSync = undefined;
     }
-    const target = this.#transformAttribute.array as Float32Array;
-    let rootPrepared = false;
-    let changedTransforms = 0;
-    let indexedChanged = 0;
-    for (const transformId of transformIds) {
-      const indexed = this.#activeTransformIndices.has(transformId);
-      const directDraws = this.#directDrawsByTransform.get(transformId);
-      if (!indexed && directDraws === undefined) continue;
-      if (!rootPrepared) {
-        if (!worldMatricesCurrent) this.#owner.drawRoot.updateWorldMatrix(true, false, true);
-        this.#rootInverse.copy(this.#owner.drawRoot.matrixWorld).invert();
-        rootPrepared = true;
-      }
-      const object = this.#transforms.get(transformId);
-      if (object === undefined) throw new Error(`Three plan target has no retained transform ${transformId}`);
-      if (!worldMatricesCurrent) object.updateWorldMatrix(true, false, true);
-      if (object === this.#owner.drawRoot) this.#relativeTransform.identity();
-      else this.#relativeTransform.multiplyMatrices(this.#rootInverse, object.matrixWorld);
-      const visible = visibleBelowRoot(object, this.#owner.drawRoot);
-      let transformChanged = false;
-      if (indexed) {
-        const offset = transformId * 16;
-        if (visible) {
-          if (!matrixEquals(target, offset, this.#relativeTransform.elements)) {
-            target.set(this.#relativeTransform.elements, offset);
-            transformChanged = true;
-          }
-        } else if (!zeroMatrixEquals(target, offset)) {
-          target.fill(0, offset, offset + 16);
-          transformChanged = true;
-        }
-        if (transformChanged) {
-          this.#transformAttribute.addUpdateRange(offset, 16);
-          indexedChanged += 1;
-        }
-      }
-      for (const draw of directDraws ?? []) {
-        let drawChanged = false;
-        if (draw.visible !== visible) {
-          draw.visible = visible;
-          drawChanged = true;
-        }
-        if (!draw.matrix.equals(this.#relativeTransform)) {
-          draw.matrix.copy(this.#relativeTransform);
-          draw.matrixWorldNeedsUpdate = true;
-          drawChanged = true;
-        }
-        if (drawChanged) {
-          draw.updateMatrixWorld(false);
-          transformChanged = true;
-        }
-      }
-      if (transformChanged) changedTransforms += 1;
-    }
-    if (changedTransforms === 0) return 0;
-    if (indexedChanged !== 0) {
-      this.#transformAttribute.needsUpdate = true;
-      invalidatePboTexture(this.#transformAttribute);
-    }
-    return changedTransforms;
+  }
+
+  #syncBoundTransforms(updates: readonly BoundTransformUpdate<THREE.Object3D>[]): void {
+    const pending = this.#pendingTransformSync;
+    if (pending === undefined) throw new Error('Three renderer transform sync requires an active boundary traversal');
+    const requested = new Set(updates.map(({ transform }) => transform));
+    const ids = pending.ids.filter((id) => {
+      const transform = this.#transforms.get(id);
+      return transform !== undefined && requested.has(transform);
+    });
+    const changed = this.#syncTransformsCore(ids, pending.worldMatricesCurrent);
+    this.#pendingTransformSync = { ...pending, changed };
+  }
+
+  #syncTransformsCore(transformIds: Iterable<number>, worldMatricesCurrent: boolean): number {
+    return this.#transformSynchronizer.sync(
+      {
+        drawRoot: this.#owner.drawRoot,
+        renderOrderBase: this.#owner.renderOrderBase,
+        draws: this.#draws,
+        activeTransformIndices: this.#activeTransformIndices,
+        directDrawsByTransform: this.#directDrawsByTransform,
+        transforms: this.#transforms,
+        transformAttribute: this.#transformAttribute,
+      },
+      transformIds,
+      worldMatricesCurrent,
+    );
   }
 
   dispose(): void {
+    if (this.#disposed || this.#disposing) return;
+    this.#disposing = true;
+    this.#rendererAbort.abort(new DOMException('Three publication boundary disposed', 'AbortError'));
+    try {
+      this.#renderer?.dispose();
+    } finally {
+      this.#disposeRendererState();
+      this.#binder?.dispose();
+      this.#disposing = false;
+    }
+  }
+
+  #disposeRendererState(): void {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#disposeDraws();
@@ -470,7 +502,26 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     this.#originSegments = [];
   }
 
-  #prepare(candidate: PlanCandidate): PreparedPublication {
+  #prepareRendererCommit(frame: BorrowedBoundCommandBuffer<ThreeBindings>) {
+    const prepared = this.#prepare(threeCandidateForBoundFrame(frame), frame);
+    let state: 'open' | 'committed' | 'discarded' = 'open';
+    return Object.freeze({
+      result: undefined,
+      commit: () => {
+        if (state !== 'open') throw new Error(`Three renderer preparation was already ${state}`);
+        state = 'committed';
+        const failure = this.#commit(prepared);
+        if (failure !== undefined) throw failure;
+      },
+      discard: () => {
+        if (state !== 'open') return;
+        state = 'discarded';
+        this.#discardPreparation(prepared.context, prepared.draws);
+      },
+    });
+  }
+
+  #prepare(candidate: PlanCandidate, boundFrame?: BorrowedBoundCommandBuffer<ThreeBindings>): PreparedPublication {
     const plan = candidate.plan;
     const resources = plan.table('resources');
     const buffers = plan.table('buffers');
@@ -502,7 +553,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     let preparedDraws: PreparedDrawReplacement | undefined;
     this.#preparation = context;
     try {
-      if (resources.count !== 0) this.#readResources(candidate, plan, resources, context);
+      if (resources.count !== 0) this.#readResources(candidate, plan, resources, context, boundFrame);
       if (buffers.count !== 0) this.#readBuffers(plan, buffers, context.buffers);
       preparedDraws = replacesDraws
         ? this.#prepareDraws(plan, draws, primitives, buffers, resources)
@@ -612,6 +663,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     plan: RenderPlanReader,
     table: RenderPlanTable,
     context: PreparationContext,
+    boundFrame: BorrowedBoundCommandBuffer<ThreeBindings> | undefined,
   ): void {
     const resources = context.resources;
     for (let index = 0; index < table.count; index += 1) {
@@ -635,6 +687,23 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
         ) {
           throw new Error(`resource ${id}:${generation} changed without a generation advance`);
         }
+        continue;
+      }
+      if (boundFrame !== undefined) {
+        const resolved = threeResourceForBoundFrame(boundFrame, id, generation);
+        const program = resolved.program;
+        if (program !== undefined) assertThreeGeometryPayload(program, resolved.resources);
+        const resource: RetainedResource = {
+          id,
+          generation,
+          techniqueId,
+          resourceKind,
+          referenceId,
+          lease: Object.freeze({ dispose: () => undefined }),
+          resolved,
+        };
+        context.newResources.add(resource);
+        resources.set(id, resource);
         continue;
       }
       const lease = candidate.acquirePayload(referenceId);
@@ -2077,20 +2146,6 @@ function transformAttribute(transformCapacity: number): THREE.StorageInstancedBu
   const attribute = new THREE.StorageInstancedBufferAttribute(new Float32Array(transformCapacity * 16), 4);
   attribute.setUsage(THREE.DynamicDrawUsage);
   return attribute;
-}
-
-function matrixEquals(target: Float32Array, offset: number, matrix: readonly number[]): boolean {
-  for (let index = 0; index < 16; index += 1) {
-    if (target[offset + index] !== Math.fround(matrix[index]!)) return false;
-  }
-  return true;
-}
-
-function zeroMatrixEquals(target: Float32Array, offset: number): boolean {
-  for (let index = 0; index < 16; index += 1) {
-    if (target[offset + index] !== 0) return false;
-  }
-  return true;
 }
 
 function indexedTransformPosition(

@@ -10,6 +10,8 @@ import {
   type BackendMaterialBinding,
   type BackendPolicy,
   type BackendTransformBinding,
+  type Codec,
+  type EncodeContext,
   type PolicyBufferId,
   type PolicyCapabilitySet,
   type PortableResource,
@@ -17,7 +19,7 @@ import {
   type RenderPlanBufferBinding,
   type GlyphBackend,
 } from '../core.js';
-import { threeRenderPolicyDescriptor, type ThreeTransformMode } from './render-policy.js';
+import { TRANSFORM_BUFFER_ID, threeRenderPolicyDescriptor, type ThreeTransformMode } from './render-policy.js';
 import type { ThreeTextMaterial } from './material.js';
 import {
   compiledThreeRasterPlanPrograms,
@@ -25,6 +27,7 @@ import {
   type CompiledThreeRasterPlanProgram,
 } from './plan-program-registry.js';
 import type * as THREE from 'three/webgpu';
+import type { ThreeGlyphConfig } from './handle.js';
 
 const builtInThreeTechniques = new Set<string>([bitmap.id, msdf.id, slug.id]);
 
@@ -39,6 +42,10 @@ export type ThreeTextEngineResource = Readonly<{
 export interface ThreeTextEngineCoordinatorOptions {
   /** Renderer-policy choice; indexed is the first-party high-throughput default. */
   readonly transformMode?: ThreeTransformMode;
+}
+
+interface ThreeConfigEncode {
+  encode(context: EncodeContext): Codec;
 }
 
 /** Counted Three material binding; dispose releases this lease without disposing the material. */
@@ -75,6 +82,7 @@ export class ThreeTextEngineCoordinator {
   readonly capabilitySet: PolicyCapabilitySet;
   /** @internal Collision-checked static identities captured while installing this renderer policy. */
   readonly identities: RenderIdFactory;
+  readonly config: ThreeGlyphConfig | undefined;
   readonly #planPrograms: ReadonlyMap<string, CompiledThreeRasterPlanProgram>;
   readonly #policyBufferIds: ReadonlyMap<number, ReadonlyMap<number, PolicyBufferId>>;
   readonly #singleFontStacks = new WeakMap<
@@ -88,7 +96,7 @@ export class ThreeTextEngineCoordinator {
   #applyingPlan = false;
   #disposed = false;
 
-  constructor(glyphEngine: GlyphEngine, options: ThreeTextEngineCoordinatorOptions = {}) {
+  constructor(glyphEngine: GlyphEngine, options: ThreeTextEngineCoordinatorOptions = {}, config?: ThreeConfigEncode) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
       throw new TypeError('Three text engine coordinator options need an object');
     }
@@ -105,13 +113,31 @@ export class ThreeTextEngineCoordinator {
     try {
       policy = backend.installPolicy((backendIdentities) => {
         identities = backendIdentities;
-        planPrograms = compiledThreeRasterPlanPrograms(backendIdentities, transformMode);
-        snapshot = true;
-        descriptor = threeRenderPolicyDescriptor(
-          backendIdentities,
-          transformMode,
-          planPrograms.map((program) => program.policy),
-        );
+        if (config === undefined) {
+          planPrograms = compiledThreeRasterPlanPrograms(backendIdentities, transformMode);
+          snapshot = true;
+          descriptor = threeRenderPolicyDescriptor(
+            backendIdentities,
+            transformMode,
+            planPrograms.map((program) => program.policy),
+          );
+        } else {
+          const codec = config.encode({ integration: '@pmndrs/glyph/three', ids: backendIdentities });
+          if (typeof codec !== 'object' || codec === null || Array.isArray(codec)) {
+            throw new TypeError('ThreeConfig.encode() must return a Codec');
+          }
+          const configuredTransformMode = codec.descriptor.programs.some((program) =>
+            program.buffers.some((buffer) => buffer.id === TRANSFORM_BUFFER_ID),
+          )
+            ? 'indexed'
+            : 'direct';
+          planPrograms = compiledThreeRasterPlanPrograms(backendIdentities, configuredTransformMode);
+          snapshot = true;
+          descriptor = {
+            ...codec.descriptor,
+            programs: [...codec.descriptor.programs, ...planPrograms.map((program) => program.policy)],
+          };
+        }
         return descriptor;
       });
     } catch (error) {
@@ -130,6 +156,7 @@ export class ThreeTextEngineCoordinator {
     this.capabilitySet = descriptor.capabilitySets[0]!;
     this.backend = backend;
     this.policy = policy;
+    this.config = config as ThreeGlyphConfig | undefined;
   }
 
   bindFontStack(selection: FontSelection<AnyRasterTechnique>): BackendFontStackBinding {

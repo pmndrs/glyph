@@ -16,19 +16,23 @@
  */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { StrictMode, Suspense, createElement, useLayoutEffect } from 'react';
 import { DefaultLoadingManager } from 'three/webgpu';
 
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader } from '@pmndrs/glyph/three';
+import { glyph } from '@pmndrs/glyph';
+import { FontLoader, ThreeConfig } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
 
-import { Text, useFont } from '@pmndrs/glyph/react';
+import { GlyphProvider, Text, useFont } from '@pmndrs/glyph/react';
 import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
 import { threeEngineDomainReport } from '../../dist/three/engine-domain.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
+await glyph.init();
+const r3fHandle = glyph.handle('three:react-lease-tests', ThreeConfig);
+after(() => r3fHandle.dispose());
 
 // Three's WebGPU renderer drives its animation loop through a host context that node does
 // not provide. These tests assert lifecycle accounting, never rendering, so a minimal
@@ -61,14 +65,18 @@ test('mounting and unmounting a React Text returns every paragraph lease', async
   try {
     const renderer = await create(
       createElement(
-        Text,
-        {
-          font,
-          style: { fontSize: 20, lineHeight: 1.25 },
-          constraints: { width: { mode: 'exact', size: 300 } },
-          layout: { wrap: 'word' },
-        },
-        'leased',
+        GlyphProvider,
+        { handle: r3fHandle },
+        createElement(
+          Text,
+          {
+            font,
+            style: { fontSize: 20, lineHeight: 1.25 },
+            constraints: { width: { mode: 'exact', size: 300 } },
+            layout: { wrap: 'word' },
+          },
+          'leased',
+        ),
       ),
     );
     await renderer.unmount();
@@ -97,6 +105,7 @@ test('StrictMode remount cycles balance their paragraph leases', async () => {
           createElement(
             Text,
             {
+              handle: r3fHandle,
               font,
               style: { fontSize: 20, lineHeight: 1.25 },
               constraints: { width: { mode: 'exact', size: 300 } },
@@ -124,6 +133,7 @@ test('user font and loader handles may dispose before React releases its Text le
     createElement(
       Text,
       {
+        handle: r3fHandle,
         font,
         style: { fontSize: 20, lineHeight: 1.25 },
         constraints: { width: { mode: 'exact', size: 300 } },
@@ -273,6 +283,7 @@ function HookFontText({ name, observed, request }) {
     Text,
     {
       font,
+      handle: r3fHandle,
       name,
       style: { fontSize: 20, lineHeight: 1.25 },
       constraints: { width: { mode: 'exact', size: 300 } },
@@ -333,5 +344,5 @@ function BitmapFontText({ input, name, observed, options }) {
       if (observed.get(name) === font) observed.delete(name);
     };
   }, [font, name, observed]);
-  return createElement(Text, { font, name }, name);
+  return createElement(Text, { font, handle: r3fHandle, name }, name);
 }

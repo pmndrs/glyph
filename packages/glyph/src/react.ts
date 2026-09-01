@@ -1,8 +1,10 @@
 import { extend, useLoader, useThree, type ThreeElement, type ThreeElements } from '@react-three/fiber/webgpu';
 import {
   createElement,
+  createContext,
   forwardRef,
   isValidElement,
+  useContext,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -15,11 +17,12 @@ import {
 
 import { resolveRangesToClusters } from './formatted-text.js';
 import type { Font } from './font.js';
-import { immutableFontRequestKey, type LoadFontInput } from './loader.js';
+import { immutableFontRequestKey, loadFont, type LoadFontInput } from './loader.js';
 import { cloneImmutableFont, type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
 import { type Constraints, type ParagraphLayout, type PropertyList, type TextStyle } from './text-properties.js';
 import type { AnyRasterTechnique, RasterOptionsOf } from './raster-technique.js';
+import { threeHandleDomain } from './three/handle.js';
 import {
   FontLoader as ThreeFontLoader,
   Text as ThreeText,
@@ -28,6 +31,7 @@ import {
   type TextGroupOptions,
   type TextSpan as ThreeTextSpanRecord,
   type ThreeFontLoadRequest,
+  type ThreeHandle,
   type ThreeTextMaterial,
 } from './three.js';
 
@@ -56,6 +60,8 @@ type FontSelectionTechnique<Selection> =
       : never;
 
 export type R3fTextProps<Technique extends AnyRasterTechnique> = Object3DProps & {
+  /** Explicit construction handle; otherwise the nearest GlyphProvider is used. */
+  readonly handle?: ThreeHandle;
   readonly font?: R3fFontSelection<Technique>;
   readonly children?: R3fTextChild<Technique>;
   /** Text shaping and presentation properties inherited by nested Text spans. */
@@ -74,6 +80,8 @@ export type R3fTextProps<Technique extends AnyRasterTechnique> = Object3DProps &
 
 export type R3fTextGroupProps = Object3DProps &
   TextGroupOptions & {
+    /** Explicit construction handle; otherwise the nearest GlyphProvider is used. */
+    readonly handle?: ThreeHandle;
     readonly children?: ReactNode;
     readonly onError?: ((error: unknown) => void) | undefined;
     readonly ref?: Ref<ThreeTextGroup>;
@@ -125,6 +133,38 @@ export interface UseFont {
 
 const ThreeTextElement = extend(ThreeText);
 const ThreeTextGroupElement = extend(ThreeTextGroup);
+const GlyphHandleContext = createContext<ThreeHandle | undefined>(undefined);
+const handleIds = new WeakMap<ThreeHandle, number>();
+let nextHandleId = 1;
+
+export interface GlyphProviderProps {
+  readonly handle: ThreeHandle;
+  readonly children?: ReactNode;
+}
+
+/** Selects the already-created Three handle used by descendant retained objects. */
+export function GlyphProvider({ handle, children }: GlyphProviderProps): ReactElement {
+  return createElement(GlyphHandleContext.Provider, { value: handle }, children);
+}
+
+function useSelectedHandle(explicit: ThreeHandle | undefined): ThreeHandle {
+  const provided = useContext(GlyphHandleContext);
+  const handle = explicit ?? provided;
+  if (handle === undefined) {
+    throw new Error('R3F Text and TextGroup require a Three handle prop or a surrounding GlyphProvider');
+  }
+  if (handle.disposed) throw new Error('R3F cannot construct Text or TextGroup from a disposed Three handle');
+  return handle;
+}
+
+function handleId(handle: ThreeHandle): number {
+  const existing = handleIds.get(handle);
+  if (existing !== undefined) return existing;
+  const id = nextHandleId;
+  nextHandleId += 1;
+  handleIds.set(handle, id);
+  return id;
+}
 
 interface TextComponent {
   <const Selection, Technique extends AnyRasterTechnique = FontSelectionTechnique<Selection>>(
@@ -140,13 +180,15 @@ export const Text = forwardRef(function Text<Technique extends AnyRasterTechniqu
   properties: Omit<R3fTextProps<Technique>, 'ref'>,
   forwardedRef: Ref<ThreeText<Technique>>,
 ): ReactElement | null {
+  const handle = useSelectedHandle(properties.handle);
   const flattened = useMemo(() => flattenText<Technique>(properties.children), [properties.children]);
   const desired = textProperties(properties, flattened);
   const [object, publishObject] = useState<ThreeText<Technique> | null>(null);
   useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
   if (desired.font === undefined) throw new TypeError('an outer R3F Text requires a font');
   return createElement(TextObject, {
-    key: properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped',
+    key: `${handleId(handle)}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
+    handle,
     desired: desired as DesiredR3fTextProperties<AnyRasterTechnique>,
     object: objectProperties(properties),
     onError: properties.onError,
@@ -156,18 +198,20 @@ export const Text = forwardRef(function Text<Technique extends AnyRasterTechniqu
 
 function TextObject({
   desired,
+  handle,
   object: objectProps,
   onError,
   publishObject: publishCommittedObject,
 }: {
   readonly desired: DesiredR3fTextProperties<AnyRasterTechnique>;
+  readonly handle: ThreeHandle;
   readonly object: TextElementProps;
   readonly onError: ((error: unknown) => void) | undefined;
   readonly publishObject: (value: ThreeText<AnyRasterTechnique> | null) => void;
 }): ReactElement {
-  const [constructorArguments] = useState<[StandaloneTextProperties<AnyRasterTechnique>]>(() => [
-    desired as StandaloneTextProperties<AnyRasterTechnique>,
-  ]);
+  const [constructorArguments] = useState<
+    [StandaloneTextProperties<AnyRasterTechnique>, ReturnType<typeof threeHandleDomain>]
+  >(() => [desired as StandaloneTextProperties<AnyRasterTechnique>, threeHandleDomain(handle)]);
   const appliedRef = useRef(desired);
   const capacityRef = useRef(desired.capacity);
   const [store] = useState(() => createObjectStore<ThreeText<AnyRasterTechnique>>());
@@ -206,10 +250,12 @@ export const TextGroup: (input: R3fTextGroupProps) => ReactElement | null = forw
   properties: Omit<R3fTextGroupProps, 'ref'>,
   forwardedRef: Ref<ThreeTextGroup>,
 ): ReactElement | null {
+  const handle = useSelectedHandle(properties.handle);
   const [object, publishObject] = useState<ThreeTextGroup | null>(null);
   useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
   return createElement(TextGroupObject, {
-    key: `${properties.compositing ?? 'ordered'}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
+    key: `${handleId(handle)}:${properties.compositing ?? 'ordered'}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
+    handle,
     object: groupObjectProperties(properties),
     options: properties,
     publishObject,
@@ -218,14 +264,16 @@ export const TextGroup: (input: R3fTextGroupProps) => ReactElement | null = forw
 
 function TextGroupObject({
   object: objectProps,
+  handle,
   options,
   publishObject: publishCommittedObject,
 }: {
   readonly object: TextGroupElementProps;
+  readonly handle: ThreeHandle;
   readonly options: Omit<R3fTextGroupProps, 'ref'>;
   readonly publishObject: (value: ThreeTextGroup | null) => void;
 }): ReactElement {
-  const [constructorArguments] = useState<[TextGroupOptions]>(() => [
+  const [constructorArguments] = useState<[TextGroupOptions, ReturnType<typeof threeHandleDomain>]>(() => [
     {
       ...(options.capacity === undefined ? {} : { capacity: options.capacity }),
       ...(options.compositing === undefined ? {} : { compositing: options.compositing }),
@@ -233,6 +281,7 @@ function TextGroupObject({
       ...(options.material === undefined ? {} : { material: options.material }),
       ...(options.pixelSnapping === undefined ? {} : { pixelSnapping: options.pixelSnapping }),
     },
+    threeHandleDomain(handle),
   ]);
   const [store] = useState(() => createObjectStore<ThreeTextGroup>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -340,12 +389,11 @@ class ReactFontLoader extends ThreeFontLoader {
   ): void {
     const key = immutableFontRequestKey(request.input, request.raster);
     const load: ReactFontLoad = { cancelled: false, controller: new AbortController(), font: undefined };
-    const loader = new ThreeFontLoader(this.manager);
     this.#loads.set(key, load);
-    loader.load(
-      { ...request, signal: load.controller.signal },
+    this.manager.itemStart(key);
+    void loadFont(request.input, request.raster, { signal: load.controller.signal }).then(
       (font) => {
-        loader.dispose();
+        this.manager.itemEnd(key);
         if (load.cancelled || this.#loads.get(key) !== load) {
           font.dispose();
           onError?.(new DOMException('React font load was cleared', 'AbortError'));
@@ -354,13 +402,14 @@ class ReactFontLoader extends ThreeFontLoader {
         load.font = font;
         onLoad(font);
       },
-      onProgress,
       (error) => {
-        loader.dispose();
+        this.manager.itemError(key);
+        this.manager.itemEnd(key);
         if (this.#loads.get(key) === load) this.#loads.delete(key);
         onError?.(error);
       },
     );
+    void onProgress;
   }
 
   release(key: string): void {
@@ -530,6 +579,7 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
   const object = { ...properties } as Record<string, unknown>;
   for (const key of [
     'font',
+    'handle',
     'children',
     'style',
     'layout',
@@ -547,7 +597,7 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
 
 function groupObjectProperties(properties: R3fTextGroupProps): TextGroupElementProps {
   const object = { ...properties } as Record<string, unknown>;
-  for (const key of ['capacity', 'compositing', 'material', 'pixelSnapping', 'children', 'onError', 'ref'])
+  for (const key of ['handle', 'capacity', 'compositing', 'material', 'pixelSnapping', 'children', 'onError', 'ref'])
     delete object[key];
   return object as TextGroupElementProps;
 }
