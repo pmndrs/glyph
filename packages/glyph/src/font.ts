@@ -16,6 +16,8 @@ export interface FontMetrics {
 
 /** Immutable font metadata exposed to a raster format while decoding its artifact. */
 export interface RasterDecodeFont {
+  /** Identity of the prepared source this font was baked from; rasters are built from its outlines. */
+  readonly sourceFingerprint: Fingerprint;
   readonly shapingFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;

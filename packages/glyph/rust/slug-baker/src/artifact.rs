@@ -73,6 +73,7 @@ pub fn bake_slug(
     let metadata_bytes = packed.record_bytes.len();
     let built = build_slug_glb(
         &request.raster_key,
+        &request.source_fingerprint,
         &request.shaping_fingerprint,
         request.glyph_count,
         &packed,

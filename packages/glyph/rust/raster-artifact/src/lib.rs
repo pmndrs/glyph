@@ -61,11 +61,17 @@ pub const SOURCE_FINGERPRINT_V0: u32 = 0x736f_7572;
 
 /// The single value a raster and its core font compare to decide they belong together.
 ///
+/// The source fingerprint participates because rasters are built from outlines and the shaping
+/// payload deliberately carries none: two fonts with identical `head`/`maxp`/`cmap`/`hhea`/`hmtx`
+/// tables but different curves share a shaping identity, so without this a raster baked from one
+/// would be accepted against the other and render the wrong shapes.
+///
 /// Every dimension that must agree is folded in here, so a consumer performs one comparison
 /// instead of re-deriving the list at each call site and forgetting a dimension when the format
 /// grows. Keys are emitted in the sorted order RFC 8785 requires, matching `canonicalJson` in
 /// `src/internal/raster-identity.ts`.
 pub fn compatibility_fingerprint(
+    source_fingerprint: &str,
     shaping_fingerprint: &str,
     raster_key: &str,
     kind: &str,
@@ -74,7 +80,7 @@ pub fn compatibility_fingerprint(
     glyph_id_width: u16,
 ) -> String {
     let canonical = std::format!(
-        "{{\"glyphCount\":{glyph_count},\"glyphIdWidth\":{glyph_id_width},\"kind\":\"{kind}\",\"rasterKey\":\"{raster_key}\",\"shaping\":\"{shaping_fingerprint}\",\"version\":{version}}}"
+        "{{\"glyphCount\":{glyph_count},\"glyphIdWidth\":{glyph_id_width},\"kind\":\"{kind}\",\"rasterKey\":\"{raster_key}\",\"shaping\":\"{shaping_fingerprint}\",\"source\":\"{source_fingerprint}\",\"version\":{version}}}"
     );
     fingerprint128(canonical.as_bytes(), COMPATIBILITY_FINGERPRINT_V0)
 }
@@ -283,6 +289,7 @@ mod fingerprint_tests {
     fn compatibility_fingerprint_matches_its_published_canonical_form() {
         assert_eq!(
             compatibility_fingerprint(
+                "14fa0a34f3783dd4f131d5b546e453b7",
                 "0c522d6ea0db73ba74bcc389dc50263b",
                 "d1dcd31304f795b5f2c497c579aa29f0",
                 "bitmap",
@@ -290,7 +297,7 @@ mod fingerprint_tests {
                 2937,
                 16,
             ),
-            "8b23c028dd6cd2d31a61b00c35bbcbe0"
+            "657b9a49c37a4c85f3247df62e408479"
         );
     }
 

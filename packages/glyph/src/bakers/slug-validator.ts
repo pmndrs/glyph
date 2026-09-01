@@ -80,6 +80,7 @@ export interface SlugArtifactValidationLimits {
 
 export interface SlugArtifactValidationContext {
   readonly rasterKey: RasterKey | string;
+  readonly sourceFingerprint: Fingerprint | string;
   readonly shapingFingerprint: Fingerprint | string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
@@ -201,6 +202,7 @@ async function validateSlugSemantics(
         kind: 'slug',
         rasterKey: context.rasterKey,
         shaping: context.shapingFingerprint as string,
+        source: context.sourceFingerprint as string,
         version: SLUG_FORMAT_VERSION,
       })
   ) {

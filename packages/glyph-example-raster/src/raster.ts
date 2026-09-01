@@ -88,6 +88,7 @@ function decodeExtension(
         kind: GLYPH_EXAMPLE_KIND,
         rasterKey: raster.rasterKey,
         shaping: font.shapingFingerprint,
+        source: font.sourceFingerprint,
         version: GLYPH_EXAMPLE_FORMAT_VERSION,
       }) ||
     extension.recordStride !== RECORD_STRIDE
@@ -110,6 +111,7 @@ function decodeExtension(
       kind: GLYPH_EXAMPLE_KIND,
       rasterKey: raster.rasterKey,
       shaping: font.shapingFingerprint,
+      source: font.sourceFingerprint,
       version: GLYPH_EXAMPLE_FORMAT_VERSION,
     }),
     descriptor,

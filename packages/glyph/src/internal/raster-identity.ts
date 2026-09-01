@@ -106,7 +106,7 @@ export function deriveRasterKey(input: {
  * the inputs it came from and recompute it later from its own manifest.
  *
  * ```text
- * {"glyphCount":2937,"glyphIdWidth":16,"kind":"bitmap","rasterKey":"d1dc…","shaping":"0c52…","version":0}
+ * {"glyphCount":2937,"glyphIdWidth":16,"kind":"bitmap","rasterKey":"d1dc…","shaping":"0c52…","source":"14fa…","version":0}
  * ```
  */
 export function compatibilityFingerprint(input: {
@@ -115,6 +115,7 @@ export function compatibilityFingerprint(input: {
   readonly kind: string;
   readonly rasterKey: string;
   readonly shaping: string;
+  readonly source: string;
   readonly version: number;
 }): Fingerprint {
   const canonical = canonicalJson({
@@ -123,6 +124,7 @@ export function compatibilityFingerprint(input: {
     kind: input.kind,
     rasterKey: input.rasterKey,
     shaping: input.shaping,
+    source: input.source,
     version: input.version,
   });
   return fingerprint128(textEncoder.encode(canonical), fingerprintDomain.compatibility);

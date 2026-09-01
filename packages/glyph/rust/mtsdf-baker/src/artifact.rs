@@ -106,6 +106,7 @@ fn bake_mtsdf_internal(
             .map_or(0, |coverage| coverage.len());
     let built = build_mtsdf_glb(
         &request.raster_key,
+        &request.source_fingerprint,
         &request.shaping_fingerprint,
         request.glyph_count,
         settings,
@@ -528,6 +529,7 @@ mod tests {
         "../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf"
     );
     const SHAPING_FINGERPRINT: &str = "0c522d6ea0db73ba74bcc389dc50263b";
+    const SOURCE_FINGERPRINT: &str = "14fa0a34f3783dd4f131d5b546e453b7";
 
     fn descriptor(em_size: Option<u16>, pixel_range: Option<u16>) -> MtsdfDescriptorV0 {
         MtsdfDescriptorV0 {
@@ -724,6 +726,7 @@ mod tests {
         };
         let built = build_mtsdf_glb(
             &"1".repeat(32),
+            &"3".repeat(32),
             &"2".repeat(32),
             1,
             settings(32, 5),
@@ -761,6 +764,7 @@ mod tests {
         let raster_key = descriptor_raster_key(&descriptor);
         let embedded = build_mtsdf_glb(
             &raster_key,
+            SOURCE_FINGERPRINT,
             SHAPING_FINGERPRINT,
             2937,
             settings,
@@ -772,6 +776,7 @@ mod tests {
         .expect("embedded");
         let repeat = build_mtsdf_glb(
             &raster_key,
+            SOURCE_FINGERPRINT,
             SHAPING_FINGERPRINT,
             2937,
             settings,
