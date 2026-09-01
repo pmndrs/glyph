@@ -37,7 +37,7 @@ pub fn abi_json() -> &'static str {
 }
 
 use pmndrs_glyph_raster_artifact::{
-    ARTIFACT_FINGERPRINT_V0, DESCRIPTOR_FINGERPRINT_V0, SOURCE_FINGERPRINT_V0, fingerprint128,
+    ARTIFACT_FINGERPRINT_V0, SOURCE_FINGERPRINT_V0, fingerprint128,
 };
 use std::{borrow::ToOwned, vec::Vec};
 
@@ -45,15 +45,12 @@ use std::{borrow::ToOwned, vec::Vec};
 pub fn bake_font(source: &[u8], descriptor: BakeDescriptorV0) -> Result<BakeResultV0, BakeError> {
     let descriptor = descriptor.validate()?;
     let source_fingerprint = fingerprint128(source, SOURCE_FINGERPRINT_V0);
-    let descriptor_fingerprint =
-        fingerprint128(&descriptor.canonical_bytes(), DESCRIPTOR_FINGERPRINT_V0);
     let shaping = sfnt::build_shaping_payload(source, descriptor.font_face_index)?;
     let shaping_report = shaping.report.clone();
     let artifact = glb::build_font_glb(
         &shaping,
         ProvenanceV0 {
             source_fingerprint,
-            descriptor_fingerprint,
             font_face_index: descriptor.font_face_index,
             baker_version: abi_contract::BAKER_VERSION.to_owned(),
             harfrust_version: abi_contract::HARFRUST_VERSION.to_owned(),

@@ -75,34 +75,21 @@ pub fn bake_slug(
         &request.raster_key,
         &request.shaping_fingerprint,
         request.glyph_count,
-        request.packaging.pages,
         &packed,
     )?;
     let raster_fingerprint = artifact_fingerprint(&built.bytes);
     let raster_id = format!(
-        "slug-{}-{}-{raster_fingerprint}.glb",
-        request.shaping_fingerprint, request.raster_key,
+        "slug-{}-{}.glb",
+        request.shaping_fingerprint, request.raster_key
     );
     let mut artifacts = Vec::new();
-    artifacts
-        .try_reserve_exact(1 + built.resources.len())
-        .map_err(|_| overflow())?;
+    artifacts.try_reserve_exact(1).map_err(|_| overflow())?;
     artifacts.push(SlugBakeArtifactV0 {
         role: "raster".into(),
         id: raster_id,
         fingerprint: raster_fingerprint,
         bytes: built.bytes,
     });
-    for resource in built.resources {
-        if !resource.embedded {
-            artifacts.push(SlugBakeArtifactV0 {
-                role: "raster-page".into(),
-                id: resource.id,
-                bytes: resource.bytes,
-                fingerprint: resource.fingerprint,
-            });
-        }
-    }
     let serialized_bytes = artifacts.iter().try_fold(0_usize, |total, artifact| {
         total.checked_add(artifact.bytes.len()).ok_or_else(overflow)
     })?;
@@ -118,12 +105,7 @@ pub fn bake_slug(
             height: page.height,
             format: "rgba16float".into(),
             gpu_bytes: page.gpu_bytes,
-            source: if page.embedded {
-                "embedded"
-            } else {
-                "external"
-            }
-            .into(),
+            source: "embedded".into(),
             encoded_bytes: page.encoded_bytes,
         });
     }
@@ -354,7 +336,6 @@ mod tests {
             raster_key: raster_key.clone(),
             packaging: crate::model::SlugPackagingV0 {
                 artifact: crate::model::ArtifactPackaging::External,
-                pages: crate::model::PagePackaging::Embedded,
             },
             descriptor: descriptor.clone(),
         };

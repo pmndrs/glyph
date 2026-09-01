@@ -14,16 +14,8 @@ export type StaticNumberTuple<Values extends readonly [number, ...number[]]> = n
 
 export type RasterSource =
   | { readonly type: 'embedded' }
-  | {
-      readonly type: 'external';
-      readonly uri: string;
-      readonly artifactFingerprint: Fingerprint;
-    }
-  | {
-      readonly type: 'external';
-      readonly uri?: never;
-      readonly artifactFingerprint?: Fingerprint;
-    };
+  | { readonly type: 'external'; readonly uri: string }
+  | { readonly type: 'external'; readonly uri?: never };
 
 export interface RasterReference<Kind extends string = string> {
   readonly rasterKey: RasterKey;
@@ -33,14 +25,8 @@ export interface RasterReference<Kind extends string = string> {
   readonly source: RasterSource;
 }
 
-export type RasterResourceSource =
-  | { readonly type: 'bufferView'; readonly bufferView: number }
-  | {
-      readonly type: 'external';
-      readonly uri: string;
-      readonly byteLength: number;
-      readonly artifactFingerprint: Fingerprint;
-    };
+/** Page payloads always travel inside the artifact that declares them. */
+export type RasterResourceSource = { readonly type: 'bufferView'; readonly bufferView: number };
 
 export interface RasterSelection<Kind extends string = string> {
   readonly rasterKey: RasterKey | string;

@@ -23,11 +23,10 @@ export type BakeProgressListener = (progress: BakeProgress) => void;
 
 export interface RasterPackaging {
   readonly artifact: 'embedded' | 'external';
-  readonly pages: 'embedded' | 'external';
 }
 
 export interface BakeArtifact {
-  readonly role: 'font' | 'raster' | 'raster-page';
+  readonly role: 'font' | 'raster';
   readonly id: string;
   readonly bytes: Uint8Array;
   readonly fingerprint: Fingerprint;
@@ -62,7 +61,6 @@ export interface RasterPagePayloadReport {
   readonly height: number;
   readonly format: string;
   readonly gpuBytes: number;
-  readonly source: 'embedded' | 'external';
   readonly encodedBytes: number;
 }
 

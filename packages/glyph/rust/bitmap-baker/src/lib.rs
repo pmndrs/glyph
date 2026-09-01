@@ -21,7 +21,7 @@ pub use error::{BitmapBakeError, BitmapBakeErrorCode};
 pub use model::{
     ArtifactPackaging, BITMAP_GENERATOR_VERSION, BitmapBakeArtifactV0, BitmapBakeRequestV0,
     BitmapBakeResultV0, BitmapDescriptorV0, BitmapPackagingV0, BitmapPageReportV0,
-    BitmapPayloadReportV0, MAX_BITMAP_PPEM, PagePackaging, RasterCoverageV0, RasterUnicodeRangeV0,
+    BitmapPayloadReportV0, MAX_BITMAP_PPEM, RasterCoverageV0, RasterUnicodeRangeV0,
 };
 
 /// Return the generated direct-memory ABI contract embedded in this build.
@@ -106,17 +106,16 @@ pub fn bake_bitmap(
         &request.raster_key,
         &request.shaping_fingerprint,
         request.glyph_count,
-        request.packaging.pages,
         &strikes,
         request.descriptor.coverage.as_ref(),
         coverage.as_ref().map(|selection| selection.bits()),
     )?;
     let raster_fingerprint = artifact_fingerprint(&built.bytes);
     let raster_id = format!(
-        "bitmap-{}-{}-{raster_fingerprint}.glb",
-        request.shaping_fingerprint, request.raster_key,
+        "bitmap-{}-{}.glb",
+        request.shaping_fingerprint, request.raster_key
     );
-    let mut artifacts = vec![BitmapBakeArtifactV0 {
+    let artifacts = vec![BitmapBakeArtifactV0 {
         role: "raster".into(),
         id: raster_id,
         bytes: built.bytes,
@@ -134,21 +133,9 @@ pub fn bake_bitmap(
             height: page.height,
             format: "r8unorm".into(),
             gpu_bytes: page_gpu_bytes,
-            source: if page.embedded {
-                "embedded".into()
-            } else {
-                "external".into()
-            },
+            source: "embedded".into(),
             encoded_bytes: page.bytes.len(),
         });
-        if !page.embedded {
-            artifacts.push(BitmapBakeArtifactV0 {
-                role: "raster-page".into(),
-                id: page.id,
-                bytes: page.bytes,
-                fingerprint: page.fingerprint,
-            });
-        }
     }
     let serialized_bytes = artifacts.iter().map(|artifact| artifact.bytes.len()).sum();
 
@@ -227,7 +214,7 @@ mod tests {
     );
     const SHAPING_FINGERPRINT: &str = "0c522d6ea0db73ba74bcc389dc50263b";
 
-    fn request(pages: PagePackaging) -> BitmapBakeRequestV0 {
+    fn request() -> BitmapBakeRequestV0 {
         let descriptor = BitmapDescriptorV0 {
             coverage: None,
             generator_version: BITMAP_GENERATOR_VERSION.into(),
@@ -244,7 +231,6 @@ mod tests {
             raster_key: descriptor_raster_key(&descriptor),
             packaging: BitmapPackagingV0 {
                 artifact: ArtifactPackaging::External,
-                pages,
             },
             descriptor,
         }
@@ -282,7 +268,7 @@ mod tests {
 
     #[test]
     fn bounded_bitmap_rasterizes_only_selected_font_local_glyphs() {
-        let mut bounded = request(PagePackaging::Embedded);
+        let mut bounded = request();
         bounded.descriptor.coverage = Some(RasterCoverageV0 {
             unicode_ranges: None,
             text: None,
@@ -336,8 +322,8 @@ mod tests {
 
     #[test]
     fn inter_bitmap_is_deterministic_and_packaging_preserves_records() {
-        let embedded_a = bake_bitmap(INTER, request(PagePackaging::Embedded)).unwrap();
-        let embedded_b = bake_bitmap(INTER, request(PagePackaging::Embedded)).unwrap();
+        let embedded_a = bake_bitmap(INTER, request()).unwrap();
+        let embedded_b = bake_bitmap(INTER, request()).unwrap();
         assert_eq!(embedded_a.artifacts, embedded_b.artifacts);
         assert_eq!(embedded_a.report, embedded_b.report);
         assert_eq!(embedded_a.report.metadata_bytes, 2937 * 20);
@@ -349,21 +335,15 @@ mod tests {
                 .all(|artifact| artifact.role == "raster")
         );
 
-        let external = bake_bitmap(INTER, request(PagePackaging::External)).unwrap();
-        assert_eq!(
-            external.report.metadata_bytes,
-            embedded_a.report.metadata_bytes
-        );
-        assert_eq!(external.report.gpu_bytes, embedded_a.report.gpu_bytes);
+        // Pages are always embedded, so a bake publishes exactly one artifact and never a
+        // separate page file.
+        assert_eq!(embedded_a.artifacts.len(), 1);
         assert!(
-            external
-                .artifacts
+            embedded_a
+                .report
+                .pages
                 .iter()
-                .any(|artifact| artifact.role == "raster-page")
-        );
-        assert_eq!(
-            record_bytes(&embedded_a.artifacts[0].bytes),
-            record_bytes(&external.artifacts[0].bytes),
+                .all(|page| page.source == "embedded")
         );
         assert_eq!(plane_units_per_em(&embedded_a.artifacts[0].bytes), 16);
         assert_native_pixel_geometry(&record_bytes(&embedded_a.artifacts[0].bytes));
@@ -371,8 +351,8 @@ mod tests {
 
     #[test]
     fn artifact_names_include_font_and_raster_identity() {
-        let first = bake_bitmap(INTER, request(PagePackaging::External)).unwrap();
-        let mut second_request = request(PagePackaging::External);
+        let first = bake_bitmap(INTER, request()).unwrap();
+        let mut second_request = request();
         second_request.shaping_fingerprint = "0".repeat(32);
         let second = bake_bitmap(INTER, second_request).unwrap();
 
@@ -393,7 +373,7 @@ mod tests {
 
     #[test]
     fn descriptor_rejects_strikes_larger_than_the_atlas_can_represent() {
-        let mut invalid = request(PagePackaging::Embedded);
+        let mut invalid = request();
         invalid.descriptor.strikes = vec![MAX_BITMAP_PPEM + 1];
         invalid.raster_key = descriptor_raster_key(&invalid.descriptor);
 

@@ -122,7 +122,7 @@ async function resolveRasters(rasters: readonly RuntimeBakeRaster[]): Promise<re
 }
 
 async function resolveRaster(raster: RuntimeBakeRaster): Promise<ResolvedRasterBakePlan> {
-  const packaging = { artifact: 'embedded', pages: 'embedded' } as const;
+  const packaging = { artifact: 'embedded' } as const;
   const rasterKey = deriveRasterKey({
     descriptor: raster.descriptor,
     extension: raster.extension,

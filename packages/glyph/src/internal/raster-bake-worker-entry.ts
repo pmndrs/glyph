@@ -45,7 +45,7 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
         shapingFingerprint: request.shapingFingerprint,
       },
       rasterKey: request.rasterKey,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       descriptor,
       onProgress(progress) {
         scope.postMessage(

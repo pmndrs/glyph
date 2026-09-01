@@ -7,7 +7,7 @@ import {
 } from './raster-ktx.js';
 import { DenseGlyphRecordError, validateDenseGlyphRecordTable, type RasterPageDimensions } from './raster-records.js';
 import { canonicalJson } from './raster-identity.js';
-import { fingerprint128, fingerprintDomain, isFingerprint as isFingerprintValue } from './fingerprint.js';
+import { isFingerprint as isFingerprintValue } from './fingerprint.js';
 import { normalizeRasterCoverage, type RasterCoverage } from '../raster-coverage.js';
 import type { JsonValue } from '../raster.js';
 
@@ -181,7 +181,6 @@ export async function resolveRasterPageSource(
   parsed: ParsedGlb,
   views: readonly RasterBufferView[],
   claimedViews: Set<number>,
-  externalPages: ReadonlyMap<string, Uint8Array> | undefined,
   label: string,
 ): Promise<ResolvedRasterPageSource> {
   if (source.type === 'bufferView') {
@@ -189,20 +188,7 @@ export async function resolveRasterPageSource(
     claimRasterView(claimedViews, views, viewIndex, `${path}/source/bufferView`, label);
     return { bytes: sliceRasterView(parsed, views[viewIndex]!), source: 'embedded' };
   }
-  if (source.type === 'external') {
-    const uri = asString(source.uri, `${path}/source/uri`);
-    const bytes =
-      externalPages?.get(uri) ??
-      fail('EXTERNAL_PAGE_MISSING', `external page ${uri} was not supplied for validation`, `${path}/source/uri`);
-    if (source.byteLength !== bytes.byteLength) {
-      fail('EXTERNAL_PAGE_LENGTH', 'external page byte length does not match its directory', path);
-    }
-    if (source.artifactFingerprint !== fingerprint128(bytes, fingerprintDomain.artifact)) {
-      fail('EXTERNAL_PAGE_FINGERPRINT', 'external page fingerprint does not match its directory', path);
-    }
-    return { bytes, source: 'external', uri };
-  }
-  fail('PAGE_SOURCE', `${label} page source must be embedded or external`, path);
+  fail('PAGE_SOURCE', `${label} page source must be a buffer view`, path);
 }
 
 export function validateNativeKtx2(

@@ -2,7 +2,7 @@ use std::{env, fs, path::PathBuf, process::ExitCode};
 
 use pmndrs_glyph_mtsdf_baker::{
     ArtifactPackaging, MSDF_GENERATOR_VERSION, MtsdfBakeRequestV0, MtsdfDescriptorV0,
-    MtsdfPackagingV0, PagePackaging, RasterCoverageV0, RasterUnicodeRangeV0, bake_mtsdf_profiled,
+    MtsdfPackagingV0, RasterCoverageV0, RasterUnicodeRangeV0, bake_mtsdf_profiled,
     descriptor_raster_key,
 };
 use pmndrs_glyph_mtsdf_fontations::glyph_count;
@@ -46,7 +46,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             raster_key,
             packaging: MtsdfPackagingV0 {
                 artifact: ArtifactPackaging::Embedded,
-                pages: PagePackaging::Embedded,
             },
             descriptor,
         },

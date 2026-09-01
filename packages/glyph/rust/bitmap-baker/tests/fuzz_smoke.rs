@@ -1,6 +1,6 @@
 use pmndrs_glyph_bitmap_baker::{
-    ArtifactPackaging, BitmapBakeRequestV0, BitmapDescriptorV0, BitmapPackagingV0, PagePackaging,
-    bake_bitmap, descriptor_raster_key,
+    ArtifactPackaging, BitmapBakeRequestV0, BitmapDescriptorV0, BitmapPackagingV0, bake_bitmap,
+    descriptor_raster_key,
 };
 
 const SEED: u32 = 0x504d_4e44;
@@ -32,7 +32,6 @@ fn arbitrary_font_bytes_fail_safely_and_deterministically() {
             raster_key: raster_key.clone(),
             packaging: BitmapPackagingV0 {
                 artifact: ArtifactPackaging::External,
-                pages: PagePackaging::Embedded,
             },
             descriptor: descriptor.clone(),
         };

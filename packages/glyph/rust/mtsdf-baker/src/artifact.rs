@@ -108,7 +108,6 @@ fn bake_mtsdf_internal(
         &request.raster_key,
         &request.shaping_fingerprint,
         request.glyph_count,
-        request.packaging.pages,
         settings,
         request.descriptor.coverage.as_ref(),
         &rasterized,
@@ -117,8 +116,8 @@ fn bake_mtsdf_internal(
     )?;
     let raster_fingerprint = artifact_fingerprint(&built.bytes);
     let raster_id = format!(
-        "msdf-{}-{}-{raster_fingerprint}.glb",
-        request.shaping_fingerprint, request.raster_key,
+        "msdf-{}-{}.glb",
+        request.shaping_fingerprint, request.raster_key
     );
     let mut artifacts = Vec::new();
     artifacts
@@ -146,21 +145,9 @@ fn bake_mtsdf_internal(
             height: page.height,
             format: "rgba8unorm".into(),
             gpu_bytes: page_gpu_bytes,
-            source: if page.embedded {
-                "embedded".into()
-            } else {
-                "external".into()
-            },
+            source: "embedded".into(),
             encoded_bytes: page.bytes.len(),
         });
-        if !page.embedded {
-            artifacts.push(MtsdfBakeArtifactV0 {
-                role: "raster-page".into(),
-                id: page.id,
-                bytes: page.bytes,
-                fingerprint: page.fingerprint,
-            });
-        }
     }
     let serialized_bytes = artifacts.iter().try_fold(0_usize, |total, artifact| {
         total.checked_add(artifact.bytes.len()).ok_or_else(overflow)
@@ -534,7 +521,7 @@ mod tests {
     use super::*;
     use crate::model::{
         MAX_MTSDF_EM_SIZE, MAX_MTSDF_PIXEL_RANGE, MSDF_GENERATOR_VERSION, MTSDF_EM_SIZE,
-        MTSDF_PIXEL_RANGE, MTSDF_PLANE_UNITS_PER_EM, PagePackaging,
+        MTSDF_PIXEL_RANGE, MTSDF_PLANE_UNITS_PER_EM,
     };
 
     const INTER: &[u8] = include_bytes!(
@@ -652,7 +639,6 @@ mod tests {
             raster_key,
             packaging: crate::MtsdfPackagingV0 {
                 artifact: crate::ArtifactPackaging::Embedded,
-                pages: crate::PagePackaging::Embedded,
             },
             descriptor,
         };
@@ -740,7 +726,6 @@ mod tests {
             &"1".repeat(32),
             &"2".repeat(32),
             1,
-            PagePackaging::Embedded,
             settings(32, 5),
             None,
             &rasterized,
@@ -759,7 +744,7 @@ mod tests {
 
     #[test]
     #[ignore = "full Inter generation is the deterministic integration fixture"]
-    fn inter_mtsdf_is_deterministic_and_packaging_preserves_records() {
+    fn inter_mtsdf_is_deterministic_and_pages_are_always_embedded() {
         let settings = MtsdfBakeSettingsV0::DEFAULT;
         let rasterized = rasterize_font(
             INTER,
@@ -778,7 +763,6 @@ mod tests {
             &raster_key,
             SHAPING_FINGERPRINT,
             2937,
-            PagePackaging::Embedded,
             settings,
             None,
             &rasterized,
@@ -786,25 +770,23 @@ mod tests {
             &mut BakeProfiler::start(),
         )
         .expect("embedded");
-        let external = build_mtsdf_glb(
+        let repeat = build_mtsdf_glb(
             &raster_key,
             SHAPING_FINGERPRINT,
             2937,
-            PagePackaging::External,
             settings,
             None,
             &rasterized,
             #[cfg(feature = "profiling")]
             &mut BakeProfiler::start(),
         )
-        .expect("external");
-        assert_eq!(embedded.pages.len(), external.pages.len());
+        .expect("repeat");
+        assert_eq!(embedded.pages.len(), repeat.pages.len());
         assert!(!embedded.pages.is_empty());
-        for (embedded_page, external_page) in embedded.pages.iter().zip(&external.pages) {
-            assert_eq!(embedded_page.bytes, external_page.bytes);
-            assert_eq!(embedded_page.fingerprint, external_page.fingerprint);
+        for (first, second) in embedded.pages.iter().zip(&repeat.pages) {
+            assert_eq!(first.bytes, second.bytes);
         }
-        assert_eq!(record_bytes(&embedded.bytes), record_bytes(&external.bytes));
+        assert_eq!(record_bytes(&embedded.bytes), record_bytes(&repeat.bytes));
     }
 
     fn record_bytes(glb: &[u8]) -> Vec<u8> {

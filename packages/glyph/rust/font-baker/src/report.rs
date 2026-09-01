@@ -33,14 +33,6 @@ impl BakeDescriptorV0 {
         }
         Ok(self)
     }
-
-    pub(crate) fn canonical_bytes(self) -> Vec<u8> {
-        format!(
-            "{{\"fontFaceIndex\":{},\"formatVersion\":{}}}",
-            self.font_face_index, self.format_version
-        )
-        .into_bytes()
-    }
 }
 
 #[derive(Debug, Serialize)]
@@ -89,7 +81,6 @@ pub struct FontMetricsV0 {
 #[serde(rename_all = "camelCase")]
 pub struct ProvenanceV0 {
     pub source_fingerprint: String,
-    pub descriptor_fingerprint: String,
     pub font_face_index: u32,
     pub baker_version: String,
     pub harfrust_version: String,

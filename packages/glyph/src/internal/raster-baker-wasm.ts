@@ -68,7 +68,7 @@ export interface DirectRasterBakerExports {
 }
 
 interface ArtifactMetadata {
-  readonly role: 'raster' | 'raster-page';
+  readonly role: 'raster';
   readonly id: string;
   readonly fingerprint: Fingerprint;
   readonly byteOffset: number;
@@ -377,7 +377,7 @@ function assertResultMetadata<Kind extends string>(
 function isArtifactMetadata(value: unknown): value is ArtifactMetadata {
   return (
     isNonArrayObject(value) &&
-    (value.role === 'raster' || value.role === 'raster-page') &&
+    value.role === 'raster' &&
     typeof value.id === 'string' &&
     isFingerprint(value.fingerprint) &&
     Number.isSafeInteger(value.byteOffset) &&

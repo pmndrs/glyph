@@ -1,8 +1,6 @@
 use std::{string::String, vec::Vec};
 
-pub use pmndrs_glyph_raster_artifact::{
-    ArtifactPackaging, PagePackaging, RasterCoverageV0, RasterUnicodeRangeV0,
-};
+pub use pmndrs_glyph_raster_artifact::{ArtifactPackaging, RasterCoverageV0, RasterUnicodeRangeV0};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{BitmapBakeError, BitmapBakeErrorCode};
@@ -65,7 +63,6 @@ impl BitmapDescriptorV0 {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BitmapPackagingV0 {
     pub artifact: ArtifactPackaging,
-    pub pages: PagePackaging,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

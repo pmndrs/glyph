@@ -1,6 +1,6 @@
 use alloc::{string::String, vec::Vec};
 
-pub use pmndrs_glyph_raster_artifact::{ArtifactPackaging, PagePackaging};
+pub use pmndrs_glyph_raster_artifact::ArtifactPackaging;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{SlugBakeError, SlugBakeErrorCode};
@@ -36,7 +36,6 @@ impl SlugDescriptorV0 {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SlugPackagingV0 {
     pub artifact: ArtifactPackaging,
-    pub pages: PagePackaging,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

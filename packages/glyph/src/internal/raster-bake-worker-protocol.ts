@@ -15,7 +15,7 @@ export interface RasterBakeWorkerRequest {
 }
 
 export interface RasterBakeWorkerArtifact {
-  readonly role: 'raster' | 'raster-page';
+  readonly role: 'raster';
   readonly id: string;
   readonly bytes: ArrayBuffer;
   readonly fingerprint: Fingerprint;
@@ -81,7 +81,7 @@ export function isRasterBakeWorkerResult(value: unknown): value is RasterBakeWor
 function isArtifact(value: unknown): value is RasterBakeWorkerArtifact {
   return (
     isObject(value) &&
-    (value.role === 'raster' || value.role === 'raster-page') &&
+    value.role === 'raster' &&
     typeof value.id === 'string' &&
     value.id.length > 0 &&
     value.bytes instanceof ArrayBuffer &&
