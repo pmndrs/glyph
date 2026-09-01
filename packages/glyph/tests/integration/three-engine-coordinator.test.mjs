@@ -267,6 +267,79 @@ test('reordering accounts for pending removals before mutating planner state', a
   }
 });
 
+test('reordered paragraphs publish multiple content updates in paragraph order', async () => {
+  const backing = await fontBacking();
+  const resource = defineRasterResourceId('test/three-reordered-content/mesh');
+  const font = fontVariant(backing, resource, indexedQuadGeometry());
+  const renderer = await rendererHarness();
+  const texts = [];
+  let binding;
+  try {
+    binding = renderer.coordinator.bindFontStack(font);
+    for (const text of ['a', 'b', 'c']) {
+      texts.push(
+        renderer.planner.createText({
+          font: binding,
+          transform: renderer.transform,
+          text,
+          style: { fontSize: 16 },
+        }),
+      );
+    }
+    assert.deepEqual(renderer.planner.publish(), { accepted: true });
+
+    renderer.planner.reorderTexts([texts[2], texts[0], texts[1]]);
+    texts[0].update({ text: 'aa' });
+    texts[2].update({ text: 'cc' });
+    assert.deepEqual(
+      renderer.planner.publish(),
+      { accepted: true },
+      'content records must follow the paragraph order consumed by the engine',
+    );
+  } finally {
+    for (const text of texts) text.dispose();
+    binding?.dispose();
+    renderer.dispose();
+    font.dispose();
+  }
+});
+
+test('order-only changes remain separate from pending content accounting', async () => {
+  const backing = await fontBacking();
+  const resource = defineRasterResourceId('test/three-reordered-content-budget/mesh');
+  const font = fontVariant(backing, resource, indexedQuadGeometry());
+  const renderer = await rendererHarness({ maxClusters: 3 });
+  const texts = [];
+  let binding;
+  try {
+    binding = renderer.coordinator.bindFontStack(font);
+    for (const text of ['a', 'b', 'c']) {
+      texts.push(
+        renderer.planner.createText({
+          font: binding,
+          transform: renderer.transform,
+          text,
+          style: { fontSize: 16 },
+        }),
+      );
+    }
+    assert.deepEqual(renderer.planner.publish(), { accepted: true });
+
+    renderer.planner.reorderTexts([texts[2], texts[0], texts[1]]);
+    texts[0].update({ text: 'updated' });
+    assert.deepEqual(
+      renderer.planner.publish(),
+      { accepted: true },
+      'three pending paragraph records and one content update must fit a three-content budget',
+    );
+  } finally {
+    for (const text of texts) text.dispose();
+    binding?.dispose();
+    renderer.dispose();
+    font.dispose();
+  }
+});
+
 test('records-sourced Three geometry renders and retains topology across text updates', async () => {
   const backing = await fontBacking();
   const resource = defineRasterResourceId('test/three-supplied-geometry/mesh');

@@ -459,7 +459,8 @@ class RenderPlannerImpl {
   #liveRegionCount = 0;
   #liveExclusionCount = 0;
   #liveInlineObjectCount = 0;
-  #dirtyTextCount = 0;
+  #pendingParagraphCount = 0;
+  #pendingContentCount = 0;
   #pendingStyleCount = 0;
   #nextTextOrdinal = 1;
   #engineRevision = 0;
@@ -628,7 +629,7 @@ class RenderPlannerImpl {
     this.#textsByOrder.clear();
     for (const [order, state] of states.entries()) {
       if (!hasPendingChanges(state)) {
-        this.#dirtyTextCount += 1;
+        this.#pendingParagraphCount += 1;
         this.#pendingStyleCount += pendingStyleMutationCount(state);
       }
       const previous = state.desired;
@@ -772,7 +773,8 @@ class RenderPlannerImpl {
     this.#liveRegionCount = 0;
     this.#liveExclusionCount = 0;
     this.#liveInlineObjectCount = 0;
-    this.#dirtyTextCount = 0;
+    this.#pendingParagraphCount = 0;
+    this.#pendingContentCount = 0;
     this.#pendingStyleCount = 0;
     attempt(() => this.#policy.dispose());
     this.#returnedBuffers?.clear();
@@ -981,8 +983,10 @@ class RenderPlannerImpl {
           order: state.desired.source.order ?? state.ordinal - 1,
         })),
     ];
-    const textMutations = [...this.#texts].flatMap((state) => {
-      if (state.removed || !hasPendingChange(state, PendingChange.Content)) return [];
+    const contentStates = [...this.#texts]
+      .filter((state) => !state.removed && hasPendingChange(state, PendingChange.Content))
+      .sort((left, right) => left.metrics.order - right.metrics.order);
+    const textMutations = contentStates.flatMap((state) => {
       const mutation = minimalTextMutation(state.publishedText, state.desired.text);
       return mutation === undefined ? [] : [{ paragraphId: state.paragraphId, ...mutation }];
     });
@@ -991,8 +995,7 @@ class RenderPlannerImpl {
     const regions: PlannerRegion[] = [];
     const exclusions: PlannerExclusion[] = [];
     const inlineObjects: PlannerInlineObject[] = [];
-    for (const state of this.#texts) {
-      if (state.removed || !hasPendingChange(state, PendingChange.Content)) continue;
+    for (const state of contentStates) {
       const styles = compileStyles(this.#backend, state);
       styleMutations.push(...styles);
       for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
@@ -1067,7 +1070,9 @@ class RenderPlannerImpl {
     const inlineObjectCount =
       this.#liveInlineObjectCount - (previous?.inlineObjectCount ?? 0) + candidate.metrics.inlineObjectCount;
     const replacingHasPendingChanges = replacing !== undefined && hasPendingChanges(replacing);
-    const dirtyTextCount = this.#dirtyTextCount - Number(replacingHasPendingChanges) + 1;
+    const replacingHasContentChanges = replacing !== undefined && hasPendingChange(replacing, PendingChange.Content);
+    const pendingParagraphCount = this.#pendingParagraphCount - Number(replacingHasPendingChanges) + 1;
+    const pendingContentCount = this.#pendingContentCount - Number(replacingHasContentChanges) + 1;
     const pendingStyleCount =
       this.#pendingStyleCount -
       (replacingHasPendingChanges ? pendingStyleMutationCount(replacing) : 0) +
@@ -1087,10 +1092,10 @@ class RenderPlannerImpl {
     if (inlineObjectCount > this.#limits.maxInlineObjects) {
       throw new RangeError('retained inline objects exceed limits.maxInlineObjects');
     }
-    if (this.#removed.size + dirtyTextCount > this.#limits.maxParagraphs) {
+    if (this.#removed.size + pendingParagraphCount > this.#limits.maxParagraphs) {
       throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
     }
-    if (dirtyTextCount > this.#limits.maxClusters) {
+    if (pendingContentCount > this.#limits.maxClusters) {
       throw new RangeError('pending text mutations exceed limits.maxClusters');
     }
     if (pendingStyleCount > this.#limits.maxClusters) {
@@ -1105,7 +1110,8 @@ class RenderPlannerImpl {
     this.#liveRegionCount += state.metrics.regionCount;
     this.#liveExclusionCount += state.metrics.exclusionCount;
     this.#liveInlineObjectCount += state.metrics.inlineObjectCount;
-    this.#dirtyTextCount += Number(hasPendingChanges(state));
+    this.#pendingParagraphCount += Number(hasPendingChanges(state));
+    this.#pendingContentCount += Number(hasPendingChange(state, PendingChange.Content));
     if (hasPendingChanges(state)) this.#pendingStyleCount += pendingStyleMutationCount(state);
   }
 
@@ -1118,9 +1124,12 @@ class RenderPlannerImpl {
     this.#liveRegionCount += metrics.regionCount - state.metrics.regionCount;
     this.#liveExclusionCount += metrics.exclusionCount - state.metrics.exclusionCount;
     this.#liveInlineObjectCount += metrics.inlineObjectCount - state.metrics.inlineObjectCount;
-    if (hasPendingChanges(state)) this.#pendingStyleCount -= pendingStyleMutationCount(state);
+    const hadPendingChanges = hasPendingChanges(state);
+    const hadContentChanges = hasPendingChange(state, PendingChange.Content);
+    if (hadPendingChanges) this.#pendingStyleCount -= pendingStyleMutationCount(state);
     const candidate = { ...state, metrics, pendingChanges: FullContentUpdate };
-    this.#dirtyTextCount += Number(!hasPendingChanges(state));
+    this.#pendingParagraphCount += Number(!hadPendingChanges);
+    this.#pendingContentCount += Number(!hadContentChanges);
     this.#pendingStyleCount += pendingStyleMutationCount(candidate);
   }
 
@@ -1131,7 +1140,8 @@ class RenderPlannerImpl {
     this.#liveRegionCount -= state.metrics.regionCount;
     this.#liveExclusionCount -= state.metrics.exclusionCount;
     this.#liveInlineObjectCount -= state.metrics.inlineObjectCount;
-    this.#dirtyTextCount -= Number(hasPendingChanges(state));
+    this.#pendingParagraphCount -= Number(hasPendingChanges(state));
+    this.#pendingContentCount -= Number(hasPendingChange(state, PendingChange.Content));
     if (hasPendingChanges(state)) this.#pendingStyleCount -= pendingStyleMutationCount(state);
   }
 
@@ -1157,7 +1167,8 @@ class RenderPlannerImpl {
         state.publishedText = state.desired.text;
         state.geometryRevision += 1;
       }
-      this.#dirtyTextCount -= 1;
+      this.#pendingParagraphCount -= 1;
+      this.#pendingContentCount -= Number(hasPendingChange(state, PendingChange.Content));
       this.#pendingStyleCount -= pendingStyleMutationCount(state);
       if (hasPendingChange(state, PendingChange.Content)) state.publishedStyleCount = compiledStyleCount(state);
       state.pendingChanges = PendingChange.None;
