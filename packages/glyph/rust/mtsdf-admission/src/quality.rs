@@ -56,7 +56,13 @@ impl ReferenceOutline {
     }
 
     /// Fill one row of pixel coverage in `[0, 1]`, exact in x and subsampled in y.
-    fn accumulate_row(&self, row: usize, width: usize, crossings: &mut Vec<(f64, i32)>, out: &mut [f64]) {
+    fn accumulate_row(
+        &self,
+        row: usize,
+        width: usize,
+        crossings: &mut Vec<(f64, i32)>,
+        out: &mut [f64],
+    ) {
         out.fill(0.0);
         let weight = 1.0 / REFERENCE_SUBSAMPLES_PER_ROW as f64;
         for subsample in 0..REFERENCE_SUBSAMPLES_PER_ROW {

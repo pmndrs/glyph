@@ -152,9 +152,9 @@ impl Edge {
 
     pub(crate) fn color(self) -> u8 {
         match self {
-            Self::Line { color, .. } | Self::Quadratic { color, .. } | Self::Cubic { color, .. } => {
-                color
-            }
+            Self::Line { color, .. }
+            | Self::Quadratic { color, .. }
+            | Self::Cubic { color, .. } => color,
         }
     }
 

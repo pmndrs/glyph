@@ -16,7 +16,10 @@ use pmndrs_glyph_mtsdf_admission::{
     reconstruct_coverage, write_triptych,
 };
 use pmndrs_glyph_mtsdf_core::{AtlasRegion, MtsdfGenerator, MtsdfTransform};
-use skrifa::{FontRef, MetadataProvider, prelude::{LocationRef, Size}};
+use skrifa::{
+    FontRef, MetadataProvider,
+    prelude::{LocationRef, Size},
+};
 
 struct Options {
     font: String,
@@ -48,11 +51,16 @@ fn run() -> Result<(), String> {
     let font = FontRef::new(&bytes)
         .map_err(|error| format!("could not parse {}: {error}", options.font))?;
     let charmap = font.charmap();
-    let units_per_em = f32::from(font.metrics(Size::unscaled(), LocationRef::default()).units_per_em);
+    let units_per_em = f32::from(
+        font.metrics(Size::unscaled(), LocationRef::default())
+            .units_per_em,
+    );
     let mut generator = MtsdfGenerator::default();
 
     if !options.emit_shape {
-        println!("character\tglyph\twidth\theight\tmeanAbsoluteError\tmaximumAbsoluteError\tworstX\tworstY\tsamplesOverQuarter\tsamplesOverHalf");
+        println!(
+            "character\tglyph\twidth\theight\tmeanAbsoluteError\tmaximumAbsoluteError\tworstX\tworstY\tsamplesOverQuarter\tsamplesOverHalf"
+        );
     }
     for character in &options.characters {
         let Some(glyph_id) = charmap.map(*character) else {
@@ -63,7 +71,12 @@ fn run() -> Result<(), String> {
             eprintln!("{character:?} has no outline");
             continue;
         };
-        let framing = Framing::new(source.bounds(), units_per_em, options.em_size, options.pixel_range)?;
+        let framing = Framing::new(
+            source.bounds(),
+            units_per_em,
+            options.em_size,
+            options.pixel_range,
+        )?;
 
         if options.emit_shape {
             let mut shape = ShapePen::new();
@@ -80,8 +93,10 @@ fn run() -> Result<(), String> {
                 framing.total_width(),
                 framing.total_height(),
                 f64::from(options.em_size) / f64::from(units_per_em),
-                -f64::from(framing.plane_left) * f64::from(units_per_em) / f64::from(options.em_size),
-                -f64::from(framing.plane_bottom) * f64::from(units_per_em) / f64::from(options.em_size),
+                -f64::from(framing.plane_left) * f64::from(units_per_em)
+                    / f64::from(options.em_size),
+                -f64::from(framing.plane_bottom) * f64::from(units_per_em)
+                    / f64::from(options.em_size),
                 framing.transform.full_distance_range_font_units(),
                 shape.finish().trim(),
             );
@@ -161,7 +176,10 @@ fn run() -> Result<(), String> {
         if let Some(directory) = &options.field_dump {
             fs::create_dir_all(directory)
                 .map_err(|error| format!("could not create {}: {error}", directory.display()))?;
-            let path = directory.join(format!("u{:04X}.{width}x{height}.rgba", u32::from(*character)));
+            let path = directory.join(format!(
+                "u{:04X}.{width}x{height}.rgba",
+                u32::from(*character)
+            ));
             fs::write(&path, &field)
                 .map_err(|error| format!("could not write {}: {error}", path.display()))?;
         }
@@ -200,8 +218,10 @@ impl Framing {
         let right = (bounds.max_x * scale).ceil() as i32;
         let top = (bounds.max_y * scale).ceil() as i32;
         let padding = usize::from(pixel_range / 2 + pixel_range % 2);
-        let inner_width = usize::try_from(right - left).map_err(|_| "glyph too large".to_owned())?;
-        let inner_height = usize::try_from(top - bottom).map_err(|_| "glyph too large".to_owned())?;
+        let inner_width =
+            usize::try_from(right - left).map_err(|_| "glyph too large".to_owned())?;
+        let inner_height =
+            usize::try_from(top - bottom).map_err(|_| "glyph too large".to_owned())?;
         let inverse_scale = units_per_em / f32::from(em_size);
         let transform_bounds = pmndrs_glyph_mtsdf_core::Bounds::new(
             left as f32 * inverse_scale,

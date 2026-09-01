@@ -513,8 +513,8 @@ pub(crate) fn mark_protected_edges(
     }
     let horizontal_radius = PROTECTION_RADIUS_TOLERANCE * horizontal_distance_delta;
     let vertical_radius = PROTECTION_RADIUS_TOLERANCE * vertical_distance_delta;
-    let diagonal_radius = PROTECTION_RADIUS_TOLERANCE
-        * horizontal_distance_delta.hypot(vertical_distance_delta);
+    let diagonal_radius =
+        PROTECTION_RADIUS_TOLERANCE * horizontal_distance_delta.hypot(vertical_distance_delta);
     let pair = |first: usize, second: usize, radius: f64, protection: &mut [u8]| {
         let a = pixel4(rgba, first);
         let b = pixel4(rgba, second);
@@ -692,9 +692,16 @@ mod tests {
         let source = [255_u8, 230, 0, 17, 0, 230, 255, 23];
 
         let mut unprotected = source.to_vec();
-        let rewritten =
-            correct_interpolation_artifacts(&mut unprotected, 2, 1, 0.05, 0.05, &mut Vec::new(), &[])
-                .expect("correction");
+        let rewritten = correct_interpolation_artifacts(
+            &mut unprotected,
+            2,
+            1,
+            0.05,
+            0.05,
+            &mut Vec::new(),
+            &[],
+        )
+        .expect("correction");
 
         let mut protected = source.to_vec();
         let untouched = correct_interpolation_artifacts(
@@ -708,7 +715,10 @@ mod tests {
         )
         .expect("correction");
 
-        assert_eq!(rewritten, 2, "the control must actually correct, or this proves nothing");
+        assert_eq!(
+            rewritten, 2,
+            "the control must actually correct, or this proves nothing"
+        );
         assert_ne!(unprotected.as_slice(), source.as_slice());
         assert_eq!(untouched, 0);
         assert_eq!(protected.as_slice(), source.as_slice());
@@ -719,8 +729,7 @@ mod tests {
         let mut rgba = vec![255, 230, 0, 17, 0, 230, 255, 23];
         let alpha = [rgba[3], rgba[7]];
         let corrected =
-            correct_interpolation_artifacts(&mut rgba, 2, 1, 0.05, 0.05, &mut Vec::new(),
-                &[])
+            correct_interpolation_artifacts(&mut rgba, 2, 1, 0.05, 0.05, &mut Vec::new(), &[])
                 .expect("correction");
         assert_eq!(corrected, 2);
         assert_eq!(&rgba[..3], &[230, 230, 230]);
@@ -733,8 +742,7 @@ mod tests {
         let mut rgba = vec![0, 0, 0, 0, 255, 255, 255, 255];
         let expected = rgba.clone();
         let corrected =
-            correct_interpolation_artifacts(&mut rgba, 2, 1, 0.05, 0.05, &mut Vec::new(),
-                &[])
+            correct_interpolation_artifacts(&mut rgba, 2, 1, 0.05, 0.05, &mut Vec::new(), &[])
                 .expect("correction");
         assert_eq!(corrected, 0);
         assert_eq!(rgba, expected);
@@ -767,17 +775,14 @@ mod tests {
         let mut wide_span = inversion;
 
         let narrow_corrections =
-            correct_interpolation_artifacts(&mut narrow_span, 2, 1, 0.7, 0.7, &mut Vec::new(),
-                &[])
+            correct_interpolation_artifacts(&mut narrow_span, 2, 1, 0.7, 0.7, &mut Vec::new(), &[])
                 .expect("narrow correction");
         let wide_corrections =
-            correct_interpolation_artifacts(&mut wide_span, 2, 1, 0.8, 0.8, &mut Vec::new(),
-                &[])
+            correct_interpolation_artifacts(&mut wide_span, 2, 1, 0.8, 0.8, &mut Vec::new(), &[])
                 .expect("wide correction");
 
         assert_eq!(narrow_corrections, 2);
         assert_eq!(wide_corrections, 0);
         assert_eq!(wide_span, vec![255, 230, 0, 17, 0, 230, 255, 23]);
     }
-
-    }
+}
