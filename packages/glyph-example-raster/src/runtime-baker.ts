@@ -15,7 +15,7 @@ const runtimeBaker: RuntimeRasterBakerModule<typeof GLYPH_EXAMPLE_KIND, GlyphExa
         shapingFingerprint: request.font.shapingFingerprint,
       },
       rasterKey: request.rasterKey as RasterKey,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       descriptor: glyphExampleDescriptor(request.options),
       ...(request.signal === undefined ? {} : { signal: request.signal }),
       ...(request.onProgress === undefined ? {} : { onProgress: request.onProgress }),

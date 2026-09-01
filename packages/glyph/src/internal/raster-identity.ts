@@ -1,4 +1,4 @@
-import type { RasterKey } from '../identity.js';
+import type { Fingerprint, RasterKey } from '../identity.js';
 import type { JsonValue } from '../raster.js';
 import { fingerprint128, fingerprintDomain } from './fingerprint.js';
 
@@ -95,4 +95,35 @@ export function deriveRasterKey(input: {
     version: input.version,
   });
   return fingerprint128(textEncoder.encode(canonical), fingerprintDomain.descriptor) as string as RasterKey;
+}
+
+/**
+ * The single value a raster and its core font compare to decide they belong together.
+ *
+ * Every dimension that must agree is folded in here, so a consumer performs one comparison
+ * instead of re-deriving the list at each call site and forgetting a dimension when the format
+ * grows. The canonical form is published contract: a build pipeline can record the digest beside
+ * the inputs it came from and recompute it later from its own manifest.
+ *
+ * ```text
+ * {"glyphCount":2937,"glyphIdWidth":16,"kind":"bitmap","rasterKey":"d1dc…","shaping":"0c52…","version":0}
+ * ```
+ */
+export function compatibilityFingerprint(input: {
+  readonly glyphCount: number;
+  readonly glyphIdWidth: number;
+  readonly kind: string;
+  readonly rasterKey: string;
+  readonly shaping: string;
+  readonly version: number;
+}): Fingerprint {
+  const canonical = canonicalJson({
+    glyphCount: input.glyphCount,
+    glyphIdWidth: input.glyphIdWidth,
+    kind: input.kind,
+    rasterKey: input.rasterKey,
+    shaping: input.shaping,
+    version: input.version,
+  });
+  return fingerprint128(textEncoder.encode(canonical), fingerprintDomain.compatibility);
 }

@@ -27,6 +27,7 @@ import { decodeRasterCoverage } from '../../internal/raster-coverage-artifact.js
 import type { JsonValue, RasterDecodeArtifact } from '../../raster.js';
 import { defineRasterResourceId } from '../../config/raster-format.js';
 import type { MsdfData, MsdfPageData } from '../msdf.js';
+import { compatibilityFingerprint } from '../../internal/raster-identity.js';
 
 const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE;
 const MAX_RUNTIME_TEXTURE_BYTES = 256 * 1024 * 1024;
@@ -39,9 +40,15 @@ export async function decodeMsdfData(font: RasterDecodeFont, raster: RasterDecod
   if (
     extension.version !== MSDF_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingFingerprint !== font.shapingFingerprint ||
-    extension.glyphCount !== font.glyphCount ||
-    extension.glyphIdWidth !== 16 ||
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: font.glyphCount,
+        glyphIdWidth: 16,
+        kind: 'msdf',
+        rasterKey: raster.rasterKey,
+        shaping: font.shapingFingerprint,
+        version: MSDF_FORMAT_VERSION,
+      }) ||
     extension.encoding !== 'mtsdf' ||
     extension.recordStride !== RECORD_STRIDE
   ) {

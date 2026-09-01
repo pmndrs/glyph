@@ -58,7 +58,7 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
     font: { fontFaceIndex: 0 },
     rasters: [
       rasterBake(glyphExampleBaker, {
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options: { paletteSeed: 7 },
       }),
     ],

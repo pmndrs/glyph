@@ -44,7 +44,7 @@ import {
   withSchemaId,
   type RasterArtifactValidationIssue,
 } from '../internal/raster-artifact-validation.js';
-import { canonicalJson } from '../internal/raster-identity.js';
+import { canonicalJson, compatibilityFingerprint } from '../internal/raster-identity.js';
 import {
   BITMAP_EXTENSION,
   BITMAP_FORMAT_VERSION,
@@ -106,7 +106,6 @@ export interface BitmapArtifactValidationContext {
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
   readonly descriptor: BitmapDescriptor;
-  readonly externalPages?: ReadonlyMap<string, Uint8Array>;
   readonly limits?: Partial<BitmapArtifactValidationLimits>;
 }
 
@@ -226,9 +225,15 @@ async function validateBitmapSemantics(
   if (
     extension.version !== BITMAP_FORMAT_VERSION ||
     extension.rasterKey !== context.rasterKey ||
-    extension.shapingFingerprint !== context.shapingFingerprint ||
-    extension.glyphCount !== context.glyphCount ||
-    extension.glyphIdWidth !== context.glyphIdWidth
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: context.glyphCount,
+        glyphIdWidth: context.glyphIdWidth,
+        kind: 'bitmap',
+        rasterKey: context.rasterKey,
+        shaping: context.shapingFingerprint as string,
+        version: BITMAP_FORMAT_VERSION,
+      })
   ) {
     fail(
       'RECIPROCAL_IDENTITY',
@@ -329,15 +334,7 @@ async function validateBitmapSemantics(
           );
         }
         const source = requireNonArrayObject(variant.source, `${variantPath}/source`);
-        const resource = await resolveRasterPageSource(
-          source,
-          variantPath,
-          parsed,
-          views,
-          claimedViews,
-          context.externalPages,
-          'bitmap',
-        );
+        const resource = await resolveRasterPageSource(source, variantPath, parsed, views, claimedViews, 'bitmap');
         validateNativeKtx2(resource.bytes, width, height, format, variantPath);
         if (gpuFormat === 'r8unorm') {
           baselinePage = {

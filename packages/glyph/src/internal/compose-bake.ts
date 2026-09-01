@@ -5,10 +5,18 @@ import { GlyphError } from '../glyph-error.js';
 import type { Fingerprint } from '../identity.js';
 import { fingerprint128, fingerprintDomain, isFingerprint } from './fingerprint.js';
 import { readGlb } from './glb-reader.js';
+import { compatibilityFingerprint } from './raster-identity.js';
 
 export interface RasterComposition {
   readonly raster: RasterBakeArtifact;
   readonly packaging: RasterPackaging;
+  /**
+   * Filename for an external companion, and the `uri` recorded for it in the core's directory.
+   *
+   * The baker mints an id from identity it can see; only the caller knows what the core font is
+   * called on disk, and the directory entry has to name the file that will actually be written.
+   */
+  readonly companionName?: string;
 }
 
 export interface ComposedFontBakeResult {
@@ -73,7 +81,7 @@ export async function composeFontBake(
   const outputArtifacts: BakeArtifact[] = [];
 
   for (let index = 0; index < rasters.length; index += 1) {
-    const { raster, packaging } = rasters[index]!;
+    const { raster, packaging, companionName } = rasters[index]!;
     const path = `/rasters/${index}`;
     if (rasterKeys.has(raster.rasterKey)) {
       fail('RASTER_KEY_DUPLICATE', 'composition contains a duplicate raster key', `${path}/rasterKey`);
@@ -86,19 +94,9 @@ export async function composeFontBake(
       'raster bake result must contain exactly one companion artifact',
       `${path}/artifacts`,
     );
-    if (rasterArtifacts.some(({ role }) => role !== 'raster' && role !== 'raster-page')) {
-      fail(
-        'RASTER_ARTIFACT_ROLE',
-        'raster results may contain only one raster index and raster-page artifacts',
-        `${path}/artifacts`,
-      );
-    }
-    if (packaging.pages === 'embedded' && rasterArtifacts.some(({ role }) => role === 'raster-page')) {
-      fail(
-        'RASTER_PAGE_PACKAGING',
-        'embedded page packaging must not emit independent raster-page artifacts',
-        `${path}/artifacts`,
-      );
+    // Pages are always embedded, so a raster bake publishes exactly one artifact.
+    if (rasterArtifacts.some(({ role }) => role !== 'raster')) {
+      fail('RASTER_ARTIFACT_ROLE', 'raster results may contain only one raster artifact', `${path}/artifacts`);
     }
     const parsedRaster = readGlb(main.bytes);
     const rasterExtensions = requireNonArrayObject(parsedRaster.document.extensions, `${path}/extensions`);
@@ -121,9 +119,13 @@ export async function composeFontBake(
         kind: raster.kind,
         extension: raster.extension,
         version: raster.version,
-        source: { type: 'external', uri: main.id, artifactFingerprint: main.fingerprint },
+        source: { type: 'external', uri: companionName ?? main.id },
       });
-      outputArtifacts.push(...rasterArtifacts);
+      outputArtifacts.push(
+        ...rasterArtifacts.map((artifact) =>
+          artifact.role === 'raster' && companionName !== undefined ? { ...artifact, id: companionName } : artifact,
+        ),
+      );
       continue;
     }
 
@@ -162,7 +164,6 @@ export async function composeFontBake(
       version: raster.version,
       source: { type: 'embedded' },
     });
-    outputArtifacts.push(...rasterArtifacts.filter(({ role }) => role === 'raster-page'));
   }
 
   document.extensionsUsed = used;
@@ -192,16 +193,18 @@ function assertRasterIdentity(
   glyphIdWidth: number,
   path: string,
 ): void {
-  if (
-    extension.version !== raster.version ||
-    extension.rasterKey !== raster.rasterKey ||
-    extension.shapingFingerprint !== shapingFingerprint ||
-    extension.glyphCount !== glyphCount ||
-    extension.glyphIdWidth !== glyphIdWidth
-  ) {
+  const expected = compatibilityFingerprint({
+    glyphCount,
+    glyphIdWidth,
+    kind: raster.kind,
+    rasterKey: raster.rasterKey,
+    shaping: shapingFingerprint,
+    version: raster.version,
+  });
+  if (extension.fingerprint !== expected) {
     fail(
       'RASTER_RECIPROCAL_IDENTITY',
-      'companion extension does not match its result metadata and core shaping identity',
+      `companion fingerprint ${String(extension.fingerprint)} does not match the core's ${expected}; rebake this font's rasters`,
       path,
     );
   }
@@ -243,10 +246,7 @@ function mapReport(
       },
     },
     rasters: rasters.map(({ raster }) => ({ kind: raster.kind, ...raster.report })),
-    containers:
-      rasters.length === 0
-        ? core.report.containers
-        : artifacts.filter(({ role }) => role !== 'raster-page').map((artifact) => containerReport(artifact)),
+    containers: rasters.length === 0 ? core.report.containers : artifacts.map((artifact) => containerReport(artifact)),
     transport:
       rasters.length === 0
         ? core.report.transport
@@ -318,7 +318,7 @@ function concatenate(parts: readonly Uint8Array[], byteLength: number): Uint8Arr
 }
 
 function asArtifact(artifact: {
-  readonly role: 'font' | 'raster' | 'raster-page';
+  readonly role: 'font' | 'raster';
   readonly id: string;
   readonly bytes: Uint8Array;
   readonly fingerprint: Fingerprint;
