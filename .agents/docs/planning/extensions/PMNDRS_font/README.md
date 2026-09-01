@@ -78,7 +78,6 @@ This extension does not define text strings, paragraph layout, line breaking, ra
       },
       "provenance": {
         "sourceFingerprint": "11111111111111111111111111111111",
-        "descriptorFingerprint": "22222222222222222222222222222222",
         "bakerVersion": "0.1.0",
         "harfrustVersion": "0.12.0",
         "harfbuzzReferenceVersion": "13.0.0",
@@ -92,8 +91,7 @@ This extension does not define text strings, paragraph layout, line breaking, ra
           "version": 0,
           "source": {
             "type": "external",
-            "uri": "msdf-11111111111111111111111111111111-22222222222222222222222222222222-33333333333333333333333333333333.glb",
-            "artifactFingerprint": "33333333333333333333333333333333"
+            "uri": "msdf-11111111111111111111111111111111-22222222222222222222222222222222-33333333333333333333333333333333.glb"
           }
         },
         {
@@ -133,7 +131,7 @@ When `OS/2.fsSelection.USE_TYPO_METRICS` is set, the serialized line metrics com
 
 Raster keys MUST be unique within the font. A key is the deterministic 128-bit descriptor fingerprint over the raster kind, companion extension/version, and canonical package-owned descriptor defined by the [raster contract](../../raster-data-contract.md); it is not a caller-authored alias. `kind` is an open identifier owned by the raster module. `extension` names the companion glTF extension that defines its data, and `version` selects that companion contract. Core consumers MUST NOT reject an otherwise valid font merely because the directory contains an unknown optional raster kind. `rasterKey`, `kind`, `extension`, and `version` MUST agree with an attached raster that the consumer elects to load.
 
-An embedded raster is stored at the root `extensions` object in the same GLB. Because glTF permits one root value per extension name, a combined GLB MUST NOT embed more than one raster using the same companion extension; additional entries using that extension MUST be external. The embedded root's reciprocal `rasterKey` MUST equal its elected directory entry. An external source URI resolves relative to the core GLB and MUST carry `artifactFingerprint`, calculated over the complete external artifact at bake time. Content-addressed names prevent ordinary stale-cache collisions. When an external source omits `uri`, the application supplies bytes through its resolver and MAY still declare a fingerprint for identity matching.
+An embedded raster is stored at the root `extensions` object in the same GLB. A font MUST declare at most one raster per companion extension: additional strikes or settings belong to that raster's options, not to a second raster. A raster is external only when the caller asks for a split. An external source URI resolves relative to the core GLB and names a self-contained companion; page payloads always travel inside the artifact that declares them and are never separate files. A companion is matched to its core by the `fingerprint` each raster extension carries, so the directory entry restates no identity of its own. When an external source omits `uri`, the application supplies bytes through its resolver.
 
 Companion extensions own a logical raster-page directory. Page payloads may remain embedded in the companion asset or use independently addressed URI, byte-length, and fingerprint sources relative to that companion asset. Core does not interpret those pages or equate their indexes with GPU binding state.
 
