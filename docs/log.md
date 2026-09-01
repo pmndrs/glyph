@@ -1,5 +1,15 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-01
+
+- **Accepted the observable FontFace direction** — Root `glyph.fontFace()` will infer default and technique-specific
+  selections from ordered `{ url | blob, format }` sources without `defineFont()` ceremony. MSDF is the zero-config
+  selection, exact technique options validate baked artifacts or drive source-font baking, and different Bitmap strike
+  contracts remain different faces. Unloaded selections publish synchronous readiness before Promise continuation so
+  imperative Three can defer one paragraph while R3F suspends from the same cache; face disposal releases preload leases
+  without invalidating independently bound Fonts. The planned direct CLI zero-flag default changes from shaping-only to
+  embedded Bitmap 8/16, MSDF, and Slug.
+
 ## 2026-08-30
 
 - **Implemented planner-assisted detached glyph slices** — A committed `RetainedText` can synchronously emit a complete

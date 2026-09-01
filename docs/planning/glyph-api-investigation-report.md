@@ -1,9 +1,9 @@
 ---
 type: Research Report
 title: Glyph handle and renderer-bound command-buffer investigation
-description: Evidence-backed audit and implementation report for the Glyph, GlyphConfig, handle, decode, resolve, renderer, Three, and R3F lifecycle.
+description: Evidence-backed audit and implementation report for the Glyph, GlyphConfig, FontFace, handle, decode, resolve, renderer, Three, and R3F lifecycle.
 documentation_type: explanation
-tags: [api, glyph, threejs, react, r3f, renderer, command-buffer, ownership]
+tags: [api, glyph, font-face, threejs, react, r3f, renderer, command-buffer, ownership]
 status: draft
 sources:
   - id: investigation-handoff
@@ -36,6 +36,15 @@ sources:
   - id: current-react
     resource: ../../packages/glyph/src/react.ts
     title: Current R3F wrapper
+  - id: current-font-contract
+    resource: ../../packages/glyph/src/font.ts
+    title: Current immutable Font and discovery-token contract
+  - id: current-font-loader
+    resource: ../../packages/glyph/src/loader.ts
+    title: Current immutable Font and FontLibrary loader
+  - id: current-bake-cli
+    resource: ../../packages/glyph/src/node/cli.ts
+    title: Current direct bake CLI defaults and raster flags
   - id: installed-r3f-scheduler
     resource: ../../packages/glyph/node_modules/@react-three/fiber/dist/index.mjs
     title: Installed R3F 10 scheduler
@@ -94,7 +103,7 @@ generated:
 
 # Glyph handle and renderer-bound command-buffer investigation
 
-Status: investigation complete; contract approved in this task and implemented with compatibility paths retained
+Status: handle/config investigation implemented; D-295 FontFace direction approved with implementation pending
 
 ## Conclusion
 
@@ -655,19 +664,19 @@ The implemented tests settle initialization, live-name reuse, two Three handles 
 group boundary ownership, multiple scenes, default-handle behavior, spread config wrapping, transform-only bypass, and
 example-renderer portability. These narrower questions remain:
 
-| Question or risk                  | Why still material                                                                                                                        | Smallest experiment or test                                                                                                                                                 |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Failed root initialization policy | Success is idempotent and concurrent-safe; retry after a failed Wasm load is implemented but not yet isolated in a root-runtime test.     | Inject one rejected `createGlyphEngine`, retry with valid bytes, and assert exactly one live engine and no leaked backend.                                                  |
-| R3F multiple-render timing        | Traversal suppresses duplicate semantic work, but two cameras/render passes in one R3F frame have not been instrumented directly.         | Commit two prop updates, invalidate once, render two cameras, and assert one semantic prepare plus cheap synchronization on the second traversal.                           |
+| Question or risk                  | Why still material                                                                                                                        | Smallest experiment or test                                                                                                                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Failed root initialization policy | Success is idempotent and concurrent-safe; retry after a failed Wasm load is implemented but not yet isolated in a root-runtime test.     | Inject one rejected `createGlyphEngine`, retry with valid bytes, and assert exactly one live engine and no leaked backend.                                                         |
+| R3F multiple-render timing        | Traversal suppresses duplicate semantic work, but two cameras/render passes in one R3F frame have not been instrumented directly.         | Commit two prop updates, invalidate once, render two cameras, and assert one semantic prepare plus cheap synchronization on the second traversal.                                  |
 | Provider handle replacement       | A mounted provider now rejects a changed handle prop; keyed remount settlement under StrictMode still needs a dedicated test.             | Remount keyed provider A as keyed provider B under StrictMode and assert one old-object disposal, distinct new object identity, retained desired props, and no cross-handle group. |
-| Two real Three renderer backends  | `resolve` deliberately creates renderer-agnostic Three objects; actual WebGPU/WebGL renderer-local realization is late-bound by Three.    | Render separate objects from one handle through two real renderers and observe texture/buffer creation and final disposal without adding canvas identity to resolve.        |
-| Resolver cache identity           | The current built-in resolver returns fresh binding leases; safe sharing across boundaries must use authenticated payload/config keys.    | Resolve one payload in two boundaries and handles, add a counted cache experimentally, and prove exact sharing plus final release under rejection and retirement.           |
-| Async-only GPU resource creation  | Borrowed decode/prepare is synchronous; a future adapter may require asynchronous device initialization or uploads.                       | Build a raw WebGPU adapter that captures an initialized device. If resource creation cannot remain synchronous, add explicit handle prefetch/init rather than async decode. |
-| Custom decoder runtime guards     | Types prevent the wrong binding vocabulary but cannot expire a retained frame or prove that an override called the canonical binder.      | Retain a frame past acceptance, return a foreign frame, and throw after resolve; add development guards only where the negative tests demonstrate a real gap.               |
-| Phase-by-phase rollback           | Current transaction tests cover renderer rejection, but not an injected failure after every individual resolve/buffer/material/draw step. | Parameterize failure injection across every phase and assert previous meshes and leases survive while every candidate-only lease disposes exactly once.                     |
-| GPU completion fences             | CPU commit does not prove prior GPU reads have completed for every adapter.                                                               | Add an explicit recording fence and verify retired resource leases remain live until the renderer's completion token is safe.                                               |
-| `shape()` return value            | Three correctly returns `void`; another adapter may want immutable publication telemetry.                                                 | Type a config-specific `ShapeResult` in the example adapter before adding any root/general return type.                                                                     |
-| Program-registry isolation        | Current Three program snapshots are coordinator-local but registration remains package-global before a coordinator reads it.              | Create two handles around intentionally distinct extension snapshots and assert no cross-handle program/material selection.                                                 |
+| Two real Three renderer backends  | `resolve` deliberately creates renderer-agnostic Three objects; actual WebGPU/WebGL renderer-local realization is late-bound by Three.    | Render separate objects from one handle through two real renderers and observe texture/buffer creation and final disposal without adding canvas identity to resolve.               |
+| Resolver cache identity           | The current built-in resolver returns fresh binding leases; safe sharing across boundaries must use authenticated payload/config keys.    | Resolve one payload in two boundaries and handles, add a counted cache experimentally, and prove exact sharing plus final release under rejection and retirement.                  |
+| Async-only GPU resource creation  | Borrowed decode/prepare is synchronous; a future adapter may require asynchronous device initialization or uploads.                       | Build a raw WebGPU adapter that captures an initialized device. If resource creation cannot remain synchronous, add explicit handle prefetch/init rather than async decode.        |
+| Custom decoder runtime guards     | Types prevent the wrong binding vocabulary but cannot expire a retained frame or prove that an override called the canonical binder.      | Retain a frame past acceptance, return a foreign frame, and throw after resolve; add development guards only where the negative tests demonstrate a real gap.                      |
+| Phase-by-phase rollback           | Current transaction tests cover renderer rejection, but not an injected failure after every individual resolve/buffer/material/draw step. | Parameterize failure injection across every phase and assert previous meshes and leases survive while every candidate-only lease disposes exactly once.                            |
+| GPU completion fences             | CPU commit does not prove prior GPU reads have completed for every adapter.                                                               | Add an explicit recording fence and verify retired resource leases remain live until the renderer's completion token is safe.                                                      |
+| `shape()` return value            | Three correctly returns `void`; another adapter may want immutable publication telemetry.                                                 | Type a config-specific `ShapeResult` in the example adapter before adding any root/general return type.                                                                            |
+| Program-registry isolation        | Current Three program snapshots are coordinator-local but registration remains package-global before a coordinator reads it.              | Create two handles around intentionally distinct extension snapshots and assert no cross-handle program/material selection.                                                        |
 
 ## 11. Illustrative `ThreeConfig` code and helper seams
 
@@ -1154,3 +1163,190 @@ refined R3F default-or-provider selection contract:
 
 The low-level `GlyphEngine`/`GlyphBackend`/`RenderPlanner` surface remains authoritative for integrations that deliberately
 own transport and target mechanics. The root handle surface is authoritative for ordinary configured adapter use.
+
+## Approved FontFace direction after the handle implementation
+
+D-295 extends the implemented handle/config contract with a root font-family declaration and observable lazy selection.
+This section records the intended contract and explicitly distinguishes it from current behavior. No FontFace public
+surface, deferred Three binding, provider font catalog, or new CLI default described here is implemented yet.
+
+### Simplest form
+
+The smallest explicit declaration needs only a family and one source. Omitted format and default declarations mean MSDF:
+
+```ts
+const Inter = glyph.fontFace({
+  family: 'Inter',
+  src: [{ url: interUrl }],
+});
+
+const label = three.createText({
+  font: Inter,
+  text: 'Hello',
+});
+
+scene.add(label);
+```
+
+`Inter`, `Inter.default`, and `Inter.msdf` identify the same default format contract. The `Text` object may be constructed
+before the bytes arrive; it has an empty draw root and does not enter shaping until the selection publishes `loaded`.
+
+The corresponding minimal R3F form uses the provider key as the local family name and suspends automatically:
+
+```tsx
+<GlyphProvider fonts={{ Inter: interUrl }}>
+  <Text font="Inter">Hello</Text>
+</GlyphProvider>
+```
+
+The provider value is captured once. A raw source shorthand creates a provider-owned face; an already-created FontFace is
+borrowed. The provider releases only faces it created when it unmounts and never disposes an externally supplied handle or
+FontFace.
+
+### Complete ordinary declaration
+
+One GLB can contain several raster formats, and its authenticated raster directory is the runtime authority. The source
+declaration supplies the static type information and states what each ordered candidate is expected to provide:
+
+```ts
+const Inter = glyph.fontFace({
+  family: 'Inter',
+  src: [
+    { url: './Inter.font.glb', format: [bitmap({ strikes: [8, 16] }), msdf, slug] },
+    { url: './Inter.slug.font.glb', format: slug },
+    { blob: FONT_BLOB, format: slug },
+  ],
+});
+
+const Body = Inter.bitmap;
+const Title = Inter.slug;
+```
+
+`src` remains an array instead of a format-keyed record because source identity and ordered fallback are real authoring
+information. Several techniques may share one fetched/parsed GLB, and several sources may be candidates for one technique.
+The const-generic result projects the union of declared technique kinds into typed properties without a separate
+`defineFont()` token. Third-party raster techniques participate through the same technique witness and acquire a property
+from their literal `kind`.
+
+The FontFace object itself implements the default selection contract. `.default` remains useful when code wants to state
+that choice explicitly, while `.bitmap`, `.msdf`, `.slug`, and inferred custom members select one declared technique. A
+family with no explicit default uses MSDF. A different default is a technique request, not a renderer setting:
+
+```ts
+const InterXSmall = glyph.fontFace({
+  family: 'Inter X-Small',
+  default: bitmap({ strikes: [8, 16] }),
+  src: [{ url: './Inter-x-small.font.glb', format: bitmap({ strikes: [8, 16] }) }],
+});
+```
+
+`InterXSmall` is a different face, not a second Bitmap member keyed by strike size inside `Inter`. Bitmap owns one ordered
+strike set and selects the appropriate baked strike for the requested CSS size and raster pixel ratio. MSDF is the normal
+scalable default, Bitmap covers intentionally baked small sizes, and Slug covers extra-large or otherwise high-fidelity
+use. The ordinary family can therefore expose all three while higher-level aliases remain plain selections:
+
+```ts
+const Body = Inter.bitmap;
+const Copy = Inter;
+const Title = Inter.slug;
+```
+
+### Format options are a bake contract
+
+The current immutable loader derives an exact raster key from the technique descriptor and first asks the GLB for that
+reference. It runtime-bakes only after an exact miss and only when retained source bytes plus a matching runtime baker are
+available. D-295 preserves and raises that invariant to FontFace:
+
+- a baked GLB candidate declaring `bitmap({ strikes: [8, 16] })` must contain that exact descriptor;
+- a GLB cannot be silently re-baked because it contains no TTF/OTF source bytes;
+- a TTF/OTF candidate may be runtime-baked with stated options or the technique's documented defaults;
+- a source declaration that promises several formats is validated against the artifact directory when that source is
+  opened;
+- ordered fallback may continue to the next candidate, but the failed candidate remains a precise diagnostic and the load
+  rejects if no candidate satisfies the selected contract.
+
+Production should normally receive pre-baked GLBs. A Vite integration may discover FontFace declarations and build the
+exact source/format graph ahead of time; runtime baking remains the source-font fallback, not the normal production path.
+
+### Synchronous readiness plus asynchronous waiting
+
+A Promise alone is insufficient for retained rendering because its continuation is a microtask and does not by itself
+schedule a host frame. Each default or technique-specific FontFace selection therefore owns an immutable synchronous
+snapshot and a subscription boundary:
+
+```ts
+type FontFaceState =
+  | { readonly status: 'unloaded' }
+  | { readonly status: 'loading' }
+  | { readonly status: 'loaded' }
+  | { readonly status: 'failed'; readonly error: unknown }
+  | { readonly status: 'disposed' };
+
+interface FontFaceSelection<Technique extends AnyRasterTechnique> {
+  readonly state: FontFaceState;
+  readonly loaded: boolean;
+  preload(): Promise<void>;
+  load(): Promise<Font<Technique>>;
+  subscribe(listener: () => void): () => void;
+}
+```
+
+`Inter.loaded` and `Inter.state` inspect the default, while `Inter.bitmap.loaded` and `Inter.slug.state` inspect exact
+members; family-level `isLoaded()` answers the default and `isLoaded(technique)` answers a declared technique without
+starting work. Loading commits the new snapshot and synchronously notifies subscribers before settling the preload
+Promise. `load()` still returns an independent immutable caller-owned `Font` lease; `preload()` retains only the
+FontFace-owned cache lease.
+
+Three `Text` retains unresolved selections, subscribes before starting load, and excludes only the affected paragraph
+from shaping/publication. A paragraph waits for every face needed by its root font, fallback stack, and spans so late
+fallback arrival cannot silently reflow already-published text. Changing a currently drawn paragraph to an unloaded face
+retires its stale draws at the next publication. Readiness binds immutable Fonts, marks semantic state dirty, and asks the
+host integration for another frame; Glyph still does not call `renderer.render(scene, camera)` because it owns none of
+those objects.
+
+R3F resolves a string through the nearest immutable provider catalog overlay and then the root catalog. It observes the
+same snapshot with `useSyncExternalStore`, calls React `use()` on the stable preload promise while pending, and invalidates
+R3F when readiness publishes. Context carries one immutable construction selection containing the chosen Three handle and
+font catalog; it remains neither a second Glyph runtime nor a mutable font store.
+
+### Ownership and disposal
+
+FontFace adds a cache owner without replacing D-286's immutable loaded `Font` ownership:
+
+- the FontFace strongly owns successful preload/lazy-cache leases so named lookup remains deterministic;
+- each `load()` caller receives an independent disposable `Font` lease;
+- each mounted/bound `Text` acquires its own private engine/renderer binding lease;
+- `FontFace.dispose()` aborts pending source work, removes its catalog registration, publishes `disposed`, and releases all
+  face-owned cache leases;
+- already-issued Fonts and committed renderer bindings remain valid until their independent owners release them;
+- ignoring the returned FontFace deliberately chooses realm lifetime, so a finalizer is neither necessary nor effective
+  while the catalog retains the declaration.
+
+### Review against the original plan
+
+| Original plan or current evidence                                                                 | D-295 result                                                                                                                                  | Consequence                                                                                               |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| D-286 makes loaded `Font<Technique>` immutable and independently leased.                          | Preserved. FontFace is an observable declaration/cache owner; resolving it still produces immutable Fonts and private bindings.               | Face disposal can release preload without invalidating mounted text.                                      |
+| D-293 lets immutable fonts bind into multiple handles.                                            | Preserved. FontFace is root-owned and renderer-neutral; each handle binds the resolved Font independently.                                    | A named family is not owned by Three, R3F, a scene, or a renderer.                                        |
+| D-294 makes React context immutable constructor injection.                                        | Extended from a bare handle to `{ handle, fonts }`, captured once.                                                                            | Provider font aliases do not create another runtime or mutable context.                                   |
+| D-287 uses R3F `useLoader` as the existing font promise cache.                                    | Superseded for FontFace selections by the root FontFace cache/readiness store; the existing `useFont` hooks may remain compatibility loaders. | React and imperative Three observe the same state instead of maintaining two caches.                      |
+| `loadFont()` currently requires exact technique options and can runtime-bake after a raster miss. | Preserved as the low-level invariant behind format declarations.                                                                              | Declared options validate baked artifacts and drive source-font runtime/unplugin baking.                  |
+| `defineFont()` is the current static discovery token.                                             | Not required for FontFace declarations; discovery can read `glyph.fontFace()` calls and their source/format graph.                            | Ordinary named-font authoring has no duplicate token ceremony.                                            |
+| The current direct CLI emits shaping-only output when no raster flags are supplied.               | Intentionally changed: no raster flags mean embedded Bitmap 8/16, default MSDF, and Slug; explicit flags replace the defaults.                | The default artifact covers small, normal, and extra-large rendering while string selection remains MSDF. |
+
+### Smallest implementation proofs
+
+1. Bake with no raster flags and authenticate one embedded Bitmap descriptor with strikes 8/16, one default MSDF
+   descriptor, and one Slug descriptor; prove any explicit raster flag set replaces that default set.
+2. Infer `Inter`/`.default` as MSDF and `.bitmap`/`.slug` from one multi-format source plus ordered Slug fallbacks; infer one
+   custom technique member without `defineFont()`.
+3. Reject a baked source whose declared Bitmap options do not match its raster directory; feed the same declaration a
+   TTF and prove the exact runtime baker request receives those options.
+4. Construct Three `Text` from an unloaded face, prove no shaping call and no draw child, publish readiness synchronously,
+   then prove exactly one semantic publication attaches the draw without relying on Promise timing.
+5. Change drawn text to an unresolved face and prove the prior draw retires; keep a loaded sibling in the same TextGroup
+   shaping and rendering throughout.
+6. Mount provider shorthand plus `font="Inter"` under Suspense and StrictMode, prove one source load, stable immutable
+   context, balanced leases, and one R3F invalidation after synchronous readiness publication.
+7. Preload several formats, acquire one independent Font and one mounted Text binding, dispose the FontFace, and prove the
+   preload/cache leases release while the independent Font and committed draw remain valid.
