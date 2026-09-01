@@ -128,8 +128,18 @@ export function defineRasterFormat<
   format: RasterFormatDefinition<Id, Kind, Options, Descriptor, Data>,
 ): RasterFormat<RasterFormatId & Id, Kind, Options, Descriptor, Data> {
   assertIdentifier(format.id, 'raster format ID');
-  assertIdentifier(format.kind, 'raster format kind');
-  assertIdentifier(format.extension, 'raster format extension');
+  assertPattern(
+    format.kind,
+    /^[A-Za-z][A-Za-z0-9]*(?:[.-][A-Za-z0-9]+)*$/,
+    'raster format kind',
+    'bitmap or vendor.name',
+  );
+  assertPattern(
+    format.extension,
+    /^[A-Z][A-Z0-9]*(?:_[A-Za-z0-9]+)+$/,
+    'raster format extension',
+    'VENDOR_feature_name',
+  );
   if (!Number.isSafeInteger(format.version) || format.version < 0) {
     throw new RangeError('raster format version must be a nonnegative safe integer');
   }
@@ -205,4 +215,16 @@ export function defineRasterResourceId<const Id extends string>(id: Id): RasterR
 
 function assertIdentifier(value: string, label: string): void {
   if (value.length === 0) throw new TypeError(`${label} must not be empty`);
+}
+
+/**
+ * A kind is interpolated into the compatibility digest's canonical form and into resource
+ * identities, so it is restricted to characters that need no escaping in either. Rust builds that
+ * canonical string by interpolation rather than serialization; a kind carrying a quote or a
+ * backslash would hash differently there than it does here. A glTF extension name is an uppercase
+ * vendor prefix followed by underscore-separated parts.
+ */
+function assertPattern(value: string, pattern: RegExp, label: string, shape: string): void {
+  assertIdentifier(value, label);
+  if (!pattern.test(value)) throw new TypeError(`${label} ${JSON.stringify(value)} must look like ${shape}`);
 }
