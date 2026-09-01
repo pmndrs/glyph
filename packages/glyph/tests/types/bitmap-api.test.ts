@@ -1,4 +1,4 @@
-import type { RasterDecodeArtifact, RasterDecodeFont } from '@pmndrs/glyph';
+import type { RasterDecodeArtifact, RasterDecodeFont, RasterKey } from '@pmndrs/glyph';
 import {
   bitmap,
   bitmapDescriptor,
