@@ -41,8 +41,10 @@ This is the pre-implementation design brief and intentionally preserves alternat
 verified implementation outcome is recorded in [the investigation report](glyph-api-investigation-report.md), with the
 ordinary adapter contract in D-293, the R3F default-or-provider selection contract in D-294, and the latest approved but
 not yet implemented canonical FontFace/handle-loading direction in D-296. D-297 adds the required content-addressed,
-lease-counted internal resource graph and restricts runtime baking to authenticated TTF/OTF source bytes. In particular,
-the implemented R3F components expose no handle prop; provider font maps and FontFace loading remain planned work.
+lease-counted internal resource graph and restricts runtime baking to authenticated TTF/OTF source bytes. D-298 makes
+that graph the sole semantic cache for the FontFace path and reduces Three and React loaders to integration/suspension
+roles. In particular, the implemented R3F components expose no handle prop; provider font maps and FontFace loading remain
+planned work.
 
 D-296's omitted FontFace `format` is deliberately handle-relative. It does not imply Slug or any other root-owned
 technique: built-in `ThreeConfig` defaults its typed technique map to MSDF, and a wrapped config may select another
@@ -53,6 +55,17 @@ Requests are transport locators; authenticated content hashes, exact raster desc
 own reusable nodes. The core GLB, each selected external raster artifact, each requested external raster resource, decoded
 technique state, and handle-local binding are separate leased generations. Disposal releases reachability rather than
 mutating live resources, and a GLB format miss never falls through to runtime baking.
+
+D-298 records that Three's base `Loader` neither caches nor discovers dependencies, the installed `FileLoader` is not used
+by Glyph's current `FontLoader`, and current R3F adds its own `useLoader` cache. The FontFace implementation must collapse
+those semantic caches into the Glyph graph: `handle.load()` owns the operation, Three's `LoadingManager` may observe it,
+and React suspends on the same stable promise. The core GLB directory—not a filename convention—selects an embedded raster
+or an authenticated external raster artifact, whose decoder must finish its required external resources before the load
+resolves.
+
+Generated sidecar filename patterns are producer conveniences, never runtime discovery. Only a validated main font GLB's
+`PMNDRS_font.rasters` directory can assert that a technique exists and name its embedded or external artifact. A sidecar
+cannot be loaded as a FontFace root or used to infer support, even when its filename matches the CLI's normal pattern.
 
 This document preserves the API investigation so it can continue in a fresh context. It is a design brief, not an implementation plan that has been approved. The current code remains the evidence for what exists today.
 

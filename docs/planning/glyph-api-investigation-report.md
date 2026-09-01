@@ -211,8 +211,16 @@ then-proposed design. The implementation outcome above is authoritative for the 
 
 ### Font loading and ownership
 
-1. `useFont()` uses R3F's Suspense `useLoader` cache with `ReactFontLoader`, which delegates each request to a fresh current Three `FontLoader` and therefore the same implicit Three domain association described above ([react.ts:267-285](../../packages/glyph/src/react.ts#L267-L285), [332-375](../../packages/glyph/src/react.ts#L332-L375)).
-2. The cached loader owns one source `Font` lease. Every mounted hook consumer creates an independent clone through `createMountedFontStore()` and releases that clone when its final subscriber unmounts ([react.ts:413-439](../../packages/glyph/src/react.ts#L413-L439)). StrictMode and sibling-consumer tests verify balanced, independent leases ([react-lease-lifecycle.test.mjs:144-190](../../packages/glyph/tests/integration/react-lease-lifecycle.test.mjs#L144-L190), [193-213](../../packages/glyph/tests/integration/react-lease-lifecycle.test.mjs#L193-L213)).
+1. `useFont()` uses R3F's Suspense `useLoader` cache with one constructor-memoized `ReactFontLoader`. R3F keys the cache by
+   the loader constructor plus the explicit canonical request key; `ReactFontLoader.load()` overrides the Three adapter
+   and calls root `loadFont()` directly rather than invoking `THREE.FileLoader` or the parent `FontLoader.load()`
+   ([react.ts:325-353](../../packages/glyph/src/react.ts#L325-L353),
+   [400-478](../../packages/glyph/src/react.ts#L400-L478), [R3F webgpu index.mjs:1083-1139](../../packages/glyph/node_modules/@react-three/fiber/dist/webgpu/index.mjs#L1083-L1139)).
+2. The memoized React loader owns one source `Font` lease per resolved request. Every mounted hook consumer creates an
+   independent clone through `createMountedFontStore()` and releases that clone when its final subscriber unmounts
+   ([react.ts:481-508](../../packages/glyph/src/react.ts#L481-L508)). StrictMode and sibling-consumer tests verify balanced,
+   independent leases ([react-lease-lifecycle.test.mjs:144-190](../../packages/glyph/tests/integration/react-lease-lifecycle.test.mjs#L144-L190),
+   [193-213](../../packages/glyph/tests/integration/react-lease-lifecycle.test.mjs#L193-L213)).
 
 ### React render and commit
 
@@ -1532,3 +1540,62 @@ in-process cache.
 8. Request a missing GLB format and prove no runtime baker is imported or called. Pass authenticated TTF and OTF bytes and
    prove equivalent exact bake contracts execute once and retain one validated composed GLB; reject WOFF and unknown
    bytes.
+
+## Cache-surface cross-check and exact external-format loading
+
+D-298 distinguishes orchestration caches from Glyph's semantic resource ownership.
+
+| Surface                        | Verified current behavior                                                                                                                                                       | FontFace direction                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `THREE.Loader`                 | `loadAsync()` only wraps the subclass's `load()` in a Promise. It provides no cache and no dependency discovery.                                                                | Remains only an adapter shape.                                                                                                                   |
+| `THREE.FileLoader` r185        | Coalesces concurrent requests in a module-global table by resolved URL. Completed values enter URL-only `THREE.Cache` only when `Cache.enabled` is set; it defaults to false.   | Not an authoritative cache because URL alone cannot express content authentication, Request semantics, dependency leases, or technique identity. |
+| Current `/three` `FontLoader`  | Extends `THREE.Loader`, reports one display URL through `LoadingManager`, and delegates to root `loadFont()` or an optional `FontLibrary`; it never creates `THREE.FileLoader`. | A compatibility/progress adapter may remain, but `handle.load()` and the Glyph graph own loading and cache lifetime.                             |
+| Current top-level `loadFont()` | Coalesces an exact composite request only while it is in flight.                                                                                                                | Compatibility calls route into the graph.                                                                                                        |
+| Current `FontLibrary`          | Retains successful exact composite request entries with bounded LRU eviction.                                                                                                   | Its separate semantic cache is unnecessary for FontFace; the face and downstream graph leases provide deterministic ownership.                   |
+| Current R3F `useFont()`        | R3F `useLoader`/`suspend-react` caches by `[ReactFontLoader, immutableFontRequestKey]`; `ReactFontLoader` owns the cached Font and `clear()` releases it.                       | Provider/Text call `use(handle.load(selection))`; React suspends on Glyph's stable graph promise and owns only mounted leases.                   |
+| Browser HTTP cache             | Applies underneath `fetch()` according to ordinary request and response policy.                                                                                                 | Remains a transport optimization, not a Font/technique ownership model.                                                                          |
+| Runtime Worker `CacheStorage`  | Optionally persists one validated composed GLB when source freshness permits it.                                                                                                | Remains the cross-page acceleration for authenticated TTF/OTF bakes; the graph guarantees in-process reuse.                                      |
+
+Three's GLTF loader demonstrates why subclass ownership matters: it explicitly uses `FileLoader` for the root document,
+parses the document, resolves buffer and image dependencies, and maintains parser-local dependency Promise caches. The
+base `Loader` does none of this automatically. Glyph has an analogous manifest, but it is `PMNDRS_font.rasters` plus each
+technique extension rather than generic glTF buffers and images, and Glyph must authenticate the reciprocal identities.
+
+The main font GLB is the only runtime manifest. The CLI/unplugin may emit predictable sidecar filenames so humans, CDNs,
+and build tools can organize output, but the loader never derives those names. It cannot know that a technique exists
+until it has validated the main GLB and found the exact directory entry. A separately obtained raster sidecar is not a
+FontFace source and cannot add a technique to the main font; it is accepted only after the main directory selected it and
+its hash plus reciprocal shaping/raster identity authenticate it. This remains true when a third party edits or repackages
+a conforming GLB—the schema data, not the producer's naming pattern, is the external contract.
+
+The exact `handle.load(faceSelection)` algorithm is:
+
+```text
+1. Acquire/fetch the FontFace's core source through the Glyph graph.
+2. Validate and parse the core GLB once.
+3. Resolve the handle's technique and normalize its exact options.
+4. Derive the exact rasterKey.
+5. Find that rasterKey + kind in PMNDRS_font.rasters.
+   - absent: throw RASTER_NOT_FOUND; do not probe or guess a sidecar; do not bake.
+6. Follow the directory entry.
+   - embedded: bind its authenticated extension and buffer views.
+   - external: resolve its declared URI against this acquisition's core-GLB base, fetch through the graph, authenticate
+     the declared artifact hash, and require the artifact to reciprocally match exactly one directory entry.
+7. Run the selected technique decoder.
+8. For every external resource named by that technique artifact, resolve relative to the raster artifact, fetch through
+   the graph, authenticate SHA-256 and byte length, and decode it.
+9. Retain the completed decoded-node lease and resolve the stable handle.load() promise.
+```
+
+The selected FontFace is not loaded after step 2 merely because its directory says the technique exists. It becomes loaded
+only after step 9. An absent entry is a capability error; a present entry whose sidecar or nested resource is unavailable,
+malformed, hash-mismatched, or incompatible is a dependency-load error. In both cases imperative Text construction still
+sees an unloaded selection and throws synchronously. Only authenticated TTF/OTF input enters runtime baking before this
+GLB path; a GLB never transitions into a baker after step 5 or later.
+
+The current low-level loader already implements most of the directory sequence: it validates the core, reads
+`PMNDRS_font.rasters`, derives the raster key, performs exact lookup, resolves an external raster relative to the core URL,
+authenticates its artifact hash, and requires reciprocal shaping/raster identity. Slug decode already awaits its external
+curve/header/reference resources before returning. The missing work is the single graph owner and per-node coalescing,
+completed-value caching, and lease retirement; Bitmap/MSDF external atlas-page decoding also remains explicitly unsupported
+today.
