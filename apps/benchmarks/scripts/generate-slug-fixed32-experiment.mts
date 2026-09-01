@@ -167,7 +167,7 @@ try {
       rasters: [
         {
           baker,
-          packaging: { artifact: 'embedded', pages: 'embedded' },
+          packaging: { artifact: 'embedded' },
           options: undefined,
         },
       ],

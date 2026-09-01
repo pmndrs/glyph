@@ -30,7 +30,7 @@ try {
     rasters: [
       {
         baker: slugBaker,
-        packaging: { artifact: 'external', pages: 'external' },
+        packaging: { artifact: 'external' },
         options: undefined,
       },
     ],
@@ -187,7 +187,8 @@ function validateArtifacts(candidate: unknown): Set<string> {
     if (urls.has(url)) throw new TypeError('Slug external parity artifact files must be unique');
     urls.add(url);
   }
-  if (roles.get('font') !== 1 || roles.get('raster') !== 1 || roles.get('raster-page') !== 3) {
+  // A split bake writes the core and one self-contained companion; pages travel inside it.
+  if (roles.get('font') !== 1 || roles.get('raster') !== 1 || roles.size !== 2) {
     throw new TypeError('Slug external parity artifact roles changed');
   }
   return urls;

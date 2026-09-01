@@ -4,7 +4,7 @@ import test, { before } from 'node:test';
 
 import { SlugArtifactValidationError, validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { slugDescriptor, slugDescriptorRasterKey } from '../../dist/internal/slug-contract.js';
-import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
+import { compatibilityFingerprint } from '../../dist/internal/raster-identity.js';
 import { interShapingFingerprint } from '../support/inter-identity.mjs';
 
 const GLB_MAGIC = 0x4654_6c67;
@@ -24,33 +24,19 @@ before(async () => {
     glyphIdWidth: 16,
     descriptor: slugDescriptor(),
   };
-  embedded = makeArtifact('embedded');
+  embedded = makeArtifact();
 });
 
-test('validates exact embedded and fingerprint-addressed external Slug page resources', async () => {
-  const embeddedResult = await validateSlugArtifact(embedded.bytes, context);
-  assert.equal(embeddedResult.records.byteLength, 80);
+test('validates Slug page resources, which always travel inside the artifact', async () => {
+  const validated = await validateSlugArtifact(embedded.bytes, context);
+  assert.equal(validated.records.byteLength, 80);
   assert.deepEqual(
-    embeddedResult.pages.map((page) => ({
+    validated.pages.map((page) => ({
       curve: page.curve.source,
       headers: page.headers.source,
       references: page.references.source,
     })),
     [{ curve: 'embedded', headers: 'embedded', references: 'embedded' }],
-  );
-
-  const external = makeArtifact('external');
-  const externalResult = await validateSlugArtifact(external.bytes, {
-    ...context,
-    externalPages: external.resources,
-  });
-  assert.deepEqual(
-    externalResult.pages.map((page) => ({
-      curve: page.curve.source,
-      headers: page.headers.source,
-      references: page.references.source,
-    })),
-    [{ curve: 'external', headers: 'external', references: 'external' }],
   );
 });
 
@@ -83,7 +69,7 @@ test('keeps package-owned Slug schemas byte-identical to their canonical sources
 
 test('rejects identity, exact record, bounds, overflow, and address mutations', async () => {
   const wrongIdentity = structuredClone(embedded.document);
-  wrongIdentity.extensions.PMNDRS_font_slug.shapingFingerprint = '0'.repeat(32);
+  wrongIdentity.extensions.PMNDRS_font_slug.fingerprint = '0'.repeat(32);
   await rejectsWithCode(buildGlb(wrongIdentity, embedded.binary), 'RECIPROCAL_IDENTITY');
 
   const shortRecord = structuredClone(embedded.document);
@@ -138,20 +124,6 @@ test('rejects malformed RGBA16F KTX2 data and nonzero integer-grid tails', async
   await rejectsWithCode(embedded.bytes, 'GPU_BUDGET', { ...context, limits: { maxGpuBytes: 1 } });
 });
 
-test('requires exact external lengths and fingerprints for every Slug page resource', async () => {
-  const external = makeArtifact('external');
-  await rejectsWithCode(external.bytes, 'EXTERNAL_PAGE_MISSING');
-
-  const resources = new Map(external.resources);
-  const curve = resources.get('curve.ktx2').slice();
-  curve[curve.byteLength - 1] ^= 1;
-  resources.set('curve.ktx2', curve);
-  await rejectsWithCode(external.bytes, 'EXTERNAL_PAGE_FINGERPRINT', {
-    ...context,
-    externalPages: resources,
-  });
-});
-
 async function rejectsWithCode(bytes, code, validationContext = context) {
   await assert.rejects(
     validateSlugArtifact(bytes, validationContext),
@@ -159,7 +131,7 @@ async function rejectsWithCode(bytes, code, validationContext = context) {
   );
 }
 
-function makeArtifact(packaging) {
+function makeArtifact() {
   const records = makeRecords();
   const curve = makeRgba16fKtx2(4, 2, new Uint8Array(64));
   const headers = new Uint8Array(16);
@@ -172,17 +144,9 @@ function makeArtifact(packaging) {
     ['headers.r32ui', headers],
     ['references.r16ui', references],
   ]);
-  const binaries = packaging === 'embedded' ? [records, curve, headers, references] : [records];
-  const { binary, bufferViews } = joinViews(binaries);
-  const source = (name, index) =>
-    packaging === 'embedded'
-      ? { type: 'bufferView', bufferView: index }
-      : {
-          type: 'external',
-          uri: name,
-          byteLength: resources.get(name).byteLength,
-          artifactFingerprint: fingerprint128(resources.get(name), fingerprintDomain.artifact),
-        };
+  const { binary, bufferViews } = joinViews([records, curve, headers, references]);
+  // Pages always travel inside the artifact that declares them.
+  const source = (_name, index) => ({ type: 'bufferView', bufferView: index });
   const document = {
     asset: { version: '2.0' },
     extensionsUsed: ['PMNDRS_font_slug'],
@@ -191,9 +155,14 @@ function makeArtifact(packaging) {
       PMNDRS_font_slug: {
         version: 0,
         rasterKey,
-        shapingFingerprint,
-        glyphCount: 2,
-        glyphIdWidth: 16,
+        fingerprint: compatibilityFingerprint({
+          glyphCount: 2,
+          glyphIdWidth: 16,
+          kind: 'slug',
+          rasterKey,
+          shaping: shapingFingerprint,
+          version: 0,
+        }),
         planeUnitsPerEm: 2048,
         recordBufferView: 0,
         recordStride: 40,

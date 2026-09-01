@@ -42,7 +42,10 @@ test('fingerprint128 matches independent reference vectors', () => {
   for (let length = 0; length <= 32; length += 1) {
     assert.ok(lengths.has(length), `corpus is missing length ${length}`);
   }
-  assert.ok([...lengths].some((length) => length > 32), 'corpus must cover multi-block accumulation');
+  assert.ok(
+    [...lengths].some((length) => length > 32),
+    'corpus must cover multi-block accumulation',
+  );
   assert.equal(checked, corpus.cases.length * Object.keys(corpus.seeds).length, 'corpus is ragged');
 });
 
@@ -54,4 +57,23 @@ test('fingerprint128 reads a subarray by its own bounds', () => {
   backing.set(payload, 16);
   const view = backing.subarray(16, 16 + payload.byteLength);
   assert.equal(fingerprint128(view, fingerprintDomain.artifact), corpus.cases[20].fingerprints.artifact);
+});
+
+test('the compatibility digest matches its published canonical form', async () => {
+  // Pinned against a value mmh3 produced outside this repository, and against the identical
+  // assertion in rust/raster-artifact. The canonical form is published contract: a build pipeline
+  // records the digest beside its inputs and recomputes it later from its own manifest.
+  const { compatibilityFingerprint } = await import('../../dist/internal/raster-identity.js');
+  assert.equal(
+    compatibilityFingerprint({
+      glyphCount: 2937,
+      glyphIdWidth: 16,
+      kind: 'bitmap',
+      rasterKey: 'd1dcd31304f795b5f2c497c579aa29f0',
+      shaping: '0c522d6ea0db73ba74bcc389dc50263b',
+      version: 0,
+    }),
+    '8b23c028dd6cd2d31a61b00c35bbcbe0',
+  );
+  assert.equal(corpus.seeds.compatibility ?? 0x636d7030, fingerprintDomain.compatibility);
 });

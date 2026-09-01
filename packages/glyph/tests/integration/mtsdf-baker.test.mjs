@@ -80,7 +80,7 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
       shapingFingerprint,
     },
     rasterKey,
-    packaging: { artifact: 'external', pages: 'external' },
+    packaging: { artifact: 'external' },
     descriptor,
     onProgress: (event) => progress.push([event.completed, event.total]),
   });
@@ -94,34 +94,24 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
   assert.ok(result.report.pages.every((page) => page.format === 'rgba8unorm'));
   const raster = result.artifacts.find((artifact) => artifact.role === 'raster');
   assert.ok(raster);
-  assert.match(raster.id, new RegExp(`^msdf-${shapingFingerprint}-${rasterKey}-[0-9a-f]{32}\\.glb$`));
-  const pages = result.artifacts.filter((artifact) => artifact.role === 'raster-page');
-  assert.equal(pages.length, result.report.pages.length);
-  for (const [index, page] of pages.entries()) {
-    assert.match(page.id, new RegExp(`^msdf-${shapingFingerprint}-${rasterKey}-p${index}-[0-9a-f]{32}\\.ktx2$`));
-    assert.deepEqual(
-      [...page.bytes.subarray(0, 12)],
-      [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a],
-    );
-  }
-  const extension = glbRoot(raster.bytes).extensions[MSDF_EXTENSION];
+  assert.match(raster.id, new RegExp(`^msdf-${shapingFingerprint}-${rasterKey}\\.glb$`));
+  // A bake publishes exactly one artifact; every page travels inside it.
   assert.deepEqual(
-    result.artifacts.map(({ bytes }) => bytes.byteLength),
-    [
-      63_104, 3_989_700, 4_190_404, 4_161_760, 4_137_316, 4_051_140, 3_969_644, 3_845_356, 4_178_128, 4_186_308,
-      2_403_940,
-    ],
+    result.artifacts.map(({ role }) => role),
+    ['raster'],
   );
+  assert.ok(result.report.pages.length > 0);
+  const extension = glbRoot(raster.bytes).extensions[MSDF_EXTENSION];
   assert.ok(result.artifacts.every(({ fingerprint }) => /^[0-9a-f]{32}$/.test(fingerprint)));
   assert.equal(extension.encoding, 'mtsdf');
   assert.equal(extension.emSize, MSDF_EM_SIZE);
   assert.equal(extension.pixelRange, MSDF_PIXEL_RANGE);
   assert.equal(extension.planeUnitsPerEm, MSDF_PLANE_UNITS_PER_EM);
   assert.equal(extension.recordStride, 20);
-  assert.equal(extension.pages.length, pages.length);
+  assert.equal(extension.pages.length, result.report.pages.length);
   assert.deepEqual(progress.at(-1), [2937, 2937]);
   assert.ok(progress.every((entry) => entry[1] === 2937));
-  await exerciseArtifactValidation(result, raster, pages, rasterKey);
+  await exerciseArtifactValidation(result, raster, rasterKey);
   await exerciseRuntime(result, raster, extension, rasterKey);
 });
 
@@ -142,7 +132,7 @@ test('bakes and validates fingerprinted 32 px/em quality policies', async () => 
         shapingFingerprint: showcaseShapingFingerprint,
       },
       rasterKey,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       descriptor,
     });
     const raster = result.artifacts.find((artifact) => artifact.role === 'raster');
@@ -201,7 +191,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   const result = await msdfBakerFromCore(core).bake({
     font: { source, sourceFingerprint, fontFaceIndex: 0, glyphCount: 2937, shapingFingerprint },
     rasterKey,
-    packaging: { artifact: 'external', pages: 'embedded' },
+    packaging: { artifact: 'external' },
     descriptor,
     onProgress: (event) => progress.push([event.completed, event.total]),
   });
@@ -274,7 +264,7 @@ test('releases a source allocation when the request allocation fails', () => {
           glyphCount: 1,
           shapingFingerprint: '0'.repeat(32),
           rasterKey: '0'.repeat(32),
-          packaging: { artifact: 'external', pages: 'embedded' },
+          packaging: { artifact: 'external' },
           descriptor: msdfDescriptor(),
         },
       }),
@@ -352,7 +342,7 @@ test('copies a segmented response in bounded chunks and releases its Wasm owners
       glyphCount: 1,
       shapingFingerprint: '0'.repeat(32),
       rasterKey: '1'.repeat(32),
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       descriptor: msdfDescriptor(),
     },
   });
@@ -369,7 +359,7 @@ function glbRoot(bytes) {
   return JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength)));
 }
 
-async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts, rasterKey) {
+async function exerciseArtifactValidation(result, rasterArtifact, rasterKey) {
   const context = {
     rasterKey,
     shapingFingerprint,
@@ -377,33 +367,21 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
     glyphIdWidth: 16,
     descriptor: msdfDescriptor(),
   };
-  const externalPages = new Map(pageArtifacts.map(({ id, bytes }) => [id, bytes]));
-  const external = await validateMsdfArtifact(rasterArtifact.bytes, {
-    ...context,
-    externalPages,
-  });
-  assert.equal(external.khronos.validatorVersion, '2.0.0-dev.3.10');
-  assert.equal(external.khronos.issues.numErrors, 0);
-  assert.equal(external.khronos.issues.numWarnings, 0);
-  assert.equal(external.records.byteLength, 2937 * 20);
-  assert.equal(external.pages.length, result.report.pages.length);
-  assert.ok(external.pages.every(({ source }) => source === 'external'));
-
-  const embeddedBytes = embedRasterPages(rasterArtifact.bytes, pageArtifacts);
-  const embedded = await validateMsdfArtifact(embeddedBytes, context);
-  assert.deepEqual(embedded.records, external.records);
-  assert.ok(embedded.pages.every(({ source }) => source === 'embedded'));
-  assert.deepEqual(
-    embedded.pages.map(({ bytes }) => bytes),
-    external.pages.map(({ bytes }) => bytes),
-  );
+  // A raster bake publishes one artifact and every page travels inside it.
+  const validated = await validateMsdfArtifact(rasterArtifact.bytes, context);
+  assert.equal(validated.khronos.validatorVersion, '2.0.0-dev.3.10');
+  assert.equal(validated.khronos.issues.numErrors, 0);
+  assert.equal(validated.khronos.issues.numWarnings, 0);
+  assert.equal(validated.records.byteLength, 2937 * 20);
+  assert.equal(validated.pages.length, result.report.pages.length);
+  assert.ok(validated.pages.every(({ source }) => source === 'embedded'));
+  // The published artifact is already the embedded form; nothing has to be assembled for it.
+  const embeddedBytes = rasterArtifact.bytes;
 
   const required = [
     'version',
     'rasterKey',
-    'shapingFingerprint',
-    'glyphCount',
-    'glyphIdWidth',
+    'fingerprint',
     'encoding',
     'emSize',
     'pixelRange',
@@ -437,10 +415,10 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
   const extension = decoded.document.extensions[MSDF_EXTENSION];
   const recordView = decoded.document.bufferViews[extension.recordBufferView];
   const recordsStart = decoded.binStart + recordView.byteOffset;
-  const present = firstPresentGlyph(embedded.records);
+  const present = firstPresentGlyph(validated.records);
 
   const wrongIdentity = structuredClone(decoded.document);
-  wrongIdentity.extensions[MSDF_EXTENSION].shapingFingerprint = '0'.repeat(32);
+  wrongIdentity.extensions[MSDF_EXTENSION].fingerprint = '0'.repeat(32);
   await rejectsMsdf(rewriteGlbDocument(embeddedBytes, wrongIdentity), context, 'RECIPROCAL_IDENTITY');
 
   const wrongConstant = structuredClone(decoded.document);
@@ -484,16 +462,6 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
   // The individual Inter pages total 39,111,736 bytes, but the runtime allocates one
   // 1024×1024×10-layer RGBA8 texture array (41,943,040 bytes).
   await rejectsMsdf(embeddedBytes, { ...context, limits: { maxGpuBytes: 40_000_000 } }, 'GPU_BUDGET');
-  await rejectsMsdf(rasterArtifact.bytes, context, 'EXTERNAL_PAGE_MISSING');
-
-  const tamperedExternalPages = new Map(pageArtifacts.map(({ id, bytes }) => [id, bytes.slice()]));
-  const firstPage = tamperedExternalPages.values().next().value;
-  firstPage[firstPage.byteLength - 1] ^= 1;
-  await rejectsMsdf(
-    rasterArtifact.bytes,
-    { ...context, externalPages: tamperedExternalPages },
-    'EXTERNAL_PAGE_FINGERPRINT',
-  );
 }
 
 async function rejectsMsdf(bytes, context, codePrefix) {
@@ -502,52 +470,6 @@ async function rejectsMsdf(bytes, context, codePrefix) {
     (error) =>
       error instanceof MsdfArtifactValidationError && error.issues.some(({ code }) => code.startsWith(codePrefix)),
   );
-}
-
-function embedRasterPages(rasterBytes, pageArtifacts) {
-  const { document, views } = glbViews(rasterBytes);
-  const extension = document.extensions[MSDF_EXTENSION];
-  const records = views[extension.recordBufferView];
-  assert.ok(records);
-  const embeddedDocument = structuredClone(document);
-  embeddedDocument.extensions[MSDF_EXTENSION].recordBufferView = 0;
-  for (const [pageIndex, page] of embeddedDocument.extensions[MSDF_EXTENSION].pages.entries()) {
-    page.variants[0].source = { type: 'bufferView', bufferView: pageIndex + 1 };
-  }
-  return buildGlb(embeddedDocument, [records, ...pageArtifacts.map(({ bytes }) => bytes)]);
-}
-
-function buildGlb(document, chunks) {
-  const bufferViews = [];
-  let binLength = 0;
-  for (const bytes of chunks) {
-    binLength = align4(binLength);
-    bufferViews.push({ buffer: 0, byteOffset: binLength, byteLength: bytes.byteLength });
-    binLength += bytes.byteLength;
-  }
-  const declaredBinLength = binLength;
-  const paddedBinLength = align4(binLength);
-  const root = structuredClone(document);
-  root.buffers = [{ byteLength: declaredBinLength }];
-  root.bufferViews = bufferViews;
-  const json = new TextEncoder().encode(JSON.stringify(root));
-  const paddedJsonLength = align4(json.byteLength);
-  const output = new Uint8Array(12 + 8 + paddedJsonLength + 8 + paddedBinLength);
-  output.fill(0x20, 20, 20 + paddedJsonLength);
-  const view = new DataView(output.buffer);
-  view.setUint32(0, 0x4654_6c67, true);
-  view.setUint32(4, 2, true);
-  view.setUint32(8, output.byteLength, true);
-  view.setUint32(12, paddedJsonLength, true);
-  view.setUint32(16, 0x4e4f_534a, true);
-  output.set(json, 20);
-  const binHeader = 20 + paddedJsonLength;
-  view.setUint32(binHeader, paddedBinLength, true);
-  view.setUint32(binHeader + 4, 0x004e_4942, true);
-  for (const [index, bytes] of chunks.entries()) {
-    output.set(bytes, binHeader + 8 + bufferViews[index].byteOffset);
-  }
-  return output;
 }
 
 function decodeGlb(bytes) {
@@ -591,11 +513,8 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   const { document, views } = glbViews(rasterArtifact.bytes);
   const records = views[extension.recordBufferView];
   assert.ok(records);
-  const pageArtifacts = result.artifacts.filter((artifact) => artifact.role === 'raster-page');
+  // Pages live in this artifact, so the runtime reads them straight out of its views.
   const runtimeExtension = structuredClone(extension);
-  for (const [pageIndex, page] of runtimeExtension.pages.entries()) {
-    page.variants[0].source = { type: 'bufferView', bufferView: pageIndex + 1 };
-  }
   const font = {
     handle: 7,
     shapingFingerprint,
@@ -610,10 +529,9 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
     rasterKey,
     extensionData: runtimeExtension,
     view(index) {
-      if (index === 0) return records;
-      const page = pageArtifacts[index - 1];
-      if (page === undefined) throw new RangeError('missing synthetic MSDF runtime view');
-      return page.bytes;
+      const view = views[index];
+      if (view === undefined) throw new RangeError('missing synthetic MSDF runtime view');
+      return view;
     },
     dispose() {},
   };

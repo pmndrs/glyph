@@ -10,7 +10,6 @@ import {
   type RasterFormatMetadata,
   type RasterResourceSource,
   type RasterSource,
-  type Fingerprint,
 } from '../../src/index.js';
 import { defineRasterBaker, rasterBake } from '../../src/bake.js';
 import { defineRasterFormat } from '../../src/config/raster-format.js';
@@ -21,17 +20,16 @@ type Expect<Value extends true> = Value;
 
 const resolverRasterSource: RasterSource = { type: 'external' };
 void resolverRasterSource;
-// @ts-expect-error URI-addressed raster artifacts require a stamped fingerprint.
-const unidentifiedRasterSource: RasterSource = { type: 'external', uri: 'bitmap.glb' };
-void unidentifiedRasterSource;
-declare const pageHash: Fingerprint;
-const externalRasterResource: RasterResourceSource = {
-  type: 'external',
-  uri: 'page.ktx2',
-  byteLength: 1024,
-  artifactFingerprint: pageHash,
-};
-void externalRasterResource;
+// A companion is identified by the digest it carries inside itself, so its directory entry is
+// just the name of the file to fetch.
+const namedRasterSource: RasterSource = { type: 'external', uri: 'my-font.bitmap.glb' };
+void namedRasterSource;
+// Pages always travel inside the artifact that declares them.
+const pageResource: RasterResourceSource = { type: 'bufferView', bufferView: 4 };
+void pageResource;
+// @ts-expect-error a page is never a separate file.
+const externalPageResource: RasterResourceSource = { type: 'external', uri: 'page.ktx2' };
+void externalPageResource;
 
 interface MsdfResource {
   readonly texture: unknown;
@@ -156,13 +154,13 @@ type _DateDescriptor = RasterBakeRequest<{ readonly invalid: Date }>;
 type _MapDescriptor = RasterBakeRequest<{ readonly invalid: Map<string, string> }>;
 
 const msdfPlan = rasterBake(msdfBaker, {
-  packaging: { artifact: 'external', pages: 'external' },
+  packaging: { artifact: 'external' },
   options: { pixelRange: 4 },
 });
 type _PlanOptions = Expect<Equal<typeof msdfPlan.options, { readonly pixelRange: number }>>;
 
 rasterBake(msdfBaker, {
-  packaging: { artifact: 'external', pages: 'external' },
+  packaging: { artifact: 'external' },
   // @ts-expect-error The package-owned MSDF baker requires its own options.
   options: { ppem: 16 },
 });

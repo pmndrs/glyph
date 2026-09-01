@@ -27,7 +27,7 @@ async function setup() {
   return { wasm, source: new Uint8Array(source), module, instance, core };
 }
 
-async function bake(core, source, pages) {
+async function bake(core, source) {
   const options = { strikes: [16] };
   const descriptor = bitmapDescriptor(options);
   const rasterKey = bitmapRasterKey(options);
@@ -40,7 +40,7 @@ async function bake(core, source, pages) {
       shapingFingerprint,
     },
     rasterKey,
-    packaging: { artifact: 'external', pages },
+    packaging: { artifact: 'external' },
     descriptor,
   });
 }
@@ -73,11 +73,11 @@ test('bakes canonical Inter deterministically through the public direct-memory s
   const first = await bitmapBakerFromCore(core).bake({
     font: { source, sourceFingerprint, fontFaceIndex: 0, glyphCount: 2937, shapingFingerprint },
     rasterKey: bitmapRasterKey(options),
-    packaging: { artifact: 'external', pages: 'embedded' },
+    packaging: { artifact: 'external' },
     descriptor,
     onProgress: (event) => progress.push([event.completed, event.total]),
   });
-  const second = await bake(core, source, 'embedded');
+  const second = await bake(core, source);
 
   assert.deepEqual(first, second);
   assert.equal(first.kind, 'bitmap');
@@ -87,7 +87,7 @@ test('bakes canonical Inter deterministically through the public direct-memory s
   assert.ok(first.report.gpuBytes > 0);
   assert.ok(first.report.pages.length > 0);
   assert.ok(first.artifacts.every(({ role }) => role === 'raster'));
-  assert.match(first.artifacts[0].id, new RegExp(`^bitmap-${shapingFingerprint}-[0-9a-f]{32}-[0-9a-f]{32}\\.glb$`));
+  assert.match(first.artifacts[0].id, new RegExp(`^bitmap-${shapingFingerprint}-[0-9a-f]{32}\\.glb$`));
   assert.deepEqual([...first.artifacts[0].bytes.subarray(0, 4)], [0x67, 0x6c, 0x54, 0x46]);
   const validated = await validateBitmapArtifact(first.artifacts[0].bytes, {
     rasterKey: first.rasterKey,
@@ -102,24 +102,19 @@ test('bakes canonical Inter deterministically through the public direct-memory s
   assert.ok(progress.every((entry) => entry[1] === 2937));
 });
 
-test('external page packaging preserves authoritative records and emits fingerprinted KTX2 artifacts', async () => {
+test('a bake publishes one artifact and keeps every page inside it', async () => {
   const { source, core } = await setup();
-  const embedded = await bake(core, source, 'embedded');
-  const external = await bake(core, source, 'external');
+  const baked = await bake(core, source);
 
-  assert.equal(external.report.metadataBytes, embedded.report.metadataBytes);
-  assert.equal(external.report.gpuBytes, embedded.report.gpuBytes);
-  const pages = external.artifacts.filter(({ role }) => role === 'raster-page');
-  assert.equal(pages.length, external.report.pages.length);
-  assert.ok(pages.length > 0);
-  for (const page of pages) {
-    assert.match(page.id, new RegExp(`^bitmap-${shapingFingerprint}-[0-9a-f]{32}-s16-p\\d+-[0-9a-f]{32}\\.ktx2$`));
-    assert.deepEqual(
-      [...page.bytes.subarray(0, 12)],
-      [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a],
-    );
-    assert.match(page.fingerprint, /^[0-9a-f]{32}$/);
-  }
+  // Pages are never separate files, so a raster bake is exactly one artifact and every page
+  // reports as embedded.
+  assert.deepEqual(
+    baked.artifacts.map(({ role }) => role),
+    ['raster'],
+  );
+  assert.ok(baked.report.pages.length > 0);
+  assert.match(baked.artifacts[0].id, /^bitmap-[0-9a-f]{32}-[0-9a-f]{32}\.glb$/);
+  assert.match(baked.artifacts[0].fingerprint, /^[0-9a-f]{32}$/);
 });
 
 test('bakes bounded coverage with deterministic progress and a validated selection bitset', async () => {
@@ -131,7 +126,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   const result = await bitmapBakerFromCore(core).bake({
     font: { source, sourceFingerprint, fontFaceIndex: 0, glyphCount: 2937, shapingFingerprint },
     rasterKey,
-    packaging: { artifact: 'external', pages: 'embedded' },
+    packaging: { artifact: 'external' },
     descriptor,
     onProgress: (event) => progress.push([event.completed, event.total]),
   });
@@ -194,7 +189,7 @@ test('rejects mismatched shaping context and honors pre-bake cancellation', asyn
     baker.bake({
       font: { source, sourceFingerprint, fontFaceIndex: 0, glyphCount: 1, shapingFingerprint },
       rasterKey,
-      packaging: { artifact: 'external', pages: 'embedded' },
+      packaging: { artifact: 'external' },
       descriptor,
     }),
     (error) => error.reason === 'INVALID_GLYPH_COUNT',
@@ -206,7 +201,7 @@ test('rejects mismatched shaping context and honors pre-bake cancellation', asyn
     baker.bake({
       font: { source, sourceFingerprint, fontFaceIndex: 0, glyphCount: 2937, shapingFingerprint },
       rasterKey,
-      packaging: { artifact: 'external', pages: 'embedded' },
+      packaging: { artifact: 'external' },
       descriptor,
       signal: controller.signal,
     }),
@@ -270,7 +265,7 @@ test('the direct-memory shim releases earlier allocations when a later copy fail
           glyphCount: 1,
           shapingFingerprint: '0'.repeat(32),
           rasterKey: '0'.repeat(32),
-          packaging: { artifact: 'embedded', pages: 'embedded' },
+          packaging: { artifact: 'embedded' },
           descriptor: bitmapDescriptor({ strikes: [16] }),
         },
       }),
@@ -297,7 +292,7 @@ test('the direct-memory shim releases an allocation whose memory copy fails', ()
         glyphCount: 1,
         shapingFingerprint: '0'.repeat(32),
         rasterKey: '0'.repeat(32),
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         descriptor: bitmapDescriptor({ strikes: [16] }),
       },
     }),

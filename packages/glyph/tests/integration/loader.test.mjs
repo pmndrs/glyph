@@ -58,7 +58,7 @@ before(async () => {
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options: { strikes: [16] },
       },
     ],
@@ -70,7 +70,7 @@ before(async () => {
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'external', pages: 'embedded' },
+        packaging: { artifact: 'external' },
         options: { strikes: [16] },
       },
     ],
@@ -382,16 +382,6 @@ test('shaping deduplication keeps differently sourced bytes qualified by provena
   assert.deepEqual(calls, ['https://assets.test/variant.font.glb', 'https://assets.test/variant.ttf']);
 });
 
-test('registration rejects a descriptor stamp that contradicts the declared face', async () => {
-  const validated = await validateFontArtifact(embeddedBytes);
-  const descriptorFingerprint = validated.document.extensions.PMNDRS_font.provenance.descriptorFingerprint;
-  const contradictory = replaceAscii(embeddedBytes, descriptorFingerprint, '0'.repeat(32));
-  await assert.rejects(
-    new FontRegistry().registerAsset(contradictory),
-    (error) => error instanceof GlyphFontError && error.reason === 'INVALID_FONT_ASSET',
-  );
-});
-
 test('shaping deduplication rejects equal stamps with contradictory payload shapes', async () => {
   const registry = new FontRegistry();
   const inter = await registry.registerAsset(embeddedBytes);
@@ -426,67 +416,26 @@ test('registration merges embedded and external delivery without changing raster
   assert.throws(() => raster.view(1_000_000), RangeError);
 });
 
-test('external raster loading resolves content-addressed resources and validates lengths without rehashing bytes', async () => {
+test('external raster loading fetches the companion and resolves its pages in place', async () => {
   const calls = [];
   const coreUrl = 'https://assets.test/generated/Inter.font.glb';
   const rasterUrl = `https://assets.test/generated/${externalRasterId}`;
-  const pageFingerprint = fingerprint128(Uint8Array.of(3, 1, 4, 1, 5, 9), fingerprintDomain.artifact);
-  const pageUrl = `https://assets.test/generated/page-${pageFingerprint}.bin`;
-  const pageBytes = Uint8Array.of(3, 1, 4, 1, 5, 9);
   const loader = new FontLoader({
     fetch: fixtureFetch(
       new Map([
         [coreUrl, externalCoreBytes],
         [rasterUrl, externalRasterBytes],
-        [pageUrl, pageBytes],
       ]),
       calls,
     ),
   });
   const font = await loader.load({ baked: coreUrl });
-  const reference = font.rasterReferences[0];
-  const raster = await font.loadRaster({ rasterKey: reference.rasterKey });
+  const raster = await font.loadRaster({ rasterKey: font.rasterReferences[0].rasterKey });
 
-  assert.equal(raster.kind, 'bitmap');
-  assert.equal(font.getRaster(reference.rasterKey), raster);
-  const resolvedPage = await raster.resource({
-    type: 'external',
-    uri: `page-${pageFingerprint}.bin`,
-    byteLength: pageBytes.byteLength,
-    artifactFingerprint: pageFingerprint,
-  });
-  assert.deepEqual(resolvedPage, pageBytes);
-  resolvedPage.fill(0);
-  assert.deepEqual(pageBytes, Uint8Array.of(3, 1, 4, 1, 5, 9));
-
-  await assert.rejects(
-    raster.resource({
-      type: 'external',
-      uri: `page-${pageFingerprint}.bin`,
-      byteLength: pageBytes.byteLength + 1,
-      artifactFingerprint: pageFingerprint,
-    }),
-    (error) =>
-      error instanceof GlyphFontError &&
-      error.reason === 'RASTER_RESOURCE_FETCH' &&
-      error.cause instanceof AggregateError &&
-      error.cause.errors.some((cause) => cause instanceof GlyphFontError && cause.reason === 'RASTER_RESOURCE_LENGTH'),
-  );
-  const controller = new AbortController();
-  controller.abort(new Error('page cancelled'));
-  await assert.rejects(
-    raster.resource(
-      {
-        type: 'external',
-        uri: `page-${pageFingerprint}.bin`,
-        byteLength: pageBytes.byteLength,
-        artifactFingerprint: pageFingerprint,
-      },
-      controller.signal,
-    ),
-    /page cancelled/,
-  );
-  assert.deepEqual(calls, [coreUrl, rasterUrl, pageUrl, pageUrl]);
+  // The core names one companion file and nothing else: its pages travel inside it, so
+  // loading a split font fetches exactly two URLs.
+  assert.deepEqual(calls, [coreUrl, rasterUrl]);
+  assert.equal(raster.rasterKey, font.rasterReferences[0].rasterKey);
 
   const otherRegistry = new FontRegistry();
   const otherFont = await otherRegistry.registerAsset(externalCoreBytes);

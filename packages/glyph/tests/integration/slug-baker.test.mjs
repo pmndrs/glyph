@@ -55,17 +55,17 @@ test('bakes and validates exact external and embedded Inter Slug resources', asy
   const rasterKey = slugDescriptorRasterKey();
   const progress = [];
   const baker = slugBakerFromCore(core);
-  const input = (pages) => ({
+  const input = () => ({
     font: { source, sourceFingerprint, fontFaceIndex: 0, glyphCount: 2937, shapingFingerprint },
     rasterKey,
-    packaging: { artifact: 'external', pages },
+    packaging: { artifact: 'external' },
     descriptor,
     onProgress(value) {
       progress.push(value);
     },
   });
-  const external = await baker.bake(input('external'));
-  const embedded = await baker.bake(input('embedded'));
+  const external = await baker.bake(input());
+  const embedded = await baker.bake(input());
 
   assert.equal(external.kind, 'slug');
   assert.equal(external.extension, SLUG_EXTENSION);
@@ -91,18 +91,20 @@ test('bakes and validates exact external and embedded Inter Slug resources', asy
   const embeddedRaster = embedded.artifacts.find(({ role }) => role === 'raster');
   assert.ok(externalRaster);
   assert.ok(embeddedRaster);
-  const pageArtifacts = external.artifacts.filter(({ role }) => role === 'raster-page');
-  assert.equal(pageArtifacts.length, external.report.pages.length * 3);
-  assert.equal(embedded.artifacts.filter(({ role }) => role === 'raster-page').length, 0);
-  assert.ok(pageArtifacts.some(({ id }) => /-curves-[0-9a-f]{32}\.ktx2$/.test(id)));
-  assert.ok(pageArtifacts.some(({ id }) => /-headers-[0-9a-f]{32}\.r32ui\.bin$/.test(id)));
-  assert.ok(pageArtifacts.some(({ id }) => /-references-[0-9a-f]{32}\.r16ui\.bin$/.test(id)));
+  // Curves, headers, and references live in the artifact that declares them; a bake never
+  // publishes a page as its own file.
+  assert.deepEqual(
+    external.artifacts.map(({ role }) => role),
+    ['raster'],
+  );
+  assert.deepEqual(
+    embedded.artifacts.map(({ role }) => role),
+    ['raster'],
+  );
+  assert.deepEqual(externalRaster.bytes, embeddedRaster.bytes);
 
   const context = { rasterKey, shapingFingerprint, glyphCount: 2937, glyphIdWidth: 16, descriptor };
-  const externalValidated = await validateSlugArtifact(externalRaster.bytes, {
-    ...context,
-    externalPages: new Map(pageArtifacts.map(({ id, bytes }) => [id, bytes])),
-  });
+  const externalValidated = await validateSlugArtifact(externalRaster.bytes, context);
   const embeddedValidated = await validateSlugArtifact(embeddedRaster.bytes, context);
   assert.deepEqual(embeddedValidated.records, externalValidated.records);
   assert.equal(externalValidated.records.byteLength, 2937 * 40);
@@ -131,7 +133,7 @@ test('surfaces structured identity failures before rasterizing', async () => {
           glyphCount: 2937,
           shapingFingerprint,
           rasterKey: '0'.repeat(32),
-          packaging: { artifact: 'external', pages: 'embedded' },
+          packaging: { artifact: 'external' },
           descriptor: slugDescriptor(),
         },
       }),
@@ -158,7 +160,7 @@ test('releases the source allocation when the request allocation fails', () => {
           glyphCount: 1,
           shapingFingerprint: '0'.repeat(32),
           rasterKey: '0'.repeat(32),
-          packaging: { artifact: 'external', pages: 'embedded' },
+          packaging: { artifact: 'external' },
           descriptor: slugDescriptor(),
         },
       }),
@@ -236,7 +238,7 @@ test('copies segmented Slug artifacts in bounded chunks and releases Wasm owners
       glyphCount: 1,
       shapingFingerprint: '0'.repeat(32),
       rasterKey: '1'.repeat(32),
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       descriptor: slugDescriptor(),
     },
   });

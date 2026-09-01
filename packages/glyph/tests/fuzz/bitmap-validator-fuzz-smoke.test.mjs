@@ -29,7 +29,7 @@ test('fixed-seed bitmap artifact mutations fail safely and deterministically', a
         shapingFingerprint,
       },
       rasterKey,
-      packaging: { artifact: 'external', pages: 'embedded' },
+      packaging: { artifact: 'external' },
       descriptor,
     })
   ).artifacts[0].bytes;

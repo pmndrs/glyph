@@ -328,7 +328,7 @@ test('Node and serial Worker entry produce identical bounded Bitmap and MSDF art
     const direct = await fixture.baker.bake({
       font,
       rasterKey: fixture.rasterKey,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       descriptor: fixture.descriptor,
     });
     const worker = await bakeThroughWorker(t, fixture, source);
