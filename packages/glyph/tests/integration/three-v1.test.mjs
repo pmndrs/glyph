@@ -1879,6 +1879,73 @@ test('TextGroup atomically replaces child paragraphs without multiplying retaine
   fontDomain.dispose();
 });
 
+test('TextGroup publishes reordered paragraphs with simultaneous content updates', async () => {
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
+  const scene = new THREE.Scene();
+  const group = new TextGroup();
+  const left = new Text({ font, text: 'AB' });
+  const right = new Text({ font, text: 'CD' });
+  group.add(left, right);
+  scene.add(group);
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined);
+
+  left.renderOrder = 1;
+  right.renderOrder = 0;
+  left.text = 'XY';
+  right.text = 'ZW';
+  scene.updateMatrixWorld();
+
+  assert.equal(group.error, undefined, 'reordering and updating two paragraphs must remain publishable');
+  assert.equal(group.children.find((child) => child.isMesh).geometry.instanceCount, 4);
+
+  group.dispose();
+  left.dispose();
+  right.dispose();
+  font.dispose();
+  fontDomain.dispose();
+});
+
+test('TextGroup flushes a pending removal before reordering at the paragraph cap', async () => {
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
+  const scene = new THREE.Scene();
+  const group = new TextGroup({ capacity: { size: 4_096, policy: 'grow' } });
+  const labels = Array.from({ length: 4_096 }, (_, index) => {
+    const label = new Text({ font, text: 'A' });
+    label.renderOrder = index;
+    return label;
+  });
+  group.add(...labels);
+  scene.add(group);
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined);
+
+  const removed = labels.pop();
+  group.remove(removed);
+  removed.dispose();
+  const replacement = new Text({ font, text: 'B' });
+  replacement.renderOrder = -1;
+  labels.push(replacement);
+  group.add(replacement);
+  scene.updateMatrixWorld();
+
+  assert.equal(group.error, undefined, 'a full batch replacement must not wedge before queued removals publish');
+  assert.equal(group.children.find((child) => child.isMesh).geometry.instanceCount, 4_096);
+
+  group.dispose();
+  for (const label of labels) label.dispose();
+  font.dispose();
+  fontDomain.dispose();
+});
+
 test('TextGroup grows aggregate glyph storage without reserving one aggregate-sized paragraph', async () => {
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(

@@ -275,7 +275,11 @@ them through a nested parent, verifies physical transform-index ownership, and v
 Planner limits bound the complete pending publication rather than reserving their maximum up front. A reorder therefore
 preflights queued removals plus every live lifecycle upsert against `maxParagraphs`, while content updates count both
 pending style removals and upserts against `maxClusters`; either overflow throws at the originating call without changing
-the previously accepted desired state.
+the previously accepted desired state. Paragraph-record, content, and style accounting remain separate so an order-only
+change cannot consume a content-mutation budget. Content payloads are serialized in paragraph order because the retained
+engine consumes each paragraph's text, style, and geometry through forward-only cursors. At the exact paragraph cap,
+`TextGroup` synchronously publishes queued removals before applying the final permutation; both publications complete in
+the same traversal, so the renderer never exposes the temporary order.
 
 Three's ordinary scene traversal owns world-matrix composition. `TextGroup` tracks local matrices, visibility, and
 parent identity only below its shared draw root, then gives the executor the paragraph IDs whose relative transform

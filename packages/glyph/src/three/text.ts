@@ -715,6 +715,7 @@ class ThreeTextBatchBinding {
   readonly #inspections = new Map<Text<AnyRasterTechnique>, CanonicalInspection>();
   #capacity: GlyphBufferCapacity;
   #pendingPublication = false;
+  #pendingRemovalCount = 0;
   #rendererUpdateRejected = false;
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #materialInvalidated = false;
@@ -805,7 +806,15 @@ class ThreeTextBatchBinding {
       }
     }
     const handles = ordered.map((text) => this.#entries.get(text)!.handle);
-    if (ordered.some((text, order) => this.#entries.get(text)!.stagedOrder !== order)) {
+    const requiresReorder = ordered.some((text, order) => this.#entries.get(text)!.stagedOrder !== order);
+    if (requiresReorder && this.#pendingRemovalCount + this.#entries.size > MAX_PARAGRAPHS) {
+      if (!this.#pendingContentFitsCapacity()) {
+        for (const text of ordered) reconciler.bind(text, this, this.#group);
+        return;
+      }
+      this.#publishPending();
+    }
+    if (requiresReorder) {
       this.#planner.reorderTexts(handles);
       this.#pendingPublication = true;
       for (const [order, text] of ordered.entries()) this.#entries.get(text)!.stagedOrder = order;
@@ -849,6 +858,7 @@ class ThreeTextBatchBinding {
     this.#entries.delete(text);
     this.#inspections.delete(text);
     this.#pendingPublication = true;
+    this.#pendingRemovalCount += 1;
     reconciler.unbindFrom(text, this);
   }
 
@@ -915,7 +925,7 @@ class ThreeTextBatchBinding {
   synchronize(worldMatricesCurrent: boolean): void {
     this.#assertActive();
     this.#coordinator.assertFrameUpdateAllowed();
-    const required = [...this.#entries.keys()].reduce((total, text) => total + text.text.length, 0);
+    const required = this.#requiredTextUnits();
     if (this.#capacity.policy === 'fixed' && required > this.#capacity.size) {
       this.#capacityExceeded = Object.freeze({ required, size: this.#capacity.size });
       this.#target.syncTransforms(undefined, worldMatricesCurrent);
@@ -926,22 +936,7 @@ class ThreeTextBatchBinding {
       this.#target.syncTransforms(undefined, worldMatricesCurrent);
       return;
     }
-    const result = this.#planner.publish({
-      semanticViews: 'measurement',
-      compositing: this.#group?.compositing ?? 'ordered',
-    });
-    this.#pendingPublication = false;
-    if (!result.accepted) {
-      this.#rendererUpdateRejected = true;
-      throw result.error;
-    }
-    this.#rendererUpdateRejected = false;
-    this.#inspections.clear();
-    for (const [text, entry] of this.#entries) {
-      entry.committedRevision = entry.stagedRevision;
-      reconciler.markCommitted(text);
-      reconciler.publishMeasurement(text, entry.handle.measure());
-    }
+    this.#publishPending();
     this.#target.syncTransforms(undefined, worldMatricesCurrent);
   }
 
@@ -1038,6 +1033,38 @@ class ThreeTextBatchBinding {
     const inspection = entry.handle.glyphs();
     this.#inspections.set(text, { revision: entry.committedRevision, value: inspection });
     return inspection;
+  }
+
+  #requiredTextUnits(): number {
+    return [...this.#entries.keys()].reduce((total, text) => total + text.text.length, 0);
+  }
+
+  #pendingContentFitsCapacity(): boolean {
+    return this.#capacity.policy !== 'fixed' || this.#requiredTextUnits() <= this.#capacity.size;
+  }
+
+  #publishPending(): void {
+    if (!this.#pendingPublication) return;
+    this.#coordinator.assertFrameUpdateAllowed();
+    const result = this.#planner.publish({
+      semanticViews: 'measurement',
+      compositing: this.#group?.compositing ?? 'ordered',
+    });
+    this.#pendingPublication = false;
+    if (!result.accepted) {
+      this.#rendererUpdateRejected = true;
+      throw result.error;
+    }
+    this.#rendererUpdateRejected = false;
+    this.#pendingRemovalCount = 0;
+    this.#inspections.clear();
+    for (const [text, entry] of this.#entries) {
+      entry.committedRevision = entry.stagedRevision;
+      if (entry.stagedRevision === reconciler.desiredRevision(text)) {
+        reconciler.markCommitted(text);
+        reconciler.publishMeasurement(text, entry.handle.measure());
+      }
+    }
   }
 
   #assertActive(): void {
