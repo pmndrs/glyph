@@ -447,6 +447,7 @@ async function bakeDirect(
         kind: plan.baker.kind,
         version: plan.baker.version,
       })),
+      split: options.split,
     });
     if (freshness.fresh) {
       io.stdout.write(`${options.output} is up to date — ${freshness.reason}\n`);

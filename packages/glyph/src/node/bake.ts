@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
-import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
 
 import {
   createFontBaker,
+  FONT_BAKER_VERSION,
   type FontBakeDescriptor,
   type FontInspection,
   type PreparedFontReport,
@@ -179,7 +180,14 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
   options.signal?.throwIfAborted();
 
   const fontBaker = await defaultFontBaker();
-  const rasters = preparedRasters ?? (await Promise.all((options.rasters ?? []).map(resolveRasterBakePlan)));
+  const resolved = preparedRasters ?? (await Promise.all((options.rasters ?? []).map(resolveRasterBakePlan)));
+  // A companion is named from the core font it belongs to. Only a caller that writes files knows
+  // that name, and no filename carries a digest: the artifact already stamps its own identity.
+  const rasters = resolved.map((plan) =>
+    plan.packaging.artifact === 'external' && plan.companionName === undefined
+      ? { ...plan, companionName: companionFileName(output, plan.baker.kind) }
+      : plan,
+  );
   const pipeline = await bakeFontPipeline({
     fontBaker,
     source: originalSource,
@@ -361,6 +369,13 @@ function outputPath(font: DiscoveredFontDefinition, outputRoot: string | undefin
   }
   const base = outputRoot === undefined ? font.assetRoot : outputRoot;
   return join(base, bakedSiblingPath(sourceRelative));
+}
+
+/** `dir/Inter.font.glb` + `bitmap` becomes `Inter.bitmap.glb`, beside the core font. */
+function companionFileName(fontOutput: string, kind: string): string {
+  const name = basename(fontOutput);
+  const stem = name.endsWith('.font.glb') ? name.slice(0, -'.font.glb'.length) : name.replace(/\.glb$/i, '');
+  return `${stem}.${kind}.glb`;
 }
 
 function bakedSiblingPath(path: string): string {
@@ -579,6 +594,8 @@ export async function fontIsUpToDate(request: {
   readonly fontFaceIndex: number;
   readonly unicodeRanges?: readonly UnicodeRange[];
   readonly rasters: readonly { readonly rasterKey: string; readonly kind: string; readonly version: number }[];
+  /** A split bake writes companions beside the core, so the same rasters are a different result. */
+  readonly split: boolean;
 }): Promise<FontFreshness> {
   let existing: Uint8Array;
   try {
@@ -587,17 +604,22 @@ export async function fontIsUpToDate(request: {
     return { fresh: false, reason: 'no font at the output path' };
   }
 
-  const baker = await defaultFontBaker();
   const source = await readFile(request.input);
-  const prepared = baker.prepare({
-    source,
-    selection: {
-      formatVersion: 0,
-      fontFaceIndex: request.fontFaceIndex,
-      ...(request.unicodeRanges === undefined ? { unicodeRanges: [] } : { unicodeRanges: request.unicodeRanges }),
-    },
-  });
-  const sourceFingerprint = fingerprint128(prepared.bytes, fingerprintDomain.source);
+  // Mirror the bake exactly: naming no ranges bakes the source as it is, and preparing with an
+  // empty selection is not the same request — the baker rejects it outright.
+  let baked: Uint8Array = source;
+  if (request.unicodeRanges !== undefined) {
+    const baker = await defaultFontBaker();
+    baked = baker.prepare({
+      source,
+      selection: {
+        formatVersion: 0,
+        fontFaceIndex: request.fontFaceIndex,
+        unicodeRanges: request.unicodeRanges,
+      },
+    }).bytes;
+  }
+  const sourceFingerprint = fingerprint128(baked, fingerprintDomain.source);
 
   let document: Readonly<Record<string, unknown>>;
   try {
@@ -611,6 +633,9 @@ export async function fontIsUpToDate(request: {
   if (font.provenance?.sourceFingerprint !== sourceFingerprint) {
     return { fresh: false, reason: 'the source font, face, or unicode ranges changed' };
   }
+  if (font.provenance?.bakerVersion !== FONT_BAKER_VERSION) {
+    return { fresh: false, reason: 'a different core baker produced this font' };
+  }
 
   // Comparing raster keys alone would call an artifact fresh after the format changed, because a
   // key describes the request and not what was written. Compare the digest each raster actually
@@ -621,6 +646,25 @@ export async function fontIsUpToDate(request: {
   const shaping = String((font.shaping ?? {}).fingerprint);
   const directory = Array.isArray(font.rasters) ? (font.rasters as Record<string, unknown>[]) : [];
   const extensions = (document.extensions ?? {}) as Record<string, Record<string, unknown> | undefined>;
+  // The requested rasters must be exactly what the font carries, not merely a subset: a bake
+  // publishes the whole file, so an extra raster means the requested bake would remove it and
+  // produce different bytes. Without this a font could never be shrunk.
+  const present = new Set(directory.map((entry) => String(entry.rasterKey)));
+  const requested = new Set(request.rasters.map((raster) => raster.rasterKey));
+  if (present.size !== requested.size || [...requested].some((key) => !present.has(key))) {
+    return { fresh: false, reason: `the font carries ${present.size} raster(s) and ${requested.size} were requested` };
+  }
+
+  // Packaging is not part of compatibility — an embedded and a split raster are equally usable —
+  // but it decides which files a bake writes, so a split request against an embedded font is not
+  // satisfied by it.
+  const embedded =
+    directory.length > 0 &&
+    directory.every((entry) => (entry.source as { type?: string } | undefined)?.type === 'embedded');
+  if (directory.length > 0 && request.split === embedded) {
+    return { fresh: false, reason: request.split ? 'the font is packed, not split' : 'the font is split, not packed' };
+  }
+
   for (const raster of request.rasters) {
     const entry = directory.find((candidate) => candidate.rasterKey === raster.rasterKey);
     if (entry === undefined) return { fresh: false, reason: `${raster.kind} is not in the font` };
@@ -631,6 +675,7 @@ export async function fontIsUpToDate(request: {
       kind: raster.kind,
       rasterKey: raster.rasterKey,
       shaping,
+      source: sourceFingerprint,
       version: raster.version,
     });
     if (carried !== expected) return { fresh: false, reason: `${raster.kind} was baked by a different contract` };
