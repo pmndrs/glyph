@@ -15,6 +15,12 @@ sources:
   - id: root-entry
     resource: ../../packages/glyph/src/index.ts
     title: Root application entry point
+  - id: glyph-runtime
+    resource: ../../packages/glyph/src/glyph.ts
+    title: Root Glyph runtime and named handles
+  - id: glyph-config
+    resource: ../../packages/glyph/src/core/glyph-config.ts
+    title: GlyphConfig, decoder, resolver, and renderer contracts
   - id: core-entry
     resource: ../../packages/glyph/src/core.ts
     title: Renderer-neutral integration entry point
@@ -39,10 +45,30 @@ generated:
 
 Glyph has two additive public surfaces:
 
-- <code>@pmndrs/glyph</code> is application vocabulary: immutable fonts, font stacks, formatted text, Paragraph, layout values, technique definition, loading, and baking;
-- <code>@pmndrs/glyph/core</code> is integration machinery: engine, backend, policy, bindings, render planners, plan targets, portable resource contracts, and semantic plan readers.
+- <code>@pmndrs/glyph</code> is application vocabulary: the initialized <code>glyph</code> runtime, immutable fonts, font stacks, formatted text, Paragraph, layout values, technique definition, loading, and baking;
+- <code>@pmndrs/glyph/core</code> is integration machinery: <code>GlyphConfig</code>, Codec/decode/resolve/renderer contracts, engine, backend, policy ABI, bindings, render planners, plan targets, portable resource contracts, and semantic plan readers.
 
 Three and React are integrations over those surfaces. Canvas, scene, GPU device, material, pipeline, and render pass remain renderer-owned.
+
+## Root Glyph runtime and handles
+
+Application adapters share one process-local engine initialization and create named, independently disposable handles:
+
+<pre><code>import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+
+await glyph.init();
+const labels = glyph.handle('labels', ThreeConfig);
+const hud = glyph.handle('hud', { ...ThreeConfig, decode: instrumentedDecoder });
+
+labels.dispose();
+hud.dispose();</code></pre>
+
+Concurrent or repeated <code>glyph.init()</code> calls share the same initialization. A live name is unique; disposal releases the name for reuse. Handles share only immutable root assets and the initialized engine. Each handle owns its adapter backend, Codec registration, bound font/resource state, and factories. Multiple handles and multiple scenes may coexist; a handle is neither a scene nor a render pass.
+
+<code>GlyphConfig.encode()</code> supplies the adapter's <code>Codec</code>. The engine creates the canonical borrowed typed command buffer. <code>decode</code> is explicit in the config and normally points to <code>defaultDecoder</code>; a type-safe wrapper may inspect phases or substitute a compatible decoder. <code>resolve</code> returns counted resource leases. Finally <code>renderer.prepare()</code> receives a borrowed <code>BorrowedBoundCommandBuffer</code> organized into resource, buffer, patch, primitive, draw, and retirement phases. All renderer-facing identities are objects chosen by the config's binding vocabulary; ordinary renderer code never receives numeric plan IDs.
+
+<code>applyGlyphPublication()</code> is the renderer-neutral decode → prepare → commit/discard transaction shared by the built-in Three adapter and the example renderer. <code>GlyphCommandBufferBinder</code> retains stable bindings across publications and settles candidate-only resource leases on acceptance or rejection. These helpers are the preferred implementation seam for another adapter; the lower-level planner/target readers below remain available when an integration needs to own the complete transport.
 
 ## Application-owned fonts
 

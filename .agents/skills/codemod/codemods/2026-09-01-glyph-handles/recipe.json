@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-01-glyph-handles",
+  "created": "2026-09-01",
+  "package": "@pmndrs/glyph",
+  "from": "canary before the root Glyph handle API",
+  "to": "canary at or after the root Glyph handle API",
+  "summary": "Initialize the root Glyph runtime, construct Three objects through named handles, and inject a selected handle into R3F.",
+  "instructions": "./instructions.md",
+  "transform": "./transform.mjs",
+  "changes": [
+    {
+      "kind": "call-rewrite",
+      "from": "new Text(properties)",
+      "to": "three.createText(properties)",
+      "automatic": false
+    },
+    {
+      "kind": "call-rewrite",
+      "from": "new TextGroup(options)",
+      "to": "three.createTextGroup(options)",
+      "automatic": false
+    },
+    {
+      "kind": "manual",
+      "from": "implicit Three font-derived runtime selection",
+      "to": "await glyph.init(); const three = glyph.handle(name, ThreeConfig)",
+      "automatic": false
+    },
+    {
+      "kind": "manual",
+      "from": "R3F Text without an adapter selection",
+      "to": "GlyphProvider handle selection or an explicit handle prop",
+      "automatic": false
+    }
+  ],
+  "verification": [
+    "mise exec -- pnpm --filter @pmndrs/glyph exec tsc -p tsconfig.types.json --noEmit",
+    "mise exec -- pnpm --filter @pmndrs/glyph test"
+  ]
+}

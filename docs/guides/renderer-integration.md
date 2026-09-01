@@ -1,7 +1,7 @@
 ---
 type: How-to guide
 title: Integrate a renderer with Glyph
-description: Builds a renderer integration from immutable fonts through a Glyph engine, backend, render planner, resource realization, plan acceptance, and disposal.
+description: Builds a GlyphConfig renderer adapter with typed decode, resource binding, transactional preparation, and an optional low-level engine/backend/planner implementation.
 tags: [renderer, core, policy, render-plan, retention, wasm]
 sources:
   - id: engine-call-contract
@@ -10,6 +10,15 @@ sources:
   - id: example-engine
     resource: ../../packages/glyph-example-renderer/src/engine.ts
     title: Example renderer engine
+  - id: glyph-config-contract
+    resource: ../../packages/glyph/src/core/glyph-config.ts
+    title: GlyphConfig and renderer-neutral publication helpers
+  - id: example-config
+    resource: ../../packages/glyph-example-renderer/src/config.ts
+    title: Example renderer GlyphConfig
+  - id: example-binder
+    resource: ../../packages/glyph-example-renderer/src/command-buffer.ts
+    title: Example renderer command-buffer binder
   - id: example-device
     resource: ../../packages/glyph-example-renderer/src/device.ts
     title: Example renderer device
@@ -35,13 +44,65 @@ generated:
 
 # Integrate a renderer with Glyph
 
-This guide is for an engine implementor. It uses application assets from `@pmndrs/glyph` and integration machinery from
-`@pmndrs/glyph/core`. The result owns a Glyph engine, installs a renderer policy, binds immutable fonts, retains
-text, realizes renderer resources, and accepts revisioned draw plans.
+This guide is for a renderer-adapter implementor. Prefer the root `glyph` + `GlyphConfig` path: it standardizes one engine,
+named handles, typed decode/bind phases, resource leases, and transactional renderer preparation. Use the lower-level
+engine/backend/planner path later in this guide only when the integration deliberately needs to own transport, async plan
+delivery, worker boundaries, or custom target scheduling.
 
-The executable reference is [`glyph-example-renderer`](../../packages/glyph-example-renderer/src/engine.ts). It uses a
+The executable reference is [`glyph-example-renderer`](../../packages/glyph-example-renderer/src/config.ts). It uses a
 real font, the external [`glyph-example-raster`](../../packages/glyph-example-raster/src/raster.ts) technique, supplied
 indexed geometry, TypeGPU-generated WGSL, a concrete WebGPU device, and non-empty pixel-producing draws.
+
+## Preferred adapter shape
+
+Keep the five config responsibilities explicit:
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { applyGlyphPublication, defaultDecoder, defineGlyphConfig, resourceLease } from '@pmndrs/glyph/core';
+
+export const MyConfig = defineGlyphConfig<MyHandle, MyBindings, void, PortableResource>({
+  capabilities,
+  encode: ({ ids }) => ({ descriptor: rendererCodec(ids) }),
+  decode: defaultDecoder,
+  resolve: ({ payload, previous, signal }) => {
+    const resolved = resolvePortableResource(payload, previous, signal);
+    return resourceLease(resolved, () => resolved.dispose());
+  },
+  renderer: (context) => new MyRenderer(context),
+  createHandle: (context) => {
+    const domain = new MyHandleDomain(context.engine, context.config);
+    return context.create(domain.publicFactories, () => domain.dispose());
+  },
+});
+
+await glyph.init();
+const handle = glyph.handle('main', MyConfig);
+```
+
+The handle domain creates one binder and renderer per private publication boundary. Its target acceptance should be the
+shared transaction, not another handwritten error path:
+
+```ts
+accept(candidate, signal) {
+  return applyGlyphPublication(candidate, signal, config.decode, binder, renderer);
+}
+```
+
+Implement `GlyphCommandBufferBinder` once per adapter. `source()` associates the borrowed engine candidate,
+`decodeDefault()` reads canonical tables and replaces every numeric ID with a stable adapter object, and `settle()`
+promotes or discards candidate binding/resource state. Retain buffer/resource generations across patch-only frames.
+Never expose the candidate association to ordinary renderer consumers; a private `WeakMap` bridge is acceptable while
+migrating an existing physical backend.
+
+`resolve` needs only the host dependency required to construct a resource. Three resolves JavaScript resource objects
+without a renderer, scene, canvas, context, or device. A raw WebGPU adapter captures an initialized `GPUDevice` in its
+config/handle closure because `device.create*` requires it; a `GPUCanvasContext` belongs to later presentation unless a
+resource is genuinely canvas-specific.
+
+The config renderer prepares retained host state; it does not submit the host frame. `prepare(frame)` must return one
+commit/discard transaction, `syncTransforms()` must stay independent from semantic publication, and `dispose()` releases
+the boundary's renderer state. The host renderer/device still builds and submits the actual render pass.
 
 ## Lifecycle at a glance
 

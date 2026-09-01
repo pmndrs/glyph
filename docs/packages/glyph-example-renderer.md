@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:2cfbf44de5a88cdcc1c27336e3461653b07dbceec6afb0e5571b1cacd7349f8d'
+source_digest: 'sha256:0bdb422d29520236a6054346217d9261e5f52ce249e0b41d0f56d4c5c017971f'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -14,6 +14,12 @@ sources:
   - id: engine-driver
     resource: ../../packages/glyph-example-renderer/src/engine.ts
     title: Retention-protocol frame driver
+  - id: glyph-config
+    resource: ../../packages/glyph-example-renderer/src/config.ts
+    title: Example GlyphConfig and named handle
+  - id: command-binder
+    resource: ../../packages/glyph-example-renderer/src/command-buffer.ts
+    title: Example bound command-buffer binder
   - id: policy
     resource: ../../packages/glyph-example-renderer/src/policy.ts
     title: Backend-authored system lanes and render policy
@@ -58,7 +64,19 @@ portable policy body. Capability wire IDs are automatic; stable author-owned ide
 The package root exposes a custom `source` condition for opted-in workspace tools; default consumers still resolve its
 built ESM and declarations.
 
-`ExampleTextEngine` receives a `GlyphEngine`, creates its backend through `glyphEngine.createBackend()`, installs its policy,
+The ordinary proof begins with `await glyph.init()` and `glyph.handle(name, defineExampleConfig(device))`. Its
+`GlyphConfig` uses the shared default decoder, resolves portable resources into counted object bindings, and gives
+phase-structured bound frames to a configured renderer. The same config can be spread or wrapped to instrument encode,
+decode, resolve, preparation, transform synchronization, and disposal. Two handle publications prove this path without
+exposing plan IDs to the config renderer.
+
+`ExampleCommandBufferBinder` is independent from Three. It interns stable program, buffer, primitive, and draw objects;
+retains buffer generations across patch-only publications; resolves resources transactionally; and releases payload plus
+resolver leases after retirement, rejection, or disposal. The renderer-facing frame contains object bindings only. A
+private weak association retains the legacy numeric draw list for the concrete device oracle, demonstrating how an
+adapter can migrate its physical backend without leaking that bridge into `GlyphConfig`.
+
+`ExampleTextEngine` remains the low-level `/core` escape hatch. It receives a `GlyphEngine`, creates its backend through `glyphEngine.createBackend()`, installs its policy,
 binds immutable fonts/stacks, opens one synchronous `RenderPlanner`, and exposes `createText()`, `update()`, `publish()`,
 and disposal. The render planner owns every paragraph/style/flow identity and one `PlanTarget`; callers do not author raw IDs,
 revisions, acknowledgments, request bytes, or ABI numbers. `measure()` and `glyphs()` remain available on the retained core
