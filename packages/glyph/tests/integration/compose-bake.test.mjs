@@ -35,6 +35,7 @@ before(async () => {
   const rasterKey = bitmapRasterKey({ strikes: [16] });
   context = {
     rasterKey,
+    sourceFingerprint: coreValidation.sourceFingerprint,
     shapingFingerprint: coreValidation.shapingFingerprint,
     glyphCount: coreValidation.glyphCount,
     glyphIdWidth: 16,
@@ -124,7 +125,10 @@ test('rebases opaque buffer-view references for multiple distinct embedded exten
 });
 
 test('emits an external companion that carries every page inside it', async () => {
-  const result = await composeFontBake(core, [{ raster: bitmapExternal, packaging: { artifact: 'external' } }]);
+  // The Node bake names a companion from its core font, and the golden pins that same name.
+  const result = await composeFontBake(core, [
+    { raster: bitmapExternal, packaging: { artifact: 'external' }, companionName: 'Inter-Regular.bitmap.glb' },
+  ]);
   assert.deepEqual(summarize(result), golden.composed.external);
   // A companion is one file: pages travel inside it, never beside it.
   assert.deepEqual(
@@ -138,7 +142,7 @@ test('emits an external companion that carries every page inside it', async () =
       kind: 'bitmap',
       extension: 'PMNDRS_font_bitmap',
       version: 0,
-      source: { type: 'external', uri: bitmapExternal.artifacts[0].id },
+      source: { type: 'external', uri: 'Inter-Regular.bitmap.glb' },
     },
   ]);
   await validateBitmapArtifact(result.artifacts[1].bytes, context);
@@ -195,6 +199,7 @@ function customRaster(source, rasterKey, extension) {
     kind: 'studio.custom',
     rasterKey,
     shaping: context.shapingFingerprint,
+    source: context.sourceFingerprint,
     version: 0,
   });
   document.extensions[extension] = data;

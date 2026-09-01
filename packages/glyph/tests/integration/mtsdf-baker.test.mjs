@@ -20,7 +20,7 @@ import {
 } from '@pmndrs/glyph/raster/msdf';
 import { mtsdfBakerAbi } from '../../dist/mtsdf-baker-abi.js';
 import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
-import { interShapingFingerprint } from '../support/inter-identity.mjs';
+import { interShapingFingerprint, interSourceFingerprint } from '../support/inter-identity.mjs';
 
 const wasmUrl = new URL('../../dist/mtsdf-baker.wasm', import.meta.url);
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
@@ -143,6 +143,7 @@ test('bakes and validates fingerprinted 32 px/em quality policies', async () => 
     assert.equal(extension.planeUnitsPerEm, 32);
     const validated = await validateMsdfArtifact(raster.bytes, {
       rasterKey,
+      sourceFingerprint,
       shapingFingerprint: showcaseShapingFingerprint,
       glyphCount: 155,
       glyphIdWidth: 16,
@@ -151,7 +152,12 @@ test('bakes and validates fingerprinted 32 px/em quality policies', async () => 
     assert.equal(validated.pages.length, result.report.pages.length);
     if (pixelRange === 4) {
       const { document, views } = glbViews(raster.bytes);
-      const font = { handle: 7, shapingFingerprint: showcaseShapingFingerprint, glyphCount: 155 };
+      const font = {
+        handle: 7,
+        sourceFingerprint,
+        shapingFingerprint: showcaseShapingFingerprint,
+        glyphCount: 155,
+      };
       const runtimeRaster = {
         font: font.handle,
         handle: 11,
@@ -202,6 +208,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   assert.ok(progress.every((entry) => entry[1] === 2));
   const validated = await validateMsdfArtifact(raster.bytes, {
     rasterKey,
+    sourceFingerprint,
     shapingFingerprint,
     glyphCount: 2937,
     glyphIdWidth: 16,
@@ -214,7 +221,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   );
 
   const { document, views } = glbViews(raster.bytes);
-  const font = { handle: 7, shapingFingerprint, glyphCount: 2937 };
+  const font = { handle: 7, sourceFingerprint, shapingFingerprint, glyphCount: 2937 };
   const runtimeRaster = {
     font: font.handle,
     handle: 11,
@@ -362,6 +369,7 @@ function glbRoot(bytes) {
 async function exerciseArtifactValidation(result, rasterArtifact, rasterKey) {
   const context = {
     rasterKey,
+    sourceFingerprint: interSourceFingerprint,
     shapingFingerprint,
     glyphCount: 2937,
     glyphIdWidth: 16,
@@ -517,6 +525,7 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   const runtimeExtension = structuredClone(extension);
   const font = {
     handle: 7,
+    sourceFingerprint: interSourceFingerprint,
     shapingFingerprint,
     glyphCount: 2937,
   };

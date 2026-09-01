@@ -52,11 +52,15 @@ const [embedded, external] = await Promise.all([
 ]);
 const [combinedEmbedded, combinedExternal, empty] = await Promise.all([
   composeFontBake(core, [{ raster: embedded, packaging: { artifact: 'embedded' } }]),
-  composeFontBake(core, [{ raster: external, packaging: { artifact: 'external' } }]),
+  // The Node bake names a companion from its core font, so the golden must pin that same name.
+  composeFontBake(core, [
+    { raster: external, packaging: { artifact: 'external' }, companionName: 'Inter-Regular.bitmap.glb' },
+  ]),
   composeFontBake(core, []),
 ]);
 const context = {
   rasterKey,
+  sourceFingerprint: coreValidation.sourceFingerprint,
   shapingFingerprint: coreValidation.shapingFingerprint,
   glyphCount,
   glyphIdWidth: 16,
@@ -84,6 +88,7 @@ const fixture = {
     fingerprint: coreValidation.sourceFingerprint,
     faceIndex: 0,
     glyphCount,
+    sourceFingerprint: coreValidation.sourceFingerprint,
     shapingFingerprint: coreValidation.shapingFingerprint,
   },
   descriptor,

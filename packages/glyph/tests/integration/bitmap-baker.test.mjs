@@ -137,6 +137,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   assert.ok(progress.every((entry) => entry[1] === 2));
   const validated = await validateBitmapArtifact(raster.bytes, {
     rasterKey,
+    sourceFingerprint,
     shapingFingerprint,
     glyphCount: 2937,
     glyphIdWidth: 16,
@@ -149,7 +150,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   );
 
   const { document, views } = glbViews(raster.bytes);
-  const font = { handle: 7, shapingFingerprint, glyphCount: 2937 };
+  const font = { handle: 7, sourceFingerprint, shapingFingerprint, glyphCount: 2937 };
   const runtimeRaster = {
     font: font.handle,
     handle: 11,

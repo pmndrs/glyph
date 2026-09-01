@@ -13,6 +13,7 @@ const GLB_MAGIC = 0x4654_6c67;
 const JSON_CHUNK = 0x4e4f_534a;
 const BIN_CHUNK = 0x004e_4942;
 const shapingFingerprint = interShapingFingerprint;
+const sourceFingerprint = interSourceFingerprint;
 const descriptor = bitmapDescriptor({ strikes: [16] });
 let rasterKey;
 let embedded;
@@ -52,7 +53,7 @@ before(async () => {
       descriptor,
     }),
   ]);
-  context = { rasterKey, shapingFingerprint, glyphCount: 2937, glyphIdWidth: 16, descriptor };
+  context = { rasterKey, sourceFingerprint, shapingFingerprint, glyphCount: 2937, glyphIdWidth: 16, descriptor };
 });
 
 test('matches the exact canonical Inter bitmap identities and payload bytes', async () => {
@@ -308,6 +309,7 @@ test('validates the pinned 65,535-glyph dense-record and multi-page boundary', a
           kind: 'bitmap',
           rasterKey,
           shaping: shapingFingerprint,
+          source: sourceFingerprint,
           version: 0,
         }),
         strikes: [

@@ -71,9 +71,10 @@ test('the compatibility digest matches its published canonical form', async () =
       kind: 'bitmap',
       rasterKey: 'd1dcd31304f795b5f2c497c579aa29f0',
       shaping: '0c522d6ea0db73ba74bcc389dc50263b',
+      source: '14fa0a34f3783dd4f131d5b546e453b7',
       version: 0,
     }),
-    '8b23c028dd6cd2d31a61b00c35bbcbe0',
+    '657b9a49c37a4c85f3247df62e408479',
   );
   assert.equal(corpus.seeds.compatibility ?? 0x636d7030, fingerprintDomain.compatibility);
 });
