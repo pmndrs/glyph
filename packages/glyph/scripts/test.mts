@@ -8,6 +8,9 @@ const completeRustTargets = [
 ] as const;
 
 const libraryRustManifests = [
+  // raster-artifact defines fingerprint128 and every domain seed. Its tests were linted but
+  // never executed until it was listed here.
+  'rust/raster-artifact/Cargo.toml',
   'rust/mtsdf-core/Cargo.toml',
   'rust/mtsdf-baker/Cargo.toml',
   'rust/mtsdf-admission/Cargo.toml',
