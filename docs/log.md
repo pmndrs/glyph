@@ -2,6 +2,12 @@
 
 ## 2026-09-01
 
+- **Made loaded R3F FontFace use synchronous** — D-299 requires React to check `handle.isLoaded(selection)` before
+  conditionally calling React 19 `use(handle.load(selection))`. The graph publishes the complete decoded selection and
+  face lease before fulfilling the stable Promise, so the resolved render skips `use()` and pays no Promise, microtask, or
+  Suspense stall. Only an authorized unloaded provider selection may start a load; failures never publish partial
+  readiness.
+
 - **Collapsed the planned FontFace cache surfaces into Glyph** — D-298 records that Three's base `Loader` supplies no
   cache or dependency discovery, Three's URL-only `FileLoader` cache is not used by Glyph's current loader, and current R3F
   adds a separate `useLoader`/`suspend-react` cache. The FontFace path instead makes `handle.load()` enter the sole Glyph
