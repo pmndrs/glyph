@@ -7,6 +7,13 @@
  */
 export type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResourceRecord } from './draw-list.js';
 export { ExampleText, ExampleTextEngine, type ExampleTextOptions, type ExampleTextUpdate } from './engine.js';
+export {
+  defineExampleConfig,
+  type ExampleBindings,
+  type ExampleGlyphConfig,
+  type ExampleHandle,
+  type ExampleResolvedResource,
+} from './config.js';
 export type { ExampleTableSnapshot } from './snapshot.js';
 export {
   exampleRendererShader,

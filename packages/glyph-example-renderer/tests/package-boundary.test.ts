@@ -27,7 +27,8 @@ describe('package boundary', () => {
         ([, specifier]) => specifier!,
       );
       const allowed = new Set(['@pmndrs/glyph/core', '@pmndrs/glyph/text-shaper.wasm']);
-      if (file === 'src/engine.ts') allowed.add('@pmndrs/glyph');
+      if (file === 'src/engine.ts' || file === 'src/config.ts') allowed.add('@pmndrs/glyph');
+      if (file === 'tests/example-engine.test.ts') allowed.add('@pmndrs/glyph');
       if (file === 'tests/example-render.test.ts') {
         allowed.add('@pmndrs/glyph');
         allowed.add('@pmndrs/glyph/bake');
