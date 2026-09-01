@@ -16,47 +16,137 @@
     "licenseFile": "LICENSE.txt",
     "licenseSha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
     "transport": {
-      "compression": { "gzipLevel": 9, "brotliQuality": 9 },
+      "compression": {
+        "gzipLevel": 9,
+        "brotliQuality": 9
+      },
       "rawBytes": 16467736,
       "gzipBytes": 13629545,
       "brotliBytes": 12365597
     }
   },
-  "face": { "fontIndex": 0, "variations": {}, "glyphCount": 65535, "glyphIdWidth": 16 },
+  "face": {
+    "fontIndex": 0,
+    "variations": {},
+    "glyphCount": 65535,
+    "glyphIdWidth": 16
+  },
   "inspection": {
-    "cmapFormats": [4, 6, 12, 14],
+    "cmapFormats": [
+      4,
+      6,
+      12,
+      14
+    ],
     "tables": [
-      { "tag": "BASE", "bytes": 240 },
-      { "tag": "CFF ", "bytes": 15458582 },
-      { "tag": "DSIG", "bytes": 8 },
-      { "tag": "GDEF", "bytes": 28 },
-      { "tag": "GPOS", "bytes": 47386 },
-      { "tag": "GSUB", "bytes": 177152 },
-      { "tag": "OS/2", "bytes": 96 },
-      { "tag": "VORG", "bytes": 920 },
-      { "tag": "cmap", "bytes": 257193 },
-      { "tag": "head", "bytes": 54 },
-      { "tag": "hhea", "bytes": 36 },
-      { "tag": "hmtx", "bytes": 262134 },
-      { "tag": "maxp", "bytes": 6 },
-      { "tag": "name", "bytes": 2146 },
-      { "tag": "post", "bytes": 32 },
-      { "tag": "vhea", "bytes": 36 },
-      { "tag": "vmtx", "bytes": 261386 }
+      {
+        "tag": "BASE",
+        "bytes": 240
+      },
+      {
+        "tag": "CFF ",
+        "bytes": 15458582
+      },
+      {
+        "tag": "DSIG",
+        "bytes": 8
+      },
+      {
+        "tag": "GDEF",
+        "bytes": 28
+      },
+      {
+        "tag": "GPOS",
+        "bytes": 47386
+      },
+      {
+        "tag": "GSUB",
+        "bytes": 177152
+      },
+      {
+        "tag": "OS/2",
+        "bytes": 96
+      },
+      {
+        "tag": "VORG",
+        "bytes": 920
+      },
+      {
+        "tag": "cmap",
+        "bytes": 257193
+      },
+      {
+        "tag": "head",
+        "bytes": 54
+      },
+      {
+        "tag": "hhea",
+        "bytes": 36
+      },
+      {
+        "tag": "hmtx",
+        "bytes": 262134
+      },
+      {
+        "tag": "maxp",
+        "bytes": 6
+      },
+      {
+        "tag": "name",
+        "bytes": 2146
+      },
+      {
+        "tag": "post",
+        "bytes": 32
+      },
+      {
+        "tag": "vhea",
+        "bytes": 36
+      },
+      {
+        "tag": "vmtx",
+        "bytes": 261386
+      }
     ],
     "mappings": [
-      { "codePoints": ["U+2000B"], "mapping": { "kind": "nominal", "glyphId": 59477 } },
       {
-        "codePoints": ["U+3001", "U+FE00"],
-        "mapping": { "kind": "useDefault", "glyphId": 1397 }
+        "codePoints": [
+          "U+2000B"
+        ],
+        "mapping": {
+          "kind": "nominal",
+          "glyphId": 59477
+        }
       },
       {
-        "codePoints": ["U+3002", "U+FE01"],
-        "mapping": { "kind": "variant", "glyphId": 63146 }
+        "codePoints": [
+          "U+3001",
+          "U+FE00"
+        ],
+        "mapping": {
+          "kind": "useDefault",
+          "glyphId": 1397
+        }
       },
       {
-        "codePoints": ["U+79B0", "U+E0100"],
-        "mapping": { "kind": "variant", "glyphId": 61979 }
+        "codePoints": [
+          "U+3002",
+          "U+FE01"
+        ],
+        "mapping": {
+          "kind": "variant",
+          "glyphId": 63146
+        }
+      },
+      {
+        "codePoints": [
+          "U+79B0",
+          "U+E0100"
+        ],
+        "mapping": {
+          "kind": "variant",
+          "glyphId": 61979
+        }
       }
     ]
   },
@@ -64,11 +154,10 @@
   "bake": {
     "bakerVersion": "0.0.0",
     "formatVersion": 0,
-    "descriptorFingerprint": "b7ce185ebb8b55f9077237a24bb9d93b",
     "expectedCore": {
-      "artifactBytes": 1540488,
-      "artifactFingerprint": "4c8ad8b43f94d5236956710827f2325a",
-      "artifactSha256": "156e8bce44799a180a765274e540a8fadb22b768fa56dd4f293244c8044f15ff",
+      "artifactBytes": 1540428,
+      "artifactFingerprint": "451bdcf5116fded6a9b9eaa3ee15695b",
+      "artifactSha256": "b8a3f71cdb33e23652d09ae141d499173b90df7525b45f3e411bf007af8fc389",
       "shapingFingerprint": "ebc337d9a558ea41ae0584ea19e0df74",
       "shapingSfntBytes": 1006900,
       "shapingSfntSha256": "0461316ade447b891e027b2deb4d8cdde0a6a31feb5dc7a529d556be311118d7",
@@ -84,24 +173,87 @@
       "strikeoutPosition": 325,
       "strikeoutSize": 50,
       "tables": [
-        { "tag": "BASE", "rawBytes": 240, "paddedBytes": 240 },
-        { "tag": "GDEF", "rawBytes": 28, "paddedBytes": 28 },
-        { "tag": "GPOS", "rawBytes": 47386, "paddedBytes": 47388 },
-        { "tag": "GSUB", "rawBytes": 177152, "paddedBytes": 177152 },
-        { "tag": "OS/2", "rawBytes": 96, "paddedBytes": 96 },
-        { "tag": "VORG", "rawBytes": 920, "paddedBytes": 920 },
-        { "tag": "cmap", "rawBytes": 257193, "paddedBytes": 257196 },
-        { "tag": "head", "rawBytes": 54, "paddedBytes": 56 },
-        { "tag": "hhea", "rawBytes": 36, "paddedBytes": 36 },
-        { "tag": "hmtx", "rawBytes": 262134, "paddedBytes": 262136 },
-        { "tag": "maxp", "rawBytes": 6, "paddedBytes": 8 },
-        { "tag": "vhea", "rawBytes": 36, "paddedBytes": 36 },
-        { "tag": "vmtx", "rawBytes": 261386, "paddedBytes": 261388 }
+        {
+          "tag": "BASE",
+          "rawBytes": 240,
+          "paddedBytes": 240
+        },
+        {
+          "tag": "GDEF",
+          "rawBytes": 28,
+          "paddedBytes": 28
+        },
+        {
+          "tag": "GPOS",
+          "rawBytes": 47386,
+          "paddedBytes": 47388
+        },
+        {
+          "tag": "GSUB",
+          "rawBytes": 177152,
+          "paddedBytes": 177152
+        },
+        {
+          "tag": "OS/2",
+          "rawBytes": 96,
+          "paddedBytes": 96
+        },
+        {
+          "tag": "VORG",
+          "rawBytes": 920,
+          "paddedBytes": 920
+        },
+        {
+          "tag": "cmap",
+          "rawBytes": 257193,
+          "paddedBytes": 257196
+        },
+        {
+          "tag": "head",
+          "rawBytes": 54,
+          "paddedBytes": 56
+        },
+        {
+          "tag": "hhea",
+          "rawBytes": 36,
+          "paddedBytes": 36
+        },
+        {
+          "tag": "hmtx",
+          "rawBytes": 262134,
+          "paddedBytes": 262136
+        },
+        {
+          "tag": "maxp",
+          "rawBytes": 6,
+          "paddedBytes": 8
+        },
+        {
+          "tag": "vhea",
+          "rawBytes": 36,
+          "paddedBytes": 36
+        },
+        {
+          "tag": "vmtx",
+          "rawBytes": 261386,
+          "paddedBytes": 261388
+        }
       ],
       "transport": {
-        "compression": { "gzipLevel": 9, "brotliQuality": 9 },
-        "shapingPayload": { "rawBytes": 1539372, "gzipBytes": 654925, "brotliBytes": 514547 },
-        "artifact": { "rawBytes": 1540468, "gzipBytes": 655925, "brotliBytes": 515615 }
+        "compression": {
+          "gzipLevel": 9,
+          "brotliQuality": 9
+        },
+        "shapingPayload": {
+          "rawBytes": 1539372,
+          "gzipBytes": 654925,
+          "brotliBytes": 514547
+        },
+        "artifact": {
+          "rawBytes": 1540468,
+          "gzipBytes": 655925,
+          "brotliBytes": 515615
+        }
       }
     }
   },
