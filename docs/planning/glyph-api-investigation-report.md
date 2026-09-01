@@ -1335,9 +1335,15 @@ text intact.
 
 R3F accepts FontFace selections and strings at its declarative boundary, but automatic loading is an explicit provider
 capability. The nearest immutable `GlyphProvider fonts` map supplies aliases and the set of faces whose `load()` operations
-the subtree may start. For one of those mapped selections, React calls `use(handle.load(selection))` and constructs or
-updates the Three object only after the stable Promise resolves. Calling `void handle.load(selection)` before rendering
-starts the same operation early; there is no separate preload cache or API.
+the subtree may start. React first calls `handle.isLoaded(selection)`. A loaded selection takes the synchronous fast path;
+an authorized unloaded selection conditionally calls `use(handle.load(selection))` and constructs or updates the Three
+object only after the stable Promise resolves. React 19 permits conditional `use()`. Calling `void handle.load(selection)`
+before rendering starts the same operation early; there is no separate preload cache or API.
+
+The graph commits the fully decoded selection and face-owned lease before fulfilling the load Promise. Therefore the
+rerender after resolution observes `handle.isLoaded(selection) === true` and skips `use()` entirely—there is no fulfilled
+Promise allocation, observation, microtask wait, or Suspense pass on the loaded path. A failed load never publishes partial
+readiness.
 
 Without a provider font map, R3F may use a loaded direct selection or loaded root-catalog name, but it does not initiate a
 load. An unloaded selection throws the same load-before-use error as imperative Three. This keeps hidden network and
@@ -1545,16 +1551,16 @@ in-process cache.
 
 D-298 distinguishes orchestration caches from Glyph's semantic resource ownership.
 
-| Surface                        | Verified current behavior                                                                                                                                                       | FontFace direction                                                                                                                               |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `THREE.Loader`                 | `loadAsync()` only wraps the subclass's `load()` in a Promise. It provides no cache and no dependency discovery.                                                                | Remains only an adapter shape.                                                                                                                   |
-| `THREE.FileLoader` r185        | Coalesces concurrent requests in a module-global table by resolved URL. Completed values enter URL-only `THREE.Cache` only when `Cache.enabled` is set; it defaults to false.   | Not an authoritative cache because URL alone cannot express content authentication, Request semantics, dependency leases, or technique identity. |
-| Current `/three` `FontLoader`  | Extends `THREE.Loader`, reports one display URL through `LoadingManager`, and delegates to root `loadFont()` or an optional `FontLibrary`; it never creates `THREE.FileLoader`. | A compatibility/progress adapter may remain, but `handle.load()` and the Glyph graph own loading and cache lifetime.                             |
-| Current top-level `loadFont()` | Coalesces an exact composite request only while it is in flight.                                                                                                                | Compatibility calls route into the graph.                                                                                                        |
-| Current `FontLibrary`          | Retains successful exact composite request entries with bounded LRU eviction.                                                                                                   | Its separate semantic cache is unnecessary for FontFace; the face and downstream graph leases provide deterministic ownership.                   |
-| Current R3F `useFont()`        | R3F `useLoader`/`suspend-react` caches by `[ReactFontLoader, immutableFontRequestKey]`; `ReactFontLoader` owns the cached Font and `clear()` releases it.                       | Provider/Text call `use(handle.load(selection))`; React suspends on Glyph's stable graph promise and owns only mounted leases.                   |
-| Browser HTTP cache             | Applies underneath `fetch()` according to ordinary request and response policy.                                                                                                 | Remains a transport optimization, not a Font/technique ownership model.                                                                          |
-| Runtime Worker `CacheStorage`  | Optionally persists one validated composed GLB when source freshness permits it.                                                                                                | Remains the cross-page acceleration for authenticated TTF/OTF bakes; the graph guarantees in-process reuse.                                      |
+| Surface                        | Verified current behavior                                                                                                                                                       | FontFace direction                                                                                                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `THREE.Loader`                 | `loadAsync()` only wraps the subclass's `load()` in a Promise. It provides no cache and no dependency discovery.                                                                | Remains only an adapter shape.                                                                                                                          |
+| `THREE.FileLoader` r185        | Coalesces concurrent requests in a module-global table by resolved URL. Completed values enter URL-only `THREE.Cache` only when `Cache.enabled` is set; it defaults to false.   | Not an authoritative cache because URL alone cannot express content authentication, Request semantics, dependency leases, or technique identity.        |
+| Current `/three` `FontLoader`  | Extends `THREE.Loader`, reports one display URL through `LoadingManager`, and delegates to root `loadFont()` or an optional `FontLibrary`; it never creates `THREE.FileLoader`. | A compatibility/progress adapter may remain, but `handle.load()` and the Glyph graph own loading and cache lifetime.                                    |
+| Current top-level `loadFont()` | Coalesces an exact composite request only while it is in flight.                                                                                                                | Compatibility calls route into the graph.                                                                                                               |
+| Current `FontLibrary`          | Retains successful exact composite request entries with bounded LRU eviction.                                                                                                   | Its separate semantic cache is unnecessary for FontFace; the face and downstream graph leases provide deterministic ownership.                          |
+| Current R3F `useFont()`        | R3F `useLoader`/`suspend-react` caches by `[ReactFontLoader, immutableFontRequestKey]`; `ReactFontLoader` owns the cached Font and `clear()` releases it.                       | Provider/Text checks `handle.isLoaded(selection)` and conditionally calls `use(handle.load(selection))`; React owns only suspension and mounted leases. |
+| Browser HTTP cache             | Applies underneath `fetch()` according to ordinary request and response policy.                                                                                                 | Remains a transport optimization, not a Font/technique ownership model.                                                                                 |
+| Runtime Worker `CacheStorage`  | Optionally persists one validated composed GLB when source freshness permits it.                                                                                                | Remains the cross-page acceleration for authenticated TTF/OTF bakes; the graph guarantees in-process reuse.                                             |
 
 Three's GLTF loader demonstrates why subclass ownership matters: it explicitly uses `FileLoader` for the root document,
 parses the document, resolves buffer and image dependencies, and maintains parser-local dependency Promise caches. The
@@ -1592,6 +1598,18 @@ only after step 9. An absent entry is a capability error; a present entry whose 
 malformed, hash-mismatched, or incompatible is a dependency-load error. In both cases imperative Text construction still
 sees an unloaded selection and throws synchronously. Only authenticated TTF/OTF input enters runtime baking before this
 GLB path; a GLB never transitions into a baker after step 5 or later.
+
+R3F consumes that state without a second cache or an always-async gate:
+
+```ts
+if (!handle.isLoaded(selection)) {
+  if (!providerFonts.authorizes(selection)) throw unloadedFontError(selection);
+  use(handle.load(selection));
+}
+```
+
+The helper names in this sketch are illustrative; the behavior is the contract. The conditional is valid for React 19's
+`use()` API. Once the graph has committed step 9, ordinary Text construction proceeds synchronously on every render.
 
 The current low-level loader already implements most of the directory sequence: it validates the core, reads
 `PMNDRS_font.rasters`, derives the raster key, performs exact lookup, resolves an external raster relative to the core URL,

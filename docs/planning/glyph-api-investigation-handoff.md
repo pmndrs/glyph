@@ -67,6 +67,11 @@ Generated sidecar filename patterns are producer conveniences, never runtime dis
 `PMNDRS_font.rasters` directory can assert that a technique exists and name its embedded or external artifact. A sidecar
 cannot be loaded as a FontFace root or used to infer support, even when its filename matches the CLI's normal pattern.
 
+D-299 keeps the R3F loaded path synchronous. React resolves the handle and selection, checks
+`handle.isLoaded(selection)`, and conditionally calls `use(handle.load(selection))` only for an authorized unloaded
+selection. The graph publishes readiness before fulfilling the Promise, so resolved rerenders skip `use()` entirely and
+pay no Promise or microtask stall.
+
 This document preserves the API investigation so it can continue in a fresh context. It is a design brief, not an implementation plan that has been approved. The current code remains the evidence for what exists today.
 
 ## 1. Direction agreed so far
