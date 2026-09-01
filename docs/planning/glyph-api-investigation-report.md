@@ -1407,3 +1407,128 @@ FontFace adds a cache owner without replacing D-286's immutable loaded `Font` ow
    prove the provider rethrows it to an outer boundary.
 9. Load several formats through two handles, acquire one low-level independent Font and one mounted Text binding, dispose
    the FontFace, and prove its cache leases release while the independent Font and committed draw remain valid.
+
+## Content-addressed FontFace resource graph
+
+D-297 answers the cache and invalidation questions that D-296 left implicit. The current implementation provides several
+pieces of the required behavior but not the complete graph:
+
+- `FontLoader` coalesces loads by a normalized request key while its registered font remains alive.
+- top-level `loadFont()` coalesces only an in-flight exact composite request; `FontLibrary` retains successful exact
+  composite requests and returns independent leases;
+- `FontRegistry` merges an artifact with an equal authenticated shaping hash only inside that registry;
+- a registered font retains one loaded raster by `rasterKey`, but it does not coalesce concurrent external-raster fetches;
+- `RegisteredRaster.resource()` authenticates external bytes by declared length and SHA-256 but does not memoize the
+  promise or successful bytes; and
+- the runtime Worker persistently caches only a complete validated baked GLB, keyed by source hash, face, normalized
+  ranges, and exact raster plan, and only while the source response grants reusable freshness.
+
+Consequently, two current immutable loads that request different techniques from the same URL can fetch and parse the
+core GLB independently. Repeated direct reads of one external page fetch it repeatedly; the loader integration test
+currently proves this by observing the same `page.bin` request twice. Technique decode normally hides that weakness after
+one immutable variant is retained, but a second FontFace/request graph can pay the work again. Current `FontLibrary.clear()`
+also evicts one whole composite request rather than one reachable resource generation.
+
+The replacement is one Glyph-owned internal dependency graph:
+
+```text
+family alias ───────┐
+generated Font{id} ─┴─> FontFace declaration lease
+                           │
+URL / Request / Blob locator
+                           │ fetch/read + authenticate
+                           ▼
+                    core GLB content hash
+                     │       │        │
+              shaping data   │   raster directory
+                             │        │ selected lazily by rasterKey
+                             │        ▼
+                             │  raster artifact hash
+                             │        │
+                             │        ├─> resource hash + byte length
+                             │        └─> resource hash + byte length
+                             │
+                             └─> decoded technique node
+                                      │
+                                      └─> handle-local resolve/renderer binding
+```
+
+The family name never appears in an identity key. A locator only answers where bytes may be fetched. Equal ordinary URL
+requests coalesce their transport operation; Requests with materially different method, headers, credentials, integrity,
+or cache semantics must not be conflated. Blob/byte object identity can coalesce before hashing. Once bytes arrive, their
+SHA-256 content owns the immutable node, so different locators with equal bytes may converge and one locator that later
+serves different bytes creates a new generation. Each acquisition edge retains its own source context—base URL, Request
+semantics, fetch implementation, and resolver—so two equal core GLBs from different directories can share parsing without
+incorrectly resolving a relative sidecar against the other face's base. Sidecar byte nodes converge only after their own
+declared hashes authenticate.
+
+The GLB directory is the dependency manifest. Loading its selected external raster reference fetches that artifact lazily
+and authenticates it against the directory's declared hash. A raster decoder requests only the external page/resources it
+needs; each is cached by declared SHA-256 plus byte length, with one shared pending promise and one immutable successful
+value. A failed promise is removed rather than poisoning the key. If two directory entries reuse identical bytes, they
+share the resource node even when their relative URIs differ.
+
+Decoded state adds the immutable core/raster identities and the authenticated technique witness identity. A config string
+such as `slug` is only a map lookup and cannot own the cache because two handles may assign the same string differently.
+Renderer resources are further downstream and remain handle/config-local; equal portable bytes do not imply that two
+renderer bindings, GPU devices, or contexts are interchangeable.
+
+### Lease-based invalidation
+
+Fine-grained invalidation means releasing graph reachability, not deleting by family name or mutating a cached value:
+
+- each successful `handle.load(selection)` gives the owning FontFace a lease on the selected decoded node and its
+  transitive dependencies;
+- immutable `Font` values, mounted `Text`, and renderer bindings take independent leases;
+- `FontFace.dispose()` removes its catalog aliases, aborts work for which it is the final consumer, and releases only its
+  leases;
+- a child node retires only when no live dependent reaches it;
+- disposing one of two faces over the same URL therefore cannot evict the other's core GLB, raster, or page resources; and
+- after the final lease retires, a later declaration may refetch the locator. If it produces new bytes, the new content
+  generation replaces the locator mapping for future consumers while old mounted consumers continue using the old
+  immutable generation.
+
+This does not require a public cache-invalidation API in the first FontFace implementation. `FontFace.dispose()` plus
+ordinary HTTP freshness is sufficient for deterministic ownership. A later explicit refresh API, if evidence requires
+one, must create a new generation and cannot invalidate live immutable Fonts in place.
+
+### Runtime baking is a source-type edge
+
+Runtime baking is not recovery from a GLB raster miss. The source bytes are classified and authenticated at the load
+boundary:
+
+- valid GLB bytes enter the artifact graph; a missing or mismatched selected format throws at `handle.load()`;
+- valid TTF/OTF SFNT bytes enter the runtime-bake graph;
+- WOFF, WOFF2, arbitrary bytes, and misleading filename/content-type combinations throw unless a future explicit source
+  capability supports them.
+
+The check must use the bytes' container signature, not only the URL suffix or Blob MIME type. A `.glb` URL that contains a
+TTF and a `.ttf` URL that contains a GLB are malformed inputs rather than alternate cache names.
+
+Within one Glyph runtime, every completed runtime bake is retained in memory while any FontFace or downstream consumer
+leases it. Its identity includes source SHA-256, collection face, normalized Unicode ranges, exact requested format
+descriptors/raster keys, and all format/baker contract versions. Therefore two equivalent TTF/OTF requests bake once;
+different Bitmap strike contracts or other exact options intentionally produce different nodes. The existing optional
+CacheStorage layer may preserve the same complete validated GLB across page lifetimes only when the source response's
+cache headers permit reuse; `no-store`, absent freshness, quota, and private contexts cannot weaken the guaranteed
+in-process cache.
+
+### Required cache proofs
+
+1. Declare two differently named FontFaces over one URL, load the same selection concurrently, and observe one core fetch,
+   one parse, one selected raster fetch, one decode, independent face leases, and no family-name key.
+2. Load MSDF through one face and Slug through another over the same core URL; observe one core fetch/parse and only each
+   selected external raster/resource subtree.
+3. Reference one authenticated external resource from multiple pages and raster artifacts; observe one pending fetch and
+   one successful immutable byte node keyed by hash and length.
+4. Cancel one of two consumers without canceling shared transport; cancel the underlying request only after the final
+   consumer releases it; remove failed promises so a retry can succeed.
+5. Dispose either of two sharing faces and prove the other remains loaded; dispose the last face while a Text binding is
+   alive and prove retirement waits for that binding; release it and prove every unreachable child retires exactly once.
+6. Serve changed bytes from one URL after all prior leases retire and prove a new generation is used without mutating an
+   independently retained old Font.
+7. Use equal URLs with materially different Request credentials/headers and prove they do not transport-coalesce; use
+   different URLs with equal authenticated bytes and prove their content nodes converge.
+8. Request a missing GLB format and prove no runtime baker is imported or called. Pass authenticated TTF and OTF bytes and
+   prove equivalent exact bake contracts execute once and retain one validated composed GLB; reject WOFF and unknown
+   bytes.
