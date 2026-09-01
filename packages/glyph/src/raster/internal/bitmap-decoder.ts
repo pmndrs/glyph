@@ -44,6 +44,7 @@ export async function decodeBitmapData(font: RasterDecodeFont, raster: RasterDec
         kind: 'bitmap',
         rasterKey: raster.rasterKey,
         shaping: font.shapingFingerprint,
+        source: font.sourceFingerprint,
         version: BITMAP_FORMAT_VERSION,
       })
   ) {

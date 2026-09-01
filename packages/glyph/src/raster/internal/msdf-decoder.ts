@@ -47,6 +47,7 @@ export async function decodeMsdfData(font: RasterDecodeFont, raster: RasterDecod
         kind: 'msdf',
         rasterKey: raster.rasterKey,
         shaping: font.shapingFingerprint,
+        source: font.sourceFingerprint,
         version: MSDF_FORMAT_VERSION,
       }) ||
     extension.encoding !== 'mtsdf' ||

@@ -298,6 +298,7 @@ export class FontRegistry {
       registry: this,
       key,
       handle,
+      sourceFingerprint: sourceFingerprint as Fingerprint,
       shapingFingerprint,
       glyphCount: integer(metricsValue.glyphCount, 'metrics.glyphCount'),
       metrics: {
@@ -1382,11 +1383,9 @@ async function loadFontFaceSourceFont(
     ...(config.maxBufferViews === undefined ? {} : { maxBufferViews: config.maxBufferViews }),
     ...(config.maxRasters === undefined ? {} : { maxRasters: config.maxRasters }),
   });
-  const workerRasters = await Promise.all(
-    prepared.initialRasters
-      .filter(({ operation }) => workerRasterKinds.includes(operation.format.kind))
-      .map(({ operation, descriptor }) => runtimeBakeRaster(operation.format, descriptor)),
-  );
+  const workerRasters = prepared.initialRasters
+    .filter(({ operation }) => workerRasterKinds.includes(operation.format.kind))
+    .map(({ operation, descriptor }) => runtimeBakeRaster(operation.format, descriptor));
   const selectedRuntimeBake = prepared.runtimeBake ?? config.runtimeBake;
   const runtimeBake: RuntimeFontBake = async (request) => {
     const bake = selectedRuntimeBake ?? (await loadDefaultRuntimeBake(request.sourceUrl));
@@ -1441,7 +1440,7 @@ async function loadImmutableVariant(
 ): Promise<ClosedFontVariant> {
   return prepared.operation.visit({
     async visit(format, request) {
-      const rasterKey = await deriveRasterKey({
+      const rasterKey = deriveRasterKey({
         descriptor: prepared.descriptor,
         extension: format.extension,
         kind: format.kind,
@@ -1621,12 +1620,12 @@ function prepareRasterRequest(value: unknown, index: number): PreparedRasterRequ
   };
 }
 
-async function runtimeBakeRaster(format: RasterFormatMetadata, descriptor: JsonValue): Promise<RuntimeBakeRaster> {
+function runtimeBakeRaster(format: RasterFormatMetadata, descriptor: JsonValue): RuntimeBakeRaster {
   return {
     kind: format.kind,
     extension: format.extension,
     version: format.version,
-    rasterKey: await deriveRasterKey({
+    rasterKey: deriveRasterKey({
       descriptor,
       extension: format.extension,
       kind: format.kind,
@@ -1696,6 +1695,7 @@ interface RegisteredFontInit {
   readonly registry: FontRegistry;
   readonly key: FontKey;
   readonly handle: FontHandle;
+  readonly sourceFingerprint: Fingerprint;
   readonly shapingFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly metrics: FontMetrics;
@@ -1705,6 +1705,7 @@ class RegisteredFontImpl implements RegisteredFont {
   readonly registry: FontRegistry;
   readonly key: FontKey;
   readonly handle: FontHandle;
+  readonly sourceFingerprint: Fingerprint;
   readonly shapingFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly glyphIdWidth = 16 as const;
@@ -1716,6 +1717,7 @@ class RegisteredFontImpl implements RegisteredFont {
     this.registry = init.registry;
     this.key = init.key;
     this.handle = init.handle;
+    this.sourceFingerprint = init.sourceFingerprint;
     this.shapingFingerprint = init.shapingFingerprint;
     this.glyphCount = init.glyphCount;
     this.metrics = Object.freeze({ ...init.metrics });
@@ -2189,6 +2191,7 @@ function matchRasterExtension(
         kind: source.reference.kind,
         rasterKey: source.reference.rasterKey,
         shaping: font.shapingFingerprint,
+        source: font.sourceFingerprint,
         version: source.reference.version,
       })
     ) {
@@ -2221,6 +2224,7 @@ function generatedRasterExtension(
     kind: reference.kind,
     rasterKey: reference.rasterKey,
     shaping: font.shapingFingerprint,
+    source: font.sourceFingerprint,
     version: reference.version,
   });
   if (candidate.fingerprint !== expected) {

@@ -52,6 +52,7 @@ export async function bakeGlyphExampleArtifact(
       kind: GLYPH_EXAMPLE_KIND,
       rasterKey: request.rasterKey,
       shaping: request.font.shapingFingerprint,
+      source: request.font.sourceFingerprint,
       version: GLYPH_EXAMPLE_FORMAT_VERSION,
     }),
     descriptor: request.descriptor,

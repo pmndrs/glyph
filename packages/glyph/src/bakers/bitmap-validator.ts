@@ -102,6 +102,7 @@ export interface BitmapArtifactValidationLimits {
 
 export interface BitmapArtifactValidationContext {
   readonly rasterKey: RasterKey | string;
+  readonly sourceFingerprint: Fingerprint | string;
   readonly shapingFingerprint: Fingerprint | string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
@@ -232,6 +233,7 @@ async function validateBitmapSemantics(
         kind: 'bitmap',
         rasterKey: context.rasterKey,
         shaping: context.shapingFingerprint as string,
+        source: context.sourceFingerprint as string,
         version: BITMAP_FORMAT_VERSION,
       })
   ) {

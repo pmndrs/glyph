@@ -63,6 +63,11 @@ export async function composeFontBake(
   const shaping = requireNonArrayObject(font.shaping, '/extensions/PMNDRS_font/shaping');
   const metrics = requireNonArrayObject(font.metrics, '/extensions/PMNDRS_font/metrics');
   const shapingFingerprint = asFingerprint(shaping.fingerprint, '/extensions/PMNDRS_font/shaping/fingerprint');
+  const provenance = requireNonArrayObject(font.provenance, '/extensions/PMNDRS_font/provenance');
+  const sourceFingerprint = asFingerprint(
+    provenance.sourceFingerprint,
+    '/extensions/PMNDRS_font/provenance/sourceFingerprint',
+  );
   const glyphCount = asInteger(metrics.glyphCount, '/extensions/PMNDRS_font/metrics/glyphCount');
   const glyphIdWidth = asInteger(metrics.glyphIdWidth, '/extensions/PMNDRS_font/metrics/glyphIdWidth');
   if (glyphIdWidth !== 16) fail('GLYPH_ID_WIDTH', 'V0 composition requires 16-bit glyph IDs');
@@ -108,6 +113,7 @@ export async function composeFontBake(
       extensionData,
       raster,
       shapingFingerprint,
+      sourceFingerprint,
       glyphCount,
       glyphIdWidth,
       `${path}/extensions/${raster.extension}`,
@@ -189,6 +195,7 @@ function assertRasterIdentity(
   extension: Readonly<Record<string, unknown>>,
   raster: RasterBakeArtifact,
   shapingFingerprint: Fingerprint,
+  sourceFingerprint: Fingerprint,
   glyphCount: number,
   glyphIdWidth: number,
   path: string,
@@ -199,6 +206,7 @@ function assertRasterIdentity(
     kind: raster.kind,
     rasterKey: raster.rasterKey,
     shaping: shapingFingerprint,
+    source: sourceFingerprint,
     version: raster.version,
   });
   if (extension.fingerprint !== expected) {

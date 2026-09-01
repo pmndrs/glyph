@@ -104,6 +104,7 @@ pub fn bake_bitmap(
             .map_or(0, |selection| selection.bits().len());
     let built = glb::build_bitmap_glb(
         &request.raster_key,
+        &request.source_fingerprint,
         &request.shaping_fingerprint,
         request.glyph_count,
         &strikes,

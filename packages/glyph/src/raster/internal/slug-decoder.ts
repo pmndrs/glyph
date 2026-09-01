@@ -44,6 +44,7 @@ export async function decodeSlugData(
         kind: 'slug',
         rasterKey: raster.rasterKey,
         shaping: font.shapingFingerprint,
+        source: font.sourceFingerprint,
         version: SLUG_FORMAT_VERSION,
       }) ||
     extension.planeUnitsPerEm !== SLUG_PLANE_UNITS_PER_EM ||

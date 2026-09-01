@@ -77,6 +77,7 @@ export interface MsdfArtifactValidationLimits {
 
 export interface MsdfArtifactValidationContext {
   readonly rasterKey: RasterKey | string;
+  readonly sourceFingerprint: Fingerprint | string;
   readonly shapingFingerprint: Fingerprint | string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
@@ -214,6 +215,7 @@ async function validateMsdfSemantics(
         kind: 'msdf',
         rasterKey: context.rasterKey,
         shaping: context.shapingFingerprint as string,
+        source: context.sourceFingerprint as string,
         version: MSDF_FORMAT_VERSION,
       })
   ) {

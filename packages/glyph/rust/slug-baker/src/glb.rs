@@ -27,6 +27,7 @@ pub(crate) struct BuiltPageReport {
 
 pub(crate) fn build_slug_glb(
     raster_key: &str,
+    source_fingerprint: &str,
     shaping_fingerprint: &str,
     glyph_count: u16,
     packed: &PackedSlug,
@@ -34,6 +35,7 @@ pub(crate) fn build_slug_glb(
     // One value the core and this raster compare to decide they belong together; every
     // dimension that must agree is folded in, so a consumer never re-derives the list.
     let compatibility = pmndrs_glyph_raster_artifact::compatibility_fingerprint(
+        source_fingerprint,
         shaping_fingerprint,
         raster_key,
         crate::model::SLUG_KIND,
