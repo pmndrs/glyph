@@ -517,6 +517,7 @@ async function validateRaster(techniqueName, bytes, core) {
   const rasterIdentity = core.document.extensions.PMNDRS_font.rasters[0];
   const context = {
     rasterKey: rasterIdentity.rasterKey,
+    sourceFingerprint: core.sourceFingerprint,
     shapingFingerprint: core.shapingFingerprint,
     glyphCount: core.glyphCount,
     glyphIdWidth: 16,

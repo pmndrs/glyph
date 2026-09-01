@@ -111,6 +111,7 @@ test('bakeFont preserves bounded raster options through the Node composition pat
   const descriptor = bitmapDescriptor(options);
   const validated = await validateBitmapArtifact(bytes, {
     rasterKey: bitmapRasterKey(options),
+    sourceFingerprint: core.sourceFingerprint,
     shapingFingerprint: core.shapingFingerprint,
     glyphCount: core.glyphCount,
     glyphIdWidth: 16,
@@ -346,7 +347,7 @@ test('pre-cancellation and source/output overlap fail before filesystem mutation
   await assert.rejects(readFile(output), { code: 'ENOENT' });
 });
 
-test('rejects unsafe package-owned artifact IDs before writing any output', async (t) => {
+test('a companion is named from its core font, so a package-owned ID never reaches disk', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-node-unsafe-artifact-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const input = join(root, 'font.ttf');
@@ -365,22 +366,14 @@ test('rejects unsafe package-owned artifact IDs before writing any output', asyn
     },
   };
 
-  await assert.rejects(
-    bakeFont({
-      input,
-      output,
-      font: { fontFaceIndex: 0 },
-      rasters: [
-        {
-          baker: unsafeBaker,
-          packaging: { artifact: 'external' },
-          options: { strikes: [16] },
-        },
-      ],
-    }),
-    (error) => error instanceof NodeBakeError && error.reason === 'UNSAFE_ARTIFACT_ID',
-  );
-  await assert.rejects(readFile(output), { code: 'ENOENT' });
+  // The package no longer names the file, so its ID is ignored rather than sanitized.
+  await bakeFont({
+    input,
+    output,
+    font: { fontFaceIndex: 0 },
+    rasters: [{ baker: unsafeBaker, packaging: { artifact: 'external' }, options: { strikes: [16] } }],
+  });
+  await readFile(join(root, 'font.bitmap.glb'));
   await assert.rejects(readFile(join(root, '..', 'escape.glb')), { code: 'ENOENT' });
 });
 
@@ -578,3 +571,37 @@ function run(command, args) {
     });
   });
 }
+
+test('a bake is skipped only when the artifact on disk is the whole result the request asks for', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-freshness-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = join(root, 'Inter-Regular.ttf');
+  await writeFile(input, await readFile(fontUrl));
+  const output = join(root, 'Inter.font.glb');
+  const rasterCount = async () =>
+    (await validateFontArtifact(await readFile(output))).document.extensions.PMNDRS_font.rasters.length;
+  const bake = async (argv) => {
+    const io = captureIo();
+    assert.equal(await runCli(['bake', '--input', input, '--output', output, ...argv], io.io), 0, io.stderr());
+    return io.stdout();
+  };
+
+  await bake(['--bitmap', '16']);
+  assert.match(await bake(['--bitmap', '16']), /is up to date/);
+
+  // Packaging decides which files a bake writes, so a split request is not satisfied by a packed
+  // font even though every raster in it is compatible.
+  assert.doesNotMatch(await bake(['--bitmap', '16', '--split']), /is up to date/);
+  assert.equal(
+    (await validateFontArtifact(await readFile(output))).document.extensions.PMNDRS_font.rasters[0].source.type,
+    'external',
+  );
+  await readFile(join(root, 'Inter.bitmap.glb'));
+
+  // A bake publishes the whole font, so an extra raster on disk means the request would remove it.
+  // Comparing the requested rasters as a subset would make a font impossible to shrink.
+  await bake(['--bitmap', '16', '--msdf', '--force']);
+  assert.equal(await rasterCount(), 2);
+  assert.doesNotMatch(await bake(['--bitmap', '16']), /is up to date/);
+  assert.equal(await rasterCount(), 1);
+});

@@ -7,6 +7,7 @@
     "fingerprint": "14fa0a34f3783dd4f131d5b546e453b7",
     "faceIndex": 0,
     "glyphCount": 2937,
+    "sourceFingerprint": "14fa0a34f3783dd4f131d5b546e453b7",
     "shapingFingerprint": "0c522d6ea0db73ba74bcc389dc50263b"
   },
   "descriptor": {
@@ -18,7 +19,7 @@
   "rasterKey": "d1dcd31304f795b5f2c497c579aa29f0",
   "generator": {
     "version": "0.0.0",
-    "optimizedWasmBytes": 614078,
+    "optimizedWasmBytes": 614135,
     "dependencies": {
       "readFonts": "0.42.1",
       "skrifa": "0.45.1",
@@ -41,8 +42,8 @@
         "role": "raster",
         "id": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0.glb",
         "bytes": 754964,
-        "fingerprint": "025a0dd5136ad03f5b6bf6505465319e",
-        "sha256": "0ea5d3cecffe048a2367a995bbe95634899f1e17851c03c8bb2446acc20d8eaa"
+        "fingerprint": "b193ac938e0c7b6a4ad5565678f83e4a",
+        "sha256": "88650c6b2354844aedaf93e56999c4108ccd6bf4b9300bceb0be272ecdc7caef"
       }
     ],
     "report": {
@@ -77,8 +78,8 @@
         "role": "raster",
         "id": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0.glb",
         "bytes": 754964,
-        "fingerprint": "025a0dd5136ad03f5b6bf6505465319e",
-        "sha256": "0ea5d3cecffe048a2367a995bbe95634899f1e17851c03c8bb2446acc20d8eaa"
+        "fingerprint": "b193ac938e0c7b6a4ad5565678f83e4a",
+        "sha256": "88650c6b2354844aedaf93e56999c4108ccd6bf4b9300bceb0be272ecdc7caef"
       }
     ],
     "report": {
@@ -114,8 +115,8 @@
           "role": "font",
           "id": "font-0c522d6ea0db73ba74bcc389dc50263b",
           "bytes": 926984,
-          "fingerprint": "185e5cd652d8e95556f2bf68afe44bdf",
-          "sha256": "fe285dd854749ecacbb974c4222c4a126fea06ad0c6300737f84572047d182d9"
+          "fingerprint": "0038a7ccd2138c456da04d85db889223",
+          "sha256": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14"
         }
       ],
       "report": {
@@ -220,16 +221,16 @@
         {
           "role": "font",
           "id": "font-0c522d6ea0db73ba74bcc389dc50263b",
-          "bytes": 172328,
-          "fingerprint": "89d9acd7fe6aaf666a8b7d02cfe1339f",
-          "sha256": "fe58f351310f48b9cf5e64f1ddc11e5c7ebd2af3d53fe72bf043ab5af50df058"
+          "bytes": 172276,
+          "fingerprint": "b3bd55812aee7bf8ddb538cc3cf2ffe0",
+          "sha256": "ee5420d3e843c9f754f1940f39d59823e1b3102c1532a8655fc31dc8f19f88dc"
         },
         {
           "role": "raster",
-          "id": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0.glb",
+          "id": "Inter-Regular.bitmap.glb",
           "bytes": 754964,
-          "fingerprint": "025a0dd5136ad03f5b6bf6505465319e",
-          "sha256": "0ea5d3cecffe048a2367a995bbe95634899f1e17851c03c8bb2446acc20d8eaa"
+          "fingerprint": "b193ac938e0c7b6a4ad5565678f83e4a",
+          "sha256": "88650c6b2354844aedaf93e56999c4108ccd6bf4b9300bceb0be272ecdc7caef"
         }
       ],
       "report": {
@@ -315,12 +316,12 @@
           {
             "artifactId": "font-0c522d6ea0db73ba74bcc389dc50263b",
             "role": "font",
-            "jsonBytes": 1244,
+            "jsonBytes": 1192,
             "paddingBytes": 0,
-            "totalBytes": 172328
+            "totalBytes": 172276
           },
           {
-            "artifactId": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0.glb",
+            "artifactId": "Inter-Regular.bitmap.glb",
             "role": "raster",
             "jsonBytes": 750,
             "paddingBytes": 2,
@@ -331,10 +332,10 @@
           {
             "artifactId": "font-0c522d6ea0db73ba74bcc389dc50263b",
             "format": "raw",
-            "bytes": 172328
+            "bytes": 172276
           },
           {
-            "artifactId": "bitmap-0c522d6ea0db73ba74bcc389dc50263b-d1dcd31304f795b5f2c497c579aa29f0.glb",
+            "artifactId": "Inter-Regular.bitmap.glb",
             "format": "raw",
             "bytes": 754964
           }

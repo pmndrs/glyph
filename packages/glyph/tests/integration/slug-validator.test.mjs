@@ -5,12 +5,13 @@ import test, { before } from 'node:test';
 import { SlugArtifactValidationError, validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { slugDescriptor, slugDescriptorRasterKey } from '../../dist/internal/slug-contract.js';
 import { compatibilityFingerprint } from '../../dist/internal/raster-identity.js';
-import { interShapingFingerprint } from '../support/inter-identity.mjs';
+import { interShapingFingerprint, interSourceFingerprint } from '../support/inter-identity.mjs';
 
 const GLB_MAGIC = 0x4654_6c67;
 const JSON_CHUNK = 0x4e4f_534a;
 const BIN_CHUNK = 0x004e_4942;
 const shapingFingerprint = interShapingFingerprint;
+const sourceFingerprint = interSourceFingerprint;
 let rasterKey;
 let context;
 let embedded;
@@ -19,6 +20,7 @@ before(async () => {
   rasterKey = slugDescriptorRasterKey();
   context = {
     rasterKey,
+    sourceFingerprint,
     shapingFingerprint,
     glyphCount: 2,
     glyphIdWidth: 16,
@@ -161,6 +163,7 @@ function makeArtifact() {
           kind: 'slug',
           rasterKey,
           shaping: shapingFingerprint,
+          source: sourceFingerprint,
           version: 0,
         }),
         planeUnitsPerEm: 2048,

@@ -103,7 +103,7 @@ test('bakes and validates exact external and embedded Inter Slug resources', asy
   );
   assert.deepEqual(externalRaster.bytes, embeddedRaster.bytes);
 
-  const context = { rasterKey, shapingFingerprint, glyphCount: 2937, glyphIdWidth: 16, descriptor };
+  const context = { rasterKey, sourceFingerprint, shapingFingerprint, glyphCount: 2937, glyphIdWidth: 16, descriptor };
   const externalValidated = await validateSlugArtifact(externalRaster.bytes, context);
   const embeddedValidated = await validateSlugArtifact(embeddedRaster.bytes, context);
   assert.deepEqual(embeddedValidated.records, externalValidated.records);

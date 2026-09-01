@@ -33,7 +33,14 @@ test('fixed-seed bitmap artifact mutations fail safely and deterministically', a
       descriptor,
     })
   ).artifacts[0].bytes;
-  const context = { rasterKey, shapingFingerprint, glyphCount: 2937, glyphIdWidth: 16, descriptor };
+  const context = {
+    rasterKey,
+    sourceFingerprint: interSourceFingerprint,
+    shapingFingerprint,
+    glyphCount: 2937,
+    glyphIdWidth: 16,
+    descriptor,
+  };
 
   let rejected = 0;
   for (const mutation of mutateArtifact(artifact, 128)) {
