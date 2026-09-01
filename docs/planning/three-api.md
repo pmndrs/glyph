@@ -18,6 +18,12 @@ sources:
   - id: current-text
     resource: ../../packages/glyph/src/three/text.ts
     title: Current Three.js Text lifecycle
+  - id: current-config
+    resource: ../../packages/glyph/src/three/handle.ts
+    title: Current ThreeConfig and handle lifecycle
+  - id: current-react
+    resource: ../../packages/glyph/src/react.ts
+    title: Current R3F handle injection
   - id: current-material
     resource: ../../packages/glyph/src/three/material.ts
     title: Current Three.js material factory
@@ -39,38 +45,62 @@ scene traversal collects desired mutations, calls the Rust engine, consumes its 
 ranges, and updates draw proxies.
 
 ```ts
-import { FontLoader, Text, TextGroup, defineTextMaterial } from '@pmndrs/glyph/three';
+import { glyph, loadFont } from '@pmndrs/glyph';
+import { ThreeConfig, defineTextMaterial } from '@pmndrs/glyph/three';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
+
+await glyph.init();
+const three = glyph.handle('main', ThreeConfig);
 ```
 
 Import only the technique modules an application uses. Each module registers the matching Three policy program and
 material implementation.
 
+`ThreeConfig` is a pure built-in config value. Spread it to wrap `encode`, `decode`, `resolve`, or renderer preparation
+without sharing mutable handle state. `defineThreeConfig({ transformMode, allocationMode })` creates a variant. Several
+named Three handles may coexist over the same immutable loaded fonts.
+
+## Resolver, draw root, and actual rendering
+
+Creating a Three handle needs no `WebGPURenderer`, scene, camera, canvas, rendering context, or `GPUDevice`.
+`ThreeConfig.resolve()` converts authenticated portable payloads into retained Three JavaScript resource descriptions.
+It does not call `device.create*`, configure a canvas, or submit work. Three's renderer-local managers perform those backend
+operations later when an application's renderer encounters the committed objects.
+
+The draw root is not a Glyph wrapper class. It is the existing `Text` or `TextGroup` `Object3D` that owns one private
+publication boundary. During renderer commit, Glyph creates/reuses ordinary `THREE.Mesh` values and calls
+`drawRoot.add(mesh)`. A standalone text therefore owns its meshes as children; grouped text shares meshes beneath the
+group. Adding the text/group root to a scene inserts that entire subtree. Glyph prepares and attaches the subtree, but it
+does not draw it:
+
+```ts
+const label = three.createText({ font, text: 'Hello' });
+scene.add(label);
+
+label.shape(); // optional explicit semantic flush; Mesh children now sit below label
+renderer.render(scene, camera); // Three traverses and actually submits those meshes
+```
+
+Each `WebGPURenderer` or `WebGLRenderer` is constructed with its own canvas/backend policy in normal Three code. Text
+instances do not create canvases, and a handle is not bound to one renderer or scene. Independent text branches from one
+handle can live in different scenes. A single `Object3D` still has only one parent, per Three's ordinary hierarchy rules.
+
 ## Load a font
 
 ```ts
-const loader = new FontLoader();
-const font = await loader.loadAsync({
-  input: '/fonts/inter-msdf.font.glb',
-  raster: {
-    technique: msdf,
-    options: {
-      /* technique options */
-    },
-  },
-});
+const font = await loadFont({ baked: '/fonts/inter-msdf.font.glb' }, msdf);
 ```
 
-`FontLoader` extends `THREE.Loader`, participates in its `LoadingManager`, and accepts an optional `AbortSignal` on the
-request. Loaders sharing a manager share one Glyph engine domain. Disposing a loader releases its lease; loaded fonts
-retain the backing they still need until their own disposal.
+Root `Font` values are immutable and renderer-neutral. The same value may bind into multiple Three handles. Compatibility
+`FontLoader` remains available when an application specifically needs `THREE.LoadingManager`; handle construction no
+longer depends on a font-associated implicit Three domain.
 
 Source-font loading requires a caller-supplied runtime baker:
 
 ```ts
-const loader = new FontLoader(undefined, { runtimeBake });
+const font = await loadFont({ source: '/fonts/inter.ttf', runtimeBake }, msdf);
 ```
 
 No runtime baker is pulled into the default Three bundle.
@@ -78,7 +108,7 @@ No runtime baker is pulled into the default Three bundle.
 ## Create text
 
 ```ts
-const label = new Text({
+const label = three.createText({
   font,
   text: 'Hello world',
   style: { fontSize: 32, lineHeight: 1.2, language: 'en', color: '#ffffff' },
@@ -89,7 +119,7 @@ const label = new Text({
 scene.add(label);
 ```
 
-A standalone `Text` owns an implicit batch of one. It binds lazily on an explicit `measure()`/`glyphs()` query or
+A standalone `Text` owns a private publication boundary of one. It binds lazily on an explicit `measure()`/`glyphs()` query or
 ordinary scene traversal; construction does not shape or allocate renderer buffers. A query may run while detached.
 
 `Text` accepts either a plain string with explicit `spans`, or a formatted value built with `txt` and `span`. Span values
@@ -98,7 +128,7 @@ may override font selection, text style, and material.
 ## Batch text
 
 ```ts
-const group = new TextGroup({
+const group = three.createTextGroup({
   capacity: { size: 4096, policy: 'grow' },
   compositing: 'ordered',
 });
@@ -107,7 +137,7 @@ group.add(title, body, iconLabel);
 scene.add(group);
 ```
 
-All descendant `Text` objects that belong to the same runtime participate in one retained Rust engine session and one
+All descendant `Text` objects that belong to the same handle participate in one retained planner and one
 render plan. Compatible Bitmap, MSDF, and Slug records may share backing storage while the plan emits the draw boundaries
 required by technique, font resource, material, clipping, and compositing policy.
 
@@ -144,6 +174,12 @@ label.set({ text: 'Final value', style: { color: '#ffffff' } });
 Setters change desired state. The nearest `TextGroup` applies all pending descendant changes together on its next
 `updateMatrixWorld()` traversal. Reassigning a value that normalizes to the current state is a no-op. Transform-only
 changes update the transform buffer and do not reshape or recompose text.
+
+Call `label.shape()` or `group.shape()` to synchronously publish current semantic desired state without waiting for host
+render traversal. `shape()` first updates the boundary's matrices, publishes at most one semantic transaction, then runs
+the cheap transform synchronizer. If no semantics are pending, it performs only transform synchronization. Ordinary
+`updateMatrixWorld()` preserves traversal safety by retaining an error on `Text`/`TextGroup`; explicit `shape()` throws a
+failure at the call that requested it.
 
 One group traversal performs at most one mutating `pmndrs_glyph_engine_update` transaction for that group's pending
 values. An earlier `measure()` query uses the non-publishing paragraph measurement call and retains a speculative batch
@@ -184,7 +220,7 @@ offsets.
 
 ```ts
 const accent = { color: '#ff0000' };
-const label = new Text({ font, text: 'abc', spans: [{ start: 0, end: 1, style: accent }] });
+const label = three.createText({ font, text: 'abc', spans: [{ start: 0, end: 1, style: accent }] });
 label.set({ text: 'ábc', spans: label.spans }); // 'a' and the mark are now one cluster spanning [0, 2)
 label.spans; // [{ start: 0, end: 2, style: accent }] -- the mark joined the style of its base
 ```
@@ -264,7 +300,7 @@ const material = defineTextMaterial((context) => {
   return value;
 });
 
-const label = new Text({ font, text: 'Custom', material });
+const label = three.createText({ font, text: 'Custom', material });
 ```
 
 The factory is renderer-owned. Rust carries a numeric `materialId` through style resolution and draw planning; it does not
@@ -292,7 +328,7 @@ const emoji = await loader.loadAsync({
 });
 
 const font = createFontStack(prose, emoji);
-const label = new Text({ font, text: 'Status 🌍' });
+const label = three.createText({ font, text: 'Status 🌍' });
 ```
 
 The font stack carries resource and technique identity. The user-facing text API does not repeat a technique selector.
@@ -374,7 +410,8 @@ The complete copy and ownership contract is recorded in
 ## Ownership and disposal
 
 - `Text.dispose()` unbinds the object and releases its font leases.
-- `TextGroup.dispose()` releases the group session and GPU resources but does not dispose descendant `Text` objects.
+- `TextGroup.dispose()` releases the group's private publication boundary and GPU resources but does not dispose descendant `Text` objects.
+- `handle.dispose()` prevents new `Text`/`TextGroup` construction and releases its adapter domain after existing object leases end.
 - `LoadedFont.dispose()` releases font and raster resources after all text leases are gone.
 - `FontLoader.dispose()` releases its claim on the manager-scoped runtime.
 
@@ -383,9 +420,24 @@ are moved into another group.
 
 ## React Three Fiber
 
-`@pmndrs/glyph/react` exports `<Text>`, `<TextGroup>`, and `useFont`. Components preserve the Three ownership and batching
-semantics above. Nested R3F `<Text>` values flatten into formatted spans; an outer text requires a font, while nested spans
-may override it. The maintained renderer target is `@react-three/fiber/webgpu`, which inherits Three's WebGL fallback.
+`@pmndrs/glyph/react` exports `GlyphProvider`, `<Text>`, `<TextGroup>`, and `useFont`. Provide a previously created Three
+handle, or pass the handle directly to an outer component:
+
+```tsx
+<GlyphProvider handle={three}>
+  <TextGroup>
+    <Text font={font}>Hello</Text>
+  </TextGroup>
+</GlyphProvider>
+```
+
+Context carries only the selected handle into R3F host-object construction. It does not initialize Glyph or own a second
+engine, resolver, renderer, scene, canvas, or publication boundary. Changing the handle remounts the retained Three
+object. Nested R3F `<Text>` values flatten into formatted spans and create no Three object of their own; an outer text
+requires a font, while nested spans may override it. React commit applies desired properties in layout effects and calls
+R3F `invalidate()`. The subsequent Three scene traversal performs `shape()`-equivalent publication or cheap transform
+synchronization before the host renderer builds its render list. The maintained renderer target is
+`@react-three/fiber/webgpu`, which inherits Three's WebGL fallback.
 
 ## Deliberately absent surfaces
 

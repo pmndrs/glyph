@@ -17,6 +17,12 @@ sources:
   - id: public-api
     resource: ../../packages/glyph/src/index.ts
     title: Renderer-neutral public exports
+  - id: glyph-runtime
+    resource: ../../packages/glyph/src/glyph.ts
+    title: Root Glyph runtime and named handle registry
+  - id: glyph-config
+    resource: ../../packages/glyph/src/core/glyph-config.ts
+    title: Reusable GlyphConfig publication contracts
   - id: glyph-engine
     resource: ../../packages/glyph/src/glyph-engine.ts
     title: GlyphEngine and font-registration ownership
@@ -56,6 +62,15 @@ sources:
   - id: three-plan
     resource: ../../packages/glyph/src/three/engine-plan-target.ts
     title: Three.js render-plan executor
+  - id: three-config
+    resource: ../../packages/glyph/src/three/handle.ts
+    title: Built-in ThreeConfig and handle factories
+  - id: three-command-buffer
+    resource: ../../packages/glyph/src/three/command-buffer.ts
+    title: Three bound command-buffer binder
+  - id: three-transform-sync
+    resource: ../../packages/glyph/src/three/transform-synchronizer.ts
+    title: Engine-free Three transform synchronization
   - id: three-glyphs
     resource: ../../packages/glyph/src/three/glyphs.ts
     title: Three.js detached Glyphs object
@@ -91,10 +106,11 @@ Status: foundation merged; canary publishing configured while publishing-feature
 
 ## Ownership
 
-The package owns five runtime layers:
+The package owns six runtime layers:
 
 | Layer                   | Owner                 | Responsibility                                                                                                                         |
 | ----------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Root runtime and config | TypeScript core       | Initialize one Glyph engine, construct named adapter handles, and coordinate typed decode/bind/prepare transactions.                   |
 | Font and raster loading | TypeScript core       | Validate portable GLB assets, register shaping payloads, decode selected raster resources, and retain font identity.                   |
 | Shaping and layout      | Rust/Wasm             | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                     |
 | Policy and render plan  | Rust/Wasm             | Interpret a validated renderer policy, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.     |
@@ -108,6 +124,12 @@ for font registrations and the single mutating
 `pmndrs_glyph_engine_update(plannerId, requestOffset, requestLength)` export for render planners.
 TypeScript does not independently shape, lay out, or pack paragraphs.
 
+The root `glyph` runtime initializes one engine idempotently. `glyph.handle(name, config)` creates an adapter-owned backend
+and independent mutable handle state; live names are unique and become reusable after disposal. `GlyphConfig` selects the
+public Codec, explicit decoder, resource resolver, phase-structured renderer preparation, and handle factory. The engine
+owns the canonical typed command buffer and built-in default decoder. The shared publication helper settles decode,
+prepare, commit/discard, and resource-binding ownership synchronously while plan bytes are borrowed.
+
 `GlyphBackend` is the cold registration owner within one engine: it claims policies, font bindings, font stacks, and
 render planners, retains every claimed ID's provenance, and rejects cross-backend references before a live borrow expires.
 `RenderPlanner` is the hot lifetime of one independently revisioned desired-text set. It owns paragraph state,
@@ -119,19 +141,19 @@ that turns those payloads into textures, buffers, and geometry and leases them a
 
 | Subpath                      | Purpose                                                                                                                                   |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `@pmndrs/glyph`              | Font/raster contracts, loading, fallback stacks, formatting helpers, paragraph inputs, layout-query values, and portable bakers.          |
-| `@pmndrs/glyph/three`        | Three `FontLoader`, `Text`, `TextGroup`, material factories, and policy registration.                                                     |
+| `@pmndrs/glyph`              | Root `glyph` runtime plus immutable font/raster contracts, loading, fallback stacks, formatting helpers, paragraphs, and portable bakers. |
+| `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, compatibility `FontLoader`, material factories, and Codec registration.        |
 | `@pmndrs/glyph/three/bitmap` | Compatibility alias re-exporting the renderer-neutral Bitmap raster module.                                                               |
 | `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                                 |
 | `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                                 |
-| `@pmndrs/glyph/react`        | React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                                       |
+| `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                      |
 | `@pmndrs/glyph/react/bitmap` | Typed `useBitmapFont(input, options)` convenience over `useFont`.                                                                         |
 | `@pmndrs/glyph/react/msdf`   | Typed `useMSDF(input, options?)` convenience over `useFont`.                                                                              |
 | `@pmndrs/glyph/react/slug`   | Typed `useSlug(input)` convenience over `useFont`.                                                                                        |
 | `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                              |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                                 |
 | `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                          |
-| `@pmndrs/glyph/core`         | Renderer-neutral Glyph engine and backend, render planners, plan/layout-query views, technique schemas, policy DSL, and binding compiler. |
+| `@pmndrs/glyph/core`         | `GlyphConfig`, bound command phases, publication helpers, engine/backend/planners, plan readers, technique schemas, and Codec policy ABI. |
 | `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                          |
 | `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.                   |
 | `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                          |
@@ -166,6 +188,11 @@ The `glyph glyphs` command uses the same package-owned baker Wasm and Skrifa to 
 IDs, and names retained in a font's `post` or CFF data. Exact repeatable `--name` filters can emit structured JSON or a
 compressed `--unicode-set` accepted by `glyph bake --unicodes`. Fonts without authored names still expose exact IDs rather
 than invented semantic labels. Rich vendor labels and aliases remain external catalog data.
+
+R3F receives one selected `ThreeHandle` through `GlyphProvider` or an explicit outer `handle` prop. Context is only
+constructor dependency injection: it owns no engine, runtime, scene, renderer, canvas, publication cursor, or resource
+pool. Changing the selected handle remounts the Three host object so an object never migrates between handle domains.
+Imperative construction uses `handle.createText()` and `handle.createTextGroup()` directly.
 
 The R3F `Text` component infers the technique union from a required outer font selection, including a font stack chosen
 from runtime state. Callers do not widen dynamic selections to `AnyRasterTechnique`. A nested `Text` is flattened into
