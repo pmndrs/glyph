@@ -1,10 +1,9 @@
 import type { BakeProgressListener } from '../bake.js';
 import type { FontBakeCore, PreparedFontReport } from '../font-baker/index.js';
-import { validateFontArtifact } from '../font-baker/validator.js';
-import type { Sha256Hex } from '../identity.js';
 
 import { composeFontBake, type ComposedFontBakeResult } from './compose-bake.js';
 import { soleCoreFontArtifact } from './core-bake-policy.js';
+import { readRuntimeFontArtifact } from './font-artifact-reader.js';
 import { normalizeUnicodeRanges } from './font-selection.js';
 import type { ResolvedRasterBakePlan } from './raster-bake-plan.js';
 
@@ -16,6 +15,8 @@ export interface FontBakePipelineOptions {
   readonly rasters: readonly ResolvedRasterBakePlan[];
   readonly signal?: AbortSignal;
   readonly onProgress?: BakeProgressListener;
+  /** Optional bake/CI validation. Runtime baking trusts package-produced artifacts. */
+  readonly validateArtifact?: (bytes: Uint8Array) => Promise<unknown>;
 }
 
 export interface FontBakePipelineTimings {
@@ -57,9 +58,13 @@ export async function bakeFontPipeline(options: FontBakePipelineOptions): Promis
   timings.coreBake = performance.now() - phase;
   options.signal?.throwIfAborted();
 
-  phase = performance.now();
-  const coreValidation = await validateFontArtifact(soleCoreFontArtifact(core).bytes);
-  timings.validate += performance.now() - phase;
+  const coreArtifact = soleCoreFontArtifact(core);
+  if (options.validateArtifact !== undefined) {
+    phase = performance.now();
+    await options.validateArtifact(coreArtifact.bytes);
+    timings.validate += performance.now() - phase;
+  }
+  const coreFont = readRuntimeFontArtifact(coreArtifact.bytes);
 
   phase = performance.now();
   const rasters = [];
@@ -69,8 +74,8 @@ export async function bakeFontPipeline(options: FontBakePipelineOptions): Promis
       font: {
         source,
         fontFaceIndex,
-        glyphCount: coreValidation.glyphCount,
-        shapingHash: coreValidation.shapingHash as Sha256Hex,
+        glyphCount: coreFont.extension.metrics.glyphCount,
+        shapingHash: coreFont.shapingHash,
       },
       rasterKey: plan.rasterKey,
       packaging: plan.packaging,
@@ -87,9 +92,11 @@ export async function bakeFontPipeline(options: FontBakePipelineOptions): Promis
   timings.compose = performance.now() - phase;
   options.signal?.throwIfAborted();
 
-  phase = performance.now();
-  await validateFontArtifact(composed.artifacts[0]!.bytes);
-  timings.validate += performance.now() - phase;
+  if (options.validateArtifact !== undefined) {
+    phase = performance.now();
+    await options.validateArtifact(composed.artifacts[0]!.bytes);
+    timings.validate += performance.now() - phase;
+  }
 
   return {
     composed,

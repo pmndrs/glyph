@@ -13,6 +13,7 @@ import {
   type UnicodeRange,
 } from '../font-baker/index.js';
 import { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
+import { validateFontArtifact } from '../font-baker/validator.js';
 
 export {
   FontBakeError,
@@ -181,6 +182,7 @@ async function bakeFontWithResolvedPlans(
     fontFaceIndex: options.font.fontFaceIndex,
     ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
     rasters,
+    validateArtifact: validateFontArtifact,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   });
   timings.coreBake = pipeline.timings.coreBake;

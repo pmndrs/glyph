@@ -164,11 +164,11 @@
       "label": "Runtime bake Worker JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "e94d60140dbf8b14b7ab190704987b25e2abd195b04ec3a05c634a8250bfa525",
-      "rawBytes": 784513,
-      "minifiedBytes": 614255,
-      "gzipBytes": 146042,
-      "brotliBytes": 119843
+      "sha256": "484aceb8e90b079f1476a78615f5e6f87c2263fa1be9be06e412d3c1495f1445",
+      "rawBytes": 50412,
+      "minifiedBytes": 35150,
+      "gzipBytes": 10437,
+      "brotliBytes": 9312
     },
     {
       "id": "bitmap-runtime-js",

@@ -1,8 +1,8 @@
 import type { FontBakeResult } from '../font-baker/index.js';
-import { parseGlb } from '../font-baker/validator.js';
 
 import type { BakeArtifact, BakeWarning, FontPayloadReport, RasterBakeArtifact, RasterPackaging } from '../bake.js';
 import type { Sha256Hex } from '../identity.js';
+import { readGlb } from './glb-reader.js';
 
 export interface RasterComposition {
   readonly raster: RasterBakeArtifact;
@@ -46,7 +46,7 @@ export async function composeFontBake(
     };
   }
 
-  const parsedCore = parseGlb(coreArtifact.bytes);
+  const parsedCore = readGlb(coreArtifact.bytes);
   const document = structuredClone(parsedCore.document);
   const extensions = requireNonArrayObject(document.extensions, '/extensions');
   const font = requireNonArrayObject(extensions.PMNDRS_font, '/extensions/PMNDRS_font');
@@ -100,7 +100,7 @@ export async function composeFontBake(
     for (let artifactIndex = 0; artifactIndex < raster.artifacts.length; artifactIndex += 1) {
       await authenticateArtifact(raster.artifacts[artifactIndex]!, `${path}/artifacts/${artifactIndex}`);
     }
-    const parsedRaster = parseGlb(main.bytes);
+    const parsedRaster = readGlb(main.bytes);
     const rasterExtensions = requireNonArrayObject(parsedRaster.document.extensions, `${path}/extensions`);
     const extensionData = requireNonArrayObject(
       rasterExtensions[raster.extension],
@@ -274,7 +274,7 @@ function containerReport(artifact: BakeArtifact): FontPayloadReport['containers'
   const json = artifact.bytes.subarray(20, 20 + jsonChunkBytes);
   let jsonBytes = json.byteLength;
   while (jsonBytes > 0 && json[jsonBytes - 1] === 0x20) jsonBytes -= 1;
-  const parsed = parseGlb(artifact.bytes);
+  const parsed = readGlb(artifact.bytes);
   return {
     artifactId: artifact.id,
     role: artifact.role,
