@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { FontRegistry } from '../../dist/loader.js';
-import { createGlyphEngine } from '@pmndrs/glyph/core';
+import { createGlyphEngine } from '../../dist/glyph-engine.js';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { GlyphBackend } from '../../dist/core/backend.js';
 import { assertGlyphId, id } from '../../dist/core/render-policy.js';

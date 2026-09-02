@@ -78,7 +78,6 @@ class GlyphRuntime implements Glyph {
             config.fonts.default,
             config.fonts.loadTechnique,
           );
-    let handle: GlyphConfigHandle<Config> | undefined;
     const context = Object.freeze({
       name,
       engine,
@@ -90,12 +89,14 @@ class GlyphRuntime implements Glyph {
       },
     });
 
-    try {
-      handle = invokeGlyphConfigHandleFactory(config, context);
-    } catch (error) {
-      fonts?.dispose();
-      throw error;
-    }
+    const handle = (() => {
+      try {
+        return invokeGlyphConfigHandleFactory(config, context);
+      } catch (error) {
+        fonts?.dispose();
+        throw error;
+      }
+    })();
     if (fonts !== undefined) registerFontFaceHandleStore(handle, fonts);
     this.#handles.set(name, handle);
     return handle;

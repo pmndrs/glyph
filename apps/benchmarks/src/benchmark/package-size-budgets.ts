@@ -8,9 +8,8 @@ export const packageSizeBudgets = {
     gzipBytes: 82_400,
     brotliBytes: 63_500,
   },
-  // Backends, planners, semantic plan readers, portable resources, and call-time validation.
-  // Includes branded ID provenance and the zero-copy compiled-font view used by renderer integrations.
-  'core-subpath-js': {
+  // Config, Codec, schema, technique policy helpers, and the zero-copy command-buffer contract.
+  'glyph-config-js': {
     rawBytes: 437_000,
     minifiedBytes: 286_000,
     gzipBytes: 71_500,

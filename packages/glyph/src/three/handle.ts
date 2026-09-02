@@ -20,14 +20,13 @@ import { bitmap } from '../raster/bitmap-technique.js';
 import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
-import { normalizeGlyphBufferCapacity, type GlyphBufferCapacity } from '../text-properties.js';
+import { normalizeGlyphBufferCapacity } from '../text-properties.js';
 import type { PortableResource } from '../core.js';
 import { loadThreeTechnique } from './internal/builtin-shaders.js';
 import { threeRenderPolicyDescriptor } from './render-policy.js';
 import type { ThreeAllocationMode, ThreeTransformMode } from './render-policy.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { createThreeCodec, type ThreeCodec } from './renderer-resources.js';
-import { configuredHandleRoot, configuredRootHandle } from '../internal/configured-handle.js';
 import { ThreeRoot, normalizeThreeRootCompositing, threeTextConstructionToken, type ThreeRootOptions } from './text.js';
 
 export interface ThreeProgramBinding {
@@ -139,14 +138,15 @@ export type ThreeGlyphConfig = GlyphConfig<
 >;
 /** @internal Resolve the anonymous root fronted by a Three handle. */
 export function threeHandleRoot(handle: ThreeHandle): ThreeRoot {
-  const root = configuredHandleRoot(handle);
-  if (!(root instanceof ThreeRoot)) throw new TypeError('handle is not configured for Three');
-  return root;
+  if (handle.handle !== handle || typeof handle.createText !== 'function') {
+    throw new TypeError('handle is not configured for Three');
+  }
+  return handle;
 }
 
 /** @internal Resolve the owning handle for a root selected from a callable Three handle. */
 export function threeRootHandle(root: ThreeRoot): ThreeHandle {
-  return configuredRootHandle(root);
+  return root.handle;
 }
 
 /** @internal Acquire an independent mounted Font lease from one loaded handle selection. */

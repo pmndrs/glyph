@@ -18,6 +18,7 @@ declare const typedCommandBufferBrand: unique symbol;
 declare const typedCommandIdentityBrand: unique symbol;
 const glyphConfigBrand: unique symbol = Symbol('pmndrs.glyph.config');
 const glyphConfigHandleFactory: unique symbol = Symbol('pmndrs.glyph.config.handle-factory');
+declare const glyphConfigRootType: unique symbol;
 
 /** One lazily projected borrowed sequence. Values expire with their command buffer. */
 export interface BorrowedCommandSequence<Value> extends Iterable<Value> {
@@ -520,17 +521,19 @@ export function applyGlyphPublication<Bindings extends AnyGlyphBindings, Result>
 export interface GlyphRoot {
   /** Stable customization label. `undefined` denotes the handle's anonymous root. */
   readonly name: string | undefined;
+  /** Owning configured handle. The anonymous root returns the handle itself. */
+  readonly handle: GlyphHandle;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-type GlyphRootLifecycleKey = keyof GlyphRoot;
-
 /** Root-owned lifecycle of one named adapter handle and its idempotent publication roots. */
 export type GlyphHandle<Root extends GlyphRoot = GlyphRoot> = ((name: string) => Root) &
-  Omit<Root, GlyphRootLifecycleKey> & {
+  Root & {
     /** Returns the idempotent named root. The handle itself fronts its anonymous default root. */
     readonly name: string;
+    /** The anonymous root is already the handle, so ownership is reflexive here. */
+    readonly handle: GlyphHandle<Root>;
     readonly disposed: boolean;
     dispose(): void;
   };
@@ -715,6 +718,7 @@ interface GlyphConfigContract<
   ConfigExtension extends object = object,
 > {
   readonly [glyphConfigBrand]: true;
+  readonly [glyphConfigRootType]?: () => Root;
   readonly schema: GlyphSchema<Bindings, Boundary>;
   readonly fonts?: GlyphFontConfig<FontTechniques>;
   readonly commands?: Partial<GlyphCommandCapacity>;
@@ -791,19 +795,13 @@ export function invokeGlyphConfigHandleFactory<Config extends AnyGlyphConfig>(
   return config[glyphConfigHandleFactory](config, input);
 }
 
-export type GlyphConfigHandle<Config> =
-  Config extends GlyphConfig<
-    infer Root,
-    AnyGlyphBindings,
-    unknown,
-    unknown,
-    Readonly<Record<string, AnyRasterTechnique>>,
-    unknown,
-    Codec,
-    object
-  >
+export type GlyphConfigHandle<Config> = Config extends {
+  readonly [glyphConfigRootType]?: () => infer Root;
+}
+  ? Root extends GlyphRoot
     ? GlyphHandle<Root>
-    : never;
+    : never
+  : never;
 
 export function defineGlyphConfig<
   Root extends GlyphRoot,

@@ -198,7 +198,13 @@ export function GlyphProvider({
   if (handle !== initial.handle || fontFaces !== initial.fontFaces) {
     throw new Error('GlyphProvider handle and fontFaces are immutable; remount the provider to replace them');
   }
-  const selection = handle === undefined ? useDefaultGlyphContext(store) : selectReactRoot(handle);
+  let selection: Readonly<{ handle: ThreeHandle; root: ThreeRoot }>;
+  if (handle === undefined) {
+    const defaultHandle = getInitializedDefaultThreeHandle() ?? use(defaultThreeHandle());
+    selection = defaultGlyphContext(store, defaultHandle);
+  } else {
+    selection = selectReactRoot(handle);
+  }
   assertUsableHandle(selection.handle);
   assertUsableRoot(selection.root);
   const [faces] = useState(() => createProviderFontFaces(fontFaces));
@@ -230,11 +236,11 @@ function useSelectedGlyphContext(): GlyphReactContext {
   const store = useStore();
   const provided = use(GlyphHandleContext);
   if (provided !== undefined) return provided;
-  return useDefaultGlyphContext(store);
+  const handle = getInitializedDefaultThreeHandle() ?? use(defaultThreeHandle());
+  return defaultGlyphContext(store, handle);
 }
 
-function useDefaultGlyphContext(store: R3fRootStore): GlyphReactContext {
-  const handle = getInitializedDefaultThreeHandle() ?? use(defaultThreeHandle());
+function defaultGlyphContext(store: R3fRootStore, handle: ThreeHandle): GlyphReactContext {
   assertUsableHandle(handle);
   const existing = defaultContexts.get(store);
   if (existing !== undefined && existing.handle === handle && !existing.root.disposed) return existing;
@@ -420,8 +426,8 @@ function TextFontFaceObject({
   readonly publishObject: (value: ThreeText<AnyRasterTechnique> | null) => void;
 }): ReactElement {
   const font = useHandleFontFace(properties.handle, selection);
-  const { handle: _handle, ...textProperties } = properties;
-  return createElement(TextObject, { ...textProperties, desired: bindDesiredFont(desired, font) });
+  const { handle: _handle, ...renderedProperties } = properties;
+  return createElement(TextObject, { ...renderedProperties, desired: bindDesiredFont(desired, font) });
 }
 
 function resolveReactTextFont(

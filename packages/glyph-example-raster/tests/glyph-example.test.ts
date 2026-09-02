@@ -20,7 +20,7 @@ import {
   registerRasterPlanProgram,
   techniqueProgram,
   type PortableGeometryPayload,
-} from '@pmndrs/glyph/core';
+} from '@pmndrs/glyph';
 import {
   registerThreeRasterPlanProgram,
   defineTextMaterial,

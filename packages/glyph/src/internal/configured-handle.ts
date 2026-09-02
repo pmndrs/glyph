@@ -51,23 +51,6 @@ const DEFAULT_LIMITS: RenderPlannerLimits = Object.freeze({
   maxOutputBytes: 64 * 1024 * 1024,
 });
 
-const anonymousRoots = new WeakMap<GlyphHandle, GlyphRoot>();
-const owningHandles = new WeakMap<GlyphRoot, GlyphHandle>();
-
-/** @internal Resolves the anonymous root projected by a configured handle. */
-export function configuredHandleRoot<Root extends GlyphRoot>(handle: GlyphHandle<Root>): Root {
-  const root = anonymousRoots.get(handle);
-  if (root === undefined) throw new TypeError('handle was not created by glyph.handle()');
-  return root as Root;
-}
-
-/** @internal Resolves the configured handle that owns one anonymous or named root. */
-export function configuredRootHandle<Root extends GlyphRoot>(root: Root): GlyphHandle<Root> {
-  const handle = owningHandles.get(root);
-  if (handle === undefined) throw new TypeError('root was not created by glyph.handle()');
-  return handle as GlyphHandle<Root>;
-}
-
 interface HandleInput {
   readonly name: string;
   readonly engine: GlyphEngine;
@@ -195,8 +178,6 @@ class ConfiguredHandleDomain<
       throw error;
     }
     this.handle = this.#createHandleProxy(anonymous);
-    anonymousRoots.set(this.handle, anonymous);
-    owningHandles.set(anonymous, this.handle);
   }
 
   #root(name: string | undefined): Root {
@@ -236,7 +217,6 @@ class ConfiguredHandleDomain<
         throw new TypeError('GlyphConfig.root.create() must return context.create(...)');
       }
       this.#roots.set(name, selected);
-      if (this.handle !== undefined) owningHandles.set(selected, this.handle);
       return selected;
     } catch (error) {
       try {
@@ -277,6 +257,7 @@ class ConfiguredHandleDomain<
     return new Proxy(extension, {
       get: (target, property) => {
         if (property === 'name') return name;
+        if (property === 'handle') return this.handle;
         if (property === 'disposed') return disposed;
         if (property === 'dispose') return dispose;
         const value = Reflect.get(target, property, target);
@@ -290,7 +271,9 @@ class ConfiguredHandleDomain<
         return method;
       },
       set: (target, property, value) => {
-        if (property === 'name' || property === 'disposed' || property === 'dispose') return false;
+        if (property === 'name' || property === 'handle' || property === 'disposed' || property === 'dispose') {
+          return false;
+        }
         return Reflect.set(target, property, value, target);
       },
     }) as Extension & GlyphRoot;
@@ -308,6 +291,7 @@ class ConfiguredHandleDomain<
     return new Proxy(select, {
       get: (_target, property) => {
         if (property === 'name') return this.#input.name;
+        if (property === 'handle') return this.handle;
         if (property === 'disposed') return this.#disposed;
         if (property === 'dispose') return dispose;
         const value = Reflect.get(anonymous, property, anonymous);
@@ -321,7 +305,9 @@ class ConfiguredHandleDomain<
         return method;
       },
       set: (_target, property, value) => {
-        if (property === 'name' || property === 'disposed' || property === 'dispose') return false;
+        if (property === 'name' || property === 'handle' || property === 'disposed' || property === 'dispose') {
+          return false;
+        }
         return Reflect.set(anonymous, property, value, anonymous);
       },
     }) as GlyphHandle<Root>;

@@ -75,6 +75,7 @@ test('one initialized Glyph runtime creates independent named Three handles over
     { technique: bitmap, options: { strikes: [16] } },
   );
   const first = glyph.handle('three:integration:first', ThreeConfig);
+  assert.equal(first.handle, first, 'the handle is its anonymous root owner');
   let wrappedEncodeCalls = 0;
   let wrappedResolveCalls = 0;
   let wrappedRendererFactories = 0;
@@ -112,6 +113,7 @@ test('one initialized Glyph runtime creates independent named Three handles over
   const secondScene = new THREE.Scene();
   const secondSceneRoot = first('secondary-scene');
   assert.equal(first('secondary-scene'), secondSceneRoot, 'one handle interns named roots by label');
+  assert.equal(secondSceneRoot.handle, first, 'a terminal named root identifies its owning handle without nesting');
   const label = first.createText({ font, text: 'Handle owned', style: { fontSize: 16 } });
   const secondSceneLabel = secondSceneRoot.createText({
     font,

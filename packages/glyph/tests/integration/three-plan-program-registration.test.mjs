@@ -27,7 +27,7 @@ import {
   techniqueProgram,
   u32,
   id,
-} from '@pmndrs/glyph/core';
+} from '@pmndrs/glyph';
 import {
   createImmutableFontBacking,
   createImmutableFontLease,
