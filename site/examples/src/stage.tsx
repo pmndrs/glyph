@@ -1,4 +1,4 @@
-import { Canvas, useFrame, useThree } from '@react-three/fiber/webgpu';
+import { Canvas, useFrame } from '@react-three/fiber/webgpu';
 import type { ReactNode } from 'react';
 import { AgXToneMapping, NoToneMapping, PerspectiveCamera } from 'three/webgpu';
 
@@ -66,9 +66,7 @@ export function Stage({
 
 /** Keeps `WORLD_WIDTH` units visible across the viewport whatever its aspect. */
 function FitWidth() {
-  const camera = useThree((state) => state.camera);
-  const size = useThree((state) => state.size);
-  useFrame(() => {
+  useFrame(({ camera, size }) => {
     if (!(camera instanceof PerspectiveCamera)) return;
     const aspect = size.width / Math.max(size.height, 1);
     // Visible height at distance d is 2·d·tan(fov/2); width is that times aspect.

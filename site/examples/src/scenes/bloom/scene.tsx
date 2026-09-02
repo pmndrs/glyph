@@ -45,7 +45,6 @@ export default function Bloom() {
 
 function Glow() {
   const strength = useRef<UniformNode<'float', number> | null>(null);
-  const elapsed = useRef(0);
 
   useRenderPipeline(({ passes, renderPipeline }) => {
     // Nullable on this r3f alpha: the callback also runs for the teardown pass.
@@ -56,9 +55,8 @@ function Glow() {
     renderPipeline.outputNode = scene.add(glow);
   });
 
-  useFrame((_state, delta) => {
-    elapsed.current += delta;
-    if (strength.current !== null) strength.current.value = 0.75 + Math.sin(elapsed.current * 1.4) * 0.45;
+  useFrame(({ elapsed }) => {
+    if (strength.current !== null) strength.current.value = 0.75 + Math.sin(elapsed * 1.4) * 0.45;
   });
 
   return null;

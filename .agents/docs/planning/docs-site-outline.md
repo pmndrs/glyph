@@ -129,6 +129,7 @@ materials — never loaded, to keep the bundle small.
 | runtime-bake | fonts/runtime-baking | load a TTF, watch the Worker bake it |
 | groups | text/text-and-groups | many labels, draw count with and without a group |
 | styling | text/styling | every `TextStyle` property, one control each |
+| decorations | text/styling | underline, overline, line-through, every line style, thickness and offset, a gradient decoration material |
 | paragraph-layout | text/paragraph-layout | wrap/align/overflow/columns on an animated box |
 | justify | text/paragraph-layout | justification bounds and last-line policy |
 | rich-text | text/rich-text | `txt`/`span` and nested `<Text>`, per-span font and material |
@@ -146,7 +147,7 @@ materials — never loaded, to keep the bundle small.
 | errors | text/errors | provoke each `TextFrameError` cause |
 | provider | react/components | two handles, two providers, one font |
 | hooks | react/hooks | preload, Suspense, StrictMode |
-| batching | advanced/performance | draw calls vs compositing mode |
+| batching | advanced/performance | the same labels in a `TextGroup`, materials interleaved (30 draws) vs sorted into runs (2) |
 | raster-ratio | advanced/performance | DPR and `rasterPixelRatio` on a paragraph seen larger than authored |
 | zoom | advanced/performance | continuous zoom across techniques |
 | shaping | advanced/how-it-works | Arabic joining, Indic reordering, mixed bidi, CJK breaks |
@@ -411,6 +412,21 @@ Unloaded font at construction · outer `<Text>` without `font` · options not ma
 ### advanced/migration (nav 58)
 
 - Table old → new: `new FontLoader().loadAsync` → `loadFont`/hooks; implicit domain → `glyph.handle`; `Text.layout()` → `measure()`; `insertText`/`deleteText`/`replaceText`/`setSpan`/`removeSpan` → assignment; `paint` → `style`.
+
+## Findings for core (2026-09-02, codex tree at 4ed218c1d plus uncommitted planner/retention edits)
+
+Measured while building the examples against `GLYPH_SOURCE=<codex>/packages/glyph`; each is reproducible from the named example.
+
+| Finding | Evidence | Example |
+| --- | --- | --- |
+| Decoration draws collapse to nothing | the decoration draw's transform-index lane holds `0x80000009`-style values (a flag bit over the index) while glyph draws hold `1, 2, 3`; `indexedTransformNodes` multiplies the raw value, reads a zero matrix, and the quad collapses. `rect` (0, 0.387, 3.61, 0.023) and the packed color `#e7ecf6` are correct. | decorations |
+| Only `solid` decoration style is implemented | `Text style decoration style 'double' is not implemented; only 'solid' is supported` is thrown at construction for `double`, `dotted`, `dashed`, `wavy` | decorations |
+| `compositing: 'independent'` does not fold interleaved materials | thirty labels alternating two materials in one `TextGroup` plan 30 draws under both modes; sorted into two runs they plan 2; standalone Texts plan one draw each | batching |
+| A thrown Text construction error in React becomes a retry loop | after the `'double'` throw, `Cannot convert undefined or null to object` repeats from the React layer (the rejected-promise eviction seen with fonts); the scene stays blank with no boundary | decorations, before its fix |
+| React recovered from a render error | `Minified React error #520` (recovered by a synchronous render) with cause `#467` (update hook called on initial render), once, on the decorations page under the React Compiler | decorations |
+| `measure().width` is the resolved box; `contentWidth` is the advance extent | a ring built from `width` left a gap; `contentWidth` closes it | arc |
+
+The pane the examples are verified in is hidden between tool calls (`document.hidden === true`, no rAF), and r3f's Canvas mounts children only once its container measures: take a throwaway screenshot before waiting, then the real one, and navigate with a fresh query string after every rebuild so cached HTML does not 404 on old chunks.
 
 ## Verification
 

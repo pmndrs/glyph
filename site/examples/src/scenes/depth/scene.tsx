@@ -25,11 +25,9 @@ const inScene = defineTextMaterial((context) => {
 export default function Depth() {
   const inter = useMsdf(INTER);
   const ball = useRef<Mesh>(null);
-  const elapsed = useRef(0);
 
-  useFrame((_state, delta) => {
-    elapsed.current += delta;
-    const t = elapsed.current * 0.6;
+  useFrame(({ elapsed }) => {
+    const t = elapsed * 0.6;
     // An ellipse through both words: in front of them for half a turn, behind for the other half.
     ball.current?.position.set(Math.sin(t) * 3.4, 0.15, Math.cos(t) * 1.4);
   });

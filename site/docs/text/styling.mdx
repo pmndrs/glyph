@@ -97,6 +97,18 @@ outline needs a larger `pixelRange` at bake. */}
 
 ## Decoration
 
+> [!NOTE]
+> `decoration.style` is typed as `'solid' | 'double' | 'dotted' | 'dashed' | 'wavy'`, but the runtime implements
+> `solid` only; any other value throws `Text style decoration style '…' is not implemented; only 'solid' is supported`
+> at construction. The other four are reserved for the wire format (`frame-wire.ts`) and land with the decoration work.
+
+<iframe
+  src="/examples/?example=decorations"
+  title="Every decoration line and style, and a custom decoration material"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
 ```ts
 decoration: { underline: true, lineThrough: false, color: '#ffd166', thickness: 0.03, offset: 0 }
 ```
