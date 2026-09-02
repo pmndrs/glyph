@@ -1,7 +1,7 @@
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
-import type { AnyTechniqueSchema, PolicyBufferDeclaration, PolicyBufferDeclarations } from '../../index.js';
+import type { AnyTechniqueSchema, CodecBufferDeclaration, CodecBufferDeclarations } from '../../index.js';
 import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../index.js';
 import { bitmapSchema, bitmap } from '../../raster/bitmap-technique.js';
 import { msdfSchema } from '../../raster/msdf.js';
@@ -10,7 +10,7 @@ import { slugSchema } from '../../raster/slug-technique.js';
 import { slug } from '../../raster/slug-technique.js';
 import { decorationShader } from '../../tsl/decoration-shader.js';
 import type { ThreeRendererResources } from '../renderer-resources.js';
-import type { ThreeRootContext, ThreeTextMaterial, ThreeTextMaterialContext } from '../material.js';
+import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
 import type { ThreePlanProgramBuffer } from '../plan-program-registry.js';
 import { decorationSchema, threeSystemBuffers } from '../render-policy.js';
 import type { ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../handle.js';
@@ -362,7 +362,7 @@ export class ThreeMaterialRealizer {
       this.#bindingId(resource.binding),
       this.key(material),
       ...extra,
-      required.map((buffer) => `${buffer.policyBufferId}:${buffer.storageKey}`).join(','),
+      required.map((buffer) => `${buffer.codecBufferId}:${buffer.storageKey}`).join(','),
       glyphStorageProgramKey(buffers),
       transformProgramKey(transform, this.#context.transformGeneration),
       addressingProgramKey(addressing),
@@ -516,7 +516,7 @@ const techniqueSchemas: ReadonlyMap<string, AnyTechniqueSchema> = new Map<string
   [slug.id, slugSchema],
 ]);
 
-export function glyphOriginBuffer(resource: ThreeHostResource): PolicyBufferDeclaration | undefined {
+export function glyphOriginBuffer(resource: ThreeHostResource): CodecBufferDeclaration | undefined {
   const schema = resource.program?.schema ?? techniqueSchemas.get(resource.technique);
   if (schema?.glyphOrigin === undefined) return undefined;
   return schema.buffers[schema.glyphOrigin.buffer];
@@ -534,7 +534,7 @@ export function transformProgramKey(transform: TransformRealization, generation:
   return transform.kind === 'direct' ? 'direct' : `indexed:${transform.indices.storageKey}:table:${generation}`;
 }
 
-function schemaDrawBuffers<Buffers extends PolicyBufferDeclarations>(
+function schemaDrawBuffers<Buffers extends CodecBufferDeclarations>(
   schema: { readonly buffers: Buffers },
   buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
   label: string,

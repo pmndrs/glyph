@@ -9,7 +9,7 @@ import { id } from '../../dist/core/render-policy.js';
 import { assertOwnedPlanPublication, PlanPublicationExpiredError } from '../../dist/core/retention.js';
 import { compilePlannerFrameUpdate } from '../../dist/core/frame-wire.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
-import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
+import { threeCodecBytes } from '../../dist/three/render-policy.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
@@ -42,7 +42,7 @@ async function drivenTransport() {
   const wasm = await readFile(wasmUrl);
   const shaper = await createRuntimeShaper({ wasm });
   const backend = new GlyphBackend(shaper);
-  backend.registerPolicy(POLICY_HANDLE, threeRenderPolicyBytes());
+  backend.registerPolicy(POLICY_HANDLE, threeCodecBytes());
   const transport = backend._createPlanTransport({
     handle: id.planner('publication-retention/transport'),
     requestCapacity: 4096,

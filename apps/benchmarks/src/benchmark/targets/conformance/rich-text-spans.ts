@@ -18,7 +18,7 @@ import {
   type RichTextCompanionFonts,
 } from '../../../workloads/rich-text/scene';
 import type { BenchmarkTarget } from '../../contracts';
-import { policyAttributeName, requiredPolicyAttribute } from '../three-policy-buffer-evidence';
+import { codecAttributeName, requiredCodecAttribute } from '../three-policy-buffer-evidence';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
 type BitmapTechnique = typeof bitmap;
@@ -33,9 +33,9 @@ type BitmapTechnique = typeof bitmap;
 const CONTENT_WIDTH = 700;
 const BODY_FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
-const BITMAP_COLOR_ATTRIBUTE = policyAttributeName(bitmapSchema.buffers.color.id);
-const DECORATION_RECT_ATTRIBUTE = policyAttributeName(hashId.buffer('glyph-three/decoration/rect'));
-const DECORATION_PACKED_ATTRIBUTE = policyAttributeName(hashId.buffer('glyph-three/decoration/packed'));
+const BITMAP_COLOR_ATTRIBUTE = codecAttributeName(bitmapSchema.buffers.color.id);
+const DECORATION_RECT_ATTRIBUTE = codecAttributeName(hashId.buffer('glyph-three/decoration/rect'));
+const DECORATION_PACKED_ATTRIBUTE = codecAttributeName(hashId.buffer('glyph-three/decoration/packed'));
 // Decoration gather convention (D-248): buffer 2 packs [color, flags | style << 8] per instance. The bit values are
 // the shaper ABI's `engine.decorationFlags` / `engine.decorationStyles`, pinned here because a silent renumbering
 // must fail this lane rather than shift what the probe counts.
@@ -371,8 +371,8 @@ function readEvidence(scene: THREE.Scene, root: ThreeRoot, layout: GlyphLayout):
   drawRoot?.traverse((child) => {
     if (!(child instanceof THREE.Mesh) || !(child.geometry instanceof THREE.InstancedBufferGeometry)) return;
     if (child.userData.pmndrsGlyphPrimitiveKind === 'decoration') {
-      const rect = requiredPolicyAttribute(child.geometry, DECORATION_RECT_ATTRIBUTE, 'decoration rect evidence');
-      const packed = requiredPolicyAttribute(child.geometry, DECORATION_PACKED_ATTRIBUTE, 'decoration packed evidence');
+      const rect = requiredCodecAttribute(child.geometry, DECORATION_RECT_ATTRIBUTE, 'decoration rect evidence');
+      const packed = requiredCodecAttribute(child.geometry, DECORATION_PACKED_ATTRIBUTE, 'decoration packed evidence');
       if (!(rect?.array instanceof Float32Array) || !(packed?.array instanceof Uint32Array)) {
         throw new Error('decoration draw is missing its rect or packed color/flags buffer');
       }
@@ -388,7 +388,7 @@ function readEvidence(scene: THREE.Scene, root: ThreeRoot, layout: GlyphLayout):
       return;
     }
     drawCount += 1;
-    const attribute = requiredPolicyAttribute(child.geometry, BITMAP_COLOR_ATTRIBUTE, 'Bitmap color evidence');
+    const attribute = requiredCodecAttribute(child.geometry, BITMAP_COLOR_ATTRIBUTE, 'Bitmap color evidence');
     const start = (child.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
     const count = child.geometry.instanceCount;
     renderedGlyphCount += count;

@@ -1,4 +1,4 @@
-import type { PolicyProgram } from '@pmndrs/glyph';
+import type { CodecProgram } from '@pmndrs/glyph';
 
 import type {
   ExampleBufferBinding,
@@ -11,7 +11,7 @@ import type {
 /** One retained renderer draw, with engine identities already replaced by config bindings. */
 export interface ExampleDraw {
   readonly kind: 'batch' | 'instance';
-  readonly program: PolicyProgram;
+  readonly program: CodecProgram;
   readonly programVariant: number;
   readonly material: ExampleMaterial | undefined;
   readonly buffers: readonly ExampleBufferBinding[];

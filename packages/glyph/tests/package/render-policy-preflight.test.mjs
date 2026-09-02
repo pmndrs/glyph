@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compileRenderPolicy, id } from '../../dist/index.js';
+import { compileCodec as compileRenderPolicy, id } from '../../dist/index.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 
 const layouts = textShaperAbi.layouts;

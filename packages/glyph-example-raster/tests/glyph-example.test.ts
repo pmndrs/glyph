@@ -26,7 +26,7 @@ import {
   defineTextMaterial,
   FontLoader,
   ThreeConfig,
-  threePolicyAbi,
+  threeCodecAbi,
   type ThreePlanProgramBuffer,
   type ThreePlanProgramMaterialContext,
   type ThreeRootContext,
@@ -184,7 +184,7 @@ describe('public external raster proof', () => {
       expect(geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.origin.id))).toBeDefined();
       expect(geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.size.id))).toBeDefined();
       expect(geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.color.id))).toBeDefined();
-      expect(geometry.getAttribute(glyphAttribute(threePolicyAbi.transformBufferId))).toBeDefined();
+      expect(geometry.getAttribute(glyphAttribute(threeCodecAbi.transformBufferId))).toBeDefined();
       expect(geometry.instanceCount).toBeGreaterThan(0);
       const sizes = geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.size.id));
       const inset = glyphExampleDescriptor({ paletteSeed: 7 }).inset;

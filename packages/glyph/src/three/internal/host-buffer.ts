@@ -1,19 +1,19 @@
 import * as THREE from 'three/webgpu';
 
-import type { PolicyBufferId, RenderPlanScalarType } from '../../index.js';
+import type { CodecBufferId, RenderPlanScalarType } from '../../index.js';
 import type { ThreeBufferBinding } from '../handle.js';
 
 export type ScalarArray = Float32Array | Uint32Array | Uint16Array;
 
-declare const threePolicyAttributeNameBrand: unique symbol;
-export type ThreePolicyAttributeName = string & { readonly [threePolicyAttributeNameBrand]: true };
-export type ThreeBufferBindingId = PolicyBufferId | 'order';
+declare const threeCodecAttributeNameBrand: unique symbol;
+export type ThreeCodecAttributeName = string & { readonly [threeCodecAttributeNameBrand]: true };
+export type ThreeBufferBindingId = CodecBufferId | 'order';
 
 export interface RetainedBuffer {
   readonly binding: ThreeBufferBinding;
   readonly storageKey: string;
-  readonly policyBufferId: ThreeBufferBindingId;
-  readonly threeAttributeName: ThreePolicyAttributeName;
+  readonly codecBufferId: ThreeBufferBindingId;
+  readonly threeAttributeName: ThreeCodecAttributeName;
   readonly scalarType: RenderPlanScalarType;
   readonly vectorWidth: number;
   readonly capacityRecords: number;
@@ -64,8 +64,8 @@ export function scalarArray(scalarType: RenderPlanScalarType, byteLength: number
   return new Uint16Array(byteLength / 2);
 }
 
-export function threePolicyAttributeName(id: ThreeBufferBindingId): ThreePolicyAttributeName {
-  return `_pmndrsGlyph_${id}` as ThreePolicyAttributeName;
+export function threeCodecAttributeName(id: ThreeBufferBindingId): ThreeCodecAttributeName {
+  return `_pmndrsGlyph_${id}` as ThreeCodecAttributeName;
 }
 
 export function transformAttribute(transformCapacity: number): THREE.StorageInstancedBufferAttribute {

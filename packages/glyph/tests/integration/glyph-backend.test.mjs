@@ -7,7 +7,7 @@ import { createGlyphEngine, createGlyphHandleState } from '../../dist/glyph-engi
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { GlyphBackend } from '../../dist/core/backend.js';
 import { assertGlyphId, id } from '../../dist/core/render-policy.js';
-import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
+import { threeCodecBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import {
   engineFrameUpdateBytes,
@@ -201,7 +201,7 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
     slug: 0xf22c_7908,
     decoration: 0x3455fa81,
   });
-  const bytes = threeRenderPolicyBytes();
+  const bytes = threeCodecBytes();
   const request = abi.layouts.policyRequest;
   const program = abi.layouts.policyProgram;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);

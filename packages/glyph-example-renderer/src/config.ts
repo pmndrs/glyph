@@ -13,7 +13,7 @@ import {
   type GlyphRootInstanceBindingInput,
   type GlyphRootServices,
   type GlyphSchema,
-  type PolicyProgram,
+  type CodecProgram,
   type PortableResource,
 } from '@pmndrs/glyph';
 
@@ -21,7 +21,7 @@ import type { ExampleRendererDevice } from './device.js';
 import { exampleRendererShader, RecordingExampleRendererDevice } from './device.js';
 import type { ExampleDrawList } from './draw-list.js';
 import { ExampleText, type ExampleTextOptions } from './engine.js';
-import { exampleRenderPolicyDescriptor } from './policy.js';
+import { exampleCodecDescriptor } from './policy.js';
 
 export interface ExampleResolvedResource {
   readonly name: string;
@@ -34,7 +34,7 @@ export interface ExampleBufferBinding {
 }
 export interface ExampleProgramBinding {
   readonly kind: 'example-program';
-  readonly program: PolicyProgram;
+  readonly program: CodecProgram;
 }
 export interface ExampleInstanceSpanBinding {
   readonly kind: 'example-instance-span';
@@ -105,7 +105,7 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
   const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
   return defineGlyphConfig({
     schema: ExampleSchema,
-    encode: ({ ids }) => ({ descriptor: exampleRenderPolicyDescriptor(ids) }),
+    encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
     resolve: ({ technique, resourceName, payload }) => {
       if (technique !== techniqueId) {
         throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${technique}"`);

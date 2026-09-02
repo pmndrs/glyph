@@ -1,12 +1,12 @@
 import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/webgpu';
 
 import {
-  createRasterPolicyProgram,
+  createRasterCodecProgram,
   resolveRasterPlanProgram,
   type AnyTechniqueSchema,
-  type PolicyBufferDeclarations,
-  type PolicyScalarKind,
-  type RenderIdFactory,
+  type CodecBufferDeclarations,
+  type CodecScalarKind,
+  type CodecIdFactory,
   type PortableResource,
   type PortableTextureFormat,
   type TechniqueGeometryDeclaration,
@@ -16,7 +16,7 @@ import {
 } from '../index.js';
 import { isRasterTechnique, type AnyRasterTechnique } from '../raster-technique.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
-import { threePolicyCapabilitySet, threeSystemBuffers } from './render-policy.js';
+import { threeCodecCapabilitySet, threeSystemBuffers } from './render-policy.js';
 
 export interface ThreePlanProgramBuffer {
   readonly scalarType: RenderPlanScalarType;
@@ -50,14 +50,14 @@ export interface ThreePlanProgramMaterialContext {
 }
 
 export interface ThreeRasterPlanBufferCapability<
-  Scalar extends PolicyScalarKind = PolicyScalarKind,
+  Scalar extends CodecScalarKind = CodecScalarKind,
   VectorWidth extends number = number,
 > {
   readonly scalar: Scalar;
   readonly vectorWidth: VectorWidth;
 }
 
-export type ThreeRasterPlanBufferCapabilities<Buffers extends PolicyBufferDeclarations> = {
+export type ThreeRasterPlanBufferCapabilities<Buffers extends CodecBufferDeclarations> = {
   readonly [Name in keyof Buffers]: ThreeRasterPlanBufferCapability<
     Buffers[Name]['scalar'],
     Buffers[Name]['lanes']['length']
@@ -85,7 +85,7 @@ export interface ThreeRasterPlanVariant<Schema extends AnyTechniqueSchema = AnyT
   readonly id: string;
   /** Shader implementation language, for example `tsl`, `wgsl`, or `glsl`. */
   readonly language: string;
-  /** Shader-visible named policy-buffer shapes consumed by this implementation. */
+  /** Shader-visible named Codec-buffer shapes consumed by this implementation. */
   readonly buffers: ThreeRasterPlanBufferCapabilities<Schema['buffers']>;
   /** Named portable resource kinds and formats consumed by this implementation. */
   readonly resources: ThreeRasterPlanResourceCapabilities<Schema['resources']>;
@@ -108,15 +108,15 @@ export interface CompiledThreeRasterPlanProgram {
   readonly variant: ThreeRasterPlanVariant;
   readonly techniqueId: number;
   readonly programId: number;
-  readonly policy: import('../index.js').PolicyProgram;
+  readonly codec: import('../index.js').CodecProgram;
   createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
 }
 
 const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
 const registeredSources = new WeakMap<object, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
-const snapshotsByRegistry = new WeakMap<RenderIdFactory, WeakRef<RenderIdFactory>[]>();
-const snapshotReferences = new Set<WeakRef<RenderIdFactory>>();
-const snapshotFinalizer = new FinalizationRegistry<WeakRef<RenderIdFactory>>((reference) => {
+const snapshotsByRegistry = new WeakMap<CodecIdFactory, WeakRef<CodecIdFactory>[]>();
+const snapshotReferences = new Set<WeakRef<CodecIdFactory>>();
+const snapshotFinalizer = new FinalizationRegistry<WeakRef<CodecIdFactory>>((reference) => {
   snapshotReferences.delete(reference);
 });
 const THREE_RESERVED_ATTRIBUTE_WIDTHS: Readonly<Record<string, readonly number[]>> = Object.freeze({
@@ -211,9 +211,9 @@ export function registerThreeRasterPlanProgram<
   registeredSources.set(program as object, snapshot);
 }
 
-/** @internal Compile the cold registry snapshot into policy, binding, and material factories. */
+/** @internal Compile the cold registry snapshot into Codec, binding, and material factories. */
 export function compiledThreeRasterPlanPrograms(
-  identities: RenderIdFactory,
+  identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct' = 'indexed',
 ): readonly CompiledThreeRasterPlanProgram[] {
   const selected = [...programs.values()].sort((left, right) => left.technique.id.localeCompare(right.technique.id));
@@ -256,7 +256,7 @@ export function assertThreeGeometryPayload(
 }
 
 /** @internal Forget a disposed Three coordinator's renderer snapshot. */
-export function releaseThreeRasterPlanProgramSnapshot(identities: RenderIdFactory): void {
+export function releaseThreeRasterPlanProgramSnapshot(identities: CodecIdFactory): void {
   const references = snapshotsByRegistry.get(identities);
   if (references === undefined) return;
   const reference = references.pop();
@@ -276,30 +276,30 @@ function liveSnapshotCount(): number {
 }
 
 /** Three-owned semantic values used by renderer-specific shader adapters. */
-export interface ThreePolicyAbi {
+export interface ThreeCodecAbi {
   readonly scalarTypes: Readonly<{ readonly f32: 'f32'; readonly u32: 'u32'; readonly u16: 'u16' }>;
   readonly transformBufferId: typeof threeSystemBuffers.transformIndex.id;
 }
 
-/** Three-owned policy metadata; raw shaper opcodes and layouts remain package-private. */
-export const threePolicyAbi: ThreePolicyAbi = Object.freeze({
+/** Three-owned Codec metadata; raw shaper opcodes and layouts remain package-private. */
+export const threeCodecAbi: ThreeCodecAbi = Object.freeze({
   scalarTypes: Object.freeze({ f32: 'f32', u32: 'u32', u16: 'u16' }),
   transformBufferId: threeSystemBuffers.transformIndex.id,
 });
 
 function compileProgram(
   program: ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>,
-  identities: RenderIdFactory,
+  identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterPlanProgram {
   const portable = resolveRasterPlanProgram(program.technique.id);
   if (portable === undefined)
     throw new Error(`no portable raster plan program is registered for "${program.technique.id}"`);
   const system = transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
-  const policy = createRasterPolicyProgram(portable, {
+  const codec = createRasterCodecProgram(portable, {
     namespace: 'three',
     system,
-    capabilitySet: threePolicyCapabilitySet(),
+    capabilitySet: threeCodecCapabilitySet(),
     transformMode,
     allocationMode: 'ordered',
     ids: identities,
@@ -308,9 +308,9 @@ function compileProgram(
     technique: program.technique,
     schema: portable.schema,
     variant: program.variant,
-    techniqueId: policy.techniqueId,
-    programId: policy.programId,
-    policy,
+    techniqueId: codec.techniqueId,
+    programId: codec.programId,
+    codec,
     createMaterial: (context) => program.variant.createMaterial(context),
   };
 }

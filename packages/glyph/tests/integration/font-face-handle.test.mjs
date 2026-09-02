@@ -5,10 +5,10 @@ import { Scene } from 'three/webgpu';
 
 import {
   FontLoadError,
-  createRasterPolicyProgram,
+  createRasterCodecProgram,
   defineGlyphConfig,
   defineGlyphSchema,
-  definePolicyBuffers,
+  defineCodecBuffers,
   glyph,
   id,
   resourceLease,
@@ -37,7 +37,7 @@ const portableCapabilities = Object.freeze({
   fragmentationBudget: 4,
   wholeBufferThresholdBasisPoints: 7_500,
 });
-const portableSystemBuffers = definePolicyBuffers({
+const portableSystemBuffers = defineCodecBuffers({
   stableGlyphId: {
     id: id.buffer('test.font-face-portable-config/stable-glyph'),
     scalar: 'u32',
@@ -64,7 +64,7 @@ function defineFontAwareConfig() {
       descriptor: {
         capabilitySets: [portableCapabilities],
         programs: [
-          createRasterPolicyProgram(bitmapPlanProgram, {
+          createRasterCodecProgram(bitmapPlanProgram, {
             namespace: 'font-face-test',
             system: portableSystemBuffers,
             capabilitySet: portableCapabilities,

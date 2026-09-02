@@ -1,5 +1,5 @@
 export {
-  createRasterPolicyProgram,
+  createRasterCodecProgram,
   defineGlyphConfig,
   defineGlyphSchema,
   resourceLease,
