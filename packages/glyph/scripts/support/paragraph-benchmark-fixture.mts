@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { glyph } from '../../dist/index.js';
-import { FontLoader, ThreeConfig } from '../../dist/three.js';
+import { ThreeConfig } from '../../dist/three.js';
 import { bitmap } from '../../dist/three/bitmap.js';
 import * as THREE from 'three/webgpu';
 
@@ -35,18 +35,14 @@ export async function loadParagraphBenchmarkFixture(corpus: BenchmarkCorpus = 'l
   const handle = glyph.handle(`three:paragraph-benchmark:${String(nextFixtureHandle)}`, ThreeConfig);
   nextFixtureHandle += 1;
   const workspaceRoot = new URL('../../../../', import.meta.url);
-  const loader = new FontLoader();
   const bytes = await readFile(
     new URL(`apps/benchmarks/fixtures/rendering/${corpusFixtures[corpus].font}`, workspaceRoot),
   );
-  const loaded = await loader.loadAsync({
-    input: { baked: `data:application/octet-stream;base64,${bytes.toString('base64')}` },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const loaded = glyph.fontFace({ baked: { bytes, ownership: 'copy' } }, { format: bitmap({ strikes: [16] }) });
+  await loaded.load();
   let nextRoot = 1;
   return {
     handle,
-    loader,
     loaded,
     root() {
       const root = handle(`paragraph:${String(nextRoot)}`);
@@ -55,7 +51,6 @@ export async function loadParagraphBenchmarkFixture(corpus: BenchmarkCorpus = 'l
     },
     dispose() {
       loaded.dispose();
-      loader.dispose();
       handle.dispose();
     },
   };
