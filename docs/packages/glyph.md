@@ -250,13 +250,16 @@ keep its identity registry alive or permanently poison later registration after 
 One baked GLB may expose several raster techniques without repeating its input identity. Root
 `loadFont(input, rasters, options?)` accepts a nonempty raster tuple and returns a position-preserving tuple of `Font`
 values, fetching and validating the artifact once while retaining each technique's exact data type. The new declaration
-surface is `glyph.fontFace(source, { family?, format? })`. The face is its default selection, `.default` aliases it, and
-declared format keys such as `.bitmap`, `.msdf`, or `.slug` select inferred techniques. The consuming handle supplies the
-default key when `format` is omitted. Each selection owns idempotent `selection.load(handle)` and synchronous
-`selection.isLoaded(handle)`; imperative Three rejects unloaded construction before it creates retained state.
+surface is `glyph.fontFace(source, { family?, format? })`. The face is its aggregate/default selection, `.default` aliases
+it, and declared format keys such as `.bitmap`, `.msdf`, or `.slug` are distinct inferred technique selections. The
+declaration owns loading: `face.load()` loads every declared format (or every imported format advertised by an undeclared
+main font), while `face.slug.load()` loads only that exact declared technique. Both calls preserve one successful Promise,
+and `isLoaded()` is the synchronous readiness query. The consuming handle supplies its default key when an undeclared face
+is passed to Text; imperative Three rejects an unloaded selected technique before it creates retained state.
 
-React's `useFont(source, config?)` declares through that same FontFace path, conditionally calls React 19 `use()` only
-while `selection.isLoaded(handle)` is false, and returns an independently mounted immutable Font lease. Single-technique
+React's `useFont(source, config?)` declares through that same FontFace path, asks the selected Three handle which exact
+technique the declaration denotes, conditionally calls React 19 `use()` only while that technique is unloaded, and returns
+an independently mounted immutable Font lease. Single-technique
 consumers may import `useBitmap`, `useMsdf`, or `useSlug` from the matching `/react/*` subpath. Each wrapper only builds its
 typed format request and delegates to `useFont`; readiness, canonical source/format identity, and mounted disposal have
 one implementation. Every hook carries Promise-returning `preload()` and declaration `clear()`. Clearing a declaration

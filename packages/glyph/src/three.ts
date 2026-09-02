@@ -1,3 +1,7 @@
+import './three/bitmap.js';
+import './three/msdf.js';
+import './three/slug.js';
+
 export type { FontSelection } from './loaded-font.js';
 export type { GlyphBufferCapacity, PropertyList } from './text-properties.js';
 export { Constraints, ParagraphLayout, TextStyle } from './text-properties.js';

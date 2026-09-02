@@ -264,12 +264,6 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
     if (!isFontFaceSelection(selection)) {
       return new Text(threeTextConstructionToken, properties as StandaloneTextProperties<Technique>, [], this);
     }
-    if (!this.#fonts.isLoaded(selection)) {
-      throw new FontLoadError(
-        'FONT_FACE_NOT_LOADED',
-        `FontFace ${JSON.stringify(selection.family)} must be loaded before creating Three Text`,
-      );
-    }
     const font = this.#fonts.acquire<Technique>(selection);
     try {
       return new Text(
@@ -340,6 +334,16 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   /** @internal Borrow the store-owned immutable source for a React render snapshot. */
   fontSource(selection: AnyFontFaceSelection): Font<AnyRasterTechnique> {
     return this.#fonts.peek(selection);
+  }
+
+  /** @internal Read readiness for React without observing or creating a Promise. */
+  isFontLoaded(selection: AnyFontFaceSelection): boolean {
+    return this.#fonts.isLoaded(selection);
+  }
+
+  /** @internal Load the exact technique selected by this root's owning handle. */
+  loadFont(selection: AnyFontFaceSelection): Promise<AnyFontFaceSelection> {
+    return this.#fonts.load(selection);
   }
 
   /** @internal Config schema boundary for this publication root. */

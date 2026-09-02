@@ -100,8 +100,8 @@ test('Glyph owns FontFace loading for a non-Three configured handle', async () =
     { family: 'FontFacePortableConfig', format: portableBitmap({ strikes: [16] }) },
   );
   try {
-    const load = face.load(handle);
-    assert.equal(face.load(handle), load);
+    const load = face.load();
+    assert.equal(face.load(), load);
     await load;
     const font = handle.acquireFont(face);
     assert.equal(font.technique, portableBitmap);
@@ -136,23 +136,25 @@ test('a loaded FontFace constructs an imperative Three Text and owns its hidden 
   const handle = glyph.handle('three:font-face-imperative', ThreeConfig);
   const face = glyph.fontFace(
     { baked: { bytes, ownership: 'copy' } },
-    { family: 'FontFaceImperative', format: [bitmap({ strikes: [16] }), 'slug'] },
+    { family: 'FontFaceImperative', format: bitmap({ strikes: [16] }) },
   );
   try {
     assert.equal(face.default, face);
-    assert.equal(face.bitmap, face);
-    assert.notEqual(face.slug, face);
-    assert.equal(face.isLoaded(handle), false);
+    assert.notEqual(face.bitmap, face, 'the aggregate face and exact technique selection have distinct load scopes');
+    assert.equal(face.bitmap, face.bitmap, 'declared technique members have stable identity');
+    assert.equal(face.isLoaded(), false);
+    assert.equal(face.bitmap.isLoaded(), false);
     assert.throws(
       () => handle.createText({ font: face, text: 'too early' }),
-      (error) => error instanceof FontLoadError && error.code === 'FONT_FACE_NOT_LOADED',
+      (error) => error instanceof FontLoadError && error.code === 'FONT_FACE_TECHNIQUE_NOT_LOADED',
     );
 
-    const load = face.load(handle);
-    assert.equal(face.load(handle), load, 'concurrent callers share one FontFace load operation');
+    const load = face.load();
+    assert.equal(face.load(), load, 'concurrent callers share one FontFace load operation');
     assert.equal(await load, face);
-    assert.equal(face.load(handle), load, 'a loaded FontFace keeps the same settled promise');
-    assert.equal(face.isLoaded(handle), true);
+    assert.equal(face.load(), load, 'a loaded FontFace keeps the same settled promise');
+    assert.equal(face.isLoaded(), true);
+    assert.equal(face.bitmap.isLoaded(), true);
     const text = handle.createText({ font: face, text: 'loaded' });
     const mountedFont = text.font;
     const scene = new Scene();
@@ -170,7 +172,7 @@ test('a loaded FontFace constructs an imperative Three Text and owns its hidden 
   }
 });
 
-test('one FontFace resolves its omitted format independently through each handle config', async () => {
+test('an undeclared FontFace load discovers every authoritative format for different handle defaults', async () => {
   const msdfHandle = glyph.handle('three:font-face-default-msdf', ThreeConfig);
   const slugHandle = glyph.handle('three:font-face-default-slug', defineThreeConfig({ defaultFontFormat: 'slug' }));
   const face = glyph.fontFace(
@@ -180,11 +182,11 @@ test('one FontFace resolves its omitted format independently through each handle
   let msdfText;
   let slugText;
   try {
-    assert.equal(face.isLoaded(msdfHandle), false);
-    assert.equal(face.isLoaded(slugHandle), false);
-    const [first, second] = await Promise.all([face.load(msdfHandle), face.load(slugHandle)]);
-    assert.equal(first, face);
-    assert.equal(second, face);
+    assert.equal(face.isLoaded(), false);
+    const load = face.load();
+    assert.equal(face.load(), load);
+    assert.equal(await load, face);
+    assert.equal(face.isLoaded(), true);
     msdfText = msdfHandle.createText({ font: face, text: 'MSDF default' });
     slugText = slugHandle.createText({ font: face, text: 'Slug default' });
     assert.equal(msdfText.font.technique, msdf);
@@ -206,12 +208,69 @@ test('FontFace family aliases reject collisions and Blob declarations load throu
   });
   try {
     assert.throws(() => glyph.fontFace('/other.font.glb', { family: 'FontFaceBlob' }), /already exists/);
-    await first.load(handle);
+    await first.load();
     const text = handle.createText({ font: 'FontFaceBlob', text: 'blob' });
     assert.equal(text.font.technique, bitmap);
     text.dispose();
   } finally {
     first.dispose();
     handle.dispose();
+  }
+});
+
+test('a declared technique member loads narrowly before the aggregate FontFace', async () => {
+  const msdfHandle = glyph.handle('three:font-face-narrow-msdf', ThreeConfig);
+  const slugHandle = glyph.handle('three:font-face-narrow-slug', defineThreeConfig({ defaultFontFormat: 'slug' }));
+  const face = glyph.fontFace(
+    { baked: { bytes: multiFormatBytes, ownership: 'copy' } },
+    { family: 'FontFaceNarrowLoad', format: [msdf, slug] },
+  );
+  let slugText;
+  let msdfText;
+  try {
+    const load = face.slug.load();
+    assert.equal(face.slug.load(), load, 'a technique member keeps one stable successful Promise');
+    assert.equal(await load, face.slug);
+    assert.equal(face.slug.isLoaded(), true);
+    assert.equal(face.msdf.isLoaded(), false);
+    assert.equal(face.isLoaded(), false, 'the aggregate is not loaded until every declaration is ready');
+    assert.throws(
+      () => msdfHandle.createText({ font: face, text: 'default is still unloaded' }),
+      (error) => error instanceof FontLoadError && error.code === 'FONT_FACE_TECHNIQUE_NOT_LOADED',
+    );
+    slugText = slugHandle.createText({ font: face.slug, text: 'exact Slug selection' });
+    assert.equal(slugText.font.technique, slug);
+
+    assert.equal(await face.load(), face);
+    assert.equal(face.isLoaded(), true);
+    assert.equal(face.msdf.isLoaded(), true);
+    msdfText = msdfHandle.createText({ font: face, text: 'aggregate default' });
+    assert.equal(msdfText.font.technique, msdf);
+  } finally {
+    msdfText?.dispose();
+    slugText?.dispose();
+    face.dispose();
+    msdfHandle.dispose();
+    slugHandle.dispose();
+  }
+});
+
+test('a declared technique rejects when the authoritative font does not implement it', async () => {
+  const face = glyph.fontFace(
+    { baked: { bytes, ownership: 'copy' } },
+    { family: 'FontFaceMissingDeclaredTechnique', format: slug },
+  );
+  try {
+    await assert.rejects(
+      face.slug.load(),
+      (error) =>
+        error instanceof FontLoadError &&
+        error.code === 'FONT_FACE_TECHNIQUE_UNAVAILABLE' &&
+        /does not implement the declared/.test(error.message),
+    );
+    assert.equal(face.slug.isLoaded(), false);
+    assert.equal(face.isLoaded(), false);
+  } finally {
+    face.dispose();
   }
 });

@@ -757,31 +757,18 @@ interface GlyphHandleFactoryInput {
   readonly released: (handle: GlyphHandle) => void;
 }
 
-type GlyphConfigContractKey = 'schema' | 'fonts' | 'encode' | 'resolve' | 'renderer' | 'root' | 'commands';
-
-type GlyphConfigExtensionValue<ConfigExtension extends object> = {
-  readonly [Key in keyof ConfigExtension as Key extends GlyphConfigContractKey ? never : Key]: ConfigExtension[Key];
-};
-
 /** Handle-relative technique keys used to resolve FontFace format declarations. */
 type GlyphFontTechniqueKey<Techniques extends object> = [keyof Techniques] extends [never]
   ? string
   : Extract<keyof Techniques, string>;
-type GlyphFontTechniqueValue<Techniques extends object> = [keyof Techniques] extends [never]
-  ? AnyRasterTechnique
-  : Techniques[keyof Techniques] & AnyRasterTechnique;
-
 export interface GlyphFontConfig<Techniques extends object> {
   readonly default: GlyphFontTechniqueKey<Techniques>;
   readonly techniques: Techniques & { readonly [Key in keyof Techniques]: AnyRasterTechnique };
-  /** Finish adapter-specific technique activation before a FontFace load becomes observable. */
-  loadTechnique?(technique: GlyphFontTechniqueValue<Techniques>): Promise<void>;
 }
 
 interface AnyGlyphFontConfig {
   readonly default: string;
   readonly techniques: Readonly<object>;
-  loadTechnique?(technique: AnyRasterTechnique): Promise<void>;
 }
 
 interface GlyphConfigContract<

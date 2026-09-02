@@ -14,7 +14,9 @@ import type { ThreeTextMaterial } from './material.js';
 type ThreeSpanFormat<Technique extends AnyRasterTechnique> = SpanFormat<Technique> | ThreeTextMaterial;
 
 /** Structural Three span tag with an optional renderer-owned material selector. */
-export function span(...formats: readonly [SpanStyle | ThreeTextMaterial, ...(SpanStyle | ThreeTextMaterial)[]]): UnboundSpanTag;
+export function span(
+  ...formats: readonly [SpanStyle | ThreeTextMaterial, ...(SpanStyle | ThreeTextMaterial)[]]
+): UnboundSpanTag;
 export function span<Technique extends AnyRasterTechnique>(
   font: FontSelection<Technique>,
   ...formats: readonly ThreeSpanFormat<NoInfer<Technique>>[]
@@ -27,7 +29,8 @@ export function span<Technique extends AnyRasterTechnique>(
   const portable: (FontSelection<Technique> | SpanStyle)[] = [];
   for (const format of [first, ...rest]) {
     if (isThreeTextMaterial(format)) {
-      if (material !== undefined) throw new TypeError('one structural span cannot declare more than one Three material');
+      if (material !== undefined)
+        throw new TypeError('one structural span cannot declare more than one Three material');
       material = format;
     } else {
       portable.push(format);

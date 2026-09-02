@@ -35,7 +35,14 @@ import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
 import { type Constraints, type ParagraphLayout, type PropertyList, type TextStyle } from './text-properties.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
-import { acquireThreeHandleFont, threeHandleFontSource, threeHandleRoot, threeRootHandle } from './three/handle.js';
+import {
+  acquireThreeHandleFont,
+  isThreeHandleFontLoaded,
+  loadThreeHandleFont,
+  threeHandleFontSource,
+  threeHandleRoot,
+  threeRootHandle,
+} from './three/handle.js';
 import {
   ThreeConfig,
   Text as ThreeText,
@@ -627,7 +634,7 @@ useFont.preload = (input: FontFaceSource, config: HookFontConfig = {}): Promise<
   const existing = defaultFontPreloads.get(key);
   if (existing !== undefined) return existing;
   const pending = defaultThreeHandle()
-    .then((handle) => reactFontFaceResource(handle, input, config).face.load(handle))
+    .then((handle) => loadThreeHandleFont(handle, reactFontFaceResource(handle, input, config).face))
     .then(() => undefined)
     .catch((error: unknown) => {
       if (defaultFontPreloads.get(key) === pending) defaultFontPreloads.delete(key);
@@ -652,7 +659,7 @@ function useHandleFontFace<Technique extends AnyRasterTechnique>(
   handle: ThreeHandle,
   selection: AnyFontFaceSelection,
 ): Font<Technique> {
-  if (!selection.isLoaded(handle)) use(selection.load(handle));
+  if (!isThreeHandleFontLoaded(handle, selection)) use(loadThreeHandleFont(handle, selection));
   const store = useMemo(() => createMountedFontStore(handle, selection), [handle, selection]);
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot) as Font<Technique>;
 }

@@ -85,7 +85,7 @@ import { ThreeConfig } from '@pmndrs/glyph/three';
 await glyph.init();
 const three = glyph.handle('main', ThreeConfig);
 const interFace = glyph.fontFace({ baked: '/fonts/Inter.font.glb' });
-await interFace.load(three);
+await interFace.load();
 
 const accent = span({ color: '#70d6ff' });
 const labels = three.createTextGroup({ compositing: 'independent' });
@@ -185,10 +185,11 @@ import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
 
-const [interBitmap, interMsdf, interSlug] = await loadFont(
-  { baked: '/fonts/Inter.font.glb' },
-  [{ technique: bitmap, options: { strikes: [32] } }, msdf, slug],
-);
+const [interBitmap, interMsdf, interSlug] = await loadFont({ baked: '/fonts/Inter.font.glb' }, [
+  { technique: bitmap, options: { strikes: [32] } },
+  msdf,
+  slug,
+]);
 ```
 
 ## Capacity, materials, and ownership
