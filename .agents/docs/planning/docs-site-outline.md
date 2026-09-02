@@ -91,8 +91,9 @@ Global `nav` numbers are assigned in blocks so a page can be inserted without re
 | 24 | text/measurement | Measurement | `measure()`, `glyphs()`, `Paragraph`, summary fields, cost |
 | 25 | text/interaction | Interaction | `caretAt`, `selectionRects`, editing loop |
 | 26 | text/materials | Materials | `defineTextMaterial`, per-technique TSL nodes, lighting |
-| 27 | text/break-apart | Break apart | `breakApart()` → `Glyphs`/`Decorations`, matrices, physics |
-| 28 | text/errors | Errors | `TextFrameError`, `onError`, retention, capacity |
+| 27 | text/in-3d | Text in 3D | depth and occlusion, render order, billboarded labels, fog, steep angles, post-processing |
+| 28 | text/break-apart | Break apart | `breakApart()` → `Glyphs`/`Decorations`, matrices, physics, text on a path |
+| 29 | text/errors | Errors | `TextFrameError`, `onError`, retention, capacity |
 | 40 | react/components | Components | `GlyphProvider`, `<Text>`, `<TextGroup>`, props, nesting |
 | 41 | react/hooks | Hooks | `useFont`, `useMSDF`, `useBitmapFont`, `useSlug`, preload/clear |
 | 50 | advanced/performance | Performance | Batching, capacity, DPR, pixel snapping, transform-only path |
@@ -136,12 +137,17 @@ materials — never loaded, to keep the bundle small.
 | caret | text/interaction | caret, selection rects, click to place |
 | materials | text/materials | lit PBR material over MSDF coverage |
 | effects | text/materials | outline, shadow, animated color |
+| depth | text/in-3d | a sphere passing in front of and behind a depth-tested word and a default one |
+| labels | text/in-3d | billboarded, depth-tested labels on orbiting bodies, in fog |
+| off-axis | text/in-3d | a Slug paragraph turning away from the camera |
+| bloom | text/in-3d | one bright word through `bloom`, strength animated as a uniform |
 | break-apart | text/break-apart | explode, physics-free tumble, reset |
+| arc | text/break-apart | a line bent into a ring: advance → angle, radius from `measure().contentWidth` |
 | errors | text/errors | provoke each `TextFrameError` cause |
 | provider | react/components | two handles, two providers, one font |
 | hooks | react/hooks | preload, Suspense, StrictMode |
 | batching | advanced/performance | draw calls vs compositing mode |
-| off-axis | advanced/performance | steep angles, DPR, `rasterPixelRatio` |
+| raster-ratio | advanced/performance | DPR and `rasterPixelRatio` on a paragraph seen larger than authored |
 | zoom | advanced/performance | continuous zoom across techniques |
 | shaping | advanced/how-it-works | Arabic joining, Indic reordering, mixed bidi, CJK breaks |
 
@@ -305,23 +311,35 @@ its docs page.
 
 - `defineTextMaterial((context) => NodeMaterial)`; `context.technique` union; `createDefaultMaterial()`.
 - Node table per technique: bitmap `position, clipPosition, atlasUv, coverage, color`; msdf `position, atlasUv, fillCoverage, outlineCoverage, shadowCoverage, color, opacity`; slug `position, renderCoordinate, coverage, color, opacity`.
-- The base contract a custom material must keep: `DoubleSide`, `depthTest: false`, `transparent`, `positionNode = context.position` (measured on the landing).
+- The base contract a custom material must keep: `DoubleSide`, `depthWrite: false`, `transparent`, `positionNode = context.position` (measured on the landing); `depthTest` is a choice, see text/in-3d.
 - Lit text: `MeshPhysicalNodeMaterial` with `colorNode = shader.color`, `opacityNode = shader.opacity`, a normal from paragraph-local position; why per-glyph em space lights letters independently.
 - Rules: synchronous, no reentrancy, shared identity, span → text → group precedence.
 - Example: materials, effects.
 - Sources: `three/material.ts`, `tsl/*-shader.ts`, site `scene.tsx`, three-api.md "Define a material".
 
-### text/break-apart (nav 27)
+### text/in-3d (nav 27)
+
+- The default material is `MeshBasicNodeMaterial({ blending: NormalBlending, depthTest: false, depthWrite: false, side: DoubleSide, transparent: true })` (`three/internal/material-realizer.ts` `baseTextMaterial`); text draws over geometry and never writes depth.
+- Occlusion is one line: `defineTextMaterial((c) => { const m = c.createDefaultMaterial(); m.depthTest = true; return m; })`; `depthWrite` must stay off (a transparent quad would write its rectangle).
+- Render order: a `Text`'s draws take its `renderOrder`; `TextGroup({ renderOrder })` states one for every child; decorations under → glyphs → line-through (`three/text.ts` `renderOrderBase`).
+- Labels: child of the body, a billboard group copying `camera.quaternion`, depth-tested; scene fog applies because the material is a `NodeMaterial`.
+- Steep angles: Slug per-pixel, MSDF until the atlas stretches, Bitmap screen-space only; `rasterPixelRatio` for MSDF/Bitmap seen larger than authored.
+- Post-processing: `useRenderPipeline` (r3f) / `PostProcessing` (three) with `bloom` from `three/examples/jsm/tsl/display/BloomNode.js`; `bloom().strength` is a uniform.
+- Example: depth, labels, off-axis, bloom.
+- Sources: `three/internal/material-realizer.ts`, `three/text.ts`, `three/material.ts`, `site/landing/src/effects.tsx`, the benchmark `off-axis-3d` workload.
+
+### text/break-apart (nav 28)
 
 - `breakApart()` → `[Glyphs, Decorations | undefined]`, committed only, atomic.
 - `Glyphs` surface table: `count`, `glyphAt`, `get/setMatrixAt`, `get/setWorldMatrixAt`, `measurements`, `materials`, `dispose`.
 - `ThreeGlyphMeasurement`: `originalMatrix`, `localInkBounds`, `localAdvanceBounds`, `anchorPoint(anchor, 'ink' | 'advance')`, `geometry`.
 - World-space bulk writes: invert once, `worldToLocalMatrix`, `setMatrixAt`.
 - Ownership: source stays live, may be disposed first; caller owns attachment, physics, reset.
-- Example: break-apart.
+- Text on a path: radius from `measure().contentWidth / 2π` (`width` is the resolved box, `contentWidth` the advance extent), each glyph's `originalMatrix` x as arc length → angle, one `setMatrixAt` per glyph.
+- Example: break-apart, arc.
 - Sources: detached-glyph-slice.md, `three/glyphs.ts`, `three/glyph-measurement.ts`, D-292.
 
-### text/errors (nav 28)
+### text/errors (nav 29)
 
 - `TextFrameError.rejection` union table: `span-range`, `cluster-boundary`, `span-overlap`, `paragraph-root`, `font-stack-missing`, `font-metrics-missing`, `capacity`, `engine`; `subject` span/paragraph/unattributed.
 - Where errors surface: construction and `set()` throw; traversal retains on `text.error`/`group.error` and calls `onError`; `shape()` throws.
