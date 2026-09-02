@@ -54,7 +54,10 @@ test('typed command buffers project the trusted group hierarchy lazily', () => {
   );
 
   const acceptedPlan = planFixture();
-  const accepted = mapper.source(candidate(acceptedPlan.plan, acceptedPlan.transformBinding), new AbortController().signal);
+  const accepted = mapper.source(
+    candidate(acceptedPlan.plan, acceptedPlan.transformBinding),
+    new AbortController().signal,
+  );
   const acceptedBatch = accepted.group.value.children.at(0);
   const acceptedSpan = acceptedBatch.instances.at(1);
   const acceptedRoot = accepted.group.value.children.at(1);
@@ -64,12 +67,18 @@ test('typed command buffers project the trusted group hierarchy lazily', () => {
   mapper.settle(accepted, true);
 
   const rejectedPlan = planFixture({ batchId: 99 });
-  const rejected = mapper.source(candidate(rejectedPlan.plan, rejectedPlan.transformBinding), new AbortController().signal);
+  const rejected = mapper.source(
+    candidate(rejectedPlan.plan, rejectedPlan.transformBinding),
+    new AbortController().signal,
+  );
   const rejectedIdentity = rejected.group.value.children.at(0).identity;
   mapper.settle(rejected, false);
 
   const retriedPlan = planFixture({ batchId: 99 });
-  const retried = mapper.source(candidate(retriedPlan.plan, retriedPlan.transformBinding), new AbortController().signal);
+  const retried = mapper.source(
+    candidate(retriedPlan.plan, retriedPlan.transformBinding),
+    new AbortController().signal,
+  );
   assert.notEqual(
     retried.group.value.children.at(0).identity,
     rejectedIdentity,
@@ -79,7 +88,21 @@ test('typed command buffers project the trusted group hierarchy lazily', () => {
   mapper.dispose();
 });
 
-function candidate(plan, transformBinding = plan.transformBinding) {
+test('one transform binding resolves every root instance identity that shares it', () => {
+  const mapper = new TypedCommandBufferMapper();
+  const binding = Object.freeze({});
+  for (const instanceId of [71, 72]) {
+    const fixture = planFixture({ rootTransformId: instanceId });
+    const source = mapper.source(candidate(fixture.plan, binding, [71, 72]), new AbortController().signal);
+    const root = source.group.value.children.at(1);
+    assert.equal(mapper.transformBinding(root.transform), binding);
+    assert.equal(mapper.transformIndex(root.transform), 19);
+    mapper.settle(source, true);
+  }
+  mapper.dispose();
+});
+
+function candidate(plan, transformBinding = plan.transformBinding, instanceIds) {
   return {
     origin: Object.freeze({}),
     plan,
@@ -87,7 +110,7 @@ function candidate(plan, transformBinding = plan.transformBinding) {
     planRevision: 1,
     publicationGeneration: 1,
     checkpoint: true,
-    transforms: Object.freeze([{ transformIndex: 19, binding: transformBinding }]),
+    transforms: Object.freeze([{ transformIndex: 19, binding: transformBinding, instanceIds }]),
     acquirePayload() {
       throw new Error('fixture has no portable payloads');
     },
@@ -100,7 +123,7 @@ function candidate(plan, transformBinding = plan.transformBinding) {
   };
 }
 
-function planFixture({ batchId = 7 } = {}) {
+function planFixture({ batchId = 7, rootTransformId = 19 } = {}) {
   const drawOffset = 64;
   const primitiveOffset = drawOffset + drawLayout.size * 2;
   const byteLength = primitiveOffset + primitiveLayout.size * 3;
@@ -117,7 +140,7 @@ function planFixture({ batchId = 7 } = {}) {
   });
   writeDraw(data, drawOffset + drawLayout.size, {
     id: 8,
-    transformId: 19,
+    transformId: rootTransformId,
     primitiveStart: 2,
     primitiveCount: 1,
   });

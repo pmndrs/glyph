@@ -132,8 +132,8 @@ export interface ResolvedPlanPayload extends ResolvedPortablePayload {
 export interface ResolvedPlanTransform {
   /** Physical transform-table record consumed by indexed renderer buffers. */
   readonly transformIndex: RenderPlanTransformId;
-  /** Optional root draw identity that selects the same host transform without entering the transform table. */
-  readonly instanceId?: RenderPlanTransformId;
+  /** Root draw identities that select the same host transform without entering the transform table. */
+  readonly instanceIds?: readonly ParagraphId[];
   readonly binding: HandleTransformBinding;
 }
 
@@ -1206,27 +1206,42 @@ class RenderPlannerImpl {
   }
 
   #resolvedTransforms(): readonly ResolvedPlanTransform[] {
-    const transforms = new Map<number, ResolvedPlanTransform>();
+    const transforms = new Map<
+      RenderPlanTransformId,
+      { readonly binding: HandleTransformBinding; readonly instanceIds: ParagraphId[] }
+    >();
+    const retain = (
+      transformIndex: RenderPlanTransformId,
+      binding: HandleTransformBinding,
+      instanceId?: ParagraphId,
+    ): void => {
+      let retained = transforms.get(transformIndex);
+      if (retained === undefined) {
+        retained = { binding, instanceIds: [] };
+        transforms.set(transformIndex, retained);
+      }
+      if (instanceId !== undefined) retained.instanceIds.push(instanceId);
+    };
     for (const state of this.#texts) {
       if (state.removed) continue;
       const rootIndex = state.desired.transform.handle as RenderPlanTransformId;
-      transforms.set(rootIndex, {
-        transformIndex: rootIndex,
-        instanceId: state.paragraphId as unknown as RenderPlanTransformId,
-        binding: this.#handleState._resolveOpaqueBinding(
-          'transform',
-          state.desired.transform.handle,
-        ) as HandleTransformBinding,
-      });
+      retain(
+        rootIndex,
+        this.#handleState._resolveOpaqueBinding('transform', state.desired.transform.handle),
+        state.paragraphId,
+      );
       for (const transform of state.desired.flowTransforms) {
         const transformIndex = transform.handle as RenderPlanTransformId;
-        transforms.set(transformIndex, {
-          transformIndex,
-          binding: this.#handleState._resolveOpaqueBinding('transform', transform.handle) as HandleTransformBinding,
-        });
+        retain(transformIndex, this.#handleState._resolveOpaqueBinding('transform', transform.handle));
       }
     }
-    return [...transforms.values()];
+    return [...transforms].map(([transformIndex, { binding, instanceIds }]) =>
+      Object.freeze({
+        transformIndex,
+        ...(instanceIds.length === 0 ? {} : { instanceIds: Object.freeze(instanceIds) }),
+        binding,
+      }),
+    );
   }
 
   #measurementParagraphMutations(): PlannerParagraphMutation[] {
