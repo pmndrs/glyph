@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { glyph } from '@pmndrs/glyph';
-import { defineTechniqueSchema, registerRasterPlanProgram, techniqueProgram, id } from '../../dist/core.js';
+import { defineTechniqueSchema, registerRasterPlanProgram, techniqueProgram, id } from '../../dist/index.js';
 import {
   createImmutableFontBacking,
   createImmutableFontLease,

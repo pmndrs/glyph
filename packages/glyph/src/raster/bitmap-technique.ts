@@ -96,7 +96,9 @@ export const bitmap: RasterTechnique<
   dispose() {},
 });
 
-import { f32, techniqueProgram, type PolicyBufferId, type RasterPlanProgram, id } from '../core.js';
+import { f32, techniqueProgram } from '../core/policy-program.js';
+import { id, type PolicyBufferId } from '../core/render-policy.js';
+import type { RasterPlanProgram } from '../core/raster-plan-program.js';
 import { registerGlyphRasterPlanProgram } from '../core/raster-plan-program.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
 

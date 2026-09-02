@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-import type { PortableGeometryPayload } from '../../core.js';
+import type { PortableGeometryPayload } from '../../index.js';
 import { createSuppliedGlyphGeometrySource, type ThreeGlyphGeometrySource } from '../glyph-measurement.js';
 import type { ThreeHostResource } from './render-state.js';
 
@@ -80,7 +80,10 @@ function createGeometry(payload: PortableGeometryPayload): THREE.BufferGeometry 
     if (accessor === undefined) throw new Error(`geometry attribute "${attribute.semantic}" has no accessor`);
     const view = payload.views[accessor.view];
     if (view === undefined) throw new Error(`geometry accessor ${attribute.accessor} has no buffer view`);
-    geometry.setAttribute(attribute.semantic, new THREE.BufferAttribute(typedGeometryArray(payload, accessor, view), accessor.components));
+    geometry.setAttribute(
+      attribute.semantic,
+      new THREE.BufferAttribute(typedGeometryArray(payload, accessor, view), accessor.components),
+    );
   }
   let indices: Uint16Array | Uint32Array | undefined;
   if (payload.indices !== undefined) {

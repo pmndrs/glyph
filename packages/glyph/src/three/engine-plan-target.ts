@@ -5,7 +5,7 @@ import {
   type TransformUpdate,
   type GlyphRenderer,
   type PreparedRendererCommit,
-} from '../core.js';
+} from '../index.js';
 import type { ThreeGlyphGeometrySource } from './glyph-measurement.js';
 import type { ThreeBindings, ThreeBufferBinding, ThreeResolvedResourceBinding } from './handle.js';
 import type { ThreeRendererResources } from './renderer-resources.js';

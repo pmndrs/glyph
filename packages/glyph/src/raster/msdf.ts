@@ -2,8 +2,6 @@ import {
   MSDF_EXTENSION,
   MSDF_FORMAT_VERSION,
   MSDF_KIND,
-  MSDF_MAX_EM_SIZE,
-  MSDF_MAX_PIXEL_RANGE,
   msdfDescriptor,
   type MsdfDescriptor,
   type MsdfOptions,
@@ -86,7 +84,9 @@ export const msdf: RasterTechnique<
   dispose() {},
 });
 
-import { f32, techniqueProgram, u32, type PolicyBufferId, type RasterPlanProgram, id } from '../core.js';
+import { f32, techniqueProgram, u32 } from '../core/policy-program.js';
+import { id, type PolicyBufferId } from '../core/render-policy.js';
+import type { RasterPlanProgram } from '../core/raster-plan-program.js';
 import { registerGlyphRasterPlanProgram } from '../core/raster-plan-program.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
 

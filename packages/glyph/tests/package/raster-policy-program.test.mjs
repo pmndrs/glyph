@@ -9,7 +9,7 @@ import {
   registerRasterPlanProgram,
   techniqueProgram,
   id,
-} from '../../dist/core.js';
+} from '../../dist/index.js';
 
 const TEST_PROGRAM_VARIANT = 3;
 const TEST_PROGRAM_NAMESPACE = 'test-renderer';

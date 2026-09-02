@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createGlyphRootRegistry } from '../../dist/core.js';
+import { createGlyphRootRegistry } from '../../dist/core/root-registry.js';
 
 test('a Glyph root registry owns one anonymous root and idempotent live named roots', () => {
   const created = [];

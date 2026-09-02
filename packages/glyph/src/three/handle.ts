@@ -13,7 +13,7 @@ import {
   type GlyphRootInstanceBindingInput,
   type GlyphSchema,
   type PolicyProgram,
-} from '../core.js';
+} from '../index.js';
 import type { AnyFontFaceSelection, FontFaceTechniqueOf } from '../font-face.js';
 import type { Font } from '../font.js';
 import { bitmap } from '../raster/bitmap-technique.js';
@@ -21,7 +21,7 @@ import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import { normalizeGlyphBufferCapacity } from '../text-properties.js';
-import type { PortableResource } from '../core.js';
+import type { PortableResource } from '../index.js';
 import { loadThreeTechnique } from './internal/builtin-shaders.js';
 import { threeRenderPolicyDescriptor } from './render-policy.js';
 import type { ThreeAllocationMode, ThreeTransformMode } from './render-policy.js';
@@ -114,7 +114,7 @@ export interface ThreeRootBinding {
   objectForTransform?(recordIndex: number, source: THREE.Object3D): THREE.Object3D;
 }
 
-export const ThreeSchema: GlyphSchema<ThreeBindings, ThreeRootBinding> = defineGlyphSchema<ThreeBindings>()({
+export const ThreeSchema: GlyphSchema<ThreeBindings, ThreeRootBinding> = defineGlyphSchema({
   drawRoot: (root: ThreeRootBinding) => root.drawRoot,
   program: (_root, program) => Object.freeze({ kind: 'three-program', program }),
   buffer: (_root, input) => Object.freeze({ kind: 'three-buffer', input }),

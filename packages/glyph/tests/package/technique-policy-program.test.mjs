@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { definePolicyBuffers, defineTechniqueSchema, techniqueProgram, id } from '../../dist/core.js';
+import { definePolicyBuffers, defineTechniqueSchema, techniqueProgram, id } from '../../dist/index.js';
 
 const ORIGIN_BUFFER_ID = id.buffer('test.policy-contract/origin');
 const PAGE_BUFFER_ID = id.buffer('test.policy-contract/page');

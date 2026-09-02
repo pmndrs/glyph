@@ -13,7 +13,7 @@ import {
   type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
   type RenderPlanScalarType,
-} from '../core.js';
+} from '../index.js';
 import { isRasterTechnique, type AnyRasterTechnique } from '../raster-technique.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { threePolicyCapabilitySet, threeSystemBuffers } from './render-policy.js';
@@ -108,7 +108,7 @@ export interface CompiledThreeRasterPlanProgram {
   readonly variant: ThreeRasterPlanVariant;
   readonly techniqueId: number;
   readonly programId: number;
-  readonly policy: import('../core.js').PolicyProgram;
+  readonly policy: import('../index.js').PolicyProgram;
   createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
 }
 

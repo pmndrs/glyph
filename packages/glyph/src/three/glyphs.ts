@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-import type { GlyphCopy } from '../core.js';
+import type { GlyphCopy } from '../index.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { GlyphPlacement, GlyphPlacements } from '../glyph-placement.js';
 import {

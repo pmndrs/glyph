@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-import type { PolicyBufferId, RenderPlanScalarType } from '../../core.js';
+import type { PolicyBufferId, RenderPlanScalarType } from '../../index.js';
 import type { ThreeBufferBinding } from '../handle.js';
 
 export type ScalarArray = Float32Array | Uint32Array | Uint16Array;
@@ -149,11 +149,7 @@ function commitBufferUpload(uploadRange: StagedBufferUpload): void {
     new Uint8Array(upload.buffer, upload.byteOffset + start, byteLength).set(source);
   }
   const scalarBytesPerElement = buffer.array.BYTES_PER_ELEMENT;
-  markStorageAttributeUpdated(
-    buffer.attribute,
-    start / scalarBytesPerElement,
-    byteLength / scalarBytesPerElement,
-  );
+  markStorageAttributeUpdated(buffer.attribute, start / scalarBytesPerElement, byteLength / scalarBytesPerElement);
 }
 
 function mergeUpdateRange(attribute: THREE.BufferAttribute, start: number, count: number): void {

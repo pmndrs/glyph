@@ -35,7 +35,7 @@ import {
   normalizeGlyphBufferCapacity,
 } from '../text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
-import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../core.js';
+import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../index.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding, ThreeRootBinding } from './handle.js';

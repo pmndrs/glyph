@@ -1,4 +1,4 @@
-import { defineTechniqueSchema, type PortableResource, id } from '../../src/core.js';
+import { defineTechniqueSchema, type PortableResource, id } from '../../src/index.js';
 import { defineRasterTechnique } from '../../src/raster-technique.js';
 import {
   registerThreeRasterPlanProgram,

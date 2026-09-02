@@ -3,14 +3,13 @@ import {
   defineTechniqueGeometryKind,
   defineTechniqueSchema,
   f32,
-  schemaFieldTable,
   schemaPolicyBuffers,
   techniqueProgram,
-  type FontBindingFieldTable,
   type PolicyBuffer,
   type PolicyF32Value,
   id,
-} from '../../dist/core.js';
+} from '../../dist/index.js';
+import { schemaFieldTable, type FontBindingFieldTable } from '../../dist/core/font-binding.js';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 
 // A technique schema is the single authority: buffer ids, scalar kinds, and lane

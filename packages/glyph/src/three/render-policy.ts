@@ -19,7 +19,7 @@ import {
   type AnyTechniqueSchema,
   type TechniqueSchema,
   id,
-} from '../core.js';
+} from '../index.js';
 import { bitmapPlanProgram } from '../raster/bitmap-technique.js';
 import { msdfPlanProgram } from '../raster/msdf.js';
 import { slugPlanProgram } from '../raster/slug-technique.js';

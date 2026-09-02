@@ -1,8 +1,8 @@
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
-import type { AnyTechniqueSchema, PolicyBufferDeclaration, PolicyBufferDeclarations } from '../../core.js';
-import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../core.js';
+import type { AnyTechniqueSchema, PolicyBufferDeclaration, PolicyBufferDeclarations } from '../../index.js';
+import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../index.js';
 import { bitmapSchema, bitmap } from '../../raster/bitmap-technique.js';
 import { msdfSchema } from '../../raster/msdf.js';
 import { msdf } from '../../raster/msdf.js';

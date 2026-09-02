@@ -8,5 +8,5 @@
     "target": "es2023",
     "types": []
   },
-  "files": ["dist/core.d.ts", "dist/tsl.d.ts"]
+  "files": ["dist/index.d.ts", "dist/tsl.d.ts"]
 }

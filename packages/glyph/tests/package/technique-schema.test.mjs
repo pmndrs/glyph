@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { defineTechniqueGeometryKind, defineTechniqueSchema, schemaPolicyBuffers, id } from '../../dist/core.js';
+import { defineTechniqueGeometryKind, defineTechniqueSchema, schemaPolicyBuffers, id } from '../../dist/index.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 import { msdfSchema } from '@pmndrs/glyph/raster/msdf';
