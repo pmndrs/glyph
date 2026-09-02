@@ -242,10 +242,8 @@ class CommandBindingEngine<
               kind: 'replace' as const,
               value: Object.freeze({
                 drawRoot: this.#config.schema.drawRoot(this.#root),
-                transforms: mapBorrowedSequence(
-                  arraySequence(this.#mapper.transformBindings(source)),
-                  ({ binding, recordIndex }) =>
-                    Object.freeze({ value: this.#transform(binding, recordIndex), recordIndex }),
+                transforms: mapBorrowedSequence(this.#mapper.transformBindings(source), ({ binding, transformIndex }) =>
+                  Object.freeze({ value: this.#transform(binding, transformIndex), recordIndex: transformIndex }),
                 ),
                 children: mapBorrowedSequence(source.group.value.children, (child) => {
                   const details = this.#mapper.drawBindingDescriptor(source, child.identity);
@@ -337,6 +335,10 @@ class CommandBindingEngine<
       if (state === undefined || frame !== projected)
         throw new TypeError('cannot settle a foreign command buffer view');
       if (!accepted) return;
+      if (state.resources === this.#resourcesById && state.fresh.size === 0) {
+        this.#buffersById = state.buffers;
+        return;
+      }
       const retained = new Set(state.resources.values());
       const candidates = new Set([...this.#resourcesById.values(), ...state.fresh]);
       for (const resource of candidates) {
@@ -406,7 +408,7 @@ class CommandBindingEngine<
     return value;
   }
 
-  #transform(binding: HandleTransformBinding, recordIndex = 0): Bindings['transform'] {
+  #transform(binding: HandleTransformBinding, recordIndex: number): Bindings['transform'] {
     let value = this.#transforms.get(binding);
     if (value === undefined) {
       value = this.#config.schema.transform(this.#root, this.#transformInput(binding), recordIndex);
@@ -430,14 +432,4 @@ class CommandBindingEngine<
   #assertActive(): void {
     if (this.#disposed) throw new Error('command binding engine is disposed');
   }
-}
-
-function arraySequence<Value>(values: readonly Value[]) {
-  return Object.freeze({
-    length: values.length,
-    at: (index: number) => values.at(index),
-    *[Symbol.iterator](): Iterator<Value> {
-      yield* values;
-    },
-  });
 }

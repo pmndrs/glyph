@@ -692,6 +692,9 @@ export class GlyphHandleState {
   }
 
   /** @internal */
+  _resolveOpaqueBinding(kind: 'material', handle: number): HandleMaterialBinding;
+  _resolveOpaqueBinding(kind: 'resource', handle: number): HandleResourceBinding;
+  _resolveOpaqueBinding(kind: 'transform', handle: number): HandleTransformBinding;
   _resolveOpaqueBinding(
     kind: RetainedOpaqueBinding['kind'],
     handle: number,

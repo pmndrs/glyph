@@ -1,7 +1,7 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { HandleMaterialBinding, HandleTransformBinding } from './handle-state.js';
 import type { RenderPlanTable } from '../core/plan-view.js';
-import type { PlanCandidate, RenderPlanReader } from '../core/render-planner.js';
+import type { PlanCandidate, RenderPlanReader, ResolvedPlanTransform } from '../core/render-planner.js';
 import type {
   BatchIdentity,
   BorrowedCommandSequence,
@@ -76,11 +76,6 @@ export interface InternalInstanceSpanBindingDescriptor {
   readonly blockStart: number;
   readonly inlineExtent: number;
   readonly blockExtent: number;
-}
-
-export interface InternalTransformBindingDescriptor {
-  readonly binding: HandleTransformBinding;
-  readonly recordIndex: number;
 }
 
 export interface InternalResourceIdentity {
@@ -246,11 +241,8 @@ export class TypedCommandBufferMapper {
     return this.#transformIndices.get(transform)!;
   }
 
-  transformBindings(source: BorrowedTypedCommandBuffer): readonly InternalTransformBindingDescriptor[] {
-    return this.#state(source).candidate.transforms.map(({ transformIndex, binding }) => ({
-      binding,
-      recordIndex: transformIndex as number,
-    }));
+  transformBindings(source: BorrowedTypedCommandBuffer): BorrowedCommandSequence<ResolvedPlanTransform> {
+    return this.#state(source).candidate.transforms;
   }
 
   batchDescriptor(source: BorrowedTypedCommandBuffer, token: BatchIdentity): InternalBatchDescriptor {
@@ -899,10 +891,10 @@ function transformBindingMap(
   transforms: PlanCandidate['transforms'],
 ): ReadonlyMap<number, Readonly<{ binding: HandleTransformBinding; recordIndex: number }>> {
   const bindings = new Map<number, Readonly<{ binding: HandleTransformBinding; recordIndex: number }>>();
-  for (const { transformIndex, instanceId, binding } of transforms) {
-    const record = Object.freeze({ binding, recordIndex: transformIndex as number });
-    bindings.set(transformIndex as number, record);
-    if (instanceId !== undefined) bindings.set(instanceId as number, record);
+  for (const { transformIndex, instanceIds, binding } of transforms) {
+    const record = Object.freeze({ binding, recordIndex: transformIndex });
+    bindings.set(transformIndex, record);
+    if (instanceIds !== undefined) for (const instanceId of instanceIds) bindings.set(instanceId, record);
   }
   return bindings;
 }
