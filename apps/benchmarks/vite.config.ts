@@ -13,6 +13,10 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
   'Cross-Origin-Embedder-Policy': 'require-corp',
   'Cross-Origin-Opener-Policy': 'same-origin',
 } as const;
+const serverPort = process.env.PORT === undefined ? 5273 : Number.parseInt(process.env.PORT, 10);
+if (!Number.isSafeInteger(serverPort) || serverPort < 1 || serverPort > 65_535) {
+  throw new RangeError('benchmark PORT must be an integer between 1 and 65535');
+}
 
 export default defineConfig({
   resolve: {
@@ -40,8 +44,7 @@ export default defineConfig({
   ],
   build: { target: 'es2022' },
   preview: { headers: CROSS_ORIGIN_ISOLATION_HEADERS },
-  // A fixed strict port: forwarded --port flags do not survive the nested pnpm
-  // dev chain, and a silently drifted port serves stale confusion instead of
-  // failing loudly.
-  server: { headers: CROSS_ORIGIN_ISOLATION_HEADERS, port: 5273, strictPort: true },
+  // Keep the ordinary development address stable while allowing an isolated
+  // launcher to supply a collision-free port through the standard environment.
+  server: { headers: CROSS_ORIGIN_ISOLATION_HEADERS, port: serverPort, strictPort: true },
 });
