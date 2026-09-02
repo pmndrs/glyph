@@ -583,8 +583,14 @@ export interface GlyphRoot {
   dispose(): void;
 }
 
+/** Terminal named root selected from a configured handle. */
+export type GlyphNamedRoot<Root extends GlyphRoot> = Root & {
+  readonly name: string;
+  readonly handle: GlyphHandle<Root>;
+};
+
 /** Root-owned lifecycle of one named adapter handle and its idempotent publication roots. */
-export type GlyphHandle<Root extends GlyphRoot = GlyphRoot> = ((name: string) => Root) &
+export type GlyphHandle<Root extends GlyphRoot = GlyphRoot> = ((name: string) => GlyphNamedRoot<Root>) &
   Root & {
     /** Returns the idempotent named root. The handle itself fronts its anonymous default root. */
     readonly name: undefined;
