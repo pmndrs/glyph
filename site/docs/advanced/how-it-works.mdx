@@ -1,87 +1,79 @@
 ---
 title: How it works
-description: From a string to meshes — Unicode analysis in JavaScript, HarfRust shaping in Wasm, integer layout in Rust, a render plan, and the three.js executor.
+description: The pipeline from a string to pixels — JavaScript Unicode analysis, Rust shaping, layout and planning in Wasm, one borrowed publication per root, and a renderer transaction — and what is retained between frames.
 nav: 52
+sourcecode: packages/glyph/src/glyph-engine.ts
 ---
 
 <Intro>
-  Text goes through five stages, each owned by the layer best placed to do it exactly once. JavaScript owns Unicode
-  analysis and the render loop. Rust/Wasm owns shaping, layout, and the plan. three.js owns the GPU.
+  Text you assign is validated in JavaScript, analysed for scripts, directions, and break opportunities, then
+  crosses into Rust once per `glyph.shape()` for every dirty root at once. There it is shaped with HarfRust, laid
+  out, and planned into batches; what comes back is one byte range per root, borrowed for the length of a
+  synchronous call, that a renderer turns into draw objects. Between frames the engine keeps everything: an
+  unchanged root costs nothing, and a moved one costs a matrix upload.
 </Intro>
 
-```mermaid
-flowchart TB
-  T[text + spans + style + layout + constraints] --> U[JS: UAX 9 bidi · UAX 14 breaks · UAX 24 scripts · UAX 29 clusters]
-  U --> S[Wasm: HarfRust shaping per run]
-  S --> L[Rust: line breaking · justification · positioning in F26.6]
-  L --> P[render plan: resources · buffers · patches · primitives · draws · retirements]
-  P --> X[three executor: decode → resolve → prepare → commit]
-  X --> M[Mesh children of Text / TextGroup]
-```
+![The glyph pipeline: text and fonts enter JavaScript for Unicode analysis, cross into Rust for shaping, layout and planning, come back as one published byte buffer, and a renderer decodes it into draw objects.](/examples/diagrams/pipeline.svg)
 
 ## Analysis
 
-{/* prose: Unicode 17 tables pinned to the font provenance version; extended grapheme clusters, line-break
-opportunities, script itemization at cluster boundaries with CJK Script_Extensions resolved from context; bidi
-levels per UAX 9. Official conformance vectors pass. */}
+Every property is validated where it enters — construction, `set()`, a hook — with the offending value in the error.
+The paragraph text is then analysed in JavaScript: UAX 9 bidi runs, UAX 14 line-break opportunities, UAX 24 scripts,
+UAX 29 grapheme clusters, and the spans' font stacks resolved to registered fonts. The engine receives runs, not
+strings.
 
 ## Shaping
 
-{/* prose: one `no_std + alloc` HarfRust shaper serves every raster and script; pinned HarfBuzz is the oracle; glyph
-ids and UTF-16 cluster offsets cross a generated direct-memory ABI as structure-of-arrays. Width changes reshape
-only affected boundaries. */}
-
 <iframe
   src="/examples/?example=shaping"
-  title="Arabic joining, Indic reordering, mixed bidi, CJK breaks"
+  title="Eight scripts arriving one grapheme cluster at a time"
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />
 
+Each run is shaped with HarfRust against the stack's first font. Clusters whose glyph is missing are collected and
+re-shaped with the next font in the stack, as many times as the stack is deep; a cluster still missing after the
+last font stays glyph 0 in the last font tried. Fallback is decided by `cmap`, not by raster coverage: a glyph the
+font maps but the raster did not bake raises `RasterCoverageError` rather than falling back.
+
 ## Layout
 
-{/* prose: integer F26.6 units end to end, one rounding contract (`floor(v·64 + ½)`), so fragment advances and
-cursor adjustments agree bit-for-bit and justified lines fill exactly. Measurement-only queries skip the positioning
-tail. */}
+Lines are broken at the opportunities analysis found, justified within the paragraph's bounds, flowed through
+columns, and positioned in F26.6 fixed point. The result is retained per paragraph: `measure()` and `glyphs()` read
+it through separate synchronous calls and never wait for a publication.
 
 ## The render plan
 
-| Table | Meaning |
-| --- | --- |
-| resources | create, update, or retain a portable resource (atlas page, curve texture) |
-| buffers | declare renderer storage and its semantic binding |
-| patches | allocate, write, fill, copy, retire byte ranges |
-| primitives | map record spans to technique, resource, geometry, order |
-| draws | ordered program / material / transform spans |
-| retirements | release exact generations after the acknowledged fence |
-
-{/* prose: numeric ids stay inside the adapter; ordinary renderer code sees stable object bindings. */}
+The planner walks glyphs in logical order and packs them into storage batches keyed by technique, program, and
+resource, then cuts draw spans wherever the codec's masks say a key changed. The output is one publication: a
+header and six tables — resources, buffers, patches, primitives, draws, retirements — laid out in Wasm memory.
+[Reading the render plan](/docs/advanced/render-plan) documents every field.
 
 ## The retained frame transaction
 
-```mermaid
-sequenceDiagram
-  participant App
-  participant Text
-  participant Planner as Rust planner
-  participant Exec as three executor
-  App->>Text: assign desired state
-  Text->>Planner: publish (once per group per traversal)
-  Planner-->>Exec: borrowed plan (A/B slot)
-  Exec->>Exec: decode → resolve → prepare
-  alt commit
-    Exec-->>Text: committed { revision }
-  else discard
-    Exec-->>Text: keep last draw, retain error
-  end
-```
+![The retained frame transaction: the app assigns desired state, shape publishes each dirty root once, the planner lends a borrowed plan, the renderer decodes, resolves and prepares, then commits or discards.](/examples/diagrams/frame-transaction.svg)
 
-{/* prose: publication and renderer acceptance are separate transactions; the borrowed bytes expire when `accept()`
-returns; a renderer copies patch bytes into its own storage. A rejected candidate never substitutes stale
-resources. */}
+`glyph.shape()` is synchronous and non-reentrant, and a no-op when nothing is dirty. It stages every dirty root —
+each root's `prepare` hook may decline — then makes **one** Wasm call for all of them across every handle. Per root
+it adopts the answer, lends it to the root's renderer as a borrowed view, and runs the transaction: project the
+tables onto the objects your schema names, `decode` to stage, `commit` to apply, settle. A throw runs `discard` and
+settles as rejected; that root keeps its last accepted draw and the error is retained on its texts. `shape()`
+rethrows after every root has been visited, one error or an `AggregateError`.
+
+Revisions make this safe. Each request states the engine revision it expects, the plan revision it consumed, and
+the last publication generation it acknowledged; a plan is a checkpoint that replaces everything when the consumed
+revision is not current, and a set of patches otherwise. A rejected accept leaves every revision untouched.
 
 ## What three.js does with it
 
-{/* prose: the executor turns resources into textures, buffers into instanced attributes, draws into `Mesh` children
-of the draw root; matrix-only frames call `syncTransforms()` and never enter Wasm; `WebGPURenderer` realizes GPU
-resources when it encounters the meshes. */}
+three's config returns the root's executor as its renderer. On a `replace` it realises one instanced mesh per draw
+span under the root's draw object, with the codec's buffers as storage attributes and one material per span from
+the format's factory; on an `unchanged` publication it applies patches into the same buffers. `renderOrder` is the
+span's index; `userData.pmndrsGlyphRunStart` is its first record. Every frame after, `Text.updateMatrixWorld`
+syncs matrices into the transform table without entering Wasm; a text that only moved never reaches the planner.
+
+| Path | Enters Wasm | Cost |
+| --- | --- | --- |
+| text, style, layout, font, or material changed | once per `shape()`, for every dirty root together | shape, layout, plan, decode, commit |
+| position, rotation, scale, visibility changed | no | matrix uploads for the rows that changed |
+| nothing changed | no | nothing |

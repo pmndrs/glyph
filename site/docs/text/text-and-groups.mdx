@@ -139,14 +139,7 @@ glyph.shape();                  // every dirty root, every live handle, one Wasm
 renderer.render(scene, camera); // three draws the meshes shape() attached
 ```
 
-```mermaid
-flowchart LR
-  A[assign desired state] --> B[glyph.shape]
-  B -->|dirty roots only| C[one engine batch]
-  C --> D[each root's renderer: decode → commit / discard]
-  D --> E[Mesh children under the root's draw object]
-  A2[move / hide a Text] --> F[transform sync, no Wasm]
-```
+![Two paths through a frame: a semantic change goes through one Wasm batch and a decode-and-commit; a transform-only change syncs matrices without entering Wasm.](/examples/diagrams/frame-paths.svg)
 
 {/* prose: unchanged roots do not enter the batch; one root may fail without another root's state being touched;
 matrix and visibility changes take the cheap renderer-local path. R3F calls shape for you before the host renders;

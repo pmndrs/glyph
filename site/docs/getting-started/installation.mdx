@@ -52,6 +52,15 @@ import { Canvas } from '@react-three/fiber/webgpu';
 > `navigator.gpu` exists only in a secure context. On `http://<lan-ip>` you get WebGL2, not a broken page; on
 > `https://` or `localhost` you get WebGPU. Wasm loads on any origin.
 
+## Serving
+
+> [!WARNING]
+> Serve from `localhost` or over `https`. Every font load hashes the artifact with `crypto.subtle`, which browsers
+> expose only in a secure context, so a page opened at `http://10.0.0.62` fails to load fonts. WebGPU is gated the
+> same way; three's WebGL2 fallback is not, so a scene without text still draws while the text does not. The
+> baked `.font.glb` files are static assets: any host that serves them with a correct `Content-Length` works, and
+> `Cache-Control` on a source font decides how long a runtime bake is kept.
+
 ## Bundlers
 
 ### Vite

@@ -79,8 +79,8 @@ Global `nav` numbers are assigned in blocks so a page can be inserted without re
 | 1 | getting-started/installation | Installation | Package, subpaths, bundlers, WebGPU entry, TypeScript |
 | 2 | getting-started/your-first-text | Your first text | Tutorial: bake → load → render → style → measure |
 | 3 | getting-started/examples | Examples | Gallery of every hosted example |
-| 10 | fonts/baking | Baking fonts | `glyph bake`, `glyph glyphs`, Node API, discovery, `--check` |
-| 11 | fonts/techniques | Raster formats | Bitmap, MSDF, Slug: what, when, options, cost |
+| 10 | fonts/baking | Baking fonts | `glyph bake` flags, `glyph glyphs`, subsetting, `--check`, discovery, Node API and report, errors, what is in the GLB — finished prose |
+| 11 | fonts/techniques | Raster formats | Bitmap, MSDF, Slug: choosing table, per-format facts, measured costs, identity, mixing — finished prose |
 | 12 | fonts/loading | Loading fonts | `loadFont`, hooks, preload, libraries, `FontLoader`, FontFace (pending) |
 | 13 | fonts/fallback-stacks | Fallback stacks | `createFontStack`, per-cluster resolution, icons, CJK |
 | 14 | fonts/runtime-baking | Runtime baking | Source fonts in the browser, Worker, CacheStorage |
@@ -100,11 +100,13 @@ Global `nav` numbers are assigned in blocks so a page can be inserted without re
 | 51 | advanced/pitfalls | Pitfalls | The mistakes the API lets you make, and their fix |
 | 52 | advanced/how-it-works | How it works | Shaper → planner → render plan → renderer, with diagrams |
 | 53 | advanced/topologies | Deployment topologies | Handles, canvases, workers, OffscreenCanvas |
-| 54 | advanced/custom-renderers | Custom renderers | `defineGlyphConfig`: schema, encode, resolve, renderer, root |
-| 55 | advanced/custom-techniques | Custom raster formats | `defineRasterFormat`, bakers, `/tsl/*`, `/typegpu/*` |
-| 56 | advanced/typescript | TypeScript | Technique inference, `PropertyList`, branded ids |
-| 57 | advanced/testing | Testing | Node, test-renderer, headless GPU |
-| 58 | advanced/migration | Migration | From the pre-handle API |
+| 54 | advanced/custom-renderers | Integrating a renderer | `defineGlyphConfig` field by field, the schema callbacks, the lifecycle, root rules, read through `@pmndrs/glyph-example-renderer` — finished prose |
+| 55 | advanced/codec | Building a codec | technique schema, `techniqueProgram`, semantics and bindings, `compile`, `createCodecProgram`, masks, ids, limits |
+| 56 | advanced/render-plan | Reading the render plan | the publication: header, six tables, batching, checkpoints, expiry, the consume transaction, the ten guarantees |
+| 57 | advanced/custom-techniques | Custom raster formats | `defineRasterFormat`, the plan program (`codecBody` + `compileFont`), `registerRasterPlanProgram`, identity, artifact, bakers, shaders — read through `@pmndrs/glyph-example-raster` — finished prose |
+| 58 | advanced/typescript | TypeScript | Technique inference, `PropertyList`, branded ids |
+| 59 | advanced/testing | Testing | Node, test-renderer, headless GPU |
+| 60 | advanced/migration | Migration | From the pre-handle API |
 
 The earlier `core-api/introduction.mdx` shell is superseded by `text/measurement`, `advanced/how-it-works`, and
 `advanced/custom-renderers`, and is removed.
@@ -397,6 +399,24 @@ Unloaded font at construction · outer `<Text>` without `font` · options not ma
 - `/core` in one screen: `GlyphConfig { encode, decode, resolve, renderer, createHandle }`, `Codec`, `defaultDecoder`, `BorrowedBoundCommandBuffer` phases, `applyGlyphPublication`.
 - Pointer to the renderer-integration guide and the example renderer package.
 
+### advanced/codec (nav 55)
+
+- `defineTechniqueSchema({ technique, scope, binding, buffers, resources?, render?, glyphOrigin? })`; lanes 1–4 per buffer, lane count is the vector width; ids from `id.buffer/technique/program` (FNV-1a of names).
+- `techniqueProgram(schema, { system, textEffects?, inverseFontSize? })` → `semantics` (inlineOrigin, blockOrigin, fontSize, color.rgba, outline?, shadow?, transformIndex, stableGlyphId), `binding`, `compile(stores)`; straight-line `f32`/`u32` ops; every lane written exactly once; ≤32 registers.
+- `createCodecProgram(techniqueId, programId, body, buffers, { transformMode, allocationMode, partitionBy })` → `storageKeyMask`, `drawKeyMask`; bit values technique 1, resource 2, program 4, material 8, clip 16, depth 32, order 64, transform 128; `primitiveKind`, `resourceKindMask`.
+- Limits: 8 capability sets, 32 programs, 16 buffers/program, 128 ops/program.
+- Worked examples: three's decoration program; the MSDF glyph program.
+- Sources: `config/schema.ts`, `config/codec-program.ts`, `config/codec.ts`, `three/codec.ts`, `raster/msdf.ts`.
+
+### advanced/render-plan (nav 56)
+
+- Header (144 B): flags.checkpoint, engineRevision, planRevision, requiredBaseRevision, publicationGeneration, outputSlot, codec identity, six offset/count pairs, fault ids.
+- Tables and strides: resources 40, buffers 36, patches 36, primitives 64, draws 64, retirements 24; patch opcodes allocate-or-resize 1, write 2, fill 3, copy 4, retire 5.
+- Batching: storage batch = technique · programVariant · programId · resource(id, generation) [+ material/clip/depth per storageKeyMask]; draw span ends on batch change, non-contiguous slots, a drawKeyMask key, or 65 535 records; independent compositing sorts draws by orderToken.
+- Expiry: epoch advance, memory growth, transport disposal; lease expired in `finally` after accept; copy payloads during accept.
+- Consume: source → project → decode → commit → settle; discard on throw; the ten guarantees.
+- Sources: `internal/plan-view.ts`, `internal/handle-state.ts`, `internal/render-planner.ts`, `three/engine-plan-target.ts`, `rust/shaper/src/engine/{ordered_plan,render_plan,plan_draw}.rs`.
+
 ### advanced/custom-techniques (nav 55)
 
 - `defineRasterTechnique`, `defineRasterResourceId`, bakers via `defineRasterBaker`/`rasterBake`, shader realizations in `/tsl` and `/typegpu`, `registerThreeRasterPlanProgram` and its registration-order rule (D-271).
@@ -425,6 +445,10 @@ Measured while building the examples against `GLYPH_SOURCE=<codex>/packages/glyp
 | A thrown Text construction error in React becomes a retry loop | after the `'double'` throw, `Cannot convert undefined or null to object` repeats from the React layer (the rejected-promise eviction seen with fonts); the scene stays blank with no boundary | decorations, before its fix |
 | React recovered from a render error | `Minified React error #520` (recovered by a synchronous render) with cause `#467` (update hook called on initial render), once, on the decorations page under the React Compiler | decorations |
 | `measure().width` is the resolved box; `contentWidth` is the advance extent | a ring built from `width` left a gap; `contentWidth` closes it | arc |
+| `/core` subpath is gone; the codec DSL and `defineGlyphConfig` are root exports | `package.json` exports and `tests/package/entry-point-boundaries.test.mjs` assert `exports['./core'] === undefined`; `docs/log.md` still names `/core` | — |
+| `TextFrameError` is declared, never produced | `three/frame-error.ts` exports the cause union; `textFrameError()` has no caller; `shape()` failures surface as `GlyphEngineStatusError` on `text.error` / `onError` / `commitState()` | errors page carries the caveat |
+| every font load requires `crypto.subtle` | `loader.ts` `_registerAsset` hashes the artifact on every load; `raster-identity.ts`, `compose-bake.ts`, `runtime-font-cache.ts` too; no pure-JS fallback in that tree (the `fix/font-identity-no-secure-context` branch here removes it) | installation page warns |
+| no "every glyph rasterised empty" guard | bitmap and MTSDF bakers mark unreadable outlines absent silently; a CFF face bakes shaping data and an empty raster | baking page warns |
 
 The pane the examples are verified in is hidden between tool calls (`document.hidden === true`, no rAF), and r3f's Canvas mounts children only once its container measures: take a throwaway screenshot before waiting, then the real one, and navigate with a fresh query string after every rebuild so cached HTML does not 404 on old chunks.
 

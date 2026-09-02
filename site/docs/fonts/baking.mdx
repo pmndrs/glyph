@@ -1,70 +1,93 @@
 ---
 title: Baking fonts
-description: Turn a TTF or OTF into a portable .font.glb with the glyph CLI or the Node API — shaping data plus the rasters you choose.
+description: Turn a TTF or OTF into one portable .font.glb with the glyph CLI or the Node API — shaping data, the metrics the engine needs, and the raster formats you choose — reproducibly.
 nav: 10
 sourcecode: packages/glyph/src/node/cli.ts
 ---
 
 <Intro>
-  A baked font is one GLB: the shaping tables the engine needs, and zero or more raster techniques rendered ahead of
-  time. Bake once at build time; nothing at runtime touches a platform font library.
+  A baked font is one GLB: the subset of the font's shaping tables the engine needs, its metrics, and zero or more
+  raster formats rendered ahead of time. You bake at build time, check the result into the project, and nothing at
+  runtime touches a platform font library. The same pipeline runs in a Worker when a source font has to be baked in
+  the browser.
 </Intro>
 
-<Keypoints title="What you'll learn">
-  <KeypointsItem>The two `glyph bake` modes — one known font, or discovery across a project</KeypointsItem>
-  <KeypointsItem>How to subset with `--unicodes` and where those code points come from</KeypointsItem>
-  <KeypointsItem>Why raster options are part of the font's identity</KeypointsItem>
-  <KeypointsItem>How `--check` proves a bake is reproducible</KeypointsItem>
+<Keypoints title="What to know">
+  <KeypointsItem>`glyph bake` takes one source and writes one GLB; the raster flags decide what it carries.</KeypointsItem>
+  <KeypointsItem>Subset with `--unicodes`. Selection is by code point, so the cmap, the layout tables, and every raster agree.</KeypointsItem>
+  <KeypointsItem>Raster options are identity. The declaration that loads the file must name the same options the bake did.</KeypointsItem>
+  <KeypointsItem>`--check` rebuilds into temporary storage and requires byte-identical output — that is the CI gate.</KeypointsItem>
 </Keypoints>
 
 ## Bake one font
 
 ```bash
-glyph bake --input Inter-Regular.ttf --output inter.font.glb --bitmap 16,32 --msdf --slug
+glyph bake --input Inter-Regular.ttf --output inter.font.glb --unicodes U+0020-007E --bitmap 32 --msdf --slug
 ```
 
-{/* prose: what each raster flag adds; with none, a shaping-only GLB. */}
-
-<details>
-<summary>Direct-mode options</summary>
+That is the command the repository's own example uses for its Inter asset: Basic Latin, one Bitmap strike, MSDF at
+its defaults, and Slug, in one 2.4 MB file. Leave every raster flag off and you get a shaping-only GLB, which is what
+a face that will be baked at runtime, or one that only measures, needs.
 
 | Option | Meaning |
 | --- | --- |
-| `--input <path>` | Source TTF, OTF, TTC, or OTC |
-| `--output <path>` | Output GLB with shaping data and selected rasters |
-| `--font-face-index <n>` | Collection face to bake (default 0) |
-| `--unicodes <set>` | Code points to keep, e.g. `U+0020-007E,U+00A0-00FF` — code points, not glyph ids |
-| `--bitmap <ppem,...>` | Embed Bitmap at positive integer ppem strikes, e.g. `16,32` |
-| `--msdf [settings]` | Embed MSDF; `em-size` (default 64), `pixel-range` (default 8), e.g. `--msdf em-size=32,pixel-range=6` |
-| `--slug` | Embed the default Slug raster |
-| `--check` | Rebuild in temporary storage and require byte-identical output |
-| `--json` | Print the complete machine-readable bake report |
+| `--input <path>` | source TTF, OTF, TTC, or OTC; WOFF and variable fonts are rejected with a named error |
+| `--output <path>` | the `.font.glb` to write; it must not alias the input |
+| `--font-face-index <n>` | face within a collection; default 0 |
+| `--unicodes <set>` | code points to keep: `U+XXXX` and `U+XXXX-YYYY`, comma separated, up to 4096 ranges |
+| `--bitmap <ppem,…>` | embed Bitmap strikes; positive integers up to 1022, stored deduplicated and ascending |
+| `--msdf [em-size=N,pixel-range=N]` | embed MSDF; defaults 64 and 8; limits 1022 and 1020 |
+| `--slug` | embed Slug; it has no options |
+| `--check` | rebuild into a temporary directory and compare bytes with `--output`; never writes the target |
+| `--json` | print the complete bake report |
 
-</details>
-
-## Choose the raster options deliberately
-
-```bash
-glyph bake --input Inter-Regular.ttf --output inter-small.font.glb --msdf em-size=32,pixel-range=6
-```
-
-> [!IMPORTANT]
-> Options are part of the raster's identity. A runtime request `msdf` with `{ emSize: 32, pixelRange: 6 }` matches
-> this bake; a request with the defaults does not, and finds no raster. Name the same values on both sides.
-
-{/* prose: a 28 px display font baked at 64 em is wasted atlas — the landing page's chorus went 4.64 MB → 1.33 MB at
-32. Link Techniques for the tradeoff. */}
+Each raster is embedded in the same file. A second raster of the same kind — two MSDF bakes at different sizes, say —
+is written as an external companion beside the GLB, because one file carries at most one raster per extension.
 
 ## Subset to what you render
 
 ```bash
 glyph glyphs fa-solid-900.ttf --name globe --name earth-americas --unicode-set
 # U+F0AC,U+F57D
-glyph bake --input fa-solid-900.ttf --output icons.font.glb --unicodes U+F0AC,U+F57D --msdf
+glyph bake --input fa-solid-900.ttf --output icons.font.glb --unicodes U+F0AC,U+F57D --bitmap 32 --msdf --slug
 ```
 
-{/* prose: `glyph glyphs` lists a font's Unicode mappings and post/CFF names; fonts without names still report exact
-ids. The set feeds `--unicodes`. Selection is by code point so the shaper's cmap stays consistent. */}
+`glyph glyphs` lists a font's code point mappings and its `post` or CFF glyph names; `--unicode-set` prints the set
+in the form `--unicodes` takes. Subsetting happens before anything is baked: the source is cut to the requested code
+points with every layout script kept and the default layout features closed over, glyphs are renumbered, and that
+prepared font feeds the shaping payload and every raster baker alike. Selection is by code point only; there is no
+glyph-id form, so the shaper's cmap always matches what was baked.
+
+> [!NOTE]
+> A glyph the subset dropped shapes to glyph 0 at runtime: it takes `.notdef`'s advance and draws nothing. Layout
+> reports it in `measure().missingGlyphCount`. A [fallback stack](/docs/fonts/fallback-stacks) is how a missing
+> code point finds another face; a wider subset is how it stops being missing.
+
+## Choose raster options deliberately
+
+```bash
+glyph bake --input Inter-Regular.ttf --output inter-small.font.glb --msdf em-size=32,pixel-range=6
+```
+
+> [!IMPORTANT]
+> Options are part of the raster's identity. The raster key is a hash of the canonical descriptor, and the runtime
+> derives the key from the options it was asked for and looks it up in the file. `msdf` with `{ emSize: 32,
+> pixelRange: 6 }` matches this bake; `msdf` with the defaults does not, and the face rejects with
+> `FONT_FACE_FORMAT_UNAVAILABLE`. Write the values once and pass them to both sides.
+
+The landing page's chorus faces are baked at `em-size=32,pixel-range=6` because nothing on that page exceeds 28 px;
+the same faces at the default 64 were three and a half times the size. [Raster formats](/docs/fonts/techniques) has
+the trade-offs.
+
+## Reproducible output
+
+```bash
+glyph bake --input Inter-Regular.ttf --output inter.font.glb --unicodes U+0020-007E --bitmap 32 --msdf --slug --check
+```
+
+`--check` runs the full bake into a temporary file and compares it byte for byte with the checked-in output; a
+difference exits with `STALE_OUTPUT` and the target is never rewritten. Bakes are deterministic, so this is the whole
+test: the repository runs a `bake:check` script for each asset as part of `check`.
 
 ## Discover fonts in a project
 
@@ -76,51 +99,86 @@ export const inter = defineFont({ source: '/fonts/Inter-Regular.ttf' }, msdf);
 ```
 
 ```bash
-glyph bake --project-root . --output-root public/generated
+glyph bake --project-root . --asset-root public --output-root public/generated
 ```
 
-{/* prose: `defineFont` is a static token — no loading happens. Discovery scans entries for tokens and writes beside
-each source asset or under `--output-root`. Direct and discovery options cannot be mixed. */}
-
-<details>
-<summary>Discovery options</summary>
+`defineFont` is a static token: it loads nothing. Discovery scans the project's TypeScript and JavaScript for
+`defineFont` imported from `@pmndrs/glyph`, skips tokens whose input is already `{ baked }`, requires the second
+argument to be a statically visible raster factory, and writes `<name>.font.glb` beside each source asset or
+mirrored under `--output-root`. Direct and discovery options cannot be mixed.
 
 | Option | Meaning |
 | --- | --- |
-| `--project-root <path>` | Project root (default: current directory) |
-| `--entry <path>` | Restrict discovery to an entry; repeatable |
-| `--asset-root <path>` | Local asset root; repeatable (default `public`) |
-| `--output-root <path>` | Mirror asset-relative outputs under this directory |
-
-</details>
+| `--project-root <path>` | where to scan; default the current directory |
+| `--entry <path>` | restrict discovery to an entry; repeatable |
+| `--asset-root <path>` | where source fonts may live; repeatable; default `public` |
+| `--output-root <path>` | mirror asset-relative outputs under this directory |
 
 ## Node API
 
 ```ts
-import { bakeFont } from '@pmndrs/glyph/bake';
+import { bakeFont, inspectFont, bakeProject } from '@pmndrs/glyph/bake';
+import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
+import { msdfBaker } from '@pmndrs/glyph/bakers/msdf';
+
+const report = await bakeFont({
+  input: 'fonts/Inter-Regular.ttf',
+  output: 'public/fonts/inter.font.glb',
+  font: { fontFaceIndex: 0 },
+  unicodeRanges: [{ start: 0x20, end: 0x7e }],
+  rasters: [
+    { baker: bitmapBaker, packaging: { artifact: 'embedded', pages: 'embedded' }, options: { strikes: [32] } },
+    { baker: msdfBaker, packaging: { artifact: 'embedded', pages: 'embedded' }, options: { emSize: 32, pixelRange: 6 } },
+  ],
+});
+report.execution.outputs;   // [{ role: 'font', file, bytes, sha256 }]
+report.execution.timingsMs; // read, coreBake, rasterBake, compose, validate, transport, write, total
 ```
 
-{/* prose: the CLI is a thin JSON-reporting layer over `bakeFont` / `bakeProject`; use the API from a build script
-or a Vite plugin. Show the report shape: artifacts, sizes, warnings. */}
+The CLI is a thin layer over these three calls. `bakeFont` returns a report, not bytes: sizes of every shaping table
+with gzip and brotli estimates, one entry per raster, and the outputs written. Writing is atomic — a temporary file,
+`fsync`, the previous target backed up, then a rename, with rollback on any failure. `inspectFont` reports a face
+without baking it; `bakeProject` is discovery mode.
 
-## Reproducible output
+Validation runs at bake time only: the GLB envelope, the Khronos glTF validator with zero errors and warnings, the
+`PMNDRS_font` JSON schema, then the semantic checks — version pins, buffer-view layout, table checksums, metrics,
+shaping hash, and the raster directory. The runtime trusts an artifact that passed.
 
-```bash
-glyph bake --input Inter-Regular.ttf --output inter.font.glb --msdf --check
-```
+| Error | Meaning |
+| --- | --- |
+| `NodeBakeError` `STALE_OUTPUT` | `--check` found a difference |
+| `NodeBakeError` `OUTPUT_OVERLAPS_INPUT`, `OUTPUT_CONFLICT`, `SOURCE_OUTSIDE_ASSET_ROOT` | the paths you gave cannot be honoured |
+| `FontBakeError` `UNSUPPORTED_CONTAINER` | WOFF or WOFF2 input; decompress it first |
+| `FontBakeError` `UNSUPPORTED_VARIABLE_FONT` | a font with `fvar`, `gvar`, or other variation tables; instance it first |
+| `FontBakeError` `UNSUPPORTED_SHAPING_SYSTEM` | AAT or Graphite tables; the engine shapes OpenType only |
+| `FontBakeError` `MISSING_TABLE`, `INVALID_TABLE`, `INVALID_GLYPH_EXTENTS`, `SUBSETTING_FAILED` | the source is not a font the baker can read |
+| `FontArtifactValidationError` | the composed GLB failed validation; `issues` names each check |
 
-{/* prose: rebuilds to temp storage and compares byte-for-byte; the check you put in CI. */}
+> [!WARNING]
+> An outline the rasteriser cannot read is marked absent, silently. A CFF-outline face today bakes to complete
+> shaping data and an empty raster, lays out at full width, and draws holes. Check `glyph glyphs` names your glyphs
+> and look at the bake report's raster sizes before trusting a new face.
 
-## Coverage on a request
+## What is in the file
 
-```ts
-useMSDF({ baked: '/fonts/inter.font.glb' }, { coverage: { text: 'Hello world' } });
-```
+One GLB, one JSON chunk, one binary chunk, one embedded buffer. The `PMNDRS_font` extension holds:
 
-{/* prose: `RasterCoverage` narrows a runtime raster request to `unicodeRanges`, `text`, or `glyphIds`; relevant to
-runtime baking, where the atlas is generated on the client. */}
+| Field | Content |
+| --- | --- |
+| `shaping` | a stripped SFNT — `head`, `maxp`, `cmap`, `hhea`, `hmtx`, `OS/2`, and the layout tables `GDEF`, `GSUB`, `GPOS`, `BASE`, `kern`, `vhea`, `vmtx`, `VORG` when present — plus per-glyph extents and an availability bitset; its SHA-256 is the shaping hash |
+| `metrics` | glyph count, units per em, ascender, descender, line gap, underline position and thickness, strikeout position and size |
+| `provenance` | source hash, descriptor hash, face index, baker, HarfRust, HarfBuzz reference, and Unicode versions |
+| `rasters` | a directory of `{ rasterKey, kind, extension, version, source }`, embedded or external |
 
-> [!NOTE]
-> Direction under review: with no raster flags the CLI will default to Bitmap strikes 8/16 plus MSDF plus Slug, and a
-> Vite integration will discover `glyph.fontFace()` declarations and pre-bake exactly what they request (D-296). Neither
-> is implemented yet.
+No outlines travel in the shaping payload: `glyf`, `loca`, and `CFF` are dropped, and glyph imagery lives only in the
+rasters. Each raster is its own extension — `PMNDRS_font_bitmap`, `PMNDRS_font_distance_field`, `PMNDRS_font_slug`
+— carrying the shaping hash, glyph count, and raster key it was baked against, and every page is a lossless KTX2
+texture. The line metrics are what draw underlines and strike-throughs at runtime, so a face baked before they were
+recorded will not decorate.
+
+## Runtime baking
+
+A face declared with a source instead of a baked file is baked in a Worker the first time it is needed, with the
+same pipeline minus validation, and cached in `CacheStorage` under a key derived from the source, the face, the
+rasters, and the subset. [Runtime baking](/docs/fonts/runtime-baking) covers when that is the right trade and what
+it costs.

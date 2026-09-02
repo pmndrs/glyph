@@ -12,13 +12,7 @@ nav: 50
 
 ## Where time goes
 
-```mermaid
-flowchart LR
-  A[assign] -->|semantic| B[glyph.shape: one Wasm batch for dirty roots] --> C[decode → commit]
-  A -->|transform only| E[sync transforms, no Wasm]
-  C --> F[three renders meshes]
-  E --> F
-```
+![Two paths through a frame: a semantic change goes through one Wasm batch and a decode-and-commit; a transform-only change syncs matrices without entering Wasm.](/examples/diagrams/frame-paths.svg)
 
 {/* prose: measurement and publication are separate; unchanged measurements are free; transform-only frames never
 enter Wasm; unchanged roots do not enter the batch. */}

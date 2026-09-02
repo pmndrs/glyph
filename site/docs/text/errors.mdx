@@ -26,6 +26,12 @@ label.onError = (error) => {
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />
 
+> [!IMPORTANT]
+> In the current tree `TextFrameError` and its `rejection.cause` union are exported, but nothing constructs them yet.
+> A failed `glyph.shape()` reaches `text.error`, `onError`, `group.error`, and `commitState()` as the engine's
+> `GlyphEngineStatusError` — codes such as `style-range-invalid`, `font-stack-missing`, `result-too-large` — or as
+> the renderer's own error. Handle those until the taxonomy below is wired.
+
 ## Causes
 
 | `rejection.cause` | Meaning | You fix it by |

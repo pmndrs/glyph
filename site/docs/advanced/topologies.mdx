@@ -12,21 +12,10 @@ nav: 53
 
 ## One application, one canvas
 
-```mermaid
-flowchart LR
-  F[FontFace] --> H[glyph.handle 'main' — anonymous root] --> S[Scene] --> R[WebGPURenderer] --> C[Canvas]
-```
+![One handle and one scene.](/examples/diagrams/topologies.svg)
 
 ## Two scenes
 
-```mermaid
-flowchart LR
-  F[FontFace] --> H[handle]
-  H --> R1[handle — anonymous root] --> S1[Scene A]
-  H --> R2["handle('hud') — named root"] --> S2[Scene B]
-  S1 --> C1[Canvas A]
-  S2 --> C2[Canvas B]
-```
 
 ```ts
 const three = glyph.handle('main', ThreeConfig);
@@ -50,11 +39,6 @@ twice. */}
 
 ## Workers and OffscreenCanvas
 
-```mermaid
-flowchart LR
-  UI[main-thread authored state] -->|messages| W[worker: glyph.init + handle + renderer] --> OC[transferred OffscreenCanvas]
-  UI -.->|face.clone once| W
-```
 
 {/* prose: the whole stack in the worker is the ordinary path; a worker has its own engine (its own Wasm copy);
 move a font with `await face.clone()` and `glyph.fontFace(serialized)` on the other side — an explicit data copy,
