@@ -123,6 +123,8 @@ test('provider-free R3F roots isolate independent Canvas stores', async () => {
   const fixture = await loadFixture();
   let firstText;
   let secondText;
+  let firstDrawRoot;
+  let secondDrawRoot;
   const first = await create(
     createElement(Text, { font: fixture.font, ref: (value) => void (firstText = value ?? firstText) }, 'first'),
   );
@@ -137,16 +139,19 @@ test('provider-free R3F roots isolate independent Canvas stores', async () => {
     assert.notEqual(firstScene, secondScene);
     firstText.shape();
     secondText.shape();
-    const firstDrawRoot = firstScene.children.find((child) => child.name.startsWith('@pmndrs/glyph:'));
-    const secondDrawRoot = secondScene.children.find((child) => child.name.startsWith('@pmndrs/glyph:'));
+    firstDrawRoot = firstScene.children.find((child) => child.name.startsWith('@pmndrs/glyph:'));
+    secondDrawRoot = secondScene.children.find((child) => child.name.startsWith('@pmndrs/glyph:'));
     assert.ok(firstDrawRoot !== undefined && secondDrawRoot !== undefined);
     assert.notEqual(firstDrawRoot, secondDrawRoot, 'each R3F store selects one independent Glyph root');
     assert.notEqual(firstDrawRoot.name, secondDrawRoot.name, 'generated root labels remain stable customization keys');
   } finally {
     await first.unmount();
     await second.unmount();
+    await Promise.resolve();
     fixture.dispose();
   }
+  assert.equal(firstDrawRoot?.parent, null, 'the first Canvas releases its default Glyph root');
+  assert.equal(secondDrawRoot?.parent, null, 'the second Canvas releases its default Glyph root');
 });
 
 test('GlyphProvider resolves a scoped string through its lazy fontFaces table', async () => {
