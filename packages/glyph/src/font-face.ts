@@ -3,10 +3,17 @@ import { cloneImmutableFont } from './loaded-font.js';
 import {
   FontLoadError,
   openFontFaceSource,
+  openSerializedFontFaceSource,
   type FontFaceSourceLease,
   type FontLibrary,
   type LoadFontInput,
 } from './loader.js';
+import type { FontFaceTransfer, SerializedFontFace } from './font-face-transfer.js';
+import {
+  claimSerializedFontFace,
+  isSerializedFontFace,
+  serializedFontFaceBuffers,
+} from './internal/font-face-transfer.js';
 import {
   isRasterFormat,
   rasterFormatForKey,
@@ -17,7 +24,7 @@ import {
 import { canonicalJson } from './internal/raster-identity.js';
 
 /** Source accepted by a reusable FontFace declaration. */
-export type FontFaceSource = LoadFontInput | Blob;
+export type FontFaceSource = LoadFontInput | Blob | SerializedFontFace;
 
 /** One format assertion accepted by a FontFace declaration. */
 export type FontFaceFormat<Format extends AnyRasterFormat = AnyRasterFormat> =
@@ -70,10 +77,11 @@ export interface FontFaceSelection<Format extends FontFaceFormat | undefined = F
   load(): Promise<FontFaceSelection<Format>>;
   /** Read this selection's readiness without observing its Promise. */
   isLoaded(): boolean;
+  /** Explicitly copy this loaded selection into fresh structured-clone transfer buffers. */
+  clone(): Promise<FontFaceTransfer>;
 }
 
 interface FontFaceBase<Formats extends FontFaceFormat> extends Omit<FontFaceSelection<Formats | undefined>, 'load'> {
-  readonly source: FontFaceSource;
   readonly default: FontFace<Formats>;
   readonly disposed: boolean;
   /** Load every declared format, or every imported format advertised by an undeclared main font. */
@@ -161,6 +169,7 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
   if (existing !== undefined && !existing.disposed) {
     throw new Error(`FontFace family ${JSON.stringify(family)} already exists`);
   }
+  const ownedSource = isSerializedFontFace(source) ? claimSerializedFontFace(source) : source;
 
   const formats = formatList(config.format);
   const selections = new Map<string, AnyFontFaceSelection>();
@@ -173,7 +182,7 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
   };
   const state: FontFaceState = {
     library,
-    source,
+    source: ownedSource,
     family,
     formats,
     owner,
@@ -186,7 +195,6 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
   const defaultFormat = formats[0];
   const base = {
     family,
-    source,
     format: defaultFormat,
     get face(): AnyFontFace {
       return face;
@@ -205,6 +213,9 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
     },
     isLoaded(): boolean {
       return isFontFaceLoaded(face);
+    },
+    clone(): Promise<FontFaceTransfer> {
+      return cloneFontFace(face);
     },
     dispose(): void {
       disposeFontFace(face);
@@ -225,6 +236,9 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
       },
       isLoaded(): boolean {
         return isDeclaredFontFaceSelectionLoaded(selection);
+      },
+      clone(): Promise<FontFaceTransfer> {
+        return cloneFontFace(selection);
       },
     });
     faceStates.set(selection, { face: state, format, aggregate: false, promises: new Map() });
@@ -398,6 +412,29 @@ function loadFontFace(face: AnyFontFace): Promise<AnyFontFace> {
   return promise;
 }
 
+async function cloneFontFace(selection: AnyFontFaceSelection): Promise<FontFaceTransfer> {
+  const selected = fontFaceSelectionState(selection);
+  if (selected.aggregate) {
+    await loadFontFace(selection as AnyFontFace);
+  } else {
+    await loadDeclaredFontFaceSelection(selection);
+  }
+  const fonts = selected.aggregate
+    ? [...selected.face.owner.records.values()].map((record) => {
+        if (record.font === undefined) throw new Error('loaded FontFace record has no immutable Font');
+        return record.font;
+      })
+    : [requiredFontFaceFormat(selection, resolveDeclaredFormat(selected.format!))];
+  const source = await ensureFontFaceSource(
+    selected.face.owner,
+    selected.face.library,
+    selected.face.source,
+    selected.face.formats.map(resolveDeclaredFormat),
+  );
+  const serialized = source.snapshot(fonts);
+  return [serialized, serializedFontFaceBuffers(serialized)];
+}
+
 async function loadAllFontFaceFormats(state: FontFaceState): Promise<void> {
   const owner = state.owner;
   const declared = state.formats.map(resolveDeclaredFormat);
@@ -555,27 +592,35 @@ function ensureFontFaceSource(
   const controller = new AbortController();
   owner.sourceController = controller;
   let promise!: Promise<FontFaceSourceLease>;
-  promise = fontFaceLoadInput(fontSource)
-    .then((input) => openFontFaceSource(library, input, initialRasters, { signal: controller.signal }))
-    .then(
-      (source) => {
-        if (owner.disposed || owner.sourcePromise !== promise) {
-          source.dispose();
-          throw new DOMException('FontFace source owner was disposed', 'AbortError');
-        }
-        owner.sourceLease = source;
-        return source;
-      },
-      (error: unknown) => {
-        if (owner.sourcePromise === promise) {
-          owner.sourcePromise = undefined;
-          owner.sourceController = undefined;
-        }
-        throw error;
-      },
-    );
+  promise = openDeclaredFontFaceSource(library, fontSource, initialRasters, controller.signal).then(
+    (source) => {
+      if (owner.disposed || owner.sourcePromise !== promise) {
+        source.dispose();
+        throw new DOMException('FontFace source owner was disposed', 'AbortError');
+      }
+      owner.sourceLease = source;
+      return source;
+    },
+    (error: unknown) => {
+      if (owner.sourcePromise === promise) {
+        owner.sourcePromise = undefined;
+        owner.sourceController = undefined;
+      }
+      throw error;
+    },
+  );
   owner.sourcePromise = promise;
   return promise;
+}
+
+function openDeclaredFontFaceSource(
+  library: FontLibrary,
+  source: FontFaceSource,
+  initialRasters: readonly RasterFormatInput<AnyRasterFormat>[],
+  signal: AbortSignal,
+): Promise<FontFaceSourceLease> {
+  if (isSerializedFontFace(source)) return openSerializedFontFaceSource(library, source, { signal });
+  return fontFaceLoadInput(source).then((input) => openFontFaceSource(library, input, initialRasters, { signal }));
 }
 
 function isFontFaceLoaded(face: AnyFontFace): boolean {
@@ -700,6 +745,7 @@ function assertFontFaceSource(source: unknown): asserts source is FontFaceSource
 }
 
 function fontFaceLoadInput(source: FontFaceSource): Promise<LoadFontInput> {
+  if (isSerializedFontFace(source)) throw new TypeError('SerializedFontFace uses the transfer loader');
   if (!(typeof Blob !== 'undefined' && source instanceof Blob)) return Promise.resolve(source as LoadFontInput);
   const existing = blobInputs.get(source);
   if (existing !== undefined) return existing;

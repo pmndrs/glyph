@@ -52,18 +52,22 @@ test('structural spans derive valid nested and disjoint ranges without an offset
   }
 });
 
-test('structural spans authenticate a loaded Font instead of copying it into authored style data', { timeout }, async () => {
-  const font = await fonts.load('inter');
-  const document = txt`body ${span(font, { features: [{ tag: 'liga' }] })`face`} tail`;
-  const mounted = mount(font, [authored(document)]);
-  try {
-    assert.doesNotThrow(() => mounted.scene.updateMatrixWorld(true));
-    assert.equal(mounted.nodes[0].error, undefined);
-    assert.equal(mounted.nodes[0].text, 'body face tail');
-  } finally {
-    unmount(mounted);
-  }
-});
+test(
+  'structural spans authenticate a loaded Font instead of copying it into authored style data',
+  { timeout },
+  async () => {
+    const font = await fonts.load('inter');
+    const document = txt`body ${span(font, { features: [{ tag: 'liga' }] })`face`} tail`;
+    const mounted = mount(font, [authored(document)]);
+    try {
+      assert.doesNotThrow(() => mounted.scene.updateMatrixWorld(true));
+      assert.equal(mounted.nodes[0].error, undefined);
+      assert.equal(mounted.nodes[0].text, 'body face tail');
+    } finally {
+      unmount(mounted);
+    }
+  },
+);
 
 test('invalid authored properties reject atomically while unknown properties are ignored', { timeout }, async (t) => {
   const three = await createThreeTestHandle(t);

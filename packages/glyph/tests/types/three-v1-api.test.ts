@@ -1,4 +1,14 @@
-import { Constraints, glyph, ParagraphLayout, span, TextStyle, txt, type Font } from '../../src/index.js';
+import {
+  Constraints,
+  glyph,
+  ParagraphLayout,
+  span,
+  TextStyle,
+  txt,
+  type Font,
+  type FontFaceTransfer,
+  type SerializedFontFace,
+} from '../../src/index.js';
 import { bitmap } from '../../src/raster/bitmap.js';
 import { msdf } from '../../src/raster/msdf.js';
 import { slug } from '../../src/raster/slug.js';
@@ -53,12 +63,15 @@ void inter.bitmap;
 // @ts-expect-error Undeclared formats are not present on a typed FontFace.
 void inter.msdf;
 inter.slug.load() satisfies Promise<typeof inter.slug>;
+inter.slug.clone() satisfies Promise<FontFaceTransfer>;
 inter.formats() satisfies Promise<readonly string[]>;
 // @ts-expect-error Format selections inspect through their owning FontFace declaration.
 inter.slug.formats();
 const discovered = glyph.fontFace('/fonts/discovered.font.glb');
 // @ts-expect-error Omitted format declarations do not synthesize technique members.
 void discovered.slug;
+declare const transferred: SerializedFontFace;
+glyph.fontFace(transferred) satisfies import('../../src/index.js').FontFace<never>;
 three.createText({ font: inter.slug, text: 'Loaded before construction' }) satisfies import('../../src/three.js').Text<
   typeof slug
 >;

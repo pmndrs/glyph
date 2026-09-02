@@ -231,6 +231,25 @@ Root construction receives synchronous `isLoaded`, promise-returning `load`, ind
 `peek` access for the exact technique selected by that handle. Text creation throws for an unloaded selection. React may
 suspend on the same stable internal technique-load promise.
 
+FontFace data crosses workers or other JavaScript realms only through an explicit snapshot:
+
+```ts
+const [serialized, transfer] = await Inter.slug.clone();
+worker.postMessage(serialized, { transfer });
+
+// receiving realm
+const InterFromWorker = glyph.fontFace(message.data, {
+  family: 'Inter',
+  format: slug,
+});
+await InterFromWorker.slug.load();
+```
+
+The `SerializedFontFace` contains fresh transferable buffers for the main GLB, the selected external raster sidecars,
+and the content-addressed external resources actually resolved by those rasters. Transferring the snapshot does not
+detach or invalidate the source FontFace. The receiving declaration claims the supplied buffers and converges them into
+its realm-local font graph; it does not transfer live Fonts, renderer resources, handles, or cached Promises.
+
 ## Ownership summary
 
 ```text

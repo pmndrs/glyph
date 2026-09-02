@@ -1,5 +1,19 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-02
+
+- **Made FontFace transfer explicit and content-addressed** — D-312 adds `FontFace.clone()` as the only path that copies
+  font data for another JavaScript realm. Exact selections carry only their raster sidecar and the external resources
+  that raster actually resolved; aggregate clones carry every loaded authoritative format. The returned
+  `[SerializedFontFace, transfer]` uses fresh full-span buffers, so transfer detaches the clone without invalidating the
+  source. A receiving `glyph.fontFace(serialized)` claims those buffers and converges them into its realm-local main,
+  raster, and resource graph without transferring Fonts, handles, Promises, or renderer resources.
+
+- **Authenticated rich-text Font values by package identity** — Structural spans now distinguish live immutable Font and
+  FontStack values through their private package-owned WeakMap/WeakSet identity rather than a stale public property-name
+  heuristic. Real Fonts therefore enter the span font slot and never reach authored-style `structuredClone`; Rich Text
+  retains its font selection after the public `technique` to `raster` rename.
+
 ## 2026-09-01
 
 - **Kept policy identifiers out of the Three material API** — D-305 makes `ThreeTextMaterialContext` a closed

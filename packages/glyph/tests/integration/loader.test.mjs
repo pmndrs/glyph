@@ -5,9 +5,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test, { after, before } from 'node:test';
 
-import { createFontLibrary, FontLoader, FontLoadError, FontRegistry, openFontFaceSource } from '../../dist/loader.js';
+import {
+  createFontLibrary,
+  FontLoader,
+  FontLoadError,
+  FontRegistry,
+  openFontFaceSource,
+  openSerializedFontFaceSource,
+} from '../../dist/loader.js';
 import { immutableFontResources } from '../../dist/loaded-font.js';
+import { claimSerializedFontFace } from '../../dist/internal/font-face-transfer.js';
 import { bitmap } from '../../dist/raster/bitmap.js';
+import { msdf } from '../../dist/raster/msdf.js';
+import { slug } from '../../dist/raster/slug.js';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
@@ -15,6 +25,8 @@ import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
+const multiFormatUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
+const multiFormatBytes = await readFile(multiFormatUrl);
 
 let root;
 let sourceBytes;
@@ -480,6 +492,109 @@ test('FontFace source leases share one canonical main and lazily loaded sidecar 
   assert.deepEqual(calls, [coreUrl, rasterUrl, coreUrl]);
   replacement.dispose();
   library.dispose();
+});
+
+test('a serialized FontFace carries an external raster and its resolved resources without another fetch', async () => {
+  const calls = [];
+  const coreUrl = 'https://assets.test/transfer/Inter-Regular.font.glb';
+  const rasterUrl = `https://assets.test/transfer/${externalRasterId}`;
+  const pageUrl = 'https://assets.test/transfer/page.bin';
+  const pageBytes = Uint8Array.of(3, 1, 4, 1, 5, 9);
+  const pageSource = {
+    type: 'external',
+    uri: 'page.bin',
+    byteLength: pageBytes.byteLength,
+    artifactHash: createHash('sha256').update(pageBytes).digest('hex'),
+  };
+  const sourceLibrary = createFontLibrary({
+    fetch: fixtureFetch(
+      new Map([
+        [coreUrl, externalCoreBytes],
+        [rasterUrl, externalRasterBytes],
+        [pageUrl, pageBytes],
+      ]),
+      calls,
+    ),
+  });
+  const source = await openFontFaceSource(sourceLibrary, coreUrl, []);
+  const request = bitmap({ strikes: [16] });
+  const font = await source.load(request);
+  await immutableFontResources(font).raster.resource(pageSource);
+
+  const snapshot = source.snapshot([font]);
+  assert.equal(snapshot.rasters.length, 1);
+  assert.ok(snapshot.rasters[0].data instanceof ArrayBuffer, 'the external raster sidecar is carried');
+  assert.equal(snapshot.resources.length, 1);
+  assert.deepEqual(snapshot.rasters[0].resources, [
+    { artifactHash: pageSource.artifactHash, byteLength: pageSource.byteLength },
+  ]);
+  assert.deepEqual(calls, [coreUrl, rasterUrl, pageUrl]);
+
+  const copiedMain = snapshot.data;
+  const claimed = claimSerializedFontFace(snapshot);
+  assert.equal(copiedMain.byteLength, 0, 'claiming detaches only the explicit snapshot allocation');
+  assert.equal(font.disposed, false, 'the source graph remains live after its snapshot is claimed');
+  font.dispose();
+  source.dispose();
+  sourceLibrary.dispose();
+
+  const receiverLibrary = createFontLibrary({
+    fetch() {
+      throw new Error('a complete transferred graph must not fetch');
+    },
+  });
+  const receiver = await openSerializedFontFaceSource(receiverLibrary, claimed);
+  const receivedFont = await receiver.load(request);
+  const receivedPage = await immutableFontResources(receivedFont).raster.resource(pageSource);
+  assert.deepEqual(receivedPage, pageBytes);
+
+  receivedFont.dispose();
+  receiver.dispose();
+  receiverLibrary.dispose();
+});
+
+test('exact FontFace transfers progressively converge on one receiving content graph', async () => {
+  const sourceLibrary = createFontLibrary();
+  const source = await openFontFaceSource(sourceLibrary, { baked: { bytes: multiFormatBytes, ownership: 'copy' } }, []);
+  const sourceMsdf = await source.load(msdf);
+  const msdfSnapshot = claimSerializedFontFace(source.snapshot([sourceMsdf]));
+  const sourceSlug = await source.load(slug);
+  const slugSnapshot = claimSerializedFontFace(source.snapshot([sourceSlug]));
+  sourceMsdf.dispose();
+  sourceSlug.dispose();
+  source.dispose();
+  sourceLibrary.dispose();
+
+  assert.deepEqual(
+    msdfSnapshot.rasters.map(({ kind }) => kind),
+    ['msdf'],
+  );
+  assert.deepEqual(
+    slugSnapshot.rasters.map(({ kind }) => kind),
+    ['slug'],
+  );
+
+  const receiverLibrary = createFontLibrary({
+    fetch() {
+      throw new Error('progressive in-memory transfers must not fetch');
+    },
+  });
+  const msdfSource = await openSerializedFontFaceSource(receiverLibrary, msdfSnapshot);
+  const receivedMsdf = await msdfSource.load(msdf);
+  const slugSource = await openSerializedFontFaceSource(receiverLibrary, slugSnapshot);
+  const receivedSlug = await slugSource.load(slug);
+
+  assert.equal(
+    immutableFontResources(receivedMsdf).font,
+    immutableFontResources(receivedSlug).font,
+    'later exact transfers enrich the same canonical receiving font',
+  );
+
+  receivedMsdf.dispose();
+  receivedSlug.dispose();
+  msdfSource.dispose();
+  slugSource.dispose();
+  receiverLibrary.dispose();
 });
 
 test('FontFace source leases converge identical main content across locators and retain every dependency base', async () => {

@@ -300,6 +300,47 @@ test('a declared format member loads narrowly before the aggregate FontFace', as
   }
 });
 
+test('an explicit FontFace clone transfers one selected format without invalidating its source', async () => {
+  const source = glyph.fontFace(
+    { baked: { bytes: multiFormatBytes, ownership: 'copy' } },
+    { family: 'FontFaceTransferSource', format: [msdf, slug] },
+  );
+  let serialized;
+  try {
+    const [snapshot, transfer] = await source.slug.clone();
+    serialized = structuredClone(snapshot, { transfer });
+
+    assert.equal(source.slug.isLoaded(), true);
+    assert.equal(source.msdf.isLoaded(), false, 'an exact clone does not load sibling formats');
+    assert.deepEqual(
+      snapshot.rasters.map(({ kind }) => kind),
+      ['slug'],
+    );
+    assert.equal(snapshot.data.byteLength, 0, 'posting the copied snapshot detaches only its transfer buffers');
+    assert.equal(source.slug.isLoaded(), true, 'transferring the clone leaves the originating FontFace intact');
+  } finally {
+    source.dispose();
+  }
+
+  const receivedMainData = serialized.data;
+  const received = glyph.fontFace(serialized, {
+    family: 'FontFaceTransferReceiver',
+    format: slug,
+  });
+  const handle = glyph.handle('three:font-face-transfer', defineThreeConfig({ defaultFontFormat: 'slug' }));
+  let text;
+  try {
+    assert.equal(receivedMainData.byteLength, 0, 'glyph.fontFace() claims the received buffers into private ownership');
+    assert.equal(await received.slug.load(), received.slug);
+    text = handle.createText({ font: received.slug, text: 'transferred' });
+    assert.equal(text.font.raster, slug);
+  } finally {
+    text?.dispose();
+    received.dispose();
+    handle.dispose();
+  }
+});
+
 test('a declared format rejects when the authoritative font does not implement it', async () => {
   const face = glyph.fontFace(
     { baked: { bytes, ownership: 'copy' } },
