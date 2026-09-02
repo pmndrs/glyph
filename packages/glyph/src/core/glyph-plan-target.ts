@@ -9,8 +9,8 @@ import {
   type ResolveContext,
   type ResourceLease,
   type TransformUpdate,
-} from './glyph-config.js';
-import type { Codec } from './glyph-config.js';
+} from '../glyph-config.js';
+import type { Codec } from '../glyph-config.js';
 import type { HandleMaterialBinding, HandleTransformBinding } from '../internal/handle-state.js';
 import type { PlanAcceptance, PlanCandidate, PlanTarget } from './render-planner.js';
 

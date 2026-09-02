@@ -4,7 +4,7 @@ import {
   type AnyGlyphConfig,
   type GlyphConfigHandle,
   type GlyphHandle,
-} from './core/glyph-config.js';
+} from './glyph-config.js';
 import {
   createFontFace,
   FontFaceHandleStore,

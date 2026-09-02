@@ -91,11 +91,11 @@ export const bitmap: RasterFormat<
   dispose() {},
 });
 
-import { f32, techniqueProgram } from '../core/policy-program.js';
-import { id, type PolicyBufferId } from '../core/render-policy.js';
-import type { RasterPlanProgram } from '../core/raster-plan-program.js';
-import { registerGlyphRasterPlanProgram } from '../core/raster-plan-program.js';
-import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
+import { f32, techniqueProgram } from '../config/codec-program.js';
+import { id, type PolicyBufferId } from '../config/codec.js';
+import type { RasterPlanProgram } from '../config/raster.js';
+import { registerGlyphRasterPlanProgram } from '../config/raster.js';
+import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
 const BITMAP_ORIGIN_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/origin');
 const BITMAP_SIZE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/size');

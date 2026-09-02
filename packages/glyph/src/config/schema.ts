@@ -13,8 +13,8 @@ import {
   portableTextureFormats,
   type PortableTextureFormat,
   type PortableVertexInput,
-} from './portable-resources.js';
-import { assertGlyphId, type PolicyBuffer, type PolicyBufferId } from './render-policy.js';
+} from './resources.js';
+import { assertGlyphId, type PolicyBuffer, type PolicyBufferId } from './codec.js';
 
 export type PolicyScalarKind = 'f32' | 'u32';
 

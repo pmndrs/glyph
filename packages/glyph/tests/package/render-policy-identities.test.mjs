@@ -8,7 +8,7 @@ import {
   GlyphIdScope,
   id,
   selectPolicyCapabilitySet,
-} from '../../dist/core/render-policy.js';
+} from '../../dist/config/codec.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 
 const opcodes = textShaperAbi.policy.opcodes;

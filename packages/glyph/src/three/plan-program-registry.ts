@@ -1,25 +1,23 @@
 import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/webgpu';
 
-import {
-  createRasterCodecProgram,
-  resolveRasterPlanProgram,
-  type AnyTechniqueSchema,
-  type CodecBufferDeclarations,
-  type CodecScalarKind,
-  type CodecIdFactory,
-  type PortableResource,
-  type PortableTextureFormat,
-  type TechniqueGeometryDeclaration,
-  type TechniqueResourceDeclaration,
-  type TechniqueResourceDeclarations,
-  type RenderPlanScalarType,
-} from '../index.js';
+import { createRasterPolicyProgram as createRasterCodecProgram, resolveRasterPlanProgram } from '../config/raster.js';
+import type { PolicyScalarType as CodecScalarType, RenderIdFactory as CodecIdFactory } from '../config/codec.js';
+import type { PolicyProgram as CodecProgram } from '../config/codec.js';
+import type { PortableResource, PortableTextureFormat } from '../config/resources.js';
+import type {
+  AnyTechniqueSchema,
+  PolicyBufferDeclarations as CodecBufferDeclarations,
+  PolicyScalarKind as CodecScalarKind,
+  TechniqueGeometryDeclaration,
+  TechniqueResourceDeclaration,
+  TechniqueResourceDeclarations,
+} from '../config/schema.js';
 import { isRasterFormat, type AnyRasterFormat } from '../raster-format.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { threeCodecCapabilitySet, threeSystemBuffers } from './codec.js';
 
 export interface ThreePlanProgramBuffer {
-  readonly scalarType: RenderPlanScalarType;
+  readonly scalarType: CodecScalarType;
   readonly vectorWidth: number;
   readonly attribute: StorageInstancedBufferAttribute;
 }
@@ -108,7 +106,7 @@ export interface CompiledThreeRasterPlanProgram {
   readonly variant: ThreeRasterPlanVariant;
   readonly techniqueId: number;
   readonly programId: number;
-  readonly codec: import('../index.js').CodecProgram;
+  readonly codec: CodecProgram;
   createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
 }
 

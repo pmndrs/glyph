@@ -19,7 +19,7 @@ sources:
     resource: ../../packages/glyph-example-raster/src/raster.ts
     title: External raster technique example
   - id: core-policy-dsl
-    resource: ../../packages/glyph/src/core/policy-program.ts
+    resource: ../../packages/glyph/src/config/codec-program.ts
     title: Policy-program expression DSL
   - id: three-policy
     resource: ../../packages/glyph/src/three/codec.ts

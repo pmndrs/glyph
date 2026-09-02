@@ -5,7 +5,7 @@ import type {
   TypedPatchCommand,
   TypedResource,
   TypedRetirementCommand,
-} from '../core/glyph-config.js';
+} from '../glyph-config.js';
 
 /** @internal Explicitly constructs a renderer-bound patch from one trusted decoded view. */
 export function bindPatch<Buffer extends object>(

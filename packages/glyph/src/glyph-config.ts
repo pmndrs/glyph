@@ -1,19 +1,19 @@
-import type { Font } from '../font.js';
-import type { GlyphEngine } from '../glyph-engine.js';
-import type { AnyFontFaceSelection } from '../font-face.js';
-import type { GlyphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
-import type { FontSelection } from '../loaded-font.js';
-import type { AnyRasterFormat } from '../raster-format.js';
-import type { Constraints, ParagraphLayout, TextStyle } from '../text-properties.js';
-import { createConfiguredGlyphHandle } from '../internal/configured-handle.js';
-import type { PortableResource } from './portable-resources.js';
+import type { Font } from './font.js';
+import type { GlyphEngine } from './glyph-engine.js';
+import type { AnyFontFaceSelection } from './font-face.js';
+import type { GlyphLayoutInspection, ParagraphLayoutSummary } from './layout.js';
+import type { FontSelection } from './loaded-font.js';
+import type { AnyRasterFormat } from './raster-format.js';
+import type { Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
+import { createConfiguredGlyphHandle } from './internal/configured-handle.js';
+import type { PortableResource } from './config/resources.js';
 import type {
   PolicyBuffer as CodecBuffer,
   PolicyDescriptor as CodecDescriptor,
   PolicyProgram as CodecProgram,
   RenderIdFactory as CodecIdFactory,
-} from './render-policy.js';
-import type { PlanAcceptance, PlanCandidate } from './render-planner.js';
+} from './config/codec.js';
+import type { PlanAcceptance, PlanCandidate } from './core/render-planner.js';
 
 declare const typedCommandBufferBrand: unique symbol;
 declare const typedCommandIdentityBrand: unique symbol;

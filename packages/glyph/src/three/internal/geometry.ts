@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-import type { PortableGeometryPayload } from '../../index.js';
+import type { PortableGeometryPayload } from '../../config/resources.js';
 import { createSuppliedGlyphGeometrySource, type ThreeGlyphGeometrySource } from '../glyph-measurement.js';
 import type { ThreeHostResource } from './render-state.js';
 

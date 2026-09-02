@@ -1,8 +1,8 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { RasterTextEffect } from '../raster-format.js';
-import type { PolicyBufferId, PolicyInput, PolicyInputScope, PolicyOperation } from './render-policy.js';
-import type { PolicyBufferDeclaration, AnyTechniqueSchema } from './technique-schema.js';
-import { isTechniqueSchema } from './technique-schema.js';
+import type { PolicyBufferId, PolicyInput, PolicyInputScope, PolicyOperation } from './codec.js';
+import type { PolicyBufferDeclaration, AnyTechniqueSchema } from './schema.js';
+import { isTechniqueSchema } from './schema.js';
 
 /**
  * Expression DSL over the policy-program register machine. Authors reference named
@@ -247,19 +247,19 @@ type PolicyBufferLaneValues<Buffer extends PolicyBufferDeclaration> = PolicyLane
 >;
 
 type PolicyLaneTuple<
-  Scalar extends import('./technique-schema.js').PolicyScalarKind,
+  Scalar extends import('./schema.js').PolicyScalarKind,
   Lanes extends readonly string[],
 > = Lanes extends readonly [string, ...infer Rest extends readonly string[]]
   ? readonly [Scalar extends 'f32' ? PolicyF32Value : PolicyU32Value, ...PolicyLaneTuple<Scalar, Rest>]
   : readonly [];
 
-export type TechniquePolicyStores<Buffers extends import('./technique-schema.js').PolicyBufferDeclarations> = {
+export type TechniquePolicyStores<Buffers extends import('./schema.js').PolicyBufferDeclarations> = {
   readonly [Name in keyof Buffers]: PolicyBufferLaneValues<Buffers[Name]>;
 };
 
 export interface TechniquePolicyProgramBuilder<
   Schema extends AnyTechniqueSchema,
-  Buffers extends import('./technique-schema.js').PolicyBufferDeclarations,
+  Buffers extends import('./schema.js').PolicyBufferDeclarations,
   F32 extends readonly string[],
   U32 extends readonly string[],
 > {
@@ -354,7 +354,7 @@ export function techniqueProgram<const Schema extends AnyTechniqueSchema>(
 
 /** @internal Snapshot and validate renderer-owned lanes before invoking a technique body. */
 export function normalizePolicyProgramSystemBuffers(
-  technique: import('./technique-schema.js').PolicyBufferDeclarations,
+  technique: import('./schema.js').PolicyBufferDeclarations,
   value: unknown,
 ): PolicyProgramSystemBuffers {
   if (!isNonArrayObject(value)) throw new TypeError('policy system buffers need an object');

@@ -13,8 +13,9 @@ import {
   type GlyphRootInstanceBindingInput,
   type GlyphSchema,
   type RendererContext,
-  type CodecProgram,
-} from '../index.js';
+} from '../glyph-config.js';
+import type { PolicyProgram as CodecProgram } from '../config/codec.js';
+import type { PortableResource } from '../config/resources.js';
 import type { AnyFontFaceSelection, FontFaceRasterOf } from '../font-face.js';
 import type { Font } from '../font.js';
 import { bitmap } from '../raster/bitmap.js';
@@ -22,7 +23,6 @@ import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug.js';
 import type { AnyRasterFormat } from '../raster-format.js';
 import { normalizeGlyphBufferCapacity } from '../text-properties.js';
-import type { PortableResource } from '../index.js';
 import { threeCodecDescriptor } from './codec.js';
 import type { ThreeAllocationMode, ThreeTransformMode } from './codec.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';

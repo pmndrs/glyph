@@ -6,7 +6,7 @@ import { FontRegistry } from '../../dist/loader.js';
 import { createGlyphEngine, createGlyphHandleState } from '../../dist/glyph-engine.js';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { GlyphHandleState } from '../../dist/internal/handle-state.js';
-import { assertGlyphId, id } from '../../dist/core/render-policy.js';
+import { assertGlyphId, id } from '../../dist/config/codec.js';
 import { threeCodecBytes } from '../../dist/three/codec.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import {

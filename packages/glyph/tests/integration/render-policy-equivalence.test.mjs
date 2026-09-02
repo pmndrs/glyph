@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { id } from '../../dist/core/render-policy.js';
+import { id } from '../../dist/config/codec.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { threeCodecBytes, threeCodecDescriptor } from '../../dist/three/codec.js';
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-import type { CodecBufferId, RenderPlanScalarType } from '../../index.js';
+import type { PolicyBufferId as CodecBufferId, PolicyScalarType as CodecScalarType } from '../../config/codec.js';
 import type { ThreeBufferBinding } from '../handle.js';
 
 export type ScalarArray = Float32Array | Uint32Array | Uint16Array;
@@ -14,7 +14,7 @@ export interface RetainedBuffer {
   readonly storageKey: string;
   readonly codecBufferId: ThreeBufferBindingId;
   readonly threeAttributeName: ThreeCodecAttributeName;
-  readonly scalarType: RenderPlanScalarType;
+  readonly scalarType: CodecScalarType;
   readonly vectorWidth: number;
   readonly capacityRecords: number;
   readonly array: ScalarArray;
@@ -57,7 +57,7 @@ export interface StagedBufferMutations {
 
 const MAX_UPDATE_RANGES = 32;
 
-export function scalarArray(scalarType: RenderPlanScalarType, byteLength: number): ScalarArray {
+export function scalarArray(scalarType: CodecScalarType, byteLength: number): ScalarArray {
   if (scalarType === 'f32' || scalarType === 'u32') {
     return scalarType === 'f32' ? new Float32Array(byteLength / 4) : new Uint32Array(byteLength / 4);
   }

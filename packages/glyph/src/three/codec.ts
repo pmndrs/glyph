@@ -1,25 +1,27 @@
 import {
-  compileCodec,
-  createCodecProgram,
-  createRasterCodecProgram,
-  defineCodecBuffers,
-  defineTechniqueSchema,
-  schemaCodecBuffers,
-  techniqueProgram,
-  type CodecAllocationMode,
-  type CodecBuffer,
-  type CodecBufferId,
-  type CodecCapabilitySet,
-  type CodecDescriptor,
-  type CodecProgram,
-  type CodecTransformMode,
+  compileRenderPolicy as compileCodec,
+  createProgram as createCodecProgram,
+  id,
+  type PolicyAllocationMode as CodecAllocationMode,
+  type PolicyBuffer as CodecBuffer,
+  type PolicyBufferId as CodecBufferId,
+  type PolicyCapabilitySet as CodecCapabilitySet,
+  type PolicyDescriptor as CodecDescriptor,
+  type PolicyProgram as CodecProgram,
+  type PolicyTransformMode as CodecTransformMode,
+  type RenderIdFactory as CodecIdFactory,
   type RenderProgramId,
-  type CodecIdFactory,
   type RenderTechniqueId,
+} from '../config/codec.js';
+import { techniqueProgram } from '../config/codec-program.js';
+import { createRasterPolicyProgram as createRasterCodecProgram } from '../config/raster.js';
+import {
+  definePolicyBuffers as defineCodecBuffers,
+  defineTechniqueSchema,
+  schemaPolicyBuffers as schemaCodecBuffers,
   type AnyTechniqueSchema,
   type TechniqueSchema,
-  id,
-} from '../index.js';
+} from '../config/schema.js';
 import { bitmapPlanProgram } from '../raster/bitmap.js';
 import { msdfPlanProgram } from '../raster/msdf.js';
 import { slugPlanProgram } from '../raster/slug.js';

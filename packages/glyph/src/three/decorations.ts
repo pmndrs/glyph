@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-import type { GlyphCopy } from '../index.js';
+import type { GlyphCopy } from '../glyph-config.js';
 import type { AnyRasterFormat } from '../raster-format.js';
 import { ThreeTextRenderPlanExecutor, type ThreeTextEnginePlanOwner } from './engine-plan-target.js';
 import type { ThreeRootBinding } from './handle.js';

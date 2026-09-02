@@ -66,11 +66,11 @@ export const slug: RasterFormat<RasterFormatId & 'pmndrs.slug', typeof SLUG_KIND
     dispose() {},
   });
 
-import { f32, techniqueProgram, u32 } from '../core/policy-program.js';
-import { id, type PolicyBufferId } from '../core/render-policy.js';
-import type { RasterPlanProgram } from '../core/raster-plan-program.js';
-import { registerGlyphRasterPlanProgram } from '../core/raster-plan-program.js';
-import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
+import { f32, techniqueProgram, u32 } from '../config/codec-program.js';
+import { id, type PolicyBufferId } from '../config/codec.js';
+import type { RasterPlanProgram } from '../config/raster.js';
+import { registerGlyphRasterPlanProgram } from '../config/raster.js';
+import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
 const SLUG_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/rect');
 const SLUG_PLANE_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/plane-rect');

@@ -8,7 +8,7 @@ sources:
     resource: ../../.agents/skills/engine-call-contract/SKILL.md
     title: Engine call contract
   - id: glyph-config-contract
-    resource: ../../packages/glyph/src/core/glyph-config.ts
+    resource: ../../packages/glyph/src/glyph-config.ts
     title: Public GlyphConfig and renderer contracts
   - id: root-entry
     resource: ../../packages/glyph/src/index.ts

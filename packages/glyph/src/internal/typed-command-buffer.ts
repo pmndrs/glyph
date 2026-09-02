@@ -23,7 +23,7 @@ import type {
   TypedResourceCommand,
   TypedRootInstance,
   TypedRetirementCommand,
-} from '../core/glyph-config.js';
+} from '../glyph-config.js';
 
 interface TypedSourceState {
   readonly candidate: PlanCandidate;

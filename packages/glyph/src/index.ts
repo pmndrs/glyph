@@ -25,7 +25,7 @@ export {
   type GlyphEngineFault,
   type GlyphEngineStatusCode,
   type GlyphEngineStatusDetails,
-} from './internal/handle-state.js';
+} from './engine-error.js';
 export {
   defineGlyphConfig,
   defineGlyphSchema,
@@ -90,7 +90,7 @@ export {
   type SelectedGlyphConfig,
   type SemanticIdentity,
   type TransformUpdate,
-} from './core/glyph-config.js';
+} from './glyph-config.js';
 export {
   compileRenderPolicy as compileCodec,
   createProgram as createCodecProgram,
@@ -112,7 +112,7 @@ export {
   type RenderResourceId,
   type RenderTechniqueId,
   selectPolicyCapabilitySet as selectCodecCapabilitySet,
-} from './core/render-policy.js';
+} from './config/codec.js';
 export {
   definePolicyBuffers as defineCodecBuffers,
   defineTechniqueGeometryKind,
@@ -139,7 +139,7 @@ export {
   type TechniqueSuppliedGeometryKind,
   type TechniqueTextureArrayResourceDeclaration,
   type TechniqueTextureResourceDeclaration,
-} from './core/technique-schema.js';
+} from './config/schema.js';
 export {
   f32,
   policyProgram as codecProgram,
@@ -157,7 +157,7 @@ export {
   type PolicyU32Value as CodecU32Value,
   type TechniquePolicyProgramBuilder as TechniqueCodecProgramBuilder,
   type TechniquePolicyStores as TechniqueCodecStores,
-} from './core/policy-program.js';
+} from './config/codec-program.js';
 export {
   assertPortableResource,
   assertPortableVertexSemantic,
@@ -184,7 +184,7 @@ export {
   type PortableVertexAttribute,
   type PortableVertexInput,
   type PortableVertexSemantic,
-} from './core/portable-resources.js';
+} from './config/resources.js';
 export {
   compileRasterFont,
   createRasterPolicyProgram as createRasterCodecProgram,
@@ -200,9 +200,7 @@ export {
   type RasterPolicyBodyFactory as RasterCodecBodyFactory,
   type RasterPolicyProgramOptions as RasterCodecProgramOptions,
   type RasterPolicySystem as RasterCodecSystem,
-} from './core/raster-plan-program.js';
-export type { RenderPlanScalarType } from './core/plan-view.js';
-
+} from './config/raster.js';
 export type {
   AnyFontFace,
   AnyFontFaceSelection,

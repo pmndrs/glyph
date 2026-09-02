@@ -36,7 +36,7 @@ import {
   normalizeGlyphBufferCapacity,
 } from '../text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
-import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../index.js';
+import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../glyph-config.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding, ThreeRootBinding } from './handle.js';
@@ -149,7 +149,7 @@ class ThreeRootDrawObject extends THREE.Object3D {
 /** One handle-owned publication root. A name is customization metadata, not a Three Scene identity. */
 export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   readonly name: string | undefined;
-  readonly #fonts: import('../core/glyph-config.js').GlyphHandleFonts;
+  readonly #fonts: import('../glyph-config.js').GlyphHandleFonts;
   readonly #services: GlyphRootServices<ThreeBindings, void, ThreeRootBinding>;
   readonly #resources: ThreeRendererResources;
   readonly #renderer: ThreeTextRenderPlanExecutor;
@@ -175,7 +175,7 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   constructor(
     token: typeof threeTextConstructionToken,
     name: string | undefined,
-    fonts: import('../core/glyph-config.js').GlyphHandleFonts,
+    fonts: import('../glyph-config.js').GlyphHandleFonts,
     services: GlyphRootServices<ThreeBindings, void, ThreeRootBinding>,
     resources: ThreeRendererResources,
     options: ThreeRootOptions,
@@ -432,7 +432,7 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   }
 
   /** @internal Reconcile this root before the engine stages its contribution to `glyph.shape()`. */
-  prepareShape(): import('../core/glyph-config.js').GlyphShapeOptions | false {
+  prepareShape(): import('../glyph-config.js').GlyphShapeOptions | false {
     this.#assertActive();
     const texts = this.#renderMembers();
     this.#needsInitialTransformSync ||= this.#bindScene(texts);
@@ -1248,7 +1248,7 @@ class ThreeRootPublication {
     return this.#services.copy(entry.handle, { kind: 'decorations' }, { boundary, renderer });
   }
 
-  prepareShape(): import('../core/glyph-config.js').GlyphShapeOptions | false {
+  prepareShape(): import('../glyph-config.js').GlyphShapeOptions | false {
     this.#assertActive();
     let required = 0;
     for (const text of this.#entries.keys()) required += text.text.length;

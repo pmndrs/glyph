@@ -7,8 +7,8 @@ import {
   type RenderIdFactory,
   type RenderResourceId,
   type RenderTechniqueId,
-} from './render-policy.js';
-import { compileRasterFont } from './raster-plan-program.js';
+} from '../config/codec.js';
+import { compileRasterFont } from '../config/raster.js';
 const MAX_U32 = 0xffff_ffff;
 const MAX_U16 = 0xffff;
 const MISSING_RESOURCE = 0xffff_ffff;

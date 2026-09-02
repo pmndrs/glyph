@@ -10,7 +10,8 @@ import {
 import type { AnyRasterFormat, RasterDataOf } from './raster-format.js';
 import type { RasterKindOf, RegisteredRaster } from './raster.js';
 import { createRuntimeShaper, runtimeShaperEngineExports, type RuntimeShaper } from './shaper.js';
-import { GlyphEngineStatusError, GlyphHandleState, type GlyphHandleStateOptions } from './internal/handle-state.js';
+import { GlyphEngineStatusError } from './engine-error.js';
+import { GlyphHandleState, type GlyphHandleStateOptions } from './internal/handle-state.js';
 import type { FontHandle } from './identity.js';
 import type { PlanAcceptance, StagedRenderPlanner } from './core/render-planner.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';

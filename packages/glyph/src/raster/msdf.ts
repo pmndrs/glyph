@@ -79,11 +79,11 @@ export const msdf: RasterFormat<
   dispose() {},
 });
 
-import { f32, techniqueProgram, u32 } from '../core/policy-program.js';
-import { id, type PolicyBufferId } from '../core/render-policy.js';
-import type { RasterPlanProgram } from '../core/raster-plan-program.js';
-import { registerGlyphRasterPlanProgram } from '../core/raster-plan-program.js';
-import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
+import { f32, techniqueProgram, u32 } from '../config/codec-program.js';
+import { id, type PolicyBufferId } from '../config/codec.js';
+import type { RasterPlanProgram } from '../config/raster.js';
+import { registerGlyphRasterPlanProgram } from '../config/raster.js';
+import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
 const MSDF_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/rect');
 const MSDF_UV_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/uv-rect');
