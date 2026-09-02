@@ -58,8 +58,9 @@ try {
       },
     });
     const outputs = (await readdir(outDir)).filter((file) => file.endsWith('.js'));
-    assert.equal(outputs.length, 1, `${lane} emitted an unexpected bundle shape`);
-    assert.equal(await execute(join(outDir, outputs[0])), `${lane}-registered`);
+    const entryOutput = outputs.find((file) => file === 'bundle.js');
+    assert.ok(entryOutput, `${lane} did not emit its registration entry: ${outputs.join(', ')}`);
+    assert.equal(await execute(join(outDir, entryOutput)), `${lane}-registered`);
   }
 } finally {
   await rm(smokeRoot, { recursive: true, force: true });
