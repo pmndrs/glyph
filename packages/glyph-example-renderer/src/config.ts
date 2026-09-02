@@ -6,7 +6,7 @@ import {
   type GlyphBatchBindingInput,
   type GlyphBindings,
   type GlyphBufferBindingInput,
-  type GlyphConfig,
+  type GlyphConfigFor,
   type GlyphHandle,
   type GlyphInstanceSpanBindingInput,
   type GlyphRoot,
@@ -14,7 +14,6 @@ import {
   type GlyphRootServices,
   type GlyphSchema,
   type CodecProgram,
-  type PortableResource,
 } from '@pmndrs/glyph';
 
 import type { ExampleRendererDevice } from './device.js';
@@ -92,18 +91,11 @@ interface ExampleRootExtension {
 export type ExampleRoot = GlyphRoot & ExampleRootExtension;
 export type ExampleHandle = GlyphHandle<ExampleRoot>;
 
-export type ExampleGlyphConfig = GlyphConfig<
-  ExampleRoot,
-  ExampleBindings,
-  ExampleDrawList,
-  PortableResource,
-  Readonly<Record<string, AnyRasterTechnique>>,
-  ExampleRootContext
->;
+export type ExampleGlyphConfig = GlyphConfigFor<typeof ExampleSchema, ExampleRoot, ExampleDrawList>;
 
 export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
   const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
-  return defineGlyphConfig({
+  const config = defineGlyphConfig({
     schema: ExampleSchema,
     encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
     resolve: ({ technique, resourceName, payload }) => {
@@ -127,6 +119,8 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
       },
     },
   });
+  config satisfies ExampleGlyphConfig;
+  return config;
 }
 
 class ExampleRootImplementation implements ExampleRootExtension {

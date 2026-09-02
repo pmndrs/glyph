@@ -136,8 +136,9 @@ authoritative batch/root-instance order. `GlyphRenderer.decode(view)` stages ret
 transactional result/commit/discard boundary. The host renderer later traverses or submits committed objects. There is no
 configurable intermediate decoder and ordinary renderer code receives no numeric IDs.
 
-`defineGlyphConfig()` preserves the schema, font vocabulary, renderer result, boundary, root, and adapter extension fields
-as one inferred relationship. Internal handle machinery owns Codec installation, planning, projection, resource
+`defineGlyphConfig()` preserves the schema, font vocabulary, renderer result, boundary, root, and Codec as one inferred
+relationship. `GlyphConfigFor<typeof Schema, Root, Result>` gives isolated declaration boundaries a nameable contract
+without repeating the schema's binding tuple or boundary type. Internal handle machinery owns Codec installation, planning, projection, resource
 settlement, and disposal; third-party integrations receive only constrained root services. When a config declares fonts,
 Glyph also creates and disposes the handle-local FontFace store over the process-wide immutable FontLibrary cache. Portable
 compiled resources remain immutable payload data, while each renderer owns physical textures, buffers, geometry, and

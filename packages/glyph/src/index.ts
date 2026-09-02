@@ -53,6 +53,8 @@ export {
   type GlyphBufferBindingInput,
   type GlyphCommandCapacity,
   type GlyphConfig,
+  type GlyphConfigBindings,
+  type GlyphConfigFor,
   type GlyphConfigHandle,
   type GlyphCommandLimits,
   type GlyphCopy,

@@ -1,27 +1,34 @@
-import type { AnyRasterTechnique } from '../raster-technique.js';
 import { createEngine } from './create-engine.js';
 import {
   applyGlyphPublication,
   type AnyGlyphBindings,
   type CommandBufferView,
-  type GlyphConfig,
-  type GlyphHandle,
   type GlyphRenderer,
+  type GlyphSchema,
+  type RendererContext,
+  type ResolveContext,
+  type ResourceLease,
   type TransformUpdate,
 } from './glyph-config.js';
 import type { Codec } from './glyph-config.js';
 import type { HandleMaterialBinding, HandleTransformBinding } from '../internal/handle-state.js';
 import type { PlanAcceptance, PlanCandidate, PlanTarget } from './render-planner.js';
 
-type PlanTargetConfig<Bindings extends AnyGlyphBindings, Result, PortableResource, Root> = Pick<
-  GlyphConfig<GlyphHandle, Bindings, Result, PortableResource, Readonly<Record<string, AnyRasterTechnique>>, Root>,
-  'schema' | 'resolve' | 'renderer'
->;
+type PlanTargetConfig<Bindings extends AnyGlyphBindings, Result, Root, CodecValue extends Codec> = Readonly<{
+  schema: GlyphSchema<Bindings, Root>;
+  resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
+  renderer(context: RendererContext<Bindings, Result, CodecValue>): GlyphRenderer<Bindings, Result>;
+}>;
 
 /** Inputs for one renderer-neutral configured plan target. */
-export interface CreateGlyphPlanTargetOptions<Bindings extends AnyGlyphBindings, Result, PortableResource, Root> {
-  readonly config: PlanTargetConfig<Bindings, Result, PortableResource, Root>;
-  readonly codec: Codec;
+export interface CreateGlyphPlanTargetOptions<
+  Bindings extends AnyGlyphBindings,
+  Result,
+  Root,
+  CodecValue extends Codec,
+> {
+  readonly config: PlanTargetConfig<Bindings, Result, Root, CodecValue>;
+  readonly codec: CodecValue;
   readonly root: Root;
   readonly defaultRenderer?: GlyphRenderer<Bindings, Result>;
   readonly materialInput: (binding: HandleMaterialBinding) => Bindings['materialInput'];
@@ -39,8 +46,8 @@ export interface GlyphPlanTarget<Bindings extends AnyGlyphBindings, Result> exte
  * Creates the shared decode, bind, prepare, commit, and cleanup boundary for one publication root.
  * The returned target owns the configured renderer, optional built-in renderer, and command binder.
  */
-export function createGlyphPlanTarget<Bindings extends AnyGlyphBindings, Result, PortableResource, Root>(
-  options: CreateGlyphPlanTargetOptions<Bindings, Result, PortableResource, Root>,
+export function createGlyphPlanTarget<Bindings extends AnyGlyphBindings, Result, Root, CodecValue extends Codec>(
+  options: CreateGlyphPlanTargetOptions<Bindings, Result, Root, CodecValue>,
 ): GlyphPlanTarget<Bindings, Result> {
   return new ConfiguredGlyphPlanTarget(options);
 }
@@ -48,8 +55,8 @@ export function createGlyphPlanTarget<Bindings extends AnyGlyphBindings, Result,
 class ConfiguredGlyphPlanTarget<
   Bindings extends AnyGlyphBindings,
   Result,
-  PortableResource,
   Root,
+  CodecValue extends Codec,
 > implements GlyphPlanTarget<Bindings, Result> {
   readonly delivery = 'borrowed' as const;
   readonly #projector;
@@ -63,7 +70,7 @@ class ConfiguredGlyphPlanTarget<
   #transforms: readonly TransformUpdate<Bindings['transform']>[] = Object.freeze([]);
   #disposed = false;
 
-  constructor(options: CreateGlyphPlanTargetOptions<Bindings, Result, PortableResource, Root>) {
+  constructor(options: CreateGlyphPlanTargetOptions<Bindings, Result, Root, CodecValue>) {
     this.#projector = createEngine({
       config: options.config,
       codec: options.codec,

@@ -6,8 +6,9 @@ import type {
   CommandBufferView,
   DisplayListInstanceSpan,
   GlyphDisplayListProjector,
-  GlyphConfig,
   GlyphInstanceSpanBindingInput,
+  GlyphSchema,
+  ResolveContext,
   Retirement,
   ResourceLease,
   TypedBuffer,
@@ -17,7 +18,6 @@ import type {
   TypedResource,
 } from './glyph-config.js';
 import type { PolicyBuffer, PolicyDescriptor, PolicyProgram } from './render-policy.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
 import { bindPatch, bindRetirement } from '../internal/bind-command-buffer.js';
 import { mapBorrowedSequence, TypedCommandBufferMapper } from '../internal/typed-command-buffer.js';
 
@@ -40,18 +40,11 @@ interface ProjectedState<Bindings extends AnyGlyphBindings> {
 }
 
 /** Inputs for the renderer-neutral command binding engine used by one publication root. */
-export interface CreateEngineOptions<Bindings extends AnyGlyphBindings, Root, PortableResource> {
-  readonly config: Pick<
-    GlyphConfig<
-      import('./glyph-config.js').GlyphHandle,
-      Bindings,
-      unknown,
-      PortableResource,
-      Readonly<Record<string, AnyRasterTechnique>>,
-      Root
-    >,
-    'schema' | 'resolve'
-  >;
+export interface CreateEngineOptions<Bindings extends AnyGlyphBindings, Root> {
+  readonly config: Readonly<{
+    schema: GlyphSchema<Bindings, Root>;
+    resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
+  }>;
   readonly codec: Readonly<{ descriptor: PolicyDescriptor }>;
   readonly root: Root;
   /** Core-owned association from an opaque plan identity to the adapter-authored value. */
@@ -64,21 +57,17 @@ export interface CreateEngineOptions<Bindings extends AnyGlyphBindings, Root, Po
  * Creates the retained mapper/binder for one publication root. Integrations provide only
  * their config schema; raw plan access, resource transactions, and identity settlement stay here.
  */
-export function createEngine<Bindings extends AnyGlyphBindings, Root, PortableResource>(
-  options: CreateEngineOptions<Bindings, Root, PortableResource>,
+export function createEngine<Bindings extends AnyGlyphBindings, Root>(
+  options: CreateEngineOptions<Bindings, Root>,
 ): GlyphDisplayListProjector<Bindings> {
   return new CommandBindingEngine(options);
 }
 
-class CommandBindingEngine<
-  Bindings extends AnyGlyphBindings,
-  Root,
-  PortableResource,
-> implements GlyphDisplayListProjector<Bindings> {
-  readonly #config: CreateEngineOptions<Bindings, Root, PortableResource>['config'];
+class CommandBindingEngine<Bindings extends AnyGlyphBindings, Root> implements GlyphDisplayListProjector<Bindings> {
+  readonly #config: CreateEngineOptions<Bindings, Root>['config'];
   readonly #root: Root;
-  readonly #materialInput: CreateEngineOptions<Bindings, Root, PortableResource>['materialInput'];
-  readonly #transformInput: CreateEngineOptions<Bindings, Root, PortableResource>['transformInput'];
+  readonly #materialInput: CreateEngineOptions<Bindings, Root>['materialInput'];
+  readonly #transformInput: CreateEngineOptions<Bindings, Root>['transformInput'];
   readonly #mapper = new TypedCommandBufferMapper();
   readonly #programsById: ReadonlyMap<number, PolicyProgram>;
   readonly #programs = new WeakMap<object, Bindings['program']>();
@@ -91,7 +80,7 @@ class CommandBindingEngine<
   #buffersById = new Map<number, RetainedBuffer<Bindings['buffer']>>();
   #disposed = false;
 
-  constructor(options: CreateEngineOptions<Bindings, Root, PortableResource>) {
+  constructor(options: CreateEngineOptions<Bindings, Root>) {
     this.#config = options.config;
     this.#root = options.root;
     this.#materialInput = options.materialInput;
@@ -133,14 +122,12 @@ class CommandBindingEngine<
           );
           let lease: ResourceLease<Bindings['resource']> | undefined;
           try {
-            const companions = new Map(
-              payload.resources.map((entry) => [entry.resourceName, entry.payload as PortableResource]),
-            );
+            const companions = new Map(payload.resources.map((entry) => [entry.resourceName, entry.payload]));
             lease = this.#config.resolve({
               technique: payload.techniqueId,
               resourceKind: String(record.resourceKind),
               resourceName: payload.resourceName,
-              payload: payload.payload as PortableResource,
+              payload: payload.payload,
               resources: companions,
               previous: retained?.value,
               signal,

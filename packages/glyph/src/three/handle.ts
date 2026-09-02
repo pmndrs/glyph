@@ -7,11 +7,12 @@ import {
   type GlyphBindings,
   type GlyphBatchBindingInput,
   type GlyphBufferBindingInput,
-  type GlyphConfig,
+  type GlyphConfigFor,
   type GlyphHandle,
   type GlyphInstanceSpanBindingInput,
   type GlyphRootInstanceBindingInput,
   type GlyphSchema,
+  type RendererContext,
   type CodecProgram,
 } from '../index.js';
 import type { AnyFontFaceSelection, FontFaceTechniqueOf } from '../font-face.js';
@@ -126,16 +127,8 @@ export const ThreeSchema: GlyphSchema<ThreeBindings, ThreeRootBinding> = defineG
   instanceSpan: (_root, input) => Object.freeze({ kind: 'three-instance-span', input }),
 });
 
-export type ThreeGlyphConfig = GlyphConfig<
-  ThreeRoot,
-  ThreeBindings,
-  void,
-  PortableResource,
-  ThreeFontTechniques,
-  ThreeRootBinding,
-  ThreeCodec,
-  ThreeRootOptions & { material?: ThreeTextMaterial }
->;
+export type ThreeGlyphConfig = GlyphConfigFor<typeof ThreeSchema, ThreeRoot, void, ThreeCodec, ThreeFontTechniques>;
+
 /** @internal Resolve the anonymous root fronted by a Three handle. */
 export function threeHandleRoot(handle: ThreeHandle): ThreeRoot {
   if (handle.handle !== handle || typeof handle.createText !== 'function') {
@@ -170,7 +163,13 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
   const transformMode = options.transformMode ?? 'indexed';
   const allocationMode = options.allocationMode ?? 'ordered';
   const defaultFontFormat = options.defaultFontFormat ?? 'msdf';
-  return defineGlyphConfig({
+  const capacity =
+    options.capacity === undefined ? undefined : normalizeGlyphBufferCapacity(options.capacity, 'ThreeConfig capacity');
+  const compositing =
+    options.compositing === undefined
+      ? undefined
+      : normalizeThreeRootCompositing(options.compositing, 'ThreeConfig compositing');
+  const config = defineGlyphConfig({
     schema: ThreeSchema,
     fonts: { default: defaultFontFormat, techniques: ThreeFontTechniques, loadTechnique: loadThreeTechnique },
     encode: ({ ids }) =>
@@ -195,7 +194,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
         }),
         () => undefined,
       ),
-    renderer: (context) => {
+    renderer: (context: RendererContext<ThreeBindings, void, ThreeCodec>) => {
       if (context.defaultRenderer === undefined) {
         throw new TypeError('ThreeConfig.renderer() must be constructed by a Three publication boundary');
       }
@@ -220,8 +219,8 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
       create: (context) => {
         if (context.fonts === undefined) throw new TypeError('Three GlyphConfig must declare font techniques');
         const rootOptions: ThreeRootOptions = {
-          ...(context.config.capacity === undefined ? {} : { capacity: context.config.capacity }),
-          ...(context.config.compositing === undefined ? {} : { compositing: context.config.compositing }),
+          ...(capacity === undefined ? {} : { capacity }),
+          ...(compositing === undefined ? {} : { compositing }),
         };
         const root = new ThreeRoot(
           threeTextConstructionToken,
@@ -232,7 +231,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
           rootOptions,
         );
         const selected = context.create(root, {
-          boundary: root.boundary(context.config.material),
+          boundary: root.boundary(options.material),
           defaultRenderer: root.renderer,
           dispose: () => root.disposeHost(),
         });
@@ -240,14 +239,9 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
         return selected;
       },
     },
-    ...(options.capacity === undefined
-      ? {}
-      : { capacity: normalizeGlyphBufferCapacity(options.capacity, 'ThreeConfig capacity') }),
-    ...(options.compositing === undefined
-      ? {}
-      : { compositing: normalizeThreeRootCompositing(options.compositing, 'ThreeConfig compositing') }),
-    ...(options.material === undefined ? {} : { material: options.material }),
   });
+  config satisfies ThreeGlyphConfig;
+  return config;
 }
 
 /** Built-in indexed/ordered Three adapter. Spreading it preserves hooks without shared handle state. */
