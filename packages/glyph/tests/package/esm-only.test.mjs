@@ -37,7 +37,7 @@ test('the published contract is ESM-only', async () => {
     './dist/three/msdf.js',
     './dist/three/slug.js',
   ]);
-  assert.equal(manifest.exports['./internal/raster-baker-profile'], undefined);
+  assert.equal(manifest.exports['./internal/*'], null);
   assert.deepEqual(manifest.pmndrs, {
     glyph: { bitmap: './bakers/bitmap', msdf: './bakers/msdf', slug: './bakers/slug' },
   });
@@ -48,8 +48,26 @@ test('the published contract is ESM-only', async () => {
     './tsl/slug',
     './tsl/decoration',
     './typegpu/bitmap',
+    './tsl/*',
+    './typegpu/*',
+    './three/*',
+    './react/*',
+    './raster/*',
+    './config/*',
   ]) {
-    assert.ok(subpath in manifest.exports, `${subpath} must remain an explicit tree-shakeable package boundary`);
+    assert.ok(subpath in manifest.exports, `${subpath} must remain a tree-shakeable package boundary`);
+  }
+  for (const blocked of [
+    './internal/*',
+    './generated/*',
+    './font-baker/*',
+    './three/internal/*',
+    './raster/internal/*',
+    './tsl/internal/*',
+    './typegpu/internal/*',
+    './tsl/slug-shaders/tsl-compat',
+  ]) {
+    assert.equal(manifest.exports[blocked], null, `${blocked} must remain package-private`);
   }
 
   // The JSON ABI subpaths were replaced by typed module subpaths. Assert the removed names are gone
@@ -67,8 +85,7 @@ test('the published contract is ESM-only', async () => {
   // The typed ABI subpaths published struct offsets for pointer arithmetic and the validator subpaths
   // published bake-time artifact checks; neither had a consumer outside this package. The modules are still built
   // and packed — only the entry points are withdrawn, so a re-added name is a decision to make, not an
-  // accident to ship. `/core` and `/tsl` stay published: they are the engine-integration surface a custom
-  // renderer builds on, and `@pmndrs/glyph/three` is itself one of their consumers.
+  // accident to ship. The root GlyphConfig DSL is the engine-integration surface a custom renderer builds on.
   for (const removed of [
     './text-shaper-abi',
     './bitmap-baker-abi',
@@ -83,6 +100,7 @@ test('the published contract is ESM-only', async () => {
   }
 
   for (const [subpath, target] of Object.entries(manifest.exports)) {
+    if (target === null) continue;
     if (typeof target === 'string') {
       assert.ok(
         [
