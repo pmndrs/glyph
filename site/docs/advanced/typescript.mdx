@@ -1,0 +1,65 @@
+---
+title: TypeScript
+description: How the technique generic flows from a font into Text, what PropertyList accepts, and which values are branded.
+nav: 56
+---
+
+<Intro>
+  The technique is a type. A `Font<typeof msdf>` carries it, a stack unions it, `<Text font={…}>` infers it, and a
+  material context narrows on it. Nothing is cast to `AnyRasterTechnique` in ordinary code.
+</Intro>
+
+```ts
+import type { Font, FontStack } from '@pmndrs/glyph';
+import type { Text } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+import { slug } from '@pmndrs/glyph/three/slug';
+
+const body: Font<typeof msdf> = await loadFont(input, msdf);
+const stack: FontStack<typeof msdf | typeof slug> = createFontStack(body, title);
+const ref = useRef<Text<typeof msdf | typeof slug>>(null);
+```
+
+## Inference
+
+| Site | Infers from |
+| --- | --- |
+| `loadFont(input, technique, options?)` | the technique value; `options` is typed by it |
+| `loadFont(input, [a, b])` | a position-preserving tuple |
+| `useFont` / typed hooks | the same |
+| `createFontStack(a, ...b)` | the union of members |
+| `<Text font={…}>` | the font selection, including a stack chosen at runtime |
+| `defineTextMaterial((context) => …)` | `context.technique` discriminates the union |
+
+## PropertyList
+
+```ts
+type PropertyList<Value> = Value | false | null | undefined | readonly PropertyList<Value>[];
+```
+
+{/* prose: nested left-to-right lists; falsy entries ignored; `TextStyle.create()`, `ParagraphLayout.create()`,
+`Constraints.create()` build typed reusable rules; TypeScript rejects unknown authored fields. */}
+
+## Text input
+
+```ts
+type TextInput<T> = string | FormattedText<T>;
+```
+
+{/* prose: a plain string with `spans`, or a `txt` literal that carries its own spans and forbids a separate `spans`
+property — the union in `TextUpdate` enforces it. */}
+
+## Branded values
+
+| Type | Where |
+| --- | --- |
+| `GlyphKey` | `glyphAt(i).key`, caret and placement identity |
+| `RasterKey`, `Sha256Hex` | artifact identity |
+| `FontHandle`, `RasterHandle`, `FontKey` | registry identities |
+
+{/* prose: brands prevent mixing identities from different registries; they are never constructed by hand. */}
+
+## `exactOptionalPropertyTypes`
+
+{/* prose: the package compiles under it and spreads conditionally (`...(x === undefined ? {} : { x })`); your
+config may enable it without friction. */}

@@ -1,0 +1,90 @@
+---
+title: Raster techniques
+description: Bitmap, MSDF, and Slug — what each renders, where it wins, what it costs, and how its options become part of the font's identity.
+nav: 11
+---
+
+<Intro>
+  One baked font can carry all three rasters. Bitmap is exact pixels at a few sizes, MSDF is a scalable field that
+  covers most text, and Slug draws the outline analytically for large or zoomed type. Pick per use, not per project.
+</Intro>
+
+| Technique | Best at | Texture | Options | Cost |
+| --- | --- | --- | --- | --- |
+| `bitmap` | small UI text at known device sizes; pixel-exact | `r8unorm` strikes | `strikes: [8, 16]`, `coverage?` | tiny; one strike per size |
+| `msdf` | everything in between; the default | `rgba8unorm` atlas | `emSize?` (64), `pixelRange?` (8), `coverage?` | atlas ∝ emSize² |
+| `slug` | titles, zoom, extreme sizes; exact curves | curve / header / reference | none | per-fragment curve evaluation |
+
+<iframe
+  src="/examples/techniques/"
+  title="The same word in Bitmap, MSDF, and Slug"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+## Bitmap
+
+```ts
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
+
+const ui = await loadFont({ baked: '/fonts/inter.font.glb' }, bitmap, { strikes: [16, 32] });
+```
+
+{/* prose: rasterized at bake time at exact ppem strikes; the renderer picks the strike for the requested size and
+`rasterPixelRatio`; `pixelSnapping` aligns quads to physical pixels. Renders fill and opacity only — outline and shadow
+are rejected at the boundary rather than degraded. */}
+
+## MSDF
+
+```ts
+import { msdf } from '@pmndrs/glyph/three/msdf';
+
+const body = await loadFont({ baked: '/fonts/inter.font.glb' }, msdf);
+const small = await loadFont({ baked: '/fonts/inter-small.font.glb' }, msdf, { emSize: 32, pixelRange: 6 });
+```
+
+{/* prose: multi-channel signed distance field reconstructs the edge from the screen-space gradient, so it is correct
+at any subpixel placement and any size within the field's range. Supports outline and shadow. `emSize` bounds the
+atlas; `pixelRange` bounds how far the field reaches — larger for bigger outlines. */}
+
+## Slug
+
+```ts
+import { slug } from '@pmndrs/glyph/three/slug';
+
+const title = await loadFont({ baked: '/fonts/playwrite.font.glb' }, slug);
+```
+
+{/* prose: analytic coverage from the glyph's curves; no atlas, no distance field, no resolution ceiling; the
+landing page's wordmark is Slug. Costs per fragment, so reserve it for large text. */}
+
+## Options are identity
+
+> [!IMPORTANT]
+> The raster key hashes the technique's descriptor. `msdf` with `{ emSize: 32 }` is a different raster from `msdf`
+> with the default 64. A load request whose options differ from the bake finds no matching raster and — only when the
+> GLB retains source bytes and a runtime baker is supplied — bakes a new one; otherwise it fails with a diagnostic that
+> names the descriptor.
+
+{/* prose: the practical rule — write the options once in a shared constant and pass it to both the bake and the load. */}
+
+## Mixing techniques
+
+{/* prose: one paragraph may draw from several techniques through a fallback stack, and one GLB may carry all three.
+Link Fallback stacks. Show the tuple load: */}
+
+```ts
+const [body, title] = await loadFont({ baked: '/fonts/inter.font.glb' }, [msdf, slug]);
+```
+
+## Quality across sizes
+
+<iframe
+  src="/examples/text-ladder/"
+  title="8 to 1024 px, one technique per row"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+{/* prose: what to look for — Bitmap sharp at its strikes and blurry between, MSDF rounding corners past its range,
+Slug holding curves at any zoom. */}

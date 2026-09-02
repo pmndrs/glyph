@@ -1,65 +1,109 @@
 ---
 title: Introduction
-description: Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for every Canvas.
+description: Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for three.js.
 nav: 0
 ---
 
 <Intro>
-  `@pmndrs/glyph` shapes and lays out text in Rust/Wasm, then publishes a retained render plan for the active renderer.
-  The maintained Three.js integration supports Bitmap, MSDF, and Slug through WebGPU and Three's WebGL fallback.
+  `@pmndrs/glyph` shapes and lays out text in Rust/Wasm, publishes a retained render plan, and lets three.js draw it.
+  One baked font file carries the shaping data plus any of three raster techniques — Bitmap, MSDF, and Slug — and the
+  same `Text` object works from React Three Fiber or plain three.js, on WebGPU with three's own WebGL2 fallback.
 </Intro>
 
-## Install
-
-```sh
-npm install @pmndrs/glyph
+```bash
+npm install three @react-three/fiber @pmndrs/glyph
 ```
 
-## Render text with React Three Fiber
+## What does it look like?
+
+{/* prose: one sentence framing the example — a font, a Text, nothing else. */}
 
 ```tsx
-import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { Canvas } from '@react-three/fiber/webgpu';
+import { Text } from '@pmndrs/glyph/react';
+import { useMSDF } from '@pmndrs/glyph/react/msdf';
 
-const fontRequest = {
-  input: { baked: '/fonts/Inter.font.glb' },
-  raster: { technique: msdf },
-} as const;
-
-useFont.preload(fontRequest);
-
-function Labels() {
-  const inter = useFont(fontRequest);
-
+function Hello() {
+  const inter = useMSDF({ baked: '/fonts/inter.font.glb' });
   return (
-    <TextGroup compositing="independent">
-      <Text
-        font={inter}
-        contentBox={{ width: { mode: 'at-most', size: 480 }, wrap: 'word' }}
-        style={{ fontSize: 32, lineHeight: 1.2 }}
-        paint={{ color: '#f4f7ff' }}
-      >
-        Hello <Text paint={{ color: '#70d6ff' }}>world</Text>
-      </Text>
-    </TextGroup>
+    <Text font={inter} style={{ fontSize: 1, color: '#f4f7ff' }}>
+      Hello world
+    </Text>
+  );
+}
+
+export default function App() {
+  return (
+    <Canvas>
+      <Hello />
+    </Canvas>
   );
 }
 ```
 
-`Text` is a retained paragraph and a Three `Object3D`. A nested `Text` is a span, and inherits the surrounding
-font, style, paint, and material unless it overrides them.
+<iframe
+  src="/examples/hello/"
+  title="Hello world"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
 
-`TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the
-ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text
-semantics and lazily owns an implicit batch of one.
+The same text from plain three.js, without React:
 
-## Bake a font
+```ts
+import { glyph, loadFont } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/three/msdf';
 
-Fonts are baked ahead of time into a `.font.glb` carrying the shaping data and every raster you ask for.
+await glyph.init();
+const three = glyph.handle('main', ThreeConfig);
+const inter = await loadFont({ baked: '/fonts/inter.font.glb' }, msdf);
 
-```sh
-npx glyph bake --input Inter-Regular.ttf --output inter.font.glb \
-  --unicodes U+0020-007E --bitmap 32 --msdf --slug
+const label = three.createText({ font: inter, text: 'Hello world', style: { fontSize: 1 } });
+scene.add(label);
 ```
 
-`--unicodes` subsets the shaping font, so an artifact only carries the coverage you render.
+## Does it need WebGPU?
+
+{/* prose: no. `WebGPURenderer` carries a WebGL2 backend and falls back on its own when `navigator.gpu` is absent
+(which it is on any plain-http origin). Every technique renders on both. */}
+
+## Is it slower than sprites or a canvas texture?
+
+{/* prose: no — text is instanced, batched, and retained. One `TextGroup` becomes one planner; compatible glyphs share
+buffers and the plan emits only the draw boundaries a technique, resource, material, clip, or compositing policy
+actually requires. Point at Performance for the numbers. */}
+
+## Which scripts and languages?
+
+{/* prose: HarfRust shaping with pinned HarfBuzz as the oracle; Latin, Arabic joining, Indic reordering, mixed bidi,
+CJK line breaking; Unicode 17 segmentation and line breaking in JS. Horizontal layout; vertical is a later milestone.
+Link the shaping example. */}
+
+## Can I use my own shader?
+
+{/* prose: yes — `defineTextMaterial` hands you the technique's TSL coverage/color nodes and you return any
+NodeMaterial, including a lit PBR one. Link Materials. */}
+
+## Where does layout happen?
+
+{/* prose: Rust, in integer F26.6 units with one rounding contract; JavaScript owns Unicode analysis and the render
+loop. Link How it works. */}
+
+<Keypoints title="Where to next">
+  <KeypointsItem>[Your first text](./your-first-text) — bake a font, render it, style it, measure it.</KeypointsItem>
+  <KeypointsItem>[Raster techniques](../fonts/techniques) — when to use Bitmap, MSDF, or Slug.</KeypointsItem>
+  <KeypointsItem>[Text and TextGroup](../text/text-and-groups) — what a text object owns and what a group batches.</KeypointsItem>
+  <KeypointsItem>[Examples](./examples) — one small example per feature.</KeypointsItem>
+</Keypoints>
+
+## Ecosystem
+
+- `@react-three/fiber` — the WebGPU entry is the maintained renderer target
+- `@react-three/drei` — helpers; environment maps and lights pair well with lit text materials
+- `@react-three/uikit` — layout UI; see the integration notes in the repository
+- `three/tsl` display nodes — bloom, lens flare, and chromatic aberration through `useRenderPipeline`
+
+## How to contribute
+
+{/* prose: repo link, Discord, the benchmark harness as the way to prove a change. */}

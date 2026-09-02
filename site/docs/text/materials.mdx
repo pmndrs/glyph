@@ -1,0 +1,111 @@
+---
+title: Materials
+description: defineTextMaterial — the TSL nodes each technique hands you, the base contract a text material must keep, and lit PBR text.
+nav: 26
+sourcecode: packages/glyph/src/three/material.ts
+---
+
+<Intro>
+  A text material is a factory. Rust carries only a numeric id; three.js calls your factory when it needs a material
+  for a concrete Bitmap, MSDF, or Slug pipeline, hands you that technique's shader nodes, and takes back any
+  `NodeMaterial`. The default is one call away; a lit, reflective, glowing word is a few lines past it.
+</Intro>
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const material = defineTextMaterial((context) => {
+  const value = context.createDefaultMaterial();
+  return value;
+});
+
+const label = three.createText({ font, text: 'Custom', material });
+```
+
+<iframe
+  src="/examples/materials/"
+  title="Lit PBR material over MSDF coverage"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+## What the context gives you
+
+```ts
+switch (context.technique) {
+  case 'pmndrs.bitmap': context.shader; // position, clipPosition, atlasUv, coverage, color
+  case 'pmndrs.msdf':   context.shader; // position, atlasUv, fillCoverage, outlineCoverage, shadowCoverage, color, opacity
+  case 'pmndrs.slug':   context.shader; // position, renderCoordinate, coverage, color, opacity
+  default:              context.outputs; // a third-party technique's named nodes
+}
+```
+
+| Node | Type | Meaning |
+| --- | --- | --- |
+| `position` | `vec3` | final renderer-local position including policy transform indirection — use it as `positionNode` |
+| `coverage` / `fillCoverage` | `float` | antialiased fill |
+| `outlineCoverage`, `shadowCoverage` | `float` | MSDF rings, fill already subtracted |
+| `color` | `vec3` | unpremultiplied composite of fill, outline, shadow |
+| `opacity` | `float` | style opacity × coverage |
+| `atlasUv`, `renderCoordinate`, `clipPosition` | — | technique-specific inputs |
+
+## The base contract
+
+> [!IMPORTANT]
+> A custom material must keep what the default sets: `positionNode = context.position`, `DoubleSide`, `transparent`,
+> `depthTest: false`, `depthWrite: false`, `NormalBlending`. Miss `positionNode` and the glyphs collapse to the
+> origin; miss `depthTest: false` and batched glyphs z-fight each other.
+
+```ts
+const material = new MeshPhysicalNodeMaterial({
+  blending: NormalBlending,
+  depthTest: false,
+  depthWrite: false,
+  side: DoubleSide,
+  transparent: true,
+});
+material.positionNode = context.position;
+```
+
+## Lit text
+
+```ts
+defineTextMaterial((context) => {
+  if (context.technique !== 'pmndrs.msdf') return context.createDefaultMaterial();
+  const material = new MeshPhysicalNodeMaterial({ /* base contract */ });
+  material.positionNode = context.position;
+  material.colorNode = context.shader.color;
+  material.opacityNode = context.shader.opacity;
+  material.metalnessNode = float(0.6);
+  material.roughnessNode = float(0.4);
+  material.normalNode = normalize(vec3(lean.x, lean.y, 1)); // a fake curvature from paragraph-local position
+  return material;
+});
+```
+
+{/* prose: lights and an environment map do the rest. The normal should come from `positionLocal` normalized over
+the paragraph's measured ink — per-glyph em space (`renderCoordinate`) lights every letter as its own object. The
+landing wordmark is this material plus bloom and a lens flare from `useRenderPipeline`. */}
+
+## Effects
+
+<iframe
+  src="/examples/effects/"
+  title="Outline, shadow, animated color"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+{/* prose: animate uniforms, not materials — a material factory runs when a pipeline needs it, not per frame. */}
+
+## Rules
+
+| Rule | Why |
+| --- | --- |
+| return synchronously | it runs while three holds borrowed plan attributes |
+| do not query or update text inside | reentrancy is rejected before another Wasm call could detach the views |
+| equal factories share identity | the plan segments draws by material identity |
+| span → text → group precedence | the nearest material wins |
+
+{/* prose: different materials may still share instance buffers; the plan decides draw segmentation and the executor
+decides what GPU resources can be shared. */}

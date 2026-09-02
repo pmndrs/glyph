@@ -1,0 +1,61 @@
+---
+title: Migration
+description: Moving from the pre-handle API — loaders, layout queries, offset helpers, and paint — to the current surface.
+nav: 58
+---
+
+<Intro>
+  The current API replaced an implicit shared runtime with an explicit root and named handles, split `paint` into
+  `style`, renamed the layout query, and removed the offset-taking edit helpers. Each old form maps to exactly one
+  new form.
+</Intro>
+
+| Before | After | Why |
+| --- | --- | --- |
+| `new FontLoader().loadAsync(...)` as the only loader | `loadFont(input, technique)` / `useMSDF(...)` | fonts are immutable root values; `FontLoader` remains for `LoadingManager` |
+| implicit engine domain on first font use | `await glyph.init(); glyph.handle('main', ThreeConfig)` | explicit, disposable, several may coexist |
+| `new Text(props)` | `handle.createText(props)` | the handle injects its domain |
+| `text.layout()` | `text.measure()` | measurement is an action; `layout` is the flow-policy property |
+| `paint: { color }` | `style: { color }` | one inherited presentation object |
+| `insertText`, `deleteText`, `replaceText`, `setSpan`, `removeSpan` | `text.text = next` / `text.set({ text, spans })` | assignment derives the minimal edit; offsets stay in your model |
+| `wrap` / `align` on the text | `layout: { wrap, align }` | flow policy is its own input |
+| `width` on the text | `constraints: { width: { mode, size } }` | the parent's box is its own input |
+| one `useFont` per technique subpath | `useFont(input, technique, options?)` plus typed `useMSDF`/`useBitmapFont`/`useSlug` | one implementation, typed wrappers |
+
+## R3F
+
+```tsx
+// before
+<Text font={font} paint={{ color: '#fff' }} width={6} wrap="word">Hello</Text>
+
+// after
+<Text font={font} style={{ color: '#fff' }} layout={{ wrap: 'word' }} constraints={{ width: { mode: 'at-most', size: 6 } }}>
+  Hello
+</Text>
+```
+
+## Imperative
+
+```ts
+// before
+const loader = new FontLoader();
+const font = await loader.loadAsync({ input: url, raster: { technique: msdf } });
+const text = new Text({ font, text: 'Hello' });
+const box = text.layout();
+
+// after
+await glyph.init();
+const three = glyph.handle('main', ThreeConfig);
+const font = await loadFont({ baked: url }, msdf);
+const text = three.createText({ font, text: 'Hello' });
+const box = text.measure();
+```
+
+{/* prose: the repository ships dated codemods for the planner vocabulary and the paragraph contract; point at
+them. */}
+
+## Coming: FontFace
+
+> [!NOTE]
+> D-296 adds `glyph.fontFace({ family, src })` with a single `load()` boundary and provider-authorized loading in
+> React. When it lands, `font: Inter` replaces `loadFont` for the common case; nothing above stops working.

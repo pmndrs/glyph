@@ -1,0 +1,132 @@
+---
+title: Your first text
+description: Bake a font, put a line of text in a scene, style it, wrap it, and measure it — in React and in plain three.js.
+nav: 2
+---
+
+<Intro>
+  This tutorial takes one font from a TTF on disk to a styled, wrapped, measured paragraph on screen. Each step ends
+  with what you now see.
+</Intro>
+
+<Keypoints title="What you'll build">
+  <KeypointsItem>A baked `.font.glb` with an MSDF raster</KeypointsItem>
+  <KeypointsItem>A `<Text>` that loads it through a hook</KeypointsItem>
+  <KeypointsItem>Style, layout, and constraints as three separate props</KeypointsItem>
+  <KeypointsItem>A measurement you use to center the result</KeypointsItem>
+</Keypoints>
+
+## 1. Bake the font
+
+```bash
+npx glyph bake --input Inter-Regular.ttf --output public/fonts/inter.font.glb --msdf
+```
+
+{/* prose: what the GLB contains — shaping data plus the MSDF atlas; nothing platform-specific; do this once at build
+time. Link Baking fonts. */}
+
+## 2. Load it
+
+```tsx
+import { useMSDF } from '@pmndrs/glyph/react/msdf';
+
+const inter = useMSDF({ baked: '/fonts/inter.font.glb' });
+```
+
+{/* prose: the hook suspends until the font is decoded; the value is an immutable `Font`. Options are part of the cache
+key, so a request must name the bake's options. */}
+
+## 3. Render it
+
+```tsx
+import { Canvas } from '@react-three/fiber/webgpu';
+import { Text } from '@pmndrs/glyph/react';
+
+<Canvas>
+  <Text font={inter}>Hello world</Text>
+</Canvas>
+```
+
+{/* prose: what appeared — one line, default size 1 world unit per em, white. `Text` is an `Object3D`; position it
+like a mesh. */}
+
+## 4. Style it
+
+```tsx
+<Text font={inter} style={{ fontSize: 0.6, color: '#ffd166', letterSpacing: 0.02 }}>
+  Hello world
+</Text>
+```
+
+{/* prose: `style` is inherited text presentation. Units are paragraph-local — the same units as `fontSize`. */}
+
+## 5. Wrap it
+
+```tsx
+<Text
+  font={inter}
+  style={{ fontSize: 0.6, color: '#ffd166' }}
+  layout={{ wrap: 'word', align: 'center' }}
+  constraints={{ width: { mode: 'at-most', size: 6 } }}
+>
+  The quick brown fox jumps over the lazy dog
+</Text>
+```
+
+{/* prose: three orthogonal inputs — `style` (inherited), `layout` (flow policy), `constraints` (the box the parent
+imposes). `at-most` lets a short line shrink to its content; `exact` keeps the box. */}
+
+## 6. Measure it
+
+```tsx
+import { useRef } from 'react';
+import { useFrame } from '@react-three/fiber/webgpu';
+import type { Text as ThreeText } from '@pmndrs/glyph/three';
+
+const ref = useRef<ThreeText<typeof msdf>>(null);
+
+useFrame(() => {
+  const ink = ref.current?.measure().inkBounds;
+  if (ink) ref.current!.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0);
+});
+```
+
+{/* prose: `measure()` returns the desired layout synchronously, before the first frame commits. `inkBounds` is what
+was drawn; `contentWidth`/`contentHeight` are the advance extents. Center on ink. Link Measurement. */}
+
+## 7. The same in plain three.js
+
+```ts
+import { glyph, loadFont } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+
+await glyph.init();
+const three = glyph.handle('main', ThreeConfig);
+const inter = await loadFont({ baked: '/fonts/inter.font.glb' }, msdf);
+
+const label = three.createText({
+  font: inter,
+  text: 'The quick brown fox jumps over the lazy dog',
+  style: { fontSize: 0.6, color: '#ffd166' },
+  layout: { wrap: 'word', align: 'center' },
+  constraints: { width: { mode: 'at-most', size: 6 } },
+});
+scene.add(label);
+
+const ink = label.measure().inkBounds;
+if (ink) label.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0);
+```
+
+{/* prose: R3F does `glyph.init()` and the default handle for you; vanilla names them. Everything else is identical. */}
+
+## The result
+
+<iframe
+  src="/examples/first-text/"
+  title="Your first text"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+{/* prose: where to go next — Techniques for the other rasters; Text and TextGroup for batching. */}

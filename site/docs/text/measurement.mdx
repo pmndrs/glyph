@@ -1,0 +1,104 @@
+---
+title: Measurement
+description: measure() and glyphs() on a Text, Paragraph without a renderer, every summary field, and what each query costs.
+nav: 24
+sourcecode: packages/glyph/src/layout.ts
+---
+
+<Intro>
+  Measurement answers for desired state, synchronously, before anything commits. `measure()` is allocation-light and
+  returns the paragraph's box, baselines, ink, and lines; `glyphs()` pays for positioned per-glyph columns. Neither
+  publishes a draw. When no scene object should exist at all, `Paragraph` measures on its own.
+</Intro>
+
+```ts
+const summary = label.measure();
+const ink = summary.inkBounds;
+if (ink) label.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0);
+```
+
+<iframe
+  src="/examples/measurement/"
+  title="Advance box versus ink bounds, live"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+## Ink versus advance
+
+```
+          ┌─────────────────── width / contentWidth ───────────────────┐
+  ascent  │  ╭──── inkBounds ────╮                                      │
+          │  │  H e l l o        │                                      │  height /
+ baseline ├──┼───────────────────┼──────────────────────────────────────┤  contentHeight
+  descent │  ╰───────────────────╯                                      │
+          └────────────────────────────────────────────────────────────┘
+```
+
+{/* prose: advance extents (`contentWidth`/`contentHeight`) are what layout reserves; `inkBounds` is what was drawn —
+a script face with long swashes overhangs its advance. Center on ink; stack boxes on advance. */}
+
+## ParagraphLayoutSummary
+
+<details>
+<summary>Every field</summary>
+
+| Field | Meaning |
+| --- | --- |
+| `ascent`, `descent`, `lineHeight` | resolved baseline metrics of the paragraph |
+| `width`, `height` | the measured box under the given constraints |
+| `contentWidth`, `contentHeight` | advance extents of the laid-out lines |
+| `firstBaseline`, `lastBaseline` | y of the first and last line baselines |
+| `inkBounds` | union of glyph ink boxes, or `undefined` when nothing drew |
+| `overflowed` | content exceeded the box under the layout's overflow policy |
+| `minContentWidth`, `maxContentWidth` | intrinsic widths: longest unbreakable / no wrapping |
+| `glyphCount`, `lineCount`, `missingGlyphCount` | totals; missing counts clusters no font covered |
+| `lines[]` | `ParagraphLineMetrics`: `index`, `textStart/End`, `glyphStart/Count`, `baseline`, `advance`, `inkBounds`, per-line ascent/descent |
+
+</details>
+
+## glyphs()
+
+```ts
+const inspection = label.glyphs();
+inspection.x[i]; inspection.y[i]; inspection.glyphIds[i]; inspection.clusters[i]; inspection.glyphStableIds[i];
+```
+
+{/* prose: `GlyphLayoutInspection` extends the summary with typed-array columns — positions, advances, ink boxes,
+font slots, bidi levels, flags, per-line starts and counts — copied on every call so the caller owns them. Use it
+for custom hit testing or decoration; ordinary rendering never materializes it. */}
+
+## Paragraph without a renderer
+
+```ts
+import { createParagraph } from '@pmndrs/glyph';
+
+const paragraph = await createParagraph({ font, text: 'Measure before rendering', style: { fontSize: 32 } });
+const metrics = paragraph.measure({ width: { mode: 'at-most', size: 480 } });
+const positioned = paragraph.glyphs({ width: { mode: 'exact', size: metrics.contentWidth } });
+paragraph.dispose();
+```
+
+{/* prose: acquires a private measurement engine once; `measure`, `glyphs`, `update` are then synchronous; a
+three-entry LRU keeps arbitrary constraint probes from retaining unbounded arrays. This is the tool for layout
+systems (uikit) that need intrinsic sizes before any scene object exists. */}
+
+## When you can measure
+
+| Situation | `measure()` | Notes |
+| --- | --- | --- |
+| Detached `Text` | works | uses its implicit standalone planner |
+| `Text` under a `TextGroup` | works | uses the group's planner; sequential queries extend one speculative transaction the next traversal adopts |
+| Before the first frame | works | does not commit; `commitState()` stays `pending` |
+| Unchanged since last call | free | returns the retained result without a Wasm crossing |
+
+{/* prose: `boundingBox` and `computeBoundingBox()` derive a local `Box3` from the last measurement; `caretAt` and
+`selectionRects` are different — they read accepted placement and return `undefined` while pending. */}
+
+## Cost
+
+| Query | Pays for |
+| --- | --- |
+| `measure()` | one Wasm measurement on a miss; nothing on a hit |
+| `glyphs()` | positioning plus copying every column |
+| traversal | at most one mutating transaction per group per frame |

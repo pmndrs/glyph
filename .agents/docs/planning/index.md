@@ -25,6 +25,7 @@
 - [Glyph alpha fast-follow implementation brief](api-alpha-fast-follow.md) — disposable post-merge prompt for the deferred Rust audit and remaining production-review findings; delete it when the accepted work is complete.
 - [uikit integration](uikit-integration.md) — third-party retained-layout integration boundary.
 - [Documentation site and landing page](docs-site.md) — the `site/` surface: a pmndrs/docs MDX build under `/docs`, a WebGPU landing hero rendering the wordmark through the library, and the committed Milestone 12 follow-on.
+- [Documentation site outline](docs-site-outline.md) — every published page, its sections, code evidence, example, and source; the stubs under `site/docs` follow it.
 
 ## Data and extension contracts
 

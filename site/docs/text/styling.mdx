@@ -1,0 +1,115 @@
+---
+title: Styling
+description: TextStyle — size, spacing, color, opacity, outline, shadow, decoration, OpenType features, language and direction — and how styles compose.
+nav: 21
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<Intro>
+  `style` is the inherited presentation of a paragraph. A span overrides what it names and inherits the rest. Every
+  length is in paragraph-local units — the units `fontSize` is in — so a style scales with the text it decorates.
+</Intro>
+
+```tsx
+<Text
+  font={inter}
+  style={{
+    fontSize: 0.5,
+    lineHeight: 1.25,
+    letterSpacing: 0.01,
+    color: '#f4f7ff',
+    opacity: 0.9,
+    outline: { color: '#0a0c12', width: 0.02 },
+    shadow: { color: [0, 0, 0, 0.5], offset: [0.02, -0.02] },
+    decoration: { underline: true },
+    features: [{ tag: 'ss01' }, { tag: 'tnum' }],
+    language: 'en',
+  }}
+>
+  Styled
+</Text>
+```
+
+<iframe
+  src="/examples/styling/"
+  title="Every TextStyle property, one control each"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+<details>
+<summary>TextStyle members</summary>
+
+| Property | Type | Notes |
+| --- | --- | --- |
+| `fontSize` | `number` | em size in paragraph-local units |
+| `lineHeight` | `number` | multiple of `fontSize`; resolved per cluster; leading clamps at zero |
+| `letterSpacing` | `number` | added per cluster |
+| `wordSpacing` | `number` | added per word-separating space |
+| `language` | `string` | BCP 47; affects shaping and line breaking |
+| `direction` | `'auto' \| 'ltr' \| 'rtl'` | paragraph base direction |
+| `features` | `FontFeature[]` | `{ tag, value?, start?, end? }` |
+| `decoration` | `TextDecorationStyle` | see below |
+| `color` | `string \| [r, g, b, a]` | CSS color string or linear RGBA tuple |
+| `opacity` | `number` | inherited independently of color |
+| `outline` | `{ color, width }` | MSDF; width in paragraph-local units |
+| `shadow` | `{ color, offset: [x, y] }` | MSDF; hard shadow |
+
+</details>
+
+## Composing styles
+
+```ts
+import { TextStyle } from '@pmndrs/glyph';
+
+const base = TextStyle.create({ fontSize: 0.5, color: '#f4f7ff' });
+const emphasis = TextStyle.create({ color: '#ffd166' });
+
+<Text font={inter} style={[base, active && emphasis, { opacity }]}>…</Text>;
+```
+
+{/* prose: a `PropertyList` is a value or a nested left-to-right list; `false`/`null` entries are ignored, so
+conditions read naturally. `TextStyle.create()` builds a typed reusable rule. Public boundaries merge and validate
+known values; unknown keys are ignored, malformed known values throw. */}
+
+## Color and opacity
+
+{/* prose: strings parse as CSS colors into linear RGBA; tuples are already linear. Opacity multiplies alpha and is
+inherited on its own, so a span can fade without restating color. */}
+
+## Outline and shadow
+
+{/* prose: MSDF renders them from the distance field — `outlineCoverage` and `shadowCoverage` nodes; Bitmap has no
+field and rejects them at the boundary rather than degrading. Width and offset are in paragraph-local units; a wider
+outline needs a larger `pixelRange` at bake. */}
+
+<iframe
+  src="/examples/effects/"
+  title="Outline, shadow, animated color"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+## Decoration
+
+```ts
+decoration: { underline: true, lineThrough: false, color: '#ffd166', thickness: 0.03, offset: 0 }
+```
+
+{/* prose: geometry comes from the font's baked `underlinePosition`/`underlineThickness` and `strikeoutPosition`/
+`strikeoutSize`; `thickness` and `offset` override when nonzero; only `solid` is implemented — other styles are
+rejected, not silently drawn solid. One continuous line spans nested size changes at the declaring span's scale;
+underline and overline draw under the glyphs, line-through over. */}
+
+## OpenType features
+
+```ts
+features: [{ tag: 'liga', value: 0 }, { tag: 'smcp' }, { tag: 'tnum', start: 12, end: 18 }]
+```
+
+{/* prose: `value` defaults to 1; `start`/`end` restrict a feature to a UTF-16 range within the styled run. */}
+
+## Language and direction
+
+{/* prose: `language` selects locale-specific shaping and UAX 14 classes; `direction: 'auto'` runs UAX 9 on the
+paragraph; set `rtl` explicitly for a paragraph that starts with neutral characters. */}
