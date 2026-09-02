@@ -19,7 +19,7 @@ sources:
     title: Shared shader input contract
   - id: portable-plan
     resource: ../../packages/glyph-example-raster/src/portable.ts
-    title: Portable technique schema and plan definition
+    title: Portable technique schema and Codec-body definition
   - id: registration
     resource: ../../packages/glyph-example-raster/src/register.ts
     title: Root-imported renderer-neutral plan registration
@@ -59,7 +59,7 @@ Status: ✅ Milestone 10.4 external extension proof
 This private workspace package is a consumer proof, not a fourth recommended production raster. It imports only published
 `@pmndrs/glyph` entry points and optional shader-language subpaths. It owns the literal `glyphExample` kind, companion
 extension and descriptor, deterministic baker, standalone-valid GLB framing, embedded or authenticated external RGBA glyph
-records, decoder validation, runtime baker, declarative Rust packing policy, matching TypeGPU and TSL shader realizations,
+records, decoder validation, runtime baker, declarative Rust packing expressions, matching TypeGPU and TSL shader realizations,
 paragraph/local-run render-order
 inheritance, abort behavior, and disposal. Rust owns retained instance storage, dirty-range publication, and overflow handling.
 A source boundary test rejects imports from core internals or the Three first-party raster and baker subpaths.
@@ -70,14 +70,14 @@ diagnostic rather than a text-quality recommendation. The baker accepts both emb
 The external lane authenticates the companion GLB and its separate record payload through the public raster and resource
 resolvers; the embedded lane proves recursive `BufferView` rebasing through the public Node composition host.
 
-The package now supplies both halves of the Rust render-plan boundary separately. `glyphExample` is a portable
+The package now supplies the portable and renderer-facing halves of the Rust command-plan boundary separately. `glyphExample` is a portable
 `defineRasterTechnique` that owns identity, decoding, one stable resource identity, and disposal while importing no renderer or
 instance-packing contract. Importing the package root runs the renderer-neutral `registerRasterPlanProgram` call through a
 dedicated registration module. The manifest marks that module and its root facade as side-effectful so a production bundle
 keeps the registration; the portable definition and shader subpaths remain free of registration side effects.
 The `/typegpu` and `/tsl` subpaths export shader functions and the same named-input descriptor; they do not register a
 renderer or own resource/material caches. A Three consumer imports `/tsl` and manually calls public
-`registerThreeRasterPlanProgram`, while the example renderer imports `/typegpu`. The policy describes the exact Rust
+`registerThreeRasterPlanProgram`, while the example renderer imports `/typegpu`. The Codec body describes the exact Rust
 inputs, buffers, scalar operations, and storage/draw keys. A cold compiler lowers validated glyph colors and inset data
 into one font binding and retains the supplied indexed quad under that stable resource identity; the selected host binds
 the resulting origin, size, and color buffers plus geometry to its shader. The package no longer owns a
