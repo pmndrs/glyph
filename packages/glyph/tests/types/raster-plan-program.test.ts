@@ -3,7 +3,7 @@ import {
   registerRasterPlanProgram,
   type CompiledPolicyProgramBody,
   type RasterFontBinding,
-} from '../../dist/core.js';
+} from '../../dist/index.js';
 import type { RasterResourceId, RasterTechnique, RasterTechniqueId } from '../../dist/index.js';
 
 declare const technique: RasterTechnique<

@@ -73,7 +73,7 @@ export interface ExampleRootContext {
   readonly name: string | undefined;
 }
 
-export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = defineGlyphSchema<ExampleBindings>()({
+export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = defineGlyphSchema({
   drawRoot: () => undefined,
   program: (_root: ExampleRootContext, program) => Object.freeze({ kind: 'example-program', program }),
   buffer: (_root, input) => Object.freeze({ kind: 'example-buffer', input }),

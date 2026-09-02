@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { assertPortableResource, portableResourceKinds, portableTopologies } from '../../dist/core.js';
+import { assertPortableResource, portableResourceKinds, portableTopologies } from '../../dist/index.js';
 import { normalizePortableResource, portableResourceIdentity } from '../../dist/core/portable-resources.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 

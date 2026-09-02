@@ -271,28 +271,84 @@ export interface GlyphSchema<Bindings extends AnyGlyphBindings, Boundary> {
   instanceSpan(boundary: Boundary, input: GlyphInstanceSpanBindingInput<Bindings>): Bindings['instanceSpan'];
 }
 
-/** Define one boundary schema while preserving the inferred boundary and draw-root types. */
-export function defineGlyphSchema<Bindings extends AnyGlyphBindings>() {
-  return function defineBoundarySchema<Boundary>(
-    schema: GlyphSchema<Bindings, Boundary>,
-  ): Readonly<GlyphSchema<Bindings, Boundary>> {
-    if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) {
-      throw new TypeError('Glyph schema must be an object');
-    }
-    for (const key of [
-      'drawRoot',
-      'program',
-      'buffer',
-      'material',
-      'transform',
-      'batch',
-      'instance',
-      'instanceSpan',
-    ] as const) {
-      if (typeof schema[key] !== 'function') throw new TypeError(`Glyph schema ${key} must be a function`);
-    }
-    return Object.freeze({ ...schema });
-  };
+type DefinedGlyphBindings<
+  Resource extends object,
+  Buffer extends object,
+  Program extends object,
+  Material extends object,
+  Transform extends object,
+  Batch extends object,
+  Instance extends object,
+  InstanceSpan extends object,
+  DrawRoot extends object | undefined,
+  MaterialInput,
+  TransformInput,
+  InlineResourceInput,
+> = GlyphBindings<
+  Resource,
+  Buffer,
+  Program,
+  Material,
+  Transform,
+  Batch,
+  Instance,
+  InstanceSpan,
+  DrawRoot,
+  MaterialInput,
+  TransformInput,
+  InlineResourceInput
+>;
+
+/** Define one boundary schema while inferring its complete binding vocabulary from the callbacks. */
+export function defineGlyphSchema<
+  Resource extends object,
+  Buffer extends object,
+  Program extends object,
+  Material extends object,
+  Transform extends object,
+  Batch extends object,
+  Instance extends object,
+  InstanceSpan extends object,
+  DrawRoot extends object | undefined,
+  MaterialInput = Material,
+  TransformInput = Transform,
+  InlineResourceInput = Resource,
+  Boundary = unknown,
+>(
+  schema: GlyphSchema<
+    DefinedGlyphBindings<
+      Resource,
+      Buffer,
+      Program,
+      Material,
+      Transform,
+      Batch,
+      Instance,
+      InstanceSpan,
+      DrawRoot,
+      MaterialInput,
+      TransformInput,
+      InlineResourceInput
+    >,
+    Boundary
+  >,
+): Readonly<typeof schema> {
+  if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) {
+    throw new TypeError('Glyph schema must be an object');
+  }
+  for (const key of [
+    'drawRoot',
+    'program',
+    'buffer',
+    'material',
+    'transform',
+    'batch',
+    'instance',
+    'instanceSpan',
+  ] as const) {
+    if (typeof schema[key] !== 'function') throw new TypeError(`Glyph schema ${key} must be a function`);
+  }
+  return Object.freeze({ ...schema });
 }
 
 /** Codec selected by `GlyphConfig.encode`; policy-named values remain an internal ABI detail. */

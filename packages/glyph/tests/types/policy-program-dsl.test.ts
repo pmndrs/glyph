@@ -1,4 +1,4 @@
-import { f32, policyProgram, u32, type PolicyF32Value, type PolicyU32Value, id } from '../../dist/core.js';
+import { f32, policyProgram, u32, type PolicyF32Value, type PolicyU32Value, id } from '../../dist/index.js';
 
 // A program declares its named inputs once; every later reference is a handle,
 // never a number.

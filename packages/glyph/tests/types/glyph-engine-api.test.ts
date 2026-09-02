@@ -1,5 +1,5 @@
 import { loadFont, type Font } from '../../src/index.js';
-import { createGlyphEngine, type GlyphEngine } from '../../src/core.js';
+import { createGlyphEngine, type GlyphEngine } from '../../src/glyph-engine.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
 import { msdf } from '../../src/raster/msdf.js';
 import { slug } from '../../src/raster/slug-technique.js';

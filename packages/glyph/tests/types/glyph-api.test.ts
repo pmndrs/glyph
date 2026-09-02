@@ -19,7 +19,7 @@ type RecordingHandle = GlyphHandle<RecordingRoot>;
 type RecordingBindings = AnyGlyphBindings;
 
 const recordingConfig = defineGlyphConfig({
-  schema: defineGlyphSchema<RecordingBindings>()({
+  schema: defineGlyphSchema({
     drawRoot: () => undefined,
     program: () => ({}),
     buffer: () => ({}),

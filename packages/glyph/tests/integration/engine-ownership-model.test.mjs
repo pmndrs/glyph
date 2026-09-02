@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { GlyphBackend } from '../../dist/core.js';
+import { GlyphBackend } from '../../dist/core/backend.js';
 import { assertGlyphId, id } from '../../dist/core/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';

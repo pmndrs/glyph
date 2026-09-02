@@ -20,13 +20,31 @@ export type {
 } from './bake.js';
 export { glyph, type Glyph } from './glyph.js';
 export {
+  GlyphEngineStatusError,
+  glyphEngineStatusErrorDetails,
+  type GlyphEngineFault,
+  type GlyphEngineStatusCode,
+  type GlyphEngineStatusDetails,
+} from './core/backend.js';
+export {
   defineGlyphConfig,
   defineGlyphSchema,
   resourceLease,
   type AnyGlyphBindings,
+  type BorrowedCommandSequence,
   type BufferPatch,
+  type BufferUpdate,
   type CommandBufferView,
   type Codec,
+  type DisplayList,
+  type DisplayListBatch,
+  type DisplayListChanges,
+  type DisplayListChild,
+  type DisplayListInstanceSpan,
+  type DisplayListPhase,
+  type DisplayListRootInstance,
+  type DisplayListTransform,
+  type EncodeContext,
   type GlyphBatchBindingInput,
   type GlyphBindings,
   type GlyphBufferBindingInput,
@@ -37,6 +55,7 @@ export {
   type GlyphCopyRequest,
   type GlyphHandle,
   type GlyphInstanceSpanBindingInput,
+  type PreparedRendererCommit,
   type GlyphRenderer,
   type GlyphRoot,
   type GlyphRootInstanceBindingInput,
@@ -46,9 +65,15 @@ export {
   type GlyphTextController,
   type GlyphTextState,
   type ResourceLease,
+  type ResourceUpdate,
+  type RendererContext,
+  type ResolveContext,
+  type Retirement,
+  type TransformUpdate,
 } from './core/glyph-config.js';
 export {
   compileRenderPolicy,
+  createProgram,
   id,
   type PolicyAllocationMode,
   type PolicyBuffer,
@@ -66,6 +91,7 @@ export {
   type RenderIdFactory,
   type RenderResourceId,
   type RenderTechniqueId,
+  selectPolicyCapabilitySet,
 } from './core/render-policy.js';
 export {
   definePolicyBuffers,

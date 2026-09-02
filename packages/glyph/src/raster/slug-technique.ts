@@ -3,7 +3,6 @@ import {
   SLUG_FORMAT_VERSION,
   SLUG_GLYPH_RECORD_STRIDE,
   SLUG_KIND,
-  SLUG_PLANE_UNITS_PER_EM,
   slugDescriptor,
   type SlugDescriptor,
 } from '../internal/slug-contract.js';
@@ -77,7 +76,9 @@ export const slug: RasterTechnique<
   dispose() {},
 });
 
-import { f32, techniqueProgram, u32, type PolicyBufferId, type RasterPlanProgram, id } from '../core.js';
+import { f32, techniqueProgram, u32 } from '../core/policy-program.js';
+import { id, type PolicyBufferId } from '../core/render-policy.js';
+import type { RasterPlanProgram } from '../core/raster-plan-program.js';
 import { registerGlyphRasterPlanProgram } from '../core/raster-plan-program.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
 

@@ -47,7 +47,7 @@ const portableSystemBuffers = definePolicyBuffers({
 await glyph.init();
 
 function defineFontAwareConfig() {
-  const schema = defineGlyphSchema()({
+  const schema = defineGlyphSchema({
     drawRoot: () => undefined,
     program: () => ({}),
     buffer: () => ({}),
