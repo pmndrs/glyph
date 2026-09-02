@@ -1,4 +1,3 @@
-import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
@@ -47,6 +46,7 @@ export const dynamicLayoutWorkload = {
       animationElapsedMs: context.animationElapsedMs,
       dpr: context.dpr,
       font: context.font,
+      root: context.root,
       viewportWidth: context.viewportWidth,
     });
   },
@@ -89,7 +89,7 @@ export function createDynamicLayoutEntries(
     const alignment = (['start', 'center', 'end'] as const)[index]!;
     const animationPhase = index * ((Math.PI * 2) / 3);
     const width = widths[index]!;
-    const text = new Text({
+    const text = context.root.createText({
       font: context.font,
       rasterPixelRatio: context.dpr,
       text: sourceText,

@@ -1,12 +1,15 @@
-export type { FormattedText, TextInput } from './formatted-text.js';
 export type { FontSelection } from './loaded-font.js';
 export type { GlyphBufferCapacity, PropertyList } from './text-properties.js';
 export { Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
 export { FontLoader } from './three/font-loader.js';
 export { defineTextMaterial } from './three/material.js';
-export { txt } from './formatted-text.js';
 export { span } from './three/span.js';
-export type { ThreeRootContext, ThreeTextMaterial, ThreeTextMaterialContext } from './three/material.js';
+export type {
+  ThreeRootContext,
+  ThreeTextMaterial,
+  ThreeTextMaterialContext,
+  ThreeTextMaterialContextMap,
+} from './three/material.js';
 export { registerThreeRasterPlanProgram, threePolicyAbi } from './three/plan-program-registry.js';
 export type {
   ThreePlanProgramBuffer,

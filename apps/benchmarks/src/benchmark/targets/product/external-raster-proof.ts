@@ -1,5 +1,5 @@
 import type { Font } from '@pmndrs/glyph';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
+import type { Text, TextGroup, ThreeRoot } from '@pmndrs/glyph/three';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import { registerExternalGlyphExampleThree } from './external-raster-three';
 
@@ -22,6 +22,7 @@ import {
   disposeConfiguredRenderer,
   type RendererBackend,
 } from '../../../renderer/webgpu-renderer';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
 const WIDTH = 384;
 const HEIGHT = 128;
@@ -38,6 +39,7 @@ interface ExternalRasterResources {
   readonly camera: THREE.OrthographicCamera;
   readonly text: Text<typeof glyphExample>;
   readonly textGroup: TextGroup;
+  readonly root: ThreeRoot;
   readonly font: Font<typeof glyphExample>;
   readonly orderingGeometry: THREE.PlaneGeometry;
   readonly orderingMaterial: THREE.MeshBasicNodeMaterial;
@@ -74,6 +76,7 @@ export function createExternalRasterProofTarget(backend: RendererBackend): Bench
       state = { kind: 'empty' };
       resources.text.dispose();
       resources.textGroup.dispose();
+      disposeBenchmarkThreeRoot(resources.root);
       resources.font.dispose();
       resources.orderingGeometry.dispose();
       resources.orderingMaterial.dispose();
@@ -107,6 +110,7 @@ async function createResources(
   let font: Font<typeof glyphExample> | undefined;
   let orderingGeometry: THREE.PlaneGeometry | undefined;
   let orderingMaterial: THREE.MeshBasicNodeMaterial | undefined;
+  const root = createBenchmarkThreeRoot(`external-raster-${backend}`);
   try {
     const physicalWidth = Math.round(WIDTH * dpr);
     const physicalHeight = Math.round(HEIGHT * dpr);
@@ -129,7 +133,7 @@ async function createResources(
       ...(signal === undefined ? {} : { signal }),
     });
     signal?.throwIfAborted();
-    text = new Text({
+    text = root.createText({
       text: INITIAL_TEXT,
       font,
       style: { fontSize: 48, color: '#ffffff' },
@@ -150,7 +154,7 @@ async function createResources(
     // The caller-owned parent stays a plain `THREE.Group`: Three derives a render list's `groupOrder` from `isGroup`,
     // so this is the boundary that must order the whole text above the cover. The `TextGroup` inside it owns only the
     // text-local render-order base, which is a separate contract this target also checks.
-    textGroup = new TextGroup({ renderOrder: 200 });
+    textGroup = root.createTextGroup({ renderOrder: 200 });
     textGroup.add(text);
     const callerGroup = new THREE.Group();
     callerGroup.renderOrder = 200;
@@ -160,10 +164,7 @@ async function createResources(
     // `Text` reconciles while parented, so attaching and forcing one world update is what commits the first revision.
     textGroup.updateMatrixWorld(true);
     if (textGroup.error !== undefined) throw textGroup.error;
-    const retainedMesh = exactlyOne(
-      textGroup.children.filter((child) => child instanceof THREE.Mesh),
-      'external raster draw mesh',
-    );
+    const retainedMesh = exactlyOne(rootDraws(scene, backend), 'external raster draw mesh');
     if (!(retainedMesh instanceof THREE.Mesh) || !(retainedMesh.geometry instanceof THREE.BufferGeometry)) {
       throw new TypeError('external raster did not publish a Three.js mesh');
     }
@@ -174,10 +175,7 @@ async function createResources(
     text.set({ text: UPDATED_TEXT });
     textGroup.updateMatrixWorld(true);
     if (textGroup.error !== undefined) throw textGroup.error;
-    if (
-      textGroup.children.find((child) => child instanceof THREE.Mesh) !== retainedMesh ||
-      retainedMesh.geometry !== retainedGeometry
-    ) {
+    if (rootDraws(scene, backend)[0] !== retainedMesh || retainedMesh.geometry !== retainedGeometry) {
       throw new Error('warm external raster update replaced its retained Three.js objects');
     }
     textGroup.renderOrder = 600;
@@ -202,6 +200,7 @@ async function createResources(
       camera,
       text,
       textGroup,
+      root,
       font,
       orderingGeometry,
       orderingMaterial,
@@ -212,6 +211,7 @@ async function createResources(
   } catch (error) {
     text?.dispose();
     textGroup?.dispose();
+    disposeBenchmarkThreeRoot(root);
     font?.dispose();
     orderingGeometry?.dispose();
     orderingMaterial?.dispose();
@@ -279,10 +279,7 @@ async function renderResources(resources: ExternalRasterResources, signal?: Abor
       `external raster proof changed only ${layeringPixels} pixels over the cover frame (${litPixels} visible pixels)`,
     );
   }
-  const liveMesh = exactlyOne(
-    resources.textGroup.children.filter((child) => child instanceof THREE.Mesh),
-    'retained external raster draw mesh',
-  );
+  const liveMesh = exactlyOne(rootDraws(resources.scene, resources.backend), 'retained external raster draw mesh');
   if (liveMesh !== resources.retainedMesh || resources.retainedMesh.geometry !== resources.retainedGeometry) {
     throw new Error('external raster proof lost retained object or geometry identity');
   }
@@ -307,6 +304,14 @@ async function renderResources(resources: ExternalRasterResources, signal?: Abor
 function exactlyOne<Value>(values: readonly Value[], label: string): Value {
   if (values.length !== 1) throw new Error(`${label} count was ${values.length}; expected 1`);
   return values[0]!;
+}
+
+function rootDraws(scene: THREE.Scene, backend: RendererBackend): THREE.Mesh[] {
+  return (
+    scene
+      .getObjectByName(`@pmndrs/glyph:external-raster-${backend}`)
+      ?.children.filter((child): child is THREE.Mesh => child instanceof THREE.Mesh) ?? []
+  );
 }
 
 async function sha256(bytes: Uint8Array): Promise<string> {

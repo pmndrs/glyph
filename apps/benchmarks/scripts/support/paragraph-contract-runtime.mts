@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import {
+  glyph,
   type Constraints,
   type Font,
   type GlyphLayoutInspection,
@@ -9,7 +10,10 @@ import {
 } from '@pmndrs/glyph';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, ThreeConfig } from '@pmndrs/glyph/three';
+
+await glyph.init();
+let nextContractHandle = 1;
 
 export type ContractFont = Font<typeof bitmap>;
 
@@ -58,8 +62,10 @@ export async function createParagraphContractRuntime() {
 }
 
 export function createContractText(font: ContractFont, text: string, style: TextStyle) {
-  const group = new TextGroup({ capacity: { size: Math.max(1_024, text.length * 4), policy: 'grow' } });
-  const value = new Text({ font, text, style });
+  const handle = glyph.handle(`paragraph-contract:${String(nextContractHandle++)}`, ThreeConfig);
+  handle.setCapacity({ size: Math.max(1_024, text.length * 4), policy: 'grow' });
+  const group = handle.createTextGroup();
+  const value = handle.createText({ font, text, style });
   group.add(value);
   return {
     group,
@@ -75,6 +81,7 @@ export function createContractText(font: ContractFont, text: string, style: Text
     dispose() {
       value.dispose();
       group.dispose();
+      handle.dispose();
     },
   };
 }

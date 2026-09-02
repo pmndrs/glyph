@@ -1,8 +1,7 @@
-import { Text } from '@pmndrs/glyph/three';
-
 import type { RasterTechnique } from '../../benchmark/url-state';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
+import { formatStyledRanges } from '../shared/formatted-ranges';
 import {
   committedTextMetrics,
   exactWidth,
@@ -36,6 +35,7 @@ export const paintEffectsWorkload = {
       ...context.configuration,
       dpr: context.dpr,
       font: context.font,
+      root: context.root,
       technique: context.technique,
       viewportWidth: context.viewportWidth,
     });
@@ -67,11 +67,10 @@ export function createPaintEffectsEntries(
       ? ([Math.max(3, context.fontSize / 10), Math.max(3, context.fontSize / 10)] as const)
       : undefined;
   const spans = createPaintSpans(0, context.amount, paintOutlineWidth, paintShadowOffset);
-  const text = new Text({
+  const text = context.root.createText({
     font: context.font,
     rasterPixelRatio: context.dpr,
-    text: PAINT_EFFECTS_TEXT,
-    spans,
+    text: formatStyledRanges(PAINT_EFFECTS_TEXT, spans),
     style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT, opacity: context.paintOpacity },
     constraints: { width: exactWidth(benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio)) },
     layout: { wrap: 'word' },
@@ -83,7 +82,6 @@ export function createPaintEffectsEntries(
       sourceText: PAINT_EFFECTS_TEXT,
       text,
       paintSpans: spans,
-      paintUpdate: { text: PAINT_EFFECTS_TEXT, spans },
       ...(paintOutlineWidth === undefined ? {} : { paintOutlineWidth }),
       ...(paintShadowOffset === undefined ? {} : { paintShadowOffset }),
     },
@@ -154,11 +152,11 @@ export function animatePaintEffectsEntries(
   // Identical text and shaping-span ranges keep Text on its synchronous paint-only batch path.
   const phase = timestamp * 0.0002 * animationRate(configuration.animationSpeed);
   entry.paintPhase = phase;
-  if (entry.paintSpans === undefined || entry.paintUpdate === undefined) {
+  if (entry.paintSpans === undefined) {
     throw new Error('paint effects entry is missing its retained span buffer');
   }
   updatePaintSpans(entry.paintSpans, phase, configuration.amount, entry.paintOutlineWidth, entry.paintShadowOffset);
-  entry.text.set(entry.paintUpdate);
+  entry.text.set({ text: formatStyledRanges(PAINT_EFFECTS_TEXT, entry.paintSpans) });
   entry.paintRevision = (entry.paintRevision ?? 0) + 1;
   entry.lastPaintUpdateMs = performance.now() - started;
 }
@@ -192,8 +190,7 @@ export function applyPaintEffectsRetainedConfiguration(
     );
     entry.text.set({
       style: { ...entry.text.style, opacity: configuration.paintOpacity },
-      text: PAINT_EFFECTS_TEXT,
-      spans: entry.paintSpans,
+      text: formatStyledRanges(PAINT_EFFECTS_TEXT, entry.paintSpans),
     });
   }
 }

@@ -1,5 +1,5 @@
 import { createFontLibrary, type FontLibrary, type ParagraphLayoutSummary } from '@pmndrs/glyph';
-import { TextGroup } from '@pmndrs/glyph/three';
+import { TextGroup, type ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { selectBitmapStrikePpem } from '@pmndrs/glyph/three/bitmap';
 
@@ -64,6 +64,7 @@ import {
   createRetainedFontFixtureController,
   type RetainedFontFixtureController,
 } from '../../../renderer/retained-font-fixture';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
 type WorkloadEntry = ComparisonWorkloadEntry;
 
@@ -374,6 +375,10 @@ async function createComparisonWorkloadRuntime(
     zoomText: zoomAnimationState,
   };
   const scene = new THREE.Scene();
+  const glyphRoot = createBenchmarkThreeRoot(`comparison-${technique}`, {
+    capacity: { size: 4_096, policy: 'grow' },
+    compositing: workloadCompositing(configuration.workload),
+  });
   let camera = createWorkloadCamera(configuration.workload, width, height);
   const textUpdateTelemetry = createTextUpdateTelemetry();
   const visibleEntryMetrics: MutableVisibleEntryMetrics = {
@@ -515,6 +520,7 @@ async function createComparisonWorkloadRuntime(
             iconFont: icons.loaded,
             iconSize,
             labelFont: activeFont().loaded,
+            root: glyphRoot,
           });
           try {
             for (const { node } of additions) batchRoot.add(node);
@@ -606,10 +612,11 @@ async function createComparisonWorkloadRuntime(
       const previous = entries;
       const previousRoot = batchRoot;
       const reuseBatchRoot =
-        previousRoot instanceof TextGroup &&
-        comparisonWorkloadDefinition(next.workload).batching !== 'standalone' &&
-        previousRoot.compositing === workloadCompositing(next.workload);
+        previousRoot instanceof TextGroup && comparisonWorkloadDefinition(next.workload).batching !== 'standalone';
+      const previousCompositing = glyphRoot.compositing;
+      glyphRoot.setCompositing(workloadCompositing(next.workload));
       const nextEntries = createEntries(
+        glyphRoot,
         activeFont().loaded,
         technique,
         next,
@@ -622,7 +629,7 @@ async function createComparisonWorkloadRuntime(
         initialIconWindow?.scrollX ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollX ?? 0)),
         initialIconWindow?.scrollY ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollY ?? 0)),
       );
-      const nextRoot = reuseBatchRoot ? previousRoot : createBatchRoot(next.workload);
+      const nextRoot = reuseBatchRoot ? previousRoot : createBatchRoot(glyphRoot, next.workload);
       const scheduledAt = performance.now();
       try {
         // Compatible grouped workloads replace their children through one retained Rust session. Creating a second
@@ -685,7 +692,8 @@ async function createComparisonWorkloadRuntime(
         if (reuseBatchRoot) {
           for (const { node } of nextEntries) nextRoot.remove(node);
           disposeBatchRoot(nextRoot);
-          const restoredRoot = createBatchRoot(configuration.workload);
+          glyphRoot.setCompositing(previousCompositing);
+          const restoredRoot = createBatchRoot(glyphRoot, configuration.workload);
           try {
             for (const { node } of previous) restoredRoot.add(node);
             publishWorkloadTexts(restoredRoot, previous);
@@ -701,6 +709,7 @@ async function createComparisonWorkloadRuntime(
         }
         disposeEntries(nextEntries);
         if (!reuseBatchRoot) disposeBatchRoot(nextRoot);
+        glyphRoot.setCompositing(previousCompositing);
         if (iconGridInstanceChanged) nextIconGridInstance?.dispose();
         throw error;
       }
@@ -1121,6 +1130,7 @@ async function createComparisonWorkloadRuntime(
           disposeEntries(entries);
           entries = [];
           disposeBatchRoot(batchRoot);
+          disposeBenchmarkThreeRoot(glyphRoot);
           batchRoot = new THREE.Group();
           // Every Text holds a font lease, so the loaded fonts can only be released after the entries are disposed.
           activeSelectedFont.dispose();
@@ -1134,6 +1144,7 @@ async function createComparisonWorkloadRuntime(
   } catch (error) {
     disposeEntries(entries);
     disposeBatchRoot(batchRoot);
+    disposeBenchmarkThreeRoot(glyphRoot);
     for (const companion of companionFonts.values()) companion.loaded.dispose();
     companionFonts.clear();
     if (selectedFontController === undefined) font?.loaded.dispose();
@@ -1148,14 +1159,9 @@ async function createComparisonWorkloadRuntime(
  * batch that owns one set of GPU resources. A single-paragraph workload gets a plain Group and keeps its own implicit
  * batch of one, which is what it already was.
  */
-function createBatchRoot(workload: ComparisonWorkloadId): THREE.Object3D {
+function createBatchRoot(root: ThreeRoot, workload: ComparisonWorkloadId): THREE.Object3D {
   if (comparisonWorkloadDefinition(workload).batching === 'standalone') return new THREE.Group();
-  // `grow` keeps one buffer per physical resource. A chunked batch would split a paragraph's glyph run at every chunk
-  // boundary and turn one draw into several, which would make the batched lanes look worse than the standalone one.
-  return new TextGroup({
-    capacity: { size: 4_096, policy: 'grow' },
-    compositing: workloadCompositing(workload),
-  });
+  return root.createTextGroup();
 }
 
 function workloadCompositing(workload: ComparisonWorkloadId): 'ordered' | 'independent' {
@@ -1169,6 +1175,7 @@ function disposeBatchRoot(root: THREE.Object3D): void {
 }
 
 function createEntries(
+  root: ThreeRoot,
   font: WorkloadFont,
   technique: RasterTechnique,
   configuration: ComparisonWorkloadConfiguration,
@@ -1187,6 +1194,7 @@ function createEntries(
     configuration,
     dpr,
     font,
+    root,
     iconScrollX,
     iconScrollY,
     technique,

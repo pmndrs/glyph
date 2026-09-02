@@ -1,6 +1,7 @@
 import type { Font } from '@pmndrs/glyph';
 import { type bitmap, type BitmapData } from '@pmndrs/glyph/three/bitmap';
 import * as THREE from 'three/webgpu';
+import type { ThreeRoot } from '@pmndrs/glyph/three';
 
 import { conformanceText, type BenchmarkFontFixture } from '../../font-fixtures';
 import type { TargetRunOutput } from '../../contracts';
@@ -20,6 +21,7 @@ import {
 import type { PersistentRenderSceneRenderer } from '../../../renderer/persistent-render-host';
 import { withRendererStateRestored } from '../../../renderer/renderer-state-transaction';
 import { compactRgba8Readback } from './rgba-readback';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
 export const BITMAP_FINITE_WIDTH = 384;
 export const BITMAP_FINITE_HEIGHT = 128;
@@ -40,6 +42,7 @@ export interface BitmapFiniteScene {
   readonly camera: THREE.OrthographicCamera;
   readonly font: Font<typeof bitmap>;
   readonly line: BitmapConformanceLine;
+  readonly root: ThreeRoot;
   readonly reference: BitmapData;
   readonly referencePixels: Uint8Array;
   readonly atlasGpuBytes: number;
@@ -93,6 +96,7 @@ export async function createBitmapFiniteScene({
   let target: THREE.RenderTarget | undefined;
   let font: Font<typeof bitmap> | undefined;
   let line: BitmapConformanceLine | undefined;
+  const root = createBenchmarkThreeRoot(`bitmap-finite-${backend}`);
   try {
     const loadedFont = await loadBitmapFontAsset({
       technique: 'bitmap',
@@ -105,6 +109,7 @@ export async function createBitmapFiniteScene({
     const scene = new THREE.Scene();
     line = createBitmapConformanceLine(
       scene,
+      root,
       font,
       loadedFont.data,
       conformanceText(),
@@ -151,6 +156,7 @@ export async function createBitmapFiniteScene({
       camera,
       font,
       line,
+      root,
       reference,
       referencePixels,
       atlasGpuBytes: bitmapAtlasBytes(reference),
@@ -159,6 +165,7 @@ export async function createBitmapFiniteScene({
     };
   } catch (error) {
     if (line !== undefined) disposeBitmapConformanceLine(line);
+    disposeBenchmarkThreeRoot(root);
     font?.dispose();
     target?.dispose();
     if (ownedRenderer !== undefined) await disposeConfiguredRenderer(ownedRenderer);
@@ -297,6 +304,7 @@ export async function renderBitmapFiniteFrame(
 
 export async function disposeBitmapFiniteScene(resources: BitmapFiniteScene): Promise<void> {
   disposeBitmapConformanceLine(resources.line);
+  disposeBenchmarkThreeRoot(resources.root);
   resources.font.dispose();
   resources.target.dispose();
   if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);

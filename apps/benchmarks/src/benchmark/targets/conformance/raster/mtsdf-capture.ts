@@ -1,6 +1,6 @@
 import type { Font, GlyphLayout } from '@pmndrs/glyph';
 import type { msdf as mtsdf, MsdfData } from '@pmndrs/glyph/three/msdf';
-import { Text } from '@pmndrs/glyph/three';
+import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import {
@@ -26,6 +26,7 @@ import {
   type RendererBackend,
 } from '../../../../renderer/webgpu-renderer';
 import type { RasterConformanceSession } from './contracts';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../../three-root';
 
 const WIDTH = 512;
 const HEIGHT = 512;
@@ -55,6 +56,7 @@ interface FlatMtsdfConformanceResources {
   readonly font: Font<typeof mtsdf>;
   readonly data: MsdfData;
   readonly line: Text<typeof mtsdf>;
+  readonly root: ThreeRoot;
 }
 
 /** A warm finite MTSDF session with an optional host renderer lease. */
@@ -188,6 +190,7 @@ async function createFlatMtsdfConformanceResources(options: {
   let target: THREE.RenderTarget | undefined;
   let font: Font<typeof mtsdf> | undefined;
   let line: Text<typeof mtsdf> | undefined;
+  const root = createBenchmarkThreeRoot(`mtsdf-conformance-${backend}`);
   try {
     const loaded = await loadMtsdfFontAsset({
       technique: 'mtsdf',
@@ -197,7 +200,7 @@ async function createFlatMtsdfConformanceResources(options: {
     });
     font = loaded.loaded;
     const data = loaded.data;
-    line = new Text({
+    line = root.createText({
       text: conformanceText(),
       font,
       constraints: { width: { mode: 'exact', size: 476 } },
@@ -240,9 +243,11 @@ async function createFlatMtsdfConformanceResources(options: {
       font,
       data,
       line,
+      root,
     };
   } catch (error) {
     line?.dispose();
+    disposeBenchmarkThreeRoot(root);
     font?.dispose();
     target?.dispose();
     if (ownedRenderer !== undefined) await disposeConfiguredRenderer(ownedRenderer);
@@ -299,6 +304,7 @@ async function captureFlatMtsdfConformance(
 async function disposeFlatMtsdfConformanceResources(resources: FlatMtsdfConformanceResources): Promise<void> {
   resources.line.removeFromParent();
   resources.line.dispose();
+  disposeBenchmarkThreeRoot(resources.root);
   resources.font.dispose();
   resources.target.dispose();
   if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);

@@ -1,6 +1,6 @@
 import type { Font } from '@pmndrs/glyph';
 import type { slug } from '@pmndrs/glyph/three/slug';
-import { Text } from '@pmndrs/glyph/three';
+import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
@@ -13,6 +13,7 @@ import {
   disposeConfiguredRenderer,
   type RendererBackend,
 } from '../../../renderer/webgpu-renderer';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
 const WIDTH = 512;
 const HEIGHT = 320;
@@ -26,6 +27,7 @@ interface SlugProductTargetResources {
   readonly camera: THREE.OrthographicCamera;
   readonly font: Font<typeof slug>;
   readonly lines: readonly Text<typeof slug>[];
+  readonly root: ThreeRoot;
   readonly configuration: SlugRasterConfiguration;
   readonly artifactBytes: number;
   readonly compressedBytes: number;
@@ -69,6 +71,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
   const renderer = await createConfiguredRenderer({ canvas, width: WIDTH, height: HEIGHT, backend, dpr });
   let target: THREE.RenderTarget | undefined;
   let font: Font<typeof slug> | undefined;
+  const root = createBenchmarkThreeRoot(`product-slug-${backend}`);
   const lines: Text<typeof slug>[] = [];
   try {
     const fontStarted = performance.now();
@@ -77,7 +80,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
     const fontLoadMs = performance.now() - fontStarted;
     const scene = new THREE.Scene();
 
-    const resizeLine = new Text({
+    const resizeLine = root.createText({
       text: BENCHMARK_IPSUM_CONFORMANCE_TEXT,
       font,
       constraints: { width: { mode: 'exact', size: 280 } },
@@ -91,7 +94,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
     resizeLine.set({ constraints: { width: { mode: 'exact', size: 476 } }, layout: { wrap: 'word' } });
     resizeLine.updateMatrixWorld(true);
 
-    const smallLine = new Text({
+    const smallLine = root.createText({
       text: 'analytic 12 px  ffi  AV  0123456789',
       font,
       style: { fontSize: 12, color: '#7dd3fc' },
@@ -100,7 +103,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
     smallLine.position.set(18, -142, 0);
     scene.add(smallLine);
 
-    const transformLine = new Text({
+    const transformLine = root.createText({
       text: 'TRANSFORM / SLUG',
       font,
       style: { fontSize: 30, color: '#c4b5fd' },
@@ -111,7 +114,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
     transformLine.scale.setScalar(0.7);
     scene.add(transformLine);
 
-    const opacityLine = new Text({
+    const opacityLine = root.createText({
       text: 'Fill  Opacity',
       font,
       style: { fontSize: 26, color: '#f8fafc', opacity: 0.72 },
@@ -153,6 +156,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
       camera,
       font,
       lines,
+      root,
       configuration,
       artifactBytes: loaded.artifactBytes,
       compressedBytes: loaded.compressedBytes,
@@ -161,6 +165,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
     };
   } catch (error) {
     for (const line of lines) line.dispose();
+    disposeBenchmarkThreeRoot(root);
     font?.dispose();
     target?.dispose();
     await disposeConfiguredRenderer(renderer);
@@ -186,8 +191,8 @@ async function renderSlugText(resources: SlugProductTargetResources): Promise<Ta
       dpr: resources.dpr,
       sceneCount: 4,
       textObjectCount: resources.lines.length,
-      glyphCount: resources.lines.reduce((sum, line) => sum + renderedGlyphCount(line), 0),
-      drawCount: resources.lines.reduce((sum, line) => sum + drawCount(line), 0),
+      glyphCount: resources.lines.reduce((sum, line) => sum + line.measure().glyphCount, 0),
+      drawCount: drawCount(resources.scene, `product-slug-${resources.backend}`),
       changedPixels: pixelEvidence.changedPixels,
       distinctRgbColors: pixelEvidence.distinctRgbColors,
       artifactBytes: resources.artifactBytes,
@@ -197,7 +202,7 @@ async function renderSlugText(resources: SlugProductTargetResources): Promise<Ta
       slugHeaderBytes: resources.configuration.headerBytes,
       slugReferenceBytes: resources.configuration.referenceBytes,
       slugResourceBytes: resources.configuration.resourceBytes,
-      slugGpuBytes: resources.lines.reduce((sum, line) => sum + line.gpuBytes, 0),
+      slugGpuBytes: resources.root.gpuBytes,
       renderTargetGpuBytes: bytes.byteLength,
       fontLoadMs: resources.fontLoadMs,
       firstDrawMs: resources.firstDrawMs,
@@ -241,6 +246,7 @@ async function disposeResources(resources: SlugProductTargetResources): Promise<
     line.dispose();
   }
   resources.font.dispose();
+  disposeBenchmarkThreeRoot(resources.root);
   resources.target.dispose();
   await disposeConfiguredRenderer(resources.renderer);
 }
@@ -266,19 +272,9 @@ function inspectPixels(bytes: Uint8Array): { readonly changedPixels: number; rea
   return { changedPixels, distinctRgbColors: colors.size };
 }
 
-function renderedGlyphCount(object: THREE.Object3D): number {
+function drawCount(scene: THREE.Scene, rootName: string): number {
   let count = 0;
-  object.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.geometry instanceof THREE.InstancedBufferGeometry) {
-      count += child.geometry.instanceCount;
-    }
-  });
-  return count;
-}
-
-function drawCount(object: THREE.Object3D): number {
-  let count = 0;
-  object.traverse((child) => {
+  scene.getObjectByName(`@pmndrs/glyph:${rootName}`)?.traverse((child) => {
     if (child instanceof THREE.Mesh) count += 1;
   });
   return count;

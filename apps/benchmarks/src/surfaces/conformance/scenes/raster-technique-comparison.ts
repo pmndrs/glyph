@@ -1,7 +1,7 @@
 import type { Constraints, Font, ParagraphLayout, TextStyle } from '@pmndrs/glyph';
 import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
 import type { slug } from '@pmndrs/glyph/three/slug';
-import { Text } from '@pmndrs/glyph/three';
+import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import type { Node } from 'three/webgpu';
 import * as THREE from 'three/webgpu';
 import { mul, saturate, sub, texture, vec4 } from 'three/tsl';
@@ -17,6 +17,7 @@ import {
 } from '../../../renderer/persistent-render-host';
 import { loadSlugFontAsset } from '../../../workloads/font-assets/slug';
 import type { RendererBackend } from '../../../renderer/webgpu-renderer';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
 const BACKGROUND = 0x070709;
 const BASE_PHYSICAL_PPEM = 64;
@@ -63,6 +64,8 @@ interface ComparisonResources {
   readonly slugFont: Font<typeof slug>;
   readonly mtsdfLine: Text<typeof mtsdf>;
   readonly slugLine: Text<typeof slug>;
+  readonly mtsdfRoot: ThreeRoot;
+  readonly slugRoot: ThreeRoot;
   readonly quad: THREE.QuadMesh;
   readonly mtsdfMaterial: THREE.NodeMaterial;
   readonly slugMaterial: THREE.NodeMaterial;
@@ -331,6 +334,8 @@ async function createComparisonResources(
   let mtsdfMaterial: THREE.NodeMaterial | undefined;
   let slugMaterial: THREE.NodeMaterial | undefined;
   let heatmapMaterial: THREE.NodeMaterial | undefined;
+  const mtsdfRoot = createBenchmarkThreeRoot('raster-comparison-mtsdf');
+  const slugRoot = createBenchmarkThreeRoot('raster-comparison-slug');
   try {
     const [mtsdfResult, slugResult] = await Promise.allSettled([
       loadMtsdfFontAsset({ technique: 'mtsdf', fixture: fontFixture, delivery: 'baked', signal: context.signal }),
@@ -352,8 +357,8 @@ async function createComparisonResources(
     const specimen = rasterConformanceSpecimen(fontFixture);
     const shaping: ComparisonShaping = { language: specimen.language, direction: specimen.direction };
     const view = comparisonLineView(context.viewport, 1);
-    mtsdfLine = new Text({ text, font: mtsdfFont, ...lineViewUpdate(shaping, view) });
-    slugLine = new Text({ text, font: slugFont, ...lineViewUpdate(shaping, view) });
+    mtsdfLine = mtsdfRoot.createText({ text, font: mtsdfFont, ...lineViewUpdate(shaping, view) });
+    slugLine = slugRoot.createText({ text, font: slugFont, ...lineViewUpdate(shaping, view) });
     mtsdfLine.position.set(18, -42, 0);
     slugLine.position.copy(mtsdfLine.position);
     const mtsdfScene = new THREE.Scene();
@@ -389,6 +394,8 @@ async function createComparisonResources(
       slugFont,
       mtsdfLine,
       slugLine,
+      mtsdfRoot,
+      slugRoot,
       quad,
       mtsdfMaterial,
       slugMaterial,
@@ -401,6 +408,8 @@ async function createComparisonResources(
   } catch (error) {
     mtsdfLine?.dispose();
     slugLine?.dispose();
+    disposeBenchmarkThreeRoot(mtsdfRoot);
+    disposeBenchmarkThreeRoot(slugRoot);
     mtsdfFont?.dispose();
     slugFont?.dispose();
     mtsdfTarget?.dispose();
@@ -577,6 +586,8 @@ function comparisonCamera(width: number, height: number): THREE.OrthographicCame
 function disposeComparison(resources: ComparisonResources): void {
   resources.mtsdfLine.dispose();
   resources.slugLine.dispose();
+  disposeBenchmarkThreeRoot(resources.mtsdfRoot);
+  disposeBenchmarkThreeRoot(resources.slugRoot);
   resources.mtsdfFont.dispose();
   resources.slugFont.dispose();
   resources.mtsdfTarget.dispose();

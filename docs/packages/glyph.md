@@ -192,14 +192,15 @@ IDs, and names retained in a font's `post` or CFF data. Exact repeatable `--name
 compressed `--unicode-set` accepted by `glyph bake --unicodes`. Fonts without authored names still expose exact IDs rather
 than invented semantic labels. Rich vendor labels and aliases remain external catalog data.
 
-R3F `<Text>` and `<TextGroup>` expose no handle prop. They read a selected `ThreeHandle` from the nearest optional
-`GlyphProvider`, or suspend on one module-owned default Three handle that calls idempotent `glyph.init()` and installs
-`ThreeConfig` once. A provider captures its initial handle and `fontFaces` alias table and never updates the context
-value; selecting another handle or alias table requires remounting the provider. Context is constructor dependency
+R3F `<Text>` and `<TextGroup>` expose no handle prop. They read a selected `ThreeHandle` or terminal `ThreeRoot` from the
+nearest optional `GlyphProvider`, or suspend on one module-owned default Three handle that calls idempotent `glyph.init()`
+and installs `ThreeConfig` once. A provider captures its initial selection and `fontFaces` alias table and never updates
+the context value; selecting another root, handle, or alias table requires remounting the provider. Context is constructor dependency
 injection only: it owns no engine, runtime, scene, renderer, canvas, publication cursor, or semantic resource cache, and
 it never disposes an externally owned handle or FontFace. It disposes only FontFaces it declared from shorthand table
 entries. Supplying `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` handles only `FontLoadError`
-and rethrows unrelated errors. Imperative construction uses `handle.createText()` and `handle.createTextGroup()` directly.
+and rethrows unrelated errors. Imperative construction uses `handle.createText()` and `handle.createTextGroup()` for the
+anonymous root, or `handle(name).createText()` and `handle(name).createTextGroup()` for a named root.
 
 Successful initialization retains one settled `Promise<void>` forever: concurrent and later `glyph.init()` calls receive
 the same object. React still checks synchronous initialized and loaded state first, so ready renders do not call `use()`
@@ -212,36 +213,22 @@ an inline styled run and may omit `font` because it inherits from its enclosing 
 without a font is invalid. Nested text creates no Three object and accepts only `children`, `font`, `style`, `paint`, and
 `material`. Because JSX erases the generic element identity needed to reject every box-only prop statically, the
 flattener validates this boundary synchronously and names any invalid property instead of silently discarding it.
-`TextGroup` owns batching and compositing policy, never font inheritance. Both mounted components register their Three
+`TextGroup` owns nestable hierarchy and presentation inheritance, never font inheritance or a planner boundary. Both mounted components register their Three
 objects with the R3F host and are constructed during its commit rather than in a layout effect. React `Activity` can
 therefore pre-render a hidden text or whole text group, while R3F retains visibility and eventual disposal ownership.
 
-Span offsets are resolved onto the extended grapheme cluster grid before any frame is built (D-265). The engine
-resolves one style per cluster and refuses a frame whose styles split one, so `Text` settles the question at its own
-boundary and settles it constructively: a cluster takes the style of its base, and every boundary moves forward to the
-end of the cluster containing it. One rule covers both entry points: offsets a caller authored through the `spans`
-array, and boundaries the tree compilers derive. `txt`/`span` and nested React `<Text>` compile a document that states
-no offsets at all, and each resolves the boundaries it derives at its own concatenation joins, where concatenation can
-fuse the tail of one fragment with the head of the next into one cluster; `alignSpansToClusters` remains the backstop
-for the untyped array rather than the discoverer of a compiler-authored split. Cluster resolution never throws, so no
-span fault the compilers derive can escape a React mount before `onError` exists; the React tree states no offsets at
-all, so nothing a `<Text>` compiles can reach the range check below either. A
-span left holding no cluster becomes an empty range and stays in `Text.spans` rather than vanishing, and empty spans
-compile to no engine style. `alignSpansToClusters` is exported so a caller can resolve or check its own offsets against
-the same segmentation, which is this package's `findGraphemeBoundaries` rather than the host's `Intl.Segmenter`.
-
-An INVERTED or out-of-range span is separated from that resolution because it has no correct answer (D-268). It throws
-from `Text` construction and `set()`, beside `normalizedColumns` and `normalizeCapacity`, where the stack still names the
-caller; `set()` normalizes before it commits, so a rejected update leaves the paragraph exactly as it was. Collapsed
-spans stay in `Text.spans` and are dropped where engine styles are compiled, and disjoint-or-nested stays with the engine.
+Structural `txt`/`span` values and nested React `<Text>` are the only public rich-text authoring paths. They compile one
+immutable string and internal span records, then resolve their derived joins onto the extended grapheme-cluster grid
+before a frame is built (D-265). Public `Text`, `Text.set()`, and `Paragraph` inputs reject a parallel raw `spans` field;
+callers therefore cannot forge offsets, split a cluster, or keep a mutable range table synchronized with text. Internal
+alignment remains a compiler backstop because concatenation can fuse the tail of one fragment with the head of the next.
 
 A frame the engine refuses names its cause and the input that caused it (D-267). Six caller-actionable statuses --
 `styleRangeInvalid`, `styleSplitsCluster`, `styleNestingInvalid`, `styleRootInvalid`, `fontStackMissing`,
 `fontMetricsMissing` -- are separated from `invalidRequest`, which keeps every internal invariant violation and names
 nothing. Each carries the offending paragraph and style in two u32s of the result header's existing tail padding, so the
 header size and every prior field offset are unchanged. `/three` re-raises them as `TextFrameError`, whose `rejection` is
-a discriminated union over the cause plus a second union over the subject: the `Text` object and, where one span owns it,
-that span and its index in `Text.spans`.
+a discriminated union over the cause and affected `Text`; span bookkeeping remains private to the structural compiler.
 
 Publicly constructible frame inputs are validated where they enter `Text`, `TextGroup`, `Paragraph`, policy assembly, or
 font registration; malformed data never waits for scene traversal to fail. A residual engine rejection therefore names an
@@ -282,10 +269,11 @@ the declaring span's scale, and records flow through both planners as resource-f
 `pmndrs.decoration` technique. Plan programs carry a primitive kind in the former reserved wire field; underline and
 overline rows precede the paragraph's glyphs while line-through follows them, matching CSS paint order, and Three
 realizes decorations as separate ordered draw objects. The same `defineTextMaterial()` factory used by glyph techniques
-receives a closed `kind: 'glyph' | 'decoration'` context and may keep or override the default flat-quad TSL material
-without mutating the glyph draw. Only the glyph branch carries its concrete raster `technique`; `pmndrs.decoration`
-remains an internal policy/command-buffer identifier. Decorated render planners rebuild their gather output; the
-undecorated retained fast path is unchanged.
+receives a `kind: 'glyph' | 'decoration'` discriminated context and may keep or override the default flat-quad TSL
+material without mutating the glyph draw. `ThreeTextMaterialContextMap` supplies the exact built-in payloads and is the
+augmentation point for a custom Three program's literal technique and output types; it does not add an untyped string
+fallback. Only glyph branches carry a raster `technique`; `pmndrs.decoration` remains an internal policy/command-buffer
+identifier. Decorated render planners rebuild their gather output; the undecorated retained fast path is unchanged.
 
 When runtime baking is required, one Worker request normalizes the Unicode ranges, prepares the selected source once,
 and feeds those exact prepared bytes to the shaping bake and every requested Bitmap, MSDF, or Slug bake. The Worker
@@ -301,7 +289,12 @@ restrictions, and storage corruption are transparent misses followed by the same
 
 ## Retained frame transaction
 
-One `TextGroup` owns one Rust render planner. A traversal sends only changed paragraph sections:
+Every handle owns one anonymous root, and `handle(name)` idempotently selects named sibling roots. Each root owns one Rust
+render planner and one renderer draw root. It may bind to at most one Three `Scene`, discovered from its attached Text
+members by object identity; a root name is stable semantic/customization metadata, not a `Scene.uuid`. A second Scene
+therefore uses another named root. Returned roots are terminal and cannot create deeper roots. `TextGroup` remains freely
+nestable for scene hierarchy, transform/visibility inheritance, material selection, pixel snapping, and render order, but
+does not create another planner or publication stream. A traversal sends only changed paragraph sections:
 
 - text replacement sends text plus any dependent style/geometry state;
 - font, spans, shaping style, paint, raster ratio, or material send style state;
@@ -309,12 +302,10 @@ One `TextGroup` owns one Rust render planner. A traversal sends only changed par
 - transform and visibility changes update Three's renderer-local sidecar without calling Wasm;
 - an empty or normalized-equal update sends nothing.
 
-Three's ordinary scene traversal owns world-matrix composition. `TextGroup` tracks local matrices, visibility, and
-parent identity only below its shared draw root, then gives the executor the paragraph IDs whose relative transform
-path changed. Camera and `TextGroup` motion therefore move the shared draw without forcing every `Text` world matrix a
-second time, multiplying every relative matrix, or scheduling transform-table uploads. Direct `Text` motion, nested
-ancestor motion, visibility, reparenting, and manual matrix changes still patch the affected renderer-local slots and do
-not enter Wasm.
+Three's ordinary scene traversal owns world-matrix composition. The root observes Text membership and ancestor state,
+publishes semantic changes once at its renderer-owned draw node, and patches root-relative transforms through a separate
+engine-free side path. Camera motion does not republish text. Text, nested `TextGroup`, and other ancestor motion,
+visibility, reparenting, and manual matrix changes patch only affected renderer-local slots and do not enter Wasm.
 
 Rust publishes one revision containing:
 
@@ -379,7 +370,7 @@ stable transform-table ID to each rendered glyph so compatible paragraphs may co
 draws by transform for integrations that prefer ordinary object matrices. Policy programs may use ordered-direct or
 stable-indirect physical storage. Stable draws carry one reserved u32 order buffer; Three validates its draw/primitive
 addressing once, then uses the same logical-to-physical mapping for technique records, transform indices, explicit origin
-queries, and third-party program material contexts. `TextGroup.compositing` determines whether Rust must preserve authored
+queries, and third-party program material contexts. Root `compositing` determines whether Rust must preserve authored
 ordering or may reorder independent work. Ordered-direct remains the first-party default until stable planning meets the
 same tail-latency target.
 

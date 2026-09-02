@@ -1,4 +1,4 @@
-import { Text } from '@pmndrs/glyph/three';
+import type { ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import fontAwesomeIcons from '../../../fixtures/fonts/font-awesome-free-6.7.2/icons.json' with { type: 'json' };
@@ -60,6 +60,7 @@ export const iconGridWorkload = {
       iconSize: context.configuration.fontSize,
       indices: window.indices,
       labelFont: context.font,
+      root: context.root,
     });
   },
   id: 'icon-grid',
@@ -82,6 +83,7 @@ export function createIconGridEntries({
   iconSize,
   indices = [],
   labelFont,
+  root,
   count,
 }: {
   readonly count: number;
@@ -90,18 +92,19 @@ export function createIconGridEntries({
   readonly iconSize: number;
   readonly indices?: readonly number[];
   readonly labelFont: WorkloadFont;
+  readonly root: ThreeRoot;
 }): readonly ComparisonWorkloadEntry[] {
   return Array.from({ length: count }, (_, poolIndex) => {
     const assignment = iconGridEntryAssignment(indices, poolIndex);
     const iconIndex = assignment.iconIndex;
     const { content, glyph } = iconGridContent(iconIndex);
-    const text = new Text({
+    const text = root.createText({
       font: iconFont,
       rasterPixelRatio: dpr,
       text: glyph,
       style: { fontSize: iconSize, color: paintColor(LIVE_TEXT_COLOR) },
     });
-    const labelText = new Text({
+    const labelText = root.createText({
       font: labelFont,
       rasterPixelRatio: dpr,
       text: iconGridLabel(iconIndex),

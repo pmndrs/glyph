@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises';
 
-import { FontLoader, Text, TextGroup } from '../../dist/three.js';
+import { glyph } from '../../dist/index.js';
+import { FontLoader, ThreeConfig } from '../../dist/three.js';
 import { bitmap } from '../../dist/three/bitmap.js';
+import * as THREE from 'three/webgpu';
 
 export const paragraphBenchmarkSource = [
   'Typography is a moving system. AVATAR To Wa Yo repeat familiar kerning pairs while a responsive panel changes the space around them. The quick visual check is useful, but the benchmark records the cost of shaping, layout, upload, and every rendered frame.',
@@ -26,8 +28,12 @@ const corpusFixtures = {
   latin: { source: paragraphBenchmarkSource, font: 'inter-bitmap-16.font.glb' },
   cjk: { source: paragraphBenchmarkSourceCjk, font: 'noto-sans-cjk-showcase-bitmap-16.font.glb' },
 } as const satisfies Record<BenchmarkCorpus, { readonly source: string; readonly font: string }>;
+let nextFixtureHandle = 1;
 
 export async function loadParagraphBenchmarkFixture(corpus: BenchmarkCorpus = 'latin') {
+  await glyph.init();
+  const handle = glyph.handle(`three:paragraph-benchmark:${String(nextFixtureHandle)}`, ThreeConfig);
+  nextFixtureHandle += 1;
   const workspaceRoot = new URL('../../../../', import.meta.url);
   const loader = new FontLoader();
   const bytes = await readFile(
@@ -37,7 +43,22 @@ export async function loadParagraphBenchmarkFixture(corpus: BenchmarkCorpus = 'l
     input: { baked: `data:application/octet-stream;base64,${bytes.toString('base64')}` },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
-  return { loader, loaded };
+  let nextRoot = 1;
+  return {
+    handle,
+    loader,
+    loaded,
+    root() {
+      const root = handle(`paragraph:${String(nextRoot)}`);
+      nextRoot += 1;
+      return root;
+    },
+    dispose() {
+      loaded.dispose();
+      loader.dispose();
+      handle.dispose();
+    },
+  };
 }
 
 export function createBenchmarkParagraph(
@@ -45,8 +66,10 @@ export function createBenchmarkParagraph(
   text: string,
   width: number,
 ) {
-  const group = new TextGroup({ capacity: { size: Math.max(256, text.length), policy: 'grow' } });
-  const paragraph = new Text({
+  const root = fixture.root();
+  root.setCapacity({ size: Math.max(256, text.length), policy: 'grow' });
+  const group = root.createTextGroup();
+  const paragraph = root.createText({
     font: fixture.loaded,
     text,
     style: { fontSize: 24 },
@@ -54,12 +77,15 @@ export function createBenchmarkParagraph(
     constraints: { width: { mode: 'exact', size: width } },
   });
   group.add(paragraph);
-  return { group, paragraph };
+  const scene = new THREE.Scene();
+  scene.add(group);
+  return { group, paragraph, root, scene };
 }
 
 export function disposeBenchmarkParagraph(created: ReturnType<typeof createBenchmarkParagraph>): void {
   created.group.dispose();
   created.paragraph.dispose();
+  created.root.dispose();
 }
 
 export function paragraphTextForGlyphs(target: number, corpus: BenchmarkCorpus = 'latin'): string {

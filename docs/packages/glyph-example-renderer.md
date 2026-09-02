@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:02d97556ef9c32a9e8c24d2a4658a60944fc4042cd8d4185ec8f031d8f992dc4'
+source_digest: 'sha256:a27a4534ecfffa2598efd7f302b2e4dd0385340fd710a374da5779a97859739a'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest

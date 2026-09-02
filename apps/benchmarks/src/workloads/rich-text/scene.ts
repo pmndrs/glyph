@@ -1,5 +1,4 @@
 import { span, txt, type AnyRasterTechnique, type Font, type TextLiteral } from '@pmndrs/glyph';
-import { Text } from '@pmndrs/glyph/three';
 
 import type { RasterTechnique } from '../../benchmark/url-state';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
@@ -218,6 +217,7 @@ export const richTextWorkload = {
       dpr: context.dpr,
       elapsedMs: context.animationElapsedMs,
       font: context.font,
+      root: context.root,
       fontSize: context.configuration.fontSize,
       layoutWidthRatio: context.configuration.layoutWidthRatio,
       paintOpacity: context.configuration.paintOpacity,
@@ -298,7 +298,7 @@ export function createRichTextEntries(
     });
     const literal = richTextLiteral(context.companionFonts, composition);
     assertRichTextSpans(literal, composition);
-    const text = new Text({
+    const text = context.root.createText({
       font: context.font,
       rasterPixelRatio: context.dpr,
       text: literal,
@@ -306,7 +306,14 @@ export function createRichTextEntries(
       constraints: { width },
       layout: { wrap: 'word' },
     });
-    return { animationPhase: index, node: text, role: 'primary', sourceText: literal.text, text };
+    return {
+      animationPhase: index,
+      node: text,
+      role: 'primary',
+      sourceText: literal.text,
+      text,
+      richTextCompanionFonts: [context.companionFonts.emphasis, context.companionFonts.foreign],
+    };
   });
 }
 
@@ -390,16 +397,11 @@ export function applyRichTextRetainedConfiguration(
 }
 
 /**
- * Recovers the companion faces from the retained paragraph rather than caching them beside the entry. The spans that
- * selected them are the authoritative record, so reading them back keeps a retained update from ever republishing a
- * face the committed paragraph does not already hold a lease on.
+ * Reads the immutable companion leases retained beside the entry. `Text` intentionally does not expose the command
+ * compiler's generated span records as mutable public state.
  */
 function retainedCompanionFonts(entry: ComparisonWorkloadEntry): RichTextCompanionFonts {
-  const selected = (name: RichTextSpanName): WorkloadFont => {
-    const range = richTextSpanRange(name);
-    const selection = entry.text.spans.find(({ start, end }) => start === range.start && end === range.end)?.font;
-    if (selection === undefined) throw new Error(`rich text paragraph lost its ${name} span font`);
-    return 'fonts' in selection ? selection.fonts[0] : selection;
-  };
-  return { emphasis: selected('face'), foreign: selected('foreign') };
+  const fonts = entry.richTextCompanionFonts;
+  if (fonts === undefined) throw new Error('rich text paragraph lost its retained companion fonts');
+  return { emphasis: fonts[0], foreign: fonts[1] };
 }

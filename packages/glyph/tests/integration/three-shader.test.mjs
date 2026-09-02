@@ -3,10 +3,12 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { defineTextMaterial, FontLoader, Text } from '@pmndrs/glyph/three';
+import { defineTextMaterial, FontLoader } from '@pmndrs/glyph/three';
 import { bitmapShader, decorationShader, msdfShader, slugShader } from '../../dist/tsl.js';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
+
+import { createThreeTestHandle } from '../support/three-handle.mjs';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 
@@ -17,7 +19,8 @@ test('the canonical technique shaders are exported as callable node builders', (
   assert.equal(typeof decorationShader, 'function');
 });
 
-test('a custom Three material composes over the Bitmap shader in the Rust command-buffer draw path', async () => {
+test('a custom Three material composes over the Bitmap shader in the Rust command-buffer draw path', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: { bytes: await readFile(fontUrl) } },
@@ -31,12 +34,12 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
     return composed;
   });
   const scene = new THREE.Scene();
-  const label = new Text({ font, material, text: 'Composed' });
+  const label = three.createText({ font, material, text: 'Composed' });
   scene.add(label);
   scene.updateMatrixWorld();
 
   assert.equal(label.error, undefined);
-  const draws = label.children.filter((child) => child.isMesh);
+  const draws = rootDraws(scene);
   assert.equal(draws.length, 1, 'the Rust publication must produce one real custom-material draw');
   assert.equal(built.length, 1, 'the material factory must run once for one retained realization');
   const { context, material: realized } = built[0];
@@ -56,7 +59,7 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
   assert.equal(draws[0].material, realized);
 
   scene.updateMatrixWorld();
-  assert.equal(label.children[0], draws[0], 'an unchanged frame must retain the draw and material realization');
+  assert.equal(rootDraws(scene)[0], draws[0], 'an unchanged frame must retain the draw and material realization');
   assert.equal(built.length, 1);
 
   label.removeFromParent();
@@ -65,7 +68,8 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
   loader.dispose();
 });
 
-test('the same custom material factory may override a separate decoration realization', async () => {
+test('the same custom material factory may override a separate decoration realization', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: { bytes: await readFile(fontUrl) } },
@@ -73,13 +77,13 @@ test('the same custom material factory may override a separate decoration realiz
   });
   const realizations = [];
   const material = defineTextMaterial((context) => {
-    realizations.push(context.kind === 'glyph' ? context.technique.id : context.kind);
+    realizations.push(context.kind === 'glyph' ? context.technique : context.kind);
     const realized = context.createDefaultMaterial();
     if (context.kind === 'decoration') realized.colorNode = context.shader.color.mul(0.5);
     return realized;
   });
   const scene = new THREE.Scene();
-  const label = new Text({
+  const label = three.createText({
     font,
     material,
     text: 'Decorated',
@@ -90,7 +94,7 @@ test('the same custom material factory may override a separate decoration realiz
 
   assert.equal(label.error, undefined);
   assert.deepEqual(realizations.sort(), ['decoration', 'pmndrs.bitmap']);
-  const draws = label.children.filter((child) => child.isMesh);
+  const draws = rootDraws(scene);
   assert.equal(draws.length, 2, 'decoration and glyph programs retain separate material realizations');
   assert.equal(new Set(draws.map((draw) => draw.material)).size, 2);
 
@@ -99,7 +103,8 @@ test('the same custom material factory may override a separate decoration realiz
   loader.dispose();
 });
 
-test('Bitmap pixel snapping is an explicit opt-in graph specialization', async () => {
+test('Bitmap pixel snapping is an explicit opt-in graph specialization', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: { bytes: await readFile(fontUrl) } },
@@ -111,8 +116,8 @@ test('Bitmap pixel snapping is an explicit opt-in graph specialization', async (
     return context.createDefaultMaterial();
   });
   const scene = new THREE.Scene();
-  const unsnapped = new Text({ font, material, text: 'A' });
-  const snapped = new Text({ font, material, pixelSnapping: true, text: 'B' });
+  const unsnapped = three.createText({ font, material, text: 'A' });
+  const snapped = three.createText({ font, material, pixelSnapping: true, text: 'B' });
   scene.add(unsnapped, snapped);
   scene.updateMatrixWorld();
 
@@ -124,3 +129,7 @@ test('Bitmap pixel snapping is an explicit opt-in graph specialization', async (
   font.dispose();
   loader.dispose();
 });
+
+function rootDraws(scene) {
+  return scene.getObjectByName('@pmndrs/glyph:anonymous')?.children.filter((child) => child.isMesh) ?? [];
+}

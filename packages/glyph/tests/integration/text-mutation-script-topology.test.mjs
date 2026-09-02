@@ -559,7 +559,7 @@ test('the differential oracle fails when a single packed float is corrupted', { 
 
 function attributeNamed(mounted, name) {
   let found;
-  mounted.group.traverse((object) => {
+  mounted.scene.traverse((object) => {
     if (found !== undefined || object.userData.pmndrsGlyphRunStart === undefined) return;
     found = object.geometry?.attributes?.[name];
   });

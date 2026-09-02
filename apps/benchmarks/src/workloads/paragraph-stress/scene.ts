@@ -1,4 +1,3 @@
-import { Text } from '@pmndrs/glyph/three';
 import type * as THREE from 'three/webgpu';
 
 import { benchmarkIpsumText } from '../../benchmark/font-fixtures';
@@ -29,6 +28,7 @@ export const paragraphStressWorkload = {
       ...context.configuration,
       dpr: context.dpr,
       font: context.font,
+      root: context.root,
       viewportWidth: context.viewportWidth,
     });
   },
@@ -52,7 +52,7 @@ export function createParagraphStressEntries(
   const sourceText = Array.from({ length: Math.max(2, Math.round(context.amount / 10)) }, () =>
     benchmarkIpsumText(),
   ).join('\n');
-  const text = new Text({
+  const text = context.root.createText({
     font: context.font,
     rasterPixelRatio: context.dpr,
     text: sourceText,

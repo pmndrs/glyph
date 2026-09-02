@@ -50,7 +50,7 @@ test('a Three consumer manually registers the example TSL realization', () => {
       outputs: glyphExampleTslVariant.outputs,
       geometry: glyphExampleTslVariant.geometry,
       createMaterial(context: import('@pmndrs/glyph/three').ThreePlanProgramMaterialContext) {
-        if (context.materialId !== 0) throw new TypeError('glyph-example supports only the default material');
+        if (context.material !== undefined) throw new TypeError('glyph-example test expects the default material');
         const origin = context.namedBuffers.get('origin');
         const size = context.namedBuffers.get('size');
         const color = context.namedBuffers.get('color');
@@ -100,8 +100,8 @@ test('a Three consumer manually registers the example TSL realization', () => {
     namedResources: new Map(),
     resourceName: 'glyphColors',
     instance: uint(0),
-    materialId: 0,
     material: undefined,
+    root: { name: undefined, scene: undefined, drawRoot: new THREE.Object3D() },
     transformPosition: (position) => position,
   });
   expect(material).toBeInstanceOf(THREE.MeshBasicNodeMaterial);

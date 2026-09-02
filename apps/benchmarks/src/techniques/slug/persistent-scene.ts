@@ -9,7 +9,7 @@ import {
   type TextStyle,
 } from '@pmndrs/glyph';
 import type { slug } from '@pmndrs/glyph/three/slug';
-import { Text } from '@pmndrs/glyph/three';
+import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
@@ -49,6 +49,7 @@ import {
   type ShapedTextIdentity,
 } from '../shared/glyph-origin-transition';
 import { slugDataConfiguration, type SlugRasterConfiguration } from './metadata';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../three-root';
 
 export interface SlugTextLiveStats {
   readonly technique: 'slug';
@@ -232,6 +233,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
   let camera: THREE.OrthographicCamera | undefined;
   let loadedFont: Font<typeof slug> | undefined;
   let line: Text<typeof slug> | undefined;
+  let glyphRoot: ThreeRoot | undefined;
   let committedState: SlugTextState | undefined;
   let presentation: SlugPresentation | undefined;
   let closing = false;
@@ -374,6 +376,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       height = positiveViewportSize(context.viewport.height, 'Slug scene height');
       committedContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
       scene = new THREE.Scene();
+      glyphRoot = createBenchmarkThreeRoot(`slug-text-scene-${backend}`);
       camera = new THREE.OrthographicCamera(0, width, 0, -height, 0.1, 1_000);
       camera.position.z = 500;
       camera.updateProjectionMatrix();
@@ -411,7 +414,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         style: slugStyle(fontSize, identity),
         rasterPixelRatio: context.viewport.dpr,
       };
-      line = new Text({
+      line = glyphRoot.createText({
         font: state.font,
         text: state.identity.text,
         constraints: state.constraints,
@@ -611,10 +614,12 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       presentation = undefined;
       line?.removeFromParent();
       line?.dispose();
+      if (glyphRoot !== undefined) disposeBenchmarkThreeRoot(glyphRoot);
       if (fontFixture === undefined) loadedFont?.dispose();
       else fontFixture.dispose();
       canvasSurface?.dispose();
       line = undefined;
+      glyphRoot = undefined;
       loadedFont = undefined;
       committedState = undefined;
       fontFixture = undefined;

@@ -91,8 +91,7 @@ if (options.jsonPath !== undefined) {
   console.log(`\nwrote ${options.jsonPath}`);
 }
 
-font.loaded.dispose();
-font.loader.dispose();
+font.dispose();
 
 async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
   const total = options.warmup + options.repetitions;

@@ -2,6 +2,7 @@ import type * as THREE from 'three/webgpu';
 
 import type { RasterConformanceSpecimen, BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import type { RasterTechnique } from '../../benchmark/url-state';
+import type { ThreeRoot } from '@pmndrs/glyph/three';
 import type { ComparisonWorkloadEntry, WorkloadFont } from '../shared/scene-entry';
 
 /** The comparison workloads that share the retained benchmark render host. */
@@ -66,6 +67,7 @@ export interface ComparisonWorkloadCreateContext extends ComparisonWorkloadLayou
   readonly companionFonts: readonly WorkloadFont[];
   readonly dpr: number;
   readonly font: WorkloadFont;
+  readonly root: ThreeRoot;
   readonly iconScrollX: number;
   readonly iconScrollY: number;
   readonly technique: RasterTechnique;

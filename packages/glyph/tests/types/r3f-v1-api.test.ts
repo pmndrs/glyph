@@ -21,15 +21,20 @@ const three: ThreeHandle = glyph.handle('three:r3f-type-fixture', ThreeConfig);
 
 const inline = createElement(Text, { style: { color: '#ff00ff' } }, 'span');
 const label = createElement(Text<typeof bitmap>, { font: bitmapFont, material, pixelSnapping: true }, 'Typed ', inline);
-const labels = createElement(TextGroup, { compositing: 'independent', material, pixelSnapping: true }, label);
+const labels = createElement(TextGroup, { material, pixelSnapping: true }, label);
 const selected = createElement(Text, { font: selectedStack }, 'Selected at runtime');
 const provided = createElement(GlyphProvider, { handle: three }, labels);
-const declared = createElement(GlyphProvider, {
-  fontFaces: {
-    Inter: '/fonts/Inter.font.glb',
-    Title: { src: '/fonts/Title.font.glb', format: 'slug' },
+const namedRootProvided = createElement(GlyphProvider, { handle: three('hud') }, labels);
+const declared = createElement(
+  GlyphProvider,
+  {
+    fontFaces: {
+      Inter: '/fonts/Inter.font.glb',
+      Title: { src: '/fonts/Title.font.glb', format: 'slug' },
+    },
   },
-}, createElement(Text, { font: 'Inter' }, 'Named provider font'));
+  createElement(Text, { font: 'Inter' }, 'Named provider font'),
+);
 
 // @ts-expect-error Handle selection is internal to Text and comes from GlyphProvider or the built-in default.
 createElement(Text, { font: bitmapFont, handle: three }, 'no per-object handle');
@@ -37,7 +42,10 @@ createElement(Text, { font: bitmapFont, handle: three }, 'no per-object handle')
 createElement(TextGroup, { handle: three }, label);
 
 function FontConsumer(): null {
-  const loaded: Font<typeof bitmap> = useFont({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } });
+  const loaded: Font<typeof bitmap> = useFont(
+    { baked: '/fonts/Inter.font.glb' },
+    { format: { technique: bitmap, options: { strikes: [16] } } },
+  );
   useBitmap({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Font<typeof bitmap>;
   useMsdf({ baked: '/fonts/Inter.font.glb' }) satisfies Font<typeof msdf>;
   useMsdf({ baked: '/fonts/Inter.font.glb' }, { emSize: 64, pixelRange: 8 }) satisfies Font<typeof msdf>;
@@ -52,9 +60,15 @@ function FontConsumer(): null {
 }
 
 const consumer = createElement(FontConsumer);
-const preloaded: Promise<void> = useFont.preload({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } });
+const preloaded: Promise<void> = useFont.preload(
+  { baked: '/fonts/Inter.font.glb' },
+  { format: { technique: bitmap, options: { strikes: [16] } } },
+);
 useFont.clear({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } });
-useFont.preload({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } }) satisfies Promise<void>;
+useFont.preload(
+  { baked: '/fonts/Inter.font.glb' },
+  { format: { technique: bitmap, options: { strikes: [16] } } },
+) satisfies Promise<void>;
 useFont.clear({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } });
 useBitmap.preload({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Promise<void>;
 useBitmap.clear({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] });
@@ -83,6 +97,7 @@ paragraphElement satisfies R3fTextChild<typeof bitmap>;
 void labels;
 void selected;
 void provided;
+void namedRootProvided;
 void declared;
 void slugFont;
 void FontConsumer;

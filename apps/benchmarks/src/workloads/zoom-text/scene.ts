@@ -1,4 +1,3 @@
-import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
@@ -50,7 +49,7 @@ export const zoomTextWorkload = {
   cameraKind: 'orthographic',
   contentWidth: 'none',
   create(context) {
-    return createZoomTextEntries({ dpr: context.dpr, font: context.font });
+    return createZoomTextEntries({ dpr: context.dpr, font: context.font, root: context.root });
   },
   id: 'zoom-text',
   layout(entries, context) {
@@ -87,7 +86,7 @@ export const ZOOM_TEXT_PHRASES = shuffleZoomTextPhrases(ZOOM_TEXT_CORPUS);
 export function createZoomTextEntries(context: WorkloadTextFactoryContext): readonly ComparisonWorkloadEntry[] {
   return ZOOM_TEXT_PHRASES.map((phrase, zoomPhraseIndex) => {
     const opacity = zoomPhraseIndex === 0 ? 1 : 0;
-    const text = new Text({
+    const text = context.root.createText({
       font: context.font,
       rasterPixelRatio: context.dpr,
       text: phrase.text,

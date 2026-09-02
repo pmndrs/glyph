@@ -1,4 +1,3 @@
-import { Text } from '@pmndrs/glyph/three';
 import type * as THREE from 'three/webgpu';
 
 import type { RasterConformanceSpecimen } from '../../benchmark/font-fixtures';
@@ -44,6 +43,7 @@ export const textLadderWorkload = {
     return createTextLadderEntries({
       dpr: context.dpr,
       font: context.font,
+      root: context.root,
       ...(context.textLadderSpecimen === undefined ? {} : { specimen: context.textLadderSpecimen }),
       viewportHeight: context.viewportHeight,
     });
@@ -65,7 +65,7 @@ export function createTextLadderEntries(
   const specimen = context.specimen ?? { text: LADDER_SENTENCE, language: 'en', direction: 'ltr' as const };
   return ladderCssSizes(context.viewportHeight).map((fontSize) => {
     const sourceText = context.specimen === undefined ? `${fontSize} px  ${specimen.text}` : specimen.text;
-    const text = new Text({
+    const text = context.root.createText({
       font: context.font,
       rasterPixelRatio: context.dpr,
       text: sourceText,

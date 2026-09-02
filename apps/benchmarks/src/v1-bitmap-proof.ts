@@ -1,8 +1,9 @@
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import type { Font } from '@pmndrs/glyph';
-import { FontLoader, Text } from '@pmndrs/glyph/three';
+import { FontLoader, type Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { proveDetachedRasterParity } from './v1-detached-proof';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from './three-root';
 
 declare global {
   interface Window {
@@ -31,6 +32,7 @@ async function render(): Promise<TargetV1BitmapResult> {
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, forceWebGL });
   const loader = new FontLoader();
   const target = new THREE.RenderTarget(256, 128, { format: THREE.RGBAFormat, type: THREE.UnsignedByteType });
+  const root = createBenchmarkThreeRoot('v1-bitmap');
   target.texture.colorSpace = THREE.NoColorSpace;
   let text: Text<typeof bitmap> | undefined;
   let font: Font<typeof bitmap> | undefined;
@@ -52,7 +54,7 @@ async function render(): Promise<TargetV1BitmapResult> {
     parent.rotation.z = 0.07;
     parent.scale.set(1.08, 0.92, 1);
     scene.add(parent);
-    text = new Text({
+    text = root.createText({
       font,
       text: 'Target v1 Bitmap',
       style: {
@@ -66,7 +68,7 @@ async function render(): Promise<TargetV1BitmapResult> {
     renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 1);
     await renderer.renderAsync(scene, camera);
-    const firstDraw = text.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+    const firstDraw = rootDraws(scene)[0];
     if (firstDraw === undefined) throw new Error('target-v1 Bitmap created no draw');
     const firstStorage = firstDraw.geometry.getAttribute('_pmndrsGlyphOrigins');
     const { detachedFirstFrameMatches, detachedSameFrameWriteMatches } = await proveDetachedRasterParity(
@@ -79,7 +81,7 @@ async function render(): Promise<TargetV1BitmapResult> {
 
     text.text = 'Target v1 Bitmop';
     await renderer.renderAsync(scene, camera);
-    const retainedDraw = text.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+    const retainedDraw = rootDraws(scene)[0];
     const pixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, 256, 128);
     let litPixels = 0;
     for (let offset = 0; offset < pixels.length; offset += 4) {
@@ -87,7 +89,7 @@ async function render(): Promise<TargetV1BitmapResult> {
     }
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
-      drawCount: text.children.filter((child) => child instanceof THREE.Mesh).length,
+      drawCount: rootDraws(scene).length,
       glyphCount: text.measure().glyphCount,
       litPixels,
       retainedDraw: retainedDraw === firstDraw,
@@ -101,7 +103,14 @@ async function render(): Promise<TargetV1BitmapResult> {
     text?.dispose();
     font?.dispose();
     loader.dispose();
+    disposeBenchmarkThreeRoot(root);
     target.dispose();
     renderer.dispose();
   }
+}
+
+function rootDraws(scene: THREE.Scene): THREE.Mesh[] {
+  return (
+    scene.getObjectByName('@pmndrs/glyph:v1-bitmap')?.children.filter((child) => child instanceof THREE.Mesh) ?? []
+  );
 }

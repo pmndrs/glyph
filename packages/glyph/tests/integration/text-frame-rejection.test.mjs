@@ -1,35 +1,14 @@
-/**
- * What a caller sees when a frame is refused.
- *
- * Three defects had one shape: the caller was told nothing useful, and told it forever.
- *
- *   1. Every frame rejection arrived as `EngineError::InvalidRequest` -> `status 6`, one integer
- *      standing for more than twenty causes, from a span that splits a grapheme cluster to an
- *      arithmetic overflow inside an arena. It named no paragraph, no span, and no offset, and
- *      `textShaperAbi.status` was not even reachable from `/three` to turn it back into a word.
- *   2. A rejected frame never reaches `markApplied()`, so `needsApply()` stayed true and the
- *      IDENTICAL frame was recompiled and rejected on every `updateMatrixWorld` for the life of
- *      the scene, with the last good publication left on screen.
- *   3. `spans` carried four invariants enforced at three different times by three different
- *      policies, so an inverted range -- pure caller arithmetic, unrepairable -- travelled all the
- *      way to Rust before failing, with a stack that named the render loop rather than the caller.
- *
- * This file pins the contract that replaced them. Every input a caller controls is refused at `set()`,
- * where the offending object can be named and the caller is still on the stack, so a frame refusal
- * is a defect in this package rather than a state to recover from: it is reported once and the batch
- * stops compiling, instead of failing silently at frame rate. A fixed glyph budget is not a failure
- * at all -- it is the policy doing what it was asked to do -- so it keeps the last complete revision
- * visible, warns in development, and self-heals.
- */
 import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 
 import '../support/browser-globals.mjs';
 import * as THREE from 'three/webgpu';
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { Text } from '@pmndrs/glyph/three';
 
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
+import { createThreeTestHandle } from '../support/three-handle.mjs';
 
 const bitmap16 = { technique: bitmap, options: { strikes: [16] } };
 const fonts = createFontCache({ inter: { file: 'inter-bitmap-16.font.glb', raster: bitmap16 } });
@@ -39,57 +18,50 @@ const constraints = { width: { mode: 'exact', size: 220 } };
 const layout = { wrap: 'word' };
 const paint = { color: '#ffffff' };
 const latin = { fontSize: 6, lineHeight: 1 };
-const styled = (start, end) => ({ start, end, style: { color: '#ff2f00' } });
-const authored = (text, spans = []) => ({
-  properties: { constraints, layout, spans, style: [latin, paint], text },
-});
+const authored = (text) => ({ properties: { constraints, layout, style: [latin, paint], text } });
 
-/** Mount one paragraph, run the body against its node, and always tear the scene down. */
-async function withParagraph(text, spans, body) {
+test('raw offset spans are rejected where the caller writes them', { timeout }, async (t) => {
+  const three = await createThreeTestHandle(t);
   const font = await fonts.load('inter');
-  const mounted = mount(font, [authored(text, spans)]);
-  try {
-    await body(mounted.nodes[0], mounted);
-  } finally {
-    unmount(mounted);
-  }
-}
-
-test('a range no caller can have meant throws where the caller wrote it', { timeout }, async () => {
-  // `normalizedColumns` and `normalizeCapacity` already throw from this same function. An inverted
-  // or out-of-range span belongs with them: nothing downstream can repair it, so deferring it to a
-  // frame only moves the report away from the code that produced the number.
-  const font = await fonts.load('inter');
-  const mounted = mount(font, [authored('abcdef', [styled(0, 3)])]);
-  const node = mounted.nodes[0];
-  try {
-    assert.throws(() => node.set({ spans: [styled(4, 2)] }), /span 0 is inverted: start 4 is after end 2/);
-    assert.throws(() => node.set({ spans: [styled(0, 99)] }), /span 0 covers \[0, 99\) outside text of length 6/);
-    assert.throws(() => node.set({ spans: [styled(-1, 3)] }), /span 0 covers \[-1, 3\) outside text of length 6/);
-    assert.throws(() => node.set({ spans: [styled(0, 1.5)] }), /span 0 offsets must be integers/);
-    assert.throws(() => node.set({ spans: [styled(0, Number.NaN)] }), /span 0 offsets must be integers/);
-    // The rejected update changed nothing: `set()` normalizes before it commits any state, so a
-    // throw leaves the paragraph exactly as it was and the scene keeps publishing.
-    assert.deepEqual(
-      node.spans.map((span) => [span.start, span.end]),
-      [[0, 3]],
-      'a rejected update must not partially apply',
-    );
-    mounted.scene.updateMatrixWorld(true);
-    assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
-    // Out-of-range is measured against the text the update states, not the text it replaces.
-    node.set({ text: 'ab', spans: [styled(0, 2)] });
-    assert.throws(() => node.set({ spans: [styled(0, 6)] }), /outside text of length 2/);
-  } finally {
-    unmount(mounted);
-  }
-});
-
-test('invalid authored properties reject atomically while unknown properties are ignored', { timeout }, async () => {
-  const font = await fonts.load('inter');
-  assert.throws(() => new Text({ font, text: 'invalid', style: { fontSize: Number.NaN } }), /fontSize must be finite/);
+  const raw = [{ start: 0, end: 3, style: { color: '#ff2f00' } }];
   assert.throws(
-    () => new Text({ font, text: 'invalid', constraints: { width: { mode: 'exact', size: -1 } } }),
+    () => three.createText({ font, text: 'abcdef', spans: raw }),
+    /cannot declare raw spans; compose formatted text with txt and span/,
+  );
+
+  const node = three.createText({ font, text: 'abcdef' });
+  try {
+    assert.throws(() => node.set({ spans: raw }), /cannot declare raw spans; compose formatted text with txt and span/);
+    assert.equal(node.text, 'abcdef', 'a rejected structural update leaves desired text unchanged');
+  } finally {
+    node.dispose();
+  }
+});
+
+test('structural spans derive valid nested and disjoint ranges without an offset API', { timeout }, async () => {
+  const font = await fonts.load('inter');
+  const red = span({ color: '#ff2f00' });
+  const large = span({ fontSize: 12 });
+  const document = txt`${red`a${large`b`}c`} ${large`def`}`;
+  const mounted = mount(font, [authored(document)]);
+  try {
+    assert.equal(mounted.nodes[0].text, 'abc def');
+    assert.doesNotThrow(() => mounted.scene.updateMatrixWorld(true));
+    assert.equal(mounted.nodes[0].error, undefined);
+  } finally {
+    unmount(mounted);
+  }
+});
+
+test('invalid authored properties reject atomically while unknown properties are ignored', { timeout }, async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await fonts.load('inter');
+  assert.throws(
+    () => three.createText({ font, text: 'invalid', style: { fontSize: Number.NaN } }),
+    /fontSize must be finite/,
+  );
+  assert.throws(
+    () => three.createText({ font, text: 'invalid', constraints: { width: { mode: 'exact', size: -1 } } }),
     /width size must be nonnegative/,
   );
 
@@ -97,134 +69,68 @@ test('invalid authored properties reject atomically while unknown properties are
   const node = mounted.nodes[0];
   try {
     assert.throws(() => node.set({ style: { fontSize: 0 } }), /fontSize must be positive/);
-    assert.equal(node.style.fontSize, latin.fontSize, 'a rejected property update must leave desired state unchanged');
+    assert.equal(node.style.fontSize, latin.fontSize, 'a rejected property update leaves desired state unchanged');
     node.set({ style: { ...latin, futureProperty: 1 } });
     mounted.scene.updateMatrixWorld(true);
-    assert.equal(node.error, undefined, 'unknown style properties must be ignored by the runtime boundary');
+    assert.equal(node.error, undefined, 'unknown style properties are ignored by the runtime boundary');
   } finally {
     unmount(mounted);
   }
 });
 
-test('a collapsed span is kept and a cluster boundary still resolves in silence', { timeout }, async () => {
-  // The two invariants `set()` does NOT throw for, asserted here so the new validation cannot grow
-  // to cover them. A collapsed span states nothing but still occupies its index, and a boundary
-  // inside a cluster has a correct answer -- the cluster takes the style of its base.
-  await withParagraph('ábc', [styled(0, 1), styled(2, 2)], (node, mounted) => {
-    assert.deepEqual(
-      node.spans.map((span) => [span.start, span.end]),
-      [
-        [0, 2],
-        [2, 2],
-      ],
-      'the boundary must resolve forward and the collapsed span must survive at its index',
-    );
-    mounted.scene.updateMatrixWorld(true);
-    assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
-  });
-});
-
-test('a partial overlap throws where the caller wrote it', { timeout }, async () => {
-  // This was the last rejection a caller could reach through the public API: partially overlapping
-  // spans are type-legal, in range, and cluster-aligned, so they compiled and the engine refused
-  // the whole frame with a status. A style scope is a stack, so the engine has no resolution for
-  // them -- but the caller does not learn that from a frame status, and the paragraph they wrote
-  // is what needs naming. Both spans and both indices are named here, with the caller on the stack.
+test('an unpaired surrogate throws where the caller wrote it', { timeout }, async (t) => {
+  const three = await createThreeTestHandle(t);
   const font = await fonts.load('inter');
   assert.throws(
-    () =>
-      new Text({
-        font,
-        constraints,
-        layout,
-        style: [latin, paint],
-        text: 'abcdefgh',
-        spans: [styled(0, 4), styled(2, 6)],
-      }),
-    (error) =>
-      error instanceof RangeError &&
-      /span 1 \[2, 6\) partially overlaps span 0/.test(error.message) &&
-      /must nest or be disjoint/.test(error.message),
-  );
-});
-
-test('an unpaired surrogate throws where the caller wrote it', { timeout }, async () => {
-  // A lone surrogate is not a character and shaping refuses the frame carrying one. It used to be
-  // handed to the engine deliberately; the offset is what a caller can act on.
-  const font = await fonts.load('inter');
-  assert.throws(
-    () => new Text({ font, constraints, layout, style: [latin, paint], text: 'ab\ud800cd' }),
+    () => three.createText({ font, constraints, layout, style: [latin, paint], text: 'ab\ud800cd' }),
     (error) => error instanceof RangeError && /text offset 2 is an unpaired high surrogate/.test(error.message),
   );
 });
 
-test('a malformed feature range throws naming the span and the feature', { timeout }, async () => {
-  // Only the outer span range was validated, so a feature range inside it reached the engine and
-  // was refused there, naming neither.
-  const font = await fonts.load('inter');
+test('a malformed feature range throws while constructing its structural span', { timeout }, () => {
   assert.throws(
-    () =>
-      new Text({
-        font,
-        constraints,
-        layout,
-        style: [latin, paint],
-        text: 'abcdefgh',
-        spans: [{ start: 0, end: 4, style: { features: [{ tag: 'liga', value: 1, start: 3, end: 1 }] } }],
-      }),
-    (error) =>
-      error instanceof RangeError && /Text span 0 style feature 0 end must not precede start/.test(error.message),
+    () => span({ features: [{ tag: 'liga', value: 1, start: 3, end: 1 }] }),
+    (error) => error instanceof RangeError && /span style feature 0 end must not precede start/.test(error.message),
   );
 });
 
-test(
-  'a fixed budget that cannot hold the content keeps the last revision and does not break the frame',
-  { timeout },
-  async () => {
-    // `fixed` is a caller declaring a hard glyph budget, which is a real thing to want in a
-    // memory-constrained scene. Exceeding it used to throw a RangeError from inside
-    // `updateMatrixWorld`, taking out the whole scene traversal for something the caller asked for.
-    const font = await fonts.load('inter');
-    const scene = new THREE.Scene();
-    const node = new Text({
-      font,
-      constraints,
-      layout,
-      style: [latin, paint],
-      text: 'abc',
-      capacity: { size: 8, policy: 'fixed' },
-    });
-    scene.add(node);
-    try {
-      scene.updateMatrixWorld(true);
-      const settled = node.measure();
-      assert.equal(settled.glyphCount, 3);
-      const settledDraw = node.children.find((child) => child.isMesh);
-      assert.ok(settledDraw, 'the paragraph inside the budget must publish a draw');
-      assert.equal(settledDraw.geometry.instanceCount, 3);
+test('a fixed root budget keeps the last complete revision and self-heals', { timeout }, async (t) => {
+  const three = await createThreeTestHandle(t);
+  three.setCapacity({ size: 8, policy: 'fixed' });
+  const font = await fonts.load('inter');
+  const scene = new THREE.Scene();
+  const node = three.createText({
+    font,
+    constraints,
+    layout,
+    style: [latin, paint],
+    text: 'abc',
+  });
+  scene.add(node);
+  try {
+    scene.updateMatrixWorld(true);
+    const settled = node.measure();
+    assert.equal(settled.glyphCount, 3);
+    const settledDraw = rootDraws(scene)[0];
+    assert.ok(settledDraw, 'content inside the root budget publishes a draw');
+    assert.equal(settledDraw.geometry.instanceCount, 3);
 
-      // Past the budget: measurement still answers for desired local state, while rendering keeps
-      // the accepted draw and reports that the desired revision remains pending.
-      node.set({ text: 'abcdefghijklmnopqrstuvwxyz' });
-      assert.doesNotThrow(() => scene.updateMatrixWorld(true), 'a fixed budget must not break the traversal');
-      const desired = node.measure();
-      assert.equal(desired.glyphCount, 26, 'measurement must not substitute stale accepted content');
-      assert.equal(settledDraw.geometry.instanceCount, 3, 'the last complete draw must stay visible');
-      assert.deepEqual(node.commitState(), { status: 'pending' });
-      assert.equal(node.error, undefined, 'honouring the declared budget is not an error');
+    node.set({ text: 'abcdefghijklmnopqrstuvwxyz' });
+    assert.doesNotThrow(() => scene.updateMatrixWorld(true));
+    assert.equal(node.measure().glyphCount, 26, 'measurement describes desired local state');
+    assert.equal(settledDraw.geometry.instanceCount, 3, 'the last complete draw stays visible');
+    assert.deepEqual(node.commitState(), { status: 'pending' });
+    assert.equal(node.error, undefined, 'honouring a fixed budget is not an error');
 
-      // Repeated frames stay quiet and stay correct.
-      for (let frame = 0; frame < 4; frame += 1) scene.updateMatrixWorld(true);
-      assert.equal(node.measure().glyphCount, 26);
-      assert.equal(settledDraw.geometry.instanceCount, 3);
+    node.set({ text: 'ab' });
+    scene.updateMatrixWorld(true);
+    assert.equal(node.measure().glyphCount, 2, 'content back inside the budget commits');
+    assert.equal(node.commitState().status, 'committed');
+  } finally {
+    node.dispose();
+  }
+});
 
-      // Self-healing: the comparison is recomputed, never latched.
-      node.set({ text: 'ab' });
-      scene.updateMatrixWorld(true);
-      const recovered = node.measure();
-      assert.ok(recovered !== undefined && recovered.glyphCount === 2, 'content back inside the budget must commit');
-    } finally {
-      node.dispose();
-    }
-  },
-);
+function rootDraws(scene) {
+  return scene.getObjectByName('@pmndrs/glyph:anonymous')?.children.filter((child) => child.isMesh) ?? [];
+}

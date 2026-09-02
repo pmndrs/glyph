@@ -1,6 +1,6 @@
 import type { Font } from '@pmndrs/glyph';
 import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
-import { Text } from '@pmndrs/glyph/three';
+import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
@@ -12,6 +12,7 @@ import {
   disposeConfiguredRenderer,
   type RendererBackend,
 } from '../../../renderer/webgpu-renderer';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
 const WIDTH = 512;
 const HEIGHT = 320;
@@ -25,6 +26,7 @@ interface MtsdfProductTargetResources {
   readonly camera: THREE.OrthographicCamera;
   readonly font: Font<typeof mtsdf>;
   readonly lines: readonly Text<typeof mtsdf>[];
+  readonly root: ThreeRoot;
   readonly artifactBytes: number;
   readonly compressedBytes: number;
   readonly fontLoadMs: number;
@@ -67,6 +69,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
   const renderer = await createConfiguredRenderer({ canvas, width: WIDTH, height: HEIGHT, backend, dpr });
   let target: THREE.RenderTarget | undefined;
   let font: Font<typeof mtsdf> | undefined;
+  const root = createBenchmarkThreeRoot(`product-mtsdf-${backend}`);
   const lines: Text<typeof mtsdf>[] = [];
   try {
     const fontStarted = performance.now();
@@ -75,7 +78,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
     const fontLoadMs = performance.now() - fontStarted;
     const scene = new THREE.Scene();
 
-    const resizeLine = new Text({
+    const resizeLine = root.createText({
       text: BENCHMARK_IPSUM_CONFORMANCE_TEXT,
       font,
       constraints: { width: { mode: 'exact', size: 280 } },
@@ -89,7 +92,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
     resizeLine.set({ constraints: { width: { mode: 'exact', size: 476 } }, layout: { wrap: 'word' } });
     resizeLine.position.set(18, -24, 0);
 
-    const mipLine = new Text({
+    const mipLine = root.createText({
       text: 'mip 12 px  ffi  AV  0123456789',
       font,
       style: { fontSize: 12, color: '#7dd3fc' },
@@ -98,7 +101,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
     mipLine.position.set(18, -142, 0);
     scene.add(mipLine);
 
-    const transformLine = new Text({
+    const transformLine = root.createText({
       text: 'TRANSFORM / MTSDF',
       font,
       style: { fontSize: 30, color: '#c4b5fd' },
@@ -109,7 +112,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
     transformLine.scale.setScalar(0.7);
     scene.add(transformLine);
 
-    const effectsLine = new Text({
+    const effectsLine = root.createText({
       text: 'Fill  Outline  Shadow',
       font,
       style: {
@@ -156,6 +159,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
       camera,
       font,
       lines,
+      root,
       artifactBytes: loaded.artifactBytes,
       compressedBytes: loaded.compressedBytes,
       fontLoadMs,
@@ -163,6 +167,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
     };
   } catch (error) {
     for (const line of lines) line.dispose();
+    disposeBenchmarkThreeRoot(root);
     font?.dispose();
     target?.dispose();
     await disposeConfiguredRenderer(renderer);
@@ -181,8 +186,8 @@ async function renderMtsdfText(resources: MtsdfProductTargetResources): Promise<
       dpr: resources.dpr,
       sceneCount: 4,
       textObjectCount: resources.lines.length,
-      glyphCount: resources.lines.reduce((sum, line) => sum + renderedGlyphCount(line), 0),
-      drawCount: resources.lines.reduce((sum, line) => sum + drawCount(line), 0),
+      glyphCount: resources.lines.reduce((sum, line) => sum + line.measure().glyphCount, 0),
+      drawCount: drawCount(resources.scene, `product-mtsdf-${resources.backend}`),
       changedPixels: pixelEvidence.changedPixels,
       distinctRgbColors: pixelEvidence.distinctRgbColors,
       artifactBytes: resources.artifactBytes,
@@ -230,6 +235,7 @@ async function disposeResources(resources: MtsdfProductTargetResources): Promise
     line.dispose();
   }
   resources.font.dispose();
+  disposeBenchmarkThreeRoot(resources.root);
   resources.target.dispose();
   await disposeConfiguredRenderer(resources.renderer);
 }
@@ -255,19 +261,9 @@ function inspectPixels(bytes: Uint8Array): { readonly changedPixels: number; rea
   return { changedPixels, distinctRgbColors: colors.size };
 }
 
-function renderedGlyphCount(object: THREE.Object3D): number {
+function drawCount(scene: THREE.Scene, rootName: string): number {
   let count = 0;
-  object.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.geometry instanceof THREE.InstancedBufferGeometry) {
-      count += child.geometry.instanceCount;
-    }
-  });
-  return count;
-}
-
-function drawCount(object: THREE.Object3D): number {
-  let count = 0;
-  object.traverse((child) => {
+  scene.getObjectByName(`@pmndrs/glyph:${rootName}`)?.traverse((child) => {
     if (child instanceof THREE.Mesh) count += 1;
   });
   return count;
