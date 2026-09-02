@@ -1,36 +1,52 @@
-import type { Node, NodeMaterial } from 'three/webgpu';
+import type { Node, NodeMaterial, Object3D, Scene } from 'three/webgpu';
 
-import type { AnyRasterTechnique } from '../raster-technique.js';
-import type { TslBitmapShaderOutput, TslMsdfShaderOutput, TslSlugShaderOutput } from '../tsl.js';
+import type {
+  TslBitmapShaderOutput,
+  TslDecorationShaderOutput,
+  TslMsdfShaderOutput,
+  TslSlugShaderOutput,
+} from '../tsl.js';
 
-export interface ThreeTextGenericMaterialContext {
-  readonly technique: AnyRasterTechnique;
-  readonly outputs: ReadonlyMap<string, Node>;
-  readonly position: Node<'vec3'>;
-  createDefaultMaterial(): NodeMaterial;
+/** Stable publication-root metadata supplied to every Three material factory. */
+export interface ThreeRootContext {
+  readonly name: string | undefined;
+  readonly scene: Scene | undefined;
+  readonly drawRoot: Object3D;
 }
 
-export type ThreeTextMaterialContext =
-  | Readonly<{
-      technique: 'pmndrs.bitmap';
-      shader: TslBitmapShaderOutput;
-      /** Final renderer-local position including policy-selected transform indirection. */
-      position: Node<'vec3'>;
-      createDefaultMaterial(): NodeMaterial;
-    }>
-  | Readonly<{
-      technique: 'pmndrs.msdf';
-      shader: TslMsdfShaderOutput;
-      position: Node<'vec3'>;
-      createDefaultMaterial(): NodeMaterial;
-    }>
-  | Readonly<{
-      technique: 'pmndrs.slug';
-      shader: TslSlugShaderOutput;
-      position: Node<'vec3'>;
-      createDefaultMaterial(): NodeMaterial;
-    }>
-  | Readonly<ThreeTextGenericMaterialContext>;
+type ThreeMaterialRootContext = Readonly<{ root: ThreeRootContext }>;
+
+export type ThreeTextMaterialContext = ThreeMaterialRootContext &
+  (
+    | Readonly<{
+        kind: 'decoration';
+        shader: TslDecorationShaderOutput;
+        position: Node<'vec3'>;
+        createDefaultMaterial(): NodeMaterial;
+      }>
+    | Readonly<{
+        kind: 'glyph';
+        technique: 'pmndrs.bitmap';
+        shader: TslBitmapShaderOutput;
+        /** Final renderer-local position including policy-selected transform indirection. */
+        position: Node<'vec3'>;
+        createDefaultMaterial(): NodeMaterial;
+      }>
+    | Readonly<{
+        kind: 'glyph';
+        technique: 'pmndrs.msdf';
+        shader: TslMsdfShaderOutput;
+        position: Node<'vec3'>;
+        createDefaultMaterial(): NodeMaterial;
+      }>
+    | Readonly<{
+        kind: 'glyph';
+        technique: 'pmndrs.slug';
+        shader: TslSlugShaderOutput;
+        position: Node<'vec3'>;
+        createDefaultMaterial(): NodeMaterial;
+      }>
+  );
 
 export interface ThreeTextMaterial {
   create(context: ThreeTextMaterialContext): NodeMaterial;

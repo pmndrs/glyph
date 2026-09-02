@@ -105,6 +105,7 @@ pub struct DecorationRecord {
     pub flags: u32,
     pub style: u8,
     pub color: u32,
+    pub material_id: u32,
     pub inline_start: f32,
     pub inline_extent: f32,
     pub block_start: f32,
@@ -141,6 +142,7 @@ fn same_decoration_group(left: &ResolvedStyle, right: &ResolvedStyle) -> bool {
     left.decoration_flags == right.decoration_flags
         && left.decoration_rgba == right.decoration_rgba
         && left.decoration_style == right.decoration_style
+        && left.material_id == right.material_id
         && left.decoration_thickness.to_bits() == right.decoration_thickness.to_bits()
         && left.decoration_offset.to_bits() == right.decoration_offset.to_bits()
         && left.decoration_font_size.to_bits() == right.decoration_font_size.to_bits()
@@ -878,6 +880,7 @@ impl PositionedGlyphArena {
                 flags: flag,
                 style: style.decoration_style,
                 color: style.decoration_rgba,
+                material_id: style.material_id,
                 inline_start,
                 inline_extent,
                 block_start: finite_f32(block_position)?,
@@ -2470,6 +2473,7 @@ mod tests {
         style.decoration_flags = crate::engine::frame::DECORATION_UNDERLINE
             | crate::engine::frame::DECORATION_LINE_THROUGH;
         style.decoration_rgba = 0xff00_00ff;
+        style.material_id = 17;
         let styles = [StyleSegment {
             text_start: 0,
             text_end: 3,
@@ -2595,6 +2599,7 @@ mod tests {
         assert_eq!(underline.block_start, 9.0);
         assert_eq!(underline.block_extent, 0.5);
         assert_eq!(underline.color, 0xff00_00ff);
+        assert_eq!(underline.material_id, 17);
         assert_eq!(underline.clip_id, 9);
         assert_eq!(underline.region_id, 9);
         assert_eq!(underline.flow_thread_id, 7);

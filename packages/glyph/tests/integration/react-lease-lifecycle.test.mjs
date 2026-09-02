@@ -18,18 +18,19 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 import { StrictMode, Suspense, createElement, useLayoutEffect } from 'react';
-import { DefaultLoadingManager } from 'three/webgpu';
 
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { msdf } from '@pmndrs/glyph/three/msdf';
 import { glyph } from '@pmndrs/glyph';
 import { FontLoader, ThreeConfig } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
 
 import { GlyphProvider, Text, TextGroup, useFont } from '@pmndrs/glyph/react';
-import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
 import { threeEngineDomainReport } from '../../dist/three/engine-domain.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
+const multiFormatFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
 await glyph.init();
 const r3fHandle = glyph.handle('three:react-lease-tests', ThreeConfig);
 after(() => r3fHandle.dispose());
@@ -116,6 +117,40 @@ test('Text and TextGroup share the built-in Three handle without a provider', as
   }
 });
 
+test('GlyphProvider resolves a scoped string through its lazy fontFaces table', async () => {
+  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const input = { baked: { bytes: await readFile(multiFormatFontUrl), ownership: 'copy' } };
+  const face = glyph.fontFace(input, { format: msdf });
+  let mounted = false;
+  const tree = createElement(
+    GlyphProvider,
+    {
+      handle: r3fHandle,
+      fontFaces: { Inter: face },
+      fallback: null,
+    },
+    createElement(
+      Text,
+      {
+        font: 'Inter',
+        name: 'named-font',
+        ref: (object) => void (mounted = object !== null),
+      },
+      'named',
+    ),
+  );
+  const renderer = await create(tree);
+  try {
+    await face.load(r3fHandle);
+    await renderer.update(tree);
+    await waitFor(() => mounted);
+    assert.equal(mounted, true);
+  } finally {
+    await renderer.unmount();
+    face.dispose();
+  }
+});
+
 test('Text and TextGroup reject untyped object-level handle selection', async () => {
   const { create } = (await import('@react-three/test-renderer/webgpu')).default;
   const fixture = await loadFixture();
@@ -143,7 +178,7 @@ test('GlyphProvider rejects a handle change instead of rebinding mounted objects
   try {
     await assert.rejects(
       () => renderer.update(createElement(GlyphProvider, { handle: replacement }, child)),
-      /GlyphProvider handle is immutable/,
+      /GlyphProvider handle and fontFaces are immutable/,
     );
   } finally {
     await renderer.unmount();
@@ -298,7 +333,10 @@ test('technique convenience preload and hook share the R3F resource', async () =
   const input = { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } };
   const options = { strikes: [16] };
   const observed = new Map();
-  await preload(() => useBitmapFont.preload(input, options));
+  const preload = useBitmap.preload(input, options);
+  assert.equal(useBitmap.preload(input, options), preload, 'preload shares one pending operation');
+  await preload;
+  assert.equal(useBitmap.preload(input, options), preload, 'preload keeps the same fulfilled operation');
   const renderer = await create(
     createElement(
       Suspense,
@@ -310,8 +348,7 @@ test('technique convenience preload and hook share the R3F resource', async () =
     await waitFor(() => observed.has('bitmap'));
     const mounted = observed.get('bitmap');
     assert.ok(mounted !== undefined);
-    useBitmapFont.clear(input, options);
-    await Promise.resolve();
+    useBitmap.clear(input, options);
     assert.equal(mounted.disposed, false, 'clear releases the preload owner, not the mounted hook lease');
   } finally {
     await renderer.unmount();
@@ -319,14 +356,40 @@ test('technique convenience preload and hook share the R3F resource', async () =
   assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
-test('clearing a pending R3F font load cannot resurrect its cache lease', async () => {
+test('a rejected preload is evicted so the next call creates a new operation', async () => {
+  const input = { baked: { bytes: new Uint8Array([0]), ownership: 'copy' } };
+  const config = { format: bitmap({ strikes: [16] }) };
+  const failed = useFont.preload(input, config);
+  assert.equal(useFont.preload(input, config), failed, 'concurrent callers share the failing operation');
+  await assert.rejects(failed);
+  const retry = useFont.preload(input, config);
+  assert.notEqual(retry, failed, 'the call after rejection receives a new operation');
+  await assert.rejects(retry);
+  useFont.clear(input, config);
+});
+
+test('clearing a loaded R3F font resource permits a later preload and mount', async () => {
+  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
   const input = { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } };
   const options = { strikes: [16] };
-  const errors = await settleLoading(() => {
-    useFont.preload(input, bitmap, options);
-    useFont.clear(input, bitmap, options);
-  });
-  assert.equal(errors.length, 1);
+  const config = { format: { technique: bitmap, options } };
+  const firstPreload = useFont.preload(input, config);
+  await firstPreload;
+  const firstObserved = new Map();
+  const firstRequest = { input, raster: { technique: bitmap, options } };
+  const firstRenderer = await create(hookFontTree(firstRequest, firstObserved, ['first']));
+  await waitFor(() => firstObserved.has('first'));
+  await firstRenderer.unmount();
+  useFont.clear(input, config);
+  const secondPreload = useFont.preload(input, config);
+  assert.notEqual(secondPreload, firstPreload, 'clear evicts the fulfilled preload operation');
+  await secondPreload;
+  const observed = new Map();
+  const request = { input, raster: { technique: bitmap, options } };
+  const renderer = await create(hookFontTree(request, observed, ['retry']));
+  await waitFor(() => observed.has('retry'));
+  await renderer.unmount();
+  useFont.clear(input, config);
   assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
@@ -343,7 +406,9 @@ function hookFontTree(request, observed, names) {
 }
 
 function HookFontText({ name, observed, request }) {
-  const font = useFont(request.input, request.raster.technique, request.raster.options);
+  const font = useFont(request.input, {
+    format: { technique: request.raster.technique, options: request.raster.options },
+  });
   useLayoutEffect(() => {
     observed.set(name, font);
     return () => {
@@ -364,50 +429,19 @@ function HookFontText({ name, observed, request }) {
 }
 
 function preloadRequest(request) {
-  return preload(() => useFont.preload(request.input, request.raster.technique, request.raster.options));
-}
-
-function preload(start) {
-  return new Promise((resolve, reject) => {
-    const previousLoad = DefaultLoadingManager.onLoad;
-    const previousError = DefaultLoadingManager.onError;
-    const restore = () => {
-      DefaultLoadingManager.onLoad = previousLoad;
-      DefaultLoadingManager.onError = previousError;
-    };
-    DefaultLoadingManager.onLoad = () => {
-      restore();
-      resolve();
-    };
-    DefaultLoadingManager.onError = (url) => {
-      restore();
-      reject(new Error(`React font preload failed: ${url}`));
-    };
-    start();
-  });
-}
-
-function settleLoading(start) {
-  return new Promise((resolve) => {
-    const errors = [];
-    const previousLoad = DefaultLoadingManager.onLoad;
-    const previousError = DefaultLoadingManager.onError;
-    DefaultLoadingManager.onError = (url) => errors.push(url);
-    DefaultLoadingManager.onLoad = () => {
-      DefaultLoadingManager.onLoad = previousLoad;
-      DefaultLoadingManager.onError = previousError;
-      resolve(errors);
-    };
-    start();
+  return useFont.preload(request.input, {
+    format: { technique: request.raster.technique, options: request.raster.options },
   });
 }
 
 function clearRequest(request) {
-  useFont.clear(request.input, request.raster.technique, request.raster.options);
+  useFont.clear(request.input, {
+    format: { technique: request.raster.technique, options: request.raster.options },
+  });
 }
 
 function BitmapFontText({ input, name, observed, options }) {
-  const font = useBitmapFont(input, options);
+  const font = useBitmap(input, options);
   useLayoutEffect(() => {
     observed.set(name, font);
     return () => {

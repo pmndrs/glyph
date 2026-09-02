@@ -1,7 +1,7 @@
 import { type Font } from '@pmndrs/glyph';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
-import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
-import { useMSDF } from '@pmndrs/glyph/react/msdf';
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import { useSlug } from '@pmndrs/glyph/react/slug';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
@@ -28,22 +28,22 @@ const bitmapOptions = { strikes: [32] } as const;
 
 // You can preload font assets to reduce loading waterfalls.
 // This is especially useful for fonts that are used in the initial scene.
-useBitmapFont.preload(latinFont, bitmapOptions);
-useMSDF.preload(latinFont);
+useBitmap.preload(latinFont, bitmapOptions);
+useMsdf.preload(latinFont);
 useSlug.preload(latinFont);
-useBitmapFont.preload(iconFont, bitmapOptions);
-useMSDF.preload(iconFont);
+useBitmap.preload(iconFont, bitmapOptions);
+useMsdf.preload(iconFont);
 useSlug.preload(iconFont);
 
 export function App() {
   const viewport = useThree((state) => state.viewport);
   const [activeTechnique, setActiveTechnique] = useState<Technique>('msdf');
 
-  const bitmapLatin = useBitmapFont(latinFont, bitmapOptions);
-  const msdfLatin = useMSDF(latinFont);
+  const bitmapLatin = useBitmap(latinFont, bitmapOptions);
+  const msdfLatin = useMsdf(latinFont);
   const slugLatin = useSlug(latinFont);
-  const bitmapIcons = useBitmapFont(iconFont, bitmapOptions);
-  const msdfIcons = useMSDF(iconFont);
+  const bitmapIcons = useBitmap(iconFont, bitmapOptions);
+  const msdfIcons = useMsdf(iconFont);
   const slugIcons = useSlug(iconFont);
 
   const fonts = [

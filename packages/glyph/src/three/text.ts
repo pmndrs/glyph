@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
 
 import { alignSpansToClusters, type FormattedText, type ParagraphSpan, type TextInput } from '../formatted-text.js';
+import type { Font } from '../font.js';
+import type { AnyFontFaceSelection, FontFaceTechniqueOf } from '../font-face.js';
 import { createGlyphPlacements, type GlyphCaret, type GlyphPlacements } from '../glyph-placement.js';
 import {
   copyGlyphLayoutInspection,
@@ -29,6 +31,7 @@ import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '
 import type {
   BackendFontStackBinding,
   BackendTransformBinding,
+  GlyphRoot,
   RenderPlanner,
   PlanTarget,
   RetainedFormattedText,
@@ -37,12 +40,8 @@ import type {
 } from '../core.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
 import { type ThreeMaterialBindingLease, type ThreeTextEngineCoordinator } from './engine-coordinator.js';
-import type { ThreeTextMaterial } from './material.js';
-import {
-  acquireThreeTextDomain,
-  type ThreeEngineDomainLease,
-  type ThreeEngineDomainProvider,
-} from './engine-domain.js';
+import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
+import { type ThreeEngineDomainLease, type ThreeEngineDomainProvider } from './engine-domain.js';
 import {
   measureGlyphPlacements,
   type ThreeGlyphGeometrySource,
@@ -77,9 +76,7 @@ export type TextSpan<Technique extends AnyRasterTechnique> = Omit<ParagraphSpan<
 type TextBaseProperties<Technique extends AnyRasterTechnique> = Omit<ParagraphBaseProperties<Technique>, 'font'> &
   Readonly<{ font: FontSelection<Technique> }>;
 
-type TextContentProperties<Technique extends AnyRasterTechnique> =
-  | Readonly<{ text: string; spans?: readonly TextSpan<Technique>[] }>
-  | Readonly<{ text: FormattedText<Technique>; spans?: never }>;
+type TextContentProperties<Technique extends AnyRasterTechnique> = Readonly<{ text: TextInput<Technique> }>;
 
 /** Complete desired state for one Three text paragraph. */
 export type TextProperties<Technique extends AnyRasterTechnique> = TextBaseProperties<Technique> &
@@ -91,11 +88,8 @@ export type StandaloneTextProperties<Technique extends AnyRasterTechnique> = Tex
   Readonly<{ capacity?: GlyphBufferCapacity; pixelSnapping?: boolean }>;
 
 /** Partial desired-state replacement accepted by {@link Text.set}. */
-export type TextUpdate<Technique extends AnyRasterTechnique> =
-  | (Partial<TextBaseProperties<Technique>> &
-      Readonly<{ text?: string; spans?: readonly TextSpan<Technique>[]; material?: ThreeTextMaterial }>)
-  | (Partial<TextBaseProperties<Technique>> &
-      Readonly<{ text: FormattedText<Technique>; spans?: never; material?: ThreeTextMaterial }>);
+export type TextUpdate<Technique extends AnyRasterTechnique> = Partial<TextBaseProperties<Technique>> &
+  Readonly<{ text?: TextInput<Technique>; material?: ThreeTextMaterial }>;
 
 /** Construction options for one Three retained text batching boundary. */
 export interface TextGroupOptions {
@@ -138,20 +132,252 @@ interface TextReconciler {
   desired<Technique extends AnyRasterTechnique>(text: Text<Technique>): DesiredTextState<Technique>;
   fontBindings(text: Text<AnyRasterTechnique>): TextFontBindings;
   desiredRevision(text: Text<AnyRasterTechnique>): number;
+  root(text: Text<AnyRasterTechnique>): ThreeRoot;
   markCommitted(text: Text<AnyRasterTechnique>): void;
   publishMeasurement(text: Text<AnyRasterTechnique>, measurement: ParagraphLayoutSummary): void;
-  bind(text: Text<AnyRasterTechnique>, binding: ThreeTextBatchBinding, group: TextGroup | undefined): void;
-  unbindFrom(text: Text<AnyRasterTechnique>, binding: ThreeTextBatchBinding): void;
+  bind(text: Text<AnyRasterTechnique>, binding: ThreeRootPublication, group: TextGroup | undefined): void;
+  unbindFrom(text: Text<AnyRasterTechnique>, binding: ThreeRootPublication): void;
 }
 
 let reconciler!: TextReconciler;
 
-interface TextGroupReconciler {
-  measurement(group: TextGroup, text: Text<AnyRasterTechnique>): ParagraphLayoutSummary;
-  inspection(group: TextGroup, text: Text<AnyRasterTechnique>): GlyphLayoutInspection;
+/** @internal Handle-owned construction operations required by one Three root. */
+export interface ThreeRootDomainProvider extends ThreeEngineDomainProvider {
+  createTextForRoot<Technique extends AnyRasterTechnique>(
+    root: ThreeRoot,
+    properties:
+      | StandaloneTextProperties<Technique>
+      | (Omit<StandaloneTextProperties<Technique>, 'font'> & { readonly font: AnyFontFaceSelection | string }),
+  ): Text<Technique>;
 }
 
-let groupReconciler!: TextGroupReconciler;
+class ThreeRootDrawObject extends THREE.Object3D {
+  readonly #commit: () => void;
+
+  constructor(commit: () => void) {
+    super();
+    this.#commit = commit;
+  }
+
+  override updateMatrixWorld(force?: boolean): void {
+    super.updateMatrixWorld(force);
+    this.#commit();
+  }
+
+  updateMatrixWorldWithoutCommit(force?: boolean): void {
+    super.updateMatrixWorld(force);
+  }
+}
+
+/** One handle-owned publication root. A name is customization metadata, not a Three Scene identity. */
+export class ThreeRoot implements GlyphRoot, ThreeRootContext {
+  readonly name: string | undefined;
+  readonly #domain: ThreeRootDomainProvider;
+  readonly #release: () => void;
+  readonly #texts = new Set<Text<AnyRasterTechnique>>();
+  readonly #drawRoot: ThreeRootDrawObject;
+  #scene: THREE.Scene | undefined;
+  #binding: ThreeRootPublication | undefined;
+  #material: ThreeTextMaterial | undefined;
+  #disposed = false;
+
+  /** @internal Ordinary applications obtain roots by calling a Three handle. */
+  constructor(name: string | undefined, domain: ThreeRootDomainProvider, release: () => void) {
+    this.name = name;
+    this.#domain = domain;
+    this.#release = release;
+    this.#drawRoot = new ThreeRootDrawObject(() => this.#commitTraversal());
+    this.#drawRoot.name = name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${name}`;
+    this.#drawRoot.matrixAutoUpdate = false;
+  }
+
+  get disposed(): boolean {
+    return this.#disposed;
+  }
+
+  get textCount(): number {
+    return this.#texts.size;
+  }
+
+  get gpuBytes(): number {
+    return this.#binding?.gpuBytes ?? 0;
+  }
+
+  get material(): ThreeTextMaterial | undefined {
+    return this.#material;
+  }
+  set material(value: ThreeTextMaterial | undefined) {
+    this.setMaterial(value);
+  }
+
+  setMaterial(value: ThreeTextMaterial | undefined): void {
+    this.#assertActive();
+    if (this.#material === value) return;
+    this.#material = value;
+    this.#binding?.invalidateMaterial();
+  }
+
+  createText<Technique extends AnyRasterTechnique>(properties: StandaloneTextProperties<Technique>): Text<Technique>;
+  createText<const Selection extends AnyFontFaceSelection | string>(
+    properties: Omit<StandaloneTextProperties<FontFaceTechniqueOf<Selection>>, 'font'> & { readonly font: Selection },
+  ): Text<FontFaceTechniqueOf<Selection>>;
+  createText<Technique extends AnyRasterTechnique>(
+    properties:
+      | StandaloneTextProperties<Technique>
+      | (Omit<StandaloneTextProperties<Technique>, 'font'> & { readonly font: AnyFontFaceSelection | string }),
+  ): Text<Technique> {
+    this.#assertActive();
+    return this.#domain.createTextForRoot(this, properties);
+  }
+
+  createTextGroup(options: TextGroupOptions = {}): TextGroup {
+    this.#assertActive();
+    return new TextGroup(options, this.#domain, this);
+  }
+
+  /** Publishes all retained descendants and synchronizes their current Three transforms. */
+  shape(): void {
+    this.#assertActive();
+    this.#synchronize();
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    try {
+      this.#binding?.dispose();
+      this.#binding = undefined;
+    } finally {
+      this.#drawRoot.removeFromParent();
+      this.#scene = undefined;
+      this.#release();
+    }
+  }
+
+  /** @internal Register one retained leaf with this publication root. */
+  register(text: Text<AnyRasterTechnique>): void {
+    this.#assertActive();
+    this.#texts.add(text);
+  }
+
+  /** @internal Remove one retained leaf from this publication root. */
+  unregister(text: Text<AnyRasterTechnique>): void {
+    this.#texts.delete(text);
+    this.#binding?.removeText(text);
+  }
+
+  /** @internal Invalidate inherited material state after a TextGroup change. */
+  invalidateMaterial(): void {
+    this.#binding?.invalidateMaterial();
+  }
+
+  /** @internal Measure one root member through the root-owned planner. */
+  measurement(text: Text<AnyRasterTechnique>): ParagraphLayoutSummary {
+    this.#assertMember(text);
+    return this.#rootBinding().measurement(text);
+  }
+
+  /** @internal Inspect one root member through the root-owned planner. */
+  inspection(text: Text<AnyRasterTechnique>): GlyphLayoutInspection {
+    this.#assertMember(text);
+    return this.#rootBinding().inspection(text);
+  }
+
+  /** @internal Called by Three traversal after one retained object updates its matrix. */
+  synchronize(_worldMatricesCurrent: boolean): void {
+    this.#assertActive();
+    this.#synchronize();
+  }
+
+  /** @internal Cheap host-tree observation; semantic publication waits for the root draw traversal. */
+  observeHostTree(): void {
+    if (this.#disposed) return;
+    this.#bindScene(this.members());
+  }
+
+  /** @internal Stable root membership snapshot used by measurement reconciliation. */
+  members(): readonly Text<AnyRasterTechnique>[] {
+    return [...this.#texts].filter((text) => !text.disposed);
+  }
+
+  #synchronize(): void {
+    const texts = [...this.#texts].filter((text) => !text.disposed);
+    for (const text of texts) text.updateWorldMatrix(true, false);
+    this.#bindScene(texts);
+    this.#drawRoot.updateMatrixWorldWithoutCommit(true);
+    if (texts.length === 0) {
+      if (this.#binding !== undefined) {
+        this.#binding.reconcile([]);
+        this.#binding.synchronize(true);
+      }
+      return;
+    }
+    validateTextDomains(texts);
+    const binding = this.#rootBinding();
+    binding.reconcile(texts);
+    binding.synchronize(true);
+  }
+
+  #commitTraversal(): void {
+    if (this.#disposed) return;
+    this.#synchronize();
+  }
+
+  #rootBinding(): ThreeRootPublication {
+    this.#binding ??= new ThreeRootPublication(this.#domain, { size: 4_096, policy: 'chunk' }, this);
+    return this.#binding;
+  }
+
+  /** @internal Private Three parent for renderer-owned batches. */
+  get drawRoot(): THREE.Object3D {
+    return this.#drawRoot;
+  }
+
+  /** @internal Current host scene, discovered from retained Three objects. */
+  get scene(): THREE.Scene | undefined {
+    return this.#scene;
+  }
+
+  /** @internal Visibility relative to the scene currently bound to this root. */
+  visible(text: THREE.Object3D): boolean {
+    const scene = this.#scene;
+    if (scene === undefined || nearestScene(text) !== scene) return false;
+    let current: THREE.Object3D | null = text;
+    while (current !== null && current !== scene) {
+      if (!current.visible) return false;
+      current = current.parent;
+    }
+    return current === scene && scene.visible;
+  }
+
+  #bindScene(texts: readonly Text<AnyRasterTechnique>[]): void {
+    let scene: THREE.Scene | undefined;
+    for (const text of texts) {
+      const candidate = nearestScene(text);
+      if (candidate === undefined) continue;
+      if (scene !== undefined && candidate !== scene) {
+        throw new Error(
+          `Three root ${JSON.stringify(this.name)} spans more than one Scene; select a different handle root for each Scene`,
+        );
+      }
+      scene = candidate;
+    }
+    if (scene === this.#scene) return;
+    this.#drawRoot.removeFromParent();
+    this.#scene = scene;
+    scene?.add(this.#drawRoot);
+  }
+
+  #assertMember(text: Text<AnyRasterTechnique>): void {
+    this.#assertActive();
+    if (!this.#texts.has(text)) throw new Error('Text does not belong to this Three root');
+  }
+
+  #assertActive(): void {
+    this.#domain.coordinator.assertFrameUpdateAllowed();
+    if (this.#disposed) throw new Error(`Three root ${JSON.stringify(this.name)} has been disposed`);
+  }
+}
 
 export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   static {
@@ -162,6 +388,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
       desired: (text) => text.#desired,
       fontBindings: (text) => text.#fontBindings,
       desiredRevision: (text) => text.#desiredRevision,
+      root: (text) => text.#root,
       markCommitted: (text) => text.#markCommitted(),
       publishMeasurement: (text, measurement) => text.#setBoundingBox(measurement),
       bind: (text, binding, group) => text.#bind(binding, group),
@@ -170,13 +397,15 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   }
 
   readonly #domain: ThreeEngineDomainLease;
+  readonly #ownedFonts: readonly Font<AnyRasterTechnique>[];
   readonly #transform: BackendTransformBinding;
   readonly #boundingBox = new THREE.Box3();
   #desired: DesiredTextState<Technique>;
   #fontBindings: TextFontBindings;
   #standaloneCapacity: GlyphBufferCapacity;
   readonly #pixelSnapping: boolean;
-  #binding: ThreeTextBatchBinding | undefined;
+  readonly #root: ThreeRoot;
+  #binding: ThreeRootPublication | undefined;
   #textGroup: TextGroup | undefined;
   #desiredRevision = 0;
   #committedRevision = -1;
@@ -186,10 +415,19 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   onError: ((error: unknown) => void) | undefined;
 
   /** @internal Ordinary applications construct Text through `handle.createText()`. */
-  constructor(properties: StandaloneTextProperties<Technique>, domainProvider?: ThreeEngineDomainProvider) {
+  constructor(
+    properties: StandaloneTextProperties<Technique>,
+    domainProvider: ThreeEngineDomainProvider,
+    ownedFonts: readonly Font<AnyRasterTechnique>[],
+    root: ThreeRoot,
+  ) {
     super();
+    if (root === undefined || domainProvider === undefined) {
+      throw new TypeError('Three Text must be created by a Glyph Three root');
+    }
+    assertNoRawSpans(properties, 'Text properties');
     const desired = normalizeDesired(properties);
-    const domain = domainProvider?.acquire() ?? acquireThreeTextDomain(fontSelections(desired));
+    const domain = domainProvider.acquire();
     let transform: BackendTransformBinding | undefined;
     let fontBindings: TextFontBindings | undefined;
     try {
@@ -201,11 +439,14 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
       throw error;
     }
     this.#domain = domain;
+    this.#ownedFonts = ownedFonts;
     this.#transform = transform;
     this.#fontBindings = fontBindings;
     this.#desired = desired;
     this.#standaloneCapacity = normalizeCapacity(properties.capacity ?? { size: 256, policy: 'grow' });
     this.#pixelSnapping = normalizePixelSnapping(properties.pixelSnapping);
+    this.#root = root;
+    root.register(eraseTextTechnique(this));
   }
 
   get textGroup(): TextGroup | undefined {
@@ -240,12 +481,6 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   }
   set text(value: TextInput<Technique>) {
     this.set({ text: value } as TextUpdate<Technique>);
-  }
-  get spans(): readonly TextSpan<Technique>[] {
-    return this.#desired.spans;
-  }
-  set spans(value: readonly TextSpan<Technique>[]) {
-    this.set({ spans: value });
   }
   /** Text shaping and presentation properties inherited by inline spans. */
   get style(): TextStyle {
@@ -285,6 +520,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     if (typeof update !== 'object' || update === null || Array.isArray(update)) {
       throw new TypeError('Text update must be an object');
     }
+    assertNoRawSpans(update, 'Text update');
     const normalizedUpdate = replacedContent(update);
     if (Reflect.ownKeys(normalizedUpdate).length === 0) return;
     const next = normalizeDesired(
@@ -327,11 +563,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   measure(): ParagraphLayoutSummary {
     this.#assertActive();
     const text = eraseTextTechnique(this);
-    const boundary = nearestTextGroup(this);
-    const measurement =
-      boundary === undefined
-        ? this.#standaloneBinding().measurement(text)
-        : groupReconciler.measurement(boundary, text);
+    const measurement = this.#root.measurement(text);
     this.#setBoundingBox(measurement);
     return measurement;
   }
@@ -343,9 +575,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   glyphs(): GlyphLayoutInspection {
     this.#assertActive();
     const text = eraseTextTechnique(this);
-    const boundary = nearestTextGroup(this);
-    const inspection =
-      boundary === undefined ? this.#standaloneBinding().inspection(text) : groupReconciler.inspection(boundary, text);
+    const inspection = this.#root.inspection(text);
     this.#setBoundingBox(inspection);
     return inspection;
   }
@@ -466,60 +696,25 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   override updateMatrixWorld(force?: boolean): void {
     super.updateMatrixWorld(force);
     if (this.#disposed) return;
-    const boundary = nearestTextGroup(this);
-    if (boundary?.disposed) {
-      this.#unbind();
-      return;
-    }
-    if (boundary !== undefined) return;
-    if (this.parent === null) {
-      this.#unbind();
-      return;
-    }
-    try {
-      this.#shapeStandalone(true);
-    } catch (error) {
-      this.#error = error;
-      this.onError?.(error);
-    }
+    this.#root.observeHostTree();
   }
 
   /** Publishes pending semantic state immediately, then synchronizes current transforms. */
   shape(): void {
     this.#assertActive();
-    const group = nearestTextGroup(this);
-    if (group !== undefined) {
-      group.shape();
-      return;
-    }
-    this.updateWorldMatrix(true, true);
-    this.#shapeStandalone(true);
-    if (!this.#binding?.hasRejectedRendererUpdate) this.#error = undefined;
+    this.#root.shape();
+    this.#error = undefined;
   }
 
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#root.unregister(eraseTextTechnique(this));
     this.#unbind();
     disposeFontBindings(this.#fontBindings);
+    for (const font of this.#ownedFonts) font.dispose();
     this.#transform.dispose();
     this.#domain.dispose();
-  }
-
-  #standaloneBinding(): ThreeTextBatchBinding {
-    if (this.#binding === undefined || this.#textGroup !== undefined) {
-      this.#unbind();
-      this.#binding = new ThreeTextBatchBinding(eraseTextTechnique(this), this.#standaloneCapacity, undefined);
-    }
-    this.#binding.reconcile([eraseTextTechnique(this)]);
-    return this.#binding;
-  }
-
-  #shapeStandalone(worldMatricesCurrent: boolean): void {
-    const binding = this.#standaloneBinding();
-    binding.reconcile([eraseTextTechnique(this)]);
-    binding.synchronize(worldMatricesCurrent);
-    if (!binding.hasRejectedRendererUpdate) this.#error = undefined;
   }
 
   #acquireDomain(): ThreeEngineDomainLease {
@@ -542,13 +737,13 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     this.#boundingBoxCurrent = true;
   }
 
-  #bind(binding: ThreeTextBatchBinding, group: TextGroup | undefined): void {
+  #bind(binding: ThreeRootPublication, group: TextGroup | undefined): void {
     if (this.#binding !== binding) this.#unbind();
     this.#binding = binding;
     this.#textGroup = group;
   }
 
-  #unbindFrom(binding: ThreeTextBatchBinding): void {
+  #unbindFrom(binding: ThreeRootPublication): void {
     if (this.#binding !== binding) return;
     this.#binding = undefined;
     this.#textGroup = undefined;
@@ -556,11 +751,9 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
 
   #unbind(): void {
     const binding = this.#binding;
-    const standalone = binding !== undefined && this.#textGroup === undefined;
     this.#binding = undefined;
     this.#textGroup = undefined;
-    if (standalone) binding.dispose();
-    else binding?.removeText(eraseTextTechnique(this));
+    binding?.removeText(eraseTextTechnique(this));
   }
 
   #assertActive(): void {
@@ -569,28 +762,23 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
 }
 
 export class TextGroup extends THREE.Object3D {
-  static {
-    groupReconciler = {
-      measurement: (group, text) => group.#measurement(text),
-      inspection: (group, text) => group.#inspection(text),
-    };
-  }
-
   #capacity: GlyphBufferCapacity;
   readonly #compositing: 'ordered' | 'independent';
   readonly #pixelSnapping: boolean;
-  readonly #domainProvider: ThreeEngineDomainProvider | undefined;
-  readonly #domainLease: ThreeEngineDomainLease | undefined;
+  readonly #domainProvider: ThreeEngineDomainProvider;
+  readonly #root: ThreeRoot;
   #material: ThreeTextMaterial | undefined;
-  #binding: ThreeTextBatchBinding | undefined;
   readonly #texts: Text<AnyRasterTechnique>[] = [];
   #disposed = false;
   #error: unknown;
   onError: ((error: unknown) => void) | undefined;
 
   /** @internal Ordinary applications construct TextGroup through `handle.createTextGroup()`. */
-  constructor(options: TextGroupOptions = {}, domainProvider?: ThreeEngineDomainProvider) {
+  constructor(options: TextGroupOptions, domainProvider: ThreeEngineDomainProvider, root: ThreeRoot) {
     super();
+    if (root === undefined || domainProvider === undefined) {
+      throw new TypeError('Three TextGroup must be created by a Glyph Three root');
+    }
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
       throw new TypeError('TextGroup options must be an object');
     }
@@ -598,7 +786,7 @@ export class TextGroup extends THREE.Object3D {
     this.#compositing = normalizeCompositing(options.compositing);
     this.#pixelSnapping = normalizePixelSnapping(options.pixelSnapping);
     this.#domainProvider = domainProvider;
-    this.#domainLease = domainProvider?.acquire();
+    this.#root = root;
     this.#material = options.material;
     if (options.renderOrder !== undefined) {
       if (!Number.isFinite(options.renderOrder)) throw new RangeError('TextGroup renderOrder must be finite');
@@ -613,7 +801,7 @@ export class TextGroup extends THREE.Object3D {
     return this.#compositing;
   }
   get textCount(): number {
-    return this.#binding?.textCount ?? 0;
+    return collectTextDescendants(this, this.#texts).length;
   }
   get pixelSnapping(): boolean {
     return this.#pixelSnapping;
@@ -625,7 +813,7 @@ export class TextGroup extends THREE.Object3D {
     return this.#error;
   }
   get gpuBytes(): number {
-    return this.#binding?.gpuBytes ?? 0;
+    return this.#root.gpuBytes;
   }
   get material(): ThreeTextMaterial | undefined {
     return this.#material;
@@ -637,7 +825,7 @@ export class TextGroup extends THREE.Object3D {
   setMaterial(value: ThreeTextMaterial | undefined): void {
     this.#assertActive();
     this.#material = value;
-    this.#binding?.invalidateMaterial();
+    this.#root.invalidateMaterial();
   }
 
   override add(...children: THREE.Object3D[]): this {
@@ -646,6 +834,7 @@ export class TextGroup extends THREE.Object3D {
     const incoming: Text<AnyRasterTechnique>[] = [];
     for (const child of children) collectTextTree(child, incoming);
     this.#assertHandle(incoming);
+    this.#assertRoot(incoming);
     validateTextDomains([...existing, ...incoming]);
     return super.add(...children);
   }
@@ -653,7 +842,6 @@ export class TextGroup extends THREE.Object3D {
   setCapacity(capacity: GlyphBufferCapacity): void {
     this.#assertActive();
     this.#capacity = normalizeCapacity(capacity);
-    this.#binding?.setCapacity(this.#capacity);
   }
 
   override clone(_recursive?: boolean): never {
@@ -667,48 +855,19 @@ export class TextGroup extends THREE.Object3D {
   override updateMatrixWorld(force?: boolean): void {
     super.updateMatrixWorld(force);
     if (this.#disposed) return;
-    try {
-      this.#shapeGroup(true);
-    } catch (error) {
-      this.#error = error;
-      this.onError?.(error);
-    }
+    this.#root.observeHostTree();
   }
 
   /** Publishes pending descendant semantic state immediately, then synchronizes current transforms. */
   shape(): void {
     this.#assertActive();
-    this.updateWorldMatrix(true, true);
-    this.#shapeGroup(true);
-    if (!this.#binding?.hasRejectedRendererUpdate) this.#error = undefined;
+    this.#root.shape();
+    this.#error = undefined;
   }
 
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#binding?.dispose();
-    this.#binding = undefined;
-    this.#domainLease?.dispose();
-  }
-
-  #measurement(text: Text<AnyRasterTechnique>): ParagraphLayoutSummary {
-    this.#assertActive();
-    const texts = collectTextDescendants(this, this.#texts);
-    if (!texts.includes(text)) throw new Error('Text must remain attached to its TextGroup for measurement');
-    validateTextDomains(texts);
-    this.#binding ??= new ThreeTextBatchBinding(texts[0]!, this.#capacity, this);
-    this.#binding.reconcile(texts);
-    return this.#binding.measurement(text);
-  }
-
-  #inspection(text: Text<AnyRasterTechnique>): GlyphLayoutInspection {
-    this.#assertActive();
-    const texts = collectTextDescendants(this, this.#texts);
-    if (!texts.includes(text)) throw new Error('Text must remain attached to its TextGroup for inspection');
-    validateTextDomains(texts);
-    this.#binding ??= new ThreeTextBatchBinding(texts[0]!, this.#capacity, this);
-    this.#binding.reconcile(texts);
-    return this.#binding.inspection(text);
   }
 
   #assertActive(): void {
@@ -716,8 +875,7 @@ export class TextGroup extends THREE.Object3D {
   }
 
   #assertHandle(texts: readonly Text<AnyRasterTechnique>[]): void {
-    const coordinator = this.#domainProvider?.coordinator;
-    if (coordinator === undefined) return;
+    const coordinator = this.#domainProvider.coordinator;
     for (const text of texts) {
       if (reconciler.coordinator(text) !== coordinator) {
         throw new TypeError('one Three TextGroup cannot contain Text objects from different Glyph handles');
@@ -725,21 +883,12 @@ export class TextGroup extends THREE.Object3D {
     }
   }
 
-  #shapeGroup(worldMatricesCurrent: boolean): void {
-    const texts = collectTextDescendants(this, this.#texts);
-    this.#assertHandle(texts);
-    if (texts.length === 0) {
-      if (this.#binding !== undefined) {
-        this.#binding.reconcile([]);
-        this.#binding.synchronize(worldMatricesCurrent);
+  #assertRoot(texts: readonly Text<AnyRasterTechnique>[]): void {
+    for (const text of texts) {
+      if (reconciler.root(text) !== this.#root) {
+        throw new TypeError('one Three TextGroup cannot contain Text objects from different Glyph roots');
       }
-    } else {
-      validateTextDomains(texts);
-      this.#binding ??= new ThreeTextBatchBinding(texts[0]!, this.#capacity, this);
-      this.#binding.reconcile(texts);
-      this.#binding.synchronize(worldMatricesCurrent);
     }
-    if (!this.#binding?.hasRejectedRendererUpdate) this.#error = undefined;
   }
 }
 
@@ -757,10 +906,10 @@ interface CanonicalInspection {
   readonly value: GlyphLayoutInspection;
 }
 
-class ThreeTextBatchBinding {
+class ThreeRootPublication {
   readonly #coordinator: ThreeTextEngineCoordinator;
   readonly #domain: ThreeEngineDomainLease;
-  readonly #group: TextGroup | undefined;
+  readonly #root: ThreeRoot;
   readonly #planner: RenderPlanner;
   readonly #target: ThreeTextRenderPlanExecutor;
   readonly #entries = new Map<Text<AnyRasterTechnique>, BoundTextEntry>();
@@ -772,18 +921,16 @@ class ThreeTextBatchBinding {
   #materialInvalidated = false;
   #disposed = false;
 
-  constructor(seed: Text<AnyRasterTechnique>, capacity: GlyphBufferCapacity, group: TextGroup | undefined) {
-    this.#coordinator = reconciler.coordinator(seed);
-    this.#domain = reconciler.acquireDomain(seed);
-    this.#group = group;
+  constructor(source: ThreeRootDomainProvider, capacity: GlyphBufferCapacity, root: ThreeRoot) {
+    this.#coordinator = source.coordinator;
+    this.#domain = source.acquire();
+    this.#root = root;
     this.#capacity = capacity;
-    const drawRoot = group ?? seed;
-    const owner = {
+    const drawRoot = root.drawRoot;
+    const planOwner = {
       drawRoot,
-      pixelSnapping: group?.pixelSnapping ?? seed.pixelSnapping,
-      get renderOrderBase(): number {
-        return group?.renderOrder ?? seed.renderOrder;
-      },
+      root,
+      visibleObject: (object: THREE.Object3D) => root.visible(object),
     };
     let target: ThreeTextRenderPlanExecutor | undefined;
     try {
@@ -791,7 +938,7 @@ class ThreeTextBatchBinding {
         policy: this.#coordinator.policy,
         capabilitySet: this.#coordinator.capabilitySet,
         target: () => {
-          target = new ThreeTextRenderPlanExecutor(this.#coordinator, owner);
+          target = new ThreeTextRenderPlanExecutor(this.#coordinator, planOwner);
           return target;
         },
         limits: THREE_TEXT_LIMITS,
@@ -852,7 +999,7 @@ class ThreeTextBatchBinding {
       ) {
         this.#stage(text, reconciler.desired(text), reconciler.fontBindings(text), revision, order);
       }
-      reconciler.bind(text, this, this.#group);
+      reconciler.bind(text, this, nearestTextGroup(text));
     }
     this.#materialInvalidated = false;
   }
@@ -886,7 +1033,7 @@ class ThreeTextBatchBinding {
   measurement(text: Text<AnyRasterTechnique>): ParagraphLayoutSummary {
     this.#assertActive();
     this.#coordinator.assertFrameUpdateAllowed();
-    this.reconcile(this.#group === undefined ? [text] : collectTextDescendants(this.#group, []));
+    this.reconcile(this.#root.members());
     const entry = this.#entries.get(text);
     if (entry === undefined) throw new Error('Text is not retained by this batch');
     const measurement = entry.handle.measure();
@@ -897,7 +1044,7 @@ class ThreeTextBatchBinding {
   inspection(text: Text<AnyRasterTechnique>): GlyphLayoutInspection {
     this.#assertActive();
     this.#coordinator.assertFrameUpdateAllowed();
-    this.reconcile(this.#group === undefined ? [text] : collectTextDescendants(this.#group, []));
+    this.reconcile(this.#root.members());
     const entry = this.#entries.get(text);
     if (entry === undefined) throw new Error('Text is not retained by this batch');
     const inspection = entry.handle.glyphs();
@@ -926,7 +1073,7 @@ class ThreeTextBatchBinding {
   glyphRenderOrderBase(text: Text<AnyRasterTechnique>, stableIds: Uint32Array): number {
     this.#assertActive();
     if (!this.#entries.has(text)) throw new Error('cannot inspect draw order for an unbound text paragraph');
-    return this.#target.renderOrderBaseForGlyphs(stableIds) ?? this.#group?.renderOrder ?? text.renderOrder;
+    return this.#target.renderOrderBaseForGlyphs(stableIds) ?? text.renderOrder;
   }
 
   copyGlyphs(text: Text<AnyRasterTechnique>, stableIds: Uint32Array, target: PlanTarget) {
@@ -959,7 +1106,7 @@ class ThreeTextBatchBinding {
     }
     const result = this.#planner.publish({
       semanticViews: 'measurement',
-      compositing: this.#group?.compositing ?? 'ordered',
+      compositing: 'ordered',
     });
     this.#pendingPublication = false;
     if (!result.accepted) {
@@ -1023,7 +1170,9 @@ class ThreeTextBatchBinding {
         desired,
         fontBindings,
         previous?.transform ?? reconciler.transform(text),
-        this.#group?.material,
+        text,
+        nearestTextGroup(text),
+        this.#root,
         order,
         this.#coordinator,
         materialLeases,
@@ -1080,15 +1229,28 @@ function coreTextOptions(
   desired: DesiredTextState<AnyRasterTechnique>,
   bindings: TextFontBindings,
   transform: BackendTransformBinding,
-  groupMaterial: ThreeTextMaterial | undefined,
+  textObject: Text<AnyRasterTechnique>,
+  group: TextGroup | undefined,
+  root: ThreeRoot,
   order: number,
   coordinator: ThreeTextEngineCoordinator,
   leases: ThreeMaterialBindingLease[],
 ): RetainedTextOptions {
-  const rootMaterial = bindMaterial(coordinator, desired.material ?? groupMaterial, leases);
+  const pixelSnapping = group?.pixelSnapping ?? textObject.pixelSnapping;
+  const renderOrder = group?.renderOrder ?? textObject.renderOrder;
+  const rootMaterial = bindMaterial(
+    coordinator,
+    desired.material ?? group?.material ?? root.material,
+    pixelSnapping,
+    renderOrder,
+    leases,
+  );
   const spans = desired.spans.map((span, index) => {
     const font = bindings.spans.get(index);
-    const material = bindMaterial(coordinator, span.material, leases);
+    const material =
+      span.material === undefined
+        ? undefined
+        : bindMaterial(coordinator, span.material, pixelSnapping, renderOrder, leases);
     return Object.freeze({
       start: span.start,
       end: span.end,
@@ -1103,7 +1265,7 @@ function coreTextOptions(
     text,
     transform,
     order,
-    ...(rootMaterial === undefined ? {} : { material: rootMaterial }),
+    material: rootMaterial,
     ...(desired.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: desired.rasterPixelRatio }),
     style: desired.style,
     layout: desired.layout,
@@ -1114,10 +1276,11 @@ function coreTextOptions(
 function bindMaterial(
   coordinator: ThreeTextEngineCoordinator,
   material: ThreeTextMaterial | undefined,
+  pixelSnapping: boolean,
+  renderOrder: number,
   leases: ThreeMaterialBindingLease[],
 ) {
-  if (material === undefined) return undefined;
-  const lease = coordinator.acquireMaterial(material);
+  const lease = coordinator.acquireMaterial(material, pixelSnapping, renderOrder);
   leases.push(lease);
   return lease.binding;
 }
@@ -1145,10 +1308,6 @@ function disposeFontBindings(bindings: TextFontBindings): void {
   bindings.root.dispose();
 }
 
-function fontSelections(desired: DesiredTextState<AnyRasterTechnique>): readonly FontSelection<AnyRasterTechnique>[] {
-  return [desired.font, ...desired.spans.flatMap((span) => (span.font === undefined ? [] : [span.font]))];
-}
-
 function normalizeDesired<Technique extends AnyRasterTechnique>(
   properties: TextProperties<Technique>,
   previous?: DesiredTextState<Technique>,
@@ -1168,8 +1327,10 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
   const text = formatted?.text ?? (properties.text as string);
   if (typeof text !== 'string') throw new TypeError('Text content must be a string or formatted text');
   assertTextStyleFeatureRanges(style, 0, text.length, 'Text style');
-  const stated = (formatted?.spans as readonly TextSpan<Technique>[] | undefined) ?? properties.spans ?? [];
-  if (!Array.isArray(stated)) throw new TypeError('Text spans must be an array');
+  const stated =
+    (formatted?.spans as readonly TextSpan<Technique>[] | undefined) ??
+    (properties as DesiredTextState<Technique>).spans ??
+    [];
   const resolved =
     previous !== undefined && previous.text === text && previous.spans === stated
       ? stated
@@ -1206,6 +1367,12 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
     ...(rasterPixelRatio === undefined ? {} : { rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
   });
+}
+
+function assertNoRawSpans(value: object, subject: string): void {
+  if (Object.hasOwn(value, 'spans')) {
+    throw new TypeError(`${subject} cannot declare raw spans; compose formatted text with txt and span`);
+  }
 }
 
 function isFormattedText(value: unknown): value is FormattedText<AnyRasterTechnique> {
@@ -1321,6 +1488,15 @@ function nearestTextGroup(object: THREE.Object3D): TextGroup | undefined {
   return undefined;
 }
 
+function nearestScene(object: THREE.Object3D): THREE.Scene | undefined {
+  let current: THREE.Object3D | null = object;
+  while (current !== null) {
+    if ((current as THREE.Scene).isScene === true) return current as THREE.Scene;
+    current = current.parent;
+  }
+  return undefined;
+}
+
 function eraseTextTechnique<Technique extends AnyRasterTechnique>(text: Text<Technique>): Text<AnyRasterTechnique> {
   return text as unknown as Text<AnyRasterTechnique>;
 }
@@ -1332,7 +1508,6 @@ function collectTextDescendants(group: TextGroup, result: Text<AnyRasterTechniqu
 }
 
 function collectTextTree(object: THREE.Object3D, result: Text<AnyRasterTechnique>[]): void {
-  if (object instanceof TextGroup) return;
   if (object instanceof Text && !object.disposed) result.push(object as Text<AnyRasterTechnique>);
   for (const child of object.children) collectTextTree(child, result);
 }

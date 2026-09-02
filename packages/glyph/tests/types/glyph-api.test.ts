@@ -1,17 +1,24 @@
 import { glyph, type GlyphHandle } from '../../src/index.js';
 import {
   defaultDecoder,
+  createGlyphRootRegistry,
   defineDecoder,
   defineGlyphConfig,
+  defineGlyphSchema,
   resourceLease,
   type AnyGlyphBindings,
   type BorrowedBoundCommandBuffer,
   type BorrowedTypedCommandBuffer,
   type DecodeContext,
   type GlyphConfig,
+  type GlyphRoot,
 } from '../../src/core.js';
 
-interface RecordingHandle extends GlyphHandle {
+interface RecordingRoot extends GlyphRoot {
+  readonly kind: 'recording-root';
+}
+
+interface RecordingHandle extends GlyphHandle<RecordingRoot> {
   readonly kind: 'recording';
 }
 
@@ -19,6 +26,16 @@ type RecordingBindings = AnyGlyphBindings;
 
 const recordingConfig = defineGlyphConfig<RecordingHandle, RecordingBindings, void>({
   capabilities: Object.freeze([]),
+  schema: defineGlyphSchema<RecordingBindings>()({
+    drawRoot: () => undefined,
+    program: () => ({}),
+    buffer: () => ({}),
+    material: () => ({}),
+    transform: () => ({}),
+    batch: () => ({}),
+    instance: () => ({}),
+    instanceSpan: () => ({}),
+  }),
   encode: () => ({ descriptor: { capabilitySets: [], programs: [] } }),
   decode: defaultDecoder,
   resolve: ({ payload }) => resourceLease({ payload }, () => undefined),
@@ -27,7 +44,27 @@ const recordingConfig = defineGlyphConfig<RecordingHandle, RecordingBindings, vo
     syncTransforms: () => undefined,
     dispose: () => undefined,
   }),
-  createHandle: (context) => context.create({ kind: 'recording' as const }, () => undefined),
+  createHandle: (context) => {
+    const roots = createGlyphRootRegistry<RecordingRoot>((name, release) => {
+      let disposed = false;
+      return Object.freeze({
+        name,
+        kind: 'recording-root' as const,
+        get disposed(): boolean {
+          return disposed;
+        },
+        dispose(): void {
+          if (disposed) return;
+          disposed = true;
+          release();
+        },
+      });
+    });
+    return context.create(
+      Object.assign((name: string) => roots.get(name), { kind: 'recording' as const }),
+      () => roots.dispose(),
+    );
+  },
 });
 
 recordingConfig satisfies GlyphConfig<RecordingHandle, RecordingBindings, void>;
@@ -48,6 +85,9 @@ async function configureGlyph(): Promise<void> {
   const second: RecordingHandle = glyph.handle('recording:second', tracedConfig);
   first.name satisfies string;
   first.disposed satisfies boolean;
+  first('hud') satisfies RecordingRoot;
+  // @ts-expect-error The handle itself fronts the anonymous root; invocation only selects named roots.
+  first();
   second.dispose();
 
   // @ts-expect-error A config's exact handle result is preserved.

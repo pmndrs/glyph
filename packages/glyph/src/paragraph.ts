@@ -83,9 +83,9 @@ interface ParagraphBaseOptions<Technique extends AnyRasterTechnique> {
 export type ParagraphOptions<Technique extends AnyRasterTechnique> = ParagraphBaseOptions<Technique> &
   ParagraphContentProperties<Technique>;
 
-type ParagraphContentUpdate<Technique extends AnyRasterTechnique> =
-  | Readonly<{ text?: string; spans?: readonly ParagraphSpan<Technique>[] }>
-  | Readonly<{ text: FormattedText<Technique>; spans?: never }>;
+type ParagraphContentUpdate<Technique extends AnyRasterTechnique> = Readonly<{
+  text?: ParagraphOptions<Technique>['text'];
+}>;
 
 export type ParagraphUpdate<Technique extends AnyRasterTechnique> = Partial<ParagraphBaseOptions<Technique>> &
   ParagraphContentUpdate<Technique>;
@@ -148,9 +148,6 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
   get text(): string {
     return this.#desired.text;
   }
-  get spans(): readonly ParagraphSpan<Technique>[] {
-    return this.#desired.spans;
-  }
   /** Text shaping and presentation properties inherited by inline spans. */
   get style(): TextStyle {
     return this.#desired.style;
@@ -207,6 +204,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
   /** Replace desired authored state; malformed input rejects before state changes. */
   update(update: ParagraphUpdate<Technique>): void {
     this.#assertActive();
+    assertNoRawSpans(update, 'paragraph update');
     const normalizedUpdate = replacedContent(update);
     if (!hasParagraphChange(normalizedUpdate)) return;
     const next = normalizeParagraphState(
@@ -283,6 +281,7 @@ export async function createParagraph<Technique extends AnyRasterTechnique>(
   options: ParagraphOptions<Technique>,
 ): Promise<Paragraph<Technique>> {
   if (options === undefined) throw new TypeError('paragraph options are required');
+  assertNoRawSpans(options, 'paragraph options');
   const desired = normalizeParagraphState(options);
   const constraints = resolveConstraints(undefined);
   normalizedColumns(desired.layout, constraints);
@@ -524,7 +523,7 @@ function axisKey(constraints: Constraints): string {
 }
 
 function hasParagraphChange<Technique extends AnyRasterTechnique>(update: ParagraphUpdate<Technique>): boolean {
-  return ['font', 'text', 'spans', 'style', 'rasterPixelRatio', 'layout'].some((key) => Object.hasOwn(update, key));
+  return ['font', 'text', 'style', 'rasterPixelRatio', 'layout'].some((key) => Object.hasOwn(update, key));
 }
 
 function frozenDeep<Value>(value: Value): Value {
@@ -542,11 +541,8 @@ function normalizeParagraphState<Technique extends AnyRasterTechnique>(
 ): ResolvedParagraphState<Technique> {
   if (properties === null || typeof properties !== 'object') throw new TypeError('paragraph options must be an object');
   const formatted = typeof properties.text === 'string' ? undefined : (properties.text as FormattedText<Technique>);
-  if (formatted !== undefined && properties.spans !== undefined) {
-    throw new TypeError('formatted paragraph text owns its spans; do not also pass spans');
-  }
   const text = formatted?.text ?? (properties.text as string);
-  const stated = formatted?.spans ?? properties.spans ?? [];
+  const stated = formatted?.spans ?? (properties as ResolvedParagraphState<Technique>).spans ?? [];
   const resolved =
     previous !== undefined && previous.text === text && previous.spans === stated
       ? stated
@@ -599,6 +595,12 @@ function normalizeParagraphState<Technique extends AnyRasterTechnique>(
     layout: frozenDeep(layout),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
   });
+}
+
+function assertNoRawSpans(value: object, subject: string): void {
+  if (Object.hasOwn(value, 'spans')) {
+    throw new TypeError(`${subject} cannot declare raw spans; compose formatted text with txt and span`);
+  }
 }
 
 let measurementServicePromise: Promise<MeasurementService> | undefined;

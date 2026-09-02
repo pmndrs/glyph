@@ -40,6 +40,9 @@ interface ImmutableFontState {
 
 const immutableFontState = new WeakMap<Font<AnyRasterTechnique>, ImmutableFontState>();
 const immutableFontStacks = new WeakSet<object>();
+const immutableFontFinalizer = new FinalizationRegistry<ImmutableFontState>((state) => {
+  disposeImmutableFontState(state);
+});
 
 /** Creates and authenticates an ordered, duplicate-free immutable font stack. */
 export function createFontStack<
@@ -103,7 +106,9 @@ class FontImpl<Technique extends AnyRasterTechnique> implements Font<Technique> 
     this.metrics = variant.backing.font.metrics;
     this.glyphCount = variant.backing.font.glyphCount;
     this.technique = variant.technique;
-    immutableFontState.set(this, { variant, disposeListeners: new Set(), disposed: false });
+    const state: ImmutableFontState = { variant, disposeListeners: new Set(), disposed: false };
+    immutableFontState.set(this, state);
+    immutableFontFinalizer.register(this, state, this);
   }
 
   get disposed(): boolean {
@@ -112,18 +117,23 @@ class FontImpl<Technique extends AnyRasterTechnique> implements Font<Technique> 
 
   dispose(): void {
     const state = immutableStateOf(this);
-    if (state.disposed) return;
-    state.disposed = true;
-    for (const listener of state.disposeListeners) {
-      try {
-        listener();
-      } catch (error) {
-        reportDisposalFailure('notifying an immutable-font disposal observer', error);
-      }
-    }
-    state.disposeListeners.clear();
-    releaseImmutableFontVariant(state.variant);
+    immutableFontFinalizer.unregister(this);
+    disposeImmutableFontState(state);
   }
+}
+
+function disposeImmutableFontState(state: ImmutableFontState): void {
+  if (state.disposed) return;
+  state.disposed = true;
+  for (const listener of state.disposeListeners) {
+    try {
+      listener();
+    } catch (error) {
+      reportDisposalFailure('notifying an immutable-font disposal observer', error);
+    }
+  }
+  state.disposeListeners.clear();
+  releaseImmutableFontVariant(state.variant);
 }
 
 /** @internal Observe explicit application disposal without wrapping the Font identity. */

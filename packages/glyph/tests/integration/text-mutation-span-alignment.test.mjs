@@ -40,7 +40,7 @@ import { createElement } from 'react';
 
 import '../support/browser-globals.mjs';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { txt } from '@pmndrs/glyph';
+import { glyph, txt } from '@pmndrs/glyph';
 import { alignSpansToClusters } from '../../dist/formatted-text.js';
 import { span } from '@pmndrs/glyph';
 import { Text as R3fText } from '@pmndrs/glyph/react';
@@ -59,6 +59,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const bitmap16 = { technique: bitmap, options: { strikes: [16] } };
 const fonts = createFontCache({ inter: { file: 'inter-bitmap-16.font.glb', raster: bitmap16 } });
+await glyph.init();
 after(() => {
   fonts.dispose();
 });

@@ -40,6 +40,7 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
   assert.equal(draws.length, 1, 'the Rust publication must produce one real custom-material draw');
   assert.equal(built.length, 1, 'the material factory must run once for one retained realization');
   const { context, material: realized } = built[0];
+  assert.equal(context.kind, 'glyph');
   assert.equal(context.technique, bitmap.id);
   assert.deepEqual(Object.keys(context.shader).sort(), [
     'atlasUv',
@@ -59,6 +60,40 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
   assert.equal(built.length, 1);
 
   label.removeFromParent();
+  label.dispose();
+  font.dispose();
+  loader.dispose();
+});
+
+test('the same custom material factory may override a separate decoration realization', async () => {
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
+    input: { baked: { bytes: await readFile(fontUrl) } },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const realizations = [];
+  const material = defineTextMaterial((context) => {
+    realizations.push(context.kind === 'glyph' ? context.technique.id : context.kind);
+    const realized = context.createDefaultMaterial();
+    if (context.kind === 'decoration') realized.colorNode = context.shader.color.mul(0.5);
+    return realized;
+  });
+  const scene = new THREE.Scene();
+  const label = new Text({
+    font,
+    material,
+    text: 'Decorated',
+    style: { decoration: { underline: true, color: '#ff0088' } },
+  });
+  scene.add(label);
+  scene.updateMatrixWorld();
+
+  assert.equal(label.error, undefined);
+  assert.deepEqual(realizations.sort(), ['decoration', 'pmndrs.bitmap']);
+  const draws = label.children.filter((child) => child.isMesh);
+  assert.equal(draws.length, 2, 'decoration and glyph programs retain separate material realizations');
+  assert.equal(new Set(draws.map((draw) => draw.material)).size, 2);
+
   label.dispose();
   font.dispose();
   loader.dispose();

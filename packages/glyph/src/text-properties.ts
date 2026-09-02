@@ -1,5 +1,5 @@
 import type { FontFeature } from './font-feature.js';
-import type { FormattedText, ParagraphSpan } from './formatted-text.js';
+import type { TextInput } from './formatted-text.js';
 import type { FontSelection } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
@@ -116,9 +116,9 @@ export interface ParagraphBaseProperties<Technique extends AnyRasterTechnique> {
   readonly order?: number;
 }
 
-export type ParagraphContentProperties<Technique extends AnyRasterTechnique> =
-  | Readonly<{ text: string; spans?: readonly ParagraphSpan<Technique>[] }>
-  | Readonly<{ text: FormattedText<Technique>; spans?: never }>;
+export type ParagraphContentProperties<Technique extends AnyRasterTechnique> = Readonly<{
+  text: TextInput<Technique>;
+}>;
 
 export type ParagraphProperties<Technique extends AnyRasterTechnique> = ParagraphBaseProperties<Technique> &
   ParagraphContentProperties<Technique>;

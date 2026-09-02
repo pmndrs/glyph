@@ -225,14 +225,25 @@ test('variant registration rejects incompatible capabilities before an engine ex
   });
   assert.throws(() => registerThreeRasterPlanProgram(witnessed), /needs its registered portable schema/);
 
-  assert.throws(
-    () =>
-      registerThreeRasterPlanProgram({
-        ...planProgram('test-portable-registration-anchor'),
-        technique: { id: 'test-no-portable', kind: 'test', extension: 'TEST_raster', version: 0 },
-      }),
-    /no portable raster plan program is registered/,
-  );
+  assert.throws(() => {
+    const anchor = planProgram('test-portable-registration-anchor');
+    const unregisteredTechnique = defineRasterTechnique({
+      id: 'test-no-portable',
+      kind: 'test',
+      extension: 'TEST_raster',
+      version: 0,
+      textEffects: [],
+      descriptor: () => ({}),
+      async decode() {
+        return {};
+      },
+      dispose() {},
+    });
+    registerThreeRasterPlanProgram({
+      ...anchor,
+      technique: unregisteredTechnique,
+    });
+  }, /no portable raster plan program is registered/);
 });
 
 test('registration selects one renderer variant per technique before engine construction', async () => {

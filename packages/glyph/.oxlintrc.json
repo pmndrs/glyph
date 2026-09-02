@@ -43,7 +43,28 @@
   "ignorePatterns": ["**/.cache/**", "dist/**", "src/generated/**", "**/target/**", "tests/fixtures/**"],
   "overrides": [
     {
-      "files": ["src/three/**", "src/three.ts", "src/react.ts"],
+      "files": ["src/three/**"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "paths": ["three", "@react-three/fiber"],
+            "patterns": [
+              "three/src/*",
+              "three/addons/*",
+              "three/examples/*",
+              "../internal/**",
+              "../../internal/**",
+              "**/generated/**",
+              "**/core/**",
+              "**/tsl/**"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/three.ts", "src/react.ts"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",

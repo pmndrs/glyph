@@ -55,6 +55,7 @@ test('one initialized Glyph runtime creates independent named Three handles over
   const secondInit = glyph.init();
   assert.equal(firstInit, secondInit, 'concurrent initialization shares one operation');
   await firstInit;
+  assert.equal(glyph.init(), firstInit, 'successful initialization keeps one settled promise forever');
 
   const font = await loadFont(
     { baked: { bytes: await readFile(fontUrl) } },
@@ -88,7 +89,7 @@ test('one initialized Glyph runtime creates independent named Three handles over
         prepare(frame) {
           wrappedPrepareCalls += 1;
           assert.equal(frame.delivery, 'borrowed-bound');
-          assert.ok(frame.draws.kind === 'unchanged' || frame.draws.kind === 'replace');
+          assert.ok(frame.group.kind === 'unchanged' || frame.group.kind === 'replace');
           return renderer.prepare(frame);
         },
         syncTransforms(updates) {
@@ -101,8 +102,14 @@ test('one initialized Glyph runtime creates independent named Three handles over
   });
   const scene = new THREE.Scene();
   const secondScene = new THREE.Scene();
+  const secondSceneRoot = first('secondary-scene');
+  assert.equal(first('secondary-scene'), secondSceneRoot, 'one handle interns named roots by label');
   const label = first.createText({ font, text: 'Handle owned', style: { fontSize: 16 } });
-  const secondSceneLabel = first.createText({ font, text: 'Same handle, other scene', style: { fontSize: 16 } });
+  const secondSceneLabel = secondSceneRoot.createText({
+    font,
+    text: 'Same handle, other scene',
+    style: { fontSize: 16 },
+  });
   const group = second.createTextGroup();
   const grouped = second.createText({ font, text: 'Independent', style: { fontSize: 16 } });
   group.add(grouped);
@@ -131,17 +138,20 @@ test('one initialized Glyph runtime creates independent named Three handles over
     assert.equal(wrappedResolveCalls, semanticCounts.resolve, 'transform-only shape does not resolve');
     assert.equal(wrappedPrepareCalls, semanticCounts.prepare, 'transform-only shape does not prepare semantic state');
     assert.ok(wrappedTransformSyncCalls > semanticCounts.transforms, 'transform-only shape synchronizes the renderer');
-    assert.ok(
-      label.children.some((child) => child.isMesh),
-      'standalone draws attach beneath the handle-created Text',
+    const firstDrawRoot = scene.getObjectByName('@pmndrs/glyph:anonymous');
+    assert.ok(firstDrawRoot, 'the handle fronts one anonymous root that late-binds to the Text Scene');
+    assert.equal(
+      secondSceneRoot.drawRoot.parent,
+      secondScene,
+      'a named root gives the same handle an independent publication stream in another Scene',
     );
     assert.ok(
-      secondSceneLabel.children.some((child) => child.isMesh),
-      'one handle creates an independent publication boundary in another scene',
+      firstDrawRoot.children.some((child) => child.isMesh),
+      'root batches realize as renderer-owned meshes',
     );
     assert.ok(
-      group.children.some((child) => child.isMesh),
-      'group draws attach beneath the handle-created TextGroup',
+      secondSceneRoot.drawRoot.children.some((child) => child.isMesh),
+      'the second root owns its own renderer meshes',
     );
     assert.throws(() => group.add(label), /different Glyph handles/);
     assert.throws(() => glyph.handle('three:integration:first', ThreeConfig), /already exists/);

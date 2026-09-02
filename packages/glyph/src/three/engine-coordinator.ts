@@ -14,7 +14,6 @@ import {
   type EncodeContext,
   type PolicyBufferId,
   type PolicyCapabilitySet,
-  type PortableResource,
   type RenderIdFactory,
   type RenderPlanBufferBinding,
   type GlyphBackend,
@@ -27,17 +26,9 @@ import {
   type CompiledThreeRasterPlanProgram,
 } from './plan-program-registry.js';
 import type * as THREE from 'three/webgpu';
-import type { ThreeGlyphConfig } from './handle.js';
+import type { ThreeGlyphConfig, ThreeMaterialBinding } from './handle.js';
 
 const builtInThreeTechniques = new Set<string>([bitmap.id, msdf.id, slug.id]);
-
-export type ThreeTextEngineResource = Readonly<{
-  technique: string;
-  resourceName: string;
-  resources: ReadonlyMap<string, PortableResource>;
-  resourceReferences: ReadonlyMap<string, number>;
-  program?: CompiledThreeRasterPlanProgram;
-}>;
 
 export interface ThreeTextEngineCoordinatorOptions {
   /** Renderer-policy choice; indexed is the first-party high-throughput default. */
@@ -48,6 +39,13 @@ interface ThreeConfigEncode {
   encode(context: EncodeContext): Codec;
 }
 
+let defaultThreeConfig: ThreeGlyphConfig | undefined;
+
+/** @internal Routes the default imperative Three surface through the same immutable built-in GlyphConfig. */
+export function registerDefaultThreeConfig(config: ThreeGlyphConfig): void {
+  defaultThreeConfig ??= config;
+}
+
 /** Counted Three material binding; dispose releases this lease without disposing the material. */
 export interface ThreeMaterialBindingLease {
   readonly binding: BackendMaterialBinding;
@@ -56,7 +54,7 @@ export interface ThreeMaterialBindingLease {
 
 interface RetainedThreeMaterialBinding {
   readonly binding: BackendMaterialBinding;
-  readonly material: ThreeTextMaterial;
+  readonly resolved: ThreeMaterialBinding;
   references: number;
 }
 
@@ -80,19 +78,22 @@ export class ThreeTextEngineCoordinator {
   readonly backend: GlyphBackend;
   readonly policy: BackendPolicy;
   readonly capabilitySet: PolicyCapabilitySet;
+  /** Canonical codec descriptor retained for renderer-neutral command binding. */
+  readonly codec: Codec;
   /** @internal Collision-checked static identities captured while installing this renderer policy. */
   readonly identities: RenderIdFactory;
-  readonly config: ThreeGlyphConfig | undefined;
+  readonly config: ThreeGlyphConfig;
   readonly #planPrograms: ReadonlyMap<string, CompiledThreeRasterPlanProgram>;
   readonly #policyBufferIds: ReadonlyMap<number, ReadonlyMap<number, PolicyBufferId>>;
   readonly #singleFontStacks = new WeakMap<
     Font<AnyRasterTechnique>,
     FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>
   >();
-  readonly #materialBindings = new WeakMap<ThreeTextMaterial, RetainedThreeMaterialBinding>();
-  readonly #materials = new WeakMap<BackendMaterialBinding, ThreeTextMaterial>();
+  readonly #defaultMaterialIdentity = {};
+  readonly #materialBindings = new WeakMap<object, Map<string, RetainedThreeMaterialBinding>>();
+  readonly #materials = new WeakMap<BackendMaterialBinding, ThreeMaterialBinding>();
   readonly #transforms = new WeakMap<BackendTransformBinding, THREE.Object3D>();
-  readonly #renderResources = new Map<string, RetainedThreeRenderResource>();
+  readonly #renderResources = new Map<object, RetainedThreeRenderResource>();
   #applyingPlan = false;
   #disposed = false;
 
@@ -105,6 +106,11 @@ export class ThreeTextEngineCoordinator {
       throw new TypeError('Three text engine transform mode must be "indexed" or "direct"');
     }
     const backend = glyphEngine.createBackend({ integration: '@pmndrs/glyph/three' });
+    const activeConfig = (config ?? defaultThreeConfig) as ThreeGlyphConfig | undefined;
+    if (activeConfig === undefined) {
+      backend.dispose();
+      throw new Error('ThreeTextEngineCoordinator requires the built-in ThreeConfig or an explicit GlyphConfig');
+    }
     let snapshot = false;
     let policy: BackendPolicy | undefined;
     let identities: RenderIdFactory | undefined;
@@ -113,31 +119,21 @@ export class ThreeTextEngineCoordinator {
     try {
       policy = backend.installPolicy((backendIdentities) => {
         identities = backendIdentities;
-        if (config === undefined) {
-          planPrograms = compiledThreeRasterPlanPrograms(backendIdentities, transformMode);
-          snapshot = true;
-          descriptor = threeRenderPolicyDescriptor(
-            backendIdentities,
-            transformMode,
-            planPrograms.map((program) => program.policy),
-          );
-        } else {
-          const codec = config.encode({ integration: '@pmndrs/glyph/three', ids: backendIdentities });
-          if (typeof codec !== 'object' || codec === null || Array.isArray(codec)) {
-            throw new TypeError('ThreeConfig.encode() must return a Codec');
-          }
-          const configuredTransformMode = codec.descriptor.programs.some((program) =>
-            program.buffers.some((buffer) => buffer.id === TRANSFORM_BUFFER_ID),
-          )
-            ? 'indexed'
-            : 'direct';
-          planPrograms = compiledThreeRasterPlanPrograms(backendIdentities, configuredTransformMode);
-          snapshot = true;
-          descriptor = {
-            ...codec.descriptor,
-            programs: [...codec.descriptor.programs, ...planPrograms.map((program) => program.policy)],
-          };
+        const codec = activeConfig.encode({ integration: '@pmndrs/glyph/three', ids: backendIdentities });
+        if (typeof codec !== 'object' || codec === null || Array.isArray(codec)) {
+          throw new TypeError('ThreeConfig.encode() must return a Codec');
         }
+        const configuredTransformMode = codec.descriptor.programs.some((program) =>
+          program.buffers.some((buffer) => buffer.id === TRANSFORM_BUFFER_ID),
+        )
+          ? 'indexed'
+          : 'direct';
+        planPrograms = compiledThreeRasterPlanPrograms(backendIdentities, configuredTransformMode);
+        snapshot = true;
+        descriptor = {
+          ...codec.descriptor,
+          programs: [...codec.descriptor.programs, ...planPrograms.map((program) => program.policy)],
+        };
         return descriptor;
       });
     } catch (error) {
@@ -154,9 +150,10 @@ export class ThreeTextEngineCoordinator {
     this.#planPrograms = new Map(planPrograms.map((program) => [program.technique.id, program]));
     this.#policyBufferIds = policyBufferIds(descriptor.programs);
     this.capabilitySet = descriptor.capabilitySets[0]!;
+    this.codec = Object.freeze({ descriptor });
     this.backend = backend;
     this.policy = policy;
-    this.config = config as ThreeGlyphConfig | undefined;
+    this.config = activeConfig;
   }
 
   bindFontStack(selection: FontSelection<AnyRasterTechnique>): BackendFontStackBinding {
@@ -178,14 +175,26 @@ export class ThreeTextEngineCoordinator {
     return this.backend.bindFontStack(stack);
   }
 
-  acquireMaterial(material: ThreeTextMaterial): ThreeMaterialBindingLease {
+  acquireMaterial(
+    material: ThreeTextMaterial | undefined,
+    pixelSnapping: boolean,
+    renderOrder: number,
+  ): ThreeMaterialBindingLease {
     this.#assertActive();
-    let retained = this.#materialBindings.get(material);
+    const owner = material ?? this.#defaultMaterialIdentity;
+    let variants = this.#materialBindings.get(owner);
+    if (variants === undefined) {
+      variants = new Map();
+      this.#materialBindings.set(owner, variants);
+    }
+    const key = `${pixelSnapping ? 1 : 0}:${renderOrder}`;
+    let retained = variants.get(key);
     if (retained === undefined) {
       const binding = this.backend.createMaterialBinding();
-      retained = { binding, material, references: 0 };
-      this.#materialBindings.set(material, retained);
-      this.#materials.set(binding, material);
+      const resolved = Object.freeze({ material, pixelSnapping, renderOrder });
+      retained = { binding, resolved, references: 0 };
+      variants.set(key, retained);
+      this.#materials.set(binding, resolved);
     }
     retained.references += 1;
     let disposed = false;
@@ -196,14 +205,15 @@ export class ThreeTextEngineCoordinator {
         disposed = true;
         retained.references -= 1;
         if (retained.references !== 0) return;
-        this.#materialBindings.delete(material);
+        variants.delete(key);
+        if (variants.size === 0) this.#materialBindings.delete(owner);
         this.#materials.delete(retained.binding);
         retained.binding.dispose();
       },
     });
   }
 
-  resolveMaterial(binding: BackendMaterialBinding): ThreeTextMaterial {
+  resolveMaterial(binding: BackendMaterialBinding): ThreeMaterialBinding {
     const material = this.#materials.get(binding);
     if (material === undefined) throw new TypeError('render plan resolved an unknown Three material binding');
     return material;
@@ -224,7 +234,7 @@ export class ThreeTextEngineCoordinator {
 
   /** @internal Shares immutable atlas/page GPU resources across live plan executors. */
   acquireRenderResource<Resource extends DisposableThreeRenderResource>(
-    key: string,
+    key: object,
     create: () => Resource,
   ): ThreeRenderResourceLease<Resource> {
     this.#assertActive();

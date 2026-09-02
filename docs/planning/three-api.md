@@ -304,12 +304,30 @@ const label = three.createText({ font, text: 'Custom', material });
 ```
 
 The factory is renderer-owned. Rust carries a numeric `materialId` through style resolution and draw planning; it does not
-execute the factory. Three invokes `create()` when it needs a material for a concrete Bitmap, MSDF, or Slug pipeline.
+execute the factory. Three invokes `create()` when it needs a material for a built-in Bitmap, MSDF, Slug, or decoration
+pipeline. A registered external plan program owns its separate typed `createMaterial` contract.
 Material creation runs while Three holds borrowed plan-backed attributes. It must return synchronously and must not query
 or update text; the coordinator rejects such reentrancy before another Wasm call can detach those views.
 
-`ThreeTextMaterialContext` is a discriminated union on `technique`. Each branch provides the concrete technique shader,
-the final policy-selected position node, and `createDefaultMaterial()`.
+`ThreeTextMaterialContext` is a closed discriminated union on `kind`. A glyph branch also carries the concrete
+`pmndrs.bitmap`, `pmndrs.msdf`, or `pmndrs.slug` technique. The decoration branch does not pretend that decoration is a
+raster technique. Every branch provides its concrete shader, the final policy-selected position node, and
+`createDefaultMaterial()`, so decoration can keep the built-in material or override it explicitly:
+
+```ts
+const material = defineTextMaterial((context) => {
+  const value = context.createDefaultMaterial();
+  if (context.kind === 'decoration') {
+    value.colorNode = context.shader.color.mul(0.75);
+  }
+  return value;
+});
+```
+
+Decoration paint still comes from the engine-authored text style. Underline, overline, and line-through spans are planned
+as their own ordered batches and become separate Three draw objects with separate material instances. Reusing one factory
+therefore unifies material selection without merging decoration geometry into the glyph draw or mutating the glyph
+material.
 
 A material on a span overrides the text material; a text material overrides the group material. Equal material objects
 share identity. Different materials may still share instance buffers—the render plan determines draw segmentation, while

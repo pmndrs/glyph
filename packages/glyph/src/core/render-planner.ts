@@ -44,7 +44,7 @@ import type {
 } from './backend.js';
 import {
   RenderPlanView,
-  readRenderPlanResource,
+  readTrustedRenderPlanResourceReferenceId,
   type RenderPlanTable,
   type RenderPlanTransformId,
 } from './plan-view.js';
@@ -130,7 +130,10 @@ export interface ResolvedPlanPayload extends ResolvedPortablePayload {
 
 /** A plan transform resolved to its backend-owned binding. */
 export interface ResolvedPlanTransform {
+  /** Physical transform-table record consumed by indexed renderer buffers. */
   readonly transformIndex: RenderPlanTransformId;
+  /** Optional root draw identity that selects the same host transform without entering the transform table. */
+  readonly instanceId?: RenderPlanTransformId;
   readonly binding: BackendTransformBinding;
 }
 
@@ -1190,7 +1193,7 @@ class RenderPlannerImpl {
     const seen = new Set<number>();
     try {
       for (let index = 0; index < table.count; index += 1) {
-        const referenceId = readRenderPlanResource(plan, table, index).referenceId;
+        const referenceId = readTrustedRenderPlanResourceReferenceId(plan, table, index);
         if (referenceId === 0 || seen.has(referenceId)) continue;
         seen.add(referenceId);
         leases.push({ referenceId, lease: this.#portablePayload(referenceId as ResourceHandle) });
@@ -1203,24 +1206,27 @@ class RenderPlannerImpl {
   }
 
   #resolvedTransforms(): readonly ResolvedPlanTransform[] {
-    const transforms = new Map<number, BackendTransformBinding>();
+    const transforms = new Map<number, ResolvedPlanTransform>();
     for (const state of this.#texts) {
       if (state.removed) continue;
-      transforms.set(
-        state.desired.transform.handle,
-        this.#backend._resolveOpaqueBinding('transform', state.desired.transform.handle) as BackendTransformBinding,
-      );
+      const rootIndex = state.desired.transform.handle as RenderPlanTransformId;
+      transforms.set(rootIndex, {
+        transformIndex: rootIndex,
+        instanceId: state.paragraphId as unknown as RenderPlanTransformId,
+        binding: this.#backend._resolveOpaqueBinding(
+          'transform',
+          state.desired.transform.handle,
+        ) as BackendTransformBinding,
+      });
       for (const transform of state.desired.flowTransforms) {
-        transforms.set(
-          transform.handle,
-          this.#backend._resolveOpaqueBinding('transform', transform.handle) as BackendTransformBinding,
-        );
+        const transformIndex = transform.handle as RenderPlanTransformId;
+        transforms.set(transformIndex, {
+          transformIndex,
+          binding: this.#backend._resolveOpaqueBinding('transform', transform.handle) as BackendTransformBinding,
+        });
       }
     }
-    return [...transforms].map(([transformIndex, binding]) => ({
-      transformIndex: transformIndex as RenderPlanTransformId,
-      binding,
-    }));
+    return [...transforms.values()];
   }
 
   #measurementParagraphMutations(): PlannerParagraphMutation[] {

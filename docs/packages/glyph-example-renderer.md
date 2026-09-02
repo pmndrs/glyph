@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:0bdb422d29520236a6054346217d9261e5f52ce249e0b41d0f56d4c5c017971f'
+source_digest: 'sha256:02d97556ef9c32a9e8c24d2a4658a60944fc4042cd8d4185ec8f031d8f992dc4'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -23,9 +23,6 @@ sources:
   - id: policy
     resource: ../../packages/glyph-example-renderer/src/policy.ts
     title: Backend-authored system lanes and render policy
-  - id: plan-reader
-    resource: ../../packages/glyph-example-renderer/src/plan-reader.ts
-    title: Retained-publication reader and draw decoder
   - id: draw-list
     resource: ../../packages/glyph-example-renderer/src/draw-list.ts
     title: Device-neutral draw list owned by the backend
@@ -70,42 +67,42 @@ phase-structured bound frames to a configured renderer. The same config can be s
 decode, resolve, preparation, transform synchronization, and disposal. Two handle publications prove this path without
 exposing plan IDs to the config renderer.
 
-`ExampleCommandBufferBinder` is independent from Three. It interns stable program, buffer, primitive, and draw objects;
-retains buffer generations across patch-only publications; resolves resources transactionally; and releases payload plus
-resolver leases after retirement, rejection, or disposal. The renderer-facing frame contains object bindings only. A
-private weak association retains the legacy numeric draw list for the concrete device oracle, demonstrating how an
-adapter can migrate its physical backend without leaking that bridge into `GlyphConfig`.
+`ExampleCommandBufferBinder` is independent from Three and deliberately thin: it delegates to the renderer-neutral core
+`createEngine({ config, codec, root })` helper. Core therefore owns admitted-plan projection, stable opaque identity,
+resource acquisition/settlement, default decoding, and borrowed-frame expiry once for every integration. The config
+schema binds programs, buffers, materials, transforms, batches, root instances, and instance spans to example-owned
+object types. Numeric wire IDs and raw plan tables never reach the configured renderer.
 
-`ExampleTextEngine` remains the low-level `/core` escape hatch. It receives a `GlyphEngine`, creates its backend through `glyphEngine.createBackend()`, installs its policy,
-binds immutable fonts/stacks, opens one synchronous `RenderPlanner`, and exposes `createText()`, `update()`, `publish()`,
-and disposal. The render planner owns every paragraph/style/flow identity and one `PlanTarget`; callers do not author raw IDs,
-revisions, acknowledgments, request bytes, or ABI numbers. `measure()` and `glyphs()` remain available on the retained core
-text when an integration needs current desired metrics or positioned glyphs before publication.
+The package's internal `ExampleTextEngine` is only the handle implementation behind `defineExampleConfig()`; it is not
+exported from the package entry point and is not an alternative application API. It receives the root engine from the
+handle factory, creates one backend and synchronous `RenderPlanner`, and exposes binding, retained text, and publication
+operations only through `ExampleHandle`. Applications and benchmarks use `glyph.handle(name, config)` just as they do for
+Three. The render planner still owns paragraph/style/flow identities and one `PlanTarget`; callers author no raw IDs,
+revisions, acknowledgments, request bytes, or ABI numbers.
 
-The plan target consumes the borrowed A/B publication synchronously. `plan-reader.ts` decodes resources, buffers, patches,
-primitives, draws, and retirements through semantic `/core` readers and copies only borrowed patch/table bytes that its
-accepted draw list retains. Resource records resolve through `candidate.acquirePayload()`, producing counted leases over
-validated portable geometry and companion resources. The target indexes accepted plan-resource generations by branded
-numeric handle, releases a payload lease after its last accepted plan reference retires, and never substitutes stale
-payloads after failure. Target disposal releases any leases and device-cache realizations that remain live without
-claiming ownership of the caller's device.
+The plan target consumes the borrowed publication synchronously through `applyGlyphPublication()`. Its configured device
+receives `BorrowedBoundCommandBuffer<ExampleBindings>` and walks the Rust-authored ordered group hierarchy during
+`prepare()`. Candidate resources, retained buffers, patches, geometry, and draws are staged in local maps; commit swaps
+them atomically, while discard leaves the previous accepted device state untouched. Only accepted renderer state is
+retained after the borrowed frame expires.
 
-`RecordingExampleRendererDevice` is the deterministic CPU oracle. It validates complete candidate state against the
-selected technique, program, variant, named buffers, geometry, resource and storage generations, patch ranges, primitive
-spans, order, and exact retirements before one commit changes accepted state. Rejected candidates discard staging and
-leave accepted state untouched.
+`RecordingExampleRendererDevice` is the deterministic CPU oracle. It reads already-bound technique, program, variant,
+named buffers, geometry, resources, ordered batches/root instances, and instance spans before one commit changes accepted
+state. It validates only renderer and user/config requirements; it does not revalidate trusted Rust hierarchy semantics.
+Rejected candidates discard staging and leave accepted state untouched.
 
 `TypeGpuExampleRendererDevice` is the concrete backend. It realizes GLB-like position, UV, and index accessors; creates
 TypeGPU/WebGPU vertex, index, and instance buffers; builds the selected pipeline; encodes an indexed instanced pass; and
-submits to an offscreen `rgba8unorm` target. Validation acceptance is awaited without stalling every frame on queue
-completion. Empty idle deltas produce no submission, while accepted removal clears the target. Device replacement drops
-physical realizations, asks the render planner for a complete checkpoint, reacquires portable resources, and redraws
-without an authored text mutation.
+submits to an offscreen `rgba8unorm` target. Empty idle deltas produce no submission, while accepted removal clears the
+target. The hardware recovery proof disposes the lost-device handle and creates a new handle with a new configured device,
+then reuses the same immutable Font and reconstructs the retained text. Device replacement is therefore not a hidden
+mutation on an ordinary handle.
 
-The acceptance fixture bakes Inter, loads it through root `loadFont()`, creates a core `GlyphEngine`, binds the external
-technique, publishes initial and updated retained text, and asserts non-empty draws, required named buffers and geometry,
-changed visible pixels, idle submission suppression, failure atomicity, checkpoint behavior, exact retirement, and
-disposal. A separate async-target fixture transfers and returns the same one-copy plan buffer under backpressure.
+The acceptance fixture bakes Inter, loads it through root `loadFont()`, creates a configured root Glyph handle, binds the
+external technique, publishes initial and updated retained text, and asserts non-empty draws, required named buffers and
+geometry, changed visible pixels, idle submission suppression, failure atomicity, exact retirement, and disposal. The
+hardware lab additionally proves recovery on a second handle. Separate low-level `/core` fixtures retain borrowed expiry,
+single-target ownership, and async one-copy transport coverage.
 
 See [Example renderer](../planning/example-renderer.md) for why the package exists and how it divides
 work with the technique-owned `/typegpu` shader subpath.

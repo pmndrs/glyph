@@ -42,7 +42,7 @@ describe.sequential('runtime repository gates', () => {
   );
   gate('packed consumer', () => runNodeScript('scripts/run-packed-consumer.mts'));
   gate('benchmark build', () => runNodeScript('scripts/build.mts'));
-  gate('React Three Fiber example', () => pnpm(['--filter', '@pmndrs/glyph-r3f-hello-world', 'check']));
+  gate('Three and React Three Fiber examples', () => pnpm(['--filter', '@pmndrs/glyph-examples', 'check']));
   gate('Japanese showcase fixture', () => pnpm(['scripts', 'run', 'fixture:japanese-showcase:check']));
 });
 
