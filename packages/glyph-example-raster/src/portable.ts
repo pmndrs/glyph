@@ -6,7 +6,7 @@ import {
   type RasterPlanProgram,
   type TechniqueSchema,
   id,
-} from '@pmndrs/glyph/core';
+} from '@pmndrs/glyph';
 
 import { glyphExampleIndexedQuadGeometry, glyphExampleSuppliedGeometryDeclaration } from './geometry-fixture.js';
 import { glyphExample } from './raster.js';

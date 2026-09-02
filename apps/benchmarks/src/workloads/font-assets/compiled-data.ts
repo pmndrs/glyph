@@ -12,7 +12,7 @@ import {
   type PortableResourceGroupPayload,
   type PortableTextureArrayPayload,
   type PortableTexturePayload,
-} from '@pmndrs/glyph/core';
+} from '@pmndrs/glyph';
 
 import type { SlugCpuReferenceData } from '../../benchmark/low-level/raster/slug-cpu-reference';
 

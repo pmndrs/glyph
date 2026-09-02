@@ -1,5 +1,5 @@
 import type { BufferAttribute, BufferGeometry, InterleavedBufferAttribute } from 'three/webgpu';
-import type { PolicyBufferId } from '@pmndrs/glyph/core';
+import type { PolicyBufferId } from '@pmndrs/glyph';
 
 /** Convert one policy-buffer identity to Three's geometry attribute key. */
 export function policyAttributeName(id: PolicyBufferId): string {

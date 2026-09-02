@@ -1,12 +1,14 @@
-import { glyph, type GlyphConfig, type GlyphHandle } from '../../src/index.js';
 import {
   defineGlyphConfig,
   defineGlyphSchema,
+  glyph,
   resourceLease,
   type AnyGlyphBindings,
   type CommandBufferView,
+  type GlyphConfig,
+  type GlyphHandle,
   type GlyphRoot,
-} from '../../src/core.js';
+} from '../../src/index.js';
 
 interface RecordingRoot extends GlyphRoot {
   readonly kind: 'recording-root';
@@ -45,7 +47,7 @@ const recordingConfig = defineGlyphConfig({
       context.config.renderer satisfies (typeof context.config)['renderer'];
       context.config.adapterLabel satisfies 'recording';
       // @ts-expect-error The selected config surface is exact rather than an open AnyGlyphConfig bag.
-      context.config.notAConfigHook;
+      void context.config.notAConfigHook;
       return context.create(
         Object.freeze({
           kind: 'recording-root' as const,
@@ -66,7 +68,10 @@ async function configureGlyph(): Promise<void> {
   first.name satisfies string;
   first.disposed satisfies boolean;
   first.kind satisfies 'recording-root';
-  first('hud') satisfies RecordingRoot;
+  first.handle satisfies RecordingHandle;
+  const hud = first('hud');
+  hud satisfies RecordingRoot;
+  hud.handle satisfies GlyphHandle;
   // @ts-expect-error The handle itself fronts the anonymous root; invocation only selects named roots.
   first();
   second.dispose();

@@ -1,15 +1,14 @@
 /**
  * Where a name lives, and why.
  *
- * The package publishes one vocabulary and several integrations. A name has exactly one home, so a
- * reader never has to guess which subpath to import it from:
+ * The package publishes one root integration vocabulary and several renderer subpaths. A name has
+ * exactly one home, so a reader never has to guess which subpath to import it from:
  *
  *   `.`        what text IS -- fonts, authoring, layout and measurement types, raster techniques,
  *              paint. Every consumer speaks it, whether they render with Three.js or drive the
  *              engine themselves.
- *   `./core`   how to DRIVE the engine -- the policy contract, the render plan, the frame wire and
- *              its handoff. Additive to the root rather than parallel to it: an integrator imports
- *              both. It shares no name with the root, and that is enforced below.
+ *   `.`        also carries the GlyphConfig, Codec, schema, and technique DSL required to build an
+ *              integration. Backend/planner/wire implementation details have no package subpath.
  *   `./three`  the Three.js integration -- `Text`, `TextGroup`, `FontLoader`, materials.
  *
  * An integration may re-export a root name ONLY when that name appears in one of its own
@@ -40,16 +39,13 @@ function published(source) {
   return names;
 }
 
-test('the root vocabulary and the engine surface share no name', async () => {
+test('GlyphConfig is the only public engine-integration surface', async () => {
   const root = published(await declaration('index.d.ts'));
-  const core = published(await declaration('core.d.ts'));
-  const shared = [...root].filter((name) => core.has(name)).sort();
-  assert.deepEqual(
-    shared,
-    [],
-    `\`.\` and \`./core\` must stay disjoint: the root says what text is, core says how to drive the ` +
-      `engine, and an integrator imports both. Shared: ${shared.join(', ')}`,
-  );
+  const manifest = JSON.parse(await declaration('../package.json'));
+  assert.equal(manifest.exports['./core'], undefined, 'backend/planner internals must not have a public subpath');
+  for (const name of ['defineGlyphConfig', 'defineGlyphSchema', 'createRasterPolicyProgram', 'techniqueProgram']) {
+    assert.equal(root.has(name), true, `the root integration DSL must publish ${name}`);
+  }
 });
 
 test('integrations re-export root names only when their own signatures use them', async () => {

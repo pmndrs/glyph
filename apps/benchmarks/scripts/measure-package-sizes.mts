@@ -363,15 +363,15 @@ const textShaperWasm = await measureWasm(
   'Shaper Wasm',
   new URL('../../../packages/glyph/dist/text-shaper.wasm', import.meta.url),
 );
-const coreSubpath = await measureJavaScript(
-  'core-subpath-js',
-  'Renderer-neutral core JS',
+const glyphConfig = await measureJavaScript(
+  'glyph-config-js',
+  'GlyphConfig integration DSL',
   new URL('../size-entries/text-core-subpath.ts', import.meta.url),
   false,
   true,
   true,
   {
-    // The renderer-neutral subpath must not pull any renderer integration.
+    // The root integration DSL must not pull any renderer integration.
     expectedDynamic: [],
     excludedInitial: [
       '/packages/glyph/dist/react.js',
@@ -467,7 +467,7 @@ const iconsSlug = await measureFontAsset(
 );
 
 const entries: SizeEntry[] = [
-  coreSubpath,
+  glyphConfig,
   tslSubpath,
   typegpuSubpath,
   coreJavaScript,
