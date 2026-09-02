@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { glyph, loadFont, type CommandBufferView } from '@pmndrs/glyph';
+import { glyph, type CommandBufferView } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { rasterBake } from '@pmndrs/glyph/baker';
 import { afterEach, expect, test } from 'vitest';
@@ -68,10 +68,11 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
   const device = new RejectOnceExampleRendererDevice();
   const handle = glyph.handle('example:bound-renderer', defineExampleConfig(device));
   const bytes = await readFile(output);
-  const font = await loadFont(
+  const font = glyph.fontFace(
     { baked: `data:model/gltf-binary;base64,${bytes.toString('base64')}` },
-    { raster: glyphExample, options: { paletteSeed: 7 } },
+    { format: glyphExample({ paletteSeed: 7 }) },
   );
+  await font.load();
   try {
     const text = handle.createText({
       font,

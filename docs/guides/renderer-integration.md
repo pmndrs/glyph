@@ -79,7 +79,7 @@ resources. Rust/Wasm readers, numeric identities, planning, and publication plum
 This is the tested public path, reduced from `packages/glyph-example-renderer/tests/example-render.test.ts`:
 
 ```ts
-import { glyph, loadFont } from '@pmndrs/glyph';
+import { glyph } from '@pmndrs/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import { defineExampleConfig, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
 
@@ -92,10 +92,10 @@ const device = await adapter.requestDevice();
 const rendererDevice = new TypeGpuExampleRendererDevice({ device, width: 768, height: 192 });
 const handle = glyph.handle('typegpu:main', defineExampleConfig(rendererDevice));
 
-const font = await loadFont(
-  { baked: new URL('./Inter-glyph-example.font.glb', import.meta.url) },
-  { technique: glyphExample, options: { paletteSeed: 17 } },
-);
+const font = glyph.fontFace(new URL('./Inter-glyph-example.font.glb', import.meta.url), {
+  format: glyphExample({ paletteSeed: 17 }),
+});
+await font.load();
 
 const text = handle.createText({
   font,
@@ -105,7 +105,8 @@ const text = handle.createText({
   height: 192,
 });
 
-const first = text.publish();
+glyph.shape();
+const first = handle.drawList;
 if (first.draws.length === 0) throw new Error('the renderer produced no draw');
 
 const pixels = await rendererDevice.readPixels();
@@ -114,7 +115,7 @@ if (!pixels.some((value, index) => index % 4 === 3 && value !== 0)) {
 }
 
 text.update({ text: 'Updated WebGPU', color: '#ff40a0' });
-text.publish();
+glyph.shape();
 
 text.dispose();
 handle.dispose();
@@ -124,8 +125,8 @@ device.destroy();
 ```
 
 `glyph.init()` is idempotent. `glyph.handle(name, config)` requires a unique nonempty handle name and infers the returned
-handle from the config. The example calls its semantic flush `publish()`; its implementation delegates directly to
-`GlyphRootServices.shape()`.
+handle from the config. `glyph.shape()` is the sole semantic flush and publishes every dirty root through one engine
+batch. The example root exposes only its last accepted renderer-owned `drawList`.
 
 Success means a publication produces an ordered draw list, pixel readback contains nonzero alpha, a semantic update
 changes accepted state, an idle publication retains prior draws, and disposal releases accepted resources.
@@ -151,7 +152,7 @@ sequenceDiagram
   participant Host as caller host renderer
 
   App->>Text: retain content, style, hierarchy
-  App->>Root: shape() / publish()
+  App->>Root: glyph.shape()
   Root->>Rust: shape + selected Codec plan
   Rust-->>Project: trusted packed command data
   Project->>Resolve: realize changed portable resources
@@ -333,15 +334,15 @@ Changing batching, record layout, capabilities, or ordering is Codec work; it is
 
 ## Resolve portable resources
 
-`resolve` turns one portable technique resource into an exactly-once renderer lease. It receives technique and resource
+`resolve` turns one portable format resource into an exactly-once renderer lease. It receives format and resource
 names, the resource kind, portable payload, singleton companions, previous accepted value, and an abort signal.
 
 ```ts
 import { resourceLease } from '@pmndrs/glyph';
 
-resolve: ({ technique, resourceName, payload }) => {
-  if (technique !== techniqueId) {
-    throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${technique}"`);
+resolve: ({ format, resourceName, payload }) => {
+  if (format !== techniqueId) {
+    throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${format}"`);
   }
   return resourceLease(
     Object.freeze({ name: resourceName, resource: payload }),
@@ -466,31 +467,32 @@ finalizer. It creates the adapter's host object, chooses its boundary, then retu
 
 ```ts
 interface ExampleRootExtension {
-  createText<Technique extends AnyRasterTechnique>(
-    options: ExampleTextOptions<Technique>,
-  ): ExampleText<Technique>;
-  publish(): ExampleDrawList;
+  createText<const Selection extends AnyFontFaceSelection>(
+    options: ExampleTextOptions<Selection>,
+  ): ExampleText<Selection>;
+  readonly drawList: ExampleDrawList;
 }
 
 class ExampleRootImplementation implements ExampleRootExtension {
   constructor(
+    readonly fonts: GlyphHandleFonts,
     readonly services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>,
   ) {}
 
-  createText<Technique extends AnyRasterTechnique>(options: ExampleTextOptions<Technique>) {
-    return new ExampleText(this.services, options);
+  createText<const Selection extends AnyFontFaceSelection>(options: ExampleTextOptions<Selection>) {
+    return new ExampleText(exampleTextConstructionToken, this.fonts, this.services, options);
   }
 
-  publish(): ExampleDrawList {
-    return this.services.shape();
-  }
+  // accept(drawList) stores the last renderer result exposed by the getter.
 }
 
 root: {
   create: (context) => {
-    const extension = new ExampleRootImplementation(context.services);
+    if (context.fonts === undefined) throw new TypeError('example config must declare font formats');
+    const extension = new ExampleRootImplementation(context.fonts, context.services);
     return context.create(extension, {
       boundary: Object.freeze({ name: context.name }),
+      shape: { accepted: (drawList) => extension.accept(drawList) },
     });
   },
 },
@@ -521,16 +523,23 @@ new publication roots.
 The actual example config connects every required field:
 
 ```ts
-export type ExampleGlyphConfig = GlyphConfigFor<typeof ExampleSchema, ExampleRoot, ExampleDrawList>;
+export type ExampleGlyphConfig = GlyphConfigFor<
+  typeof ExampleSchema,
+  ExampleRoot,
+  ExampleDrawList,
+  Codec,
+  ExampleFontFormats
+>;
 
 export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
   const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
-  const config = defineGlyphConfig({
+  return defineGlyphConfig({
     schema: ExampleSchema,
+    fonts: { default: glyphExample.kind, formats: ExampleFontFormats },
     encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
-    resolve: ({ technique, resourceName, payload }) => {
-      if (technique !== techniqueId) {
-        throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${technique}"`);
+    resolve: ({ format, resourceName, payload }) => {
+      if (format !== techniqueId) {
+        throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${format}"`);
       }
       return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () => undefined);
     },
@@ -544,13 +553,15 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
     },
     root: {
       create: (context) => {
-        const extension = new ExampleRootImplementation(context.services);
-        return context.create(extension, { boundary: Object.freeze({ name: context.name }) });
+        if (context.fonts === undefined) throw new TypeError('example GlyphConfig must declare font formats');
+        const extension = new ExampleRootImplementation(context.fonts, context.services);
+        return context.create(extension, {
+          boundary: Object.freeze({ name: context.name }),
+          shape: { accepted: (drawList) => extension.accept(drawList) },
+        });
       },
     },
   });
-  config satisfies ExampleGlyphConfig;
-  return config;
 }
 ```
 
@@ -582,16 +593,20 @@ An adapter Text owns user-facing desired state and privately holds the controlle
 `context.services.createText()`:
 
 ```ts
-export class ExampleText<Technique extends AnyRasterTechnique> {
-  readonly #controller: GlyphTextController<Technique, ExampleMaterial, ExampleTransform>;
+export class ExampleText<Selection extends AnyFontFaceSelection> {
+  readonly #controller: GlyphTextController<FontFaceRasterOf<Selection>, ExampleMaterial, ExampleTransform>;
+  readonly #font: Font<FontFaceRasterOf<Selection>>;
   readonly #transform: ExampleTransform = Object.freeze({ kind: 'example-transform' });
 
   constructor(
+    token: typeof exampleTextConstructionToken,
+    fonts: GlyphHandleFonts,
     readonly services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>,
-    options: ExampleTextOptions<Technique>,
+    options: ExampleTextOptions<Selection>,
   ) {
+    this.#font = fonts.acquire<FontFaceRasterOf<Selection>>(options.font);
     this.#controller = services.createText({
-      font: options.font,
+      font: this.#font,
       text: options.text,
       transform: this.#transform,
       style: { fontSize: options.fontSize ?? 48 },
@@ -602,11 +617,12 @@ export class ExampleText<Technique extends AnyRasterTechnique> {
     });
   }
 
-  publish(): ExampleDrawList {
-    return this.services.shape();
-  }
   dispose(): void {
-    this.#controller.dispose();
+    try {
+      this.#controller.dispose();
+    } finally {
+      this.#font.dispose();
+    }
   }
 }
 ```
@@ -616,15 +632,15 @@ ergonomics in the adapter. `shape()` publishes semantic changes. A matrix-only t
 `services.syncTransforms()` so the renderer can update host transforms without shaping or Codec work. The example's
 transform implementation is intentionally a no-op; Three is the current live proof of matrix-traversal synchronization.
 
-## Add handle-relative FontFace loading when needed
+## Declare handle-relative FontFace loading
 
-The example's tested path accepts an already loaded immutable `Font`. An adapter that accepts FontFace selections declares
-its technique vocabulary in `fonts`:
+The example's tested path accepts a loaded FontFace selection. Its config names the exact portable formats the handle can
+bind and selects one default:
 
 ```ts
 const config = defineGlyphConfig({
   schema: ExampleSchema,
-  fonts: { default: 'glyphExample', techniques: { glyphExample } },
+  fonts: { default: 'glyphExample', formats: { glyphExample } },
   encode,
   resolve,
   renderer,
@@ -775,7 +791,7 @@ a long-lived integration.
 | Object                      | First required                                                                                  |
 | --------------------------- | ----------------------------------------------------------------------------------------------- |
 | Glyph runtime               | Before `glyph.handle()`: call `await glyph.init()`.                                             |
-| Immutable `Font`            | Before synchronous Text creation or update.                                                     |
+| Loaded FontFace selection   | Before synchronous Text creation; Text acquires an immutable Font lease.                        |
 | `GPUDevice`                 | Before physical buffers, textures, samplers, bind groups, or pipelines. Not needed for shaping. |
 | Canvas                      | Only for onscreen presentation. Never required for shaping, projection, or an offscreen target. |
 | `GPUCanvasContext`          | When configuring a canvas and acquiring its current presentation texture.                       |
@@ -847,7 +863,7 @@ abandoned FontFace declarations, never the correctness mechanism.
 10. **Transforms:** transform-only changes call `syncTransforms()` without `shape()` or Rust work.
 11. **Roots:** the handle fronts its anonymous root; repeated named lookup returns one live terminal root.
 12. **Fonts:** every FontFace record and immutable Text-held Font lease releases deterministically.
-13. **Recovery:** lost-device reconstruction starts from immutable Fonts and retained desired application state.
+13. **Recovery:** lost-device reconstruction starts from loaded FontFace selections and retained desired application state.
 14. **Host integration:** canvas, context, pass, camera, targets, shadows, and post-processing remain caller-owned.
 
 ## Current gaps
@@ -855,11 +871,11 @@ abandoned FontFace declarations, never the correctness mechanism.
 - `defineGlyphSchema(schema)` is direct, but the example still needs an explicit
   `GlyphSchema<ExampleBindings, ExampleRootContext>` variable annotation to witness its complete binding relationship.
   Config and handle inference are clean afterward.
-- `glyph-example-renderer` accepts immutable `Font` values directly; it does not expose a FontFace-taking Text wrapper.
+- TypeScript `--isolatedDeclarations` requires the exported config factory to name `ExampleGlyphConfig`; the DSL's
+  callbacks, handle, roots, bindings, and FontFace format selection still infer from that one boundary without casts.
 - Its `syncTransforms()` is a no-op. Three supplies the current transform-only synchronization proof.
 - `TypeGpuExampleRendererDevice` submits a device-owned offscreen pass during commit. A caller-owned
   canvas/context/pass or render-graph method is not public yet.
-- The example calls the semantic operation `publish()` while the root service and intended adapter term is `shape()`.
 - Repository documentation checks do not compile fenced TypeScript. The connected excerpts mirror checked package source,
   but there is no extracted-snippet typecheck.
 

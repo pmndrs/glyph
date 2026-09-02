@@ -50,7 +50,7 @@ The package supplies a complete `GlyphConfig`:
 - `resolve` returns exactly-once leases over portable raster resources;
 - `renderer` creates one root-scoped `GlyphRenderer` whose `decode(view)` stages accepted host state;
 - `root` creates the adapter's anonymous and named roots through constrained root services; and
-- optional `fonts` and `commands` remain config data rather than extra runtime owners.
+- required custom-format `fonts` and optional `commands` remain config data rather than extra runtime owners.
 
 `glyph.handle(name, config)` owns the internal engine wiring. The example never constructs or receives those internals.
 The returned handle fronts one anonymous root, while `handle(name)` selects an idempotent terminal sibling root.
@@ -61,7 +61,7 @@ One semantic publication follows this path:
 
 ```text
 ExampleText desired state
-  → root services shape()
+  → top-level glyph.shape()
   → Rust emits Codec-defined packed command data
   → Glyph internally projects trusted data and resolves resources
   → CommandBufferView<ExampleBindings>
@@ -112,8 +112,8 @@ post-processing graph. No such caller-pass method is implemented in the example 
 
 ## Font ownership
 
-The acceptance path loads an immutable root `Font` with `loadFont()` and passes it to `handle.createText()`. A config that
-declares `fonts` can additionally use handle-relative FontFace loading. Root construction receives `context.fonts` for
+The acceptance path declares and loads a typed `glyph.fontFace()` selection and passes that selection to
+`handle.createText()`. The config declares its exact `fonts` map and default. Root construction receives `context.fonts` for
 synchronous readiness, stable loading promises, independent Font acquisition, and borrowed lookup. Text owns its acquired
 Font lease and releases it with its controller.
 

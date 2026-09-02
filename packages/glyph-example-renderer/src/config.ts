@@ -1,4 +1,3 @@
-import type { AnyRasterFormat } from '@pmndrs/glyph';
 import {
   defineGlyphConfig,
   defineGlyphSchema,
@@ -8,18 +7,26 @@ import {
   type GlyphBufferBindingInput,
   type GlyphConfigFor,
   type GlyphHandle,
+  type GlyphHandleFonts,
   type GlyphInstanceSpanBindingInput,
   type GlyphRoot,
   type GlyphRootInstanceBindingInput,
   type GlyphRootServices,
   type GlyphSchema,
+  type Codec,
   type CodecProgram,
 } from '@pmndrs/glyph';
+import { glyphExample } from '@pmndrs/glyph-example-raster';
 
 import type { ExampleRendererDevice } from './device.js';
 import { exampleRendererShader, RecordingExampleRendererDevice } from './device.js';
 import type { ExampleDrawList } from './draw-list.js';
-import { ExampleText, type ExampleTextOptions } from './engine.js';
+import {
+  exampleTextConstructionToken,
+  ExampleText,
+  type ExampleFontFaceSelection,
+  type ExampleTextOptions,
+} from './engine.js';
 import { exampleCodecDescriptor } from './codec.js';
 
 export interface ExampleResolvedResource {
@@ -72,6 +79,12 @@ export interface ExampleRootContext {
   readonly name: string | undefined;
 }
 
+export interface ExampleFontFormats {
+  readonly glyphExample: typeof glyphExample;
+}
+
+export const ExampleFontFormats: ExampleFontFormats = Object.freeze({ glyphExample });
+
 export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = defineGlyphSchema({
   drawRoot: () => undefined,
   program: (_root: ExampleRootContext, program) => Object.freeze({ kind: 'example-program', program }),
@@ -84,19 +97,28 @@ export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = d
 });
 
 interface ExampleRootExtension {
-  createText<Format extends AnyRasterFormat>(options: ExampleTextOptions<Format>): ExampleText<Format>;
+  createText<const Selection extends ExampleFontFaceSelection>(
+    options: ExampleTextOptions<Selection>,
+  ): ExampleText<Selection>;
   readonly drawList: ExampleDrawList;
 }
 
 export type ExampleRoot = GlyphRoot & ExampleRootExtension;
 export type ExampleHandle = GlyphHandle<ExampleRoot>;
 
-export type ExampleGlyphConfig = GlyphConfigFor<typeof ExampleSchema, ExampleRoot, ExampleDrawList>;
+export type ExampleGlyphConfig = GlyphConfigFor<
+  typeof ExampleSchema,
+  ExampleRoot,
+  ExampleDrawList,
+  Codec,
+  ExampleFontFormats
+>;
 
 export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
   const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
-  const config = defineGlyphConfig({
+  return defineGlyphConfig({
     schema: ExampleSchema,
+    fonts: { default: glyphExample.kind, formats: ExampleFontFormats },
     encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
     resolve: ({ format, resourceName, payload }) => {
       if (format !== techniqueId) {
@@ -114,7 +136,8 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
     },
     root: {
       create: (context) => {
-        const extension = new ExampleRootImplementation(context.services);
+        if (context.fonts === undefined) throw new TypeError('example GlyphConfig must declare font formats');
+        const extension = new ExampleRootImplementation(context.fonts, context.services);
         return context.create(extension, {
           boundary: Object.freeze({ name: context.name }),
           shape: { accepted: (drawList) => extension.accept(drawList) },
@@ -122,19 +145,24 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
       },
     },
   });
-  config satisfies ExampleGlyphConfig;
-  return config;
 }
 
 class ExampleRootImplementation implements ExampleRootExtension {
+  readonly #fonts: GlyphHandleFonts;
   readonly #services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>;
 
-  constructor(services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>) {
+  constructor(
+    fonts: GlyphHandleFonts,
+    services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>,
+  ) {
+    this.#fonts = fonts;
     this.#services = services;
   }
 
-  createText<Format extends AnyRasterFormat>(options: ExampleTextOptions<Format>): ExampleText<Format> {
-    return new ExampleText(this.#services, options);
+  createText<const Selection extends ExampleFontFaceSelection>(
+    options: ExampleTextOptions<Selection>,
+  ): ExampleText<Selection> {
+    return new ExampleText(exampleTextConstructionToken, this.#fonts, this.#services, options);
   }
 
   #drawList: ExampleDrawList | undefined;
