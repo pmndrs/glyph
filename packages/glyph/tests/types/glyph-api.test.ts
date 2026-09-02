@@ -71,8 +71,8 @@ async function configureGlyph(): Promise<void> {
   first.handle satisfies RecordingHandle;
   const hud = first('hud');
   hud satisfies RecordingRoot;
-  hud.name satisfies string | undefined;
-  hud.handle satisfies GlyphHandle;
+  hud.name satisfies string;
+  hud.handle satisfies RecordingHandle;
   // @ts-expect-error The handle itself fronts the anonymous root; invocation only selects named roots.
   first();
   second.dispose();

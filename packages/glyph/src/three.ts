@@ -25,11 +25,22 @@ export { Text, TextGroup, ThreeRoot } from './three/text.js';
 export {
   ThreeConfig,
   defineThreeConfig,
+  type ThreeBatchBinding,
   type ThreeBindings,
+  type ThreeBufferBinding,
   type ThreeConfigOptions,
   type ThreeGlyphConfig,
   type ThreeHandle,
+  type ThreeInstanceBinding,
+  type ThreeInstanceSpanBinding,
+  type ThreeMaterialBinding,
+  type ThreePortableResource,
+  type ThreeProgramBinding,
+  type ThreeResolvedMaterialBinding,
+  type ThreeResolvedResourceBinding,
+  type ThreeRootBinding,
 } from './three/handle.js';
+export type { ThreeCodec } from './three/renderer-resources.js';
 export type {
   StandaloneTextProperties,
   TextCommitState,
