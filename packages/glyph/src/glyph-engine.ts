@@ -184,7 +184,7 @@ class GlyphEngineImpl implements GlyphEngine {
       options,
       () => this.#handleStates.delete(state),
       (font) => this._acquireFont(font),
-      () => this.#assertBackendAvailable(),
+      () => this.#assertHandleStateAvailable(),
       () => this.#enterBorrowedPlan(),
       `${options.integration}/handle/${ordinal}`,
     );
@@ -328,10 +328,10 @@ class GlyphEngineImpl implements GlyphEngine {
 
   #assertActive(): void {
     if (this.#disposed || this.#disposing) throw new Error('glyph engine has been disposed');
-    this.#assertBackendAvailable();
+    this.#assertHandleStateAvailable();
   }
 
-  #assertBackendAvailable(): void {
+  #assertHandleStateAvailable(): void {
     if (this.#disposed) throw new Error('glyph engine has been disposed');
     if (this.#borrowedPlanActive) {
       throw new Error('glyph engine cannot be reentered while a borrowed render plan is active');

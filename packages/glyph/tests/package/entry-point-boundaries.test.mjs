@@ -8,7 +8,7 @@
  *              paint. Every consumer speaks it, whether they render with Three.js or drive the
  *              engine themselves.
  *   `.`        also carries the GlyphConfig, Codec, schema, and technique DSL required to build an
- *              integration. Backend/planner/wire implementation details have no package subpath.
+ *              integration. Handle/planner/wire implementation details have no package subpath.
  *   `./three`  the Three.js integration -- `Text`, `TextGroup`, `FontLoader`, materials.
  *
  * An integration may re-export a root name ONLY when that name appears in one of its own
@@ -42,7 +42,7 @@ function published(source) {
 test('GlyphConfig is the only public engine-integration surface', async () => {
   const root = published(await declaration('index.d.ts'));
   const manifest = JSON.parse(await declaration('../package.json'));
-  assert.equal(manifest.exports['./core'], undefined, 'backend/planner internals must not have a public subpath');
+  assert.equal(manifest.exports['./core'], undefined, 'handle/planner internals must not have a public subpath');
   for (const name of [
     'defineGlyphConfig',
     'defineGlyphSchema',

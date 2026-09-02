@@ -10,7 +10,7 @@ import {
   type TransformUpdate,
 } from './glyph-config.js';
 import type { Codec } from './glyph-config.js';
-import type { BackendMaterialBinding, BackendTransformBinding } from '../internal/handle-state.js';
+import type { HandleMaterialBinding, HandleTransformBinding } from '../internal/handle-state.js';
 import type { PlanAcceptance, PlanCandidate, PlanTarget } from './render-planner.js';
 
 type PlanTargetConfig<Bindings extends AnyGlyphBindings, Result, PortableResource, Root> = Pick<
@@ -24,8 +24,8 @@ export interface CreateGlyphPlanTargetOptions<Bindings extends AnyGlyphBindings,
   readonly codec: Codec;
   readonly root: Root;
   readonly defaultRenderer?: GlyphRenderer<Bindings, Result>;
-  readonly materialInput?: (binding: BackendMaterialBinding) => Bindings['materialInput'];
-  readonly transformInput?: (binding: BackendTransformBinding) => Bindings['transformInput'];
+  readonly materialInput: (binding: HandleMaterialBinding) => Bindings['materialInput'];
+  readonly transformInput: (binding: HandleTransformBinding) => Bindings['transformInput'];
 }
 
 /** One configured synchronous plan target and its most recently committed renderer result. */
@@ -68,8 +68,8 @@ class ConfiguredGlyphPlanTarget<
       config: options.config,
       codec: options.codec,
       root: options.root,
-      ...(options.materialInput === undefined ? {} : { materialInput: options.materialInput }),
-      ...(options.transformInput === undefined ? {} : { transformInput: options.transformInput }),
+      materialInput: options.materialInput,
+      transformInput: options.transformInput,
     });
     this.#defaultRenderer = options.defaultRenderer;
     const configured = options.config.renderer(

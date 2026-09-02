@@ -62,7 +62,7 @@ export function markOwnedPlanPublication(publication: PlanPublication): OwnedPla
   return publication as OwnedPlanPublication;
 }
 
-/** Thrown when a backend reads a borrowed publication after the engine reclaimed its bytes. */
+/** Thrown when a handle reads a borrowed publication after the engine reclaimed its bytes. */
 export class PlanPublicationExpiredError extends Error {
   /** The publication generation the host tried to keep reading. */
   readonly consumedGeneration: number;

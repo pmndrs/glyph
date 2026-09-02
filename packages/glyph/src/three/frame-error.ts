@@ -38,7 +38,7 @@ export type TextFrameRejection<Technique extends AnyRasterTechnique = AnyRasterT
   | Readonly<{ cause: 'font-stack-missing'; subject: TextFrameSubject<Technique> }>
   /** A font in the laid-out text has no registered metrics. */
   | Readonly<{ cause: 'font-metrics-missing'; subject: TextFrameSubject<Technique> }>
-  /** The frame did not fit the planner arenas even after the backend grew them. */
+  /** The frame did not fit the planner arenas even after the handle grew them. */
   | Readonly<{ cause: 'capacity'; requiredRequestBytes: number; requiredResultBytes: number }>
   /** Any status the engine does not classify as caller-actionable. */
   | Readonly<{ cause: 'engine' }>;

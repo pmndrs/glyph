@@ -121,7 +121,7 @@ export function threeCodecDescriptor(
     }
   }
   const capabilitySet = threeCodecCapabilitySet();
-  // The portable assembler validates the backend-supplied factory before Three invokes it directly.
+  // The portable assembler validates the handle-supplied factory before Three invokes it directly.
   const rasterPrograms: CodecProgram[] = [
     createRasterCodecProgram(bitmapPlanProgram, {
       namespace: THREE_PROGRAM_NAMESPACE,

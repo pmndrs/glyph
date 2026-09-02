@@ -41,9 +41,9 @@ function frameRequest(transport, latest, accepted) {
 async function drivenTransport() {
   const wasm = await readFile(wasmUrl);
   const shaper = await createRuntimeShaper({ wasm });
-  const backend = new GlyphHandleState(shaper);
-  backend.registerCodec(POLICY_HANDLE, threeCodecBytes());
-  const transport = backend._createPlanTransport({
+  const handleState = new GlyphHandleState(shaper);
+  handleState.registerCodec(POLICY_HANDLE, threeCodecBytes());
+  const transport = handleState._createPlanTransport({
     handle: id.planner('publication-retention/transport'),
     requestCapacity: 4096,
     resultCapacity: 128 * 1024,
@@ -51,7 +51,7 @@ async function drivenTransport() {
   let latest = { engineRevision: 0, planRevision: 0 };
   let accepted = { planRevision: 0, publicationGeneration: 0 };
   return {
-    backend,
+    handleState,
     transport,
     publish() {
       latest = transport.update(frameRequest(transport, latest, accepted));
@@ -156,11 +156,11 @@ test('a borrowed publication expires at the next call, and an owned copy survive
 });
 
 test('expiry covers capacity growth and disposal, and foreign publications are rejected', async () => {
-  const { backend, transport, publish } = await drivenTransport();
+  const { handleState, transport, publish } = await drivenTransport();
   const published = publish();
   transport.reserve(4096, 8 * 1024 * 1024);
   assert.equal(transport.isExpired(published), true, 'reserving moves the arenas the borrow points into');
-  backend.dispose();
+  handleState.dispose();
 
   // A publication this transport never issued cannot be reasoned about, so even a
   // live-looking one is rejected instead of silently accepted.

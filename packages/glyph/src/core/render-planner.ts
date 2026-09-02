@@ -32,12 +32,12 @@ import {
   validatePlannerFrameRecords,
 } from './frame-wire.js';
 import type {
-  BackendFontStackBinding,
-  BackendMaterialBinding,
-  BackendOpaqueBindingLease,
+  HandleFontStackBinding,
+  HandleMaterialBinding,
+  HandleBindingLease,
   CodecRegistration,
-  BackendResourceBinding,
-  BackendTransformBinding,
+  HandleResourceBinding,
+  HandleTransformBinding,
   GlyphHandleState,
   PlanPublication,
   PlanTransport,
@@ -128,13 +128,13 @@ export interface ResolvedPlanPayload extends ResolvedPortablePayload {
   readonly resources: readonly ResolvedPortablePayload[];
 }
 
-/** A plan transform resolved to its backend-owned binding. */
+/** A plan transform resolved to its handle-owned binding. */
 export interface ResolvedPlanTransform {
   /** Physical transform-table record consumed by indexed renderer buffers. */
   readonly transformIndex: RenderPlanTransformId;
   /** Optional root draw identity that selects the same host transform without entering the transform table. */
   readonly instanceId?: RenderPlanTransformId;
-  readonly binding: BackendTransformBinding;
+  readonly binding: HandleTransformBinding;
 }
 
 /** A synchronous candidate whose borrowed plan must be consumed during `accept`. */
@@ -148,8 +148,8 @@ export interface PlanCandidate {
   readonly checkpoint: boolean;
   readonly transforms: readonly ResolvedPlanTransform[];
   acquirePayload(referenceId: ResourceHandle): PortablePayloadLease;
-  resolveMaterial(materialId: MaterialHandle): BackendMaterialBinding;
-  resolveResource(resourceId: ResourceHandle): BackendResourceBinding;
+  resolveMaterial(materialId: MaterialHandle): HandleMaterialBinding;
+  resolveResource(resourceId: ResourceHandle): HandleResourceBinding;
 }
 
 /** A self-owned candidate suitable for a worker or deferred renderer. */
@@ -197,12 +197,12 @@ export interface AsyncPlanTarget {
 /** Either supported plan-delivery contract. */
 export type RenderPlanTarget = PlanTarget | AsyncPlanTarget;
 
-/** One formatted-text span using backend-bound renderer and font values. */
+/** One formatted-text span using handle-bound renderer and font values. */
 export interface RetainedTextSpan {
   readonly start: number;
   readonly end: number;
-  readonly font?: BackendFontStackBinding;
-  readonly material?: BackendMaterialBinding;
+  readonly font?: HandleFontStackBinding;
+  readonly material?: HandleMaterialBinding;
   /** Text shaping and presentation overrides for this inline span. */
   readonly style?: TextStyle;
 }
@@ -216,12 +216,12 @@ export interface RetainedFormattedText {
 /** Plain or formatted input accepted by a retained text instance. */
 export type RetainedTextInput = string | RetainedFormattedText;
 
-/** A flow region whose transform is already bound to the backend. */
+/** A flow region whose transform is already bound to the handle. */
 export type RetainedTextRegionInput = Omit<
   PlannerRegion,
   'id' | 'geometryRevision' | 'transformIndex' | 'exclusionStart' | 'exclusionCount'
 > & {
-  readonly transform: BackendTransformBinding;
+  readonly transform: HandleTransformBinding;
 };
 
 /** An exclusion authored relative to its containing flow region. */
@@ -238,13 +238,13 @@ export interface RetainedTextFlowInput {
   readonly regions: readonly RetainedTextFlowRegionInput[];
 }
 
-/** Inline-object input using backend-bound material and resource values. */
+/** Inline-object input using handle-bound material and resource values. */
 export type RetainedTextInlineObjectInput = Omit<
   PlannerInlineObject,
   'paragraphId' | 'id' | 'contentRevision' | 'materialId' | 'resourceId' | 'resourceGeneration'
 > & {
-  readonly material: BackendMaterialBinding;
-  readonly resource: BackendResourceBinding;
+  readonly material: HandleMaterialBinding;
+  readonly resource: HandleResourceBinding;
 };
 
 /** Fixed safety and capacity limits for one render planner. */
@@ -252,10 +252,10 @@ export interface RenderPlannerLimits extends PlannerFrameLimits {}
 
 /** Initial desired state for one retained text instance. */
 export interface RetainedTextOptions {
-  readonly font: BackendFontStackBinding;
+  readonly font: HandleFontStackBinding;
   readonly text: RetainedTextInput;
-  readonly material?: BackendMaterialBinding;
-  readonly transform?: BackendTransformBinding;
+  readonly material?: HandleMaterialBinding;
+  readonly transform?: HandleTransformBinding;
   readonly order?: number;
   readonly rasterPixelRatio?: number;
   /** Text shaping and presentation properties inherited by inline spans. */
@@ -270,7 +270,7 @@ export interface RetainedTextOptions {
 
 /** Partial desired-state replacement for one retained text instance. */
 export type RetainedTextUpdate = Partial<Omit<RetainedTextOptions, 'font'>> & {
-  readonly font?: BackendFontStackBinding;
+  readonly font?: HandleFontStackBinding;
 };
 
 /** One planner-owned retained text instance. */
@@ -365,7 +365,7 @@ interface ResolvedSpan {
   readonly start: number;
   readonly end: number;
   readonly font: ReturnType<GlyphHandleState['_retainFontStackBinding']> | undefined;
-  readonly material: BackendOpaqueBindingLease | undefined;
+  readonly material: HandleBindingLease | undefined;
   readonly style: TextStyle | undefined;
 }
 
@@ -374,11 +374,11 @@ interface ResolvedTextOptions {
   readonly text: string;
   readonly spans: readonly ResolvedSpan[];
   readonly font: ReturnType<GlyphHandleState['_retainFontStackBinding']>;
-  readonly material: BackendOpaqueBindingLease | undefined;
-  readonly transform: BackendOpaqueBindingLease;
-  readonly flowTransforms: readonly BackendOpaqueBindingLease[];
-  readonly inlineMaterials: readonly BackendOpaqueBindingLease[];
-  readonly inlineResources: readonly BackendOpaqueBindingLease[];
+  readonly material: HandleBindingLease | undefined;
+  readonly transform: HandleBindingLease;
+  readonly flowTransforms: readonly HandleBindingLease[];
+  readonly inlineMaterials: readonly HandleBindingLease[];
+  readonly inlineResources: readonly HandleBindingLease[];
 }
 
 interface RetainedTextState {
@@ -1116,11 +1116,11 @@ class RenderPlannerImpl {
       },
       resolveMaterial: (materialId: MaterialHandle) => {
         lease.assertActive();
-        return this.#handleState._resolveOpaqueBinding('material', materialId) as BackendMaterialBinding;
+        return this.#handleState._resolveOpaqueBinding('material', materialId) as HandleMaterialBinding;
       },
       resolveResource: (resourceId: ResourceHandle) => {
         lease.assertActive();
-        return this.#handleState._resolveOpaqueBinding('resource', resourceId) as BackendResourceBinding;
+        return this.#handleState._resolveOpaqueBinding('resource', resourceId) as HandleResourceBinding;
       },
     });
   }
@@ -1216,13 +1216,13 @@ class RenderPlannerImpl {
         binding: this.#handleState._resolveOpaqueBinding(
           'transform',
           state.desired.transform.handle,
-        ) as BackendTransformBinding,
+        ) as HandleTransformBinding,
       });
       for (const transform of state.desired.flowTransforms) {
         const transformIndex = transform.handle as RenderPlanTransformId;
         transforms.set(transformIndex, {
           transformIndex,
-          binding: this.#handleState._resolveOpaqueBinding('transform', transform.handle) as BackendTransformBinding,
+          binding: this.#handleState._resolveOpaqueBinding('transform', transform.handle) as HandleTransformBinding,
         });
       }
     }
@@ -1540,14 +1540,14 @@ function resolveTextOptions(
         style: span.style,
       });
     });
-    const flowTransforms: BackendOpaqueBindingLease[] = [];
+    const flowTransforms: HandleBindingLease[] = [];
     for (const flowRegion of value.flow?.regions ?? []) {
       const retained = handleState._retainOpaqueBinding(flowRegion.region.transform, 'transform');
       leases.push(retained);
       flowTransforms.push(retained);
     }
-    const inlineMaterials: BackendOpaqueBindingLease[] = [];
-    const inlineResources: BackendOpaqueBindingLease[] = [];
+    const inlineMaterials: HandleBindingLease[] = [];
+    const inlineResources: HandleBindingLease[] = [];
     for (const object of value.inlineObjects ?? []) {
       const retainedMaterial = handleState._retainOpaqueBinding(object.material, 'material');
       leases.push(retainedMaterial);
@@ -1604,8 +1604,8 @@ function normalizeTextInput(value: unknown): RetainedFormattedText {
     return Object.freeze({
       start: span.start as number,
       end: span.end as number,
-      ...(span.font === undefined ? {} : { font: span.font as BackendFontStackBinding }),
-      ...(span.material === undefined ? {} : { material: span.material as BackendMaterialBinding }),
+      ...(span.font === undefined ? {} : { font: span.font as HandleFontStackBinding }),
+      ...(span.material === undefined ? {} : { material: span.material as HandleMaterialBinding }),
       ...(span.style === undefined
         ? {}
         : { style: cloneAuthoredData(span.style as TextStyle, `text span ${index} style`) }),
@@ -1618,12 +1618,12 @@ function snapshotTextOptions(
   value: RetainedTextOptions,
   input: RetainedFormattedText,
   font: ReturnType<GlyphHandleState['_retainFontStackBinding']>,
-  material: BackendOpaqueBindingLease | undefined,
-  transform: BackendOpaqueBindingLease,
+  material: HandleBindingLease | undefined,
+  transform: HandleBindingLease,
   spans: readonly ResolvedSpan[],
-  flowTransforms: readonly BackendOpaqueBindingLease[],
-  inlineMaterials: readonly BackendOpaqueBindingLease[],
-  inlineResources: readonly BackendOpaqueBindingLease[],
+  flowTransforms: readonly HandleBindingLease[],
+  inlineMaterials: readonly HandleBindingLease[],
+  inlineResources: readonly HandleBindingLease[],
 ): RetainedTextOptions {
   const {
     font: _font,
@@ -1643,7 +1643,7 @@ function snapshotTextOptions(
           start: span.start,
           end: span.end,
           ...(span.font === undefined ? {} : { font: span.font.binding }),
-          ...(span.material === undefined ? {} : { material: span.material.binding as BackendMaterialBinding }),
+          ...(span.material === undefined ? {} : { material: span.material.binding as HandleMaterialBinding }),
           ...(span.style === undefined ? {} : { style: span.style }),
         }),
       ),
@@ -1653,8 +1653,8 @@ function snapshotTextOptions(
     ...snapshot,
     font: font.binding,
     text,
-    ...(material === undefined ? {} : { material: material.binding as BackendMaterialBinding }),
-    transform: transform.binding as BackendTransformBinding,
+    ...(material === undefined ? {} : { material: material.binding as HandleMaterialBinding }),
+    transform: transform.binding as HandleTransformBinding,
     ...(value.flow === undefined
       ? {}
       : {
@@ -1665,7 +1665,7 @@ function snapshotTextOptions(
                 return Object.freeze({
                   region: Object.freeze({
                     ...cloneAuthoredData(region, `text flow region ${index}`),
-                    transform: flowTransforms[index]!.binding as BackendTransformBinding,
+                    transform: flowTransforms[index]!.binding as HandleTransformBinding,
                   }),
                   ...(flowRegion.exclusions === undefined
                     ? {}
@@ -1687,8 +1687,8 @@ function snapshotTextOptions(
               const { material: _inlineMaterial, resource: _inlineResource, ...data } = object;
               return Object.freeze({
                 ...cloneAuthoredData(data, `text inline object ${index}`),
-                material: inlineMaterials[index]!.binding as BackendMaterialBinding,
-                resource: inlineResources[index]!.binding as BackendResourceBinding,
+                material: inlineMaterials[index]!.binding as HandleMaterialBinding,
+                resource: inlineResources[index]!.binding as HandleResourceBinding,
               });
             }),
           ),

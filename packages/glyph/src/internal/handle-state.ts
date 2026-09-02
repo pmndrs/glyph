@@ -16,12 +16,12 @@ import { markOwnedPlanPublication, PlanPublicationExpiredError, type OwnedPlanPu
 import {
   assertGlyphId,
   compileRenderPolicy,
-  createBackendIdFactory,
+  createHandleIdFactory,
   GlyphIdScope,
   RenderIdScope,
   type FontBindingHandle,
   type FontStackHandle,
-  type BackendIdFactory,
+  type HandleIdFactory,
   type ParagraphId,
   type PolicyDescriptor,
   type PolicyHandle,
@@ -40,67 +40,67 @@ interface PlanTransportOptions {
   readonly textCapacity?: number;
 }
 
-/** Names one renderer integration backend. */
+/** Names one renderer integration handle state. */
 export interface GlyphHandleStateOptions {
   /** Stable diagnostic namespace; never a wire ID or lookup key. */
   readonly integration: string;
 }
 
-/** A counted backend-local render-policy installation. */
+/** A counted handle-local render-policy installation. */
 export interface CodecRegistration {
   readonly [codecRegistrationBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-/** Builds one policy descriptor using the backend's collision-checked wire identities. */
+/** Builds one policy descriptor using the handle's collision-checked wire identities. */
 export type CodecFactory = (ids: RenderIdFactory) => PolicyDescriptor;
 
-/** A counted backend-local binding of one immutable font. */
-export interface BackendFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
-  readonly [backendFontBindingBrand]: true;
+/** A counted handle-local binding of one immutable font. */
+export interface HandleFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+  readonly [handleFontBindingBrand]: true;
   readonly technique: Technique;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-/** A counted backend-local ordered font-stack binding. */
-export interface BackendFontStackBinding {
-  readonly [backendFontStackBindingBrand]: true;
+/** A counted handle-local ordered font-stack binding. */
+export interface HandleFontStackBinding {
+  readonly [handleFontStackBindingBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-/** A backend-local renderer material identity. */
-export interface BackendMaterialBinding {
-  readonly [backendMaterialBindingBrand]: true;
+/** A handle-local renderer material identity. */
+export interface HandleMaterialBinding {
+  readonly [handleMaterialBindingBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-/** A backend-local renderer resource identity. */
-export interface BackendResourceBinding {
-  readonly [backendResourceBindingBrand]: true;
+/** A handle-local renderer resource identity. */
+export interface HandleResourceBinding {
+  readonly [handleResourceBindingBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-/** A backend-local renderer transform identity. */
-export interface BackendTransformBinding {
-  readonly [backendTransformBindingBrand]: true;
+/** A handle-local renderer transform identity. */
+export interface HandleTransformBinding {
+  readonly [handleTransformBindingBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
 declare const codecRegistrationBrand: unique symbol;
-declare const backendFontBindingBrand: unique symbol;
-declare const backendFontStackBindingBrand: unique symbol;
-declare const backendMaterialBindingBrand: unique symbol;
-declare const backendResourceBindingBrand: unique symbol;
-declare const backendTransformBindingBrand: unique symbol;
+declare const handleFontBindingBrand: unique symbol;
+declare const handleFontStackBindingBrand: unique symbol;
+declare const handleMaterialBindingBrand: unique symbol;
+declare const handleResourceBindingBrand: unique symbol;
+declare const handleTransformBindingBrand: unique symbol;
 
 /** @internal Runtime-owned shaping registration supplied only by GlyphEngine. */
-export interface BackendEngineFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+export interface HandleEngineFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
   readonly technique: Technique;
   readonly handle: FontHandle;
   readonly identity: object;
@@ -108,10 +108,10 @@ export interface BackendEngineFontBinding<Technique extends AnyRasterTechnique =
   dispose(): void;
 }
 
-/** @internal Engine callback installed when it constructs a backend. */
-export type BackendEngineFontBinder = <Technique extends AnyRasterTechnique>(
+/** @internal Engine callback installed when it constructs handle state. */
+export type HandleEngineFontBinder = <Technique extends AnyRasterTechnique>(
   font: Font<Technique>,
-) => BackendEngineFontBinding<Technique>;
+) => HandleEngineFontBinding<Technique>;
 
 /**
  * One borrowed A/B render-plan publication. Its bytes point into Wasm memory and expire when
@@ -139,7 +139,7 @@ export interface PlanPublication {
 /**
  * The paragraph and style a rejected frame names, read out of the result header.
  *
- * Both are the identifiers the request used, so a backend maps them to what it authored.
+ * Both are the identifiers the request used, so a handle maps them to what it authored.
  * Zero means the status names none: an engine-internal invariant, a capacity watermark, or a
  * planner-level conflict attributes nothing.
  */
@@ -293,63 +293,66 @@ interface InstalledCodecRegistration {
   disposed: boolean;
 }
 
-interface RetainedBackendFontBinding {
+interface RetainedHandleFontBinding {
   readonly identity: object;
   readonly technique: AnyRasterTechnique;
   readonly handle: FontBindingHandle;
-  readonly engineBinding: BackendEngineFontBinding;
-  readonly payloads: ReadonlyMap<number, RetainedBackendPortablePayload>;
+  readonly engineBinding: HandleEngineFontBinding;
+  readonly payloads: ReadonlyMap<number, RetainedPortablePayload>;
   leases: number;
   disposed: boolean;
 }
 
-interface RetainedBackendPortablePayload {
+interface RetainedPortablePayload {
   readonly referenceId: number;
   readonly identity: object;
   readonly techniqueId: string;
   readonly resourceName: string;
   readonly payload: PortableResource;
-  group: readonly RetainedBackendPortablePayload[] | undefined;
+  group: readonly RetainedPortablePayload[] | undefined;
   owners: number;
   leases: number;
 }
 
-interface RetainedBackendFontStackBinding {
+interface RetainedHandleFontStackBinding {
   readonly identity: object;
   readonly handle: FontStackHandle;
-  readonly bindings: readonly BackendFontBindingImpl[];
+  readonly bindings: readonly HandleFontBindingImpl[];
   leases: number;
   disposed: boolean;
 }
 
-interface RetainedBackendOpaqueBinding {
+interface RetainedOpaqueBinding {
   readonly kind: 'material' | 'resource' | 'transform';
   readonly handle: number;
-  binding: BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding;
+  binding: HandleMaterialBinding | HandleResourceBinding | HandleTransformBinding;
   leases: number;
   disposed: boolean;
 }
 
-/** Counted lease over one backend-local renderer binding. */
-export interface BackendOpaqueBindingLease<
-  Binding extends BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding =
-    | BackendMaterialBinding
-    | BackendResourceBinding
-    | BackendTransformBinding,
+/** Counted lease over one handle-local renderer binding. */
+export interface HandleBindingLease<
+  Binding extends HandleMaterialBinding | HandleResourceBinding | HandleTransformBinding =
+    | HandleMaterialBinding
+    | HandleResourceBinding
+    | HandleTransformBinding,
 > {
   readonly handle: number;
   readonly binding: Binding;
   dispose(): void;
 }
 
-const handleCodecs = new WeakMap<object, Readonly<{ backend: GlyphHandleState; state: InstalledCodecRegistration }>>();
-const backendFontStacks = new WeakMap<
+const handleCodecs = new WeakMap<
   object,
-  Readonly<{ backend: GlyphHandleState; state: RetainedBackendFontStackBinding }>
+  Readonly<{ handleState: GlyphHandleState; state: InstalledCodecRegistration }>
 >();
-const backendOpaqueBindings = new WeakMap<
+const handleFontStacks = new WeakMap<
   object,
-  Readonly<{ backend: GlyphHandleState; state: RetainedBackendOpaqueBinding }>
+  Readonly<{ handleState: GlyphHandleState; state: RetainedHandleFontStackBinding }>
+>();
+const handleOpaqueBindings = new WeakMap<
+  object,
+  Readonly<{ handleState: GlyphHandleState; state: RetainedOpaqueBinding }>
 >();
 
 /** Owns one renderer integration's policies, bindings, render planners, and transports. */
@@ -366,19 +369,19 @@ export class GlyphHandleState {
   readonly #fontStacks = new Map<FontStackHandle, readonly FontBindingHandle[]>();
   readonly #fontBindings = new Set<FontBindingHandle>();
   readonly #installedCodecs = new Set<InstalledCodecRegistration>();
-  readonly #retainedFontBindings = new WeakMap<object, RetainedBackendFontBinding>();
-  readonly #liveRetainedFontBindings = new Set<RetainedBackendFontBinding>();
-  readonly #retainedFontStacks = new WeakMap<object, RetainedBackendFontStackBinding>();
-  readonly #liveRetainedFontStacks = new Set<RetainedBackendFontStackBinding>();
-  readonly #portablePayloads = new Map<number, RetainedBackendPortablePayload>();
-  readonly #opaqueBindings = new Set<RetainedBackendOpaqueBinding>();
+  readonly #retainedFontBindings = new WeakMap<object, RetainedHandleFontBinding>();
+  readonly #liveRetainedFontBindings = new Set<RetainedHandleFontBinding>();
+  readonly #retainedFontStacks = new WeakMap<object, RetainedHandleFontStackBinding>();
+  readonly #liveRetainedFontStacks = new Set<RetainedHandleFontStackBinding>();
+  readonly #portablePayloads = new Map<number, RetainedPortablePayload>();
+  readonly #opaqueBindings = new Set<RetainedOpaqueBinding>();
   readonly #opaqueBindingsByKind = {
-    material: new Map<number, RetainedBackendOpaqueBinding>(),
-    resource: new Map<number, RetainedBackendOpaqueBinding>(),
-    transform: new Map<number, RetainedBackendOpaqueBinding>(),
+    material: new Map<number, RetainedOpaqueBinding>(),
+    resource: new Map<number, RetainedOpaqueBinding>(),
+    transform: new Map<number, RetainedOpaqueBinding>(),
   };
   readonly #onDispose: (() => void) | undefined;
-  readonly #bindEngineFont: BackendEngineFontBinder | undefined;
+  readonly #bindEngineFont: HandleEngineFontBinder | undefined;
   readonly #assertEngineAvailable: (() => void) | undefined;
   readonly #enterEngineBorrow: (() => () => void) | undefined;
   #nextCodecOrdinal = 1;
@@ -391,21 +394,21 @@ export class GlyphHandleState {
   #nextPlannerOrdinal = 1;
   #disposed = false;
 
-  /** @internal Backends are owned and normally created by GlyphEngine. */
+  /** @internal Handle states are owned and normally created by GlyphEngine. */
   constructor(
     shaper: RuntimeShaper,
     options: GlyphHandleStateOptions = { integration: 'internal' },
     onDispose?: () => void,
-    bindEngineFont?: BackendEngineFontBinder,
+    bindEngineFont?: HandleEngineFontBinder,
     assertEngineAvailable?: () => void,
     enterEngineBorrow?: () => () => void,
     identityNamespace?: string,
   ) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-      throw new TypeError('glyph backend options must be an object');
+      throw new TypeError('Glyph handle state options must be an object');
     }
     if (typeof options.integration !== 'string' || options.integration.length === 0) {
-      throw new TypeError('glyph backend integration must be a nonempty string');
+      throw new TypeError('Glyph handle state integration must be a nonempty string');
     }
     this.integration = options.integration;
     this.#identityNamespace = identityNamespace ?? options.integration;
@@ -417,10 +420,10 @@ export class GlyphHandleState {
     this.#enterEngineBorrow = enterEngineBorrow;
   }
 
-  /** @internal Derive one branded ID retained until its registration or this backend is disposed. */
-  readonly id: BackendIdFactory = createBackendIdFactory(this.#ids, () => this.#assertActive());
+  /** @internal Derive one branded ID retained until its registration or this handle is disposed. */
+  readonly id: HandleIdFactory = createHandleIdFactory(this.#ids, () => this.#assertActive());
 
-  /** Installs one renderer policy for this backend and returns its counted lease. */
+  /** Installs one renderer policy for this handle and returns its counted lease. */
   installCodec(factory: CodecFactory): CodecRegistration {
     this.#assertActive();
     if (typeof factory !== 'function') throw new TypeError('text engine policy must be a factory');
@@ -439,28 +442,28 @@ export class GlyphHandleState {
     };
     this.#installedCodecs.add(state);
     const policy = new CodecRegistrationImpl(this, state) as CodecRegistration;
-    handleCodecs.set(policy, { backend: this, state });
+    handleCodecs.set(policy, { handleState: this, state });
     return policy;
   }
 
-  /** Binds one immutable font's shaping and portable raster resources to this backend. */
-  bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): BackendFontBinding<Technique> {
+  /** Binds one immutable font's shaping and portable raster resources to this handle. */
+  bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): HandleFontBinding<Technique> {
     this.#assertActive();
     if (this.#bindEngineFont === undefined) {
-      throw new Error('glyph backend was not created by a glyph engine');
+      throw new Error('Glyph handle state was not created by a glyph engine');
     }
     const engineBinding = this.#bindEngineFont(font);
     try {
       const techniqueId = this.#wireIdentities.technique(font.technique);
       if (![...this.#installedCodecs].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
-        throw new TypeError(`glyph backend has no installed policy for "${font.technique.id}"`);
+        throw new TypeError(`Glyph handle state has no installed policy for "${font.technique.id}"`);
       }
       const existing = this.#retainedFontBindings.get(engineBinding.identity);
       if (existing !== undefined && !existing.disposed) {
         if (existing.technique !== font.technique) throw new Error('engine font identity changed raster technique');
         engineBinding.dispose();
         existing.leases += 1;
-        return new BackendFontBindingImpl(this, existing) as unknown as BackendFontBinding<Technique>;
+        return new HandleFontBindingImpl(this, existing) as unknown as HandleFontBinding<Technique>;
       }
       const compiled = compileRasterFont(font, this.#wireIdentities);
       if (compiled === undefined) {
@@ -476,7 +479,7 @@ export class GlyphHandleState {
         throw error;
       }
       this.#nextFontBindingOrdinal = ordinal + 1;
-      const state: RetainedBackendFontBinding = {
+      const state: RetainedHandleFontBinding = {
         identity: engineBinding.identity,
         technique: font.technique,
         handle,
@@ -487,36 +490,36 @@ export class GlyphHandleState {
       };
       this.#retainedFontBindings.set(engineBinding.identity, state);
       this.#liveRetainedFontBindings.add(state);
-      return new BackendFontBindingImpl(this, state) as unknown as BackendFontBinding<Technique>;
+      return new HandleFontBindingImpl(this, state) as unknown as HandleFontBinding<Technique>;
     } catch (error) {
       engineBinding.dispose();
       throw error;
     }
   }
 
-  /** Binds an ordered immutable font stack to this backend. */
+  /** Binds an ordered immutable font stack to this handle. */
   bindFontStack<Technique extends AnyRasterTechnique>(
     stack: FontStack<Technique, Font<Technique>>,
-  ): BackendFontStackBinding {
+  ): HandleFontStackBinding {
     this.#assertActive();
     const fonts = immutableFontStackFonts(stack as FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>);
     for (const font of fonts) {
       const techniqueId = this.#wireIdentities.technique(font.technique);
       if (![...this.#installedCodecs].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
-        throw new TypeError(`glyph backend has no installed policy for "${font.technique.id}"`);
+        throw new TypeError(`Glyph handle state has no installed policy for "${font.technique.id}"`);
       }
     }
     const existing = this.#retainedFontStacks.get(stack);
     if (existing !== undefined && !existing.disposed) {
       existing.leases += 1;
-      const binding = new BackendFontStackBindingImpl(this, existing) as BackendFontStackBinding;
-      backendFontStacks.set(binding, { backend: this, state: existing });
+      const binding = new HandleFontStackBindingImpl(this, existing) as HandleFontStackBinding;
+      handleFontStacks.set(binding, { handleState: this, state: existing });
       return binding;
     }
-    const bindings: BackendFontBindingImpl[] = [];
+    const bindings: HandleFontBindingImpl[] = [];
     try {
       for (const font of fonts) {
-        bindings.push(this.bindFont(font) as unknown as BackendFontBindingImpl);
+        bindings.push(this.bindFont(font) as unknown as HandleFontBindingImpl);
       }
       const ordinal = this.#nextFontStackOrdinal;
       const handle = this.id('font-stack', `${this.#identityNamespace}/font-stack/${ordinal}`);
@@ -525,7 +528,7 @@ export class GlyphHandleState {
         bindings.map((binding) => binding._state().handle),
       );
       this.#nextFontStackOrdinal = ordinal + 1;
-      const state: RetainedBackendFontStackBinding = {
+      const state: RetainedHandleFontStackBinding = {
         identity: stack,
         handle,
         bindings: Object.freeze(bindings),
@@ -534,8 +537,8 @@ export class GlyphHandleState {
       };
       this.#retainedFontStacks.set(stack, state);
       this.#liveRetainedFontStacks.add(state);
-      const binding = new BackendFontStackBindingImpl(this, state) as BackendFontStackBinding;
-      backendFontStacks.set(binding, { backend: this, state });
+      const binding = new HandleFontStackBindingImpl(this, state) as HandleFontStackBinding;
+      handleFontStacks.set(binding, { handleState: this, state });
       return binding;
     } catch (error) {
       for (const binding of bindings.reverse()) binding.dispose();
@@ -546,7 +549,7 @@ export class GlyphHandleState {
   /** @internal */
   _disposeInstalledCodec(state: InstalledCodecRegistration): void {
     if (state.disposed) return;
-    if (state.leases <= 0) throw new Error('backend policy lease underflow');
+    if (state.leases <= 0) throw new Error('codec lease underflow');
     state.leases -= 1;
     if (state.leases === 0) this.#disposeInstalledCodec(state);
   }
@@ -557,8 +560,8 @@ export class GlyphHandleState {
   ): Readonly<{ handle: PolicyHandle; descriptor: PolicyDescriptor; dispose(): void }> {
     this.#assertActive();
     const entry = handleCodecs.get(policy as object);
-    if (entry === undefined || entry.backend !== this || entry.state.disposed || policy.disposed) {
-      throw new TypeError('backend policy must be a live policy installed by this glyph backend');
+    if (entry === undefined || entry.handleState !== this || entry.state.disposed || policy.disposed) {
+      throw new TypeError('codec must be a live policy installed by this Glyph handle state');
     }
     entry.state.leases += 1;
     let disposed = false;
@@ -574,20 +577,20 @@ export class GlyphHandleState {
   }
 
   /** @internal */
-  _retainFontStackBinding(binding: BackendFontStackBinding): Readonly<{
+  _retainFontStackBinding(binding: HandleFontStackBinding): Readonly<{
     handle: FontStackHandle;
-    binding: BackendFontStackBinding;
+    binding: HandleFontStackBinding;
     techniques: readonly AnyRasterTechnique[];
     dispose(): void;
   }> {
     this.#assertActive();
-    const entry = backendFontStacks.get(binding as object);
-    if (entry === undefined || entry.backend !== this || entry.state.disposed || binding.disposed) {
-      throw new TypeError('font stack binding must be live and owned by this glyph backend');
+    const entry = handleFontStacks.get(binding as object);
+    if (entry === undefined || entry.handleState !== this || entry.state.disposed || binding.disposed) {
+      throw new TypeError('font stack binding must be live and owned by this Glyph handle state');
     }
     entry.state.leases += 1;
-    const retained = new BackendFontStackBindingImpl(this, entry.state) as BackendFontStackBinding;
-    backendFontStacks.set(retained, { backend: this, state: entry.state });
+    const retained = new HandleFontStackBindingImpl(this, entry.state) as HandleFontStackBinding;
+    handleFontStacks.set(retained, { handleState: this, state: entry.state });
     return Object.freeze({
       handle: entry.state.handle,
       binding: retained,
@@ -596,54 +599,45 @@ export class GlyphHandleState {
     });
   }
 
-  /** Allocates a backend-local identity for renderer-owned material state. */
-  createMaterialBinding(): BackendMaterialBinding {
-    return this.#createOpaqueBinding('material') as BackendMaterialBinding;
+  /** Allocates a handle-local identity for renderer-owned material state. */
+  createMaterialBinding(): HandleMaterialBinding {
+    return this.#createOpaqueBinding('material') as HandleMaterialBinding;
   }
 
-  /** Allocates a backend-local identity for renderer-owned resource state. */
-  createResourceBinding(): BackendResourceBinding {
-    return this.#createOpaqueBinding('resource') as BackendResourceBinding;
+  /** Allocates a handle-local identity for renderer-owned resource state. */
+  createResourceBinding(): HandleResourceBinding {
+    return this.#createOpaqueBinding('resource') as HandleResourceBinding;
   }
 
-  /** Allocates a backend-local identity for renderer-owned transform state. */
-  createTransformBinding(): BackendTransformBinding {
-    return this.#createOpaqueBinding('transform') as BackendTransformBinding;
+  /** Allocates a handle-local identity for renderer-owned transform state. */
+  createTransformBinding(): HandleTransformBinding {
+    return this.#createOpaqueBinding('transform') as HandleTransformBinding;
   }
 
   /** @internal */
+  _retainOpaqueBinding(binding: HandleMaterialBinding, kind: 'material'): HandleBindingLease<HandleMaterialBinding>;
+  _retainOpaqueBinding(binding: HandleResourceBinding, kind: 'resource'): HandleBindingLease<HandleResourceBinding>;
+  _retainOpaqueBinding(binding: HandleTransformBinding, kind: 'transform'): HandleBindingLease<HandleTransformBinding>;
   _retainOpaqueBinding(
-    binding: BackendMaterialBinding,
-    kind: 'material',
-  ): BackendOpaqueBindingLease<BackendMaterialBinding>;
-  _retainOpaqueBinding(
-    binding: BackendResourceBinding,
-    kind: 'resource',
-  ): BackendOpaqueBindingLease<BackendResourceBinding>;
-  _retainOpaqueBinding(
-    binding: BackendTransformBinding,
-    kind: 'transform',
-  ): BackendOpaqueBindingLease<BackendTransformBinding>;
-  _retainOpaqueBinding(
-    binding: BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding,
-    kind: RetainedBackendOpaqueBinding['kind'],
-  ): BackendOpaqueBindingLease<BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding> {
+    binding: HandleMaterialBinding | HandleResourceBinding | HandleTransformBinding,
+    kind: RetainedOpaqueBinding['kind'],
+  ): HandleBindingLease<HandleMaterialBinding | HandleResourceBinding | HandleTransformBinding> {
     this.#assertActive();
-    const entry = backendOpaqueBindings.get(binding as object);
+    const entry = handleOpaqueBindings.get(binding as object);
     if (
       entry === undefined ||
-      entry.backend !== this ||
+      entry.handleState !== this ||
       entry.state.kind !== kind ||
       entry.state.disposed ||
       binding.disposed
     ) {
-      throw new TypeError(`${kind} binding must be live and owned by this glyph backend`);
+      throw new TypeError(`${kind} binding must be live and owned by this Glyph handle state`);
     }
     entry.state.leases += 1;
-    const retained = new BackendOpaqueBindingImpl(this, entry.state) as BackendMaterialBinding &
-      BackendResourceBinding &
-      BackendTransformBinding;
-    backendOpaqueBindings.set(retained, { backend: this, state: entry.state });
+    const retained = new HandleOpaqueBindingImpl(this, entry.state) as HandleMaterialBinding &
+      HandleResourceBinding &
+      HandleTransformBinding;
+    handleOpaqueBindings.set(retained, { handleState: this, state: entry.state });
     return Object.freeze({
       handle: entry.state.handle,
       binding: retained,
@@ -665,7 +659,7 @@ export class GlyphHandleState {
     }>[];
     dispose(): void;
   }> {
-    if (this.#disposed) throw new Error('glyph backend is disposed');
+    if (this.#disposed) throw new Error('Glyph handle state is disposed');
     uint32Handle(referenceId, 'portable payload reference');
     const resolved = this.#portablePayloads.get(referenceId);
     if (resolved === undefined || resolved.owners === 0 || resolved.group === undefined) {
@@ -699,19 +693,19 @@ export class GlyphHandleState {
 
   /** @internal */
   _resolveOpaqueBinding(
-    kind: RetainedBackendOpaqueBinding['kind'],
+    kind: RetainedOpaqueBinding['kind'],
     handle: number,
-  ): BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding {
-    if (this.#disposed) throw new Error('glyph backend is disposed');
+  ): HandleMaterialBinding | HandleResourceBinding | HandleTransformBinding {
+    if (this.#disposed) throw new Error('Glyph handle state is disposed');
     const state = this.#opaqueBindingsByKind[kind].get(handle);
     if (state !== undefined && !state.disposed) return state.binding;
     throw new Error(`text render plan references unknown ${kind} binding ${handle}`);
   }
 
   /** @internal */
-  _disposeRetainedFontBinding(state: RetainedBackendFontBinding): void {
+  _disposeRetainedFontBinding(state: RetainedHandleFontBinding): void {
     if (state.disposed) return;
-    if (state.leases <= 0) throw new Error('backend font binding lease underflow');
+    if (state.leases <= 0) throw new Error('handle font binding lease underflow');
     if (state.leases > 1) {
       state.leases -= 1;
       return;
@@ -720,9 +714,9 @@ export class GlyphHandleState {
   }
 
   /** @internal */
-  _disposeRetainedFontStack(state: RetainedBackendFontStackBinding): void {
+  _disposeRetainedFontStack(state: RetainedHandleFontStackBinding): void {
     if (state.disposed) return;
-    if (state.leases <= 0) throw new Error('backend font stack lease underflow');
+    if (state.leases <= 0) throw new Error('handle font stack lease underflow');
     if (state.leases > 1) {
       state.leases -= 1;
       return;
@@ -758,7 +752,7 @@ export class GlyphHandleState {
     this.#assertActive();
     assertGlyphId(bindingHandle, 'font-binding', 'font binding handle');
     if (!this.#fontBindings.has(bindingHandle)) {
-      throw new Error(`font binding ${bindingHandle} is not owned by this glyph backend`);
+      throw new Error(`font binding ${bindingHandle} is not owned by this Glyph handle state`);
     }
     for (const [stackHandle, fontHandles] of this.#fontStacks) {
       if (fontHandles.includes(bindingHandle)) {
@@ -781,7 +775,7 @@ export class GlyphHandleState {
     for (const [index, fontHandle] of fontHandles.entries()) {
       const checkedHandle = assertGlyphId(fontHandle, 'font-binding', 'font binding handle');
       if (!this.#fontBindings.has(checkedHandle)) {
-        throw new Error(`font binding ${checkedHandle} is not owned by this glyph backend`);
+        throw new Error(`font binding ${checkedHandle} is not owned by this Glyph handle state`);
       }
       view.setUint32(index * 4, checkedHandle, true);
     }
@@ -804,7 +798,7 @@ export class GlyphHandleState {
   disposeFontStack(handle: FontStackHandle): void {
     this.#assertActive();
     assertGlyphId(handle, 'font-stack', 'font stack handle');
-    if (!this.#fontStacks.has(handle)) throw new Error(`font stack ${handle} is not owned by this glyph backend`);
+    if (!this.#fontStacks.has(handle)) throw new Error(`font stack ${handle} is not owned by this Glyph handle state`);
     requireStatus(this.#exports.disposeFontStack(handle), 'dispose font stack');
     this.#fontStacks.delete(handle);
     this.#releaseClaim(this.#owners.fontStacks, handle);
@@ -834,7 +828,7 @@ export class GlyphHandleState {
   disposeCodec(handle: PolicyHandle): void {
     this.#assertActive();
     handle = assertGlyphId(handle, 'policy', 'policy handle');
-    if (!this.#codecs.has(handle)) throw new Error(`render policy ${handle} is not owned by this glyph backend`);
+    if (!this.#codecs.has(handle)) throw new Error(`render policy ${handle} is not owned by this Glyph handle state`);
     requireStatus(this.#exports.disposePolicy(handle), 'dispose render policy');
     this.#codecs.delete(handle);
     this.#releaseClaim(this.#owners.codecs, handle);
@@ -913,7 +907,7 @@ export class GlyphHandleState {
     this.#assertActive();
   }
 
-  /** Disposes this backend and every policy, binding, planner, and transport it owns. */
+  /** Disposes this handle and every policy, binding, planner, and transport it owns. */
   dispose(): void {
     if (this.#disposed) return;
     this.#assertEngineAvailable?.();
@@ -950,7 +944,7 @@ export class GlyphHandleState {
       this.#codecs.size !== 0 ||
       this.#portablePayloads.size !== 0
     ) {
-      failure ??= new Error('glyph backend disposal left live registrations or payload leases');
+      failure ??= new Error('Glyph handle state disposal left live registrations or payload leases');
     } else {
       try {
         this.#ids.dispose();
@@ -970,16 +964,16 @@ export class GlyphHandleState {
       throw new TypeError(`text update belongs to planner ${references.plannerHandle}, not ${plannerHandle}`);
     }
     if (this.#owners.codecs.get(references.policyHandle) !== this) {
-      throw new TypeError(`render policy ${references.policyHandle} is not owned by this glyph backend`);
+      throw new TypeError(`render policy ${references.policyHandle} is not owned by this Glyph handle state`);
     }
     for (const handle of references.fontStackHandles) {
       if (this.#owners.fontStacks.get(handle) !== this) {
-        throw new TypeError(`font stack ${handle} is not owned by this glyph backend`);
+        throw new TypeError(`font stack ${handle} is not owned by this Glyph handle state`);
       }
     }
   }
 
-  #disposeRetainedFontBinding(state: RetainedBackendFontBinding): void {
+  #disposeRetainedFontBinding(state: RetainedHandleFontBinding): void {
     if (state.disposed) return;
     this.disposeFontBinding(state.handle);
     state.leases = 0;
@@ -993,12 +987,12 @@ export class GlyphHandleState {
   #retainPortablePayloads(
     technique: AnyRasterTechnique,
     compiled: CompiledRasterFont,
-  ): ReadonlyMap<number, RetainedBackendPortablePayload> {
+  ): ReadonlyMap<number, RetainedPortablePayload> {
     const resourceNames = new Map<string, string>();
     for (const [name, keys] of compiled.declaredResources) {
       for (const key of keys) resourceNames.set(key, name);
     }
-    const payloads = new Map<number, RetainedBackendPortablePayload>();
+    const payloads = new Map<number, RetainedPortablePayload>();
     try {
       for (const [key, payload] of compiled.resources) {
         const resourceName = resourceNames.get(key);
@@ -1038,13 +1032,13 @@ export class GlyphHandleState {
   #bindPortablePayloadGroups(
     technique: AnyRasterTechnique,
     compiled: CompiledRasterFont,
-    payloads: ReadonlyMap<number, RetainedBackendPortablePayload>,
+    payloads: ReadonlyMap<number, RetainedPortablePayload>,
   ): void {
     const program = resolveRasterPlanProgram(technique.id);
     if (program === undefined) throw new Error(`portable plan program "${technique.id}" is no longer registered`);
     const selectedName = program.schema.render.resource;
     if (selectedName === undefined) throw new Error(`portable plan program "${technique.id}" has no render resource`);
-    const companions: RetainedBackendPortablePayload[] = [];
+    const companions: RetainedPortablePayload[] = [];
     for (const [name, keys] of compiled.declaredResources) {
       if (name === selectedName || program.schema.resources[name]?.cardinality === 'many') continue;
       if (keys.length !== 1) throw new Error(`singleton resource "${name}" does not have exactly one payload`);
@@ -1065,7 +1059,7 @@ export class GlyphHandleState {
     }
   }
 
-  #releasePortablePayloadOwners(payloads: ReadonlyMap<number, RetainedBackendPortablePayload>): void {
+  #releasePortablePayloadOwners(payloads: ReadonlyMap<number, RetainedPortablePayload>): void {
     for (const payload of payloads.values()) {
       if (payload.owners <= 0) throw new Error('portable payload owner underflow');
       payload.owners -= 1;
@@ -1073,13 +1067,13 @@ export class GlyphHandleState {
     }
   }
 
-  #releasePortablePayloadLease(payload: RetainedBackendPortablePayload): void {
+  #releasePortablePayloadLease(payload: RetainedPortablePayload): void {
     if (payload.leases <= 0) throw new Error('portable payload lease underflow');
     payload.leases -= 1;
     this.#deletePortablePayloadIfUnused(payload);
   }
 
-  #deletePortablePayloadIfUnused(payload: RetainedBackendPortablePayload): void {
+  #deletePortablePayloadIfUnused(payload: RetainedPortablePayload): void {
     if (payload.owners === 0 && payload.leases === 0 && this.#portablePayloads.get(payload.referenceId) === payload) {
       this.#portablePayloads.delete(payload.referenceId);
     }
@@ -1093,7 +1087,7 @@ export class GlyphHandleState {
     this.#installedCodecs.delete(state);
   }
 
-  #createOpaqueBinding(kind: RetainedBackendOpaqueBinding['kind']): BackendOpaqueBindingImpl {
+  #createOpaqueBinding(kind: RetainedOpaqueBinding['kind']): HandleOpaqueBindingImpl {
     this.#assertActive();
     const recycledTransformOrdinal = kind === 'transform' ? this.#freeTransformOrdinals.pop() : undefined;
     const ordinal =
@@ -1103,29 +1097,29 @@ export class GlyphHandleState {
         : kind === 'resource'
           ? this.#nextResourceOrdinal
           : this.#nextTransformOrdinal);
-    const next = recycledTransformOrdinal === undefined ? nextBackendOrdinal(ordinal, `${kind} binding`) : undefined;
+    const next = recycledTransformOrdinal === undefined ? nextHandleOrdinal(ordinal, `${kind} binding`) : undefined;
     const handle = kind === 'transform' ? ordinal : this.id(kind, `${this.#identityNamespace}/${kind}/${ordinal}`);
-    const state: RetainedBackendOpaqueBinding = {
+    const state: RetainedOpaqueBinding = {
       kind,
       handle,
-      binding: undefined as unknown as BackendOpaqueBindingImpl,
+      binding: undefined as unknown as HandleOpaqueBindingImpl,
       leases: 1,
       disposed: false,
     };
-    const binding = new BackendOpaqueBindingImpl(this, state);
+    const binding = new HandleOpaqueBindingImpl(this, state);
     state.binding = binding;
     this.#opaqueBindings.add(state);
     this.#opaqueBindingsByKind[kind].set(handle, state);
-    backendOpaqueBindings.set(binding, { backend: this, state });
+    handleOpaqueBindings.set(binding, { handleState: this, state });
     if (kind === 'material') this.#nextMaterialOrdinal = next!;
     else if (kind === 'resource') this.#nextResourceOrdinal = next!;
     else if (next !== undefined) this.#nextTransformOrdinal = next;
     return binding;
   }
 
-  #releaseOpaqueBinding(state: RetainedBackendOpaqueBinding): void {
+  #releaseOpaqueBinding(state: RetainedOpaqueBinding): void {
     if (state.disposed) return;
-    if (state.leases <= 0) throw new Error(`backend ${state.kind} binding lease underflow`);
+    if (state.leases <= 0) throw new Error(`handle ${state.kind} binding lease underflow`);
     state.leases -= 1;
     if (state.leases !== 0) return;
     state.disposed = true;
@@ -1134,7 +1128,7 @@ export class GlyphHandleState {
     if (state.kind === 'transform') this.#freeTransformOrdinals.push(state.handle);
   }
 
-  #forceDisposeOpaqueBinding(state: RetainedBackendOpaqueBinding): void {
+  #forceDisposeOpaqueBinding(state: RetainedOpaqueBinding): void {
     if (state.disposed) return;
     state.leases = 0;
     state.disposed = true;
@@ -1143,13 +1137,14 @@ export class GlyphHandleState {
   }
 
   /** @internal */
-  _disposeOpaqueBinding(binding: BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding): void {
-    const entry = backendOpaqueBindings.get(binding as object);
-    if (entry === undefined || entry.backend !== this) throw new TypeError('opaque binding belongs to another backend');
+  _disposeOpaqueBinding(binding: HandleMaterialBinding | HandleResourceBinding | HandleTransformBinding): void {
+    const entry = handleOpaqueBindings.get(binding as object);
+    if (entry === undefined || entry.handleState !== this)
+      throw new TypeError('opaque binding belongs to another handle');
     this.#releaseOpaqueBinding(entry.state);
   }
 
-  #disposeRetainedFontStack(state: RetainedBackendFontStackBinding): void {
+  #disposeRetainedFontStack(state: RetainedHandleFontStackBinding): void {
     if (state.disposed) return;
     this.disposeFontStack(state.handle);
     state.leases = 0;
@@ -1170,7 +1165,7 @@ export class GlyphHandleState {
   #claim(owners: Map<number, GlyphHandleState>, handle: number, label: string): boolean {
     const owner = owners.get(handle);
     if (owner === this) return false;
-    if (owner !== undefined) throw new Error(`${label} ${handle} is already owned by another glyph backend`);
+    if (owner !== undefined) throw new Error(`${label} ${handle} is already owned by another Glyph handle state`);
     owners.set(handle, this);
     return true;
   }
@@ -1180,7 +1175,7 @@ export class GlyphHandleState {
   }
 
   #releaseClaim(owners: Map<number, GlyphHandleState>, handle: number): void {
-    if (owners.get(handle) !== this) throw new Error(`glyph backend lost registration ${handle}`);
+    if (owners.get(handle) !== this) throw new Error(`Glyph handle state lost registration ${handle}`);
     owners.delete(handle);
   }
 
@@ -1200,14 +1195,14 @@ export class GlyphHandleState {
   }
 
   #assertActive(): void {
-    if (this.#disposed) throw new Error('glyph backend is disposed');
+    if (this.#disposed) throw new Error('Glyph handle state is disposed');
     this.#assertEngineAvailable?.();
   }
 }
 
 function samePortablePayloadGroup(
-  left: readonly RetainedBackendPortablePayload[],
-  right: readonly RetainedBackendPortablePayload[],
+  left: readonly RetainedPortablePayload[],
+  right: readonly RetainedPortablePayload[],
 ): boolean {
   if (left.length !== right.length) return false;
   return left.every((resource, index) => right[index] === resource);
@@ -1268,12 +1263,12 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
 
 class CodecRegistrationImpl implements CodecRegistration {
   declare readonly [codecRegistrationBrand]: true;
-  readonly #backend: GlyphHandleState;
+  readonly #handleState: GlyphHandleState;
   readonly #state: InstalledCodecRegistration;
   #disposed = false;
 
-  constructor(backend: GlyphHandleState, state: InstalledCodecRegistration) {
-    this.#backend = backend;
+  constructor(handleState: GlyphHandleState, state: InstalledCodecRegistration) {
+    this.#handleState = handleState;
     this.#state = state;
   }
 
@@ -1283,18 +1278,18 @@ class CodecRegistrationImpl implements CodecRegistration {
 
   dispose(): void {
     if (this.disposed) return;
-    this.#backend._disposeInstalledCodec(this.#state);
+    this.#handleState._disposeInstalledCodec(this.#state);
     this.#disposed = true;
   }
 }
 
-class BackendFontBindingImpl {
-  readonly #backend: GlyphHandleState;
-  readonly #state: RetainedBackendFontBinding;
+class HandleFontBindingImpl {
+  readonly #handleState: GlyphHandleState;
+  readonly #state: RetainedHandleFontBinding;
   #disposed = false;
 
-  constructor(backend: GlyphHandleState, state: RetainedBackendFontBinding) {
-    this.#backend = backend;
+  constructor(handleState: GlyphHandleState, state: RetainedHandleFontBinding) {
+    this.#handleState = handleState;
     this.#state = state;
   }
 
@@ -1308,25 +1303,25 @@ class BackendFontBindingImpl {
 
   dispose(): void {
     if (this.disposed) return;
-    this.#backend._disposeRetainedFontBinding(this.#state);
+    this.#handleState._disposeRetainedFontBinding(this.#state);
     this.#disposed = true;
   }
 
   /** @internal */
-  _state(): RetainedBackendFontBinding {
-    if (this.disposed) throw new Error('backend font binding has been disposed');
+  _state(): RetainedHandleFontBinding {
+    if (this.disposed) throw new Error('handle font binding has been disposed');
     return this.#state;
   }
 }
 
-class BackendFontStackBindingImpl implements BackendFontStackBinding {
-  declare readonly [backendFontStackBindingBrand]: true;
-  readonly #backend: GlyphHandleState;
-  readonly #state: RetainedBackendFontStackBinding;
+class HandleFontStackBindingImpl implements HandleFontStackBinding {
+  declare readonly [handleFontStackBindingBrand]: true;
+  readonly #handleState: GlyphHandleState;
+  readonly #state: RetainedHandleFontStackBinding;
   #disposed = false;
 
-  constructor(backend: GlyphHandleState, state: RetainedBackendFontStackBinding) {
-    this.#backend = backend;
+  constructor(handleState: GlyphHandleState, state: RetainedHandleFontStackBinding) {
+    this.#handleState = handleState;
     this.#state = state;
   }
 
@@ -1336,21 +1331,21 @@ class BackendFontStackBindingImpl implements BackendFontStackBinding {
 
   dispose(): void {
     if (this.disposed) return;
-    this.#backend._disposeRetainedFontStack(this.#state);
+    this.#handleState._disposeRetainedFontStack(this.#state);
     this.#disposed = true;
   }
 }
 
-class BackendOpaqueBindingImpl implements BackendMaterialBinding, BackendResourceBinding, BackendTransformBinding {
-  declare readonly [backendMaterialBindingBrand]: true;
-  declare readonly [backendResourceBindingBrand]: true;
-  declare readonly [backendTransformBindingBrand]: true;
-  readonly #backend: GlyphHandleState;
-  readonly #state: RetainedBackendOpaqueBinding;
+class HandleOpaqueBindingImpl implements HandleMaterialBinding, HandleResourceBinding, HandleTransformBinding {
+  declare readonly [handleMaterialBindingBrand]: true;
+  declare readonly [handleResourceBindingBrand]: true;
+  declare readonly [handleTransformBindingBrand]: true;
+  readonly #handleState: GlyphHandleState;
+  readonly #state: RetainedOpaqueBinding;
   #disposed = false;
 
-  constructor(backend: GlyphHandleState, state: RetainedBackendOpaqueBinding) {
-    this.#backend = backend;
+  constructor(handleState: GlyphHandleState, state: RetainedOpaqueBinding) {
+    this.#handleState = handleState;
     this.#state = state;
   }
 
@@ -1360,7 +1355,7 @@ class BackendOpaqueBindingImpl implements BackendMaterialBinding, BackendResourc
 
   dispose(): void {
     if (this.disposed) return;
-    this.#backend._disposeOpaqueBinding(this);
+    this.#handleState._disposeOpaqueBinding(this);
     this.#disposed = true;
   }
 }
@@ -1538,7 +1533,7 @@ export class PlanTransport {
 
   /**
    * Answers one paragraph-scoped synchronous measurement without publishing. The
-   * result rides the inactive output slot under a backend lease: its bytes stay readable
+   * result rides the inactive output slot under a handle-state lease: its bytes stay readable
    * only until the next call into the same Wasm module. Engine revisions, the
    * publication generation, and the renderer fence are untouched, so the following
    * ordinary frame proceeds from pre-measure state.
@@ -1803,7 +1798,7 @@ function checkedProduct(left: number, right: number, label: string): number {
   return value;
 }
 
-function nextBackendOrdinal(current: number, label: string): number {
+function nextHandleOrdinal(current: number, label: string): number {
   if (!Number.isSafeInteger(current) || current <= 0 || current > MAX_U32) {
     throw new RangeError(`${label} identities are exhausted`);
   }

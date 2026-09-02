@@ -1,5 +1,5 @@
 import type { PortablePayloadLease } from './render-planner.js';
-import type { BackendMaterialBinding, BackendTransformBinding } from '../internal/handle-state.js';
+import type { HandleMaterialBinding, HandleTransformBinding } from '../internal/handle-state.js';
 import type {
   AnyGlyphBindings,
   BorrowedTypedCommandBuffer,
@@ -55,9 +55,9 @@ export interface CreateEngineOptions<Bindings extends AnyGlyphBindings, Root, Po
   readonly codec: Readonly<{ descriptor: PolicyDescriptor }>;
   readonly root: Root;
   /** Core-owned association from an opaque plan identity to the adapter-authored value. */
-  readonly materialInput?: (binding: BackendMaterialBinding) => Bindings['materialInput'];
+  readonly materialInput: (binding: HandleMaterialBinding) => Bindings['materialInput'];
   /** Core-owned association from an opaque plan identity to the adapter-authored value. */
-  readonly transformInput?: (binding: BackendTransformBinding) => Bindings['transformInput'];
+  readonly transformInput: (binding: HandleTransformBinding) => Bindings['transformInput'];
 }
 
 /**
@@ -77,8 +77,8 @@ class CommandBindingEngine<
 > implements GlyphDisplayListProjector<Bindings> {
   readonly #config: CreateEngineOptions<Bindings, Root, PortableResource>['config'];
   readonly #root: Root;
-  readonly #materialInput: NonNullable<CreateEngineOptions<Bindings, Root, PortableResource>['materialInput']>;
-  readonly #transformInput: NonNullable<CreateEngineOptions<Bindings, Root, PortableResource>['transformInput']>;
+  readonly #materialInput: CreateEngineOptions<Bindings, Root, PortableResource>['materialInput'];
+  readonly #transformInput: CreateEngineOptions<Bindings, Root, PortableResource>['transformInput'];
   readonly #mapper = new TypedCommandBufferMapper();
   readonly #programsById: ReadonlyMap<number, PolicyProgram>;
   readonly #programs = new WeakMap<object, Bindings['program']>();
@@ -94,8 +94,8 @@ class CommandBindingEngine<
   constructor(options: CreateEngineOptions<Bindings, Root, PortableResource>) {
     this.#config = options.config;
     this.#root = options.root;
-    this.#materialInput = options.materialInput ?? ((binding) => binding as Bindings['materialInput']);
-    this.#transformInput = options.transformInput ?? ((binding) => binding as Bindings['transformInput']);
+    this.#materialInput = options.materialInput;
+    this.#transformInput = options.transformInput;
     this.#programsById = new Map(
       options.codec.descriptor.programs.map((program) => [program.programId as number, program]),
     );
@@ -406,7 +406,7 @@ class CommandBindingEngine<
     return value;
   }
 
-  #transform(binding: BackendTransformBinding, recordIndex = 0): Bindings['transform'] {
+  #transform(binding: HandleTransformBinding, recordIndex = 0): Bindings['transform'] {
     let value = this.#transforms.get(binding);
     if (value === undefined) {
       value = this.#config.schema.transform(this.#root, this.#transformInput(binding), recordIndex);
