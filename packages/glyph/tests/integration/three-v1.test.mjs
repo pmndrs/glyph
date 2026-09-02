@@ -245,6 +245,30 @@ test('a root releases its renderer publication when its final Text is disposed',
   font.dispose();
 });
 
+test('a root restores its draw object when the host clears and reattaches the authored tree', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
+  const scene = new THREE.Scene();
+  const text = three.createText({ font, text: 'reattached' });
+  scene.add(text);
+  scene.updateMatrixWorld(true);
+  assert.equal(three.drawRoot.parent, scene);
+  assert.ok(rootDraws(scene).length > 0);
+
+  scene.clear();
+  assert.equal(three.drawRoot.parent, null);
+  scene.add(text);
+  scene.updateMatrixWorld(true);
+  assert.equal(three.drawRoot.parent, scene, 'the stable scene identity must not hide a detached draw object');
+  assert.ok(rootDraws(scene).length > 0);
+
+  text.dispose();
+  font.dispose();
+});
+
 test('TextGroup ancestry cannot smuggle a Text across Glyph roots', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont(

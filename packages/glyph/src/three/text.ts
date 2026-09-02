@@ -418,8 +418,10 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   }
 
   /** @internal Cheap host-tree observation; semantic publication waits for the root draw traversal. */
-  observeHostTree(): void {
+  observeHostTree(text: THREE.Object3D): void {
     if (this.#disposed) return;
+    const scene = nearestScene(text);
+    if (scene === this.#scene && (scene === undefined || this.#drawRoot.parent === scene)) return;
     this.#bindScene(this.#renderMembers());
   }
 
@@ -520,7 +522,7 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
       }
       scene = candidate;
     }
-    if (scene === this.#scene) return;
+    if (scene === this.#scene && (scene === undefined || this.#drawRoot.parent === scene)) return;
     this.#drawRoot.removeFromParent();
     this.#scene = scene;
     if (scene !== undefined) {
@@ -835,7 +837,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   override updateMatrixWorld(force?: boolean): void {
     super.updateMatrixWorld(force);
     if (this.#disposed) return;
-    this.#root.observeHostTree();
+    this.#root.observeHostTree(this);
   }
 
   /** Publishes pending semantic state immediately, then synchronizes current transforms. */
@@ -999,12 +1001,6 @@ export class TextGroup extends THREE.Object3D {
 
   override copy(_source: THREE.Object3D, _recursive?: boolean): never {
     throw new Error('TextGroup cannot be copied');
-  }
-
-  override updateMatrixWorld(force?: boolean): void {
-    super.updateMatrixWorld(force);
-    if (this.#disposed) return;
-    this.#root.observeHostTree();
   }
 
   /** Publishes pending descendant semantic state immediately, then synchronizes current transforms. */
