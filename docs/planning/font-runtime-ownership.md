@@ -1,9 +1,9 @@
 ---
 type: Implementation Plan
-title: Font, GlyphEngine, backend, render-planner, and render-target ownership
-description: Ownership correction that separates portable font assets from engine registration and makes renderer acceptance lifetimes explicit.
+title: Superseded font and engine ownership plan
+description: Historical ownership plan superseded by the root GlyphConfig, handle, and root integration contract.
 tags: [fonts, engine, renderer, ownership, lifecycle, memory, disposal]
-status: draft
+status: deprecated
 sources:
   - id: current-loader
     resource: ../../packages/glyph/src/loader.ts
@@ -30,8 +30,8 @@ sources:
     resource: ../../packages/glyph/src/internal/frame-transfer-pool.ts
     title: Existing bounded worker transfer pool
   - id: current-three-engine
-    resource: ../../packages/glyph/src/three/engine-coordinator.ts
-    title: Current Three.js integration
+    resource: ../../packages/glyph/src/three/handle.ts
+    title: Current Three.js configured handle
   - id: renderer-guide
     resource: ../guides/renderer-integration.md
     title: Current renderer integration guide
@@ -44,6 +44,12 @@ generated:
 ---
 
 # Font, GlyphEngine, backend, render-planner, and render-target ownership
+
+> **Historical record — superseded.** This document preserves the engine-driving design that preceded D-306 and D-308.
+> Integrators now use root `GlyphConfig`/`defineGlyphConfig`, Codec `encode`, the internal trusted projection to a borrowed
+> `CommandBufferView` with ordered `DisplayList`, `GlyphRenderer.decode`, `glyph.handle`, and anonymous or named roots.
+> See the [current renderer integration guide](../guides/renderer-integration.md). The backend, planner, target, and public
+> `/core` examples below are not current API guidance.
 
 This plan separates an immutable font asset from the mutable engine, backend, render planner, and GPU registrations that consume
 it. It also makes the one relationship the renderer protocol already depends on explicit: one render planner advances one
@@ -1229,19 +1235,19 @@ its explicit leases are released.
 
 ### Repository work map
 
-| Area                                 | Primary implementation owners                                                                                                                                 | Required outcome                                                                                                                                                                                                                         |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| immutable Font and loading           | `packages/glyph/src/loader.ts`, `loaded-font.ts`, `glyph-engine.ts`, and internal registered-font/cache modules                                               | Replace engine-bound `LoadedFont` with one canonical root `Font` backing, explicit library leases, and engine-independent loading.                                                                                                       |
-| declarative bake discovery           | `packages/glyph/src/font.ts`, `packages/glyph/src/discovery.ts`, `packages/glyph/src/node/bake.ts`, bake fixtures, and package exports                        | Preserve `defineFont`/`FontToken` as the statically discoverable root contract; reuse the existing `FontInput` name and prove source discovery after migration.                                                                          |
-| engine and backend ownership         | `packages/glyph/src/glyph-engine.ts`, `core/backend.ts`, `core/retention.ts`, and `core/plan-view.ts`                                                         | Engine-owned backend factory, hidden registrations, target-bound render planners, engine-wide borrow gate, and unforgeable candidate modes.                                                                                              |
-| retained engine and ABI              | `packages/glyph/rust/shaper/src/engine`, generated ABI, TypeScript frame/compiler internals, and `internal/frame-transfer-pool.ts`                            | Keep the numeric wire format and A/B publication; add retained text handles, privatize caller-authored render planner/acknowledgment inputs, and adapt the existing bounded transfer/return pool rather than creating a second protocol. |
-| renderer-free measurement            | `packages/glyph/src/paragraph.ts` and a package-private per-realm measurement service                                                                         | Replace sync construction with async `createParagraph`, keep later queries synchronous, and use a target-less non-publishing render planner without exposing engine ownership at root.                                                   |
-| Three reference integration          | `packages/glyph/src/three/engine-coordinator.ts`, `engine-plan-target.ts`, `font-loader.ts`, and `text.ts`                                                    | Consume public root plus `/core`, keep `PlanTarget` zero-copy, pool immutable resources per WebGPU device or WebGL context, and batch compatible font-stack members without reordering.                                                  |
-| React integration                    | `packages/glyph/src/react.ts`                                                                                                                                 | Replace module-global loader/promise ownership with provider or application `FontLibrary` leases and prove StrictMode lifecycle safety.                                                                                                  |
-| external renderer proof              | `packages/glyph-example-renderer/src` and its tests                                                                                                           | Keep TypeGPU/WebGPU device ownership external, implement ordinary zero-copy `PlanTarget`, and add a real worker-backed `AsyncPlanTarget` round trip.                                                                                     |
-| applications, labs, and size entries | every consumer under `apps/`, including module-scope `useFont.preload`, benchmark labs, conformance targets, proof routes, and `apps/benchmarks/size-entries` | Migrate all call sites in the same atomic package change; preserve module-scope preload through an explicit library-bound contract, replace withdrawn export anchors, and keep root checks plus comparable size graphs reachable.        |
-| package cleanup                      | package manifests, exports, boundary tests, and obsolete example adapters                                                                                     | Remove engine-bound and renderer-leaking compatibility surfaces; permit Three only in `glyph-example-raster`'s explicit `/tsl` implementation subpath and never in its neutral entry or in `glyph-example-renderer`.                     |
-| docs and evidence                    | README, package concepts, renderer guide, this plan, HTML report, benchmark workflows, and size evidence                                                      | Make current APIs, ownership graphs, worker transfer, performance, and deferred work agree at the final source head.                                                                                                                     |
+| Area                                   | Primary implementation owners                                                                                                                                 | Required outcome                                                                                                                                                                                                                         |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| immutable Font and loading             | `packages/glyph/src/loader.ts`, `loaded-font.ts`, `glyph-engine.ts`, and internal registered-font/cache modules                                               | Replace engine-bound `LoadedFont` with one canonical root `Font` backing, explicit library leases, and engine-independent loading.                                                                                                       |
+| declarative bake discovery             | `packages/glyph/src/font.ts`, `packages/glyph/src/discovery.ts`, `packages/glyph/src/node/bake.ts`, bake fixtures, and package exports                        | Preserve `defineFont`/`FontToken` as the statically discoverable root contract; reuse the existing `FontInput` name and prove source discovery after migration.                                                                          |
+| engine and backend ownership           | `packages/glyph/src/glyph-engine.ts`, `core/backend.ts`, `core/retention.ts`, and `core/plan-view.ts`                                                         | Engine-owned backend factory, hidden registrations, target-bound render planners, engine-wide borrow gate, and unforgeable candidate modes.                                                                                              |
+| retained engine and ABI                | `packages/glyph/rust/shaper/src/engine`, generated ABI, TypeScript frame/compiler internals, and `internal/frame-transfer-pool.ts`                            | Keep the numeric wire format and A/B publication; add retained text handles, privatize caller-authored render planner/acknowledgment inputs, and adapt the existing bounded transfer/return pool rather than creating a second protocol. |
+| renderer-free measurement              | `packages/glyph/src/paragraph.ts` and a package-private per-realm measurement service                                                                         | Replace sync construction with async `createParagraph`, keep later queries synchronous, and use a target-less non-publishing render planner without exposing engine ownership at root.                                                   |
+| Historical Three reference integration | Removed `three/engine-coordinator.ts` plus then-current `engine-plan-target.ts`, `font-loader.ts`, and `text.ts`                                              | Superseded implementation sequence; current integration uses root `GlyphConfig`, `GlyphRenderer.decode`, handles, and roots.                                                                                                             |
+| React integration                      | `packages/glyph/src/react.ts`                                                                                                                                 | Replace module-global loader/promise ownership with provider or application `FontLibrary` leases and prove StrictMode lifecycle safety.                                                                                                  |
+| external renderer proof                | `packages/glyph-example-renderer/src` and its tests                                                                                                           | Keep TypeGPU/WebGPU device ownership external, implement ordinary zero-copy `PlanTarget`, and add a real worker-backed `AsyncPlanTarget` round trip.                                                                                     |
+| applications, labs, and size entries   | every consumer under `apps/`, including module-scope `useFont.preload`, benchmark labs, conformance targets, proof routes, and `apps/benchmarks/size-entries` | Migrate all call sites in the same atomic package change; preserve module-scope preload through an explicit library-bound contract, replace withdrawn export anchors, and keep root checks plus comparable size graphs reachable.        |
+| package cleanup                        | package manifests, exports, boundary tests, and obsolete example adapters                                                                                     | Remove engine-bound and renderer-leaking compatibility surfaces; permit Three only in `glyph-example-raster`'s explicit `/tsl` implementation subpath and never in its neutral entry or in `glyph-example-renderer`.                     |
+| docs and evidence                      | README, package concepts, renderer guide, this plan, HTML report, benchmark workflows, and size evidence                                                      | Make current APIs, ownership graphs, worker transfer, performance, and deferred work agree at the final source head.                                                                                                                     |
 
 Each step is one coherent commit and remains green before the next.
 

@@ -49,7 +49,7 @@ sources:
     title: Retained Rust text engine
   - id: backend
     resource: ../../packages/glyph/src/core/backend.ts
-    title: Glyph backend and Wasm plan transport
+    title: Internal Glyph backend and Wasm command transport
   - id: tsl-shaders
     resource: ../../packages/glyph/src/tsl.ts
     title: Technique shader library layer
@@ -67,7 +67,7 @@ sources:
     title: Built-in ThreeConfig and handle factories
   - id: configured-plan-target
     resource: ../../packages/glyph/src/core/glyph-plan-target.ts
-    title: Shared configured plan target
+    title: Internal configured publication target
   - id: three-transform-sync
     resource: ../../packages/glyph/src/three/transform-synchronizer.ts
     title: Engine-free Three transform synchronization
@@ -79,7 +79,7 @@ sources:
     title: Three.js detached Decorations object
   - id: three-policy
     resource: ../../packages/glyph/src/three/plan-program-registry.ts
-    title: Three.js policy-program registry
+    title: Three.js Codec-program registry
   - id: react
     resource: ../../packages/glyph/src/react.ts
     title: React Three Fiber adapter
@@ -108,14 +108,14 @@ Status: foundation merged; canary publishing configured while publishing-feature
 
 The package owns six runtime layers:
 
-| Layer                   | Owner                 | Responsibility                                                                                                                         |
-| ----------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Root runtime and config | TypeScript core       | Initialize one Glyph engine, construct named adapter handles, and coordinate projection/decode/commit transactions.                    |
-| Font and raster loading | TypeScript core       | Validate portable GLB assets, register shaping payloads, decode selected raster resources, and retain font identity.                   |
-| Shaping and layout      | Rust/Wasm             | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                     |
-| Policy and render plan  | Rust/Wasm             | Interpret a validated renderer policy, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.     |
-| Three.js integration    | `@pmndrs/glyph/three` | Compile policy programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
-| React integration       | `@pmndrs/glyph/react` | Reconcile React values into the same imperative `Text` and `TextGroup` objects.                                                        |
+| Layer                   | Owner                 | Responsibility                                                                                                                        |
+| ----------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Root runtime and config | TypeScript core       | Initialize one Glyph engine, construct named adapter handles, and coordinate projection/decode/commit transactions.                   |
+| Font and raster loading | TypeScript core       | Validate portable GLB assets, register shaping payloads, decode selected raster resources, and retain font identity.                  |
+| Shaping and layout      | Rust/Wasm             | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                    |
+| Codec and command plan  | Rust/Wasm             | Interpret a validated Codec, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.              |
+| Three.js integration    | `@pmndrs/glyph/three` | Compile Codec programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
+| React integration       | `@pmndrs/glyph/react` | Reconcile React values into the same imperative `Text` and `TextGroup` objects.                                                       |
 
 Runtime Rust and all shared Rust code remain `no_std + alloc` compatible with the package allocator contract. The optional
 font-baker Wasm alone enables a feature-gated `std` adapter for Fontations subsetting; the same crate continues to
@@ -124,23 +124,24 @@ for font registrations and the single mutating
 `pmndrs_glyph_engine_update(plannerId, requestOffset, requestLength)` export for render planners.
 TypeScript does not independently shape, lay out, or pack paragraphs.
 
-The root `glyph` runtime initializes one engine idempotently. `glyph.handle(name, config)` creates an adapter-owned backend
-and independent mutable handle state; live names are unique and become reusable after disposal. `GlyphConfig` selects the
-public Codec, resource resolver, phase-structured renderer decoder, and handle factory. The engine owns the internal encoded
-command buffer and projects its trusted data into a borrowed `CommandBufferView` whose ordered `DisplayList` is one nested
-phase. The shared publication helper settles projection, renderer decode, commit/discard, and resource-binding ownership
-synchronously while command bytes are borrowed. There is no configurable intermediate decoder.
-`defineGlyphConfig()` preserves the schema, font vocabulary, renderer result, boundary, handle, and adapter extension fields
-as one inferred relationship. It packages handle construction while those types are known; the heterogeneous root registry
-invokes that common operation without recovering or casting a concrete config type. When a config declares fonts, Glyph
-also creates and disposes the handle-local FontFace store over the process-wide immutable FontLibrary cache.
+The root `glyph` runtime initializes one engine idempotently. `glyph.handle(name, config)` creates independent mutable
+adapter state; live names are unique and become reusable after disposal. Every handle owns one anonymous root and fronts
+that root's API directly. Calling `handle(name)` selects one idempotent live terminal sibling root, so roots cannot nest and
+Text/TextGroup objects cannot be rootless.
 
-`GlyphBackend` is the cold registration owner within one engine: it claims policies, font bindings, font stacks, and
-render planners, retains every claimed ID's provenance, and rejects cross-backend references before a live borrow expires.
-`RenderPlanner` is the hot lifetime of one independently revisioned desired-text set. It owns paragraph state,
-physical plan storage and generations, publications, and engine-side resource residency; it is not a scene, device, or
-render pass. Portable compiled resources remain immutable payload data. A renderer owns the per-device realization pool
-that turns those payloads into textures, buffers, and geometry and leases them across render planners by stable identity.
+`GlyphConfig` contains `schema`, optional `fonts`, `encode`, `resolve`, `renderer`, `root`, and optional `commands`.
+`encode()` selects the Codec that defines packed command-buffer data. The engine owns those internal bytes and projects
+trusted data through the schema and resolver into a borrowed `CommandBufferView`; its nested `DisplayList` preserves
+authoritative batch/root-instance order. `GlyphRenderer.decode(view)` stages retained host objects and returns the
+transactional result/commit/discard boundary. The host renderer later traverses or submits committed objects. There is no
+configurable intermediate decoder and ordinary renderer code receives no numeric IDs.
+
+`defineGlyphConfig()` preserves the schema, font vocabulary, renderer result, boundary, root, and adapter extension fields
+as one inferred relationship. Internal handle machinery owns Codec installation, planning, projection, resource
+settlement, and disposal; third-party integrations receive only constrained root services. When a config declares fonts,
+Glyph also creates and disposes the handle-local FontFace store over the process-wide immutable FontLibrary cache. Portable
+compiled resources remain immutable payload data, while each renderer owns physical textures, buffers, geometry, and
+their device-relative leases.
 
 ## Public package surfaces
 
@@ -158,7 +159,6 @@ that turns those payloads into textures, buffers, and geometry and leases them a
 | `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                              |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                                 |
 | `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                          |
-| `@pmndrs/glyph/core`         | `GlyphConfig`, `CommandBufferView`/`DisplayList` contracts, publication helpers, engine/backend/planners, technique schemas, and Codec ABI. |
 | `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                          |
 | `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.                   |
 | `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                          |
@@ -232,7 +232,7 @@ nothing. Each carries the offending paragraph and style in two u32s of the resul
 header size and every prior field offset are unchanged. `/three` re-raises them as `TextFrameError`, whose `rejection` is
 a discriminated union over the cause and affected `Text`; span bookkeeping remains private to the structural compiler.
 
-Publicly constructible frame inputs are validated where they enter `Text`, `TextGroup`, `Paragraph`, policy assembly, or
+Publicly constructible frame inputs are validated where they enter `Text`, `TextGroup`, `Paragraph`, Codec assembly, or
 font registration; malformed data never waits for scene traversal to fail. A residual engine rejection therefore names an
 internal invariant defect through `TextFrameError` while the last committed draw state remains live. Renderer preparation is
 separate: if an engine-accepted publication cannot realize its resources or material, Three discards the candidate, keeps
@@ -339,11 +339,11 @@ the exact content-box width. Columns fill in order without balancing, so the fin
 `width` is required because the column advance is derived from it. Ordered columns are the only multi-interval flow the
 engine represents; balancing, exclusions, and contour flow remain post-v1.
 
-## Renderer policy
+## Renderer Codec
 
-Each portable technique registers a schema, policy-body factory, and cold font compiler in `/core`. Three registers
-only the renderer half — resource realization and material creation — then assembles the complete Three `PolicyProgram`
-from the portable body. Rust validates and interprets the compiled policy; it never invokes a JavaScript callback in
+Each portable technique registers a schema, Codec-body factory, and cold font compiler through the root package. Three
+registers only the renderer half—resource realization and material creation—then assembles the complete Three Codec
+program from the portable body. Rust validates and interprets the compiled Codec; it never invokes a JavaScript callback in
 shaping, layout, or packing. Cold resource selection receives explicit `(glyphIndex, strikeIndex)` coordinates; the
 compiler alone lowers them into the strike-major wire table. Three validates declared reserved supplied-geometry
 semantics when a variant registers, then validates every retained payload attribute when a font is bound, before device
@@ -359,21 +359,18 @@ Portable resource declarations select `one` or `many` cardinality. Fixed-member 
 and textures under one retained identity; groups cannot nest, geometry cannot repeat, and every resourceful schema names
 the primary render resource used by the plan primitive. Bitmap repeated strikes, MSDF atlas/range companions, and Slug
 repeated page groups all compile through this contract. Capability profiles contain capabilities only;
-`compileRenderPolicy()` assigns their nonzero wire IDs by descriptor order, and ordinary single-profile frames omit the
+`compileCodec()` assigns their nonzero wire IDs by descriptor order, and ordinary single-profile frames omit the
 selector.
 
-Renderer-authored wire identities are hashed domain/name pairs returned as branded numbers (`PolicyHandle`,
-`FontBindingHandle`, `FontStackHandle`, `PlannerHandle`, `MaterialHandle`, or `PolicyBufferId`). Module-level policy
-and buffer constants use `id(kind, stableName)`. Engine-created bindings, stacks, render planners, materials, paragraphs,
-styles, flows, and regions use backend-scoped identities whose provenance is released by `backend.dispose()`.
-Both paths reject invalid names or observed collisions at the authoring call, and every consuming backend call verifies active
-provenance. Buffer IDs are folded into the nonzero `u16` ABI range; registration and policy compilation still reject
-conflicting IDs when values meet. Dense renderer slots such as `transformIndex` remain explicit compact indices rather
-than identities.
+Codec-authored wire identities are hashed domain/name pairs returned as branded numbers. Module-level Codec and buffer
+constants use `id(kind, stableName)`. Handle construction supplies collision-checked identities to `encode()` and keeps
+their provenance private. Invalid names or observed collisions throw at the authoring call. Buffer IDs are folded into
+the nonzero `u16` ABI range; registration and Codec compilation still reject conflicts. Dense renderer slots such as
+`transformIndex` remain explicit compact indices rather than application identities.
 
-The first-party policy can select indexed transform batching, direct per-draw transforms, or a hybrid. Indexed mode adds a
+The first-party Codec can select indexed transform batching, direct per-draw transforms, or a hybrid. Indexed mode adds a
 stable transform-table ID to each rendered glyph so compatible paragraphs may collapse into one draw. Direct mode splits
-draws by transform for integrations that prefer ordinary object matrices. Policy programs may use ordered-direct or
+draws by transform for integrations that prefer ordinary object matrices. Codec programs may use ordered-direct or
 stable-indirect physical storage. Stable draws carry one reserved u32 order buffer; Three validates its draw/primitive
 addressing once, then uses the same logical-to-physical mapping for technique records, transform indices, explicit origin
 queries, and third-party program material contexts. Root `compositing` determines whether Rust must preserve authored
@@ -397,13 +394,13 @@ font carries both shaping identity and raster binding, so `Text` has no redundan
 font for each cluster and partitions the render plan according to the active renderer's supported technique programs.
 
 This permits an MSDF or Bitmap prose font to fall back to a Slug emoji font while keeping third-party renderers safe: an
-unregistered technique fails at the policy boundary instead of producing an unsupported draw.
+unregistered technique fails at the Codec boundary instead of producing an unsupported draw.
 A public compiled-Wasm integration loads Bitmap Inter plus Slug Font Awesome, shapes one paragraph through that ordered
 fallback stack, and observes two Rust-planned draws with exact Bitmap `vec2` and Slug `vec4` physical records. The
 selected font binding—not a `Text` technique selector—carries the renderer program and resource.
 
-Techniques explicitly declare the text effects their portable policy and shader implement. MSDF supports outline and
-shadow; Bitmap and Slug currently support neither. Three, `Paragraph`, and direct `/core` planner entry points validate
+Techniques explicitly declare the text effects their portable Codec and shader implement. MSDF supports outline and
+shadow; Bitmap and Slug currently support neither. Three, `Paragraph`, and root-configured integrations validate
 the selected font techniques at the call that accepts a style, so an unsupported effect cannot become a malformed or
 silently degraded render plan. The semantic ABI carries effect color, width, offset, and inherited opacity only for
 technique programs that opt in.
@@ -459,13 +456,12 @@ The semantic values preserve information useful to callers:
   explicit inspection;
 - detached copy requests never mutate authoritative Rust layout or the source planner's acceptance frontier.
 
-## Planner-assisted detached glyph copies
+## Root-assisted detached glyph copies
 
-`RetainedText.copyGlyphs(stableIds, target)` and `copyDecorations(target)` are synchronous committed-state queries over
-the existing render planner. Rust compacts the selected paragraph records through the installed policy into complete
-checkpoints; it does not expose planner buffer offsets for each renderer to reconstruct. The supplied borrowed target
-must import the checkpoint before returning. The query neither acknowledges renderer acceptance nor advances source
-revisions, publication generation, or A/B output ownership.
+Public `Text.breakApart()` requests committed glyph and decoration subsets through its owning root. Rust compacts the
+selected paragraph records through the installed Codec into complete checkpoints; it does not expose buffer offsets or
+private planning objects for each renderer to reconstruct. Root services synchronously decode each detached copy into its
+destination renderer. The query does not advance the source root's revision or publication generation.
 
 Three's `Text.breakApart()` uses both planner requests and returns the frozen tuple
 `[Glyphs, Decorations | undefined]`. It preserves the source transform, planner-defined batching, fallback techniques,
@@ -473,7 +469,7 @@ shared immutable atlas/page leases, and supplied geometry while adding one full 
 local methods mirror `InstancedMesh`; world methods bridge physics state to root-relative storage. Bulk world-space
 callers update the detached root once, invert its world matrix once, convert each body matrix with
 `worldToLocalMatrix()`, and use `setMatrixAt()` so traversal and inversion stay outside the per-glyph loop. Materials and
-engine domain leases belong to each detached object,
+root-relative resource leases belong to each detached object,
 so the pair may outlive the source `Text`, font, and loader without sharing mutable presentation state. The source `Text`
 stays live and may continue publishing while detached objects remain unchanged.
 
@@ -512,31 +508,27 @@ There are no instance-ignoring runtime ABI readers. Package builds isolate the d
 `artifact-baker` feature sets from kernel-only test targets and reject an optimized module missing any contract-declared
 artifact export, preventing Cargo's shared top-level artifact path from silently publishing a smaller test variant.
 
-The renderer-neutral core publishes as `@pmndrs/glyph/core` (D-249): GlyphEngine creation, engine-owned backends and render planners,
-semantic render-plan and layout readers, portable font compilation, and the policy-authoring
-toolkit. The four technique TSL node graphs publish as `@pmndrs/glyph/tsl` under Tsl-prefixed names, including the Slug shader tree that
-previously lived in core internals. Three's first-party policy is authored with the same public toolkit in
-`three/render-policy.ts`, and a scoped import lint denies the three, tsl, and react surfaces any import from `internal/`
-or `generated/`, so the first-party integrations consume exactly the layering a third party would.
+Renderer integration publishes from root `@pmndrs/glyph`: `GlyphConfig`, `defineGlyphConfig`, Codec authoring,
+schema bindings, `CommandBufferView`/`DisplayList`, resource leases, constrained root services, and
+`GlyphRenderer.decode`. D-306 and D-308 supersede D-249's former public `/core` engine-driving layer. Internal projection,
+identity mapping, planning, settlement, and Wasm transport are package machinery rather than an application or integrator
+API. The explicit `/tsl` and `/typegpu` shader subpaths own technique shader realizations and no scene, runtime, or root.
 
-Both layers publish as npm subpaths. They are how a renderer integrates without our `Object3D`s, and
-`@pmndrs/glyph/three` is itself built on `/core`. `packages/glyph-example-renderer` is the standing second-engine proof:
-borrowed targets consume Wasm A/B memory synchronously, async targets receive exactly one bounded self-owned copy,
-renderer fences advance only after device commit, and storage generations retire by exact identity. Public wire
-identities are branded numeric hashes; backend-created registrations are automatic and expire with that backend. The
-Glyph engine owns backends, the backend owns bindings, policies, and render planners, and each render planner owns text plus one target and acceptance
-frontier. Portable font compilation retains only validated buffer, texture, grouped-resource, and GLB-like geometry
-payloads, never renderer objects.
+Three and `packages/glyph-example-renderer` consume the same root contract available to third-party integrations. The
+example is the standing second-engine proof: its Codec describes storage, the trusted internal projection supplies one
+borrowed ordered view, its renderer stages and commits host objects synchronously, exact identities govern retirement,
+and its caller-owned TypeGPU/WebGPU host later submits work. Portable font compilation retains only validated buffer,
+texture, grouped-resource, and GLB-like geometry payloads, never renderer objects.
 
 The same reasoning withdrew the `*-abi` and `bakers/*/validate` subpaths. Raw struct offsets and enum numbers remain
-package-private implementation data; `/core` exposes validated semantic policy values and record readers instead. The
-validator subpaths likewise had no consumer outside this package. Both sets of modules remain reachable by relative path
-from package-owned tests and scripts where wire-level verification is legitimate.
+package-private implementation data; the root exposes only renderer-facing semantic views and Codec authoring values.
+The validator subpaths likewise had no consumer outside this package. Both sets of modules remain reachable by relative
+path from package-owned tests and scripts where wire-level verification is legitimate.
 
-The renderer-neutral core owns the completed asynchronous Worker transfer contract: it copies opaque plan bytes once into
+Internal engine machinery owns the completed asynchronous Worker transfer contract: it copies opaque plan bytes once into
 a bounded exact-size transferable pool, applies explicit backpressure, and requires the target to return the same
-unmodified full-span buffer. Three uses the default synchronous borrowed target. The example renderer proves TypeGPU and
-WebGPU realization directly against the same Rust render plan.
+unmodified full-span buffer. The ordinary configured path uses the synchronous borrowed view. The example renderer proves
+TypeGPU and WebGPU realization directly against the same Rust command plan.
 
 ## Current correctness evidence
 
