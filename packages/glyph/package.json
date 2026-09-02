@@ -84,6 +84,16 @@
       "source": "./src/tsl/decoration-shader.ts",
       "import": "./dist/tsl/decoration-shader.js"
     },
+    "./tsl/slug-shaders/tsl-compat": null,
+    "./tsl/internal/*": null,
+    "./tsl/*": {
+      "types": {
+        "source": "./src/tsl/*.ts",
+        "default": "./dist/tsl/*.d.ts"
+      },
+      "source": "./src/tsl/*.ts",
+      "import": "./dist/tsl/*.js"
+    },
     "./typegpu": {
       "types": {
         "source": "./src/typegpu.ts",
@@ -99,6 +109,15 @@
       },
       "source": "./src/typegpu/bitmap-shader.ts",
       "import": "./dist/typegpu/bitmap-shader.js"
+    },
+    "./typegpu/internal/*": null,
+    "./typegpu/*": {
+      "types": {
+        "source": "./src/typegpu/*.ts",
+        "default": "./dist/typegpu/*.d.ts"
+      },
+      "source": "./src/typegpu/*.ts",
+      "import": "./dist/typegpu/*.js"
     },
     "./three": {
       "types": {
@@ -132,6 +151,19 @@
       "source": "./src/three/slug.ts",
       "import": "./dist/three/slug.js"
     },
+    "./three/internal/*": null,
+    "./three/codec": null,
+    "./three/detached-object": null,
+    "./three/engine-plan-target": null,
+    "./three/transform-synchronizer": null,
+    "./three/*": {
+      "types": {
+        "source": "./src/three/*.ts",
+        "default": "./dist/three/*.d.ts"
+      },
+      "source": "./src/three/*.ts",
+      "import": "./dist/three/*.js"
+    },
     "./react": {
       "types": {
         "source": "./src/react.ts",
@@ -164,6 +196,14 @@
       "source": "./src/react/slug.ts",
       "import": "./dist/react/slug.js"
     },
+    "./react/*": {
+      "types": {
+        "source": "./src/react/*.ts",
+        "default": "./dist/react/*.d.ts"
+      },
+      "source": "./src/react/*.ts",
+      "import": "./dist/react/*.js"
+    },
     "./raster/bitmap": {
       "types": {
         "source": "./src/raster/bitmap.ts",
@@ -187,6 +227,23 @@
       },
       "source": "./src/raster/slug.ts",
       "import": "./dist/raster/slug.js"
+    },
+    "./raster/internal/*": null,
+    "./raster/*": {
+      "types": {
+        "source": "./src/raster/*.ts",
+        "default": "./dist/raster/*.d.ts"
+      },
+      "source": "./src/raster/*.ts",
+      "import": "./dist/raster/*.js"
+    },
+    "./config/*": {
+      "types": {
+        "source": "./src/config/*.ts",
+        "default": "./dist/config/*.d.ts"
+      },
+      "source": "./src/config/*.ts",
+      "import": "./dist/config/*.js"
     },
     "./bakers/bitmap": {
       "types": {
@@ -236,6 +293,9 @@
       "source": "./src/runtime-bake.ts",
       "import": "./dist/runtime-bake.js"
     },
+    "./internal/*": null,
+    "./generated/*": null,
+    "./font-baker/*": null,
     "./text-shaper.wasm": "./dist/text-shaper.wasm",
     "./bitmap-baker.wasm": "./dist/bitmap-baker.wasm",
     "./mtsdf-baker.wasm": "./dist/mtsdf-baker.wasm",

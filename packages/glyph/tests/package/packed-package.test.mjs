@@ -62,11 +62,12 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   );
   const consumerEntry = pathToFileURL(join(temporaryDirectory, 'consumer', 'entry.mjs')).href;
   const moduleSubpaths = Object.entries(manifest.exports)
-    .filter(([, target]) => typeof target === 'object' && target !== null)
+    .filter(([subpath, target]) => typeof target === 'object' && target !== null && !subpath.includes('*'))
     .map(([subpath]) => (subpath === '.' ? '@pmndrs/glyph' : `@pmndrs/glyph${subpath.slice(1)}`));
 
   for (const target of Object.values(manifest.exports)) {
     if (typeof target !== 'object' || target === null) continue;
+    if (target.source.includes('*')) continue;
     assert.ok(packedFiles.includes(target.source.slice(2)), `${target.source} must ship with its source condition`);
   }
 
@@ -74,6 +75,20 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     const resolved = import.meta.resolve(specifier, consumerEntry);
     const imported = await import(resolved);
     assert.ok(Object.keys(imported).length > 0, `${specifier} must expose at least one ESM export`);
+  }
+
+  for (const specifier of [
+    '@pmndrs/glyph/tsl/packed-color',
+    '@pmndrs/glyph/tsl/slug-shaders/slug-render',
+    '@pmndrs/glyph/typegpu/bitmap-reference',
+    '@pmndrs/glyph/three/material',
+    '@pmndrs/glyph/react/bitmap',
+    '@pmndrs/glyph/raster/bitmap',
+    '@pmndrs/glyph/config/schema',
+  ]) {
+    const resolved = import.meta.resolve(specifier, consumerEntry);
+    const imported = await import(resolved);
+    assert.ok(Object.keys(imported).length > 0, `${specifier} must expose its public leaf`);
   }
 
   for (const subpath of ['./text-shaper.wasm', './bitmap-baker.wasm', './mtsdf-baker.wasm', './slug-baker.wasm']) {
@@ -100,6 +115,13 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     '@pmndrs/glyph/bakers/bitmap/validate',
     '@pmndrs/glyph/bakers/msdf/validate',
     '@pmndrs/glyph/bakers/slug/validate',
+    '@pmndrs/glyph/internal/configured-handle',
+    '@pmndrs/glyph/generated/text-shaper-abi',
+    '@pmndrs/glyph/font-baker/validator',
+    '@pmndrs/glyph/three/internal/draw-realizer',
+    '@pmndrs/glyph/three/engine-plan-target',
+    '@pmndrs/glyph/raster/internal/bitmap-decoder',
+    '@pmndrs/glyph/tsl/slug-shaders/tsl-compat',
   ]) {
     assert.throws(
       () => import.meta.resolve(removed, consumerEntry),

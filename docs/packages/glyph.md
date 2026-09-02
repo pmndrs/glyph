@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:762b521b0b25bc60e521fbe7acfd385f477a3c6d8aa0e5119db4cc72837cedce'
+source_digest: 'sha256:3c51618908947ef0eacab1464070332277c3c5e5a07411e6f15806fa9144a1f1'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -565,6 +565,13 @@ The same reasoning withdrew the `*-abi` and `bakers/*/validate` subpaths. Raw st
 package-private implementation data; the root exposes only renderer-facing semantic views and Codec authoring values.
 The validator subpaths likewise had no consumer outside this package. Both sets of modules remain reachable by relative
 path from package-owned tests and scripts where wire-level verification is legitimate.
+
+Public implementation helpers use wildcard leaf exports under `/config`, `/three`, `/react`, `/raster`, `/tsl`, and
+`/typegpu`; exact friendly aliases such as `/tsl/slug` remain stable. Nested TSL and TypeGPU shader modules are therefore
+directly importable without a barrel. Explicit `null` export-map entries block the package's `internal`, generated ABI,
+font-baker validator, Three executor, raster decoder, and TSL compatibility paths even though package-owned relative
+imports can still reach those files. Packed-package tests import representative nested leaves and prove each blocked path
+fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
 
 Internal engine machinery owns the completed asynchronous Worker transfer contract: it copies opaque plan bytes once into
 a bounded exact-size transferable pool, applies explicit backpressure, and requires the target to return the same
