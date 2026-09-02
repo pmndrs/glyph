@@ -10,7 +10,7 @@ sources:
     resource: engine-integration-boundary.md
     title: Renderer-neutral core and engine integration
   - id: glyph-config
-    resource: ../../packages/glyph/src/core/glyph-config.ts
+    resource: ../../packages/glyph/src/glyph-config.ts
     title: GlyphConfig and publication transaction
   - id: typed-command-buffer
     resource: ../../packages/glyph/src/internal/typed-command-buffer.ts

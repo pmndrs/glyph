@@ -49,7 +49,7 @@ import {
   type RenderPlanTransformId,
 } from './plan-view.js';
 import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
-import type { PortableResource } from './portable-resources.js';
+import type { PortableResource } from '../config/resources.js';
 import {
   policyCapabilitySetSelectionId,
   selectPolicyCapabilitySet,
@@ -57,7 +57,7 @@ import {
   type ParagraphId,
   type PolicyCapabilitySet,
   type ResourceHandle,
-} from './render-policy.js';
+} from '../config/codec.js';
 
 const MAX_U32 = 0xffff_ffff;
 const claimedTargets = new WeakSet<object>();

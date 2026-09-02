@@ -6,7 +6,7 @@ import type {
   RenderProgramId,
   RenderTechniqueId,
   ResourceHandle,
-} from './render-policy.js';
+} from '../config/codec.js';
 
 /** Byte span, record count, and fixed stride for one validated plan table. */
 export interface RenderPlanTable {

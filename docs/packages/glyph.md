@@ -24,7 +24,7 @@ sources:
     resource: ../../packages/glyph/src/font-face.ts
     title: Renderer-neutral FontFace declarations and loading
   - id: glyph-config
-    resource: ../../packages/glyph/src/core/glyph-config.ts
+    resource: ../../packages/glyph/src/glyph-config.ts
     title: Reusable GlyphConfig publication contracts
   - id: glyph-engine
     resource: ../../packages/glyph/src/glyph-engine.ts

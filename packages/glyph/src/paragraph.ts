@@ -20,19 +20,15 @@ import {
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from './engine-encoding.js';
 import { createGlyphEngine, createGlyphHandleState, type GlyphEngine } from './glyph-engine.js';
 import type { HandleFontStackBinding, CodecRegistration, GlyphHandleState } from './internal/handle-state.js';
-import {
-  createRasterPolicyProgram,
-  resolveRasterPlanProgram,
-  type RasterPlanProgram,
-} from './core/raster-plan-program.js';
+import { createRasterPolicyProgram, resolveRasterPlanProgram, type RasterPlanProgram } from './config/raster.js';
 import {
   createMeasurementPlanner,
   type MeasurementPlanner,
   type RetainedText,
   type RetainedTextOptions,
 } from './core/render-planner.js';
-import { type PolicyCapabilitySet, type PolicyDescriptor, type RenderIdFactory, id } from './core/render-policy.js';
-import { definePolicyBuffers, type AnyTechniqueSchema } from './core/technique-schema.js';
+import { type PolicyCapabilitySet, type PolicyDescriptor, type RenderIdFactory, id } from './config/codec.js';
+import { definePolicyBuffers, type AnyTechniqueSchema } from './config/schema.js';
 
 const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const MAX_PARAGRAPH_TEXT_UNITS = 0x00ff_ffff;

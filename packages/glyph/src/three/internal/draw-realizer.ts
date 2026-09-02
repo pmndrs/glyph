@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-import type { BorrowedCommandSequence, DisplayListBatch, DisplayListRootInstance } from '../../index.js';
+import type { BorrowedCommandSequence, DisplayListBatch, DisplayListRootInstance } from '../../glyph-config.js';
 import type { ThreeRendererResources } from '../renderer-resources.js';
 import type {
   ThreeBatchBinding,

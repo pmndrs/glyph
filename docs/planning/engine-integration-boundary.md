@@ -330,7 +330,7 @@ expect(typeGpuThreeMtsdfProgram.technique).toBe(mtsdfTechnique);
 ### 5b. Expose the canonical ordered command hierarchy
 
 Status: implemented. The admitted Rust plan is projected into the borrowed hierarchy in
-`packages/glyph/src/core/glyph-config.ts` and the render-planner mapper, with lazy indexable sequences and opaque stable
+`packages/glyph/src/glyph-config.ts` and the render-planner mapper, with lazy indexable sequences and opaque stable
 identities. Three and the example renderer no longer reconstruct raw plan tables or receive numeric plan IDs.
 
 Do this before implementing `GlyphConfig.decode` or migrating any renderer. Rust already determines grouping, batching,

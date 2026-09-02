@@ -16,8 +16,8 @@ import type {
   TypedMaterial,
   TypedProgram,
   TypedResource,
-} from './glyph-config.js';
-import type { PolicyBuffer, PolicyDescriptor, PolicyProgram } from './render-policy.js';
+} from '../glyph-config.js';
+import type { PolicyBuffer, PolicyDescriptor, PolicyProgram } from '../config/codec.js';
 import { bindPatch, bindRetirement } from '../internal/bind-command-buffer.js';
 import { mapBorrowedSequence, TypedCommandBufferMapper } from '../internal/typed-command-buffer.js';
 

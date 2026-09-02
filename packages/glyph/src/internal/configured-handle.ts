@@ -35,7 +35,7 @@ import type {
   ResourceLease,
   GlyphTextController,
   GlyphTextState,
-} from '../core/glyph-config.js';
+} from '../glyph-config.js';
 import type { HandleFontStackBinding } from './handle-state.js';
 import type {
   RenderPlanner,
@@ -371,7 +371,7 @@ class ConfiguredHandleDomain<
 
 interface RootRuntimeConfig<Bindings extends AnyGlyphBindings, RendererResult, Boundary, CodecValue extends Codec> {
   readonly schema: GlyphSchema<Bindings, Boundary>;
-  readonly commands?: Partial<import('../core/glyph-config.js').GlyphCommandCapacity>;
+  readonly commands?: Partial<import('../glyph-config.js').GlyphCommandCapacity>;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
   renderer(context: RendererContext<Bindings, RendererResult, CodecValue>): GlyphRenderer<Bindings, RendererResult>;
 }

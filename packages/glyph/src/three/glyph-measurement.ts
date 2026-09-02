@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-import type { PortableGeometryPayload } from '../index.js';
+import type { PortableGeometryPayload } from '../config/resources.js';
 import type { GlyphKey, GlyphPlacement, GlyphPlacements } from '../glyph-placement.js';
 import type { LayoutBox } from '../layout.js';
 

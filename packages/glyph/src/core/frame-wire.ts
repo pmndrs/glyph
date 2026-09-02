@@ -12,8 +12,8 @@ import type {
   ResourceHandle,
   StyleId,
   PlannerHandle,
-} from './render-policy.js';
-import { policyCapabilitySetSelectionId } from './render-policy.js';
+} from '../config/codec.js';
+import { policyCapabilitySetSelectionId } from '../config/codec.js';
 
 const MAX_U32 = 0xffff_ffff;
 export const MAX_TEXT_ENGINE_OUTPUT_BYTES: number = 64 * 1024 * 1024;

@@ -8,7 +8,7 @@ import type {
   PlannerRegion,
   PlannerStyleValue,
 } from './core/frame-wire.js';
-import type { HandleIdFactory, ParagraphId, StyleId } from './core/render-policy.js';
+import type { HandleIdFactory, ParagraphId, StyleId } from './config/codec.js';
 
 /**
  * The single implementation of the paragraph-to-engine encodings shared by every host:

@@ -3,7 +3,7 @@ import {
   glyphEngineStatusErrorDetails,
   type GlyphEngineFault,
   type GlyphEngineStatusCode,
-} from '../index.js';
+} from '../engine-error.js';
 import type { AnyRasterFormat } from '../raster-format.js';
 import type { Text, TextSpan } from './text.js';
 

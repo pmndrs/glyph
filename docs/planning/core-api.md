@@ -16,7 +16,7 @@ sources:
     resource: ../../packages/glyph/src/glyph.ts
     title: Root Glyph runtime and handle registry
   - id: glyph-config
-    resource: ../../packages/glyph/src/core/glyph-config.ts
+    resource: ../../packages/glyph/src/glyph-config.ts
     title: Root-exported GlyphConfig and renderer contracts
   - id: configured-handle
     resource: ../../packages/glyph/src/internal/configured-handle.ts

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { GlyphHandleState } from '../../dist/internal/handle-state.js';
-import { assertGlyphId, id } from '../../dist/core/render-policy.js';
+import { assertGlyphId, id } from '../../dist/config/codec.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';

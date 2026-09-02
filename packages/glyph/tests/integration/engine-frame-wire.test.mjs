@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { compilePlannerFrameUpdate, validatePlannerFrameRecords } from '../../dist/core/frame-wire.js';
-import { id } from '../../dist/core/render-policy.js';
+import { id } from '../../dist/config/codec.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 

@@ -85,7 +85,7 @@ sources:
     resource: ../../packages/glyph/src/glyph.ts
     title: Implemented root Glyph runtime
   - id: implemented-config-contract
-    resource: ../../packages/glyph/src/core/glyph-config.ts
+    resource: ../../packages/glyph/src/glyph-config.ts
     title: Implemented GlyphConfig and publication helpers
   - id: implemented-three-config
     resource: ../../packages/glyph/src/three/handle.ts

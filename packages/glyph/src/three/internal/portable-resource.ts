@@ -1,6 +1,10 @@
 import * as THREE from 'three/webgpu';
 
-import type { PortableResourceGroupPayload, PortableTextureArrayPayload, PortableTexturePayload } from '../../index.js';
+import type {
+  PortableResourceGroupPayload,
+  PortableTextureArrayPayload,
+  PortableTexturePayload,
+} from '../../config/resources.js';
 import type { ThreeHostResource } from './render-state.js';
 
 export function textureArrayResource(

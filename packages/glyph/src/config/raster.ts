@@ -2,7 +2,12 @@ import type { Font } from '../font.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { immutableFontResources, immutableFontVariantIdentity } from '../loaded-font.js';
 import { isRasterFormat, type AnyRasterFormat, type RasterResourceId } from '../raster-format.js';
-import { compileFontBinding, emptyFontBindingTable, fontBindingResources, schemaFieldTable } from './font-binding.js';
+import {
+  compileFontBinding,
+  emptyFontBindingTable,
+  fontBindingResources,
+  schemaFieldTable,
+} from '../core/font-binding.js';
 import {
   normalizePortableResource,
   type PortableBufferPayload,
@@ -11,20 +16,20 @@ import {
   type PortableResourceGroupPayload,
   type PortableTextureArrayPayload,
   type PortableTexturePayload,
-} from './portable-resources.js';
+} from './resources.js';
 import {
   assertTechniquePolicyBody,
   normalizePolicyProgramSystemBuffers,
   type CompiledPolicyProgramBody,
   type PolicyProgramSystemBuffers,
-} from './policy-program.js';
+} from './codec-program.js';
 import {
   isTechniqueSchema,
   schemaPolicyBuffers,
   type AnyTechniqueSchema,
   type TechniqueBindingDeclaration,
   type TechniqueResourceDeclaration,
-} from './technique-schema.js';
+} from './schema.js';
 import {
   assertRenderIdFactory,
   createProgram,
@@ -36,7 +41,7 @@ import {
   type PolicyProgram,
   type PolicyTransformMode,
   type RenderIdFactory,
-} from './render-policy.js';
+} from './codec.js';
 /** System buffers are owned by the engine and are deliberately absent from a technique schema. */
 export type RasterPolicySystem = PolicyProgramSystemBuffers;
 
