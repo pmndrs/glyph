@@ -15,6 +15,7 @@ try {
   const scope = join(smokeRoot, 'node_modules', '@pmndrs');
   await mkdir(scope, { recursive: true });
   await symlink(packageRoot, join(scope, 'glyph'));
+  await symlink(fileURLToPath(new URL('../', import.meta.resolve('three'))), join(smokeRoot, 'node_modules', 'three'));
   await writeFile(join(smokeRoot, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
 
   for (const [lane, subpaths] of [

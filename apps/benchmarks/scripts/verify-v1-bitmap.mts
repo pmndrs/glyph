@@ -65,6 +65,7 @@ try {
     });
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(`http://127.0.0.1:5177/v1-bitmap.html?backend=${expected}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.targetV1BitmapReady !== undefined);
     const result = await page.evaluate(
       () => (window as typeof window & { targetV1BitmapReady: Promise<RasterProofResult> }).targetV1BitmapReady,
     );
@@ -95,6 +96,7 @@ try {
     await page.goto(`http://127.0.0.1:5177/v1-mtsdf.html?backend=${expected}`, {
       waitUntil: 'domcontentloaded',
     });
+    await page.waitForFunction(() => window.targetV1MtsdfReady !== undefined);
     const result = await page.evaluate(
       () => (window as typeof window & { targetV1MtsdfReady: Promise<RasterProofResult> }).targetV1MtsdfReady,
     );
@@ -124,6 +126,7 @@ try {
     await page.goto(`http://127.0.0.1:5177/v1-slug.html?backend=${expected}`, {
       waitUntil: 'domcontentloaded',
     });
+    await page.waitForFunction(() => window.targetV1SlugReady !== undefined);
     const result = await page.evaluate(
       () => (window as typeof window & { targetV1SlugReady: Promise<RasterProofResult> }).targetV1SlugReady,
     );
@@ -151,6 +154,7 @@ try {
     });
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(`http://127.0.0.1:5177/v1-compose.html?backend=${expected}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.targetV1ComposeReady !== undefined);
     const result = await page.evaluate(
       () => (window as typeof window & { targetV1ComposeReady: Promise<ComposeProofResult> }).targetV1ComposeReady,
     );

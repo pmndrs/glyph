@@ -118,6 +118,37 @@ test('Text and TextGroup share the built-in Three handle without a provider', as
   }
 });
 
+test('provider-free R3F roots isolate independent Canvas stores', async () => {
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const fixture = await loadFixture();
+  let firstText;
+  let secondText;
+  const first = await create(
+    createElement(Text, { font: fixture.font, ref: (value) => void (firstText = value ?? firstText) }, 'first'),
+  );
+  const second = await create(
+    createElement(Text, { font: fixture.font, ref: (value) => void (secondText = value ?? secondText) }, 'second'),
+  );
+  try {
+    assert.ok(firstText !== undefined && secondText !== undefined);
+    const firstScene = nearestScene(firstText);
+    const secondScene = nearestScene(secondText);
+    assert.ok(firstScene !== undefined && secondScene !== undefined);
+    assert.notEqual(firstScene, secondScene);
+    firstText.shape();
+    secondText.shape();
+    const firstDrawRoot = firstScene.children.find((child) => child.name.startsWith('@pmndrs/glyph:'));
+    const secondDrawRoot = secondScene.children.find((child) => child.name.startsWith('@pmndrs/glyph:'));
+    assert.ok(firstDrawRoot !== undefined && secondDrawRoot !== undefined);
+    assert.notEqual(firstDrawRoot, secondDrawRoot, 'each R3F store selects one independent Glyph root');
+    assert.notEqual(firstDrawRoot.name, secondDrawRoot.name, 'generated root labels remain stable customization keys');
+  } finally {
+    await first.unmount();
+    await second.unmount();
+    fixture.dispose();
+  }
+});
+
 test('GlyphProvider resolves a scoped string through its lazy fontFaces table', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
   const input = { baked: { bytes: await readFile(multiFormatFontUrl), ownership: 'copy' } };

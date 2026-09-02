@@ -41,6 +41,7 @@
 import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 
+import { span, txt } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 
 import { createFontCache, edit, lanes, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
@@ -113,15 +114,16 @@ test('2. an authored span kept across a text change stays aligned to clusters', 
   const font = await fonts.load('inter');
   const latin = { fontSize: 6, lineHeight: 1 };
   // 'abc' is three single-scalar clusters, so a span over the first is cluster-aligned and legal.
-  const spans = [{ start: 0, end: 1, style: { color: '#ff2f00' } }];
-  const mounted = mount(font, [authored('abc', latin, spans)]);
+  const red = span({ color: '#ff2f00' });
+  const mounted = mount(font, [authored(txt`${red`a`}bc`, latin)]);
   try {
     const node = mounted.nodes[0];
     assert.equal(node.measure().glyphCount, 3, 'the starting paragraph must publish');
-    // Legal by the public contract: the caller re-authors the string with a mark inserted and
-    // carries forward the range it already had. That fuses 'a' and the mark into one cluster
-    // spanning [0, 2), leaving the authored boundary at 1 inside it.
-    node.set({ text: 'ábc', spans });
+    // Legal by the public contract: the caller structurally re-authors the same styled fragment
+    // followed by a combining mark. Concatenation fuses them into one cluster spanning [0, 2),
+    // so txt must move the derived boundary instead of exposing or retaining a raw offset.
+    const updated = txt`${red`a`}́bc`;
+    node.set({ text: updated });
     mounted.scene.updateMatrixWorld(true);
     assert.equal(node.text, 'ábc');
     assert.deepEqual(
@@ -130,7 +132,7 @@ test('2. an authored span kept across a text change stays aligned to clusters', 
       'the insertion must fuse the base and the mark into one cluster',
     );
     assert.deepEqual(
-      node.spans.map(({ start, end }) => [start, end]),
+      updated.spans.map(({ start, end }) => [start, end]),
       [[0, 2]],
       'the boundary must resolve onto the cluster whose base the span already held',
     );

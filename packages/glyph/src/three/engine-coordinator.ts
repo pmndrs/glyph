@@ -12,13 +12,11 @@ import {
   type BackendTransformBinding,
   type Codec,
   type EncodeContext,
-  type PolicyBufferId,
   type PolicyCapabilitySet,
   type RenderIdFactory,
-  type RenderPlanBufferBinding,
   type GlyphBackend,
 } from '../core.js';
-import { TRANSFORM_BUFFER_ID, threeRenderPolicyDescriptor, type ThreeTransformMode } from './render-policy.js';
+import { TRANSFORM_BUFFER_ID, threeRenderPolicyDescriptor } from './render-policy.js';
 import type { ThreeTextMaterial } from './material.js';
 import {
   compiledThreeRasterPlanPrograms,
@@ -29,11 +27,6 @@ import type * as THREE from 'three/webgpu';
 import type { ThreeGlyphConfig, ThreeMaterialBinding } from './handle.js';
 
 const builtInThreeTechniques = new Set<string>([bitmap.id, msdf.id, slug.id]);
-
-export interface ThreeTextEngineCoordinatorOptions {
-  /** Renderer-policy choice; indexed is the first-party high-throughput default. */
-  readonly transformMode?: ThreeTransformMode;
-}
 
 interface ThreeConfigEncode {
   encode(context: EncodeContext): Codec;
@@ -84,7 +77,6 @@ export class ThreeTextEngineCoordinator {
   readonly identities: RenderIdFactory;
   readonly config: ThreeGlyphConfig;
   readonly #planPrograms: ReadonlyMap<string, CompiledThreeRasterPlanProgram>;
-  readonly #policyBufferIds: ReadonlyMap<number, ReadonlyMap<number, PolicyBufferId>>;
   readonly #singleFontStacks = new WeakMap<
     Font<AnyRasterTechnique>,
     FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>
@@ -97,14 +89,7 @@ export class ThreeTextEngineCoordinator {
   #applyingPlan = false;
   #disposed = false;
 
-  constructor(glyphEngine: GlyphEngine, options: ThreeTextEngineCoordinatorOptions = {}, config?: ThreeConfigEncode) {
-    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-      throw new TypeError('Three text engine coordinator options need an object');
-    }
-    const transformMode = options.transformMode ?? 'indexed';
-    if (transformMode !== 'indexed' && transformMode !== 'direct') {
-      throw new TypeError('Three text engine transform mode must be "indexed" or "direct"');
-    }
+  constructor(glyphEngine: GlyphEngine, config?: ThreeConfigEncode) {
     const backend = glyphEngine.createBackend({ integration: '@pmndrs/glyph/three' });
     const activeConfig = (config ?? defaultThreeConfig) as ThreeGlyphConfig | undefined;
     if (activeConfig === undefined) {
@@ -148,7 +133,6 @@ export class ThreeTextEngineCoordinator {
     }
     this.identities = identities;
     this.#planPrograms = new Map(planPrograms.map((program) => [program.technique.id, program]));
-    this.#policyBufferIds = policyBufferIds(descriptor.programs);
     this.capabilitySet = descriptor.capabilitySets[0]!;
     this.codec = Object.freeze({ descriptor });
     this.backend = backend;
@@ -286,16 +270,6 @@ export class ThreeTextEngineCoordinator {
     }
   }
 
-  /** Resolve a decoded wire value through the exact policy program that declared it. */
-  resolveBufferBindingId(programId: number, binding: RenderPlanBufferBinding): PolicyBufferId | 'order' {
-    if (binding.kind === 'order') return 'order';
-    const bufferId = this.#policyBufferIds.get(programId)?.get(binding.id);
-    if (bufferId === undefined) {
-      throw new TypeError(`Three policy program ${programId} does not declare buffer ${binding.id}`);
-    }
-    return bufferId;
-  }
-
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -325,15 +299,4 @@ export class ThreeTextEngineCoordinator {
   #assertActive(): void {
     if (this.#disposed) throw new Error('Three text engine coordinator is disposed');
   }
-}
-
-function policyBufferIds(
-  programs: readonly import('../core.js').PolicyProgram[],
-): ReadonlyMap<number, ReadonlyMap<number, PolicyBufferId>> {
-  return new Map(
-    programs.map((program) => [
-      program.programId,
-      new Map(program.buffers.map((buffer) => [buffer.id, buffer.id] as const)),
-    ]),
-  );
 }

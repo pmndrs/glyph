@@ -27,7 +27,7 @@ import type { ExampleRendererDevice } from './device.js';
 import { exampleRendererShader, RecordingExampleRendererDevice } from './device.js';
 import type { ExampleDrawList } from './draw-list.js';
 import { ExampleTextEngine, type ExampleText, type ExampleTextOptions } from './engine.js';
-import { exampleCapabilitySet, exampleRenderPolicyDescriptor } from './policy.js';
+import { exampleRenderPolicyDescriptor } from './policy.js';
 
 export interface ExampleResolvedResource {
   readonly name: string;
@@ -100,7 +100,6 @@ export type ExampleGlyphConfig = GlyphConfig<
   ExampleBindings,
   ExampleDrawList,
   PortableResource,
-  typeof exampleCapabilitySet,
   Readonly<Record<string, AnyRasterTechnique>>,
   ExampleRootContext
 >;
@@ -112,11 +111,9 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
     ExampleBindings,
     ExampleDrawList,
     PortableResource,
-    typeof exampleCapabilitySet,
     Readonly<Record<string, AnyRasterTechnique>>,
     ExampleRootContext
   >({
-    capabilities: exampleCapabilitySet,
     schema: ExampleSchema,
     encode: ({ ids }) => ({ descriptor: exampleRenderPolicyDescriptor(ids) }),
     decode: defaultDecoder,

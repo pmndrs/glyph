@@ -6,7 +6,6 @@ import {
   type BackendPolicy,
   type PlanCandidate,
   type PlanTarget,
-  type PlanTargetControl,
   type RenderPlanner,
   type RendererContext,
   type RetainedText,
@@ -15,11 +14,12 @@ import {
   type BorrowedBoundCommandBuffer,
   type Codec,
   type GlyphRenderer,
+  createEngine,
+  type GlyphCommandBufferBinder,
 } from '@pmndrs/glyph/core';
 
 import type { ExampleDrawList } from './draw-list.js';
 import { exampleCapabilitySet, exampleRenderPolicyDescriptor } from './policy.js';
-import { ExampleCommandBufferBinder } from './command-buffer.js';
 import type { ExampleBindings, ExampleGlyphConfig, ExampleRootContext } from './config.js';
 
 type ExampleAbortSignal = RendererContext<ExampleBindings>['signal'];
@@ -115,10 +115,7 @@ export class ExampleTextEngine {
     this.#planner = this.#backend.createPlanner({
       policy: this.#policy,
       capabilitySet: exampleCapabilitySet,
-      target: (control) => {
-        this.#target.attachControl(control);
-        return this.#target;
-      },
+      target: () => this.#target,
       limits: EXAMPLE_LIMITS,
       requestCapacity: 64 * 1024,
       resultCapacity: 256 * 1024,
@@ -220,17 +217,16 @@ export class ExampleText {
 
 class ExamplePlanTarget implements PlanTarget {
   readonly delivery = 'borrowed' as const;
-  #control: PlanTargetControl | undefined;
   #lastDrawList: ExampleDrawList | undefined;
   readonly #config: ExampleGlyphConfig;
-  readonly #binder: ExampleCommandBufferBinder;
+  readonly #binder: GlyphCommandBufferBinder<ExampleBindings>;
   readonly #renderer: GlyphRenderer<ExampleBindings, ExampleDrawList>;
   readonly #rendererAbort = new ExampleAbortController();
   #disposed = false;
 
   constructor(config: ExampleGlyphConfig, codec: Codec, root: ExampleRootContext) {
     this.#config = config;
-    this.#binder = new ExampleCommandBufferBinder(config, codec, root);
+    this.#binder = createEngine({ config, codec, root });
     const configured = config.renderer(
       Object.freeze({
         drawRoot: config.schema.drawRoot(root),
@@ -266,11 +262,6 @@ class ExamplePlanTarget implements PlanTarget {
     return this.#lastDrawList;
   }
 
-  attachControl(control: PlanTargetControl): void {
-    if (this.#control !== undefined) throw new Error('example plan target already has planner control');
-    this.#control = control;
-  }
-
   accept(candidate: PlanCandidate, signal: Parameters<PlanTarget['accept']>[1]) {
     if (this.#disposed) return { accepted: false as const, error: new Error('example plan target is disposed') };
     return applyGlyphPublication(candidate, signal, this.#config.decode, this.#binder, this.#renderer);
@@ -290,7 +281,6 @@ class ExamplePlanTarget implements PlanTarget {
     };
     attempt(() => this.#renderer.dispose());
     attempt(() => this.#binder.dispose());
-    this.#control = undefined;
     if (failure !== undefined) throw failure;
   }
 }

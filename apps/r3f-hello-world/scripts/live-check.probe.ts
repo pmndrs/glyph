@@ -40,19 +40,16 @@ async function waitForTechnique(
     const root = _roots.get(targetCanvas);
     const scene = root?.store.getState().scene;
     const worldLayer = scene?.getObjectByName('world-text');
-    let draws = 0;
-    let records = 0;
-    worldLayer?.traverse((object) => {
-      if (object.userData.pmndrsGlyphRunStart === undefined || !('geometry' in object)) return;
-      const geometry = object.geometry;
-      if (typeof geometry !== 'object' || geometry === null || !('instanceCount' in geometry)) return;
-      const instanceCount = geometry.instanceCount;
-      if (typeof instanceCount !== 'number') return;
-      draws += 1;
-      records += instanceCount;
-    });
+    const drawRoot = scene?.children.find((child) => child.name.startsWith('@pmndrs/glyph:'));
+    const counts = drawCounts(drawRoot);
     const selected = worldLayer?.getObjectByName(`font-${technique}`);
-    if (selected?.visible === true && draws === 6 && records === 33) return { draws: draws / 3, records: records / 3 };
+    const commit =
+      selected !== undefined && 'commitState' in selected && typeof selected.commitState === 'function'
+        ? selected.commitState()
+        : undefined;
+    if (selected?.visible === true && commit?.status === 'committed' && counts.draws === 7 && counts.records === 47) {
+      return { draws: 2, records: 11 };
+    }
     await nextFrame();
   }
   // Report what the scene actually looked like. A bare "did not settle" says only that a
@@ -61,10 +58,33 @@ async function waitForTechnique(
   const root = _roots.get(targetCanvas);
   const scene = root?.store.getState().scene;
   const worldLayer = scene?.getObjectByName('world-text');
+  const drawRoot = scene?.children.find((child) => child.name.startsWith('@pmndrs/glyph:'));
   const selected = worldLayer?.getObjectByName(`font-${technique}`);
+  const { draws, records } = drawCounts(drawRoot);
+  const commit =
+    selected !== undefined && 'commitState' in selected && typeof selected.commitState === 'function'
+      ? selected.commitState()
+      : undefined;
+  const names: string[] = [];
+  worldLayer?.children.forEach((child) => names.push(`${child.name}:${String(child.visible)}`));
+  throw new Error(
+    `R3F hello-world did not settle the ${technique} technique ` +
+      `(root=${String(root !== undefined)} world=${String(worldLayer !== undefined)} ` +
+      `connected=${String(targetCanvas.isConnected)} canvases=${String(document.querySelectorAll('canvas').length)} ` +
+      `sameNode=${String(document.querySelector('canvas') === targetCanvas)} roots=${String(_roots.size)} ` +
+      `selected=${String(selected !== undefined)} visible=${String(selected?.visible)} commit=${JSON.stringify(commit)} ` +
+      `drawRoot=${String(drawRoot !== undefined)} ` +
+      `draws=${String(draws)} records=${String(records)} children=[${names.join(',')}])`,
+  );
+}
+
+function drawCounts(root: import('three/webgpu').Object3D | undefined): {
+  readonly draws: number;
+  readonly records: number;
+} {
   let draws = 0;
   let records = 0;
-  worldLayer?.traverse((object) => {
+  root?.traverse((object) => {
     if (object.userData.pmndrsGlyphRunStart === undefined || !('geometry' in object)) return;
     const geometry = object.geometry;
     if (typeof geometry !== 'object' || geometry === null || !('instanceCount' in geometry)) return;
@@ -73,16 +93,7 @@ async function waitForTechnique(
     draws += 1;
     records += instanceCount;
   });
-  const names: string[] = [];
-  worldLayer?.children.forEach((child) => names.push(`${child.name}:${String(child.visible)}`));
-  throw new Error(
-    `R3F hello-world did not settle the ${technique} technique ` +
-      `(root=${String(root !== undefined)} world=${String(worldLayer !== undefined)} ` +
-      `connected=${String(targetCanvas.isConnected)} canvases=${String(document.querySelectorAll('canvas').length)} ` +
-      `sameNode=${String(document.querySelector('canvas') === targetCanvas)} roots=${String(_roots.size)} ` +
-      `selected=${String(selected !== undefined)} visible=${String(selected?.visible)} ` +
-      `draws=${String(draws)} records=${String(records)} children=[${names.join(',')}])`,
-  );
+  return { draws, records };
 }
 
 function clickCanvas(targetCanvas: HTMLCanvasElement, clientX: number, clientY: number): void {

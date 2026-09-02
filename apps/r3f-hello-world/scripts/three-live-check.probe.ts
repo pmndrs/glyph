@@ -11,7 +11,8 @@ for (let frame = 0; frame < 600; frame += 1) {
 
   let draws = 0;
   let records = 0;
-  state.text.traverse((object) => {
+  const drawRoot = state.scene.children.find((child) => child.name.startsWith('@pmndrs/glyph:'));
+  drawRoot?.traverse((object) => {
     if (object.userData.pmndrsGlyphRunStart === undefined || !('geometry' in object)) return;
     const geometry = object.geometry;
     if (typeof geometry !== 'object' || geometry === null || !('instanceCount' in geometry)) return;
@@ -23,6 +24,11 @@ for (let frame = 0; frame < 600; frame += 1) {
   if (!state.renderer.domElement.isConnected) throw new Error('imperative Three canvas is detached');
   if (state.scene.getObjectByName('three-hello-world') !== state.text) {
     throw new Error('imperative Three Text is not attached to its scene');
+  }
+  if (drawRoot === undefined) throw new Error('imperative Three publication root is not attached to its scene');
+  const commit = state.text.commitState();
+  if (commit.status !== 'committed') {
+    throw new Error(`imperative Three Text did not commit: ${JSON.stringify(commit)}`);
   }
   if (state.text.error !== undefined) throw state.text.error;
   if (draws !== 1 || records !== 10) {

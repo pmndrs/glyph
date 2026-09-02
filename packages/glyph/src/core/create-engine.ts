@@ -40,7 +40,7 @@ interface DecodedState<Bindings extends AnyGlyphBindings> {
 
 /** Inputs for the renderer-neutral command binding engine used by one publication root. */
 export interface CreateEngineOptions<Bindings extends AnyGlyphBindings, Root, PortableResource> {
-  readonly config: GlyphConfig<any, Bindings, any, PortableResource, any, any, Root>;
+  readonly config: GlyphConfig<any, Bindings, any, PortableResource, any, Root>;
   readonly codec: Readonly<{ descriptor: PolicyDescriptor }>;
   readonly root: Root;
 }
