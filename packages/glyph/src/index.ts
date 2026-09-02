@@ -25,7 +25,7 @@ export {
   type GlyphEngineFault,
   type GlyphEngineStatusCode,
   type GlyphEngineStatusDetails,
-} from './core/backend.js';
+} from './internal/handle-state.js';
 export {
   defineGlyphConfig,
   defineGlyphSchema,

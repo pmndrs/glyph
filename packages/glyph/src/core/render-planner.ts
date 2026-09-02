@@ -35,13 +35,13 @@ import type {
   BackendFontStackBinding,
   BackendMaterialBinding,
   BackendOpaqueBindingLease,
-  BackendPolicy,
+  CodecRegistration,
   BackendResourceBinding,
   BackendTransformBinding,
-  GlyphBackend,
+  GlyphHandleState,
   PlanPublication,
   PlanTransport,
-} from './backend.js';
+} from '../internal/handle-state.js';
 import {
   RenderPlanView,
   readTrustedRenderPlanResourceReferenceId,
@@ -321,7 +321,7 @@ export type RenderPlannerFor<Target extends RenderPlanTarget> = Target extends A
 
 /** Construction options for one retained-text planner and render target. */
 export interface RenderPlannerOptions<Target extends RenderPlanTarget> {
-  readonly policy: BackendPolicy;
+  readonly codec: CodecRegistration;
   readonly capabilitySet?: PolicyCapabilitySet;
   readonly target: (control: PlanTargetControl) => Target;
   readonly limits: RenderPlannerLimits;
@@ -339,7 +339,7 @@ export interface MeasurementPlanner {
 
 /** @internal Renderer-free planner construction used by the root Paragraph service. */
 export interface MeasurementPlannerOptions {
-  readonly policy: BackendPolicy;
+  readonly codec: CodecRegistration;
   readonly limits: RenderPlannerLimits;
   readonly requestCapacity: number;
   readonly resultCapacity: number;
@@ -364,7 +364,7 @@ export class PlanTransportError extends Error {}
 interface ResolvedSpan {
   readonly start: number;
   readonly end: number;
-  readonly font: ReturnType<GlyphBackend['_retainFontStackBinding']> | undefined;
+  readonly font: ReturnType<GlyphHandleState['_retainFontStackBinding']> | undefined;
   readonly material: BackendOpaqueBindingLease | undefined;
   readonly style: TextStyle | undefined;
 }
@@ -373,7 +373,7 @@ interface ResolvedTextOptions {
   readonly source: RetainedTextOptions;
   readonly text: string;
   readonly spans: readonly ResolvedSpan[];
-  readonly font: ReturnType<GlyphBackend['_retainFontStackBinding']>;
+  readonly font: ReturnType<GlyphHandleState['_retainFontStackBinding']>;
   readonly material: BackendOpaqueBindingLease | undefined;
   readonly transform: BackendOpaqueBindingLease;
   readonly flowTransforms: readonly BackendOpaqueBindingLease[];
@@ -414,26 +414,26 @@ interface PendingPublication {
 
 const textStates = new WeakMap<object, Readonly<{ planner: RenderPlannerImpl; state: RetainedTextState }>>();
 
-/** @internal Constructed only after GlyphBackend validates backend ownership. */
+/** @internal Constructed only after GlyphHandleState validates handle ownership. */
 export function createRenderPlanner<Target extends RenderPlanTarget>(
-  backend: GlyphBackend,
+  handleState: GlyphHandleState,
   options: RenderPlannerOptions<Target>,
 ): RenderPlannerFor<Target> {
-  return new RenderPlannerImpl(backend, options) as RenderPlannerFor<Target>;
+  return new RenderPlannerImpl(handleState, options) as RenderPlannerFor<Target>;
 }
 
 /** @internal Construct a query planner without a renderer acceptance target. */
 export function createMeasurementPlanner(
-  backend: GlyphBackend,
+  handleState: GlyphHandleState,
   options: MeasurementPlannerOptions,
 ): MeasurementPlanner {
-  return new RenderPlannerImpl(backend, options, true);
+  return new RenderPlannerImpl(handleState, options, true);
 }
 
 class RenderPlannerImpl {
-  readonly #backend: GlyphBackend;
+  readonly #handleState: GlyphHandleState;
   readonly #transport: PlanTransport;
-  readonly #policy: ReturnType<GlyphBackend['_retainInstalledPolicy']>;
+  readonly #codec: ReturnType<GlyphHandleState['_retainInstalledCodec']>;
   readonly #capabilitySet: ReturnType<typeof selectPolicyCapabilitySet> | undefined;
   readonly #target: RenderPlanTarget | undefined;
   readonly #control: TargetControlState | undefined;
@@ -465,33 +465,33 @@ class RenderPlannerImpl {
   #disposed = false;
 
   constructor(
-    backend: GlyphBackend,
+    handleState: GlyphHandleState,
     options: RenderPlannerOptions<RenderPlanTarget> | MeasurementPlannerOptions,
     measurementOnly = false,
   ) {
-    this.#backend = backend;
+    this.#handleState = handleState;
     if (measurementOnly) assertMeasurementPlanOptions(options);
     else assertRenderPlannerOptions(options);
     this.#limits = snapshotLimits(options.limits);
     this.#textCapacity = options.textCapacity;
-    const policy = backend._retainInstalledPolicy(options.policy);
+    const codec = handleState._retainInstalledCodec(options.codec);
     if (measurementOnly) {
       try {
-        const handle = backend._allocatePlannerHandle();
-        this.#transport = backend._createPlanTransport({
+        const handle = handleState._allocatePlannerHandle();
+        this.#transport = handleState._createPlanTransport({
           handle,
           requestCapacity: options.requestCapacity,
           resultCapacity: options.resultCapacity,
           textCapacity: options.textCapacity,
         });
-        this.#policy = policy;
+        this.#codec = codec;
         this.#capabilitySet = undefined;
         this.#target = undefined;
         this.#control = undefined;
         this.#returnedBuffers = undefined;
         return;
       } catch (error) {
-        policy.dispose();
+        codec.dispose();
         throw error;
       }
     }
@@ -506,14 +506,14 @@ class RenderPlannerImpl {
       const capabilitySet =
         renderOptions.capabilitySet === undefined
           ? undefined
-          : selectPolicyCapabilitySet(policy.handle, policy.descriptor, renderOptions.capabilitySet);
+          : selectPolicyCapabilitySet(codec.handle, codec.descriptor, renderOptions.capabilitySet);
       target = renderOptions.target(control);
       assertTarget(target, this.#limits.maxOutputBytes);
       if (claimedTargets.has(target)) throw new TypeError('plan target is already attached to another render planner');
       claimedTargets.add(target);
       claimed = true;
-      const handle = backend._allocatePlannerHandle();
-      this.#transport = backend._createPlanTransport({
+      const handle = handleState._allocatePlannerHandle();
+      this.#transport = handleState._createPlanTransport({
         handle,
         requestCapacity: options.requestCapacity,
         resultCapacity: options.resultCapacity,
@@ -521,7 +521,7 @@ class RenderPlannerImpl {
       });
       this.#target = target;
       this.#control = control;
-      this.#policy = policy;
+      this.#codec = codec;
       this.#capabilitySet = capabilitySet;
       this.#returnedBuffers =
         target.delivery === 'owned'
@@ -533,7 +533,7 @@ class RenderPlannerImpl {
           : undefined;
     } catch (error) {
       control.dispose();
-      policy.dispose();
+      codec.dispose();
       if (claimed) {
         try {
           target!.dispose();
@@ -553,9 +553,9 @@ class RenderPlannerImpl {
     this.#assertMutable();
     const ordinal = this.#nextTextOrdinal;
     const nextOrdinal = checkedNextOrdinal(ordinal);
-    const desired = resolveTextOptions(this.#backend, options, ordinal);
+    const desired = resolveTextOptions(this.#handleState, options, ordinal);
     const state: RetainedTextState = {
-      paragraphId: this.#backend.id('paragraph', `${this.#backend.integration}/text/${ordinal}`),
+      paragraphId: this.#handleState.id('paragraph', `${this.#handleState.integration}/text/${ordinal}`),
       ordinal,
       desired,
       metrics: retainedTextMetrics(desired, ordinal),
@@ -599,7 +599,7 @@ class RenderPlannerImpl {
     if (state.disposed) throw new Error('text engine text has been disposed');
     if (!isNonArrayObject(update)) throw new TypeError('text engine text update must be an object');
     const source = Object.freeze({ ...state.desired.source, ...update }) as RetainedTextOptions;
-    const desired = resolveTextOptions(this.#backend, source, state.ordinal);
+    const desired = resolveTextOptions(this.#handleState, source, state.ordinal);
     const candidate = { ...state, desired, metrics: retainedTextMetrics(desired, state.ordinal), dirty: true };
     try {
       this.#validateState(candidate, state);
@@ -643,7 +643,7 @@ class RenderPlannerImpl {
     const publication = this.#transport.copyGlyphs(
       state.paragraphId,
       stableIds,
-      this.#policy.handle,
+      this.#codec.handle,
       this.#capabilitySetId(),
       this.#limits.maxOutputBytes,
     );
@@ -655,7 +655,7 @@ class RenderPlannerImpl {
     this.#assertCopyable(state, target);
     const publication = this.#transport.copyDecorations(
       state.paragraphId,
-      this.#policy.handle,
+      this.#codec.handle,
       this.#capabilitySetId(),
       this.#limits.maxOutputBytes,
     );
@@ -682,7 +682,7 @@ class RenderPlannerImpl {
 
   dispose(): void {
     if (this.#disposed) return;
-    this.#backend._assertEngineMutationAllowed();
+    this.#handleState._assertEngineMutationAllowed();
     this.#disposed = true;
     this.#targetController.abort(new RenderPlannerDisposedError());
     this.#control?.dispose();
@@ -714,9 +714,9 @@ class RenderPlannerImpl {
     this.#liveInlineObjectCount = 0;
     this.#dirtyTextCount = 0;
     this.#pendingStyleCount = 0;
-    attempt(() => this.#policy.dispose());
+    attempt(() => this.#codec.dispose());
     this.#returnedBuffers?.clear();
-    this.#backend._detachPlanner(this);
+    this.#handleState._detachPlanner(this);
     if (failure !== undefined) throw failure;
   }
 
@@ -725,7 +725,7 @@ class RenderPlannerImpl {
     const { publication } = pending;
     const lease = new BorrowedPlanLease(publication, this.#transport);
     const candidate = this.#candidate(lease);
-    const leaveBorrow = this.#backend._enterBorrowedPlan();
+    const leaveBorrow = this.#handleState._enterBorrowedPlan();
     let result: PlanAcceptance;
     try {
       const answer = (this.#target as PlanTarget).accept(candidate, this.#targetController.signal);
@@ -855,20 +855,20 @@ class RenderPlannerImpl {
   #queryText(state: RetainedTextState, inspection: boolean): ParagraphLayoutSummary | GlyphLayoutInspection {
     this.#assertTextQueryable(state);
     this.#ensureTextCapacity();
-    const styles = compileStyles(this.#backend, state);
+    const styles = compileStyles(this.#handleState, state);
     const styleMutations: PlannerStyleMutation[] = [...styles];
     for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
       styleMutations.push({
         opcode: 'remove',
         paragraphId: state.paragraphId,
-        styleId: engineStyleId(this.#backend.id, state.paragraphId, index),
+        styleId: engineStyleId(this.#handleState.id, state.paragraphId, index),
       });
     }
-    const geometry = compileGeometry(this.#backend, state, 0, 0);
+    const geometry = compileGeometry(this.#handleState, state, 0, 0);
     const textChanged = !state.published || state.publishedText !== state.desired.text;
     const request = compileValidatedPlannerFrameUpdate({
       plannerId: this.#transport.handle,
-      policyHandle: this.#policy.handle,
+      policyHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
       consumedPlanRevision: this.#planRevision,
@@ -892,7 +892,7 @@ class RenderPlannerImpl {
       constraints: [geometry.constraint],
       regions: geometry.regions,
       exclusions: geometry.exclusions,
-      inlineObjects: compileInlineObjects(this.#backend, state),
+      inlineObjects: compileInlineObjects(this.#handleState, state),
     });
     const publication = this.#transport.measureParagraph(request, state.paragraphId);
     if (inspection) {
@@ -933,24 +933,24 @@ class RenderPlannerImpl {
     const inlineObjects: PlannerInlineObject[] = [];
     for (const state of this.#texts) {
       if (state.removed || !state.dirty) continue;
-      const styles = compileStyles(this.#backend, state);
+      const styles = compileStyles(this.#handleState, state);
       styleMutations.push(...styles);
       for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
         styleMutations.push({
           opcode: 'remove',
           paragraphId: state.paragraphId,
-          styleId: engineStyleId(this.#backend.id, state.paragraphId, index),
+          styleId: engineStyleId(this.#handleState.id, state.paragraphId, index),
         });
       }
-      const geometry = compileGeometry(this.#backend, state, regions.length, exclusions.length);
+      const geometry = compileGeometry(this.#handleState, state, regions.length, exclusions.length);
       constraints.push(geometry.constraint);
       regions.push(...geometry.regions);
       exclusions.push(...geometry.exclusions);
-      inlineObjects.push(...compileInlineObjects(this.#backend, state));
+      inlineObjects.push(...compileInlineObjects(this.#handleState, state));
     }
     return compileValidatedPlannerFrameUpdate({
       plannerId: this.#transport.handle,
-      policyHandle: this.#policy.handle,
+      policyHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
       consumedPlanRevision: checkpointGeneration === this.#acceptedCheckpointGeneration ? this.#planRevision : 0,
@@ -969,9 +969,9 @@ class RenderPlannerImpl {
   }
 
   #validateState(state: RetainedTextState, replacing?: RetainedTextState): void {
-    const styles = compileStyles(this.#backend, state);
-    const geometry = compileGeometry(this.#backend, state, 0, 0);
-    const inlineObjects = compileInlineObjects(this.#backend, state);
+    const styles = compileStyles(this.#handleState, state);
+    const geometry = compileGeometry(this.#handleState, state, 0, 0);
+    const inlineObjects = compileInlineObjects(this.#handleState, state);
     validatePlannerFrameRecords(
       {
         paragraphMutations: [
@@ -1116,18 +1116,18 @@ class RenderPlannerImpl {
       },
       resolveMaterial: (materialId: MaterialHandle) => {
         lease.assertActive();
-        return this.#backend._resolveOpaqueBinding('material', materialId) as BackendMaterialBinding;
+        return this.#handleState._resolveOpaqueBinding('material', materialId) as BackendMaterialBinding;
       },
       resolveResource: (resourceId: ResourceHandle) => {
         lease.assertActive();
-        return this.#backend._resolveOpaqueBinding('resource', resourceId) as BackendResourceBinding;
+        return this.#handleState._resolveOpaqueBinding('resource', resourceId) as BackendResourceBinding;
       },
     });
   }
 
   #offerCopy(publication: PlanPublication, target: PlanTarget): PlanAcceptance {
     const lease = new BorrowedPlanLease(publication, this.#transport);
-    const leaveBorrow = this.#backend._enterBorrowedPlan();
+    const leaveBorrow = this.#handleState._enterBorrowedPlan();
     try {
       const answer = target.accept(this.#candidate(lease), this.#targetController.signal);
       if (isPromiseLike(answer)) throw new TypeError('a detached plan target must answer synchronously');
@@ -1151,11 +1151,11 @@ class RenderPlannerImpl {
   #capabilitySetId(): number {
     return this.#capabilitySet === undefined
       ? 1
-      : policyCapabilitySetSelectionId(this.#capabilitySet, this.#policy.handle);
+      : policyCapabilitySetSelectionId(this.#capabilitySet, this.#codec.handle);
   }
 
   #portablePayload(referenceId: ResourceHandle): PortablePayloadLease {
-    const lease = this.#backend._acquirePortablePayload(referenceId);
+    const lease = this.#handleState._acquirePortablePayload(referenceId);
     let disposed = false;
     return Object.freeze({
       referenceId,
@@ -1213,7 +1213,7 @@ class RenderPlannerImpl {
       transforms.set(rootIndex, {
         transformIndex: rootIndex,
         instanceId: state.paragraphId as unknown as RenderPlanTransformId,
-        binding: this.#backend._resolveOpaqueBinding(
+        binding: this.#handleState._resolveOpaqueBinding(
           'transform',
           state.desired.transform.handle,
         ) as BackendTransformBinding,
@@ -1222,7 +1222,7 @@ class RenderPlannerImpl {
         const transformIndex = transform.handle as RenderPlanTransformId;
         transforms.set(transformIndex, {
           transformIndex,
-          binding: this.#backend._resolveOpaqueBinding('transform', transform.handle) as BackendTransformBinding,
+          binding: this.#handleState._resolveOpaqueBinding('transform', transform.handle) as BackendTransformBinding,
         });
       }
     }
@@ -1487,7 +1487,11 @@ function normalizePublishOptions(value: RenderPlannerPublishOptions | undefined)
   };
 }
 
-function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, ordinal: number): ResolvedTextOptions {
+function resolveTextOptions(
+  handleState: GlyphHandleState,
+  value: RetainedTextOptions,
+  ordinal: number,
+): ResolvedTextOptions {
   if (!isNonArrayObject(value)) throw new TypeError('text engine text options must be an object');
   validateTextScalarOptions(value, ordinal);
   const formattedText = normalizeTextInput(value.text);
@@ -1499,16 +1503,16 @@ function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, o
   assertParagraphLayout(layout, 'text layout');
   assertConstraints(constraints, 'text constraints');
   normalizedColumns(layout, constraints);
-  const font = backend._retainFontStackBinding(value.font);
+  const font = handleState._retainFontStackBinding(value.font);
   const leases: Array<{ dispose(): void }> = [font];
   try {
     assertTextEffectsSupported(style, font.techniques, 'text engine text style');
     const material =
-      value.material === undefined ? undefined : backend._retainOpaqueBinding(value.material, 'material');
+      value.material === undefined ? undefined : handleState._retainOpaqueBinding(value.material, 'material');
     if (material !== undefined) leases.push(material);
     const createdTransform = value.transform === undefined;
-    const transformBinding = value.transform ?? backend.createTransformBinding();
-    const transform = backend._retainOpaqueBinding(transformBinding, 'transform');
+    const transformBinding = value.transform ?? handleState.createTransformBinding();
+    const transform = handleState._retainOpaqueBinding(transformBinding, 'transform');
     leases.push(transform);
     if (createdTransform) transformBinding.dispose();
     const spans = formattedText.spans.map((span) => {
@@ -1516,7 +1520,7 @@ function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, o
         assertTextStyle(span.style, `text span style [${span.start}, ${span.end})`);
         assertTextStyleFeatureRanges(span.style, span.start, span.end, `text span style [${span.start}, ${span.end})`);
       }
-      const spanFont = span.font === undefined ? undefined : backend._retainFontStackBinding(span.font);
+      const spanFont = span.font === undefined ? undefined : handleState._retainFontStackBinding(span.font);
       if (spanFont !== undefined) leases.push(spanFont);
       if (span.style !== undefined) {
         assertTextEffectsSupported(
@@ -1526,7 +1530,7 @@ function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, o
         );
       }
       const spanMaterial =
-        span.material === undefined ? undefined : backend._retainOpaqueBinding(span.material, 'material');
+        span.material === undefined ? undefined : handleState._retainOpaqueBinding(span.material, 'material');
       if (spanMaterial !== undefined) leases.push(spanMaterial);
       return Object.freeze({
         start: span.start,
@@ -1538,17 +1542,17 @@ function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, o
     });
     const flowTransforms: BackendOpaqueBindingLease[] = [];
     for (const flowRegion of value.flow?.regions ?? []) {
-      const retained = backend._retainOpaqueBinding(flowRegion.region.transform, 'transform');
+      const retained = handleState._retainOpaqueBinding(flowRegion.region.transform, 'transform');
       leases.push(retained);
       flowTransforms.push(retained);
     }
     const inlineMaterials: BackendOpaqueBindingLease[] = [];
     const inlineResources: BackendOpaqueBindingLease[] = [];
     for (const object of value.inlineObjects ?? []) {
-      const retainedMaterial = backend._retainOpaqueBinding(object.material, 'material');
+      const retainedMaterial = handleState._retainOpaqueBinding(object.material, 'material');
       leases.push(retainedMaterial);
       inlineMaterials.push(retainedMaterial);
-      const retainedResource = backend._retainOpaqueBinding(object.resource, 'resource');
+      const retainedResource = handleState._retainOpaqueBinding(object.resource, 'resource');
       leases.push(retainedResource);
       inlineResources.push(retainedResource);
     }
@@ -1613,7 +1617,7 @@ function normalizeTextInput(value: unknown): RetainedFormattedText {
 function snapshotTextOptions(
   value: RetainedTextOptions,
   input: RetainedFormattedText,
-  font: ReturnType<GlyphBackend['_retainFontStackBinding']>,
+  font: ReturnType<GlyphHandleState['_retainFontStackBinding']>,
   material: BackendOpaqueBindingLease | undefined,
   transform: BackendOpaqueBindingLease,
   spans: readonly ResolvedSpan[],
@@ -1723,13 +1727,13 @@ function validateTextScalarOptions(value: RetainedTextOptions, ordinal: number):
   uint32(ordinal, 'text ordinal');
 }
 
-function compileStyles(backend: GlyphBackend, state: RetainedTextState): readonly PlannerStyleMutation[] {
+function compileStyles(handleState: GlyphHandleState, state: RetainedTextState): readonly PlannerStyleMutation[] {
   const desired = state.desired;
   const source = desired.source;
   const root: PlannerStyleMutation = {
     opcode: 'upsert',
     paragraphId: state.paragraphId,
-    styleId: engineStyleId(backend.id, state.paragraphId, 1),
+    styleId: engineStyleId(handleState.id, state.paragraphId, 1),
     cascadeOrder: 0,
     start: 0,
     end: desired.text.length,
@@ -1748,7 +1752,7 @@ function compileStyles(backend: GlyphBackend, state: RetainedTextState): readonl
       .map((span, index) => ({
         opcode: 'upsert' as const,
         paragraphId: state.paragraphId,
-        styleId: engineStyleId(backend.id, state.paragraphId, index + 2),
+        styleId: engineStyleId(handleState.id, state.paragraphId, index + 2),
         cascadeOrder: index + 1,
         start: span.start,
         end: span.end,
@@ -1782,7 +1786,7 @@ function pendingStyleMutationCount(state: RetainedTextState): number {
 }
 
 function compileGeometry(
-  backend: GlyphBackend,
+  handleState: GlyphHandleState,
   state: RetainedTextState,
   regionStart: number,
   exclusionStart: number,
@@ -1793,7 +1797,7 @@ function compileGeometry(
 }> {
   const revision = state.geometryRevision + 1;
   const ordinary = compileEngineGeometry(
-    backend.id,
+    handleState.id,
     state.paragraphId,
     state.desired.transform.handle,
     revision,
@@ -1809,7 +1813,7 @@ function compileGeometry(
   for (const [regionIndex, input] of flow.regions.entries()) {
     const transform = state.desired.flowTransforms[regionIndex]!;
     const firstExclusion = exclusionStart + exclusions.length;
-    const regionId = backend.id('region', `paragraph/${state.paragraphId}/flow/${regionIndex}`);
+    const regionId = handleState.id('region', `paragraph/${state.paragraphId}/flow/${regionIndex}`);
     regions.push({
       ...input.region,
       id: regionId,
@@ -1821,7 +1825,7 @@ function compileGeometry(
     for (const [index, exclusion] of (input.exclusions ?? []).entries()) {
       exclusions.push({
         ...exclusion,
-        id: backend.id('exclusion', `paragraph/${state.paragraphId}/flow/${regionIndex}/exclusion/${index}`),
+        id: handleState.id('exclusion', `paragraph/${state.paragraphId}/flow/${regionIndex}/exclusion/${index}`),
         regionId,
         geometryRevision: revision,
       });
@@ -1834,11 +1838,11 @@ function compileGeometry(
   };
 }
 
-function compileInlineObjects(backend: GlyphBackend, state: RetainedTextState): readonly PlannerInlineObject[] {
+function compileInlineObjects(handleState: GlyphHandleState, state: RetainedTextState): readonly PlannerInlineObject[] {
   return (state.desired.source.inlineObjects ?? []).map((object, index) => ({
     ...object,
     paragraphId: state.paragraphId,
-    id: backend.id('inline-object', `paragraph/${state.paragraphId}/inline/${index}`),
+    id: handleState.id('inline-object', `paragraph/${state.paragraphId}/inline/${index}`),
     contentRevision: state.geometryRevision + 1,
     materialId: state.desired.inlineMaterials[index]!.handle as MaterialHandle,
     resourceId: state.desired.inlineResources[index]!.handle as ResourceHandle,

@@ -1,5 +1,5 @@
 import type { PortablePayloadLease } from './render-planner.js';
-import type { BackendMaterialBinding, BackendTransformBinding } from './backend.js';
+import type { BackendMaterialBinding, BackendTransformBinding } from '../internal/handle-state.js';
 import type {
   AnyGlyphBindings,
   BorrowedTypedCommandBuffer,

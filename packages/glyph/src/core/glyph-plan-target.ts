@@ -10,7 +10,7 @@ import {
   type TransformUpdate,
 } from './glyph-config.js';
 import type { Codec } from './glyph-config.js';
-import type { BackendMaterialBinding, BackendTransformBinding } from './backend.js';
+import type { BackendMaterialBinding, BackendTransformBinding } from '../internal/handle-state.js';
 import type { PlanAcceptance, PlanCandidate, PlanTarget } from './render-planner.js';
 
 type PlanTargetConfig<Bindings extends AnyGlyphBindings, Result, PortableResource, Root> = Pick<

@@ -10,7 +10,7 @@ import {
 import type { AnyRasterTechnique, RasterDataOf } from './raster-technique.js';
 import type { RasterKindOf, RegisteredRaster } from './raster.js';
 import { createRuntimeShaper, type RuntimeShaper } from './shaper.js';
-import { GlyphBackend, type GlyphBackendOptions } from './core/backend.js';
+import { GlyphHandleState, type GlyphHandleStateOptions } from './internal/handle-state.js';
 import type { FontHandle } from './identity.js';
 
 /** Options for constructing one independent Wasm shaping engine. */
@@ -119,7 +119,7 @@ export function observeGlyphEngineDispose(glyphEngine: GlyphEngine, dispose: () 
 }
 
 /** @internal Creates the engine-local state owned by one configured Glyph handle. */
-export function createGlyphHandleState(glyphEngine: GlyphEngine, options: GlyphBackendOptions): GlyphBackend {
+export function createGlyphHandleState(glyphEngine: GlyphEngine, options: GlyphHandleStateOptions): GlyphHandleState {
   if (!(glyphEngine instanceof GlyphEngineImpl)) throw new TypeError('glyph engine was not created by this package');
   return glyphEngine._createHandleState(options);
 }
@@ -155,7 +155,7 @@ class GlyphEngineImpl implements GlyphEngine {
   readonly #fontRegistry: EngineFontRegistry;
   readonly #shaper: RuntimeShaper;
   readonly #disposeObservers = new Set<() => void>();
-  readonly #handleStates = new Set<GlyphBackend>();
+  readonly #handleStates = new Set<GlyphHandleState>();
   readonly #fontRegistrations = new WeakMap<RegisteredFont, EngineFontRegistration>();
   readonly #liveFontRegistrations = new Set<EngineFontRegistration>();
   #disposed = false;
@@ -173,13 +173,13 @@ class GlyphEngineImpl implements GlyphEngine {
   }
 
   /** @internal */
-  _createHandleState(options: GlyphBackendOptions): GlyphBackend {
+  _createHandleState(options: GlyphHandleStateOptions): GlyphHandleState {
     this.#assertActive();
     const ordinal = this.#nextHandleOrdinal;
     const nextOrdinal = ordinal + 1;
     if (!Number.isSafeInteger(nextOrdinal)) throw new RangeError('glyph handle identities are exhausted');
-    let state!: GlyphBackend;
-    state = new GlyphBackend(
+    let state!: GlyphHandleState;
+    state = new GlyphHandleState(
       this.#shaper,
       options,
       () => this.#handleStates.delete(state),

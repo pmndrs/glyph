@@ -4,15 +4,15 @@ import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
-import { compileRasterFont, resolveRasterPlanProgram, type CompiledRasterFont } from './raster-plan-program.js';
-import { portableResourceIdentity, type PortableResource } from './portable-resources.js';
+import { compileRasterFont, resolveRasterPlanProgram, type CompiledRasterFont } from '../core/raster-plan-program.js';
+import { portableResourceIdentity, type PortableResource } from '../core/portable-resources.js';
 import {
   createRenderPlanner,
   type RenderPlannerFor,
   type RenderPlannerOptions,
   type RenderPlanTarget,
-} from './render-planner.js';
-import { markOwnedPlanPublication, PlanPublicationExpiredError, type OwnedPlanPublication } from './retention.js';
+} from '../core/render-planner.js';
+import { markOwnedPlanPublication, PlanPublicationExpiredError, type OwnedPlanPublication } from '../core/retention.js';
 import {
   assertGlyphId,
   compileRenderPolicy,
@@ -28,7 +28,7 @@ import {
   type RenderIdFactory,
   type StyleId,
   type PlannerHandle,
-} from './render-policy.js';
+} from '../core/render-policy.js';
 
 const MAX_U32 = 0xffff_ffff;
 
@@ -41,20 +41,20 @@ interface PlanTransportOptions {
 }
 
 /** Names one renderer integration backend. */
-export interface GlyphBackendOptions {
+export interface GlyphHandleStateOptions {
   /** Stable diagnostic namespace; never a wire ID or lookup key. */
   readonly integration: string;
 }
 
 /** A counted backend-local render-policy installation. */
-export interface BackendPolicy {
-  readonly [backendPolicyBrand]: true;
+export interface CodecRegistration {
+  readonly [codecRegistrationBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
 /** Builds one policy descriptor using the backend's collision-checked wire identities. */
-export type BackendPolicyFactory = (ids: RenderIdFactory) => PolicyDescriptor;
+export type CodecFactory = (ids: RenderIdFactory) => PolicyDescriptor;
 
 /** A counted backend-local binding of one immutable font. */
 export interface BackendFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
@@ -92,7 +92,7 @@ export interface BackendTransformBinding {
   dispose(): void;
 }
 
-declare const backendPolicyBrand: unique symbol;
+declare const codecRegistrationBrand: unique symbol;
 declare const backendFontBindingBrand: unique symbol;
 declare const backendFontStackBindingBrand: unique symbol;
 declare const backendMaterialBindingBrand: unique symbol;
@@ -152,10 +152,10 @@ export interface GlyphEngineFault {
 const NO_FAULT: GlyphEngineFault = Object.freeze({ paragraphId: 0, styleId: 0 });
 
 interface EngineRegistrationOwners {
-  readonly policies: Map<number, GlyphBackend>;
-  readonly fontBindings: Map<number, GlyphBackend>;
-  readonly fontStacks: Map<number, GlyphBackend>;
-  readonly planners: Map<number, GlyphBackend>;
+  readonly codecs: Map<number, GlyphHandleState>;
+  readonly fontBindings: Map<number, GlyphHandleState>;
+  readonly fontStacks: Map<number, GlyphHandleState>;
+  readonly planners: Map<number, GlyphHandleState>;
 }
 
 const registrationOwners = new WeakMap<object, EngineRegistrationOwners>();
@@ -164,7 +164,7 @@ function ownersFor(exports: object): EngineRegistrationOwners {
   let owners = registrationOwners.get(exports);
   if (owners === undefined) {
     owners = {
-      policies: new Map(),
+      codecs: new Map(),
       fontBindings: new Map(),
       fontStacks: new Map(),
       planners: new Map(),
@@ -285,7 +285,7 @@ function headerFault(header: DataView): GlyphEngineFault {
     : Object.freeze({ paragraphId: paragraphId as ParagraphId | 0, styleId: styleId as StyleId | 0 });
 }
 
-interface InstalledBackendPolicy {
+interface InstalledCodecRegistration {
   readonly handle: PolicyHandle;
   readonly descriptor: PolicyDescriptor;
   readonly techniqueIds: ReadonlySet<number>;
@@ -342,18 +342,18 @@ export interface BackendOpaqueBindingLease<
   dispose(): void;
 }
 
-const backendPolicies = new WeakMap<object, Readonly<{ backend: GlyphBackend; state: InstalledBackendPolicy }>>();
+const handleCodecs = new WeakMap<object, Readonly<{ backend: GlyphHandleState; state: InstalledCodecRegistration }>>();
 const backendFontStacks = new WeakMap<
   object,
-  Readonly<{ backend: GlyphBackend; state: RetainedBackendFontStackBinding }>
+  Readonly<{ backend: GlyphHandleState; state: RetainedBackendFontStackBinding }>
 >();
 const backendOpaqueBindings = new WeakMap<
   object,
-  Readonly<{ backend: GlyphBackend; state: RetainedBackendOpaqueBinding }>
+  Readonly<{ backend: GlyphHandleState; state: RetainedBackendOpaqueBinding }>
 >();
 
 /** Owns one renderer integration's policies, bindings, render planners, and transports. */
-export class GlyphBackend {
+export class GlyphHandleState {
   readonly integration: string;
   readonly #identityNamespace: string;
   readonly #wireIdentities = new RenderIdScope();
@@ -362,10 +362,10 @@ export class GlyphBackend {
   readonly #owners: EngineRegistrationOwners;
   readonly #planners = new Set<{ dispose(): void }>();
   readonly #transports = new Set<PlanTransport>();
-  readonly #policies = new Set<PolicyHandle>();
+  readonly #codecs = new Set<PolicyHandle>();
   readonly #fontStacks = new Map<FontStackHandle, readonly FontBindingHandle[]>();
   readonly #fontBindings = new Set<FontBindingHandle>();
-  readonly #installedPolicies = new Set<InstalledBackendPolicy>();
+  readonly #installedCodecs = new Set<InstalledCodecRegistration>();
   readonly #retainedFontBindings = new WeakMap<object, RetainedBackendFontBinding>();
   readonly #liveRetainedFontBindings = new Set<RetainedBackendFontBinding>();
   readonly #retainedFontStacks = new WeakMap<object, RetainedBackendFontStackBinding>();
@@ -381,7 +381,7 @@ export class GlyphBackend {
   readonly #bindEngineFont: BackendEngineFontBinder | undefined;
   readonly #assertEngineAvailable: (() => void) | undefined;
   readonly #enterEngineBorrow: (() => () => void) | undefined;
-  #nextPolicyOrdinal = 1;
+  #nextCodecOrdinal = 1;
   #nextFontBindingOrdinal = 1;
   #nextFontStackOrdinal = 1;
   #nextMaterialOrdinal = 1;
@@ -394,7 +394,7 @@ export class GlyphBackend {
   /** @internal Backends are owned and normally created by GlyphEngine. */
   constructor(
     shaper: RuntimeShaper,
-    options: GlyphBackendOptions = { integration: 'internal' },
+    options: GlyphHandleStateOptions = { integration: 'internal' },
     onDispose?: () => void,
     bindEngineFont?: BackendEngineFontBinder,
     assertEngineAvailable?: () => void,
@@ -421,25 +421,25 @@ export class GlyphBackend {
   readonly id: BackendIdFactory = createBackendIdFactory(this.#ids, () => this.#assertActive());
 
   /** Installs one renderer policy for this backend and returns its counted lease. */
-  installPolicy(factory: BackendPolicyFactory): BackendPolicy {
+  installCodec(factory: CodecFactory): CodecRegistration {
     this.#assertActive();
     if (typeof factory !== 'function') throw new TypeError('text engine policy must be a factory');
     const snapshot = snapshotPolicyDescriptor(factory(this.#wireIdentities));
     const bytes = compileRenderPolicy(snapshot);
-    const ordinal = this.#nextPolicyOrdinal;
+    const ordinal = this.#nextCodecOrdinal;
     const handle = this.id('policy', `${this.#identityNamespace}/policy/${ordinal}`);
-    this.registerPolicy(handle, bytes);
-    this.#nextPolicyOrdinal = ordinal + 1;
-    const state: InstalledBackendPolicy = {
+    this.registerCodec(handle, bytes);
+    this.#nextCodecOrdinal = ordinal + 1;
+    const state: InstalledCodecRegistration = {
       handle,
       descriptor: snapshot,
       techniqueIds: new Set(snapshot.programs.map((program) => program.techniqueId)),
       leases: 1,
       disposed: false,
     };
-    this.#installedPolicies.add(state);
-    const policy = new BackendPolicyImpl(this, state) as BackendPolicy;
-    backendPolicies.set(policy, { backend: this, state });
+    this.#installedCodecs.add(state);
+    const policy = new CodecRegistrationImpl(this, state) as CodecRegistration;
+    handleCodecs.set(policy, { backend: this, state });
     return policy;
   }
 
@@ -452,7 +452,7 @@ export class GlyphBackend {
     const engineBinding = this.#bindEngineFont(font);
     try {
       const techniqueId = this.#wireIdentities.technique(font.technique);
-      if (![...this.#installedPolicies].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
+      if (![...this.#installedCodecs].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
         throw new TypeError(`glyph backend has no installed policy for "${font.technique.id}"`);
       }
       const existing = this.#retainedFontBindings.get(engineBinding.identity);
@@ -502,7 +502,7 @@ export class GlyphBackend {
     const fonts = immutableFontStackFonts(stack as FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>);
     for (const font of fonts) {
       const techniqueId = this.#wireIdentities.technique(font.technique);
-      if (![...this.#installedPolicies].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
+      if (![...this.#installedCodecs].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
         throw new TypeError(`glyph backend has no installed policy for "${font.technique.id}"`);
       }
     }
@@ -544,19 +544,19 @@ export class GlyphBackend {
   }
 
   /** @internal */
-  _disposeInstalledPolicy(state: InstalledBackendPolicy): void {
+  _disposeInstalledCodec(state: InstalledCodecRegistration): void {
     if (state.disposed) return;
     if (state.leases <= 0) throw new Error('backend policy lease underflow');
     state.leases -= 1;
-    if (state.leases === 0) this.#disposeInstalledPolicy(state);
+    if (state.leases === 0) this.#disposeInstalledCodec(state);
   }
 
   /** @internal */
-  _retainInstalledPolicy(
-    policy: BackendPolicy,
+  _retainInstalledCodec(
+    policy: CodecRegistration,
   ): Readonly<{ handle: PolicyHandle; descriptor: PolicyDescriptor; dispose(): void }> {
     this.#assertActive();
-    const entry = backendPolicies.get(policy as object);
+    const entry = handleCodecs.get(policy as object);
     if (entry === undefined || entry.backend !== this || entry.state.disposed || policy.disposed) {
       throw new TypeError('backend policy must be a live policy installed by this glyph backend');
     }
@@ -568,7 +568,7 @@ export class GlyphBackend {
       dispose: () => {
         if (disposed) return;
         disposed = true;
-        this._disposeInstalledPolicy(entry.state);
+        this._disposeInstalledCodec(entry.state);
       },
     });
   }
@@ -812,37 +812,37 @@ export class GlyphBackend {
   }
 
   /** @internal */
-  registerPolicy(handle: PolicyHandle, bytes: Uint8Array): void {
+  registerCodec(handle: PolicyHandle, bytes: Uint8Array): void {
     this.#assertActive();
     handle = assertGlyphId(handle, 'policy', 'policy handle');
     const adopted = this.#ids.retain(handle, 'policy', 'policy handle');
     let claimed = false;
     try {
-      claimed = this.#claim(this.#owners.policies, handle, 'render policy');
+      claimed = this.#claim(this.#owners.codecs, handle, 'render policy');
       this.#withBytes(bytes, (pointer, length) =>
         requireStatus(this.#exports.registerPolicy(handle, pointer, length), 'register render policy'),
       );
-      this.#policies.add(handle);
+      this.#codecs.add(handle);
     } catch (error) {
-      this.#rollbackClaim(this.#owners.policies, handle, claimed);
+      this.#rollbackClaim(this.#owners.codecs, handle, claimed);
       if (adopted) this.#ids.release(handle, 'policy');
       throw error;
     }
   }
 
   /** @internal */
-  disposePolicy(handle: PolicyHandle): void {
+  disposeCodec(handle: PolicyHandle): void {
     this.#assertActive();
     handle = assertGlyphId(handle, 'policy', 'policy handle');
-    if (!this.#policies.has(handle)) throw new Error(`render policy ${handle} is not owned by this glyph backend`);
+    if (!this.#codecs.has(handle)) throw new Error(`render policy ${handle} is not owned by this glyph backend`);
     requireStatus(this.#exports.disposePolicy(handle), 'dispose render policy');
-    this.#policies.delete(handle);
-    this.#releaseClaim(this.#owners.policies, handle);
+    this.#codecs.delete(handle);
+    this.#releaseClaim(this.#owners.codecs, handle);
     this.#ids.release(handle, 'policy');
   }
 
   /** Creates a render planner whose delivery mode is selected by its target. */
-  createPlanner<Target extends RenderPlanTarget>(options: RenderPlannerOptions<Target>): RenderPlannerFor<Target> {
+  createRootPlanner<Target extends RenderPlanTarget>(options: RenderPlannerOptions<Target>): RenderPlannerFor<Target> {
     const planner = createRenderPlanner(this, options);
     this.#planners.add(planner);
     return planner;
@@ -938,16 +938,16 @@ export class GlyphBackend {
     for (const handle of [...this.#fontBindings]) {
       if (!retainedFontHandles.has(handle)) attempt(() => this.disposeFontBinding(handle));
     }
-    const installedPolicyHandles = new Set([...this.#installedPolicies].map((policy) => policy.handle));
-    for (const policy of [...this.#installedPolicies]) attempt(() => this.#disposeInstalledPolicy(policy));
-    for (const handle of [...this.#policies]) {
-      if (!installedPolicyHandles.has(handle)) attempt(() => this.disposePolicy(handle));
+    const installedPolicyHandles = new Set([...this.#installedCodecs].map((policy) => policy.handle));
+    for (const policy of [...this.#installedCodecs]) attempt(() => this.#disposeInstalledCodec(policy));
+    for (const handle of [...this.#codecs]) {
+      if (!installedPolicyHandles.has(handle)) attempt(() => this.disposeCodec(handle));
     }
     if (
       this.#transports.size !== 0 ||
       this.#fontStacks.size !== 0 ||
       this.#fontBindings.size !== 0 ||
-      this.#policies.size !== 0 ||
+      this.#codecs.size !== 0 ||
       this.#portablePayloads.size !== 0
     ) {
       failure ??= new Error('glyph backend disposal left live registrations or payload leases');
@@ -969,7 +969,7 @@ export class GlyphBackend {
     if (references.plannerHandle !== plannerHandle) {
       throw new TypeError(`text update belongs to planner ${references.plannerHandle}, not ${plannerHandle}`);
     }
-    if (this.#owners.policies.get(references.policyHandle) !== this) {
+    if (this.#owners.codecs.get(references.policyHandle) !== this) {
       throw new TypeError(`render policy ${references.policyHandle} is not owned by this glyph backend`);
     }
     for (const handle of references.fontStackHandles) {
@@ -1085,12 +1085,12 @@ export class GlyphBackend {
     }
   }
 
-  #disposeInstalledPolicy(state: InstalledBackendPolicy): void {
+  #disposeInstalledCodec(state: InstalledCodecRegistration): void {
     if (state.disposed) return;
-    this.disposePolicy(state.handle);
+    this.disposeCodec(state.handle);
     state.leases = 0;
     state.disposed = true;
-    this.#installedPolicies.delete(state);
+    this.#installedCodecs.delete(state);
   }
 
   #createOpaqueBinding(kind: RetainedBackendOpaqueBinding['kind']): BackendOpaqueBindingImpl {
@@ -1167,7 +1167,7 @@ export class GlyphBackend {
     if (failure !== undefined) throw failure;
   }
 
-  #claim(owners: Map<number, GlyphBackend>, handle: number, label: string): boolean {
+  #claim(owners: Map<number, GlyphHandleState>, handle: number, label: string): boolean {
     const owner = owners.get(handle);
     if (owner === this) return false;
     if (owner !== undefined) throw new Error(`${label} ${handle} is already owned by another glyph backend`);
@@ -1175,11 +1175,11 @@ export class GlyphBackend {
     return true;
   }
 
-  #rollbackClaim(owners: Map<number, GlyphBackend>, handle: number, claimed: boolean): void {
+  #rollbackClaim(owners: Map<number, GlyphHandleState>, handle: number, claimed: boolean): void {
     if (claimed && owners.get(handle) === this) owners.delete(handle);
   }
 
-  #releaseClaim(owners: Map<number, GlyphBackend>, handle: number): void {
+  #releaseClaim(owners: Map<number, GlyphHandleState>, handle: number): void {
     if (owners.get(handle) !== this) throw new Error(`glyph backend lost registration ${handle}`);
     owners.delete(handle);
   }
@@ -1266,13 +1266,13 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   return true;
 }
 
-class BackendPolicyImpl implements BackendPolicy {
-  declare readonly [backendPolicyBrand]: true;
-  readonly #backend: GlyphBackend;
-  readonly #state: InstalledBackendPolicy;
+class CodecRegistrationImpl implements CodecRegistration {
+  declare readonly [codecRegistrationBrand]: true;
+  readonly #backend: GlyphHandleState;
+  readonly #state: InstalledCodecRegistration;
   #disposed = false;
 
-  constructor(backend: GlyphBackend, state: InstalledBackendPolicy) {
+  constructor(backend: GlyphHandleState, state: InstalledCodecRegistration) {
     this.#backend = backend;
     this.#state = state;
   }
@@ -1283,17 +1283,17 @@ class BackendPolicyImpl implements BackendPolicy {
 
   dispose(): void {
     if (this.disposed) return;
-    this.#backend._disposeInstalledPolicy(this.#state);
+    this.#backend._disposeInstalledCodec(this.#state);
     this.#disposed = true;
   }
 }
 
 class BackendFontBindingImpl {
-  readonly #backend: GlyphBackend;
+  readonly #backend: GlyphHandleState;
   readonly #state: RetainedBackendFontBinding;
   #disposed = false;
 
-  constructor(backend: GlyphBackend, state: RetainedBackendFontBinding) {
+  constructor(backend: GlyphHandleState, state: RetainedBackendFontBinding) {
     this.#backend = backend;
     this.#state = state;
   }
@@ -1321,11 +1321,11 @@ class BackendFontBindingImpl {
 
 class BackendFontStackBindingImpl implements BackendFontStackBinding {
   declare readonly [backendFontStackBindingBrand]: true;
-  readonly #backend: GlyphBackend;
+  readonly #backend: GlyphHandleState;
   readonly #state: RetainedBackendFontStackBinding;
   #disposed = false;
 
-  constructor(backend: GlyphBackend, state: RetainedBackendFontStackBinding) {
+  constructor(backend: GlyphHandleState, state: RetainedBackendFontStackBinding) {
     this.#backend = backend;
     this.#state = state;
   }
@@ -1345,11 +1345,11 @@ class BackendOpaqueBindingImpl implements BackendMaterialBinding, BackendResourc
   declare readonly [backendMaterialBindingBrand]: true;
   declare readonly [backendResourceBindingBrand]: true;
   declare readonly [backendTransformBindingBrand]: true;
-  readonly #backend: GlyphBackend;
+  readonly #backend: GlyphHandleState;
   readonly #state: RetainedBackendOpaqueBinding;
   #disposed = false;
 
-  constructor(backend: GlyphBackend, state: RetainedBackendOpaqueBinding) {
+  constructor(backend: GlyphHandleState, state: RetainedBackendOpaqueBinding) {
     this.#backend = backend;
     this.#state = state;
   }

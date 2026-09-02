@@ -28,7 +28,7 @@
  *   through their `referenceId`.
  */
 
-import type { PlanPublication } from './backend.js';
+import type { PlanPublication } from '../internal/handle-state.js';
 
 /**
  * Ownership brand for a publication whose bytes are host-owned copies.

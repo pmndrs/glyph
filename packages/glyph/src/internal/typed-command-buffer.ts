@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { BackendMaterialBinding, BackendTransformBinding } from '../core/backend.js';
+import type { BackendMaterialBinding, BackendTransformBinding } from './handle-state.js';
 import type { RenderPlanTable } from '../core/plan-view.js';
 import type { PlanCandidate, RenderPlanReader } from '../core/render-planner.js';
 import type {

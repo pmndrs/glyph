@@ -13,8 +13,7 @@ import {
   TextStyle,
   txt,
 } from '@pmndrs/glyph';
-import { GlyphBackend } from '../../dist/core/backend.js';
-import { PlanTransport } from '../../dist/core/backend.js';
+import { GlyphHandleState, PlanTransport } from '../../dist/internal/handle-state.js';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
@@ -1293,21 +1292,21 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
 test('a rejected fixed-capacity candidate releases its provisional font-stack lease', async (t) => {
   const three = await createThreeTestHandle(t);
   three.setCapacity({ size: 1, policy: 'fixed' });
-  const registerFontStack = GlyphBackend.prototype.registerFontStack;
-  const disposeFontStack = GlyphBackend.prototype.disposeFontStack;
+  const registerFontStack = GlyphHandleState.prototype.registerFontStack;
+  const disposeFontStack = GlyphHandleState.prototype.disposeFontStack;
   let registrations = 0;
   let disposals = 0;
-  GlyphBackend.prototype.registerFontStack = function (...args) {
+  GlyphHandleState.prototype.registerFontStack = function (...args) {
     registrations += 1;
     return registerFontStack.apply(this, args);
   };
-  GlyphBackend.prototype.disposeFontStack = function (...args) {
+  GlyphHandleState.prototype.disposeFontStack = function (...args) {
     disposals += 1;
     return disposeFontStack.apply(this, args);
   };
   t.after(() => {
-    GlyphBackend.prototype.registerFontStack = registerFontStack;
-    GlyphBackend.prototype.disposeFontStack = disposeFontStack;
+    GlyphHandleState.prototype.registerFontStack = registerFontStack;
+    GlyphHandleState.prototype.disposeFontStack = disposeFontStack;
   });
 
   const fontDomain = createThreeFontDomain();
