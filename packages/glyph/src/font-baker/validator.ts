@@ -4,6 +4,7 @@ import Ajv, { type ErrorObject, type ValidateFunction } from 'ajv';
 import draft04Schema from 'ajv/lib/refs/json-schema-draft-04.json' with { type: 'json' };
 import { validateBytes } from 'gltf-validator';
 
+import { GlbReadError, readGlb, type ParsedGlb } from '../internal/glb-reader.js';
 import { FONT_BAKER_VERSION } from './contract.js';
 
 import extensionSchema from './schemas/gltf-2.0/extension.schema.json' with { type: 'json' };
@@ -11,11 +12,7 @@ import extrasSchema from './schemas/gltf-2.0/extras.schema.json' with { type: 'j
 import gltfPropertySchema from './schemas/gltf-2.0/glTFProperty.schema.json' with { type: 'json' };
 import fontExtensionSchema from './schemas/extensions/glTF.PMNDRS_font.schema.json' with { type: 'json' };
 
-const GLB_MAGIC = 0x4654_6c67;
-const JSON_CHUNK = 0x4e4f_534a;
-const BIN_CHUNK = 0x004e_4942;
 const GLTF_VALIDATOR_VERSION = '2.0.0-dev.3.10';
-const textDecoder = new TextDecoder('utf-8', { fatal: true });
 const textEncoder = new TextEncoder();
 
 export interface FontArtifactValidationIssue {
@@ -76,73 +73,15 @@ export async function validateFontArtifact(bytes: Uint8Array): Promise<Validated
   return validateFontSemantics(parsed, khronos);
 }
 
-export interface ParsedGlb {
-  readonly document: Record<string, unknown>;
-  readonly bin: Uint8Array;
-  readonly declaredBinLength: number;
-}
+export type { ParsedGlb } from '../internal/glb-reader.js';
 
 export function parseGlb(bytes: Uint8Array): ParsedGlb {
-  if (bytes.byteLength < 28) fail('GLB_TOO_SHORT', 'GLB must contain a header plus JSON and BIN chunks');
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (view.getUint32(0, true) !== GLB_MAGIC) fail('GLB_MAGIC', 'invalid GLB magic', '/header/magic');
-  if (view.getUint32(4, true) !== 2) fail('GLB_VERSION', 'only GLB version 2 is supported', '/header/version');
-  if (view.getUint32(8, true) !== bytes.byteLength) {
-    fail('GLB_LENGTH', 'declared GLB length must consume the complete input', '/header/length');
-  }
-
-  const chunks: { readonly type: number; readonly start: number; readonly end: number }[] = [];
-  let cursor = 12;
-  while (cursor < bytes.byteLength) {
-    if (cursor > bytes.byteLength - 8)
-      fail('GLB_CHUNK_HEADER', 'truncated GLB chunk header', `/chunks/${chunks.length}`);
-    const byteLength = view.getUint32(cursor, true);
-    const type = view.getUint32(cursor + 4, true);
-    if ((byteLength & 3) !== 0)
-      fail('GLB_CHUNK_ALIGNMENT', 'chunk byte length must be four-byte aligned', `/chunks/${chunks.length}`);
-    const start = cursor + 8;
-    const end = start + byteLength;
-    if (!Number.isSafeInteger(end) || end < start || end > bytes.byteLength) {
-      fail('GLB_CHUNK_RANGE', 'chunk payload exceeds the declared GLB length', `/chunks/${chunks.length}`);
-    }
-    chunks.push({ type, start, end });
-    cursor = end;
-  }
-  if (cursor !== bytes.byteLength) fail('GLB_TRAILING_BYTES', 'chunks must consume the complete GLB');
-  if (chunks.length !== 2 || chunks[0]?.type !== JSON_CHUNK || chunks[1]?.type !== BIN_CHUNK) {
-    fail('GLB_CHUNK_ORDER', 'GLB must contain exactly one JSON chunk followed by one BIN chunk');
-  }
-
-  const jsonChunk = bytes.subarray(chunks[0].start, chunks[0].end);
-  let jsonEnd = jsonChunk.byteLength;
-  while (jsonEnd > 0 && jsonChunk[jsonEnd - 1] === 0x20) jsonEnd -= 1;
-  if (jsonEnd === 0) fail('GLB_JSON_EMPTY', 'JSON chunk is empty', '/json');
-  for (let index = jsonEnd; index < jsonChunk.byteLength; index += 1) {
-    if (jsonChunk[index] !== 0x20) fail('GLB_JSON_PADDING', 'JSON chunk padding must use spaces', '/json');
-  }
-  let document: unknown;
   try {
-    document = JSON.parse(textDecoder.decode(jsonChunk.subarray(0, jsonEnd)));
+    return readGlb(bytes);
   } catch (error) {
-    fail('GLB_JSON', error instanceof Error ? error.message : String(error), '/json');
+    if (error instanceof GlbReadError) throw new FontArtifactValidationError(error.issues);
+    throw error;
   }
-  const root = requireNonArrayObject(document, 'GLB JSON root', '/json');
-  const buffers = asArray(root.buffers, 'buffers', '/buffers');
-  if (buffers.length !== 1) fail('BUFFER_COUNT', 'GLB must contain exactly one buffer', '/buffers');
-  const buffer = requireNonArrayObject(buffers[0], 'buffer', '/buffers/0');
-  if (buffer.uri !== undefined) fail('BUFFER_URI', 'GLB buffer must be embedded', '/buffers/0/uri');
-  const declaredBinLength = asInteger(buffer.byteLength, 'buffer byteLength', '/buffers/0/byteLength', 0);
-  const binChunk = chunks[1];
-  const bin = bytes.subarray(binChunk.start, binChunk.end);
-  if (declaredBinLength > bin.byteLength || bin.byteLength - declaredBinLength > 3) {
-    fail(
-      'BIN_LENGTH',
-      'BIN chunk must equal its declared buffer length plus at most three padding bytes',
-      '/buffers/0/byteLength',
-    );
-  }
-  if (!allZero(bin.subarray(declaredBinLength))) fail('BIN_PADDING', 'BIN chunk padding must be zero', '/bin');
-  return { document: root, bin, declaredBinLength };
 }
 
 export async function validateWithKhronos(
