@@ -94,6 +94,14 @@ export function immutableFontSelectionFonts<Technique extends AnyRasterFormat>(
   return [selection];
 }
 
+/** @internal Narrow a live package-owned Font or FontStack without accepting structural lookalikes. */
+export function isImmutableFontSelection(value: unknown): value is FontSelection<AnyRasterFormat> {
+  if (typeof value !== 'object' || value === null) return false;
+  if (immutableFontStacks.has(value)) return true;
+  const state = immutableFontState.get(value as Font<AnyRasterFormat>);
+  return state !== undefined && !state.disposed;
+}
+
 class FontImpl<Format extends AnyRasterFormat> implements Font<Format> {
   readonly metrics: FontMetrics;
   readonly glyphCount: number;

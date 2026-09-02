@@ -1757,7 +1757,7 @@ function normalizeTextInput(value: unknown): RetainedFormattedText {
       ...(span.material === undefined ? {} : { material: span.material as HandleMaterialBinding }),
       ...(span.style === undefined
         ? {}
-        : { style: cloneAuthoredData(span.style as TextStyle, `text span ${index} style`) }),
+        : { style: snapshotAuthoredData(span.style as TextStyle, `text span ${index} style`) }),
     });
   });
   return Object.freeze({ text, spans: Object.freeze(alignSpansToClusters(text, spans)) });
@@ -1783,7 +1783,7 @@ function snapshotTextOptions(
     inlineObjects: _inlineObjects,
     ...rest
   } = value;
-  const snapshot = cloneAuthoredData(rest, 'text options');
+  const snapshot = snapshotAuthoredData(rest, 'text options');
   const text = Object.freeze({
     text: input.text,
     spans: Object.freeze(
@@ -1813,14 +1813,14 @@ function snapshotTextOptions(
                 const { transform: _regionTransform, ...region } = flowRegion.region;
                 return Object.freeze({
                   region: Object.freeze({
-                    ...cloneAuthoredData(region, `text flow region ${index}`),
+                    ...snapshotAuthoredData(region, `text flow region ${index}`),
                     transform: flowTransforms[index]!.binding as HandleTransformBinding,
                   }),
                   ...(flowRegion.exclusions === undefined
                     ? {}
                     : {
                         exclusions: Object.freeze(
-                          cloneAuthoredData(flowRegion.exclusions, `text flow region ${index} exclusions`),
+                          snapshotAuthoredData(flowRegion.exclusions, `text flow region ${index} exclusions`),
                         ),
                       }),
                 });
@@ -1835,7 +1835,7 @@ function snapshotTextOptions(
             value.inlineObjects.map((object, index) => {
               const { material: _inlineMaterial, resource: _inlineResource, ...data } = object;
               return Object.freeze({
-                ...cloneAuthoredData(data, `text inline object ${index}`),
+                ...snapshotAuthoredData(data, `text inline object ${index}`),
                 material: inlineMaterials[index]!.binding as HandleMaterialBinding,
                 resource: inlineResources[index]!.binding as HandleResourceBinding,
               });
@@ -2218,7 +2218,8 @@ function uint32(value: unknown, label: string): asserts value is number {
   }
 }
 
-function cloneAuthoredData<Value>(value: Value, label: string): Value {
+/** Snapshots plain authored values at publication; Font and resource ownership never enters this path. */
+function snapshotAuthoredData<Value>(value: Value, label: string): Value {
   try {
     return structuredClone(value);
   } catch (cause) {
