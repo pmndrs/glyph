@@ -3,11 +3,11 @@ import { createGlyphHandleState, type GlyphEngine } from '../glyph-engine.js';
 import { createFontStack, immutableFontSelectionFonts, type FontSelection, type FontStack } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import {
-  GlyphBackend,
+  GlyphHandleState,
   type BackendMaterialBinding,
-  type BackendPolicy,
+  type CodecRegistration,
   type BackendTransformBinding,
-} from '../core/backend.js';
+} from './handle-state.js';
 import { createGlyphPlanTarget, type GlyphPlanTarget } from '../core/glyph-plan-target.js';
 import type {
   AnyGlyphBindings,
@@ -30,7 +30,7 @@ import type {
   GlyphTextController,
   GlyphTextState,
 } from '../core/glyph-config.js';
-import type { BackendFontStackBinding } from '../core/backend.js';
+import type { BackendFontStackBinding } from './handle-state.js';
 import type {
   RenderPlanner,
   RenderPlannerLimits,
@@ -115,8 +115,8 @@ class ConfiguredHandleDomain<
     CodecValue,
     ConfigExtension
   >;
-  readonly #backend: GlyphBackend;
-  readonly #policy;
+  readonly #handleState: GlyphHandleState;
+  readonly #codecRegistration;
   readonly #codec: CodecValue;
   readonly #roots = new Map<string | undefined, Root>();
   #copyLeases = 0;
@@ -138,21 +138,21 @@ class ConfiguredHandleDomain<
   ) {
     this.#input = input;
     this.#config = config;
-    this.#backend = createGlyphHandleState(input.engine, { integration: input.name });
+    this.#handleState = createGlyphHandleState(input.engine, { integration: input.name });
     let codec: CodecValue | undefined;
     try {
-      this.#policy = this.#backend.installPolicy((ids) => {
+      this.#codecRegistration = this.#handleState.installCodec((ids) => {
         const encoded = config.encode({ integration: input.name, ids });
         codec = encoded;
         return encoded.descriptor;
       });
     } catch (error) {
-      this.#backend.dispose();
+      this.#handleState.dispose();
       throw error;
     }
     if (codec === undefined) {
-      this.#policy.dispose();
-      this.#backend.dispose();
+      this.#codecRegistration.dispose();
+      this.#handleState.dispose();
       throw new Error('GlyphConfig.encode() did not produce a Codec');
     }
     this.#codec = codec;
@@ -161,7 +161,7 @@ class ConfiguredHandleDomain<
       anonymous = this.#root(undefined);
     } catch (error) {
       try {
-        this.#policy.dispose();
+        this.#codecRegistration.dispose();
       } catch {
         // Preserve the root-construction failure.
       }
@@ -171,7 +171,7 @@ class ConfiguredHandleDomain<
         // Preserve the root-construction failure.
       }
       try {
-        this.#backend.dispose();
+        this.#handleState.dispose();
       } catch {
         // Preserve the root-construction failure.
       }
@@ -185,8 +185,8 @@ class ConfiguredHandleDomain<
     const existing = this.#roots.get(name);
     if (existing !== undefined) return existing;
     const services = new ConfiguredRootServices<Bindings, RendererResult, PortableResource, Boundary>(
-      this.#backend,
-      this.#policy,
+      this.#handleState,
+      this.#codecRegistration,
       this.#codec,
       this.#config,
       () => this.#retainCopy(),
@@ -358,7 +358,7 @@ class ConfiguredHandleDomain<
     this.#infrastructureDisposed = true;
     let failure: unknown;
     try {
-      this.#policy.dispose();
+      this.#codecRegistration.dispose();
     } catch (error) {
       failure = error;
     }
@@ -368,7 +368,7 @@ class ConfiguredHandleDomain<
       failure ??= error;
     }
     try {
-      this.#backend.dispose();
+      this.#handleState.dispose();
     } catch (error) {
       failure ??= error;
     }
@@ -393,8 +393,8 @@ class ConfiguredRootServices<
   PortableResource,
   Boundary,
 > implements GlyphRootServices<Bindings, RendererResult, Boundary> {
-  readonly #backend: GlyphBackend;
-  readonly #policy: BackendPolicy;
+  readonly #handleState: GlyphHandleState;
+  readonly #codecRegistration: CodecRegistration;
   readonly #codec: Codec;
   readonly #config: RootRuntimeConfig<Bindings, RendererResult, PortableResource, Boundary>;
   readonly #retainCopy: () => () => void;
@@ -418,14 +418,14 @@ class ConfiguredRootServices<
   #publishing = false;
 
   constructor(
-    backend: GlyphBackend,
-    policy: BackendPolicy,
+    handleState: GlyphHandleState,
+    codecRegistration: CodecRegistration,
     codec: Codec,
     config: RootRuntimeConfig<Bindings, RendererResult, PortableResource, Boundary>,
     retainCopy: () => () => void,
   ) {
-    this.#backend = backend;
-    this.#policy = policy;
+    this.#handleState = handleState;
+    this.#codecRegistration = codecRegistration;
     this.#codec = codec;
     this.#config = config;
     this.#retainCopy = retainCopy;
@@ -444,8 +444,8 @@ class ConfiguredRootServices<
     try {
       const commands = this.#config.commands;
       const capabilitySet = this.#codec.descriptor.capabilitySets[this.#codec.capabilitySet ?? 0];
-      this.#planner = this.#backend.createPlanner({
-        policy: this.#policy,
+      this.#planner = this.#handleState.createRootPlanner({
+        codec: this.#codecRegistration,
         ...(capabilitySet === undefined ? {} : { capabilitySet }),
         target: () => target,
         limits: commands?.limits ?? DEFAULT_LIMITS,
@@ -623,18 +623,18 @@ class ConfiguredRootServices<
       stack = this.#singleFontStacks.get(font) ?? createFontStack(font);
       this.#singleFontStacks.set(font, stack);
     }
-    return this.#backend.bindFontStack(stack);
+    return this.#handleState.bindFontStack(stack);
   }
 
   #bindMaterial(input: Bindings['materialInput'], leases: Array<{ dispose(): void }>): BackendMaterialBinding {
     let shared = this.#materialBindings.get(input);
     if (shared === undefined || shared.canonical.disposed) {
-      const canonical = this.#backend.createMaterialBinding();
+      const canonical = this.#handleState.createMaterialBinding();
       shared = { canonical, references: 0 };
       this.#materialBindings.set(input, shared);
       this.#materials.set(canonical, input);
     }
-    const lease = this.#backend._retainOpaqueBinding(shared.canonical, 'material');
+    const lease = this.#handleState._retainOpaqueBinding(shared.canonical, 'material');
     shared.references += 1;
     leases.push(this.#sharedMaterialLease(input, shared, lease));
     return lease.binding;
@@ -655,12 +655,12 @@ class ConfiguredRootServices<
   #bindTransform(input: Bindings['transformInput'], leases: Array<{ dispose(): void }>): BackendTransformBinding {
     let shared = this.#transformBindings.get(input);
     if (shared === undefined || shared.canonical.disposed) {
-      const canonical = this.#backend.createTransformBinding();
+      const canonical = this.#handleState.createTransformBinding();
       shared = { canonical, references: 0 };
       this.#transformBindings.set(input, shared);
       this.#transforms.set(canonical, input);
     }
-    const lease = this.#backend._retainOpaqueBinding(shared.canonical, 'transform');
+    const lease = this.#handleState._retainOpaqueBinding(shared.canonical, 'transform');
     shared.references += 1;
     leases.push(this.#sharedTransformLease(input, shared, lease));
     return lease.binding;

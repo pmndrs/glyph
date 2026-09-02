@@ -1,6 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
-import type { PlanPublication } from './backend.js';
+import type { PlanPublication } from '../internal/handle-state.js';
 
 /**
  * Reads the ink box off one semantic record, or reports its absence.

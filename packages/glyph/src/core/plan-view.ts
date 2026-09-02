@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { PlanPublication } from './backend.js';
+import type { PlanPublication } from '../internal/handle-state.js';
 import type {
   MaterialHandle,
   PolicyBufferId,

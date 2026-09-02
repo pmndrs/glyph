@@ -5,7 +5,7 @@ import test from 'node:test';
 import { FontRegistry } from '../../dist/loader.js';
 import { createGlyphEngine, createGlyphHandleState } from '../../dist/glyph-engine.js';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
-import { GlyphBackend } from '../../dist/core/backend.js';
+import { GlyphHandleState } from '../../dist/internal/handle-state.js';
 import { assertGlyphId, id } from '../../dist/core/render-policy.js';
 import { threeCodecBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
@@ -28,7 +28,7 @@ test('a glyph engine owns every configured-handle state it creates', async () =>
   const backend = createGlyphHandleState(glyphEngine, { integration: 'test.glyphEngine-owner' });
   const plannerHandle = backend.id('planner', 'test.glyphEngine-owner/transport');
   const policyHandle = backend.id('policy', 'test.glyphEngine-owner/policy');
-  backend.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));
+  backend.registerCodec(policyHandle, renderPolicyBytes(textShaperAbi));
   const request = engineUpdateBytes(textShaperAbi, {
     plannerId: plannerHandle,
     policyHandle,
@@ -51,10 +51,10 @@ test('a glyph backend publishes borrowed A/B plans through the engine shaper', a
   const wasm = await readFile(wasmUrl);
   const abi = textShaperAbi;
   const shaper = await createRuntimeShaper({ wasm });
-  const backend = new GlyphBackend(shaper);
+  const backend = new GlyphHandleState(shaper);
   const policyHandle = TEST_POLICY_HANDLE;
   const plannerId = TEST_PLANNER_HANDLE;
-  backend.registerPolicy(policyHandle, renderPolicyBytes(abi));
+  backend.registerCodec(policyHandle, renderPolicyBytes(abi));
   const firstRequest = engineUpdateBytes(abi, {
     plannerId,
     policyHandle,
@@ -100,7 +100,7 @@ test('a glyph backend publishes borrowed A/B plans through the engine shaper', a
 
 test('backend-scoped ID provenance expires with its owning backend', async () => {
   const shaper = await createRuntimeShaper({ wasm: await readFile(wasmUrl) });
-  const backend = new GlyphBackend(shaper);
+  const backend = new GlyphHandleState(shaper);
   const handle = backend.id('planner', 'test.text-engine-backend/scoped-transport');
   assert.equal(assertGlyphId(handle, 'planner', 'transport handle'), handle);
   backend.dispose();
@@ -119,8 +119,8 @@ test('font bindings cannot be disposed while an owned stack still references the
   const font = await registry.registerAsset(artifact);
   const shaper = await createRuntimeShaper({ registry, wasm });
   shaper.registerFont(font);
-  const backend = new GlyphBackend(shaper);
-  const foreignBackend = new GlyphBackend(shaper);
+  const backend = new GlyphHandleState(shaper);
+  const foreignBackend = new GlyphHandleState(shaper);
   const bindingHandle = backend.id('font-binding', 'test.text-engine-backend/lifecycle-binding');
   const stackHandle = backend.id('font-stack', 'test.text-engine-backend/lifecycle-stack');
   const foreignStackHandle = foreignBackend.id('font-stack', 'test.text-engine-backend/foreign-lifecycle-stack');
@@ -145,7 +145,7 @@ test('font bindings cannot be disposed while an owned stack still references the
     assert.equal(shaper.memoryReport().fontCount, 1, 'a refused disposal must keep the shaper registration owned');
     const policyHandle = backend.id('policy', 'test.text-engine-backend/lifecycle-policy');
     const plannerHandle = backend.id('planner', 'test.text-engine-backend/lifecycle-transport');
-    backend.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));
+    backend.registerCodec(policyHandle, renderPolicyBytes(textShaperAbi));
     const request = engineFrameUpdateBytes(textShaperAbi, {
       plannerId: plannerHandle,
       policyHandle,
@@ -167,14 +167,14 @@ test('font bindings cannot be disposed while an owned stack still references the
       'a committed transport must retain the stack named by its styles',
     );
     assert.throws(
-      () => backend.disposePolicy(policyHandle),
+      () => backend.disposeCodec(policyHandle),
       (error) => error.code === 'registration-in-use',
       'a committed transport must retain its policy',
     );
     transport.dispose();
     backend.disposeFontStack(stackHandle);
     backend.disposeFontBinding(bindingHandle);
-    backend.disposePolicy(policyHandle);
+    backend.disposeCodec(policyHandle);
     assert.throws(() => backend.disposeFontBinding(bindingHandle), /must come from id/u);
     shaper.disposeFont(font);
     assert.equal(shaper.memoryReport().fontCount, 0);
@@ -226,8 +226,8 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
   }
 
   const shaper = await createRuntimeShaper({ wasm });
-  const backend = new GlyphBackend(shaper);
-  backend.registerPolicy(THREE_POLICY_HANDLE, bytes);
+  const backend = new GlyphHandleState(shaper);
+  backend.registerCodec(THREE_POLICY_HANDLE, bytes);
   backend.dispose();
   shaper.dispose();
 });

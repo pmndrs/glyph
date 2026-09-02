@@ -177,7 +177,7 @@ test('a glyph-engine-owned backend installs complete policies and deduplicates o
 
   assert.throws(() => backend.bindFont(font), /no installed policy/);
   assert.equal(shaper.memoryReport().fontCount, 0);
-  const policy = backend.installPolicy(threeCodecDescriptor);
+  const policy = backend.installCodec(threeCodecDescriptor);
   const first = backend.bindFont(font);
   const second = backend.bindFont(font);
   assert.equal(first.technique, bitmap);
@@ -203,7 +203,7 @@ test('one backend rejects colliding resource identities when the second font bin
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);
   const backend = createGlyphHandleState(glyphEngine, { integration: 'test.backend-font-binding-collision' });
-  const policy = backend.installPolicy((ids) => {
+  const policy = backend.installCodec((ids) => {
     const capabilitySet = threeCodecCapabilitySet();
     const options = {
       namespace: 'test.backend-font-binding-collision',
@@ -237,7 +237,7 @@ test('a glyph-engine-owned backend binds immutable font stacks and retains their
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);
   const backend = createGlyphHandleState(glyphEngine, { integration: 'test.backend-font-stack-binding' });
-  const policy = backend.installPolicy(threeCodecDescriptor);
+  const policy = backend.installCodec(threeCodecDescriptor);
 
   assert.throws(() => backend.bindFontStack({ fonts: [font] }), /font stack was not created by this package/);
   const first = backend.bindFontStack(stack);

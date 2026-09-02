@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 import test from 'node:test';
 
-import { GlyphBackend } from '../../dist/core/backend.js';
+import { GlyphHandleState } from '../../dist/internal/handle-state.js';
 import { RenderPlanView } from '../../dist/core/plan-view.js';
 import { id } from '../../dist/core/render-policy.js';
 import { assertOwnedPlanPublication, PlanPublicationExpiredError } from '../../dist/core/retention.js';
@@ -41,8 +41,8 @@ function frameRequest(transport, latest, accepted) {
 async function drivenTransport() {
   const wasm = await readFile(wasmUrl);
   const shaper = await createRuntimeShaper({ wasm });
-  const backend = new GlyphBackend(shaper);
-  backend.registerPolicy(POLICY_HANDLE, threeCodecBytes());
+  const backend = new GlyphHandleState(shaper);
+  backend.registerCodec(POLICY_HANDLE, threeCodecBytes());
   const transport = backend._createPlanTransport({
     handle: id.planner('publication-retention/transport'),
     requestCapacity: 4096,
