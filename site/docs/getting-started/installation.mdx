@@ -5,15 +5,15 @@ nav: 1
 ---
 
 <Intro>
-  One package, many entry points. Import only the subpaths your application uses: each raster technique, the React
-  layer, the baker, and the integrator core are separate graphs, so a bundle carries only what it renders.
+  One package, many entry points. Import only the subpaths your application uses: each raster format, the React
+  layer, the shader realizations, and the bakers are separate graphs, so a bundle carries only what it renders.
 </Intro>
 
 ```bash
 npm install three @react-three/fiber @pmndrs/glyph
 ```
 
-{/* prose: peers — three (0.185+), @react-three/fiber (WebGPU entry, v10), React 19. */}
+{/* prose: peers — three 0.185, @react-three/fiber v10 (WebGPU entry), React 19. */}
 
 ## Entry points
 
@@ -22,23 +22,22 @@ npm install three @react-three/fiber @pmndrs/glyph
 
 | Subpath | Exports | Pulls in |
 | --- | --- | --- |
-| `@pmndrs/glyph` | `glyph`, `loadFont`, `createFontStack`, `createParagraph`, `TextStyle`, `ParagraphLayout`, `Constraints`, `txt`, `span`, `defineFont` | the shaper Wasm, on first use |
-| `@pmndrs/glyph/three` | `ThreeConfig`, `defineThreeConfig`, `Text`, `TextGroup`, `defineTextMaterial`, `Glyphs`, `Decorations`, `FontLoader`, `TextFrameError` | three.js |
-| `@pmndrs/glyph/three/bitmap` · `/msdf` · `/slug` | the technique value (`bitmap`, `msdf`, `slug`) | that technique's decoder and TSL program |
+| `@pmndrs/glyph` | `glyph`, `loadFont`, `createFontStack`, `createParagraph`, `TextStyle`, `ParagraphLayout`, `Constraints`, `txt`, `span`, `defineFont`, `defineGlyphConfig` | the shaper Wasm, on first use |
+| `@pmndrs/glyph/three` | `ThreeConfig`, `defineThreeConfig`, `Text`, `TextGroup`, `ThreeRoot`, `span`, `defineTextMaterial`, `Glyphs`, `Decorations`, `FontLoader`, `TextFrameError` | three.js and all three built-in formats |
+| `@pmndrs/glyph/three/bitmap` · `/msdf` · `/slug` | the format value (`bitmap`, `msdf`, `slug`) plus its options | that format's decoder and Three program |
 | `@pmndrs/glyph/react` | `GlyphProvider`, `Text`, `TextGroup`, `useFont` | React Three Fiber |
-| `@pmndrs/glyph/react/bitmap` · `/msdf` · `/slug` | `useBitmapFont`, `useMSDF`, `useSlug` | that technique |
-| `@pmndrs/glyph/raster/*` | renderer-neutral technique contracts | no renderer |
-| `@pmndrs/glyph/bake` | `bakeFont`, `bakeProject` (Node) | the baker Wasm, validator |
+| `@pmndrs/glyph/react/bitmap` · `/msdf` · `/slug` | `useBitmap`, `useMsdf`, `useSlug` | that format |
+| `@pmndrs/glyph/raster/*` | renderer-neutral format contracts | no renderer |
+| `@pmndrs/glyph/tsl` · `/tsl/{bitmap,msdf,slug,decoration}` | TSL shader realizations | no scene integration |
+| `@pmndrs/glyph/typegpu` · `/typegpu/bitmap` | TypeGPU shader realizations | no scene integration |
+| `@pmndrs/glyph/bake` · `/baker` · `/bakers/*` | Node baking, the baker host, portable raster bakers | the baker Wasm, validator |
 | `@pmndrs/glyph/runtime-bake` | `bakeFontInWorker` | a module Worker, on demand |
-| `@pmndrs/glyph/core` | `GlyphConfig`, `createGlyphEngine`, plan readers | integrator machinery |
-| `@pmndrs/glyph/tsl` · `/typegpu` | technique shader realizations | no scene integration |
-| `@pmndrs/glyph/bakers/*` | portable raster bakers | optional |
 | `@pmndrs/glyph/*.wasm` | `text-shaper`, `font-baker`, `bitmap-baker`, `mtsdf-baker`, `slug-baker` | distribution artifacts |
 
 </details>
 
 {/* prose: the root entry has no static edge to the baker, validator, or any Wasm beyond the shaper; importing a
-technique module registers it. */}
+format module registers it; `/three` imports all three formats so ordinary Three apps need no extra import. */}
 
 ## Renderer entry
 
@@ -46,7 +45,7 @@ technique module registers it. */}
 import { Canvas } from '@react-three/fiber/webgpu';
 ```
 
-{/* prose: the WebGPU entry is the maintained target. three's `WebGPURenderer` constructs a WebGL2 backend when
+{/* prose: the WebGPU entry is the maintained target; three's `WebGPURenderer` constructs a WebGL2 backend when
 `navigator.gpu` is missing — no configuration needed. */}
 
 > [!NOTE]
@@ -62,7 +61,8 @@ import inter from './fonts/inter.font.glb?url';
 ```
 
 {/* prose: fonts are assets; `?url` gives a hashed path. Dedupe `react`, `react-dom`, `three`, `@react-three/fiber`
-when drei is present so hooks resolve against one copy. */}
+when drei is present so hooks resolve against one copy. Workspace apps may opt into the `source` condition for TS
+hot reload. */}
 
 ### Next.js
 
@@ -70,7 +70,7 @@ when drei is present so hooks resolve against one copy. */}
 
 ## TypeScript
 
-{/* prose: `exactOptionalPropertyTypes` is respected; technique generics are inferred from the font you pass; see
+{/* prose: `exactOptionalPropertyTypes` is respected; format generics are inferred from the font you pass; see
 Advanced → TypeScript. */}
 
 ```ts

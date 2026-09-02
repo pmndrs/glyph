@@ -7,8 +7,8 @@ sourcecode: packages/glyph/src/three/frame-error.ts
 
 <Intro>
   Malformed input fails where it enters — construction, `set()`, a query — with the offending value in the stack.
-  A rejection the engine reports during traversal is retained on the object and forwarded to `onError`; the last
-  accepted draw stays on screen and nothing retries an unchanged frame.
+  A rejection the engine reports during `glyph.shape()` is retained on the text and its root and forwarded to
+  `onError`; that root keeps its last accepted draw while every other root's publication proceeds.
 </Intro>
 
 ```ts
@@ -36,7 +36,7 @@ label.onError = (error) => {
 | `paragraph-root` | missing paragraph root style | supplying `style` |
 | `font-stack-missing` | an unregistered stack | loading and binding the font first |
 | `font-metrics-missing` | a font with no metrics | re-baking |
-| `capacity` | request/result buffers too small; carries `requiredRequestBytes`, `requiredResultBytes` | raising planner capacities |
+| `capacity` | request/result buffers too small; carries `requiredRequestBytes`, `requiredResultBytes` | raising `commands` capacities on the config |
 | `engine` | an internal invariant; names nothing | filing it |
 
 {/* prose: `rejection.subject` is `{ kind: 'span', text, index, span }`, `{ kind: 'paragraph', text }`, or
@@ -46,18 +46,23 @@ label.onError = (error) => {
 
 | Entry | Behaviour |
 | --- | --- |
-| `createText`, `set()` | throw synchronously; desired state is left as it was |
-| scene traversal | retained on `text.error` and the owning `group.error`; `onError` called; never escapes `updateMatrixWorld` |
-| `shape()` | throws at the call that requested it |
+| `createText`, `set()`, `text.font =` on an unloaded face | throw synchronously; desired state is left as it was |
+| `glyph.shape()` | per root: retained on `text.error` and `root.error`, `onError` called; other roots still publish |
 | `measure()` / `glyphs()` | throw for invalid constraints at the call |
+| a font load | rejects the selection's `load()` promise with `FontLoadError`; the record is evicted so a retry is a new operation |
 
 ## What the renderer keeps
 
 {/* prose: a renderer-side failure leaves the last accepted draw live and `commitState()` reports
-`{ status: 'failed', error }`; unchanged traversals do not retry; assigning material or other renderer-relevant state
-requests a checkpoint. A malformed emitted plan is an engine defect, never a recovery path. */}
+`{ status: 'failed', error }`; unchanged roots do not re-enter the batch; assigning material or other renderer-relevant
+state requests a fresh publication. A malformed emitted plan is an engine defect, never a recovery path. */}
 
 ## Fixed capacity is not an error
 
-{/* prose: exceeding a `fixed` capacity keeps the last draw and `commitState()` `pending`; `measure()` still answers
-for desired text; the decision is retried every traversal. Link Text and TextGroup → Capacity. */}
+{/* prose: exceeding a `fixed` root capacity keeps the last draw and `commitState()` `pending`; `measure()` still
+answers for desired text; the decision is retried on every shape. Link Text, roots, and TextGroup → Capacity. */}
+
+## React
+
+{/* prose: `onError` on `<Text>` and `<TextGroup>`; `GlyphProvider errorFallback` catches only `FontLoadError` from
+its own `fontFaces` and rethrows everything else to your boundary. */}

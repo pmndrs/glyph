@@ -1,59 +1,90 @@
 ---
 title: Custom renderers
-description: The /core contract a renderer adapter implements — GlyphConfig, Codec, decode, resolve, and the borrowed bound command buffer.
+description: The GlyphConfig contract a renderer adapter implements — schema, encode, resolve, renderer, root — and the borrowed CommandBufferView it decodes.
 nav: 54
-sourcecode: packages/glyph/src/core/glyph-config.ts
+sourcecode: packages/glyph/src/glyph-config.ts
 ---
 
 <Intro>
-  three.js is one adapter. `@pmndrs/glyph/core` exposes the contract it is built on: a `GlyphConfig` that names how
-  plans are encoded, decoded into stable object bindings, resolved into resources, and handed to a renderer. The
-  example renderer in the repository implements the same contract against a raw device oracle.
+  three.js is one adapter. `defineGlyphConfig` from the root entry is the whole integrator contract: a schema that
+  names your renderer's objects, a Codec that packs command data, a resolver that turns portable payloads into
+  leased resources, a renderer that decodes one borrowed view into retained host objects, and a root recipe. The
+  example renderer in the repository implements it against a raw device oracle.
 </Intro>
 
 ```ts
-import type { GlyphConfig } from '@pmndrs/glyph/core';
-import { defaultDecoder } from '@pmndrs/glyph/core';
+import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph';
 
-const MyConfig: GlyphConfig<MyHandle, MyBindings, MyPrepared, MyResource> = {
-  encode: () => myCodec,
-  decode: defaultDecoder,
-  resolve: (payload) => resolveToMyResource(payload),
-  renderer: myRenderer,
-  createHandle: (domain) => new MyHandle(domain),
-};
+const MyConfig = defineGlyphConfig({
+  schema: MySchema,
+  encode: ({ ids }) => ({ descriptor: myCodecDescriptor(ids) }),
+  resolve: ({ format, resourceName, payload }) => resourceLease(realize(format, resourceName, payload), () => release()),
+  renderer: () => ({
+    decode: (view) => device.decode(view),   // stage retained host objects; return commit / discard
+    syncTransforms: (updates) => device.moveInstances(updates),
+    dispose: () => device.reset(),
+  }),
+  root: {
+    create(context) {
+      return context.create(new MyRoot(context.services), { boundary: Object.freeze({ name: context.name }) });
+    },
+  },
+});
 
 const mine = glyph.handle('mine', MyConfig);
 ```
 
-## The hooks
+## The contract
 
-| Hook | Job |
-| --- | --- |
-| `encode` | supply the `Codec`; the engine defines the canonical typed command buffer it produces |
-| `decode` | turn that buffer into a `BorrowedBoundCommandBuffer` of stable object bindings; wrap or replace `defaultDecoder` type-safely |
-| `resolve` | turn an immutable portable payload into a boundary-owned disposable lease, synchronously |
-| `renderer` | `prepare` / `commit` / `discard` over the bound buffer's phases |
-| `createHandle` | the adapter's handle factory |
+| Field | Required | Job |
+| --- | --- | --- |
+| `schema` | yes | binds trusted meanings — program, buffer, material, transform, batch, instance — to renderer-owned objects; defines `drawRoot` |
+| `fonts` | no | the handle's raster-format keys, its default key, and typed font loading |
+| `encode` | yes | selects the Codec that defines packed command-buffer data |
+| `resolve` | yes | creates or updates leased renderer resources from portable payloads |
+| `renderer` | yes | a root-scoped `{ decode, syncTransforms, dispose }` |
+| `root` | yes | constructs the anonymous or a named root through constrained root services |
+| `commands` | no | overrides initial command-buffer and retained-text capacities |
 
-## Phases
+{/* prose: there is no `decode` hook on the config and no configurable intermediate decoder. The engine projects its
+trusted output into the view; your `renderer.decode(view)` is the decoder. */}
+
+## The view
 
 ```
-resources → buffers → patches → primitives → draws → retirements
+CommandBufferView
+  resources    create · update · retain leased resources
+  storage      buffers your schema named
+  patches      byte ranges to write, fill, copy, retire
+  displayList  the engine-authored ordered tree of batches and root instances
+  retirements  generations to release after the acknowledged fence
 ```
 
-{/* prose: bindings are stable objects — resources from `resolve`, buffer bindings, transform/material bindings,
-primitive objects — never numeric plan ids; those stay private to each adapter's binder. `GlyphCommandBufferBinder`
-and `applyGlyphPublication()` own decode → prepare → commit/discard and candidate resource cleanup for you. */}
+{/* prose: every reference in the view is already a stable object your schema chose — never a numeric plan id, and
+never a Rust table. `View` is a lifetime claim like `ArrayBufferView`: read it only during the synchronous `decode`
+call; retain nothing from it but the host objects you built. */}
+
+## Transactional commit
+
+```mermaid
+sequenceDiagram
+  participant G as glyph.shape()
+  participant R as renderer.decode(view)
+  G->>R: borrowed view for one dirty root
+  R-->>G: { commit } or { discard, error }
+  Note over G: committed roots settle; a discarded root keeps its last accepted state
+```
+
+{/* prose: prepare everything, then commit or discard as a unit; a rejected candidate never substitutes stale
+resources. `syncTransforms` is the cheap path for matrix-only frames and never enters Wasm. */}
 
 ## When you need a device
 
 {/* prose: three's resolver creates three.js objects with no renderer, scene, canvas, or `GPUDevice`; a raw WebGPU
-adapter needs a device at its first `device.create*`, captured in the config closure; a canvas only when it presents.
-No universal host-context or public session concept. */}
+adapter captures its device in the config closure at its first `device.create*`; a canvas only when it presents.
+Device loss: dispose the lost-device handle and create a new named handle over the same immutable fonts. */}
 
-## Lower still
+## Where to go
 
-{/* prose: `createGlyphEngine()` → `createBackend()` → `installPolicy()` → `createPlanner()` → `createText()` →
-`publish()` with a `PlanTarget` — for integrations that own transport and target mechanics. Link the
-renderer-integration guide and `packages/glyph-example-renderer`. */}
+{/* prose: link the renderer-integration guide (eleven steps, from vocabulary to disposal order) and
+`packages/glyph-example-renderer`; the guide's TypeGPU example is the canonical minimal config. */}

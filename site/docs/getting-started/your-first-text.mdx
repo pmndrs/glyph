@@ -22,19 +22,19 @@ nav: 2
 npx glyph bake --input Inter-Regular.ttf --output public/fonts/inter.font.glb --msdf
 ```
 
-{/* prose: what the GLB contains — shaping data plus the MSDF atlas; nothing platform-specific; do this once at build
+{/* prose: the GLB carries the shaping data plus the MSDF atlas; nothing platform-specific; do this once at build
 time. Link Baking fonts. */}
 
 ## 2. Load it
 
 ```tsx
-import { useMSDF } from '@pmndrs/glyph/react/msdf';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
 
-const inter = useMSDF({ baked: '/fonts/inter.font.glb' });
+const inter = useMsdf('/fonts/inter.font.glb');
 ```
 
-{/* prose: the hook suspends until the font is decoded; the value is an immutable `Font`. Options are part of the cache
-key, so a request must name the bake's options. */}
+{/* prose: the hook declares a FontFace, suspends until it is loaded, and returns an immutable `Font`. A string is a
+baked URL; `{ baked }` and `{ source, runtimeBake }` are the explicit forms. */}
 
 ## 3. Render it
 
@@ -58,7 +58,7 @@ like a mesh. */}
 </Text>
 ```
 
-{/* prose: `style` is inherited text presentation. Units are paragraph-local — the same units as `fontSize`. */}
+{/* prose: `style` is inherited text presentation; lengths are paragraph-local — the units `fontSize` is in. */}
 
 ## 5. Wrap it
 
@@ -82,6 +82,7 @@ imposes). `at-most` lets a short line shrink to its content; `exact` keeps the b
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber/webgpu';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
+import type { msdf } from '@pmndrs/glyph/three/msdf';
 
 const ref = useRef<ThreeText<typeof msdf>>(null);
 
@@ -91,19 +92,19 @@ useFrame(() => {
 });
 ```
 
-{/* prose: `measure()` returns the desired layout synchronously, before the first frame commits. `inkBounds` is what
+{/* prose: `measure()` answers for desired state, synchronously, before the first frame commits. `inkBounds` is what
 was drawn; `contentWidth`/`contentHeight` are the advance extents. Center on ink. Link Measurement. */}
 
 ## 7. The same in plain three.js
 
 ```ts
-import { glyph, loadFont } from '@pmndrs/glyph';
+import { glyph } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
-import { msdf } from '@pmndrs/glyph/three/msdf';
 
 await glyph.init();
 const three = glyph.handle('main', ThreeConfig);
-const inter = await loadFont({ baked: '/fonts/inter.font.glb' }, msdf);
+const inter = glyph.fontFace({ baked: '/fonts/inter.font.glb' });
+await inter.load();
 
 const label = three.createText({
   font: inter,
@@ -116,9 +117,13 @@ scene.add(label);
 
 const ink = label.measure().inkBounds;
 if (ink) label.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0);
+
+glyph.shape();
+renderer.render(scene, camera);
 ```
 
-{/* prose: R3F does `glyph.init()` and the default handle for you; vanilla names them. Everything else is identical. */}
+{/* prose: R3F does `glyph.init()`, the default handle, and `shape()` before each render for you; vanilla names them.
+Everything else is identical. */}
 
 ## The result
 
@@ -129,4 +134,4 @@ if (ink) label.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0)
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />
 
-{/* prose: where to go next — Techniques for the other rasters; Text and TextGroup for batching. */}
+{/* prose: where to go next — Raster formats for Bitmap and Slug; Text, roots, and TextGroup for batching. */}

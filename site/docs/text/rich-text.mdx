@@ -1,46 +1,37 @@
 ---
 title: Rich text
-description: Style runs inside a paragraph with spans, the txt/span template tags, or nested Text — and the one rule that keeps a span on a grapheme cluster.
+description: Style runs inside a paragraph with the txt/span template tags or nested Text — and the one rule that keeps a span on a grapheme cluster.
 nav: 23
 sourcecode: packages/glyph/src/formatted-text.ts
 ---
 
 <Intro>
-  A paragraph is one shaped unit; a span is a range inside it that overrides font, style, or material. You can author
-  the ranges as offsets, as template-tag fragments, or as nested React elements — all three compile to the same pair
-  of `text` and `spans`, and all three resolve their boundaries onto grapheme clusters before a frame is built.
+  A paragraph is one shaped unit; a span is a range inside it that overrides font, style, or material. You author
+  runs as `txt`/`span` fragments in three.js or as nested `<Text>` in React — both compile to the same document with
+  no offsets in it, and both resolve their boundaries onto grapheme clusters before a frame is built.
 </Intro>
 
 <Keypoints title="What you'll learn">
-  <KeypointsItem>Three ways to author the same document</KeypointsItem>
-  <KeypointsItem>What a span may override, and precedence</KeypointsItem>
+  <KeypointsItem>Two ways to author the same document, and what a span may override</KeypointsItem>
   <KeypointsItem>The cluster rule: a boundary moves forward, a base keeps its style</KeypointsItem>
-  <KeypointsItem>Editing: one assignment per keystroke, `text` and `spans` together</KeypointsItem>
+  <KeypointsItem>Editing: one assignment per keystroke</KeypointsItem>
 </Keypoints>
-
-## Offsets
-
-```ts
-three.createText({
-  font: inter,
-  text: 'Status: online',
-  spans: [{ start: 8, end: 14, style: { color: '#4ade80' }, font: mono }],
-});
-```
 
 ## Template tags
 
 ```ts
-import { span, txt } from '@pmndrs/glyph';
+import { glyph, txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
 
 const ok = span({ color: '#4ade80' });
-const code = span(mono, { letterSpacing: 0.01 });
+const code = span(Mono, { letterSpacing: 0.01 });
+const glow = span(glowMaterial);
 
-three.createText({ font: inter, text: txt`Status: ${ok`online`} in ${code`us-east-1`}` });
+three.createText({ font: Inter, text: txt`Status: ${ok`online`} in ${code`us-east-1`} ${glow`●`}` });
 ```
 
 {/* prose: `txt` composes fragments and derives every boundary at a concatenation join; `span(font?, ...styles)`
-returns a tag; nesting is allowed. The result is a frozen `{ text, spans }`. */}
+returns a tag; the `/three` `span` also accepts one material. Nesting is allowed. The result is a frozen document. */}
 
 ## Nested Text
 
@@ -50,9 +41,9 @@ returns a tag; nesting is allowed. The result is a frozen `{ text, spans }`. */}
 </Text>
 ```
 
-{/* prose: a nested `<Text>` is an inline run — it inherits the paragraph's font and style, creates no Object3D,
-carries no transform, and accepts only `children`, `font`, `style`, and `material`; a box prop on it is named and
-rejected at mount. */}
+{/* prose: a nested `<Text>` is an inline run — it inherits the paragraph's font, style, and material, creates no
+Object3D, carries no transform, and accepts only `children`, `font`, `style`, and `material`; a box prop on it is
+named and rejected at mount. */}
 
 <iframe
   src="/examples/rich-text/"
@@ -65,9 +56,18 @@ rejected at mount. */}
 
 | Field | Effect |
 | --- | --- |
-| `font` | a different loaded font or stack for the run |
+| `font` | a different loaded font, face selection, or stack for the run |
 | `style` | any `TextStyle` member; the rest inherits |
-| `material` | a `defineTextMaterial` factory; span → text → group precedence |
+| `material` | a `defineTextMaterial` factory; span → text → group → root precedence |
+
+## Reading the result
+
+```ts
+label.spans; // the resolved records: [{ start, end, style?, font?, material? }]
+```
+
+{/* prose: `spans` is read-only — you author through `text`; the resolved offsets it reports are on cluster
+boundaries. */}
 
 ## The cluster rule
 
@@ -76,32 +76,29 @@ rejected at mount. */}
 > so a mark that attaches to a base follows the base. Nothing throws; `text.spans` reports the resolved offsets.
 
 ```ts
-const accent = { color: '#ff0000' };
-const label = three.createText({ font, text: 'abc', spans: [{ start: 0, end: 1, style: accent }] });
-label.set({ text: 'ábc', spans: label.spans }); // 'a' + combining acute is now one cluster
-label.spans; // [{ start: 0, end: 2, style: accent }]
+txt`a${span({ color: '#ff0000' })`́b`}`;
+// text  'áb' — the base and the combining acute fused into one cluster spanning [0, 2)
+// spans [{ start: 2, end: 3, … }] — the fused cluster keeps the style of its base, which is plain
 ```
 
-{/* prose: why forward — backward would take style away from a base you styled and hand the cluster to its mark.
-An emptied span stays in the array as `[n, n)` so entries line up with what you authored. Out-of-range or inverted
-ranges are a different error and throw from construction/`set()`. `alignSpansToClusters(text, spans)` applies the
-same resolution to your own offsets and returns the input by identity when nothing moves. */}
+{/* prose: why forward — backward would take style away from a base you styled and hand the cluster to its mark. An
+emptied span stays as `[n, n)` so entries line up with what you authored. Out-of-range or inverted ranges are a
+different error and throw from construction/`set()`. */}
 
 ## Editing
 
 ```ts
-label.text = document.value; // derives the smallest common-prefix/suffix UTF-16 edit
-label.set({ text: document.value, spans: document.spans }); // when you own styled ranges
+label.text = document.value;                          // derives the smallest common-prefix/suffix UTF-16 edit
+label.text = txt`${document.before}${ok`${document.selected}`}${document.after}`; // restate runs with the text
 ```
 
-{/* prose: assignment is the edit protocol — one narrow edit per keystroke, no offset helpers. `text` without
-`spans` clears the ranges it replaced, because replacement text carries its own formatting; an editor that owns
-ranges rebases them in its own model and states both. The removed helpers (`insertText`, `deleteText`,
-`replaceText`, `setSpan`, `removeSpan`) let a caller hand the engine an offset the tree cannot express. */}
+{/* prose: assignment is the edit protocol — one narrow edit per keystroke; a styled document is restated as a
+document, never as offsets. The removed helpers (`insertText`, `deleteText`, `replaceText`, `setSpan`, `removeSpan`)
+let a caller hand the engine an offset the tree cannot express. */}
 
 <iframe
   src="/examples/editing/"
-  title="Keystroke editing with retained spans"
+  title="Keystroke editing with retained runs"
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />
