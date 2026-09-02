@@ -11,7 +11,7 @@ import {
   type TechniqueGeometryDeclaration,
   type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
-} from '@pmndrs/glyph/core';
+} from '@pmndrs/glyph';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 import {
   glyphExampleFragment,

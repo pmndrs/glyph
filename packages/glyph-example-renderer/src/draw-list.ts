@@ -1,19 +1,25 @@
-import type { BackendMaterialBinding, BackendTransformBinding, PolicyProgram } from '@pmndrs/glyph/core';
+import type { PolicyProgram } from '@pmndrs/glyph';
 
-import type { ExampleBufferBinding, ExampleInstanceSpanBinding, ExampleResolvedResource } from './config.js';
+import type {
+  ExampleBufferBinding,
+  ExampleInstanceSpanBinding,
+  ExampleMaterial,
+  ExampleResolvedResource,
+  ExampleTransform,
+} from './config.js';
 
 /** One retained renderer draw, with engine identities already replaced by config bindings. */
 export interface ExampleDraw {
   readonly kind: 'batch' | 'instance';
   readonly program: PolicyProgram;
   readonly programVariant: number;
-  readonly material: BackendMaterialBinding | undefined;
+  readonly material: ExampleMaterial | undefined;
   readonly buffers: readonly ExampleBufferBinding[];
   readonly resources: readonly ExampleResolvedResource[];
   readonly flags: number;
   readonly depthKey: number;
   readonly order: number;
-  readonly transform: BackendTransformBinding | undefined;
+  readonly transform: ExampleTransform | undefined;
   readonly primitive: ExamplePrimitiveRecord;
 }
 

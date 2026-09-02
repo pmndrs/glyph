@@ -1,37 +1,19 @@
-import type { AnyRasterTechnique, ColorInput, Font, FontStack } from '@pmndrs/glyph';
-import {
-  type BackendFontBinding,
-  type BackendFontStackBinding,
-  type BackendTransformBinding,
-  type BackendPolicy,
-  type PlanCandidate,
-  type PlanTarget,
-  type RenderPlanner,
-  type RetainedText,
-  type GlyphEngine,
-  type Codec,
-  createGlyphPlanTarget,
-  type GlyphPlanTarget,
-} from '@pmndrs/glyph/core';
+import type {
+  AnyRasterTechnique,
+  ColorInput,
+  FontSelection,
+  GlyphRootServices,
+  GlyphTextController,
+} from '@pmndrs/glyph';
 
 import type { ExampleDrawList } from './draw-list.js';
-import { exampleCapabilitySet, exampleRenderPolicyDescriptor } from './policy.js';
-import type { ExampleBindings, ExampleGlyphConfig, ExampleRootContext } from './config.js';
+import type { ExampleBindings, ExampleRootContext, ExampleTransform } from './config.js';
 
-const EXAMPLE_LIMITS = Object.freeze({
-  maxParagraphs: 64,
-  maxClusters: 16_384,
-  maxLines: 4_096,
-  maxRegions: 256,
-  maxExclusions: 256,
-  maxInlineObjects: 256,
-  maxSlotsPerBand: 32,
-  maxOutputBytes: 16 * 1024 * 1024,
-});
+const MAX_LINES = 4_096;
 
 /** Initial state for one retained example-renderer text instance. */
-export interface ExampleTextOptions {
-  readonly font: BackendFontStackBinding;
+export interface ExampleTextOptions<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+  readonly font: FontSelection<Technique>;
   readonly text: string;
   readonly fontSize?: number;
   readonly width?: number;
@@ -42,161 +24,69 @@ export interface ExampleTextOptions {
 }
 
 /** Desired-state changes accepted by an example-renderer text instance. */
-export interface ExampleTextUpdate {
-  readonly font?: BackendFontStackBinding;
-  readonly text?: string;
-  readonly fontSize?: number;
-  readonly width?: number;
-  readonly height?: number;
-  readonly rasterPixelRatio?: number;
-  readonly color?: ColorInput;
-  readonly opacity?: number;
-}
+export type ExampleTextUpdate<Technique extends AnyRasterTechnique = AnyRasterTechnique> = Partial<
+  ExampleTextOptions<Technique>
+>;
 
-/** A complete third-party integration using root assets and the public `/core` backend contract. */
-export class ExampleTextEngine {
-  readonly #backend;
-  readonly #policy: BackendPolicy;
-  readonly #target: ExamplePlanTarget;
-  #planner: RenderPlanner | undefined;
+/** One retained Text owned by the root services supplied through GlyphConfig.root. */
+export class ExampleText<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+  readonly #services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>;
+  readonly #controller: GlyphTextController<Technique, ExampleBindings['materialInput'], ExampleTransform>;
+  readonly #transform: ExampleTransform = Object.freeze({ kind: 'example-transform' });
+  #state: NormalizedExampleTextOptions<Technique>;
   #disposed = false;
 
   constructor(
-    glyphEngine: GlyphEngine,
-    config: Parameters<ExampleGlyphConfig['createHandle']>[0]['config'],
-    root: ExampleRootContext,
+    services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>,
+    options: ExampleTextOptions<Technique>,
   ) {
-    this.#backend = glyphEngine.createBackend({ integration: '@pmndrs/glyph-example-renderer' });
-    let codec: Codec | undefined;
-    try {
-      this.#policy = this.#backend.installPolicy((ids) => {
-        codec =
-          config?.encode({ integration: '@pmndrs/glyph-example-renderer', ids }) ??
-          Object.freeze({ descriptor: exampleRenderPolicyDescriptor(ids) });
-        return codec.descriptor;
-      });
-    } catch (error) {
-      this.#backend.dispose();
-      throw error;
-    }
-    if (codec === undefined) throw new Error('example codec was not created during policy installation');
-    this.#target = new ExamplePlanTarget(config, codec, root);
-  }
-
-  /** Binds one immutable font to this renderer backend. */
-  bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): BackendFontBinding<Technique> {
-    this.#assertActive();
-    return this.#backend.bindFont(font);
-  }
-
-  /** Binds an ordered immutable font stack to this renderer backend. */
-  bindFontStack<Technique extends AnyRasterTechnique>(
-    stack: FontStack<Technique, Font<Technique>>,
-  ): BackendFontStackBinding {
-    this.#assertActive();
-    return this.#backend.bindFontStack(stack);
-  }
-
-  /** Opens the example engine's single render planner. */
-  openPlanner(): RenderPlanner {
-    this.#assertActive();
-    if (this.#planner !== undefined) throw new Error('example engine already has an open render planner');
-    this.#planner = this.#backend.createPlanner({
-      policy: this.#policy,
-      capabilitySet: exampleCapabilitySet,
-      target: () => this.#target,
-      limits: EXAMPLE_LIMITS,
-      requestCapacity: 64 * 1024,
-      resultCapacity: 256 * 1024,
-      textCapacity: 16 * 1024,
-    });
-    return this.#planner;
-  }
-
-  /** Creates one retained text instance in the open planner. */
-  createText(options: ExampleTextOptions): ExampleText {
-    const planner = this.#requirePlanner();
-    return new ExampleText(planner, () => this.publish(), this.#backend.createTransformBinding(), options);
-  }
-
-  /** Publishes current desired state and returns the accepted decoded draw list. */
-  publish(): ExampleDrawList {
-    const result = this.#requirePlanner().publish();
-    if (!result.accepted) throw result.error;
-    return this.#target.lastDrawList;
-  }
-
-  /** Disposes the backend, planner, target, and retained payload leases. */
-  dispose(): void {
-    if (this.#disposed) return;
-    this.#disposed = true;
-    this.#backend.dispose();
-    this.#planner = undefined;
-  }
-
-  #requirePlanner(): RenderPlanner {
-    this.#assertActive();
-    return this.#planner ?? this.openPlanner();
-  }
-
-  #assertActive(): void {
-    if (this.#disposed) throw new Error('example engine is disposed');
-  }
-}
-
-/** One retained text instance owned by an {@link ExampleTextEngine} plan. */
-export class ExampleText {
-  readonly #text: RetainedText;
-  readonly #publish: () => ExampleDrawList;
-  readonly #transform: BackendTransformBinding;
-  #state: NormalizedExampleTextOptions;
-  #disposed = false;
-
-  constructor(
-    planner: RenderPlanner,
-    publish: () => ExampleDrawList,
-    transform: BackendTransformBinding,
-    options: ExampleTextOptions,
-  ) {
-    this.#publish = publish;
-    this.#transform = transform;
+    this.#services = services;
     this.#state = normalizeTextOptions(options);
-    try {
-      this.#text = planner.createText(coreTextOptions(this.#state, transform));
-    } catch (error) {
-      transform.dispose();
-      throw error;
-    }
+    this.#controller = services.createText(this.#coreState(this.#state));
   }
 
-  /** Current desired text content. */
   get text(): string {
     return this.#state.text;
   }
 
-  /** Replaces part of the desired text state without publishing. */
-  update(update: ExampleTextUpdate): void {
+  update(update: ExampleTextUpdate<Technique>): void {
     this.#assertActive();
     if (typeof update !== 'object' || update === null || Array.isArray(update)) {
       throw new TypeError('example text updates must be objects');
     }
-    const state = normalizeTextOptions({ ...this.#state, ...update });
-    this.#text.update(coreTextOptions(state, this.#transform));
-    this.#state = state;
+    const next = normalizeTextOptions({ ...this.#state, ...update });
+    this.#controller.update(this.#coreState(next));
+    this.#state = next;
   }
 
-  /** Publishes the owning plan and returns its accepted draw list. */
   publish(): ExampleDrawList {
     this.#assertActive();
-    return this.#publish();
+    return this.#services.shape();
   }
 
-  /** Removes this retained text instance from its plan. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#text.dispose();
-    this.#transform.dispose();
+    this.#controller.dispose();
+  }
+
+  #coreState(state: NormalizedExampleTextOptions<Technique>) {
+    return {
+      font: state.font,
+      text: state.text,
+      transform: this.#transform,
+      style: {
+        fontSize: state.fontSize,
+        ...(state.color === undefined ? {} : { color: state.color }),
+        ...(state.opacity === undefined ? {} : { opacity: state.opacity }),
+      },
+      rasterPixelRatio: state.rasterPixelRatio,
+      constraints: {
+        width: { mode: 'at-most' as const, size: state.width },
+        height: { mode: 'at-most' as const, size: state.height },
+      },
+      layout: { maxLines: MAX_LINES },
+    };
   }
 
   #assertActive(): void {
@@ -204,35 +94,14 @@ export class ExampleText {
   }
 }
 
-class ExamplePlanTarget implements PlanTarget {
-  readonly delivery = 'borrowed' as const;
-  readonly #target: GlyphPlanTarget<ExampleBindings, ExampleDrawList>;
+type NormalizedExampleTextOptions<Technique extends AnyRasterTechnique> = Required<
+  Omit<ExampleTextOptions<Technique>, 'font' | 'color' | 'opacity'>
+> &
+  Pick<ExampleTextOptions<Technique>, 'font' | 'color' | 'opacity'>;
 
-  constructor(
-    config: Parameters<ExampleGlyphConfig['createHandle']>[0]['config'],
-    codec: Codec,
-    root: ExampleRootContext,
-  ) {
-    this.#target = createGlyphPlanTarget({ config, codec, root });
-  }
-
-  get lastDrawList(): ExampleDrawList {
-    return this.#target.lastResult;
-  }
-
-  accept(candidate: PlanCandidate, signal: Parameters<PlanTarget['accept']>[1]) {
-    return this.#target.accept(candidate, signal);
-  }
-
-  dispose(): void {
-    this.#target.dispose();
-  }
-}
-
-type NormalizedExampleTextOptions = Required<Omit<ExampleTextOptions, 'font' | 'color' | 'opacity'>> &
-  Pick<ExampleTextOptions, 'font' | 'color' | 'opacity'>;
-
-function normalizeTextOptions(options: ExampleTextOptions): NormalizedExampleTextOptions {
+function normalizeTextOptions<Technique extends AnyRasterTechnique>(
+  options: ExampleTextOptions<Technique>,
+): NormalizedExampleTextOptions<Technique> {
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {
     throw new TypeError('example text options must be an object');
   }
@@ -246,27 +115,6 @@ function normalizeTextOptions(options: ExampleTextOptions): NormalizedExampleTex
     rasterPixelRatio: positiveFinite(options.rasterPixelRatio ?? 1, 'rasterPixelRatio'),
     ...(options.color === undefined ? {} : { color: options.color }),
     ...(options.opacity === undefined ? {} : { opacity: options.opacity }),
-  };
-}
-
-function coreTextOptions(state: NormalizedExampleTextOptions, transform: BackendTransformBinding) {
-  return {
-    font: state.font,
-    transform,
-    text: state.text,
-    style: {
-      fontSize: state.fontSize,
-      ...(state.color === undefined ? {} : { color: state.color }),
-      ...(state.opacity === undefined ? {} : { opacity: state.opacity }),
-    },
-    rasterPixelRatio: state.rasterPixelRatio,
-    constraints: {
-      width: { mode: 'at-most' as const, size: state.width },
-      height: { mode: 'at-most' as const, size: state.height },
-    },
-    layout: {
-      maxLines: EXAMPLE_LIMITS.maxLines,
-    },
   };
 }
 

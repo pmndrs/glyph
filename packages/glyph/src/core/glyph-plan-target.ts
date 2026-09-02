@@ -10,6 +10,7 @@ import {
   type TransformUpdate,
 } from './glyph-config.js';
 import type { Codec } from './glyph-config.js';
+import type { BackendMaterialBinding, BackendTransformBinding } from './backend.js';
 import type { PlanAcceptance, PlanCandidate, PlanTarget } from './render-planner.js';
 
 type PlanTargetConfig<Bindings extends AnyGlyphBindings, Result, PortableResource, Root> = Pick<
@@ -23,12 +24,14 @@ export interface CreateGlyphPlanTargetOptions<Bindings extends AnyGlyphBindings,
   readonly codec: Codec;
   readonly root: Root;
   readonly defaultRenderer?: GlyphRenderer<Bindings, Result>;
+  readonly materialInput?: (binding: BackendMaterialBinding) => Bindings['materialInput'];
+  readonly transformInput?: (binding: BackendTransformBinding) => Bindings['transformInput'];
 }
 
 /** One configured synchronous plan target and its most recently committed renderer result. */
 export interface GlyphPlanTarget<Bindings extends AnyGlyphBindings, Result> extends PlanTarget {
   readonly lastResult: Result;
-  syncTransforms(updates: readonly TransformUpdate<Bindings['transform']>[]): void;
+  syncTransforms(updates?: readonly TransformUpdate<Bindings['transform']>[]): void;
   dispose(): void;
 }
 
@@ -57,15 +60,23 @@ class ConfiguredGlyphPlanTarget<
   #result: Readonly<{ committed: false }> | Readonly<{ committed: true; value: Result }> = Object.freeze({
     committed: false,
   });
+  #transforms: readonly TransformUpdate<Bindings['transform']>[] = Object.freeze([]);
   #disposed = false;
 
   constructor(options: CreateGlyphPlanTargetOptions<Bindings, Result, PortableResource, Root>) {
-    this.#projector = createEngine({ config: options.config, codec: options.codec, root: options.root });
+    this.#projector = createEngine({
+      config: options.config,
+      codec: options.codec,
+      root: options.root,
+      ...(options.materialInput === undefined ? {} : { materialInput: options.materialInput }),
+      ...(options.transformInput === undefined ? {} : { transformInput: options.transformInput }),
+    });
     this.#defaultRenderer = options.defaultRenderer;
     const configured = options.config.renderer(
       Object.freeze({
         drawRoot: options.config.schema.drawRoot(options.root),
         signal: this.#rendererAbort.signal,
+        codec: options.codec,
         ...(options.defaultRenderer === undefined ? {} : { defaultRenderer: options.defaultRenderer }),
       }),
     );
@@ -73,6 +84,12 @@ class ConfiguredGlyphPlanTarget<
     this.#renderer = Object.freeze({
       decode: (view: CommandBufferView<Bindings>) => {
         const prepared = configured.decode(view);
+        const transforms =
+          view.displayList.kind === 'replace'
+            ? Object.freeze(
+                Array.from(view.displayList.value.transforms, ({ value }) => Object.freeze({ transform: value })),
+              )
+            : this.#transforms;
         let settled = false;
         return Object.freeze({
           result: prepared.result,
@@ -81,6 +98,7 @@ class ConfiguredGlyphPlanTarget<
             settled = true;
             prepared.commit();
             this.#result = Object.freeze({ committed: true, value: prepared.result });
+            this.#transforms = transforms;
           },
           discard: () => {
             if (settled) return;
@@ -105,7 +123,7 @@ class ConfiguredGlyphPlanTarget<
     return applyGlyphPublication(candidate, signal, this.#projector, this.#renderer);
   }
 
-  syncTransforms(updates: readonly TransformUpdate<Bindings['transform']>[]): void {
+  syncTransforms(updates: readonly TransformUpdate<Bindings['transform']>[] = this.#transforms): void {
     if (this.#disposed) throw new Error('Glyph plan target has been disposed');
     this.#renderer.syncTransforms(updates);
   }

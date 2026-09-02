@@ -1,17 +1,18 @@
 import * as THREE from 'three/webgpu';
 
-import type { PlanAcceptance, PlanTarget } from '../core.js';
+import type { GlyphCopy } from '../core.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
-import type { ThreeEngineDomainLease } from './engine-domain.js';
 import { ThreeTextRenderPlanExecutor, type ThreeTextEnginePlanOwner } from './engine-plan-target.js';
+import type { ThreeRootBinding } from './handle.js';
+import type { ThreeRendererResources } from './renderer-resources.js';
 import type { Text } from './text.js';
 import { copyCurrentLocalTransform } from './detached-object.js';
 
 /** @internal Constructed only by `Text.breakApart()`. */
 interface DecorationsOptions<Technique extends AnyRasterTechnique> {
   readonly source: Text<Technique>;
-  readonly copy: (target: PlanTarget) => PlanAcceptance;
-  readonly domain: ThreeEngineDomainLease;
+  readonly copy: (renderer: ThreeTextRenderPlanExecutor, boundary: ThreeRootBinding) => GlyphCopy<void>;
+  readonly resources: ThreeRendererResources;
   readonly renderOrderBase: number;
 }
 
@@ -25,7 +26,6 @@ let inspectDecorationDraws:
 /** @internal Constructs the detached branch while keeping the public class receive-only. */
 export function createDecorations(options: DecorationsOptions<AnyRasterTechnique>): Decorations | undefined {
   if (constructDecorations === undefined || decorationsHaveDraws === undefined) {
-    options.domain.dispose();
     throw new Error('Decorations constructor is unavailable');
   }
   const decorations = constructDecorations(options);
@@ -45,7 +45,7 @@ export function decorationDraws(
 /** An independently rendered copy of one committed paragraph's decorations. */
 export class Decorations extends THREE.Object3D {
   readonly #target: ThreeTextRenderPlanExecutor;
-  readonly #domain: ThreeEngineDomainLease;
+  readonly #copy: GlyphCopy<void>;
   #disposed = false;
 
   static {
@@ -69,8 +69,8 @@ export class Decorations extends THREE.Object3D {
     if (token !== decorationsConstructorToken) {
       throw new TypeError('Decorations objects are created by Text.breakApart()');
     }
-    this.#domain = options.domain;
     let target: ThreeTextRenderPlanExecutor | undefined;
+    let copy: GlyphCopy<void> | undefined;
     try {
       copyCurrentLocalTransform(options.source, this);
 
@@ -80,17 +80,19 @@ export class Decorations extends THREE.Object3D {
         renderOrderBase: options.renderOrderBase,
         objectForTransform: () => this,
       };
-      target = new ThreeTextRenderPlanExecutor(options.domain.coordinator, owner);
+      target = new ThreeTextRenderPlanExecutor(options.resources, owner);
       this.#target = target;
-      const result = options.copy(target);
-      if (!result.accepted) throw result.error;
+      copy = options.copy(target, {
+        drawRoot: this,
+        root: Object.freeze({ name: undefined, scene: undefined, drawRoot: this }),
+        material: options.resources.material,
+        objectForTransform: () => this,
+      });
+      this.#copy = copy;
       this.matrixWorldNeedsUpdate = true;
     } catch (error) {
-      try {
-        target?.dispose();
-      } finally {
-        options.domain.dispose();
-      }
+      copy?.dispose();
+      if (copy === undefined) target?.dispose();
       throw error;
     }
   }
@@ -106,14 +108,9 @@ export class Decorations extends THREE.Object3D {
     this.#disposed = true;
     let failure: unknown;
     try {
-      this.#target.dispose();
+      this.#copy.dispose();
     } catch (error) {
       failure = error;
-    }
-    try {
-      this.#domain.dispose();
-    } catch (error) {
-      failure ??= error;
     }
     this.removeFromParent();
     if (failure !== undefined) throw failure;

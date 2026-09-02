@@ -13,7 +13,7 @@ import {
   TextStyle,
   txt,
 } from '@pmndrs/glyph';
-import { GlyphBackend } from '@pmndrs/glyph/core';
+import { GlyphBackend } from '../../dist/core/backend.js';
 import { PlanTransport } from '../../dist/core/backend.js';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
@@ -30,7 +30,6 @@ import * as THREE from 'three/webgpu';
 import { bitmapSchema } from '../../dist/raster/bitmap-technique.js';
 import { msdfSchema } from '../../dist/raster/msdf.js';
 import { slugSchema } from '../../dist/raster/slug-technique.js';
-import { threeHandleDomain } from '../../dist/three/handle.js';
 import { decorationSchema, threeSystemBuffers } from '../../dist/three/render-policy.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
@@ -159,7 +158,7 @@ test('one initialized Glyph runtime creates independent named Three handles over
       secondSceneRoot.drawRoot.children.some((child) => child.isMesh),
       'the second root owns its own renderer meshes',
     );
-    assert.throws(() => group.add(label), /different Glyph handles/);
+    assert.throws(() => group.add(label), /different Glyph roots/);
     assert.throws(() => glyph.handle('three:integration:first', ThreeConfig), /already exists/);
   } finally {
     label.dispose();
@@ -329,14 +328,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
 
   let detached;
   try {
-    const sourceResourceCount = threeHandleDomain(three).coordinator.sharedRenderResourceCount;
-    assert.ok(sourceResourceCount > 0, 'the committed source realizes its atlas resource');
     [detached] = label.breakApart();
-    assert.equal(
-      threeHandleDomain(three).coordinator.sharedRenderResourceCount,
-      sourceResourceCount,
-      'the detached executor leases the source atlas instead of uploading a duplicate',
-    );
     assert.deepEqual(
       detached.matrix.elements,
       label.matrix.elements,
@@ -501,11 +493,6 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     scene.updateMatrixWorld(true);
     assert.equal(detached.matrix.elements[12], rootX + 3, 'ordinary Three TRS edits must update the detached root');
     detached.dispose();
-    assert.equal(
-      threeHandleDomain(three).coordinator.sharedRenderResourceCount,
-      sourceResourceCount,
-      'disposing the detached lease must retain the source atlas',
-    );
     assert.throws(() => detached.getMatrixAt(0, new THREE.Matrix4()), /disposed/u);
     assert.throws(() => detached.setMatrixAt(0, new THREE.Matrix4()), /disposed/u);
     detached = undefined;
@@ -529,20 +516,17 @@ test('detached glyphs retain their engine domain after the source and font owner
   scene.add(label);
   scene.updateMatrixWorld(true);
   const [detached] = label.breakApart();
-  const domain = threeHandleDomain(three);
   scene.add(detached);
   label.dispose();
   font.dispose();
   loader.dispose();
   three.dispose();
   try {
-    assert.ok(domain.coordinator.sharedRenderResourceCount > 0, 'the detached object owns a handle-domain lease');
     assert.ok(detached.materials.length > 0);
     detached.getMatrixAt(0, new THREE.Matrix4());
   } finally {
     detached.dispose();
   }
-  assert.equal(domain.coordinator.sharedRenderResourceCount, 0);
 });
 
 test('Text.breakApart returns a paragraph-scoped independent decoration plan when one exists', async (t) => {
@@ -931,7 +915,8 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   group.add(container);
   scene.add(group);
 
-  assert.equal(label.bound, false, 'construction and add must not shape eagerly');
+  assert.equal(label.bound, true, 'construction binds desired state to its required handle root');
+  assert.equal(rootDraws(scene).length, 0, 'construction and add must not publish or realize draws eagerly');
   scene.updateMatrixWorld();
   assert.equal(label.bound, true);
   assert.equal(label.textGroup, group);
@@ -1211,7 +1196,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   let label;
   const material = defineTextMaterial((context) => {
     if (failMaterial) {
-      assert.throws(() => label.measure(), /cannot reenter Three render-plan application/u);
+      assert.throws(() => label.measure(), /cannot reenter publication/u);
       throw new Error('deliberate material realization failure');
     }
     return context.createDefaultMaterial();

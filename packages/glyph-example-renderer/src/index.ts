@@ -1,5 +1,5 @@
 /**
- * An example engine consumer built on `@pmndrs/glyph/core` alone.
+ * A custom renderer built only from the public root GlyphConfig vocabulary.
  *
  * It exists to keep the engine-integration surface honest: if a second renderer cannot
  * be written against `/core` without reaching into package internals, this package

@@ -3,7 +3,7 @@
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 
-import type { CommandBufferView, PortableGeometryPayload } from '@pmndrs/glyph/core';
+import type { CommandBufferView, PortableGeometryPayload } from '@pmndrs/glyph';
 import {
   TypeGpuGlyphExampleFragmentInput,
   TypeGpuGlyphExampleVertexInput,
