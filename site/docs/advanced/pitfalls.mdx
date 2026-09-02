@@ -54,6 +54,11 @@ for desired positions. */}
 {/* symptom: a text renders nothing after its face was disposed. cause: leases are counted; a disposed face keeps the
 text alive until the text disposes, but nothing new can bind. fix: text → group → root/handle → face. */}
 
+## `hsl()` in a style
+
+{/* symptom: `Text style color must be #rrggbb, #rrggbbaa, or linear RGBA`. cause: style colours are hex or a linear
+tuple, not arbitrary CSS. fix: convert — a hue to hex, or an sRGB triple to linear RGBA. */}
+
 ## No WebGPU on the LAN
 
 {/* symptom: WebGL2 on `http://10.0.0.x`, WebGPU on localhost. cause: `navigator.gpu` needs a secure context.

@@ -37,8 +37,9 @@ const ref = useRef<Text<typeof msdf | typeof slug>>(null);
 type PropertyList<Value> = Value | false | null | undefined | readonly PropertyList<Value>[];
 ```
 
-{/* prose: nested left-to-right lists; falsy entries ignored; `TextStyle.create()`, `ParagraphLayout.create()`,
-`Constraints.create()` build typed reusable rules; TypeScript rejects unknown authored fields. */}
+{/* prose: nested left-to-right lists; falsy entries ignored; `TextStyle.create({ name: rule })`,
+`ParagraphLayout.create({ … })`, `Constraints.create({ … })` take a record of named rules — each may be a list — and
+return them validated and frozen under the same names; TypeScript rejects unknown authored fields. */}
 
 ## Text input
 

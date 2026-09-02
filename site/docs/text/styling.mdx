@@ -31,7 +31,7 @@ sourcecode: packages/glyph/src/text-properties.ts
 ```
 
 <iframe
-  src="/examples/styling/"
+  src="/examples/?example=styling"
   title="Every TextStyle property, one control each"
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
@@ -50,7 +50,7 @@ sourcecode: packages/glyph/src/text-properties.ts
 | `direction` | `'auto' \| 'ltr' \| 'rtl'` | paragraph base direction |
 | `features` | `FontFeature[]` | `{ tag, value?, start?, end? }` |
 | `decoration` | `TextDecorationStyle` | see below |
-| `color` | `string \| [r, g, b, a]` | CSS color string or linear RGBA tuple |
+| `color` | `'#rrggbb' \| '#rrggbbaa' \| [r, g, b, a]` | hex, or a linear RGBA tuple; other CSS forms are rejected |
 | `opacity` | `number` | inherited independently of color |
 | `outline` | `{ color, width }` | MSDF; width in paragraph-local units |
 | `shadow` | `{ color, offset: [x, y] }` | MSDF; hard shadow |
@@ -62,20 +62,25 @@ sourcecode: packages/glyph/src/text-properties.ts
 ```ts
 import { TextStyle } from '@pmndrs/glyph';
 
-const base = TextStyle.create({ fontSize: 0.5, color: '#f4f7ff' });
-const emphasis = TextStyle.create({ color: '#ffd166' });
+const styles = TextStyle.create({
+  base: { fontSize: 0.5, color: '#f4f7ff' },
+  emphasis: [{ fontSize: 0.5, color: '#f4f7ff' }, { color: '#ffd166' }], // a rule may itself be a list
+});
 
-<Text font={inter} style={[base, active && emphasis, { opacity }]}>…</Text>;
+<Text font={inter} style={[styles.base, active && styles.emphasis, { opacity }]}>…</Text>;
 ```
 
 {/* prose: a `PropertyList` is a value or a nested left-to-right list; `false`/`null` entries are ignored, so
-conditions read naturally. `TextStyle.create()` builds a typed reusable rule. Public boundaries merge and validate
-known values; unknown keys are ignored, malformed known values throw. */}
+conditions read naturally. `TextStyle.create({ name: rule })` validates each named rule once, merges any list it was
+given, and returns them frozen. Public boundaries merge and validate known values; unknown keys are ignored,
+malformed known values throw. */}
 
 ## Color and opacity
 
-{/* prose: strings parse as CSS colors into linear RGBA; tuples are already linear. Opacity multiplies alpha and is
-inherited on its own, so a span can fade without restating color. */}
+{/* prose: a string is `#rrggbb` or `#rrggbbaa` (sRGB, converted to linear); a tuple is already linear RGBA; any
+other CSS colour form — `hsl()`, names — throws `Text style color must be #rrggbb, #rrggbbaa, or linear RGBA` at the
+boundary, so animate a hue by converting to hex or a tuple. Opacity multiplies alpha and is inherited on its own, so a
+span can fade without restating color. */}
 
 ## Outline and shadow
 
@@ -84,7 +89,7 @@ field and rejects them at the boundary rather than degrading. Width and offset a
 outline needs a larger `pixelRange` at bake. */}
 
 <iframe
-  src="/examples/effects/"
+  src="/examples/?example=effects"
   title="Outline, shadow, animated color"
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}

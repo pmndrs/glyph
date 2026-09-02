@@ -28,6 +28,35 @@
         "5274"
       ],
       "port": 5274
+    },
+    {
+      "name": "glyph-examples",
+      "runtimeExecutable": "mise",
+      "runtimeArgs": [
+        "exec",
+        "--",
+        "pnpm",
+        "--filter",
+        "@pmndrs/glyph-site",
+        "dev:examples",
+        "--port",
+        "5276",
+        "--strictPort"
+      ],
+      "port": 5276
+    },
+    {
+      "name": "glyph-site-dist",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "-y",
+        "serve",
+        "site/dist",
+        "-l",
+        "5277",
+        "--no-clipboard"
+      ],
+      "port": 5277
     }
   ]
 }

@@ -31,7 +31,7 @@ flowchart LR
 ```
 
 <iframe
-  src="/examples/paragraph-layout/"
+  src="/examples/?example=paragraph-layout"
   title="Wrap, align, overflow, and columns on an animated box"
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
@@ -71,8 +71,13 @@ preserves the stated box for alignment and columns. `height` bounds the block ax
 ```ts
 import { ParagraphLayout, Constraints } from '@pmndrs/glyph';
 
-const editorial = ParagraphLayout.create({ wrap: 'word', align: 'justify', columns: { count: 3, gap: 0.4 } });
-const column = Constraints.create({ width: { mode: 'exact', size: 9 } });
+const layouts = ParagraphLayout.create({
+  editorial: { wrap: 'word', align: 'justify', columns: { count: 3, gap: 0.4 } },
+  caption: { wrap: 'word', maxLines: 2, overflow: 'ellipsis' },
+});
+const boxes = Constraints.create({ column: { width: { mode: 'exact', size: 9 } } });
+
+<Text layout={layouts.editorial} constraints={boxes.column}>…</Text>;
 ```
 
 ## Justification bounds
@@ -90,7 +95,7 @@ spills into per-gap letter-space expansion up to `letterSpaceExpansion`; unset s
 euclidean in integer layout units so fragments and cursor advances agree bit-for-bit (D-254). */}
 
 <iframe
-  src="/examples/justify/"
+  src="/examples/?example=justify"
   title="Justification bounds and last-line policy"
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}

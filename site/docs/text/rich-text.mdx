@@ -20,18 +20,21 @@ sourcecode: packages/glyph/src/formatted-text.ts
 ## Template tags
 
 ```ts
-import { glyph, txt } from '@pmndrs/glyph';
+import { glyph, loadFont, txt } from '@pmndrs/glyph';
 import { span } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/three/msdf';
 
+const mono = await loadFont({ baked: '/fonts/mono.font.glb' }, msdf); // a span's font is a loaded Font or stack
 const ok = span({ color: '#4ade80' });
-const code = span(Mono, { letterSpacing: 0.01 });
+const code = span(mono, { letterSpacing: 0.01 });
 const glow = span(glowMaterial);
 
 three.createText({ font: Inter, text: txt`Status: ${ok`online`} in ${code`us-east-1`} ${glow`●`}` });
 ```
 
 {/* prose: `txt` composes fragments and derives every boundary at a concatenation join; `span(font?, ...styles)`
-returns a tag; the `/three` `span` also accepts one material. Nesting is allowed. The result is a frozen document. */}
+returns a tag whose font is a loaded `Font`/`FontStack` (the paragraph's own `font` may be a FontFace); the `/three`
+`span` also accepts one material. Nesting is allowed. The result is a frozen document. */}
 
 ## Nested Text
 
@@ -46,7 +49,7 @@ Object3D, carries no transform, and accepts only `children`, `font`, `style`, an
 named and rejected at mount. */}
 
 <iframe
-  src="/examples/rich-text/"
+  src="/examples/?example=rich-text"
   title="txt/span and nested Text, per-span font and material"
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
@@ -56,9 +59,13 @@ named and rejected at mount. */}
 
 | Field | Effect |
 | --- | --- |
-| `font` | a different loaded font, face selection, or stack for the run |
+| `font` | a different loaded `Font` or stack for the run, in the paragraph's raster format |
 | `style` | any `TextStyle` member; the rest inherits |
 | `material` | a `defineTextMaterial` factory; span → text → group → root precedence |
+
+> [!NOTE]
+> A `txt` document is typed by one raster format, so a span's font shares the paragraph's format — Slug in Slug,
+> MSDF in MSDF. To mix formats, put the faces in a stack on the paragraph; the run then selects a face, not a format.
 
 ## Reading the result
 
@@ -97,7 +104,7 @@ document, never as offsets. The removed helpers (`insertText`, `deleteText`, `re
 let a caller hand the engine an offset the tree cannot express. */}
 
 <iframe
-  src="/examples/editing/"
+  src="/examples/?example=editing"
   title="Keystroke editing with retained runs"
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}

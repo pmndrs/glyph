@@ -397,5 +397,9 @@ Unloaded font at construction · outer `<Text>` without `font` · options not ma
 ## Verification
 
 - `pnpm --filter @pmndrs/glyph-site check:docs` compiles every MDX page.
-- Every code sample names only exports present on the handle/config tree; samples that depend on D-296 sit under a callout that says so.
-- Each example folder builds under the site's Vite config and is linked from both its page and the gallery.
+- Every code sample names only exports present on the redesign tree's source.
+- The examples are written against that tree and verified against it before it merges, two ways:
+  `site/.examples-codex.tsconfig.json` (ignored; generated with `paths` into the other checkout) typechecks every
+  scene and twin with `tsc -p`, and `GLYPH_SOURCE=<checkout>/packages/glyph pnpm build:examples` builds the real
+  bundle through aliases read from that package's `exports` map. Both pass at zero errors. `check:examples` joins
+  the site's `check` when the package on this branch carries the same surface.

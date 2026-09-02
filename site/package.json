@@ -4,17 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm build:landing && pnpm build:docs",
+    "build": "pnpm build:landing && pnpm build:examples && pnpm build:docs",
     "build:docs": "npm_config_cache=.npx-cache npx -y @pmndrs/docs@4.1.2 build docs dist/docs --format website --libname \"@pmndrs/glyph\" --libname-short glyph --libname-dotsuffix-label docs --libname-dotsuffix-href https://docs.pmnd.rs --icon ♠️ --github https://github.com/pmndrs/glyph --discord https://discord.gg/poimandres --home-redirect /getting-started/introduction --theme-primary \"#0a0c12\" --theme-scheme neutral --theme-contrast 0",
+    "build:examples": "vite build --config vite.examples.config.ts",
     "build:landing": "vite build",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:docs && pnpm build:landing",
     "check:docs": "npm_config_cache=.npx-cache npx -y @pmndrs/docs@4.1.2 build docs dist/.mdx-check",
+    "check:examples": "tsc --noEmit -p tsconfig.examples.json && pnpm build:examples",
     "dev": "vite",
-    "format:check": "oxfmt --check landing/src scripts package.json tsconfig.json vite.config.ts",
+    "dev:examples": "vite --config vite.examples.config.ts",
+    "format": "oxfmt landing/src examples/src scripts package.json tsconfig.json tsconfig.examples.json vite.config.ts vite.examples.config.ts",
+    "format:check": "oxfmt --check landing/src examples/src scripts package.json tsconfig.json tsconfig.examples.json vite.config.ts vite.examples.config.ts",
     "lint": "oxlint --deny-warnings .",
     "preview": "node ./scripts/preview.mts",
-    "typecheck": "tsc --noEmit",
-    "format": "oxfmt landing/src scripts package.json tsconfig.json vite.config.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@pmndrs/glyph": "workspace:*",
