@@ -19,7 +19,8 @@
  *   is not device acceptance; a transactional renderer advances only after submission commits.
  * - **Dirty ranges, not whole arrays.** The `patches` table names buffer deltas by
  *   `(bufferId, bufferGeneration)` with destination offsets and payload ranges; a host applies
- *   those instead of re-uploading whole arrays. `readRenderPlanPatch` surfaces them decoded.
+ *   those instead of re-uploading whole arrays. The internal command-buffer projection exposes
+ *   them as typed buffer updates without publishing the raw wire rows.
  * - **Identity survives updates by construction.** Paragraph ids are caller-chosen handles,
  *   durable until removal. Glyph identity is the policy's stable-glyph-id lane, which survives
  *   reflow within a paragraph's lifetime. Engine storage is keyed by `(id, generation)`:

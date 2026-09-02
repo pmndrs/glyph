@@ -42,12 +42,7 @@ import type {
   PlanPublication,
   PlanTransport,
 } from '../internal/handle-state.js';
-import {
-  RenderPlanView,
-  readTrustedRenderPlanResourceReferenceId,
-  type RenderPlanTable,
-  type RenderPlanTransformId,
-} from './plan-view.js';
+import { RenderPlanView, readTrustedRenderPlanResourceReferenceId, type RenderPlanTable } from './plan-view.js';
 import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
 import type { PortableResource } from '../config/resources.js';
 import {
@@ -73,6 +68,10 @@ declare const payloadIdentityBrand: unique symbol;
 export interface PortablePayloadIdentity {
   readonly [payloadIdentityBrand]: true;
 }
+
+declare const renderPlanTransformBrand: unique symbol;
+/** Engine-owned host transform identity used only while mapping a trusted publication. */
+type RenderPlanTransformId = number & { readonly [renderPlanTransformBrand]: true };
 
 /** A table carried by every renderer-neutral plan publication. */
 export type RenderPlanTableName =
