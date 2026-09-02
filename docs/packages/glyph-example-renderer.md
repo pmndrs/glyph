@@ -5,7 +5,7 @@ description: Proves the root GlyphConfig integration surface through a real Type
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:4da9ce78269e3799ad9f65519ffb224a06afaa6dcb207616a4602273e9ca3583'
+source_digest: 'sha256:e3377ee7717eaec3eccc98593e363f1c381dddd2a2617f26e7cd3a910c030652'
 tags: [package, glyph-config, codec, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -58,18 +58,18 @@ namespace while reusing the technique's portable Codec body. The package root ex
 opted-in workspace tools; default consumers resolve built ESM and declarations.
 
 The ordinary proof begins with `await glyph.init()` and `glyph.handle(name, defineExampleConfig(device))`. Its seven-field
-config uses `schema`, optional `fonts`, `encode`, `resolve`, `renderer`, `root`, and optional `commands`. `encode()` selects
+config uses `schema`, required custom-format `fonts`, `encode`, `resolve`, `renderer`, `root`, and optional `commands`. `encode()` selects
 `exampleCodecDescriptor(ids)`. `resolve()` leases portable resources. The internal trusted projector binds schema values
 and gives the configured renderer a borrowed `CommandBufferView<ExampleBindings>` whose nested `DisplayList` preserves
 Rust-authored order. Numeric IDs and raw plan tables never reach the renderer.
 
-The implementation first infers its complete config from `defineGlyphConfig({...})` and then checks it with
-`satisfies ExampleGlyphConfig`. The exported `ExampleGlyphConfig` is
-`GlyphConfigFor<typeof ExampleSchema, ExampleRoot, ExampleDrawList>`, so isolated declaration emit has a stable name while
-bindings and the root boundary remain derived from the schema instead of being repeated as a corrective generic tuple.
+The exported factory names one `ExampleGlyphConfig` return boundary because TypeScript `--isolatedDeclarations` cannot
+emit the type of a nontrivial exported call expression. That alias derives the bindings and root boundary from
+`ExampleSchema` and names `ExampleFontFormats`; every DSL callback and the resulting handle/root/Text types infer without
+casts or repeated callback annotations.
 
-The package's `ExampleRootImplementation` receives only constrained `GlyphRootServices` and uses them to construct adapter
-`ExampleText` objects. Semantic mutations invalidate that root; the application publishes all dirty roots through the
+The package's `ExampleRootImplementation` receives only constrained `GlyphRootServices` plus `GlyphHandleFonts` and uses
+them to construct adapter `ExampleText` objects with a private immutable Font lease. Semantic mutations invalidate that root; the application publishes all dirty roots through the
 single top-level `glyph.shape()` boundary. The integration never constructs or receives a public engine, backend, planner,
 or target. The returned handle fronts one anonymous root, and `handle(name)` selects idempotent terminal named siblings.
 Applications and benchmarks use that surface exactly as they use the first-party Three handle.
@@ -88,12 +88,12 @@ Rejected candidates discard staging and leave accepted state untouched.
 TypeGPU/WebGPU vertex, index, and instance buffers; builds the selected pipeline; encodes an indexed instanced pass; and
 submits to an offscreen `rgba8unorm` target. Empty idle deltas produce no submission, while accepted removal clears the
 target. The hardware recovery proof disposes the lost-device handle and creates a new handle with a new configured device,
-then reuses the same immutable Font and reconstructs the retained text. Device replacement is therefore not a hidden
+then reuses the same loaded FontFace selection and reconstructs the retained text. Device replacement is therefore not a hidden
 mutation on an ordinary handle.
 
-The acceptance fixture bakes Inter, loads an immutable Font through the renderer-neutral root `loadFont()`, creates a
-configured Glyph handle, binds the external format, publishes initial and updated retained text through `glyph.shape()`,
-and asserts non-empty draws, required named buffers and
+The acceptance fixture bakes Inter, declares and loads a typed `glyph.fontFace()` selection, creates a configured Glyph
+handle, acquires an independent immutable Font lease inside its Text, and publishes initial and updated retained state
+through `glyph.shape()`. It asserts non-empty draws, required named buffers and
 geometry, changed visible pixels, idle submission suppression, failure atomicity, exact retirement, and disposal. The
 hardware lab additionally proves recovery on a second handle. Glyph's package-private tests retain borrowed expiry,
 publication ownership, and worker-transfer coverage without exposing those mechanisms to integrators.

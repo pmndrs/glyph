@@ -351,7 +351,7 @@
 
       <section id="quickstart">
         <h2>First success</h2>
-        <pre><code>import { glyph, loadFont } from '@pmndrs/glyph';
+        <pre><code>import { glyph } from '@pmndrs/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import { defineExampleConfig, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
 
@@ -362,17 +362,17 @@ if (adapter === null) throw new Error('WebGPU is unavailable');
 const device = await adapter.requestDevice();
 const rendererDevice = new TypeGpuExampleRendererDevice({ device, width: 768, height: 192 });
 const handle = glyph.handle('typegpu:main', defineExampleConfig(rendererDevice));
-const font = await loadFont(
-  { baked: new URL('./Inter-glyph-example.font.glb', import.meta.url) },
-  { technique: glyphExample, options: { paletteSeed: 17 } },
-);
+const font = glyph.fontFace(new URL('./Inter-glyph-example.font.glb', import.meta.url), {
+  format: glyphExample({ paletteSeed: 17 }),
+});
+await font.load();
 const text = handle.createText({ font, text: 'Portable TypeGPU', fontSize: 64, width: 768, height: 192 });
-const publication = text.publish();
-if (publication.draws.length === 0) throw new Error('the renderer produced no draw');</code></pre>
+glyph.shape();
+if (handle.drawList.draws.length === 0) throw new Error('the renderer produced no draw');</code></pre>
         <p>
           <code>glyph.init()</code> is idempotent. <code>glyph.handle(name, config)</code> requires a unique nonempty
-          handle name and infers the concrete handle. The example's <code>publish()</code> delegates to
-          <code>GlyphRootServices.shape()</code>.
+          handle name and infers the concrete handle. <code>glyph.shape()</code> publishes every dirty root through one
+          engine batch; Text and root objects do not expose a second semantic flush.
         </p>
       </section>
 
@@ -418,7 +418,7 @@ if (publication.draws.length === 0) throw new Error('the renderer produced no dr
             <path class="edge" d="M75 90H225" marker-end="url(#arrow-b)" />
             <text class="minor" x="150" y="82" text-anchor="middle">retain content/style</text>
             <path class="edge" d="M75 145H370" marker-end="url(#arrow-b)" />
-            <text class="minor" x="222" y="137" text-anchor="middle">shape / publish</text>
+            <text class="minor" x="222" y="137" text-anchor="middle">glyph.shape()</text>
             <path class="edge" d="M370 200H520" marker-end="url(#arrow-b)" />
             <text class="minor" x="445" y="192" text-anchor="middle">selected Codec plan</text>
             <path class="edge" d="M520 255H680" marker-end="url(#arrow-b)" />
@@ -491,17 +491,20 @@ if (publication.draws.length === 0) throw new Error('the renderer produced no dr
         <pre><code>export type ExampleGlyphConfig = GlyphConfigFor&lt;
   typeof ExampleSchema,
   ExampleRoot,
-  ExampleDrawList
+  ExampleDrawList,
+  Codec,
+  ExampleFontFormats
 &gt;;
 
 export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
   const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
-  const config = defineGlyphConfig({
+  return defineGlyphConfig({
     schema: ExampleSchema,
+    fonts: { default: glyphExample.kind, formats: ExampleFontFormats },
     encode: ({ ids }) =&gt; ({ descriptor: exampleCodecDescriptor(ids) }),
-    resolve: ({ technique, resourceName, payload }) =&gt; {
-      if (technique !== techniqueId) {
-        throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${technique}"`);
+    resolve: ({ format, resourceName, payload }) =&gt; {
+      if (format !== techniqueId) {
+        throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${format}"`);
       }
       return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () =&gt; undefined);
     },
@@ -515,13 +518,15 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
     },
     root: {
       create: (context) =&gt; {
-        const extension = new ExampleRootImplementation(context.services);
-        return context.create(extension, { boundary: Object.freeze({ name: context.name }) });
+        if (context.fonts === undefined) throw new TypeError('example GlyphConfig must declare font formats');
+        const extension = new ExampleRootImplementation(context.fonts, context.services);
+        return context.create(extension, {
+          boundary: Object.freeze({ name: context.name }),
+          shape: { accepted: (drawList) =&gt; extension.accept(drawList) },
+        });
       },
     },
   });
-  config satisfies ExampleGlyphConfig;
-  return config;
 }</code></pre>
         <p>
           Optional command tuning is plain config data: <code>{ requestBytes, resultBytes, textUnits, limits }</code>.
@@ -630,9 +635,11 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
         <h2>Construct one anonymous root and named siblings</h2>
         <pre><code>root: {
   create: (context) =&gt; {
-    const extension = new ExampleRootImplementation(context.services);
+    if (context.fonts === undefined) throw new TypeError('example config must declare font formats');
+    const extension = new ExampleRootImplementation(context.fonts, context.services);
     return context.create(extension, {
       boundary: Object.freeze({ name: context.name }),
+      shape: { accepted: (drawList) =&gt; extension.accept(drawList) },
     });
   },
 },</code></pre>
@@ -653,10 +660,10 @@ const hudText = hud.createText({ font, text: 'Score: 42' });</code></pre>
       </section>
 
       <section id="fonts">
-        <h2>Optional FontFace loading and handle binding</h2>
+        <h2>FontFace loading and handle binding</h2>
         <pre><code>fonts: {
   default: 'glyphExample',
-  techniques: { glyphExample },
+  formats: { glyphExample },
 },</code></pre>
         <p>
           With <code>fonts</code> configured, root construction receives <code>context.fonts</code> with
@@ -785,8 +792,8 @@ device.queue.submit([encoder.finish()]);</code></pre>
               <td>Before <code>glyph.handle()</code>; await <code>glyph.init()</code>.</td>
             </tr>
             <tr>
-              <td>Immutable Font</td>
-              <td>Before synchronous Text creation or update.</td>
+              <td>Loaded FontFace selection</td>
+              <td>Before synchronous Text creation; Text acquires its own immutable Font lease.</td>
             </tr>
             <tr>
               <td><code>GPUDevice</code></td>
@@ -889,7 +896,7 @@ device.destroy();</code></pre>
           <li>Inject decode and commit failures; keep accepted state and discard candidates.</li>
           <li>Synchronize transforms without shape or Rust work.</li>
           <li>Prove anonymous-root projection and idempotent terminal named roots.</li>
-          <li>Reconstruct physical state after device loss from immutable Font and desired Text state.</li>
+          <li>Reconstruct physical state after device loss from loaded FontFace selections and desired Text state.</li>
           <li>Keep canvas, context, pass, shadows, targets, and post-processing under host ownership.</li>
         </ol>
       </section>
@@ -905,8 +912,11 @@ device.destroy();</code></pre>
             </p>
           </article>
           <article class="card">
-            <h3>FontFace convenience</h3>
-            <p>The example Text accepts immutable Font values and has no FontFace-taking wrapper.</p>
+            <h3>Exported config annotation</h3>
+            <p>
+              <code>--isolatedDeclarations</code> requires the exported config factory to name
+              <code>ExampleGlyphConfig</code>; callback and handle types still infer from that single boundary.
+            </p>
           </article>
           <article class="card">
             <h3>Transform proof</h3>
@@ -915,13 +925,6 @@ device.destroy();</code></pre>
           <article class="card">
             <h3>Host pass seam</h3>
             <p>The TypeGPU proof owns its offscreen target and submission; no caller-pass method exists.</p>
-          </article>
-          <article class="card">
-            <h3>Semantic name</h3>
-            <p>
-              The example says <code>publish()</code>; the root service and intended adapter operation are
-              <code>shape()</code>.
-            </p>
           </article>
           <article class="card">
             <h3>Snippet checking</h3>

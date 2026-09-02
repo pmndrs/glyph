@@ -6,10 +6,16 @@
  * stops compiling. See `docs/planning/example-renderer.md`.
  */
 export type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResourceRecord } from './draw-list.js';
-export { ExampleText, type ExampleTextOptions, type ExampleTextUpdate } from './engine.js';
+export {
+  ExampleText,
+  type ExampleFontFaceSelection,
+  type ExampleTextOptions,
+  type ExampleTextUpdate,
+} from './engine.js';
 export {
   defineExampleConfig,
   type ExampleBindings,
+  ExampleFontFormats,
   type ExampleGlyphConfig,
   type ExampleHandle,
   type ExampleRoot,
