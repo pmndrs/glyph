@@ -347,6 +347,28 @@ mod tests {
     }
 
     #[test]
+    fn analysis_resolves_contextual_script_extensions() {
+        for (text, expected) in [
+            ("漢、字", vec![(0, 3, tag(b"Hani"))]),
+            ("あ、ア", vec![(0, 2, tag(b"Hira")), (2, 3, tag(b"Kana"))]),
+            ("한、글", vec![(0, 3, tag(b"Hang"))]),
+            ("「日本語」", vec![(0, 5, tag(b"Hani"))]),
+            ("あーア", vec![(0, 2, tag(b"Hira")), (2, 3, tag(b"Kana"))]),
+            ("漢\u{e0100}字", vec![(0, 4, tag(b"Hani"))]),
+        ] {
+            let utf16: Vec<u16> = text.encode_utf16().collect();
+            let mut analysis = UnicodeAnalysis::default();
+            analysis.analyze(&utf16).unwrap();
+            let actual: Vec<(u32, u32, u32)> = analysis
+                .script_items()
+                .iter()
+                .map(|item| (item.text_start, item.text_end, item.script))
+                .collect();
+            assert_eq!(actual, expected, "{text:?}");
+        }
+    }
+
+    #[test]
     fn analysis_segments_emoji_and_resolves_neutral_scripts() {
         let text: Vec<u16> = "Latin, हिन्दी 👩‍🚀 カー".encode_utf16().collect();
         let mut analysis = UnicodeAnalysis::default();

@@ -313,13 +313,13 @@
     "check": "node ./scripts/check.mts"
   },
   "dependencies": {
-    "@cto.af/linebreak": "4.0.3",
     "ajv": "6.15.0",
     "gltf-validator": "2.0.0-dev.3.10",
     "ktx-parse": "1.1.0",
     "unicode-segmenter": "0.15.0"
   },
   "devDependencies": {
+    "@cto.af/linebreak": "4.0.3",
     "@react-three/fiber": "10.0.0-alpha.3",
     "@react-three/test-renderer": "10.0.0-alpha.3",
     "@types/node": "24.13.3",

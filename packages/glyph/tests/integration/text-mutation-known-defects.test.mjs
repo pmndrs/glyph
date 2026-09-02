@@ -45,7 +45,8 @@ import { span, txt } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 
 import { createFontCache, edit, lanes, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
-import { findGraphemeBoundaries, findLineBreaks } from '../../dist/internal/unicode.js';
+import { findLineBreaks } from '../support/unicode-line-breaks.mjs';
+import { findGraphemeBoundaries } from '../../dist/internal/graphemes.js';
 
 const bitmap16 = { raster: bitmap, options: { strikes: [16] } };
 const fonts = createFontCache({

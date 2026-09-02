@@ -8,7 +8,7 @@ import { Text as R3fText } from '@pmndrs/glyph/react';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
-import { findGraphemeBoundaries } from '../../dist/internal/unicode.js';
+import { findGraphemeBoundaries } from '../../dist/internal/graphemes.js';
 
 globalThis.self ??= globalThis;
 globalThis.requestAnimationFrame ??= () => 0;

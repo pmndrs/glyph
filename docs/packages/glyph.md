@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:0e4f38fae5c2693fb4203b2a748021a05d1591b1b738ec3fa70a64139fc4ed3d'
+source_digest: 'sha256:0bd7ca6f400432b609aa1ca623581ed4b105ebdcbfa41d7503c4ec9b08c6dab0'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -627,7 +627,14 @@ centered glyph row, content height, and complete layout hash exactly; no runtime
 
 ## Legacy-path and duplication audit
 
-The Rust command buffer is the only glyph-packing implementation. The former TypeScript `RasterRuntime`, raster
+The Rust command buffer is the only glyph-packing implementation. Rust is also the production authority for Unicode
+analysis: the generator emits the compact Script/Script_Extensions and line-break tables consumed by the shaper, and
+the full TypeScript paragraph analyzer has been retired. The JavaScript `findGraphemeBoundaries` helper remains a real
+runtime dependency while authored rich-text spans are normalized synchronously before the shape boundary; its complete
+Unicode 17 GraphemeBreakTest gate is retained beside an independent gate over Rust's analysis. Mutation tests keep a
+test-only line-break oracle so their expected topology is not derived from the engine under test.
+
+The former TypeScript `RasterRuntime`, raster
 candidate/commit transaction, `select`, `createStorage`, and `writeStorage` surfaces are deleted from production source
 and public exports. Current raster formats own identity, artifact decoding, retained CPU resource data, and disposal;
 Rust policy programs own instance packing and dirty-range publication. The package gate retains production render-plan,
