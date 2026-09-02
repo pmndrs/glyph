@@ -7,7 +7,7 @@ import {
   type CommandBufferView,
   type CodecBufferId,
   type PortableGeometryPayload,
-  type RenderPlanScalarType,
+  type CodecScalarType,
   type TechniqueGeometryDeclaration,
   type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
@@ -116,7 +116,7 @@ export interface ExampleRendererDevice {
 
 interface RetainedExampleBuffer {
   readonly binding: ExampleBufferBinding;
-  readonly scalarType: RenderPlanScalarType;
+  readonly scalarType: CodecScalarType;
   readonly vectorWidth: number;
   readonly capacityRecords: number;
   readonly bytes: Uint8Array;

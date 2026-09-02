@@ -69,7 +69,7 @@ export const glyphExamplePlanProgramDefinition: RasterPlanProgram<typeof glyphEx
   raster: glyphExample,
   schema: glyphExampleSchema,
   programVariant: GLYPH_EXAMPLE_PROGRAM_VARIANT,
-  policyBody(system, _capabilities) {
+  codecBody(system, _capabilities) {
     const p = techniqueProgram(glyphExampleSchema, { system });
     const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
     const { inset, red, green, blue, alpha } = p.binding;
