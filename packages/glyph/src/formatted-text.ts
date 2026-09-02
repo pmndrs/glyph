@@ -1,6 +1,6 @@
 import { type ClusterAlignableRange, resolveRangesToClusters } from './internal/graphemes.js';
 import { statedProperties } from './internal/span-cascade.js';
-import type { FontSelection } from './loaded-font.js';
+import { isImmutableFontSelection, type FontSelection } from './loaded-font.js';
 import { assertTextStyle, type TextStyle } from './text-properties.js';
 import type { AnyRasterFormat } from './raster-format.js';
 
@@ -206,7 +206,5 @@ function normalizeFormats<Technique extends AnyRasterFormat>(
 }
 
 function isFontSelection(value: unknown): value is FontSelection<AnyRasterFormat> {
-  return (
-    typeof value === 'object' && value !== null && ('technique' in value || 'fonts' in value) && !('fontSize' in value)
-  );
+  return isImmutableFontSelection(value);
 }

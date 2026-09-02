@@ -3,8 +3,7 @@ import test, { after } from 'node:test';
 
 import '../support/browser-globals.mjs';
 import * as THREE from 'three/webgpu';
-import { txt } from '@pmndrs/glyph';
-import { span } from '@pmndrs/glyph/three';
+import { span, txt } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
@@ -48,6 +47,19 @@ test('structural spans derive valid nested and disjoint ranges without an offset
     assert.equal(mounted.nodes[0].text, 'abc def');
     assert.doesNotThrow(() => mounted.scene.updateMatrixWorld(true));
     assert.equal(mounted.nodes[0].error, undefined);
+  } finally {
+    unmount(mounted);
+  }
+});
+
+test('structural spans authenticate a loaded Font instead of copying it into authored style data', { timeout }, async () => {
+  const font = await fonts.load('inter');
+  const document = txt`body ${span(font, { features: [{ tag: 'liga' }] })`face`} tail`;
+  const mounted = mount(font, [authored(document)]);
+  try {
+    assert.doesNotThrow(() => mounted.scene.updateMatrixWorld(true));
+    assert.equal(mounted.nodes[0].error, undefined);
+    assert.equal(mounted.nodes[0].text, 'body face tail');
   } finally {
     unmount(mounted);
   }
