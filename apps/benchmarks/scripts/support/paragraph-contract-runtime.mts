@@ -47,7 +47,7 @@ export async function createParagraphContractRuntime() {
         loader.loadAsync({
           input: { baked: { bytes, ownership: 'copy' } },
           raster: {
-            technique: bitmap,
+            raster: bitmap,
             options: { strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) },
           },
         }),
