@@ -12,7 +12,7 @@ import { decorationShader } from '../../tsl/decoration-shader.js';
 import type { ThreeRendererResources } from '../renderer-resources.js';
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
 import type { ThreePlanProgramBuffer } from '../plan-program-registry.js';
-import { decorationSchema, threeSystemBuffers } from '../render-policy.js';
+import { decorationSchema, threeSystemBuffers } from '../codec.js';
 import type { ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../handle.js';
 import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
 import { threeBitmapShader, threeMsdfShader, threeSlugShader } from './builtin-shaders.js';
@@ -91,7 +91,7 @@ export class ThreeMaterialRealizer {
     const rect = buffers.get(decorationSchema.buffers.rect.id);
     const packed = buffers.get(decorationSchema.buffers.packed.id);
     if (rect === undefined || packed === undefined) {
-      throw new Error('decoration draw is missing its rectangle or packed policy buffer');
+      throw new Error('decoration draw is missing its rectangle or packed Codec buffer');
     }
     const key = `decoration:${this.key(selection)}:${rect.storageKey}:${packed.storageKey}:${transformProgramKey(
       transform,
@@ -320,7 +320,7 @@ export class ThreeMaterialRealizer {
     const namedBuffers = new Map<string, ThreePlanProgramBuffer>();
     for (const [name, declaration] of Object.entries(resolved.program.schema.buffers)) {
       const source = buffers.get(declaration.id);
-      if (source === undefined) throw new Error(`Three draw is missing declared policy buffer "${name}"`);
+      if (source === undefined) throw new Error(`Three draw is missing declared Codec buffer "${name}"`);
       namedBuffers.set(name, {
         scalarType: source.scalarType,
         vectorWidth: source.vectorWidth,
@@ -542,7 +542,7 @@ function schemaDrawBuffers<Buffers extends CodecBufferDeclarations>(
   const resolved: Record<string, RetainedBuffer> = {};
   for (const [name, declaration] of Object.entries(schema.buffers)) {
     const buffer = buffers.get(declaration.id);
-    if (buffer === undefined) throw new Error(`${label} draw is missing its "${name}" policy buffer`);
+    if (buffer === undefined) throw new Error(`${label} draw is missing its "${name}" Codec buffer`);
     resolved[name] = buffer;
   }
   return resolved as { readonly [Name in keyof Buffers]: RetainedBuffer };

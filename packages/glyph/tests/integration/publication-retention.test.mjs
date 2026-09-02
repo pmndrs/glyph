@@ -9,7 +9,7 @@ import { id } from '../../dist/core/render-policy.js';
 import { assertOwnedPlanPublication, PlanPublicationExpiredError } from '../../dist/core/retention.js';
 import { compilePlannerFrameUpdate } from '../../dist/core/frame-wire.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
-import { threeCodecBytes } from '../../dist/three/render-policy.js';
+import { threeCodecBytes } from '../../dist/three/codec.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);

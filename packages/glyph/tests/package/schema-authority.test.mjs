@@ -15,7 +15,7 @@ const DEFINITION_SITES = new Set([
   'raster/bitmap-technique.ts',
   'raster/msdf.ts',
   'raster/slug-technique.ts',
-  'three/render-policy.ts',
+  'three/codec.ts',
 ]);
 
 test('buffer ids appear only inside schema declarations', async () => {

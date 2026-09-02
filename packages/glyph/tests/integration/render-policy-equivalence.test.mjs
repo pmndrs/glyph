@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { id } from '../../dist/core/render-policy.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
-import { threeCodecBytes, threeCodecDescriptor } from '../../dist/three/render-policy.js';
+import { threeCodecBytes, threeCodecDescriptor } from '../../dist/three/codec.js';
 
 const fixtureUrl = new URL('../fixtures/render-policy/hand-numbered-policy-bytes.json', import.meta.url);
 const THREE_PROGRAM_IDS = new Map([

@@ -24,7 +24,7 @@ import { FontLoader, ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 // The identity lane is named by the policy contract that packs it, not by a literal here.
-import { STABLE_GLYPH_BUFFER_ID, TRANSFORM_BUFFER_ID } from '../../dist/three/render-policy.js';
+import { STABLE_GLYPH_BUFFER_ID, TRANSFORM_BUFFER_ID } from '../../dist/three/codec.js';
 
 export const IDENTITY_LANE = `_pmndrsGlyph_${STABLE_GLYPH_BUFFER_ID}`;
 const TRANSFORM_INDEX_LANE = `_pmndrsGlyph_${TRANSFORM_BUFFER_ID}`;

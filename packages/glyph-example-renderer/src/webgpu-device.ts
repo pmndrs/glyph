@@ -61,7 +61,7 @@ const fragmentMain = tgpu.fragmentFn({ in: { color: d.vec4f, uv: d.vec2f }, out:
   return glyphExampleFragment(TypeGpuGlyphExampleFragmentInput({ color: input.color, quadUv: input.uv }));
 });
 
-/** Caller-owned WebGPU device and offscreen target dimensions for the example backend. */
+/** Caller-owned WebGPU device and offscreen target dimensions for the example renderer. */
 export interface TypeGpuExampleRendererDeviceOptions {
   readonly device: GPUDevice;
   readonly width: number;
@@ -108,7 +108,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   #lost = false;
   #disposed = false;
 
-  /** Creates an offscreen TypeGPU backend around a caller-owned WebGPU device. */
+  /** Creates an offscreen TypeGPU renderer around a caller-owned WebGPU device. */
   constructor(options: TypeGpuExampleRendererDeviceOptions) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
       throw new TypeError('TypeGPU example renderer options must be an object');
@@ -299,7 +299,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     }
   }
 
-  /** Releases every GPU resource owned by this backend; the caller still owns the device. */
+  /** Releases every GPU resource owned by this renderer; the caller still owns the device. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;

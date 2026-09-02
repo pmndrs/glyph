@@ -16,7 +16,7 @@ import {
 } from '../index.js';
 import { isRasterTechnique, type AnyRasterTechnique } from '../raster-technique.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
-import { threeCodecCapabilitySet, threeSystemBuffers } from './render-policy.js';
+import { threeCodecCapabilitySet, threeSystemBuffers } from './codec.js';
 
 export interface ThreePlanProgramBuffer {
   readonly scalarType: RenderPlanScalarType;

@@ -8,7 +8,7 @@ import type {
   ThreeInstanceBinding,
   ThreeInstanceSpanBinding,
 } from '../handle.js';
-import { threeSystemBuffers } from '../render-policy.js';
+import { threeSystemBuffers } from '../codec.js';
 import { createGeometrySource, realizeGeometry, resolveDrawGeometry } from './geometry.js';
 import { transformAttribute, type RetainedBuffer, type ThreeBufferBindingId } from './host-buffer.js';
 import { glyphOriginBuffer, glyphStorageKey, ThreeMaterialRealizer, transformProgramKey } from './material-realizer.js';
@@ -272,7 +272,7 @@ function drawRealizationKey(
       ([left], [right]) =>
         (left === 'order' ? Number.MAX_SAFE_INTEGER : left) - (right === 'order' ? Number.MAX_SAFE_INTEGER : right),
     )
-    .map(([policyId, buffer]) => `${policyId}:${buffer.storageKey}`)
+    .map(([codecBufferId, buffer]) => `${codecBufferId}:${buffer.storageKey}`)
     .join(',');
   const transformKey =
     transform.kind === 'direct'

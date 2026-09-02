@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 
-import { threeCodecBytes } from '../../dist/three/render-policy.js';
+import { threeCodecBytes } from '../../dist/three/codec.js';
 
 /**
  * Byte identity for the DSL-authored Three render policy. Register numbering is

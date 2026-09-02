@@ -29,7 +29,7 @@ type ThreeBitmapMaterialContext = ThreeMaterialRootContext &
     kind: 'glyph';
     technique: 'pmndrs.bitmap';
     shader: TslBitmapShaderOutput;
-    /** Final renderer-local position including policy-selected transform indirection. */
+    /** Final renderer-local position including Codec-selected transform indirection. */
     position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
   }>;
