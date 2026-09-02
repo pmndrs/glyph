@@ -290,7 +290,7 @@ class ConfiguredHandleDomain<
     const dispose = (): void => this.#dispose();
     return new Proxy(select, {
       get: (_target, property) => {
-        if (property === 'name') return this.#input.name;
+        if (property === 'name') return undefined;
         if (property === 'handle') return this.handle;
         if (property === 'disposed') return this.#disposed;
         if (property === 'dispose') return dispose;

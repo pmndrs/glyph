@@ -65,12 +65,13 @@ async function configureGlyph(): Promise<void> {
   await glyph.init();
   const first: RecordingHandle = glyph.handle('recording:first', recordingConfig);
   const second: RecordingHandle = glyph.handle('recording:second', recordingConfig);
-  first.name satisfies string;
+  first.name satisfies undefined;
   first.disposed satisfies boolean;
   first.kind satisfies 'recording-root';
   first.handle satisfies RecordingHandle;
   const hud = first('hud');
   hud satisfies RecordingRoot;
+  hud.name satisfies string | undefined;
   hud.handle satisfies GlyphHandle;
   // @ts-expect-error The handle itself fronts the anonymous root; invocation only selects named roots.
   first();

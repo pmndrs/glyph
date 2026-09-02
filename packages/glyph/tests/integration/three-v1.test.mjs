@@ -75,6 +75,11 @@ test('one initialized Glyph runtime creates independent named Three handles over
   );
   const first = glyph.handle('three:integration:first', ThreeConfig);
   assert.equal(first.handle, first, 'the handle is its anonymous root owner');
+  assert.equal(
+    first.name,
+    undefined,
+    'the handle fronts the anonymous root rather than exposing its integration label',
+  );
   let wrappedEncodeCalls = 0;
   let wrappedResolveCalls = 0;
   let wrappedRendererFactories = 0;
