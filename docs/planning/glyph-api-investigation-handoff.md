@@ -27,9 +27,9 @@ sources:
   - id: current-example
     resource: ../../packages/glyph-example-renderer/src/engine.ts
     title: Current example renderer
-  - id: current-example-binder
-    resource: ../../packages/glyph-example-renderer/src/command-buffer.ts
-    title: Current example command-buffer binder
+  - id: configured-plan-target
+    resource: ../../packages/glyph/src/core/glyph-plan-target.ts
+    title: Shared configured plan target
 generated:
   by: openai-codex/gpt-5.6
   at: '2026-09-01T00:00:00-04:00'

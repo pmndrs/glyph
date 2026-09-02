@@ -66,6 +66,15 @@ This standard is the canonical code-quality policy for `pmndrs/glyph`. It suppor
 - Prefer discriminated unions for protocol, lifecycle, result, and exclusive option states. Use exhaustive checks when a new variant must force downstream review.
 - Use branded primitives for opaque handles and hashes when equal representations have different identities.
 - Keep untyped boundary data `unknown`. A cast, `as Partial<T>`, object check, or property-presence check is not validation.
+- Do not treat a package, config, registry, or callback boundary as a reason to erase types. Preserve associated types through
+  generic inference when a runtime value—such as a `GlyphConfig`, technique, schema, handle, or program—already witnesses
+  their relationship. `unknown` is for data whose shape is not yet trusted, not for values that merely cross an
+  architectural boundary.
+- A genuinely heterogeneous registry may erase its private storage type only when registration packages every operation
+  the registry will need while the concrete type is still known. The registry consumes that common operation surface; it
+  does not recover the concrete type. Do not make consumers reconstruct relationships with `Any*` types, `unknown`,
+  explicit generic arguments, or corrective casts. If later work needs the concrete type, preserve it in a typed wrapper
+  or narrow the registry operation instead of erasing it.
 - Choose a boundary tool by what it proves:
   - return `boolean` for a semantic classifier that provides no useful narrowing;
   - return `value is T` only when every promised part of `T` is proven;
