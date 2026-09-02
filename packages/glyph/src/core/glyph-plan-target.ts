@@ -3,18 +3,18 @@ import { createEngine } from './create-engine.js';
 import {
   applyGlyphPublication,
   type AnyGlyphBindings,
-  type BoundTransformUpdate,
-  type BorrowedBoundCommandBuffer,
+  type CommandBufferView,
   type GlyphConfig,
   type GlyphHandle,
   type GlyphRenderer,
+  type TransformUpdate,
 } from './glyph-config.js';
 import type { Codec } from './glyph-config.js';
 import type { PlanAcceptance, PlanCandidate, PlanTarget } from './render-planner.js';
 
 type PlanTargetConfig<Bindings extends AnyGlyphBindings, Result, PortableResource, Root> = Pick<
   GlyphConfig<GlyphHandle, Bindings, Result, PortableResource, Readonly<Record<string, AnyRasterTechnique>>, Root>,
-  'schema' | 'decode' | 'resolve' | 'renderer'
+  'schema' | 'resolve' | 'renderer'
 >;
 
 /** Inputs for one renderer-neutral configured plan target. */
@@ -28,7 +28,7 @@ export interface CreateGlyphPlanTargetOptions<Bindings extends AnyGlyphBindings,
 /** One configured synchronous plan target and its most recently committed renderer result. */
 export interface GlyphPlanTarget<Bindings extends AnyGlyphBindings, Result> extends PlanTarget {
   readonly lastResult: Result;
-  syncTransforms(updates: readonly BoundTransformUpdate<Bindings['transform']>[]): void;
+  syncTransforms(updates: readonly TransformUpdate<Bindings['transform']>[]): void;
   dispose(): void;
 }
 
@@ -49,9 +49,9 @@ class ConfiguredGlyphPlanTarget<
   Root,
 > implements GlyphPlanTarget<Bindings, Result> {
   readonly delivery = 'borrowed' as const;
-  readonly #config: PlanTargetConfig<Bindings, Result, PortableResource, Root>;
-  readonly #binder;
+  readonly #projector;
   readonly #defaultRenderer: GlyphRenderer<Bindings, Result> | undefined;
+  readonly #configuredRenderer: GlyphRenderer<Bindings, Result>;
   readonly #renderer: GlyphRenderer<Bindings, Result>;
   readonly #rendererAbort = new AbortController();
   #result: Readonly<{ committed: false }> | Readonly<{ committed: true; value: Result }> = Object.freeze({
@@ -60,8 +60,7 @@ class ConfiguredGlyphPlanTarget<
   #disposed = false;
 
   constructor(options: CreateGlyphPlanTargetOptions<Bindings, Result, PortableResource, Root>) {
-    this.#config = options.config;
-    this.#binder = createEngine({ config: options.config, codec: options.codec, root: options.root });
+    this.#projector = createEngine({ config: options.config, codec: options.codec, root: options.root });
     this.#defaultRenderer = options.defaultRenderer;
     const configured = options.config.renderer(
       Object.freeze({
@@ -70,9 +69,10 @@ class ConfiguredGlyphPlanTarget<
         ...(options.defaultRenderer === undefined ? {} : { defaultRenderer: options.defaultRenderer }),
       }),
     );
+    this.#configuredRenderer = configured;
     this.#renderer = Object.freeze({
-      prepare: (frame: BorrowedBoundCommandBuffer<Bindings>) => {
-        const prepared = configured.prepare(frame);
+      decode: (view: CommandBufferView<Bindings>) => {
+        const prepared = configured.decode(view);
         let settled = false;
         return Object.freeze({
           result: prepared.result,
@@ -89,7 +89,7 @@ class ConfiguredGlyphPlanTarget<
           },
         });
       },
-      syncTransforms: (updates: readonly BoundTransformUpdate<Bindings['transform']>[]) =>
+      syncTransforms: (updates: readonly TransformUpdate<Bindings['transform']>[]) =>
         configured.syncTransforms(updates),
       dispose: () => configured.dispose(),
     });
@@ -102,10 +102,10 @@ class ConfiguredGlyphPlanTarget<
 
   accept(candidate: PlanCandidate, signal: AbortSignal): PlanAcceptance {
     if (this.#disposed) return { accepted: false, error: new Error('Glyph plan target has been disposed') };
-    return applyGlyphPublication(candidate, signal, this.#config.decode, this.#binder, this.#renderer);
+    return applyGlyphPublication(candidate, signal, this.#projector, this.#renderer);
   }
 
-  syncTransforms(updates: readonly BoundTransformUpdate<Bindings['transform']>[]): void {
+  syncTransforms(updates: readonly TransformUpdate<Bindings['transform']>[]): void {
     if (this.#disposed) throw new Error('Glyph plan target has been disposed');
     this.#renderer.syncTransforms(updates);
   }
@@ -123,10 +123,10 @@ class ConfiguredGlyphPlanTarget<
       }
     };
     release(() => this.#renderer.dispose());
-    if (this.#defaultRenderer !== undefined && this.#defaultRenderer !== this.#renderer) {
+    if (this.#defaultRenderer !== undefined && this.#defaultRenderer !== this.#configuredRenderer) {
       release(() => this.#defaultRenderer?.dispose());
     }
-    release(() => this.#binder.dispose());
+    release(() => this.#projector.dispose());
     if (failure !== undefined) throw failure;
   }
 }

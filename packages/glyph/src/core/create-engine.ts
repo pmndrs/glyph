@@ -2,13 +2,13 @@ import type { PortablePayloadLease } from './render-planner.js';
 import type { BackendTransformBinding } from './backend.js';
 import type {
   AnyGlyphBindings,
-  BorrowedBoundCommandBuffer,
   BorrowedTypedCommandBuffer,
-  BoundInstanceSpan,
-  BoundRetirementCommand,
-  GlyphCommandBufferBinder,
+  CommandBufferView,
+  DisplayListInstanceSpan,
+  GlyphDisplayListProjector,
   GlyphConfig,
   GlyphInstanceSpanBindingInput,
+  Retirement,
   ResourceLease,
   TypedBuffer,
   TypedInstanceSpan,
@@ -33,7 +33,7 @@ interface RetainedBuffer<Buffer extends object> {
   readonly value: Buffer;
 }
 
-interface DecodedState<Bindings extends AnyGlyphBindings> {
+interface ProjectedState<Bindings extends AnyGlyphBindings> {
   readonly resources: Map<number, RetainedResource<Bindings['resource']>>;
   readonly buffers: Map<number, RetainedBuffer<Bindings['buffer']>>;
   readonly fresh: ReadonlySet<RetainedResource<Bindings['resource']>>;
@@ -62,7 +62,7 @@ export interface CreateEngineOptions<Bindings extends AnyGlyphBindings, Root, Po
  */
 export function createEngine<Bindings extends AnyGlyphBindings, Root, PortableResource>(
   options: CreateEngineOptions<Bindings, Root, PortableResource>,
-): GlyphCommandBufferBinder<Bindings> {
+): GlyphDisplayListProjector<Bindings> {
   return new CommandBindingEngine(options);
 }
 
@@ -70,7 +70,7 @@ class CommandBindingEngine<
   Bindings extends AnyGlyphBindings,
   Root,
   PortableResource,
-> implements GlyphCommandBufferBinder<Bindings> {
+> implements GlyphDisplayListProjector<Bindings> {
   readonly #config: CreateEngineOptions<Bindings, Root, PortableResource>['config'];
   readonly #root: Root;
   readonly #mapper = new TypedCommandBufferMapper();
@@ -79,8 +79,8 @@ class CommandBindingEngine<
   readonly #buffers = new WeakMap<object, Bindings['buffer']>();
   readonly #materials = new WeakMap<object, Bindings['material']>();
   readonly #transforms = new WeakMap<object, Bindings['transform']>();
-  readonly #decoded = new WeakMap<BorrowedTypedCommandBuffer, BorrowedBoundCommandBuffer<Bindings>>();
-  readonly #states = new WeakMap<BorrowedBoundCommandBuffer<Bindings>, DecodedState<Bindings>>();
+  readonly #projected = new WeakMap<BorrowedTypedCommandBuffer, CommandBufferView<Bindings>>();
+  readonly #states = new WeakMap<CommandBufferView<Bindings>, ProjectedState<Bindings>>();
   #resourcesById = new Map<number, RetainedResource<Bindings['resource']>>();
   #buffersById = new Map<number, RetainedBuffer<Bindings['buffer']>>();
   #disposed = false;
@@ -93,14 +93,14 @@ class CommandBindingEngine<
     );
   }
 
-  source(candidate: Parameters<GlyphCommandBufferBinder<Bindings>['source']>[0], signal: AbortSignal) {
+  source(candidate: Parameters<GlyphDisplayListProjector<Bindings>['source']>[0], signal: AbortSignal) {
     this.#assertActive();
     return this.#mapper.source(candidate, signal);
   }
 
-  decodeDefault(source: BorrowedTypedCommandBuffer): BorrowedBoundCommandBuffer<Bindings> {
+  project(source: BorrowedTypedCommandBuffer): CommandBufferView<Bindings> {
     this.#assertActive();
-    if (this.#decoded.has(source)) throw new TypeError('defaultDecoder may bind a publication only once');
+    if (this.#projected.has(source)) throw new TypeError('a command buffer may be projected only once');
     const candidate = this.#mapper.candidate(source);
     const signal = this.#mapper.signal(source);
     signal.throwIfAborted();
@@ -177,7 +177,7 @@ class CommandBindingEngine<
         bindPatch(patch, (identity) => this.#buffer(identity, buffers)),
       );
 
-      const boundRetirements: BoundRetirementCommand<Bindings['resource'], Bindings['buffer']>[] = [];
+      const boundRetirements: Retirement<Bindings['resource'], Bindings['buffer']>[] = [];
       for (const retirement of source.updates.retirements) {
         const bound = bindRetirement(retirement, {
           resource: (resource) => {
@@ -224,7 +224,7 @@ class CommandBindingEngine<
           recordIndex: span.recordIndex,
           recordCount: span.recordCount,
           logicalOrder: span.logicalOrder,
-        }) satisfies BoundInstanceSpan<Bindings['instanceSpan']>;
+        }) satisfies DisplayListInstanceSpan<Bindings['instanceSpan']>;
       };
 
       const group =
@@ -296,7 +296,7 @@ class CommandBindingEngine<
             });
 
       const frame = Object.freeze({
-        delivery: 'borrowed-bound' as const,
+        delivery: 'borrowed-command-buffer' as const,
         engineRevision: source.engineRevision,
         planRevision: source.planRevision,
         publicationGeneration: source.publicationGeneration,
@@ -307,9 +307,9 @@ class CommandBindingEngine<
           patches: boundPatches,
           retirements: Object.freeze(boundRetirements),
         }),
-        group,
+        displayList: group,
       });
-      this.#decoded.set(source, frame);
+      this.#projected.set(source, frame);
       this.#states.set(frame, { resources, buffers, fresh });
       return frame;
     } catch (error) {
@@ -318,20 +318,16 @@ class CommandBindingEngine<
     }
   }
 
-  settle(
-    source: BorrowedTypedCommandBuffer,
-    frame: BorrowedBoundCommandBuffer<Bindings> | undefined,
-    accepted: boolean,
-  ): void {
-    const decoded = this.#decoded.get(source);
-    this.#decoded.delete(source);
-    let state: DecodedState<Bindings> | undefined;
+  settle(source: BorrowedTypedCommandBuffer, frame: CommandBufferView<Bindings> | undefined, accepted: boolean): void {
+    const projected = this.#projected.get(source);
+    this.#projected.delete(source);
+    let state: ProjectedState<Bindings> | undefined;
     try {
-      if (decoded === undefined) return;
-      state = this.#states.get(decoded);
-      this.#states.delete(decoded);
-      if (state === undefined) throw new TypeError('cannot settle a foreign command buffer');
-      void frame;
+      if (projected === undefined) throw new TypeError('cannot settle an unprojected command buffer');
+      state = this.#states.get(projected);
+      this.#states.delete(projected);
+      if (state === undefined || frame !== projected)
+        throw new TypeError('cannot settle a foreign command buffer view');
       if (!accepted) return;
       const retained = new Set(state.resources.values());
       const candidates = new Set([...this.#resourcesById.values(), ...state.fresh]);

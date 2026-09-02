@@ -227,7 +227,7 @@ export interface GlyphDrawBindingInput<Bindings extends AnyGlyphBindings> {
 
 export interface GlyphBatchBindingInput<Bindings extends AnyGlyphBindings> extends GlyphDrawBindingInput<Bindings> {
   readonly identity: BatchIdentity;
-  readonly instances: BorrowedCommandSequence<BoundInstanceSpan<Bindings['instanceSpan']>>;
+  readonly instances: BorrowedCommandSequence<DisplayListInstanceSpan<Bindings['instanceSpan']>>;
 }
 
 export interface GlyphRootInstanceBindingInput<
@@ -235,7 +235,7 @@ export interface GlyphRootInstanceBindingInput<
 > extends GlyphDrawBindingInput<Bindings> {
   readonly identity: InstanceIdentity;
   readonly transform: Bindings['transform'] | undefined;
-  readonly instance: BoundInstanceSpan<Bindings['instanceSpan']>;
+  readonly instance: DisplayListInstanceSpan<Bindings['instanceSpan']>;
 }
 
 /** Config-owned schema that binds trusted engine meanings to renderer payloads. */
@@ -303,12 +303,12 @@ export interface ResolveContext<PortableResource = unknown, Previous extends obj
   readonly signal: AbortSignal;
 }
 
-export type BoundResourceCommand<Resource extends object> =
+export type ResourceUpdate<Resource extends object> =
   | Readonly<{ kind: 'acquire'; resource: Resource }>
   | Readonly<{ kind: 'update'; resource: Resource }>
   | Readonly<{ kind: 'retain'; resource: Resource }>;
 
-export type BoundBufferCommand<Buffer extends object, Program extends object> = Readonly<{
+export type BufferUpdate<Buffer extends object, Program extends object> = Readonly<{
   kind: 'ensure';
   buffer: Buffer;
   program: Program;
@@ -318,7 +318,7 @@ export type BoundBufferCommand<Buffer extends object, Program extends object> = 
   byteLength: number;
 }>;
 
-export type BoundPatchCommand<Buffer extends object> =
+export type BufferPatch<Buffer extends object> =
   | Readonly<{
       kind: 'allocate-or-resize';
       buffer: Buffer;
@@ -348,7 +348,7 @@ export type BoundPatchCommand<Buffer extends object> =
       byteLength: number;
     }>;
 
-export interface BoundInstanceSpan<InstanceSpan extends object> {
+export interface DisplayListInstanceSpan<InstanceSpan extends object> {
   readonly value: InstanceSpan;
   readonly kind: 'glyph' | 'decoration' | 'inline-object' | 'clip' | 'codec';
   readonly recordIndex: number;
@@ -356,97 +356,71 @@ export interface BoundInstanceSpan<InstanceSpan extends object> {
   readonly logicalOrder: number;
 }
 
-export interface BoundBatch<Batch extends object, InstanceSpan extends object> {
+export interface DisplayListBatch<Batch extends object, InstanceSpan extends object> {
   readonly kind: 'batch';
   readonly value: Batch;
-  readonly instances: BorrowedCommandSequence<BoundInstanceSpan<InstanceSpan>>;
+  readonly instances: BorrowedCommandSequence<DisplayListInstanceSpan<InstanceSpan>>;
 }
 
-export interface BoundRootInstance<Instance extends object, Transform extends object> {
+export interface DisplayListRootInstance<Instance extends object, Transform extends object> {
   readonly kind: 'instance';
   readonly value: Instance;
   readonly transform: Transform | undefined;
 }
 
-export type BoundGroupChild<Bindings extends AnyGlyphBindings> =
-  | BoundBatch<Bindings['batch'], Bindings['instanceSpan']>
-  | BoundRootInstance<Bindings['instance'], Bindings['transform']>;
+export type DisplayListChild<Bindings extends AnyGlyphBindings> =
+  | DisplayListBatch<Bindings['batch'], Bindings['instanceSpan']>
+  | DisplayListRootInstance<Bindings['instance'], Bindings['transform']>;
 
-export interface BoundGroup<Bindings extends AnyGlyphBindings> {
+export interface DisplayList<Bindings extends AnyGlyphBindings> {
   readonly drawRoot: Bindings['drawRoot'];
-  readonly transforms: BorrowedCommandSequence<BoundTransformRecord<Bindings['transform']>>;
-  readonly children: BorrowedCommandSequence<BoundGroupChild<Bindings>>;
+  readonly transforms: BorrowedCommandSequence<DisplayListTransform<Bindings['transform']>>;
+  readonly children: BorrowedCommandSequence<DisplayListChild<Bindings>>;
 }
 
-export interface BoundTransformRecord<Transform extends object> {
+export interface DisplayListTransform<Transform extends object> {
   readonly value: Transform;
   /** Physical transform-table record selected by the Codec. */
   readonly recordIndex: number;
 }
 
-export type BoundGroupPhase<Bindings extends AnyGlyphBindings> =
+export type DisplayListPhase<Bindings extends AnyGlyphBindings> =
   | Readonly<{ kind: 'unchanged' }>
-  | Readonly<{ kind: 'replace'; value: BoundGroup<Bindings> }>;
+  | Readonly<{ kind: 'replace'; value: DisplayList<Bindings> }>;
 
-export type BoundRetirementCommand<Resource extends object, Buffer extends object> =
+export type Retirement<Resource extends object, Buffer extends object> =
   | Readonly<{ kind: 'resource'; resource: Resource }>
   | Readonly<{ kind: 'buffer'; buffer: Buffer }>
   | Readonly<{ kind: 'slot-range'; byteOffset: number; byteLength: number }>
   | Readonly<{ kind: 'output-bytes'; byteOffset: number; byteLength: number }>;
 
-export interface BoundUpdatePhases<Bindings extends AnyGlyphBindings> {
-  readonly resources: BorrowedCommandSequence<BoundResourceCommand<Bindings['resource']>>;
-  readonly buffers: BorrowedCommandSequence<BoundBufferCommand<Bindings['buffer'], Bindings['program']>>;
-  readonly patches: BorrowedCommandSequence<BoundPatchCommand<Bindings['buffer']>>;
-  readonly retirements: BorrowedCommandSequence<BoundRetirementCommand<Bindings['resource'], Bindings['buffer']>>;
+export interface DisplayListChanges<Bindings extends AnyGlyphBindings> {
+  readonly resources: BorrowedCommandSequence<ResourceUpdate<Bindings['resource']>>;
+  readonly buffers: BorrowedCommandSequence<BufferUpdate<Bindings['buffer'], Bindings['program']>>;
+  readonly patches: BorrowedCommandSequence<BufferPatch<Bindings['buffer']>>;
+  readonly retirements: BorrowedCommandSequence<Retirement<Bindings['resource'], Bindings['buffer']>>;
 }
 
 /**
- * One phase-structured renderer input. Every binding is an object identity; numeric
- * engine IDs remain private to the decoder/binder that produced this borrowed value.
+ * One phase-structured retained display-list update. Every reference is already a typed
+ * binding; numeric engine IDs and the trusted wire representation remain private.
  */
-export interface BorrowedBoundCommandBuffer<Bindings extends AnyGlyphBindings> {
-  readonly delivery: 'borrowed-bound';
+export interface CommandBufferView<Bindings extends AnyGlyphBindings> {
+  readonly delivery: 'borrowed-command-buffer';
   readonly engineRevision: number;
   readonly planRevision: number;
   readonly publicationGeneration: number;
   readonly checkpoint: boolean;
-  readonly updates: BoundUpdatePhases<Bindings>;
-  readonly group: BoundGroupPhase<Bindings>;
+  readonly updates: DisplayListChanges<Bindings>;
+  readonly displayList: DisplayListPhase<Bindings>;
 }
 
-/** Engine-owned binding service passed to exactly one synchronous decoder call. */
-export interface DecodeContext<Bindings extends AnyGlyphBindings> {
-  decodeDefault(source: BorrowedTypedCommandBuffer): BorrowedBoundCommandBuffer<Bindings>;
-}
-
-/** Retained handle/boundary binder used by the renderer-neutral publication transaction. */
-export interface GlyphCommandBufferBinder<Bindings extends AnyGlyphBindings> extends DecodeContext<Bindings> {
+/** Internal retained projector used by one root's renderer publication transaction. */
+export interface GlyphDisplayListProjector<Bindings extends AnyGlyphBindings> {
   source(candidate: PlanCandidate, signal: AbortSignal): BorrowedTypedCommandBuffer;
-  settle(
-    source: BorrowedTypedCommandBuffer,
-    frame: BorrowedBoundCommandBuffer<Bindings> | undefined,
-    accepted: boolean,
-  ): void;
+  project(source: BorrowedTypedCommandBuffer): CommandBufferView<Bindings>;
+  settle(source: BorrowedTypedCommandBuffer, update: CommandBufferView<Bindings> | undefined, accepted: boolean): void;
   dispose(): void;
-}
-
-export type Decoder<Bindings extends AnyGlyphBindings> = (
-  source: BorrowedTypedCommandBuffer,
-  context: DecodeContext<Bindings>,
-) => BorrowedBoundCommandBuffer<Bindings>;
-
-/** The canonical decoder remains explicit in every config and may be wrapped type-safely. */
-export function defaultDecoder<Bindings extends AnyGlyphBindings>(
-  source: BorrowedTypedCommandBuffer,
-  context: DecodeContext<Bindings>,
-): BorrowedBoundCommandBuffer<Bindings> {
-  return context.decodeDefault(source);
-}
-
-export function defineDecoder<Bindings extends AnyGlyphBindings>(decoder: Decoder<Bindings>): Decoder<Bindings> {
-  if (typeof decoder !== 'function') throw new TypeError('Glyph decoder must be a function');
-  return decoder;
 }
 
 export interface PreparedRendererCommit<Result> {
@@ -455,14 +429,14 @@ export interface PreparedRendererCommit<Result> {
   discard(): void;
 }
 
-export interface BoundTransformUpdate<Transform extends object> {
+export interface TransformUpdate<Transform extends object> {
   readonly transform: Transform;
 }
 
-/** Adapter-side renderer: prepares retained host objects; it does not submit a host render pass. */
+/** Adapter-side decoder: stages retained host objects; it does not submit a host render pass. */
 export interface GlyphRenderer<Bindings extends AnyGlyphBindings, Result> {
-  prepare(frame: BorrowedBoundCommandBuffer<Bindings>): PreparedRendererCommit<Result>;
-  syncTransforms(updates: readonly BoundTransformUpdate<Bindings['transform']>[]): void;
+  decode(view: CommandBufferView<Bindings>): PreparedRendererCommit<Result>;
+  syncTransforms(updates: readonly TransformUpdate<Bindings['transform']>[]): void;
   dispose(): void;
 }
 
@@ -474,28 +448,27 @@ export interface RendererContext<Bindings extends AnyGlyphBindings, Result = unk
 }
 
 /**
- * Runs one borrowed publication transaction. Decode/prepare failures discard candidate
+ * Runs one borrowed publication transaction. Projection/decode failures discard candidate
  * state; once commit begins, binder state follows the committed host branch even if cleanup throws.
  */
 export function applyGlyphPublication<Bindings extends AnyGlyphBindings, Result>(
   candidate: PlanCandidate,
   signal: AbortSignal,
-  decode: Decoder<Bindings>,
-  binder: GlyphCommandBufferBinder<Bindings>,
+  projector: GlyphDisplayListProjector<Bindings>,
   renderer: GlyphRenderer<Bindings, Result>,
 ): PlanAcceptance {
   if (signal.aborted) return { accepted: false, error: signal.reason };
   let source: BorrowedTypedCommandBuffer | undefined;
-  let frame: BorrowedBoundCommandBuffer<Bindings> | undefined;
+  let update: CommandBufferView<Bindings> | undefined;
   let prepared: PreparedRendererCommit<Result> | undefined;
   let commitStarted = false;
   try {
-    source = binder.source(candidate, signal);
-    frame = decode(source, binder);
-    prepared = renderer.prepare(frame);
+    source = projector.source(candidate, signal);
+    update = projector.project(source);
+    prepared = renderer.decode(update);
     commitStarted = true;
     prepared.commit();
-    binder.settle(source, frame, true);
+    projector.settle(source, update, true);
     return { accepted: true };
   } catch (error) {
     try {
@@ -505,9 +478,9 @@ export function applyGlyphPublication<Bindings extends AnyGlyphBindings, Result>
     }
     if (source !== undefined) {
       try {
-        binder.settle(source, frame, commitStarted);
+        projector.settle(source, update, commitStarted);
       } catch {
-        // A foreign custom-decoder frame is already rejected by the renderer/binder boundary.
+        // Preserve the renderer failure if projection settlement also fails.
       }
     }
     return { accepted: false, error };
@@ -556,7 +529,7 @@ export interface GlyphHandleFactoryContext<Config extends object> extends GlyphH
   readonly config: Config;
 }
 
-type GlyphConfigContractKey = 'schema' | 'fonts' | 'encode' | 'decode' | 'resolve' | 'renderer' | 'createHandle';
+type GlyphConfigContractKey = 'schema' | 'fonts' | 'encode' | 'resolve' | 'renderer' | 'createHandle';
 
 type GlyphConfigExtensionValue<ConfigExtension extends object> = {
   readonly [Key in keyof ConfigExtension as Key extends GlyphConfigContractKey ? never : Key]: ConfigExtension[Key];
@@ -579,7 +552,7 @@ type SelectedGlyphConfig<
     Boundary,
     ConfigExtension
   >,
-  'schema' | 'fonts' | 'encode' | 'decode' | 'resolve' | 'renderer'
+  'schema' | 'fonts' | 'encode' | 'resolve' | 'renderer'
 > &
   Readonly<ConfigExtension>;
 
@@ -612,7 +585,6 @@ interface GlyphConfigContract<
   readonly schema: GlyphSchema<Bindings, Boundary>;
   readonly fonts?: GlyphFontConfig<FontTechniques>;
   encode(context: EncodeContext): Codec;
-  readonly decode: Decoder<Bindings>;
   resolve(context: ResolveContext<PortableResource, Bindings['resource']>): ResourceLease<Bindings['resource']>;
   renderer(context: RendererContext<Bindings, RendererResult>): GlyphRenderer<Bindings, RendererResult>;
   createHandle(
@@ -707,7 +679,7 @@ export function defineGlyphConfig<
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw new TypeError('GlyphConfig must be an object');
   }
-  for (const key of ['encode', 'decode', 'resolve', 'renderer', 'createHandle'] as const) {
+  for (const key of ['encode', 'resolve', 'renderer', 'createHandle'] as const) {
     if (typeof config[key] !== 'function') throw new TypeError(`GlyphConfig.${key} must be a function`);
   }
   if (typeof config.schema !== 'object' || config.schema === null) {

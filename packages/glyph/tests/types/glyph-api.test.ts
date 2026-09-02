@@ -1,15 +1,11 @@
 import { glyph, type GlyphConfig, type GlyphHandle } from '../../src/index.js';
 import {
-  defaultDecoder,
   createGlyphRootRegistry,
-  defineDecoder,
   defineGlyphConfig,
   defineGlyphSchema,
   resourceLease,
   type AnyGlyphBindings,
-  type BorrowedBoundCommandBuffer,
-  type BorrowedTypedCommandBuffer,
-  type DecodeContext,
+  type CommandBufferView,
   type GlyphRoot,
 } from '../../src/core.js';
 
@@ -35,17 +31,19 @@ const recordingConfig = defineGlyphConfig({
     instanceSpan: () => ({}),
   }),
   encode: () => ({ descriptor: { capabilitySets: [], programs: [] } }),
-  decode: defaultDecoder,
   resolve: ({ payload }) => resourceLease({ payload }, () => undefined),
   renderer: () => ({
-    prepare: () => ({ result: undefined, commit: () => undefined, discard: () => undefined }),
+    decode: (view) => {
+      const commandBufferView: CommandBufferView<RecordingBindings> = view;
+      void commandBufferView;
+      return { result: undefined, commit: () => undefined, discard: () => undefined };
+    },
     syncTransforms: () => undefined,
     dispose: () => undefined,
   }),
   adapterLabel: 'recording' as const,
   createHandle: (context) => {
     context.config.schema satisfies (typeof context.config)['schema'];
-    context.config.decode satisfies (typeof context.config)['decode'];
     context.config.renderer satisfies (typeof context.config)['renderer'];
     context.config.adapterLabel satisfies 'recording';
     // @ts-expect-error The selected config surface is exact rather than an open AnyGlyphConfig bag.
@@ -74,20 +72,11 @@ const recordingConfig = defineGlyphConfig({
 
 recordingConfig satisfies GlyphConfig<RecordingHandle, RecordingBindings, void>;
 
-const tracedDecoder = defineDecoder<RecordingBindings>(
-  (source: BorrowedTypedCommandBuffer, context: DecodeContext<RecordingBindings>) => {
-    const frame: BorrowedBoundCommandBuffer<RecordingBindings> = defaultDecoder(source, context);
-    return frame;
-  },
-);
-
-const tracedConfig = { ...recordingConfig, decode: tracedDecoder } satisfies typeof recordingConfig;
-
 async function configureGlyph(): Promise<void> {
   await glyph.init();
   await glyph.init();
   const first: RecordingHandle = glyph.handle('recording:first', recordingConfig);
-  const second: RecordingHandle = glyph.handle('recording:second', tracedConfig);
+  const second: RecordingHandle = glyph.handle('recording:second', recordingConfig);
   first.name satisfies string;
   first.disposed satisfies boolean;
   first('hud') satisfies RecordingRoot;

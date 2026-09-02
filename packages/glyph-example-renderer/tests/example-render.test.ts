@@ -16,7 +16,7 @@ import {
   type ExamplePendingSubmission,
   type ExampleRendererDevice,
 } from '../src/index.js';
-import type { BorrowedBoundCommandBuffer } from '@pmndrs/glyph/core';
+import type { CommandBufferView } from '@pmndrs/glyph/core';
 import type { ExampleBindings } from '../src/config.js';
 
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
@@ -29,8 +29,8 @@ class RejectOnceExampleRendererDevice implements ExampleRendererDevice {
   failNextPreparation = false;
   discarded = 0;
 
-  prepare(frame: BorrowedBoundCommandBuffer<ExampleBindings>): ExamplePendingSubmission {
-    const pending = this.primary.prepare(frame);
+  decode(frame: CommandBufferView<ExampleBindings>): ExamplePendingSubmission {
+    const pending = this.primary.decode(frame);
     if (this.failNextPreparation) {
       this.failNextPreparation = false;
       pending.discard();

@@ -3,8 +3,8 @@ import tgpu from 'typegpu';
 import {
   assertPortableResource,
   resolveRasterPlanProgram,
-  type BorrowedBoundCommandBuffer,
-  type BoundPatchCommand,
+  type BufferPatch,
+  type CommandBufferView,
   type PolicyBufferId,
   type PortableGeometryPayload,
   type RenderPlanScalarType,
@@ -109,7 +109,7 @@ export const exampleRendererShader: GlyphExampleRendererShader = Object.freeze({
 /** A narrow device seam: bound command preparation is atomic and does not submit a host frame. */
 export interface ExampleRendererDevice {
   readonly shader: ExampleRendererShader;
-  prepare(frame: BorrowedBoundCommandBuffer<ExampleBindings>): ExamplePendingSubmission;
+  decode(view: CommandBufferView<ExampleBindings>): ExamplePendingSubmission;
   /** Release accepted renderer state without taking ownership of the caller's device object. */
   reset(): void;
 }
@@ -166,7 +166,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     this.shader = shader;
   }
 
-  prepare(frame: BorrowedBoundCommandBuffer<ExampleBindings>): RecordingPendingSubmission {
+  decode(frame: CommandBufferView<ExampleBindings>): RecordingPendingSubmission {
     this.#assertMutable('prepare a publication');
     const revision = this.#revision;
     const resources = new Map(this.resources);
@@ -194,7 +194,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       if (retirement.kind === 'buffer') buffers.delete(retirement.buffer);
     }
 
-    const groupChanged = frame.group.kind === 'replace';
+    const groupChanged = frame.displayList.kind === 'replace';
     const draws = groupChanged ? retainDraws(frame) : this.#draws;
     const replacesRenderState =
       groupChanged ||
@@ -286,10 +286,10 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   }
 }
 
-function retainDraws(frame: BorrowedBoundCommandBuffer<ExampleBindings>): readonly ExampleDraw[] {
-  if (frame.group.kind !== 'replace') return [];
+function retainDraws(frame: CommandBufferView<ExampleBindings>): readonly ExampleDraw[] {
+  if (frame.displayList.kind !== 'replace') return [];
   const draws: ExampleDraw[] = [];
-  for (const child of frame.group.value.children) {
+  for (const child of frame.displayList.value.children) {
     const input = child.value.input;
     const spans = child.kind === 'batch' ? child.instances : [child.value.input.instance];
     for (const span of spans) {
@@ -362,7 +362,7 @@ function cloneBuffers(
 
 function applyPatch(
   buffers: Map<ExampleBufferBinding, RetainedExampleBuffer>,
-  patch: BoundPatchCommand<ExampleBufferBinding>,
+  patch: BufferPatch<ExampleBufferBinding>,
 ): void {
   const targetBinding = patch.kind === 'copy' ? patch.destination : patch.buffer;
   const target = buffers.get(targetBinding);

@@ -4,8 +4,8 @@ import {
   type BackendMaterialBinding,
   type BackendTransformBinding,
   type PlanAcceptance,
-  type BorrowedBoundCommandBuffer,
-  type BoundTransformUpdate,
+  type CommandBufferView,
+  type TransformUpdate,
   type GlyphRenderer,
   createGlyphPlanTarget,
   type GlyphPlanTarget,
@@ -125,8 +125,8 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
       },
     });
     const defaultRenderer: GlyphRenderer<ThreeBindings, void> = Object.freeze({
-      prepare: (frame: BorrowedBoundCommandBuffer<ThreeBindings>) => this.#prepareRendererCommit(frame),
-      syncTransforms: (updates: readonly BoundTransformUpdate<THREE.Object3D>[]) => this.#syncBoundTransforms(updates),
+      decode: (view: CommandBufferView<ThreeBindings>) => this.#decodeRendererCommit(view),
+      syncTransforms: (updates: readonly TransformUpdate<THREE.Object3D>[]) => this.#syncBoundTransforms(updates),
       dispose: () => this.#disposeRendererState(),
     });
     this.#target = createGlyphPlanTarget({ config, codec: coordinator.codec, root, defaultRenderer });
@@ -250,7 +250,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     }
   }
 
-  #syncBoundTransforms(updates: readonly BoundTransformUpdate<THREE.Object3D>[]): void {
+  #syncBoundTransforms(updates: readonly TransformUpdate<THREE.Object3D>[]): void {
     const pending = this.#pendingTransformSync;
     if (pending === undefined) throw new Error('Three renderer transform sync requires an active boundary traversal');
     const requested = new Set(updates.map(({ transform }) => transform));
@@ -303,8 +303,8 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     this.#originSegments = [];
   }
 
-  #prepareRendererCommit(frame: BorrowedBoundCommandBuffer<ThreeBindings>) {
-    const prepared = this.#prepareBound(frame);
+  #decodeRendererCommit(view: CommandBufferView<ThreeBindings>) {
+    const prepared = this.#prepareBound(view);
     let state: 'open' | 'committed' | 'discarded' = 'open';
     return Object.freeze({
       result: undefined,
@@ -322,12 +322,12 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     });
   }
 
-  #prepareBound(frame: BorrowedBoundCommandBuffer<ThreeBindings>): PreparedPublication {
-    const replacesDraws = frame.group.kind === 'replace';
+  #prepareBound(frame: CommandBufferView<ThreeBindings>): PreparedPublication {
+    const replacesDraws = frame.displayList.kind === 'replace';
     const transforms = replacesDraws ? new Map<number, THREE.Object3D>() : this.#transforms;
-    if (frame.group.kind === 'replace') {
-      for (let index = 0; index < frame.group.value.transforms.length; index += 1) {
-        const transform = frame.group.value.transforms.at(index)!;
+    if (frame.displayList.kind === 'replace') {
+      for (let index = 0; index < frame.displayList.value.transforms.length; index += 1) {
+        const transform = frame.displayList.value.transforms.at(index)!;
         transforms.set(transform.recordIndex, transform.value);
       }
     }
@@ -350,10 +350,10 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
       this.#readBoundResources(frame, context);
       this.#readBoundBuffers(frame, context.buffers);
       preparedDraws =
-        frame.group.kind === 'replace'
+        frame.displayList.kind === 'replace'
           ? prepareDrawReplacement({
-              root: frame.group.value.drawRoot,
-              children: frame.group.value.children,
+              root: frame.displayList.value.drawRoot,
+              children: frame.displayList.value.children,
               context,
               coordinator: this.#coordinator,
               owner: this.#owner,
@@ -455,7 +455,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     return failure;
   }
 
-  #readBoundResources(frame: BorrowedBoundCommandBuffer<ThreeBindings>, context: PreparationContext): void {
+  #readBoundResources(frame: CommandBufferView<ThreeBindings>, context: PreparationContext): void {
     for (const command of frame.updates.resources) {
       if (context.resources.has(command.resource)) continue;
       const program = this.#coordinator.planProgram(command.resource.technique);
@@ -471,10 +471,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     }
   }
 
-  #readBoundBuffers(
-    frame: BorrowedBoundCommandBuffer<ThreeBindings>,
-    buffers: Map<ThreeBufferBinding, RetainedBuffer>,
-  ): void {
+  #readBoundBuffers(frame: CommandBufferView<ThreeBindings>, buffers: Map<ThreeBufferBinding, RetainedBuffer>): void {
     for (const command of frame.updates.buffers) {
       if (buffers.has(command.buffer)) continue;
       const declaration = command.buffer.input.declaration;
@@ -498,7 +495,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   }
 
   #stageBoundBufferMutations(
-    frame: BorrowedBoundCommandBuffer<ThreeBindings>,
+    frame: CommandBufferView<ThreeBindings>,
     buffers: ReadonlyMap<ThreeBufferBinding, RetainedBuffer>,
   ): StagedBufferMutations {
     const operations: StagedBufferOperation[] = [];
@@ -547,7 +544,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     return { operations, uploads: [...staged.values()].filter(({ start, end }) => end > start) };
   }
 
-  #applyBoundRetirements(frame: BorrowedBoundCommandBuffer<ThreeBindings>, context: PreparationContext): void {
+  #applyBoundRetirements(frame: CommandBufferView<ThreeBindings>, context: PreparationContext): void {
     for (const retirement of frame.updates.retirements) {
       if (retirement.kind === 'buffer') {
         context.buffers.delete(retirement.buffer);

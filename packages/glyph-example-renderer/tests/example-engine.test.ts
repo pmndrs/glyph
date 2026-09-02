@@ -35,23 +35,18 @@ describe('a retained engine driven through the published core surface', () => {
   test('uses the root Glyph handle and the same configured publication phases as Three', async () => {
     await glyph.init({ wasm: await wasmBytes() });
     const base = defineExampleConfig();
-    let decodeCalls = 0;
     let rendererFactories = 0;
-    let prepareCalls = 0;
+    let rendererDecodeCalls = 0;
     const config: ExampleGlyphConfig = {
       ...base,
-      decode(source, context) {
-        decodeCalls += 1;
-        return base.decode(source, context);
-      },
       renderer(context) {
         rendererFactories += 1;
         const renderer = base.renderer(context);
         return {
-          prepare(frame) {
-            prepareCalls += 1;
-            expect(frame.delivery).toBe('borrowed-bound');
-            return renderer.prepare(frame);
+          decode(frame) {
+            rendererDecodeCalls += 1;
+            expect(frame.delivery).toBe('borrowed-command-buffer');
+            return renderer.decode(frame);
           },
           syncTransforms: (updates) => renderer.syncTransforms(updates),
           dispose: () => renderer.dispose(),
@@ -63,8 +58,7 @@ describe('a retained engine driven through the published core surface', () => {
       expect(handle.publish().publicationGeneration).toBe(1);
       expect(handle.publish().publicationGeneration).toBe(2);
       expect(rendererFactories).toBe(1);
-      expect(decodeCalls).toBe(2);
-      expect(prepareCalls).toBe(2);
+      expect(rendererDecodeCalls).toBe(2);
     } finally {
       handle.dispose();
     }
@@ -96,10 +90,10 @@ describe('a retained engine driven through the published core surface', () => {
       renderer(context) {
         const renderer = base.renderer(context);
         return {
-          prepare(frame) {
+          decode(frame) {
             attempts += 1;
             if (attempts === 1) throw new Error('intentional preparation failure');
-            const prepared = renderer.prepare(frame);
+            const prepared = renderer.decode(frame);
             return {
               result: prepared.result,
               commit: () => prepared.commit(),

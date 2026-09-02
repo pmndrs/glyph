@@ -1,6 +1,6 @@
 import type {
-  BoundPatchCommand,
-  BoundRetirementCommand,
+  BufferPatch,
+  Retirement,
   TypedBuffer,
   TypedPatchCommand,
   TypedResource,
@@ -11,7 +11,7 @@ import type {
 export function bindPatch<Buffer extends object>(
   patch: TypedPatchCommand,
   buffer: (identity: TypedBuffer) => Buffer,
-): BoundPatchCommand<Buffer> {
+): BufferPatch<Buffer> {
   switch (patch.kind) {
     case 'allocate-or-resize':
     case 'retire':
@@ -57,7 +57,7 @@ interface RetirementBindings<Resource extends object, Buffer extends object> {
 export function bindRetirement<Resource extends object, Buffer extends object>(
   retirement: TypedRetirementCommand,
   bindings: RetirementBindings<Resource, Buffer>,
-): BoundRetirementCommand<Resource, Buffer> | undefined {
+): Retirement<Resource, Buffer> | undefined {
   switch (retirement.kind) {
     case 'resource': {
       const resource = bindings.resource(retirement.resource);

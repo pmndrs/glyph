@@ -1,6 +1,5 @@
 import type { AnyRasterTechnique, Font, FontStack } from '@pmndrs/glyph';
 import {
-  defaultDecoder,
   createGlyphRootRegistry,
   defineGlyphConfig,
   defineGlyphSchema,
@@ -109,7 +108,6 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
   return defineGlyphConfig({
     schema: ExampleSchema,
     encode: ({ ids }) => ({ descriptor: exampleRenderPolicyDescriptor(ids) }),
-    decode: defaultDecoder,
     resolve: ({ technique, resourceName, payload }) => {
       if (technique !== techniqueId) {
         throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${technique}"`);
@@ -119,7 +117,7 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
     renderer: (_context) => {
       const selectedDevice = device ?? new RecordingExampleRendererDevice();
       return {
-        prepare: (frame) => selectedDevice.prepare(frame),
+        decode: (view) => selectedDevice.decode(view),
         syncTransforms: () => undefined,
         dispose: () => selectedDevice.reset(),
       };

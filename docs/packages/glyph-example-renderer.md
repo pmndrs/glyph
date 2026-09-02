@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:7ea0d3efab81cf0b9e115d60c88af81f9db60c6d5729935517442f50471f3e10'
+source_digest: 'sha256:9c29f3a604a8aef1b521977580f93d36eaea863105f2c57a4c7a8f068e00861f'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -62,14 +62,14 @@ The package root exposes a custom `source` condition for opted-in workspace tool
 built ESM and declarations.
 
 The ordinary proof begins with `await glyph.init()` and `glyph.handle(name, defineExampleConfig(device))`. Its
-`GlyphConfig` uses the shared default decoder, resolves portable resources into counted object bindings, and gives
-phase-structured bound frames to a configured renderer. The same config can be spread or wrapped to instrument encode,
-decode, resolve, preparation, transform synchronization, and disposal. Two handle publications prove this path without
-exposing plan IDs to the config renderer.
+`GlyphConfig` resolves portable resources into counted object bindings and gives a borrowed `CommandBufferView` to the
+configured renderer's `decode()` method. The view nests the Rust-authored ordered `DisplayList`; it is not a second retained
+copy. The same config can be spread or wrapped to instrument encode, resolve, renderer decode, transform synchronization,
+and disposal. Two handle publications prove this path without exposing plan IDs to the config renderer.
 
 The example delegates its entire root publication boundary to the renderer-neutral
 `createGlyphPlanTarget({ config, codec, root })` helper. Core therefore owns admitted-plan projection, stable opaque
-identity, resource acquisition/settlement, default decoding, transactional renderer preparation, the last committed
+identity, resource acquisition/settlement, command-view projection, transactional renderer decoding, the last committed
 result, transform synchronization, disposal, and borrowed-frame expiry once for every integration. The config schema
 binds programs, buffers, materials, transforms, batches, root instances, and instance spans to example-owned object
 types. Numeric wire IDs and raw plan tables never reach the configured renderer.
@@ -82,8 +82,8 @@ Three. The render planner still owns paragraph/style/flow identities and one `Pl
 revisions, acknowledgments, request bytes, or ABI numbers.
 
 The shared plan target consumes each borrowed publication synchronously through `applyGlyphPublication()`. Its configured
-device receives `BorrowedBoundCommandBuffer<ExampleBindings>` and walks the Rust-authored ordered group hierarchy during
-`prepare()`. Candidate resources, retained buffers, patches, geometry, and draws are staged in local maps; commit swaps
+device receives `CommandBufferView<ExampleBindings>` and walks its Rust-authored ordered `DisplayList` during `decode()`.
+Candidate resources, retained buffers, patches, geometry, and draws are staged in local maps; commit swaps
 them atomically, while discard leaves the previous accepted device state untouched. Only accepted renderer state is
 retained after the borrowed frame expires. The example-specific target is now only a small naming adapter for
 `lastDrawList`; it does not duplicate the binding or transaction implementation.
