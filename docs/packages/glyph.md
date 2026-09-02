@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:6ba27e0bc0d4a521bd1a86abb3eb199dfe6b400468514da0a9b6eda5b7e3cb81'
+source_digest: 'sha256:50ff863b3c605d4d730cd50caf6a5aae3fe36faf57cdd30ffa327c57254bc9c2'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -143,7 +143,10 @@ Portable fonts are schema-validated when Glyph bakes them. The rendering loader 
 validator: it checks the GLB envelope, the reserved `PMNDRS_font` extension and compatible version identity, then proves
 only the buffer-view ranges needed to create safe typed-array views. Generated TypeScript types preserve the checked-in
 extension schema at that trust boundary. A malformed payload throws when its required data is read or decoded; runtime
-does not repeat bake-time schema, SFNT, checksum, or whole-document semantic validation.
+does not repeat bake-time schema, SFNT, checksum, or whole-document semantic validation. Runtime OTF/TTF baking follows
+the same rule for GLBs returned by Glyph's own bakers; the Node `/bake` entry explicitly retains full validation before
+raster work and after composition. The size graph rejects the validator, AJV, and Khronos implementation from the
+runtime Worker's initial bundle.
 
 `defineGlyphConfig()` preserves the schema, font vocabulary, renderer result, boundary, root, and Codec as one inferred
 relationship. `GlyphConfigFor<typeof Schema, Root, Result>` gives isolated declaration boundaries a nameable contract

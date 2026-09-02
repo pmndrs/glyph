@@ -508,6 +508,19 @@ const entries: SizeEntry[] = [
     new URL('../../../packages/glyph/dist/runtime-bake-worker.js', import.meta.url),
     false,
     true,
+    false,
+    {
+      expectedDynamic: [
+        '/packages/glyph/dist/bakers/bitmap.js',
+        '/packages/glyph/dist/bakers/msdf.js',
+        '/packages/glyph/dist/bakers/slug.js',
+      ],
+      excludedInitial: [
+        '/packages/glyph/dist/font-baker/validator.js',
+        '/node_modules/ajv/',
+        '/node_modules/gltf-validator/',
+      ],
+    },
   ),
   await measureJavaScript(
     'bitmap-runtime-js',

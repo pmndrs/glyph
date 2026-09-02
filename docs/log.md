@@ -2,6 +2,15 @@
 
 ## 2026-09-02
 
+- **Removed the full validator from runtime baking** — The runtime OTF/TTF Worker now trusts the core and raster GLBs
+  produced by Glyph's own bakers, reading only the GLB envelope, reserved extension identity, compatible versions, and
+  ranges required to pass core metadata into raster baking and composition. Node `/bake` explicitly supplies the full
+  schema/Khronos validator at the same two pipeline checkpoints, so authoring and CI validation are unchanged. A size
+  graph boundary now rejects `validator`, AJV, or `gltf-validator` in the Worker's initial graph. The Worker fell from
+  784,513 to 50,412 raw bytes and from 146,042 to 10,437 gzip; the independent validator leaf remains unchanged. The
+  post-change 33-cell Chromium/WebGPU sweep again rendered every workload on first visit with nonzero glyphs and draws,
+  zero slow frames, Rich Text at 36 draws and 0.475–0.53 ms CPU submit, and Icon Grid at two draws and 0.125–0.155 ms.
+
 - **Removed the last single-root publication fallback** — Internal planners no longer expose a direct `publish()` path,
   and their Wasm transport no longer exposes a matching one-root `update()` or owned-copy escape hatch. Every renderer
   publication now enters through `glyph.shape()`'s staged engine-wide batch and is consumed as a synchronous borrowed
