@@ -592,7 +592,7 @@ export interface GlyphRoot {
 export type GlyphHandle<Root extends GlyphRoot = GlyphRoot> = ((name: string) => Root) &
   Root & {
     /** Returns the idempotent named root. The handle itself fronts its anonymous default root. */
-    readonly name: string;
+    readonly name: undefined;
     /** The anonymous root is already the handle, so ownership is reflexive here. */
     readonly handle: GlyphHandle<Root>;
     readonly disposed: boolean;

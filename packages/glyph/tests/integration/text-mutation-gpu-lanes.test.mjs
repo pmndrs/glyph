@@ -18,7 +18,7 @@
  * Three Codec with `threeCodecBytes`'s default `'ordered'` allocation mode and
  * `ThreeTextEngineCoordinatorOptions` exposes only `transformMode`, so no first-party path
  * reachable from `Text`/`TextGroup` selects `'stable'`. Covering it needs either a coordinator
- * option or a host-level test that drives `GlyphBackend` directly, as
+ * option or a host-level test that drives internal handle state directly, as
  * `three-engine-coordinator.test.mjs` does.
  */
 import test, { after } from 'node:test';
