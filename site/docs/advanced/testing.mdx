@@ -1,0 +1,47 @@
+---
+title: Testing
+description: Text in Node with the R3F test renderer, in headless Chromium with a GPU, and what CI can and cannot see.
+nav: 57
+---
+
+<Intro>
+  Shaping and layout run in Node; drawing needs a browser. Test measurement and content without a GPU, test pixels
+  in a real Chromium, and know that a hosted CI runner has WebGL2 but no WebGPU.
+</Intro>
+
+## Node
+
+```ts
+import ReactThreeTestRenderer from '@react-three/test-renderer/webgpu';
+import { createParagraph, loadFont } from '@pmndrs/glyph';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+
+const font = await loadFont({ baked: bytes }, msdf);
+const paragraph = await createParagraph({ font, text: 'Hello', style: { fontSize: 32 } });
+expect(paragraph.measure({ width: { mode: 'at-most', size: 480 } }).lineCount).toBe(1);
+```
+
+{/* prose: the shaper Wasm loads in Node; `Paragraph` needs no renderer; the R3F test renderer mounts `<Text>` and
+lets you read `measure()` from a ref without drawing. The package's own test-renderer shim supplies `localStorage`
+for three's Inspector at module scope. */}
+
+## Headless Chromium
+
+{/* prose: the repository's conformance suite renders reference, candidate, and difference through headless
+Chromium with `--dpr` and sample counts, and compares against pinned captures; Vitexec and Playwright are the
+GPU-capable local lanes. */}
+
+## CI has no WebGPU
+
+> [!NOTE]
+> Hosted runners fall back to WebGL2. Faking `navigator.gpu` breaks three's own fallback. Assert on
+> `renderer.backend.isWebGPUBackend` when a test depends on the backend, and let the rest run on WebGL2.
+
+## What to assert
+
+| Layer | Assert on |
+| --- | --- |
+| shaping | exact glyph ids, clusters, positions, flags — not counts |
+| layout | `measure()` fields under exact constraints |
+| rendering | pixel comparisons with an error envelope for filtered techniques; exact for Bitmap |
+| lifecycle | `commitState()`, `gpuBytes`, disposal order |

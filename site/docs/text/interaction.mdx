@@ -1,0 +1,78 @@
+---
+title: Interaction
+description: Caret placement, selection rectangles, hit testing, and an editing loop built on accepted glyph placement.
+nav: 25
+sourcecode: packages/glyph/src/glyph-placement.ts
+---
+
+<Intro>
+  `caretAt` and `selectionRects` read the placement the renderer last accepted, in paragraph-local units. They answer
+  in clusters, not characters — a ligature is one glyph over several code units, and under bidi the character after
+  an offset can be drawn to its left.
+</Intro>
+
+```ts
+const caret = label.caretAt(localX, localY);      // GlyphCaret | undefined
+const rects = label.selectionRects(start, end);   // LayoutBox[] | undefined
+```
+
+<iframe
+  src="/examples/caret/"
+  title="Click to place a caret, drag to select"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+## From a pointer to a caret
+
+```tsx
+<Text
+  ref={ref}
+  font={inter}
+  onPointerDown={(event) => {
+    const local = ref.current!.worldToLocal(event.point.clone());
+    const caret = ref.current!.caretAt(local.x, local.y);
+    if (caret) setCursor(caret);
+  }}
+>
+  …
+</Text>
+```
+
+{/* prose: R3F raycasts the text's meshes; convert the hit to the text's local space; `caretAt` returns the nearest
+cluster boundary with its line and offset. */}
+
+## Selection
+
+```ts
+for (const box of label.selectionRects(anchor, focus) ?? []) drawHighlight(box);
+```
+
+{/* prose: one box per line segment; a bidi selection is several boxes; boxes are paragraph-local — draw them as
+children of the text so they inherit its transform. */}
+
+## `undefined` means pending
+
+| State | `caretAt` / `selectionRects` |
+| --- | --- |
+| never traversed | `undefined` |
+| desired change not yet committed | `undefined` |
+| renderer rejected the last candidate | `undefined` until a checkpoint succeeds |
+| committed | answers |
+
+{/* prose: measurement is desired-state; interaction is accepted-state. Do not mix them in one frame. */}
+
+## An editing loop
+
+```ts
+onKey(key) {
+  document.insert(cursor, key);
+  label.text = document.value;      // one narrow UTF-16 edit derived from the assignment
+  cursor += key.length;
+}
+useFrame(() => {
+  const caret = label.caretAt(...);  // reads the frame the renderer accepted
+});
+```
+
+{/* prose: keystroke → assignment → traversal publishes → next frame's caret. Link Rich text → Editing for spans. */}

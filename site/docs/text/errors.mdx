@@ -1,0 +1,63 @@
+---
+title: Errors
+description: TextFrameError names its cause and the span that caused it; where errors throw, where they are retained, and what the renderer keeps showing.
+nav: 28
+sourcecode: packages/glyph/src/three/frame-error.ts
+---
+
+<Intro>
+  Malformed input fails where it enters — construction, `set()`, a query — with the offending value in the stack.
+  A rejection the engine reports during traversal is retained on the object and forwarded to `onError`; the last
+  accepted draw stays on screen and nothing retries an unchanged frame.
+</Intro>
+
+```ts
+import { TextFrameError } from '@pmndrs/glyph/three';
+
+label.onError = (error) => {
+  if (error instanceof TextFrameError) console.warn(error.rejection.cause, error.rejection);
+};
+```
+
+<iframe
+  src="/examples/errors/"
+  title="Provoke each TextFrameError cause"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+## Causes
+
+| `rejection.cause` | Meaning | You fix it by |
+| --- | --- | --- |
+| `span-range` | inverted or out-of-range span | authoring valid offsets |
+| `cluster-boundary` | a style split a grapheme cluster | (resolved constructively at `Text`; reaching the engine is a defect) |
+| `span-overlap` | partial overlap between spans | nesting or disjoint ranges |
+| `paragraph-root` | missing paragraph root style | supplying `style` |
+| `font-stack-missing` | an unregistered stack | loading and binding the font first |
+| `font-metrics-missing` | a font with no metrics | re-baking |
+| `capacity` | request/result buffers too small; carries `requiredRequestBytes`, `requiredResultBytes` | raising planner capacities |
+| `engine` | an internal invariant; names nothing | filing it |
+
+{/* prose: `rejection.subject` is `{ kind: 'span', text, index, span }`, `{ kind: 'paragraph', text }`, or
+`{ kind: 'unattributed' }`. Six causes are caller-actionable and named; `engine` keeps every internal invariant. */}
+
+## Where errors surface
+
+| Entry | Behaviour |
+| --- | --- |
+| `createText`, `set()` | throw synchronously; desired state is left as it was |
+| scene traversal | retained on `text.error` and the owning `group.error`; `onError` called; never escapes `updateMatrixWorld` |
+| `shape()` | throws at the call that requested it |
+| `measure()` / `glyphs()` | throw for invalid constraints at the call |
+
+## What the renderer keeps
+
+{/* prose: a renderer-side failure leaves the last accepted draw live and `commitState()` reports
+`{ status: 'failed', error }`; unchanged traversals do not retry; assigning material or other renderer-relevant state
+requests a checkpoint. A malformed emitted plan is an engine defect, never a recovery path. */}
+
+## Fixed capacity is not an error
+
+{/* prose: exceeding a `fixed` capacity keeps the last draw and `commitState()` `pending`; `measure()` still answers
+for desired text; the decision is retried every traversal. Link Text and TextGroup → Capacity. */}

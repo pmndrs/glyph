@@ -1,0 +1,101 @@
+---
+title: Break apart
+description: breakApart() copies a committed paragraph into independently owned Glyphs and Decorations you can move, fade, throw, and dispose.
+nav: 27
+sourcecode: packages/glyph/src/three/glyphs.ts
+---
+
+<Intro>
+  `breakApart()` takes the glyphs the renderer last committed and copies them into a `Glyphs` object with one
+  matrix per glyph, plus a `Decorations` object for underlines when there are any. The source keeps shaping; the
+  copies are yours — attach them, animate them, hand them to physics, dispose them.
+</Intro>
+
+```ts
+const [glyphs, decorations] = label.breakApart();
+label.parent!.add(glyphs);                       // sibling attachment overlays the source exactly
+if (decorations !== undefined) label.parent!.add(decorations);
+label.visible = false;
+
+const m = new THREE.Matrix4();
+glyphs.getMatrixAt(3, m);
+m.setPosition(0, 0.4, 0);
+glyphs.setMatrixAt(3, m);
+
+glyphs.materials[0].opacity = 0.65;
+
+glyphs.dispose();
+decorations?.dispose();
+label.visible = true;
+```
+
+<iframe
+  src="/examples/break-apart/"
+  title="Explode, tumble, reset"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+## Preconditions
+
+{/* prose: committed only — `commitState().status === 'committed'`; the call is synchronous and atomic: if the
+decoration copy fails, the glyph branch already created is disposed before the error escapes. */}
+
+## Glyphs
+
+| Member | Meaning |
+| --- | --- |
+| `count` | drawable detached glyphs |
+| `glyphAt(index)` | `DetachedGlyph`: `sourceIndex`, `key`, `cluster`, `line`, `word`, `fontSize`, `advance` |
+| `getMatrixAt` / `setMatrixAt` | full affine matrix in `Glyphs`-local space |
+| `getWorldMatrixAt` / `setWorldMatrixAt` | the same through the root's world transform |
+| `measurements` | `ThreeGlyphMeasurement[]`, original transforms and bounds |
+| `materials` | cloned materials owned by this branch |
+| `dispose()` | releases plan, storage, materials, leases; removes from parent |
+
+{/* prose: the surface follows `InstancedMesh`; the root starts with the source's local transform, and each record
+starts at its committed drawn origin. */}
+
+## Measurements
+
+```ts
+const m = glyphs.measurements[i];
+m.originalMatrix;        // where it was
+m.localInkBounds;        // Box3
+m.localAdvanceBounds;    // Box3
+m.anchorPoint({ x: 'center', y: 'min' }, 'ink'); // Vector3
+m.geometry;              // metric quad or supplied geometry, with bounds
+```
+
+{/* prose: measurements never traverse or cache ancestors — they are local facts; physics adapters choose their own
+body shape from them. */}
+
+## World-space writes in bulk
+
+```ts
+import { worldToLocalMatrix } from '@pmndrs/glyph/three';
+
+glyphs.updateMatrixWorld();
+const inverse = glyphs.matrixWorld.clone().invert();
+for (let i = 0; i < glyphs.count; i += 1) {
+  worldToLocalMatrix(inverse, bodyWorldMatrix(i), scratch);
+  glyphs.setMatrixAt(i, scratch);
+}
+```
+
+{/* prose: invert the root once; `setWorldMatrixAt` is correct for one-offs but updates and inverts the ancestor
+chain every call. First-frame and same-render writes upload before draw on both backends. */}
+
+## Decorations
+
+{/* prose: independent topology and lifetime; returned as tuple slot two, `undefined` when the paragraph has no
+decoration draws; keeps under-decoration → glyph → line-through paint order. */}
+
+## Ownership
+
+| Fact | Consequence |
+| --- | --- |
+| the source stays live | later source publications never touch the copy |
+| copies lease atlas/page resources | no re-upload; source `Text`, `Font`, and loader may be disposed first |
+| the caller owns attachment, visibility, physics, reset, disposal | nothing happens automatically |
+| materials are cloned | changing one cannot affect the source or a sibling branch |

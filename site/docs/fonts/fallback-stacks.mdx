@@ -1,0 +1,76 @@
+---
+title: Fallback stacks
+description: Order several fonts so every character finds a face — icons, scripts, and emoji in one paragraph.
+nav: 13
+sourcecode: packages/glyph/src/loaded-font.ts
+---
+
+<Intro>
+  A stack is an ordered list of loaded fonts. The engine resolves each grapheme cluster against the first font that
+  covers it, so one paragraph can mix a Latin face, an icon font, and a CJK face without the caller choosing per
+  character.
+</Intro>
+
+```ts
+import { createFontStack, loadFont } from '@pmndrs/glyph';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+import { slug } from '@pmndrs/glyph/three/slug';
+
+const prose = await loadFont({ baked: '/fonts/inter.font.glb' }, msdf);
+const icons = await loadFont({ baked: '/fonts/icons.font.glb' }, msdf);
+const emoji = await loadFont({ baked: '/fonts/emoji.font.glb' }, slug);
+
+const font = createFontStack(prose, icons, emoji);
+const label = three.createText({ font, text: 'Status  🌍' });
+```
+
+<iframe
+  src="/examples/fallback-stack/"
+  title="Latin, icons, and CJK from one stack"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+## Resolution
+
+{/* prose: per extended grapheme cluster, first font in order that covers every code point of the cluster; a cluster
+that no font covers renders the primary's notdef and counts in `measure().missingGlyphCount`. Techniques may differ
+per font in one stack — the render plan partitions draws by technique and resource. */}
+
+## Icon fonts
+
+```tsx
+<Text font={prose}>
+  Hello world <Text font={icons}>{''}</Text>
+</Text>
+```
+
+{/* prose: bake only the glyphs you use (`glyph glyphs --unicode-set`); a nested `<Text font={…}>` overrides the
+face for a run without a stack; a stack is for when you do not know where the icons fall. */}
+
+## CJK
+
+{/* prose: use TrueType faces (M PLUS 1p, Nanum Gothic, ZCOOL XiaoWei on the landing); CFF-only Noto Sans CJK
+produces no outlines through the current baker — tracked upstream. Line breaking follows UAX 14 with CJK
+Script_Extensions resolved from context. Vertical layout is not yet supported. */}
+
+## Emoji
+
+{/* prose: Slug renders outline emoji faces; color emoji (COLR/CBDT) are not supported. */}
+
+## Leading across faces
+
+> [!WARNING]
+> `lineHeight` is resolved per cluster and clamps leading at zero, so a face with tall ascent/descent (Myanmar,
+> Arabic Noto statics) opens the line it lands on. Prefer faces with similar vertical metrics in one stack, or
+> set an explicit `lineHeight` large enough for the tallest.
+
+## Typing
+
+```ts
+import type { Font, FontStack } from '@pmndrs/glyph';
+
+let font: FontStack<typeof msdf | typeof slug>;
+```
+
+{/* prose: the stack's technique type is the union of its members'; `<Text>` infers its technique from `font`. */}

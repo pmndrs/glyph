@@ -37,6 +37,10 @@ sources:
 
 # Documentation site and landing page
 
+The page-by-page map of the published docs — every page's sections, code evidence, example, and source — is
+[the documentation site outline](docs-site-outline.md); the stubs under `site/docs` follow it.
+
+
 Status: accepted direction; nothing is published until the publish decision is taken separately.
 
 ## Outcome

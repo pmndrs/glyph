@@ -1,0 +1,72 @@
+---
+title: Pitfalls
+description: The mistakes the API lets you make, each as symptom, cause, and fix.
+nav: 51
+---
+
+<Intro>
+  Every entry here was hit for real. Each is one paragraph: what you see, why, what to do.
+</Intro>
+
+## The font never matches the bake
+
+{/* symptom: a load rejects naming a descriptor, or runtime baking kicks in unexpectedly. cause: raster options are
+part of the raster key — `msdf` default (64/8) ≠ `msdf { emSize: 32 }`. fix: one shared constant for bake and load. */}
+
+## An outer `<Text>` without a font
+
+{/* symptom: mount error naming `font`. cause: only nested Text inherits. fix: pass `font` on the paragraph. */}
+
+## `text =` cleared my spans
+
+{/* symptom: styled ranges vanish after assignment. cause: replacement text carries its own formatting; retaining
+old ranges would restyle unrelated text. fix: `set({ text, spans })` from a model that rebased its own offsets. */}
+
+## A span boundary moved
+
+{/* symptom: `text.spans` differs from what was authored. cause: the boundary split a grapheme cluster and was
+resolved forward to the cluster end — a base keeps its style. fix: author on cluster boundaries;
+`alignSpansToClusters` to check. */}
+
+## Nothing changes with `fixed` capacity
+
+{/* symptom: text stops updating; `commitState()` stays `pending`. cause: desired UTF-16 length exceeds `size`; the
+last draw is kept by design. fix: shorten, or `setCapacity`. */}
+
+## Measuring a detached text
+
+{/* symptom: `measure()` on a Text that was never attached is fine; but interaction queries return `undefined`.
+cause: measurement is desired-state, `caretAt` is accepted-state. fix: attach and traverse once, or use `Paragraph`
+for renderer-free measurement. */}
+
+## Disposing in the wrong order
+
+{/* symptom: a text renders nothing after its font was disposed. cause: fonts are leased; disposing the font first
+is allowed but the text keeps the lease until it disposes. fix: text → group → font → handle. */}
+
+## No WebGPU on the LAN
+
+{/* symptom: WebGL2 on `http://10.0.0.x`, WebGPU on localhost. cause: `navigator.gpu` needs a secure context.
+fix: HTTPS or a tunnel; the page still renders on WebGL2. */}
+
+## CJK renders nothing
+
+{/* symptom: a Noto Sans CJK bake has empty outlines. cause: the current baker reads TrueType outlines; CFF-only
+faces produce none. fix: a TrueType CJK face (M PLUS 1p, Nanum Gothic, ZCOOL XiaoWei). Tracked upstream. */}
+
+## Each letter lit separately
+
+{/* symptom: a custom lit material shades glyphs as individual objects. cause: the normal was derived from
+per-glyph em space (`renderCoordinate`). fix: derive it from `positionLocal` normalized by the paragraph's ink. */}
+
+## Leading opens up with a fallback face
+
+{/* symptom: one line is much taller. cause: `lineHeight` is resolved per cluster and clamps leading at zero; a
+face with tall ascent/descent wins. fix: faces with similar vertical metrics, or a `lineHeight` that fits the
+tallest. */}
+
+## Suspense retries forever
+
+{/* symptom: a rejected font load re-fetches without bound. cause: a rejected promise evicted from the cache; React
+retries against an empty cache. fix: keep the rejection cached (suspend-react does); wrap in an error boundary.
+Fixed on the font-identity branch. */}

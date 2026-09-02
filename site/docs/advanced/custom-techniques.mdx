@@ -1,0 +1,53 @@
+---
+title: Custom techniques
+description: Define a raster technique, ship its baker, realize its shader in TSL or TypeGPU, and register its three.js program.
+nav: 55
+sourcecode: packages/glyph/src/raster-technique.ts
+---
+
+<Intro>
+  Bitmap, MSDF, and Slug are ordinary techniques built on a public contract. A third-party technique defines its
+  descriptor and decoder, optionally a portable baker, a shader realization, and a three.js plan program — and then
+  loads, stacks, and batches like the built-ins.
+</Intro>
+
+```ts
+import { defineRasterTechnique, defineRasterResourceId } from '@pmndrs/glyph';
+
+export const sdf = defineRasterTechnique({
+  kind: 'acme.sdf',
+  // descriptor, options normalization, decode(artifact) → data, resources, records
+});
+```
+
+## Pieces
+
+| Piece | Entry | Job |
+| --- | --- | --- |
+| technique | `defineRasterTechnique` | descriptor, raster key, decode portable data, partition and pack records |
+| resources | `defineRasterResourceId` | named portable resources a shader expects |
+| baker | `defineRasterBaker` / `rasterBake` (`/bake`) | produce the artifact at build time |
+| shader | `/tsl` or `/typegpu` | the canonical realization for a backend |
+| three program | `registerThreeRasterPlanProgram` (`/three`) | binds the shader and material factory to the plan |
+
+## Registration order
+
+> [!WARNING]
+> `registerThreeRasterPlanProgram` refuses a technique registered after a runtime has already read the registry, and
+> names the technique. Import technique modules before the first text is created.
+
+## Loading and using
+
+```ts
+const font = await loadFont({ baked: '/fonts/acme.font.glb' }, sdf, { spread: 4 });
+const custom = useFont({ baked: '/fonts/acme.font.glb' }, sdf, { spread: 4 });
+```
+
+{/* prose: the technique's `kind` becomes the raster-key namespace and, under the FontFace direction, a typed member
+(`Inter.sdf`). Materials see `context.outputs` for a technique without a first-party branch. */}
+
+## The artifact
+
+{/* prose: the `PMNDRS_font` GLB family — one shaping core, typed raster companions with reciprocal identity;
+embedded and external forms share a schema; a companion authenticates shaping hash, glyph count, raster key, and
+version before it attaches. Link the raster-technique-api and technique-implementation-report docs. */}
