@@ -4,16 +4,16 @@ import { bitmap, type BitmapTechniqueOptions } from '../three/bitmap.js';
 import { useFont } from '../react.js';
 
 /** Bitmap convenience hook over the shared R3F `useFont` cache. */
-export interface UseBitmapFont {
+export interface UseBitmap {
   (input: LoadFontInput, options: BitmapTechniqueOptions): Font<typeof bitmap>;
   /** Start the same cached Bitmap load before a component requests it. */
-  preload(input: LoadFontInput, options: BitmapTechniqueOptions): void;
+  preload(input: LoadFontInput, options: BitmapTechniqueOptions): Promise<void>;
   /** Release the cached Bitmap lease without invalidating mounted consumers. */
   clear(input: LoadFontInput, options: BitmapTechniqueOptions): void;
 }
 
 /** Load one Bitmap font through the shared R3F cache. */
-export const useBitmapFont = ((input: LoadFontInput, options: BitmapTechniqueOptions): Font<typeof bitmap> =>
-  useFont(input, bitmap, options)) as UseBitmapFont;
-useBitmapFont.preload = (input, options) => useFont.preload(input, bitmap, options);
-useBitmapFont.clear = (input, options) => useFont.clear(input, bitmap, options);
+export const useBitmap = ((input: LoadFontInput, options: BitmapTechniqueOptions): Font<typeof bitmap> =>
+  useFont(input, { format: { technique: bitmap, options } })) as UseBitmap;
+useBitmap.preload = (input, options) => useFont.preload(input, { format: { technique: bitmap, options } });
+useBitmap.clear = (input, options) => useFont.clear(input, { format: { technique: bitmap, options } });

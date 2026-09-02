@@ -68,6 +68,7 @@ export class RenderPlanView {
   #view: DataView | undefined;
   #baseOffset = 0;
   #byteLength = 0;
+  #tables: Readonly<Record<TableName, RenderPlanTable>> | undefined;
 
   /** @internal Raw Wasm publications are consumed only by the render planner. */
   bind(publication: PlanPublication): this {
@@ -89,31 +90,22 @@ export class RenderPlanView {
 
   #bindValidated(bytes: Uint8Array<ArrayBufferLike>): this {
     const view = this.#memoryBuffer === bytes.buffer ? this.#view! : new DataView(bytes.buffer);
-    validateResultBytes(bytes, view);
+    const tables = validateResultBytes(bytes, view);
     if (this.#memoryBuffer !== bytes.buffer) {
       this.#memoryBuffer = bytes.buffer;
       this.#view = view;
     }
     this.#baseOffset = bytes.byteOffset;
     this.#byteLength = bytes.byteLength;
+    this.#tables = tables;
     return this;
   }
 
   /** Resolves one validated table descriptor by semantic name. */
   table(name: TableName): RenderPlanTable {
-    const layout = tableLayouts[name];
-    const offset = this.u32(layout.offset);
-    const count = this.u32(layout.count);
-    if (count === 0) {
-      if (offset !== 0) throw new RangeError(`empty text-engine ${name} table has a nonzero offset`);
-      return { offset: 0, count: 0, stride: layout.record.size };
-    }
-    if (offset % layout.record.alignment !== 0) throw new RangeError(`text-engine ${name} table is misaligned`);
-    const byteLength = checkedProduct(count, layout.record.size, `${name} table`);
-    if (offset < resultLayout.size || offset + byteLength > this.#byteLength) {
-      throw new RangeError(`text-engine ${name} table is outside the publication`);
-    }
-    return { offset, count, stride: layout.record.size };
+    const table = this.#tables?.[name];
+    if (table === undefined) throw new RangeError('text-engine render-plan view is not bound');
+    return table;
   }
 
   /** Resolves one bounds-checked record offset within a table. */
@@ -181,7 +173,10 @@ interface ResultTableLayout {
   readonly record: { readonly size: number; readonly alignment: number };
 }
 
-function validateResultBytes(bytes: Uint8Array<ArrayBufferLike>, view: DataView): void {
+function validateResultBytes(
+  bytes: Uint8Array<ArrayBufferLike>,
+  view: DataView,
+): Readonly<Record<TableName, RenderPlanTable>> {
   if (bytes.byteLength < resultLayout.size) {
     throw new RangeError('text-engine publication header has an invalid byte length');
   }
@@ -195,14 +190,15 @@ function validateResultBytes(bytes: Uint8Array<ArrayBufferLike>, view: DataView)
   if (u32(resultLayout.status) !== textShaperAbi.status.ok) {
     throw new RangeError('text-engine publication does not contain a successful result');
   }
-  for (const name of Object.keys(tableLayouts) as TableName[]) {
-    validateResultTable(u32, bytes.byteLength, name, tableLayouts[name]);
-  }
+  const tables = {} as Record<TableName, RenderPlanTable>;
+  for (const name of Object.keys(tableLayouts) as TableName[])
+    tables[name] = validateResultTable(u32, bytes.byteLength, name, tableLayouts[name]);
   validateResultTable(u32, bytes.byteLength, 'semantic views', {
     offset: resultLayout.semanticViewsOffset,
     count: resultLayout.semanticViewCount,
     record: textShaperAbi.layouts.engineSemanticView,
   });
+  return Object.freeze(tables);
 }
 
 function validateResultTable(
@@ -210,18 +206,29 @@ function validateResultTable(
   resultByteLength: number,
   name: string,
   layout: ResultTableLayout,
-): void {
+): RenderPlanTable {
   const offset = u32(layout.offset);
   const count = u32(layout.count);
   if (count === 0) {
     if (offset !== 0) throw new RangeError(`empty text-engine ${name} table has a nonzero offset`);
-    return;
+    return Object.freeze({ offset: 0, count: 0, stride: layout.record.size });
   }
   if (offset % layout.record.alignment !== 0) throw new RangeError(`text-engine ${name} table is misaligned`);
   const byteLength = checkedProduct(count, layout.record.size, `${name} table`);
   if (offset < resultLayout.size || offset + byteLength > resultByteLength) {
     throw new RangeError(`text-engine ${name} table is outside the publication`);
   }
+  return Object.freeze({ offset, count, stride: layout.record.size });
+}
+
+/** @internal Reads one field from an admitted Rust resource row without semantic revalidation. */
+export function readTrustedRenderPlanResourceReferenceId(
+  plan: RenderPlanView,
+  table: RenderPlanTable,
+  index: number,
+): ResourceHandle {
+  const base = plan.record(table, index);
+  return plan.u32(base + textShaperAbi.layouts.engineResource.referenceId) as ResourceHandle;
 }
 
 declare const renderPlanIdentityBrand: unique symbol;

@@ -39,6 +39,14 @@ export interface RasterTechnique<
   Descriptor extends JsonValue,
   Data,
 > extends AnyRasterTechnique {
+  (
+    ...options: [Options] extends [never]
+      ? []
+      : undefined extends Options
+        ? [options?: Options]
+        : [options: Options]
+  ): RasterTechniqueRequest<RasterTechnique<Id, Kind, Options, Descriptor, Data>>;
+
   readonly [rasterTechniqueTypes]?: RasterTechniqueTypeMap<Options, Descriptor, Data>;
 
   readonly id: Id;
@@ -124,24 +132,34 @@ export function defineRasterTechnique<
   if (new Set(textEffects).size !== textEffects.length) {
     throw new TypeError('raster technique textEffects must not contain duplicates');
   }
-  const defined = Object.freeze({
-    id: technique.id,
-    kind: technique.kind,
-    extension: technique.extension,
-    version: technique.version,
-    textEffects: Object.freeze(textEffects),
-    ...(technique.runtimeBaker === undefined ? {} : { runtimeBaker: technique.runtimeBaker }),
-    descriptor: technique.descriptor,
-    decode: technique.decode,
-    dispose: technique.dispose,
-  }) as RasterTechnique<RasterTechniqueId & Id, Kind, Options, Descriptor, Data>;
+  type Defined = RasterTechnique<RasterTechniqueId & Id, Kind, Options, Descriptor, Data>;
+  let defined!: Defined;
+  const select = (...options: readonly [Options?]): RasterTechniqueRequest<Defined> =>
+    (options.length === 0 || options[0] === undefined
+      ? { technique: defined }
+      : { technique: defined, options: options[0] }) as unknown as RasterTechniqueRequest<Defined>;
+  defined = Object.freeze(
+    Object.assign(select, {
+      id: technique.id,
+      kind: technique.kind,
+      extension: technique.extension,
+      version: technique.version,
+      textEffects: Object.freeze(textEffects),
+      ...(technique.runtimeBaker === undefined ? {} : { runtimeBaker: technique.runtimeBaker }),
+      descriptor: technique.descriptor,
+      decode: technique.decode,
+      dispose: technique.dispose,
+    }),
+  ) as unknown as Defined;
   rasterTechniqueInstances.add(defined);
   return defined;
 }
 
 /** @internal Authenticate the exact technique witness created by `defineRasterTechnique`. */
 export function isRasterTechnique(value: unknown): value is AnyRasterTechnique {
-  return typeof value === 'object' && value !== null && rasterTechniqueInstances.has(value);
+  return (
+    (typeof value === 'object' || typeof value === 'function') && value !== null && rasterTechniqueInstances.has(value)
+  );
 }
 
 /** Brand a stable resource identity produced by a portable technique. */

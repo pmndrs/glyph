@@ -2,11 +2,31 @@
 
 ## 2026-09-01
 
+- **Kept policy identifiers out of the Three material API** — D-305 makes `ThreeTextMaterialContext` a closed
+  `kind: 'glyph' | 'decoration'` union. Glyph branches carry the concrete built-in raster technique; decoration has no
+  technique, while the reserved `pmndrs.decoration` name remains internal to the policy and command-buffer ABI.
+
+- **Pinned cached Promise identity to cache ownership** — D-304 makes `glyph.init()` return one `Promise<void>` forever
+  after success, gives the default R3F handle one process-lived operation, and keeps one FontFace load Promise only until
+  its face/handle record is released. Ready React paths still skip `use()` synchronously. Large byte/resource fulfillment
+  values require explicit eviction because a reachable fulfilled Promise retains its value.
+
+- **Finished the ordinary Glyph adapter cutover** — D-301–D-303 place handle-relative loading on the FontFace selection
+  (`selection.load(handle)` and `selection.isLoaded(handle)`), keep R3F provider/context optional and immutable, and give
+  hooks deterministic mounted-Font disposal plus Promise-returning eager preload. One material factory now receives both
+  glyph and decoration contexts while Three retains separate ordered draw/material realizations. The paired
+  `@pmndrs/glyph-examples` routes prove imperative Three and R3F over shared assets, and the external TypeGPU proof now
+  enters only through a configured Glyph handle, including recovery onto a second handle with the same immutable Font.
+
+- **Reduced R3F font loading to resolution plus readiness** — D-300 makes readiness the only loading branch after font
+  resolution: loaded selections proceed synchronously and unloaded selections suspend on the stable `handle.load()`
+  promise. A provider font map contributes local aliases only. Direct FontFace and root-catalog selections use the same
+  path; only an unresolvable name throws before the readiness check.
+
 - **Made loaded R3F FontFace use synchronous** — D-299 requires React to check `handle.isLoaded(selection)` before
   conditionally calling React 19 `use(handle.load(selection))`. The graph publishes the complete decoded selection and
   face lease before fulfilling the stable Promise, so the resolved render skips `use()` and pays no Promise, microtask, or
-  Suspense stall. Only an authorized unloaded provider selection may start a load; failures never publish partial
-  readiness.
+  Suspense stall. Every resolved unloaded selection starts the same load; failures never publish partial readiness.
 
 - **Collapsed the planned FontFace cache surfaces into Glyph** — D-298 records that Three's base `Loader` supplies no
   cache or dependency discovery, Three's URL-only `FileLoader` cache is not used by Glyph's current loader, and current R3F
@@ -39,9 +59,9 @@
   selections from ordered `{ url | blob, format }` sources without `defineFont()` ceremony. MSDF is the zero-config
   selection, exact technique options validate baked artifacts or drive source-font baking, and different Bitmap strike
   contracts remain different faces. One idempotent `load()` replaces preload and resolves to the same selection;
-  imperative Three throws on an unloaded selection, while an immutable `GlyphProvider fonts` map authorizes R3F to suspend
-  on that load before constructing `Text`. Without such a map, an unloaded React selection also throws. The provider may
-  supply Suspense and selective font-error boundaries while rethrowing errors outside its map. Face disposal releases its
+  imperative Three throws on an unloaded selection, while R3F suspends on that load before constructing `Text`. The
+  immutable `GlyphProvider fonts` map supplies local aliases. The provider may supply Suspense and selective font-error
+  boundaries while rethrowing unrelated errors. Face disposal releases its
   cache leases without invalidating independently bound Fonts. The planned direct CLI zero-flag default changes from
   shaping-only to embedded Bitmap 8/16, MSDF, and Slug.
 

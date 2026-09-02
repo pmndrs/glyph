@@ -1165,6 +1165,10 @@ backends therefore cannot alias; two backends bound to the same backing may deli
 
 ### React and Suspense ownership
 
+> Historical design note: D-301 and the current `/react` implementation supersede this `useLoader` model. Hooks now
+> declare through `glyph.fontFace`, load through the selected FontFace member, and use provider context only as an optional
+> immutable handle or named-FontFace override boundary.
+
 `/react` delegates promise and resolved-value caching to R3F's canonical `useLoader`/`suspend-react` cache. Generic
 `useFont(input, technique, options?)` is the extension point; `useBitmapFont`, `useMSDF`, and `useSlug` are thin typed
 wrappers over that same key. Their `.preload()` methods populate the same cache and `.clear()` removes that cache entry.

@@ -1,7 +1,11 @@
-import { createFontStack, loadFont } from '@pmndrs/glyph';
-import { createGlyphEngine } from '@pmndrs/glyph/core';
+import { createFontStack, glyph, loadFont } from '@pmndrs/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
-import { ExampleTextEngine, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
+import {
+  defineExampleConfig,
+  TypeGpuExampleRendererDevice,
+  type ExampleHandle,
+  type ExampleText,
+} from '@pmndrs/glyph-example-renderer';
 
 import {
   createFontDeliveryMetrics,
@@ -31,13 +35,16 @@ export interface RenderTechniqueTypeGpuLabReport {
 /** Runs the external-renderer contract through a real WebGPU device and reads its RGBA target back. */
 export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTypeGpuLabReport> {
   if (navigator.gpu === undefined) throw new Error('the TypeGPU renderer lab requires WebGPU');
+  await glyph.init();
   let gpuDevice = await requestGpuDevice();
-  const glyphEngine = await createGlyphEngine();
   let renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
   const devices = [gpuDevice];
   const renderers = [renderer];
-  const engine = new ExampleTextEngine(glyphEngine, renderer);
+  let handle: ExampleHandle = glyph.handle('benchmark:typegpu:primary', defineExampleConfig(renderer));
   let font;
+  let binding;
+  let text: ExampleText | undefined;
+  let textDisposed = false;
   try {
     font = await loadFont(
       {
@@ -46,17 +53,14 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       },
       { technique: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
     );
-    const binding = engine.bindFont(font);
-    const stack = engine.bindFontStack(createFontStack(font));
-    engine.openPlanner();
-    const text = engine.createText({
-      font: stack,
+    binding = handle.bindFontStack(createFontStack(font));
+    text = handle.createText({
+      font: binding,
       text: 'Portable TypeGPU',
       fontSize: 64,
       width: 768,
       height: 192,
     });
-    let textDisposed = false;
     try {
       const initial = text.publish();
       const initialPixels = await renderer.readPixels();
@@ -64,11 +68,23 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       const updated = text.publish();
       const updatedPixels = await renderer.readPixels();
       gpuDevice.destroy();
+      text.dispose();
+      binding.dispose();
+      handle.dispose();
       gpuDevice = await requestGpuDevice();
       devices.push(gpuDevice);
       renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
       renderers.push(renderer);
-      engine.replaceDevice(renderer);
+      handle = glyph.handle('benchmark:typegpu:recovered', defineExampleConfig(renderer));
+      binding = handle.bindFontStack(createFontStack(font));
+      text = handle.createText({
+        font: binding,
+        text: 'Updated WebGPU',
+        color: '#ff40a0',
+        fontSize: 64,
+        width: 768,
+        height: 192,
+      });
       const recovered = text.publish();
       const recoveredPixels = await renderer.readPixels();
       const submissionSamples: number[] = [];
@@ -89,7 +105,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       const idleGpuSubmissions = renderer.submittedPasses - submissionsBeforeIdle;
       const submissionsBeforeDispose = renderer.submittedPasses;
       text.dispose();
-      engine.publish();
+      handle.publish();
       textDisposed = true;
       const clearedPixels = await renderer.readPixels();
       const report = Object.freeze({
@@ -127,15 +143,13 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       }
       return report;
     } finally {
-      if (!textDisposed) text.dispose();
-      stack.dispose();
-      binding.dispose();
+      if (!textDisposed) text?.dispose();
+      binding?.dispose();
     }
   } finally {
-    engine.dispose();
+    handle.dispose();
     font?.dispose();
     for (const ownedRenderer of renderers.reverse()) ownedRenderer.dispose();
-    glyphEngine.dispose();
     for (const ownedDevice of devices.reverse()) ownedDevice.destroy();
   }
 }

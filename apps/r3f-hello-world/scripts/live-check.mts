@@ -13,35 +13,40 @@ import { fileURLToPath } from 'node:url';
  * exists to enforce. The probe reports success by printing this marker as its last statement;
  * requiring it turns "the probe ran" into "the probe succeeded".
  */
-const successMarker = 'r3f-hello-world-live-ok';
 const applicationRoot = fileURLToPath(new URL('..', import.meta.url));
+const probes = [
+  { file: './scripts/live-check.probe.ts', marker: 'r3f-hello-world-live-ok', path: '/?example=r3f' },
+  { file: './scripts/three-live-check.probe.ts', marker: 'three-hello-world-live-ok', path: '/?example=three' },
+] as const;
 
-const child = spawn(
-  process.platform === 'win32' ? 'npx.cmd' : 'npx',
-  ['vitexec', './scripts/live-check.probe.ts', ...process.argv.slice(2)],
-  { cwd: applicationRoot, stdio: ['inherit', 'pipe', 'inherit'] },
-);
-
-let output = '';
-child.stdout.setEncoding('utf8');
-child.stdout.on('data', (chunk: string) => {
-  output += chunk;
-  process.stdout.write(chunk);
-});
-
-const code = await new Promise<number>((resolve, reject) => {
-  child.on('error', reject);
-  child.on('close', (value: number | null) => resolve(value ?? 1));
-});
-
-if (code !== 0) {
-  process.stderr.write(`vitexec exited with ${String(code)}\n`);
-  process.exit(code);
-}
-
-if (!output.includes(successMarker)) {
-  process.stderr.write(
-    `live probe did not report ${successMarker}; it threw or exited early, and vitexec reported success anyway\n`,
+for (const probe of probes) {
+  const child = spawn(
+    process.platform === 'win32' ? 'npx.cmd' : 'npx',
+    ['vitexec', '--path', probe.path, probe.file, ...process.argv.slice(2)],
+    { cwd: applicationRoot, stdio: ['inherit', 'pipe', 'inherit'] },
   );
-  process.exit(1);
+
+  let output = '';
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk: string) => {
+    output += chunk;
+    process.stdout.write(chunk);
+  });
+
+  const code = await new Promise<number>((resolve, reject) => {
+    child.on('error', reject);
+    child.on('close', (value: number | null) => resolve(value ?? 1));
+  });
+
+  if (code !== 0) {
+    process.stderr.write(`vitexec exited with ${String(code)} for ${probe.path}\n`);
+    process.exit(code);
+  }
+
+  if (!output.includes(probe.marker)) {
+    process.stderr.write(
+      `live probe did not report ${probe.marker}; it threw or exited early, and vitexec reported success anyway\n`,
+    );
+    process.exit(1);
+  }
 }

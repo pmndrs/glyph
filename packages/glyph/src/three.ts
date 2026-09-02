@@ -4,7 +4,9 @@ export type { GlyphBufferCapacity, PropertyList } from './text-properties.js';
 export { Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
 export { FontLoader } from './three/font-loader.js';
 export { defineTextMaterial } from './three/material.js';
-export type { ThreeTextGenericMaterialContext, ThreeTextMaterial, ThreeTextMaterialContext } from './three/material.js';
+export { txt } from './formatted-text.js';
+export { span } from './three/span.js';
+export type { ThreeRootContext, ThreeTextMaterial, ThreeTextMaterialContext } from './three/material.js';
 export { registerThreeRasterPlanProgram, threePolicyAbi } from './three/plan-program-registry.js';
 export type {
   ThreePlanProgramBuffer,
@@ -16,7 +18,7 @@ export type {
 export type { ThreeFontLoaderOptions, ThreeFontLoadRequest } from './three/font-loader.js';
 export { TextFrameError } from './three/frame-error.js';
 export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.js';
-export { Text, TextGroup } from './three/text.js';
+export { Text, TextGroup, ThreeRoot } from './three/text.js';
 export {
   ThreeConfig,
   defineThreeConfig,
@@ -30,7 +32,6 @@ export type {
   TextCommitState,
   TextGroupOptions,
   TextProperties,
-  TextSpan,
   TextUpdate,
 } from './three/text.js';
 export { Glyphs, localToWorldMatrix, worldToLocalMatrix } from './three/glyphs.js';

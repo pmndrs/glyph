@@ -3,8 +3,8 @@ import { createElement, type ReactElement } from 'react';
 import { glyph, type Font, type FontStack } from '../../src/index.js';
 import * as ReactApi from '../../src/react.js';
 import { GlyphProvider, Text, TextGroup, useFont } from '../../src/react.js';
-import { useBitmapFont } from '../../src/react/bitmap.js';
-import { useMSDF } from '../../src/react/msdf.js';
+import { useBitmap } from '../../src/react/bitmap.js';
+import { useMsdf } from '../../src/react/msdf.js';
 import { useSlug } from '../../src/react/slug.js';
 import type { R3fTextChild, R3fTextProps } from '../../src/react.js';
 import { ThreeConfig, type ThreeHandle, type ThreeTextMaterial } from '../../src/three.js';
@@ -24,6 +24,12 @@ const label = createElement(Text<typeof bitmap>, { font: bitmapFont, material, p
 const labels = createElement(TextGroup, { compositing: 'independent', material, pixelSnapping: true }, label);
 const selected = createElement(Text, { font: selectedStack }, 'Selected at runtime');
 const provided = createElement(GlyphProvider, { handle: three }, labels);
+const declared = createElement(GlyphProvider, {
+  fontFaces: {
+    Inter: '/fonts/Inter.font.glb',
+    Title: { src: '/fonts/Title.font.glb', format: 'slug' },
+  },
+}, createElement(Text, { font: 'Inter' }, 'Named provider font'));
 
 // @ts-expect-error Handle selection is internal to Text and comes from GlyphProvider or the built-in default.
 createElement(Text, { font: bitmapFont, handle: three }, 'no per-object handle');
@@ -31,29 +37,30 @@ createElement(Text, { font: bitmapFont, handle: three }, 'no per-object handle')
 createElement(TextGroup, { handle: three }, label);
 
 function FontConsumer(): null {
-  const loaded: Font<typeof bitmap> = useFont({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] });
-  useBitmapFont({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Font<typeof bitmap>;
-  useMSDF({ baked: '/fonts/Inter.font.glb' }) satisfies Font<typeof msdf>;
-  useMSDF({ baked: '/fonts/Inter.font.glb' }, { emSize: 64, pixelRange: 8 }) satisfies Font<typeof msdf>;
+  const loaded: Font<typeof bitmap> = useFont({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } });
+  useBitmap({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Font<typeof bitmap>;
+  useMsdf({ baked: '/fonts/Inter.font.glb' }) satisfies Font<typeof msdf>;
+  useMsdf({ baked: '/fonts/Inter.font.glb' }, { emSize: 64, pixelRange: 8 }) satisfies Font<typeof msdf>;
   useSlug({ baked: '/fonts/Inter.font.glb' }) satisfies Font<typeof slug>;
   void loaded;
-  // @ts-expect-error Bitmap declares required technique options.
-  useFont({ baked: '/fonts/Inter.font.glb' }, bitmap);
-  // @ts-expect-error Slug declares no technique options.
-  useFont({ baked: '/fonts/Inter.font.glb' }, slug, {});
+  useFont({ baked: '/fonts/Inter.font.glb' }, { format: bitmap({ strikes: [16] }) }) satisfies Font<typeof bitmap>;
+  // @ts-expect-error Bitmap's exact request helper requires bake options.
+  bitmap();
+  // @ts-expect-error Slug has no request options.
+  slug({});
   return null;
 }
 
 const consumer = createElement(FontConsumer);
-const preloaded: void = useFont.preload({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] });
-useFont.clear({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] });
-useFont.preload({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] }) satisfies void;
-useFont.clear({ baked: '/fonts/Inter.font.glb' }, bitmap, { strikes: [16] });
-useBitmapFont.preload({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies void;
-useBitmapFont.clear({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] });
-useMSDF.preload({ baked: '/fonts/Inter.font.glb' }) satisfies void;
-useMSDF.clear({ baked: '/fonts/Inter.font.glb' });
-useSlug.preload({ baked: '/fonts/Inter.font.glb' }) satisfies void;
+const preloaded: Promise<void> = useFont.preload({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } });
+useFont.clear({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } });
+useFont.preload({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } }) satisfies Promise<void>;
+useFont.clear({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } });
+useBitmap.preload({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Promise<void>;
+useBitmap.clear({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] });
+useMsdf.preload({ baked: '/fonts/Inter.font.glb' }) satisfies Promise<void>;
+useMsdf.clear({ baked: '/fonts/Inter.font.glb' });
+useSlug.preload({ baked: '/fonts/Inter.font.glb' }) satisfies Promise<void>;
 useSlug.clear({ baked: '/fonts/Inter.font.glb' });
 
 // @ts-expect-error React uses R3F's shared loader cache; no hook factory is public.
@@ -76,6 +83,7 @@ paragraphElement satisfies R3fTextChild<typeof bitmap>;
 void labels;
 void selected;
 void provided;
+void declared;
 void slugFont;
 void FontConsumer;
 void consumer;

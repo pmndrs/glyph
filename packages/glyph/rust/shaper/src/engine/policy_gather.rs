@@ -615,7 +615,7 @@ impl PolicyGatherWorkspace {
                 resource_reference: 0,
                 semantic_id: stable_id,
                 transform_id,
-                material_id: record.color,
+                material_id: record.material_id,
                 clip_id: record.clip_id,
                 depth_key: match pass {
                     DecorationPass::Under => 0,
@@ -2148,6 +2148,7 @@ mod tests {
             flags: 1,
             style: 3,
             color: 0xff00_00ff,
+            material_id: 7,
             inline_start: 4.0,
             inline_extent: 12.0,
             block_start: 9.0,
@@ -2182,6 +2183,7 @@ mod tests {
         assert_eq!(row.resource_id, 0);
         assert_eq!(row.resource_generation, 0);
         assert_eq!(row.resource_kind, 0);
+        assert_eq!(row.material_id, 7);
         assert_eq!(row.clip_id, 9);
         assert_eq!(row.depth_key, 0);
         assert_eq!(view.f32_fields[0][0], 4.0);

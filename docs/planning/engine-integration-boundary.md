@@ -327,6 +327,163 @@ expect(typeGpuMtsdfProgram.technique).toBe(mtsdfTechnique);
 expect(typeGpuThreeMtsdfProgram.technique).toBe(mtsdfTechnique);
 ```
 
+### 5b. Expose the canonical ordered command hierarchy
+
+Status: implemented. The admitted Rust plan is projected into the borrowed hierarchy in
+`packages/glyph/src/core/glyph-config.ts` and the render-planner mapper, with lazy indexable sequences and opaque stable
+identities. Three and the example renderer no longer reconstruct raw plan tables or receive numeric plan IDs.
+
+Do this before implementing `GlyphConfig.decode` or migrating any renderer. Rust already determines grouping, batching,
+instance membership, and logical order. The TypeScript boundary must preserve that result instead of exposing raw plan
+tables and requiring every renderer to reconstruct the same hierarchy.
+
+The semantic contract is:
+
+```ts
+interface TypedGroup {
+  readonly children: readonly TypedGroupChild[];
+}
+
+type TypedGroupChild = TypedBatch | TypedRootInstance;
+
+interface TypedBatch {
+  readonly kind: 'batch';
+  readonly identity: BatchIdentity;
+  readonly instances: readonly TypedInstanceSpan[];
+}
+
+interface TypedRootInstance {
+  readonly kind: 'instance';
+  readonly identity: InstanceIdentity;
+  readonly transform: TransformIdentity | undefined;
+}
+
+interface TypedInstanceSpan {
+  readonly identity: InstanceSpanIdentity;
+  readonly kind: 'glyph' | 'decoration' | 'inline-object' | 'clip' | 'codec';
+  readonly recordIndex: number;
+  readonly recordCount: number;
+  readonly logicalOrder: number;
+}
+```
+
+`TypedGroup.children` is the Rust-authored draw order. Batches and root instances remain interleaved exactly where Rust
+placed them. `TypedBatch.instances` is the Rust-authored ordered span range for that batch. Neither decoder nor renderer
+sorts, groups, reparses, or validates these semantic decisions.
+
+The array notation above defines the readable semantic shape, not permission to allocate a second object graph. The
+production surface must use a borrowed, read-only, indexable sequence with `length`, `at(index)`, and iteration, backed
+directly by the contiguous plan memory. Accessing one child or instance projects that record lazily. The built-in hot path
+uses indexed loops; custom decoder code may use the iterable surface. No preparatory scan, table-to-map conversion,
+generator-per-record allocation, or copied scalar record is allowed.
+
+Opaque identities are the only retained mapping:
+
+- `BatchIdentity` associates one batch node with the renderer/config payload needed to bind it;
+- `InstanceIdentity` associates one root instance with its renderer/config payload;
+- `InstanceSpanIdentity` associates one span with its internal primitive descriptor; and
+- `TransformIdentity` associates an optional authored transform with its host binding.
+
+The engine may intern those identities lazily from numeric wire IDs, but numeric IDs never cross the public decoder or
+renderer boundary. Identity metadata stores only a plan reference plus an offset/index needed for lazy access; it does not
+copy a plan record. Accepted publications retain the identities needed for incremental updates. Rejected publications
+discard candidate-only identity and buffer-overlay state. Borrowed plan access expires when the synchronous publication
+callback settles. An asynchronous or cross-realm target receives one explicit owned command-buffer copy instead.
+
+The trust boundary is mechanical, not semantic. The Wasm bridge checks ABI version, framing, alignment, and bounds or
+uses generated layout types. Once the Rust plan is admitted, its kinds, ranges, order, and relationships are trusted.
+A contradiction is an engine bug. Do not add adapter-specific recovery validation for trusted Rust output.
+
+Implement and prove this layer in this order:
+
+1. Generate or pin the Rust/TypeScript layout contract for group children, batch instance spans, root instances, and
+   transforms. Keep the raw table/offset vocabulary package-internal.
+2. Add the borrowed lazy sequence and opaque identity interner. Constructing a `TypedCommandBuffer` may read table
+   descriptors and counts but must not visit records.
+3. Project `TypedGroup.children` in one ordered pass. A batch child lazily exposes only its own instance range; a root
+   instance exposes only its identity and optional transform.
+4. Add focused probes showing that `children.at(0)` reads only child zero, batch instances are not visited until requested,
+   interleaving is preserved, and repeated live wire identities reuse the same opaque objects.
+5. Prove rejection does not commit candidate buffer/identity overlays, acceptance does, and an expired borrowed view cannot
+   be consumed after publication.
+
+### 5c. Bind the hierarchy through `GlyphConfig.decode`
+
+Status: implemented. `packages/glyph/src/core/create-engine.ts` owns renderer-neutral schema binding, resolver leases,
+stable accepted overlays, default decoding, and settlement. Both `ThreeConfig` and `defineExampleConfig()` wire
+`defaultDecoder`; their renderers consume `BorrowedBoundCommandBuffer` and retain only accepted host state. Three keeps its
+separate transform synchronizer, R3F injects only the selected handle at construction, and the paired live examples prove
+both public Three entry paths over shared assets.
+
+Only after 5b is stable, add the config-facing decoder and renderer payload schema:
+
+- `GlyphConfig.encode` selects the `Codec` that produces the Rust plan;
+- the package-internal mapper exposes the trusted borrowed `TypedCommandBuffer` hierarchy above;
+- required `GlyphConfig.decode` receives that hierarchy and returns the config's inferred bound hierarchy;
+- `defaultDecoder` performs the common binding path and remains explicitly wired in built-in configs so an advanced
+  integration can replace or wrap it type-safely;
+- the config schema infers the renderer's batch, root-instance, instance-span, transform, resource, and `drawRoot` payload
+  types; and
+- `resolve` creates or acquires renderer resources only when a resource command requires it, returning a staged lease that
+  the boundary commits or disposes transactionally.
+
+`decode` is a whole-publication hook, not a per-command functor and not the Rust-layout reader. Its useful customization
+space is renderer-specific binding: selecting a host batch/root payload, adding derived renderer metadata, changing
+resource binding strategy, or returning a renderer-optimized lazy facade with the same hierarchy. It must not create or
+attach Three meshes. The renderer's `prepare` transaction owns host objects and attachment; the host renderer later owns
+actual rendering.
+
+The bound result preserves the same tree:
+
+```ts
+interface BoundGroup<Schema extends GlyphSchema> {
+  readonly drawRoot: Schema['drawRoot'];
+  readonly children: BorrowedSequence<BoundBatch<Schema> | BoundRootInstance<Schema>>;
+}
+
+interface BoundBatch<Schema extends GlyphSchema> {
+  readonly kind: 'batch';
+  readonly value: Schema['batch'];
+  readonly instances: BorrowedSequence<BoundInstanceSpan<Schema>>;
+}
+
+interface BoundRootInstance<Schema extends GlyphSchema> {
+  readonly kind: 'instance';
+  readonly value: Schema['instance'];
+  readonly transform: Schema['transform'] | undefined;
+}
+```
+
+The exact helper/type names in this illustrative bound form are not approval to rename settled Glyph concepts. Before
+publishing them, infer the associated types from one `defineGlyphConfig`/schema helper and verify that a non-Three config
+does not import or imitate Three classes.
+
+Prove the integration in this order:
+
+1. Implement package-internal publication/resource machinery and `defaultDecoder` over the 5b hierarchy.
+2. Migrate the example renderer first. It must consume the bound hierarchy without Three concepts and without reading raw
+   plan tables; this is the abstraction fitness test.
+3. Migrate `ThreeTextRenderPlanExecutor` to renderer preparation over bound batches/root instances. Remove its duplicate
+   plan decoding, numeric-ID lookup, semantic validation, and hierarchy reconstruction only after parity tests pass.
+4. Preserve Three's transform-only side path so matrix/visibility/render-order changes do not call `shape`, Rust, or the
+   decoder.
+5. Thread the selected immutable handle through optional R3F context solely into `Text`/`TextGroup` construction. R3F then
+   uses the same Three traversal/publication path; it does not gain another decoder or runtime.
+6. Put imperative Three and R3F hello-world examples side by side over the same assets and root selector. The imperative
+   example proves `handle.createText()`; the React example proves default-handle and provider construction.
+7. Restrict raw plan readers and internal mapper helpers to package-internal entry points after every built-in adapter and
+   proof package uses the typed hierarchy.
+
+Exit evidence:
+
+- one fixture produces the same ordered group/batch/root-instance/span hierarchy in the example and Three adapters;
+- neither adapter imports raw plan-table readers or sees numeric IDs;
+- custom decode type tests infer exact config payloads and reject a foreign renderer payload;
+- injected failure at each resolve/decode/prepare phase preserves the previous committed group and disposes every
+  candidate-only lease exactly once;
+- repeated accepted publications reuse retained renderer objects where identities remain live; and
+- package graph checks prove the canonical mapper/publication helpers are renderer-neutral.
+
 ### 6. Rebuild the Three.js public surface over hidden core objects
 
 - Keep Three.js applications on `FontLoader`, `TextGroup`, and transform-bearing `Text`; never expose a core runtime,

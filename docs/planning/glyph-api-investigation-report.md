@@ -15,6 +15,9 @@ sources:
   - id: decision-register
     resource: decision-register.md
     title: Decision register
+  - id: engine-integration-plan
+    resource: engine-integration-boundary.md
+    title: Renderer-neutral core and engine integration plan
   - id: current-three-text
     resource: ../../packages/glyph/src/three/text.ts
     title: Current Three Text and TextGroup lifecycle
@@ -75,9 +78,9 @@ sources:
   - id: current-example
     resource: ../../packages/glyph-example-renderer/src/engine.ts
     title: Current example renderer
-  - id: current-example-reader
-    resource: ../../packages/glyph-example-renderer/src/plan-reader.ts
-    title: Current example plan decoder
+  - id: current-example-binder
+    resource: ../../packages/glyph-example-renderer/src/command-buffer.ts
+    title: Current example command-buffer binder
   - id: implemented-glyph-runtime
     resource: ../../packages/glyph/src/glyph.ts
     title: Implemented root Glyph runtime
@@ -103,7 +106,7 @@ generated:
 
 # Glyph handle and renderer-bound command-buffer investigation
 
-Status: handle/config investigation implemented; D-296 FontFace direction approved with implementation pending
+Status: handle/config, FontFace/R3F lifecycle, bound hierarchy, and built-in renderer cutover implemented
 
 ## Conclusion
 
@@ -117,7 +120,10 @@ call. D-293 now records the approved ordinary-adapter surface while retaining
 
 Second, `decode(TypedCommandBuffer)` should return a **borrowed, phase-structured `BoundCommandBuffer<Bindings>`**. `GlyphConfig.decode` is a required, type-safe hook, and every built-in config wires the same engine-supplied `defaultDecoder` unless it deliberately overrides it. The decoder implementation remains owned by the engine package, but decoder selection is explicit in the config. Its output must contain stable object bindings, not plan IDs: resource bindings already produced by `resolve`, buffer bindings in place of buffer IDs, transform and material bindings in place of numeric handles, primitive objects in place of primitive indices, and retirement commands naming those same bindings. The handle and each private publication boundary own the leases and renderer transaction. The renderer may retain its own committed host objects, but it may not retain the bound command arrays or borrowed patch bytes.
 
-Third, React context should carry only the selected Three handle. It must neither initialize Glyph nor own a second registry, engine, decoder, resource pool, renderer, scene, or canvas binding. A handle selection change reconstructs the retained Three object. Nested inline `<Text>` remains compiled into the outer paragraph and never reads context independently.
+Third, React context carries the selected Three handle plus an optional immutable local FontFace alias map. It neither
+initializes a second Glyph runtime nor owns an engine, decoder, resource pool, renderer, scene, canvas, or semantic font
+cache. A handle or alias-map change requires provider remount and reconstructs the retained Three subtree. Nested inline
+`<Text>` remains compiled into the outer paragraph and never reads context independently.
 
 Three does not require a renderer, scene, canvas, or `GPUDevice` in `GlyphConfig.resolve`. The resolver creates Three JavaScript objects; `Text`/`TextGroup` own their `Object3D` hierarchy and private publication boundaries; the host's `WebGPURenderer` later encounters those objects and realizes renderer-local GPU resources. A raw WebGPU adapter is different: it needs a `GPUDevice` at the first `device.create*` call, but it still does not need a canvas until it configures a `GPUCanvasContext` and presents a frame. That device can be captured by that adapter's config factory or handle closure without adding a universal host-context or public session concept.
 
@@ -146,34 +152,45 @@ runtime:
   `ThreeConfig` handle. They expose no handle prop; provider remounts select another handle, while nested inline `<Text>`
   continues to flatten into the outer paragraph;
 - the example renderer implements the same config/binder/publication contract, retaining a private numeric draw-list
-  bridge only for its existing concrete device oracle.
+  bridge only for its existing concrete device oracle;
+- `glyph.fontFace(source, config?)` returns its default selection, with `.default` and declared technique members inferred
+  from `format`; each selection owns `load(handle)` and `isLoaded(handle)`, while the handle contributes the technique map
+  and default key;
+- R3F hooks declare through the same FontFace path, conditionally suspend only while a selection is unloaded, own mounted
+  immutable Font leases, and expose Promise-returning `.preload()` plus declaration `.clear()`;
+- `GlyphProvider` is optional. It may select one immutable external handle, declare scoped aliases through `fontFaces`,
+  and opt into Suspense/font-error fallbacks without becoming a runtime or font-cache owner;
+- one `defineTextMaterial()` factory receives closed `kind: 'glyph' | 'decoration'` realizations; only glyph branches
+  expose a concrete raster technique, while the reserved `pmndrs.decoration` name stays inside the policy ABI;
+  those realizations remain separate ordered draws and separate material objects; and
+- the paired `@pmndrs/glyph-examples` app proves imperative Three and R3F over the same assets, while the TypeGPU proof
+  uses only a public configured handle and recreates a handle after device loss.
 
 The implementation tests cover repeated/concurrent initialization, two named Three handles over one immutable font,
 spread config hooks, explicit decode and resolve calls, standalone and grouped draw-root attachment, multiple scenes on
 one handle, cross-handle group rejection, name reuse after disposal, explicit `shape()`, transform-only bypass of semantic
-phases, R3F provider/default-handle construction, immutable provider selection, React lease balance, and the configured
-example-renderer path. The final full Glyph behavioral run passed 938 TypeScript tests plus its Rust suites, declarations,
-lint, and formatting. The focused React lifecycle run passed 11 tests, the combined R3F/span run passed 45 tests, and the
-example renderer passed 13 tests.
+phases, R3F provider/default-handle construction, immutable provider selection, React lease balance, FontFace loading,
+decoration material override, paired live examples, and the configured example-renderer path. Current focused results are
+recorded in the final verification section and canonical log rather than frozen here while the refactor is active.
 
 ## Pre-change evidence status of the handoff
 
 The following audit records the repository state inspected before implementation and distinguishes those facts from the
 then-proposed design. The implementation outcome above is authoritative for the resulting working tree.
 
-| Handoff claim                                                                                   | Status                                                   | Verified evidence or correction                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current Three has an implicit shared engine domain.                                             | Verified.                                                | First loader use creates one weakly cached domain; initialization creates one `GlyphEngine` and one `ThreeTextEngineCoordinator` ([engine-domain.ts:58-73](../../packages/glyph/src/three/engine-domain.ts#L58-L73), [126-149](../../packages/glyph/src/three/engine-domain.ts#L126-L149)).                                                                                                                                                 |
-| A Three `Font` must be initialized before `Text` construction.                                  | Verified for the current API.                            | `acquireThreeTextDomain()` rejects any selected variant without a ready associated domain ([engine-domain.ts:87-104](../../packages/glyph/src/three/engine-domain.ts#L87-L104)).                                                                                                                                                                                                                                                            |
-| Loaded fonts are immutable application values.                                                  | Verified.                                                | `Font` exposes readonly metadata and a disposal lease; stacks are frozen and authenticated ([font.ts:48-55](../../packages/glyph/src/font.ts#L48-L55), [loaded-font.ts:44-68](../../packages/glyph/src/loaded-font.ts#L44-L68)).                                                                                                                                                                                                            |
-| Current `Text` retains desired state and binds an opaque transform.                             | Verified.                                                | Construction normalizes desired state, acquires the domain, binds `this` through the coordinator, and binds fonts ([text.ts:168-204](../../packages/glyph/src/three/text.ts#L168-L204)); the coordinator maps a backend binding to `Object3D` through a `WeakMap` ([engine-coordinator.ts:84-87](../../packages/glyph/src/three/engine-coordinator.ts#L84-L87), [185-196](../../packages/glyph/src/three/engine-coordinator.ts#L185-L196)). |
-| `TextGroup` is the current batch/publication boundary.                                          | Verified.                                                | Nested `TextGroup`s terminate descendant collection, each nonempty group creates one `ThreeTextBatchBinding`, and one synchronization follows reconciliation ([text.ts:639-654](../../packages/glyph/src/three/text.ts#L639-L654), [1276-1285](../../packages/glyph/src/three/text.ts#L1276-L1285)).                                                                                                                                        |
-| A clean frame uses a transform-only path.                                                       | Verified.                                                | `synchronize()` calls `syncTransforms()` directly when no publication is pending ([text.ts:894-925](../../packages/glyph/src/three/text.ts#L894-L925)); the executor documents and implements that path without Wasm ([engine-plan-target.ts:384-449](../../packages/glyph/src/three/engine-plan-target.ts#L384-L449)).                                                                                                                     |
-| The current executor decodes, resolves, realizes, commits, and retires.                         | Verified.                                                | Its state includes buffers, resources, textures/pages, materials, transforms, origins, draws, and preparation state ([engine-plan-target.ts:250-275](../../packages/glyph/src/three/engine-plan-target.ts#L250-L275)); `accept()` calls `prepare()` then `commit()` transactionally ([301-309](../../packages/glyph/src/three/engine-plan-target.ts#L301-L309), [473-608](../../packages/glyph/src/three/engine-plan-target.ts#L473-L608)). |
-| Current R3F uses no Glyph context.                                                              | Verified.                                                | `react.ts` imports React hooks but creates no context or provider; `Text` and `TextGroup` construct the existing Three classes through R3F `extend()` ([react.ts:1-14](../../packages/glyph/src/react.ts#L1-L14), [126-202](../../packages/glyph/src/react.ts#L126-L202), [204-265](../../packages/glyph/src/react.ts#L204-L265)).                                                                                                          |
-| R3F nested `<Text>` creates no Three object.                                                    | Verified.                                                | `flattenText()` recognizes nested `Text`, derives string ranges, and emits spans into the outer paragraph ([react.ts:442-485](../../packages/glyph/src/react.ts#L442-L485)).                                                                                                                                                                                                                                                                |
-| The example renderer is a second consumer of the same portable plan.                            | Verified.                                                | It creates a backend/policy/planner, decodes all plan tables, realizes resources through a device, commits a submission, and retires payloads ([example engine.ts:57-135](../../packages/glyph-example-renderer/src/engine.ts#L57-L135), [255-333](../../packages/glyph-example-renderer/src/engine.ts#L255-L333), [plan-reader.ts:16-71](../../packages/glyph-example-renderer/src/plan-reader.ts#L16-L71)).                               |
-| `decode => BoundCommandBuffer`, `GlyphConfig`, handles, and `shape()` existed before this work. | Not in the audited baseline; implemented after approval. | The prior published integrator boundary was `PlanCandidate`/`PlanTarget`. D-293 and the implementation outcome above record the added ordinary-adapter surface.                                                                                                                                                                                                                                                                             |
+| Handoff claim                                                                                   | Status                                                   | Verified evidence or correction                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current Three has an implicit shared engine domain.                                             | Verified.                                                | First loader use creates one weakly cached domain; initialization creates one `GlyphEngine` and one `ThreeTextEngineCoordinator` ([engine-domain.ts:58-73](../../packages/glyph/src/three/engine-domain.ts#L58-L73), [126-149](../../packages/glyph/src/three/engine-domain.ts#L126-L149)).                                                                                                                                                                                              |
+| A Three `Font` must be initialized before `Text` construction.                                  | Verified for the current API.                            | `acquireThreeTextDomain()` rejects any selected variant without a ready associated domain ([engine-domain.ts:87-104](../../packages/glyph/src/three/engine-domain.ts#L87-L104)).                                                                                                                                                                                                                                                                                                         |
+| Loaded fonts are immutable application values.                                                  | Verified.                                                | `Font` exposes readonly metadata and a disposal lease; stacks are frozen and authenticated ([font.ts:48-55](../../packages/glyph/src/font.ts#L48-L55), [loaded-font.ts:44-68](../../packages/glyph/src/loaded-font.ts#L44-L68)).                                                                                                                                                                                                                                                         |
+| Current `Text` retains desired state and binds an opaque transform.                             | Verified.                                                | Construction normalizes desired state, acquires the domain, binds `this` through the coordinator, and binds fonts ([text.ts:168-204](../../packages/glyph/src/three/text.ts#L168-L204)); the coordinator maps a backend binding to `Object3D` through a `WeakMap` ([engine-coordinator.ts:84-87](../../packages/glyph/src/three/engine-coordinator.ts#L84-L87), [185-196](../../packages/glyph/src/three/engine-coordinator.ts#L185-L196)).                                              |
+| `TextGroup` is the current batch/publication boundary.                                          | Verified.                                                | Nested `TextGroup`s terminate descendant collection, each nonempty group creates one `ThreeTextBatchBinding`, and one synchronization follows reconciliation ([text.ts:639-654](../../packages/glyph/src/three/text.ts#L639-L654), [1276-1285](../../packages/glyph/src/three/text.ts#L1276-L1285)).                                                                                                                                                                                     |
+| A clean frame uses a transform-only path.                                                       | Verified.                                                | `synchronize()` calls `syncTransforms()` directly when no publication is pending ([text.ts:894-925](../../packages/glyph/src/three/text.ts#L894-L925)); the executor documents and implements that path without Wasm ([engine-plan-target.ts:384-449](../../packages/glyph/src/three/engine-plan-target.ts#L384-L449)).                                                                                                                                                                  |
+| The current executor decodes, resolves, realizes, commits, and retires.                         | Verified.                                                | Its state includes buffers, resources, textures/pages, materials, transforms, origins, draws, and preparation state ([engine-plan-target.ts:250-275](../../packages/glyph/src/three/engine-plan-target.ts#L250-L275)); `accept()` calls `prepare()` then `commit()` transactionally ([301-309](../../packages/glyph/src/three/engine-plan-target.ts#L301-L309), [473-608](../../packages/glyph/src/three/engine-plan-target.ts#L473-L608)).                                              |
+| Current R3F uses no Glyph context.                                                              | Verified.                                                | `react.ts` imports React hooks but creates no context or provider; `Text` and `TextGroup` construct the existing Three classes through R3F `extend()` ([react.ts:1-14](../../packages/glyph/src/react.ts#L1-L14), [126-202](../../packages/glyph/src/react.ts#L126-L202), [204-265](../../packages/glyph/src/react.ts#L204-L265)).                                                                                                                                                       |
+| R3F nested `<Text>` creates no Three object.                                                    | Verified.                                                | `flattenText()` recognizes nested `Text`, derives string ranges, and emits spans into the outer paragraph ([react.ts:442-485](../../packages/glyph/src/react.ts#L442-L485)).                                                                                                                                                                                                                                                                                                             |
+| The example renderer is a second consumer of the same portable plan.                            | Verified and migrated.                                   | It creates a backend/policy/planner behind `defineExampleConfig()`, delegates canonical mapping and resource settlement to the renderer-neutral core binder, consumes the bound hierarchy in its device transaction, commits a submission, and retires resources ([config.ts](../../packages/glyph-example-renderer/src/config.ts), [command-buffer.ts](../../packages/glyph-example-renderer/src/command-buffer.ts), [device.ts](../../packages/glyph-example-renderer/src/device.ts)). |
+| `decode => BoundCommandBuffer`, `GlyphConfig`, handles, and `shape()` existed before this work. | Not in the audited baseline; implemented after approval. | The prior published integrator boundary was `PlanCandidate`/`PlanTarget`. D-293 and the implementation outcome above record the added ordinary-adapter surface.                                                                                                                                                                                                                                                                                                                          |
 
 ## 1. Verified current lifecycle: imperative Three
 
@@ -243,7 +260,11 @@ One subtle ordering fact matters for the redesign: `TextGroup.updateMatrixWorld(
 2. `bindFont()`/`bindFontStack()` bind immutable root fonts to that backend and reject techniques unsupported by the selected shader ([example engine.ts:76-104](../../packages/glyph-example-renderer/src/engine.ts#L76-L104)).
 3. `openPlanner()` creates the engine's single planner and attaches `ExamplePlanTarget`. `createText()` creates a retained engine text; `ExampleText.update()` changes desired state without publishing ([example engine.ts:106-129](../../packages/glyph-example-renderer/src/engine.ts#L106-L129), [164-203](../../packages/glyph-example-renderer/src/engine.ts#L164-L203)).
 4. `publish()` synchronously publishes and throws if the target rejects; after acceptance it returns the target's last decoded draw list ([example engine.ts:131-135](../../packages/glyph-example-renderer/src/engine.ts#L131-L135)).
-5. `readCandidate()` decodes all six operational tables plus diagnostics. Because the target requests borrowed delivery, it copies only write-patch payloads and table snapshots that escape acceptance; scalar decoded records are already owned JS values ([plan-reader.ts:16-87](../../packages/glyph-example-renderer/src/plan-reader.ts#L16-L87)).
+5. The pre-change `readCandidate()` copied operational tables. The migrated target instead delegates admitted plan mapping,
+   stable identity, resolver leases, and default decoding to core `createEngine()`. Its device walks the borrowed bound
+   hierarchy during `prepare()` and retains only accepted renderer-owned draw/buffer/resource state
+   ([command-buffer.ts](../../packages/glyph-example-renderer/src/command-buffer.ts),
+   [device.ts](../../packages/glyph-example-renderer/src/device.ts)).
 6. Without a device, the target stores the decoded list and accepts it. With a device, it acquires missing portable payload leases, validates technique compatibility, stages and commits resources, stages and commits the whole submission, then publishes the new list/maps and releases payloads no longer referenced by the accepted resource generations ([example engine.ts:255-328](../../packages/glyph-example-renderer/src/engine.ts#L255-L328)).
 7. A preparation or submission failure discards candidate state and releases newly acquired leases; the target returns a rejection rather than corrupting its previous accepted state ([example engine.ts:292-313](../../packages/glyph-example-renderer/src/engine.ts#L292-L313), [329-332](../../packages/glyph-example-renderer/src/engine.ts#L329-L332)).
 8. `ExampleTextEngine.dispose()` disposes its backend; backend/planner ownership cascades target and payload disposal ([example engine.ts:145-151](../../packages/glyph-example-renderer/src/engine.ts#L145-L151), [335-353](../../packages/glyph-example-renderer/src/engine.ts#L335-L353)).
@@ -323,165 +344,78 @@ For imperative Three, application code calls the host renderer directly. For R3F
 
 ### Concrete answer
 
-The exact candidate is:
+The exact source hierarchy is:
 
 ```ts
-type Decoder<Bindings extends AnyGlyphBindings> = (
-  source: BorrowedTypedCommandBuffer,
-  context: DecodeContext<Bindings>,
-) => BorrowedBoundCommandBuffer<Bindings>;
-
-declare const defaultDecoder: <Bindings extends AnyGlyphBindings>(
-  source: BorrowedTypedCommandBuffer,
-  context: DecodeContext<Bindings>,
-) => BorrowedBoundCommandBuffer<Bindings>;
-```
-
-The engine package owns `defaultDecoder`, the canonical source ABI, the closed output unions, validation helpers, and borrowed-view enforcement. `GlyphConfig` owns decoder selection through a required `decode: Decoder<Bindings>` field. `ThreeConfig`, the example config, and other built-ins should all assign `decode: defaultDecoder`; the handle invokes `config.decode` rather than reaching around the config to an internal decoder.
-
-An advanced config may replace or wrap that function. Type safety requires the exact `BorrowedTypedCommandBuffer` input, the config's exact `DecodeContext<Bindings>`, and `BorrowedBoundCommandBuffer<Bindings>` output. The override remains synchronous, must obey the same borrowed lifetime, must return the same phase vocabulary, and must throw at the call site for invalid input. It cannot introduce a second command-buffer dialect or expose raw numeric IDs to its renderer. `defineDecoder<Bindings>()` preserves inference; stronger development-time lifetime guards remain an explicit risk/experiment below rather than an unimplemented claim.
-
-The renderer-facing candidate types are:
-
-```ts
-interface GlyphBindings<
-  Resource extends object,
-  Buffer extends object,
-  Program extends object,
-  Material extends object,
-  Transform extends object,
-  Primitive extends object,
-  Draw extends object,
-> {
-  readonly resource: Resource;
-  readonly buffer: Buffer;
-  readonly program: Program;
-  readonly material: Material;
-  readonly transform: Transform;
-  readonly primitive: Primitive;
-  readonly draw: Draw;
+interface TypedGroup {
+  readonly children: readonly TypedGroupChild[];
 }
 
-type AnyGlyphBindings = GlyphBindings<object, object, object, object, object, object, object>;
+type TypedGroupChild = TypedBatch | TypedRootInstance;
 
-interface ResourceLease<Value> {
-  readonly value: Value;
-  dispose(): void;
+interface TypedBatch {
+  readonly kind: 'batch';
+  readonly identity: BatchIdentity;
+  readonly instances: readonly TypedInstanceSpan[];
 }
 
-interface ResolveContext<PortableResource, Previous> {
-  readonly technique: string;
-  readonly resourceKind: string;
-  readonly resourceName: string;
-  readonly payload: PortableResource;
-  readonly previous: Previous | undefined;
-  readonly signal: AbortSignal;
+interface TypedRootInstance {
+  readonly kind: 'instance';
+  readonly identity: InstanceIdentity;
+  readonly transform: TransformIdentity | undefined;
 }
 
-type BoundResourceCommand<Resource> =
-  | Readonly<{ kind: 'acquire'; resource: Resource }>
-  | Readonly<{ kind: 'update'; resource: Resource }>
-  | Readonly<{ kind: 'retain'; resource: Resource }>;
-
-type BoundBufferCommand<Buffer, Program> = Readonly<{
-  kind: 'ensure';
-  buffer: Buffer;
-  program: Program;
-  scalarType: 'f32' | 'u32' | 'u16';
-  vectorWidth: number;
-  capacityRecords: number;
-  byteLength: number;
-}>;
-
-type BoundPatchCommand<Buffer> =
-  | Readonly<{ kind: 'write'; buffer: Buffer; destinationOffset: number; payload: Uint8Array }>
-  | Readonly<{ kind: 'fill'; buffer: Buffer; destinationOffset: number; byteLength: number; value: number }>
-  | Readonly<{
-      kind: 'copy';
-      source: Buffer;
-      sourceOffset: number;
-      destination: Buffer;
-      destinationOffset: number;
-      byteLength: number;
-    }>;
-
-interface BoundPrimitiveCommand<Resource, Buffer, Program, Primitive> {
-  readonly primitive: Primitive;
+interface TypedInstanceSpan {
+  readonly identity: InstanceSpanIdentity;
   readonly kind: 'glyph' | 'decoration' | 'inline-object' | 'clip' | 'codec';
-  readonly program: Program;
-  readonly resource: Resource | undefined;
-  readonly buffers: readonly Buffer[];
   readonly recordIndex: number;
   readonly recordCount: number;
   readonly logicalOrder: number;
 }
-
-interface BoundDrawCommand<Buffer, Program, Material, Transform, Primitive, Draw> {
-  readonly draw: Draw;
-  readonly program: Program;
-  readonly material: Material | undefined;
-  readonly transform: Transform;
-  readonly buffers: readonly Buffer[];
-  readonly primitives: readonly Primitive[];
-  readonly depthKey: number;
-}
-
-type BoundDrawPhase<DrawCommand> =
-  | Readonly<{ kind: 'unchanged' }>
-  | Readonly<{ kind: 'replace'; values: readonly DrawCommand[] }>;
-
-type BoundRetirementCommand<Resource, Buffer> =
-  | Readonly<{ kind: 'resource'; resource: Resource }>
-  | Readonly<{ kind: 'buffer'; buffer: Buffer }>;
-
-interface BorrowedBoundCommandBuffer<Bindings extends AnyGlyphBindings> {
-  readonly delivery: 'borrowed-bound';
-  readonly checkpoint: boolean;
-  readonly resources: readonly BoundResourceCommand<Bindings['resource']>[];
-  readonly buffers: readonly BoundBufferCommand<Bindings['buffer'], Bindings['program']>[];
-  readonly patches: readonly BoundPatchCommand<Bindings['buffer']>[];
-  readonly primitives: readonly BoundPrimitiveCommand<
-    Bindings['resource'],
-    Bindings['buffer'],
-    Bindings['program'],
-    Bindings['primitive']
-  >[];
-  readonly draws: BoundDrawPhase<
-    BoundDrawCommand<
-      Bindings['buffer'],
-      Bindings['program'],
-      Bindings['material'],
-      Bindings['transform'],
-      Bindings['primitive'],
-      Bindings['draw']
-    >
-  >;
-  readonly retirements: readonly BoundRetirementCommand<Bindings['resource'], Bindings['buffer']>[];
-}
-
-interface PreparedRendererCommit<Result> {
-  readonly result: Result;
-  commit(): void;
-  discard(): void;
-}
-
-interface BoundTransformUpdate<Transform> {
-  readonly transform: Transform;
-}
-
-interface Renderer<Bindings extends AnyGlyphBindings, Result> {
-  prepare(frame: BorrowedBoundCommandBuffer<Bindings>): PreparedRendererCommit<Result>;
-  syncTransforms(updates: readonly BoundTransformUpdate<Bindings['transform']>[]): void;
-  dispose(): void;
-}
-
-interface RendererContext<Bindings extends AnyGlyphBindings> {
-  readonly drawRoot: Bindings['transform'];
-  readonly signal: AbortSignal;
-}
 ```
 
-The binding types are opaque object identities created by the engine/handle binder. They may wrap host values, but ordinary renderer code never receives or looks up `RenderPlanResourceId`, `RenderPlanBufferId`, `RenderPlanPrimitiveId`, `RenderPlanDrawId`, material handles, or transform indices. This differs intentionally from the decoded record types, whose IDs remain correct for low-level `/core` integrators but are below the implemented config renderer boundary.
+The array notation describes the hierarchy. The production values are borrowed lazy read-only sequences backed by the
+contiguous Rust plan: `length`, indexed access, `at(index)`, and iteration do not require a preparatory scan or a copied
+object graph. `TypedGroup.children` preserves the exact Rust order and interleaving. A `TypedBatch` exposes only its ordered
+instance-span range; a `TypedRootInstance` exposes only its identity and optional authored transform.
+
+`BatchIdentity`, `InstanceIdentity`, `InstanceSpanIdentity`, and `TransformIdentity` are opaque retained objects. The
+package-internal mapper may intern them from numeric wire IDs, but the numeric IDs and raw table/offset vocabulary never
+reach `GlyphConfig.decode` or the renderer. The mapper retains only identity-to-plan-location associations; command scalar
+data remains in the borrowed Rust publication and is accessed lazily.
+
+The decode contract is:
+
+```ts
+type Decoder<Schema extends GlyphSchema> = (
+  source: BorrowedTypedCommandBuffer,
+  context: DecodeContext<Schema>,
+) => BorrowedBoundCommandBuffer<Schema>;
+
+declare const defaultDecoder: <Schema extends GlyphSchema>(
+  source: BorrowedTypedCommandBuffer,
+  context: DecodeContext<Schema>,
+) => BorrowedBoundCommandBuffer<Schema>;
+```
+
+The engine package owns the fixed Rust-layout accessor/identity mapper, `defaultDecoder`, and borrowed-view enforcement.
+That mapper is internal plumbing and is not another decoder. `GlyphConfig` owns decoder selection through a required
+`decode` field. `ThreeConfig`, the example config, and other built-ins explicitly assign `decode: defaultDecoder`; a handle
+always invokes the function selected by its config.
+
+An advanced config may replace or wrap `defaultDecoder` type-safely. It receives the whole publication and returns the same
+ordered hierarchy with values bound to its inferred schema: `drawRoot`, batch, root instance, instance span, transform,
+and resource payloads. Useful work includes choosing renderer payloads, adding derived renderer metadata, or changing the
+binding strategy. It cannot introduce another command-buffer dialect, expose raw numeric IDs, or install per-command
+functors.
+
+Neither the internal mapper nor a built-in decoder revalidates Rust's semantic decisions. The Wasm boundary mechanically
+checks ABI/framing/bounds using generated layout types; after admission, group membership, kinds, ranges, and order are
+trusted. A contradiction is an engine bug. Fallible external work still throws where written: `resolve`, a custom decoder,
+renderer preparation, host binding lookup, or GPU/device operations.
+
+The authoritative hookup order and zero-copy proof requirements live in
+[the renderer-neutral integration plan](engine-integration-boundary.md#5b-expose-the-canonical-ordered-command-hierarchy).
 
 `resolve` has this role:
 
@@ -510,19 +444,22 @@ throws where it was written.
 
 ### Lifetime rules
 
-| Value                                                                    | Validity                                                                      | Retention rule                                                                                                                                                                                                                                                     |
-| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Borrowed `TypedCommandBuffer`                                            | Only during the synchronous `decode`/target callback                          | No field or byte view may escape. Current borrowed readers deliberately throw after acceptance ([render-planner.ts:720-736](../../packages/glyph/src/core/render-planner.ts#L720-L736), [1371-1419](../../packages/glyph/src/core/render-planner.ts#L1371-L1419)). |
-| `BorrowedBoundCommandBuffer` and phase arrays                            | From decode through `renderer.prepare()` and its synchronous preparation only | Renderer must not store the frame or arrays. The private publication boundary expires them when `shape()` settles.                                                                                                                                                 |
-| Write-patch `Uint8Array`                                                 | Same lifetime as the bound frame                                              | Renderer must upload or copy it during preparation. The current example copies escaping writes, proving the need ([plan-reader.ts:44-50](../../packages/glyph-example-renderer/src/plan-reader.ts#L44-L50)).                                                       |
-| Opaque resource/buffer/program/material/transform/primitive/draw binding | Stable object identity for its live generation                                | Renderer may key retained maps by the object. It must not manufacture or numerically decode one.                                                                                                                                                                   |
-| Newly resolved `ResourceLease`                                           | Candidate-local until renderer commit                                         | The boundary calls `dispose()` on discard; successful commit promotes it to live retained state.                                                                                                                                                                   |
-| Committed `ResourceLease`                                                | Until an accepted retirement, boundary disposal, or handle-domain teardown    | The boundary binder owns disposal. Renderer consumes `value` but does not independently release the lease.                                                                                                                                                         |
-| Prepared renderer transaction                                            | One `shape()` attempt                                                         | Exactly one of `commit()` or `discard()` is called. Both must be idempotent after settling.                                                                                                                                                                        |
-| Renderer result                                                          | Config-defined preparation value                                              | Current `shape()` does not surface it. A future adapter return must be stable and self-owned, never plan bytes or cleanup closures.                                                                                                                                |
-| Async/worker plan                                                        | Explicit owned-delivery path only                                             | The engine makes one contiguous owned copy. Bound fields that cross a realm must be self-owned/validated; borrowed bindings and realm-local provenance do not transfer ([render-planner.ts:739-789](../../packages/glyph/src/core/render-planner.ts#L739-L789)).   |
+| Value                                                        | Validity                                                                      | Retention rule                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Borrowed `TypedCommandBuffer`                                | Only during the synchronous `decode`/target callback                          | No field or byte view may escape. Current borrowed readers deliberately throw after acceptance ([render-planner.ts:720-736](../../packages/glyph/src/core/render-planner.ts#L720-L736), [1371-1419](../../packages/glyph/src/core/render-planner.ts#L1371-L1419)). |
+| `BorrowedBoundCommandBuffer` and lazy sequences              | From decode through `renderer.prepare()` and its synchronous preparation only | Renderer must not store the frame or sequences. The private publication boundary expires them when `shape()` settles.                                                                                                                                              |
+| Write-patch `Uint8Array`                                     | Same lifetime as the bound frame                                              | Renderer must upload or copy it during preparation. The example device applies patches into candidate-owned retained buffers before commit ([device.ts](../../packages/glyph-example-renderer/src/device.ts)).                                                     |
+| Opaque resource/buffer/batch/instance/span/transform binding | Stable object identity for its live generation                                | Renderer may key retained maps by the object. It must not manufacture or numerically decode one.                                                                                                                                                                   |
+| Newly resolved `ResourceLease`                               | Candidate-local until renderer commit                                         | The boundary calls `dispose()` on discard; successful commit promotes it to live retained state.                                                                                                                                                                   |
+| Committed `ResourceLease`                                    | Until an accepted retirement, boundary disposal, or handle-domain teardown    | The boundary binder owns disposal. Renderer consumes `value` but does not independently release the lease.                                                                                                                                                         |
+| Prepared renderer transaction                                | One `shape()` attempt                                                         | Exactly one of `commit()` or `discard()` is called. Both must be idempotent after settling.                                                                                                                                                                        |
+| Renderer result                                              | Config-defined preparation value                                              | Current `shape()` does not surface it. A future adapter return must be stable and self-owned, never plan bytes or cleanup closures.                                                                                                                                |
+| Async/worker plan                                            | Explicit owned-delivery path only                                             | The engine makes one contiguous owned copy. Bound fields that cross a realm must be self-owned/validated; borrowed bindings and realm-local provenance do not transfer ([render-planner.ts:739-789](../../packages/glyph/src/core/render-planner.ts#L739-L789)).   |
 
-The phases are ordered by contract: resources -> buffers -> patches -> primitives -> draws -> retirements. The draw phase must distinguish `unchanged` from `replace` because an empty replacement means “retire all draws,” while a patch-only publication means “leave committed draw topology alone.” Within one `replace`, every draw binding is unique; repetition is a decoder error. A fixed interpreter over closed discriminated unions is the intended implementation. Per-command functors would obscure phase order, allocate on the hot path, and make lifetime/rollback behavior impossible to audit.
+The publication order is resources -> buffers -> patches -> ordered group traversal -> retirements. The group phase must
+distinguish `unchanged` from `replace`: an empty replacement retires the group contents, while a patch-only publication
+leaves committed hierarchy intact. The default path uses indexed loops over borrowed sequences. Per-command functors would
+obscure order, allocate on the hot path, and make lifetime and rollback behavior difficult to audit.
 
 ## 7. R3F injection without a second runtime
 
@@ -1172,12 +1109,14 @@ refined R3F default-or-provider selection contract:
 The low-level `GlyphEngine`/`GlyphBackend`/`RenderPlanner` surface remains authoritative for integrations that deliberately
 own transport and target mechanics. The root handle surface is authoritative for ordinary configured adapter use.
 
-## Approved FontFace direction after the handle implementation
+## Implemented FontFace direction after the handle implementation
 
 D-296 supersedes D-295's source-list and root-relative loading sketches with one canonical two-argument declaration and
-handle-relative format resolution. This section records the intended contract and explicitly distinguishes it from current
-behavior. No FontFace public surface, fail-fast Three binding, provider font catalog, typed handle technique map, or new
-CLI default described here is implemented yet.
+handle-relative format resolution. D-301 corrects the method placement: the selection owns `load(handle)` and
+`isLoaded(handle)`; no `load()` method is added to `GlyphHandle`. The FontFace surface, fail-fast Three construction,
+typed config technique map, conditional React suspension, hook-managed Font leases, and optional provider `fontFaces`
+aliases described below are implemented. D-297's complete content-addressed multi-tier dependency graph and the proposed
+zero-flag CLI bake default remain separate work and are not claimed by this section.
 
 ### Simplest form
 
@@ -1187,7 +1126,7 @@ The smallest declaration is the source itself. Glyph generates a monotonic unuse
 ```ts
 const MyFont = glyph.fontFace('./my-font.glb');
 
-await three.load(MyFont);
+await MyFont.load(three);
 
 const label = three.createText({
   font: MyFont,
@@ -1198,21 +1137,23 @@ scene.add(label);
 ```
 
 `MyFont` and `MyFont.default` identify the same default selection. Built-in `ThreeConfig` resolves that selection to MSDF,
-while a spread/wrapped config may choose another key from its own typed technique map. `handle.load()` is idempotent and
-resolves to that same selection, so `font: await three.load(MyFont)` is equivalent. Constructing or updating imperative
+while a spread/wrapped config may choose another key from its own typed technique map. `selection.load(handle)` is
+idempotent and resolves to that same selection, so `font: await MyFont.load(three)` is equivalent. Constructing or updating imperative
 `Text` with an unloaded face throws synchronously instead of creating a temporarily empty object.
 
-The corresponding minimal R3F form uses the provider key as the local family name and authorizes automatic loading:
+The corresponding minimal R3F form keeps declaration and loading declarative:
 
 ```tsx
-<GlyphProvider fonts={{ MyFont: './my-font.glb' }} fallback={<LoadingFonts />}>
-  <Text font="MyFont">Hello</Text>
-</GlyphProvider>
+function Label() {
+  const font = useFont('./my-font.glb');
+  return <Text font={font}>Hello</Text>;
+}
 ```
 
-The provider value is captured once. A raw source shorthand creates a provider-owned face; an already-created FontFace is
-borrowed. The provider releases only faces it created when it unmounts and never disposes an externally supplied handle or
-FontFace. `fallback` is the provider's Suspense fallback; omitting it may use `null` without changing load ownership.
+`useFont(source, config?)` is the React wrapper around `glyph.fontFace(source, config?)`. It retains one declaration for
+that canonical source/config key, loads it through the selected handle, suspends while needed, and returns an independently
+mounted immutable `Font<Technique>` lease. `useFont.preload(source, config?)` creates the same declaration and starts the
+same stable load early. Ordinary React Suspense and error boundaries around the component own loading UI.
 
 ### Canonical declaration and inferred identity
 
@@ -1279,35 +1220,37 @@ GlyphConfig can give a string key its technique implementation and associated ty
 
 ```ts
 interface GlyphConfig<Formats extends TechniqueMap, Default extends keyof Formats> {
-  readonly formats: Formats;
-  readonly defaultFormat: Default;
+  readonly fonts: {
+    readonly techniques: Formats;
+    readonly default: Default;
+  };
   // encode, decode, resolve, renderer, and constructors omitted here
 }
 
-interface GlyphHandle<Formats extends TechniqueMap, Default extends keyof Formats> {
-  load<Selection extends CompatibleSelection<Formats>>(selection: Selection): Promise<Selection>;
-  isLoaded(selection: CompatibleSelection<Formats>): boolean;
+interface FontFaceSelection<Format> {
+  load(handle: GlyphHandle): Promise<FontFaceSelection<Format>>;
+  isLoaded(handle: GlyphHandle): boolean;
 }
 ```
 
-The names `formats` and `defaultFormat` are candidate field names, not a request to rename any settled concept. Their
-type-level invariant is required: the default is a key of the same map. An omitted FontFace format resolves to that key;
+The implemented `fonts.techniques` and `fonts.default` fields preserve the required type-level invariant: the default is
+a key of the same technique map. An omitted FontFace format resolves to that key;
 an explicit literal key must exist in the map; an imported technique/request brings its own associated types but still
 must be supported by the handle. Built-in `ThreeConfig` supplies Bitmap, MSDF, and Slug and defaults to MSDF:
 
 ```ts
 const SlugFirstConfig = {
   ...ThreeConfig,
-  defaultFormat: 'slug',
-} satisfies GlyphConfig<typeof ThreeConfig.formats, 'slug'>;
+  fonts: { ...ThreeConfig.fonts, default: 'slug' },
+} satisfies GlyphConfig<typeof ThreeConfig.fonts.techniques, 'slug'>;
 
 const three = glyph.handle('three-slug', SlugFirstConfig);
-await three.load(Inter); // omitted face format resolves to Slug for this handle
+await Inter.load(three); // omitted face format resolves to Slug for this handle
 
-await Promise.all([three.load(Inter.bitmap), three.load(Inter.msdf), three.load(Inter.slug)]);
+await Promise.all([Inter.bitmap.load(three), Inter.msdf.load(three), Inter.slug.load(three)]);
 ```
 
-`handle.isLoaded(Inter)` checks that handle's configured default without starting work. Technique members check exact
+`Inter.isLoaded(handle)` checks that handle's configured default without starting work. Technique members check exact
 selections. The stable operation resolves to the same selection object, and the FontFace retains the resulting cache
 lease. Different handles may map a key differently, so readiness cannot be a truthful single boolean on the root face.
 
@@ -1316,7 +1259,7 @@ selection is loaded before acquiring private immutable Font bindings. An unloade
 without mutating desired state, creating a planner entry, or changing the last accepted draw. Callers therefore write:
 
 ```ts
-await three.load(Inter);
+await Inter.load(three);
 const label = three.createText({ font: Inter, text: 'Hello' });
 ```
 
@@ -1324,7 +1267,7 @@ or select another format directly:
 
 ```ts
 const title = three.createText({
-  font: await three.load(Inter.slug),
+  font: await Inter.slug.load(three),
   text: 'Title',
 });
 ```
@@ -1333,50 +1276,61 @@ This removes the frame-scheduling problem rather than adding a second synchroniz
 that needs an invalidation callback: imperative code awaits before construction, and a failed update leaves the current
 text intact.
 
-R3F accepts FontFace selections and strings at its declarative boundary, but automatic loading is an explicit provider
-capability. The nearest immutable `GlyphProvider fonts` map supplies aliases and the set of faces whose `load()` operations
-the subtree may start. React first calls `handle.isLoaded(selection)`. A loaded selection takes the synchronous fast path;
-an authorized unloaded selection conditionally calls `use(handle.load(selection))` and constructs or updates the Three
-object only after the stable Promise resolves. React 19 permits conditional `use()`. Calling `void handle.load(selection)`
-before rendering starts the same operation early; there is no separate preload cache or API.
+R3F accepts direct FontFace selections and root-catalog family strings on `Text`. Its `useFont(source, config?)` hook is
+instead the declarative counterpart of `glyph.fontFace(source, config?)`: the React integration creates or retrieves one
+FontFace declaration keyed by the same canonical arguments, then resolves its default or explicitly requested format
+through the selected handle. Omitted `format` uses that handle's configured default; explicit string keys, imported
+techniques, and exact requests retain the same inference and validation as the root call.
+
+React checks `selection.isLoaded(handle)`. A loaded selection takes the synchronous fast path. An unloaded selection takes
+the Suspense path by conditionally calling `use(selection.load(handle))`; React 19 permits conditional `use()`. After the
+load, `useFont` acquires an independent mounted immutable `Font<Technique>` lease. The hook subscription disposes that
+lease after its last mounted subscriber unmounts, including StrictMode replay, without disposing the shared declaration.
 
 The graph commits the fully decoded selection and face-owned lease before fulfilling the load Promise. Therefore the
-rerender after resolution observes `handle.isLoaded(selection) === true` and skips `use()` entirely—there is no fulfilled
+rerender after resolution observes `selection.isLoaded(handle) === true` and skips `use()` entirely—there is no fulfilled
 Promise allocation, observation, microtask wait, or Suspense pass on the loaded path. A failed load never publishes partial
 readiness.
 
-Without a provider font map, R3F may use a loaded direct selection or loaded root-catalog name, but it does not initiate a
-load. An unloaded selection throws the same load-before-use error as imperative Three. This keeps hidden network and
-runtime-bake work out of components that did not declare a font-loading boundary.
+`useFont.preload(source, config?)` creates the same cached declaration and starts the same stable handle load before a
+component requests it; the hook consumes that operation or starts it itself. `useFont.clear(source, config?)` removes and
+disposes the cached declaration owner, but independent mounted Font and Text leases remain valid until their own cleanup.
+This small React declaration cache owns hook declaration identity and disposal only. The Glyph-owned FontLibrary and
+handle-local FontFace store own the actual load promise, decoded Font value, and readiness. D-297's finer-grained
+content-addressed dependency graph remains follow-up work.
 
-`GlyphProvider` may itself supply both boundaries around its immutable context value:
+`GlyphProvider` remains optional immutable constructor dependency injection. It can override the handle and can add local
+family aliases without adding another loading policy or semantic cache:
 
 ```tsx
 <GlyphProvider
-  fonts={{ Inter: interUrl }}
-  fallback={<LoadingFonts />}
-  errorFallback={(error) => <FontLoadFailure error={error} />}
+  handle={customThree}
+  fontFaces={{
+    Inter: './Inter.font.glb',
+    Title: { src: './Title.font.glb', format: 'slug' },
+  }}
+  fallback={null}
 >
   <Text font="Inter">Hello</Text>
 </GlyphProvider>
 ```
 
-The internal error boundary handles only authenticated FontFace load errors whose owning face belongs to that provider's
-map. A parse/fetch/bake error is wrapped at the FontFace boundary with family and source provenance, so the provider does
-not classify errors from messages or `instanceof` alone. Errors from application children, Three realization, another
-catalog, or an unmapped externally supplied face are rethrown to the next application error boundary. With no
-`errorFallback`, font errors are rethrown as well rather than being silently swallowed.
+The provider captures `handle` and `fontFaces` once; changing either requires a keyed remount. It disposes only FontFaces
+it declared from the table, never an externally supplied handle or face. Supplying `fontFaces` or `fallback` installs a
+local Suspense boundary; supplying `errorFallback` installs a boundary that handles `FontLoadError` and rethrows unrelated
+application/renderer errors. Without a provider, the module selects its shared default Three handle. A static
+`useFont.preload(source, config?)` primes that default handle and returns the real `Promise<void>`; advanced code with a
+custom handle starts the canonical operation with `void faceSelection.load(customThree)`.
 
-Context carries one immutable construction selection containing the chosen Three handle and font catalog; it remains
-neither a second Glyph runtime nor a mutable font store. A `GlyphProvider` without `fonts` may still select a handle and
-provide UI boundaries, but it authorizes no font loads.
+Imperative Three remains different because it has no Suspense boundary: constructing or updating Text with an unloaded
+selection throws and tells the caller to await `selection.load(handle)` first.
 
 ### Ownership and disposal
 
 FontFace adds a cache owner without replacing D-286's immutable loaded `Font` ownership:
 
 - the FontFace strongly owns each successfully loaded format's cache lease so named lookup remains deterministic;
-- `handle.load()` resolves to the same stable default or technique-specific selection and does not create a caller-owned
+- `selection.load(handle)` resolves to the same stable default or technique-specific selection and does not create a caller-owned
   lease;
 - loading state and stable promises are indexed by the handle's authenticated technique identity, so two handles can
   coexist without pretending that equal string keys necessarily mean equal implementations;
@@ -1385,20 +1339,20 @@ FontFace adds a cache owner without replacing D-286's immutable loaded `Font` ow
   face-owned cache leases;
 - Fonts acquired through the low-level `loadFont()` API and committed renderer bindings remain valid until their
   independent owners release them;
-- ignoring the returned FontFace deliberately chooses realm lifetime, so a finalizer is neither necessary nor effective
-  while the catalog retains the declaration.
+- the root family catalog retains only a `WeakRef`; explicit `FontFace.dispose()` is the deterministic correctness path,
+  while `FinalizationRegistry` is a best-effort safety net for an unreachable undisposed declaration, never refcount timing.
 
 ### Review against the original plan
 
-| Original plan or current evidence                                                                 | D-296 result                                                                                                                         | Consequence                                                                                                    |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| D-286 makes loaded `Font<Technique>` immutable and independently leased.                          | Preserved internally and in low-level `loadFont()`. FontFace owns its cache lease, while Text acquires a private binding lease.      | Face disposal releases its cache without invalidating mounted text.                                            |
-| D-293 lets immutable fonts bind into multiple handles.                                            | Preserved. The root face is renderer-neutral; each handle resolves its configured default/key and independently binds the Font.      | Readiness and key meaning are handle-relative; a family is not owned by Three, R3F, a scene, or a renderer.    |
-| D-294 makes React context immutable constructor injection.                                        | Extended from a bare handle to `{ handle, fonts }`, captured once; the map also authorizes automatic loading through that handle.    | Provider aliases and loading policy do not create another runtime or mutable context.                          |
-| D-287 uses R3F `useLoader` as the existing font promise cache.                                    | Superseded for FontFace selections by the handle-indexed idempotent load promise; existing hooks may remain compatibility loaders.   | React suspends on the same handle operation imperative callers await.                                          |
-| `loadFont()` currently requires exact technique options and can runtime-bake after a raster miss. | Preserved as the low-level invariant behind format declarations.                                                                     | Declared options validate baked artifacts and drive source-font runtime/unplugin baking.                       |
-| `defineFont()` is the current static discovery token.                                             | Not required for FontFace declarations; discovery can read `glyph.fontFace()` calls and their source/format graph.                   | Ordinary named-font authoring has no duplicate token ceremony.                                                 |
-| The current direct CLI emits shaping-only output when no raster flags are supplied.               | Intentionally changed: zero flags bake Bitmap 8/16, MSDF, and Slug. Built-in `ThreeConfig` uses MSDF as its overridable default key. | The artifact covers small, normal, and extra-large rendering without making a renderer choice in the root API. |
+| Original plan or current evidence                                                                 | D-296 result                                                                                                                         | Consequence                                                                                                 |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| D-286 makes loaded `Font<Technique>` immutable and independently leased.                          | Preserved internally and in low-level `loadFont()`. FontFace owns its cache lease, while Text acquires a private binding lease.      | Face disposal releases its cache without invalidating mounted text.                                         |
+| D-293 lets immutable fonts bind into multiple handles.                                            | Preserved. The root face is renderer-neutral; each handle resolves its configured default/key and independently binds the Font.      | Readiness and key meaning are handle-relative; a family is not owned by Three, R3F, a scene, or a renderer. |
+| D-294 makes React context immutable constructor injection.                                        | Extended from a bare handle to `{ handle, fontFaces }`, captured once; the map contributes local aliases only.                       | Provider aliases do not create another runtime or mutable context.                                          |
+| D-287 uses R3F `useLoader` as the existing font promise cache.                                    | Superseded for FontFace selections by `selection.load(handle)`; the current hooks declare FontFaces and suspend on that operation.   | React suspends on the same selection operation imperative callers await.                                    |
+| `loadFont()` currently requires exact technique options and can runtime-bake after a raster miss. | Preserved as the low-level invariant behind format declarations.                                                                     | Declared options validate baked artifacts and drive source-font runtime/unplugin baking.                    |
+| `defineFont()` is the current static discovery token.                                             | Not required for FontFace declarations; discovery can read `glyph.fontFace()` calls and their source/format graph.                   | Ordinary named-font authoring has no duplicate token ceremony.                                              |
+| The current direct CLI emits shaping-only output when no raster flags are supplied.               | Proposed separately: zero flags would bake Bitmap 8/16, MSDF, and Slug. Built-in `ThreeConfig` already uses MSDF as its default key. | FontFace loading does not claim this CLI-default change until its own bake checks are implemented.          |
 
 ### Smallest implementation proofs
 
@@ -1413,10 +1367,10 @@ FontFace adds a cache owner without replacing D-286's immutable loaded `Font` ow
 5. Reject a baked source whose declared Bitmap options do not match its raster directory; feed a TTF declaration to the
    runtime baker and prove the exact request receives those options.
 6. Construct and update imperative Three `Text` with an unloaded face and prove each call throws before shaping, desired
-   state mutation, or draw retirement; await `handle.load()` and prove the same selection then succeeds.
-7. Mount provider shorthand plus `font="Inter"` under Suspense and StrictMode, prove one stable handle load, immutable
-   context, balanced leases, and no Three `Text` construction before resolution; omit `fonts` and prove the same unloaded
-   selection throws without starting a request.
+   state mutation, or draw retirement; await `selection.load(handle)` and prove the same selection then succeeds.
+7. Mount provider shorthand plus `font="Inter"` under Suspense and StrictMode, prove one stable selection load, immutable
+   context, balanced leases, and no Three `Text` construction before resolution; omit `fontFaces` and prove a direct
+   FontFace or root-catalog family uses the same readiness branch without requiring a provider.
 8. Reject one mapped font load through the provider's font fallback, then throw an unrelated child/renderer error and
    prove the provider rethrows it to an outer boundary.
 9. Load several formats through two handles, acquire one low-level independent Font and one mounted Text binding, dispose
@@ -1491,7 +1445,7 @@ renderer bindings, GPU devices, or contexts are interchangeable.
 
 Fine-grained invalidation means releasing graph reachability, not deleting by family name or mutating a cached value:
 
-- each successful `handle.load(selection)` gives the owning FontFace a lease on the selected decoded node and its
+- each successful `selection.load(handle)` gives the owning FontFace a lease on the selected decoded node and its
   transitive dependencies;
 - immutable `Font` values, mounted `Text`, and renderer bindings take independent leases;
 - `FontFace.dispose()` removes its catalog aliases, aborts work for which it is the final consumer, and releases only its
@@ -1511,7 +1465,7 @@ one, must create a new generation and cannot invalidate live immutable Fonts in 
 Runtime baking is not recovery from a GLB raster miss. The source bytes are classified and authenticated at the load
 boundary:
 
-- valid GLB bytes enter the artifact graph; a missing or mismatched selected format throws at `handle.load()`;
+- valid GLB bytes enter the artifact graph; a missing or mismatched selected format throws at `selection.load(handle)`;
 - valid TTF/OTF SFNT bytes enter the runtime-bake graph;
 - WOFF, WOFF2, arbitrary bytes, and misleading filename/content-type combinations throw unless a future explicit source
   capability supports them.
@@ -1551,16 +1505,16 @@ in-process cache.
 
 D-298 distinguishes orchestration caches from Glyph's semantic resource ownership.
 
-| Surface                        | Verified current behavior                                                                                                                                                       | FontFace direction                                                                                                                                      |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `THREE.Loader`                 | `loadAsync()` only wraps the subclass's `load()` in a Promise. It provides no cache and no dependency discovery.                                                                | Remains only an adapter shape.                                                                                                                          |
-| `THREE.FileLoader` r185        | Coalesces concurrent requests in a module-global table by resolved URL. Completed values enter URL-only `THREE.Cache` only when `Cache.enabled` is set; it defaults to false.   | Not an authoritative cache because URL alone cannot express content authentication, Request semantics, dependency leases, or technique identity.        |
-| Current `/three` `FontLoader`  | Extends `THREE.Loader`, reports one display URL through `LoadingManager`, and delegates to root `loadFont()` or an optional `FontLibrary`; it never creates `THREE.FileLoader`. | A compatibility/progress adapter may remain, but `handle.load()` and the Glyph graph own loading and cache lifetime.                                    |
-| Current top-level `loadFont()` | Coalesces an exact composite request only while it is in flight.                                                                                                                | Compatibility calls route into the graph.                                                                                                               |
-| Current `FontLibrary`          | Retains successful exact composite request entries with bounded LRU eviction.                                                                                                   | Its separate semantic cache is unnecessary for FontFace; the face and downstream graph leases provide deterministic ownership.                          |
-| Current R3F `useFont()`        | R3F `useLoader`/`suspend-react` caches by `[ReactFontLoader, immutableFontRequestKey]`; `ReactFontLoader` owns the cached Font and `clear()` releases it.                       | Provider/Text checks `handle.isLoaded(selection)` and conditionally calls `use(handle.load(selection))`; React owns only suspension and mounted leases. |
-| Browser HTTP cache             | Applies underneath `fetch()` according to ordinary request and response policy.                                                                                                 | Remains a transport optimization, not a Font/technique ownership model.                                                                                 |
-| Runtime Worker `CacheStorage`  | Optionally persists one validated composed GLB when source freshness permits it.                                                                                                | Remains the cross-page acceleration for authenticated TTF/OTF bakes; the graph guarantees in-process reuse.                                             |
+| Surface                        | Verified current behavior                                                                                                                                                                                    | FontFace direction                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `THREE.Loader`                 | `loadAsync()` only wraps the subclass's `load()` in a Promise. It provides no cache and no dependency discovery.                                                                                             | Remains only an adapter shape.                                                                                                                   |
+| `THREE.FileLoader` r185        | Coalesces concurrent requests in a module-global table by resolved URL. Completed values enter URL-only `THREE.Cache` only when `Cache.enabled` is set; it defaults to false.                                | Not an authoritative cache because URL alone cannot express content authentication, Request semantics, dependency leases, or technique identity. |
+| Current `/three` `FontLoader`  | Extends `THREE.Loader`, reports one display URL through `LoadingManager`, and delegates to root `loadFont()` or an optional `FontLibrary`; it never creates `THREE.FileLoader`.                              | It remains a compatibility/progress adapter; `selection.load(handle)` and the Glyph FontFace store own new-API readiness.                        |
+| Current top-level `loadFont()` | Coalesces an exact composite request only while it is in flight.                                                                                                                                             | Compatibility calls route into the graph.                                                                                                        |
+| Current `FontLibrary`          | Retains successful exact composite request entries with bounded LRU eviction.                                                                                                                                | Its separate semantic cache is unnecessary for FontFace; the face and downstream graph leases provide deterministic ownership.                   |
+| Current R3F `useFont()`        | Canonically caches one hook-created FontFace declaration per handle/source/format key, checks `selection.isLoaded(handle)`, conditionally calls `use(selection.load(handle))`, and owns mounted Font leases. | React owns declaration identity, suspension, and mounted leases; it does not create a second semantic loader cache.                              |
+| Browser HTTP cache             | Applies underneath `fetch()` according to ordinary request and response policy.                                                                                                                              | Remains a transport optimization, not a Font/technique ownership model.                                                                          |
+| Runtime Worker `CacheStorage`  | Optionally persists one validated composed GLB when source freshness permits it.                                                                                                                             | Remains the cross-page acceleration for authenticated TTF/OTF bakes; the graph guarantees in-process reuse.                                      |
 
 Three's GLTF loader demonstrates why subclass ownership matters: it explicitly uses `FileLoader` for the root document,
 parses the document, resolves buffer and image dependencies, and maintains parser-local dependency Promise caches. The
@@ -1574,7 +1528,7 @@ FontFace source and cannot add a technique to the main font; it is accepted only
 its hash plus reciprocal shaping/raster identity authenticate it. This remains true when a third party edits or repackages
 a conforming GLB—the schema data, not the producer's naming pattern, is the external contract.
 
-The exact `handle.load(faceSelection)` algorithm is:
+The intended complete `faceSelection.load(handle)` dependency-graph algorithm is:
 
 ```text
 1. Acquire/fetch the FontFace's core source through the Glyph graph.
@@ -1590,7 +1544,7 @@ The exact `handle.load(faceSelection)` algorithm is:
 7. Run the selected technique decoder.
 8. For every external resource named by that technique artifact, resolve relative to the raster artifact, fetch through
    the graph, authenticate SHA-256 and byte length, and decode it.
-9. Retain the completed decoded-node lease and resolve the stable handle.load() promise.
+9. Retain the completed decoded-node lease and resolve the stable selection load promise.
 ```
 
 The selected FontFace is not loaded after step 2 merely because its directory says the technique exists. It becomes loaded
@@ -1602,14 +1556,14 @@ GLB path; a GLB never transitions into a baker after step 5 or later.
 R3F consumes that state without a second cache or an always-async gate:
 
 ```ts
-if (!handle.isLoaded(selection)) {
-  if (!providerFonts.authorizes(selection)) throw unloadedFontError(selection);
-  use(handle.load(selection));
+if (!selection.isLoaded(handle)) {
+  use(selection.load(handle));
 }
 ```
 
-The helper names in this sketch are illustrative; the behavior is the contract. The conditional is valid for React 19's
-`use()` API. Once the graph has committed step 9, ordinary Text construction proceeds synchronously on every render.
+Font-name resolution happens before this check. Failure to resolve a string is an unknown-font error, so it never reaches
+the readiness branch. The conditional is valid for React 19's `use()` API. Once the graph has committed step 9, ordinary
+Text construction proceeds synchronously on every render.
 
 The current low-level loader already implements most of the directory sequence: it validates the core, reads
 `PMNDRS_font.rasters`, derives the raster key, performs exact lookup, resolves an external raster relative to the core URL,

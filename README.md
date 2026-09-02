@@ -8,20 +8,20 @@ Portable font baking, Unicode shaping, paragraph layout, and batched text render
 
 ```tsx
 import { Text, TextGroup } from '@pmndrs/glyph/react';
-import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
-import { useMSDF } from '@pmndrs/glyph/react/msdf';
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import { useSlug } from '@pmndrs/glyph/react/slug';
 
 const VT323 = '/fonts/VT323.font.glb';
 const INTER = '/fonts/Inter.font.glb';
 const LOVERS_QUARREL = '/fonts/LoversQuarrel.font.glb';
 
-useMSDF.preload(INTER);
+void useMsdf.preload(INTER);
 
 function Labels() {
-  const inter = useMSDF(INTER);
+  const inter = useMsdf(INTER);
   const loversQuarrel = useSlug(LOVERS_QUARREL);
-  const vt323 = useBitmapFont(VT323, { strikes: [8, 16] });
+  const vt323 = useBitmap(VT323, { strikes: [8, 16] });
 
   return (
     <>
@@ -79,20 +79,18 @@ An outer `Text` is a retained paragraph and a Three `Object3D`. A nested `Text` 
 ## Render text with Three.js
 
 ```ts
-import { span, txt } from '@pmndrs/glyph';
-import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { glyph, span, txt } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
 
-const loader = new FontLoader();
-const inter = await loader.loadAsync({
-  input: { baked: '/fonts/Inter.font.glb' },
-  raster: { technique: msdf },
-});
+await glyph.init();
+const three = glyph.handle('main', ThreeConfig);
+const interFace = glyph.fontFace({ baked: '/fonts/Inter.font.glb' });
+await interFace.load(three);
 
 const accent = span({ color: '#70d6ff' });
-const labels = new TextGroup({ compositing: 'independent' });
-const label = new Text({
-  font: inter,
+const labels = three.createTextGroup({ compositing: 'independent' });
+const label = three.createText({
+  font: interFace,
   text: txt`Hello ${accent`world`}`,
   style: { fontSize: 32, lineHeight: 1.2, color: '#f4f7ff' },
   layout: { wrap: 'word' },
@@ -104,6 +102,11 @@ scene.add(labels);
 ```
 
 Three uses `txt` and `span` where React uses nested `Text`. A span may override its font selection or text style without manually maintaining UTF-16 ranges; the Three `spans` form also accepts a material override.
+
+`handle.createText()` creates an ordinary Three `Object3D`, not a canvas or renderer. During `shape()` or Three scene
+traversal, Glyph attaches planned `Mesh` children below that `Text`/`TextGroup`; the application's later
+`renderer.render(scene, camera)` performs the actual host draw. Dispose the text/group, FontFace, and handle when their
+owning application scope ends.
 
 Add a `Text` directly to the scene when it does not need to share a batch. The nearest `TextGroup` applies all pending descendant changes together during Three's normal scene traversal.
 
@@ -165,28 +168,27 @@ a constraint that is not finite and nonnegative throws from the call, naming the
 A FontStack created with `createFontStack` allows you to use additional fonts to lookup missing glyphs if your primary font doesn't contain that glyph. This can be helpful for rendering emoji or icons as well as using additional fonts for other languages or character sets.
 
 ```ts
-import { createFontStack } from '@pmndrs/glyph';
+import { createFontStack, loadFont } from '@pmndrs/glyph';
 import { slug } from '@pmndrs/glyph/three/slug';
 
-const emoji = await loader.loadAsync({
-  input: { baked: '/fonts/Emoji.font.glb' },
-  raster: { technique: slug },
-});
+const interSlug = await loadFont({ baked: '/fonts/Inter.font.glb' }, slug);
+const emoji = await loadFont({ baked: '/fonts/Emoji.font.glb' }, slug);
 
-const prose = createFontStack(inter, emoji);
-scene.add(new Text({ font: prose, text: 'Status 🌍' }));
+const prose = createFontStack(interSlug, emoji);
+scene.add(three.createText({ font: prose, text: 'Status 🌍' }));
 ```
 
 One baked GLB may contain several raster techniques, or you may bake each technique into it's own GLB font asset. Load them together when the application needs each typed font:
 
 ```ts
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
 
-const [interBitmap, interMsdf, interSlug] = await loader.loadAsync({
-  input: { baked: '/fonts/Inter.font.glb' },
-  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
-});
+const [interBitmap, interMsdf, interSlug] = await loadFont(
+  { baked: '/fonts/Inter.font.glb' },
+  [{ technique: bitmap, options: { strikes: [32] } }, msdf, slug],
+);
 ```
 
 ## Capacity, materials, and ownership
@@ -194,7 +196,7 @@ const [interBitmap, interMsdf, interSlug] = await loader.loadAsync({
 Capacity is optional. A `TextGroup` defaults to 4,096-glyph chunks; a standalone `Text` defaults to a 256-glyph growing buffer. Set an explicit policy for known bounds or memory behavior:
 
 ```ts
-const denseLabels = new TextGroup({
+const denseLabels = three.createTextGroup({
   capacity: { size: 20_000, policy: 'chunk' },
 });
 ```
@@ -217,10 +219,12 @@ const material = defineTextMaterial((context) => {
   return value;
 });
 
-const custom = new Text({ font: inter, text: 'Custom material', material });
+const custom = three.createText({ font: interFace, text: 'Custom material', material });
 ```
 
-Call `dispose()` when a `Text`, `TextGroup`, loaded font, or loader will not be reused. Disposing a group releases its render planner and renderer resources but does not dispose descendant `Text` objects, which may move to another live group.
+Call `dispose()` when a `Text`, `TextGroup`, FontFace, immutable loaded Font, or handle will not be reused. Disposing a
+group releases its render planner and renderer resources but does not dispose descendant `Text` objects, which may move
+to another live group.
 
 ## Bake fonts
 
@@ -260,24 +264,22 @@ The external example packages exercise that lifecycle against a real TypeGPU/Web
 sequence used by the hardware renderer lab:
 
 ```ts
-import { createFontStack, loadFont } from '@pmndrs/glyph';
-import { createGlyphEngine } from '@pmndrs/glyph/core';
+import { createFontStack, glyph, loadFont } from '@pmndrs/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
-import { ExampleTextEngine, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
+import { defineExampleConfig, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
 
 const adapter = await navigator.gpu.requestAdapter();
 if (adapter === null) throw new Error('WebGPU is unavailable');
 const gpuDevice = await adapter.requestDevice();
 
-const glyphEngine = await createGlyphEngine();
+await glyph.init();
 const device = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
-const renderer = new ExampleTextEngine(glyphEngine, device);
+const renderer = glyph.handle('typegpu', defineExampleConfig(device));
 const font = await loadFont(
   { baked: '/fonts/Inter.font.glb' },
   { technique: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
 );
 const stack = renderer.bindFontStack(createFontStack(font));
-renderer.openPlanner();
 const title = renderer.createText({
   font: stack,
   text: 'Portable TypeGPU',
@@ -300,15 +302,16 @@ stack.dispose();
 renderer.dispose();
 font.dispose();
 device.dispose();
-glyphEngine.dispose();
 gpuDevice.destroy();
 ```
 
-`ExampleTextEngine` is intentionally an external integration rather than privileged Glyph code. Its implementation uses
-only the public `/core` sequence: `glyphEngine.createBackend()`, `backend.installPolicy()`, font binding,
-`backend.createPlanner()`, `planner.createText()`, and `planner.publish()`. Its synchronous `PlanTarget` acquires portable
-payload leases, stages resource and submission transactions, commits them, and releases retired resources. The semantic
-record readers are its public decoding surface; raw ABI offsets are package-private.
+`defineExampleConfig()` is intentionally an external integration rather than privileged Glyph code. The application sees
+the same ordinary root sequence as the built-in Three adapter: one `glyph`, one named handle, and handle-created retained
+text. Behind that config, the package uses only the public `/core` sequence: `glyphEngine.createBackend()`,
+`backend.installPolicy()`, font binding, `backend.createPlanner()`, `planner.createText()`, and `planner.publish()`. Its
+synchronous `PlanTarget` acquires portable payload leases, decodes the trusted plan into the typed ordered hierarchy,
+binds renderer resources, stages one device transaction, commits it, and releases retired resources. Raw ABI offsets and
+numeric plan identities remain package-private.
 
 `PlanTarget` is the normal zero-copy path because CPU-side GPU encoding is synchronous. Use `AsyncPlanTarget` only when
 the candidate crosses an asynchronous boundary such as a Worker; it receives one self-owned copy and must return that

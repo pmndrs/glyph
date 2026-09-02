@@ -1,13 +1,15 @@
 import * as THREE from 'three/webgpu';
 
+import { visibleBelowRoot } from './internal/scene-tree.js';
+
 export interface ThreeTransformState {
   readonly drawRoot: THREE.Object3D;
-  readonly renderOrderBase: number;
   readonly draws: readonly THREE.Mesh[];
   readonly activeTransformIndices: ReadonlySet<number>;
   readonly directDrawsByTransform: ReadonlyMap<number, readonly THREE.Mesh[]>;
   readonly transforms: ReadonlyMap<number, THREE.Object3D>;
   readonly transformAttribute: THREE.StorageInstancedBufferAttribute;
+  readonly visibleObject?: (object: THREE.Object3D) => boolean;
 }
 
 /** Cheap scene-side synchronization that never enters the Glyph engine or command decoder. */
@@ -16,8 +18,8 @@ export class ThreeTransformSynchronizer {
   readonly #relativeTransform = new THREE.Matrix4();
 
   sync(state: ThreeTransformState, transformIds: Iterable<number>, worldMatricesCurrent: boolean): number {
-    for (const [index, draw] of state.draws.entries()) {
-      draw.renderOrder = state.renderOrderBase + index;
+    for (const draw of state.draws) {
+      draw.renderOrder = (draw.userData.pmndrsGlyphRenderOrder as number | undefined) ?? draw.renderOrder;
     }
     const target = state.transformAttribute.array as Float32Array;
     let rootPrepared = false;
@@ -37,7 +39,7 @@ export class ThreeTransformSynchronizer {
       if (!worldMatricesCurrent) object.updateWorldMatrix(true, false, true);
       if (object === state.drawRoot) this.#relativeTransform.identity();
       else this.#relativeTransform.multiplyMatrices(this.#rootInverse, object.matrixWorld);
-      const visible = visibleBelowRoot(object, state.drawRoot);
+      const visible = state.visibleObject?.(object) ?? visibleBelowRoot(object, state.drawRoot);
       let transformChanged = false;
       if (indexed) {
         const offset = transformId * 16;
@@ -81,15 +83,6 @@ export class ThreeTransformSynchronizer {
     }
     return changedTransforms;
   }
-}
-
-function visibleBelowRoot(object: THREE.Object3D, root: THREE.Object3D): boolean {
-  let current: THREE.Object3D | null = object;
-  while (current !== null && current !== root) {
-    if (!current.visible) return false;
-    current = current.parent;
-  }
-  return current === root;
 }
 
 function matrixEquals(target: Float32Array, offset: number, matrix: readonly number[]): boolean {

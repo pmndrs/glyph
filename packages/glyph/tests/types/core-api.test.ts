@@ -3,7 +3,6 @@ import {
   type AnyRasterTechnique,
   type FontSelection,
   type FormattedText,
-  type ParagraphSpan,
 } from '@pmndrs/glyph';
 import {
   readCompiledRasterFont,
@@ -240,22 +239,20 @@ void techniqueId;
 void brandedTechniqueId;
 void programContext;
 
-// Paragraph content has one authority: plain text may carry explicit spans,
-// while formatted text carries its own spans and cannot be combined with another array.
+// Paragraph rich text is structural; only txt/span may derive internal range records.
 declare const paragraphFont: FontSelection<AnyRasterTechnique>;
 declare const formattedText: FormattedText<AnyRasterTechnique>;
-declare const paragraphSpans: readonly ParagraphSpan<AnyRasterTechnique>[];
-const paragraph = await createParagraph({ font: paragraphFont, text: 'plain', spans: paragraphSpans });
+const paragraph = await createParagraph({ font: paragraphFont, text: 'plain' });
 const formattedParagraph = await createParagraph({ font: paragraphFont, text: formattedText });
 void formattedParagraph;
-// @ts-expect-error Formatted text already owns its spans.
-const invalidFormattedParagraph = createParagraph({
+const invalidRawParagraph = createParagraph({
   font: paragraphFont,
-  text: formattedText,
-  spans: paragraphSpans,
+  text: 'plain',
+  // @ts-expect-error Applications cannot author raw span offsets.
+  spans: [],
 });
-void invalidFormattedParagraph;
-paragraph.update({ text: 'updated', spans: paragraphSpans });
+void invalidRawParagraph;
+paragraph.update({ text: 'updated' });
 paragraph.update({ text: formattedText });
-// @ts-expect-error Updates cannot provide two span authorities either.
-paragraph.update({ text: formattedText, spans: paragraphSpans });
+// @ts-expect-error Updates cannot author raw span offsets either.
+paragraph.update({ spans: [] });

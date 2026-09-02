@@ -12,8 +12,7 @@
   "writes": "docs/packages/*.md source_digest pins and stdout"
 } */
 import { execFile } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import { isMainModule, run } from './support/command-cli.mts';
@@ -48,11 +47,13 @@ async function repinPackageDigests(): Promise<void> {
   // Captured rather than streamed: the generator reports every workspace package, and echoing
   // that table would bury the one line a contributor needs, which is what actually changed.
   const { stdout: report } = await execFileAsync('ruby', [generator, '../..']);
+  const concepts = await workspacePackageConcepts();
   let repinned = 0;
   for (const line of report.split('\n')) {
-    const [, digest, packageRoot] = line.split('\t');
-    if (digest === undefined || packageRoot === undefined) continue;
-    const concept = `../../docs/packages/${basename(packageRoot.trim())}.md`;
+    const [workspacePackage, digest] = line.split('\t');
+    if (workspacePackage === undefined || digest === undefined) continue;
+    const concept = concepts.get(workspacePackage.trim());
+    if (concept === undefined) continue;
     const before = await readConcept(concept);
     if (before === undefined) continue;
     const after = before.replace(/source_digest: 'sha256:[0-9a-f]{64}'/, `source_digest: '${digest}'`);
@@ -62,6 +63,19 @@ async function repinPackageDigests(): Promise<void> {
     repinned += 1;
   }
   if (repinned === 0) process.stdout.write('every concept digest was already current\n');
+}
+
+async function workspacePackageConcepts(): Promise<ReadonlyMap<string, string>> {
+  const directory = '../../docs/packages';
+  const concepts = new Map<string, string>();
+  for (const entry of await readdir(directory)) {
+    if (!entry.endsWith('.md')) continue;
+    const path = `${directory}/${entry}`;
+    const source = await readFile(path, 'utf8');
+    const workspacePackage = /^workspace_package: ['"]([^'"]+)['"]$/m.exec(source)?.[1];
+    if (workspacePackage !== undefined) concepts.set(workspacePackage, path);
+  }
+  return concepts;
 }
 
 async function readConcept(path: string): Promise<string | undefined> {

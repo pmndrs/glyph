@@ -24,6 +24,19 @@ export { glyph, type Glyph } from './glyph.js';
 export type { GlyphHandle } from './core/glyph-config.js';
 
 export type {
+  AnyFontFace,
+  AnyFontFaceSelection,
+  FontFace,
+  FontFaceConfig,
+  FontFaceDeclaredFormat,
+  FontFaceFormat,
+  FontFaceFormatDeclaration,
+  FontFaceSelection,
+  FontFaceSource,
+  FontFaceTechniqueOf,
+} from './font-face.js';
+
+export type {
   AnyFontToken,
   BakedFontSource,
   Font,

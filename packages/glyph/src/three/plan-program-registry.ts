@@ -14,8 +14,8 @@ import {
   type TechniqueResourceDeclarations,
   type RenderPlanScalarType,
 } from '../core.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
-import type { ThreeTextMaterial } from './material.js';
+import { isRasterTechnique, type AnyRasterTechnique } from '../raster-technique.js';
+import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { threePolicyCapabilitySet, threeSystemBuffers } from './render-policy.js';
 
 export interface ThreePlanProgramBuffer {
@@ -25,6 +25,8 @@ export interface ThreePlanProgramBuffer {
 }
 
 export interface ThreePlanProgramMaterialContext {
+  /** Publication root selected by the configured Three handle. */
+  readonly root: ThreeRootContext;
   /** Portable technique selected for this draw. */
   readonly technique: AnyRasterTechnique;
   /** The portable schema selected for this draw. */
@@ -42,7 +44,7 @@ export interface ThreePlanProgramMaterialContext {
   /** Name of the resource referenced by this draw's wire resource record. */
   readonly resourceName: string;
   readonly instance: Node<'uint'>;
-  readonly materialId: number;
+  /** Renderer material selected by the bound command buffer, if any. */
   readonly material: ThreeTextMaterial | undefined;
   transformPosition(position: Node<'vec3'>): Node<'vec3'>;
 }
@@ -135,8 +137,7 @@ export function registerThreeRasterPlanProgram<
   }
   const source = program as ThreeRasterPlanProgram<Technique, Schema> & Record<string, unknown>;
   const technique = source.technique;
-  const techniqueId =
-    typeof technique === 'object' && technique !== null && !Array.isArray(technique) ? technique.id : undefined;
+  const techniqueId = isRasterTechnique(technique) ? technique.id : undefined;
   if (typeof techniqueId !== 'string' || techniqueId.length === 0) {
     throw new TypeError('Three raster plan programs need a technique with a nonempty id');
   }

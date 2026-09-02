@@ -1,43 +1,41 @@
-import {
-  type RenderPlanBufferRecord,
-  type RenderPlanDrawRecord,
-  type RenderPlanPatchRecord,
-  type RenderPlanPrimitiveRecord,
-  type RenderPlanResourceRecord,
-  type RenderPlanRetirementRecord,
-} from '@pmndrs/glyph/core';
+import type { BackendMaterialBinding, BackendTransformBinding, PolicyProgram } from '@pmndrs/glyph/core';
 
-import type { ExampleTableSnapshot } from './snapshot.js';
+import type { ExampleBufferBinding, ExampleInstanceSpanBinding, ExampleResolvedResource } from './config.js';
 
-/** One portable resource lifecycle row decoded from a render plan. */
-export type ExampleResourceRecord = RenderPlanResourceRecord;
-/** One renderer-neutral geometry row decoded from a render plan. */
-export type ExamplePrimitiveRecord = RenderPlanPrimitiveRecord;
+/** One retained renderer draw, with engine identities already replaced by config bindings. */
+export interface ExampleDraw {
+  readonly kind: 'batch' | 'instance';
+  readonly program: PolicyProgram;
+  readonly programVariant: number;
+  readonly material: BackendMaterialBinding | undefined;
+  readonly buffers: readonly ExampleBufferBinding[];
+  readonly resources: readonly ExampleResolvedResource[];
+  readonly flags: number;
+  readonly depthKey: number;
+  readonly order: number;
+  readonly transform: BackendTransformBinding | undefined;
+  readonly primitive: ExamplePrimitiveRecord;
+}
 
-/** One draw the engine wants issued, decoded from the plan's `draws` table. */
-export type ExampleDraw = RenderPlanDrawRecord;
+/** One retained primitive span in a renderer draw. */
+export type ExamplePrimitiveRecord = Readonly<
+  Omit<ExampleInstanceSpanBinding['input'], 'identity' | 'program' | 'buffer'> & {
+    readonly buffer: ExampleBufferBinding | undefined;
+  }
+>;
+
+/** One resolved portable resource selected by the config. */
+export type ExampleResourceRecord = ExampleResolvedResource;
 
 /**
- * One decoded frame, safe to hold after target acceptance. Borrowed byte fields are copied
- * while the target callback is active; scalar records are decoded directly.
+ * Accepted renderer state. The hierarchy is walked while borrowed; only renderer bindings
+ * and the scalar draw contract are retained after publication.
  */
 export interface ExampleDrawList {
   readonly engineRevision: number;
   readonly planRevision: number;
   readonly publicationGeneration: number;
+  readonly checkpoint: boolean;
+  readonly changed: boolean;
   readonly draws: readonly ExampleDraw[];
-  readonly resourceRecords: readonly ExampleResourceRecord[];
-  readonly bufferRecords: readonly RenderPlanBufferRecord[];
-  readonly primitiveRecords: readonly ExamplePrimitiveRecord[];
-  /** Dirty ranges: what changed on which renderer buffer, not whole arrays. */
-  readonly patches: readonly RenderPlanPatchRecord[];
-  /**
-   * Storage to release, each naming `(kind, id, generation)` and the acknowledged
-   * publication generation that makes release safe.
-   */
-  readonly retirements: readonly RenderPlanRetirementRecord[];
-  readonly resources: ExampleTableSnapshot;
-  readonly buffers: ExampleTableSnapshot;
-  readonly primitives: ExampleTableSnapshot;
-  readonly diagnostics: ExampleTableSnapshot;
 }

@@ -20,6 +20,35 @@ canvas {
   touch-action: none;
 }
 
+.example-navigation {
+  position: fixed;
+  z-index: 10;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #293244;
+  border-radius: 999px;
+  background: rgb(7 9 15 / 88%);
+  backdrop-filter: blur(12px);
+}
+
+.example-navigation a {
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: #aeb9cf;
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.example-navigation a:hover,
+.example-navigation a[aria-current='page'] {
+  color: #ffffff;
+  background: #1a3a56;
+}
+
 .fallback {
   display: grid;
   width: 100%;

@@ -27,9 +27,9 @@ sources:
   - id: current-example
     resource: ../../packages/glyph-example-renderer/src/engine.ts
     title: Current example renderer
-  - id: current-example-reader
-    resource: ../../packages/glyph-example-renderer/src/plan-reader.ts
-    title: Current example plan decoder
+  - id: current-example-binder
+    resource: ../../packages/glyph-example-renderer/src/command-buffer.ts
+    title: Current example command-buffer binder
 generated:
   by: openai-codex/gpt-5.6
   at: '2026-09-01T00:00:00-04:00'
@@ -38,13 +38,13 @@ generated:
 # Glyph API investigation handoff
 
 This is the pre-implementation design brief and intentionally preserves alternatives that were investigated. The
-verified implementation outcome is recorded in [the investigation report](glyph-api-investigation-report.md), with the
-ordinary adapter contract in D-293, the R3F default-or-provider selection contract in D-294, and the latest approved but
-not yet implemented canonical FontFace/handle-loading direction in D-296. D-297 adds the required content-addressed,
-lease-counted internal resource graph and restricts runtime baking to authenticated TTF/OTF source bytes. D-298 makes
-that graph the sole semantic cache for the FontFace path and reduces Three and React loaders to integration/suspension
-roles. In particular, the implemented R3F components expose no handle prop; provider font maps and FontFace loading remain
-planned work.
+verified implementation outcome is recorded in [the investigation report](glyph-api-investigation-report.md). D-293 and
+D-294 establish the ordinary handle and immutable R3F context. D-296–D-300 preserve the FontFace/cache investigation;
+D-301 records the implemented correction that loading belongs to the FontFace selection as `selection.load(handle)` and
+`selection.isLoaded(handle)`, not as methods on a handle. D-302 records the shared glyph/decoration material factory, and
+D-303 records the paired Three/R3F examples plus external-renderer handle cutover. D-297's complete content-addressed,
+lease-counted dependency graph remains distinct follow-up work; current implementation shares the root FontLibrary and
+canonical React/loader request identity but does not claim every graph tier in that proposed model.
 
 D-296's omitted FontFace `format` is deliberately handle-relative. It does not imply Slug or any other root-owned
 technique: built-in `ThreeConfig` defaults its typed technique map to MSDF, and a wrapped config may select another
@@ -57,9 +57,9 @@ technique state, and handle-local binding are separate leased generations. Dispo
 mutating live resources, and a GLB format miss never falls through to runtime baking.
 
 D-298 records that Three's base `Loader` neither caches nor discovers dependencies, the installed `FileLoader` is not used
-by Glyph's current `FontLoader`, and current R3F adds its own `useLoader` cache. The FontFace implementation must collapse
-those semantic caches into the Glyph graph: `handle.load()` owns the operation, Three's `LoadingManager` may observe it,
-and React suspends on the same stable promise. The core GLB directory—not a filename convention—selects an embedded raster
+by Glyph's current `FontLoader`, and the former R3F loader path added its own `useLoader` cache. The implemented FontFace
+path collapses that React cache into Glyph: `selection.load(handle)` owns the operation, and React suspends on the same
+stable promise. The core GLB directory—not a filename convention—selects an embedded raster
 or an authenticated external raster artifact, whose decoder must finish its required external resources before the load
 resolves.
 
@@ -67,10 +67,11 @@ Generated sidecar filename patterns are producer conveniences, never runtime dis
 `PMNDRS_font.rasters` directory can assert that a technique exists and name its embedded or external artifact. A sidecar
 cannot be loaded as a FontFace root or used to infer support, even when its filename matches the CLI's normal pattern.
 
-D-299 keeps the R3F loaded path synchronous. React resolves the handle and selection, checks
-`handle.isLoaded(selection)`, and conditionally calls `use(handle.load(selection))` only for an authorized unloaded
-selection. The graph publishes readiness before fulfilling the Promise, so resolved rerenders skip `use()` entirely and
-pay no Promise or microtask stall.
+D-301 keeps the R3F rule binary. React resolves the handle and selection, checks `selection.isLoaded(handle)`, and
+conditionally calls `use(selection.load(handle))` whenever that resolved selection is not loaded. FontFace family strings
+resolve through Glyph's root catalog; an unknown name fails resolution. `GlyphProvider` only overrides the selected handle
+for a subtree. The graph publishes readiness before fulfilling the Promise, so resolved rerenders skip `use()` entirely
+and pay no Promise or microtask stall.
 
 This document preserves the API investigation so it can continue in a fresh context. It is a design brief, not an implementation plan that has been approved. The current code remains the evidence for what exists today.
 
@@ -332,9 +333,14 @@ Evidence in the current source:
 
 The current target is doing too many jobs in one class. It retains buffers, resources, materials, transforms, origin records, draws, preparation state, and retirement bookkeeping. This is the concrete reason the proposed decomposition is needed.
 
-## 8. How current R3F works
+## 8. Audited pre-refactor R3F baseline
 
-Current R3F does not use a Glyph React context or an explicit handle. The wrapper in `packages/glyph/src/react.ts`:
+This section records the implementation inspected when the investigation began. D-301 and the current `/react` source
+supersede it: R3F now selects an immutable handle through the optional provider context or the built-in default and uses
+FontFace selections instead of the legacy hook/cache path described below.
+
+The audited R3F implementation did not use a Glyph React context or an explicit handle. The wrapper then present in
+`packages/glyph/src/react.ts`:
 
 - registers the Three `Text` and `TextGroup` classes with R3F;
 - turns nested React `<Text>` children into one flattened text string plus span records;
@@ -344,7 +350,7 @@ Current R3F does not use a Glyph React context or an explicit handle. The wrappe
 - calls `invalidate()` after retained property updates;
 - relies on the Three object lifecycle and `updateMatrixWorld()` for publication.
 
-The current R3F consumer therefore looks like:
+That pre-refactor R3F consumer looked like:
 
 ```tsx
 const font = useMSDF(...);
@@ -488,12 +494,13 @@ flowchart LR
 
 Evidence:
 
-| Location                                                   | Current behavior                                                                                                                 |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/glyph-example-renderer/src/engine.ts:106-122`    | `openPlanner()` installs the policy, capability set, target, limits, and capacities.                                             |
-| `packages/glyph-example-renderer/src/engine.ts:125-135`    | `createText()` creates retained text; `publish()` publishes and returns the target’s decoded draw list.                          |
-| `packages/glyph-example-renderer/src/plan-reader.ts:16-71` | `readCandidate()` reads plan tables into an owned `ExampleDrawList`; borrowed write payloads are copied only when they escape.   |
-| `packages/glyph-example-renderer/src/engine.ts:255-333`    | The target resolves payloads, prepares/commits resources, prepares/commits submission, tracks generations, and retires payloads. |
+| Location                                                | Current behavior                                                                                                                                                                |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/glyph-example-renderer/src/engine.ts:106-122` | `openPlanner()` installs the policy, capability set, target, limits, and capacities.                                                                                            |
+| `packages/glyph-example-renderer/src/engine.ts:125-135` | `createText()` creates retained text; `publish()` publishes and returns the target’s decoded draw list.                                                                         |
+| `packages/glyph-example-renderer/src/command-buffer.ts` | `ExampleCommandBufferBinder` delegates canonical mapping, identity retention, resource settlement, and default decoding to core `createEngine()`.                               |
+| `packages/glyph-example-renderer/src/device.ts`         | The example renderer walks the bound ordered hierarchy during preparation and retains only the device-owned draw/buffer/resource state needed after the borrowed frame expires. |
+| `packages/glyph-example-renderer/src/engine.ts:255-333` | The target resolves payloads, prepares/commits resources, prepares/commits submission, tracks generations, and retires payloads.                                                |
 
 The proposed config/handle API should make this lifecycle reusable: the engine supplies the canonical plan and publication protocol; the example renderer supplies `resolve` and renderer/device consumption. It should not need a Three-specific command buffer.
 

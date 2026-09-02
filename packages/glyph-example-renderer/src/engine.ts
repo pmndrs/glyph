@@ -2,29 +2,27 @@ import type { AnyRasterTechnique, ColorInput, Font, FontStack } from '@pmndrs/gl
 import {
   type BackendFontBinding,
   type BackendFontStackBinding,
+  type BackendTransformBinding,
   type BackendPolicy,
   type PlanCandidate,
   type PlanTarget,
   type PlanTargetControl,
-  type RenderPlanResourceId,
-  type ResourceHandle,
   type RenderPlanner,
+  type RendererContext,
   type RetainedText,
   type GlyphEngine,
   applyGlyphPublication,
   type BorrowedBoundCommandBuffer,
+  type Codec,
   type GlyphRenderer,
 } from '@pmndrs/glyph/core';
 
 import type { ExampleDrawList } from './draw-list.js';
-import type { ExampleRendererDevice, ExampleRendererResourceInput } from './device.js';
-import { readCandidate } from './plan-reader.js';
 import { exampleCapabilitySet, exampleRenderPolicyDescriptor } from './policy.js';
-import { ExampleCommandBufferBinder, exampleFrameState } from './command-buffer.js';
-import type { ExampleBindings, ExampleGlyphConfig, ExampleRendererContext } from './config.js';
+import { ExampleCommandBufferBinder } from './command-buffer.js';
+import type { ExampleBindings, ExampleGlyphConfig, ExampleRootContext } from './config.js';
 
-const exampleDrawRoot = Object.freeze({}) as ExampleBindings['transform'];
-type ExampleAbortSignal = ExampleRendererContext['signal'];
+type ExampleAbortSignal = RendererContext<ExampleBindings>['signal'];
 interface ExampleAbortController {
   readonly signal: ExampleAbortSignal;
   abort(reason?: unknown): void;
@@ -78,31 +76,27 @@ export class ExampleTextEngine {
   #planner: RenderPlanner | undefined;
   #disposed = false;
 
-  constructor(glyphEngine: GlyphEngine, device?: ExampleRendererDevice, config?: ExampleGlyphConfig) {
-    if (device !== undefined) assertExampleRendererDevice(device);
+  constructor(glyphEngine: GlyphEngine, config: ExampleGlyphConfig, root: ExampleRootContext) {
     this.#backend = glyphEngine.createBackend({ integration: '@pmndrs/glyph-example-renderer' });
-    this.#target = new ExamplePlanTarget(device, config);
+    let codec: Codec | undefined;
     try {
-      this.#policy = this.#backend.installPolicy(
-        (ids) =>
-          config?.encode({ integration: '@pmndrs/glyph-example-renderer', ids }).descriptor ??
-          exampleRenderPolicyDescriptor(ids),
-      );
+      this.#policy = this.#backend.installPolicy((ids) => {
+        codec =
+          config?.encode({ integration: '@pmndrs/glyph-example-renderer', ids }) ??
+          Object.freeze({ descriptor: exampleRenderPolicyDescriptor(ids) });
+        return codec.descriptor;
+      });
     } catch (error) {
       this.#backend.dispose();
       throw error;
     }
+    if (codec === undefined) throw new Error('example codec was not created during policy installation');
+    this.#target = new ExamplePlanTarget(config, codec, root);
   }
 
   /** Binds one immutable font to this renderer backend. */
   bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): BackendFontBinding<Technique> {
     this.#assertActive();
-    const shader = this.#target.shader;
-    if (shader !== undefined && shader.variant.techniqueId !== font.technique.id) {
-      throw new TypeError(
-        `example renderer shader "${shader.variant.techniqueId}" cannot render "${font.technique.id}"`,
-      );
-    }
     return this.#backend.bindFont(font);
   }
 
@@ -111,16 +105,6 @@ export class ExampleTextEngine {
     stack: FontStack<Technique, Font<Technique>>,
   ): BackendFontStackBinding {
     this.#assertActive();
-    const shader = this.#target.shader;
-    if (shader !== undefined) {
-      for (const font of stack.fonts) {
-        if (font.technique.id !== shader.variant.techniqueId) {
-          throw new TypeError(
-            `example renderer shader "${shader.variant.techniqueId}" cannot render "${font.technique.id}"`,
-          );
-        }
-      }
-    }
     return this.#backend.bindFontStack(stack);
   }
 
@@ -146,7 +130,7 @@ export class ExampleTextEngine {
   /** Creates one retained text instance in the open planner. */
   createText(options: ExampleTextOptions): ExampleText {
     const planner = this.#requirePlanner();
-    return new ExampleText(planner, () => this.publish(), options);
+    return new ExampleText(planner, () => this.publish(), this.#backend.createTransformBinding(), options);
   }
 
   /** Publishes current desired state and returns the accepted decoded draw list. */
@@ -154,13 +138,6 @@ export class ExampleTextEngine {
     const result = this.#requirePlanner().publish();
     if (!result.accepted) throw result.error;
     return this.#target.lastDrawList;
-  }
-
-  /** Installs a caller-owned rebuilt device; the next publication is a complete checkpoint. */
-  replaceDevice(device: ExampleRendererDevice): void {
-    this.#assertActive();
-    assertExampleRendererDevice(device);
-    this.#target.replaceDevice(device);
   }
 
   /** Disposes the backend, planner, target, and retained payload leases. */
@@ -185,13 +162,25 @@ export class ExampleTextEngine {
 export class ExampleText {
   readonly #text: RetainedText;
   readonly #publish: () => ExampleDrawList;
+  readonly #transform: BackendTransformBinding;
   #state: NormalizedExampleTextOptions;
   #disposed = false;
 
-  constructor(planner: RenderPlanner, publish: () => ExampleDrawList, options: ExampleTextOptions) {
+  constructor(
+    planner: RenderPlanner,
+    publish: () => ExampleDrawList,
+    transform: BackendTransformBinding,
+    options: ExampleTextOptions,
+  ) {
     this.#publish = publish;
+    this.#transform = transform;
     this.#state = normalizeTextOptions(options);
-    this.#text = planner.createText(coreTextOptions(this.#state));
+    try {
+      this.#text = planner.createText(coreTextOptions(this.#state, transform));
+    } catch (error) {
+      transform.dispose();
+      throw error;
+    }
   }
 
   /** Current desired text content. */
@@ -206,7 +195,7 @@ export class ExampleText {
       throw new TypeError('example text updates must be objects');
     }
     const state = normalizeTextOptions({ ...this.#state, ...update });
-    this.#text.update(coreTextOptions(state));
+    this.#text.update(coreTextOptions(state, this.#transform));
     this.#state = state;
   }
 
@@ -221,6 +210,7 @@ export class ExampleText {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#text.dispose();
+    this.#transform.dispose();
   }
 
   #assertActive(): void {
@@ -230,41 +220,45 @@ export class ExampleText {
 
 class ExamplePlanTarget implements PlanTarget {
   readonly delivery = 'borrowed' as const;
-  #device: ExampleRendererDevice | undefined;
   #control: PlanTargetControl | undefined;
-  readonly #payloads = new Map<ResourceHandle, ReturnType<PlanCandidate['acquirePayload']>>();
-  readonly #resourcePayloads = new Map<
-    RenderPlanResourceId,
-    Readonly<{ generation: number; referenceId: ResourceHandle }>
-  >();
   #lastDrawList: ExampleDrawList | undefined;
-  readonly #config: ExampleGlyphConfig | undefined;
-  readonly #binder: ExampleCommandBufferBinder | undefined;
-  readonly #renderer: GlyphRenderer<ExampleBindings, void> | undefined;
+  readonly #config: ExampleGlyphConfig;
+  readonly #binder: ExampleCommandBufferBinder;
+  readonly #renderer: GlyphRenderer<ExampleBindings, ExampleDrawList>;
   readonly #rendererAbort = new ExampleAbortController();
   #disposed = false;
 
-  constructor(device: ExampleRendererDevice | undefined, config: ExampleGlyphConfig | undefined) {
-    this.#device = device;
+  constructor(config: ExampleGlyphConfig, codec: Codec, root: ExampleRootContext) {
     this.#config = config;
-    if (config !== undefined) {
-      this.#binder = new ExampleCommandBufferBinder(config);
-      const defaultRenderer: GlyphRenderer<ExampleBindings, void> = Object.freeze({
-        prepare: (frame: BorrowedBoundCommandBuffer<ExampleBindings>) => this.#prepareBoundFrame(frame),
-        syncTransforms: () => undefined,
-        dispose: () => undefined,
-      });
-      const context: ExampleRendererContext = Object.freeze({
-        drawRoot: exampleDrawRoot,
+    this.#binder = new ExampleCommandBufferBinder(config, codec, root);
+    const configured = config.renderer(
+      Object.freeze({
+        drawRoot: config.schema.drawRoot(root),
         signal: this.#rendererAbort.signal,
-        defaultRenderer,
-      });
-      this.#renderer = config.renderer(context);
-    }
-  }
-
-  get shader(): ExampleRendererDevice['shader'] | undefined {
-    return this.#device?.shader;
+      }),
+    );
+    this.#renderer = Object.freeze({
+      prepare: (frame: BorrowedBoundCommandBuffer<ExampleBindings>) => {
+        const prepared = configured.prepare(frame);
+        let settled = false;
+        return Object.freeze({
+          result: prepared.result,
+          commit: () => {
+            if (settled) throw new Error('example renderer preparation is already settled');
+            settled = true;
+            prepared.commit();
+            this.#lastDrawList = prepared.result;
+          },
+          discard: () => {
+            if (settled) return;
+            settled = true;
+            prepared.discard();
+          },
+        });
+      },
+      syncTransforms: (updates: Parameters<typeof configured.syncTransforms>[0]) => configured.syncTransforms(updates),
+      dispose: () => configured.dispose(),
+    });
   }
 
   get lastDrawList(): ExampleDrawList {
@@ -277,105 +271,9 @@ class ExamplePlanTarget implements PlanTarget {
     this.#control = control;
   }
 
-  replaceDevice(device: ExampleRendererDevice): void {
-    if (this.#disposed) throw new Error('example plan target is disposed');
-    const current = this.#device;
-    if (current === device) return;
-    if (current !== undefined && !sameShaderSelection(current.shader, device.shader)) {
-      throw new TypeError('replacement device must select the same renderer shader');
-    }
-    this.#control?.requestCheckpoint();
-    for (const payload of this.#payloads.values()) payload.dispose();
-    this.#payloads.clear();
-    this.#resourcePayloads.clear();
-    this.#lastDrawList = undefined;
-    this.#device = device;
-  }
-
   accept(candidate: PlanCandidate, signal: Parameters<PlanTarget['accept']>[1]) {
     if (this.#disposed) return { accepted: false as const, error: new Error('example plan target is disposed') };
-    if (this.#config !== undefined && this.#binder !== undefined && this.#renderer !== undefined) {
-      return applyGlyphPublication(candidate, signal, this.#config.decode, this.#binder, this.#renderer);
-    }
-    return this.#acceptCandidate(candidate, readCandidate(candidate));
-  }
-
-  #acceptCandidate(candidate: PlanCandidate, list: ExampleDrawList) {
-    const device = this.#device;
-    if (device === undefined) {
-      this.#lastDrawList = list;
-      return { accepted: true as const };
-    }
-
-    const resources: ExampleRendererResourceInput[] = [];
-    const nextResourcePayloads = new Map(this.#resourcePayloads);
-    const acquired: Array<ReturnType<PlanCandidate['acquirePayload']>> = [];
-    const retained = new Set<ReturnType<PlanCandidate['acquirePayload']>>();
-    try {
-      for (const record of list.resourceRecords) {
-        if (record.referenceId === 0) continue;
-        nextResourcePayloads.set(record.id, { generation: record.generation, referenceId: record.referenceId });
-        if (this.#payloads.has(record.referenceId)) continue;
-        const payload = candidate.acquirePayload(record.referenceId);
-        if (payload.techniqueId !== device.shader.variant.techniqueId) {
-          payload.dispose();
-          throw new TypeError(`plan payload technique "${payload.techniqueId}" does not match the selected shader`);
-        }
-        acquired.push(payload);
-        resources.push({
-          id: record.referenceId,
-          generation: record.generation,
-          name: payload.resourceName,
-          resource: payload.payload,
-        });
-      }
-      for (const retirement of list.retirements) {
-        if (retirement.kind !== 'resource') continue;
-        const resourceId = retirement.id as RenderPlanResourceId;
-        const current = nextResourcePayloads.get(resourceId);
-        if (current?.generation === retirement.generation) nextResourcePayloads.delete(resourceId);
-      }
-      const pendingResources = device.prepareResources(resources);
-      try {
-        pendingResources.commit();
-      } catch (error) {
-        pendingResources.discard();
-        throw error;
-      }
-      for (const [index, payload] of acquired.entries()) {
-        this.#payloads.set(resources[index]!.id, payload);
-        retained.add(payload);
-      }
-
-      const pending = device.prepareSubmission(list);
-      try {
-        if (!pending.commit()) {
-          pending.discard();
-          return { accepted: false as const, error: new Error('example renderer rejected a superseded plan') };
-        }
-      } catch (error) {
-        pending.discard();
-        throw error;
-      }
-      this.#lastDrawList = list;
-      this.#resourcePayloads.clear();
-      for (const [id, payload] of nextResourcePayloads) this.#resourcePayloads.set(id, payload);
-      const activeReferences = new Set([...nextResourcePayloads.values()].map(({ referenceId }) => referenceId));
-      const retiredPayloads: Array<[ResourceHandle, ReturnType<PlanCandidate['acquirePayload']>]> = [];
-      for (const [referenceId, payload] of this.#payloads) {
-        if (activeReferences.has(referenceId)) continue;
-        retiredPayloads.push([referenceId, payload]);
-      }
-      device.releaseResources(retiredPayloads.map(([referenceId]) => referenceId));
-      for (const [referenceId, payload] of retiredPayloads) {
-        payload.dispose();
-        this.#payloads.delete(referenceId);
-      }
-      return { accepted: true as const };
-    } catch (error) {
-      for (const payload of acquired) if (!retained.has(payload)) payload.dispose();
-      return { accepted: false as const, error };
-    }
+    return applyGlyphPublication(candidate, signal, this.#config.decode, this.#binder, this.#renderer);
   }
 
   dispose(): void {
@@ -390,67 +288,10 @@ class ExamplePlanTarget implements PlanTarget {
         failure ??= error;
       }
     };
-    const referenceIds = [...this.#payloads.keys()];
-    attempt(() => this.#renderer?.dispose());
-    attempt(() => this.#binder?.dispose());
-    if (referenceIds.length !== 0) attempt(() => this.#device?.releaseResources(referenceIds));
-    for (const payload of this.#payloads.values()) attempt(() => payload.dispose());
-    this.#payloads.clear();
-    this.#resourcePayloads.clear();
+    attempt(() => this.#renderer.dispose());
+    attempt(() => this.#binder.dispose());
     this.#control = undefined;
     if (failure !== undefined) throw failure;
-  }
-
-  #prepareBoundFrame(frame: BorrowedBoundCommandBuffer<ExampleBindings>) {
-    const state = exampleFrameState(frame);
-    let settled = false;
-    return Object.freeze({
-      result: undefined,
-      commit: () => {
-        if (settled) throw new Error('example renderer preparation is already settled');
-        settled = true;
-        const result = this.#acceptCandidate(state.candidate, state.list);
-        if (!result.accepted) throw result.error;
-      },
-      discard: () => {
-        settled = true;
-      },
-    });
-  }
-}
-
-function sameShaderSelection(left: ExampleRendererDevice['shader'], right: ExampleRendererDevice['shader']): boolean {
-  return (
-    left.variant.techniqueId === right.variant.techniqueId &&
-    left.variant.language === right.variant.language &&
-    left.programNamespace === right.programNamespace &&
-    left.programName === right.programName &&
-    left.programVariant === right.programVariant
-  );
-}
-
-function assertExampleRendererDevice(value: unknown): asserts value is ExampleRendererDevice {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new TypeError('example renderer device must be an object');
-  }
-  const device = value as Partial<ExampleRendererDevice>;
-  const shader = device.shader;
-  if (
-    typeof shader !== 'object' ||
-    shader === null ||
-    typeof shader.variant !== 'object' ||
-    shader.variant === null ||
-    typeof shader.variant.techniqueId !== 'string' ||
-    typeof shader.variant.language !== 'string'
-  ) {
-    throw new TypeError('example renderer device must select a shader');
-  }
-  if (
-    typeof device.prepareResources !== 'function' ||
-    typeof device.prepareSubmission !== 'function' ||
-    typeof device.releaseResources !== 'function'
-  ) {
-    throw new TypeError('example renderer device must implement resource and submission methods');
   }
 }
 
@@ -474,9 +315,10 @@ function normalizeTextOptions(options: ExampleTextOptions): NormalizedExampleTex
   };
 }
 
-function coreTextOptions(state: NormalizedExampleTextOptions) {
+function coreTextOptions(state: NormalizedExampleTextOptions, transform: BackendTransformBinding) {
   return {
     font: state.font,
+    transform,
     text: state.text,
     style: {
       fontSize: state.fontSize,

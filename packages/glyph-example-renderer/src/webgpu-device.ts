@@ -3,7 +3,7 @@
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 
-import type { PortableGeometryPayload, ResourceHandle } from '@pmndrs/glyph/core';
+import type { BorrowedBoundCommandBuffer, PortableGeometryPayload } from '@pmndrs/glyph/core';
 import {
   TypeGpuGlyphExampleFragmentInput,
   TypeGpuGlyphExampleVertexInput,
@@ -11,14 +11,12 @@ import {
   glyphExampleVertex,
 } from '@pmndrs/glyph-example-raster/typegpu';
 
-import type { ExampleDrawList } from './draw-list.js';
+import type { ExampleBindings } from './config.js';
 import {
   RecordingExampleRendererDevice,
   exampleRendererShader,
-  type ExamplePendingResources,
   type ExamplePendingSubmission,
   type ExampleRendererDevice,
-  type ExampleRendererResourceInput,
   type ExampleRendererShader,
   type ExampleRealizedDraw,
 } from './device.js';
@@ -88,7 +86,6 @@ type GpuInstanceBuffers = Map<string, Map<Uint8Array, GpuInstanceBuffer>>;
 interface PreparedGeometry {
   readonly resource: unknown;
   readonly geometry: GpuGeometry;
-  readonly resourceIds: ResourceHandle[];
 }
 
 /** A concrete offscreen TypeGPU renderer whose accepted submissions produce RGBA pixels. */
@@ -106,7 +103,6 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   readonly #pipeline;
   // Font bindings are host-lifetime; their geometry is released with the device.
   readonly #geometries = new Map<unknown, GpuGeometry>();
-  readonly #geometryResources = new Map<ResourceHandle, unknown>();
   readonly #instanceBuffers: GpuInstanceBuffers = new Map();
   #submittedPasses = 0;
   #lost = false;
@@ -162,60 +158,14 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     return this.#submittedPasses;
   }
 
-  /** Validates and stages portable geometry without mutating accepted GPU state. */
-  prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources {
+  /** Stages one bound publication, including portable resources, buffers, and GPU submission. */
+  prepare(frame: BorrowedBoundCommandBuffer<ExampleBindings>): ExamplePendingSubmission {
     this.#assertActive();
-    const pending = this.#recording.prepareResources(resources);
-    const prepared = new Map<unknown, PreparedGeometry>();
-    try {
-      for (const input of resources) {
-        if (input.name !== this.shader.variant.geometry.resource) continue;
-        const existing = prepared.get(input.resource);
-        if (existing !== undefined) {
-          existing.resourceIds.push(input.id);
-          continue;
-        }
-        const geometry = this.#createGeometry(input.name, input.resource as PortableGeometryPayload);
-        prepared.set(input.resource, { resource: input.resource, geometry, resourceIds: [input.id] });
-      }
-    } catch (error) {
-      for (const entry of prepared.values()) destroyGeometry(entry.geometry);
-      pending.discard();
-      throw error;
-    }
-    let active = true;
-    return Object.freeze({
-      commit: () => {
-        if (!active) return;
-        pending.commit();
-        active = false;
-        for (const entry of prepared.values()) {
-          if (!entry.resourceIds.some((id) => this.#recording.resources.get(id) === entry.resource)) {
-            destroyGeometry(entry.geometry);
-            continue;
-          }
-          const previous = this.#geometries.get(entry.resource);
-          this.#geometries.set(entry.resource, entry.geometry);
-          if (previous !== undefined) destroyGeometry(previous);
-          for (const id of entry.resourceIds) this.#geometryResources.set(id, entry.resource);
-        }
-      },
-      discard: () => {
-        if (!active) return;
-        active = false;
-        pending.discard();
-        for (const entry of prepared.values()) destroyGeometry(entry.geometry);
-      },
-    });
-  }
-
-  /** Validates and stages one publication before its GPU submission is committed. */
-  prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission {
-    this.#assertActive();
-    const pending = this.#recording.prepareSubmission(drawList);
+    const pending = this.#recording.prepare(frame);
     if (!pending.replacesRenderState) {
       let active = true;
       return Object.freeze({
+        result: pending.result,
         commit: () => {
           if (!active) return false;
           active = false;
@@ -228,29 +178,57 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
         },
       });
     }
+    const geometryName =
+      this.shader.variant.geometry.kind === 'synthetic-quad' ? undefined : this.shader.variant.geometry.resource;
+    const activeGeometryResources = new Set(
+      [...pending.activeResources].filter(([binding]) => binding.name === geometryName).map(([, resource]) => resource),
+    );
+    const candidateGeometries = new Map(
+      [...this.#geometries].filter(([resource]) => activeGeometryResources.has(resource)),
+    );
+    const preparedGeometries: PreparedGeometry[] = [];
     let buffers: GpuInstanceBuffers;
     try {
+      if (geometryName !== undefined) {
+        for (const resource of activeGeometryResources) {
+          if (candidateGeometries.has(resource)) continue;
+          const geometry = this.#createGeometry(geometryName, resource as PortableGeometryPayload);
+          preparedGeometries.push({ resource, geometry });
+          candidateGeometries.set(resource, geometry);
+        }
+      }
       buffers = this.#prepareInstanceBuffers(pending.realizedDraws);
     } catch (error) {
+      for (const entry of preparedGeometries) destroyGeometry(entry.geometry);
       pending.discard();
       throw error;
     }
     let active = true;
     return Object.freeze({
+      result: pending.result,
       commit: () => {
         if (!active) return false;
         active = false;
         try {
           this.#assertActive();
-          const accepted = pending.publish(() => this.#submitValidated(pending.realizedDraws, buffers));
+          const accepted = pending.publish(() =>
+            this.#submitValidated(pending.realizedDraws, buffers, candidateGeometries),
+          );
           if (!accepted) {
             destroyInstanceBuffers(buffers);
+            for (const entry of preparedGeometries) destroyGeometry(entry.geometry);
             return false;
           }
         } catch (error) {
           destroyInstanceBuffers(buffers);
+          for (const entry of preparedGeometries) destroyGeometry(entry.geometry);
           throw error;
         }
+        for (const [resource, geometry] of this.#geometries) {
+          if (!candidateGeometries.has(resource)) destroyGeometry(geometry);
+        }
+        this.#geometries.clear();
+        for (const [resource, geometry] of candidateGeometries) this.#geometries.set(resource, geometry);
         destroyInstanceBuffers(this.#instanceBuffers);
         this.#instanceBuffers.clear();
         for (const [name, byBytes] of buffers) this.#instanceBuffers.set(name, byBytes);
@@ -261,23 +239,19 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
         active = false;
         pending.discard();
         destroyInstanceBuffers(buffers);
+        for (const entry of preparedGeometries) destroyGeometry(entry.geometry);
       },
     });
   }
 
-  /** Destroys geometry after its last accepted portable reference retires. */
-  releaseResources(referenceIds: readonly ResourceHandle[]): void {
+  /** Clears accepted host state while keeping the caller-owned device usable. */
+  reset(): void {
     this.#assertActive();
-    this.#recording.releaseResources(referenceIds);
-    for (const id of referenceIds) {
-      const resource = this.#geometryResources.get(id);
-      if (resource === undefined || this.#recording.resources.has(id)) continue;
-      this.#geometryResources.delete(id);
-      if ([...this.#geometryResources.values()].includes(resource)) continue;
-      const geometry = this.#geometries.get(resource);
-      if (geometry !== undefined) destroyGeometry(geometry);
-      this.#geometries.delete(resource);
-    }
+    this.#recording.reset();
+    for (const geometry of this.#geometries.values()) destroyGeometry(geometry);
+    this.#geometries.clear();
+    destroyInstanceBuffers(this.#instanceBuffers);
+    this.#instanceBuffers.clear();
   }
 
   /** Returns a caller-owned RGBA snapshot after submitted GPU work completes. */
@@ -330,7 +304,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     if (this.#disposed) return;
     this.#disposed = true;
     for (const geometry of this.#geometries.values()) destroyGeometry(geometry);
-    this.#geometryResources.clear();
+    this.#geometries.clear();
     destroyInstanceBuffers(this.#instanceBuffers);
     this.#target.destroy();
     this.#viewport.buffer.destroy();
@@ -413,6 +387,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   #encodeAcceptedState(
     realizedDraws: readonly ExampleRealizedDraw[],
     buffers: ReadonlyMap<string, ReadonlyMap<Uint8Array, GpuInstanceBuffer>>,
+    geometries: ReadonlyMap<unknown, GpuGeometry>,
   ): GPUCommandBuffer {
     if (realizedDraws.length === 0) {
       const encoder = this.#root['~unstable'].createCommandEncoder();
@@ -445,7 +420,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
         const geometryName = realized.geometry.resourceName;
         if (geometryName === undefined) throw new Error('TypeGPU example renderer needs supplied geometry');
         const geometryResource = realized.resources.get(geometryName);
-        const geometry = this.#geometries.get(geometryResource);
+        const geometry = geometries.get(geometryResource);
         if (geometryResource === undefined || geometry === undefined) {
           throw new Error(`TypeGPU example renderer has no realized "${geometryName}" geometry`);
         }
@@ -489,8 +464,9 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   #submitValidated(
     realizedDraws: readonly ExampleRealizedDraw[],
     buffers: ReadonlyMap<string, ReadonlyMap<Uint8Array, GpuInstanceBuffer>>,
+    geometries: ReadonlyMap<unknown, GpuGeometry>,
   ): void {
-    const command = this.#encodeAcceptedState(realizedDraws, buffers);
+    const command = this.#encodeAcceptedState(realizedDraws, buffers, geometries);
     this.#device.queue.submit([command]);
     // CPU submission acceptance commits the candidate; later WebGPU faults enter device-loss recovery.
     this.#assertActive();

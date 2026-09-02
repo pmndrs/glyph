@@ -21,11 +21,14 @@ export interface TextLiteral<Technique extends AnyRasterTechnique = never> {
   readonly spans: readonly ParagraphSpan<Technique>[];
 }
 
-export interface TextSpanFragment<Technique extends AnyRasterTechnique = never> {
+export interface TextSpanFragment<
+  Technique extends AnyRasterTechnique = never,
+  Properties extends object = Omit<ParagraphSpan<Technique>, 'start' | 'end'>,
+> {
   readonly [textSpanFragmentTechnique]: (technique: Technique) => Technique;
   readonly text: string;
   readonly spans: readonly ParagraphSpan<Technique>[];
-  readonly properties: Omit<ParagraphSpan<Technique>, 'start' | 'end'>;
+  readonly properties: Properties;
 }
 
 /**
@@ -46,26 +49,13 @@ export { resolveRangesToClusters } from './internal/graphemes.js';
  * engine, so the rule a caller sees is the constructive one -- a cluster takes the style of its
  * base -- rather than a deferred rejection.
  *
- * This is the backstop for the ONE surface that carries raw offsets: the untyped `spans` array,
- * whose numbers are the caller's own arithmetic. It is no longer what discovers a split the
- * package itself derived. `txt`/`span` and the React `<Text>` tree compile a document that states
- * no offsets at all, and each resolves the boundaries it derives at its own concatenation joins
+ * `txt`/`span` and the React `<Text>` tree compile a document that states no offsets at all, and each
+ * resolves the boundaries it derives at its own concatenation joins
  * (`resolveRangesToClusters`), so a compiled paragraph arrives here already on the cluster grid and
  * this call finds nothing to move.
  *
- * It is exported because a caller that would rather detect the shift than accept it needs the same
- * answer the library will use. The argument array is returned by identity when nothing moves, so
- * `alignSpansToClusters(text, spans) === spans` is the whole check.
- *
- * Not published. Every span reaching the engine already passes through here -- `Text.set()` applies it to the
- * `spans` array, and the tree compilers resolve the same way before a span is ever built -- so a caller who
- * called it could not change the outcome. It stays exported from this module for the engine and for the test
- * that pins its identity property.
- *
- * ```ts
- * const resolved = alignSpansToClusters(text, spans);
- * if (resolved !== spans) reportToTheEditorThatItsOffsetsSplitACluster(resolved);
- * ```
+ * It stays module-local to the structural compilers and engine adapter; applications never author the
+ * resulting offset records.
  *
  * Text that is not well-formed UTF-16 has no cluster grid to resolve against and is the engine's to
  * reject; its spans are returned untouched so that the presence of a span cannot decide whether a
@@ -102,6 +92,24 @@ export interface UnboundSpanTag {
   ): TextSpanFragment<Technique>;
 }
 
+/** Integrator utility for adding renderer-owned properties to a structural span fragment. */
+export function createSpanTag<Technique extends AnyRasterTechnique, Properties extends object>(
+  properties: Readonly<Properties>,
+): SpanTag<Technique> {
+  if (typeof properties !== 'object' || properties === null || Array.isArray(properties)) {
+    throw new TypeError('span properties must be an object');
+  }
+  const frozen = Object.freeze({ ...properties });
+  return ((strings: TemplateStringsArray, ...values: readonly TextTemplateValue<Technique>[]) => {
+    const composed = compose(strings, values);
+    return Object.freeze({
+      text: composed.text,
+      spans: Object.freeze(composed.spans),
+      properties: frozen,
+    }) as TextSpanFragment<Technique, Properties>;
+  }) as SpanTag<Technique>;
+}
+
 export function txt<Technique extends AnyRasterTechnique = never>(
   strings: TemplateStringsArray,
   ...values: readonly TextTemplateValue<Technique>[]
@@ -120,14 +128,7 @@ export function span<Technique extends AnyRasterTechnique>(
   ...rest: readonly SpanFormat<Technique>[]
 ): SpanTag<Technique> | UnboundSpanTag {
   const properties = normalizeFormats([first, ...rest]);
-  return ((strings: TemplateStringsArray, ...values: readonly TextTemplateValue<Technique>[]) => {
-    const composed = compose(strings, values);
-    return Object.freeze({
-      text: composed.text,
-      spans: Object.freeze(composed.spans),
-      properties,
-    }) as TextSpanFragment<Technique>;
-  }) as SpanTag<Technique>;
+  return createSpanTag<Technique, typeof properties>(properties) as SpanTag<Technique> | UnboundSpanTag;
 }
 
 /**
@@ -150,7 +151,7 @@ function compose<Technique extends AnyRasterTechnique>(
     const value = values[index]!;
     const start = text.length;
     if (isFragment(value)) {
-      const fragment = value as TextLiteral<Technique> | TextSpanFragment<Technique>;
+      const fragment = value as TextLiteral<Technique> | TextSpanFragment<Technique, object>;
       text += fragment.text;
       // Every resolver applies the last covering span, so an enclosing span must
       // precede the spans it contains for inner formatting to compose over it.

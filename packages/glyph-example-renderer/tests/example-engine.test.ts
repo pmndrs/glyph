@@ -5,7 +5,6 @@ import { createGlyphEngine, type PlanTarget, type RenderPlanner, type RenderPlan
 import { glyph } from '@pmndrs/glyph';
 import { describe, expect, test } from 'vitest';
 
-import { ExampleTextEngine } from '../src/engine.js';
 import { defineExampleConfig, type ExampleGlyphConfig } from '../src/config.js';
 import { exampleRenderPolicyDescriptor } from '../src/policy.js';
 
@@ -72,19 +71,18 @@ describe('a retained engine driven through the published core surface', () => {
   });
 
   test('publishes synchronously without exposing raw revisions or frame bytes', async () => {
-    const glyphEngine = await createGlyphEngine({ wasm: await wasmBytes() });
-    const engine = new ExampleTextEngine(glyphEngine);
+    await glyph.init({ wasm: await wasmBytes() });
+    const handle = glyph.handle('example:publication-test', defineExampleConfig());
     try {
-      const first = engine.publish();
-      const second = engine.publish();
+      const first = handle.publish();
+      const second = handle.publish();
       expect(first.publicationGeneration).toBe(1);
       expect(first.engineRevision).toBe(1);
       expect(first.draws).toEqual([]);
       expect(second.publicationGeneration).toBe(2);
       expect(second.engineRevision).toBe(2);
     } finally {
-      engine.dispose();
-      glyphEngine.dispose();
+      handle.dispose();
     }
   });
 

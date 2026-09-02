@@ -20,6 +20,9 @@ sources:
   - id: glyph-runtime
     resource: ../../packages/glyph/src/glyph.ts
     title: Root Glyph runtime and named handle registry
+  - id: font-face
+    resource: ../../packages/glyph/src/font-face.ts
+    title: FontFace declarations and handle-relative loading
   - id: glyph-config
     resource: ../../packages/glyph/src/core/glyph-config.ts
     title: Reusable GlyphConfig publication contracts
@@ -147,8 +150,8 @@ that turns those payloads into textures, buffers, and geometry and leases them a
 | `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                                 |
 | `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                                 |
 | `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                      |
-| `@pmndrs/glyph/react/bitmap` | Typed `useBitmapFont(input, options)` convenience over `useFont`.                                                                         |
-| `@pmndrs/glyph/react/msdf`   | Typed `useMSDF(input, options?)` convenience over `useFont`.                                                                              |
+| `@pmndrs/glyph/react/bitmap` | Typed `useBitmap(input, options)` convenience over `useFont`.                                                                             |
+| `@pmndrs/glyph/react/msdf`   | Typed `useMsdf(input, options?)` convenience over `useFont`.                                                                              |
 | `@pmndrs/glyph/react/slug`   | Typed `useSlug(input)` convenience over `useFont`.                                                                                        |
 | `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                              |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                                 |
@@ -189,12 +192,19 @@ IDs, and names retained in a font's `post` or CFF data. Exact repeatable `--name
 compressed `--unicode-set` accepted by `glyph bake --unicodes`. Fonts without authored names still expose exact IDs rather
 than invented semantic labels. Rich vendor labels and aliases remain external catalog data.
 
-R3F `<Text>` and `<TextGroup>` expose no handle prop. They read a selected `ThreeHandle` from the nearest
+R3F `<Text>` and `<TextGroup>` expose no handle prop. They read a selected `ThreeHandle` from the nearest optional
 `GlyphProvider`, or suspend on one module-owned default Three handle that calls idempotent `glyph.init()` and installs
-`ThreeConfig` once. A provider captures its initial handle and never updates the context value; selecting another handle
-requires remounting the provider. Context is constructor dependency injection only: it owns no engine, runtime, scene,
-renderer, canvas, publication cursor, or resource pool, and it never disposes an externally owned handle. Imperative
-construction uses `handle.createText()` and `handle.createTextGroup()` directly.
+`ThreeConfig` once. A provider captures its initial handle and `fontFaces` alias table and never updates the context
+value; selecting another handle or alias table requires remounting the provider. Context is constructor dependency
+injection only: it owns no engine, runtime, scene, renderer, canvas, publication cursor, or semantic resource cache, and
+it never disposes an externally owned handle or FontFace. It disposes only FontFaces it declared from shorthand table
+entries. Supplying `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` handles only `FontLoadError`
+and rethrows unrelated errors. Imperative construction uses `handle.createText()` and `handle.createTextGroup()` directly.
+
+Successful initialization retains one settled `Promise<void>` forever: concurrent and later `glyph.init()` calls receive
+the same object. React still checks synchronous initialized and loaded state first, so ready renders do not call `use()`
+or cross a microtask. FontFace loads retain one Promise only for the lifetime of their handle-owned load record; disposing
+the face or handle releases that record, and a rejected operation is evicted for retry.
 
 The R3F `Text` component infers the technique union from a required outer font selection, including a font stack chosen
 from runtime state. Callers do not widen dynamic selections to `AnyRasterTechnique`. A nested `Text` is flattened into
@@ -249,17 +259,18 @@ keep its identity registry alive or permanently poison later registration after 
 
 One baked GLB may expose several raster techniques without repeating its input identity. Root
 `loadFont(input, rasters, options?)` accepts a nonempty raster tuple and returns a position-preserving tuple of `Font`
-values, fetching and validating the artifact once while retaining each technique's exact data type. R3F's generic
-`useFont(input, technique, options?)` intentionally loads one typed technique; a component that renders several calls the
-corresponding hooks, which R3F caches under their canonical per-technique keys.
+values, fetching and validating the artifact once while retaining each technique's exact data type. The new declaration
+surface is `glyph.fontFace(source, { family?, format? })`. The face is its default selection, `.default` aliases it, and
+declared format keys such as `.bitmap`, `.msdf`, or `.slug` select inferred techniques. The consuming handle supplies the
+default key when `format` is omitted. Each selection owns idempotent `selection.load(handle)` and synchronous
+`selection.isLoaded(handle)`; imperative Three rejects unloaded construction before it creates retained state.
 
-Single-technique React consumers may import `useBitmapFont`, `useMSDF`, or `useSlug` from the matching `/react/*`
-subpath. Each hook only constructs that technique's typed request and delegates to `useFont`; Suspense, cache identity,
-and disposal therefore have one implementation. Technique-specific subpaths preserve the registration and
-bundle boundary instead of making the main React entry import every built-in raster. Every hook carries `preload()` and
-`clear()`. Generic `useFont(input, technique, options?)` is the extension point for third-party techniques. R3F's
-`useLoader` cache owns the shared promise and resolved value; Glyph adds only deterministic font-lease disposal so
-clearing a preload does not dispose an independently mounted consumer.
+React's `useFont(source, config?)` declares through that same FontFace path, conditionally calls React 19 `use()` only
+while `selection.isLoaded(handle)` is false, and returns an independently mounted immutable Font lease. Single-technique
+consumers may import `useBitmap`, `useMsdf`, or `useSlug` from the matching `/react/*` subpath. Each wrapper only builds its
+typed format request and delegates to `useFont`; readiness, canonical source/format identity, and mounted disposal have
+one implementation. Every hook carries Promise-returning `preload()` and declaration `clear()`. Clearing a declaration
+does not invalidate an independently mounted Font or Text lease.
 
 Artifact metrics carry text decoration from bake time (D-246): required `underlinePosition`/`underlineThickness` from
 `post` and `strikeoutPosition`/`strikeoutSize` from `OS/2`, with a conservative derived fallback when a source font
@@ -270,8 +281,11 @@ boundary), the engine cascade stamps the CSS decorating box so one continuous li
 the declaring span's scale, and records flow through both planners as resource-free rows of the reserved
 `pmndrs.decoration` technique. Plan programs carry a primitive kind in the former reserved wire field; underline and
 overline rows precede the paragraph's glyphs while line-through follows them, matching CSS paint order, and Three
-realizes every decoration draw with one shared flat-quad TSL material. Decorated render planners rebuild their gather output;
-the undecorated retained fast path is unchanged.
+realizes decorations as separate ordered draw objects. The same `defineTextMaterial()` factory used by glyph techniques
+receives a closed `kind: 'glyph' | 'decoration'` context and may keep or override the default flat-quad TSL material
+without mutating the glyph draw. Only the glyph branch carries its concrete raster `technique`; `pmndrs.decoration`
+remains an internal policy/command-buffer identifier. Decorated render planners rebuild their gather output; the
+undecorated retained fast path is unchanged.
 
 When runtime baking is required, one Worker request normalizes the Unicode ranges, prepares the selected source once,
 and feeds those exact prepared bytes to the shaping bake and every requested Bitmap, MSDF, or Slug bake. The Worker

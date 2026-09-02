@@ -1,18 +1,23 @@
-# React Three Fiber hello world
+# Three.js and React Three Fiber examples
 
-This is the smallest product-shaped `@pmndrs/glyph` example in the workspace. It renders `Hello world` through the
-public React Three Fiber API, binds the globe span to a subsetted Font Awesome font, and switches between Bitmap, MSDF,
-and Slug using controls rendered inside the canvas.
+This private Vite package places imperative Three.js and React Three Fiber examples side by side over the same checked
+font assets. The root page dynamically loads only the selected integration:
 
-The complete scene lives in `src/app.tsx`. Two public `useFont.preload()` calls begin loading the checked assets before
-the scene suspends on the same cached requests. Local technique state reveals one of three pre-rendered React `Activity`
-branches. Each branch contains one standalone Inter `Text` with a nested `Text` span that selects the matching Font
-Awesome raster directly, so this known icon does not require a font stack. The technique color is shared by that globe
-span and its in-canvas button label. The Slug-rendered controls use a `TextGroup` so their three labels can batch
-explicitly; the row stays centered across the top while the world copy stays centered in the viewport.
+- `?example=three` runs `src/three-example.ts`.
+- `?example=r3f` runs `src/r3f-example.tsx` and `src/app.tsx` (the default).
+
+The imperative example is the smallest complete public lifecycle. It initializes Glyph once, creates a Three handle,
+declares and loads one FontFace through that handle, creates a `Text`, and attaches it to an ordinary Three scene. Its
+explicit `text.shape()` call publishes the semantic state and attaches the planned `Mesh` below the `Text` before the
+application initializes `WebGPURenderer`; only `renderer.render(scene, camera)` performs the host draw.
+
+The R3F twin renders `Hello world` through the public React adapter, binds the globe span to a subsetted Font Awesome
+font, and switches between Bitmap, MSDF, and Slug using controls rendered inside the canvas. The typed convenience hooks
+start the checked font loads before the scene suspends on those same cached requests. The Slug-rendered controls use a
+`TextGroup` so their three labels can batch explicitly.
 
 ```sh
-mise exec -- pnpm --filter @pmndrs/glyph-r3f-hello-world dev
+mise exec -- pnpm --filter @pmndrs/glyph-examples dev
 ```
 
 The app uses React 19, the React Compiler, the WebGPU R3F entry point, and Three's automatic WebGL fallback. Its two checked-in GLBs share shaping data across the three embedded raster techniques:
@@ -27,10 +32,13 @@ uses the same commands with `--check`, which rebuilds into temporary storage and
 rewriting the checked asset.
 
 ```sh
-mise exec -- pnpm --filter @pmndrs/glyph-r3f-hello-world bake
-mise exec -- pnpm --filter @pmndrs/glyph-r3f-hello-world bake:check
-mise exec -- pnpm --filter @pmndrs/glyph-r3f-hello-world check
+mise exec -- pnpm --filter @pmndrs/glyph-examples bake
+mise exec -- pnpm --filter @pmndrs/glyph-examples bake:check
+mise exec -- pnpm --filter @pmndrs/glyph-examples check
 ```
 
 `bake:inter` and `bake:icons` regenerate one asset each; `bake:check:inter` and `bake:check:icons` verify them
-independently. Each font-specific command still embeds all three raster techniques in one GLB.
+independently. Each font-specific command still embeds all three raster techniques in one GLB. The final check also runs
+two browser probes: the R3F route exercises all three technique branches, and the imperative route verifies that the
+scene owns the `Text`, the `Text` owns one planned draw mesh, and Three sees ten visible glyph instances for `Hello world`
+(the space shapes but does not draw).
