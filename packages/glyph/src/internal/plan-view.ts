@@ -1,6 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { PlanPublication } from './handle-state.js';
-import type { ResourceHandle } from '../config/codec.js';
 
 /** Byte span, record count, and fixed stride for one validated plan table. */
 export interface RenderPlanTable {
@@ -203,14 +202,4 @@ function validateResultTable(
     throw new RangeError(`text-engine ${name} table is outside the publication`);
   }
   return Object.freeze({ offset, count, stride: layout.record.size });
-}
-
-/** @internal Reads one field from an admitted Rust resource row without semantic revalidation. */
-export function readTrustedRenderPlanResourceReferenceId(
-  plan: RenderPlanView,
-  table: RenderPlanTable,
-  index: number,
-): ResourceHandle {
-  const base = plan.record(table, index);
-  return plan.u32(base + textShaperAbi.layouts.engineResource.referenceId) as ResourceHandle;
 }

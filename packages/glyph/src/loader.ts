@@ -2872,10 +2872,6 @@ function copyView(value: ArrayBufferView): Uint8Array<ArrayBuffer> {
   return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice() as Uint8Array<ArrayBuffer>;
 }
 
-function copyBuffer(value: ArrayBufferView): ArrayBuffer {
-  return copyView(value).buffer;
-}
-
 function ownFontBytes(value: ArrayBufferView, ownership: FontByteOwnership): Uint8Array<ArrayBuffer> {
   if (!ArrayBuffer.isView(value)) throw new TypeError('font bytes must be an ArrayBuffer view');
   if (value.byteLength === 0) throw new TypeError('font bytes must not be empty or detached');

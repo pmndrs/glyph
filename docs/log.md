@@ -2,6 +2,13 @@
 
 ## 2026-09-02
 
+- **Removed the unreachable owned render-plan pipeline** — Configured handles now retain only the synchronous borrowed
+  publication path used by `glyph.shape()`, Three, R3F, and the example renderer. The deleted alternative copied every
+  Wasm publication, eagerly built a second payload manifest, awaited a renderer Promise, validated the returned buffer,
+  and pooled exact-size allocations, but no GlyphConfig integration referenced it and the engine-wide shape batch
+  explicitly rejected it. D-318 records one zero-copy rendering path while keeping explicit FontFace Worker transfer
+  independent and lazy.
+
 - **Removed the example renderer's parallel font/publication recipe** — The custom TypeGPU renderer now declares its
   exact `glyphExample` RasterFormat and default in `GlyphConfig.fonts`, accepts a loaded `glyph.fontFace()` selection at
   `handle.createText()`, and lets Text acquire and release its own immutable Font lease. Its acceptance path no longer

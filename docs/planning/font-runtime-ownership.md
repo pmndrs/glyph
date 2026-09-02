@@ -26,9 +26,6 @@ sources:
   - id: current-bake-discovery
     resource: ../../packages/glyph/src/discovery.ts
     title: Current static defineFont discovery
-  - id: current-transfer-pool
-    resource: ../../packages/glyph/src/internal/frame-transfer-pool.ts
-    title: Existing bounded worker transfer pool
   - id: current-three-engine
     resource: ../../packages/glyph/src/three/handle.ts
     title: Current Three.js configured handle

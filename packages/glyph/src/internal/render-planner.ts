@@ -10,7 +10,6 @@ import {
   type ParagraphLayout,
   type TextStyle,
 } from '../text-properties.js';
-import { createExactFrameBufferPool, type ExactFrameBufferPool } from './frame-transfer-pool.js';
 import {
   compileEngineGeometry,
   assertTextEffectsSupported,
@@ -42,7 +41,7 @@ import type {
   PlanPublication,
   PlanTransport,
 } from './handle-state.js';
-import { RenderPlanView, readTrustedRenderPlanResourceReferenceId, type RenderPlanTable } from './plan-view.js';
+import { RenderPlanView, type RenderPlanTable } from './plan-view.js';
 import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
 import type { PortableResource } from '../config/resources.js';
 import {
@@ -99,11 +98,6 @@ export interface BorrowedRenderPlan extends RenderPlanReader {
   readonly delivery: 'borrowed';
 }
 
-/** A self-owned render-plan view that may cross an asynchronous boundary. */
-export interface OwnedRenderPlan extends RenderPlanReader {
-  readonly delivery: 'owned';
-}
-
 /** One renderer-neutral payload resolved from a plan resource reference. */
 export interface ResolvedPortablePayload {
   readonly referenceId: ResourceHandle;
@@ -119,12 +113,6 @@ export interface PortablePayloadLease extends ResolvedPortablePayload {
   readonly resources: readonly ResolvedPortablePayload[];
   readonly disposed: boolean;
   dispose(): void;
-}
-
-/** One self-owned payload delivered with an asynchronous plan candidate. */
-export interface ResolvedPlanPayload extends ResolvedPortablePayload {
-  readonly techniqueId: string;
-  readonly resources: readonly ResolvedPortablePayload[];
 }
 
 /** A plan transform resolved to its handle-owned binding. */
@@ -151,27 +139,8 @@ export interface PlanCandidate {
   resolveResource(resourceId: ResourceHandle): HandleResourceBinding;
 }
 
-/** A self-owned candidate suitable for a worker or deferred renderer. */
-export interface AsyncPlanCandidate {
-  readonly origin: PlanOrigin;
-  readonly plan: OwnedRenderPlan;
-  readonly engineRevision: number;
-  readonly planRevision: number;
-  readonly publicationGeneration: number;
-  /** Whether this publication is a complete renderer checkpoint rather than an incremental update. */
-  readonly checkpoint: boolean;
-  readonly bytes: Uint8Array<ArrayBuffer>;
-  readonly payloads: readonly ResolvedPlanPayload[];
-  readonly transforms: readonly ResolvedPlanTransform[];
-}
-
 /** The renderer's transactional decision for one candidate. */
 export type PlanAcceptance = Readonly<{ accepted: true }> | Readonly<{ accepted: false; error: unknown }>;
-
-/** An asynchronous target decision that returns ownership of the transfer buffer. */
-export type AsyncPlanTargetResult =
-  | Readonly<{ accepted: true; returnedBytes: Uint8Array<ArrayBuffer> }>
-  | Readonly<{ accepted: false; error: unknown; returnedBytes?: Uint8Array<ArrayBuffer> }>;
 
 /** Renderer-to-plan control channel for requesting a complete checkpoint. */
 export interface PlanTargetControl {
@@ -184,17 +153,6 @@ export interface PlanTarget {
   accept(candidate: PlanCandidate, signal: AbortSignal): PlanAcceptance;
   dispose(): void;
 }
-
-/** Asynchronous one-copy target for worker or deferred consumption. */
-export interface AsyncPlanTarget {
-  readonly delivery: 'owned';
-  readonly maximumPlanBytes: number;
-  accept(candidate: AsyncPlanCandidate, signal: AbortSignal): Promise<AsyncPlanTargetResult>;
-  dispose(): void;
-}
-
-/** Either supported plan-delivery contract. */
-export type RenderPlanTarget = PlanTarget | AsyncPlanTarget;
 
 /** One formatted-text span using handle-bound renderer and font values. */
 export interface RetainedTextSpan {
@@ -307,22 +265,11 @@ export interface RenderPlanner extends RenderPlannerBase {
   publish(options?: RenderPlannerPublishOptions): PlanAcceptance;
 }
 
-/** An asynchronous producer of owned render plans for an asynchronous target. */
-export interface AsyncRenderPlanner extends RenderPlannerBase {
-  /** Copies, transfers, and asynchronously offers current desired state to the plan target. */
-  publish(options?: RenderPlannerPublishOptions): Promise<PlanAcceptance>;
-}
-
-/** Resolves the planner surface from its target's delivery contract. */
-export type RenderPlannerFor<Target extends RenderPlanTarget> = Target extends AsyncPlanTarget
-  ? AsyncRenderPlanner
-  : RenderPlanner;
-
 /** Construction options for one retained-text planner and render target. */
-export interface RenderPlannerOptions<Target extends RenderPlanTarget> {
+export interface RenderPlannerOptions {
   readonly codec: CodecRegistration;
   readonly capabilitySet?: CodecCapabilitySet;
-  readonly target: (control: PlanTargetControl) => Target;
+  readonly target: (control: PlanTargetControl) => PlanTarget;
   readonly limits: RenderPlannerLimits;
   readonly requestCapacity: number;
   readonly resultCapacity: number;
@@ -353,12 +300,8 @@ export class RenderPlannerDisposedError extends Error {
   }
 }
 
-/** Thrown when a pending asynchronous acceptance prevents another plan call. */
-export class RenderPlannerBackpressureError extends Error {}
 /** Thrown when fixed transport capacity cannot encode the requested work. */
 export class PlanTransportCapacityError extends Error {}
-/** Thrown when an asynchronous target violates the transfer contract. */
-export class PlanTransportError extends Error {}
 
 interface ResolvedSpan {
   readonly start: number;
@@ -429,11 +372,8 @@ export interface StagedRenderPlanner {
 const textStates = new WeakMap<object, Readonly<{ planner: RenderPlannerImpl; state: RetainedTextState }>>();
 
 /** @internal Constructed only after GlyphHandleState validates handle ownership. */
-export function createRenderPlanner<Target extends RenderPlanTarget>(
-  handleState: GlyphHandleState,
-  options: RenderPlannerOptions<Target>,
-): RenderPlannerFor<Target> {
-  return new RenderPlannerImpl(handleState, options) as RenderPlannerFor<Target>;
+export function createRenderPlanner(handleState: GlyphHandleState, options: RenderPlannerOptions): RenderPlanner {
+  return new RenderPlannerImpl(handleState, options);
 }
 
 /** @internal Construct a query planner without a renderer acceptance target. */
@@ -465,7 +405,7 @@ class RenderPlannerImpl {
   readonly #transport: PlanTransport;
   readonly #codec: ReturnType<GlyphHandleState['_retainInstalledCodec']>;
   readonly #capabilitySet: ReturnType<typeof selectCodecCapabilitySet> | undefined;
-  readonly #target: RenderPlanTarget | undefined;
+  readonly #target: PlanTarget | undefined;
   readonly #control: TargetControlState | undefined;
   readonly #targetController = new AbortController();
   readonly #origin = Object.freeze({}) as PlanOrigin;
@@ -473,7 +413,6 @@ class RenderPlannerImpl {
   readonly #texts = new Set<RetainedTextState>();
   readonly #removed = new Set<RetainedTextState>();
   readonly #measured = new Map<RetainedTextState, ResolvedTextOptions>();
-  readonly #returnedBuffers: ExactFrameBufferPool | undefined;
   readonly #textsByOrder = new Map<number, RetainedTextState>();
   #liveTextCount = 0;
   #liveStyleCount = 0;
@@ -491,7 +430,6 @@ class RenderPlannerImpl {
   #structureRevision = 0;
   #measuredStructureRevision = -1;
   #textCapacity: number;
-  #pending = false;
   #disposed = false;
   #stagedBatch: StagedBatchPublication | undefined;
   #stagedRequestLength = 0;
@@ -501,7 +439,7 @@ class RenderPlannerImpl {
 
   constructor(
     handleState: GlyphHandleState,
-    options: RenderPlannerOptions<RenderPlanTarget> | MeasurementPlannerOptions,
+    options: RenderPlannerOptions | MeasurementPlannerOptions,
     measurementOnly = false,
   ) {
     this.#handleState = handleState;
@@ -523,15 +461,14 @@ class RenderPlannerImpl {
         this.#capabilitySet = undefined;
         this.#target = undefined;
         this.#control = undefined;
-        this.#returnedBuffers = undefined;
         return;
       } catch (error) {
         codec.dispose();
         throw error;
       }
     }
-    const renderOptions = options as RenderPlannerOptions<RenderPlanTarget>;
-    let target: RenderPlanTarget | undefined;
+    const renderOptions = options as RenderPlannerOptions;
+    let target: PlanTarget | undefined;
     let claimed = false;
     const control = new TargetControlState(() => {
       this.#assertActive();
@@ -544,7 +481,7 @@ class RenderPlannerImpl {
           ? undefined
           : selectCodecCapabilitySet(codec.handle, codec.descriptor, renderOptions.capabilitySet);
       target = renderOptions.target(control);
-      assertTarget(target, this.#limits.maxOutputBytes);
+      assertTarget(target);
       if (claimedTargets.has(target)) throw new TypeError('plan target is already attached to another render planner');
       claimedTargets.add(target);
       claimed = true;
@@ -559,14 +496,6 @@ class RenderPlannerImpl {
       this.#control = control;
       this.#codec = codec;
       this.#capabilitySet = capabilitySet;
-      this.#returnedBuffers =
-        target.delivery === 'owned'
-          ? createExactFrameBufferPool({
-              maximumBufferBytes: target.maximumPlanBytes,
-              maximumPooledBuffers: 2,
-              maximumPooledBytes: target.maximumPlanBytes,
-            })
-          : undefined;
     } catch (error) {
       control.dispose();
       codec.dispose();
@@ -623,11 +552,11 @@ class RenderPlannerImpl {
     return text;
   }
 
-  publish(options?: RenderPlannerPublishOptions): PlanAcceptance | Promise<PlanAcceptance> {
+  publish(options?: RenderPlannerPublishOptions): PlanAcceptance {
     this.#assertMutable();
     if (this.#target === undefined) throw new Error('measurement-only planners cannot publish render plans');
     const normalized = normalizePublishOptions(options);
-    return this.#target.delivery === 'borrowed' ? this.#publishBorrowed(normalized) : this.#publishOwned(normalized);
+    return this.#publishBorrowed(normalized);
   }
 
   /** @internal */
@@ -843,7 +772,6 @@ class RenderPlannerImpl {
     this.#dirtyTextCount = 0;
     this.#pendingStyleCount = 0;
     attempt(() => this.#codec.dispose());
-    this.#returnedBuffers?.clear();
     this.#handleState._detachPlanner(this);
     if (failure !== undefined) throw failure;
   }
@@ -865,86 +793,6 @@ class RenderPlannerImpl {
     }
     if (result.accepted) this.#accept(pending);
     return result;
-  }
-
-  async #publishOwned(options: NormalizedPublishOptions): Promise<PlanAcceptance> {
-    const pending = this.#publishEngine(options);
-    const { publication } = pending;
-    const publicationByteLength = publication.bytes.byteLength;
-    const bytes = this.#copyPlan(publication.bytes);
-    const plan = new RenderPlanView().bindBytes(bytes);
-    const payloadLeases = this.#resolvePlanPayloads(plan);
-    const candidate: AsyncPlanCandidate = Object.freeze({
-      origin: this.#origin,
-      plan: new OwnedPlanReader(plan),
-      engineRevision: publication.engineRevision,
-      planRevision: publication.planRevision,
-      publicationGeneration: publication.publicationGeneration,
-      checkpoint: publicationIsCheckpoint(publication),
-      bytes,
-      payloads: Object.freeze(
-        payloadLeases.map(({ referenceId, lease }) => ({
-          referenceId: referenceId as ResourceHandle,
-          identity: lease.identity,
-          techniqueId: lease.techniqueId,
-          resourceName: lease.resourceName,
-          payload: lease.payload,
-          resources: lease.resources,
-        })),
-      ),
-      transforms: Object.freeze(this.#resolvedTransforms()),
-    });
-    this.#pending = true;
-    let allocationSettled = false;
-    const reclaimAttachedSource = (): void => {
-      if (allocationSettled || bytes.buffer.byteLength === 0) return;
-      this.#returnPlanBuffer(bytes);
-      allocationSettled = true;
-    };
-    let outcome!: PlanAcceptance;
-    let primaryFailure: unknown;
-    try {
-      const result = await abortableTargetAcceptance(
-        (this.#target as AsyncPlanTarget).accept(candidate, this.#targetController.signal),
-        this.#targetController.signal,
-      );
-      const accepted = assertAsyncAcceptance(result, publication, publicationByteLength);
-      if (accepted.returnedBytes !== undefined) {
-        if (bytes.buffer.byteLength !== 0 && accepted.returnedBytes.buffer !== bytes.buffer) {
-          throw new PlanTransportError('async target copied the plan instead of transferring it');
-        }
-        this.#returnPlanBuffer(accepted.returnedBytes);
-        allocationSettled = true;
-      }
-      if (accepted.accepted) this.#accept(pending);
-      outcome = accepted.accepted ? { accepted: true } : { accepted: false, error: accepted.error };
-    } catch (error) {
-      primaryFailure = error;
-    }
-    this.#pending = false;
-    let cleanupFailure: unknown;
-    try {
-      reclaimAttachedSource();
-    } catch (error) {
-      cleanupFailure = error;
-    }
-    for (const { lease } of payloadLeases) {
-      try {
-        lease.dispose();
-      } catch (error) {
-        cleanupFailure ??= error;
-      }
-    }
-    if (primaryFailure !== undefined) {
-      if (cleanupFailure !== undefined) {
-        throw new AggregateError([primaryFailure, cleanupFailure], 'plan acceptance and cleanup both failed', {
-          cause: primaryFailure,
-        });
-      }
-      throw primaryFailure;
-    }
-    if (cleanupFailure !== undefined) throw cleanupFailure;
-    return outcome;
   }
 
   #publishEngine(options: NormalizedPublishOptions): PendingPublication {
@@ -1312,27 +1160,6 @@ class RenderPlannerImpl {
     });
   }
 
-  #resolvePlanPayloads(plan: RenderPlanView): readonly Readonly<{
-    referenceId: number;
-    lease: PortablePayloadLease;
-  }>[] {
-    const table = plan.table('resources');
-    const leases: Array<Readonly<{ referenceId: number; lease: PortablePayloadLease }>> = [];
-    const seen = new Set<number>();
-    try {
-      for (let index = 0; index < table.count; index += 1) {
-        const referenceId = readTrustedRenderPlanResourceReferenceId(plan, table, index);
-        if (referenceId === 0 || seen.has(referenceId)) continue;
-        seen.add(referenceId);
-        leases.push({ referenceId, lease: this.#portablePayload(referenceId as ResourceHandle) });
-      }
-      return leases;
-    } catch (error) {
-      for (const { lease } of leases) lease.dispose();
-      throw error;
-    }
-  }
-
   #resolvedTransforms(): readonly ResolvedPlanTransform[] {
     const transforms = new Map<
       RenderPlanTransformId,
@@ -1417,23 +1244,6 @@ class RenderPlannerImpl {
     if (failure !== undefined) throw failure;
   }
 
-  #copyPlan(source: Uint8Array): Uint8Array<ArrayBuffer> {
-    if (source.byteLength > (this.#target as AsyncPlanTarget).maximumPlanBytes) {
-      throw new PlanTransportCapacityError('render plan exceeds the target transfer limit');
-    }
-    const buffer = this.#returnedBuffers!.acquire(source.byteLength);
-    const bytes = new Uint8Array(buffer);
-    bytes.set(source);
-    return bytes;
-  }
-
-  #returnPlanBuffer(bytes: Uint8Array<ArrayBuffer>): void {
-    if (!(bytes instanceof Uint8Array) || bytes.byteOffset !== 0 || bytes.byteLength !== bytes.buffer.byteLength) {
-      throw new PlanTransportError('async target returned a non-full-span plan buffer');
-    }
-    this.#returnedBuffers!.release(bytes.buffer);
-  }
-
   #accept({ publication, checkpointGeneration }: PendingPublication): void {
     this.#planRevision = publication.planRevision;
     this.#acknowledgedGeneration = publication.publicationGeneration;
@@ -1442,7 +1252,6 @@ class RenderPlannerImpl {
 
   #assertMutable(): void {
     this.#assertActive();
-    if (this.#pending) throw new RenderPlannerBackpressureError('an asynchronous plan acceptance is already pending');
   }
 
   #assertTextQueryable(state: RetainedTextState): void {
@@ -1572,35 +1381,6 @@ class GuardedPlanReader implements BorrowedRenderPlan {
   }
   bytes(offset: number, byteLength: number): Uint8Array {
     this.#assertActive();
-    return this.#view.bytes(offset, byteLength);
-  }
-}
-
-class OwnedPlanReader implements OwnedRenderPlan {
-  readonly delivery = 'owned' as const;
-  readonly #view: RenderPlanView;
-  constructor(view: RenderPlanView) {
-    this.#view = view;
-  }
-  table(name: RenderPlanTableName): RenderPlanTable {
-    return this.#view.table(name);
-  }
-  record(table: RenderPlanTable, index: number): number {
-    return this.#view.record(table, index);
-  }
-  u8(offset: number): number {
-    return this.#view.u8(offset);
-  }
-  u16(offset: number): number {
-    return this.#view.u16(offset);
-  }
-  u32(offset: number): number {
-    return this.#view.u32(offset);
-  }
-  f32(offset: number): number {
-    return this.#view.f32(offset);
-  }
-  bytes(offset: number, byteLength: number): Uint8Array {
     return this.#view.bytes(offset, byteLength);
   }
 }
@@ -2045,7 +1825,7 @@ function releaseResolvedText(value: ResolvedTextOptions): void {
   if (failure !== undefined) throw failure;
 }
 
-function assertRenderPlannerOptions(value: unknown): asserts value is RenderPlannerOptions<RenderPlanTarget> {
+function assertRenderPlannerOptions(value: unknown): asserts value is RenderPlannerOptions {
   if (!isNonArrayObject(value)) throw new TypeError('render planner options must be an object');
   if (typeof value.target !== 'function') throw new TypeError('render planner target must be a factory');
   assertRenderPlannerCapacities(value);
@@ -2085,18 +1865,11 @@ function snapshotLimits(value: unknown): RenderPlannerLimits {
   return snapshot;
 }
 
-function assertTarget(value: unknown, minimumPlanBytes: number): asserts value is RenderPlanTarget {
+function assertTarget(value: unknown): asserts value is PlanTarget {
   if (!isNonArrayObject(value)) throw new TypeError('plan target factory must return an object');
-  if (value.delivery !== 'borrowed' && value.delivery !== 'owned')
-    throw new TypeError('plan target delivery is invalid');
+  if (value.delivery !== 'borrowed') throw new TypeError('plan target delivery must be borrowed');
   if (typeof value.accept !== 'function' || typeof value.dispose !== 'function') {
     throw new TypeError('plan target must implement accept() and dispose()');
-  }
-  if (value.delivery === 'owned') {
-    positiveU32(value.maximumPlanBytes, 'maximumPlanBytes');
-    if ((value.maximumPlanBytes as number) < minimumPlanBytes) {
-      throw new RangeError('maximumPlanBytes must cover limits.maxOutputBytes');
-    }
   }
 }
 
@@ -2125,63 +1898,6 @@ function assertAcceptance(value: unknown): PlanAcceptance {
   if (value.accepted) return Object.freeze({ accepted: true });
   if (!('error' in value)) throw new TypeError('rejected plan acceptance must carry an error');
   return Object.freeze({ accepted: false, error: value.error });
-}
-
-function assertAsyncAcceptance(
-  value: unknown,
-  publication: PlanPublication,
-  publicationByteLength: number,
-): Readonly<{ accepted: boolean; error?: unknown; returnedBytes?: Uint8Array<ArrayBuffer> }> {
-  const accepted = assertAcceptance(value);
-  const returnedBytes = isNonArrayObject(value) ? value.returnedBytes : undefined;
-  if (returnedBytes !== undefined) {
-    if (
-      !(returnedBytes instanceof Uint8Array) ||
-      !(returnedBytes.buffer instanceof ArrayBuffer) ||
-      returnedBytes.byteOffset !== 0 ||
-      returnedBytes.byteLength !== publicationByteLength ||
-      returnedBytes.buffer.byteLength !== publicationByteLength
-    ) {
-      throw new PlanTransportError('async target returned the wrong plan buffer');
-    }
-    let returnedPlan: RenderPlanView;
-    try {
-      returnedPlan = new RenderPlanView().bindBytes(returnedBytes as Uint8Array<ArrayBuffer>);
-    } catch (cause) {
-      throw new PlanTransportError('async target returned malformed plan bytes', { cause });
-    }
-    const layout = textShaperAbi.layouts.engineResult;
-    if (
-      returnedPlan.u32(layout.engineRevision) !== publication.engineRevision ||
-      returnedPlan.u32(layout.planRevision) !== publication.planRevision ||
-      returnedPlan.u32(layout.publicationGeneration) !== publication.publicationGeneration
-    ) {
-      throw new PlanTransportError('async target returned bytes for a different publication');
-    }
-  }
-  if (accepted.accepted && returnedBytes === undefined) {
-    throw new PlanTransportError('accepted async plan did not return its transfer buffer');
-  }
-  return accepted.accepted
-    ? { accepted: true, returnedBytes: returnedBytes as Uint8Array<ArrayBuffer> }
-    : {
-        accepted: false,
-        error: accepted.error,
-        ...(returnedBytes === undefined ? {} : { returnedBytes: returnedBytes as Uint8Array<ArrayBuffer> }),
-      };
-}
-
-async function abortableTargetAcceptance(
-  promise: Promise<AsyncPlanTargetResult>,
-  signal: AbortSignal,
-): Promise<AsyncPlanTargetResult> {
-  if (!(promise instanceof Promise)) throw new TypeError('owned plan target accept() must return a Promise');
-  return new Promise((resolve, reject) => {
-    const abort = (): void => reject(signal.reason ?? new RenderPlannerDisposedError());
-    if (signal.aborted) return abort();
-    signal.addEventListener('abort', abort, { once: true });
-    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
-  });
 }
 
 function checkedNextOrdinal(value: number): number {

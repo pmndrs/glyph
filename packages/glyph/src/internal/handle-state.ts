@@ -7,12 +7,7 @@ import type { AnyRasterFormat } from '../raster-format.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import { compileRasterFont, resolveRasterPlanProgram, type CompiledRasterFont } from '../config/raster.js';
 import { portableResourceIdentity, type PortableResource } from '../config/resources.js';
-import {
-  createRenderPlanner,
-  type RenderPlannerFor,
-  type RenderPlannerOptions,
-  type RenderPlanTarget,
-} from './render-planner.js';
+import { createRenderPlanner, type RenderPlanner, type RenderPlannerOptions } from './render-planner.js';
 import { markOwnedPlanPublication, PlanPublicationExpiredError, type OwnedPlanPublication } from './retention.js';
 import {
   assertGlyphId,
@@ -749,8 +744,8 @@ export class GlyphHandleState {
     this.#ids.release(handle, 'codec');
   }
 
-  /** Creates a render planner whose delivery mode is selected by its target. */
-  createRootPlanner<Target extends RenderPlanTarget>(options: RenderPlannerOptions<Target>): RenderPlannerFor<Target> {
+  /** Creates a render planner for a synchronous borrowed target. */
+  createRootPlanner(options: RenderPlannerOptions): RenderPlanner {
     const planner = createRenderPlanner(this, options);
     this.#planners.add(planner);
     return planner;

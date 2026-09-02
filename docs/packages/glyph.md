@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:823281167917181148f7e7f5832252e35bb75ca6787f61d1fbea00ba270b378f'
+source_digest: 'sha256:1138953b61927fa0a881d360f76f0bab0d8fd0b7cc5bb8e2369bcacdd07ee669'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -580,10 +580,13 @@ font-baker validator, Three executor, raster decoder, and TSL compatibility path
 imports can still reach those files. Packed-package tests import representative nested leaves and prove each blocked path
 fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
 
-Internal engine machinery owns the completed asynchronous Worker transfer contract: it copies opaque plan bytes once into
-a bounded exact-size transferable pool, applies explicit backpressure, and requires the target to return the same
-unmodified full-span buffer. The ordinary configured path uses the synchronous borrowed view. The example renderer proves
-TypeGPU and WebGPU realization directly against the same Rust command plan.
+Configured rendering has one publication contract: `glyph.shape()` stages every dirty root, crosses the Wasm boundary
+once, and synchronously offers each root's borrowed command-buffer view to its renderer. The view expires when decode
+returns; renderer commit/discard settles the corresponding publication before the batch closes. The removed owned-target
+branch copied every plan, resolved a second payload manifest, awaited a separate target, and pooled returned buffers, but
+no GlyphConfig integration could use it and it could not participate in the engine-wide shape batch. Cross-realm font
+movement remains the explicit lazy `FontFace.clone()` operation; render-plan transfer is not a parallel publication API.
+The example renderer proves TypeGPU and WebGPU realization directly against the same borrowed Rust command plan.
 
 ## Current correctness evidence
 
