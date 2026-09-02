@@ -75,7 +75,7 @@ const planProgram = (techniqueIdentity, declaration = {}) => {
     registerRasterPlanProgram({
       raster: technique,
       schema,
-      policyBody(system) {
+      codecBody(system) {
         const program = techniqueProgram(schema, { system });
         return program.compile(
           Object.fromEntries(
@@ -258,7 +258,7 @@ test('registration selects one renderer variant per technique before engine cons
   const font = await fontForTechnique(unsupported);
   assert.throws(
     () => handle.createText({ font, text: 'unsupported' }),
-    /no installed policy for "test-portable-without-three"/,
+    /no installed codec for "test-portable-without-three"/,
   );
   font.dispose();
   handle.dispose();
@@ -315,7 +315,7 @@ test('engine construction rejects a portable body compiled for different system 
   const portable = registerRasterPlanProgram({
     raster: technique,
     schema,
-    policyBody() {
+    codecBody() {
       const authoring = techniqueProgram(schema, {
         system: {
           stableGlyphId: { id: STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
@@ -344,7 +344,7 @@ test('engine construction rejects a portable body compiled for different system 
 
   assert.throws(
     () => glyph.handle('three:program-registration:wrong-system', ThreeConfig),
-    /policy body does not use the requested system buffers/,
+    /codec body does not use the requested system buffers/,
   );
 });
 

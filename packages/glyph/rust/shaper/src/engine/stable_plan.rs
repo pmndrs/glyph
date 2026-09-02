@@ -9,6 +9,11 @@ use alloc::vec::Vec;
 use core::mem;
 
 use super::{
+    codec::{
+        ALLOCATION_STABLE_INDIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BUFFER_USAGE_COPY_DST,
+        BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CapabilitySetId, ScalarType, TechniqueId,
+        ValidatedCodec,
+    },
     identity_index::IdentitySet,
     plan_draw::{GlyphDraw, push_glyph_draw},
     plan_input::{
@@ -21,14 +26,9 @@ use super::{
         coalesce_buffer_ranges, collect_range_jobs, execute_run, grown_capacity,
         push_pending_allocation, record_alignment, take_allocation,
     },
-    policy::{
-        ALLOCATION_STABLE_INDIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BUFFER_USAGE_COPY_DST,
-        BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CapabilitySetId, ScalarType, TechniqueId,
-        ValidatedPolicy,
-    },
     render_plan::{
-        BUFFER_STABLE_INDIRECT, BufferRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE,
-        POLICY_BUFFER_ORDER, PRIMITIVE_DECORATION, PatchRecord, PrimitiveRecord,
+        BUFFER_STABLE_INDIRECT, BufferRecord, CODEC_BUFFER_ORDER, DrawRecord,
+        PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE, PRIMITIVE_DECORATION, PatchRecord, PrimitiveRecord,
         RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN, RETIRE_BUFFER, RETIRE_RESOURCE,
         RETIRE_SLOT_RANGE, RenderPlanView, ResourceRecord, RetirementRecord,
     },
@@ -186,9 +186,9 @@ struct SlotWrite {
 
 #[derive(Clone, Copy)]
 struct PrepareContext<'a> {
-    policy: &'a ValidatedPolicy,
+    codec: &'a ValidatedCodec,
     capability_set: CapabilitySetId,
-    capability: &'a super::policy::CapabilitySet,
+    capability: &'a super::codec::CapabilitySet,
     input: StablePlanInput<'a>,
     checkpoint: bool,
     publication_generation: u32,
@@ -242,7 +242,7 @@ impl StablePlanCompiler {
     #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: StablePlanInput<'_>,
         checkpoint: bool,
@@ -250,7 +250,7 @@ impl StablePlanCompiler {
         acknowledged_publication_generation: u32,
     ) -> Result<(), StablePlanError> {
         self.prepare_with_strategy_filter(
-            policy,
+            codec,
             capability_set,
             input,
             checkpoint,
@@ -263,7 +263,7 @@ impl StablePlanCompiler {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn prepare_filtered(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: StablePlanInput<'_>,
         checkpoint: bool,
@@ -271,7 +271,7 @@ impl StablePlanCompiler {
         acknowledged_publication_generation: u32,
     ) -> Result<(), StablePlanError> {
         self.prepare_with_strategy_filter(
-            policy,
+            codec,
             capability_set,
             input,
             checkpoint,
@@ -284,7 +284,7 @@ impl StablePlanCompiler {
     #[allow(clippy::too_many_arguments)]
     fn prepare_with_strategy_filter(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: StablePlanInput<'_>,
         checkpoint: bool,
@@ -302,7 +302,7 @@ impl StablePlanCompiler {
         }
         self.committed_batch_count = self.batches.len();
         let result = self.prepare_inner(
-            policy,
+            codec,
             capability_set,
             input,
             checkpoint,
@@ -319,7 +319,7 @@ impl StablePlanCompiler {
     #[allow(clippy::too_many_arguments)]
     fn prepare_inner(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: StablePlanInput<'_>,
         checkpoint: bool,
@@ -327,7 +327,7 @@ impl StablePlanCompiler {
         acknowledged_publication_generation: u32,
         strict_strategy: bool,
     ) -> Result<(), StablePlanError> {
-        let capability = policy
+        let capability = codec
             .capability_set(capability_set)
             .ok_or(StablePlanError::CapabilitySetMissing)?;
         validate_input(input)?;
@@ -357,7 +357,7 @@ impl StablePlanCompiler {
                     program
                 }
                 _ => {
-                    let program = policy
+                    let program = codec
                         .program(capability_set, glyph.technique, glyph.program_variant)
                         .ok_or(StablePlanError::ProgramMissing)?;
                     cached_kind_program = Some((glyph.technique, glyph.program_variant, program));
@@ -395,12 +395,12 @@ impl StablePlanCompiler {
                 } else {
                     0
                 },
-                clip_id: if program.storage_key_mask & super::policy::BATCH_CLIP != 0 {
+                clip_id: if program.storage_key_mask & super::codec::BATCH_CLIP != 0 {
                     glyph.clip_id
                 } else {
                     0
                 },
-                depth_key: if program.storage_key_mask & super::policy::BATCH_DEPTH != 0 {
+                depth_key: if program.storage_key_mask & super::codec::BATCH_DEPTH != 0 {
                     glyph.depth_key
                 } else {
                     0
@@ -438,7 +438,7 @@ impl StablePlanCompiler {
 
         self.layout_batch_inputs(input)?;
         let context = PrepareContext {
-            policy,
+            codec,
             capability_set,
             capability,
             input,
@@ -478,36 +478,36 @@ impl StablePlanCompiler {
 
     pub fn plan_view(
         &self,
-        policy_handle: u32,
+        codec_handle: u32,
         capability_set: CapabilitySetId,
-        policy_fingerprint: u64,
+        codec_fingerprint: u64,
     ) -> Result<RenderPlanView<'_>, StablePlanError> {
-        self.plan_view_internal(policy_handle, capability_set, policy_fingerprint, false)
+        self.plan_view_internal(codec_handle, capability_set, codec_fingerprint, false)
     }
 
     pub(crate) fn plan_view_forced(
         &self,
-        policy_handle: u32,
+        codec_handle: u32,
         capability_set: CapabilitySetId,
-        policy_fingerprint: u64,
+        codec_fingerprint: u64,
     ) -> Result<RenderPlanView<'_>, StablePlanError> {
-        self.plan_view_internal(policy_handle, capability_set, policy_fingerprint, true)
+        self.plan_view_internal(codec_handle, capability_set, codec_fingerprint, true)
     }
 
     fn plan_view_internal(
         &self,
-        policy_handle: u32,
+        codec_handle: u32,
         capability_set: CapabilitySetId,
-        policy_fingerprint: u64,
+        codec_fingerprint: u64,
         force_bindings: bool,
     ) -> Result<RenderPlanView<'_>, StablePlanError> {
         if !self.prepared {
             return Err(StablePlanError::NotPrepared);
         }
         Ok(RenderPlanView {
-            policy_handle,
+            codec_handle,
             capability_set: capability_set.0,
-            policy_fingerprint,
+            codec_fingerprint,
             resources: if self.publish_bindings || force_bindings {
                 &self.resources
             } else {
@@ -743,7 +743,7 @@ impl StablePlanCompiler {
         let batch_index = pending.batch_index as usize;
         let key = self.batches[batch_index].key;
         let program = context
-            .policy
+            .codec
             .program(context.capability_set, key.technique, key.program_variant)
             .ok_or(StablePlanError::ProgramMissing)?;
         let required_slots = self.batches[batch_index].slots.required_slots()?;
@@ -826,7 +826,7 @@ impl StablePlanCompiler {
         &mut self,
         context: PrepareContext<'_>,
         pending_index: usize,
-        program: &super::policy::ProgramDescriptor,
+        program: &super::codec::ProgramDescriptor,
         replace: bool,
     ) -> Result<(), StablePlanError> {
         let pending = self.pending_batches[pending_index];
@@ -867,7 +867,7 @@ impl StablePlanCompiler {
         }
         for changed in self.changed_ranges.iter().copied() {
             let active_buffers = stable_active_buffers(
-                context.policy,
+                context.codec,
                 context.capability_set,
                 program,
                 context.input,
@@ -952,7 +952,7 @@ impl StablePlanCompiler {
                     end += 1;
                 }
                 execute_run(
-                    context.policy,
+                    context.codec,
                     context.capability_set,
                     program,
                     context.input,
@@ -1265,7 +1265,7 @@ impl StablePlanCompiler {
             let mut pending = self.pending_batches[pending_index];
             let batch = &self.batches[pending.batch_index as usize];
             let program = context
-                .policy
+                .codec
                 .program(
                     context.capability_set,
                     batch.key.technique,
@@ -1284,7 +1284,7 @@ impl StablePlanCompiler {
                     id: pending.buffer_ids[schema_index],
                     generation: pending.buffer_generations[schema_index],
                     program_id: batch.key.program_id,
-                    policy_buffer_id: schema.id.0,
+                    codec_buffer_id: schema.id.0,
                     scalar_type: schema.scalar as u8,
                     vector_width: schema.vector_width,
                     strategy: BUFFER_STABLE_INDIRECT,
@@ -1302,7 +1302,7 @@ impl StablePlanCompiler {
                 id: pending.order_buffer_id,
                 generation: pending.order_buffer_generation,
                 program_id: batch.key.program_id,
-                policy_buffer_id: POLICY_BUFFER_ORDER,
+                codec_buffer_id: CODEC_BUFFER_ORDER,
                 scalar_type: ScalarType::U32 as u8,
                 vector_width: 1,
                 strategy: BUFFER_STABLE_INDIRECT,
@@ -1398,7 +1398,7 @@ impl StablePlanCompiler {
             let pending = self.pending_batches[pending_index];
             let batch = &self.batches[pending.batch_index as usize];
             let program = context
-                .policy
+                .codec
                 .program(
                     context.capability_set,
                     first.technique,
@@ -1486,7 +1486,7 @@ impl StablePlanCompiler {
             let pending = self.pending_batches[pending_index];
             let key = self.batches[pending.batch_index as usize].key;
             let program = context
-                .policy
+                .codec
                 .program(context.capability_set, key.technique, key.program_variant)
                 .ok_or(StablePlanError::ProgramMissing)?;
             let split_material = program.draw_key_mask & BATCH_MATERIAL != 0;
@@ -1704,9 +1704,9 @@ impl StablePlanCompiler {
 }
 
 fn stable_active_buffers(
-    policy: &ValidatedPolicy,
+    codec: &ValidatedCodec,
     capability_set: CapabilitySetId,
-    program: &super::policy::ProgramDescriptor,
+    program: &super::codec::ProgramDescriptor,
     input: StablePlanInput<'_>,
     writes: &[SlotWrite],
     changed: RecordRange,
@@ -1716,7 +1716,7 @@ fn stable_active_buffers(
     if replace {
         return Ok(all);
     }
-    let dependencies = policy
+    let dependencies = codec
         .buffer_dependency_masks(capability_set, program.technique, program.variant)
         .ok_or(StablePlanError::ProgramMissing)?;
     let mut active = 0_u32;
@@ -1749,7 +1749,7 @@ fn writes_in_range(writes: &[SlotWrite], range: RecordRange) -> &[SlotWrite] {
 
 fn order_schema() -> BufferSchema {
     BufferSchema::packed(
-        BufferId(POLICY_BUFFER_ORDER),
+        BufferId(CODEC_BUFFER_ORDER),
         ScalarType::U32,
         1,
         BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
@@ -1773,9 +1773,9 @@ fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), StablePlanEr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::policy::{
+    use crate::engine::codec::{
         BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, CAP_STABLE_INDIRECT,
-        CapabilitySet, Operation, PolicyDescriptor, ProgramCapabilities, ProgramDescriptor,
+        CapabilitySet, CodecDescriptor, Operation, ProgramCapabilities, ProgramDescriptor,
         ProgramId,
     };
     use crate::engine::render_plan_wire::plan_layout;
@@ -1811,12 +1811,12 @@ mod tests {
 
     #[test]
     fn insertion_writes_one_new_physical_record_and_one_order_chunk() {
-        let policy = policy(false);
+        let codec = codec(false);
         let mut compiler = StablePlanCompiler::default();
         let initial = [glyph(1, 1), glyph(2, 1), glyph(3, 1)];
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &initial,
             &[1.0, 2.0, 3.0],
             true,
@@ -1824,7 +1824,7 @@ mod tests {
             0,
         );
         let first = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert_eq!(first.buffers.len(), 2);
         assert_eq!(first.patches.len(), 4);
@@ -1841,7 +1841,7 @@ mod tests {
         let inserted = [glyph(1, 1), glyph(4, 1), glyph(2, 1), glyph(3, 1)];
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &inserted,
             &[1.0, 4.0, 2.0, 3.0],
             false,
@@ -1849,7 +1849,7 @@ mod tests {
             0,
         );
         let delta = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert_eq!(delta.patches.len(), 2);
         assert_eq!(delta.patches[0].destination_offset, 12);
@@ -1865,16 +1865,16 @@ mod tests {
 
     #[test]
     fn stable_semantic_dependencies_suppress_unrelated_physical_buffer_writes() {
-        let policy = policy(false);
+        let codec = codec(false);
         let mut compiler = StablePlanCompiler::default();
-        prepare(&mut compiler, &policy, &[glyph(1, 1)], &[1.0], true, 1, 0);
+        prepare(&mut compiler, &codec, &[glyph(1, 1)], &[1.0], true, 1, 0);
         compiler.commit().unwrap();
 
         let mut block_changed = glyph(1, 2);
         block_changed.block_start = 4.0;
         compiler
             .prepare(
-                &policy,
+                &codec,
                 CAPABILITY,
                 StablePlanInput {
                     glyphs: &[block_changed],
@@ -1890,7 +1890,7 @@ mod tests {
             .unwrap();
         assert!(
             compiler
-                .plan_view(7, CAPABILITY, policy.fingerprint())
+                .plan_view(7, CAPABILITY, codec.fingerprint())
                 .unwrap()
                 .patches
                 .is_empty()
@@ -1899,7 +1899,7 @@ mod tests {
 
         compiler
             .prepare(
-                &policy,
+                &codec,
                 CAPABILITY,
                 StablePlanInput {
                     glyphs: &[glyph(1, 3)],
@@ -1914,7 +1914,7 @@ mod tests {
             )
             .unwrap();
         let plan = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert_eq!(plan.patches.len(), 1);
         assert_eq!(plan.payload, 2.0_f32.to_le_bytes());
@@ -1922,12 +1922,12 @@ mod tests {
 
     #[test]
     fn reorder_changes_only_the_indirection_buffer() {
-        let policy = policy(false);
+        let codec = codec(false);
         let mut compiler = StablePlanCompiler::default();
         let initial = [glyph(1, 1), glyph(2, 1), glyph(3, 1)];
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &initial,
             &[1.0, 2.0, 3.0],
             true,
@@ -1938,7 +1938,7 @@ mod tests {
         let reordered = [glyph(3, 1), glyph(1, 1), glyph(2, 1)];
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &reordered,
             &[3.0, 1.0, 2.0],
             false,
@@ -1946,7 +1946,7 @@ mod tests {
             0,
         );
         let plan = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert_eq!(plan.patches.len(), 1);
         assert_eq!(plan.patches[0].buffer_id, 2);
@@ -1955,14 +1955,14 @@ mod tests {
 
     #[test]
     fn no_op_publishes_nothing_and_abort_preserves_physical_bytes() {
-        let policy = policy(false);
+        let codec = codec(false);
         let mut compiler = StablePlanCompiler::default();
         let initial = [glyph(1, 1), glyph(2, 1)];
-        prepare(&mut compiler, &policy, &initial, &[1.0, 2.0], true, 1, 0);
+        prepare(&mut compiler, &codec, &initial, &[1.0, 2.0], true, 1, 0);
         compiler.commit().unwrap();
-        prepare(&mut compiler, &policy, &initial, &[99.0, 99.0], false, 2, 0);
+        prepare(&mut compiler, &codec, &initial, &[99.0, 99.0], false, 2, 0);
         let no_op = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert!(no_op.resources.is_empty());
         assert!(no_op.buffers.is_empty());
@@ -1972,19 +1972,19 @@ mod tests {
         compiler.commit().unwrap();
 
         let changed = [glyph(1, 2), glyph(2, 1)];
-        prepare(&mut compiler, &policy, &changed, &[10.0, 2.0], false, 3, 0);
+        prepare(&mut compiler, &codec, &changed, &[10.0, 2.0], false, 3, 0);
         compiler.abort();
         assert_eq!(read_f32(compiler.buffer_bytes(1).unwrap(), 0), 1.0);
     }
 
     #[test]
     fn deleted_slots_wait_for_an_explicit_renderer_fence() {
-        let policy = policy(false);
+        let codec = codec(false);
         let mut compiler = StablePlanCompiler::default();
         let initial = [glyph(1, 1), glyph(2, 1), glyph(3, 1)];
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &initial,
             &[1.0, 2.0, 3.0],
             true,
@@ -1994,7 +1994,7 @@ mod tests {
         compiler.commit().unwrap();
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &initial[..2],
             &[1.0, 2.0],
             false,
@@ -2003,7 +2003,7 @@ mod tests {
         );
         assert!(
             compiler
-                .plan_view(7, CAPABILITY, policy.fingerprint())
+                .plan_view(7, CAPABILITY, codec.fingerprint())
                 .unwrap()
                 .retirements
                 .iter()
@@ -2012,49 +2012,33 @@ mod tests {
         compiler.commit().unwrap();
 
         let added = [glyph(1, 1), glyph(2, 1), glyph(4, 1)];
-        prepare(
-            &mut compiler,
-            &policy,
-            &added,
-            &[1.0, 2.0, 4.0],
-            false,
-            3,
-            0,
-        );
+        prepare(&mut compiler, &codec, &added, &[1.0, 2.0, 4.0], false, 3, 0);
         assert_eq!(compiler.input_slots[2], 3);
         compiler.abort();
-        prepare(
-            &mut compiler,
-            &policy,
-            &added,
-            &[1.0, 2.0, 4.0],
-            false,
-            3,
-            2,
-        );
+        prepare(&mut compiler, &codec, &added, &[1.0, 2.0, 4.0], false, 3, 2);
         assert_eq!(compiler.input_slots[2], 2);
     }
 
     #[test]
     fn an_inactive_batch_stays_live_only_until_its_quarantine_is_acknowledged() {
-        let policy = policy(false);
+        let codec = codec(false);
         let mut compiler = StablePlanCompiler::default();
         let initial = [glyph(1, 1)];
-        prepare(&mut compiler, &policy, &initial, &[1.0], true, 1, 0);
+        prepare(&mut compiler, &codec, &initial, &[1.0], true, 1, 0);
         compiler.commit().unwrap();
 
-        prepare(&mut compiler, &policy, &[], &[], false, 2, 0);
+        prepare(&mut compiler, &codec, &[], &[], false, 2, 0);
         compiler.commit().unwrap();
         assert!(compiler.has_state());
 
-        prepare(&mut compiler, &policy, &[], &[], false, 3, 2);
+        prepare(&mut compiler, &codec, &[], &[], false, 3, 2);
         compiler.commit().unwrap();
         assert!(!compiler.has_state());
     }
 
     #[test]
     fn interleaved_resources_keep_ordered_draws_over_separate_stable_pools() {
-        let policy = policy(false);
+        let codec = codec(false);
         let mut compiler = StablePlanCompiler::default();
         let a1 = glyph(1, 1);
         let a2 = glyph(2, 1);
@@ -2065,7 +2049,7 @@ mod tests {
         let glyphs = [a1, a2, b, a3];
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &glyphs,
             &[1.0, 2.0, 3.0, 4.0],
             true,
@@ -2073,7 +2057,7 @@ mod tests {
             0,
         );
         let plan = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert_eq!(plan.resources.len(), 2);
         assert_eq!(plan.buffers.len(), 4);
@@ -2088,7 +2072,7 @@ mod tests {
 
     #[test]
     fn independent_compositing_batches_interleaved_stable_resources() {
-        let policy = policy(false);
+        let codec = codec(false);
         let mut compiler = StablePlanCompiler::default();
         let a1 = glyph(1, 1);
         let a2 = glyph(2, 1);
@@ -2099,7 +2083,7 @@ mod tests {
         let glyphs = [a1, a2, b, a3];
         compiler
             .prepare(
-                &policy,
+                &codec,
                 CAPABILITY,
                 StablePlanInput {
                     glyphs: &glyphs,
@@ -2114,7 +2098,7 @@ mod tests {
             )
             .unwrap();
         let plan = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
 
         assert_eq!(plan.draws.len(), 2);
@@ -2130,15 +2114,15 @@ mod tests {
 
     #[test]
     fn material_splits_draws_without_splitting_stable_storage() {
-        let policy = policy(false);
+        let codec = codec(false);
         let mut compiler = StablePlanCompiler::default();
         let first = glyph(1, 1);
         let mut second = glyph(2, 1);
         second.material_id = 2;
         let glyphs = [first, second];
-        prepare(&mut compiler, &policy, &glyphs, &[1.0, 2.0], true, 1, 0);
+        prepare(&mut compiler, &codec, &glyphs, &[1.0, 2.0], true, 1, 0);
         let plan = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert_eq!(plan.buffers.len(), 2);
         assert_eq!(plan.draws.len(), 2);
@@ -2148,16 +2132,16 @@ mod tests {
     }
 
     #[test]
-    fn policy_can_partition_stable_storage_by_material() {
-        let policy = policy(true);
+    fn codec_can_partition_stable_storage_by_material() {
+        let codec = codec(true);
         let mut compiler = StablePlanCompiler::default();
         let first = glyph(1, 1);
         let mut second = glyph(2, 1);
         second.material_id = 2;
         let glyphs = [first, second];
-        prepare(&mut compiler, &policy, &glyphs, &[1.0, 2.0], true, 1, 0);
+        prepare(&mut compiler, &codec, &glyphs, &[1.0, 2.0], true, 1, 0);
         let plan = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert_eq!(plan.buffers.len(), 4);
         assert_eq!(plan.draws.len(), 2);
@@ -2166,12 +2150,12 @@ mod tests {
 
     #[test]
     fn repeated_warm_updates_keep_all_glyph_scaled_scratch_capacity() {
-        let policy = policy(false);
+        let codec = codec(false);
         let mut compiler = StablePlanCompiler::default();
         let initial = [glyph(1, 1), glyph(2, 1), glyph(3, 1), glyph(4, 1)];
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &initial,
             &[1.0, 2.0, 3.0, 4.0],
             true,
@@ -2182,7 +2166,7 @@ mod tests {
         let changed = [glyph(1, 1), glyph(2, 2), glyph(3, 1), glyph(4, 1)];
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &changed,
             &[1.0, 20.0, 3.0, 4.0],
             false,
@@ -2194,7 +2178,7 @@ mod tests {
         let changed_again = [glyph(1, 1), glyph(2, 3), glyph(3, 1), glyph(4, 1)];
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &changed_again,
             &[1.0, 21.0, 3.0, 4.0],
             false,
@@ -2207,15 +2191,15 @@ mod tests {
 
     #[test]
     fn fragmentation_budget_rebases_only_the_order_buffer() {
-        let policy = policy_with_budget(false, 1);
+        let codec = codec_with_budget(false, 1);
         let mut compiler = StablePlanCompiler::default();
         let seeded: Vec<_> = (1..=129).map(|id| glyph(id, 1)).collect();
         let seeded_x: Vec<_> = seeded.iter().map(|glyph| glyph.stable_id as f32).collect();
-        prepare(&mut compiler, &policy, &seeded, &seeded_x, true, 1, 0);
+        prepare(&mut compiler, &codec, &seeded, &seeded_x, true, 1, 0);
         compiler.commit().unwrap();
         let initial = &seeded[..127];
         let initial_x = &seeded_x[..127];
-        prepare(&mut compiler, &policy, initial, initial_x, false, 2, 0);
+        prepare(&mut compiler, &codec, initial, initial_x, false, 2, 0);
         compiler.commit().unwrap();
 
         let mut inserted = initial.to_vec();
@@ -2224,9 +2208,9 @@ mod tests {
             .iter()
             .map(|glyph| glyph.stable_id as f32)
             .collect();
-        prepare(&mut compiler, &policy, &inserted, &inserted_x, false, 3, 0);
+        prepare(&mut compiler, &codec, &inserted, &inserted_x, false, 3, 0);
         let plan = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert_eq!(plan.primitives.len(), 1);
         assert_eq!(plan.primitives[0].record_count, 128);
@@ -2245,7 +2229,7 @@ mod tests {
     #[allow(clippy::too_many_arguments)]
     fn prepare(
         compiler: &mut StablePlanCompiler,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         glyphs: &[StableGlyph],
         x: &[f32],
         checkpoint: bool,
@@ -2254,7 +2238,7 @@ mod tests {
     ) {
         compiler
             .prepare(
-                policy,
+                codec,
                 CAPABILITY,
                 StablePlanInput {
                     glyphs,
@@ -2292,12 +2276,12 @@ mod tests {
         }
     }
 
-    fn policy(partition_materials: bool) -> ValidatedPolicy {
-        policy_with_budget(partition_materials, 8)
+    fn codec(partition_materials: bool) -> ValidatedCodec {
+        codec_with_budget(partition_materials, 8)
     }
 
-    fn policy_with_budget(partition_materials: bool, fragmentation_budget: u16) -> ValidatedPolicy {
-        ValidatedPolicy::new(descriptor_with_budget(
+    fn codec_with_budget(partition_materials: bool, fragmentation_budget: u16) -> ValidatedCodec {
+        ValidatedCodec::new(descriptor_with_budget(
             partition_materials,
             fragmentation_budget,
         ))
@@ -2306,7 +2290,7 @@ mod tests {
 
     #[test]
     fn stable_decoration_rows_pack_and_draw_without_resources() {
-        let policy = {
+        let codec = {
             let mut descriptor = descriptor_with_budget(false, 8);
             let mut program = descriptor.programs[0].clone();
             program.primitive_kind = PRIMITIVE_DECORATION;
@@ -2320,7 +2304,7 @@ mod tests {
                 }
             }
             descriptor.programs.push(program);
-            ValidatedPolicy::new(descriptor).unwrap()
+            ValidatedCodec::new(descriptor).unwrap()
         };
         let mut compiler = StablePlanCompiler::default();
         let decoration = StableGlyph {
@@ -2343,9 +2327,9 @@ mod tests {
             block_extent: 0.5,
         };
         let rows = [glyph(1, 1), decoration];
-        prepare(&mut compiler, &policy, &rows, &[1.0, 4.0], true, 1, 0);
+        prepare(&mut compiler, &codec, &rows, &[1.0, 4.0], true, 1, 0);
         let view = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         let primitive = view
             .primitives
@@ -2368,7 +2352,7 @@ mod tests {
         // Twin of the ordered-plan regression: a decoration batch carries resource_id 0, and
         // retiring it must skip the resource lifecycle the publication path already skips.
         // A RETIRE_RESOURCE record with id 0 is malformed and fails the whole publication.
-        let policy = {
+        let codec = {
             let mut descriptor = descriptor_with_budget(false, 8);
             let mut program = descriptor.programs[0].clone();
             program.primitive_kind = PRIMITIVE_DECORATION;
@@ -2382,7 +2366,7 @@ mod tests {
                 }
             }
             descriptor.programs.push(program);
-            ValidatedPolicy::new(descriptor).unwrap()
+            ValidatedCodec::new(descriptor).unwrap()
         };
         let mut compiler = StablePlanCompiler::default();
         let decoration = StableGlyph {
@@ -2406,7 +2390,7 @@ mod tests {
         };
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &[glyph(1, 1), decoration],
             &[1.0, 4.0],
             true,
@@ -2414,13 +2398,13 @@ mod tests {
             0,
         );
         compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         compiler.commit().unwrap();
 
-        prepare(&mut compiler, &policy, &[glyph(1, 2)], &[1.0], true, 2, 1);
+        prepare(&mut compiler, &codec, &[glyph(1, 2)], &[1.0], true, 2, 1);
         let view = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert!(
             !view
@@ -2436,8 +2420,8 @@ mod tests {
     fn descriptor_with_budget(
         partition_materials: bool,
         fragmentation_budget: u16,
-    ) -> PolicyDescriptor {
-        PolicyDescriptor {
+    ) -> CodecDescriptor {
+        CodecDescriptor {
             capability_sets: vec![CapabilitySet {
                 id: CAPABILITY,
                 flags: CAP_STABLE_INDIRECT,
@@ -2472,11 +2456,11 @@ mod tests {
                     | BATCH_RESOURCE
                     | BATCH_MATERIAL
                     | BATCH_ORDER
-                    | crate::engine::policy::BATCH_TRANSFORM,
+                    | crate::engine::codec::BATCH_TRANSFORM,
                 allocation_strategy: ALLOCATION_STABLE_INDIRECT,
                 f32_input_count: 1,
                 u32_input_count: 0,
-                inputs: vec![crate::engine::policy::InputSource::semantic(0)],
+                inputs: vec![crate::engine::codec::InputSource::semantic(0)],
                 capabilities: ProgramCapabilities::default(),
                 buffers: vec![BufferSchema::packed(
                     BufferId(1),

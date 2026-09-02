@@ -87,7 +87,7 @@ export interface PortableAccessor {
 export interface PortableVertexAttribute {
   readonly semantic: PortableVertexSemantic;
   readonly accessor: number;
-  /** Per-record inputs are policy buffers, never finite geometry streams. */
+  /** Per-record inputs are codec buffers, never finite geometry streams. */
   readonly rate?: never;
 }
 
@@ -139,7 +139,7 @@ export interface PortableTextureArrayPayload {
  * GLB-like geometry: immutable bytes plus typed accessors and semantic
  * attributes over internal buffer views, optional indices, topology, draw
  * range — never a renderer geometry object. The plan's record span is the
- * sole instance-count authority; per-record data belongs in policy buffers.
+ * sole instance-count authority; per-record data belongs in codec buffers.
  */
 export interface PortableGeometryPayload {
   readonly kind: 'geometry';

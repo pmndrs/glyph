@@ -6,13 +6,13 @@ use crate::{
     abi_contract::{
         ABI_VERSION, ENGINE_RESULT_ABI_VERSION, ENGINE_RESULT_BUFFER_COUNT,
         ENGINE_RESULT_BUFFERS_OFFSET, ENGINE_RESULT_BYTE_LENGTH, ENGINE_RESULT_CAPABILITY_SET,
-        ENGINE_RESULT_DIAGNOSTIC_COUNT, ENGINE_RESULT_DIAGNOSTICS_OFFSET, ENGINE_RESULT_DRAW_COUNT,
-        ENGINE_RESULT_DRAWS_OFFSET, ENGINE_RESULT_ENGINE_REVISION,
-        ENGINE_RESULT_FAULT_PARAGRAPH_ID, ENGINE_RESULT_FAULT_STYLE_ID, ENGINE_RESULT_FLAGS,
-        ENGINE_RESULT_HEADER_ALIGNMENT, ENGINE_RESULT_HEADER_SIZE, ENGINE_RESULT_OUTPUT_SLOT,
-        ENGINE_RESULT_PATCH_COUNT, ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_PLAN_REVISION,
-        ENGINE_RESULT_PLANNER_ID, ENGINE_RESULT_POLICY_FINGERPRINT_HIGH,
-        ENGINE_RESULT_POLICY_FINGERPRINT_LOW, ENGINE_RESULT_POLICY_HANDLE,
+        ENGINE_RESULT_CODEC_FINGERPRINT_HIGH, ENGINE_RESULT_CODEC_FINGERPRINT_LOW,
+        ENGINE_RESULT_CODEC_HANDLE, ENGINE_RESULT_DIAGNOSTIC_COUNT,
+        ENGINE_RESULT_DIAGNOSTICS_OFFSET, ENGINE_RESULT_DRAW_COUNT, ENGINE_RESULT_DRAWS_OFFSET,
+        ENGINE_RESULT_ENGINE_REVISION, ENGINE_RESULT_FAULT_PARAGRAPH_ID,
+        ENGINE_RESULT_FAULT_STYLE_ID, ENGINE_RESULT_FLAGS, ENGINE_RESULT_HEADER_ALIGNMENT,
+        ENGINE_RESULT_HEADER_SIZE, ENGINE_RESULT_OUTPUT_SLOT, ENGINE_RESULT_PATCH_COUNT,
+        ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_PLAN_REVISION, ENGINE_RESULT_PLANNER_ID,
         ENGINE_RESULT_PRIMITIVE_COUNT, ENGINE_RESULT_PRIMITIVES_OFFSET,
         ENGINE_RESULT_PUBLICATION_GENERATION, ENGINE_RESULT_REQUEST_CAPACITY,
         ENGINE_RESULT_REQUIRED_BASE_REVISION, ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY,
@@ -273,9 +273,9 @@ impl FrameTransport {
         let layout = encode_publication(plan, semantic_views, self.outputs[slot].bytes_mut())?;
         Ok(StagedPlan {
             slot,
-            policy_handle: plan.policy_handle,
+            codec_handle: plan.codec_handle,
             capability_set: plan.capability_set,
-            policy_fingerprint: plan.policy_fingerprint,
+            codec_fingerprint: plan.codec_fingerprint,
             layout,
         })
     }
@@ -305,9 +305,9 @@ impl FrameTransport {
                 publication_generation: self.publication_generation,
                 required_request_capacity: 0,
                 required_result_capacity: 0,
-                policy_handle: plan.policy_handle,
+                codec_handle: plan.codec_handle,
                 capability_set: plan.capability_set,
-                policy_fingerprint: plan.policy_fingerprint,
+                codec_fingerprint: plan.codec_fingerprint,
                 layout,
             },
         );
@@ -333,9 +333,9 @@ impl FrameTransport {
                 required_request_capacity: 0,
                 fault: FrameFault::default(),
                 required_result_capacity: 0,
-                policy_handle: staged.policy_handle,
+                codec_handle: staged.codec_handle,
                 capability_set: staged.capability_set,
-                policy_fingerprint: staged.policy_fingerprint,
+                codec_fingerprint: staged.codec_fingerprint,
                 layout: staged.layout,
             },
         );
@@ -368,9 +368,9 @@ impl FrameTransport {
                 publication_generation: self.publication_generation,
                 required_request_capacity: 0,
                 required_result_capacity: 0,
-                policy_handle: 0,
+                codec_handle: 0,
                 capability_set: 0,
-                policy_fingerprint: 0,
+                codec_fingerprint: 0,
                 layout,
             },
         );
@@ -399,9 +399,9 @@ impl FrameTransport {
                 publication_generation: self.publication_generation,
                 required_request_capacity,
                 required_result_capacity,
-                policy_handle: 0,
+                codec_handle: 0,
                 capability_set: 0,
-                policy_fingerprint: 0,
+                codec_fingerprint: 0,
                 layout: EncodedPlanLayout {
                     byte_length: ENGINE_RESULT_HEADER_SIZE,
                     ..EncodedPlanLayout::default()
@@ -456,17 +456,17 @@ impl FrameTransport {
             values.fault.paragraph_id,
         );
         write_u32(bytes, ENGINE_RESULT_FAULT_STYLE_ID, values.fault.style_id);
-        write_u32(bytes, ENGINE_RESULT_POLICY_HANDLE, values.policy_handle);
+        write_u32(bytes, ENGINE_RESULT_CODEC_HANDLE, values.codec_handle);
         write_u32(bytes, ENGINE_RESULT_CAPABILITY_SET, values.capability_set);
         write_u32(
             bytes,
-            ENGINE_RESULT_POLICY_FINGERPRINT_LOW,
-            values.policy_fingerprint as u32,
+            ENGINE_RESULT_CODEC_FINGERPRINT_LOW,
+            values.codec_fingerprint as u32,
         );
         write_u32(
             bytes,
-            ENGINE_RESULT_POLICY_FINGERPRINT_HIGH,
-            (values.policy_fingerprint >> 32) as u32,
+            ENGINE_RESULT_CODEC_FINGERPRINT_HIGH,
+            (values.codec_fingerprint >> 32) as u32,
         );
         write_span(
             bytes,
@@ -530,17 +530,17 @@ struct HeaderValues {
     publication_generation: u32,
     required_request_capacity: u32,
     required_result_capacity: u32,
-    policy_handle: u32,
+    codec_handle: u32,
     capability_set: u32,
-    policy_fingerprint: u64,
+    codec_fingerprint: u64,
     layout: EncodedPlanLayout,
 }
 
 pub(crate) struct StagedPlan {
     slot: usize,
-    policy_handle: u32,
+    codec_handle: u32,
     capability_set: u32,
-    policy_fingerprint: u64,
+    codec_fingerprint: u64,
     layout: EncodedPlanLayout,
 }
 
@@ -648,7 +648,7 @@ mod tests {
     use crate::{
         STATUS_PLANNER_MISSING,
         abi_contract::{
-            ENGINE_RESULT_POLICY_HANDLE, ENGINE_UPDATE_BATCH_PLANNER_ID,
+            ENGINE_RESULT_CODEC_HANDLE, ENGINE_UPDATE_BATCH_PLANNER_ID,
             ENGINE_UPDATE_BATCH_REQUEST_LENGTH, ENGINE_UPDATE_BATCH_RESULT_POINTER,
             ENGINE_UPDATE_BATCH_STATUS, PATCH_PAYLOAD_OFFSET,
         },
@@ -973,7 +973,7 @@ mod tests {
             id: 1,
             generation: 2,
             program_id: 3,
-            policy_buffer_id: 4,
+            codec_buffer_id: 4,
             scalar_type: 1,
             vector_width: 4,
             strategy: BUFFER_ORDERED_DIRECT,
@@ -990,9 +990,9 @@ mod tests {
             ..PatchRecord::default()
         }];
         let plan = RenderPlanView {
-            policy_handle: 9,
+            codec_handle: 9,
             capability_set: 10,
-            policy_fingerprint: 0x1122_3344_5566_7788,
+            codec_fingerprint: 0x1122_3344_5566_7788,
             buffers: &buffers,
             patches: &patches,
             payload: &[1, 2, 3, 4],
@@ -1004,7 +1004,7 @@ mod tests {
         let bytes = transport.outputs[0].bytes();
         let patch_offset = read_u32(bytes, ENGINE_RESULT_PATCHES_OFFSET).unwrap() as usize;
         let payload_offset = read_u32(bytes, patch_offset + PATCH_PAYLOAD_OFFSET).unwrap() as usize;
-        assert_eq!(read_u32(bytes, ENGINE_RESULT_POLICY_HANDLE).unwrap(), 9);
+        assert_eq!(read_u32(bytes, ENGINE_RESULT_CODEC_HANDLE).unwrap(), 9);
         assert_eq!(read_u32(bytes, ENGINE_RESULT_BUFFER_COUNT).unwrap(), 1);
         assert_eq!(read_u32(bytes, ENGINE_RESULT_PATCH_COUNT).unwrap(), 1);
         assert_eq!(&bytes[payload_offset..payload_offset + 4], &[1, 2, 3, 4]);
@@ -1028,7 +1028,7 @@ mod tests {
 
     fn plan() -> RenderPlanView<'static> {
         RenderPlanView {
-            policy_handle: 1,
+            codec_handle: 1,
             ..RenderPlanView::default()
         }
     }

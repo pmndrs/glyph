@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
-  createRasterCodecProgram as createRasterPolicyProgram,
+  createRasterCodecProgram,
   defineRasterResourceId,
   defineRasterFormat,
   defineTechniqueSchema,
@@ -58,7 +58,7 @@ function collisionPlan(technique, resource) {
   return registerRasterPlanProgram({
     raster: technique,
     schema,
-    policyBody(system) {
+    codecBody(system) {
       const program = techniqueProgram(schema, { system });
       return program.compile({
         origin: [program.semantics.inlineOrigin, program.semantics.blockOrigin],
@@ -175,9 +175,9 @@ test('a glyph-engine-owned handle state installs a complete codec and deduplicat
   const shaper = glyphEngineShaperForTests(glyphEngine);
   const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.handle-state-font-binding' });
 
-  assert.throws(() => handleState.bindFont(font), /no installed policy/);
+  assert.throws(() => handleState.bindFont(font), /no installed codec/);
   assert.equal(shaper.memoryReport().fontCount, 0);
-  const policy = handleState.installCodec(threeCodecDescriptor);
+  const codec = handleState.installCodec(threeCodecDescriptor);
   const first = handleState.bindFont(font);
   const second = handleState.bindFont(font);
   assert.equal(first.raster, bitmap);
@@ -189,7 +189,7 @@ test('a glyph-engine-owned handle state installs a complete codec and deduplicat
   assert.equal(shaper.memoryReport().fontCount, 1);
   second.dispose();
   assert.equal(shaper.memoryReport().fontCount, 0);
-  policy.dispose();
+  codec.dispose();
   handleState.dispose();
   glyphEngine.dispose();
 });
@@ -203,7 +203,7 @@ test('one handle state rejects colliding resource identities when the second fon
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);
   const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.handle-state-font-binding-collision' });
-  const policy = handleState.installCodec((ids) => {
+  const codec = handleState.installCodec((ids) => {
     const capabilitySet = threeCodecCapabilitySet();
     const options = {
       namespace: 'test.handle-state-font-binding-collision',
@@ -214,8 +214,8 @@ test('one handle state rejects colliding resource identities when the second fon
       ids,
     };
     return threeCodecDescriptor(ids, 'indexed', [
-      createRasterPolicyProgram(firstCollisionPlan, options),
-      createRasterPolicyProgram(secondCollisionPlan, options),
+      createRasterCodecProgram(firstCollisionPlan, options),
+      createRasterCodecProgram(secondCollisionPlan, options),
     ]);
   });
   const first = handleState.bindFont(firstFont);
@@ -224,7 +224,7 @@ test('one handle state rejects colliding resource identities when the second fon
   assert.equal(shaper.memoryReport().fontCount, 1, 'a rejected binding must release its engine registration');
 
   first.dispose();
-  policy.dispose();
+  codec.dispose();
   handleState.dispose();
   glyphEngine.dispose();
   firstFont.dispose();
@@ -237,7 +237,7 @@ test('a glyph-engine-owned handle state binds immutable font stacks and retains 
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);
   const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.handle-state-font-stack-binding' });
-  const policy = handleState.installCodec(threeCodecDescriptor);
+  const codec = handleState.installCodec(threeCodecDescriptor);
 
   assert.throws(() => handleState.bindFontStack({ fonts: [font] }), /font stack was not created by this package/);
   const first = handleState.bindFontStack(stack);
@@ -249,7 +249,7 @@ test('a glyph-engine-owned handle state binds immutable font stacks and retains 
   assert.equal(shaper.memoryReport().fontCount, 1);
   second.dispose();
   assert.equal(shaper.memoryReport().fontCount, 0);
-  policy.dispose();
+  codec.dispose();
   handleState.dispose();
   glyphEngine.dispose();
 });

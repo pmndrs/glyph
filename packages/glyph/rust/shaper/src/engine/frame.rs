@@ -107,7 +107,7 @@ pub(crate) struct UpdateRequest<'a> {
     pub expected_engine_revision: u32,
     pub consumed_plan_revision: u32,
     pub acknowledged_publication_generation: u32,
-    pub policy_handle: u32,
+    pub codec_handle: u32,
     pub capability_set: u32,
     pub semantic_view_mask: u32,
     pub compositing_independent: bool,
@@ -156,9 +156,9 @@ pub(crate) struct PreparedUpdate {
     pub(super) next: PlannerRevision,
     pub(super) required_base_revision: u32,
     pub(super) checkpoint: bool,
-    pub(super) policy_handle: u32,
+    pub(super) codec_handle: u32,
     pub(super) capability_set: u32,
-    pub(super) policy_fingerprint: u64,
+    pub(super) codec_fingerprint: u64,
 }
 
 impl PreparedUpdate {

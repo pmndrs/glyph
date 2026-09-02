@@ -1,6 +1,6 @@
 export interface EngineUpdateFields {
   readonly plannerId: number;
-  readonly policyHandle: number;
+  readonly codecHandle: number;
   readonly expectedEngineRevision: number;
   readonly consumedPlanRevision: number;
   readonly acknowledgedPublicationGeneration?: number;
@@ -12,12 +12,12 @@ export interface EngineUpdateFields {
   }[];
 }
 
-export function renderPolicyBytes(abi: object): Uint8Array;
-export function kernelPolicyBytes(abi: object): Uint8Array;
+export function renderCodecBytes(abi: object): Uint8Array;
+export function kernelCodecBytes(abi: object): Uint8Array;
 export function engineUpdateBytes(abi: object, fields: EngineUpdateFields): Uint8Array;
 export interface EngineFrameUpdateFields {
   readonly plannerId: number;
-  readonly policyHandle: number;
+  readonly codecHandle: number;
   readonly fontStackHandle: number;
   readonly expectedEngineRevision?: number;
   readonly consumedPlanRevision?: number;

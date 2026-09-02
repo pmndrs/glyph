@@ -13,7 +13,7 @@ import { threeCodecBytes } from '../../dist/three/codec.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const POLICY_HANDLE = id.policy('publication-retention/policy');
+const CODEC_HANDLE = id.codec('publication-retention/codec');
 
 const LIMITS = {
   maxParagraphs: 8,
@@ -30,7 +30,7 @@ const LIMITS = {
 function frameRequest(transport, latest, accepted) {
   return compilePlannerFrameUpdate({
     plannerId: transport.handle,
-    policyHandle: POLICY_HANDLE,
+    codecHandle: CODEC_HANDLE,
     expectedEngineRevision: latest.engineRevision,
     consumedPlanRevision: accepted.planRevision,
     acknowledgedPublicationGeneration: accepted.publicationGeneration,
@@ -42,7 +42,7 @@ async function drivenTransport() {
   const wasm = await readFile(wasmUrl);
   const shaper = await createRuntimeShaper({ wasm });
   const handleState = new GlyphHandleState(shaper);
-  handleState.registerCodec(POLICY_HANDLE, threeCodecBytes());
+  handleState.registerCodec(CODEC_HANDLE, threeCodecBytes());
   const transport = handleState._createPlanTransport({
     handle: id.planner('publication-retention/transport'),
     requestCapacity: 4096,
@@ -188,7 +188,7 @@ test('the engine verifies acceptance: a generation that goes backwards is a conf
   // ...so replaying an older one is a revision conflict, proving the wire field is load-bearing.
   const replayed = compilePlannerFrameUpdate({
     plannerId: transport.handle,
-    policyHandle: POLICY_HANDLE,
+    codecHandle: CODEC_HANDLE,
     expectedEngineRevision: second.engineRevision,
     consumedPlanRevision: second.planRevision,
     acknowledgedPublicationGeneration: 0,

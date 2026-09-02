@@ -20,7 +20,7 @@ pub(crate) const CLUSTER_SPACE: u8 = 1 << 4;
 use super::shaping_state::GLYPH_FLAG_UNSAFE_TO_BREAK as GLYPH_UNSAFE_TO_BREAK;
 
 /// Intrinsic inline extents derived from one cluster-arena scan, mirroring the
-/// line breaker's own wrap-policy decisions rather than approximating them.
+/// line breaker's own wrap-codec decisions rather than approximating them.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct IntrinsicWidths {
     pub min_content_width: f64,
@@ -1981,7 +1981,7 @@ mod tests {
     }
 
     /// A hand-built arena over "ax by c" plus a hard break, so the intrinsic scan's
-    /// wrap-policy mirroring is pinned cluster by cluster without shaping.
+    /// wrap-codec mirroring is pinned cluster by cluster without shaping.
     fn intrinsic_fixture() -> ClusterArena {
         //                 a     x     sp    b     y     sp    c
         let advances = vec![10.0, 5.0, 3.0, 7.0, 2.0, 3.0, 6.0];

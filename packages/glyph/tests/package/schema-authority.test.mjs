@@ -9,7 +9,7 @@ const sourceRoot = new URL('../../src/', import.meta.url).pathname;
  * The technique schema is the only witness to buffer identity. Nobody else may
  * hold a literal buffer id: not executor lookups, not attribute-name strings,
  * not parallel const tables. Schema declarations (raster formats and the
- * Three policy's own buffers) are the sanctioned definition sites.
+ * Three codec's own buffers) are the sanctioned definition sites.
  */
 const DEFINITION_SITES = new Set(['raster/bitmap.ts', 'raster/msdf.ts', 'raster/slug.ts', 'three/codec.ts']);
 
@@ -20,7 +20,7 @@ test('buffer ids appear only inside schema declarations', async () => {
     const text = await readFile(file, 'utf8');
     for (const [index, line] of text.split('\n').entries()) {
       const lookup = /\.get\(\s*\d+\s*\)/.exec(line);
-      if (lookup && /byPolicyId|buffers/.test(line)) {
+      if (lookup && /byCodecId|buffers/.test(line)) {
         offenders.push(`${relative}:${index + 1} literal buffer lookup: ${line.trim()}`);
       }
       if (/_pmndrsGlyph_\d/.test(line)) {
@@ -30,10 +30,10 @@ test('buffer ids appear only inside schema declarations', async () => {
         offenders.push(`${relative}:${index + 1} parallel id const: ${line.trim()}`);
       }
       // Buffer id sequences and vector widths derive from a schema, never from a
-      // hand-rolled numeric list: no literal-width policy-buffer builders outside
+      // hand-rolled numeric list: no literal-width codec-buffer builders outside
       // their core definition, no literal id arrays mapped into buffer lookups,
       // and no restated system-buffer ids.
-      if (relative !== 'core/render-policy.ts' && /(?:floatBuffers|u32Buffers)\(\s*\[/.test(line)) {
+      if (/(?:floatBuffers|u32Buffers)\(\s*\[/.test(line)) {
         offenders.push(`${relative}:${index + 1} literal buffer widths: ${line.trim()}`);
       }
       if (/\[\s*\d+\s*(?:,\s*\d+\s*){2,}\]\.map\(/.test(line)) {

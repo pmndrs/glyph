@@ -67,18 +67,18 @@ export const slug: RasterFormat<RasterFormatId & 'pmndrs.slug', typeof SLUG_KIND
   });
 
 import { f32, techniqueProgram, u32 } from '../config/codec-program.js';
-import { id, type PolicyBufferId } from '../config/codec.js';
+import { id, type CodecBufferId } from '../config/codec.js';
 import type { RasterPlanProgram } from '../config/raster.js';
 import { registerGlyphRasterPlanProgram } from '../config/raster.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
-const SLUG_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/rect');
-const SLUG_PLANE_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/plane-rect');
-const SLUG_BAND_TRANSFORM_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/band-transform');
-const SLUG_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/color');
-const SLUG_INVERSE_FONT_SIZE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/inverse-font-size');
-const SLUG_TABLE_STARTS_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/table-starts');
-const SLUG_BAND_COUNTS_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/band-counts');
+const SLUG_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/rect');
+const SLUG_PLANE_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/plane-rect');
+const SLUG_BAND_TRANSFORM_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/band-transform');
+const SLUG_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/color');
+const SLUG_INVERSE_FONT_SIZE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/inverse-font-size');
+const SLUG_TABLE_STARTS_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/table-starts');
+const SLUG_BAND_COUNTS_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/band-counts');
 
 /**
  * The authoritative physical shape of the Slug format.
@@ -210,7 +210,7 @@ export const slugSchema: TechniqueSchema<
 export const slugPlanProgram: RasterPlanProgram<typeof slug, typeof slugSchema> = registerGlyphRasterPlanProgram({
   raster: slug,
   schema: slugSchema,
-  policyBody(system) {
+  codecBody(system) {
     const p = techniqueProgram(slugSchema, { inverseFontSize: true, system });
     const { inlineOrigin, blockOrigin, fontSize, color, inverseFontSize } = p.semantics;
     if (inverseFontSize === undefined) throw new TypeError('the Slug program declares inverseFontSize');

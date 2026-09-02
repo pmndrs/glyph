@@ -5,7 +5,7 @@ import test from 'node:test';
 import { threeCodecBytes } from '../../dist/three/codec.js';
 
 /**
- * Byte identity for the DSL-authored Three render policy. Register numbering is
+ * Byte identity for the DSL-authored Three render codec. Register numbering is
  * program-private, so the DSL port re-pinned these digests once — with the
  * semantic-equivalence test proving the input tables, buffer schemas, and reviewed
  * per-lane effect conversion against the hand-numbered fixtures. From here, any
@@ -18,7 +18,7 @@ const GOLDEN = new Map([
   ['indexed/stable', '60d56678500883ce24cb70df7ca4c3b76e6b40e28f7f6bffee08f32c04e1a0cd'],
 ]);
 
-test('the Three render policy compiles to its golden bytes for every variant', () => {
+test('the Three render codec compiles to its golden bytes for every variant', () => {
   for (const transform of ['direct', 'indexed']) {
     for (const allocation of ['ordered', 'stable']) {
       const bytes = threeCodecBytes(undefined, transform, [], allocation);
@@ -26,7 +26,7 @@ test('the Three render policy compiles to its golden bytes for every variant', (
       assert.equal(
         digest,
         GOLDEN.get(`${transform}/${allocation}`),
-        `policy bytes changed for ${transform}/${allocation}`,
+        `codec bytes changed for ${transform}/${allocation}`,
       );
     }
   }

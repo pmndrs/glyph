@@ -3,15 +3,15 @@ import test from 'node:test';
 
 import {
   assertGlyphId,
-  compileRenderPolicy,
-  createProgram,
+  compileCodec,
+  createCodecProgram,
   GlyphIdScope,
   id,
-  selectPolicyCapabilitySet,
+  selectCodecCapabilitySet,
 } from '../../dist/config/codec.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 
-const opcodes = textShaperAbi.policy.opcodes;
+const opcodes = textShaperAbi.codec.opcodes;
 
 function capabilitySet() {
   return {
@@ -56,10 +56,10 @@ test('semantic ID helpers are stable and namespace program variants', () => {
 });
 
 test('host ID helpers are stable, nonzero, domain-separated, and collision-checked', () => {
-  assert.equal(id.policy('example/default'), id.policy('example/default'));
-  assert.notEqual(id.policy('example/default'), id.planner('example/default'));
+  assert.equal(id.codec('example/default'), id.codec('example/default'));
+  assert.notEqual(id.codec('example/default'), id.planner('example/default'));
   assert.ok(id.buffer('example/origin') > 0 && id.buffer('example/origin') <= 0xffff);
-  assert.throws(() => id.policy(''), /nonempty string/);
+  assert.throws(() => id.codec(''), /nonempty string/);
   assert.throws(() => id('unknown', 'example'), /exactly one stable name/);
   id.buffer('collision-36');
   assert.throws(() => id.buffer('collision-326'), /ID collision/);
@@ -85,24 +85,24 @@ test('identity registries reject colliding program names at assembly', () => {
 });
 
 test('capability profiles are selected from descriptors without exposing wire ordinals', () => {
-  const policyHandle = id.policy('test.identities/capability-profile');
+  const codecHandle = id.codec('test.identities/capability-profile');
   const first = capabilitySet();
   const second = { ...capabilitySet(), maxBufferBytes: 2 * 1024 * 1024 };
   const descriptor = {
     capabilitySets: [first, second],
     programs: [program(FIRST_TECHNIQUE_ID, SHARED_PROGRAM_ID)],
   };
-  const selection = selectPolicyCapabilitySet(policyHandle, descriptor, second);
+  const selection = selectCodecCapabilitySet(codecHandle, descriptor, second);
   assert.equal(typeof selection, 'object');
   assert.ok(Object.isFrozen(selection));
   assert.throws(
-    () => selectPolicyCapabilitySet(policyHandle, descriptor, { ...second, maxBufferBytes: 3 * 1024 * 1024 }),
+    () => selectCodecCapabilitySet(codecHandle, descriptor, { ...second, maxBufferBytes: 3 * 1024 * 1024 }),
     /not declared/,
   );
 });
 
 function program(wireTechniqueId, wireProgramId, transformMode = 'direct') {
-  return createProgram(wireTechniqueId, wireProgramId, body, buffers, transformMode, 'ordered');
+  return createCodecProgram(wireTechniqueId, wireProgramId, body, buffers, transformMode, 'ordered');
 }
 
 test('program construction rejects reserved zero wire identities', () => {
@@ -113,7 +113,7 @@ test('program construction rejects reserved zero wire identities', () => {
 test('program construction rejects unknown host modes immediately', () => {
   assert.throws(() => program(FIRST_TECHNIQUE_ID, SHARED_PROGRAM_ID, 'sideways'), /transform mode/);
   assert.throws(
-    () => createProgram(FIRST_TECHNIQUE_ID, SHARED_PROGRAM_ID, body, buffers, 'direct', 'recycling'),
+    () => createCodecProgram(FIRST_TECHNIQUE_ID, SHARED_PROGRAM_ID, body, buffers, 'direct', 'recycling'),
     /allocation mode/,
   );
 });
@@ -125,7 +125,7 @@ test('program construction snapshots accepted body and buffer records', () => {
     operations: body.operations.map((operation) => ({ ...operation })),
   };
   const mutableBuffers = buffers.map((buffer) => ({ ...buffer }));
-  const compiled = createProgram(
+  const compiled = createCodecProgram(
     FIRST_TECHNIQUE_ID,
     SHARED_PROGRAM_ID,
     mutableBody,
@@ -142,10 +142,10 @@ test('program construction snapshots accepted body and buffer records', () => {
   assert.ok(Object.isFrozen(compiled.buffers));
 });
 
-test('policy compilation rejects a program id shared by different techniques', () => {
+test('codec compilation rejects a program id shared by different techniques', () => {
   assert.throws(
     () =>
-      compileRenderPolicy({
+      compileCodec({
         capabilitySets: [capabilitySet()],
         programs: [program(FIRST_TECHNIQUE_ID, SHARED_PROGRAM_ID), program(SECOND_TECHNIQUE_ID, SHARED_PROGRAM_ID)],
       }),

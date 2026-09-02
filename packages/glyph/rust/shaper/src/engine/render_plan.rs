@@ -9,8 +9,8 @@ pub const RESOURCE_ACTION_RETAIN: u16 = 3;
 
 pub const BUFFER_ORDERED_DIRECT: u16 = 1;
 pub const BUFFER_STABLE_INDIRECT: u16 = 2;
-/// Reserved non-policy binding ID for the stable-indirect logical-order buffer.
-pub const POLICY_BUFFER_ORDER: u16 = u16::MAX;
+/// Reserved non-codec binding ID for the stable-indirect logical-order buffer.
+pub const CODEC_BUFFER_ORDER: u16 = u16::MAX;
 
 pub const PATCH_ALLOCATE_OR_RESIZE: u16 = 1;
 pub const PATCH_WRITE: u16 = 2;
@@ -22,7 +22,7 @@ pub const PRIMITIVE_GLYPH: u16 = 1;
 pub const PRIMITIVE_DECORATION: u16 = 2;
 pub const PRIMITIVE_INLINE_OBJECT: u16 = 3;
 pub const PRIMITIVE_CLIP: u16 = 4;
-pub const PRIMITIVE_POLICY: u16 = 5;
+pub const PRIMITIVE_CODEC: u16 = 5;
 
 pub const RETIRE_RESOURCE: u16 = 1;
 pub const RETIRE_BUFFER: u16 = 2;
@@ -51,7 +51,7 @@ pub struct BufferRecord {
     pub id: u32,
     pub generation: u32,
     pub program_id: u32,
-    pub policy_buffer_id: u16,
+    pub codec_buffer_id: u16,
     pub scalar_type: u8,
     pub vector_width: u8,
     pub strategy: u16,
@@ -155,9 +155,9 @@ pub struct DiagnosticRecord {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RenderPlanView<'a> {
-    pub policy_handle: u32,
+    pub codec_handle: u32,
     pub capability_set: u32,
-    pub policy_fingerprint: u64,
+    pub codec_fingerprint: u64,
     pub resources: &'a [ResourceRecord],
     pub buffers: &'a [BufferRecord],
     pub patches: &'a [PatchRecord],

@@ -23,7 +23,7 @@ import { glyph, span, txt } from '@pmndrs/glyph';
 import { FontLoader, ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
-// The identity lane is named by the policy contract that packs it, not by a literal here.
+// The identity lane is named by the codec contract that packs it, not by a literal here.
 import { STABLE_GLYPH_BUFFER_ID, TRANSFORM_BUFFER_ID } from '../../dist/three/codec.js';
 
 export const IDENTITY_LANE = `_pmndrsGlyph_${STABLE_GLYPH_BUFFER_ID}`;
@@ -124,7 +124,7 @@ function structuralProperties(properties) {
 /**
  * Read every lane a scene exposes, engine-side and GPU-side.
  *
- * Every draw in a group shares one retained buffer per policy lane and addresses its own run
+ * Every draw in a group shares one retained buffer per codec lane and addresses its own run
  * through `pmndrsGlyphRunStart`, so a lane must be read from `start` rather than from the head of
  * the array. Only the run's own `instanceCount` records are read: capacity beyond it is allowed to
  * hold anything, and asserting it would fail on legal slack rather than on a defect.

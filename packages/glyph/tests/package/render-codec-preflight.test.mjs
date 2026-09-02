@@ -1,21 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compileCodec as compileRenderPolicy, id } from '../../dist/index.js';
+import { compileCodec, id } from '../../dist/index.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 
 const layouts = textShaperAbi.layouts;
-const policy = textShaperAbi.policy;
-const { batchFields, capabilityFlags, scalarTypes, opcodes } = policy;
-const PRIMARY_TECHNIQUE_ID = id.technique('test.policy-preflight/primary');
-const SECONDARY_TECHNIQUE_ID = id.technique('test.policy-preflight/secondary');
-const PRIMARY_PROGRAM_ID = id.program('test.policy-preflight/primary', 'test');
-const SECONDARY_PROGRAM_ID = id.program('test.policy-preflight/secondary', 'test');
-const F32_BUFFER_ID = id.buffer('test.policy-preflight/f32');
-const U16_BUFFER_ID = id.buffer('test.policy-preflight/u16');
-const U32_BUFFER_ID = id.buffer('test.policy-preflight/u32');
-const SECONDARY_BUFFER_ID = id.buffer('test.policy-preflight/secondary-u32');
-const UNKNOWN_BUFFER_ID = id.buffer('test.policy-preflight/unknown');
+const codec = textShaperAbi.codec;
+const { batchFields, capabilityFlags, scalarTypes, opcodes } = codec;
+const PRIMARY_TECHNIQUE_ID = id.technique('test.codec-preflight/primary');
+const SECONDARY_TECHNIQUE_ID = id.technique('test.codec-preflight/secondary');
+const PRIMARY_PROGRAM_ID = id.program('test.codec-preflight/primary', 'test');
+const SECONDARY_PROGRAM_ID = id.program('test.codec-preflight/secondary', 'test');
+const F32_BUFFER_ID = id.buffer('test.codec-preflight/f32');
+const U16_BUFFER_ID = id.buffer('test.codec-preflight/u16');
+const U32_BUFFER_ID = id.buffer('test.codec-preflight/u32');
+const SECONDARY_BUFFER_ID = id.buffer('test.codec-preflight/secondary-u32');
+const UNKNOWN_BUFFER_ID = id.buffer('test.codec-preflight/unknown');
 
 function capabilitySet(overrides = {}) {
   return {
@@ -74,7 +74,7 @@ function fullDescriptor() {
         paintCapabilities: 12,
         compositingCapabilities: 34,
         variant: 0xffff,
-        allocationStrategy: policy.allocationStrategies.stableIndirect,
+        allocationStrategy: codec.allocationStrategies.stableIndirect,
         f32InputCount: 2,
         u32InputCount: 2,
         inputs: [
@@ -117,15 +117,15 @@ function fullDescriptor() {
 }
 
 function compileDecoded(descriptor) {
-  const bytes = compileRenderPolicy(descriptor);
+  const bytes = compileCodec(descriptor);
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 }
 
-test('a fully specified policy retains every serialized value exactly', () => {
+test('a fully specified codec retains every serialized value exactly', () => {
   const descriptor = fullDescriptor();
   const view = compileDecoded(descriptor);
-  const request = layouts.policyRequest;
-  const capability = layouts.policyCapabilitySet;
+  const request = layouts.codecRequest;
+  const capability = layouts.codecCapabilitySet;
 
   assert.equal(view.getUint32(request.byteLength, true), view.byteLength);
   assert.equal(view.getUint32(request.capabilitySetCount, true), 1);
@@ -151,7 +151,7 @@ test('a fully specified policy retains every serialized value exactly', () => {
   assert.equal(view.getUint16(capabilitiesOffset + capability.fragmentationBudget, true), 88);
   assert.equal(view.getUint16(capabilitiesOffset + capability.wholeBufferThresholdBasisPoints, true), 7500);
 
-  const programLayout = layouts.policyProgram;
+  const programLayout = layouts.codecProgram;
   const programsOffset = view.getUint32(request.programsOffset, true);
   const first = programsOffset;
   assert.equal(view.getUint32(first + programLayout.techniqueId, true), PRIMARY_TECHNIQUE_ID);
@@ -172,7 +172,7 @@ test('a fully specified policy retains every serialized value exactly', () => {
   assert.equal(view.getUint16(first + programLayout.inputCount, true), 4);
   assert.equal(
     view.getUint16(first + programLayout.allocationStrategy, true),
-    policy.allocationStrategies.stableIndirect,
+    codec.allocationStrategies.stableIndirect,
   );
   assert.equal(
     view.getUint16(first + programLayout.primitiveKind, true),
@@ -193,14 +193,14 @@ test('a fully specified policy retains every serialized value exactly', () => {
   assert.equal(view.getUint16(second + programLayout.variant, true), 0);
   assert.equal(
     view.getUint16(second + programLayout.allocationStrategy, true),
-    policy.allocationStrategies.orderedDirect,
+    codec.allocationStrategies.orderedDirect,
   );
   assert.equal(view.getUint16(second + programLayout.primitiveKind, true), textShaperAbi.engine.primitiveKinds.glyph);
   assert.equal(view.getUint32(second + programLayout.bufferStart, true), 3);
   assert.equal(view.getUint32(second + programLayout.operationStart, true), FULL_OPERATIONS.length);
   assert.equal(view.getUint32(second + programLayout.inputStart, true), 4);
 
-  const bufferLayout = layouts.policyBuffer;
+  const bufferLayout = layouts.codecBuffer;
   const buffersOffset = view.getUint32(request.buffersOffset, true);
   const explicitBuffer = buffersOffset;
   assert.equal(view.getUint16(explicitBuffer + bufferLayout.id, true), F32_BUFFER_ID);
@@ -218,11 +218,11 @@ test('a fully specified policy retains every serialized value exactly', () => {
   assert.equal(view.getUint16(defaultedBuffer + bufferLayout.stride, true), 4);
   assert.equal(
     view.getUint32(defaultedBuffer + bufferLayout.usage, true),
-    policy.bufferUsage.storage | policy.bufferUsage.copyDst,
+    codec.bufferUsage.storage | codec.bufferUsage.copyDst,
   );
   assert.equal(view.getUint16(defaultedBuffer + bufferLayout.capacityClass, true), 1);
 
-  const operationLayout = layouts.policyOperation;
+  const operationLayout = layouts.codecOperation;
   const operationsOffset = view.getUint32(request.operationsOffset, true);
   const firstOperation = operationsOffset;
   assert.equal(view.getUint8(firstOperation + operationLayout.opcode, true), opcodes.loadF32);
@@ -242,7 +242,7 @@ test('a fully specified policy retains every serialized value exactly', () => {
   assert.equal(view.getUint8(lastStore + operationLayout.operand1, true), 1);
   assert.equal(view.getUint32(lastStore + operationLayout.immediate0, true), U16_BUFFER_ID);
 
-  const inputLayout = layouts.policyInput;
+  const inputLayout = layouts.codecInput;
   const inputsOffset = view.getUint32(request.inputsOffset, true);
   const scopes = [
     ['semantic', 200],
@@ -252,7 +252,7 @@ test('a fully specified policy retains every serialized value exactly', () => {
   ];
   for (const [index, [scope, field]] of scopes.entries()) {
     const offset = inputsOffset + index * inputLayout.size;
-    assert.equal(view.getUint8(offset + inputLayout.scope, true), policy.inputScopes[scope]);
+    assert.equal(view.getUint8(offset + inputLayout.scope, true), codec.inputScopes[scope]);
     assert.equal(view.getUint8(offset + inputLayout.field, true), field);
   }
 });
@@ -260,21 +260,18 @@ test('a fully specified policy retains every serialized value exactly', () => {
 test('a decoration program may accept zero resource kinds', () => {
   const descriptor = fullDescriptor();
   descriptor.programs[0].resourceKindMask = 0;
-  assert.doesNotThrow(() => compileRenderPolicy(descriptor));
+  assert.doesNotThrow(() => compileCodec(descriptor));
 });
 
 test('buffer ids collide only within one program', () => {
   const descriptor = fullDescriptor();
   descriptor.programs[1].buffers = [{ id: F32_BUFFER_ID, scalar: 'u32', vectorWidth: 1 }];
   descriptor.programs[1].operations[1].immediate0 = F32_BUFFER_ID;
-  assert.doesNotThrow(() => compileRenderPolicy(descriptor));
+  assert.doesNotThrow(() => compileCodec(descriptor));
 
   const colliding = fullDescriptor();
   colliding.programs[0].buffers[1].id = F32_BUFFER_ID;
-  assert.throws(
-    () => compileRenderPolicy(colliding),
-    new RegExp(`repeats buffer id ${F32_BUFFER_ID} within a program`),
-  );
+  assert.throws(() => compileCodec(colliding), new RegExp(`repeats buffer id ${F32_BUFFER_ID} within a program`));
 });
 
 test('rejection happens before any output allocation or write', () => {
@@ -292,7 +289,7 @@ test('rejection happens before any output allocation or write', () => {
   try {
     const descriptor = fullDescriptor();
     descriptor.programs[1].operations = [];
-    assert.throws(() => compileRenderPolicy(descriptor), /declares no operations/);
+    assert.throws(() => compileCodec(descriptor), /declares no operations/);
     assert.equal(outputAllocations, 0);
   } finally {
     globalThis.Uint8Array = original;
@@ -300,25 +297,22 @@ test('rejection happens before any output allocation or write', () => {
 });
 
 test('compiler rejects malformed descriptor shapes at its call boundary', () => {
-  assert.throws(() => compileRenderPolicy(null), /descriptor needs an object/);
-  assert.throws(() => compileRenderPolicy({ capabilitySets: {}, programs: [] }), /capabilitySets needs an array/);
-  assert.throws(() => compileRenderPolicy({ capabilitySets: [], programs: {} }), /programs needs an array/);
+  assert.throws(() => compileCodec(null), /descriptor needs an object/);
+  assert.throws(() => compileCodec({ capabilitySets: {}, programs: [] }), /capabilitySets needs an array/);
+  assert.throws(() => compileCodec({ capabilitySets: [], programs: {} }), /programs needs an array/);
+  assert.throws(() => compileCodec({ capabilitySets: [null], programs: [] }), /capability set 0 needs an object/);
   assert.throws(
-    () => compileRenderPolicy({ capabilitySets: [null], programs: [] }),
-    /capability set 0 needs an object/,
-  );
-  assert.throws(
-    () => compileRenderPolicy({ capabilitySets: [capabilitySet()], programs: [null] }),
+    () => compileCodec({ capabilitySets: [capabilitySet()], programs: [null] }),
     /program 0 needs an object/,
   );
   for (const field of ['inputs', 'buffers', 'operations']) {
     const descriptor = fullDescriptor();
     descriptor.programs[0][field] = {};
-    assert.throws(() => compileRenderPolicy(descriptor), new RegExp(`program 0 ${field} needs an array`));
+    assert.throws(() => compileCodec(descriptor), new RegExp(`program 0 ${field} needs an array`));
   }
   const descriptor = fullDescriptor();
   descriptor.programs[0].operations[0] = null;
-  assert.throws(() => compileRenderPolicy(descriptor), /program 0 operation 0 needs an object/);
+  assert.throws(() => compileCodec(descriptor), /program 0 operation 0 needs an object/);
 });
 
 /** Each case mutates a valid descriptor into one specific preflight rejection. */
@@ -417,7 +411,7 @@ for (const [name, mutate, pattern] of numericRejections) {
   test(`preflight rejects ${name}`, () => {
     const descriptor = fullDescriptor();
     mutate(descriptor);
-    assert.throws(() => compileRenderPolicy(descriptor), pattern);
+    assert.throws(() => compileCodec(descriptor), pattern);
   });
 }
 
@@ -426,8 +420,8 @@ test('preflight rejects unknown and inherited input scope keys before indexing t
     const descriptor = fullDescriptor();
     descriptor.programs[0].inputs[0].scope = scope;
     assert.throws(
-      () => compileRenderPolicy(descriptor),
-      (error) => error instanceof TypeError && /input 0 scope .* is not a policy input scope/.test(error.message),
+      () => compileCodec(descriptor),
+      (error) => error instanceof TypeError && /input 0 scope .* is not a codec input scope/.test(error.message),
     );
   }
 });
@@ -435,7 +429,7 @@ test('preflight rejects unknown and inherited input scope keys before indexing t
 test('preflight rejects equivalent capability sets', () => {
   const descriptor = fullDescriptor();
   descriptor.capabilitySets.push({ ...descriptor.capabilitySets[0] });
-  assert.throws(() => compileRenderPolicy(descriptor), /repeats an equivalent capability set/);
+  assert.throws(() => compileCodec(descriptor), /repeats an equivalent capability set/);
 });
 
 test('compiler snapshots each declared capability field once', () => {
@@ -450,7 +444,7 @@ test('compiler snapshots each declared capability field once', () => {
     },
   });
 
-  compileRenderPolicy(descriptor);
+  compileCodec(descriptor);
 
   assert.equal(reads, 1);
 });
@@ -458,7 +452,7 @@ test('compiler snapshots each declared capability field once', () => {
 test('preflight rejects a program referencing an undeclared capability set', () => {
   const descriptor = fullDescriptor();
   descriptor.programs[0].capabilitySet = capabilitySet({ maxBufferBytes: 0xfe_dc_ba_97 });
-  assert.throws(() => compileRenderPolicy(descriptor), /references an undeclared capability set/);
+  assert.throws(() => compileCodec(descriptor), /references an undeclared capability set/);
 });
 
 test('preflight rejects a repeated technique, capability set, and variant', () => {
@@ -468,10 +462,10 @@ test('preflight rejects a repeated technique, capability set, and variant', () =
     capabilitySet: descriptor.capabilitySets[0],
     variant: 0xffff,
   });
-  assert.throws(() => compileRenderPolicy(descriptor), /repeats a technique, capability set, and program variant/);
+  assert.throws(() => compileCodec(descriptor), /repeats a technique, capability set, and program variant/);
 });
 
-/** Each case mirrors one PolicyError from the shaper's Rust validators. */
+/** Each case mirrors one CodecError from the shaper's Rust validators. */
 const semanticRejections = [
   ['empty capability sets', (d) => (d.capabilitySets = []), /declares no capability sets/],
   [
@@ -483,7 +477,7 @@ const semanticRejections = [
   [
     'unknown capability names',
     (d) => d.capabilitySets[0].capabilities.push('unbounded-magic'),
-    /not a known policy capability/,
+    /not a known codec capability/,
   ],
   [
     'capabilities with no allocation support',
@@ -532,8 +526,8 @@ const semanticRejections = [
     (d) =>
       (d.programs = Array.from({ length: 33 }, (_, index) => ({
         ...d.programs[1],
-        techniqueId: id.technique(`test.policy-preflight/many/${index}`),
-        programId: id.program(`test.policy-preflight/many/${index}`, 'test'),
+        techniqueId: id.technique(`test.codec-preflight/many/${index}`),
+        programId: id.program(`test.codec-preflight/many/${index}`, 'test'),
         buffers: [...d.programs[1].buffers],
         operations: [...d.programs[1].operations],
         inputs: [...d.programs[1].inputs],
@@ -594,7 +588,7 @@ const semanticRejections = [
     'more than sixteen buffers',
     (d) =>
       (d.programs[1].buffers = Array.from({ length: 17 }, (_, index) => ({
-        id: id.buffer(`test.policy-preflight/many/${index}`),
+        id: id.buffer(`test.codec-preflight/many/${index}`),
         scalar: 'u32',
         vectorWidth: 1,
       }))),
@@ -618,7 +612,7 @@ const semanticRejections = [
   ['zero buffer usage', (d) => (d.programs[0].buffers[0].usage = 0), /usage needs copyDst/],
   [
     'buffer usage without copy destination',
-    (d) => (d.programs[0].buffers[0].usage = policy.bufferUsage.vertex),
+    (d) => (d.programs[0].buffers[0].usage = codec.bufferUsage.vertex),
     /usage needs copyDst/,
   ],
   ['unknown buffer usage bits', (d) => (d.programs[0].buffers[0].usage = 7 + 2 ** 31), /usage needs copyDst/],
@@ -685,6 +679,6 @@ for (const [name, mutate, pattern] of semanticRejections) {
   test(`engine rules reject ${name}`, () => {
     const descriptor = fullDescriptor();
     mutate(descriptor);
-    assert.throws(() => compileRenderPolicy(descriptor), pattern);
+    assert.throws(() => compileCodec(descriptor), pattern);
   });
 }

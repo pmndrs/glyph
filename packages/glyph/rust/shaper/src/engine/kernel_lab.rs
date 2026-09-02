@@ -6,9 +6,9 @@ use core::{mem, slice};
 #[cfg(target_arch = "wasm32")]
 use crate::STATUS_INVALID_REQUEST;
 #[cfg(target_arch = "wasm32")]
-use crate::engine::policy::{
+use crate::engine::codec::{
     BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CapabilitySetId,
-    PhysicalBufferMut, ScalarType, SemanticInputBatch, TechniqueId, ValidatedPolicy,
+    PhysicalBufferMut, ScalarType, SemanticInputBatch, TechniqueId, ValidatedCodec,
 };
 
 const MAX_RECORDS: usize = 1_000_000;
@@ -609,8 +609,8 @@ pub(crate) unsafe fn exported_chunk_summaries_i64(
 
 #[cfg(target_arch = "wasm32")]
 #[allow(clippy::too_many_arguments)]
-pub(crate) unsafe fn exported_policy(
-    policy: &ValidatedPolicy,
+pub(crate) unsafe fn exported_codec(
+    codec: &ValidatedCodec,
     technique: u32,
     variant: u32,
     count: u32,
@@ -686,7 +686,7 @@ pub(crate) unsafe fn exported_policy(
                 bytes: byte_slice_mut(u16_output_pointer, count * mem::size_of::<u16>()),
             },
         ];
-        policy
+        codec
             .execute(
                 CapabilitySetId(1),
                 TechniqueId(technique),

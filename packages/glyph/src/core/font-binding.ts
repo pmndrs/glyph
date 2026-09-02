@@ -2,11 +2,11 @@ import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { Font } from '../font.js';
 import type { AnyRasterFormat, RasterResourceId } from '../raster-format.js';
 import {
-  assertRenderIdFactory,
-  RenderIdScope,
-  type RenderIdFactory,
-  type RenderResourceId,
-  type RenderTechniqueId,
+  assertCodecIdFactory,
+  CodecIdScope,
+  type CodecIdFactory,
+  type CodecResourceId,
+  type CodecTechniqueId,
 } from '../config/codec.js';
 import { compileRasterFont } from '../config/raster.js';
 const MAX_U32 = 0xffff_ffff;
@@ -16,7 +16,7 @@ const MAX_BINDING_FIELDS = 32;
 
 export interface BindingResource {
   readonly key: RasterResourceId;
-  readonly id: RenderResourceId;
+  readonly id: CodecResourceId;
   readonly generation: number;
   readonly kind: number;
   readonly reference: number;
@@ -31,7 +31,7 @@ export interface FontBindingFieldTable {
 
 /**
  * Order a binding table by the schema's declared field names. The same name
- * list drives the policy program's input table, so a missing, extra, or
+ * list drives the codec program's input table, so a missing, extra, or
  * misspelled reader is a compile error instead of a silently shifted column.
  */
 export function schemaFieldTable<const Names extends readonly string[]>(
@@ -43,7 +43,7 @@ export function schemaFieldTable<const Names extends readonly string[]>(
 }
 
 export interface FontBindingDescriptor {
-  readonly techniqueId: RenderTechniqueId;
+  readonly techniqueId: CodecTechniqueId;
   readonly programVariant: number;
   readonly glyphCount: number;
   readonly strikes: readonly number[];
@@ -60,7 +60,7 @@ export interface FontBindingDescriptor {
 /** Compile one immutable font's binding bytes; portable resources are dropped from this byte-only projection. */
 export function fontBindingBytes(
   font: Font<AnyRasterFormat>,
-  identities: RenderIdFactory = new RenderIdScope(),
+  identities: CodecIdFactory = new CodecIdScope(),
 ): Uint8Array {
   const compiled = compileRasterFont(font, identities);
   if (compiled !== undefined) return compiled.binding;
@@ -73,12 +73,12 @@ function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
 
 export function fontBindingResources(
   keys: readonly RasterResourceId[],
-  identities: RenderIdFactory,
+  identities: CodecIdFactory,
 ): {
   readonly resources: readonly BindingResource[];
   readonly indexFor: (key: RasterResourceId) => number;
 } {
-  assertRenderIdFactory(identities, 'font binding resource ids');
+  assertCodecIdFactory(identities, 'font binding resource ids');
   const byKey = new Map<RasterResourceId, BindingResource>();
   const byId = new Map<number, RasterResourceId>();
   for (const key of keys) {

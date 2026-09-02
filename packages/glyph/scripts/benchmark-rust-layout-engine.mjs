@@ -23,7 +23,7 @@ import { techniqueProof } from './support/render-technique-proof.mjs';
 
 const options = parseArguments(process.argv.slice(2));
 const plannerId = 1;
-const policyHandle = 1;
+const codecHandle = 1;
 const fontHandle = 1;
 const fontStackHandle = 1;
 const regionHeight = options.height;
@@ -47,7 +47,7 @@ const memoryAfterInitialize = memory.buffer.byteLength;
 registerFont();
 registerBinding();
 registerStack();
-registerPolicy();
+registerCodec();
 const memoryAfterRegistration = memory.buffer.byteLength;
 
 const text = paragraphTextForGlyphs(options.glyphs, options.corpus);
@@ -304,7 +304,7 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
 function updateBytes(fields) {
   return engineFrameUpdateBytes(abi, {
     plannerId,
-    policyHandle,
+    codecHandle,
     fontStackHandle,
     limits,
     ...fields,
@@ -347,10 +347,10 @@ function registerStack() {
   fn.deallocate(pointer, bytes.byteLength);
 }
 
-function registerPolicy() {
-  const bytes = technique.policyBytes;
+function registerCodec() {
+  const bytes = technique.codecBytes;
   const pointer = copyIntoAllocation(memory, fn.allocate, bytes);
-  requireStatus(fn.registerPolicy(policyHandle, pointer, bytes.byteLength), 'register render policy');
+  requireStatus(fn.registerCodec(codecHandle, pointer, bytes.byteLength), 'register render codec');
   fn.deallocate(pointer, bytes.byteLength);
 }
 

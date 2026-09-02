@@ -2,18 +2,18 @@
 //!
 //! Homogeneous frames delegate directly to one compiler. Mixed frames let both compilers filter
 //! the same borrowed semantic inputs, then merge only renderer-facing plan records. No glyph or
-//! policy input is copied into a strategy-specific partition.
+//! codec input is copied into a strategy-specific partition.
 
 use alloc::vec::Vec;
 
 use super::{
+    codec::{
+        ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, CapabilitySetId,
+        CodecExecutionError, ValidatedCodec,
+    },
     ordered_plan::OrderedPlanCompiler,
     plan_error::PlanError,
     plan_input::{PlanInput, PlanInputError, validate_input},
-    policy::{
-        ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, CapabilitySetId,
-        PolicyExecutionError, ValidatedPolicy,
-    },
     render_plan::{
         BufferRecord, DrawRecord, PATCH_WRITE, PatchRecord, PrimitiveRecord,
         RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE, RETIRE_RESOURCE, RenderPlanView,
@@ -75,16 +75,16 @@ impl RenderPlanCompilerError {
     }
 }
 
-fn policy_result_too_large(error: PolicyExecutionError) -> bool {
+fn codec_result_too_large(error: CodecExecutionError) -> bool {
     match error {
-        PolicyExecutionError::OutputCapacity => true,
-        PolicyExecutionError::CapabilitySetMissing
-        | PolicyExecutionError::ProgramMissing
-        | PolicyExecutionError::InputFieldCount
-        | PolicyExecutionError::InputLength
-        | PolicyExecutionError::OutputBufferCount
-        | PolicyExecutionError::OutputSchema
-        | PolicyExecutionError::NonFiniteOutput => false,
+        CodecExecutionError::OutputCapacity => true,
+        CodecExecutionError::CapabilitySetMissing
+        | CodecExecutionError::ProgramMissing
+        | CodecExecutionError::InputFieldCount
+        | CodecExecutionError::InputLength
+        | CodecExecutionError::OutputBufferCount
+        | CodecExecutionError::OutputSchema
+        | CodecExecutionError::NonFiniteOutput => false,
     }
 }
 
@@ -103,7 +103,7 @@ fn plan_result_too_large(error: PlanError) -> bool {
         | PlanError::InvalidIdentity
         | PlanError::DuplicateIdentity
         | PlanError::InvalidResource => false,
-        PlanError::PolicyExecution(error) => policy_result_too_large(error),
+        PlanError::CodecExecution(error) => codec_result_too_large(error),
     }
 }
 
@@ -160,7 +160,7 @@ impl RenderPlanCompiler {
     #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: PlanInput<'_>,
         checkpoint: bool,
@@ -175,20 +175,20 @@ impl RenderPlanCompiler {
         {
             return Err(RenderPlanCompilerError::InvalidIdentity);
         }
-        if policy.capability_set(capability_set).is_none() {
+        if codec.capability_set(capability_set).is_none() {
             return Err(RenderPlanCompilerError::CapabilitySetMissing);
         }
         validate_input(input)?;
         self.clear_merged_plan();
 
         let (mut ordered_input, mut stable_input) = (false, false);
-        match policy.uniform_allocation_strategy(capability_set) {
+        match codec.uniform_allocation_strategy(capability_set) {
             Some(ALLOCATION_ORDERED_DIRECT) => ordered_input = !input.glyphs.is_empty(),
             Some(ALLOCATION_STABLE_INDIRECT) => stable_input = !input.glyphs.is_empty(),
             Some(_) => return Err(RenderPlanCompilerError::UnsupportedStrategy),
             None => {
                 for glyph in input.glyphs {
-                    let program = policy
+                    let program = codec
                         .program(capability_set, glyph.technique, glyph.program_variant)
                         .ok_or(RenderPlanCompilerError::ProgramMissing)?;
                     match program.allocation_strategy {
@@ -212,7 +212,7 @@ impl RenderPlanCompiler {
             }
             (true, false) => {
                 self.ordered.prepare(
-                    policy,
+                    codec,
                     capability_set,
                     input,
                     checkpoint,
@@ -223,7 +223,7 @@ impl RenderPlanCompiler {
             }
             (false, true) => {
                 self.stable.prepare(
-                    policy,
+                    codec,
                     capability_set,
                     input,
                     checkpoint,
@@ -234,7 +234,7 @@ impl RenderPlanCompiler {
                 Ok(())
             }
             (true, true) => self.prepare_mixed(
-                policy,
+                codec,
                 capability_set,
                 input,
                 checkpoint,
@@ -246,30 +246,30 @@ impl RenderPlanCompiler {
 
     pub fn plan_view(
         &self,
-        policy_handle: u32,
+        codec_handle: u32,
         capability_set: CapabilitySetId,
-        policy_fingerprint: u64,
+        codec_fingerprint: u64,
     ) -> Result<RenderPlanView<'_>, RenderPlanCompilerError> {
         match self.prepared_strategy {
             PreparedStrategy::None => Err(RenderPlanCompilerError::NotPrepared),
             PreparedStrategy::Empty => Ok(RenderPlanView {
-                policy_handle,
+                codec_handle,
                 capability_set: capability_set.0,
-                policy_fingerprint,
+                codec_fingerprint,
                 ..RenderPlanView::default()
             }),
             PreparedStrategy::Ordered => self
                 .ordered
-                .plan_view(policy_handle, capability_set, policy_fingerprint)
+                .plan_view(codec_handle, capability_set, codec_fingerprint)
                 .map_err(Into::into),
             PreparedStrategy::Stable => self
                 .stable
-                .plan_view(policy_handle, capability_set, policy_fingerprint)
+                .plan_view(codec_handle, capability_set, codec_fingerprint)
                 .map_err(Into::into),
             PreparedStrategy::Mixed => Ok(RenderPlanView {
-                policy_handle,
+                codec_handle,
                 capability_set: capability_set.0,
-                policy_fingerprint,
+                codec_fingerprint,
                 resources: &self.resources,
                 buffers: &self.buffers,
                 patches: &self.patches,
@@ -321,7 +321,7 @@ impl RenderPlanCompiler {
     #[allow(clippy::too_many_arguments)]
     fn prepare_mixed(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: PlanInput<'_>,
         checkpoint: bool,
@@ -329,7 +329,7 @@ impl RenderPlanCompiler {
         acknowledged_publication_generation: u32,
     ) -> Result<(), RenderPlanCompilerError> {
         if let Err(error) = self.ordered.prepare_filtered(
-            policy,
+            codec,
             capability_set,
             input,
             checkpoint,
@@ -339,7 +339,7 @@ impl RenderPlanCompiler {
             return Err(error.into());
         }
         if let Err(error) = self.stable.prepare_filtered(
-            policy,
+            codec,
             capability_set,
             input,
             checkpoint,
@@ -350,7 +350,7 @@ impl RenderPlanCompiler {
             self.stable.abort();
             return Err(error.into());
         }
-        if let Err(error) = self.merge_prepared(capability_set, policy.fingerprint()) {
+        if let Err(error) = self.merge_prepared(capability_set, codec.fingerprint()) {
             self.ordered.abort();
             self.stable.abort();
             return Err(error);
@@ -362,7 +362,7 @@ impl RenderPlanCompiler {
     fn merge_prepared(
         &mut self,
         capability_set: CapabilitySetId,
-        policy_fingerprint: u64,
+        codec_fingerprint: u64,
     ) -> Result<(), RenderPlanCompilerError> {
         let publish_bindings =
             self.ordered.publishes_bindings() || self.stable.publishes_bindings();
@@ -371,10 +371,10 @@ impl RenderPlanCompiler {
         }
         let ordered = self
             .ordered
-            .plan_view_forced(0, capability_set, policy_fingerprint)?;
+            .plan_view_forced(0, capability_set, codec_fingerprint)?;
         let stable = self
             .stable
-            .plan_view_forced(0, capability_set, policy_fingerprint)?;
+            .plan_view_forced(0, capability_set, codec_fingerprint)?;
 
         append_resources(&mut self.resources, ordered.resources)?;
         append_resources(&mut self.resources, stable.resources)?;
@@ -645,13 +645,13 @@ mod tests {
 
     use super::*;
     use crate::engine::{
-        plan_input::PlanGlyph,
-        policy::{
+        codec::{
             BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST,
             BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CAP_ORDERED_DIRECT, CAP_STABLE_INDIRECT,
-            CapabilitySet, Operation, PolicyDescriptor, ProgramCapabilities, ProgramDescriptor,
+            CapabilitySet, CodecDescriptor, Operation, ProgramCapabilities, ProgramDescriptor,
             ProgramId, ScalarType, TechniqueId,
         },
+        plan_input::PlanGlyph,
         render_plan::{BUFFER_ORDERED_DIRECT, BUFFER_STABLE_INDIRECT},
         render_plan_wire::plan_layout,
     };
@@ -662,13 +662,13 @@ mod tests {
 
     #[test]
     fn homogeneous_frames_delegate_without_allocating_merge_tables() {
-        let policy = policy();
+        let codec = codec();
         let glyphs = [glyph(1, ORDERED, 0)];
         let x = [1.0];
         let mut compiler = RenderPlanCompiler::default();
-        prepare(&mut compiler, &policy, &glyphs, &x, true, 1, 0);
+        prepare(&mut compiler, &codec, &glyphs, &x, true, 1, 0);
         let plan = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
 
         assert_eq!(compiler.prepared_strategy, PreparedStrategy::Ordered);
@@ -679,13 +679,13 @@ mod tests {
 
     #[test]
     fn acknowledged_ordered_state_can_publish_an_empty_reuse_transaction() {
-        let policy = policy();
+        let codec = codec();
         let glyphs = [glyph(1, ORDERED, 0)];
         let x = [1.0];
         let mut compiler = RenderPlanCompiler::default();
-        prepare(&mut compiler, &policy, &glyphs, &x, true, 1, 0);
+        prepare(&mut compiler, &codec, &glyphs, &x, true, 1, 0);
         let buffer = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap()
             .buffers[0]
             .id;
@@ -693,7 +693,7 @@ mod tests {
 
         compiler.prepare_reuse().unwrap();
         let plan = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert!(plan.buffers.is_empty());
         assert!(plan.patches.is_empty());
@@ -703,7 +703,7 @@ mod tests {
 
     #[test]
     fn mixed_frames_preserve_global_draw_order_and_disjoint_buffer_namespaces() {
-        let policy = policy();
+        let codec = codec();
         let glyphs = [
             glyph(1, ORDERED, 0),
             glyph(2, STABLE, 0),
@@ -712,9 +712,9 @@ mod tests {
         ];
         let x = [1.0, 2.0, 3.0, 4.0];
         let mut compiler = RenderPlanCompiler::default();
-        prepare(&mut compiler, &policy, &glyphs, &x, true, 1, 0);
+        prepare(&mut compiler, &codec, &glyphs, &x, true, 1, 0);
         let plan = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
 
         assert_eq!(compiler.prepared_strategy, PreparedStrategy::Mixed);
@@ -744,16 +744,16 @@ mod tests {
 
     #[test]
     fn changing_allocation_strategy_keeps_a_shared_resource_live() {
-        let policy = policy_with_shared_technique_variants();
+        let codec = codec_with_shared_technique_variants();
         let mut compiler = RenderPlanCompiler::default();
         let first = [glyph(1, ORDERED, 1)];
-        prepare(&mut compiler, &policy, &first, &[1.0], true, 1, 0);
+        prepare(&mut compiler, &codec, &first, &[1.0], true, 1, 0);
         compiler.commit().unwrap();
 
         let second = [glyph(1, ORDERED, 0)];
-        prepare(&mut compiler, &policy, &second, &[1.0], false, 2, 0);
+        prepare(&mut compiler, &codec, &second, &[1.0], false, 2, 0);
         let plan = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
 
         assert_eq!(compiler.prepared_strategy, PreparedStrategy::Mixed);
@@ -768,7 +768,7 @@ mod tests {
 
     #[test]
     fn repeated_mixed_updates_publish_no_op_frames_and_settle_merge_capacity() {
-        let policy = policy();
+        let codec = codec();
         let mut glyphs = [
             glyph(1, ORDERED, 0),
             glyph(2, STABLE, 0),
@@ -778,7 +778,7 @@ mod tests {
         let mut compiler = RenderPlanCompiler::default();
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &glyphs,
             &[1.0, 2.0, 3.0, 4.0],
             true,
@@ -789,7 +789,7 @@ mod tests {
 
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &glyphs,
             &[1.0, 2.0, 3.0, 4.0],
             false,
@@ -797,7 +797,7 @@ mod tests {
             0,
         );
         let no_op = compiler
-            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert!(no_op.resources.is_empty());
         assert!(no_op.buffers.is_empty());
@@ -811,7 +811,7 @@ mod tests {
         glyphs[1].content_revision = 2;
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &glyphs,
             &[1.0, 20.0, 3.0, 4.0],
             false,
@@ -824,7 +824,7 @@ mod tests {
         glyphs[1].content_revision = 3;
         prepare(
             &mut compiler,
-            &policy,
+            &codec,
             &glyphs,
             &[1.0, 21.0, 3.0, 4.0],
             false,
@@ -837,7 +837,7 @@ mod tests {
     #[allow(clippy::too_many_arguments)]
     fn prepare(
         compiler: &mut RenderPlanCompiler,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         glyphs: &[PlanGlyph],
         x: &[f32],
         checkpoint: bool,
@@ -846,7 +846,7 @@ mod tests {
     ) {
         compiler
             .prepare(
-                policy,
+                codec,
                 CAPABILITY,
                 PlanInput {
                     glyphs,
@@ -884,8 +884,8 @@ mod tests {
         }
     }
 
-    fn policy() -> ValidatedPolicy {
-        ValidatedPolicy::new(PolicyDescriptor {
+    fn codec() -> ValidatedCodec {
+        ValidatedCodec::new(CodecDescriptor {
             capability_sets: vec![capability()],
             programs: vec![
                 program(ORDERED, 0, ProgramId(1), ALLOCATION_ORDERED_DIRECT),
@@ -895,8 +895,8 @@ mod tests {
         .unwrap()
     }
 
-    fn policy_with_shared_technique_variants() -> ValidatedPolicy {
-        ValidatedPolicy::new(PolicyDescriptor {
+    fn codec_with_shared_technique_variants() -> ValidatedCodec {
+        ValidatedCodec::new(CodecDescriptor {
             capability_sets: vec![capability()],
             programs: vec![
                 program(ORDERED, 0, ProgramId(1), ALLOCATION_ORDERED_DIRECT),
@@ -941,11 +941,11 @@ mod tests {
                 | BATCH_PROGRAM
                 | BATCH_RESOURCE
                 | BATCH_ORDER
-                | crate::engine::policy::BATCH_TRANSFORM,
+                | crate::engine::codec::BATCH_TRANSFORM,
             allocation_strategy,
             f32_input_count: 1,
             u32_input_count: 0,
-            inputs: vec![crate::engine::policy::InputSource::semantic(0)],
+            inputs: vec![crate::engine::codec::InputSource::semantic(0)],
             capabilities: ProgramCapabilities::default(),
             buffers: vec![BufferSchema::packed(
                 BufferId(1),

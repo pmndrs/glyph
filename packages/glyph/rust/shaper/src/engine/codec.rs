@@ -1,6 +1,6 @@
-//! Validated renderer policy data and its scalar correctness executor.
+//! Validated renderer codec data and its scalar correctness executor.
 //!
-//! Policies are intentionally straight-line. The engine owns record iteration, so a policy cannot
+//! Policies are intentionally straight-line. The engine owns record iteration, so a codec cannot
 //! allocate, loop, branch backward, address arbitrary memory, or mutate semantic layout.
 
 use alloc::vec::Vec;
@@ -266,7 +266,7 @@ pub struct ProgramDescriptor {
     pub technique: TechniqueId,
     pub variant: u16,
     pub id: ProgramId,
-    /// Zero makes a program valid for every capability set in this policy.
+    /// Zero makes a program valid for every capability set in this codec.
     pub capability_set: CapabilitySetId,
     pub resource_kind_mask: u32,
     pub semantic_view_mask: u32,
@@ -283,21 +283,21 @@ pub struct ProgramDescriptor {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct PolicyDescriptor {
+pub struct CodecDescriptor {
     pub capability_sets: Vec<CapabilitySet>,
     pub programs: Vec<ProgramDescriptor>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ValidatedPolicy {
+pub struct ValidatedCodec {
     capability_sets: Vec<CapabilitySet>,
     programs: Vec<ProgramDescriptor>,
     execution: Vec<ExecutableProgram>,
     fingerprint: u64,
 }
 
-impl ValidatedPolicy {
-    /// The decoration program admitted for this capability set, if the policy declares one.
+impl ValidatedCodec {
+    /// The decoration program admitted for this capability set, if the codec declares one.
     pub fn decoration_program(
         &self,
         capability_set: CapabilitySetId,
@@ -308,17 +308,17 @@ impl ValidatedPolicy {
         })
     }
 
-    pub fn new(descriptor: PolicyDescriptor) -> Result<Self, PolicyError> {
-        validate_policy(&descriptor)?;
+    pub fn new(descriptor: CodecDescriptor) -> Result<Self, CodecError> {
+        validate_codec(&descriptor)?;
         let mut execution = Vec::new();
         execution
             .try_reserve_exact(descriptor.programs.len())
-            .map_err(|_| PolicyError::AllocationFailed)?;
+            .map_err(|_| CodecError::AllocationFailed)?;
         for program in &descriptor.programs {
             execution.push(ExecutableProgram::new(program)?);
         }
         Ok(Self {
-            fingerprint: policy_fingerprint(&descriptor),
+            fingerprint: codec_fingerprint(&descriptor),
             capability_sets: descriptor.capability_sets,
             programs: descriptor.programs,
             execution,
@@ -388,9 +388,9 @@ impl ValidatedPolicy {
         inputs: SemanticInputBatch<'_>,
         output_start: usize,
         outputs: &mut [PhysicalBufferMut<'_>],
-    ) -> Result<(), PolicyExecutionError> {
+    ) -> Result<(), CodecExecutionError> {
         if self.capability_set(capability_set).is_none() {
-            return Err(PolicyExecutionError::CapabilitySetMissing);
+            return Err(CodecExecutionError::CapabilitySetMissing);
         }
         let program_index = self
             .programs
@@ -407,15 +407,15 @@ impl ValidatedPolicy {
                         && program.variant == variant
                 })
             })
-            .ok_or(PolicyExecutionError::ProgramMissing)?;
+            .ok_or(CodecExecutionError::ProgramMissing)?;
         let program = self
             .programs
             .get(program_index)
-            .ok_or(PolicyExecutionError::ProgramMissing)?;
+            .ok_or(CodecExecutionError::ProgramMissing)?;
         let execution = self
             .execution
             .get(program_index)
-            .ok_or(PolicyExecutionError::ProgramMissing)?;
+            .ok_or(CodecExecutionError::ProgramMissing)?;
         let active_buffers = (1_u32 << program.buffers.len()) - 1;
         execute_program(
             program,
@@ -440,9 +440,9 @@ impl ValidatedPolicy {
         output_start: usize,
         outputs: &mut [PhysicalBufferMut<'_>],
         active_buffers: u32,
-    ) -> Result<(), PolicyExecutionError> {
+    ) -> Result<(), CodecExecutionError> {
         if self.capability_set(capability_set).is_none() {
-            return Err(PolicyExecutionError::CapabilitySetMissing);
+            return Err(CodecExecutionError::CapabilitySetMissing);
         }
         let program_index = self
             .programs
@@ -459,7 +459,7 @@ impl ValidatedPolicy {
                         && program.variant == variant
                 })
             })
-            .ok_or(PolicyExecutionError::ProgramMissing)?;
+            .ok_or(CodecExecutionError::ProgramMissing)?;
         execute_program(
             &self.programs[program_index],
             &self.execution[program_index],
@@ -552,7 +552,7 @@ fn low_bits(count: u8) -> u32 {
     }
 }
 
-fn policy_fingerprint(descriptor: &PolicyDescriptor) -> u64 {
+fn codec_fingerprint(descriptor: &CodecDescriptor) -> u64 {
     let mut fingerprint = 0xcbf2_9ce4_8422_2325_u64;
     mix_u32(&mut fingerprint, descriptor.capability_sets.len() as u32);
     for set in &descriptor.capability_sets {
@@ -695,7 +695,7 @@ struct ExecutableProgram {
 }
 
 impl ExecutableProgram {
-    fn new(program: &ProgramDescriptor) -> Result<Self, PolicyError> {
+    fn new(program: &ProgramDescriptor) -> Result<Self, CodecError> {
         let operation_buffer_masks = operation_buffer_masks(program)?;
         let mut store_buffer_indices = Vec::new();
         let mut buffer_dependency_masks = Vec::new();
@@ -703,16 +703,16 @@ impl ExecutableProgram {
         let mut buffer_u32_input_masks = Vec::new();
         store_buffer_indices
             .try_reserve_exact(program.operations.len())
-            .map_err(|_| PolicyError::AllocationFailed)?;
+            .map_err(|_| CodecError::AllocationFailed)?;
         buffer_dependency_masks
             .try_reserve_exact(program.buffers.len())
-            .map_err(|_| PolicyError::AllocationFailed)?;
+            .map_err(|_| CodecError::AllocationFailed)?;
         buffer_f32_input_masks
             .try_reserve_exact(program.buffers.len())
-            .map_err(|_| PolicyError::AllocationFailed)?;
+            .map_err(|_| CodecError::AllocationFailed)?;
         buffer_u32_input_masks
             .try_reserve_exact(program.buffers.len())
-            .map_err(|_| PolicyError::AllocationFailed)?;
+            .map_err(|_| CodecError::AllocationFailed)?;
         buffer_dependency_masks.resize(program.buffers.len(), 0);
         buffer_f32_input_masks.resize(program.buffers.len(), 0);
         buffer_u32_input_masks.resize(program.buffers.len(), 0);
@@ -725,9 +725,9 @@ impl ExecutableProgram {
                     .buffers
                     .iter()
                     .position(|schema| schema.id == buffer)
-                    .ok_or(PolicyError::UnknownBuffer)?
+                    .ok_or(CodecError::UnknownBuffer)?
                     .try_into()
-                    .map_err(|_| PolicyError::TooManyBuffers)?,
+                    .map_err(|_| CodecError::TooManyBuffers)?,
                 None => NOT_A_STORE,
             };
             store_buffer_indices.push(index);
@@ -756,11 +756,11 @@ impl ExecutableProgram {
     }
 }
 
-fn operation_buffer_masks(program: &ProgramDescriptor) -> Result<Vec<u32>, PolicyError> {
+fn operation_buffer_masks(program: &ProgramDescriptor) -> Result<Vec<u32>, CodecError> {
     let mut masks = Vec::new();
     masks
         .try_reserve_exact(program.operations.len())
-        .map_err(|_| PolicyError::AllocationFailed)?;
+        .map_err(|_| CodecError::AllocationFailed)?;
     masks.resize(program.operations.len(), 0);
     let mut register_consumers = [0_u32; MAX_REGISTERS];
     for (operation_index, operation) in program.operations.iter().enumerate().rev() {
@@ -769,7 +769,7 @@ fn operation_buffer_masks(program: &ProgramDescriptor) -> Result<Vec<u32>, Polic
                 .buffers
                 .iter()
                 .position(|schema| schema.id == buffer)
-                .ok_or(PolicyError::UnknownBuffer)?;
+                .ok_or(CodecError::UnknownBuffer)?;
             let mask = 1_u32 << buffer_index;
             masks[operation_index] = mask;
             register_consumers[usize::from(operation_sources(operation)[0])] |= mask;
@@ -838,7 +838,7 @@ fn propagate_input_dependencies(
     u32_registers: &mut [u32; MAX_REGISTERS],
     f32_buffers: &mut [u32],
     u32_buffers: &mut [u32],
-) -> Result<(), PolicyError> {
+) -> Result<(), CodecError> {
     match *operation {
         Operation::LoadF32 { target, field } => {
             f32_registers[usize::from(target)] = 1_u32 << field;
@@ -901,7 +901,7 @@ fn propagate_input_dependencies(
                 .buffers
                 .iter()
                 .position(|schema| schema.id == buffer)
-                .ok_or(PolicyError::UnknownBuffer)?;
+                .ok_or(CodecError::UnknownBuffer)?;
             f32_buffers[index] |= f32_registers[usize::from(source)];
             u32_buffers[index] |= u32_registers[usize::from(source)];
         }
@@ -914,7 +914,7 @@ fn propagate_dependencies(
     operation: &Operation,
     registers: &mut [u16; MAX_REGISTERS],
     buffers: &mut [u16],
-) -> Result<(), PolicyError> {
+) -> Result<(), CodecError> {
     match *operation {
         Operation::LoadF32 { target, field } => {
             registers[usize::from(target)] =
@@ -970,7 +970,7 @@ fn propagate_dependencies(
                 .buffers
                 .iter()
                 .position(|schema| schema.id == buffer)
-                .ok_or(PolicyError::UnknownBuffer)?;
+                .ok_or(CodecError::UnknownBuffer)?;
             buffers[index] |= registers[usize::from(source)];
         }
     }
@@ -1014,7 +1014,7 @@ pub struct PhysicalBufferMut<'a> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PolicyExecutionError {
+pub enum CodecExecutionError {
     CapabilitySetMissing,
     ProgramMissing,
     InputFieldCount,
@@ -1026,7 +1026,7 @@ pub enum PolicyExecutionError {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PolicyError {
+pub enum CodecError {
     AllocationFailed,
     EmptyCapabilitySets,
     TooManyCapabilitySets,
@@ -1036,7 +1036,7 @@ pub enum PolicyError {
     InvalidCapabilityLimits,
     InvalidUpdateAlignment,
     InvalidUploadCostModel,
-    EmptyPolicy,
+    EmptyCodec,
     TooManyPrograms,
     InvalidTechniqueId,
     InvalidProgramId,
@@ -1078,7 +1078,7 @@ fn execute_program(
     output_start: usize,
     outputs: &mut [PhysicalBufferMut<'_>],
     active_buffers: u32,
-) -> Result<(), PolicyExecutionError> {
+) -> Result<(), CodecExecutionError> {
     validate_execution(program, inputs, output_start, outputs, active_buffers)?;
     #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
     let completed = unsafe {
@@ -1113,11 +1113,11 @@ fn validate_execution(
     output_start: usize,
     outputs: &[PhysicalBufferMut<'_>],
     active_buffers: u32,
-) -> Result<(), PolicyExecutionError> {
+) -> Result<(), CodecExecutionError> {
     if inputs.f32_fields.len() != usize::from(program.f32_input_count)
         || inputs.u32_fields.len() != usize::from(program.u32_input_count)
     {
-        return Err(PolicyExecutionError::InputFieldCount);
+        return Err(CodecExecutionError::InputFieldCount);
     }
     if inputs
         .f32_fields
@@ -1128,26 +1128,26 @@ fn validate_execution(
             .iter()
             .any(|field| field.len() != inputs.record_count)
     {
-        return Err(PolicyExecutionError::InputLength);
+        return Err(CodecExecutionError::InputLength);
     }
     if outputs.len() != program.buffers.len() {
-        return Err(PolicyExecutionError::OutputBufferCount);
+        return Err(CodecExecutionError::OutputBufferCount);
     }
     let output_end = output_start
         .checked_add(inputs.record_count)
-        .ok_or(PolicyExecutionError::OutputCapacity)?;
+        .ok_or(CodecExecutionError::OutputCapacity)?;
     for (index, (output, schema)) in outputs.iter().zip(&program.buffers).enumerate() {
         if output.schema != *schema {
-            return Err(PolicyExecutionError::OutputSchema);
+            return Err(CodecExecutionError::OutputSchema);
         }
         if active_buffers & (1 << index) == 0 {
             continue;
         }
         let required = output_end
             .checked_mul(schema.stride())
-            .ok_or(PolicyExecutionError::OutputCapacity)?;
+            .ok_or(CodecExecutionError::OutputCapacity)?;
         if output.bytes.len() < required {
-            return Err(PolicyExecutionError::OutputCapacity);
+            return Err(CodecExecutionError::OutputCapacity);
         }
     }
     Ok(())
@@ -1161,7 +1161,7 @@ fn execute_record(
     input_record: usize,
     outputs: &mut [PhysicalBufferMut<'_>],
     active_buffers: u32,
-) -> Result<(), PolicyExecutionError> {
+) -> Result<(), CodecExecutionError> {
     let mut registers = [0_u32; MAX_REGISTERS];
     let mut values = [0_u32; MAX_OUTPUT_LANES];
     for (operation_index, operation) in program.operations.iter().enumerate() {
@@ -1229,7 +1229,7 @@ fn execute_record(
             Operation::StoreF32 { source, lane, .. } => {
                 let bits = registers[usize::from(source)];
                 if !f32::from_bits(bits).is_finite() {
-                    return Err(PolicyExecutionError::NonFiniteOutput);
+                    return Err(CodecExecutionError::NonFiniteOutput);
                 }
                 values[store_slot(execution, operation_index, lane)] = bits;
             }
@@ -1270,7 +1270,7 @@ unsafe fn execute_simd_records(
     output_start: usize,
     outputs: &mut [PhysicalBufferMut<'_>],
     active_buffers: u32,
-) -> Result<usize, PolicyExecutionError> {
+) -> Result<usize, CodecExecutionError> {
     use core::arch::wasm32::{
         f32x4_add, f32x4_convert_u32x4, f32x4_lt, f32x4_mul, f32x4_sub, i32x4_ne, u32x4_splat,
         v128, v128_and, v128_bitselect, v128_load,
@@ -1367,7 +1367,7 @@ unsafe fn execute_simd_records(
                 Operation::StoreF32 { source, lane, .. } => {
                     let value = registers[usize::from(source)];
                     if !simd_f32_is_finite(value) {
-                        return Err(PolicyExecutionError::NonFiniteOutput);
+                        return Err(CodecExecutionError::NonFiniteOutput);
                     }
                     values[store_slot(execution, operation_index, lane)] = value;
                 }
@@ -1515,20 +1515,20 @@ fn store_buffer(operation: &Operation) -> Option<BufferId> {
     }
 }
 
-fn validate_policy(descriptor: &PolicyDescriptor) -> Result<(), PolicyError> {
+fn validate_codec(descriptor: &CodecDescriptor) -> Result<(), CodecError> {
     validate_capability_sets(&descriptor.capability_sets)?;
     if descriptor.programs.is_empty() {
-        return Err(PolicyError::EmptyPolicy);
+        return Err(CodecError::EmptyCodec);
     }
     if descriptor.programs.len() > MAX_PROGRAMS {
-        return Err(PolicyError::TooManyPrograms);
+        return Err(CodecError::TooManyPrograms);
     }
     for (index, program) in descriptor.programs.iter().enumerate() {
         if program.technique.0 == 0 {
-            return Err(PolicyError::InvalidTechniqueId);
+            return Err(CodecError::InvalidTechniqueId);
         }
         if program.id.0 == 0 {
-            return Err(PolicyError::InvalidProgramId);
+            return Err(CodecError::InvalidProgramId);
         }
         if program.capability_set.0 != 0
             && !descriptor
@@ -1536,27 +1536,27 @@ fn validate_policy(descriptor: &PolicyDescriptor) -> Result<(), PolicyError> {
                 .iter()
                 .any(|set| set.id == program.capability_set)
         {
-            return Err(PolicyError::UnknownCapabilitySet);
+            return Err(CodecError::UnknownCapabilitySet);
         }
         // Decoration programs draw without raster resources; every other program must
         // declare the resource kinds it accepts.
         if program.resource_kind_mask == 0
             && program.primitive_kind != super::render_plan::PRIMITIVE_DECORATION
         {
-            return Err(PolicyError::InvalidResourceKinds);
+            return Err(CodecError::InvalidResourceKinds);
         }
         if program.storage_key_mask & !STORAGE_KEY_FIELDS != 0
             || program.storage_key_mask & REQUIRED_STORAGE_KEYS != REQUIRED_STORAGE_KEYS
             || program.draw_key_mask & !BATCH_FIELDS != 0
             || program.draw_key_mask & REQUIRED_DRAW_KEYS != REQUIRED_DRAW_KEYS
         {
-            return Err(PolicyError::InvalidBatchKey);
+            return Err(CodecError::InvalidBatchKey);
         }
         if !matches!(
             program.allocation_strategy,
             ALLOCATION_ORDERED_DIRECT | ALLOCATION_STABLE_INDIRECT
         ) {
-            return Err(PolicyError::UnsupportedAllocationStrategy);
+            return Err(CodecError::UnsupportedAllocationStrategy);
         }
         let required_capability = if program.allocation_strategy == ALLOCATION_ORDERED_DIRECT {
             CAP_ORDERED_DIRECT
@@ -1567,17 +1567,17 @@ fn validate_policy(descriptor: &PolicyDescriptor) -> Result<(), PolicyError> {
             (program.capability_set.0 == 0 || program.capability_set == set.id)
                 && set.flags & required_capability == 0
         }) {
-            return Err(PolicyError::UnsupportedAllocationStrategy);
+            return Err(CodecError::UnsupportedAllocationStrategy);
         }
         for previous in &descriptor.programs[..index] {
             if previous.capability_set == program.capability_set
                 && previous.technique == program.technique
                 && previous.variant == program.variant
             {
-                return Err(PolicyError::DuplicateTechniqueVariant);
+                return Err(CodecError::DuplicateTechniqueVariant);
             }
             if previous.id == program.id {
-                return Err(PolicyError::DuplicateProgramId);
+                return Err(CodecError::DuplicateProgramId);
             }
         }
         validate_program(program)?;
@@ -1588,32 +1588,32 @@ fn validate_policy(descriptor: &PolicyDescriptor) -> Result<(), PolicyError> {
             .iter()
             .any(|program| program.capability_set.0 == 0 || program.capability_set == set.id)
     }) {
-        return Err(PolicyError::UnknownCapabilitySet);
+        return Err(CodecError::UnknownCapabilitySet);
     }
     Ok(())
 }
 
-fn validate_capability_sets(capability_sets: &[CapabilitySet]) -> Result<(), PolicyError> {
+fn validate_capability_sets(capability_sets: &[CapabilitySet]) -> Result<(), CodecError> {
     if capability_sets.is_empty() {
-        return Err(PolicyError::EmptyCapabilitySets);
+        return Err(CodecError::EmptyCapabilitySets);
     }
     if capability_sets.len() > MAX_CAPABILITY_SETS {
-        return Err(PolicyError::TooManyCapabilitySets);
+        return Err(CodecError::TooManyCapabilitySets);
     }
     for (index, set) in capability_sets.iter().enumerate() {
         if set.id.0 == 0 {
-            return Err(PolicyError::InvalidCapabilitySetId);
+            return Err(CodecError::InvalidCapabilitySetId);
         }
         if capability_sets[..index]
             .iter()
             .any(|previous| previous.id == set.id)
         {
-            return Err(PolicyError::DuplicateCapabilitySetId);
+            return Err(CodecError::DuplicateCapabilitySetId);
         }
         if set.flags & !CAPABILITY_FLAGS != 0
             || set.flags & (CAP_ORDERED_DIRECT | CAP_STABLE_INDIRECT) == 0
         {
-            return Err(PolicyError::InvalidCapabilityFlags);
+            return Err(CodecError::InvalidCapabilityFlags);
         }
         if set.max_buffer_bytes == 0
             || set.max_buffers_per_draw == 0
@@ -1621,82 +1621,82 @@ fn validate_capability_sets(capability_sets: &[CapabilitySet]) -> Result<(), Pol
             || set.max_resources_per_draw == 0
             || set.fragmentation_budget == 0
         {
-            return Err(PolicyError::InvalidCapabilityLimits);
+            return Err(CodecError::InvalidCapabilityLimits);
         }
         if !set.update_alignment.is_power_of_two() || set.update_alignment > 256 {
-            return Err(PolicyError::InvalidUpdateAlignment);
+            return Err(CodecError::InvalidUpdateAlignment);
         }
         if set.coalesce_gap_bytes > set.max_buffer_bytes
             || set.range_call_penalty_bytes > set.max_buffer_bytes
             || !(1..=10_000).contains(&set.whole_buffer_threshold_basis_points)
         {
-            return Err(PolicyError::InvalidUploadCostModel);
+            return Err(CodecError::InvalidUploadCostModel);
         }
         if (set.flags & CAP_INDIRECT_DRAWS == 0) != (set.max_indirect_draws == 0) {
-            return Err(PolicyError::InvalidCapabilityLimits);
+            return Err(CodecError::InvalidCapabilityLimits);
         }
     }
     Ok(())
 }
 
-fn validate_program(program: &ProgramDescriptor) -> Result<(), PolicyError> {
+fn validate_program(program: &ProgramDescriptor) -> Result<(), CodecError> {
     if usize::from(program.f32_input_count) > MAX_REGISTERS
         || usize::from(program.u32_input_count) > MAX_REGISTERS
     {
-        return Err(PolicyError::TooManyInputFields);
+        return Err(CodecError::TooManyInputFields);
     }
     if program.inputs.len()
         != usize::from(program.f32_input_count) + usize::from(program.u32_input_count)
     {
-        return Err(PolicyError::InvalidInputSources);
+        return Err(CodecError::InvalidInputSources);
     }
     if program.buffers.is_empty() {
-        return Err(PolicyError::EmptyBuffers);
+        return Err(CodecError::EmptyBuffers);
     }
     if program.buffers.len() > MAX_BUFFERS_PER_PROGRAM {
-        return Err(PolicyError::TooManyBuffers);
+        return Err(CodecError::TooManyBuffers);
     }
     for (index, buffer) in program.buffers.iter().enumerate() {
         if buffer.id.0 == 0 {
-            return Err(PolicyError::InvalidBufferId);
+            return Err(CodecError::InvalidBufferId);
         }
         if buffer.vector_width == 0 || buffer.vector_width > MAX_VECTOR_WIDTH {
-            return Err(PolicyError::InvalidVectorWidth);
+            return Err(CodecError::InvalidVectorWidth);
         }
         if buffer.alignment == 0 || !buffer.alignment.is_power_of_two() || buffer.alignment > 256 {
-            return Err(PolicyError::InvalidBufferAlignment);
+            return Err(CodecError::InvalidBufferAlignment);
         }
         let packed_width = buffer
             .scalar
             .byte_width()
             .checked_mul(usize::from(buffer.vector_width))
-            .ok_or(PolicyError::InvalidBufferStride)?;
+            .ok_or(CodecError::InvalidBufferStride)?;
         if usize::from(buffer.stride) < packed_width
             || usize::from(buffer.stride) % usize::from(buffer.alignment) != 0
         {
-            return Err(PolicyError::InvalidBufferStride);
+            return Err(CodecError::InvalidBufferStride);
         }
         if buffer.usage == 0
             || buffer.usage & !BUFFER_USAGE_FLAGS != 0
             || buffer.usage & BUFFER_USAGE_COPY_DST == 0
         {
-            return Err(PolicyError::InvalidBufferUsage);
+            return Err(CodecError::InvalidBufferUsage);
         }
         if buffer.capacity_class == 0 {
-            return Err(PolicyError::InvalidCapacityClass);
+            return Err(CodecError::InvalidCapacityClass);
         }
         if program.buffers[..index]
             .iter()
             .any(|previous| previous.id == buffer.id)
         {
-            return Err(PolicyError::DuplicateBufferId);
+            return Err(CodecError::DuplicateBufferId);
         }
     }
     if program.operations.is_empty() {
-        return Err(PolicyError::EmptyOperations);
+        return Err(CodecError::EmptyOperations);
     }
     if program.operations.len() > MAX_OPERATIONS_PER_PROGRAM {
-        return Err(PolicyError::TooManyOperations);
+        return Err(CodecError::TooManyOperations);
     }
 
     let mut registers = [UNINITIALIZED; MAX_REGISTERS];
@@ -1707,7 +1707,7 @@ fn validate_program(program: &ProgramDescriptor) -> Result<(), PolicyError> {
     for (index, buffer) in program.buffers.iter().enumerate() {
         let required = (1_u8 << buffer.vector_width) - 1;
         if stored_lanes[index] != required {
-            return Err(PolicyError::IncompleteBuffer);
+            return Err(CodecError::IncompleteBuffer);
         }
     }
     Ok(())
@@ -1718,23 +1718,23 @@ fn validate_operation(
     operation: &Operation,
     registers: &mut [u8; MAX_REGISTERS],
     stored_lanes: &mut [u8; MAX_BUFFERS_PER_PROGRAM],
-) -> Result<(), PolicyError> {
+) -> Result<(), CodecError> {
     match *operation {
         Operation::LoadF32 { target, field } => {
             if field >= program.f32_input_count {
-                return Err(PolicyError::InvalidInputField);
+                return Err(CodecError::InvalidInputField);
             }
             initialize(registers, target, F32_REGISTER)
         }
         Operation::LoadU32 { target, field } => {
             if field >= program.u32_input_count {
-                return Err(PolicyError::InvalidInputField);
+                return Err(CodecError::InvalidInputField);
             }
             initialize(registers, target, U32_REGISTER)
         }
         Operation::ConstantF32 { target, bits } => {
             if !f32::from_bits(bits).is_finite() {
-                return Err(PolicyError::NonFiniteConstant);
+                return Err(CodecError::NonFiniteConstant);
             }
             initialize(registers, target, F32_REGISTER)
         }
@@ -1813,10 +1813,10 @@ fn initialize(
     registers: &mut [u8; MAX_REGISTERS],
     target: u8,
     register_type: u8,
-) -> Result<(), PolicyError> {
+) -> Result<(), CodecError> {
     let slot = registers
         .get_mut(usize::from(target))
-        .ok_or(PolicyError::InvalidRegister)?;
+        .ok_or(CodecError::InvalidRegister)?;
     *slot = register_type;
     Ok(())
 }
@@ -1825,15 +1825,15 @@ fn require(
     registers: &[u8; MAX_REGISTERS],
     register: u8,
     register_type: u8,
-) -> Result<(), PolicyError> {
+) -> Result<(), CodecError> {
     let actual = *registers
         .get(usize::from(register))
-        .ok_or(PolicyError::InvalidRegister)?;
+        .ok_or(CodecError::InvalidRegister)?;
     if actual == UNINITIALIZED {
-        return Err(PolicyError::UninitializedRegister);
+        return Err(CodecError::UninitializedRegister);
     }
     if actual != register_type {
-        return Err(PolicyError::RegisterTypeMismatch);
+        return Err(CodecError::RegisterTypeMismatch);
     }
     Ok(())
 }
@@ -1844,22 +1844,22 @@ fn validate_store(
     lane: u8,
     scalar: ScalarType,
     stored_lanes: &mut [u8; MAX_BUFFERS_PER_PROGRAM],
-) -> Result<(), PolicyError> {
+) -> Result<(), CodecError> {
     let index = program
         .buffers
         .iter()
         .position(|candidate| candidate.id == buffer)
-        .ok_or(PolicyError::UnknownBuffer)?;
+        .ok_or(CodecError::UnknownBuffer)?;
     let schema = program.buffers[index];
     if schema.scalar != scalar {
-        return Err(PolicyError::StoreTypeMismatch);
+        return Err(CodecError::StoreTypeMismatch);
     }
     if lane >= schema.vector_width {
-        return Err(PolicyError::InvalidStoreLane);
+        return Err(CodecError::InvalidStoreLane);
     }
     let mask = 1_u8 << lane;
     if stored_lanes[index] & mask != 0 {
-        return Err(PolicyError::DuplicateStore);
+        return Err(CodecError::DuplicateStore);
     }
     stored_lanes[index] |= mask;
     Ok(())
@@ -1892,8 +1892,8 @@ mod tests {
         }
     }
 
-    fn descriptor(programs: Vec<ProgramDescriptor>) -> PolicyDescriptor {
-        PolicyDescriptor {
+    fn descriptor(programs: Vec<ProgramDescriptor>) -> CodecDescriptor {
+        CodecDescriptor {
             capability_sets: vec![valid_capability_set()],
             programs,
         }
@@ -1951,14 +1951,14 @@ mod tests {
 
     #[test]
     fn accepts_complete_straight_line_program() {
-        let policy = ValidatedPolicy::new(descriptor(vec![valid_program()])).unwrap();
+        let codec = ValidatedCodec::new(descriptor(vec![valid_program()])).unwrap();
         assert_eq!(
-            policy.program(CAPABILITY, BITMAP, 0).map(|value| value.id),
+            codec.program(CAPABILITY, BITMAP, 0).map(|value| value.id),
             Some(PROGRAM)
         );
-        assert_eq!(policy.program(CAPABILITY, BITMAP, 1), None);
+        assert_eq!(codec.program(CAPABILITY, BITMAP, 1), None);
         assert_eq!(
-            policy.buffer_dependency_masks(CAPABILITY, BITMAP, 0),
+            codec.buffer_dependency_masks(CAPABILITY, BITMAP, 0),
             Some([0b11].as_slice())
         );
     }
@@ -1977,7 +1977,7 @@ mod tests {
     #[test]
     fn reports_only_a_truly_uniform_allocation_strategy() {
         let ordered = valid_program();
-        let uniform = ValidatedPolicy::new(descriptor(vec![ordered.clone()])).unwrap();
+        let uniform = ValidatedCodec::new(descriptor(vec![ordered.clone()])).unwrap();
         assert_eq!(
             uniform.uniform_allocation_strategy(CAPABILITY),
             Some(ALLOCATION_ORDERED_DIRECT)
@@ -1987,7 +1987,7 @@ mod tests {
         stable.technique = TechniqueId(2);
         stable.id = ProgramId(2);
         stable.allocation_strategy = ALLOCATION_STABLE_INDIRECT;
-        let mixed = ValidatedPolicy::new(descriptor(vec![valid_program(), stable])).unwrap();
+        let mixed = ValidatedCodec::new(descriptor(vec![valid_program(), stable])).unwrap();
         assert_eq!(mixed.uniform_allocation_strategy(CAPABILITY), None);
     }
 
@@ -2012,41 +2012,41 @@ mod tests {
                 lane: 0,
             },
         ]);
-        let policy = ValidatedPolicy::new(descriptor(vec![program])).unwrap();
+        let codec = ValidatedCodec::new(descriptor(vec![program])).unwrap();
 
         assert_eq!(
-            policy.execution[0].operation_buffer_masks,
+            codec.execution[0].operation_buffer_masks,
             [1, 1, 1, 1, 2, 2]
         );
     }
 
     #[test]
-    fn input_sources_are_exact_and_participate_in_policy_identity() {
+    fn input_sources_are_exact_and_participate_in_codec_identity() {
         let program = valid_program();
-        let first = ValidatedPolicy::new(descriptor(vec![program.clone()])).unwrap();
+        let first = ValidatedCodec::new(descriptor(vec![program.clone()])).unwrap();
         let mut changed = program.clone();
         changed.inputs[1] = InputSource {
             scope: InputScope::Glyph,
             field: 0,
         };
-        let second = ValidatedPolicy::new(descriptor(vec![changed])).unwrap();
+        let second = ValidatedCodec::new(descriptor(vec![changed])).unwrap();
         assert_ne!(first.fingerprint(), second.fingerprint());
 
         let mut missing = program;
         missing.inputs.pop();
         assert_eq!(
-            ValidatedPolicy::new(descriptor(vec![missing])),
-            Err(PolicyError::InvalidInputSources)
+            ValidatedCodec::new(descriptor(vec![missing])),
+            Err(CodecError::InvalidInputSources)
         );
     }
 
     #[test]
-    fn fingerprints_exact_validated_policy_content() {
-        let first = ValidatedPolicy::new(descriptor(vec![valid_program()])).unwrap();
-        let same = ValidatedPolicy::new(descriptor(vec![valid_program()])).unwrap();
+    fn fingerprints_exact_validated_codec_content() {
+        let first = ValidatedCodec::new(descriptor(vec![valid_program()])).unwrap();
+        let same = ValidatedCodec::new(descriptor(vec![valid_program()])).unwrap();
         let mut changed_program = valid_program();
         changed_program.technique = TechniqueId(2);
-        let changed = ValidatedPolicy::new(descriptor(vec![changed_program])).unwrap();
+        let changed = ValidatedCodec::new(descriptor(vec![changed_program])).unwrap();
         assert_eq!(first.fingerprint(), same.fingerprint());
         assert_ne!(first.fingerprint(), changed.fingerprint());
     }
@@ -2060,8 +2060,8 @@ mod tests {
             lane: 0,
         };
         assert_eq!(
-            ValidatedPolicy::new(descriptor(vec![uninitialized])),
-            Err(PolicyError::UninitializedRegister)
+            ValidatedCodec::new(descriptor(vec![uninitialized])),
+            Err(CodecError::UninitializedRegister)
         );
 
         let mut wrong_type = valid_program();
@@ -2070,8 +2070,8 @@ mod tests {
             value: 1,
         };
         assert_eq!(
-            ValidatedPolicy::new(descriptor(vec![wrong_type])),
-            Err(PolicyError::RegisterTypeMismatch)
+            ValidatedCodec::new(descriptor(vec![wrong_type])),
+            Err(CodecError::RegisterTypeMismatch)
         );
     }
 
@@ -2080,8 +2080,8 @@ mod tests {
         let mut partial = valid_program();
         partial.operations.pop();
         assert_eq!(
-            ValidatedPolicy::new(descriptor(vec![partial])),
-            Err(PolicyError::IncompleteBuffer)
+            ValidatedCodec::new(descriptor(vec![partial])),
+            Err(CodecError::IncompleteBuffer)
         );
 
         let mut duplicate = valid_program();
@@ -2091,8 +2091,8 @@ mod tests {
             lane: 0,
         };
         assert_eq!(
-            ValidatedPolicy::new(descriptor(vec![duplicate])),
-            Err(PolicyError::DuplicateStore)
+            ValidatedCodec::new(descriptor(vec![duplicate])),
+            Err(CodecError::DuplicateStore)
         );
 
         let mut out_of_range = valid_program();
@@ -2102,8 +2102,8 @@ mod tests {
             lane: 2,
         };
         assert_eq!(
-            ValidatedPolicy::new(descriptor(vec![out_of_range])),
-            Err(PolicyError::InvalidStoreLane)
+            ValidatedCodec::new(descriptor(vec![out_of_range])),
+            Err(CodecError::InvalidStoreLane)
         );
     }
 
@@ -2113,15 +2113,15 @@ mod tests {
         let mut same_variant = valid_program();
         same_variant.id = ProgramId(2);
         assert_eq!(
-            ValidatedPolicy::new(descriptor(vec![first.clone(), same_variant])),
-            Err(PolicyError::DuplicateTechniqueVariant)
+            ValidatedCodec::new(descriptor(vec![first.clone(), same_variant])),
+            Err(CodecError::DuplicateTechniqueVariant)
         );
 
         let mut duplicate_id = valid_program();
         duplicate_id.technique = TechniqueId(2);
         assert_eq!(
-            ValidatedPolicy::new(descriptor(vec![first, duplicate_id])),
-            Err(PolicyError::DuplicateProgramId)
+            ValidatedCodec::new(descriptor(vec![first, duplicate_id])),
+            Err(CodecError::DuplicateProgramId)
         );
     }
 
@@ -2131,8 +2131,8 @@ mod tests {
         let mut second = valid_program();
         second.variant = 1;
         second.id = ProgramId(2);
-        let policy = ValidatedPolicy::new(descriptor(vec![first, second])).unwrap();
-        assert_eq!(policy.programs().len(), 2);
+        let codec = ValidatedCodec::new(descriptor(vec![first, second])).unwrap();
+        assert_eq!(codec.programs().len(), 2);
     }
 
     #[test]
@@ -2140,21 +2140,21 @@ mod tests {
         let mut missing_storage_resource = valid_program();
         missing_storage_resource.storage_key_mask = BATCH_TECHNIQUE | BATCH_PROGRAM;
         assert_eq!(
-            ValidatedPolicy::new(descriptor(vec![missing_storage_resource])).unwrap_err(),
-            PolicyError::InvalidBatchKey,
+            ValidatedCodec::new(descriptor(vec![missing_storage_resource])).unwrap_err(),
+            CodecError::InvalidBatchKey,
         );
 
         let mut missing_draw_order = valid_program();
         missing_draw_order.draw_key_mask = BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE;
         assert_eq!(
-            ValidatedPolicy::new(descriptor(vec![missing_draw_order])).unwrap_err(),
-            PolicyError::InvalidBatchKey,
+            ValidatedCodec::new(descriptor(vec![missing_draw_order])).unwrap_err(),
+            CodecError::InvalidBatchKey,
         );
 
         let mut material_partitioned = valid_program();
         material_partitioned.storage_key_mask |= BATCH_MATERIAL;
         material_partitioned.draw_key_mask |= BATCH_MATERIAL;
-        assert!(ValidatedPolicy::new(descriptor(vec![material_partitioned])).is_ok());
+        assert!(ValidatedCodec::new(descriptor(vec![material_partitioned])).is_ok());
     }
 
     #[test]
@@ -2172,47 +2172,47 @@ mod tests {
         indirect.id = ProgramId(2);
         indirect.capability_set = webgl.id;
         indirect.allocation_strategy = ALLOCATION_STABLE_INDIRECT;
-        let policy = ValidatedPolicy::new(PolicyDescriptor {
+        let codec = ValidatedCodec::new(CodecDescriptor {
             capability_sets: vec![webgpu, webgl],
             programs: vec![direct, indirect],
         })
         .unwrap();
         assert_eq!(
-            policy.program(CapabilitySetId(1), BITMAP, 0).unwrap().id,
+            codec.program(CapabilitySetId(1), BITMAP, 0).unwrap().id,
             ProgramId(1)
         );
         assert_eq!(
-            policy.program(CapabilitySetId(2), BITMAP, 0).unwrap().id,
+            codec.program(CapabilitySetId(2), BITMAP, 0).unwrap().id,
             ProgramId(2)
         );
-        assert_eq!(policy.program(CapabilitySetId(3), BITMAP, 0), None);
+        assert_eq!(codec.program(CapabilitySetId(3), BITMAP, 0), None);
 
         let mut invalid_cost = valid_capability_set();
         invalid_cost.whole_buffer_threshold_basis_points = 10_001;
         assert_eq!(
-            ValidatedPolicy::new(PolicyDescriptor {
+            ValidatedCodec::new(CodecDescriptor {
                 capability_sets: vec![invalid_cost],
                 programs: vec![valid_program()],
             }),
-            Err(PolicyError::InvalidUploadCostModel)
+            Err(CodecError::InvalidUploadCostModel)
         );
     }
 
     #[test]
-    fn executor_honors_policy_stride_without_touching_padding() {
+    fn executor_honors_codec_stride_without_touching_padding() {
         let mut program = valid_program();
         program.buffers[0].alignment = 16;
         program.buffers[0].stride = 16;
-        let policy = ValidatedPolicy::new(descriptor(vec![program])).unwrap();
+        let codec = ValidatedCodec::new(descriptor(vec![program])).unwrap();
         let x = [1.0, 2.0];
         let y = [3.0, 4.0];
         let fields: [&[f32]; 2] = [&x, &y];
         let mut bytes = [0xa5_u8; 32];
         let mut outputs = [PhysicalBufferMut {
-            schema: policy.program(CAPABILITY, BITMAP, 0).unwrap().buffers[0],
+            schema: codec.program(CAPABILITY, BITMAP, 0).unwrap().buffers[0],
             bytes: &mut bytes,
         }];
-        policy
+        codec
             .execute(
                 CAPABILITY,
                 BITMAP,
@@ -2236,18 +2236,18 @@ mod tests {
 
     #[test]
     fn scalar_executor_writes_a_bounded_record_range_without_touching_spares() {
-        let policy = ValidatedPolicy::new(descriptor(vec![valid_program()])).unwrap();
+        let codec = ValidatedCodec::new(descriptor(vec![valid_program()])).unwrap();
         let x = [1.25, -2.5, 8.0];
         let y = [4.0, 6.5, -9.0];
         let fields: [&[f32]; 2] = [&x, &y];
-        let schema = policy.program(CAPABILITY, BITMAP, 0).unwrap().buffers[0];
+        let schema = codec.program(CAPABILITY, BITMAP, 0).unwrap().buffers[0];
         let mut bytes = [0x7f_u8; 5 * 8];
         {
             let mut outputs = [PhysicalBufferMut {
                 schema,
                 bytes: &mut bytes,
             }];
-            policy
+            codec
                 .execute(
                     CAPABILITY,
                     BITMAP,
@@ -2276,7 +2276,7 @@ mod tests {
         let color = BufferId(1);
         let object = BufferId(2);
         let page = BufferId(3);
-        let policy = ValidatedPolicy::new(descriptor(vec![ProgramDescriptor {
+        let codec = ValidatedCodec::new(descriptor(vec![ProgramDescriptor {
             primitive_kind: 1,
             technique: BITMAP,
             variant: 0,
@@ -2394,7 +2394,7 @@ mod tests {
         let mut colors = [0_u8; 16];
         let mut objects = [0_u8; 8];
         let mut pages = [0_u8; 4];
-        let program = policy.program(CAPABILITY, BITMAP, 0).unwrap();
+        let program = codec.program(CAPABILITY, BITMAP, 0).unwrap();
         let mut outputs = [
             PhysicalBufferMut {
                 schema: program.buffers[0],
@@ -2409,7 +2409,7 @@ mod tests {
                 bytes: &mut pages,
             },
         ];
-        policy
+        codec
             .execute(
                 CAPABILITY,
                 BITMAP,
@@ -2435,17 +2435,17 @@ mod tests {
 
     #[test]
     fn scalar_executor_rejects_invalid_shapes_before_writing() {
-        let policy = ValidatedPolicy::new(descriptor(vec![valid_program()])).unwrap();
+        let codec = ValidatedCodec::new(descriptor(vec![valid_program()])).unwrap();
         let x = [1.0, 2.0];
         let short_y = [3.0];
         let fields: [&[f32]; 2] = [&x, &short_y];
         let mut bytes = [0xa5_u8; 16];
         let mut outputs = [PhysicalBufferMut {
-            schema: policy.program(CAPABILITY, BITMAP, 0).unwrap().buffers[0],
+            schema: codec.program(CAPABILITY, BITMAP, 0).unwrap().buffers[0],
             bytes: &mut bytes,
         }];
         assert_eq!(
-            policy.execute(
+            codec.execute(
                 CAPABILITY,
                 BITMAP,
                 0,
@@ -2457,21 +2457,21 @@ mod tests {
                 0,
                 &mut outputs,
             ),
-            Err(PolicyExecutionError::InputLength)
+            Err(CodecExecutionError::InputLength)
         );
         assert_eq!(bytes, [0xa5; 16]);
     }
 
     #[test]
-    fn policy_and_executor_reject_nonfinite_physical_values() {
+    fn codec_and_executor_reject_nonfinite_physical_values() {
         let mut constant = valid_program();
         constant.operations[0] = Operation::ConstantF32 {
             target: 0,
             bits: f32::INFINITY.to_bits(),
         };
         assert_eq!(
-            ValidatedPolicy::new(descriptor(vec![constant])),
-            Err(PolicyError::NonFiniteConstant)
+            ValidatedCodec::new(descriptor(vec![constant])),
+            Err(CodecError::NonFiniteConstant)
         );
 
         let mut overflow = valid_program();
@@ -2483,16 +2483,16 @@ mod tests {
                 right: 1,
             },
         );
-        let policy = ValidatedPolicy::new(descriptor(vec![overflow])).unwrap();
+        let codec = ValidatedCodec::new(descriptor(vec![overflow])).unwrap();
         let values = [f32::MAX];
         let fields: [&[f32]; 2] = [&values, &values];
         let mut bytes = [0x5a_u8; 8];
         let mut outputs = [PhysicalBufferMut {
-            schema: policy.program(CAPABILITY, BITMAP, 0).unwrap().buffers[0],
+            schema: codec.program(CAPABILITY, BITMAP, 0).unwrap().buffers[0],
             bytes: &mut bytes,
         }];
         assert_eq!(
-            policy.execute(
+            codec.execute(
                 CAPABILITY,
                 BITMAP,
                 0,
@@ -2504,7 +2504,7 @@ mod tests {
                 0,
                 &mut outputs,
             ),
-            Err(PolicyExecutionError::NonFiniteOutput)
+            Err(CodecExecutionError::NonFiniteOutput)
         );
         assert_eq!(bytes, [0x5a; 8]);
     }

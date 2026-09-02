@@ -97,7 +97,7 @@ const unknownBuffer: Variant = {
   ...variant,
   buffers: {
     ...variant.buffers,
-    // @ts-expect-error Renderer variants cannot invent policy buffers.
+    // @ts-expect-error Renderer variants cannot invent codec buffers.
     ghost: { scalar: 'f32', vectorWidth: 1 },
   },
 };

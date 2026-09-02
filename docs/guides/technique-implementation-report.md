@@ -179,7 +179,7 @@ export const glyphExamplePlanProgramDefinition: RasterPlanProgram<typeof glyphEx
   technique: glyphExample,
   schema: glyphExampleSchema,
   programVariant: 0,
-  policyBody(system) {
+  codecBody(system) {
     const p = techniqueProgram(glyphExampleSchema, { system });
     const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
     const { inset, red, green, blue, alpha } = p.binding;
@@ -214,8 +214,8 @@ export const glyphExamplePlanProgramDefinition: RasterPlanProgram<typeof glyphEx
 };
 ```
 
-The currently named `policyBody` member is the technique expression body compiled into a renderer's Codec program. It
-does not introduce a public Policy runtime or owner. `compileFont()` runs for a font binding, not once per frame or glyph;
+The `codecBody` member is the technique expression body compiled into a renderer's Codec program. `compileFont()` runs
+for a font binding, not once per frame or glyph;
 its result is portable binding data and leased resource payloads.
 
 Register the portable program from the package's side-effectful main path:

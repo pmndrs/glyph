@@ -327,14 +327,15 @@ and reserve `'layout-inspection'` or `'all'` for consumers that need positioned 
 
 ## Render policy and render plan
 
-The public text API describes typography. A renderer policy describes how that semantic result becomes physical instance records and compatible draws. It is registered once as validated numeric data, not called as JavaScript during layout or packing.
+The public text API describes typography. A Codec describes how that semantic result becomes physical instance records
+and compatible draws. It is registered once as typed numeric data, not called as JavaScript during layout or packing.
 
 ```mermaid
 flowchart LR
   mutations["Text and font mutations"] --> layout["Rust shaping and layout"]
-  layout --> policy["Validated renderer policy"]
-  policy --> plan["Revisioned render plan"]
-  plan --> render["Renderer resources, uploads, materials, and draws"]
+  layout --> codec["Renderer Codec"]
+  codec --> commands["Revisioned command buffer"]
+  commands --> render["Renderer resources, uploads, materials, and draws"]
 ```
 
 Who supplies each piece matters more than the order, because it decides what you write once and what
@@ -346,26 +347,26 @@ flowchart TD
   artifact --> technique
   subgraph portable["Written once — works in every engine"]
     technique["Technique<br/><i>decode, dispose, schema</i>"]
-    policy["Policy body<br/><i>portable operations</i>"]
+    codec["Codec body<br/><i>portable operations</i>"]
     binding["Cold compiler<br/><i>binding bytes + resources</i>"]
   end
-  technique --> policy --> assemble["Engine policy assembly<br/><i>system lanes + capabilities</i>"]
-  assemble --> plan["Render plan<br/><i>fixed-record data</i>"]
-  technique --> binding --> plan
+  technique --> codec --> assemble["Engine Codec assembly<br/><i>system lanes + capabilities</i>"]
+  assemble --> commands["Command buffer<br/><i>fixed-record data</i>"]
+  technique --> binding --> commands
   subgraph engine["Written once per engine"]
     gpu["Bind buffers, textures, resources<br/><i>from the plan</i>"]
     material["Realize material and submit"]
   end
-  plan --> gpu --> draw["Draws"]
-  plan --> material --> draw
+  commands --> gpu --> draw["Draws"]
+  commands --> material --> draw
 ```
 
-The portable plan and compiled font result contain no renderer types. The plan owns the schema, policy body, and
+The portable program and compiled font result contain no renderer types. The program owns the schema, Codec body, and
 cold binding/resource composition; each engine supplies its own system-lane numbers, capabilities, transform and
-allocation choices, and final `PolicyProgram` assembly. Only buffer/texture/resource binding and material realization
+allocation choices, and final `CodecProgram` assembly. Only buffer/texture/resource binding and material realization
 are engine objects. A technique is therefore authored once and consumed by any renderer that can execute the plan.
 
-The policy declares:
+The Codec declares:
 
 - supported raster techniques and paint/compositing capabilities;
 - physical buffer schemas and the semantic fields they consume;

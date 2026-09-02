@@ -53,7 +53,7 @@ const suppliedGeometrySchema = defineTechniqueSchema({
 registerRasterPlanProgram({
   raster: suppliedGeometryTechnique,
   schema: suppliedGeometrySchema,
-  policyBody(system) {
+  codecBody(system) {
     const program = techniqueProgram(suppliedGeometrySchema, { system });
     return program.compile({ origin: [program.semantics.inlineOrigin, program.semantics.blockOrigin] });
   },

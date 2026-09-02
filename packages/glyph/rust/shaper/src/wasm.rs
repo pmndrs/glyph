@@ -2,20 +2,20 @@ use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
-    STATUS_FONT_IN_USE, STATUS_FONT_STACK_MISSING, STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST,
-    STATUS_OK, STATUS_PLANNER_CONFLICT, STATUS_PLANNER_MISSING, STATUS_POLICY_CONFLICT,
-    STATUS_POLICY_MISSING, STATUS_REGISTRATION_IN_USE, STATUS_RESULT_TOO_LARGE,
+    STATUS_CODEC_CONFLICT, STATUS_CODEC_MISSING, STATUS_FONT_IN_USE, STATUS_FONT_STACK_MISSING,
+    STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_OK, STATUS_PLANNER_CONFLICT,
+    STATUS_PLANNER_MISSING, STATUS_REGISTRATION_IN_USE, STATUS_RESULT_TOO_LARGE,
     STATUS_REVISION_CONFLICT, ShaperRegistry,
     engine::{
         EngineError, FrameFault, TextEngine,
+        codec::CapabilitySetId,
+        codec_wire::parse_codec,
         font_binding_wire::parse_font_binding,
         frame::PlannerRevision,
         frame_wire::parse_update_request,
-        policy::CapabilitySetId,
         render_plan_compiler::RenderPlanCompilerError,
         render_plan_wire::{publication_layout, query_layout},
         transport::{FrameTransport, UpdateBatchResult, UpdateBatchTransport},
-        wire::parse_policy,
     },
 };
 
@@ -217,7 +217,7 @@ pub extern "C" fn pmndrs_glyph_engine_font_binding_count() -> u32 {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pmndrs_glyph_engine_register_policy(
+pub unsafe extern "C" fn pmndrs_glyph_engine_register_codec(
     handle: u32,
     pointer: u32,
     length: u32,
@@ -231,11 +231,11 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_register_policy(
         let Some(bytes) = owned_bytes(allocations, pointer, length) else {
             return STATUS_INVALID_REQUEST;
         };
-        let policy = match parse_policy(bytes) {
-            Ok(policy) => policy,
+        let codec = match parse_codec(bytes) {
+            Ok(codec) => codec,
             Err(status) => return status,
         };
-        match engine.register_policy(handle, policy) {
+        match engine.register_codec(handle, codec) {
             Ok(()) => 0,
             Err(error) => engine_status(error),
         }
@@ -243,16 +243,16 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_register_policy(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_engine_dispose_policy(handle: u32) -> u32 {
-    with_state(|state| match state.engine.dispose_policy(handle) {
+pub extern "C" fn pmndrs_glyph_engine_dispose_codec(handle: u32) -> u32 {
+    with_state(|state| match state.engine.dispose_codec(handle) {
         Ok(()) => 0,
         Err(error) => engine_status(error),
     })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_engine_policy_count() -> u32 {
-    with_state(|state| state.engine.policy_count())
+pub extern "C" fn pmndrs_glyph_engine_codec_count() -> u32 {
+    with_state(|state| state.engine.codec_count())
 }
 
 #[unsafe(no_mangle)]
@@ -542,8 +542,8 @@ pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_chunk_summaries_i64(
 #[cfg(feature = "kernel-lab")]
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_policy(
-    policy_handle: u32,
+pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_codec(
+    codec_handle: u32,
     technique: u32,
     variant: u32,
     count: u32,
@@ -582,16 +582,16 @@ pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_policy(
         {
             return STATUS_INVALID_REQUEST;
         }
-        let policy = match state.engine.policy(policy_handle) {
-            Ok(policy) => policy,
-            Err(_) => return STATUS_POLICY_MISSING,
+        let codec = match state.engine.codec(codec_handle) {
+            Ok(codec) => codec,
+            Err(_) => return STATUS_CODEC_MISSING,
         };
         // SAFETY: every direct-memory region belongs to a live caller allocation, so it cannot
         // alias engine-owned state. The kernel validates alignment, bounds, and pairwise
         // disjointness before creating slices, and this state borrow remains synchronous.
         unsafe {
-            crate::engine::kernel_lab::exported_policy(
-                policy,
+            crate::engine::kernel_lab::exported_codec(
+                codec,
                 technique,
                 variant,
                 count,
@@ -837,7 +837,7 @@ fn update(
 pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
     planner_id: u32,
     paragraph_id: u32,
-    policy_handle: u32,
+    codec_handle: u32,
     capability_set: u32,
     max_output_bytes: u32,
     stable_ids_pointer: u32,
@@ -864,7 +864,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
         let plan = match state.engine.copy_glyphs(
             planner_id,
             paragraph_id,
-            policy_handle,
+            codec_handle,
             capability_set,
             &stable_ids,
         ) {
@@ -872,12 +872,12 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
             Err(error) => return publish_engine_failure(state, planner_id, revision, error),
         };
         let view = match plan.plan_view(
-            policy_handle,
+            codec_handle,
             CapabilitySetId(capability_set),
             state
                 .engine
-                .policy(policy_handle)
-                .map(|policy| policy.fingerprint())
+                .codec(codec_handle)
+                .map(|codec| codec.fingerprint())
                 .unwrap_or(0),
         ) {
             Ok(view) => view,
@@ -904,7 +904,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_engine_copy_decorations(
     planner_id: u32,
-    policy_handle: u32,
+    codec_handle: u32,
     capability_set: u32,
     paragraph_id: u32,
     max_output_bytes: u32,
@@ -916,7 +916,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_decorations(
         };
         let plan = match state.engine.copy_decorations(
             planner_id,
-            policy_handle,
+            codec_handle,
             capability_set,
             paragraph_id,
         ) {
@@ -924,12 +924,12 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_decorations(
             Err(error) => return publish_engine_failure(state, planner_id, revision, error),
         };
         let view = match plan.plan_view(
-            policy_handle,
+            codec_handle,
             CapabilitySetId(capability_set),
             state
                 .engine
-                .policy(policy_handle)
-                .map(|policy| policy.fingerprint())
+                .codec(codec_handle)
+                .map(|codec| codec.fingerprint())
                 .unwrap_or(0),
         ) {
             Ok(view) => view,
@@ -1120,8 +1120,8 @@ fn owns_region(allocations: &[Allocation], pointer: u32, length: u32) -> bool {
 fn engine_status(error: EngineError) -> u32 {
     match error {
         EngineError::InvalidHandle => STATUS_INVALID_HANDLE,
-        EngineError::HandleConflict => STATUS_POLICY_CONFLICT,
-        EngineError::PolicyMissing => STATUS_POLICY_MISSING,
+        EngineError::HandleConflict => STATUS_CODEC_CONFLICT,
+        EngineError::CodecMissing => STATUS_CODEC_MISSING,
         EngineError::FontStackMissing | EngineError::StyleFontStackMissing(_) => {
             STATUS_FONT_STACK_MISSING
         }

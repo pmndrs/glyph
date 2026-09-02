@@ -11,16 +11,15 @@ okf_version: '0.2'
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
 - [Merged v0 runtime and bake API](planning/api-shapes.md) — superseded migration fixture; it describes the merged v0 surface that the Rust render-plan cutover deleted.
 - [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
-- [Core text API](planning/core-api.md) — authoritative application and integration API for fonts, measurement, engines, backends, render planners, and renderer targets.
-- [Font and engine ownership plan](planning/font-runtime-ownership.md) — accepted migration that separates immutable font assets from engine registration and binds backends, render planners, targets, leases, and renderer acceptance to explicit lifetimes.
-- [Rust layout engine contract](planning/rust-layout-engine.md) — authoritative engine ABI, render-plan policy, and publication boundary for custom renderers.
+- [Core text API](planning/core-api.md) — historical application and integration API superseded by the config-owned handle contract.
+- [Font and engine ownership plan](planning/font-runtime-ownership.md) — historical ownership analysis that led to immutable fonts and config-owned handle roots.
+- [Rust layout engine contract](planning/rust-layout-engine.md) — engine ABI, Codec execution, and command-buffer publication contract.
 - [Engine integration contract](planning/engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
 - [Raster technique and engine resource API](planning/raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
 - [TypeGPU-first shader authority](planning/typegpu-first-shader-authority.md) — exploratory TypeGPU-first shader/program architecture, Three and gpucat bridge limits, fallback authority models, and proof gates.
-- [Renderer integration guide](guides/renderer-integration.md) — the working path for a custom engine: declare a
-  technique schema, author and register a render policy, drive a render planner, consume all seven plan tables, and
-  implement the retention and patch protocols.
-- [Technique implementation report](guides/technique-implementation-report.md) — worked portable plan, policy, raster,
+- [Renderer integration guide](guides/renderer-integration.md) — the config-only path for a custom engine: define its
+  schema, Codec, resource resolver, renderer decoder, and root recipe through the same public API used by Three.
+- [Technique implementation report](guides/technique-implementation-report.md) — worked portable program, Codec, raster,
   and baker examples with ownership maps and the end-to-end draw flow.
 - [Merged v0 raster and baker plugin guide](planning/raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
 - [External gpucat integration fitness plan](planning/gpucat-integration.md) — source-validated proof plan for consuming the target v1 core without private imports or core changes.

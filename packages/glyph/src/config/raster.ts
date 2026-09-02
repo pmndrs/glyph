@@ -18,38 +18,38 @@ import {
   type PortableTexturePayload,
 } from './resources.js';
 import {
-  assertTechniquePolicyBody,
-  normalizePolicyProgramSystemBuffers,
-  type CompiledPolicyProgramBody,
-  type PolicyProgramSystemBuffers,
+  assertTechniqueCodecBody,
+  normalizeCodecProgramSystemBuffers,
+  type CompiledCodecProgramBody,
+  type CodecProgramSystemBuffers,
 } from './codec-program.js';
 import {
   isTechniqueSchema,
-  schemaPolicyBuffers,
+  schemaCodecBuffers,
   type AnyTechniqueSchema,
   type TechniqueBindingDeclaration,
   type TechniqueResourceDeclaration,
 } from './schema.js';
 import {
-  assertRenderIdFactory,
-  createProgram,
-  normalizePolicyCapabilitySet,
-  RenderIdScope,
-  type PolicyAllocationMode,
-  type PolicyBuffer,
-  type PolicyCapabilitySet,
-  type PolicyProgram,
-  type PolicyTransformMode,
-  type RenderIdFactory,
+  assertCodecIdFactory,
+  createCodecProgram,
+  normalizeCodecCapabilitySet,
+  CodecIdScope,
+  type CodecAllocationMode,
+  type CodecBuffer,
+  type CodecCapabilitySet,
+  type CodecProgram,
+  type CodecTransformMode,
+  type CodecIdFactory,
 } from './codec.js';
 /** System buffers are owned by the engine and are deliberately absent from a technique schema. */
-export type RasterPolicySystem = PolicyProgramSystemBuffers;
+export type RasterCodecSystem = CodecProgramSystemBuffers;
 
-/** Renderer-neutral policy body, before an engine assigns program and capability identities. */
-export type RasterPolicyBodyFactory<Schema extends AnyTechniqueSchema = AnyTechniqueSchema> = (
-  system: RasterPolicySystem,
-  capabilities: PolicyCapabilitySet,
-) => CompiledPolicyProgramBody<Schema>;
+/** Renderer-neutral codec body, before an engine assigns program and capability identities. */
+export type RasterCodecBodyFactory<Schema extends AnyTechniqueSchema = AnyTechniqueSchema> = (
+  system: RasterCodecSystem,
+  capabilities: CodecCapabilitySet,
+) => CompiledCodecProgramBody<Schema>;
 
 /**
  * Portable output of cold font compilation: renderer-neutral binding bytes plus
@@ -149,65 +149,65 @@ export interface RasterPlanProgram<Technique extends AnyRasterFormat, Schema ext
   readonly raster: Technique;
   readonly schema: RasterPlanSchema<Schema> & { readonly technique: Technique['id'] };
   readonly programVariant?: number;
-  readonly policyBody: RasterPolicyBodyFactory<Schema>;
+  readonly codecBody: RasterCodecBodyFactory<Schema>;
   readonly compileFont: (compiler: RasterPlanProgramFontCompiler<Technique, NoInfer<Schema>>) => CompiledRasterFont;
 }
 
-/** Host-owned capabilities and system lanes used to assemble one portable raster policy body. */
-export interface RasterPolicyProgramOptions {
+/** Host-owned capabilities and system lanes used to assemble one portable raster codec body. */
+export interface RasterCodecProgramOptions {
   readonly namespace: string;
   readonly programName?: string;
-  readonly system: RasterPolicySystem;
-  readonly capabilitySet: PolicyCapabilitySet;
-  readonly transformMode: PolicyTransformMode;
-  readonly allocationMode: PolicyAllocationMode;
-  readonly ids?: RenderIdFactory;
+  readonly system: RasterCodecSystem;
+  readonly capabilitySet: CodecCapabilitySet;
+  readonly transformMode: CodecTransformMode;
+  readonly allocationMode: CodecAllocationMode;
+  readonly ids?: CodecIdFactory;
 }
 
-/** Assemble one engine PolicyProgram from a registered renderer-neutral plan. */
-export function createRasterPolicyProgram<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema>(
+/** Assemble one engine CodecProgram from a registered renderer-neutral plan. */
+export function createRasterCodecProgram<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema>(
   program: RasterPlanProgram<Technique, Schema>,
-  options: RasterPolicyProgramOptions,
-): PolicyProgram {
+  options: RasterCodecProgramOptions,
+): CodecProgram {
   const erasedProgram = program as unknown as ErasedProgram;
   if (programs.get(program.raster.id) !== erasedProgram) {
-    throw new TypeError('raster policy assembly needs the registered portable plan program');
+    throw new TypeError('raster codec assembly needs the registered portable plan program');
   }
-  if (!isRecord(options)) throw new TypeError('raster policy assembly options need an object');
+  if (!isRecord(options)) throw new TypeError('raster codec assembly options need an object');
   if ('identityRegistry' in options) {
-    throw new TypeError('raster policy identityRegistry was renamed to ids');
+    throw new TypeError('raster codec identityRegistry was renamed to ids');
   }
   if (typeof options.namespace !== 'string' || options.namespace.length === 0) {
-    throw new TypeError('raster policy namespace must be a nonempty string');
+    throw new TypeError('raster codec namespace must be a nonempty string');
   }
   if (
     options.programName !== undefined &&
     (typeof options.programName !== 'string' || options.programName.length === 0)
   ) {
-    throw new TypeError('raster policy programName must be a nonempty string');
+    throw new TypeError('raster codec programName must be a nonempty string');
   }
   if (options.transformMode !== 'direct' && options.transformMode !== 'indexed') {
-    throw new TypeError('raster policy transform mode must be "direct" or "indexed"');
+    throw new TypeError('raster codec transform mode must be "direct" or "indexed"');
   }
   if (options.allocationMode !== 'ordered' && options.allocationMode !== 'stable') {
-    throw new TypeError('raster policy allocation mode must be "ordered" or "stable"');
+    throw new TypeError('raster codec allocation mode must be "ordered" or "stable"');
   }
   if (options.ids !== undefined) {
-    assertRenderIdFactory(options.ids, 'raster policy ids');
+    assertCodecIdFactory(options.ids, 'raster codec ids');
   }
-  const system = normalizePolicyProgramSystemBuffers(program.schema.buffers, options.system);
-  const capabilitySet = normalizePolicyCapabilitySet(options.capabilitySet, 'raster policy capability set');
-  const ids = options.ids ?? new RenderIdScope();
+  const system = normalizeCodecProgramSystemBuffers(program.schema.buffers, options.system);
+  const capabilitySet = normalizeCodecCapabilitySet(options.capabilitySet, 'raster codec capability set');
+  const ids = options.ids ?? new CodecIdScope();
   const compiledTechniqueId = ids.technique(program.raster);
   const compiledProgramId = ids.program(program.raster, options.namespace, options.programName);
-  const body = program.policyBody(system, capabilitySet);
-  assertTechniquePolicyBody(body, program.schema, system);
+  const body = program.codecBody(system, capabilitySet);
+  assertTechniqueCodecBody(body, program.schema, system);
   return Object.freeze({
-    ...createProgram(
+    ...createCodecProgram(
       compiledTechniqueId,
       compiledProgramId,
       body,
-      [...schemaPolicyBuffers(program.schema), ...systemPolicyBuffers(system)],
+      [...schemaCodecBuffers(program.schema), ...systemCodecBuffers(system)],
       options.transformMode,
       options.allocationMode,
     ),
@@ -274,7 +274,7 @@ function registerRasterPlanProgramOwned<
   }
   const schema = source.schema;
   const programVariant = source.programVariant ?? 0;
-  const policyBody = source.policyBody;
+  const codecBody = source.codecBody;
   const compileFontCallback = source.compileFont;
   if (!isTechniqueSchema(schema)) {
     throw new TypeError(`raster plan program "${techniqueId}" needs a schema from defineTechniqueSchema`);
@@ -291,8 +291,8 @@ function registerRasterPlanProgramOwned<
   if (!Number.isSafeInteger(programVariant) || (programVariant as number) < 0 || (programVariant as number) > 0xffff) {
     throw new RangeError(`raster plan program "${techniqueId}" needs a u16 program variant`);
   }
-  if (typeof policyBody !== 'function' || typeof compileFontCallback !== 'function') {
-    throw new TypeError(`raster plan program "${techniqueId}" needs policyBody and compileFont callbacks`);
+  if (typeof codecBody !== 'function' || typeof compileFontCallback !== 'function') {
+    throw new TypeError(`raster plan program "${techniqueId}" needs codecBody and compileFont callbacks`);
   }
   const registered = registeredSources.get(program as unknown as object);
   if (registered !== undefined) {
@@ -311,7 +311,7 @@ function registerRasterPlanProgramOwned<
     raster: technique,
     schema,
     programVariant,
-    policyBody,
+    codecBody,
     compileFont: compileFontCallback,
   }) as unknown as ErasedProgram;
   programs.set(techniqueId, snapshot);
@@ -328,9 +328,9 @@ export function resolveRasterPlanProgram(id: string): ErasedProgram | undefined 
 /** Compile an immutable font through the registered portable program, if it has one. */
 export function compileRasterFont(
   font: Font<AnyRasterFormat>,
-  ids: RenderIdFactory = new RenderIdScope(),
+  ids: CodecIdFactory = new CodecIdScope(),
 ): CompiledRasterFont | undefined {
-  assertRenderIdFactory(ids, 'raster font compiler ids');
+  assertCodecIdFactory(ids, 'raster font compiler ids');
   const fontResources = immutableFontResources(font);
   return compileRasterFontSource(
     immutableFontVariantIdentity(font),
@@ -348,7 +348,7 @@ export function compileRasterFont(
 export function readCompiledRasterFont<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema>(
   compiled: CompiledRasterFont,
   program: RasterPlanProgram<Technique, Schema> & { readonly raster: Technique; readonly schema: Schema },
-  ids: RenderIdFactory = new RenderIdScope(),
+  ids: CodecIdFactory = new CodecIdScope(),
 ): CompiledRasterFontView<Schema> {
   if (!compiledRasterFonts.has(compiled)) throw new TypeError('compiled raster font was not created by this package');
   if (!isRecord(program) || !isRasterFormat(program.raster)) {
@@ -357,7 +357,7 @@ export function readCompiledRasterFont<Technique extends AnyRasterFormat, Schema
   if (programs.get(program.raster.id) !== (program as unknown as ErasedProgram)) {
     throw new TypeError('compiled raster font reader needs the registered portable plan program');
   }
-  assertRenderIdFactory(ids, 'compiled raster font reader ids');
+  assertCodecIdFactory(ids, 'compiled raster font reader ids');
   const bytes = compiled.binding;
   const request = textShaperAbi.layouts.fontBindingRequest;
   const strikeLayout = textShaperAbi.layouts.fontBindingStrike;
@@ -507,7 +507,7 @@ function compileRasterFontSource(
   technique: AnyRasterFormat,
   glyphCount: number,
   data: unknown,
-  identities: RenderIdFactory,
+  identities: CodecIdFactory,
 ): CompiledRasterFont | undefined {
   const program = programs.get(technique.id);
   if (program === undefined) return undefined;
@@ -612,7 +612,7 @@ function compileRasterFontSource(
 function compileFont(
   program: ErasedProgram,
   glyphCount: number,
-  identities: RenderIdFactory,
+  identities: CodecIdFactory,
   retained: Map<RasterResourceId, PortableResource>,
   declaredResources: Map<string, RasterResourceId[]>,
   input: RasterFontBinding<TechniqueBindingDeclaration>,
@@ -742,7 +742,7 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
   return isRecord(value) && typeof value.then === 'function';
 }
 
-function systemPolicyBuffers(system: RasterPolicySystem): PolicyBuffer[] {
+function systemCodecBuffers(system: RasterCodecSystem): CodecBuffer[] {
   return [
     { id: system.stableGlyphId.id, scalar: 'u32', vectorWidth: 1 },
     ...(system.transformIndex === undefined

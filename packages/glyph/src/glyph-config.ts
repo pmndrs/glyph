@@ -7,12 +7,7 @@ import type { AnyRasterFormat } from './raster-format.js';
 import type { Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
 import { createConfiguredGlyphHandle } from './internal/configured-handle.js';
 import type { PortableResource } from './config/resources.js';
-import type {
-  PolicyBuffer as CodecBuffer,
-  PolicyDescriptor as CodecDescriptor,
-  PolicyProgram as CodecProgram,
-  RenderIdFactory as CodecIdFactory,
-} from './config/codec.js';
+import type { CodecBuffer, CodecDescriptor, CodecIdFactory, CodecProgram } from './config/codec.js';
 import type { PlanAcceptance, PlanCandidate } from './core/render-planner.js';
 
 declare const typedCommandBufferBrand: unique symbol;
@@ -344,7 +339,7 @@ export function defineGlyphSchema<
   return Object.freeze({ ...schema });
 }
 
-/** Codec selected by `GlyphConfig.encode`; policy-named values remain an internal ABI detail. */
+/** Codec selected by `GlyphConfig.encode`; codec-named values remain an internal ABI detail. */
 export interface Codec {
   readonly descriptor: CodecDescriptor;
   /** Selects one descriptor capability set; omission selects the descriptor's first set. */

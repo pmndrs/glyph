@@ -1,31 +1,31 @@
-export function renderPolicyBytes(abi) {
-  return renderPolicyBytesFromPrograms(abi, [
+export function renderCodecBytes(abi) {
+  return renderCodecBytesFromPrograms(abi, [
     {
       techniqueId: 1,
       programId: 1,
       f32InputCount: 1,
       u32InputCount: 0,
-      buffers: [{ id: 1, scalar: abi.policy.scalarTypes.f32, vectorWidth: 1 }],
+      buffers: [{ id: 1, scalar: abi.codec.scalarTypes.f32, vectorWidth: 1 }],
       operations: [
-        { opcode: abi.policy.opcodes.loadF32, target: 0, operand0: 0 },
-        { opcode: abi.policy.opcodes.storeF32, operand0: 0, immediate0: 1 },
+        { opcode: abi.codec.opcodes.loadF32, target: 0, operand0: 0 },
+        { opcode: abi.codec.opcodes.storeF32, operand0: 0, immediate0: 1 },
       ],
     },
   ]);
 }
 
-export function kernelPolicyBytes(abi) {
-  const opcodes = abi.policy.opcodes;
-  return renderPolicyBytesFromPrograms(abi, [
+export function kernelCodecBytes(abi) {
+  const opcodes = abi.codec.opcodes;
+  return renderCodecBytesFromPrograms(abi, [
     {
       techniqueId: 1,
       programId: 1,
       f32InputCount: 4,
       u32InputCount: 1,
       buffers: [
-        { id: 1, scalar: abi.policy.scalarTypes.f32, vectorWidth: 4 },
-        { id: 2, scalar: abi.policy.scalarTypes.u32, vectorWidth: 1 },
-        { id: 3, scalar: abi.policy.scalarTypes.u16, vectorWidth: 1 },
+        { id: 1, scalar: abi.codec.scalarTypes.f32, vectorWidth: 4 },
+        { id: 2, scalar: abi.codec.scalarTypes.u32, vectorWidth: 1 },
+        { id: 3, scalar: abi.codec.scalarTypes.u16, vectorWidth: 1 },
       ],
       operations: [
         { opcode: opcodes.loadF32, target: 0, operand0: 0 },
@@ -54,7 +54,7 @@ export function engineUpdateBytes(
   abi,
   {
     plannerId,
-    policyHandle,
+    codecHandle,
     expectedEngineRevision,
     consumedPlanRevision,
     acknowledgedPublicationGeneration = 0,
@@ -76,7 +76,7 @@ export function engineUpdateBytes(
   view.setUint32(layout.expectedEngineRevision, expectedEngineRevision, true);
   view.setUint32(layout.consumedPlanRevision, consumedPlanRevision, true);
   view.setUint32(layout.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
-  view.setUint32(layout.policyHandle, policyHandle, true);
+  view.setUint32(layout.codecHandle, codecHandle, true);
   view.setUint32(layout.capabilitySet, 1, true);
   for (const field of [
     'maxParagraphs',
@@ -116,7 +116,7 @@ export function engineFrameUpdateBytes(
   abi,
   {
     plannerId,
-    policyHandle,
+    codecHandle,
     fontStackHandle,
     paragraphId = 1,
     styleId = 1,
@@ -160,7 +160,7 @@ export function engineFrameUpdateBytes(
   view.setUint32(request.expectedEngineRevision, expectedEngineRevision, true);
   view.setUint32(request.consumedPlanRevision, consumedPlanRevision, true);
   view.setUint32(request.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
-  view.setUint32(request.policyHandle, policyHandle, true);
+  view.setUint32(request.codecHandle, codecHandle, true);
   view.setUint32(request.capabilitySet, 1, true);
   view.setUint32(request.maxParagraphs, 1, true);
   view.setUint32(request.maxClusters, limits.maxClusters, true);
@@ -350,13 +350,13 @@ function align(value, alignment) {
   return Math.ceil(value / alignment) * alignment;
 }
 
-export function renderPolicyBytesFromPrograms(abi, programs) {
-  const requestLayout = abi.layouts.policyRequest;
-  const capabilityLayout = abi.layouts.policyCapabilitySet;
-  const programLayout = abi.layouts.policyProgram;
-  const bufferLayout = abi.layouts.policyBuffer;
-  const operationLayout = abi.layouts.policyOperation;
-  const inputLayout = abi.layouts.policyInput;
+export function renderCodecBytesFromPrograms(abi, programs) {
+  const requestLayout = abi.layouts.codecRequest;
+  const capabilityLayout = abi.layouts.codecCapabilitySet;
+  const programLayout = abi.layouts.codecProgram;
+  const bufferLayout = abi.layouts.codecBuffer;
+  const operationLayout = abi.layouts.codecOperation;
+  const inputLayout = abi.layouts.codecInput;
   const bufferCount = programs.reduce((total, program) => total + program.buffers.length, 0);
   const operationCount = programs.reduce((total, program) => total + program.operations.length, 0);
   const programInputs = programs.map(
@@ -371,9 +371,9 @@ export function renderPolicyBytesFromPrograms(abi, programs) {
     {
       id: 1,
       flags:
-        abi.policy.capabilityFlags.storageBuffers |
-        abi.policy.capabilityFlags.orderedDirect |
-        abi.policy.capabilityFlags.stableIndirect,
+        abi.codec.capabilityFlags.storageBuffers |
+        abi.codec.capabilityFlags.orderedDirect |
+        abi.codec.capabilityFlags.stableIndirect,
       maxBufferBytes: 64 * 1024 * 1024,
       updateAlignment: 4,
       coalesceGapBytes: 128,
@@ -446,17 +446,17 @@ export function renderPolicyBytesFromPrograms(abi, programs) {
     view.setUint32(
       offset + programLayout.storageKeyMask,
       descriptor.storageKeyMask ??
-        abi.policy.batchFields.technique | abi.policy.batchFields.program | abi.policy.batchFields.resource,
+        abi.codec.batchFields.technique | abi.codec.batchFields.program | abi.codec.batchFields.resource,
       true,
     );
     view.setUint32(
       offset + programLayout.drawKeyMask,
       descriptor.drawKeyMask ??
-        abi.policy.batchFields.technique |
-          abi.policy.batchFields.program |
-          abi.policy.batchFields.resource |
-          abi.policy.batchFields.order |
-          abi.policy.batchFields.transform,
+        abi.codec.batchFields.technique |
+          abi.codec.batchFields.program |
+          abi.codec.batchFields.resource |
+          abi.codec.batchFields.order |
+          abi.codec.batchFields.transform,
       true,
     );
     view.setUint16(offset + programLayout.variant, descriptor.variant ?? 0, true);
@@ -470,7 +470,7 @@ export function renderPolicyBytesFromPrograms(abi, programs) {
     view.setUint16(offset + programLayout.operationCount, descriptor.operations.length, true);
     view.setUint16(
       offset + programLayout.allocationStrategy,
-      descriptor.allocationStrategy ?? abi.policy.allocationStrategies.orderedDirect,
+      descriptor.allocationStrategy ?? abi.codec.allocationStrategies.orderedDirect,
       true,
     );
     view.setUint32(offset + programLayout.inputStart, inputStart, true);
@@ -488,12 +488,12 @@ export function renderPolicyBytesFromPrograms(abi, programs) {
       view.setUint16(offset + bufferLayout.id, buffer.id, true);
       view.setUint8(offset + bufferLayout.scalar, buffer.scalar);
       view.setUint8(offset + bufferLayout.vectorWidth, buffer.vectorWidth);
-      const scalarBytes = buffer.scalar === abi.policy.scalarTypes.u16 ? 2 : 4;
+      const scalarBytes = buffer.scalar === abi.codec.scalarTypes.u16 ? 2 : 4;
       view.setUint16(offset + bufferLayout.alignment, buffer.alignment ?? scalarBytes, true);
       view.setUint16(offset + bufferLayout.stride, buffer.stride ?? scalarBytes * buffer.vectorWidth, true);
       view.setUint32(
         offset + bufferLayout.usage,
-        buffer.usage ?? abi.policy.bufferUsage.storage | abi.policy.bufferUsage.copyDst,
+        buffer.usage ?? abi.codec.bufferUsage.storage | abi.codec.bufferUsage.copyDst,
         true,
       );
       view.setUint16(offset + bufferLayout.capacityClass, buffer.capacityClass ?? 1, true);
@@ -512,7 +512,7 @@ export function renderPolicyBytesFromPrograms(abi, programs) {
     }
     for (const input of programInputs[programIndex]) {
       const offset = inputsOffset + inputIndex * inputLayout.size;
-      view.setUint8(offset + inputLayout.scope, abi.policy.inputScopes[input.scope]);
+      view.setUint8(offset + inputLayout.scope, abi.codec.inputScopes[input.scope]);
       view.setUint8(offset + inputLayout.field, input.field);
       inputIndex += 1;
     }

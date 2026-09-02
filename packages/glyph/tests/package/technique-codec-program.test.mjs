@@ -1,20 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  defineCodecBuffers as definePolicyBuffers,
-  defineTechniqueSchema,
-  techniqueProgram,
-  id,
-} from '../../dist/index.js';
+import { defineCodecBuffers, defineTechniqueSchema, techniqueProgram, id } from '../../dist/index.js';
 
-const ORIGIN_BUFFER_ID = id.buffer('test.policy-contract/origin');
-const PAGE_BUFFER_ID = id.buffer('test.policy-contract/page');
-const SYSTEM_BUFFER_ID = id.buffer('test.policy-contract/system/stable-glyph-id');
-const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.policy-contract/system/other-stable-glyph-id');
+const ORIGIN_BUFFER_ID = id.buffer('test.codec-contract/origin');
+const PAGE_BUFFER_ID = id.buffer('test.codec-contract/page');
+const SYSTEM_BUFFER_ID = id.buffer('test.codec-contract/system/stable-glyph-id');
+const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.codec-contract/system/other-stable-glyph-id');
 
 const schema = defineTechniqueSchema({
-  technique: 'test.policy-contract',
+  technique: 'test.codec-contract',
   scope: 'glyph',
   binding: {},
   buffers: {
@@ -23,7 +18,7 @@ const schema = defineTechniqueSchema({
   },
 });
 
-const system = definePolicyBuffers({
+const system = defineCodecBuffers({
   stableGlyphId: { id: SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 
@@ -31,7 +26,7 @@ function program() {
   return techniqueProgram(schema, { system });
 }
 
-test('schema-keyed policy compilation requires every declared buffer exactly once', () => {
+test('schema-keyed codec compilation requires every declared buffer exactly once', () => {
   const missing = program();
   assert.throws(
     () => missing.compile({ origin: [missing.semantics.inlineOrigin, missing.semantics.blockOrigin] }),
@@ -50,7 +45,7 @@ test('schema-keyed policy compilation requires every declared buffer exactly onc
   );
 });
 
-test('policy values reject wrong widths and scalar kinds at the compile call', () => {
+test('codec values reject wrong widths and scalar kinds at the compile call', () => {
   const width = program();
   assert.throws(
     () => width.compile({ origin: [width.semantics.inlineOrigin], page: [width.semantics.stableGlyphId] }),

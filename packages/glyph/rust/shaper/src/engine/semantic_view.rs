@@ -52,7 +52,7 @@ pub struct SemanticRecord {
     /// descent is `block_extent - ascent` exactly, and the box top is `block_start - ascent`.
     pub ascent: f32,
     /// Paragraph-measurement summaries only: the largest unbreakable run under the
-    /// constraint's wrap policy. Line, glyph, and other records carry zero.
+    /// constraint's wrap codec. Line, glyph, and other records carry zero.
     pub min_content_width: f32,
     /// Paragraph-measurement summaries only: the widest hard-break-free run.
     pub max_content_width: f32,

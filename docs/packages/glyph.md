@@ -782,13 +782,13 @@ The complete ordered Bitmap/MSDF/Slug/custom-material matrix remains green on bo
 run exposed a quadratic dependency scan: each changed physical range rescanned every slot write. Binary-partitioning the
 sorted writes to the requested range reduces stable font-size from 350.136 to 7.982 ms median and column resize from
 49.636 to 3.767 ms; localized edit is 2.172/6.628 ms and splice is 9.372/9.583 ms median/p95. Stable no-op remains
-1.083 ms versus ordered-direct's 0.001 ms, so stable remains an explicit policy rather than the first-party default. The
+1.083 ms versus ordered-direct's 0.001 ms, so stable remains an explicit allocation strategy rather than the first-party default. The
 sequential benchmark high-water marks are 107.56 MiB ordered and 114.25 MiB stable; retained-memory right-sizing remains
 open and neither figure is presented as ordinary application demand.
 
-The first-party policy declares one allocation strategy for every registered technique. Rust now resolves that uniform
+The first-party Codec declares one allocation strategy for every registered technique. Rust now resolves that uniform
 strategy once per update instead of looking up a program for every glyph before the selected planner performs its own
-validated compilation. Mixed-strategy policies retain the per-glyph discovery path and stop once both strategies are
+validated compilation. Mixed-strategy Codecs retain the per-glyph discovery path and stop once both strategies are
 observed. A five-warmup/11-sample ordered run measures 6.005 ms font-size, 2.813 ms column-resize, 1.212 ms localized-edit,
 and 8.281 ms middle-splice medians. The adjacent prior medians were 6.178, 2.817, 1.353, and 8.452 ms; these short runs
 show no regression and suggest a small scan reduction, but do not establish a latency win. The same change preserves

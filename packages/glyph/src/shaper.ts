@@ -68,8 +68,8 @@ interface ShaperExports {
   readonly fontBindingCount: () => number;
   readonly registerFontStack: (handle: number, pointer: number, count: number) => number;
   readonly disposeFontStack: (handle: number) => number;
-  readonly registerPolicy: (handle: number, pointer: number, length: number) => number;
-  readonly disposePolicy: (handle: number) => number;
+  readonly registerCodec: (handle: number, pointer: number, length: number) => number;
+  readonly disposeCodec: (handle: number) => number;
   readonly createPlanner: (
     handle: number,
     requestCapacity: number,
@@ -94,7 +94,7 @@ interface ShaperExports {
   readonly copyGlyphs: (
     handle: number,
     paragraphId: number,
-    policyHandle: number,
+    codecHandle: number,
     capabilitySet: number,
     maxOutputBytes: number,
     stableIdsPointer: number,
@@ -102,7 +102,7 @@ interface ShaperExports {
   ) => number;
   readonly copyDecorations: (
     handle: number,
-    policyHandle: number,
+    codecHandle: number,
     capabilitySet: number,
     paragraphId: number,
     maxOutputBytes: number,
@@ -268,8 +268,8 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       fontBindingCount: exportedFunction(instance, functions.fontBindingCount),
       registerFontStack: exportedFunction(instance, functions.registerFontStack),
       disposeFontStack: exportedFunction(instance, functions.disposeFontStack),
-      registerPolicy: exportedFunction(instance, functions.registerPolicy),
-      disposePolicy: exportedFunction(instance, functions.disposePolicy),
+      registerCodec: exportedFunction(instance, functions.registerCodec),
+      disposeCodec: exportedFunction(instance, functions.disposeCodec),
       createPlanner: exportedFunction(instance, functions.createPlanner),
       reservePlanner: exportedFunction(instance, functions.reservePlanner),
       disposePlanner: exportedFunction(instance, functions.disposePlanner),

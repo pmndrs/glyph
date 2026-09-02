@@ -1,8 +1,9 @@
-//! Policy-directed gather from semantic layout and normalized font bindings.
+//! Codec-directed gather from semantic layout and normalized font bindings.
 
 use alloc::vec::Vec;
 
 use super::{
+    codec::{CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedCodec},
     font_binding::{FontRenderBinding, SelectedGlyphBinding},
     frame::{
         SEMANTIC_F32_BLOCK_ORIGIN, SEMANTIC_F32_FOREGROUND_ALPHA, SEMANTIC_F32_FOREGROUND_BLUE,
@@ -12,7 +13,6 @@ use super::{
         SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_OUTLINE_RGBA, SEMANTIC_U32_SHADOW_RGBA,
     },
     plan_input::{PlanGlyph, PlanInput},
-    policy::{CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedPolicy},
     positioning::{
         ALL_SEMANTIC_CHANGES, SEMANTIC_F32_BASE_FIELD_COUNT, SEMANTIC_F32_FIELD_COUNT,
         SEMANTIC_U32_BASE_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT, SemanticGlyph,
@@ -20,7 +20,7 @@ use super::{
 };
 
 // Exact Float32 results of the IEC 61966-2-1 sRGB transfer for every byte value.
-// Foreground colors stay one compact u32 per glyph while policy output reproduces
+// Foreground colors stay one compact u32 per glyph while codec output reproduces
 // the renderer's prior linear Float32 instance records without a hot-path powf.
 const SRGB8_TO_LINEAR_BITS: [u32; 256] = [
     0x00000000, 0x399f22b4, 0x3a1f22b4, 0x3a6eb40e, 0x3a9f22b4, 0x3ac6eb61, 0x3aeeb40e, 0x3b0b3e5d,
@@ -163,7 +163,7 @@ fn selection_key(selected: SelectedGlyphBinding) -> u32 {
 }
 
 #[derive(Default)]
-pub struct PolicyGatherWorkspace {
+pub struct CodecGatherWorkspace {
     glyphs: Vec<PlanGlyph>,
     sources: Vec<GatherSource>,
     semantic_change_masks: Vec<u16>,
@@ -192,25 +192,25 @@ pub struct GatheredPlanInput<'a> {
     u32_field_count: usize,
 }
 
-impl PolicyGatherWorkspace {
+impl CodecGatherWorkspace {
     pub fn reserve_records(&mut self, record_capacity: usize) -> Result<(), GatherError> {
         reserve(&mut self.glyphs, record_capacity)?;
         reserve(&mut self.sources, record_capacity)?;
         reserve(&mut self.semantic_change_masks, record_capacity)
     }
 
-    pub fn reserve_policy(
+    pub fn reserve_codec(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         record_capacity: usize,
     ) -> Result<(), GatherError> {
-        let f32_fields = policy
+        let f32_fields = codec
             .programs()
             .iter()
             .map(|program| usize::from(program.f32_input_count))
             .max()
             .unwrap_or(0);
-        let u32_fields = policy
+        let u32_fields = codec
             .programs()
             .iter()
             .map(|program| usize::from(program.u32_input_count))
@@ -224,31 +224,31 @@ impl PolicyGatherWorkspace {
 
     pub fn gather<'binding>(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
         binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<(), GatherError> {
-        self.begin(policy, input.glyphs.len())?;
-        self.append(policy, capability_set, input, binding_for_font)
+        self.begin(codec, input.glyphs.len())?;
+        self.append(codec, capability_set, input, binding_for_font)
     }
 
     pub fn begin(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         record_capacity: usize,
     ) -> Result<(), GatherError> {
-        self.reserve_policy(policy, record_capacity)?;
+        self.reserve_codec(codec, record_capacity)?;
         self.clear();
         Ok(())
     }
 
     pub fn begin_retained(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         record_capacity: usize,
     ) -> Result<bool, GatherError> {
-        self.reserve_policy(policy, record_capacity)?;
+        self.reserve_codec(codec, record_capacity)?;
         self.retained_cursor = 0;
         self.retained_source_cursor = 0;
         let retained_len = self.glyphs.len();
@@ -265,7 +265,7 @@ impl PolicyGatherWorkspace {
 
     pub fn append_retained<'binding>(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
@@ -353,7 +353,7 @@ impl PolicyGatherWorkspace {
                     program
                 }
                 _ => {
-                    let program = policy
+                    let program = codec
                         .program(capability_set, technique, variant)
                         .ok_or(GatherError::ProgramMissing)?;
                     cached_program = Some((technique, variant, program));
@@ -386,7 +386,7 @@ impl PolicyGatherWorkspace {
                 return Ok(RetainedGather::RebuildFrom(glyph_index));
             }
             let selection_changed = !previous_source.same_selection(selected);
-            let (f32_inputs, u32_inputs) = policy
+            let (f32_inputs, u32_inputs) = codec
                 .input_masks_for_changes(
                     capability_set,
                     technique,
@@ -437,17 +437,17 @@ impl PolicyGatherWorkspace {
 
     pub fn append<'binding>(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
         binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<(), GatherError> {
-        self.append_from(policy, capability_set, input, 0, binding_for_font)
+        self.append_from(codec, capability_set, input, 0, binding_for_font)
     }
 
     pub fn append_from<'binding>(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
         source_start: usize,
@@ -506,7 +506,7 @@ impl PolicyGatherWorkspace {
                     program
                 }
                 _ => {
-                    let program = policy
+                    let program = codec
                         .program(capability_set, technique, variant)
                         .ok_or(GatherError::ProgramMissing)?;
                     cached_program = Some((technique, variant, program));
@@ -547,18 +547,18 @@ impl PolicyGatherWorkspace {
     /// then flags with the line style in bits 8-15. `pass` selects CSS paint order:
     /// underline and overline records append before the paragraph's glyphs and
     /// line-through records after, so draw order tokens place them under and over the
-    /// text respectively. Returns false when the policy declares no decoration program,
+    /// text respectively. Returns false when the codec declares no decoration program,
     /// leaving the gather output untouched.
     pub fn append_decorations(
         &mut self,
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         decorations: &[super::positioning::DecorationRecord],
         transform_id: u32,
         content_revision: u32,
         pass: DecorationPass,
     ) -> Result<bool, GatherError> {
-        let Some(program) = policy.decoration_program(capability_set) else {
+        let Some(program) = codec.decoration_program(capability_set) else {
             return Ok(false);
         };
         let decorations: alloc::vec::Vec<&super::positioning::DecorationRecord> = decorations
@@ -1113,14 +1113,13 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), GatherError> {
 mod tests {
     use super::*;
     use crate::engine::{
-        font_binding::{FieldTable, FontResource, FontStrike},
-        policy::{
+        codec::{
             ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE,
             BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId, BufferSchema,
-            CAP_ORDERED_DIRECT, CAP_STORAGE_BUFFERS, CapabilitySet, InputSource, Operation,
-            PolicyDescriptor, ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType,
-            TechniqueId,
+            CAP_ORDERED_DIRECT, CAP_STORAGE_BUFFERS, CapabilitySet, CodecDescriptor, InputSource,
+            Operation, ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
         },
+        font_binding::{FieldTable, FontResource, FontStrike},
         render_plan_compiler::RenderPlanCompiler,
     };
     use alloc::vec;
@@ -1128,7 +1127,7 @@ mod tests {
     const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
 
     #[test]
-    fn derives_policy_color_channels_and_inverse_font_size_without_retained_arrays() {
+    fn derives_codec_color_channels_and_inverse_font_size_without_retained_arrays() {
         let mut glyphs = [layout_glyph(1, 0)];
         glyphs[0].semantic_glyph_index = 1;
         let semantic_glyphs = [
@@ -1255,16 +1254,16 @@ mod tests {
     #[test]
     fn gathers_program_specific_sources_without_a_union_record() {
         let binding = binding();
-        let policy = policy();
+        let codec = codec();
         let glyphs = [layout_glyph(1, 0), layout_glyph(2, 1)];
         let semantic_x = [10.0, 20.0];
         let semantic_kind = [100, 200];
-        let mut workspace = PolicyGatherWorkspace::default();
-        workspace.reserve_policy(&policy, 8).unwrap();
+        let mut workspace = CodecGatherWorkspace::default();
+        workspace.reserve_codec(&codec, 8).unwrap();
         let capacities = workspace.capacities();
         workspace
             .gather(
-                &policy,
+                &codec,
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
@@ -1306,10 +1305,10 @@ mod tests {
 
             let mut compiler = RenderPlanCompiler::default();
             compiler
-                .prepare(&policy, CAPABILITY, input, true, 1, 0)
+                .prepare(&codec, CAPABILITY, input, true, 1, 0)
                 .unwrap();
             let plan = compiler
-                .plan_view(3, CAPABILITY, policy.fingerprint())
+                .plan_view(3, CAPABILITY, codec.fingerprint())
                 .unwrap();
             assert_eq!(plan.draws.len(), 1);
             assert_eq!(plan.draws[0].transform_id, 1);
@@ -1327,14 +1326,14 @@ mod tests {
     #[test]
     fn retained_gather_updates_changed_fields_and_rejects_storage_topology_changes() {
         let binding = binding();
-        let policy = policy();
+        let codec = codec();
         let glyphs = [layout_glyph(1, 0), layout_glyph(2, 1)];
         let initial_x = [10.0, 20.0];
         let semantic_kind = [100, 200];
-        let mut workspace = PolicyGatherWorkspace::default();
+        let mut workspace = CodecGatherWorkspace::default();
         workspace
             .gather(
-                &policy,
+                &codec,
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
@@ -1355,11 +1354,11 @@ mod tests {
         let changed_x = [999.0, 25.0];
         let mut changed_glyphs = glyphs;
         changed_glyphs[1].content_revision = 2;
-        assert!(workspace.begin_retained(&policy, 2).unwrap());
+        assert!(workspace.begin_retained(&codec, 2).unwrap());
         assert_eq!(
             workspace
                 .append_retained(
-                    &policy,
+                    &codec,
                     CAPABILITY,
                     LayoutPlanInput {
                         transform_id: 1,
@@ -1384,11 +1383,11 @@ mod tests {
 
         let mut changed_topology = changed_glyphs;
         changed_topology[1].material_id = 7;
-        assert!(workspace.begin_retained(&policy, 2).unwrap());
+        assert!(workspace.begin_retained(&codec, 2).unwrap());
         assert_eq!(
             workspace
                 .append_retained(
-                    &policy,
+                    &codec,
                     CAPABILITY,
                     LayoutPlanInput {
                         transform_id: 1,
@@ -1409,7 +1408,7 @@ mod tests {
         workspace.truncate_to_retained_prefix();
         workspace
             .append_from(
-                &policy,
+                &codec,
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
@@ -1433,15 +1432,15 @@ mod tests {
     #[test]
     fn appends_independent_layouts_into_one_plan_input() {
         let binding = binding();
-        let policy = policy();
+        let codec = codec();
         let first = [layout_glyph(1, 0)];
         let second = [layout_glyph(2, 1)];
         let first_x = [10.0];
         let second_x = [20.0];
         let first_kind = [100];
         let second_kind = [200];
-        let mut workspace = PolicyGatherWorkspace::default();
-        workspace.begin(&policy, 2).unwrap();
+        let mut workspace = CodecGatherWorkspace::default();
+        workspace.begin(&codec, 2).unwrap();
         for input in [
             LayoutPlanInput {
                 transform_id: 1,
@@ -1461,7 +1460,7 @@ mod tests {
             },
         ] {
             workspace
-                .append(&policy, CAPABILITY, input, |_| Some(&binding))
+                .append(&codec, CAPABILITY, input, |_| Some(&binding))
                 .unwrap();
         }
         let gathered = workspace.view();
@@ -1475,10 +1474,10 @@ mod tests {
         assert_eq!(input.u32_fields[0], &[100, 200]);
         let mut compiler = RenderPlanCompiler::default();
         compiler
-            .prepare(&policy, CAPABILITY, input, true, 1, 0)
+            .prepare(&codec, CAPABILITY, input, true, 1, 0)
             .unwrap();
         let plan = compiler
-            .plan_view(3, CAPABILITY, policy.fingerprint())
+            .plan_view(3, CAPABILITY, codec.fingerprint())
             .unwrap();
         assert_eq!(
             plan.draws
@@ -1496,14 +1495,14 @@ mod tests {
     #[test]
     fn retained_gather_reads_only_inputs_reaching_changed_buffers() {
         let binding = binding();
-        let policy = policy();
+        let codec = codec();
         let glyphs = [layout_glyph(1, 0), layout_glyph(2, 1)];
         let semantic_x = [10.0, 20.0];
         let semantic_kind = [100, 200];
-        let mut workspace = PolicyGatherWorkspace::default();
+        let mut workspace = CodecGatherWorkspace::default();
         workspace
             .gather(
-                &policy,
+                &codec,
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
@@ -1520,11 +1519,11 @@ mod tests {
         let moved_x = [10.0, 55.0];
         let mut revised = glyphs;
         revised[1].content_revision = 2;
-        assert!(workspace.begin_retained(&policy, 2).unwrap());
+        assert!(workspace.begin_retained(&codec, 2).unwrap());
         assert_eq!(
             workspace
                 .append_retained(
-                    &policy,
+                    &codec,
                     CAPABILITY,
                     LayoutPlanInput {
                         transform_id: 1,
@@ -1576,15 +1575,15 @@ mod tests {
             FieldTable::new(1, 1, vec![15]).unwrap(),
         )
         .unwrap();
-        let policy = policy();
+        let codec = codec();
         let mut glyph = layout_glyph(1, 0);
         glyph.font_size = 8.0;
         let semantic_x = [10.0];
         let semantic_kind = [100];
-        let mut workspace = PolicyGatherWorkspace::default();
+        let mut workspace = CodecGatherWorkspace::default();
         workspace
             .gather(
-                &policy,
+                &codec,
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
@@ -1600,11 +1599,11 @@ mod tests {
 
         glyph.font_size = 16.0;
         glyph.content_revision = 2;
-        assert!(workspace.begin_retained(&policy, 1).unwrap());
+        assert!(workspace.begin_retained(&codec, 1).unwrap());
         assert_eq!(
             workspace
                 .append_retained(
-                    &policy,
+                    &codec,
                     CAPABILITY,
                     LayoutPlanInput {
                         transform_id: 1,
@@ -1628,12 +1627,12 @@ mod tests {
     #[test]
     fn missing_program_binding_and_source_are_explicit() {
         let binding = binding();
-        let policy = policy();
+        let codec = codec();
         let glyphs = [layout_glyph(1, 0)];
-        let mut workspace = PolicyGatherWorkspace::default();
+        let mut workspace = CodecGatherWorkspace::default();
         assert_eq!(
             workspace.gather(
-                &policy,
+                &codec,
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
@@ -1649,7 +1648,7 @@ mod tests {
         );
         assert_eq!(
             workspace.gather(
-                &policy,
+                &codec,
                 CapabilitySetId(2),
                 LayoutPlanInput {
                     transform_id: 1,
@@ -1665,7 +1664,7 @@ mod tests {
         );
         assert_eq!(
             workspace.gather(
-                &policy,
+                &codec,
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
@@ -1694,7 +1693,7 @@ mod tests {
         expected: RetainedGather,
     ) {
         let binding = binding();
-        let policy = policy();
+        let codec = codec();
         let semantic_before: Vec<f32> = (0..before.len()).map(|index| index as f32).collect();
         let semantic_after: Vec<f32> = (0..after.len()).map(|index| index as f32).collect();
         let kinds_before: Vec<u32> = (0..before.len()).map(|index| index as u32 + 100).collect();
@@ -1716,31 +1715,29 @@ mod tests {
             semantic_u32: &[&kinds_after],
         };
 
-        let mut incremental = PolicyGatherWorkspace::default();
-        incremental.reserve_policy(&policy, 16).unwrap();
+        let mut incremental = CodecGatherWorkspace::default();
+        incremental.reserve_codec(&codec, 16).unwrap();
         incremental
-            .gather(&policy, CAPABILITY, initial, |_| Some(&binding))
+            .gather(&codec, CAPABILITY, initial, |_| Some(&binding))
             .unwrap();
-        assert!(incremental.begin_retained(&policy, 16).unwrap(), "{label}");
+        assert!(incremental.begin_retained(&codec, 16).unwrap(), "{label}");
         let outcome = incremental
-            .append_retained(&policy, CAPABILITY, edited, |_| Some(&binding))
+            .append_retained(&codec, CAPABILITY, edited, |_| Some(&binding))
             .unwrap();
         assert_eq!(outcome, expected, "{label}: retained outcome");
         if let RetainedGather::RebuildFrom(source_start) = outcome {
             incremental.truncate_to_retained_prefix();
             incremental
-                .append_from(&policy, CAPABILITY, edited, source_start, |_| {
-                    Some(&binding)
-                })
+                .append_from(&codec, CAPABILITY, edited, source_start, |_| Some(&binding))
                 .unwrap();
         } else if !incremental.finish_retained() {
             incremental.truncate_to_retained_prefix();
         }
 
-        let mut fresh = PolicyGatherWorkspace::default();
-        fresh.reserve_policy(&policy, 16).unwrap();
+        let mut fresh = CodecGatherWorkspace::default();
+        fresh.reserve_codec(&codec, 16).unwrap();
         fresh
-            .gather(&policy, CAPABILITY, edited, |_| Some(&binding))
+            .gather(&codec, CAPABILITY, edited, |_| Some(&binding))
             .unwrap();
 
         let incremental_view = incremental.view();
@@ -1794,7 +1791,7 @@ mod tests {
     #[test]
     fn fresh_gather_sources_every_declared_register_whatever_the_change_mask_says() {
         let binding = binding();
-        let policy = policy();
+        let codec = codec();
         let glyphs = [layout_glyph(1, 0), layout_glyph(2, 1)];
         let semantic_x = [10.0, 20.0];
         let semantic_kind = [100, 200];
@@ -1809,10 +1806,10 @@ mod tests {
                 semantic_f32: &semantic_f32,
                 semantic_u32: &semantic_u32,
             };
-            let mut workspace = PolicyGatherWorkspace::default();
-            workspace.reserve_policy(&policy, 8).unwrap();
+            let mut workspace = CodecGatherWorkspace::default();
+            workspace.reserve_codec(&codec, 8).unwrap();
             workspace
-                .gather(&policy, CAPABILITY, input, |_| Some(&binding))
+                .gather(&codec, CAPABILITY, input, |_| Some(&binding))
                 .unwrap();
             let view = workspace.view();
             let plan = view.plan_input();
@@ -1941,18 +1938,18 @@ mod tests {
         // A recordless glyph that stays put must not cost the retained path anything: a retained plan
         // holding a space and changing nothing is retained end to end, so the checks above buy
         // their correctness without a rebuild.
-        let mut workspace = PolicyGatherWorkspace::default();
+        let mut workspace = CodecGatherWorkspace::default();
         let binding = binding();
-        let policy = policy();
+        let codec = codec();
         let paragraphs: &[Paragraph<'_>] = &[
             (1, &[layout_glyph(1, 0), space(2), layout_glyph(3, 1)], &[]),
             (2, &[layout_glyph(4, 1)], &[]),
         ];
-        workspace.reserve_policy(&policy, 16).unwrap();
-        gather_planner(&policy, &binding, &mut workspace, paragraphs, false);
-        assert!(workspace.begin_retained(&policy, 16).unwrap());
+        workspace.reserve_codec(&codec, 16).unwrap();
+        gather_planner(&codec, &binding, &mut workspace, paragraphs, false);
+        assert!(workspace.begin_retained(&codec, 16).unwrap());
         assert!(gather_planner(
-            &policy,
+            &codec,
             &binding,
             &mut workspace,
             paragraphs,
@@ -1967,9 +1964,9 @@ mod tests {
     /// Gathers a whole retained plan the way `state::append_planner_gather` does, and reports whether
     /// the retained path survived to the end.
     fn gather_planner(
-        policy: &ValidatedPolicy,
+        codec: &ValidatedCodec,
         binding: &FontRenderBinding,
-        workspace: &mut PolicyGatherWorkspace,
+        workspace: &mut CodecGatherWorkspace,
         paragraphs: &[Paragraph<'_>],
         retained: bool,
     ) -> bool {
@@ -1989,21 +1986,21 @@ mod tests {
             };
             if retaining {
                 match workspace
-                    .append_retained(policy, CAPABILITY, input, |_| Some(binding))
+                    .append_retained(codec, CAPABILITY, input, |_| Some(binding))
                     .unwrap()
                 {
                     RetainedGather::Complete => {}
                     RetainedGather::RebuildFrom(source_start) => {
                         workspace.truncate_to_retained_prefix();
                         workspace
-                            .append_from(policy, CAPABILITY, input, source_start, |_| Some(binding))
+                            .append_from(codec, CAPABILITY, input, source_start, |_| Some(binding))
                             .unwrap();
                         retaining = false;
                     }
                 }
             } else {
                 workspace
-                    .append(policy, CAPABILITY, input, |_| Some(binding))
+                    .append(codec, CAPABILITY, input, |_| Some(binding))
                     .unwrap();
             }
         }
@@ -2027,18 +2024,18 @@ mod tests {
         expect_retained: bool,
     ) {
         let binding = binding();
-        let policy = policy();
+        let codec = codec();
 
-        let mut incremental = PolicyGatherWorkspace::default();
-        incremental.reserve_policy(&policy, 16).unwrap();
-        gather_planner(&policy, &binding, &mut incremental, before, false);
-        assert!(incremental.begin_retained(&policy, 16).unwrap(), "{label}");
-        let retained = gather_planner(&policy, &binding, &mut incremental, after, true);
+        let mut incremental = CodecGatherWorkspace::default();
+        incremental.reserve_codec(&codec, 16).unwrap();
+        gather_planner(&codec, &binding, &mut incremental, before, false);
+        assert!(incremental.begin_retained(&codec, 16).unwrap(), "{label}");
+        let retained = gather_planner(&codec, &binding, &mut incremental, after, true);
         assert_eq!(retained, expect_retained, "{label}: retention");
 
-        let mut fresh = PolicyGatherWorkspace::default();
-        fresh.reserve_policy(&policy, 16).unwrap();
-        gather_planner(&policy, &binding, &mut fresh, after, false);
+        let mut fresh = CodecGatherWorkspace::default();
+        fresh.reserve_codec(&codec, 16).unwrap();
+        gather_planner(&codec, &binding, &mut fresh, after, false);
 
         let incremental_view = incremental.view();
         let fresh_view = fresh.view();
@@ -2067,7 +2064,7 @@ mod tests {
         );
     }
 
-    impl PolicyGatherWorkspace {
+    impl CodecGatherWorkspace {
         fn capacities(&self) -> (usize, Vec<usize>, Vec<usize>) {
             (
                 self.glyphs.capacity(),
@@ -2120,11 +2117,11 @@ mod tests {
         .unwrap()
     }
 
-    fn policy() -> ValidatedPolicy {
-        ValidatedPolicy::new(base_descriptor()).unwrap()
+    fn codec() -> ValidatedCodec {
+        ValidatedCodec::new(base_descriptor()).unwrap()
     }
 
-    fn policy_with_decorations() -> ValidatedPolicy {
+    fn codec_with_decorations() -> ValidatedCodec {
         let mut descriptor = base_descriptor();
         let mut program = descriptor.programs[0].clone();
         program.primitive_kind = 2;
@@ -2139,7 +2136,7 @@ mod tests {
             }
         }
         descriptor.programs.push(program);
-        ValidatedPolicy::new(descriptor).unwrap()
+        ValidatedCodec::new(descriptor).unwrap()
     }
 
     #[test]
@@ -2158,8 +2155,8 @@ mod tests {
             flow_thread_id: 7,
             transform_index: 9,
         };
-        let decorated = policy_with_decorations();
-        let mut workspace = PolicyGatherWorkspace::default();
+        let decorated = codec_with_decorations();
+        let mut workspace = CodecGatherWorkspace::default();
         workspace.begin(&decorated, 4).unwrap();
         assert!(
             workspace
@@ -2226,8 +2223,8 @@ mod tests {
         assert_eq!(view.glyphs.len(), 2);
         assert_eq!(view.glyphs[1].depth_key, 2);
 
-        let plain = policy();
-        let mut plain_workspace = PolicyGatherWorkspace::default();
+        let plain = codec();
+        let mut plain_workspace = CodecGatherWorkspace::default();
         plain_workspace.begin(&plain, 4).unwrap();
         assert!(
             !plain_workspace
@@ -2237,8 +2234,8 @@ mod tests {
         assert_eq!(plain_workspace.view().glyphs.len(), 0);
     }
 
-    fn base_descriptor() -> PolicyDescriptor {
-        PolicyDescriptor {
+    fn base_descriptor() -> CodecDescriptor {
+        CodecDescriptor {
             capability_sets: vec![CapabilitySet {
                 id: CAPABILITY,
                 flags: CAP_ORDERED_DIRECT | CAP_STORAGE_BUFFERS,
@@ -2265,7 +2262,7 @@ mod tests {
                     | BATCH_PROGRAM
                     | BATCH_RESOURCE
                     | BATCH_ORDER
-                    | crate::engine::policy::BATCH_TRANSFORM,
+                    | crate::engine::codec::BATCH_TRANSFORM,
                 allocation_strategy: ALLOCATION_ORDERED_DIRECT,
                 f32_input_count: 4,
                 u32_input_count: 4,

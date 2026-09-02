@@ -52,7 +52,7 @@ let portableCompileCalls = 0;
 registerRasterPlanProgram({
   raster: portableTechnique,
   schema: portableSchema,
-  policyBody(system) {
+  codecBody(system) {
     const program = techniqueProgram(portableSchema, { system });
     return program.compile({});
   },

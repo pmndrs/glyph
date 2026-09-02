@@ -1,4 +1,4 @@
-import { fontBindingBytes, renderPolicyBytesFromPrograms } from '../../tests/support/engine-abi.mjs';
+import { fontBindingBytes, renderCodecBytesFromPrograms } from '../../tests/support/engine-abi.mjs';
 
 const ABSENT_PAGE = 0xffff;
 const MISSING_RESOURCE = 0xffff_ffff;
@@ -112,11 +112,11 @@ function slugProof(abi, raster, allocation) {
 function proof(abi, descriptor, allocation, binding) {
   const allocationStrategy =
     allocation === 'stable'
-      ? abi.policy.allocationStrategies.stableIndirect
-      : abi.policy.allocationStrategies.orderedDirect;
+      ? abi.codec.allocationStrategies.stableIndirect
+      : abi.codec.allocationStrategies.orderedDirect;
   const selected = { ...descriptor, allocationStrategy };
   return {
-    policyBytes: renderPolicyBytesFromPrograms(abi, [selected]),
+    codecBytes: renderCodecBytesFromPrograms(abi, [selected]),
     bindingBytes: fontBindingBytes(abi, { techniqueId: TECHNIQUE_ID, ...binding }),
     outputBytesPerGlyph: selected.buffers.reduce(
       (sum, buffer) => sum + buffer.vectorWidth * scalarBytes(abi, buffer.scalar),
@@ -164,15 +164,15 @@ function mtsdfProgram(abi) {
   ];
   const operations = [];
   const loadF32 = (target, inputField) =>
-    operations.push({ opcode: abi.policy.opcodes.loadF32, target, operand0: inputField });
+    operations.push({ opcode: abi.codec.opcodes.loadF32, target, operand0: inputField });
   const loadU32 = (target, inputField) =>
-    operations.push({ opcode: abi.policy.opcodes.loadU32, target, operand0: inputField });
+    operations.push({ opcode: abi.codec.opcodes.loadU32, target, operand0: inputField });
   const binary = (name, target, left, right) =>
-    operations.push({ opcode: abi.policy.opcodes[name], target, operand0: left, operand1: right });
+    operations.push({ opcode: abi.codec.opcodes[name], target, operand0: left, operand1: right });
   const storeF32 = (buffer, lane, register) =>
-    operations.push({ opcode: abi.policy.opcodes.storeF32, operand0: register, operand1: lane, immediate0: buffer });
+    operations.push({ opcode: abi.codec.opcodes.storeF32, operand0: register, operand1: lane, immediate0: buffer });
   const storeU32 = (buffer, lane, register) =>
-    operations.push({ opcode: abi.policy.opcodes.storeU32, operand0: register, operand1: lane, immediate0: buffer });
+    operations.push({ opcode: abi.codec.opcodes.storeU32, operand0: register, operand1: lane, immediate0: buffer });
   const copyF32 = (buffer, lane, inputField) => {
     loadF32(0, inputField);
     storeF32(buffer, lane, 0);
@@ -210,7 +210,7 @@ function mtsdfProgram(abi) {
   copyF32(6, 1, 9);
   copyF32(6, 2, 7);
   loadU32(0, 2);
-  operations.push({ opcode: abi.policy.opcodes.convertU32ToF32, target: 1, operand0: 0 });
+  operations.push({ opcode: abi.codec.opcodes.convertU32ToF32, target: 1, operand0: 0 });
   storeF32(6, 3, 1);
   const context = {
     inputs: [
@@ -227,7 +227,7 @@ function mtsdfProgram(abi) {
   return program(context, [
     ...floatBuffers(abi, [4, 4, 4, 4]),
     ...uintBuffers(abi, [2], 5),
-    { id: 6, scalar: abi.policy.scalarTypes.f32, vectorWidth: 4 },
+    { id: 6, scalar: abi.codec.scalarTypes.f32, vectorWidth: 4 },
   ]);
 }
 
@@ -279,24 +279,24 @@ function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inv
     operations,
     loadF32(count) {
       for (let fieldIndex = 0; fieldIndex < count; fieldIndex += 1) {
-        operations.push({ opcode: abi.policy.opcodes.loadF32, target: fieldIndex, operand0: fieldIndex });
+        operations.push({ opcode: abi.codec.opcodes.loadF32, target: fieldIndex, operand0: fieldIndex });
       }
     },
     loadU32(target, fieldIndex) {
-      operations.push({ opcode: abi.policy.opcodes.loadU32, target, operand0: fieldIndex });
+      operations.push({ opcode: abi.codec.opcodes.loadU32, target, operand0: fieldIndex });
     },
     binary(name, target, left, right) {
-      operations.push({ opcode: abi.policy.opcodes[name], target, operand0: left, operand1: right });
+      operations.push({ opcode: abi.codec.opcodes[name], target, operand0: left, operand1: right });
     },
     constantF32(target, value) {
-      operations.push({ opcode: abi.policy.opcodes.constantF32, target, immediate0: f32Bits(value) });
+      operations.push({ opcode: abi.codec.opcodes.constantF32, target, immediate0: f32Bits(value) });
     },
     constantU32(target, value) {
-      operations.push({ opcode: abi.policy.opcodes.constantU32, target, immediate0: value });
+      operations.push({ opcode: abi.codec.opcodes.constantU32, target, immediate0: value });
     },
     storeF32(buffer, lane, register) {
       operations.push({
-        opcode: abi.policy.opcodes.storeF32,
+        opcode: abi.codec.opcodes.storeF32,
         operand0: register,
         operand1: lane,
         immediate0: buffer,
@@ -304,7 +304,7 @@ function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inv
     },
     storeU32(buffer, lane, register) {
       operations.push({
-        opcode: abi.policy.opcodes.storeU32,
+        opcode: abi.codec.opcodes.storeU32,
         operand0: register,
         operand1: lane,
         immediate0: buffer,
@@ -334,11 +334,11 @@ function stores(write, groups) {
 }
 
 function floatBuffers(abi, widths) {
-  return widths.map((vectorWidth, index) => ({ id: index + 1, scalar: abi.policy.scalarTypes.f32, vectorWidth }));
+  return widths.map((vectorWidth, index) => ({ id: index + 1, scalar: abi.codec.scalarTypes.f32, vectorWidth }));
 }
 
 function uintBuffers(abi, widths, firstId) {
-  return widths.map((vectorWidth, index) => ({ id: firstId + index, scalar: abi.policy.scalarTypes.u32, vectorWidth }));
+  return widths.map((vectorWidth, index) => ({ id: firstId + index, scalar: abi.codec.scalarTypes.u32, vectorWidth }));
 }
 
 function denseAtlasFields(view, glyphCount, units, pages, binding) {
@@ -393,7 +393,7 @@ function resource(_, index) {
 }
 
 function scalarBytes(abi, scalar) {
-  return scalar === abi.policy.scalarTypes.u16 ? 2 : 4;
+  return scalar === abi.codec.scalarTypes.u16 ? 2 : 4;
 }
 
 function f32Bits(value) {
