@@ -1,12 +1,12 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-example-renderer'
-description: Proves the published core engine surface through a real TypeGPU/WebGPU backend without Three.js.
+description: Proves the root GlyphConfig integration surface through a real TypeGPU/WebGPU renderer without Three.js.
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:fa4e95a5931710317f83cc3c672094e1d95cdf0436cd890372c35e22c67f479a'
-tags: [package, core, engine, integration-proof, typegpu]
+source_digest: 'sha256:bd853ba9d1b18675ab766efdc7e7ac15d039a820a39426ff1978e3fa61a410c6'
+tags: [package, glyph-config, codec, integration-proof, typegpu]
 sources:
   - id: manifest
     resource: ../../packages/glyph-example-renderer/package.json
@@ -19,10 +19,10 @@ sources:
     title: Example GlyphConfig and named handle
   - id: configured-plan-target
     resource: ../../packages/glyph/src/core/glyph-plan-target.ts
-    title: Shared configured plan target
+    title: Internal configured publication target
   - id: policy
     resource: ../../packages/glyph-example-renderer/src/policy.ts
-    title: Backend-authored system lanes and render policy
+    title: Renderer-authored system lanes and Codec
   - id: draw-list
     resource: ../../packages/glyph-example-renderer/src/draw-list.ts
     title: Device-neutral draw list owned by the backend
@@ -51,42 +51,30 @@ generated:
 
 # Package reference: `@pmndrs/glyph-example-renderer`
 
-Status: Active external-engine proof. It drives a real immutable font through the public planner and render-plan contract,
-portable raster registration, resource realization, and concrete TypeGPU/WebGPU submission without Three.js.
+Status: Active external-renderer proof. It drives a real immutable font through the public root `GlyphConfig`, Codec,
+resource realization, borrowed `CommandBufferView`, and concrete TypeGPU/WebGPU submission without Three.js.
 
-The package is a standing consumer proof. Source imports only published root assets, `/core`, and the example raster's
-public main and `/typegpu` subpaths—never `internal/`, `generated/`, `/three`, or Three itself. Its policy supplies its own
-system lane, semantic capability set, allocation mode, transform mode, and program namespace while reusing the technique's
-portable policy body. Capability wire IDs are automatic; stable author-owned identities are branded numeric hashes.
-The package root exposes a custom `source` condition for opted-in workspace tools; default consumers still resolve its
-built ESM and declarations.
+The package is a standing consumer proof. Production source imports only `@pmndrs/glyph`, the example raster package, and
+the raster's explicit `/typegpu` shader subpath—never `internal/`, `generated/`, a removed `/core` subpath, `/three`, or
+Three itself. Its Codec supplies its own system lane, capability set, allocation mode, transform mode, and program
+namespace while reusing the technique's portable Codec body. The package root exposes a custom `source` condition for
+opted-in workspace tools; default consumers resolve built ESM and declarations.
 
-The ordinary proof begins with `await glyph.init()` and `glyph.handle(name, defineExampleConfig(device))`. Its
-`GlyphConfig` resolves portable resources into counted object bindings and gives a borrowed `CommandBufferView` to the
-configured renderer's `decode()` method. The view nests the Rust-authored ordered `DisplayList`; it is not a second retained
-copy. The same config can be spread or wrapped to instrument encode, resolve, renderer decode, transform synchronization,
-and disposal. Two handle publications prove this path without exposing plan IDs to the config renderer.
+The ordinary proof begins with `await glyph.init()` and `glyph.handle(name, defineExampleConfig(device))`. Its seven-field
+config uses `schema`, optional `fonts`, `encode`, `resolve`, `renderer`, `root`, and optional `commands`. `encode()` selects
+`exampleCodecDescriptor(ids)`. `resolve()` leases portable resources. The internal trusted projector binds schema values
+and gives the configured renderer a borrowed `CommandBufferView<ExampleBindings>` whose nested `DisplayList` preserves
+Rust-authored order. Numeric IDs and raw plan tables never reach the renderer.
 
-The example delegates its entire root publication boundary to the renderer-neutral
-`createGlyphPlanTarget({ config, codec, root })` helper. Core therefore owns admitted-plan projection, stable opaque
-identity, resource acquisition/settlement, command-view projection, transactional renderer decoding, the last committed
-result, transform synchronization, disposal, and borrowed-frame expiry once for every integration. The config schema
-binds programs, buffers, materials, transforms, batches, root instances, and instance spans to example-owned object
-types. Numeric wire IDs and raw plan tables never reach the configured renderer.
+The package's `ExampleRootImplementation` receives only constrained `GlyphRootServices`. It creates adapter `ExampleText`
+objects and publishes through `services.shape()`; it never constructs or receives a public engine, backend, planner, or
+target. The returned handle fronts one anonymous root, and `handle(name)` selects idempotent terminal named siblings.
+Applications and benchmarks use that surface exactly as they use the first-party Three handle.
 
-The package's internal `ExampleTextEngine` is only the handle implementation behind `defineExampleConfig()`; it is not
-exported from the package entry point and is not an alternative application API. It receives the root engine from the
-handle factory, creates one backend and synchronous `RenderPlanner`, and exposes binding, retained text, and publication
-operations only through `ExampleHandle`. Applications and benchmarks use `glyph.handle(name, config)` just as they do for
-Three. The render planner still owns paragraph/style/flow identities and one `PlanTarget`; callers author no raw IDs,
-revisions, acknowledgments, request bytes, or ABI numbers.
-
-The shared plan target consumes each borrowed publication synchronously through `applyGlyphPublication()`. Its configured
-device receives `CommandBufferView<ExampleBindings>` and walks its Rust-authored ordered `DisplayList` during `decode()`.
-Candidate resources, retained buffers, patches, geometry, and draws are staged in local maps; commit swaps
-them atomically, while discard leaves the previous accepted device state untouched. Only accepted renderer state is
-retained after the borrowed frame expires. The example-specific target is now only a small naming adapter for
-`lastDrawList`; it does not duplicate the binding or transaction implementation.
+During each synchronous `decode(view)`, the configured device walks already-bound programs, buffers, resources, batches,
+root instances, and instance spans. Candidate resources, retained buffers, patches, geometry, and draws are staged in
+local maps; `commit()` swaps them atomically, while `discard()` leaves the previous accepted device state untouched. Only
+accepted renderer-owned state survives after the borrowed view expires.
 
 `RecordingExampleRendererDevice` is the deterministic CPU oracle. It reads already-bound technique, program, variant,
 named buffers, geometry, resources, ordered batches/root instances, and instance spans before one commit changes accepted
@@ -100,11 +88,11 @@ target. The hardware recovery proof disposes the lost-device handle and creates 
 then reuses the same immutable Font and reconstructs the retained text. Device replacement is therefore not a hidden
 mutation on an ordinary handle.
 
-The acceptance fixture bakes Inter, loads it through root `loadFont()`, creates a configured root Glyph handle, binds the
+The acceptance fixture bakes Inter, loads it through root `loadFont()`, creates a configured Glyph handle, binds the
 external technique, publishes initial and updated retained text, and asserts non-empty draws, required named buffers and
 geometry, changed visible pixels, idle submission suppression, failure atomicity, exact retirement, and disposal. The
-hardware lab additionally proves recovery on a second handle. Separate low-level `/core` fixtures retain borrowed expiry,
-single-target ownership, and async one-copy transport coverage.
+hardware lab additionally proves recovery on a second handle. Glyph's package-private tests retain borrowed expiry,
+publication ownership, and worker-transfer coverage without exposing those mechanisms to integrators.
 
 See [Example renderer](../planning/example-renderer.md) for why the package exists and how it divides
 work with the technique-owned `/typegpu` shader subpath.

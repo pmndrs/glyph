@@ -483,7 +483,7 @@ if (publication.draws.length === 0) throw new Error('the renderer produced no dr
             <tr>
               <td><code>commands</code></td>
               <td>no</td>
-              <td>Initial command capacities and limits.</td>
+              <td>Initial command-buffer and retained-text capacities.</td>
             </tr>
           </tbody>
         </table>
@@ -492,7 +492,7 @@ if (publication.draws.length === 0) throw new Error('the renderer produced no dr
   const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
   return defineGlyphConfig({
     schema: ExampleSchema,
-    encode: ({ ids }) =&gt; ({ descriptor: exampleRenderPolicyDescriptor(ids) }),
+    encode: ({ ids }) =&gt; ({ descriptor: exampleCodecDescriptor(ids) }),
     resolve: ({ technique, resourceName, payload }) =&gt; {
       if (technique !== techniqueId) {
         throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${technique}"`);

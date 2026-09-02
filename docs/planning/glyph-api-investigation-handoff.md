@@ -4,17 +4,17 @@ title: Glyph API investigation handoff
 description: Durable record of the proposed Glyph handle/config API, current Three and R3F lifecycle, command-buffer boundary, and questions for the next investigation pass.
 documentation_type: explanation
 tags: [api, glyph, threejs, react, r3f, render-plan, handoff]
-status: draft
+status: deprecated
 sources:
   - id: current-three-text
     resource: ../../packages/glyph/src/three/text.ts
     title: Current Three Text and TextGroup lifecycle
   - id: current-three-domain
-    resource: ../../packages/glyph/src/three/engine-domain.ts
-    title: Current Three engine-domain ownership
+    resource: ../../packages/glyph/src/three/handle.ts
+    title: Current Three configured handle and roots
   - id: current-three-coordinator
-    resource: ../../packages/glyph/src/three/engine-coordinator.ts
-    title: Current Three engine coordinator
+    resource: ../../packages/glyph/src/internal/configured-handle.ts
+    title: Current internal configured-handle ownership
   - id: current-three-plan-target
     resource: ../../packages/glyph/src/three/engine-plan-target.ts
     title: Current Three render-plan executor
@@ -36,6 +36,12 @@ generated:
 ---
 
 # Glyph API investigation handoff
+
+> **Historical record — superseded.** This pre-implementation brief preserves alternatives considered before D-306 and
+> D-308. Current integrations use root `GlyphConfig`/`defineGlyphConfig`, Codec `encode`, internal trusted projection to
+> `CommandBufferView`/`DisplayList`, `GlyphRenderer.decode`, `glyph.handle`, and anonymous or named roots. The public
+> decoder, backend, planner, target, and `/core` sketches below are not current API guidance; use the
+> [renderer integration guide](../guides/renderer-integration.md).
 
 This is the pre-implementation design brief and intentionally preserves alternatives that were investigated. The
 verified implementation outcome is recorded in [the investigation report](glyph-api-investigation-report.md). D-293 and
@@ -320,9 +326,9 @@ Evidence in the current source:
 
 | Location                                                 | Current behavior                                                                                                                         |
 | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/glyph/src/three/engine-domain.ts:58-105`       | Loader and text domain leases select a shared domain; fonts must be initialized by `FontLoader` before constructing `Text`.              |
-| `packages/glyph/src/three/engine-domain.ts:126-149`      | The domain asynchronously creates one `GlyphEngine` and one `ThreeTextEngineCoordinator`.                                                |
-| `packages/glyph/src/three/engine-coordinator.ts:185-196` | `Object3D` instances are associated with opaque transform bindings through a `WeakMap`.                                                  |
+| Historical `three/engine-domain.ts`                      | The removed implementation used loader/text domain leases and initialized fonts before `Text` construction.                              |
+| Historical `three/engine-domain.ts`                      | The removed implementation asynchronously created one `GlyphEngine` and coordinator.                                                     |
+| Historical `three/engine-coordinator.ts`                 | The removed implementation associated `Object3D` values with opaque transform bindings through a `WeakMap`.                              |
 | `packages/glyph/src/three/text.ts:184-204`               | `Text` acquires a domain, binds its transform and fonts, and retains desired state.                                                      |
 | `packages/glyph/src/three/text.ts:461-480`               | A standalone `Text.updateMatrixWorld()` reconciles and synchronizes its implicit one-text binding.                                       |
 | `packages/glyph/src/three/text.ts:639-668`               | `TextGroup.updateMatrixWorld()` collects descendant text, reconciles one group binding, and synchronizes it.                             |

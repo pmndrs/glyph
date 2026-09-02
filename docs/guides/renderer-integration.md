@@ -181,7 +181,7 @@ import {
   type GlyphInstanceSpanBindingInput,
   type GlyphRootInstanceBindingInput,
   type GlyphSchema,
-  type PolicyProgram,
+  type CodecProgram,
 } from '@pmndrs/glyph';
 
 export interface ExampleResolvedResource {
@@ -194,7 +194,7 @@ export interface ExampleBufferBinding {
 }
 export interface ExampleProgramBinding {
   readonly kind: 'example-program';
-  readonly program: PolicyProgram;
+  readonly program: CodecProgram;
 }
 export interface ExampleInstanceSpanBinding {
   readonly kind: 'example-instance-span';
@@ -282,21 +282,21 @@ emit packed buffers, programs, ordering, and capabilities:
 
 ```ts
 import {
-  createRasterPolicyProgram,
-  definePolicyBuffers,
+  createRasterCodecProgram,
+  defineCodecBuffers,
   id,
-  type PolicyCapabilitySet,
-  type PolicyDescriptor,
-  type RenderIdFactory,
+  type CodecCapabilitySet,
+  type CodecDescriptor,
+  type CodecIdFactory,
 } from '@pmndrs/glyph';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 
 const stableGlyphId = id.buffer('glyph-example-renderer/stable-glyph');
-const system = definePolicyBuffers({
+const system = defineCodecBuffers({
   stableGlyphId: { id: stableGlyphId, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 
-const capabilities: PolicyCapabilitySet = Object.freeze({
+const capabilities: CodecCapabilitySet = Object.freeze({
   capabilities: Object.freeze(['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct']),
   maxBufferBytes: 16 * 1024 * 1024,
   updateAlignment: 4,
@@ -309,11 +309,11 @@ const capabilities: PolicyCapabilitySet = Object.freeze({
   wholeBufferThresholdBasisPoints: 7_500,
 });
 
-function descriptor(ids: RenderIdFactory): PolicyDescriptor {
+function descriptor(ids: CodecIdFactory): CodecDescriptor {
   return Object.freeze({
     capabilitySets: [capabilities],
     programs: [
-      createRasterPolicyProgram(glyphExamplePlanProgram, {
+      createRasterCodecProgram(glyphExamplePlanProgram, {
         namespace: 'example-renderer',
         system,
         capabilitySet: capabilities,
@@ -325,10 +325,10 @@ function descriptor(ids: RenderIdFactory): PolicyDescriptor {
   });
 }
 
-const encode = ({ ids }: { ids: RenderIdFactory }) => ({ descriptor: descriptor(ids) });
+const encode = ({ ids }: { ids: CodecIdFactory }) => ({ descriptor: descriptor(ids) });
 ```
 
-The package implementation is `exampleRenderPolicyDescriptor(ids)`. Ordinary renderer code never sees the numeric IDs.
+The package implementation is `exampleCodecDescriptor(ids)`. Ordinary renderer code never sees the numeric IDs.
 Changing batching, record layout, capabilities, or ordering is Codec work; it is not a `decode()` rewrite.
 
 ## Resolve portable resources
@@ -525,7 +525,7 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
   const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
   return defineGlyphConfig({
     schema: ExampleSchema,
-    encode: ({ ids }) => ({ descriptor: exampleRenderPolicyDescriptor(ids) }),
+    encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
     resolve: ({ technique, resourceName, payload }) => {
       if (technique !== techniqueId) {
         throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${technique}"`);
@@ -552,15 +552,15 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
 
 `GlyphConfig` is a small declarative DSL:
 
-| Field      | Required | Owns                                                                           |
-| ---------- | -------- | ------------------------------------------------------------------------------ |
-| `schema`   | yes      | Inferred host binding vocabulary and `drawRoot`.                               |
-| `fonts`    | no       | Handle-relative technique names, default technique, and technique loading.     |
-| `encode`   | yes      | Codec descriptor for packed command-buffer data.                               |
-| `resolve`  | yes      | Portable-resource realization and leases.                                      |
-| `renderer` | yes      | Root-scoped `decode`, transform sync, and retained host-state disposal.        |
-| `root`     | yes      | Anonymous/named root host object and boundary construction.                    |
-| `commands` | no       | Initial command capacities and limits; omit until measurements justify tuning. |
+| Field      | Required | Owns                                                                                         |
+| ---------- | -------- | -------------------------------------------------------------------------------------------- |
+| `schema`   | yes      | Inferred host binding vocabulary and `drawRoot`.                                             |
+| `fonts`    | no       | Handle-relative technique names, default technique, and technique loading.                   |
+| `encode`   | yes      | Codec descriptor for packed command-buffer data.                                             |
+| `resolve`  | yes      | Portable-resource realization and leases.                                                    |
+| `renderer` | yes      | Root-scoped `decode`, transform sync, and retained host-state disposal.                      |
+| `root`     | yes      | Anonymous/named root host object and boundary construction.                                  |
+| `commands` | no       | Initial command-buffer and retained-text capacities; omit until measurements justify tuning. |
 
 For example, a capacity override is data, not another lifecycle object:
 
