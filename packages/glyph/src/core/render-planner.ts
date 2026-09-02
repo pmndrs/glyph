@@ -20,7 +20,7 @@ import {
   normalizedColumns,
 } from '../engine-encoding.js';
 import {
-  compileValidatedPlannerFrameUpdate,
+  compilePlannerFrameUpdate,
   MAX_TEXT_ENGINE_OUTPUT_BYTES,
   type PlannerConstraint,
   type PlannerExclusion,
@@ -866,7 +866,7 @@ class RenderPlannerImpl {
     }
     const geometry = compileGeometry(this.#handleState, state, 0, 0);
     const textChanged = !state.published || state.publishedText !== state.desired.text;
-    const request = compileValidatedPlannerFrameUpdate({
+    const request = compilePlannerFrameUpdate({
       plannerId: this.#transport.handle,
       policyHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
@@ -948,7 +948,7 @@ class RenderPlannerImpl {
       exclusions.push(...geometry.exclusions);
       inlineObjects.push(...compileInlineObjects(this.#handleState, state));
     }
-    return compileValidatedPlannerFrameUpdate({
+    return compilePlannerFrameUpdate({
       plannerId: this.#transport.handle,
       policyHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
@@ -1461,9 +1461,6 @@ interface NormalizedPublishOptions {
 
 function normalizePublishOptions(value: RenderPlannerPublishOptions | undefined): NormalizedPublishOptions {
   if (value !== undefined && !isNonArrayObject(value)) throw new TypeError('publish options must be an object');
-  if (value !== undefined && Object.hasOwn(value, 'policyParameters')) {
-    throw new TypeError('publish policyParameters are not supported');
-  }
   const semanticViews = value?.semanticViews ?? 'none';
   const masks = textShaperAbi.engine.semanticViewMasks;
   const semanticViewMask =

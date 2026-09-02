@@ -13,7 +13,7 @@ import type {
   StyleId,
   PlannerHandle,
 } from './render-policy.js';
-import { assertGlyphId, policyCapabilitySetSelectionId } from './render-policy.js';
+import { policyCapabilitySetSelectionId } from './render-policy.js';
 
 const MAX_U32 = 0xffff_ffff;
 export const MAX_TEXT_ENGINE_OUTPUT_BYTES: number = 64 * 1024 * 1024;
@@ -225,15 +225,6 @@ export function validatePlannerFrameRecords(records: PlannerFrameRecords, limits
   const regions = records.regions ?? [];
   const exclusions = records.exclusions ?? [];
   const inlineObjects = records.inlineObjects ?? [];
-  assertFrameRecordIds(
-    paragraphMutations,
-    textMutations,
-    styleMutations,
-    constraints,
-    regions,
-    exclusions,
-    inlineObjects,
-  );
   for (const mutation of paragraphMutations) {
     if (mutation.opcode !== 'upsert' && mutation.opcode !== 'remove') {
       throw new TypeError('paragraph mutation opcode is invalid');
@@ -263,14 +254,8 @@ export function validatePlannerFrameRecords(records: PlannerFrameRecords, limits
   );
 }
 
-/** Serialize mutations and constraints only; shaping, measure, planning, and packing remain Rust-owned. */
+/** @internal Serialize one package-owned frame; shaping, measure, planning, and packing remain Rust-owned. */
 export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array {
-  validatePlannerFrameUpdate(frame);
-  return compileValidatedPlannerFrameUpdate(frame);
-}
-
-/** @internal Serialize an already validated package-owned frame. */
-export function compileValidatedPlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array {
   const abi = textShaperAbi;
   const request = abi.layouts.engineUpdateRequest;
   const paragraphMutations = frame.paragraphMutations ?? [];
@@ -280,20 +265,6 @@ export function compileValidatedPlannerFrameUpdate(frame: PlannerFrameUpdate): U
   const regions = frame.regions ?? [];
   const exclusions = frame.exclusions ?? [];
   const inlineObjects = frame.inlineObjects ?? [];
-  assertGlyphId(frame.plannerId, 'planner', 'frame plannerId');
-  assertGlyphId(frame.policyHandle, 'policy', 'frame policyHandle');
-  if (frame.capabilitySet !== undefined) {
-    policyCapabilitySetSelectionId(frame.capabilitySet, frame.policyHandle);
-  }
-  assertFrameRecordIds(
-    paragraphMutations,
-    textMutations,
-    styleMutations,
-    constraints,
-    regions,
-    exclusions,
-    inlineObjects,
-  );
   let cursor: number = request.size;
   const allocate = (count: number, stride: number, alignment: number, label: string): number => {
     if (count === 0) return 0;
@@ -363,109 +334,6 @@ export function compileValidatedPlannerFrameUpdate(frame: PlannerFrameUpdate): U
   writeExclusions(view, exclusionOffset, exclusions, exclusionVertexOffsets);
   writeInlineObjects(view, inlineObjectOffset, inlineObjects);
   return bytes;
-}
-
-function validatePlannerFrameUpdate(frame: PlannerFrameUpdate): void {
-  if (!isNonArrayObject(frame)) throw new TypeError('text engine frame must be an object');
-  if (Object.hasOwn(frame, 'policyParameters')) throw new TypeError('frame policyParameters are not supported');
-  assertGlyphId(frame.plannerId, 'planner', 'frame plannerId');
-  assertGlyphId(frame.policyHandle, 'policy', 'frame policyHandle');
-  if (frame.capabilitySet !== undefined) policyCapabilitySetSelectionId(frame.capabilitySet, frame.policyHandle);
-  for (const [label, value] of [
-    ['expectedEngineRevision', frame.expectedEngineRevision],
-    ['consumedPlanRevision', frame.consumedPlanRevision],
-    ['acknowledgedPublicationGeneration', frame.acknowledgedPublicationGeneration],
-  ] as const) {
-    u32(value, label);
-  }
-  const semanticViewMask = u32(frame.semanticViewMask ?? 0, 'semanticViewMask');
-  const supportedSemanticViews =
-    textShaperAbi.engine.semanticViewMasks.measurement | textShaperAbi.engine.semanticViewMasks.layoutInspection;
-  if ((semanticViewMask & ~supportedSemanticViews) !== 0) throw new RangeError('semanticViewMask is not supported');
-  optionalBoolean(frame.compositingIndependent, 'frame compositingIndependent');
-  validateFrameLimits(frame.limits);
-  for (const name of [
-    'paragraphMutations',
-    'textMutations',
-    'styleMutations',
-    'constraints',
-    'regions',
-    'exclusions',
-    'inlineObjects',
-  ] as const) {
-    if (frame[name] !== undefined && !Array.isArray(frame[name])) {
-      throw new TypeError(`frame ${name} must be an array`);
-    }
-  }
-  validatePlannerFrameRecords(frame, frame.limits);
-}
-
-function validateFrameLimits(limits: PlannerFrameLimits): void {
-  if (!isNonArrayObject(limits)) throw new TypeError('text engine frame limits must be an object');
-  for (const label of [
-    'maxParagraphs',
-    'maxClusters',
-    'maxLines',
-    'maxRegions',
-    'maxExclusions',
-    'maxInlineObjects',
-    'maxSlotsPerBand',
-    'maxOutputBytes',
-  ] as const) {
-    const value = limits[label];
-    u32(value, label);
-    if (value === 0) throw new RangeError(`${label} must be positive`);
-  }
-  if (limits.maxOutputBytes < textShaperAbi.layouts.engineResult.size) {
-    throw new RangeError('maxOutputBytes cannot hold a text engine result header');
-  }
-  if (limits.maxOutputBytes > MAX_TEXT_ENGINE_OUTPUT_BYTES) {
-    throw new RangeError('maxOutputBytes exceeds the text engine limit');
-  }
-}
-
-function assertFrameRecordIds(
-  paragraphMutations: readonly PlannerParagraphMutation[],
-  textMutations: readonly PlannerTextMutation[],
-  styleMutations: readonly PlannerStyleMutation[],
-  constraints: readonly PlannerConstraint[],
-  regions: readonly PlannerRegion[],
-  exclusions: readonly PlannerExclusion[],
-  inlineObjects: readonly PlannerInlineObject[],
-): void {
-  for (const mutation of paragraphMutations) {
-    assertGlyphId(mutation.paragraphId, 'paragraph', 'paragraph mutation paragraphId');
-  }
-  for (const mutation of textMutations) {
-    assertGlyphId(mutation.paragraphId, 'paragraph', 'text mutation paragraphId');
-  }
-  for (const mutation of styleMutations) {
-    assertGlyphId(mutation.paragraphId, 'paragraph', 'style mutation paragraphId');
-    assertGlyphId(mutation.styleId, 'style', 'style mutation styleId');
-    if (mutation.opcode === 'upsert') {
-      if (mutation.value.fontStackHandle !== undefined) {
-        assertGlyphId(mutation.value.fontStackHandle, 'font-stack', 'style fontStackHandle');
-      }
-      if (mutation.value.materialId !== undefined) {
-        assertGlyphId(mutation.value.materialId, 'material', 'style materialId');
-      }
-    }
-  }
-  for (const constraint of constraints) {
-    assertGlyphId(constraint.paragraphId, 'paragraph', 'constraint paragraphId');
-    assertGlyphId(constraint.flowThreadId, 'flow-thread', 'constraint flowThreadId');
-  }
-  for (const region of regions) assertGlyphId(region.id, 'region', 'region id');
-  for (const exclusion of exclusions) {
-    assertGlyphId(exclusion.id, 'exclusion', 'exclusion id');
-    assertGlyphId(exclusion.regionId, 'region', 'exclusion regionId');
-  }
-  for (const object of inlineObjects) {
-    assertGlyphId(object.paragraphId, 'paragraph', 'inline object paragraphId');
-    assertGlyphId(object.id, 'inline-object', 'inline object id');
-    assertGlyphId(object.materialId, 'material', 'inline object materialId');
-    assertGlyphId(object.resourceId, 'resource', 'inline object resourceId');
-  }
 }
 
 function validateStyleMutation(mutation: PlannerStyleMutation): void {
@@ -1305,8 +1173,4 @@ function checkedAdd(left: number, right: number, label: string): number {
   const value = left + right;
   if (!Number.isSafeInteger(value) || value > MAX_U32) throw new RangeError(`${label} exceeds the frame ABI`);
   return value;
-}
-
-function isNonArrayObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -2,13 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { compilePlannerFrameUpdate, validatePlannerFrameRecords } from '../../dist/core/frame-wire.js';
-import { selectPolicyCapabilitySet, id } from '../../dist/core/render-policy.js';
+import { id } from '../../dist/core/render-policy.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const PLANNER_ID = id.planner('engine-frame-wire/planner');
 const POLICY_ID = id.policy('engine-frame-wire/policy');
-const OTHER_POLICY_ID = id.policy('engine-frame-wire/other-policy');
 const FONT_STACK_ID = id.fontStack('engine-frame-wire/font-stack');
 const PARAGRAPH_ID = id.paragraph('engine-frame-wire/paragraph');
 const OTHER_PARAGRAPH_ID = id.paragraph('engine-frame-wire/other-paragraph');
@@ -20,62 +19,7 @@ const INLINE_OBJECT_ID = id.inlineObject('engine-frame-wire/inline-object');
 const MATERIAL_ID = id.material('engine-frame-wire/material');
 const RESOURCE_ID = id.resourceHandle('engine-frame-wire/resource');
 
-test('frame compiler rejects raw and cross-domain numeric identities before allocation', () => {
-  const valid = {
-    plannerId: PLANNER_ID,
-    policyHandle: POLICY_ID,
-    expectedEngineRevision: 0,
-    consumedPlanRevision: 0,
-    acknowledgedPublicationGeneration: 0,
-    limits: {
-      maxParagraphs: 1,
-      maxClusters: 1,
-      maxLines: 1,
-      maxRegions: 1,
-      maxExclusions: 1,
-      maxInlineObjects: 1,
-      maxSlotsPerBand: 1,
-      maxOutputBytes: 1024,
-    },
-  };
-  assert.throws(() => compilePlannerFrameUpdate({ ...valid, plannerId: 1 }), /must come from id\.planner/);
-  assert.throws(() => compilePlannerFrameUpdate({ ...valid, plannerId: POLICY_ID }), /must come from id\.planner/);
-  assert.throws(
-    () => compilePlannerFrameUpdate({ ...valid, capabilitySet: 1 }),
-    /must come from selectPolicyCapabilitySet/,
-  );
-  const capability = {
-    capabilities: ['storage-buffers', 'ordered-direct'],
-    maxBufferBytes: 1024,
-    updateAlignment: 4,
-    coalesceGapBytes: 16,
-    rangeCallPenaltyBytes: 32,
-    maxBuffersPerDraw: 1,
-    maxResourcesPerDraw: 1,
-    maxIndirectDraws: 0,
-    fragmentationBudget: 1,
-    wholeBufferThresholdBasisPoints: 7500,
-  };
-  const selection = selectPolicyCapabilitySet(
-    OTHER_POLICY_ID,
-    { capabilitySets: [capability], programs: [] },
-    capability,
-  );
-  assert.throws(
-    () => compilePlannerFrameUpdate({ ...valid, capabilitySet: selection }),
-    /belongs to a different policy handle/,
-  );
-  assert.throws(
-    () =>
-      compilePlannerFrameUpdate({
-        ...valid,
-        paragraphMutations: [{ opcode: 'remove', paragraphId: 1 }],
-      }),
-    /must come from id\.paragraph/,
-  );
-});
-
-test('record validation rejects malformed runtime values without serializing a frame', () => {
+test('record validation rejects malformed user-derived values without serializing a frame', () => {
   const style = {
     opcode: 'upsert',
     paragraphId: PARAGRAPH_ID,
@@ -96,72 +40,6 @@ test('record validation rejects malformed runtime values without serializing a f
         ],
       }),
     /duplicate paragraph orders/,
-  );
-  assert.throws(
-    () =>
-      compilePlannerFrameUpdate({
-        plannerId: PLANNER_ID,
-        policyHandle: POLICY_ID,
-        expectedEngineRevision: 0,
-        consumedPlanRevision: 0,
-        acknowledgedPublicationGeneration: 0,
-        limits: {
-          maxParagraphs: 1,
-          maxClusters: 1,
-          maxLines: 1,
-          maxRegions: 1,
-          maxExclusions: 1,
-          maxInlineObjects: 1,
-          maxSlotsPerBand: 1,
-          maxOutputBytes: 1024,
-        },
-        styleMutations: [style],
-      }),
-    /direction is invalid/,
-  );
-  assert.throws(
-    () =>
-      compilePlannerFrameUpdate({
-        plannerId: PLANNER_ID,
-        policyHandle: POLICY_ID,
-        expectedEngineRevision: 0,
-        consumedPlanRevision: 0,
-        acknowledgedPublicationGeneration: 0,
-        semanticViewMask: 6,
-        limits: {
-          maxParagraphs: 1,
-          maxClusters: 1,
-          maxLines: 1,
-          maxRegions: 1,
-          maxExclusions: 1,
-          maxInlineObjects: 1,
-          maxSlotsPerBand: 1,
-          maxOutputBytes: 1024,
-        },
-      }),
-    /semanticViewMask is not supported/,
-  );
-  assert.throws(
-    () =>
-      compilePlannerFrameUpdate({
-        plannerId: PLANNER_ID,
-        policyHandle: POLICY_ID,
-        expectedEngineRevision: 0,
-        consumedPlanRevision: 0,
-        acknowledgedPublicationGeneration: 0,
-        limits: {
-          maxParagraphs: 1,
-          maxClusters: 1,
-          maxLines: 1,
-          maxRegions: 1,
-          maxExclusions: 1,
-          maxInlineObjects: 1,
-          maxSlotsPerBand: 1,
-          maxOutputBytes: 1024,
-        },
-        policyParameters: new Uint8Array(),
-      }),
-    /policyParameters are not supported/,
   );
 });
 
