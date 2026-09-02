@@ -1,4 +1,4 @@
-import { createFontStack, glyph, loadFont } from '@pmndrs/glyph';
+import { glyph, loadFont } from '@pmndrs/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import {
   defineExampleConfig,
@@ -42,7 +42,6 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
   const renderers = [renderer];
   let handle: ExampleHandle = glyph.handle('benchmark:typegpu:primary', defineExampleConfig(renderer));
   let font;
-  let binding;
   let text: ExampleText | undefined;
   let textDisposed = false;
   try {
@@ -53,9 +52,8 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       },
       { technique: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
     );
-    binding = handle.bindFontStack(createFontStack(font));
     text = handle.createText({
-      font: binding,
+      font,
       text: 'Portable TypeGPU',
       fontSize: 64,
       width: 768,
@@ -69,16 +67,14 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       const updatedPixels = await renderer.readPixels();
       gpuDevice.destroy();
       text.dispose();
-      binding.dispose();
       handle.dispose();
       gpuDevice = await requestGpuDevice();
       devices.push(gpuDevice);
       renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
       renderers.push(renderer);
       handle = glyph.handle('benchmark:typegpu:recovered', defineExampleConfig(renderer));
-      binding = handle.bindFontStack(createFontStack(font));
       text = handle.createText({
-        font: binding,
+        font,
         text: 'Updated WebGPU',
         color: '#ff40a0',
         fontSize: 64,
@@ -144,7 +140,6 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       return report;
     } finally {
       if (!textDisposed) text?.dispose();
-      binding?.dispose();
     }
   } finally {
     handle.dispose();
