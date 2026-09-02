@@ -35,13 +35,7 @@ import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
 import { type Constraints, type ParagraphLayout, type PropertyList, type TextStyle } from './text-properties.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
-import {
-  acquireThreeHandleFont,
-  threeHandleDomain,
-  threeHandleFontSource,
-  threeHandleRoot,
-  threeRootHandle,
-} from './three/handle.js';
+import { acquireThreeHandleFont, threeHandleFontSource, threeHandleRoot, threeRootHandle } from './three/handle.js';
 import {
   ThreeConfig,
   Text as ThreeText,
@@ -426,7 +420,8 @@ function TextFontFaceObject({
   readonly publishObject: (value: ThreeText<AnyRasterTechnique> | null) => void;
 }): ReactElement {
   const font = useHandleFontFace(properties.handle, selection);
-  return createElement(TextObject, { ...properties, desired: bindDesiredFont(desired, font) });
+  const { handle: _handle, ...textProperties } = properties;
+  return createElement(TextObject, { ...textProperties, desired: bindDesiredFont(desired, font) });
 }
 
 function resolveReactTextFont(
@@ -450,34 +445,20 @@ function bindDesiredFont(
 
 function TextObject({
   desired,
-  handle,
   root,
   object: objectProps,
   onError,
   publishObject: publishCommittedObject,
 }: {
   readonly desired: DesiredR3fTextProperties<AnyRasterTechnique>;
-  readonly handle: ThreeHandle;
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
   readonly onError: ((error: unknown) => void) | undefined;
   readonly publishObject: (value: ThreeText<AnyRasterTechnique> | null) => void;
 }): ReactElement {
   const [constructorArguments] = useState<
-    [
-      typeof threeTextConstructionToken,
-      StandaloneTextProperties<AnyRasterTechnique>,
-      ReturnType<typeof threeHandleDomain>,
-      readonly [],
-      ThreeRoot,
-    ]
-  >(() => [
-    threeTextConstructionToken,
-    desired as StandaloneTextProperties<AnyRasterTechnique>,
-    threeHandleDomain(handle),
-    [],
-    root,
-  ]);
+    [typeof threeTextConstructionToken, StandaloneTextProperties<AnyRasterTechnique>, readonly [], ThreeRoot]
+  >(() => [threeTextConstructionToken, desired as StandaloneTextProperties<AnyRasterTechnique>, [], root]);
   const appliedRef = useRef(desired);
   const [store] = useState(() => createObjectStore<ThreeText<AnyRasterTechnique>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -515,13 +496,11 @@ export const TextGroup: (input: R3fTextGroupProps) => ReactElement | null = forw
 ): ReactElement | null {
   assertNoHandleProp(properties, 'TextGroup');
   const context = useSelectedGlyphContext();
-  const handle = context.handle;
   const root = context.root;
   const [object, publishObject] = useState<ThreeTextGroup | null>(null);
   useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
   return createElement(TextGroupObject, {
     key: `${rootId(root)}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
-    handle,
     root,
     object: groupObjectProperties(properties),
     options: properties,
@@ -531,27 +510,22 @@ export const TextGroup: (input: R3fTextGroupProps) => ReactElement | null = forw
 
 function TextGroupObject({
   object: objectProps,
-  handle,
   root,
   options,
   publishObject: publishCommittedObject,
 }: {
   readonly object: TextGroupElementProps;
-  readonly handle: ThreeHandle;
   readonly root: ThreeRoot;
   readonly options: Omit<R3fTextGroupProps, 'ref'>;
   readonly publishObject: (value: ThreeTextGroup | null) => void;
 }): ReactElement {
-  const [constructorArguments] = useState<
-    [typeof threeTextConstructionToken, TextGroupOptions, ReturnType<typeof threeHandleDomain>, ThreeRoot]
-  >(() => [
+  const [constructorArguments] = useState<[typeof threeTextConstructionToken, TextGroupOptions, ThreeRoot]>(() => [
     threeTextConstructionToken,
     {
       ...(options.renderOrder === undefined ? {} : { renderOrder: options.renderOrder }),
       ...(options.material === undefined ? {} : { material: options.material }),
       ...(options.pixelSnapping === undefined ? {} : { pixelSnapping: options.pixelSnapping }),
     },
-    threeHandleDomain(handle),
     root,
   ]);
   const [store] = useState(() => createObjectStore<ThreeTextGroup>());

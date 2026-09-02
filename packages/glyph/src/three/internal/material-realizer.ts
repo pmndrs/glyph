@@ -9,7 +9,7 @@ import { msdf } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug-technique.js';
 import { slug } from '../../raster/slug-technique.js';
 import { decorationShader } from '../../tsl/decoration-shader.js';
-import type { ThreeTextEngineCoordinator } from '../engine-coordinator.js';
+import type { ThreeRendererResources } from '../renderer-resources.js';
 import type { ThreeRootContext, ThreeTextMaterial, ThreeTextMaterialContext } from '../material.js';
 import type { ThreePlanProgramBuffer } from '../plan-program-registry.js';
 import { decorationSchema, threeSystemBuffers } from '../render-policy.js';
@@ -51,7 +51,7 @@ interface ThreeMaterialOwner {
 }
 
 interface ThreeMaterialRealizerOptions {
-  readonly coordinator: ThreeTextEngineCoordinator;
+  readonly coordinator: ThreeRendererResources;
   readonly owner: ThreeMaterialOwner;
   readonly context: PreparationContext;
   readonly ownedMaterials: WeakSet<THREE.NodeMaterial>;
@@ -60,7 +60,7 @@ interface ThreeMaterialRealizerOptions {
 
 /** Realizes program-specific Three materials and GPU resources inside one publication transaction. */
 export class ThreeMaterialRealizer {
-  readonly #coordinator: ThreeTextEngineCoordinator;
+  readonly #coordinator: ThreeRendererResources;
   readonly #owner: ThreeMaterialOwner;
   readonly #context: PreparationContext;
   readonly #ownedMaterials: WeakSet<THREE.NodeMaterial>;

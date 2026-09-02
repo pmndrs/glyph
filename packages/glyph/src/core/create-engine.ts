@@ -1,5 +1,5 @@
 import type { PortablePayloadLease } from './render-planner.js';
-import type { BackendTransformBinding } from './backend.js';
+import type { BackendMaterialBinding, BackendTransformBinding } from './backend.js';
 import type {
   AnyGlyphBindings,
   BorrowedTypedCommandBuffer,
@@ -54,6 +54,10 @@ export interface CreateEngineOptions<Bindings extends AnyGlyphBindings, Root, Po
   >;
   readonly codec: Readonly<{ descriptor: PolicyDescriptor }>;
   readonly root: Root;
+  /** Core-owned association from an opaque plan identity to the adapter-authored value. */
+  readonly materialInput?: (binding: BackendMaterialBinding) => Bindings['materialInput'];
+  /** Core-owned association from an opaque plan identity to the adapter-authored value. */
+  readonly transformInput?: (binding: BackendTransformBinding) => Bindings['transformInput'];
 }
 
 /**
@@ -73,6 +77,8 @@ class CommandBindingEngine<
 > implements GlyphDisplayListProjector<Bindings> {
   readonly #config: CreateEngineOptions<Bindings, Root, PortableResource>['config'];
   readonly #root: Root;
+  readonly #materialInput: NonNullable<CreateEngineOptions<Bindings, Root, PortableResource>['materialInput']>;
+  readonly #transformInput: NonNullable<CreateEngineOptions<Bindings, Root, PortableResource>['transformInput']>;
   readonly #mapper = new TypedCommandBufferMapper();
   readonly #programsById: ReadonlyMap<number, PolicyProgram>;
   readonly #programs = new WeakMap<object, Bindings['program']>();
@@ -88,6 +94,8 @@ class CommandBindingEngine<
   constructor(options: CreateEngineOptions<Bindings, Root, PortableResource>) {
     this.#config = options.config;
     this.#root = options.root;
+    this.#materialInput = options.materialInput ?? ((binding) => binding as Bindings['materialInput']);
+    this.#transformInput = options.transformInput ?? ((binding) => binding as Bindings['transformInput']);
     this.#programsById = new Map(
       options.codec.descriptor.programs.map((program) => [program.programId as number, program]),
     );
@@ -392,7 +400,7 @@ class CommandBindingEngine<
     if (identity === undefined) return undefined;
     let value = this.#materials.get(identity);
     if (value === undefined) {
-      value = this.#config.schema.material(this.#root, this.#mapper.materialBinding(identity));
+      value = this.#config.schema.material(this.#root, this.#materialInput(this.#mapper.materialBinding(identity)));
       this.#materials.set(identity, value);
     }
     return value;
@@ -401,7 +409,7 @@ class CommandBindingEngine<
   #transform(binding: BackendTransformBinding, recordIndex = 0): Bindings['transform'] {
     let value = this.#transforms.get(binding);
     if (value === undefined) {
-      value = this.#config.schema.transform(this.#root, binding, recordIndex);
+      value = this.#config.schema.transform(this.#root, this.#transformInput(binding), recordIndex);
       this.#transforms.set(binding, value);
     }
     return value;

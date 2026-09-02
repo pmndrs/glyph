@@ -17,11 +17,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { defineRasterTechnique } from '@pmndrs/glyph';
+import { defineRasterTechnique, glyph } from '@pmndrs/glyph';
 import { registerThreeRasterPlanProgram, ThreeConfig } from '@pmndrs/glyph/three';
 import {
   defineTechniqueGeometryKind,
-  createGlyphEngine,
   defineTechniqueSchema,
   f32,
   registerRasterPlanProgram,
@@ -36,14 +35,10 @@ import {
 } from '../../dist/loaded-font.js';
 import { FontRegistry } from '../../dist/loader.js';
 
-const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-
 const RECT_BUFFER_ID = id.buffer('test.three-plan-program/rect');
 const STABLE_GLYPH_BUFFER_ID = id.buffer('test.three-plan-program/system/stable-glyph-id');
 const TRANSFORM_BUFFER_ID = id.buffer('test.three-plan-program/system/transform-index');
-// The coordinator is what takes the snapshot, so the lifecycle is asserted against it directly
-// rather than through a mounted scene that would only reach it incidentally.
-import { ThreeTextEngineCoordinator } from '../../dist/three/engine-coordinator.js';
+await glyph.init();
 
 const portablePrograms = new Map();
 const planProgram = (techniqueIdentity, declaration = {}) => {
@@ -259,21 +254,18 @@ test('registration selects one renderer variant per technique before engine cons
     () => registerThreeRasterPlanProgram(secondary),
     /already selected raster variant "test" for technique "test-variant-selection"/,
   );
-  const glyphEngine = await createGlyphEngine({ wasm: await readFile(shaperWasmUrl) });
-  const coordinator = new ThreeTextEngineCoordinator(glyphEngine, ThreeConfig);
+  const handle = glyph.handle('three:program-registration:selection', ThreeConfig);
   const font = await fontForTechnique(unsupported);
   assert.throws(
-    () => coordinator.bindFontStack(font),
-    /no registered renderer variant for portable technique "test-portable-without-three"/,
+    () => handle.createText({ font, text: 'unsupported' }),
+    /no installed policy for "test-portable-without-three"/,
   );
   font.dispose();
-  coordinator.dispose();
-  glyphEngine.dispose();
+  handle.dispose();
 });
 
 test('a technique registered after an engine exists is refused, not silently dropped', async () => {
-  const glyphEngine = await createGlyphEngine({ wasm: await readFile(shaperWasmUrl) });
-  const coordinator = new ThreeTextEngineCoordinator(glyphEngine, ThreeConfig);
+  const handle = glyph.handle('three:program-registration:late', ThreeConfig);
 
   const late = planProgram('test-late-technique');
   assert.throws(
@@ -287,8 +279,7 @@ test('a technique registered after an engine exists is refused, not silently dro
 
   // Once nothing holds a snapshot there is nothing a registration could miss, so it is legal again.
   // Without this, one disposed engine would poison the module-global registry for the process.
-  coordinator.dispose();
-  glyphEngine.dispose();
+  handle.dispose();
   assert.doesNotThrow(() => registerThreeRasterPlanProgram(late));
   // Re-registering the IDENTICAL program stays a no-op, so a module evaluated twice is not an error.
   assert.doesNotThrow(() => registerThreeRasterPlanProgram(late));
@@ -351,12 +342,10 @@ test('engine construction rejects a portable body compiled for different system 
     },
   });
 
-  const glyphEngine = await createGlyphEngine({ wasm: await readFile(shaperWasmUrl) });
   assert.throws(
-    () => new ThreeTextEngineCoordinator(glyphEngine, ThreeConfig),
+    () => glyph.handle('three:program-registration:wrong-system', ThreeConfig),
     /policy body does not use the requested system buffers/,
   );
-  glyphEngine.dispose();
 });
 
 async function fontForTechnique(technique) {

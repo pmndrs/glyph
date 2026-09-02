@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { createFontStack, glyph, loadFont } from '@pmndrs/glyph';
+import { glyph, loadFont, type CommandBufferView } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { rasterBake } from '@pmndrs/glyph/baker';
 import { afterEach, expect, test } from 'vitest';
@@ -16,7 +16,6 @@ import {
   type ExamplePendingSubmission,
   type ExampleRendererDevice,
 } from '../src/index.js';
-import type { CommandBufferView } from '@pmndrs/glyph/core';
 import type { ExampleBindings } from '../src/config.js';
 
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
@@ -74,9 +73,8 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
     { technique: glyphExample, options: { paletteSeed: 7 } },
   );
   try {
-    const stack = handle.bindFontStack(createFontStack(font));
     const text = handle.createText({
-      font: stack,
+      font,
       text: 'Glyph',
       fontSize: 48,
       width: 1000,
@@ -125,7 +123,6 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
     text.dispose();
     handle.publish();
     expect(device.primary.resources.size).toBe(0);
-    stack.dispose();
   } finally {
     handle.dispose();
     font.dispose();

@@ -1,13 +1,13 @@
 import type * as THREE from 'three/webgpu';
 
 import type { TslSlugPageResources } from '../../tsl.js';
-import type { ThreeRenderResourceLease, ThreeTextEngineCoordinator } from '../engine-coordinator.js';
+import type { ThreeRenderResourceLease, ThreeRendererResources } from '../renderer-resources.js';
 import type { ThreeGlyphGeometrySource } from '../glyph-measurement.js';
 import type { ThreeBufferBinding, ThreeResolvedResourceBinding } from '../handle.js';
 import type { RetainedBuffer, StagedBufferMutations } from './host-buffer.js';
 
 export type ThreeHostResource = ThreeResolvedResourceBinding &
-  Readonly<{ program?: ReturnType<ThreeTextEngineCoordinator['planProgram']> }>;
+  Readonly<{ program?: ReturnType<ThreeRendererResources['planProgram']> }>;
 
 export interface RetainedResource {
   readonly binding: ThreeResolvedResourceBinding;

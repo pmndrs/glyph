@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 
 import type { BorrowedCommandSequence, DisplayListBatch, DisplayListRootInstance } from '../../core.js';
-import type { ThreeTextEngineCoordinator } from '../engine-coordinator.js';
+import type { ThreeRendererResources } from '../renderer-resources.js';
 import type {
   ThreeBatchBinding,
   ThreeBufferBinding,
@@ -41,7 +41,7 @@ interface PrepareDrawReplacementOptions {
     | DisplayListRootInstance<ThreeInstanceBinding, THREE.Object3D>
   >;
   readonly context: PreparationContext;
-  readonly coordinator: ThreeTextEngineCoordinator;
+  readonly coordinator: ThreeRendererResources;
   readonly owner: DrawOwner;
   readonly ownedMaterials: WeakSet<THREE.NodeMaterial>;
   readonly previousDraws: readonly THREE.Mesh[];

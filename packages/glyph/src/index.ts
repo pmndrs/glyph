@@ -19,7 +19,56 @@ export type {
   SerializedBakeError,
 } from './bake.js';
 export { glyph, type Glyph } from './glyph.js';
-export type { GlyphConfig, GlyphConfigHandle, GlyphHandle } from './core/glyph-config.js';
+export {
+  defineGlyphConfig,
+  defineGlyphSchema,
+  resourceLease,
+  type AnyGlyphBindings,
+  type BufferPatch,
+  type CommandBufferView,
+  type Codec,
+  type GlyphBatchBindingInput,
+  type GlyphBindings,
+  type GlyphBufferBindingInput,
+  type GlyphConfig,
+  type GlyphConfigHandle,
+  type GlyphCopy,
+  type GlyphCopyDestination,
+  type GlyphCopyRequest,
+  type GlyphHandle,
+  type GlyphInstanceSpanBindingInput,
+  type GlyphRenderer,
+  type GlyphRoot,
+  type GlyphRootInstanceBindingInput,
+  type GlyphRootRecipeContext,
+  type GlyphRootServices,
+  type GlyphSchema,
+  type GlyphTextController,
+  type GlyphTextState,
+  type ResourceLease,
+} from './core/glyph-config.js';
+export {
+  compileRenderPolicy,
+  id,
+  type PolicyBufferId,
+  type PolicyCapabilitySet,
+  type PolicyDescriptor,
+  type PolicyProgram,
+  type RenderIdFactory,
+} from './core/render-policy.js';
+export { definePolicyBuffers } from './core/technique-schema.js';
+export type {
+  TechniqueGeometryDeclaration,
+  TechniqueResourceDeclaration,
+  TechniqueResourceDeclarations,
+} from './core/technique-schema.js';
+export {
+  assertPortableResource,
+  type PortableGeometryPayload,
+  type PortableResource,
+} from './core/portable-resources.js';
+export { createRasterPolicyProgram, resolveRasterPlanProgram } from './core/raster-plan-program.js';
+export type { RenderPlanScalarType } from './core/plan-view.js';
 
 export type {
   AnyFontFace,

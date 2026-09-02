@@ -1,31 +1,26 @@
-import type { AnyRasterTechnique, Font, FontStack } from '@pmndrs/glyph';
+import type { AnyRasterTechnique } from '@pmndrs/glyph';
 import {
-  createGlyphRootRegistry,
   defineGlyphConfig,
   defineGlyphSchema,
   resourceLease,
-  type BackendFontBinding,
-  type BackendFontStackBinding,
-  type BackendMaterialBinding,
-  type BackendTransformBinding,
-  type GlyphBindings,
   type GlyphBatchBindingInput,
+  type GlyphBindings,
   type GlyphBufferBindingInput,
   type GlyphConfig,
   type GlyphHandle,
-  type GlyphRoot,
-  type GlyphEngine,
   type GlyphInstanceSpanBindingInput,
+  type GlyphRoot,
   type GlyphRootInstanceBindingInput,
+  type GlyphRootServices,
   type GlyphSchema,
   type PolicyProgram,
   type PortableResource,
-} from '@pmndrs/glyph/core';
+} from '@pmndrs/glyph';
 
 import type { ExampleRendererDevice } from './device.js';
 import { exampleRendererShader, RecordingExampleRendererDevice } from './device.js';
 import type { ExampleDrawList } from './draw-list.js';
-import { ExampleTextEngine, type ExampleText, type ExampleTextOptions } from './engine.js';
+import { ExampleText, type ExampleTextOptions } from './engine.js';
 import { exampleRenderPolicyDescriptor } from './policy.js';
 
 export interface ExampleResolvedResource {
@@ -53,17 +48,25 @@ export interface ExampleInstanceBinding {
   readonly kind: 'example-instance';
   readonly input: GlyphRootInstanceBindingInput<ExampleBindings>;
 }
+export interface ExampleMaterial {
+  readonly kind: 'example-material';
+}
+export interface ExampleTransform {
+  readonly kind: 'example-transform';
+}
 
 export type ExampleBindings = GlyphBindings<
   ExampleResolvedResource,
   ExampleBufferBinding,
   ExampleProgramBinding,
-  BackendMaterialBinding,
-  BackendTransformBinding,
+  ExampleMaterial,
+  ExampleTransform,
   ExampleBatchBinding,
   ExampleInstanceBinding,
   ExampleInstanceSpanBinding,
-  undefined
+  undefined,
+  ExampleMaterial,
+  ExampleTransform
 >;
 
 export interface ExampleRootContext {
@@ -72,30 +75,25 @@ export interface ExampleRootContext {
 
 export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = defineGlyphSchema<ExampleBindings>()({
   drawRoot: () => undefined,
-  program: (_root, program) => Object.freeze({ kind: 'example-program', program }),
+  program: (_root: ExampleRootContext, program) => Object.freeze({ kind: 'example-program', program }),
   buffer: (_root, input) => Object.freeze({ kind: 'example-buffer', input }),
-  material: (_root, binding) => binding,
-  transform: (_root, binding) => binding,
+  material: (_root, material) => material,
+  transform: (_root, transform) => transform,
   batch: (_root, input) => Object.freeze({ kind: 'example-batch', input }),
   instance: (_root, input) => Object.freeze({ kind: 'example-instance', input }),
   instanceSpan: (_root, input) => Object.freeze({ kind: 'example-instance-span', input }),
 });
 
 interface ExampleRootExtension {
-  bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): BackendFontBinding<Technique>;
-  bindFontStack<Technique extends AnyRasterTechnique>(
-    stack: FontStack<Technique, Font<Technique>>,
-  ): BackendFontStackBinding;
-  createText(options: ExampleTextOptions): ExampleText;
+  createText<Technique extends AnyRasterTechnique>(options: ExampleTextOptions<Technique>): ExampleText<Technique>;
   publish(): ExampleDrawList;
 }
 
-export interface ExampleRoot extends GlyphRoot, ExampleRootExtension {}
-
-export interface ExampleHandle extends GlyphHandle<ExampleRoot>, ExampleRootExtension {}
+export type ExampleRoot = GlyphRoot & ExampleRootExtension;
+export type ExampleHandle = GlyphHandle<ExampleRoot>;
 
 export type ExampleGlyphConfig = GlyphConfig<
-  ExampleHandle,
+  ExampleRoot,
   ExampleBindings,
   ExampleDrawList,
   PortableResource,
@@ -114,7 +112,7 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
       }
       return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () => undefined);
     },
-    renderer: (_context) => {
+    renderer: () => {
       const selectedDevice = device ?? new RecordingExampleRendererDevice();
       return {
         decode: (view) => selectedDevice.decode(view),
@@ -122,74 +120,27 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
         dispose: () => selectedDevice.reset(),
       };
     },
-    createHandle: (context) => {
-      const roots = createGlyphRootRegistry(
-        (name, release) => new ExampleRootImplementation(name, context.engine, context.config, release),
-      );
-      const anonymous = roots.anonymous;
-      const selectRoot = Object.assign((name: string) => roots.get(name), {
-        bindFont: anonymous.bindFont.bind(anonymous),
-        bindFontStack: anonymous.bindFontStack.bind(anonymous),
-        createText: anonymous.createText.bind(anonymous),
-        publish: anonymous.publish.bind(anonymous),
-      });
-      return context.create(selectRoot, () => roots.dispose());
+    root: {
+      create: (context) => {
+        const extension = new ExampleRootImplementation(context.services);
+        return context.create(extension, { boundary: Object.freeze({ name: context.name }) });
+      },
     },
   });
 }
 
-class ExampleRootImplementation implements ExampleRoot {
-  readonly name: string | undefined;
-  readonly #engine: ExampleTextEngine;
-  readonly #release: () => void;
-  #disposed = false;
+class ExampleRootImplementation implements ExampleRootExtension {
+  readonly #services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>;
 
-  constructor(
-    name: string | undefined,
-    engine: GlyphEngine,
-    config: ConstructorParameters<typeof ExampleTextEngine>[1],
-    release: () => void,
-  ) {
-    this.name = name;
-    this.#engine = new ExampleTextEngine(engine, config, Object.freeze({ name }));
-    this.#release = release;
+  constructor(services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>) {
+    this.#services = services;
   }
 
-  get disposed(): boolean {
-    return this.#disposed;
-  }
-
-  bindFont: ExampleRootExtension['bindFont'] = (font) => {
-    this.#assertActive();
-    return this.#engine.bindFont(font);
-  };
-
-  bindFontStack: ExampleRootExtension['bindFontStack'] = (stack) => {
-    this.#assertActive();
-    return this.#engine.bindFontStack(stack);
-  };
-
-  createText(options: ExampleTextOptions): ExampleText {
-    this.#assertActive();
-    return this.#engine.createText(options);
+  createText<Technique extends AnyRasterTechnique>(options: ExampleTextOptions<Technique>): ExampleText<Technique> {
+    return new ExampleText(this.#services, options);
   }
 
   publish(): ExampleDrawList {
-    this.#assertActive();
-    return this.#engine.publish();
-  }
-
-  dispose(): void {
-    if (this.#disposed) return;
-    this.#disposed = true;
-    try {
-      this.#engine.dispose();
-    } finally {
-      this.#release();
-    }
-  }
-
-  #assertActive(): void {
-    if (this.#disposed) throw new Error(`example root ${JSON.stringify(this.name)} has been disposed`);
+    return this.#services.shape();
   }
 }

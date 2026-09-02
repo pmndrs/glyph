@@ -3,9 +3,17 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { Scene } from 'three/webgpu';
 
-import { FontLoadError, glyph } from '@pmndrs/glyph';
-import { createGlyphRootRegistry, defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/glyph/core';
-import { bitmap as portableBitmap } from '@pmndrs/glyph/raster/bitmap';
+import {
+  FontLoadError,
+  createRasterPolicyProgram,
+  defineGlyphConfig,
+  defineGlyphSchema,
+  definePolicyBuffers,
+  glyph,
+  id,
+  resourceLease,
+} from '@pmndrs/glyph';
+import { bitmap as portableBitmap, bitmapPlanProgram } from '@pmndrs/glyph/raster/bitmap';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
@@ -17,6 +25,25 @@ const bytes = await readFile(fontUrl);
 const multiFormatBytes = await readFile(
   new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
 );
+const portableCapabilities = Object.freeze({
+  capabilities: Object.freeze(['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct']),
+  maxBufferBytes: 1024 * 1024,
+  updateAlignment: 4,
+  coalesceGapBytes: 64,
+  rangeCallPenaltyBytes: 128,
+  maxBuffersPerDraw: 4,
+  maxResourcesPerDraw: 4,
+  maxIndirectDraws: 0,
+  fragmentationBudget: 4,
+  wholeBufferThresholdBasisPoints: 7_500,
+});
+const portableSystemBuffers = definePolicyBuffers({
+  stableGlyphId: {
+    id: id.buffer('test.font-face-portable-config/stable-glyph'),
+    scalar: 'u32',
+    lanes: ['stableGlyphId'],
+  },
+});
 await glyph.init();
 
 function defineFontAwareConfig() {
@@ -33,35 +60,35 @@ function defineFontAwareConfig() {
   return defineGlyphConfig({
     schema,
     fonts: { default: 'bitmap', techniques: { bitmap: portableBitmap } },
-    encode: () => ({ descriptor: { capabilitySets: [], programs: [] } }),
+    encode: ({ ids }) => ({
+      descriptor: {
+        capabilitySets: [portableCapabilities],
+        programs: [
+          createRasterPolicyProgram(bitmapPlanProgram, {
+            namespace: 'font-face-test',
+            system: portableSystemBuffers,
+            capabilitySet: portableCapabilities,
+            transformMode: 'direct',
+            allocationMode: 'ordered',
+            ids,
+          }),
+        ],
+      },
+    }),
     resolve: ({ payload }) => resourceLease({ payload }, () => undefined),
     renderer: () => ({
-      prepare: () => ({ result: undefined, commit: () => undefined, discard: () => undefined }),
+      decode: () => ({ result: undefined, commit: () => undefined, discard: () => undefined }),
       syncTransforms: () => undefined,
       dispose: () => undefined,
     }),
-    createHandle: (context) => {
-      assert.ok(context.fonts, 'a config with font techniques receives its runtime-owned font store');
-      const roots = createGlyphRootRegistry((name, release) => {
-        let disposed = false;
-        return Object.freeze({
-          name,
-          get disposed() {
-            return disposed;
-          },
-          dispose() {
-            if (disposed) return;
-            disposed = true;
-            release();
-          },
-        });
-      });
-      return context.create(
-        Object.assign((name) => roots.get(name), {
-          acquireFont: (selection) => context.fonts.acquire(selection),
-        }),
-        () => roots.dispose(),
-      );
+    root: {
+      create: (context) => {
+        assert.ok(context.fonts, 'a config with font techniques receives its runtime-owned font store');
+        return context.create(
+          { acquireFont: (selection) => context.fonts.acquire(selection) },
+          { boundary: undefined },
+        );
+      },
     },
   });
 }
@@ -90,29 +117,11 @@ test('a packaged config factory honors spread overrides and releases a handle cr
   let releases = 0;
   const failing = {
     ...base,
-    createHandle(context) {
-      const roots = createGlyphRootRegistry((name, release) => {
-        let disposed = false;
-        return Object.freeze({
-          name,
-          get disposed() {
-            return disposed;
-          },
-          dispose() {
-            if (disposed) return;
-            disposed = true;
-            release();
-          },
-        });
-      });
-      context.create(
-        (name) => roots.get(name),
-        () => {
-          releases += 1;
-          roots.dispose();
-        },
-      );
-      throw new Error('intentional config factory failure');
+    root: {
+      create(context) {
+        context.create({}, { boundary: undefined, dispose: () => (releases += 1) });
+        throw new Error('intentional config factory failure');
+      },
     },
   };
 

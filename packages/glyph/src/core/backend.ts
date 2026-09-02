@@ -331,9 +331,14 @@ interface RetainedBackendOpaqueBinding {
 }
 
 /** Counted lease over one backend-local renderer binding. */
-export interface BackendOpaqueBindingLease {
+export interface BackendOpaqueBindingLease<
+  Binding extends BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding =
+    | BackendMaterialBinding
+    | BackendResourceBinding
+    | BackendTransformBinding,
+> {
   readonly handle: number;
-  readonly binding: BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding;
+  readonly binding: Binding;
   dispose(): void;
 }
 
@@ -608,9 +613,21 @@ export class GlyphBackend {
 
   /** @internal */
   _retainOpaqueBinding(
+    binding: BackendMaterialBinding,
+    kind: 'material',
+  ): BackendOpaqueBindingLease<BackendMaterialBinding>;
+  _retainOpaqueBinding(
+    binding: BackendResourceBinding,
+    kind: 'resource',
+  ): BackendOpaqueBindingLease<BackendResourceBinding>;
+  _retainOpaqueBinding(
+    binding: BackendTransformBinding,
+    kind: 'transform',
+  ): BackendOpaqueBindingLease<BackendTransformBinding>;
+  _retainOpaqueBinding(
     binding: BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding,
     kind: RetainedBackendOpaqueBinding['kind'],
-  ): BackendOpaqueBindingLease {
+  ): BackendOpaqueBindingLease<BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding> {
     this.#assertActive();
     const entry = backendOpaqueBindings.get(binding as object);
     if (

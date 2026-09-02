@@ -1,5 +1,5 @@
 /**
- * The example renderer's own render policy, authored entirely through `@pmndrs/glyph/core`.
+ * The example renderer's own Codec, authored through the root GlyphConfig vocabulary.
  *
  * A host does not borrow the Three policy: it supplies its own system lanes and compiles the
  * shared portable technique body into validated policy bytes.
@@ -13,7 +13,7 @@ import {
   type PolicyCapabilitySet,
   type PolicyDescriptor,
   id,
-} from '@pmndrs/glyph/core';
+} from '@pmndrs/glyph';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 
 const EXAMPLE_STABLE_GLYPH_BUFFER_ID: PolicyBufferId = id.buffer('glyph-example-renderer/stable-glyph');

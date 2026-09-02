@@ -1,20 +1,15 @@
 import * as THREE from 'three/webgpu';
 
 import {
-  type BackendMaterialBinding,
-  type BackendTransformBinding,
-  type PlanAcceptance,
   type CommandBufferView,
   type TransformUpdate,
   type GlyphRenderer,
-  createGlyphPlanTarget,
-  type GlyphPlanTarget,
-  type PlanCandidate,
-  type PlanTarget,
+  type PreparedRendererCommit,
 } from '../core.js';
-import type { ThreeTextEngineCoordinator } from './engine-coordinator.js';
 import type { ThreeGlyphGeometrySource } from './glyph-measurement.js';
-import type { ThreeBindings, ThreeBufferBinding, ThreeRootBinding, ThreeResolvedResourceBinding } from './handle.js';
+import type { ThreeBindings, ThreeBufferBinding, ThreeResolvedResourceBinding } from './handle.js';
+import type { ThreeRendererResources } from './renderer-resources.js';
+import type { ThreeRootContext } from './material.js';
 import { ThreeTransformSynchronizer } from './transform-synchronizer.js';
 import {
   commitBufferMutations,
@@ -48,7 +43,6 @@ import type {
   ReusedDrawUpdate,
   ThreeHostResource,
 } from './internal/render-state.js';
-import type { ThreeRootContext } from './material.js';
 
 export { markStorageAttributeUpdated } from './internal/host-buffer.js';
 
@@ -73,9 +67,8 @@ export interface ThreeTextEnginePlanOwner {
 }
 
 /** Applies retained Rust command-buffer deltas to Three storage attributes and draw objects. */
-export class ThreeTextRenderPlanExecutor implements PlanTarget {
-  readonly delivery = 'borrowed' as const;
-  readonly #coordinator: ThreeTextEngineCoordinator;
+export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings, void> {
+  readonly #resourcesContext: ThreeRendererResources;
   readonly #owner: ThreeTextEnginePlanOwner;
   #buffers = new Map<ThreeBufferBinding, RetainedBuffer>();
   #resources = new Map<ThreeResolvedResourceBinding, RetainedResource>();
@@ -97,39 +90,14 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   readonly #bindingIds = new WeakMap<object, number>();
   #nextBindingId = 1;
   #preparation: PreparationContext | undefined;
-  readonly #target: GlyphPlanTarget<ThreeBindings, void>;
   #pendingTransformSync:
     | Readonly<{ ids: readonly number[]; worldMatricesCurrent: boolean; changed: number }>
     | undefined;
   #disposed = false;
 
-  constructor(coordinator: ThreeTextEngineCoordinator, owner: ThreeTextEnginePlanOwner) {
-    this.#coordinator = coordinator;
+  constructor(resources: ThreeRendererResources, owner: ThreeTextEnginePlanOwner) {
+    this.#resourcesContext = resources;
     this.#owner = owner;
-    const config = coordinator.config;
-    const rootContext: ThreeRootContext =
-      owner.root ?? Object.freeze({ name: undefined, scene: undefined, drawRoot: owner.drawRoot });
-    const root: ThreeRootBinding = Object.freeze({
-      drawRoot: owner.drawRoot,
-      resolveMaterial: (binding: BackendMaterialBinding) => {
-        const selected = coordinator.resolveMaterial(binding);
-        return Object.freeze({
-          ...selected,
-          material: selected.material ?? coordinator.material,
-          root: rootContext,
-        });
-      },
-      resolveTransform: (binding: BackendTransformBinding, recordIndex: number) => {
-        const source = coordinator.resolveTransform(binding);
-        return owner.objectForTransform?.(recordIndex, source) ?? source;
-      },
-    });
-    const defaultRenderer: GlyphRenderer<ThreeBindings, void> = Object.freeze({
-      decode: (view: CommandBufferView<ThreeBindings>) => this.#decodeRendererCommit(view),
-      syncTransforms: (updates: readonly TransformUpdate<THREE.Object3D>[]) => this.#syncBoundTransforms(updates),
-      dispose: () => this.#disposeRendererState(),
-    });
-    this.#target = createGlyphPlanTarget({ config, codec: coordinator.codec, root, defaultRenderer });
   }
 
   get draws(): readonly THREE.Mesh[] {
@@ -152,14 +120,9 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     return bytes;
   }
 
-  accept(candidate: PlanCandidate, signal: AbortSignal): PlanAcceptance {
-    if (this.#disposed) throw new Error('Three text-engine plan target has been disposed');
-    if (signal.aborted) return { accepted: false, error: signal.reason };
-    try {
-      return this.#coordinator.applyPlan(() => this.#target.accept(candidate, signal));
-    } catch (error) {
-      return { accepted: false, error };
-    }
+  decode(view: CommandBufferView<ThreeBindings>): PreparedRendererCommit<void> {
+    if (this.#disposed) throw new Error('Three renderer has been disposed');
+    return this.#decodeRendererCommit(view);
   }
 
   /**
@@ -235,31 +198,26 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   }
 
   /** Upload changed scene transforms without crossing into Wasm or invalidating text measure. */
-  syncTransforms(transformIds: Iterable<number> = this.#transforms.keys(), worldMatricesCurrent = false): number {
-    const ids = [...transformIds];
-    const updates = ids.flatMap((id) => {
-      const transform = this.#transforms.get(id);
-      return transform === undefined ? [] : [Object.freeze({ transform })];
-    });
+  synchronizeTransforms(worldMatricesCurrent: boolean, sync: () => void): number {
+    const ids = [...this.#transforms.keys()];
     this.#pendingTransformSync = { ids, worldMatricesCurrent, changed: 0 };
     try {
-      this.#target.syncTransforms(updates);
+      sync();
       return this.#pendingTransformSync.changed;
     } finally {
       this.#pendingTransformSync = undefined;
     }
   }
 
-  #syncBoundTransforms(updates: readonly TransformUpdate<THREE.Object3D>[]): void {
+  syncTransforms(updates: readonly TransformUpdate<THREE.Object3D>[]): void {
     const pending = this.#pendingTransformSync;
-    if (pending === undefined) throw new Error('Three renderer transform sync requires an active boundary traversal');
     const requested = new Set(updates.map(({ transform }) => transform));
-    const ids = pending.ids.filter((id) => {
+    const ids = (pending?.ids ?? [...this.#transforms.keys()]).filter((id) => {
       const transform = this.#transforms.get(id);
       return transform !== undefined && requested.has(transform);
     });
-    const changed = this.#syncTransformsCore(ids, pending.worldMatricesCurrent);
-    this.#pendingTransformSync = { ...pending, changed };
+    const changed = this.#syncTransformsCore(ids, pending?.worldMatricesCurrent ?? false);
+    if (pending !== undefined) this.#pendingTransformSync = { ...pending, changed };
   }
 
   #syncTransformsCore(transformIds: Iterable<number>, worldMatricesCurrent: boolean): number {
@@ -279,10 +237,6 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   }
 
   dispose(): void {
-    this.#target.dispose();
-  }
-
-  #disposeRendererState(): void {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#disposeDraws();
@@ -303,18 +257,18 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     this.#originSegments = [];
   }
 
-  #decodeRendererCommit(view: CommandBufferView<ThreeBindings>) {
+  #decodeRendererCommit(view: CommandBufferView<ThreeBindings>): PreparedRendererCommit<void> {
     const prepared = this.#prepareBound(view);
     let state: 'open' | 'committed' | 'discarded' = 'open';
     return Object.freeze({
       result: undefined,
-      commit: () => {
+      commit: (): void => {
         if (state !== 'open') throw new Error(`Three renderer preparation was already ${state}`);
         state = 'committed';
         const failure = this.#commit(prepared);
         if (failure !== undefined) throw failure;
       },
-      discard: () => {
+      discard: (): void => {
         if (state !== 'open') return;
         state = 'discarded';
         this.#discardPreparation(prepared.context, prepared.draws);
@@ -355,7 +309,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
               root: frame.displayList.value.drawRoot,
               children: frame.displayList.value.children,
               context,
-              coordinator: this.#coordinator,
+              coordinator: this.#resourcesContext,
               owner: this.#owner,
               ownedMaterials: this.#ownedMaterials,
               previousDraws: this.#draws,
@@ -458,7 +412,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   #readBoundResources(frame: CommandBufferView<ThreeBindings>, context: PreparationContext): void {
     for (const command of frame.updates.resources) {
       if (context.resources.has(command.resource)) continue;
-      const program = this.#coordinator.planProgram(command.resource.technique);
+      const program = this.#resourcesContext.planProgram(command.resource.technique);
       const resolved: ThreeHostResource = Object.freeze({
         ...command.resource,
         ...(program === undefined ? {} : { program }),

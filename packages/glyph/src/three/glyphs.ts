@@ -1,9 +1,8 @@
 import * as THREE from 'three/webgpu';
 
-import type { PlanAcceptance, PlanTarget } from '../core.js';
+import type { GlyphCopy } from '../core.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { GlyphPlacement, GlyphPlacements } from '../glyph-placement.js';
-import type { ThreeEngineDomainLease } from './engine-domain.js';
 import {
   markStorageAttributeUpdated,
   ThreeTextRenderPlanExecutor,
@@ -11,6 +10,8 @@ import {
 } from './engine-plan-target.js';
 import type { ThreeGlyphGeometrySource, ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { measureGlyphPlacements } from './glyph-measurement.js';
+import type { ThreeRootBinding } from './handle.js';
+import type { ThreeRendererResources } from './renderer-resources.js';
 import type { Text } from './text.js';
 import { copyCurrentLocalTransform } from './detached-object.js';
 
@@ -52,8 +53,8 @@ interface GlyphsOptions<Technique extends AnyRasterTechnique> {
   readonly source: Text<Technique>;
   readonly placements: GlyphPlacements;
   readonly geometry?: ReadonlyMap<number, ThreeGlyphGeometrySource>;
-  readonly copy: (target: PlanTarget) => PlanAcceptance;
-  readonly domain: ThreeEngineDomainLease;
+  readonly copy: (renderer: ThreeTextRenderPlanExecutor, boundary: ThreeRootBinding) => GlyphCopy<void>;
+  readonly resources: ThreeRendererResources;
   readonly renderOrderBase: number;
 }
 
@@ -64,7 +65,6 @@ let configureGlyphDrawOrder: ((glyphs: Glyphs, start: number) => number) | undef
 /** @internal Constructs the detached branch while keeping the public class receive-only. */
 export function createGlyphs(options: GlyphsOptions<AnyRasterTechnique>): Glyphs {
   if (constructGlyphs === undefined) {
-    options.domain.dispose();
     throw new Error('Glyphs constructor is unavailable');
   }
   return constructGlyphs(options);
@@ -111,7 +111,7 @@ interface DetachedGlyphRecordAddress {
  */
 export class Glyphs extends THREE.Object3D {
   readonly #target: ThreeTextRenderPlanExecutor;
-  readonly #domain: ThreeEngineDomainLease;
+  readonly #copy: GlyphCopy<void>;
   readonly #owner: ThreeTextEnginePlanOwner;
   readonly #placements: readonly GlyphPlacement[];
   readonly #glyphs: readonly DetachedGlyph[];
@@ -133,8 +133,8 @@ export class Glyphs extends THREE.Object3D {
   private constructor(token: typeof glyphsConstructorToken, options: GlyphsOptions<AnyRasterTechnique>) {
     super();
     if (token !== glyphsConstructorToken) throw new TypeError('Glyphs objects are created by Text.breakApart()');
-    this.#domain = options.domain;
     let target: ThreeTextRenderPlanExecutor | undefined;
+    let copy: GlyphCopy<void> | undefined;
     try {
       const incomplete = new Set(options.placements.incomplete);
       this.#placements = Object.freeze(options.placements.glyphs.filter((_, index) => !incomplete.has(index)));
@@ -189,10 +189,15 @@ export class Glyphs extends THREE.Object3D {
           return owner.#storages.get(storageKey);
         },
       };
-      target = new ThreeTextRenderPlanExecutor(options.domain.coordinator, this.#owner);
+      target = new ThreeTextRenderPlanExecutor(options.resources, this.#owner);
       this.#target = target;
-      const result = options.copy(this.#target);
-      if (!result.accepted) throw result.error;
+      copy = options.copy(this.#target, {
+        drawRoot: this,
+        root: Object.freeze({ name: undefined, scene: undefined, drawRoot: this }),
+        material: options.resources.material,
+        objectForTransform: (_recordIndex, _source) => this,
+      });
+      this.#copy = copy;
       if (this.#storages.size === 0) {
         throw new Error('detached glyph copy produced no drawable record storage');
       }
@@ -220,16 +225,13 @@ export class Glyphs extends THREE.Object3D {
       // Re-dirty it so the first scene traversal composes this exact local matrix with its real parent.
       this.matrixWorldNeedsUpdate = true;
     } catch (error) {
-      try {
-        target?.dispose();
-        for (const storage of this.#storages.values()) {
-          storage.transforms.dispose();
-          storage.pivots.dispose();
-        }
-        this.#storages.clear();
-      } finally {
-        options.domain.dispose();
+      copy?.dispose();
+      if (copy === undefined) target?.dispose();
+      for (const storage of this.#storages.values()) {
+        storage.transforms.dispose();
+        storage.pivots.dispose();
       }
+      this.#storages.clear();
       throw error;
     }
   }
@@ -294,7 +296,7 @@ export class Glyphs extends THREE.Object3D {
     this.#disposed = true;
     let failure: unknown;
     try {
-      this.#target.dispose();
+      this.#copy.dispose();
     } catch (error) {
       failure = error;
     }
@@ -307,11 +309,6 @@ export class Glyphs extends THREE.Object3D {
       }
     }
     this.#storages.clear();
-    try {
-      this.#domain.dispose();
-    } catch (error) {
-      failure ??= error;
-    }
     this.removeFromParent();
     if (failure !== undefined) throw failure;
   }
