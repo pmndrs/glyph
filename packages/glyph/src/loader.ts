@@ -9,16 +9,20 @@ import {
   createImmutableFontBacking,
   createImmutableFontLease,
   createImmutableFontVariant,
+  immutableFontResources,
   releaseImmutableFontVariant,
   retainImmutableFontVariant,
   type ImmutableFontVariant,
 } from './loaded-font.js';
+import type { SerializedFontFace, SerializedFontFaceRaster } from './font-face-transfer.js';
+import { freezeSerializedFontFace } from './internal/font-face-transfer.js';
 import type { FontHandle, FontKey, RasterHandle, RasterKey, Sha256Hex } from './identity.js';
 import {
   deleteRegisteredFontData,
   getRegisteredFontData,
   setRegisteredFontData,
   type RegisteredBufferView,
+  type RegisteredRasterResourceData,
   type RegisteredRasterResourceCandidate,
   type RegisteredRasterSourceData,
 } from './internal/registered-font.js';
@@ -338,6 +342,7 @@ export class FontRegistry {
       glyphExtents: validated.glyphExtents,
       glyphExtentsAvailability: validated.glyphExtentsAvailability,
       rasterSources,
+      resources: new Map(),
       unicodeVersion: string(provenance.unicodeVersion, 'provenance.unicodeVersion'),
     });
     mergeRasterSources(font, binaryBytes, document, views, references, context.artifactUrl, context.fetch);
@@ -374,10 +379,11 @@ export class FontRegistry {
     font: RegisteredFont,
     bytes: ArrayBufferView,
     context: RegisteredRasterResourceCandidate = {},
+    ownership: FontByteOwnership = 'copy',
   ): Promise<RegisteredRaster> {
     const registered = this.#ownedFont(font);
     this.#checkArtifactSize(bytes.byteLength);
-    const owned = copyView(bytes);
+    const owned = ownFontBytes(bytes, ownership);
     const validator = await loadValidator();
     let parsed: ParsedGlb;
     try {
@@ -394,21 +400,31 @@ export class FontRegistry {
       );
     }
     const match = matchRasterExtension(registered, parsed.document);
+    const artifactHash = await sha256(owned);
     if (match.reference.source.type === 'external' && match.reference.source.artifactHash !== undefined) {
-      const actual = await sha256(owned);
-      if (actual !== match.reference.source.artifactHash) {
+      if (artifactHash !== match.reference.source.artifactHash) {
         throw new FontLoadError(
           'RASTER_ARTIFACT_HASH',
           'external raster artifact hash does not match its font directory entry',
         );
       }
     }
-    return registered.registerRaster(
+    const source = retainRasterArtifactData(
+      registered,
       match.reference,
       match.extensionData,
       parsed.bin.subarray(0, parsed.declaredBinLength),
       views,
+      owned,
+      artifactHash,
       [context],
+    );
+    return registered.registerRaster(
+      source.reference,
+      source.extensionData!,
+      source.binaryBytes!,
+      source.bufferViews!,
+      source.resourceCandidates,
     );
   }
 
@@ -439,15 +455,23 @@ export class FontRegistry {
     const reference: RasterReference = { ...expected, source: { type: 'external' } };
     const extensionData = generatedRasterExtension(registered, parsed.document, reference);
     const binaryBytes = parsed.bin.subarray(0, parsed.declaredBinLength);
-    getRegisteredFontData(registered).rasterSources.set(reference.rasterKey, {
+    const source = retainRasterArtifactData(
+      registered,
       reference,
       extensionData,
       binaryBytes,
-      bufferViews: views,
-      externalCandidates: [],
-      resourceCandidates: [],
-    });
-    return registered.registerRaster(reference, extensionData, binaryBytes, views, []);
+      views,
+      owned,
+      await sha256(owned),
+      [],
+    );
+    return registered.registerRaster(
+      source.reference,
+      source.extensionData!,
+      source.binaryBytes!,
+      source.bufferViews!,
+      source.resourceCandidates,
+    );
   }
 
   /** @internal */
@@ -909,6 +933,8 @@ export interface FontFaceSourceLease {
   readonly formats: readonly string[];
   load<Format extends AnyRasterFormat>(raster: RasterFormatInput<Format>): Promise<Font<Format>>;
   loadAdvertised(excluding?: readonly AnyRasterFormat[]): Promise<readonly Font<AnyRasterFormat>[]>;
+  /** Snapshot selected loaded variants into fresh cross-realm buffers. */
+  snapshot(fonts: readonly Font<AnyRasterFormat>[]): SerializedFontFace;
   dispose(): void;
 }
 
@@ -921,6 +947,16 @@ export function openFontFaceSource(
 ): Promise<FontFaceSourceLease> {
   assertFontLibrary(library, 'FontFace loading');
   return (library as FontLibraryImpl).openFontFaceSource(input, initialRasters, options);
+}
+
+/** @internal Adopt an explicit cross-realm snapshot without consulting a URL or runtime baker. */
+export function openSerializedFontFaceSource(
+  library: FontLibrary,
+  serialized: SerializedFontFace,
+  options: FontLoadOptions = {},
+): Promise<FontFaceSourceLease> {
+  assertFontLibrary(library, 'serialized FontFace loading');
+  return (library as FontLibraryImpl).openSerializedFontFaceSource(serialized, options);
 }
 
 class FontLibraryImpl implements FontLibrary {
@@ -1028,6 +1064,26 @@ class FontLibraryImpl implements FontLibrary {
     return consumeFontFaceSourceLoad(shared, signal);
   }
 
+  async openSerializedFontFaceSource(
+    serialized: SerializedFontFace,
+    options: FontLoadOptions = {},
+  ): Promise<FontFaceSourceLease> {
+    this.#assertActive();
+    const signal = fontLoadSignal(options);
+    signal?.throwIfAborted();
+    const existing = this.#fontFaceContent.get(serialized.artifactHash);
+    if (existing !== undefined && existing.contains(serialized)) return existing.acquire();
+    const candidate = await loadSerializedFontFaceSource(serialized, this.#config, signal);
+    try {
+      signal?.throwIfAborted();
+      this.#assertActive();
+      return this.#convergeFontFaceSource(candidate).acquire();
+    } catch (error) {
+      candidate.dispose();
+      throw error;
+    }
+  }
+
   clear<Format extends AnyRasterFormat>(token: FontToken<Format>): void;
   clear<Format extends AnyRasterFormat>(input: LoadFontInput, raster: RasterFormatInput<Format>): void;
   clear(input: LoadFontInput, rasters: FontRasterInputs): void;
@@ -1088,6 +1144,10 @@ class FontLibraryImpl implements FontLibrary {
   async #loadFontFaceSource(prepared: PreparedFontFaceSourceRequest, signal: AbortSignal): Promise<FontFaceSourceNode> {
     const candidate = await loadFontFaceSourceFont(prepared, this.#config, signal);
     signal.throwIfAborted();
+    return this.#convergeFontFaceSource(candidate);
+  }
+
+  #convergeFontFaceSource(candidate: RegisteredFont): FontFaceSourceNode {
     const contentHash = getRegisteredFontData(candidate).artifactHash;
     const existing = this.#fontFaceContent.get(contentHash);
     if (existing !== undefined) {
@@ -1385,6 +1445,29 @@ class FontFaceSourceNode {
     mergeRegisteredFontAcquisition(this.#font, candidate);
   }
 
+  contains(serialized: SerializedFontFace): boolean {
+    this.#assertActive();
+    const registered = getRegisteredFontData(this.#font);
+    if (registered.artifactHash !== serialized.artifactHash) return false;
+    for (const raster of serialized.rasters) {
+      const source = registered.rasterSources.get(raster.rasterKey);
+      if (
+        source === undefined ||
+        source.reference.kind !== raster.kind ||
+        source.reference.extension !== raster.extension ||
+        source.reference.version !== raster.version
+      ) {
+        return false;
+      }
+      if (raster.data !== undefined && source.artifactHash !== raster.artifactHash) return false;
+      if (source.reference.source.type === 'external' && source.artifactBytes === undefined) return false;
+    }
+    for (const resource of serialized.resources) {
+      if (!registered.resources.has(rasterResourceIdentity(resource.artifactHash, resource.byteLength))) return false;
+    }
+    return true;
+  }
+
   acquire(): FontFaceSourceLease {
     this.#assertActive();
     this.#leases += 1;
@@ -1423,6 +1506,72 @@ class FontFaceSourceNode {
       seen.add(raster.id);
     }
     return Promise.all(selected.map(({ reference, raster }) => this.#loadReference(reference, raster)));
+  }
+
+  snapshot(fonts: readonly Font<AnyRasterFormat>[]): SerializedFontFace {
+    this.#assertActive();
+    const registered = getRegisteredFontData(this.#font);
+    const rasters: SerializedFontFaceRaster[] = [];
+    const seen = new Set<string>();
+    const resourceIdentities = new Set<string>();
+    for (const font of fonts) {
+      const fontResources = immutableFontResources(font);
+      if (fontResources.font !== this.#font) {
+        throw new TypeError('FontFace snapshot received a font from another source');
+      }
+      const rasterKey = fontResources.raster.rasterKey;
+      if (seen.has(rasterKey)) continue;
+      seen.add(rasterKey);
+      const source = registered.rasterSources.get(rasterKey);
+      if (source === undefined) throw new Error('loaded FontFace raster has no retained source data');
+      if (source.reference.source.type === 'external' && source.artifactBytes === undefined) {
+        throw new Error('loaded external FontFace raster has no retained artifact data');
+      }
+      for (const identity of source.resourceIdentities) resourceIdentities.add(identity);
+      const dependencies = Object.freeze(
+        [...source.resourceIdentities].map((identity) => {
+          const resource = registered.resources.get(identity);
+          if (resource === undefined) throw new Error('loaded FontFace raster has no retained resource data');
+          return Object.freeze({
+            artifactHash: resource.artifactHash,
+            byteLength: resource.byteLength,
+          });
+        }),
+      );
+      rasters.push(
+        Object.freeze({
+          rasterKey,
+          kind: source.reference.kind,
+          extension: source.reference.extension,
+          version: source.reference.version,
+          ...(source.artifactBytes === undefined
+            ? {}
+            : {
+                data: copyBuffer(source.artifactBytes),
+                artifactHash: source.artifactHash!,
+              }),
+          resources: dependencies,
+        }),
+      );
+    }
+    return freezeSerializedFontFace({
+      kind: 'glyph-font-face',
+      version: 1,
+      data: copyBuffer(registered.artifactBytes),
+      artifactHash: registered.artifactHash,
+      rasters: Object.freeze(rasters),
+      resources: Object.freeze(
+        [...resourceIdentities].map((identity) => {
+          const resource = registered.resources.get(identity);
+          if (resource === undefined) throw new Error('loaded FontFace raster has no retained resource data');
+          return Object.freeze({
+            artifactHash: resource.artifactHash,
+            byteLength: resource.byteLength,
+            data: copyBuffer(resource.bytes),
+          });
+        }),
+      ),
+    });
   }
 
   release(): void {
@@ -1527,6 +1676,11 @@ class FontFaceSourceLeaseImpl implements FontFaceSourceLease {
     return this.#node.loadAdvertised(excluding);
   }
 
+  snapshot(fonts: readonly Font<AnyRasterFormat>[]): SerializedFontFace {
+    this.#assertActive();
+    return this.#node.snapshot(fonts);
+  }
+
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -1535,6 +1689,87 @@ class FontFaceSourceLeaseImpl implements FontFaceSourceLease {
 
   #assertActive(): void {
     if (this.#disposed) throw new DOMException('FontFace source lease was disposed', 'AbortError');
+  }
+}
+
+async function loadSerializedFontFaceSource(
+  serialized: SerializedFontFace,
+  config: ImmutableLoaderConfig,
+  signal: AbortSignal | undefined,
+): Promise<RegisteredFont> {
+  const registry = new FontRegistry({
+    ...(config.maxArtifactBytes === undefined ? {} : { maxArtifactBytes: config.maxArtifactBytes }),
+    ...(config.maxBufferViews === undefined ? {} : { maxBufferViews: config.maxBufferViews }),
+    ...(config.maxRasters === undefined ? {} : { maxRasters: config.maxRasters }),
+  });
+  let font: RegisteredFont | undefined;
+  try {
+    font = await registry._registerAsset(new Uint8Array(serialized.data), {}, 'adopt');
+    signal?.throwIfAborted();
+    const registered = getRegisteredFontData(font);
+    if (registered.artifactHash !== serialized.artifactHash) {
+      throw new FontLoadError(
+        'FONT_FACE_TRANSFER_IDENTITY',
+        'SerializedFontFace main data does not match its identity',
+      );
+    }
+    for (const raster of serialized.rasters) {
+      const source = registered.rasterSources.get(raster.rasterKey);
+      if (
+        source === undefined ||
+        source.reference.kind !== raster.kind ||
+        source.reference.extension !== raster.extension ||
+        source.reference.version !== raster.version
+      ) {
+        throw new FontLoadError(
+          'FONT_FACE_TRANSFER_RASTER',
+          'SerializedFontFace raster does not match the authoritative main font',
+        );
+      }
+      if (source.reference.source.type === 'embedded') {
+        if (raster.data !== undefined) {
+          throw new FontLoadError('FONT_FACE_TRANSFER_RASTER', 'an embedded raster must not carry a sidecar artifact');
+        }
+      } else {
+        if (raster.data === undefined || raster.artifactHash === undefined) {
+          throw new FontLoadError('FONT_FACE_TRANSFER_RASTER', 'an external raster must carry its sidecar artifact');
+        }
+        await registry._attachRaster(font, new Uint8Array(raster.data), {}, 'adopt');
+        const retained = getRegisteredFontData(font).rasterSources.get(raster.rasterKey);
+        if (retained?.artifactHash !== raster.artifactHash) {
+          throw new FontLoadError(
+            'FONT_FACE_TRANSFER_IDENTITY',
+            'SerializedFontFace raster data does not match its identity',
+          );
+        }
+      }
+      signal?.throwIfAborted();
+    }
+    const resourceRecords = await Promise.all(
+      serialized.resources.map(async (resource) => {
+        const bytes = new Uint8Array(resource.data);
+        if ((await sha256(bytes)) !== resource.artifactHash) {
+          throw new FontLoadError(
+            'FONT_FACE_TRANSFER_IDENTITY',
+            'SerializedFontFace resource data does not match its identity',
+          );
+        }
+        return {
+          identity: rasterResourceIdentity(resource.artifactHash, resource.byteLength),
+          value: Object.freeze({
+            artifactHash: resource.artifactHash,
+            byteLength: resource.byteLength,
+            bytes,
+          }),
+        };
+      }),
+    );
+    signal?.throwIfAborted();
+    for (const resource of resourceRecords) registered.resources.set(resource.identity, resource.value);
+    return font;
+  } catch (error) {
+    font?.dispose();
+    throw error;
   }
 }
 
@@ -2044,6 +2279,7 @@ class RegisteredFontImpl implements RegisteredFont {
       extensionData,
       binaryBytes,
       views,
+      resources: getRegisteredFontData(this).resources,
       resourceCandidates,
       handle: nextRasterHandle++ as RasterHandle,
     });
@@ -2088,6 +2324,7 @@ interface RegisteredRasterInit {
   readonly extensionData: JsonValue;
   readonly binaryBytes: Uint8Array;
   readonly views: readonly RegisteredBufferView[];
+  readonly resources: Map<string, RegisteredRasterResourceData>;
   readonly resourceCandidates: readonly RegisteredRasterResourceCandidate[];
   readonly handle: RasterHandle;
 }
@@ -2097,6 +2334,8 @@ class RegisteredRasterImpl implements RegisteredRaster {
   readonly #binaryBytes: Uint8Array;
   readonly #views: readonly RegisteredBufferView[];
   readonly #reference: RasterReference;
+  readonly #resources: Map<string, RegisteredRasterResourceData>;
+  readonly #resourceLoads = new Map<string, Promise<Uint8Array<ArrayBuffer>>>();
   readonly #resourceCandidates: RegisteredRasterResourceCandidate[];
   readonly rasterKey: RasterKey;
   readonly handle: RasterHandle;
@@ -2112,6 +2351,7 @@ class RegisteredRasterImpl implements RegisteredRaster {
     this.#binaryBytes = init.binaryBytes;
     this.#views = init.views;
     this.#reference = freezeReference(init.reference);
+    this.#resources = init.resources;
     this.#resourceCandidates = mergeResourceCandidates([], init.resourceCandidates);
     this.rasterKey = init.reference.rasterKey;
     this.handle = init.handle;
@@ -2141,6 +2381,46 @@ class RegisteredRasterImpl implements RegisteredRaster {
       );
     }
 
+    const identity = rasterResourceIdentity(source.artifactHash, source.byteLength);
+    const cached = this.#resources.get(identity);
+    if (cached !== undefined) {
+      this.#retainResourceIdentity(identity);
+      return cached.bytes;
+    }
+    const pending = this.#resourceLoads.get(identity);
+    if (pending !== undefined) return pending;
+    let operation!: Promise<Uint8Array<ArrayBuffer>>;
+    operation = this.#loadExternalResource(source, signal).then(
+      (bytes) => {
+        if (this.#resourceLoads.get(identity) === operation) this.#resourceLoads.delete(identity);
+        const resource = Object.freeze({
+          artifactHash: source.artifactHash,
+          byteLength: source.byteLength,
+          bytes,
+        });
+        this.#resources.set(identity, resource);
+        this.#retainResourceIdentity(identity);
+        return bytes;
+      },
+      (error: unknown) => {
+        if (this.#resourceLoads.get(identity) === operation) this.#resourceLoads.delete(identity);
+        throw error;
+      },
+    );
+    this.#resourceLoads.set(identity, operation);
+    return operation;
+  }
+
+  #retainResourceIdentity(identity: string): void {
+    const source = getRegisteredFontData(this.#owner).rasterSources.get(this.rasterKey);
+    if (source === undefined) throw new Error('registered raster source data is unavailable');
+    source.resourceIdentities.add(identity);
+  }
+
+  async #loadExternalResource(
+    source: Extract<RasterResourceSource, { readonly type: 'external' }>,
+    signal: AbortSignal | undefined,
+  ): Promise<Uint8Array<ArrayBuffer>> {
     const failures: unknown[] = [];
     for (const candidate of this.#resourceCandidates) {
       if (candidate.resolveResource !== undefined) {
@@ -2223,11 +2503,13 @@ class RegisteredRasterImpl implements RegisteredRaster {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#resourceLoads.clear();
     this.#owner.removeRaster(this);
   }
 
   disposeFromOwner(): void {
     this.#disposed = true;
+    this.#resourceLoads.clear();
   }
 
   #assertActive(): void {
@@ -2256,6 +2538,22 @@ function mergeRegisteredFontAcquisition(target: RegisteredFont, candidate: Regis
   }
   for (const [rasterKey, source] of candidateData.rasterSources) {
     const targetSource = targetData.rasterSources.get(rasterKey)!;
+    if (targetSource.artifactBytes === undefined && source.artifactBytes !== undefined) {
+      if (
+        source.artifactHash === undefined ||
+        source.extensionData === undefined ||
+        source.binaryBytes === undefined ||
+        source.bufferViews === undefined
+      ) {
+        throw new Error('retained raster artifact data is incomplete');
+      }
+      targetSource.artifactBytes = source.artifactBytes;
+      targetSource.artifactHash = source.artifactHash;
+      targetSource.extensionData = source.extensionData;
+      targetSource.binaryBytes = source.binaryBytes;
+      targetSource.bufferViews = source.bufferViews;
+    }
+    for (const identity of source.resourceIdentities) targetSource.resourceIdentities.add(identity);
     for (const external of source.externalCandidates) {
       if (
         !targetSource.externalCandidates.some(
@@ -2273,6 +2571,57 @@ function mergeRegisteredFontAcquisition(target: RegisteredFont, candidate: Regis
     const raster = target.getRaster(rasterKey);
     if (raster instanceof RegisteredRasterImpl) raster.addResourceCandidates(source.resourceCandidates);
   }
+  for (const [identity, resource] of candidateData.resources) {
+    if (!targetData.resources.has(identity)) targetData.resources.set(identity, resource);
+  }
+}
+
+function retainRasterArtifactData(
+  font: RegisteredFontImpl,
+  reference: RasterReference,
+  extensionData: JsonValue,
+  binaryBytes: Uint8Array,
+  views: readonly RegisteredBufferView[],
+  artifactBytes: Uint8Array<ArrayBuffer>,
+  artifactHash: string,
+  resourceCandidates: readonly RegisteredRasterResourceCandidate[],
+): RegisteredRasterSourceData {
+  const sources = getRegisteredFontData(font).rasterSources;
+  const current = sources.get(reference.rasterKey);
+  if (current === undefined) {
+    const created: RegisteredRasterSourceData = {
+      reference: freezeReference(reference),
+      extensionData,
+      binaryBytes,
+      bufferViews: views,
+      artifactBytes,
+      artifactHash,
+      resourceIdentities: new Set(),
+      externalCandidates: [],
+      resourceCandidates: mergeResourceCandidates([], resourceCandidates),
+    };
+    sources.set(reference.rasterKey, created);
+    return created;
+  }
+  if (
+    current.reference.kind !== reference.kind ||
+    current.reference.extension !== reference.extension ||
+    current.reference.version !== reference.version ||
+    (current.artifactHash !== undefined && current.artifactHash !== artifactHash)
+  ) {
+    throw new FontLoadError('RASTER_REFERENCE_CONFLICT', 'one raster identity resolved to conflicting artifact data');
+  }
+  current.extensionData ??= extensionData;
+  current.binaryBytes ??= binaryBytes;
+  current.bufferViews ??= views;
+  current.artifactBytes ??= artifactBytes;
+  current.artifactHash ??= artifactHash;
+  current.resourceCandidates.splice(
+    0,
+    current.resourceCandidates.length,
+    ...mergeResourceCandidates(current.resourceCandidates, resourceCandidates),
+  );
+  return current;
 }
 
 function mergeRasterSources(
@@ -2334,6 +2683,7 @@ function mergeRasterSources(
           extensionData,
           binaryBytes,
           bufferViews: views,
+          resourceIdentities: current.resourceIdentities,
           externalCandidates: current.externalCandidates,
           resourceCandidates: mergeResourceCandidates(
             current.resourceCandidates,
@@ -2357,6 +2707,7 @@ function mergeRasterSources(
       reference: freezeReference(reference),
       ...(extensionData === undefined ? {} : { extensionData }),
       ...(extensionData === undefined ? {} : { binaryBytes, bufferViews: views }),
+      resourceIdentities: new Set(),
       externalCandidates: externalCandidate === undefined ? [] : [externalCandidate],
       resourceCandidates: resourceCandidate === undefined ? [] : [resourceCandidate],
     });
@@ -2692,8 +3043,12 @@ function abortReason(signal: AbortSignal | undefined): unknown {
   return signal?.reason ?? new DOMException('The operation was aborted', 'AbortError');
 }
 
-function copyView(value: ArrayBufferView): Uint8Array {
-  return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice();
+function copyView(value: ArrayBufferView): Uint8Array<ArrayBuffer> {
+  return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice() as Uint8Array<ArrayBuffer>;
+}
+
+function copyBuffer(value: ArrayBufferView): ArrayBuffer {
+  return copyView(value).buffer;
 }
 
 function ownFontBytes(value: ArrayBufferView, ownership: FontByteOwnership): Uint8Array<ArrayBuffer> {
@@ -2904,7 +3259,7 @@ async function authenticateRasterResource(
   bytes: Uint8Array,
   source: Extract<RasterResourceSource, { readonly type: 'external' }>,
   url?: string,
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   if (bytes.byteLength !== source.byteLength) {
     throw new FontLoadError(
       'RASTER_RESOURCE_LENGTH',
@@ -2919,7 +3274,11 @@ async function authenticateRasterResource(
       { ...(url === undefined ? {} : { url }) },
     );
   }
-  return bytes;
+  return bytes as Uint8Array<ArrayBuffer>;
+}
+
+function rasterResourceIdentity(artifactHash: string, byteLength: number): string {
+  return `${artifactHash}:${byteLength}`;
 }
 
 async function authenticatedFontFaceIndex(provenance: Readonly<Record<string, unknown>>): Promise<number> {

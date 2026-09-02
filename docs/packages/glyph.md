@@ -264,9 +264,29 @@ undeclared face is passed to Text; imperative Three rejects an unloaded selected
 The FontFace source cache coalesces canonical-equivalent locators before I/O and converges different locators onto one
 parsed main-font node after their complete GLB bytes have the same SHA-256 content identity. Every acquisition base is
 retained on that node, so a relative sidecar may fall back across equivalent acquisitions without using its filename as
-identity. Per-format variants load lazily and the shared main node retires after its last source lease. Authenticated
-content nodes for raster sidecars and their external resources remain the unfinished portion of D-297; the main-node
-convergence does not imply that the complete dependency graph is implemented yet.
+identity. Per-format variants load lazily and the shared main node retires after its last source lease. Loaded external
+raster artifacts retain their authenticated complete bytes, and external raster resources converge by SHA-256 plus byte
+length instead of URL or filename. Each raster records only the resource identities it actually resolved, preserving the
+dependency graph without copying those resources into every format.
+
+Cross-realm movement is deliberately outside ordinary loading and rendering. Only an explicit `clone()` copies bytes:
+
+```ts
+const Inter = glyph.fontFace('/fonts/Inter.font.glb', { format: [msdf, slug] });
+const [serialized, transfer] = await Inter.slug.clone();
+
+worker.postMessage(serialized, { transfer });
+```
+
+`face.clone()` loads and snapshots the aggregate selection; `face.slug.clone()` loads and snapshots only that exact
+selection. Both return fresh full-span `ArrayBuffer`s, so transferring them may detach the clone without changing the
+originating FontFace, immutable Font values, or cache. The receiving realm passes the inert, versioned
+`SerializedFontFace` directly to `glyph.fontFace(serialized)`. Glyph synchronously claims its buffers into private
+ownership and imports the main GLB, selected raster sidecars, and only their resolved external resources into the same
+content graph used by URL, Request, Blob, and byte declarations. A complete existing graph is reused without fetching;
+partial transfers may progressively add formats to that graph. No live FontFace, Font, Promise, handle, or renderer
+resource crosses the realm boundary, and no normal `load()`, Text construction, `glyph.shape()`, or renderer path invokes
+the snapshot code.
 
 React's `useFont(source, config?)` declares through that same FontFace path, asks the selected Three handle which exact
 format the declaration denotes, conditionally calls React 19 `use()` only while that format is unloaded, and returns

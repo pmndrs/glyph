@@ -215,6 +215,13 @@ export type {
   FontFaceSource,
   FontFaceRasterOf,
 } from './font-face.js';
+export type {
+  FontFaceTransfer,
+  SerializedFontFace,
+  SerializedFontFaceRaster,
+  SerializedFontFaceResource,
+  SerializedFontFaceResourceIdentity,
+} from './font-face-transfer.js';
 
 export type {
   AnyFontToken,
