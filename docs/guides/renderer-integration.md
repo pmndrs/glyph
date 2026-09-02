@@ -2,44 +2,32 @@
 type: How-to guide
 title: Integrate a renderer with Glyph
 description: Builds a complete GlyphConfig adapter and TypeGPU/WebGPU renderer from the public Glyph API.
-tags: [renderer, core, codec, render-plan, typegpu, webgpu]
+tags: [renderer, glyph-config, codec, command-buffer, typegpu, webgpu]
 sources:
   - id: engine-call-contract
     resource: ../../.agents/skills/engine-call-contract/SKILL.md
     title: Engine call contract
   - id: glyph-config-contract
     resource: ../../packages/glyph/src/core/glyph-config.ts
-    title: GlyphConfig and renderer publication contracts
-  - id: glyph-plan-target
-    resource: ../../packages/glyph/src/core/glyph-plan-target.ts
-    title: Shared configured plan target
-  - id: core-entry
-    resource: ../../packages/glyph/src/core.ts
-    title: Renderer-neutral public entry point
+    title: Public GlyphConfig and renderer contracts
   - id: root-entry
     resource: ../../packages/glyph/src/index.ts
-    title: Application public entry point
+    title: Public Glyph entry point
   - id: example-config
     resource: ../../packages/glyph-example-renderer/src/config.ts
     title: Example renderer GlyphConfig
-  - id: example-engine
+  - id: example-text
     resource: ../../packages/glyph-example-renderer/src/engine.ts
-    title: Example renderer retained engine
-  - id: example-policy
-    resource: ../../packages/glyph-example-renderer/src/policy.ts
-    title: Example renderer Codec policy
+    title: Example retained Text
   - id: example-device
     resource: ../../packages/glyph-example-renderer/src/device.ts
-    title: Example renderer CPU oracle
+    title: Example renderer decoder
   - id: example-webgpu-device
     resource: ../../packages/glyph-example-renderer/src/webgpu-device.ts
-    title: Concrete TypeGPU and WebGPU renderer
+    title: Concrete TypeGPU and WebGPU realization
   - id: example-typegpu-technique
     resource: ../../packages/glyph-example-raster/src/typegpu.ts
     title: TypeGPU shader realization
-  - id: ownership-plan
-    resource: ../planning/font-runtime-ownership.md
-    title: Font, engine, backend, render-planner, and target ownership
 generated:
   by: openai-codex/gpt-5.6
   at: '2026-09-02T00:00:00Z'
@@ -47,56 +35,51 @@ generated:
 
 # Integrate a renderer with Glyph
 
-This guide builds a renderer adapter around `GlyphConfig`, then follows one publication through the real
-`glyph-example-renderer` TypeGPU/WebGPU implementation. By the end, the integration will:
+This guide builds a renderer adapter with `GlyphConfig`, then follows one publication through the repository's real
+TypeGPU 0.12 example. The finished adapter:
 
-- initialize the one Glyph runtime and create an inferred renderer handle;
-- select a Codec, decode the engine-owned command hierarchy, resolve portable resources, and prepare renderer state;
-- expose one anonymous root and idempotent named roots;
-- retain Text state until `shape()` or an adapter-equivalent publication call;
-- synchronize transform-only changes without shaping; and
-- realize TypeGPU buffers and a pipeline on a caller-owned `GPUDevice`.
+- uses only public root imports from `@pmndrs/glyph` plus explicit technique and `/typegpu` subpaths;
+- creates one inferred handle with an anonymous root and idempotent named roots;
+- retains Text state and publishes it through `shape()`;
+- receives an engine-projected, borrowed `CommandBufferView` in `GlyphRenderer.decode()`;
+- resolves portable resources into leased renderer values;
+- stages and commits retained host objects transactionally; and
+- leaves final traversal or draw submission to the host renderer.
 
-The guide uses only `@pmndrs/glyph`, `@pmndrs/glyph/core`, and explicit public technique/shader subpaths. A third-party
-integration must not import `src/`, `internal/`, `generated/`, `/three`, or React bindings. Three and R3F are consumers of
-the same contracts, not privileged routes into Glyph.
+The example package exercises the same public API available to Three and R3F. There is no privileged adapter import,
+hidden hook, or second runtime.
 
-> **Current proof boundary.** The example package proves a device-owned offscreen texture, render pass, and queue
-> submission. A reusable caller-owned canvas/context/pass API is not implemented yet. The [host-rendering boundary](#host-rendering-boundary)
-> separates that proven path from the next contract instead of inventing an API.
+> **Proof boundary.** `TypeGpuExampleRendererDevice` currently owns an offscreen texture and submits a WebGPU pass while
+> committing accepted state. It proves buffers, geometry, shaders, pixels, failure atomicity, and cleanup. A reusable
+> caller-owned canvas/context/pass seam is not implemented. This guide marks that seam as a gap instead of inventing it.
 
-## Understand the public boundary
-
-An integration normally needs three public dependency layers. The renderer package owns everything below them.
+## Keep the dependency boundary honest
 
 ```mermaid
 flowchart LR
-  App[Application] --> Root["@pmndrs/glyph<br/>glyph, FontFace, immutable Font"]
-  Adapter["Custom integration package"] --> Root
-  Adapter --> Core["@pmndrs/glyph/core<br/>GlyphConfig, Codec, decoder, schema, engine"]
-  Adapter --> Technique["portable technique package<br/>artifact decoder + plan program"]
-  Device["TypeGPU device adapter"] --> TechniqueShader["technique /typegpu subpath<br/>typed shader functions"]
-  Device --> TypeGPU["typegpu 0.12"]
-  Core --> Rust["Glyph Rust/Wasm engine"]
-  Technique --> Core
-  TechniqueShader --> Technique
+  App[Application] --> Glyph["@pmndrs/glyph<br/>glyph · FontFace · Font"]
+  Adapter[Custom integration] --> Glyph
+  Adapter --> Portable["technique package<br/>portable schema + Codec program"]
+  Device[Host renderer adapter] --> Shader["technique /typegpu<br/>typed shaders"]
+  Device --> TypeGPU[TypeGPU 0.12]
+  Glyph --> Rust[private Rust/Wasm engine]
+  Portable --> Glyph
+  Shader --> Portable
   Adapter --> Device
-
-  Three["@pmndrs/glyph/three"] -. peer consumer .-> Root
-  Three -. public integration surface .-> Core
-  R3F["@pmndrs/glyph/react"] -. wraps Three handle .-> Three
+  Three[Three integration] -. same root API .-> Glyph
+  R3F[R3F integration] -. immutable selected root .-> Three
 ```
 
-In prose: application assets enter through the root package; an adapter is assembled through `/core`; a portable raster
-technique contributes artifact and Codec metadata; its `/typegpu` subpath contributes shader code; the custom integration
-owns renderer objects, GPU resources, and host presentation.
+The root package exposes the complete integration vocabulary. A portable technique contributes its schema and Codec
+program. Its explicit `/typegpu` subpath contributes shaders. Your integration owns host objects and physical GPU
+resources. Rust/Wasm readers, numeric identities, planning, and publication plumbing remain private to Glyph.
 
 ## Run the complete example first
 
-The hardware lab under `apps/benchmarks` is the shortest connected example. Its essential application code is:
+This is the tested public path, reduced from `packages/glyph-example-renderer/tests/example-render.test.ts`:
 
 ```ts
-import { createFontStack, glyph, loadFont } from '@pmndrs/glyph';
+import { glyph, loadFont } from '@pmndrs/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import { defineExampleConfig, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
 
@@ -105,17 +88,17 @@ await glyph.init();
 const adapter = await navigator.gpu.requestAdapter();
 if (adapter === null) throw new Error('WebGPU is unavailable');
 
-const gpuDevice = await adapter.requestDevice();
-const renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
-const handle = glyph.handle('typegpu:main', defineExampleConfig(renderer));
+const device = await adapter.requestDevice();
+const rendererDevice = new TypeGpuExampleRendererDevice({ device, width: 768, height: 192 });
+const handle = glyph.handle('typegpu:main', defineExampleConfig(rendererDevice));
 
 const font = await loadFont(
   { baked: new URL('./Inter-glyph-example.font.glb', import.meta.url) },
-  { technique: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
+  { technique: glyphExample, options: { paletteSeed: 17 } },
 );
-const fontBinding = handle.bindFontStack(createFontStack(font));
+
 const text = handle.createText({
-  font: fontBinding,
+  font,
   text: 'Portable TypeGPU',
   fontSize: 64,
   width: 768,
@@ -124,7 +107,8 @@ const text = handle.createText({
 
 const first = text.publish();
 if (first.draws.length === 0) throw new Error('the renderer produced no draw');
-const pixels = await renderer.readPixels();
+
+const pixels = await rendererDevice.readPixels();
 if (!pixels.some((value, index) => index % 4 === 3 && value !== 0)) {
   throw new Error('the renderer produced no visible pixels');
 }
@@ -133,522 +117,551 @@ text.update({ text: 'Updated WebGPU', color: '#ff40a0' });
 text.publish();
 
 text.dispose();
-fontBinding.dispose();
 handle.dispose();
 font.dispose();
-renderer.dispose();
-gpuDevice.destroy();
+rendererDevice.dispose();
+device.destroy();
 ```
 
-`glyph.init()` is idempotent: successful calls return the same settled initialization promise. `glyph.handle()` requires a
-nonempty process-local name, creates independent adapter state, and infers the handle type from the config. The handle
-itself fronts the anonymous root. Calling `handle('hud')` selects a named sibling root; it does not create a child of the
-anonymous root.
+`glyph.init()` is idempotent. `glyph.handle(name, config)` requires a unique nonempty handle name and infers the returned
+handle from the config. The example calls its semantic flush `publish()`; its implementation delegates directly to
+`GlyphRootServices.shape()`.
 
-Success means the first publication has at least one draw, the readback contains nonzero alpha, a text update changes
-pixels, an idle publication submits no new pass, and disposal clears the accepted draw state. The repository hardware
-workflow exercises those assertions through `benchmark:render-technique-typegpu`.
+Success means a publication produces an ordered draw list, pixel readback contains nonzero alpha, a semantic update
+changes accepted state, an idle publication retains prior draws, and disposal releases accepted resources.
 
-## Follow one publication
+## Understand one publication before writing the config
 
-The application never asks the decoder to interpret Rust tables and never receives numeric engine IDs. Rust determines
-the ordered group/batch/root-instance hierarchy. The package-internal mapper exposes it as a synchronous borrowed view;
-the default decoder binds it to the schema-selected renderer types.
+`GlyphConfig.encode()` selects the Codec that defines the packed command-buffer data Rust produces. Glyph's trusted internal projection then resolves
+identities and resources into a borrowed, phase-structured `CommandBufferView`. Its nested `DisplayList` preserves the
+engine-authored order of batches and root instances. `GlyphRenderer.decode(view)` stages retained host objects and returns
+`{ result, commit, discard }`. It does not render a frame by definition; the host renderer later traverses or submits the
+committed objects.
 
 ```mermaid
 sequenceDiagram
-  participant App as App / React commit
-  participant Text as Text or TextGroup
+  participant App as App or React commit
+  participant Text as Text / TextGroup
   participant Root as anonymous or named root
   participant Rust as Glyph Rust/Wasm
-  participant Map as internal typed mapper
-  participant Decode as config.decode
-  participant Resolve as config.resolve
-  participant Renderer as config.renderer
+  participant Project as trusted internal projection
+  participant Resolve as GlyphConfig.resolve
+  participant Decode as GlyphRenderer.decode
+  participant HostState as retained host state
   participant Host as caller host renderer
 
-  App->>Text: retain desired content/style
-  App->>Text: retain scene hierarchy/transform
-  App->>Root: shape() / publish semantic state
-  Root->>Rust: shape + compile Codec plan
-  Rust-->>Map: trusted borrowed plan
-  Map-->>Decode: BorrowedTypedCommandBuffer
-  Decode->>Resolve: acquire/update resource leases as needed
-  Decode-->>Renderer: BorrowedBoundCommandBuffer
-  Renderer->>Renderer: prepare candidate host state
-  Renderer-->>Root: commit or discard
-  Root-->>App: accepted result or throw
-  App->>Text: transform-only change
-  Text->>Renderer: syncTransforms (no Rust call)
-  Host->>Host: obtain target/pass and draw accepted state
+  App->>Text: retain content, style, hierarchy
+  App->>Root: shape() / publish()
+  Root->>Rust: shape + selected Codec plan
+  Rust-->>Project: trusted packed command data
+  Project->>Resolve: realize changed portable resources
+  Project-->>Decode: borrowed CommandBufferView + ordered DisplayList
+  Decode-->>Root: result + commit/discard
+  Root->>HostState: commit staged objects
+  App->>Text: transform-only mutation
+  Root->>HostState: syncTransforms() without shaping
+  Host->>HostState: traverse accepted objects
+  Host->>Host: encode pass and submit
 ```
 
-The example root calls this operation `publish()`; Three exposes `shape()`. They are the same semantic boundary: desired
-state is retained before the call, and the call makes the latest semantics publishable. A custom integration should expose
-the name `shape()` when that matches its host API. Transform synchronization stays a separate cheap path.
+The view and every borrowed sequence or byte slice inside it expire when `decode()` returns. Copy scalar values and retain
+schema-produced object identities as needed; never store the view, its sequences, or patch payloads.
 
-## Build the GlyphConfig
+## Define the renderer vocabulary
 
-`GlyphConfig` is the adapter's mini DSL. It declares a schema, optional fonts, encode, decode, resolve, renderer, and handle
-construction. The descriptor is immutable; each handle created from it owns its mutable engine/renderer state.
-
-### 1. Define renderer-owned binding types
-
-The decoder's result is parameterized by a renderer vocabulary. The TypeGPU example uses ordinary object identities:
+Start with the exact host values that the schema will create. The example uses stable wrapper objects so renderer code
+never handles numeric engine IDs:
 
 ```ts
-import type {
-  BackendMaterialBinding,
-  BackendTransformBinding,
-  GlyphBatchBindingInput,
-  GlyphBindings,
-  GlyphBufferBindingInput,
-  GlyphInstanceSpanBindingInput,
-  GlyphRootInstanceBindingInput,
-  PolicyProgram,
-} from '@pmndrs/glyph/core';
+import {
+  defineGlyphSchema,
+  type GlyphBatchBindingInput,
+  type GlyphBindings,
+  type GlyphBufferBindingInput,
+  type GlyphInstanceSpanBindingInput,
+  type GlyphRootInstanceBindingInput,
+  type GlyphSchema,
+  type PolicyProgram,
+} from '@pmndrs/glyph';
 
-export interface ResolvedResource {
+export interface ExampleResolvedResource {
   readonly name: string;
   readonly resource: unknown;
 }
-
-export interface BufferBinding {
-  readonly kind: 'typegpu-buffer';
-  readonly input: GlyphBufferBindingInput<TypeGpuBindings>;
+export interface ExampleBufferBinding {
+  readonly kind: 'example-buffer';
+  readonly input: GlyphBufferBindingInput<ExampleBindings>;
 }
-
-export interface ProgramBinding {
-  readonly kind: 'typegpu-program';
+export interface ExampleProgramBinding {
+  readonly kind: 'example-program';
   readonly program: PolicyProgram;
 }
-
-export interface InstanceSpanBinding {
-  readonly kind: 'typegpu-instance-span';
-  readonly input: GlyphInstanceSpanBindingInput<TypeGpuBindings>;
+export interface ExampleInstanceSpanBinding {
+  readonly kind: 'example-instance-span';
+  readonly input: GlyphInstanceSpanBindingInput<ExampleBindings>;
+}
+export interface ExampleBatchBinding {
+  readonly kind: 'example-batch';
+  readonly input: GlyphBatchBindingInput<ExampleBindings>;
+}
+export interface ExampleInstanceBinding {
+  readonly kind: 'example-instance';
+  readonly input: GlyphRootInstanceBindingInput<ExampleBindings>;
+}
+export interface ExampleMaterial {
+  readonly kind: 'example-material';
+}
+export interface ExampleTransform {
+  readonly kind: 'example-transform';
 }
 
-export interface BatchBinding {
-  readonly kind: 'typegpu-batch';
-  readonly input: GlyphBatchBindingInput<TypeGpuBindings>;
-}
-
-export interface RootInstanceBinding {
-  readonly kind: 'typegpu-instance';
-  readonly input: GlyphRootInstanceBindingInput<TypeGpuBindings>;
-}
-
-export type TypeGpuBindings = GlyphBindings<
-  ResolvedResource,
-  BufferBinding,
-  ProgramBinding,
-  BackendMaterialBinding,
-  BackendTransformBinding,
-  BatchBinding,
-  RootInstanceBinding,
-  InstanceSpanBinding,
-  undefined
+export type ExampleBindings = GlyphBindings<
+  ExampleResolvedResource,
+  ExampleBufferBinding,
+  ExampleProgramBinding,
+  ExampleMaterial,
+  ExampleTransform,
+  ExampleBatchBinding,
+  ExampleInstanceBinding,
+  ExampleInstanceSpanBinding,
+  undefined,
+  ExampleMaterial,
+  ExampleTransform
 >;
 ```
 
-The ninth member is `drawRoot`. It is `undefined` here because the offscreen proof has no scene-like host object. In a
-scene-graph renderer it could be a host node; in a render-graph engine it could be a pass bucket or layer object. The config
-schema defines and therefore types it—`drawRoot` is not a Glyph or Three class.
+The ninth binding is `drawRoot`. It is `undefined` because this offscreen proof has no scene-like host object. A scene
+graph could return a node; a render graph could return a layer or pass bucket. The schema owns that type—`drawRoot` is not
+a Glyph class and is not intrinsically a Three object.
 
-The current `defineGlyphSchema<Bindings>()` helper requires this explicit `GlyphBindings` declaration. That is a known DSL
-ergonomics gap: the config itself infers from the schema, but the schema does not yet infer all binding members from its
-callbacks.
+`defineGlyphSchema(schema)` is direct and infers from its argument. The current example still needs the explicit variable
+annotation `GlyphSchema<ExampleBindings, ExampleRootContext>` to witness the complete binding relationship. That
+annotation is the remaining inference ergonomics gap; it is not a reason to add casts or explicit Glyph generics at
+application call sites.
 
-### 2. Bind the schema
+## Bind trusted meanings with `schema`
 
-`defineGlyphSchema()` maps trusted semantic identities to adapter values. The example wraps each input so the renderer can
-retain stable object identity without exposing a numeric ID:
+The example schema is:
 
 ```ts
-import { defineGlyphSchema, type GlyphSchema } from '@pmndrs/glyph/core';
-
-export interface RootContext {
+export interface ExampleRootContext {
   readonly name: string | undefined;
 }
 
-export const TypeGpuSchema: GlyphSchema<TypeGpuBindings, RootContext> = defineGlyphSchema<TypeGpuBindings>()({
+export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = defineGlyphSchema({
   drawRoot: () => undefined,
-  program: (_root, program) => Object.freeze({ kind: 'typegpu-program', program }),
-  buffer: (_root, input) => Object.freeze({ kind: 'typegpu-buffer', input }),
-  material: (_root, binding) => binding,
-  transform: (_root, binding) => binding,
-  batch: (_root, input) => Object.freeze({ kind: 'typegpu-batch', input }),
-  instance: (_root, input) => Object.freeze({ kind: 'typegpu-instance', input }),
-  instanceSpan: (_root, input) => Object.freeze({ kind: 'typegpu-instance-span', input }),
+  program: (_root: ExampleRootContext, program) => Object.freeze({ kind: 'example-program', program }),
+  buffer: (_root, input) => Object.freeze({ kind: 'example-buffer', input }),
+  material: (_root, material) => material,
+  transform: (_root, transform) => transform,
+  batch: (_root, input) => Object.freeze({ kind: 'example-batch', input }),
+  instance: (_root, input) => Object.freeze({ kind: 'example-instance', input }),
+  instanceSpan: (_root, input) => Object.freeze({ kind: 'example-instance-span', input }),
 });
 ```
 
-The callbacks have distinct jobs:
+| Schema callback | Renderer-owned result                                                    |
+| --------------- | ------------------------------------------------------------------------ |
+| `drawRoot`      | One host publication root for this anonymous or named root.              |
+| `program`       | A pipeline/program selector for one Codec program.                       |
+| `buffer`        | A stable host buffer binding for Codec or order storage.                 |
+| `material`      | The material/paint value accepted by Text and used by draws.             |
+| `transform`     | A host transform binding plus its physical record selection.             |
+| `batch`         | One ordered batched draw containing already-bound instance spans.        |
+| `instance`      | One ordered root instance not folded into a batch.                       |
+| `instanceSpan`  | A glyph, decoration, inline object, clip, or Codec-defined record range. |
 
-| Callback       | Result owned by the adapter                                             |
-| -------------- | ----------------------------------------------------------------------- |
-| `drawRoot`     | One host publication root for this anonymous or named Glyph root.       |
-| `program`      | Pipeline/program selection for a compiled Codec program.                |
-| `buffer`       | Stable renderer buffer binding for a Codec or ordering buffer.          |
-| `material`     | Adapter material/paint binding.                                         |
-| `transform`    | Host transform binding, including its physical record index.            |
-| `batch`        | One ordered batched draw with its already-bound instance spans.         |
-| `instance`     | One ordered root instance that was not folded into a batch.             |
-| `instanceSpan` | A glyph, decoration, inline-object, clip, or custom Codec record range. |
+The callbacks run during internal projection, once for each retained identity that needs binding. `batch` and `instance`
+receive typed programs, materials, buffers, resources, flags, ordering, and clip information. They do not rediscover
+hierarchy: `DisplayList.children` already interleaves batches and root instances in authoritative order.
 
-`batch` and `instance` receive program, material, buffer, resource, order, depth, clip, and indirect-draw data. They do
-not reconstruct hierarchy: Rust has already interleaved batch and root-instance children in authoritative draw order.
+## Define packed data with `encode`
 
-### 3. Select the Codec in `encode`
-
-`encode` receives collision-checked ID factories and returns a Codec. A Codec is the renderer policy input that tells Rust
-which programs, buffers, capabilities, transform mode, allocation mode, and ordering contract to compile.
+`encode` is the Codec side of the API. It receives a collision-checked ID factory and returns the descriptor Rust uses to
+emit packed buffers, programs, ordering, and capabilities:
 
 ```ts
 import {
   createRasterPolicyProgram,
   definePolicyBuffers,
   id,
+  type PolicyCapabilitySet,
   type PolicyDescriptor,
   type RenderIdFactory,
-} from '@pmndrs/glyph/core';
+} from '@pmndrs/glyph';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 
+const stableGlyphId = id.buffer('glyph-example-renderer/stable-glyph');
 const system = definePolicyBuffers({
-  stableGlyphId: {
-    id: id.buffer('typegpu-text/stable-glyph'),
-    scalar: 'u32',
-    lanes: ['stableGlyphId'],
-  },
+  stableGlyphId: { id: stableGlyphId, scalar: 'u32', lanes: ['stableGlyphId'] },
+});
+
+const capabilities: PolicyCapabilitySet = Object.freeze({
+  capabilities: Object.freeze(['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct']),
+  maxBufferBytes: 16 * 1024 * 1024,
+  updateAlignment: 4,
+  coalesceGapBytes: 128,
+  rangeCallPenaltyBytes: 256,
+  maxBuffersPerDraw: 8,
+  maxResourcesPerDraw: 4,
+  maxIndirectDraws: 0,
+  fragmentationBudget: 8,
+  wholeBufferThresholdBasisPoints: 7_500,
 });
 
 function descriptor(ids: RenderIdFactory): PolicyDescriptor {
-  return {
-    capabilitySets: [capabilitySet],
+  return Object.freeze({
+    capabilitySets: [capabilities],
     programs: [
       createRasterPolicyProgram(glyphExamplePlanProgram, {
-        namespace: 'typegpu-text',
+        namespace: 'example-renderer',
         system,
-        capabilitySet,
+        capabilitySet: capabilities,
         transformMode: 'direct',
         allocationMode: 'ordered',
         ids,
       }),
     ],
-  };
+  });
 }
 
 const encode = ({ ids }: { ids: RenderIdFactory }) => ({ descriptor: descriptor(ids) });
 ```
 
-The repository implementation is `exampleRenderPolicyDescriptor(ids)`. Application authors never supply wire IDs. A
-custom integration owns its namespace and capability claim; it reuses the portable technique's plan-program body rather
-than copying a Three Codec.
+The package implementation is `exampleRenderPolicyDescriptor(ids)`. Ordinary renderer code never sees the numeric IDs.
+Changing batching, record layout, capabilities, or ordering is Codec work; it is not a `decode()` rewrite.
 
-### 4. Keep `decode` explicit
+## Resolve portable resources
 
-The canonical decoder is intentionally wired into every config:
-
-```ts
-import { defaultDecoder } from '@pmndrs/glyph/core';
-
-const decode = defaultDecoder;
-```
-
-Its exact type is:
+`resolve` turns one portable technique resource into an exactly-once renderer lease. It receives technique and resource
+names, the resource kind, portable payload, singleton companions, previous accepted value, and an abort signal.
 
 ```ts
-type Decoder<Bindings extends AnyGlyphBindings> = (
-  source: BorrowedTypedCommandBuffer,
-  context: DecodeContext<Bindings>,
-) => BorrowedBoundCommandBuffer<Bindings>;
+import { resourceLease } from '@pmndrs/glyph';
+
+resolve: ({ technique, resourceName, payload }) => {
+  if (technique !== techniqueId) {
+    throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${technique}"`);
+  }
+  return resourceLease(
+    Object.freeze({ name: resourceName, resource: payload }),
+    () => undefined,
+  );
+},
 ```
 
-The input is a synchronous, zero-copy, engine-owned hierarchy. Its update phases are `resources`, `buffers`, `patches`,
-and `retirements`; its group phase is either `unchanged` or a replacement ordered tree. The output preserves that shape
-while replacing opaque engine identities with the schema's adapter values and `resolve` results.
+The example keeps resolution portable and creates physical geometry later in its device object. Therefore `resolve`
+needs no `GPUDevice`, canvas, `GPUCanvasContext`, scene-like object, or render pass. Another integration may capture a
+device and realize a resource here when its lifetime truly matches the resource lease. The disposer must then destroy
+that value on candidate discard, retirement, or root disposal.
 
-The useful custom-decoder hook is whole-publication instrumentation or a renderer-specific lazy facade—not a per-command
-functor and not a second raw-plan parser. Wrap the base config so the binding type remains inferred:
+Do not cache by display names or filenames. Font loading deduplicates canonical sources and dependencies; renderer leases
+follow the resolved resource identities and generations Glyph provides.
+
+## Decode into retained host objects
+
+`renderer` creates one root-scoped `GlyphRenderer`. The real example delegates to a selected device:
+
+```ts
+renderer: () => {
+  const selected = device ?? new RecordingExampleRendererDevice();
+  return {
+    decode: (view) => selected.decode(view),
+    syncTransforms: () => undefined,
+    dispose: () => selected.reset(),
+  };
+},
+```
+
+The renderer's `decode(view)` is the only public decoder hook. It receives `CommandBufferView<ExampleBindings>`, applies
+the `resources`, `buffers`, `patches`, and `retirements` phases to candidate state, and walks a replacement
+`DisplayList` only when `displayList.kind === 'replace'`.
+
+The example's retained walk is deliberately direct:
+
+```ts
+function retainDraws(frame: CommandBufferView<ExampleBindings>): readonly ExampleDraw[] {
+  if (frame.displayList.kind !== 'replace') return [];
+  const draws: ExampleDraw[] = [];
+  for (const child of frame.displayList.value.children) {
+    const input = child.value.input;
+    const instances = child.kind === 'batch' ? child.instances : [child.value.input.instance];
+    for (const instance of instances) {
+      const primitive = instance.value.input;
+      draws.push(
+        Object.freeze({
+          kind: child.kind,
+          program: input.program.program,
+          programVariant: input.programVariant,
+          material: input.material,
+          buffers: Object.freeze(Array.from(input.buffers)),
+          resources: Object.freeze(Array.from(input.resources)),
+          flags: input.flags,
+          depthKey: input.depthKey,
+          order: input.order,
+          transform: child.kind === 'instance' ? child.transform : undefined,
+          primitive: Object.freeze({
+            kind: primitive.kind,
+            programVariant: primitive.programVariant,
+            resource: primitive.resource,
+            buffer: primitive.buffer,
+            recordIndex: primitive.recordIndex,
+            recordCount: primitive.recordCount,
+            logicalOrder: primitive.logicalOrder,
+            clip: primitive.clip,
+            semantic: primitive.semantic,
+            inlineStart: primitive.inlineStart,
+            blockStart: primitive.blockStart,
+            inlineExtent: primitive.inlineExtent,
+            blockExtent: primitive.blockExtent,
+          }),
+        }),
+      );
+    }
+  }
+  return Object.freeze(draws);
+}
+```
+
+`decode()` returns a transaction:
+
+```ts
+return Object.freeze({
+  result,
+  commit: () => publish(() => undefined),
+  discard: () => {
+    active = false;
+  },
+});
+```
+
+Stage every fallible change before `commit()`. `discard()` releases candidate-only work. A throw retains the previous
+accepted host state. To instrument decoding, wrap `renderer`, not command projection:
 
 ```ts
 const base = defineExampleConfig(device);
 
 const traced = defineGlyphConfig({
   ...base,
-  decode(source, context) {
-    performance.mark(`glyph:${source.planRevision}:decode:start`);
-    const frame = base.decode(source, context);
-    performance.mark(`glyph:${source.planRevision}:decode:end`);
-    return frame;
+  renderer(context) {
+    const renderer = base.renderer(context);
+    return {
+      decode(view) {
+        performance.mark(`glyph:${view.planRevision}:decode:start`);
+        const pending = renderer.decode(view);
+        performance.mark(`glyph:${view.planRevision}:decode:end`);
+        return pending;
+      },
+      syncTransforms: (updates) => renderer.syncTransforms(updates),
+      dispose: () => renderer.dispose(),
+    };
   },
 });
 ```
 
-Borrowed sequences expire when the synchronous publication callback returns. A renderer may retain its schema objects and
-copied scalar state after commit, but never the command buffer, borrowed sequences, or patch payload views.
+## Construct roots without exposing internals
 
-### 5. Resolve portable resources and return leases
-
-`resolve` is a resource factory/binder. It receives a technique name, schema resource name/kind, the portable payload, all
-singleton companion payloads, the previous accepted adapter resource when one exists, and an abort signal. It returns an
-exactly-once lease:
+`root.create(context)` receives only the selected config, Codec, optional font access, constrained root services, and a
+finalizer. It creates the adapter's host object, chooses its boundary, then returns `context.create(...)`:
 
 ```ts
-import { resourceLease } from '@pmndrs/glyph/core';
+interface ExampleRootExtension {
+  createText<Technique extends AnyRasterTechnique>(
+    options: ExampleTextOptions<Technique>,
+  ): ExampleText<Technique>;
+  publish(): ExampleDrawList;
+}
 
-resolve: ({ technique, resourceName, payload }) => {
-  if (technique !== glyphExample.id) {
-    throw new TypeError(`this renderer cannot realize ${technique}`);
+class ExampleRootImplementation implements ExampleRootExtension {
+  constructor(
+    readonly services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>,
+  ) {}
+
+  createText<Technique extends AnyRasterTechnique>(options: ExampleTextOptions<Technique>) {
+    return new ExampleText(this.services, options);
   }
 
-  const resource = Object.freeze({ name: resourceName, resource: payload });
-  return resourceLease(resource, () => {
-    // Release adapter state held specifically for this resolved binding.
-  });
-},
-```
+  publish(): ExampleDrawList {
+    return this.services.shape();
+  }
+}
 
-The TypeGPU proof deliberately keeps `resolve` portable. `RecordingExampleRendererDevice.prepare()` validates named
-resources and `TypeGpuExampleRendererDevice.prepare()` realizes geometry on its captured `GPUDevice`. This separation
-means `resolve` needs no canvas, `GPUCanvasContext`, render pass, or scene.
-
-An integration may capture a `GPUDevice` in its config closure and create a device object in `resolve` when the object is
-truly resource-scoped. The lease must then destroy it on candidate discard, generation retirement, or root disposal. Do
-not key correctness by filenames: the engine supplies retained payload identity and generations; the root FontLibrary
-deduplicates source and dependency content independently of a Three loader.
-
-### 6. Prepare renderer state transactionally
-
-The config renderer consumes only a bound command buffer. `prepare()` may allocate candidate objects, but accepted state
-changes only in `commit()`; `discard()` releases candidate-only work. `syncTransforms()` bypasses Codec planning and Rust.
-
-```ts
-renderer: () => {
-  const selected = device ?? new RecordingExampleRendererDevice();
-  return {
-    prepare: (frame) => selected.prepare(frame),
-    syncTransforms: (_updates) => undefined,
-    dispose: () => selected.reset(),
-  };
-},
-```
-
-The shared `createGlyphPlanTarget({ config, codec, root })` utility owns source projection, default binding, decode,
-resolution, prepare/commit/discard settlement, `lastResult`, transform synchronization, and disposal for one root. Adapter
-code should use it instead of reproducing the transaction.
-
-```mermaid
-flowchart LR
-  Codec[Codec from encode] --> Rust[trusted Rust plan]
-  Rust --> Typed[BorrowedTypedCommandBuffer]
-  Typed --> Decoder[config.decode]
-  Schema[config.schema] --> Binder[default binder]
-  Resolve[config.resolve] --> Binder
-  Decoder --> Binder
-  Binder --> Bound["BorrowedBoundCommandBuffer&lt;Bindings&gt;"]
-  Bound --> Prepare[renderer.prepare]
-  Prepare --> Commit{prepare succeeds?}
-  Commit -->|yes| Accepted[commit host state + binder overlay]
-  Commit -->|no| Discard[discard candidate leases and state]
-  Accepted --> Host[host renders accepted state]
-```
-
-If `resolve`, `decode`, or `prepare` throws, the target rejects that publication, disposes candidate-only leases, and keeps
-the previous accepted state. Once renderer commit begins, binder settlement follows the committed branch even if cleanup
-later throws.
-
-### 7. Expose the anonymous root and named roots
-
-Every handle has exactly one anonymous root. The handle's extension methods delegate to that root. Calling the handle with
-a nonempty string selects an idempotent named sibling; returned roots are terminal and cannot create deeper roots.
-
-```ts
-import { createGlyphRootRegistry } from '@pmndrs/glyph/core';
-
-createHandle: (context) => {
-  const roots = createGlyphRootRegistry((name, release) =>
-    new TypeGpuRoot(name, context.engine, context.config, release),
-  );
-  const anonymous = roots.anonymous;
-
-  return context.create(
-    Object.assign((name: string) => roots.get(name), {
-      createText: anonymous.createText.bind(anonymous),
-      shape: anonymous.shape.bind(anonymous),
-    }),
-    () => roots.dispose(),
-  );
-},
-```
-
-The example currently names the semantic operation `publish()` rather than `shape()` and delegates `bindFont`,
-`bindFontStack`, `createText`, and `publish` to its anonymous root. A production adapter can expose `shape()` with the same
-planner-publication implementation. Do not make an application call `handle(undefined)`: the handle already is the
-anonymous root. Do not derive named roots from renderer scene UUIDs; names are stable application customization labels.
-
-Use named roots for independent acceptance/rendering boundaries such as `handle('world')`, `handle('hud')`, or
-`handle('print')`. The host adapter decides what those labels mean. A material factory or render-graph lookup can use the
-name; core does not rename it to a Three scene.
-
-## Add FontFace loading to a handle
-
-Declare the formats understood by the adapter in `GlyphConfig.fonts`. The runtime creates one handle-local font store,
-while all handles share Glyph's semantic FontLibrary cache:
-
-```ts
-import { glyphExample } from '@pmndrs/glyph-example-raster';
-
-const config = defineGlyphConfig({
-  schema: TypeGpuSchema,
-  fonts: {
-    default: 'glyphExample',
-    techniques: { glyphExample },
+root: {
+  create: (context) => {
+    const extension = new ExampleRootImplementation(context.services);
+    return context.create(extension, {
+      boundary: Object.freeze({ name: context.name }),
+    });
   },
-  // encode, decode, resolve, renderer, createHandle...
+},
+```
+
+This two-phase recipe breaks the cycle cleanly: services exist before the host root, while the boundary and renderer are
+activated only when `context.create()` is called. Call it exactly once and return its result.
+
+Every handle owns one anonymous root. The callable handle fronts that root, so `handle.createText(...)` needs no extra
+root argument. `handle('hud')` returns a terminal named sibling. The same name returns the same live root; after that root
+is disposed, selecting the name constructs a fresh root. Roots cannot be called, nested, or omitted from Text creation.
+
+```ts
+const handle = glyph.handle('typegpu:main', config);
+const worldText = handle.createText({ font, text: 'World' });
+const hud = handle('hud');
+const sameHud = handle('hud');
+console.assert(hud === sameHud);
+const hudText = hud.createText({ font, text: 'Score: 42' });
+```
+
+Names are application customization labels, not inferred scene UUIDs. If a host scene boundary matters, make the root's
+boundary object carry it. Nested TextGroup values remain hierarchy and inheritance inside one root; they do not create
+new publication roots.
+
+## Assemble the complete `GlyphConfig`
+
+The actual example config connects every required field:
+
+```ts
+export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
+  const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
+  return defineGlyphConfig({
+    schema: ExampleSchema,
+    encode: ({ ids }) => ({ descriptor: exampleRenderPolicyDescriptor(ids) }),
+    resolve: ({ technique, resourceName, payload }) => {
+      if (technique !== techniqueId) {
+        throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${technique}"`);
+      }
+      return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () => undefined);
+    },
+    renderer: () => {
+      const selectedDevice = device ?? new RecordingExampleRendererDevice();
+      return {
+        decode: (view) => selectedDevice.decode(view),
+        syncTransforms: () => undefined,
+        dispose: () => selectedDevice.reset(),
+      };
+    },
+    root: {
+      create: (context) => {
+        const extension = new ExampleRootImplementation(context.services);
+        return context.create(extension, { boundary: Object.freeze({ name: context.name }) });
+      },
+    },
+  });
+}
+```
+
+`GlyphConfig` is a small declarative DSL:
+
+| Field      | Required | Owns                                                                           |
+| ---------- | -------- | ------------------------------------------------------------------------------ |
+| `schema`   | yes      | Inferred host binding vocabulary and `drawRoot`.                               |
+| `fonts`    | no       | Handle-relative technique names, default technique, and technique loading.     |
+| `encode`   | yes      | Codec descriptor for packed command-buffer data.                               |
+| `resolve`  | yes      | Portable-resource realization and leases.                                      |
+| `renderer` | yes      | Root-scoped `decode`, transform sync, and retained host-state disposal.        |
+| `root`     | yes      | Anonymous/named root host object and boundary construction.                    |
+| `commands` | no       | Initial command capacities and limits; omit until measurements justify tuning. |
+
+For example, a capacity override is data, not another lifecycle object:
+
+```ts
+commands: {
+  requestBytes: 128 * 1024,
+  resultBytes: 512 * 1024,
+  textUnits: 2_048,
+},
+```
+
+## Retain Text and keep transform sync cheap
+
+An adapter Text owns user-facing desired state and privately holds the controller returned by
+`context.services.createText()`:
+
+```ts
+export class ExampleText<Technique extends AnyRasterTechnique> {
+  readonly #controller: GlyphTextController<Technique, ExampleMaterial, ExampleTransform>;
+  readonly #transform: ExampleTransform = Object.freeze({ kind: 'example-transform' });
+
+  constructor(
+    readonly services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>,
+    options: ExampleTextOptions<Technique>,
+  ) {
+    this.#controller = services.createText({
+      font: options.font,
+      text: options.text,
+      transform: this.#transform,
+      style: { fontSize: options.fontSize ?? 48 },
+      constraints: {
+        width: { mode: 'at-most', size: options.width ?? 1024 },
+        height: { mode: 'at-most', size: options.height ?? 256 },
+      },
+    });
+  }
+
+  publish(): ExampleDrawList {
+    return this.services.shape();
+  }
+  dispose(): void {
+    this.#controller.dispose();
+  }
+}
+```
+
+Pass complete desired snapshots to `controller.update()`. Keep partial updates, inherited TextGroup state, and scene-tree
+ergonomics in the adapter. `shape()` publishes semantic changes. A matrix-only traversal should call
+`services.syncTransforms()` so the renderer can update host transforms without shaping or Codec work. The example's
+transform implementation is intentionally a no-op; Three is the current live proof of matrix-traversal synchronization.
+
+## Add handle-relative FontFace loading when needed
+
+The example's tested path accepts an already loaded immutable `Font`. An adapter that accepts FontFace selections declares
+its technique vocabulary in `fonts`:
+
+```ts
+const config = defineGlyphConfig({
+  schema: ExampleSchema,
+  fonts: { default: 'glyphExample', techniques: { glyphExample } },
+  encode,
+  resolve,
+  renderer,
+  root,
 });
 ```
 
-`context.fonts` is available inside `createHandle` when the config declares this vocabulary. It is not a second runtime.
-Use it in the root implementation to convert a loaded selection into an independent immutable Font lease:
+Inside `root.create`, `context.fonts` provides `isLoaded(selection)`, `load(selection)`, `acquire(selection)`, and
+`peek(selection)`. `acquire` returns an independent immutable `Font` lease. `peek` borrows the store-owned value and must
+not be disposed. A root wrapper can enforce the synchronous Text contract:
 
 ```ts
-import { FontLoadError, type AnyFontFaceSelection } from '@pmndrs/glyph';
-
-const fonts = context.fonts;
-if (fonts === undefined) throw new Error('the adapter requires configured fonts');
-
-function mountFont(selection: AnyFontFaceSelection) {
+function acquireLoadedFont(selection: AnyFontFaceSelection) {
+  const fonts = context.fonts;
+  if (fonts === undefined) throw new Error('this integration has no configured font techniques');
   if (!fonts.isLoaded(selection)) {
-    throw new FontLoadError('FONT_FACE_NOT_LOADED', `${selection.family} is not loaded`);
+    throw new Error(`FontFace ${JSON.stringify(selection.family)} is not loaded`);
   }
   return fonts.acquire(selection);
 }
 ```
 
-Application code remains small:
+Application code loads through the returned FontFace token:
 
 ```ts
 const Inter = glyph.fontFace(new URL('./Inter.font.glb', import.meta.url), {
   family: 'Inter',
-  format: glyphExample({ paletteSeed: 17, inset: 0.08 }),
+  format: glyphExample({ paletteSeed: 17 }),
 });
 
-await Inter.load(handle); // stable Promise while this handle-owned load record succeeds
-const text = handle.createText({ font: Inter, text: 'Hello' });
+await Inter.load(handle);
+console.assert(Inter.isLoaded(handle));
 ```
 
-The face itself is its default format selection. `.default` aliases the face, and declared format properties select other
-techniques. An omitted format resolves through `config.fonts.default`. Passing an unloaded selection to Text throws at
-construction; React can catch that loading promise and suspend. A Text instance retains its own immutable Font lease, so
-disposing the FontFace releases its preload/cache ownership without invalidating mounted Text. Dispose the Text to release
-that mounted lease. Handle disposal aborts loads and releases its store.
+The adapter retains the acquired `Font` for its Text and disposes that lease with the Text. Disposing the FontFace
+releases its load record; it does not invalidate independent Font leases held by live Text. A React hook may initiate
+`load()` and suspend, but React context only carries the selected handle/root—it is not another Glyph runtime.
 
-The current `glyph-example-renderer` public Text accepts a pre-bound `BackendFontStackBinding`, not a FontFace selection.
-The code above is the public mechanism an adapter should use, but the example package has not yet connected that convenience
-to `ExampleTextOptions`.
+## Realize the TypeGPU resources
 
-## Drive retained Text from the handle
-
-The config handle factory may use the advanced public engine objects internally. Ordinary application users should not
-see them. The example root owns this chain:
-
-```text
-Glyph (one initialized runtime)
-└─ configured handle
-   ├─ anonymous root
-   │  └─ backend → Codec policy → planner → retained Text values → configured plan target
-   └─ named root "hud"
-      └─ backend → Codec policy → planner → retained Text values → configured plan target
-```
-
-`ExampleTextEngine` demonstrates the implementation:
-
-```ts
-const backend = context.engine.createBackend({ integration: '@scope/typegpu-text' });
-let codec: Codec | undefined;
-
-const policy = backend.installPolicy((ids) => {
-  codec = config.encode({ integration: '@scope/typegpu-text', ids });
-  return codec.descriptor;
-});
-
-if (codec === undefined) throw new Error('encode did not run during policy installation');
-const target = createGlyphPlanTarget({ config, codec, root });
-const planner = backend.createPlanner({
-  policy,
-  capabilitySet,
-  target: () => target,
-  limits,
-  requestCapacity: 64 * 1024,
-  resultCapacity: 256 * 1024,
-  textCapacity: 16 * 1024,
-});
-```
-
-Text owns desired content/style and one backend transform binding. `update()` changes desired state. `shape()` (the example's
-`publish()`) calls `planner.publish()`, which shapes all dirty Text in that root and synchronously drives the target.
-`TextGroup` is an adapter-level hierarchy/presentation parent when the host has such a concept. It may inherit transforms,
-visibility, material, or ordering, but it must not create a separate planner for every nested group. The named/anonymous
-root is the publication boundary; nested TextGroup values remain inside it.
-
-## Realize the TypeGPU renderer
-
-The real proof separates a deterministic CPU oracle from physical GPU realization. This makes the candidate transaction
-testable without a GPU and keeps renderer validation out of the Rust trust boundary.
-
-### Define TypeGPU shader functions and layouts
-
-The technique `/typegpu` subpath exports typed functions. The renderer adds host vertex inputs and a viewport uniform:
-
-```ts
-import tgpu from 'typegpu';
-import * as d from 'typegpu/data';
-import {
-  TypeGpuGlyphExampleFragmentInput,
-  TypeGpuGlyphExampleVertexInput,
-  glyphExampleFragment,
-  glyphExampleVertex,
-} from '@pmndrs/glyph-example-raster/typegpu';
-
-const positionLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x3));
-const uvLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2));
-const originLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
-const sizeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
-const colorLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
-const viewportLayout = tgpu.bindGroupLayout({ viewport: { uniform: d.vec2f } });
-
-const vertexMain = tgpu.vertexFn({
-  in: { position: d.vec3f, uv: d.vec2f, origin: d.vec2f, size: d.vec2f, color: d.vec4f },
-  out: { position: d.builtin.position, color: d.vec4f, uv: d.vec2f },
-})((input) => {
-  'use gpu';
-  const output = glyphExampleVertex(
-    TypeGpuGlyphExampleVertexInput({
-      quadPosition: input.position.xy,
-      quadUv: input.uv,
-      instance: { origin: input.origin, size: input.size, color: input.color },
-    }),
-  );
-  const viewport = viewportLayout.$.viewport;
-  return {
-    position: d.vec4f(2 * (output.position.x / viewport.x) - 1, 1 + 2 * (output.position.y / viewport.y), 0, 1),
-    color: output.color,
-    uv: output.quadUv,
-  };
-});
-
-const fragmentMain = tgpu.fragmentFn({ in: { color: d.vec4f, uv: d.vec2f }, out: d.vec4f })((input) => {
-  'use gpu';
-  return glyphExampleFragment(TypeGpuGlyphExampleFragmentInput({ color: input.color, quadUv: input.uv }));
-});
-```
-
-The technique owns glyph math; the engine adapter owns clip-space projection, target format, blending, and pipeline inputs.
-
-### Create device-bound resources
-
-The caller obtains the `GPUDevice`. The proof adapter wraps it without taking ownership:
+The concrete device wraps a caller-owned `GPUDevice`:
 
 ```ts
 const root = tgpu.initFromDevice({ device });
@@ -658,6 +671,7 @@ const target = root
 const targetView = target.createView('render');
 const viewport = root.createUniform(d.vec2f, [width, height]);
 const viewportGroup = root.createBindGroup(viewportLayout, { viewport });
+
 const pipeline = root.createRenderPipeline({
   attribs: {
     position: positionLayout.attrib,
@@ -680,13 +694,34 @@ const pipeline = root.createRenderPipeline({
 pipeline.initSync();
 ```
 
-`prepare(frame)` first applies resource/buffer/patch/group phases to candidate CPU state. It creates missing geometry and
-instance buffers, writes the bound bytes, and retains only resources referenced by the candidate. It does not reparse
-command tables.
+Supplied geometry becomes vertex and index buffers, while packed Codec buffers become instance vertex buffers:
 
-### Draw the accepted hierarchy
+```ts
+const position = root.createBuffer(positionLayout.schemaForCount(vertexCount)).$usage('vertex');
+position.write(positionBytes);
+const origin = root.createBuffer(originLayout.schemaForCount(instanceCount)).$usage('vertex');
+origin.write(originBytes);
+```
 
-The concrete proof opens a pass and emits one indexed instanced draw for every realized ordered draw:
+Shaders come from `@pmndrs/glyph-example-raster/typegpu`; the integration adds viewport projection, target format,
+blending, and vertex layouts. This keeps technique math independent of the host target.
+
+## Submit accepted state in the host
+
+```mermaid
+flowchart LR
+  Shape[shape / publication] --> State[committed retained host objects]
+  State --> Draw[host draw method]
+  Canvas[caller canvas] --> Context[caller GPUCanvasContext]
+  Context --> Target[current presentation texture]
+  Target --> Pass[caller render pass]
+  Pass --> Draw
+  Draw --> Commands[encoded glyph draws]
+  Commands --> Queue[caller submission / render graph]
+```
+
+At that point the host renderer walks committed ordered draws. The current offscreen example performs this loop inside
+its commit callback:
 
 ```ts
 const encoder = root['~unstable'].createCommandEncoder();
@@ -702,17 +737,6 @@ const pass = encoder.beginRenderPass({
 });
 
 for (const realized of realizedDraws) {
-  const geometryName = realized.geometry.resourceName;
-  if (geometryName === undefined) throw new Error('the TypeGPU renderer needs supplied geometry');
-  const geometryResource = realized.resources.get(geometryName);
-  const geometry = geometries.get(geometryResource);
-  if (geometryResource === undefined || geometry === undefined) {
-    throw new Error(`the TypeGPU renderer has no realized ${geometryName} geometry`);
-  }
-  const origin = gpuBufferForDraw(buffers, realized, 'origin');
-  const size = gpuBufferForDraw(buffers, realized, 'size');
-  const color = gpuBufferForDraw(buffers, realized, 'color');
-
   pipeline
     .with(viewportGroup)
     .with(positionLayout, geometry.position)
@@ -735,137 +759,99 @@ pass.end();
 device.queue.submit([encoder.finish()]);
 ```
 
-The source implementation names buffers through the shader contract and looks them up from candidate state. Queue
-submission happens only when accepted renderer state changed.
+The render pass API lives under TypeGPU 0.12's `~unstable` surface. Recheck installed declarations before copying it into
+a long-lived integration.
 
-## Host-rendering boundary
+| Object                      | First required                                                                                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------- |
+| Glyph runtime               | Before `glyph.handle()`: call `await glyph.init()`.                                             |
+| Immutable `Font`            | Before synchronous Text creation or update.                                                     |
+| `GPUDevice`                 | Before physical buffers, textures, samplers, bind groups, or pipelines. Not needed for shaping. |
+| Canvas                      | Only for onscreen presentation. Never required for shaping, projection, or an offscreen target. |
+| `GPUCanvasContext`          | When configuring a canvas and acquiring its current presentation texture.                       |
+| Scene-like/root-like object | Only if your host needs one; represent it through the schema boundary and `drawRoot`.           |
+| Render-pass encoder         | During actual host draw recording, after retained state has committed.                          |
+| Camera/frame uniforms       | During host drawing or transform sync unless they intentionally affect semantic layout.         |
 
-These dependencies enter at different times:
+The example proves only the device-owned offscreen branch. A public method accepting a caller-owned context, pass, or
+render-graph recorder remains an unimplemented contract.
 
-| Host object          | First required stage                                                                                     |
-| -------------------- | -------------------------------------------------------------------------------------------------------- |
-| Glyph runtime        | `await glyph.init()` before `glyph.handle()`.                                                            |
-| Canvas               | Only when an application needs onscreen presentation; never for shaping, decode, or an offscreen target. |
-| `GPUDevice`          | Before creating GPU buffers, textures, samplers, bind groups, or pipelines.                              |
-| `GPUCanvasContext`   | When configuring an onscreen canvas and obtaining its current presentation texture.                      |
-| Scene-like object    | Never required by core; only an adapter with a host scene hierarchy needs one as `drawRoot`.             |
-| Render-pass encoder  | At actual host draw submission, after a publication has committed accepted state.                        |
-| Camera/view uniforms | At host drawing or transform sync, not during shaping unless layout semantics explicitly depend on them. |
+## Recover without corrupting accepted state
 
-The current TypeGPU proof owns the offscreen texture, creates its pass during commit, and submits directly. That is useful
-for pixel and failure evidence, but it couples Glyph publication to one target. The desired reusable onscreen boundary is:
+User inputs and adapter declarations throw where they enter. Trusted Rust output is not repeatedly validated; an
+impossible `CommandBufferView` is an engine defect. Renderer compatibility checks still belong at the adapter boundary.
 
-```mermaid
-flowchart LR
-  Publish[Glyph shape/publish] --> State[committed TypeGPU draw state]
-  State --> HostAdapter[adapter draw function]
-  Canvas[caller canvas] --> Context[caller GPUCanvasContext]
-  Context --> Texture[current presentation texture]
-  Texture --> Pass[caller render pass]
-  Camera[caller view/frame uniforms] --> HostAdapter
-  Pass --> HostAdapter
-  HostAdapter --> Commands[encode accepted Glyph draws]
-  Commands --> Queue[caller submission / render graph]
-```
+For a failed publication:
 
-This seam would let the same accepted Glyph root participate in shadows, render targets, post-processing, portals, and
-multi-pass rendering according to the host engine. It needs a named public adapter method that accepts a caller pass (or
-records into a host render graph), plus lifetime rules for per-pass resources. Neither `GlyphRenderer` nor
-`TypeGpuExampleRendererDevice` currently exposes that seam, so this guide does not prescribe a signature.
+1. `resolve()` or `renderer.decode()` throws, or staged commit work fails.
+2. Glyph calls `discard()` when a renderer transaction exists.
+3. Candidate-only leases and GPU objects are released exactly once.
+4. The previous accepted display list stays live.
+5. `shape()` throws the original error at the call site.
 
-## Recover from invalidation and device loss
+The TypeGPU device cannot be rebound after device loss. Dispose it and its configured handle, obtain a new device, create
+a new device object and uniquely named handle, recreate Text from retained application state, and shape again.
 
-User/config input failures throw where the input enters. Data returned from the trusted Rust plan is not repeatedly
-validated; an impossible typed hierarchy is an engine bug. Renderer-specific checks still belong at their user boundary,
-such as confirming that a selected shader supports the technique's named buffers and geometry.
-
-For candidate failure:
-
-1. `resolve`, `decode`, or `prepare` throws.
-2. The publication target calls `discard()` when preparation exists.
-3. Candidate-only resource leases are disposed exactly once.
-4. The previous accepted renderer state remains active.
-5. The Text/root publication call reports the original error.
-
-For the current TypeGPU proof, device loss recovery is explicit: dispose Text/bindings/handle/device adapter, acquire a new
-`GPUDevice`, create a new adapter and uniquely named handle, rebind the same immutable Font, recreate retained Text, and
-publish. The device adapter does not mutate an existing handle to point at a new device.
-
-## Dispose in ownership order
+## Dispose by ownership
 
 ```mermaid
 flowchart TD
-  Glyph["Glyph singleton<br/>process lifetime"] --> Handle["configured handle<br/>font store + roots"]
-  Handle --> Root["anonymous or named root<br/>backend + Codec + planner + target"]
-  Root --> Text["Text / TextGroup desired state<br/>transform and Font leases"]
-  Handle --> FontRecord["handle FontFace load record<br/>stable Promise + store-owned Font"]
-  FontFace["FontFace declaration<br/>weak global family catalog"] --> FontRecord
-  FontRecord --> Cache["shared FontLibrary<br/>source/dependency/bake cache"]
-  Root --> PlanTarget["decoder/binder + renderer leases"]
-  PlanTarget --> DeviceAdapter["TypeGPU adapter-owned GPU resources"]
-  CallerDevice["caller-owned GPUDevice"] --> DeviceAdapter
-  CallerContext["caller-owned canvas/context/pass"] -. desired host seam .-> DeviceAdapter
+  Glyph["Glyph singleton<br/>process lifetime"] --> Handle["configured handle<br/>Codec + font store + roots"]
+  Handle --> Anonymous[anonymous root]
+  Handle --> Named[named roots]
+  Anonymous --> Text["Text / TextGroup<br/>desired state"]
+  Named --> Text2["Text / TextGroup<br/>desired state"]
+  Handle --> FaceRecord["handle-relative FontFace load record"]
+  Face[FontFace declaration] --> FaceRecord
+  FaceRecord --> Cache["shared immutable Font cache"]
+  Anonymous --> Renderer["renderer decode state + leases"]
+  Renderer --> GPU["TypeGPU buffers · texture · pipeline"]
+  Device[caller-owned GPUDevice] -. borrowed by .-> GPU
+  Host["caller canvas / context / pass"] -. desired seam .-> GPU
 ```
-
-For the complete example, dispose in this order:
 
 ```ts
-text.dispose(); // retained Text + mounted transform/font leases
-fontBinding.dispose(); // backend font-stack binding
-handle.dispose(); // all roots, planners, targets, renderer state, handle font store
-font.dispose(); // application immutable Font lease
-renderer.dispose(); // proof adapter's TypeGPU resources
-gpuDevice.destroy(); // caller-owned device, last
+text.dispose();
+handle.dispose();
+font.dispose();
+rendererDevice.dispose();
+device.destroy();
 ```
 
-Root, handle, renderer, lease, Font, and Text disposals are idempotent. Owner disposal cascades down, but explicit leaf-first
-disposal makes failures and resource release timing visible. `FinalizationRegistry` is only a leak safety net for abandoned
-FontFace declarations; deterministic correctness uses `dispose()`.
-
-## Decide whether to use lower-level engine objects
-
-Most integrations should hide `GlyphEngine`, `GlyphBackend`, `RenderPlanner`, `PlanTarget`, and `RetainedText` behind their
-handle implementation, as the example does. Use those public `/core` objects directly only when an advanced host needs to
-own worker transport, asynchronous plan delivery, custom capacity management, or target scheduling.
-
-The standard configured path is synchronous and zero-copy. `AsyncPlanTarget` exists for a real ownership boundary such as
-a Worker: Glyph makes one standalone copy, the receiver binds an owned plan, and the full-span `ArrayBuffer` returns to the
-bounded pool. Do not choose the async path merely because the host render loop is asynchronous; CPU decode/bind can finish
-synchronously while GPU execution continues later.
+Text releases its controller and mounted font ownership. Root disposal releases its renderer state. Handle disposal
+cascades roots, its Codec, and handle-relative font records. The device object releases TypeGPU resources but never owns
+the caller's `GPUDevice`; destroy that last. Public disposals are idempotent. Finalization is only a leak safety net for
+abandoned FontFace declarations, never the correctness mechanism.
 
 ## Verify a new integration
 
-Prove these in order:
+1. **Package boundary:** imports come only from `@pmndrs/glyph`, technique packages, and explicit shader subpaths.
+2. **Type inference:** `glyph.handle('name', config)` infers the concrete handle without casts or explicit Glyph generics.
+3. **Codec:** real text produces expected lanes, variants, capabilities, batching, and order.
+4. **Hierarchy:** `DisplayList.children` reaches the renderer in authoritative order with no numeric IDs.
+5. **Resources:** acquire, update, retain, and retirement preserve exactly-once lease ownership.
+6. **Physical realization:** supplied geometry, buffers, bind groups, and a pipeline produce nonempty draws.
+7. **Pixels:** a hardware-backed draw produces pixels and a semantic update changes them.
+8. **Retention:** an idle publication keeps accepted draws and does not repeat physical work.
+9. **Failure atomicity:** injected resolution, decode, and commit failures preserve accepted state and discard candidates.
+10. **Transforms:** transform-only changes call `syncTransforms()` without `shape()` or Rust work.
+11. **Roots:** the handle fronts its anonymous root; repeated named lookup returns one live terminal root.
+12. **Fonts:** every FontFace record and immutable Text-held Font lease releases deterministically.
+13. **Recovery:** lost-device reconstruction starts from immutable Fonts and retained desired application state.
+14. **Host integration:** canvas, context, pass, camera, targets, shadows, and post-processing remain caller-owned.
 
-1. **Package boundary:** the adapter imports only the root package, `/core`, its technique package, and explicit shader
-   subpaths. It has no Three import and no private Glyph import.
-2. **Type inference:** `glyph.handle('name', config)` infers the concrete handle; config overrides infer their callback
-   parameters without casts or corrective generic arguments.
-3. **Font path:** a real baked or runtime-baked Font loads, binds, shapes, and releases every dependency lease.
-4. **Hierarchy:** ordered batches and root instances reach the renderer with bound objects and no numeric IDs.
-5. **Physical realization:** named resources, supplied geometry, buffers, bind group, and pipeline produce nonempty draws.
-6. **Pixels:** a hardware-backed publication changes visible pixels and a semantic update changes them again.
-7. **Retention:** idle publication retains draws and submits no extra GPU work; patches update only dirty ranges.
-8. **Failure atomicity:** injected resolve/decode/prepare failures keep accepted state and dispose candidate leases once.
-9. **Transform path:** transform-only changes call `syncTransforms()` without `shape()`, Codec work, or a Rust publication.
-10. **Roots:** the handle fronts the anonymous root, repeated `handle('hud')` calls return the same root, and independently
-    disposed roots release their names without allowing nested roots.
-11. **Recovery:** device loss reconstructs physical state from immutable application Font values and retained desired state.
-12. **Disposal:** Text, roots, handle, resources, renderer, and caller device release in deterministic order.
+## Current gaps
 
-The current repository checks provide strong evidence for package boundaries, retained hierarchy, physical realization,
-visible pixels, idle retention, preparation-failure atomicity, recovery, and disposal through
-`@pmndrs/glyph-example-renderer`; Three contains the active transform-only and scene-hierarchy proof.
+- `defineGlyphSchema(schema)` is direct, but the example still needs an explicit
+  `GlyphSchema<ExampleBindings, ExampleRootContext>` variable annotation to witness its complete binding relationship.
+  Config and handle inference are clean afterward.
+- `glyph-example-renderer` accepts immutable `Font` values directly; it does not expose a FontFace-taking Text wrapper.
+- Its `syncTransforms()` is a no-op. Three supplies the current transform-only synchronization proof.
+- `TypeGpuExampleRendererDevice` submits a device-owned offscreen pass during commit. A caller-owned
+  canvas/context/pass or render-graph method is not public yet.
+- The example calls the semantic operation `publish()` while the root service and intended adapter term is `shape()`.
+- Repository documentation checks do not compile fenced TypeScript. The connected excerpts mirror checked package source,
+  but there is no extracted-snippet typecheck.
 
-Known gaps in the current custom-engine corpus are explicit:
-
-- `defineGlyphSchema<Bindings>()` still requires the integrator to spell the complete binding tuple instead of inferring it
-  from the schema callbacks;
-- `glyph-example-renderer` accepts pre-bound font stacks and has not connected its public Text convenience to FontFace;
-- its `syncTransforms()` implementation is a no-op, so only Three currently proves the transform-only path; and
-- `TypeGpuExampleRendererDevice` owns its offscreen pass and queue submission instead of accepting a caller-owned pass.
-
-Those are integration-contract work, not responsibilities that a user should infer from the offscreen proof.
-
-See [Implement a reusable raster technique](technique-implementation-report.md) for artifact decoding, technique schemas,
-portable plan programs, and the `/typegpu` shader side of the same contract.
+See the [standalone HTML rendering](renderer-integration.html) for accessible architecture, lifecycle, and ownership
+diagrams without remote scripts or assets.
