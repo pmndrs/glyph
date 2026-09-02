@@ -147,7 +147,6 @@ class ThreeRootDrawObject extends THREE.Object3D {
 
 /** One handle-owned publication root. A name is customization metadata, not a Three Scene identity. */
 export class ThreeRoot implements GlyphRoot, ThreeRootContext {
-  declare readonly handle: import('./handle.js').ThreeHandle;
   readonly name: string | undefined;
   readonly #fonts: import('../core/glyph-config.js').GlyphHandleFonts;
   readonly #services: GlyphRootServices<ThreeBindings, void, ThreeRootBinding>;
@@ -164,6 +163,11 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   #material: ThreeTextMaterial | undefined;
   #nextTextOrder = 0;
   #disposed = false;
+
+  get handle(): import('./handle.js').ThreeHandle {
+    if (this.#publicRoot === undefined) throw new Error('Three root public identity has not been bound');
+    return this.#publicRoot.handle;
+  }
 
   /** Ordinary applications obtain roots by calling a Three handle. */
   constructor(

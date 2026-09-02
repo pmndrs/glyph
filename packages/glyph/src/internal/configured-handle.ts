@@ -255,6 +255,12 @@ class ConfiguredHandleDomain<
       if (failure !== undefined) throw failure;
     };
     return new Proxy(extension, {
+      has: (target, property) =>
+        property === 'name' ||
+        property === 'handle' ||
+        property === 'disposed' ||
+        property === 'dispose' ||
+        Reflect.has(target, property),
       get: (target, property) => {
         if (property === 'name') return name;
         if (property === 'handle') return this.handle;
@@ -289,6 +295,12 @@ class ConfiguredHandleDomain<
     const bound = new Map<PropertyKey, Function>();
     const dispose = (): void => this.#dispose();
     return new Proxy(select, {
+      has: (_target, property) =>
+        property === 'name' ||
+        property === 'handle' ||
+        property === 'disposed' ||
+        property === 'dispose' ||
+        Reflect.has(anonymous, property),
       get: (_target, property) => {
         if (property === 'name') return undefined;
         if (property === 'handle') return this.handle;

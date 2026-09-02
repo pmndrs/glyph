@@ -119,6 +119,9 @@ test('one initialized Glyph runtime creates independent named Three handles over
   assert.equal(first('secondary-scene'), secondSceneRoot, 'one handle interns named roots by label');
   assert.equal(secondSceneRoot.handle, first, 'a terminal named root identifies its owning handle without nesting');
   const label = first.createText({ font, text: 'Handle owned', style: { fontSize: 16 } });
+  assert.equal('createText' in first, true, 'the callable handle reflects its anonymous-root surface');
+  assert.equal('handle' in first, true);
+  assert.equal('createText' in first('hud'), true, 'named roots reflect the same adapter extension surface');
   const secondSceneLabel = secondSceneRoot.createText({
     font,
     text: 'Same handle, other scene',
