@@ -1,7 +1,7 @@
 ---
 title: Break apart
 description: breakApart() copies a committed paragraph into independently owned Glyphs and Decorations you can move, fade, throw, and dispose.
-nav: 27
+nav: 28
 sourcecode: packages/glyph/src/three/glyphs.ts
 ---
 
@@ -69,6 +69,30 @@ m.geometry;              // metric quad or supplied geometry, with bounds
 
 {/* prose: measurements never traverse or cache ancestors — they are local facts; physics adapters choose their own
 body shape from them. */}
+
+## Text on a circle
+
+```ts
+const radius = line.measure().contentWidth / (Math.PI * 2); // advance extent, not the resolved box width
+const [glyphs] = line.breakApart();
+for (let i = 0; i < glyphs.count; i += 1) {
+  glyphs.measurements[i].originalMatrix.decompose(home, q, s);
+  const angle = home.x / radius;                     // advance along the line → angle
+  turn.setFromAxisAngle(up, angle);
+  m.compose(new Vector3(Math.sin(angle) * radius, home.y, Math.cos(angle) * radius), turn.multiply(q), s);
+  glyphs.setMatrixAt(i, m);
+}
+```
+
+<iframe
+  src="/examples/?example=arc"
+  title="A line of text bent into a turning ring"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+{/* prose: layout stays straight; the bend is a matrix per glyph, written once. Any path works the same way —
+sample it by arc length at each glyph's `originalMatrix` x. */}
 
 ## World-space writes in bulk
 

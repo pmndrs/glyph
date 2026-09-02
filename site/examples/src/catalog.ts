@@ -87,11 +87,41 @@ export const EXAMPLES = {
     stage: {},
     load: () => import('./scenes/effects/scene'),
   },
+  depth: {
+    title: 'Depth and occlusion',
+    page: '/docs/text/in-3d',
+    stage: { lit: true },
+    load: () => import('./scenes/depth/scene'),
+  },
+  labels: {
+    title: 'Labels in a scene',
+    page: '/docs/text/in-3d',
+    stage: { lit: true },
+    load: () => import('./scenes/labels/scene'),
+  },
+  'off-axis': {
+    title: 'Off-axis',
+    page: '/docs/text/in-3d',
+    stage: {},
+    load: () => import('./scenes/off-axis/scene'),
+  },
+  bloom: {
+    title: 'Bloom',
+    page: '/docs/text/in-3d',
+    stage: {},
+    load: () => import('./scenes/bloom/scene'),
+  },
   'break-apart': {
     title: 'Break apart',
     page: '/docs/text/break-apart',
     stage: {},
     load: () => import('./scenes/break-apart/scene'),
+  },
+  arc: {
+    title: 'Text on a circle',
+    page: '/docs/text/break-apart',
+    stage: {},
+    load: () => import('./scenes/arc/scene'),
   },
 } as const satisfies Record<string, ExampleEntry>;
 

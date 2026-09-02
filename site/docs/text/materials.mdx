@@ -69,8 +69,10 @@ format — it is not pretending to be a raster. */}
 
 > [!IMPORTANT]
 > A custom material must keep what the default sets: `positionNode = context.position`, `DoubleSide`, `transparent`,
-> `depthTest: false`, `depthWrite: false`, `NormalBlending`. Miss `positionNode` and the glyphs collapse to the
-> origin; miss `depthTest: false` and batched glyphs z-fight.
+> `depthWrite: false`, `NormalBlending`. Miss `positionNode` and the glyphs collapse to the origin; turn on
+> `depthWrite` and every quad writes a rectangle into the depth buffer. `depthTest` is yours to choose — off by
+> default so labels draw over what they annotate, on when the text is a surface in the scene (see [Text in
+> 3D](/docs/text/in-3d)).
 
 ```ts
 const material = new MeshPhysicalNodeMaterial({

@@ -1,0 +1,147 @@
+---
+title: Text in 3D
+description: Text is geometry in your scene — depth and occlusion, render order, labels that follow and face, steep angles, fog, and post-processing.
+nav: 27
+sourcecode: packages/glyph/src/three/internal/material-realizer.ts
+---
+
+<Intro>
+  A `Text` is an `Object3D` whose draws are meshes under the root, so the camera, the depth buffer, fog, lights,
+  and post-processing already apply. Two defaults are chosen for you: text draws over geometry, and it never writes
+  depth. Both are one line to change, and this page is the set of choices around them.
+</Intro>
+
+<Keypoints title="What to know">
+  <KeypointsItem>The default material has `depthTest: false` — a label is never lost behind what it annotates.</KeypointsItem>
+  <KeypointsItem>`depthTest: true` through `defineTextMaterial` makes text a surface in the scene; keep `depthWrite: false`.</KeypointsItem>
+  <KeypointsItem>Slug is the format for steep angles; Bitmap is screen-space and belongs on the near plane.</KeypointsItem>
+  <KeypointsItem>Bloom, fog, lights: text is pixels in the scene pass and a node material in the scene, nothing more.</KeypointsItem>
+</Keypoints>
+
+## Depth and occlusion
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const inScene = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  material.depthTest = true; // hidden by geometry in front of it
+  return material;
+});
+
+three.createText({ font: Inter, text: 'occluded', material: inScene });
+three.createText({ font: Inter, text: 'overlaid' }); // the default draws over everything
+```
+
+<iframe
+  src="/examples/?example=depth"
+  title="A sphere passing in front of and behind two words"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+| Setting | Default | Change it when |
+| --- | --- | --- |
+| `depthTest` | `false` | the text is a surface in the world — signage, a label on a body, a paragraph on a wall |
+| `depthWrite` | `false` | never for glyphs: the quad is transparent outside its ink and would write a rectangle |
+| `transparent` | `true` | never: coverage is blended, not cut |
+| `side` | `DoubleSide` | the back of a sign should be blank |
+
+{/* prose: the base material is `MeshBasicNodeMaterial({ blending: NormalBlending, depthTest: false, depthWrite:
+false, side: DoubleSide, transparent: true })` (material-realizer.ts). Glyphs in one batch never z-fight whatever
+`depthTest` is, because none of them writes depth; the test only compares against what opaque geometry wrote. */}
+
+## Render order
+
+```ts
+label.renderOrder = 10;                          // a standalone Text: its draws inherit it
+three.createTextGroup({ renderOrder: 5 });       // a group states one order for every child
+```
+
+{/* prose: each planned draw is a mesh whose `renderOrder` is derived from the Text or TextGroup it belongs to
+(text.ts `renderOrderBase`); decorations are ordered under → glyphs → line-through. Three sorts transparent
+objects back to front within an order, so two overlapping default-material texts resolve by `renderOrder` first
+and distance second. */}
+
+## Labels that follow and face
+
+```tsx
+function Billboard({ children }) {
+  const group = useRef<Group>(null);
+  useFrame(({ camera }) => group.current?.quaternion.copy(camera.quaternion));
+  return <group ref={group}>{children}</group>;
+}
+
+<mesh position={orbit}>
+  <sphereGeometry />
+  <Billboard>
+    <Text font={inter} material={inScene} position={[-1.5, 0.55, 0]}>Io</Text>
+  </Billboard>
+</mesh>
+```
+
+<iframe
+  src="/examples/?example=labels"
+  title="Moons with depth-tested labels in fog"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+{/* prose: the label is a child of the body, so it moves with it for free; the billboard group turns it; the
+depth-tested material lets a nearer body hide it. `scene.fog` reaches it because the text material is a
+`NodeMaterial` with `fog` on — nothing text-specific is involved. */}
+
+## Steep angles
+
+<iframe
+  src="/examples/?example=off-axis"
+  title="A paragraph turning away from the camera"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+| Format | Off-axis | Why |
+| --- | --- | --- |
+| Slug | crisp at any angle | the outline is evaluated per pixel; nothing is sampled |
+| MSDF | good until the atlas is stretched | a texture sample of a distance field; anisotropy softens far edges |
+| Bitmap | screen-space only | pre-rasterised at a size; `pixelSnapping` assumes a plane facing the camera |
+
+{/* prose: see fonts/techniques for the full comparison; `rasterPixelRatio` raises MSDF/Bitmap sampling for a
+paragraph that will be seen larger than authored. */}
+
+## Post-processing
+
+```tsx
+import { useRenderPipeline } from '@react-three/fiber/webgpu';
+import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
+
+useRenderPipeline(({ passes, renderPipeline }) => {
+  if (renderPipeline === null) return;
+  const scene = passes.scenePass.getTextureNode();
+  renderPipeline.outputNode = scene.add(bloom(scene, 0.9, 0.4, 0.55));
+});
+```
+
+```ts
+// three.js
+const scenePass = pass(scene, camera);
+const post = new PostProcessing(renderer);
+post.outputNode = scenePass.getTextureNode().add(bloom(scenePass.getTextureNode(), 0.9, 0.4, 0.55));
+glyph.shape();
+post.render();
+```
+
+<iframe
+  src="/examples/?example=bloom"
+  title="One bright word through bloom"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+{/* prose: bloom thresholds on brightness, so colour is the control: dim words stay put, the bright one blooms.
+`bloom().strength` is a uniform — animate it per frame without rebuilding the pipeline. */}
+
+## Lighting
+
+{/* prose: a lit material is the materials page's subject — `MeshPhysicalNodeMaterial` over the format's coverage
+nodes, with a normal derived from paragraph-local position. Link to /docs/text/materials#lit-text. */}
