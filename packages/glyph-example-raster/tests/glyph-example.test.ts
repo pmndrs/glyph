@@ -323,7 +323,7 @@ const stripGeometry = triangleStripGeometry(glyphExampleIndexedQuadGeometry);
 registerRasterPlanProgram({
   raster: suppliedGlyphExample,
   schema: suppliedGlyphExampleSchema,
-  policyBody(system) {
+  codecBody(system) {
     const p = techniqueProgram(suppliedGlyphExampleSchema, { system });
     const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
     const { inset, red, green, blue, alpha } = p.binding;
