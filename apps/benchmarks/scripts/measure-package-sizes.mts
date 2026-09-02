@@ -422,6 +422,12 @@ const threeRuntime = await measureJavaScript(
   false,
   true,
   true,
+  {
+    // Artifact validation is a cold font-load dependency. It must remain a dynamic boundary rather than joining the
+    // Three adapter's initial graph through a shared bundler runtime helper.
+    expectedDynamic: ['/packages/glyph/dist/font-baker/validator.js'],
+    excludedInitial: ['/packages/glyph/dist/font-baker/validator.js'],
+  },
 );
 const interBitmap = await measureFontAsset(
   'font-inter-bitmap-16-32',

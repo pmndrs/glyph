@@ -9,11 +9,11 @@ import {
   defineRasterTechnique,
   glyph,
   loadFont,
-  rasterBake,
   type RasterKey,
   type Sha256Hex,
 } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
+import { rasterBake } from '@pmndrs/glyph/baker';
 import {
   defineTechniqueSchema,
   f32,

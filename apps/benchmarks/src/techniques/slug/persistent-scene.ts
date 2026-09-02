@@ -451,7 +451,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         activeLine.updateMatrixWorld(true);
         if (activeLine.error !== undefined) throw activeLine.error;
         committedState = state;
-        updateSlugDrawVisibility(activeLine);
         const readyAt = performance.now();
         context.signal.throwIfAborted();
         textReadyMs = performance.now() - textStarted;
@@ -477,7 +476,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       const active = activeResources();
       const startedAt = performance.now();
       advancePresentation(active.line, context);
-      updateSlugDrawVisibility(active.line);
       active.canvasSurface.render(active.scene, active.camera);
       if (!firstDrawRecorded) {
         firstDrawMs = performance.now() - startedAt;
@@ -485,7 +483,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       }
     },
     telemetry(snapshot, viewport) {
-      if (closing || disposed || fontFixture === undefined || line === undefined) return;
+      if (closing || disposed || fontFixture === undefined || line === undefined || scene === undefined) return;
       const currentFontFixture = fontFixture.current.asset;
       const layout = committedLayout(line);
       const framebufferGpuBytes = viewport.drawingBufferWidth * viewport.drawingBufferHeight * 4;
@@ -498,7 +496,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         ...snapshot,
         glyphCount: renderedGlyphCount(line),
         missingGlyphCount: missingGlyphCount(layout),
-        drawCount: drawCount(line),
+        drawCount: drawCount(scene),
         layoutWidth: layout.width,
         layoutHeight: layout.height,
         lineCount: layout.lineCount,
@@ -602,7 +600,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       };
       const before = originsToInterpolate(activeLine, active.state, identity, next.animatePresentation);
       activeFontFixture.commit(nextFixture, (fixture) => {
-        if (next.text.length === 0) activeLine.visible = false;
         commitState(activeLine, {
           font: fixture.loadedFont,
           identity,
@@ -611,7 +608,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
           style: slugStyle(nextFontSize, identity),
           rasterPixelRatio: active.state.rasterPixelRatio,
         });
-        updateSlugDrawVisibility(activeLine);
         fontSize = nextFontSize;
         anchor = next.anchor;
         textAlign = next.textAlign;
@@ -650,6 +646,7 @@ function applyState(line: Text<typeof slug>, next: SlugTextState): void {
     style: next.style,
     rasterPixelRatio: next.rasterPixelRatio,
   });
+  line.visible = next.identity.text.length > 0;
   line.updateMatrixWorld(true);
   if (line.error !== undefined) throw line.error;
 }
@@ -708,30 +705,8 @@ function assertLayoutWidthRatio(value: number): void {
   }
 }
 
-function renderedGlyphCount(object: THREE.Object3D): number {
-  let count = 0;
-  object.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.geometry instanceof THREE.InstancedBufferGeometry) {
-      count += child.geometry.instanceCount;
-    }
-  });
-  return count;
-}
-
-function updateSlugDrawVisibility(object: THREE.Object3D): void {
-  let glyphCount = 0;
-  object.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
-    const availableVertexCount = child.geometry.index?.count ?? child.geometry.getAttribute('position')?.count ?? 0;
-    const vertexCount = Number.isFinite(child.geometry.drawRange.count)
-      ? Math.min(availableVertexCount, child.geometry.drawRange.count)
-      : availableVertexCount;
-    const instanceCount =
-      child.geometry instanceof THREE.InstancedBufferGeometry ? child.geometry.instanceCount : vertexCount > 0 ? 1 : 0;
-    child.visible = vertexCount > 0 && instanceCount > 0;
-    if (child.geometry instanceof THREE.InstancedBufferGeometry) glyphCount += child.geometry.instanceCount;
-  });
-  object.visible = glyphCount > 0;
+function renderedGlyphCount(text: Text<typeof slug>): number {
+  return text.measure().glyphCount;
 }
 
 function drawCount(object: THREE.Object3D): number {

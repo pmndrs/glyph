@@ -51,11 +51,11 @@ export function loadThreeTechnique(technique: AnyRasterTechnique): Promise<void>
 function loadBuiltin(id: string): Promise<void> {
   switch (id) {
     case 'pmndrs.bitmap':
-      return import('../bitmap.js').then(() => undefined);
+      return import('./load-bitmap-shader.js').then(() => undefined);
     case 'pmndrs.msdf':
-      return import('../msdf.js').then(() => undefined);
+      return import('./load-msdf-shader.js').then(() => undefined);
     case 'pmndrs.slug':
-      return import('../slug.js').then(() => undefined);
+      return import('./load-slug-shader.js').then(() => undefined);
     default:
       return Promise.resolve();
   }

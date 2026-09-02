@@ -2,26 +2,32 @@ import type { Node } from 'three/webgpu';
 
 import {
   bitmapShader,
-  decorationShader,
-  msdfShader,
-  slugShader,
   type TslBitmapInstanceNodes,
   type TslBitmapShaderOptions,
   type TslBitmapShaderOutput,
   type TslBitmapShaderResources,
+} from '@pmndrs/glyph/tsl/bitmap';
+import {
+  decorationShader,
   type TslDecorationInstanceNodes,
   type TslDecorationShaderOutput,
+} from '@pmndrs/glyph/tsl/decoration';
+import {
+  msdfShader,
   type TslMsdfInstanceNodes,
   type TslMsdfShaderOutput,
   type TslMsdfShaderResources,
+} from '@pmndrs/glyph/tsl/msdf';
+import {
+  slugShader,
   type TslSlugFillRule,
   type TslSlugInstanceNodes,
   type TslSlugPageResources,
   type TslSlugShaderOutput,
-} from '@pmndrs/glyph/tsl';
+} from '@pmndrs/glyph/tsl/slug';
 
-// The four technique node graphs are one shader library, importable without the
-// Three integration so future renderer integrations reuse them.
+// Each technique node graph has a package subpath, so renderer integrations can
+// reuse one shader without importing the other built-in realizations.
 declare const bitmapInstance: TslBitmapInstanceNodes;
 declare const bitmapResources: TslBitmapShaderResources;
 declare const bitmapOptions: TslBitmapShaderOptions;

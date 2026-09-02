@@ -41,6 +41,16 @@ test('the published contract is ESM-only', async () => {
   assert.deepEqual(manifest.pmndrs, {
     glyph: { bitmap: './bakers/bitmap', msdf: './bakers/msdf', slug: './bakers/slug' },
   });
+  for (const subpath of [
+    './baker',
+    './tsl/bitmap',
+    './tsl/msdf',
+    './tsl/slug',
+    './tsl/decoration',
+    './typegpu/bitmap',
+  ]) {
+    assert.ok(subpath in manifest.exports, `${subpath} must remain an explicit tree-shakeable package boundary`);
+  }
 
   // The JSON ABI subpaths were replaced by typed module subpaths. Assert the removed names are gone
   // whatever target shape they might reappear with, since the resource allow-list below only sees strings.
@@ -128,4 +138,12 @@ test('the public loader graph exposes immutable loading without mutable registra
     assert.doesNotMatch(source, /(?:^|\n)\s*(?:import|export\s+\{.*\}\s+from)\s/m);
   }
   assert.ok((await readFile(new URL('../../dist/font-baker.wasm', import.meta.url))).byteLength > 0);
+});
+
+test('generic raster baker construction lives only on the dedicated baker subpath', async () => {
+  assert.equal('defineRasterBaker' in glyph, false);
+  assert.equal('rasterBake' in glyph, false);
+  const baker = await import('@pmndrs/glyph/baker');
+  assert.equal(typeof baker.defineRasterBaker, 'function');
+  assert.equal(typeof baker.rasterBake, 'function');
 });

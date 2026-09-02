@@ -32,6 +32,7 @@ describe('package boundary', () => {
       if (file === 'tests/example-render.test.ts') {
         allowed.add('@pmndrs/glyph');
         allowed.add('@pmndrs/glyph/bake');
+        allowed.add('@pmndrs/glyph/baker');
       }
       for (const specifier of glyphImports) expect(allowed, `${file}: ${specifier}`).toContain(specifier);
       // No scene-graph integration or Three dependency.

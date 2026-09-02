@@ -18,8 +18,6 @@ export type {
   FontPayloadReport,
   SerializedBakeError,
 } from './bake.js';
-export { defineRasterBaker, rasterBake } from './bake.js';
-
 export { glyph, type Glyph } from './glyph.js';
 export type { GlyphConfig, GlyphConfigHandle, GlyphHandle } from './core/glyph-config.js';
 
