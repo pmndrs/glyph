@@ -5,6 +5,7 @@ declare const rasterTechniqueIdBrand: unique symbol;
 declare const rasterResourceIdBrand: unique symbol;
 declare const rasterTechniqueTypes: unique symbol;
 const rasterTechniqueInstances = new WeakSet<object>();
+const rasterTechniques = new Set<AnyRasterTechnique>();
 
 /** Stable public identity for one portable raster technique. */
 export type RasterTechniqueId = string & { readonly [rasterTechniqueIdBrand]: true };
@@ -40,11 +41,7 @@ export interface RasterTechnique<
   Data,
 > extends AnyRasterTechnique {
   (
-    ...options: [Options] extends [never]
-      ? []
-      : undefined extends Options
-        ? [options?: Options]
-        : [options: Options]
+    ...options: [Options] extends [never] ? [] : undefined extends Options ? [options?: Options] : [options: Options]
   ): RasterTechniqueRequest<RasterTechnique<Id, Kind, Options, Descriptor, Data>>;
 
   readonly [rasterTechniqueTypes]?: RasterTechniqueTypeMap<Options, Descriptor, Data>;
@@ -152,6 +149,7 @@ export function defineRasterTechnique<
     }),
   ) as unknown as Defined;
   rasterTechniqueInstances.add(defined);
+  rasterTechniques.add(defined);
   return defined;
 }
 
@@ -160,6 +158,44 @@ export function isRasterTechnique(value: unknown): value is AnyRasterTechnique {
   return (
     (typeof value === 'object' || typeof value === 'function') && value !== null && rasterTechniqueInstances.has(value)
   );
+}
+
+/** @internal Resolve one imported technique from its public format key. */
+export function rasterTechniqueForFormatKey(key: string): AnyRasterTechnique | undefined {
+  let match: AnyRasterTechnique | undefined;
+  for (const technique of rasterTechniques) {
+    if (technique.kind !== key && technique.id !== key) continue;
+    if (match !== undefined && match !== technique) {
+      throw new TypeError(`font format key ${JSON.stringify(key)} matches more than one imported raster technique`);
+    }
+    match = technique;
+  }
+  return match;
+}
+
+/** @internal Resolve the imported decoder matching one authenticated raster-directory entry. */
+export function rasterTechniqueForReference(reference: {
+  readonly kind: string;
+  readonly extension: string;
+  readonly version: number;
+}): AnyRasterTechnique | undefined {
+  let match: AnyRasterTechnique | undefined;
+  for (const technique of rasterTechniques) {
+    if (
+      technique.kind !== reference.kind ||
+      technique.extension !== reference.extension ||
+      technique.version !== reference.version
+    ) {
+      continue;
+    }
+    if (match !== undefined && match !== technique) {
+      throw new TypeError(
+        `raster directory entry ${JSON.stringify(reference.kind)} matches more than one imported technique`,
+      );
+    }
+    match = technique;
+  }
+  return match;
 }
 
 /** Brand a stable resource identity produced by a portable technique. */

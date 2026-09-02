@@ -1,4 +1,4 @@
-import { bitmapShader } from '../tsl/bitmap-shader.js';
+import { bitmapShader } from '@pmndrs/glyph/tsl/bitmap';
 import {
   BITMAP_EXTENSION,
   BITMAP_FORMAT_VERSION,

@@ -46,15 +46,16 @@ generated:
 This is the pre-implementation design brief and intentionally preserves alternatives that were investigated. The
 verified implementation outcome is recorded in [the investigation report](glyph-api-investigation-report.md). D-293 and
 D-294 establish the ordinary handle and immutable R3F context. D-296–D-300 preserve the FontFace/cache investigation;
-D-301 records the implemented correction that loading belongs to the FontFace selection as `selection.load(handle)` and
-`selection.isLoaded(handle)`, not as methods on a handle. D-302 records the shared glyph/decoration material factory, and
+D-309 records the implemented correction that loading belongs to the FontFace declaration or declared technique member as
+handle-free `load()` and `isLoaded()` calls; handles select and bind loaded techniques when constructing Text. D-302
+records the shared glyph/decoration material factory, and
 D-303 records the paired Three/R3F examples plus external-renderer handle cutover. D-297's complete content-addressed,
 lease-counted dependency graph remains distinct follow-up work; current implementation shares the root FontLibrary and
 canonical React/loader request identity but does not claim every graph tier in that proposed model.
 
-D-296's omitted FontFace `format` is deliberately handle-relative. It does not imply Slug or any other root-owned
-technique: built-in `ThreeConfig` defaults its typed technique map to MSDF, and a wrapped config may select another
-registered default. An explicit `format` on `glyph.fontFace(source, config?)` still overrides that handle default.
+D-309's omitted FontFace `format` synthesizes no keyed technique members. Its aggregate `load()` discovers every imported
+technique advertised by the authoritative main GLB. When the face is later passed to Text, the consuming handle still
+selects its configured default—built-in `ThreeConfig` uses MSDF unless a wrapped config chooses another registered key.
 
 D-297 forbids family names and raw URL strings from serving as resource identities. Names are lookup aliases; URLs and
 Requests are transport locators; authenticated content hashes, exact raster descriptors, and technique witness identity
@@ -64,8 +65,8 @@ mutating live resources, and a GLB format miss never falls through to runtime ba
 
 D-298 records that Three's base `Loader` neither caches nor discovers dependencies, the installed `FileLoader` is not used
 by Glyph's current `FontLoader`, and the former R3F loader path added its own `useLoader` cache. The implemented FontFace
-path collapses that React cache into Glyph: `selection.load(handle)` owns the operation, and React suspends on the same
-stable promise. The core GLB directory—not a filename convention—selects an embedded raster
+path collapses that React cache into Glyph: FontFace owns loaded technique records, and React suspends on the selected
+handle's exact technique operation. The core GLB directory—not a filename convention—selects an embedded raster
 or an authenticated external raster artifact, whose decoder must finish its required external resources before the load
 resolves.
 
@@ -73,11 +74,11 @@ Generated sidecar filename patterns are producer conveniences, never runtime dis
 `PMNDRS_font.rasters` directory can assert that a technique exists and name its embedded or external artifact. A sidecar
 cannot be loaded as a FontFace root or used to infer support, even when its filename matches the CLI's normal pattern.
 
-D-301 keeps the R3F rule binary. React resolves the handle and selection, checks `selection.isLoaded(handle)`, and
-conditionally calls `use(selection.load(handle))` whenever that resolved selection is not loaded. FontFace family strings
-resolve through Glyph's root catalog; an unknown name fails resolution. `GlyphProvider` only overrides the selected handle
-for a subtree. The graph publishes readiness before fulfilling the Promise, so resolved rerenders skip `use()` entirely
-and pay no Promise or microtask stall.
+D-309 keeps the R3F rule binary. React resolves the handle and selection, synchronously asks the handle-owned binding store
+whether its exact technique is loaded, and conditionally calls `use()` on that stable internal load operation when false.
+FontFace family strings resolve through the provider map and then Glyph's root catalog; an unknown name fails resolution.
+`GlyphProvider` only overrides the selected handle for a subtree. Readiness publishes before the Promise fulfills, so a
+resolved rerender skips `use()` entirely and pays no Promise or microtask stall.
 
 This document preserves the API investigation so it can continue in a fresh context. It is a design brief, not an implementation plan that has been approved. The current code remains the evidence for what exists today.
 

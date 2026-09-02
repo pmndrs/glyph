@@ -36,11 +36,14 @@ three();
 // @ts-expect-error A named root is terminal; roots cannot create nested roots.
 hud('nested');
 // @ts-expect-error Text construction is owned by a Three handle root.
-new Text({ font: bitmapFont, text: 'rootless' });
+const rootlessText = new Text({ font: bitmapFont, text: 'rootless' });
+void rootlessText;
 // @ts-expect-error TextGroup construction is owned by a Three handle root.
-new TextGroup();
+const rootlessGroup = new TextGroup();
+void rootlessGroup;
 // @ts-expect-error ThreeRoot construction is owned by a Three handle.
-new ThreeRoot(undefined, undefined, () => undefined);
+const rootlessThreeRoot = new ThreeRoot(undefined, undefined, () => undefined);
+void rootlessThreeRoot;
 const inter = glyph.fontFace('/fonts/Inter.font.glb', {
   family: 'Inter',
   format: [slug, bitmap({ strikes: [8, 16] })] as const,
@@ -49,7 +52,10 @@ inter.default satisfies typeof inter;
 void inter.bitmap;
 // @ts-expect-error Undeclared formats are not present on a typed FontFace.
 void inter.msdf;
-inter.slug.load(three) satisfies Promise<typeof inter.slug>;
+inter.slug.load() satisfies Promise<typeof inter.slug>;
+const discovered = glyph.fontFace('/fonts/discovered.font.glb');
+// @ts-expect-error Omitted format declarations do not synthesize technique members.
+void discovered.slug;
 three.createText({ font: inter.slug, text: 'Loaded before construction' }) satisfies import('../../src/three.js').Text<
   typeof slug
 >;

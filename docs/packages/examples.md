@@ -5,7 +5,7 @@ description: Demonstrates matching public imperative Three.js and React Three Fi
 resource: ../../apps/r3f-hello-world
 workspace_package: '@pmndrs/glyph-examples'
 documentation_type: reference
-source_digest: 'sha256:06916c27a28918fee60f9742d4a6df3e3862e79448e6b9866276a2b4b3ddf3fc'
+source_digest: 'sha256:588248e0e0a968bae306f06ccc09e0c7783679f4ca360835a56a229b4736d4f3'
 tags: [package, example, three, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -32,7 +32,7 @@ entry reads `?example=three|r3f` and dynamically imports only that integration. 
 Font Awesome GLBs rather than maintaining separate fixture or loading paths.
 
 The imperative route uses the complete ordinary contract: `await glyph.init()`, `glyph.handle(name, ThreeConfig)`,
-`glyph.fontFace(source)`, `await face.load(handle)`, `handle.createText()`, `scene.add(text)`, `text.shape()`, and finally
+`glyph.fontFace(source)`, `await face.load()`, `handle.createText()`, `scene.add(text)`, `text.shape()`, and finally
 `renderer.render(scene, camera)`. `shape()` commits one planned Three `Mesh` below the `Text` before
 `WebGPURenderer.init()` is awaited. The renderer, its canvas, and the camera are therefore application-owned host state,
 not inputs to Glyph resource resolution.

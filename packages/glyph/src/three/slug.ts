@@ -1,4 +1,4 @@
-import { slugShader } from '../tsl/slug-shader.js';
+import { slugShader } from '@pmndrs/glyph/tsl/slug';
 import {
   SLUG_DEFAULT_BAND_COUNT,
   SLUG_EXTENSION,

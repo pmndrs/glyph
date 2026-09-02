@@ -34,7 +34,7 @@ export async function mountThreeExample(root: HTMLElement): Promise<() => void> 
 
   try {
     // The FontFace owns the declaration; loading is explicitly relative to this handle.
-    await inter.load(handle);
+    await inter.load();
     text = handle.createText({
       constraints: { width: { mode: 'exact', size: root.clientWidth } },
       font: inter,

@@ -653,7 +653,7 @@ const hudText = hud.createText({ font, text: 'Score: 42' });</code></pre>
       </section>
 
       <section id="fonts">
-        <h2>Optional handle-relative FontFace loading</h2>
+        <h2>Optional FontFace loading and handle binding</h2>
         <pre><code>fonts: {
   default: 'glyphExample',
   techniques: { glyphExample },
@@ -667,11 +667,13 @@ const hudText = hud.createText({ font, text: 'Score: 42' });</code></pre>
   family: 'Inter',
   format: glyphExample({ paletteSeed: 17 }),
 });
-await Inter.load(handle);
-console.assert(Inter.isLoaded(handle));</code></pre>
+await Inter.load();
+console.assert(Inter.isLoaded());
+await Inter.glyphExample.load(); // exact technique only</code></pre>
         <p>
-          A synchronous Text constructor throws when its selected font is not loaded. React may suspend on the same load
-          promise; its immutable context carries only the selected handle/root and never becomes another Glyph runtime.
+          The main font must advertise every declared technique or loading rejects. A synchronous Text constructor
+          throws when its selected technique is not loaded. React may suspend on the handle's exact technique operation;
+          its immutable context carries only the selected handle/root and never becomes another Glyph runtime.
         </p>
       </section>
 

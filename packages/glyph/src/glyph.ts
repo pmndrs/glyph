@@ -8,12 +8,9 @@ import {
 import {
   createFontFace,
   FontFaceHandleStore,
-  registerFontFaceHandleStore,
-  unregisterFontFaceHandleStore,
   type FontFace,
   type FontFaceConfig,
   type FontFaceDeclaredFormat,
-  type FontFaceFormat,
   type FontFaceFormatDeclaration,
   type FontFaceSource,
 } from './font-face.js';
@@ -23,7 +20,7 @@ export interface Glyph {
   readonly initialized: boolean;
   init(options?: GlyphEngineOptions): Promise<void>;
   handle<Config extends AnyGlyphConfig>(name: string, config: Config): GlyphConfigHandle<Config>;
-  fontFace<const Declaration extends FontFaceFormatDeclaration = FontFaceFormat>(
+  fontFace<const Declaration extends FontFaceFormatDeclaration = never>(
     source: FontFaceSource,
     config?: FontFaceConfig<Declaration>,
   ): FontFace<FontFaceDeclaredFormat<Declaration>>;
@@ -70,21 +67,13 @@ class GlyphRuntime implements Glyph {
     if (this.#handles.has(name)) throw new Error(`Glyph handle ${JSON.stringify(name)} already exists`);
 
     const fonts =
-      config.fonts === undefined
-        ? undefined
-        : new FontFaceHandleStore(
-            this.fontLibrary,
-            config.fonts.techniques,
-            config.fonts.default,
-            config.fonts.loadTechnique,
-          );
+      config.fonts === undefined ? undefined : new FontFaceHandleStore(config.fonts.techniques, config.fonts.default);
     const context = Object.freeze({
       name,
       engine,
       fonts,
       released: (released: GlyphHandle): void => {
         if (this.#handles.get(name) === released) this.#handles.delete(name);
-        unregisterFontFaceHandleStore(released);
         fonts?.dispose();
       },
     });
@@ -97,16 +86,15 @@ class GlyphRuntime implements Glyph {
         throw error;
       }
     })();
-    if (fonts !== undefined) registerFontFaceHandleStore(handle, fonts);
     this.#handles.set(name, handle);
     return handle;
   }
 
-  fontFace<const Declaration extends FontFaceFormatDeclaration = FontFaceFormat>(
+  fontFace<const Declaration extends FontFaceFormatDeclaration = never>(
     source: FontFaceSource,
     config: FontFaceConfig<Declaration> = {},
   ): FontFace<FontFaceDeclaredFormat<Declaration>> {
-    return createFontFace(source, config);
+    return createFontFace(this.fontLibrary, source, config);
   }
 }
 

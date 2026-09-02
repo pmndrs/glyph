@@ -23,7 +23,6 @@ import { slug } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import { normalizeGlyphBufferCapacity } from '../text-properties.js';
 import type { PortableResource } from '../index.js';
-import { loadThreeTechnique } from './internal/builtin-shaders.js';
 import { threeCodecDescriptor } from './codec.js';
 import type { ThreeAllocationMode, ThreeTransformMode } from './codec.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
@@ -155,6 +154,19 @@ export function threeHandleFontSource(handle: ThreeHandle, selection: AnyFontFac
   return threeHandleRoot(handle).fontSource(selection);
 }
 
+/** @internal Read whether the selected handle can synchronously acquire this FontFace technique. */
+export function isThreeHandleFontLoaded(handle: ThreeHandle, selection: AnyFontFaceSelection): boolean {
+  return threeHandleRoot(handle).isFontLoaded(selection);
+}
+
+/** @internal Load the exact FontFace technique selected by this handle. */
+export function loadThreeHandleFont(
+  handle: ThreeHandle,
+  selection: AnyFontFaceSelection,
+): Promise<AnyFontFaceSelection> {
+  return threeHandleRoot(handle).loadFont(selection);
+}
+
 /** Creates a pure Three config descriptor; every handle still owns independent mutable state. */
 export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphConfig {
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {
@@ -171,7 +183,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
       : normalizeThreeRootCompositing(options.compositing, 'ThreeConfig compositing');
   const config = defineGlyphConfig({
     schema: ThreeSchema,
-    fonts: { default: defaultFontFormat, techniques: ThreeFontTechniques, loadTechnique: loadThreeTechnique },
+    fonts: { default: defaultFontFormat, techniques: ThreeFontTechniques },
     encode: ({ ids }) =>
       createThreeCodec(
         ids,

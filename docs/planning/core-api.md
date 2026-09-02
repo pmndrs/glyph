@@ -214,7 +214,8 @@ transform-only path. TextGroup remains adapter hierarchy and inheritance inside 
 Immutable `Font<Technique>` values remain the renderer-neutral ownership model. `loadFont()` returns an application-owned
 lease. `createFontStack()` creates an ordered immutable fallback selection.
 
-When `GlyphConfig.fonts` is present, a FontFace selection loads relative to that handle:
+When `GlyphConfig.fonts` is present, the handle selects and binds a loaded FontFace technique for Text. Loading remains
+owned by the declaration itself:
 
 ```ts
 const Inter = glyph.fontFace('/fonts/Inter.font.glb', {
@@ -222,12 +223,13 @@ const Inter = glyph.fontFace('/fonts/Inter.font.glb', {
   format: msdf,
 });
 
-await Inter.load(three);
-if (!Inter.isLoaded(three)) throw new Error('font did not load');
+await Inter.load();
+if (!Inter.isLoaded()) throw new Error('font did not load');
 ```
 
 Root construction receives synchronous `isLoaded`, promise-returning `load`, independent-lease `acquire`, and borrowed
-`peek` access. Text creation throws for an unloaded selection. React may suspend on the same stable load promise.
+`peek` access for the exact technique selected by that handle. Text creation throws for an unloaded selection. React may
+suspend on the same stable internal technique-load promise.
 
 ## Ownership summary
 

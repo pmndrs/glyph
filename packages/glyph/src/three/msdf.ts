@@ -1,4 +1,4 @@
-import { msdfShader } from '../tsl/msdf-shader.js';
+import { msdfShader } from '@pmndrs/glyph/tsl/msdf';
 import {
   MSDF_EM_SIZE,
   MSDF_EXTENSION,
