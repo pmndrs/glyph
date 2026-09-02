@@ -27,6 +27,14 @@ Package exports define the public surface. A source file under `src/core` or an 
 private implementation detail unless `package.json` exports that subpath. Tests may import such files to own a focused
 internal contract, but must not present that evidence as a public integration contract.
 
+Public type evidence needs both boundaries a consumer encounters. A source fixture can exercise fast inference while the
+package is being authored; an isolated consumer must also resolve every public package specifier against emitted or packed
+declarations. The source fixture does not prove that declaration emit, `stripInternal`, conditional exports, or a missing
+declaration dependency preserved that contract. Conversely, loading each JavaScript subpath from a packed archive does not
+prove its TypeScript surface. In an inference fixture, let the public factory call infer the value first and assert the
+result afterward. An explicit return annotation, `Any*` binding alias, generic argument, or corrective cast can make a
+broken inference path look green.
+
 ## Prefer product behavior over framework behavior
 
 React and R3F tests should assert Glyph behavior: selected handle/root identity, suspension on a FontFace load, independent
@@ -39,6 +47,11 @@ Browser and GPU tests need causal completion signals. A frame count, sleep, retr
 not evidence that Glyph committed or the host rendered. Expose an app-owned completion signal tied to the product state,
 then assert the scene/draw/pixel result. Diagnostic polling may describe a timeout, but it must not define correctness.
 
+Initialization and transition are different product invariants. A sequential test that first reaches one healthy route
+and then switches workload, technique, scene, or font does not prove that a later selection works on a fresh page. Keep one
+bounded fresh-load matrix when boot order, lazy loading, or retained caches can affect the result; let a separate transition
+test prove reuse and handoff.
+
 ## Do not reproduce the implementation in the test
 
 - Derive expectations from authenticated fixtures, independent implementations, public measurements, or explicit
@@ -48,6 +61,15 @@ then assert the scene/draw/pixel result. Diagnostic polling may describe a timeo
 - Extract repeated test setup only when it has one stable meaning. A helper that accepts many callbacks and flags can hide
   which lifecycle each test actually owns.
 - Keep generated, vendored, built, and authenticated fixture output outside maintained-test duplication decisions.
+
+When several closed variants have the same lifecycle and only their expected metadata differs, prefer one table-driven
+test with explicit per-variant expectations. Separate files that repeat the same construction, capability set, and
+precondition failure are not independent coverage. Keep a variant-specific test only when it crosses a distinct decoder,
+shader, artifact, error, or ownership boundary.
+
+Keep test names accountable to their assertions. A title that claims a value is hidden, a path is public, or a resource is
+released must contain an assertion that would fail if that exact contract regressed; otherwise strengthen the test or
+rename it before treating it as evidence.
 
 ## Review changed code for scaffolding residue
 
@@ -78,4 +100,5 @@ relationships from one runtime witness through schema callbacks, config extensio
 helper may have a separate internal type fixture, but it is not evidence that consumers can import it. TypeScript cannot
 prevent a consumer from asserting a false type, so canonical integrations must compile without `Any*`, `unknown`,
 explicit generic repair, or corrective casts; static boundary tests may enforce that property in those canonical
-examples.
+examples. Run the same consumer contract against the packed declaration graph so an internal source condition cannot hide
+an export or declaration-emit regression.
