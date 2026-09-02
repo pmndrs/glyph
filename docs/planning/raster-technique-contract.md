@@ -222,7 +222,7 @@ Dependency-ordered layers, each green standalone:
 
 1. ✅ `core`: `defineTechniqueSchema` + schema-typed `store`/binding/lookup APIs. Landed with the D-250/D-251
    stack, then hardened by the adversarial-review closure: schemas deep-freeze at definition, DSL values carry
-   session provenance (a value from one program throws when stored into another), and `schemaPolicyBuffers` /
+   session provenance (a value from one program throws when stored into another), and `schemaCodecBuffers` /
    `schemaFieldTable` derive wire buffer lists and binding-table order from the declaration.
 2. ✅ `raster/<t>`: bitmap, msdf, slug, decoration schemas declared and consumed by programs, binding compilers,
    and the executor; hardcoded id ranges, positional field tables, and width lists are gone, and the byte goldens

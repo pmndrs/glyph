@@ -80,17 +80,17 @@ export const msdf: RasterFormat<
 });
 
 import { f32, techniqueProgram, u32 } from '../config/codec-program.js';
-import { id, type PolicyBufferId } from '../config/codec.js';
+import { id, type CodecBufferId } from '../config/codec.js';
 import type { RasterPlanProgram } from '../config/raster.js';
 import { registerGlyphRasterPlanProgram } from '../config/raster.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
-const MSDF_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/rect');
-const MSDF_UV_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/uv-rect');
-const MSDF_UV_BOUNDS_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/uv-bounds');
-const MSDF_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/color');
-const MSDF_EFFECT_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/effect-color');
-const MSDF_PAGE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/page');
+const MSDF_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/rect');
+const MSDF_UV_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/uv-rect');
+const MSDF_UV_BOUNDS_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/uv-bounds');
+const MSDF_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/color');
+const MSDF_EFFECT_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/effect-color');
+const MSDF_PAGE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/page');
 
 /**
  * The authoritative physical shape of the MSDF technique.
@@ -197,7 +197,7 @@ export const msdfSchema: TechniqueSchema<
 export const msdfPlanProgram: RasterPlanProgram<typeof msdf, typeof msdfSchema> = registerGlyphRasterPlanProgram({
   raster: msdf,
   schema: msdfSchema,
-  policyBody(system) {
+  codecBody(system) {
     const p = techniqueProgram(msdfSchema, { textEffects: msdf.textEffects, system });
     const { inlineOrigin, blockOrigin, fontSize, color, outline, shadow } = p.semantics;
     if (outline === undefined || shadow === undefined) {

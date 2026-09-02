@@ -1,13 +1,12 @@
-//! Shared policy execution and capacity arithmetic for retained plan compilers.
+//! Shared codec execution and capacity arithmetic for retained plan compilers.
 
 use core::{mem, slice};
 
 use super::{
-    plan_input::PlanInput,
-    policy::{
-        CapabilitySetId, PhysicalBufferMut, PolicyExecutionError, SemanticInputBatch,
-        ValidatedPolicy,
+    codec::{
+        CapabilitySetId, CodecExecutionError, PhysicalBufferMut, SemanticInputBatch, ValidatedCodec,
     },
+    plan_input::PlanInput,
     render_plan::{PATCH_WRITE, PatchRecord},
 };
 
@@ -19,7 +18,7 @@ pub enum PackingError {
     ArithmeticOverflow,
     CapacityExceeded,
     InvalidIdentity,
-    Policy(PolicyExecutionError),
+    Codec(CodecExecutionError),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -38,7 +37,7 @@ pub struct PhysicalBufferState {
     pub id: u32,
     pub generation: u32,
     pub program_id: u32,
-    pub schema: super::policy::BufferSchema,
+    pub schema: super::codec::BufferSchema,
     pub capacity: u32,
     pub bytes: alloc::vec::Vec<u8>,
 }
@@ -54,7 +53,7 @@ pub fn push_pending_allocation(
     id: u32,
     generation: u32,
     program_id: u32,
-    schema: super::policy::BufferSchema,
+    schema: super::codec::BufferSchema,
     capacity: u32,
 ) -> Result<(), PackingError> {
     allocations
@@ -71,7 +70,7 @@ impl PhysicalBufferState {
         id: u32,
         generation: u32,
         program_id: u32,
-        schema: super::policy::BufferSchema,
+        schema: super::codec::BufferSchema,
         capacity: u32,
     ) -> Result<Self, PackingError> {
         let length = usize::try_from(capacity)
@@ -134,9 +133,9 @@ pub fn take_allocation(
 
 #[allow(clippy::too_many_arguments)]
 pub fn execute_run(
-    policy: &ValidatedPolicy,
+    codec: &ValidatedCodec,
     capability_set: CapabilitySetId,
-    program: &super::policy::ProgramDescriptor,
+    program: &super::codec::ProgramDescriptor,
     input: PlanInput<'_>,
     input_index: usize,
     record_count: u32,
@@ -149,10 +148,8 @@ pub fn execute_run(
     let input_end = input_index
         .checked_add(record_count as usize)
         .ok_or(PackingError::ArithmeticOverflow)?;
-    let mut f32_fields: [&[f32]; super::policy::MAX_REGISTERS] =
-        [&[]; super::policy::MAX_REGISTERS];
-    let mut u32_fields: [&[u32]; super::policy::MAX_REGISTERS] =
-        [&[]; super::policy::MAX_REGISTERS];
+    let mut f32_fields: [&[f32]; super::codec::MAX_REGISTERS] = [&[]; super::codec::MAX_REGISTERS];
+    let mut u32_fields: [&[u32]; super::codec::MAX_REGISTERS] = [&[]; super::codec::MAX_REGISTERS];
     for (target, field) in f32_fields
         .iter_mut()
         .zip(input.f32_fields.iter())
@@ -194,7 +191,7 @@ pub fn execute_run(
             program.buffers.len(),
         )
     };
-    policy
+    codec
         .execute_buffers(
             capability_set,
             program.technique,
@@ -208,7 +205,7 @@ pub fn execute_run(
             outputs,
             active_buffers,
         )
-        .map_err(PackingError::Policy)
+        .map_err(PackingError::Codec)
 }
 
 pub fn grown_capacity(mut capacity: u32, required: u32) -> Result<u32, PackingError> {
@@ -221,7 +218,7 @@ pub fn grown_capacity(mut capacity: u32, required: u32) -> Result<u32, PackingEr
 }
 
 pub fn record_alignment(
-    program: &super::policy::ProgramDescriptor,
+    program: &super::codec::ProgramDescriptor,
     byte_alignment: u32,
 ) -> Result<u32, PackingError> {
     program.buffers.iter().try_fold(1_u32, |records, schema| {
@@ -229,7 +226,7 @@ pub fn record_alignment(
     })
 }
 
-pub fn buffer_record_alignment(schema: &super::policy::BufferSchema, byte_alignment: u32) -> u32 {
+pub fn buffer_record_alignment(schema: &super::codec::BufferSchema, byte_alignment: u32) -> u32 {
     byte_alignment / gcd(byte_alignment, u32::from(schema.stride))
 }
 
@@ -253,7 +250,7 @@ pub fn align_record_range(range: RecordRange, alignment: u32) -> Result<RecordRa
 pub fn coalesce_buffer_ranges(
     ranges: &mut alloc::vec::Vec<RecordRange>,
     bytes_per_record: u32,
-    capability: &super::policy::CapabilitySet,
+    capability: &super::codec::CapabilitySet,
     live_records: u32,
 ) -> Result<(), PackingError> {
     if ranges.is_empty() {
@@ -381,7 +378,7 @@ mod tests {
         MAX_PHYSICAL_BUFFERS, PackingError, RangeJob, RecordRange, coalesce_buffer_ranges,
         collect_range_jobs,
     };
-    use crate::engine::policy::{CapabilitySet, CapabilitySetId};
+    use crate::engine::codec::{CapabilitySet, CapabilitySetId};
 
     fn capability() -> CapabilitySet {
         CapabilitySet {

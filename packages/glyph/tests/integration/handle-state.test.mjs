@@ -13,25 +13,25 @@ import {
   engineFrameUpdateBytes,
   engineUpdateBytes,
   fontBindingBytes,
-  renderPolicyBytes,
+  renderCodecBytes,
 } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const TEST_POLICY_HANDLE = id.policy('test.text-engine-handle-state/default');
+const TEST_CODEC_HANDLE = id.codec('test.text-engine-handle-state/default');
 const TEST_PLANNER_HANDLE = id.planner('test.text-engine-handle-state/default');
-const THREE_POLICY_HANDLE = id.policy('test.text-engine-handle-state/three');
+const THREE_CODEC_HANDLE = id.codec('test.text-engine-handle-state/three');
 
 test('a glyph engine owns every configured-handle state it creates', async () => {
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(wasmUrl) });
   assert.throws(() => createGlyphHandleState(glyphEngine, { integration: '' }), /nonempty string/u);
   const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.glyphEngine-owner' });
   const plannerHandle = handleState.id('planner', 'test.glyphEngine-owner/transport');
-  const policyHandle = handleState.id('policy', 'test.glyphEngine-owner/policy');
-  handleState.registerCodec(policyHandle, renderPolicyBytes(textShaperAbi));
+  const codecHandle = handleState.id('codec', 'test.glyphEngine-owner/codec');
+  handleState.registerCodec(codecHandle, renderCodecBytes(textShaperAbi));
   const request = engineUpdateBytes(textShaperAbi, {
     plannerId: plannerHandle,
-    policyHandle,
+    codecHandle,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
   });
@@ -52,12 +52,12 @@ test('a Glyph handle state publishes borrowed A/B plans through the engine shape
   const abi = textShaperAbi;
   const shaper = await createRuntimeShaper({ wasm });
   const handleState = new GlyphHandleState(shaper);
-  const policyHandle = TEST_POLICY_HANDLE;
+  const codecHandle = TEST_CODEC_HANDLE;
   const plannerId = TEST_PLANNER_HANDLE;
-  handleState.registerCodec(policyHandle, renderPolicyBytes(abi));
+  handleState.registerCodec(codecHandle, renderCodecBytes(abi));
   const firstRequest = engineUpdateBytes(abi, {
     plannerId,
-    policyHandle,
+    codecHandle,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
   });
@@ -73,14 +73,14 @@ test('a Glyph handle state publishes borrowed A/B plans through the engine shape
   assert.equal(first.requiredBaseRevision, 0);
   assert.equal(first.publicationGeneration, 1);
   assert.equal(first.outputSlot, 0);
-  assert.equal(first.policyHandle, policyHandle);
+  assert.equal(first.codecHandle, codecHandle);
   assert.equal(first.bytes.byteLength, abi.layouts.engineResult.size);
   const retainedFirst = first.bytes.slice();
 
   const second = transport.update(
     engineUpdateBytes(abi, {
       plannerId,
-      policyHandle,
+      codecHandle,
       expectedEngineRevision: first.engineRevision,
       consumedPlanRevision: first.planRevision,
       acknowledgedPublicationGeneration: first.publicationGeneration,
@@ -143,12 +143,12 @@ test('font bindings cannot be disposed while an owned stack still references the
     assert.throws(() => handleState.disposeFontBinding(bindingHandle), /still used by font stack/u);
     assert.throws(() => shaper.disposeFont(font), /retained by a registered font stack/u);
     assert.equal(shaper.memoryReport().fontCount, 1, 'a refused disposal must keep the shaper registration owned');
-    const policyHandle = handleState.id('policy', 'test.text-engine-handle-state/lifecycle-policy');
+    const codecHandle = handleState.id('codec', 'test.text-engine-handle-state/lifecycle-codec');
     const plannerHandle = handleState.id('planner', 'test.text-engine-handle-state/lifecycle-transport');
-    handleState.registerCodec(policyHandle, renderPolicyBytes(textShaperAbi));
+    handleState.registerCodec(codecHandle, renderCodecBytes(textShaperAbi));
     const request = engineFrameUpdateBytes(textShaperAbi, {
       plannerId: plannerHandle,
-      policyHandle,
+      codecHandle,
       fontStackHandle: stackHandle,
       textMutation: { start: 0, deleteCount: 0, insert: [0x41] },
       style: { textEnd: 1, fontSize: 16, lineHeight: 19.2, rasterPixelRatio: 1 },
@@ -167,14 +167,14 @@ test('font bindings cannot be disposed while an owned stack still references the
       'a committed transport must retain the stack named by its styles',
     );
     assert.throws(
-      () => handleState.disposeCodec(policyHandle),
+      () => handleState.disposeCodec(codecHandle),
       (error) => error.code === 'registration-in-use',
-      'a committed transport must retain its policy',
+      'a committed transport must retain its codec',
     );
     transport.dispose();
     handleState.disposeFontStack(stackHandle);
     handleState.disposeFontBinding(bindingHandle);
-    handleState.disposeCodec(policyHandle);
+    handleState.disposeCodec(codecHandle);
     assert.throws(() => handleState.disposeFontBinding(bindingHandle), /must come from id/u);
     shaper.disposeFont(font);
     assert.equal(shaper.memoryReport().fontCount, 0);
@@ -186,7 +186,7 @@ test('font bindings cannot be disposed while an owned stack still references the
   }
 });
 
-test('one deterministic Three policy registers Bitmap, MSDF, and Slug with material-directed draws', async () => {
+test('one deterministic Three codec registers Bitmap, MSDF, and Slug with material-directed draws', async () => {
   const wasm = await readFile(wasmUrl);
   const abi = textShaperAbi;
   const wireIds = {
@@ -202,8 +202,8 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
     decoration: 0x3455fa81,
   });
   const bytes = threeCodecBytes();
-  const request = abi.layouts.policyRequest;
-  const program = abi.layouts.policyProgram;
+  const request = abi.layouts.codecRequest;
+  const program = abi.layouts.codecProgram;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   assert.equal(view.getUint32(request.programCount, true), 4);
   const programsOffset = view.getUint32(request.programsOffset, true);
@@ -218,8 +218,8 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
     const offset = programsOffset + index * program.size;
     assert.equal(view.getUint32(offset + program.techniqueId, true), wireTechniqueId);
     assert.equal(view.getUint32(offset + program.programId, true), expectedPrograms[index]);
-    assert.ok(view.getUint32(offset + program.drawKeyMask, true) & abi.policy.batchFields.material);
-    assert.equal(view.getUint32(offset + program.storageKeyMask, true) & abi.policy.batchFields.material, 0);
+    assert.ok(view.getUint32(offset + program.drawKeyMask, true) & abi.codec.batchFields.material);
+    assert.equal(view.getUint32(offset + program.storageKeyMask, true) & abi.codec.batchFields.material, 0);
     const expectedKind =
       wireTechniqueId === wireIds.decoration ? abi.engine.primitiveKinds.decoration : abi.engine.primitiveKinds.glyph;
     assert.equal(view.getUint16(offset + program.primitiveKind, true), expectedKind);
@@ -227,7 +227,7 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
 
   const shaper = await createRuntimeShaper({ wasm });
   const handleState = new GlyphHandleState(shaper);
-  handleState.registerCodec(THREE_POLICY_HANDLE, bytes);
+  handleState.registerCodec(THREE_CODEC_HANDLE, bytes);
   handleState.dispose();
   shaper.dispose();
 });

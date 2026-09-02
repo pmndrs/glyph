@@ -475,7 +475,7 @@ export class TypedCommandBufferMapper {
   }
 
   #bufferFromRecord(state: TypedSourceState, view: RenderPlanReader, offset: number): TypedBuffer {
-    const binding = view.u16(offset + bufferLayout.policyBufferId);
+    const binding = view.u16(offset + bufferLayout.codecBufferId);
     return this.declareBuffer(
       state,
       view.u32(offset + bufferLayout.id),
@@ -609,7 +609,7 @@ class BufferCommandView implements TypedBufferCommand {
   }
 
   get buffer(): TypedBuffer {
-    const binding = this.#view.u16(this.#offset + bufferLayout.policyBufferId);
+    const binding = this.#view.u16(this.#offset + bufferLayout.codecBufferId);
     return this.#mapper.declareBuffer(
       this.#state,
       this.#view.u32(this.#offset + bufferLayout.id),
@@ -625,7 +625,7 @@ class BufferCommandView implements TypedBufferCommand {
 
   get scalarType(): TypedBufferCommand['scalarType'] {
     const wire = this.#view.u8(this.#offset + bufferLayout.scalarType);
-    const scalars = textShaperAbi.policy.scalarTypes;
+    const scalars = textShaperAbi.codec.scalarTypes;
     return wire === scalars.f32 ? 'f32' : wire === scalars.u32 ? 'u32' : 'u16';
   }
 

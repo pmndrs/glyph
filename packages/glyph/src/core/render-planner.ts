@@ -46,11 +46,11 @@ import { RenderPlanView, readTrustedRenderPlanResourceReferenceId, type RenderPl
 import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
 import type { PortableResource } from '../config/resources.js';
 import {
-  policyCapabilitySetSelectionId,
-  selectPolicyCapabilitySet,
+  codecCapabilitySetSelectionId,
+  selectCodecCapabilitySet,
   type MaterialHandle,
   type ParagraphId,
-  type PolicyCapabilitySet,
+  type CodecCapabilitySet,
   type ResourceHandle,
 } from '../config/codec.js';
 
@@ -321,7 +321,7 @@ export type RenderPlannerFor<Target extends RenderPlanTarget> = Target extends A
 /** Construction options for one retained-text planner and render target. */
 export interface RenderPlannerOptions<Target extends RenderPlanTarget> {
   readonly codec: CodecRegistration;
-  readonly capabilitySet?: PolicyCapabilitySet;
+  readonly capabilitySet?: CodecCapabilitySet;
   readonly target: (control: PlanTargetControl) => Target;
   readonly limits: RenderPlannerLimits;
   readonly requestCapacity: number;
@@ -464,7 +464,7 @@ class RenderPlannerImpl {
   readonly #handleState: GlyphHandleState;
   readonly #transport: PlanTransport;
   readonly #codec: ReturnType<GlyphHandleState['_retainInstalledCodec']>;
-  readonly #capabilitySet: ReturnType<typeof selectPolicyCapabilitySet> | undefined;
+  readonly #capabilitySet: ReturnType<typeof selectCodecCapabilitySet> | undefined;
   readonly #target: RenderPlanTarget | undefined;
   readonly #control: TargetControlState | undefined;
   readonly #targetController = new AbortController();
@@ -542,7 +542,7 @@ class RenderPlannerImpl {
       const capabilitySet =
         renderOptions.capabilitySet === undefined
           ? undefined
-          : selectPolicyCapabilitySet(codec.handle, codec.descriptor, renderOptions.capabilitySet);
+          : selectCodecCapabilitySet(codec.handle, codec.descriptor, renderOptions.capabilitySet);
       target = renderOptions.target(control);
       assertTarget(target, this.#limits.maxOutputBytes);
       if (claimedTargets.has(target)) throw new TypeError('plan target is already attached to another render planner');
@@ -996,7 +996,7 @@ class RenderPlannerImpl {
     const textChanged = !state.published || state.publishedText !== state.desired.text;
     const request = compilePlannerFrameUpdate({
       plannerId: this.#transport.handle,
-      policyHandle: this.#codec.handle,
+      codecHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
       consumedPlanRevision: this.#planRevision,
@@ -1078,7 +1078,7 @@ class RenderPlannerImpl {
     }
     return compilePlannerFrameUpdate({
       plannerId: this.#transport.handle,
-      policyHandle: this.#codec.handle,
+      codecHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
       consumedPlanRevision: checkpointGeneration === this.#acceptedCheckpointGeneration ? this.#planRevision : 0,
@@ -1279,7 +1279,7 @@ class RenderPlannerImpl {
   #capabilitySetId(): number {
     return this.#capabilitySet === undefined
       ? 1
-      : policyCapabilitySetSelectionId(this.#capabilitySet, this.#codec.handle);
+      : codecCapabilitySetSelectionId(this.#capabilitySet, this.#codec.handle);
   }
 
   #portablePayload(referenceId: ResourceHandle): PortablePayloadLease {

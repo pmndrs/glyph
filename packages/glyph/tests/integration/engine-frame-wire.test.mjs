@@ -7,7 +7,7 @@ import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const PLANNER_ID = id.planner('engine-frame-wire/planner');
-const POLICY_ID = id.policy('engine-frame-wire/policy');
+const CODEC_ID = id.codec('engine-frame-wire/codec');
 const FONT_STACK_ID = id.fontStack('engine-frame-wire/font-stack');
 const PARAGRAPH_ID = id.paragraph('engine-frame-wire/paragraph');
 const OTHER_PARAGRAPH_ID = id.paragraph('engine-frame-wire/other-paragraph');
@@ -50,7 +50,7 @@ test('production frame compiler preserves the established benchmark request byte
   const limits = { maxClusters: 8, maxLines: 8, maxOutputBytes: 65_536 };
   const expected = engineFrameUpdateBytes(abi, {
     plannerId: PLANNER_ID,
-    policyHandle: POLICY_ID,
+    codecHandle: CODEC_ID,
     fontStackHandle: FONT_STACK_ID,
     paragraphId: PARAGRAPH_ID,
     styleId: STYLE_ID,
@@ -64,7 +64,7 @@ test('production frame compiler preserves the established benchmark request byte
   });
   const actual = compilePlannerFrameUpdate({
     plannerId: PLANNER_ID,
-    policyHandle: POLICY_ID,
+    codecHandle: CODEC_ID,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
     acknowledgedPublicationGeneration: 0,
@@ -141,7 +141,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
   const abi = textShaperAbi;
   const bytes = compilePlannerFrameUpdate({
     plannerId: PLANNER_ID,
-    policyHandle: POLICY_ID,
+    codecHandle: CODEC_ID,
     expectedEngineRevision: 3,
     consumedPlanRevision: 4,
     acknowledgedPublicationGeneration: 5,
@@ -291,8 +291,8 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
   assert.equal(header.getUint32(request.regionCount, true), 1);
   assert.equal(header.getUint32(request.exclusionCount, true), 1);
   assert.equal(header.getUint32(request.inlineObjectCount, true), 1);
-  assert.equal(header.getUint32(request.policyParametersLength, true), 0);
-  assert.equal(header.getUint32(request.policyParametersOffset, true), 0);
+  assert.equal(header.getUint32(request.codecParametersLength, true), 0);
+  assert.equal(header.getUint32(request.codecParametersOffset, true), 0);
   const styleOffset = header.getUint32(request.styleMutationsOffset, true);
   const style = abi.layouts.engineStyleMutation;
   const styleView = new DataView(bytes.buffer, bytes.byteOffset + styleOffset, style.size);
@@ -340,7 +340,7 @@ test('style payloads stay in per-record order when several paragraphs carry lang
   const paragraphIds = Array.from({ length: 4 }, (_, index) => id.paragraph(`engine-frame-wire/paragraph/${index}`));
   const bytes = compilePlannerFrameUpdate({
     plannerId: PLANNER_ID,
-    policyHandle: POLICY_ID,
+    codecHandle: CODEC_ID,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
     acknowledgedPublicationGeneration: 0,
@@ -412,7 +412,7 @@ test('production frame compiler encodes typography controls and their defaults',
   const compile = (typography) =>
     compilePlannerFrameUpdate({
       plannerId: PLANNER_ID,
-      policyHandle: POLICY_ID,
+      codecHandle: CODEC_ID,
       expectedEngineRevision: 0,
       consumedPlanRevision: 0,
       acknowledgedPublicationGeneration: 0,

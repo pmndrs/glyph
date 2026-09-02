@@ -3,14 +3,14 @@ import type { AnyRasterFormat, RasterResourceId } from '../raster-format.js';
 
 const MAX_U32 = 0xffff_ffff;
 
-// Engine-side policy limits mirrored from rust/shaper/src/engine/policy.rs.
-const MAX_POLICY_CAPABILITY_SETS = 8;
-const MAX_POLICY_PROGRAMS = 32;
-const MAX_BUFFERS_PER_POLICY_PROGRAM = 16;
-const MAX_OPERATIONS_PER_POLICY_PROGRAM = 128;
-const MAX_POLICY_REGISTERS = 32;
-const MAX_POLICY_VECTOR_WIDTH = 4;
-const MAX_POLICY_ALIGNMENT = 256;
+// Engine-side codec limits mirrored from rust/shaper/src/engine/codec.rs.
+const MAX_CODEC_CAPABILITY_SETS = 8;
+const MAX_CODEC_PROGRAMS = 32;
+const MAX_BUFFERS_PER_CODEC_PROGRAM = 16;
+const MAX_OPERATIONS_PER_CODEC_PROGRAM = 128;
+const MAX_CODEC_REGISTERS = 32;
+const MAX_CODEC_VECTOR_WIDTH = 4;
+const MAX_CODEC_ALIGNMENT = 256;
 const MAX_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS = 10_000;
 // Wire register types from the shaper's straight-line operation validator.
 const REGISTER_UNINITIALIZED = 0;
@@ -29,7 +29,7 @@ const namedIds = new Map<string, NamedGlyphId>();
 const glyphIdKinds = new Set([
   'generic',
   'buffer',
-  'policy',
+  'codec',
   'font-binding',
   'font-stack',
   'planner',
@@ -46,7 +46,7 @@ const glyphIdKinds = new Set([
 export type GlyphIdKind =
   | 'generic'
   | 'buffer'
-  | 'policy'
+  | 'codec'
   | 'font-binding'
   | 'font-stack'
   | 'planner'
@@ -64,8 +64,8 @@ declare const glyphIdBrand: unique symbol;
 export type GlyphId<Kind extends GlyphIdKind = GlyphIdKind> = number & { readonly [glyphIdBrand]: Kind };
 /** A deterministic domainless identity. Prefer a domain method on `id` when a protocol field has one. */
 export type Id = GlyphId<'generic'>;
-export type PolicyBufferId = GlyphId<'buffer'>;
-export type PolicyHandle = GlyphId<'policy'>;
+export type CodecBufferId = GlyphId<'buffer'>;
+export type CodecHandle = GlyphId<'codec'>;
 export type FontBindingHandle = GlyphId<'font-binding'>;
 export type FontStackHandle = GlyphId<'font-stack'>;
 export type PlannerHandle = GlyphId<'planner'>;
@@ -82,8 +82,8 @@ export type ResourceHandle = GlyphId<'resource'>;
 /** @internal Handle-scoped identity minting with explicit wire domains. */
 export interface HandleIdFactory {
   <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind>;
-  buffer(name: string): PolicyBufferId;
-  policy(name: string): PolicyHandle;
+  buffer(name: string): CodecBufferId;
+  codec(name: string): CodecHandle;
   fontBinding(name: string): FontBindingHandle;
   fontStack(name: string): FontStackHandle;
   planner(name: string): PlannerHandle;
@@ -164,7 +164,7 @@ export function createHandleIdFactory(scope: GlyphIdScope, assertActive: () => v
   return Object.freeze(
     Object.assign(mint, {
       buffer: (name: string) => mint('buffer', name),
-      policy: (name: string) => mint('policy', name),
+      codec: (name: string) => mint('codec', name),
       fontBinding: (name: string) => mint('font-binding', name),
       fontStack: (name: string) => mint('font-stack', name),
       planner: (name: string) => mint('planner', name),
@@ -203,7 +203,7 @@ function glyphIdFactoryLabel(kind: GlyphIdKind): string {
 
 const glyphIdMethods = {
   buffer: 'buffer',
-  policy: 'policy',
+  codec: 'codec',
   'font-binding': 'fontBinding',
   'font-stack': 'fontStack',
   planner: 'planner',
@@ -251,20 +251,20 @@ function registerGlyphId(derived: DerivedGlyphId<GlyphIdKind>, permanent: boolea
 // Reused bit-level scratch for finite-constant checks; module scope avoids per-op allocation.
 const f32Scratch = new DataView(new ArrayBuffer(4));
 
-export type PolicyInputScope = keyof typeof textShaperAbi.policy.inputScopes;
+export type CodecInputScope = keyof typeof textShaperAbi.codec.inputScopes;
 
-export interface PolicyInput {
-  readonly scope: PolicyInputScope;
+export interface CodecInput {
+  readonly scope: CodecInputScope;
   readonly field: number;
 }
 
-/** Scalar representation of one policy output buffer. */
-export type PolicyScalarType = 'f32' | 'u32' | 'u16';
+/** Scalar representation of one codec output buffer. */
+export type CodecScalarType = 'f32' | 'u32' | 'u16';
 
-/** One physical output buffer declared by a renderer policy program. */
-export interface PolicyBuffer {
-  readonly id: PolicyBufferId;
-  readonly scalar: PolicyScalarType;
+/** One physical output buffer declared by a renderer codec program. */
+export interface CodecBuffer {
+  readonly id: CodecBufferId;
+  readonly scalar: CodecScalarType;
   readonly vectorWidth: number;
   readonly alignment?: number;
   readonly stride?: number;
@@ -272,8 +272,8 @@ export interface PolicyBuffer {
   readonly capacityClass?: number;
 }
 
-/** Compiled straight-line operation emitted by the policy DSL. */
-export interface PolicyOperation {
+/** Compiled straight-line operation emitted by the codec DSL. */
+export interface CodecOperation {
   readonly opcode: number;
   readonly target?: number;
   readonly operand0?: number;
@@ -283,14 +283,14 @@ export interface PolicyOperation {
   readonly immediate2?: number;
 }
 
-/** One renderer-owned executable policy assembled from a portable technique body. */
-export interface PolicyProgram {
-  readonly techniqueId: RenderTechniqueId;
-  readonly programId: RenderProgramId;
+/** One renderer-owned executable codec assembled from a portable technique body. */
+export interface CodecProgram {
+  readonly techniqueId: CodecTechniqueId;
+  readonly programId: CodecProgramId;
   /** Plan primitive kind this program's records publish as; glyph when omitted. */
   readonly primitiveKind?: 'glyph' | 'decoration';
   /** Capability profile this program targets; omitted programs apply to every profile. */
-  readonly capabilitySet?: PolicyCapabilitySet;
+  readonly capabilitySet?: CodecCapabilitySet;
   readonly resourceKindMask?: number;
   readonly semanticViewMask?: number;
   readonly storageKeyMask?: number;
@@ -301,13 +301,13 @@ export interface PolicyProgram {
   readonly paintCapabilities?: number;
   readonly compositingCapabilities?: number;
   readonly allocationStrategy?: number;
-  readonly inputs: readonly PolicyInput[];
-  readonly buffers: readonly PolicyBuffer[];
-  readonly operations: readonly PolicyOperation[];
+  readonly inputs: readonly CodecInput[];
+  readonly buffers: readonly CodecBuffer[];
+  readonly operations: readonly CodecOperation[];
 }
 
-/** A renderer feature the policy compiler may target. */
-export type PolicyCapability =
+/** A renderer feature the codec compiler may target. */
+export type CodecCapability =
   | 'storage-buffers'
   | 'indirect-draws'
   | 'alias-vec2'
@@ -315,10 +315,10 @@ export type PolicyCapability =
   | 'ordered-direct'
   | 'stable-indirect';
 
-/** Renderer limits and named GPU features available to one policy profile. */
-export interface PolicyCapabilitySet {
-  /** Semantic capabilities lowered to wire flags only by `compileRenderPolicy()`. */
-  readonly capabilities: readonly PolicyCapability[];
+/** Renderer limits and named GPU features available to one codec profile. */
+export interface CodecCapabilitySet {
+  /** Semantic capabilities lowered to wire flags only by `compileCodec()`. */
+  readonly capabilities: readonly CodecCapability[];
   readonly maxBufferBytes: number;
   readonly updateAlignment: number;
   readonly coalesceGapBytes: number;
@@ -330,61 +330,61 @@ export interface PolicyCapabilitySet {
   readonly wholeBufferThresholdBasisPoints: number;
 }
 
-/** Complete renderer-owned policy installed into one text-engine host. */
-export interface PolicyDescriptor {
-  readonly capabilitySets: readonly PolicyCapabilitySet[];
-  readonly programs: readonly PolicyProgram[];
+/** Complete renderer-owned codec installed into one text-engine host. */
+export interface CodecDescriptor {
+  readonly capabilitySets: readonly CodecCapabilitySet[];
+  readonly programs: readonly CodecProgram[];
 }
 
-declare const policyCapabilitySetSelectionBrand: unique symbol;
+declare const codecCapabilitySetSelectionBrand: unique symbol;
 
-/** Opaque selection of one capability profile from a specific policy descriptor. */
-export interface PolicyCapabilitySetSelection {
-  readonly [policyCapabilitySetSelectionBrand]: true;
+/** Opaque selection of one capability profile from a specific codec descriptor. */
+export interface CodecCapabilitySetSelection {
+  readonly [codecCapabilitySetSelectionBrand]: true;
 }
 
 interface CapabilitySetSelectionRecord {
   readonly id: number;
-  readonly policyHandle: PolicyHandle;
+  readonly codecHandle: CodecHandle;
 }
 
 const capabilitySetSelections = new WeakMap<object, CapabilitySetSelectionRecord>();
 
 /** Select a declared capability profile without exposing its order-dependent wire ordinal. */
-export function selectPolicyCapabilitySet(
-  policyHandle: PolicyHandle,
-  descriptor: PolicyDescriptor,
-  selected: PolicyCapabilitySet,
-): PolicyCapabilitySetSelection {
-  assertGlyphId(policyHandle, 'policy', 'capability-set policy handle');
-  assertPolicyDescriptorShape(descriptor);
-  if (descriptor.capabilitySets.length === 0 || descriptor.capabilitySets.length > MAX_POLICY_CAPABILITY_SETS) {
-    throw new RangeError(`policy needs one to ${MAX_POLICY_CAPABILITY_SETS} capability sets`);
+export function selectCodecCapabilitySet(
+  codecHandle: CodecHandle,
+  descriptor: CodecDescriptor,
+  selected: CodecCapabilitySet,
+): CodecCapabilitySetSelection {
+  assertGlyphId(codecHandle, 'codec', 'capability-set codec handle');
+  assertCodecDescriptorShape(descriptor);
+  if (descriptor.capabilitySets.length === 0 || descriptor.capabilitySets.length > MAX_CODEC_CAPABILITY_SETS) {
+    throw new RangeError(`codec needs one to ${MAX_CODEC_CAPABILITY_SETS} capability sets`);
   }
-  const selectedKey = capabilitySetKey(normalizePolicyCapabilitySet(selected, 'selected policy capability set'));
+  const selectedKey = capabilitySetKey(normalizeCodecCapabilitySet(selected, 'selected codec capability set'));
   let selectedId: number | undefined;
   const seen = new Set<string>();
   for (const [index, capabilitySet] of descriptor.capabilitySets.entries()) {
-    const key = capabilitySetKey(normalizePolicyCapabilitySet(capabilitySet, `policy capability set ${index}`));
-    if (seen.has(key)) throw new TypeError('policy repeats an equivalent capability set');
+    const key = capabilitySetKey(normalizeCodecCapabilitySet(capabilitySet, `codec capability set ${index}`));
+    if (seen.has(key)) throw new TypeError('codec repeats an equivalent capability set');
     seen.add(key);
     if (key === selectedKey) selectedId = index + 1;
   }
-  if (selectedId === undefined) throw new TypeError('selected capability set is not declared by the policy');
-  const selection = Object.freeze({}) as PolicyCapabilitySetSelection;
-  capabilitySetSelections.set(selection, Object.freeze({ id: selectedId, policyHandle }));
+  if (selectedId === undefined) throw new TypeError('selected capability set is not declared by the codec');
+  const selection = Object.freeze({}) as CodecCapabilitySetSelection;
+  capabilitySetSelections.set(selection, Object.freeze({ id: selectedId, codecHandle }));
   return selection;
 }
 
-/** @internal Resolve only selections created by `selectPolicyCapabilitySet`. */
-export function policyCapabilitySetSelectionId(selection: unknown, policyHandle: PolicyHandle): number {
+/** @internal Resolve only selections created by `selectCodecCapabilitySet`. */
+export function codecCapabilitySetSelectionId(selection: unknown, codecHandle: CodecHandle): number {
   if (typeof selection !== 'object' || selection === null) {
-    throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
+    throw new TypeError('frame capabilitySet must come from selectCodecCapabilitySet()');
   }
   const selected = capabilitySetSelections.get(selection);
-  if (selected === undefined) throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
-  if (selected.policyHandle !== policyHandle) {
-    throw new TypeError('frame capabilitySet belongs to a different policy handle');
+  if (selected === undefined) throw new TypeError('frame capabilitySet must come from selectCodecCapabilitySet()');
+  if (selected.codecHandle !== codecHandle) {
+    throw new TypeError('frame capabilitySet belongs to a different codec handle');
   }
   return selected.id;
 }
@@ -393,11 +393,11 @@ declare const techniqueWireIdBrand: unique symbol;
 declare const programWireIdBrand: unique symbol;
 declare const resourceWireIdBrand: unique symbol;
 
-export type RenderTechniqueId = number & { readonly [techniqueWireIdBrand]: true };
-export type RenderProgramId = number & { readonly [programWireIdBrand]: true };
-export type RenderResourceId = number & { readonly [resourceWireIdBrand]: true };
+export type CodecTechniqueId = number & { readonly [techniqueWireIdBrand]: true };
+export type CodecProgramId = number & { readonly [programWireIdBrand]: true };
+export type CodecResourceId = number & { readonly [resourceWireIdBrand]: true };
 
-/** Deterministic UTF-8 FNV-1a mapping used by both policy and font-binding compilers. */
+/** Deterministic UTF-8 FNV-1a mapping used by both codec and font-binding compilers. */
 function renderWireId(identity: string): number {
   if (typeof identity !== 'string' || identity.length === 0) {
     throw new TypeError('render identity must be a nonempty string');
@@ -408,20 +408,20 @@ function renderWireId(identity: string): number {
   return hash;
 }
 
-/** Collision-checked render identities used while assembling policy programs and font bindings. */
-export interface RenderIdFactory {
+/** Collision-checked render identities used while assembling codec programs and font bindings. */
+export interface CodecIdFactory {
   /** Derive the stable wire identity of one Codec program family. */
-  technique(technique: AnyRasterFormat | string): RenderTechniqueId;
+  technique(technique: AnyRasterFormat | string): CodecTechniqueId;
   /** Derive one renderer program identity, optionally naming a variant. */
-  program(technique: AnyRasterFormat | string, namespace: string, variant?: string): RenderProgramId;
+  program(technique: AnyRasterFormat | string, namespace: string, variant?: string): CodecProgramId;
   /** Derive the wire identity of one authored baked-resource key. */
-  resource(resource: RasterResourceId): RenderResourceId;
+  resource(resource: RasterResourceId): CodecResourceId;
 }
 
 const renderIdFactories = new WeakSet<object>();
 
 /** @internal Runtime-scoped collision proof for identities lowered into the shared u32 render namespace. */
-export class RenderIdScope implements RenderIdFactory {
+export class CodecIdScope implements CodecIdFactory {
   readonly #strings = new Map<number, string>();
 
   constructor() {
@@ -438,35 +438,35 @@ export class RenderIdScope implements RenderIdFactory {
     return wireId;
   }
 
-  technique(technique: AnyRasterFormat | string): RenderTechniqueId {
-    return this.idFor(rasterTechniqueIdentity(technique)) as RenderTechniqueId;
+  technique(technique: AnyRasterFormat | string): CodecTechniqueId {
+    return this.idFor(rasterTechniqueIdentity(technique)) as CodecTechniqueId;
   }
 
-  program(technique: AnyRasterFormat | string, namespace: string, variant = 'default'): RenderProgramId {
-    return this.idFor(programWireKey(technique, namespace, variant)) as RenderProgramId;
+  program(technique: AnyRasterFormat | string, namespace: string, variant = 'default'): CodecProgramId {
+    return this.idFor(programWireKey(technique, namespace, variant)) as CodecProgramId;
   }
 
-  resource(resource: RasterResourceId): RenderResourceId {
-    return this.idFor(resource) as RenderResourceId;
+  resource(resource: RasterResourceId): CodecResourceId {
+    return this.idFor(resource) as CodecResourceId;
   }
 }
 
 /** @internal Reject render-ID providers not created or supplied by this module instance. */
-export function assertRenderIdFactory(value: unknown, label: string): RenderIdFactory {
+export function assertCodecIdFactory(value: unknown, label: string): CodecIdFactory {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null || !renderIdFactories.has(value)) {
-    throw new TypeError(`${label} must be the id utility or a handle-supplied RenderIdFactory`);
+    throw new TypeError(`${label} must be the id utility or a handle-supplied CodecIdFactory`);
   }
-  return value as RenderIdFactory;
+  return value as CodecIdFactory;
 }
 
 /** Callable authored-ID utility with a distinct method for every protocol domain. */
-export interface IdFactory extends RenderIdFactory {
+export interface IdFactory extends CodecIdFactory {
   /** Derive a domainless identity when no protocol-specific brand applies. */
   (name: string): Id;
-  /** Derive an authored policy-buffer identity. */
-  buffer(name: string): PolicyBufferId;
-  /** Derive an authored render-policy identity. */
-  policy(name: string): PolicyHandle;
+  /** Derive an authored codec-buffer identity. */
+  buffer(name: string): CodecBufferId;
+  /** Derive an authored render-codec identity. */
+  codec(name: string): CodecHandle;
   /** Derive an authored font-binding identity. */
   fontBinding(name: string): FontBindingHandle;
   /** Derive an authored font-stack identity. */
@@ -491,7 +491,7 @@ export interface IdFactory extends RenderIdFactory {
   resourceHandle(name: string): ResourceHandle;
 }
 
-const permanentRenderIds = new RenderIdScope();
+const permanentCodecIds = new CodecIdScope();
 const permanentGlyphId = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
   const derived = deriveGlyphId(kind, name);
   registerGlyphId(derived, true);
@@ -504,7 +504,7 @@ const authoredId = Object.assign(
   },
   {
     buffer: (name: string) => permanentGlyphId('buffer', name),
-    policy: (name: string) => permanentGlyphId('policy', name),
+    codec: (name: string) => permanentGlyphId('codec', name),
     fontBinding: (name: string) => permanentGlyphId('font-binding', name),
     fontStack: (name: string) => permanentGlyphId('font-stack', name),
     planner: (name: string) => permanentGlyphId('planner', name),
@@ -516,10 +516,10 @@ const authoredId = Object.assign(
     exclusion: (name: string) => permanentGlyphId('exclusion', name),
     inlineObject: (name: string) => permanentGlyphId('inline-object', name),
     resourceHandle: (name: string) => permanentGlyphId('resource', name),
-    technique: (technique: AnyRasterFormat | string) => permanentRenderIds.technique(technique),
+    technique: (technique: AnyRasterFormat | string) => permanentCodecIds.technique(technique),
     program: (technique: AnyRasterFormat | string, namespace: string, variant = 'default') =>
-      permanentRenderIds.program(technique, namespace, variant),
-    resource: (resource: RasterResourceId) => permanentRenderIds.resource(resource),
+      permanentCodecIds.program(technique, namespace, variant),
+    resource: (resource: RasterResourceId) => permanentCodecIds.resource(resource),
   },
 ) as IdFactory;
 renderIdFactories.add(authoredId);
@@ -545,12 +545,12 @@ function rasterTechniqueIdentity(technique: AnyRasterFormat | string): string {
   return identity;
 }
 
-export type PolicyTransformMode = 'direct' | 'indexed';
-export type PolicyAllocationMode = 'ordered' | 'stable';
+export type CodecTransformMode = 'direct' | 'indexed';
+export type CodecAllocationMode = 'ordered' | 'stable';
 
 export interface ProgramContext {
-  readonly inputs: PolicyInput[];
-  readonly operations: PolicyOperation[];
+  readonly inputs: CodecInput[];
+  readonly operations: CodecOperation[];
   readonly f32InputCount: number;
   readonly u32InputCount: number;
   readonly loadF32: (count: number) => void;
@@ -563,20 +563,20 @@ export interface ProgramContext {
   ) => void;
   readonly constantF32: (target: number, value: number) => void;
   readonly constantU32: (target: number, value: number) => void;
-  readonly storeF32: (buffer: PolicyBufferId, lane: number, register: number) => void;
-  readonly storeU32: (buffer: PolicyBufferId, lane: number, register: number) => void;
+  readonly storeF32: (buffer: CodecBufferId, lane: number, register: number) => void;
+  readonly storeU32: (buffer: CodecBufferId, lane: number, register: number) => void;
 }
 
 export function programContext(
-  bindingScope: PolicyInputScope,
+  bindingScope: CodecInputScope,
   bindingF32Count: number,
   bindingU32Count: number,
   inverseFontSize = false,
 ): ProgramContext {
-  const operations: PolicyOperation[] = [];
+  const operations: CodecOperation[] = [];
   const semantic = textShaperAbi.engine.semanticF32Fields;
   const semanticU32 = textShaperAbi.engine.semanticU32Fields;
-  const inputs: PolicyInput[] = [
+  const inputs: CodecInput[] = [
     { scope: 'semantic', field: semantic.inlineOrigin },
     { scope: 'semantic', field: semantic.blockOrigin },
     { scope: 'semantic', field: semantic.fontSize },
@@ -597,24 +597,24 @@ export function programContext(
     u32InputCount: bindingU32Count + 2,
     loadF32(count) {
       for (let field = 0; field < count; field += 1) {
-        operations.push({ opcode: textShaperAbi.policy.opcodes.loadF32, target: field, operand0: field });
+        operations.push({ opcode: textShaperAbi.codec.opcodes.loadF32, target: field, operand0: field });
       }
     },
     loadU32(target, field) {
-      operations.push({ opcode: textShaperAbi.policy.opcodes.loadU32, target, operand0: field });
+      operations.push({ opcode: textShaperAbi.codec.opcodes.loadU32, target, operand0: field });
     },
     binary(name, target, left, right) {
-      operations.push({ opcode: textShaperAbi.policy.opcodes[name], target, operand0: left, operand1: right });
+      operations.push({ opcode: textShaperAbi.codec.opcodes[name], target, operand0: left, operand1: right });
     },
     constantF32(target, value) {
-      operations.push({ opcode: textShaperAbi.policy.opcodes.constantF32, target, immediate0: f32Bits(value) });
+      operations.push({ opcode: textShaperAbi.codec.opcodes.constantF32, target, immediate0: f32Bits(value) });
     },
     constantU32(target, value) {
-      operations.push({ opcode: textShaperAbi.policy.opcodes.constantU32, target, immediate0: value });
+      operations.push({ opcode: textShaperAbi.codec.opcodes.constantU32, target, immediate0: value });
     },
     storeF32(buffer, lane, register) {
       operations.push({
-        opcode: textShaperAbi.policy.opcodes.storeF32,
+        opcode: textShaperAbi.codec.opcodes.storeF32,
         operand0: register,
         operand1: lane,
         immediate0: buffer,
@@ -622,7 +622,7 @@ export function programContext(
     },
     storeU32(buffer, lane, register) {
       operations.push({
-        opcode: textShaperAbi.policy.opcodes.storeU32,
+        opcode: textShaperAbi.codec.opcodes.storeU32,
         operand0: register,
         operand1: lane,
         immediate0: buffer,
@@ -632,42 +632,42 @@ export function programContext(
 }
 
 export interface ProgramBody {
-  readonly inputs: PolicyInput[];
-  readonly operations: PolicyOperation[];
+  readonly inputs: CodecInput[];
+  readonly operations: CodecOperation[];
   readonly f32InputCount: number;
   readonly u32InputCount: number;
 }
 
-export function createProgram(
-  wireTechniqueId: RenderTechniqueId,
-  wireProgramId: RenderProgramId,
+export function createCodecProgram(
+  wireTechniqueId: CodecTechniqueId,
+  wireProgramId: CodecProgramId,
   context: ProgramBody,
-  buffers: readonly PolicyBuffer[],
-  transformMode: PolicyTransformMode,
-  allocationMode: PolicyAllocationMode,
-): PolicyProgram {
-  nonzeroU32(wireTechniqueId, 'policy technique id');
-  nonzeroU32(wireProgramId, 'policy program id');
-  if (!isNonArrayObject(context)) throw new TypeError('policy program body needs an object');
+  buffers: readonly CodecBuffer[],
+  transformMode: CodecTransformMode,
+  allocationMode: CodecAllocationMode,
+): CodecProgram {
+  nonzeroU32(wireTechniqueId, 'codec technique id');
+  nonzeroU32(wireProgramId, 'codec program id');
+  if (!isNonArrayObject(context)) throw new TypeError('codec program body needs an object');
   if (!Array.isArray(context.inputs) || !Array.isArray(context.operations)) {
-    throw new TypeError('policy program body needs input and operation arrays');
+    throw new TypeError('codec program body needs input and operation arrays');
   }
-  if (!Array.isArray(buffers)) throw new TypeError('policy program buffers need an array');
+  if (!Array.isArray(buffers)) throw new TypeError('codec program buffers need an array');
   if (transformMode !== 'direct' && transformMode !== 'indexed') {
-    throw new TypeError('policy transform mode must be "direct" or "indexed"');
+    throw new TypeError('codec transform mode must be "direct" or "indexed"');
   }
   if (allocationMode !== 'ordered' && allocationMode !== 'stable') {
-    throw new TypeError('policy allocation mode must be "ordered" or "stable"');
+    throw new TypeError('codec allocation mode must be "ordered" or "stable"');
   }
   const inputs = Object.freeze(
     context.inputs.map((input, index) => {
-      if (!isNonArrayObject(input)) throw new TypeError(`policy program input ${index} needs an object`);
+      if (!isNonArrayObject(input)) throw new TypeError(`codec program input ${index} needs an object`);
       return Object.freeze({ scope: input.scope, field: input.field });
     }),
   );
   const operations = Object.freeze(
     context.operations.map((operation, index) => {
-      if (!isNonArrayObject(operation)) throw new TypeError(`policy program operation ${index} needs an object`);
+      if (!isNonArrayObject(operation)) throw new TypeError(`codec program operation ${index} needs an object`);
       return Object.freeze({
         opcode: operation.opcode,
         ...(operation.target === undefined ? {} : { target: operation.target }),
@@ -681,8 +681,8 @@ export function createProgram(
   );
   const bufferSnapshots = Object.freeze(
     buffers.map((buffer, index) => {
-      if (!isNonArrayObject(buffer)) throw new TypeError(`policy program buffer ${index} needs an object`);
-      const source = buffer as unknown as PolicyBuffer;
+      if (!isNonArrayObject(buffer)) throw new TypeError(`codec program buffer ${index} needs an object`);
+      const source = buffer as unknown as CodecBuffer;
       return Object.freeze({
         id: source.id,
         scalar: source.scalar,
@@ -694,7 +694,7 @@ export function createProgram(
       });
     }),
   );
-  const batch = textShaperAbi.policy.batchFields;
+  const batch = textShaperAbi.codec.batchFields;
   return Object.freeze({
     techniqueId: wireTechniqueId,
     programId: wireProgramId,
@@ -705,8 +705,8 @@ export function createProgram(
     operations,
     allocationStrategy:
       allocationMode === 'stable'
-        ? textShaperAbi.policy.allocationStrategies.stableIndirect
-        : textShaperAbi.policy.allocationStrategies.orderedDirect,
+        ? textShaperAbi.codec.allocationStrategies.stableIndirect
+        : textShaperAbi.codec.allocationStrategies.orderedDirect,
     storageKeyMask: batch.technique | batch.program | batch.resource,
     drawKeyMask:
       batch.technique |
@@ -721,53 +721,53 @@ export function createProgram(
 }
 
 export function stores(
-  write: (buffer: PolicyBufferId, lane: number, register: number) => void,
-  groups: readonly (readonly [PolicyBufferId, readonly number[]])[],
+  write: (buffer: CodecBufferId, lane: number, register: number) => void,
+  groups: readonly (readonly [CodecBufferId, readonly number[]])[],
 ): void {
   for (const [buffer, registers] of groups) {
     for (const [lane, register] of registers.entries()) write(buffer, lane, register);
   }
 }
 
-export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
-  assertPolicyDescriptorShape(descriptor);
-  const request = textShaperAbi.layouts.policyRequest;
-  const capability = textShaperAbi.layouts.policyCapabilitySet;
-  const programLayout = textShaperAbi.layouts.policyProgram;
-  const bufferLayout = textShaperAbi.layouts.policyBuffer;
-  const operationLayout = textShaperAbi.layouts.policyOperation;
-  const inputLayout = textShaperAbi.layouts.policyInput;
+export function compileCodec(descriptor: CodecDescriptor): Uint8Array {
+  assertCodecDescriptorShape(descriptor);
+  const request = textShaperAbi.layouts.codecRequest;
+  const capability = textShaperAbi.layouts.codecCapabilitySet;
+  const programLayout = textShaperAbi.layouts.codecProgram;
+  const bufferLayout = textShaperAbi.layouts.codecBuffer;
+  const operationLayout = textShaperAbi.layouts.codecOperation;
+  const inputLayout = textShaperAbi.layouts.codecInput;
   const programs = descriptor.programs;
 
-  // Call-boundary preflight mirroring the shaper's validate_policy: every serialized
+  // Call-boundary preflight mirroring the shaper's validate_codec: every serialized
   // value and engine semantic rule is proven before the output allocation exists.
   if (descriptor.capabilitySets.length === 0) {
-    throw new RangeError('policy declares no capability sets');
+    throw new RangeError('codec declares no capability sets');
   }
-  if (descriptor.capabilitySets.length > MAX_POLICY_CAPABILITY_SETS) {
-    throw new RangeError(`policy declares more than ${MAX_POLICY_CAPABILITY_SETS} capability sets`);
+  if (descriptor.capabilitySets.length > MAX_CODEC_CAPABILITY_SETS) {
+    throw new RangeError(`codec declares more than ${MAX_CODEC_CAPABILITY_SETS} capability sets`);
   }
   const capabilitySets = descriptor.capabilitySets.map((set, index) =>
-    normalizePolicyCapabilitySet(set, `policy capability set ${index}`),
+    normalizeCodecCapabilitySet(set, `codec capability set ${index}`),
   );
   const capabilityIds = new Map<string, number>();
   for (const [index, set] of capabilitySets.entries()) {
     const key = capabilitySetKey(set);
-    if (capabilityIds.has(key)) throw new TypeError('policy repeats an equivalent capability set');
+    if (capabilityIds.has(key)) throw new TypeError('codec repeats an equivalent capability set');
     capabilityIds.set(key, index + 1);
   }
 
-  if (programs.length === 0) throw new RangeError('policy declares no programs');
-  if (programs.length > MAX_POLICY_PROGRAMS) {
-    throw new RangeError(`policy declares more than ${MAX_POLICY_PROGRAMS} programs`);
+  if (programs.length === 0) throw new RangeError('codec declares no programs');
+  if (programs.length > MAX_CODEC_PROGRAMS) {
+    throw new RangeError(`codec declares more than ${MAX_CODEC_PROGRAMS} programs`);
   }
   const programIds = new Set<number>();
   const variants = new Set<string>();
   const programCapabilityIds: number[] = [];
   for (const program of programs) {
-    nonzeroU32(program.techniqueId, 'policy technique id');
-    nonzeroU32(program.programId, 'policy program id');
-    const programLabel = `policy program ${program.programId}`;
+    nonzeroU32(program.techniqueId, 'codec technique id');
+    nonzeroU32(program.programId, 'codec program id');
+    const programLabel = `codec program ${program.programId}`;
     // Numeric domains first so the semantic rules below never judge unproven values.
     if (program.resourceKindMask !== undefined) u32(program.resourceKindMask, `${programLabel} resourceKindMask`);
     if (program.semanticViewMask !== undefined) u32(program.semanticViewMask, `${programLabel} semanticViewMask`);
@@ -782,20 +782,19 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     if (program.allocationStrategy !== undefined) {
       u16(program.allocationStrategy, `${programLabel} allocationStrategy`);
     }
-    if (program.primitiveKind !== undefined)
-      policyPrimitiveKind(program.primitiveKind, `${programLabel} primitiveKind`);
-    const variant = u16(program.variant ?? 0, 'policy program variant');
+    if (program.primitiveKind !== undefined) codecPrimitiveKind(program.primitiveKind, `${programLabel} primitiveKind`);
+    const variant = u16(program.variant ?? 0, 'codec program variant');
     u8(program.f32InputCount, `${programLabel} f32 input count`);
     u8(program.u32InputCount, `${programLabel} u32 input count`);
 
     u16(program.buffers.length, `${programLabel} buffer count`);
     const bufferIds = new Set<number>();
     for (const [index, buffer] of program.buffers.entries()) {
-      const bufferLabel = `policy program ${program.programId} buffer ${index}`;
+      const bufferLabel = `codec program ${program.programId} buffer ${index}`;
       const bufferId = u16(assertGlyphId(buffer.id, 'buffer', `${bufferLabel} id`), `${bufferLabel} id`);
-      if (bufferIds.has(bufferId)) throw new TypeError(`policy repeats buffer id ${bufferId} within a program`);
+      if (bufferIds.has(bufferId)) throw new TypeError(`codec repeats buffer id ${bufferId} within a program`);
       bufferIds.add(bufferId);
-      policyScalarType(buffer.scalar, `${bufferLabel} scalar`);
+      codecScalarType(buffer.scalar, `${bufferLabel} scalar`);
       u8(buffer.vectorWidth, `${bufferLabel} vectorWidth`);
       if (buffer.alignment !== undefined) u16(buffer.alignment, `${bufferLabel} alignment`);
       if (buffer.stride !== undefined) u16(buffer.stride, `${bufferLabel} stride`);
@@ -805,7 +804,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
 
     u16(program.operations.length, `${programLabel} operation count`);
     for (const [index, operation] of program.operations.entries()) {
-      const operationLabel = `policy program ${program.programId} operation ${index}`;
+      const operationLabel = `codec program ${program.programId} operation ${index}`;
       u8(operation.opcode, `${operationLabel} opcode`);
       if (operation.target !== undefined) u8(operation.target, `${operationLabel} target`);
       if (operation.operand0 !== undefined) u8(operation.operand0, `${operationLabel} operand0`);
@@ -817,10 +816,10 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
 
     u16(program.inputs.length, `${programLabel} input count`);
     for (const [index, input] of program.inputs.entries()) {
-      const inputLabel = `policy program ${program.programId} input ${index}`;
+      const inputLabel = `codec program ${program.programId} input ${index}`;
       // Object.hasOwn keeps inherited keys like "toString" out of the ABI table lookup.
-      if (!(typeof input.scope === 'string' && Object.hasOwn(textShaperAbi.policy.inputScopes, input.scope))) {
-        throw new TypeError(`${inputLabel} scope ${JSON.stringify(input.scope)} is not a policy input scope`);
+      if (!(typeof input.scope === 'string' && Object.hasOwn(textShaperAbi.codec.inputScopes, input.scope))) {
+        throw new TypeError(`${inputLabel} scope ${JSON.stringify(input.scope)} is not a codec input scope`);
       }
       u8(input.field, `${inputLabel} field`);
     }
@@ -829,10 +828,10 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     const effectiveCapabilitySetId = resolveCapabilitySetId(program.capabilitySet, capabilityIds, programLabel);
     programCapabilityIds.push(effectiveCapabilitySetId);
     preflightProgramSemantics(program, capabilitySets, effectiveCapabilitySetId);
-    if (programIds.has(program.programId)) throw new TypeError(`policy repeats program id ${program.programId}`);
+    if (programIds.has(program.programId)) throw new TypeError(`codec repeats program id ${program.programId}`);
     programIds.add(program.programId);
     const key = `${effectiveCapabilitySetId}:${program.techniqueId}:${variant}`;
-    if (variants.has(key)) throw new TypeError('policy repeats a technique, capability set, and program variant');
+    if (variants.has(key)) throw new TypeError('codec repeats a technique, capability set, and program variant');
     variants.add(key);
   }
 
@@ -842,54 +841,50 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     const wireId = index + 1;
     const referenced = programCapabilityIds.some((capabilityId) => capabilityId === 0 || capabilityId === wireId);
     if (!referenced) {
-      throw new TypeError(`policy capability set ${index} is declared but referenced by no program`);
+      throw new TypeError(`codec capability set ${index} is declared but referenced by no program`);
     }
   }
 
   const bufferCount = sum(programs, (program) => program.buffers.length);
   const operationCount = sum(programs, (program) => program.operations.length);
   const inputCount = sum(programs, (program) => program.inputs.length);
-  const capabilitiesOffset = align(request.size, capability.alignment, 'policy capability sets');
+  const capabilitiesOffset = align(request.size, capability.alignment, 'codec capability sets');
   const programsOffset = align(
     checkedAdd(
       capabilitiesOffset,
-      checkedProduct(capability.size, capabilitySets.length, 'policy capabilities'),
-      'policy programs',
+      checkedProduct(capability.size, capabilitySets.length, 'codec capabilities'),
+      'codec programs',
     ),
     programLayout.alignment,
-    'policy programs',
+    'codec programs',
   );
   const buffersOffset = align(
-    checkedAdd(
-      programsOffset,
-      checkedProduct(programLayout.size, programs.length, 'policy programs'),
-      'policy buffers',
-    ),
+    checkedAdd(programsOffset, checkedProduct(programLayout.size, programs.length, 'codec programs'), 'codec buffers'),
     bufferLayout.alignment,
-    'policy buffers',
+    'codec buffers',
   );
   const operationsOffset = align(
-    checkedAdd(buffersOffset, checkedProduct(bufferLayout.size, bufferCount, 'policy buffers'), 'policy operations'),
+    checkedAdd(buffersOffset, checkedProduct(bufferLayout.size, bufferCount, 'codec buffers'), 'codec operations'),
     operationLayout.alignment,
-    'policy operations',
+    'codec operations',
   );
   const inputsOffset = align(
     checkedAdd(
       operationsOffset,
-      checkedProduct(operationLayout.size, operationCount, 'policy operations'),
-      'policy inputs',
+      checkedProduct(operationLayout.size, operationCount, 'codec operations'),
+      'codec inputs',
     ),
     inputLayout.alignment,
-    'policy inputs',
+    'codec inputs',
   );
   const byteLength = checkedAdd(
     inputsOffset,
-    checkedProduct(inputLayout.size, inputCount, 'policy inputs'),
-    'policy bytes',
+    checkedProduct(inputLayout.size, inputCount, 'codec inputs'),
+    'codec bytes',
   );
 
   interface PlannedProgram {
-    readonly value: PolicyProgram;
+    readonly value: CodecProgram;
     readonly capabilitySetId: number;
     readonly bufferStart: number;
     readonly operationStart: number;
@@ -903,9 +898,9 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   let inputStart = 0;
   const plans: PlannedProgram[] = programs.map((value, index) => {
     const plan = { value, capabilitySetId: programCapabilityIds[index]!, bufferStart, operationStart, inputStart };
-    bufferStart = checkedAdd(bufferStart, value.buffers.length, 'policy buffer start');
-    operationStart = checkedAdd(operationStart, value.operations.length, 'policy operation start');
-    inputStart = checkedAdd(inputStart, value.inputs.length, 'policy input start');
+    bufferStart = checkedAdd(bufferStart, value.buffers.length, 'codec buffer start');
+    operationStart = checkedAdd(operationStart, value.operations.length, 'codec operation start');
+    inputStart = checkedAdd(inputStart, value.inputs.length, 'codec input start');
     return plan;
   });
 
@@ -926,7 +921,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   for (const [index, value] of capabilitySets.entries()) {
     const offset = capabilitiesOffset + index * capability.size;
     view.setUint32(offset + capability.id, index + 1, true);
-    view.setUint32(offset + capability.flags, policyCapabilityFlags(value), true);
+    view.setUint32(offset + capability.flags, codecCapabilityFlags(value), true);
     view.setUint32(offset + capability.maxBufferBytes, value.maxBufferBytes, true);
     view.setUint32(offset + capability.updateAlignment, value.updateAlignment, true);
     view.setUint32(offset + capability.coalesceGapBytes, value.coalesceGapBytes, true);
@@ -957,12 +952,12 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     view.setUint16(offset + programLayout.operationCount, value.operations.length, true);
     view.setUint16(
       offset + programLayout.allocationStrategy,
-      value.allocationStrategy ?? textShaperAbi.policy.allocationStrategies.orderedDirect,
+      value.allocationStrategy ?? textShaperAbi.codec.allocationStrategies.orderedDirect,
       true,
     );
     view.setUint16(
       offset + programLayout.primitiveKind,
-      policyPrimitiveKind(value.primitiveKind ?? 'glyph', `policy program ${value.programId} primitiveKind`),
+      codecPrimitiveKind(value.primitiveKind ?? 'glyph', `codec program ${value.programId} primitiveKind`),
       true,
     );
     view.setUint8(offset + programLayout.f32InputCount, value.f32InputCount);
@@ -979,13 +974,13 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
       const offset = buffersOffset + bufferIndex * bufferLayout.size;
       const scalarBytes = buffer.scalar === 'u16' ? 2 : 4;
       view.setUint16(offset + bufferLayout.id, buffer.id, true);
-      view.setUint8(offset + bufferLayout.scalar, policyScalarType(buffer.scalar, `policy buffer ${buffer.id} scalar`));
+      view.setUint8(offset + bufferLayout.scalar, codecScalarType(buffer.scalar, `codec buffer ${buffer.id} scalar`));
       view.setUint8(offset + bufferLayout.vectorWidth, buffer.vectorWidth);
       view.setUint16(offset + bufferLayout.alignment, buffer.alignment ?? scalarBytes, true);
       view.setUint16(offset + bufferLayout.stride, buffer.stride ?? scalarBytes * buffer.vectorWidth, true);
       view.setUint32(
         offset + bufferLayout.usage,
-        buffer.usage ?? textShaperAbi.policy.bufferUsage.storage | textShaperAbi.policy.bufferUsage.copyDst,
+        buffer.usage ?? textShaperAbi.codec.bufferUsage.storage | textShaperAbi.codec.bufferUsage.copyDst,
         true,
       );
       view.setUint16(offset + bufferLayout.capacityClass, buffer.capacityClass ?? 1, true);
@@ -1004,7 +999,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     }
     for (const input of value.inputs) {
       const offset = inputsOffset + inputIndex * inputLayout.size;
-      view.setUint8(offset + inputLayout.scope, textShaperAbi.policy.inputScopes[input.scope]);
+      view.setUint8(offset + inputLayout.scope, textShaperAbi.codec.inputScopes[input.scope]);
       view.setUint8(offset + inputLayout.field, input.field);
       inputIndex += 1;
     }
@@ -1012,33 +1007,32 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   return bytes;
 }
 
-function assertPolicyDescriptorShape(value: unknown): asserts value is PolicyDescriptor {
-  if (!isNonArrayObject(value)) throw new TypeError('policy descriptor needs an object');
-  if (!Array.isArray(value.capabilitySets)) throw new TypeError('policy descriptor capabilitySets needs an array');
-  if (!Array.isArray(value.programs)) throw new TypeError('policy descriptor programs needs an array');
+function assertCodecDescriptorShape(value: unknown): asserts value is CodecDescriptor {
+  if (!isNonArrayObject(value)) throw new TypeError('codec descriptor needs an object');
+  if (!Array.isArray(value.capabilitySets)) throw new TypeError('codec descriptor capabilitySets needs an array');
+  if (!Array.isArray(value.programs)) throw new TypeError('codec descriptor programs needs an array');
   for (const [index, set] of value.capabilitySets.entries()) {
-    if (!isNonArrayObject(set)) throw new TypeError(`policy capability set ${index} needs an object`);
+    if (!isNonArrayObject(set)) throw new TypeError(`codec capability set ${index} needs an object`);
   }
   for (const [programIndex, program] of value.programs.entries()) {
-    if (!isNonArrayObject(program)) throw new TypeError(`policy program ${programIndex} needs an object`);
+    if (!isNonArrayObject(program)) throw new TypeError(`codec program ${programIndex} needs an object`);
     const inputs = program.inputs;
     const buffers = program.buffers;
     const operations = program.operations;
-    if (!Array.isArray(inputs)) throw new TypeError(`policy program ${programIndex} inputs needs an array`);
-    if (!Array.isArray(buffers)) throw new TypeError(`policy program ${programIndex} buffers needs an array`);
-    if (!Array.isArray(operations)) throw new TypeError(`policy program ${programIndex} operations needs an array`);
+    if (!Array.isArray(inputs)) throw new TypeError(`codec program ${programIndex} inputs needs an array`);
+    if (!Array.isArray(buffers)) throw new TypeError(`codec program ${programIndex} buffers needs an array`);
+    if (!Array.isArray(operations)) throw new TypeError(`codec program ${programIndex} operations needs an array`);
     for (const [index, input] of inputs.entries()) {
-      if (!isNonArrayObject(input))
-        throw new TypeError(`policy program ${programIndex} input ${index} needs an object`);
+      if (!isNonArrayObject(input)) throw new TypeError(`codec program ${programIndex} input ${index} needs an object`);
     }
     for (const [index, buffer] of buffers.entries()) {
       if (!isNonArrayObject(buffer)) {
-        throw new TypeError(`policy program ${programIndex} buffer ${index} needs an object`);
+        throw new TypeError(`codec program ${programIndex} buffer ${index} needs an object`);
       }
     }
     for (const [index, operation] of operations.entries()) {
       if (!isNonArrayObject(operation)) {
-        throw new TypeError(`policy program ${programIndex} operation ${index} needs an object`);
+        throw new TypeError(`codec program ${programIndex} operation ${index} needs an object`);
       }
     }
   }
@@ -1051,15 +1045,15 @@ function nonzeroU32(value: number, label: string): number {
 }
 
 /** @internal Validate and snapshot one host capability set before invoking technique code. */
-export function normalizePolicyCapabilitySet(value: unknown, label = 'policy capability set'): PolicyCapabilitySet {
+export function normalizeCodecCapabilitySet(value: unknown, label = 'codec capability set'): CodecCapabilitySet {
   if (!isNonArrayObject(value)) throw new TypeError(`${label} needs an object`);
   const sourceCapabilities = value.capabilities;
   if (!Array.isArray(sourceCapabilities)) throw new TypeError(`${label} capabilities needs an array`);
   const capabilities = sourceCapabilities.map((capability, index) =>
-    policyCapability(capability, `${label} capability ${index}`),
+    codecCapability(capability, `${label} capability ${index}`),
   );
   if (new Set(capabilities).size !== capabilities.length) throw new TypeError(`${label} repeats a capability`);
-  const snapshot: PolicyCapabilitySet = Object.freeze({
+  const snapshot: CodecCapabilitySet = Object.freeze({
     capabilities: Object.freeze(capabilities),
     maxBufferBytes: value.maxBufferBytes,
     updateAlignment: value.updateAlignment,
@@ -1070,13 +1064,13 @@ export function normalizePolicyCapabilitySet(value: unknown, label = 'policy cap
     maxIndirectDraws: value.maxIndirectDraws,
     fragmentationBudget: value.fragmentationBudget,
     wholeBufferThresholdBasisPoints: value.wholeBufferThresholdBasisPoints,
-  }) as PolicyCapabilitySet;
+  }) as CodecCapabilitySet;
   preflightCapabilitySet(snapshot, label);
   return snapshot;
 }
 
 /** Capability-set contract mirrored from validate_capability_sets. */
-function preflightCapabilitySet(set: PolicyCapabilitySet, label: string): void {
+function preflightCapabilitySet(set: CodecCapabilitySet, label: string): void {
   u32(set.maxBufferBytes, `${label} maxBufferBytes`);
   u32(set.updateAlignment, `${label} updateAlignment`);
   u32(set.coalesceGapBytes, `${label} coalesceGapBytes`);
@@ -1093,16 +1087,16 @@ function preflightCapabilitySet(set: PolicyCapabilitySet, label: string): void {
   if (
     set.maxBufferBytes === 0 ||
     set.maxBuffersPerDraw === 0 ||
-    set.maxBuffersPerDraw > MAX_BUFFERS_PER_POLICY_PROGRAM ||
+    set.maxBuffersPerDraw > MAX_BUFFERS_PER_CODEC_PROGRAM ||
     set.maxResourcesPerDraw === 0 ||
     set.fragmentationBudget === 0
   ) {
     throw new RangeError(
-      `${label} limits need nonzero capacity within ${MAX_BUFFERS_PER_POLICY_PROGRAM} buffers per draw`,
+      `${label} limits need nonzero capacity within ${MAX_BUFFERS_PER_CODEC_PROGRAM} buffers per draw`,
     );
   }
-  if (!isPowerOfTwo(set.updateAlignment) || set.updateAlignment > MAX_POLICY_ALIGNMENT) {
-    throw new RangeError(`${label} updateAlignment needs a power of two up to ${MAX_POLICY_ALIGNMENT}`);
+  if (!isPowerOfTwo(set.updateAlignment) || set.updateAlignment > MAX_CODEC_ALIGNMENT) {
+    throw new RangeError(`${label} updateAlignment needs a power of two up to ${MAX_CODEC_ALIGNMENT}`);
   }
   if (
     set.coalesceGapBytes > set.maxBufferBytes ||
@@ -1117,16 +1111,16 @@ function preflightCapabilitySet(set: PolicyCapabilitySet, label: string): void {
   }
 }
 
-/** Program-level contract mirrored from validate_policy's per-program checks. */
+/** Program-level contract mirrored from validate_codec's per-program checks. */
 function preflightProgramSemantics(
-  program: PolicyProgram,
-  capabilitySets: readonly PolicyCapabilitySet[],
+  program: CodecProgram,
+  capabilitySets: readonly CodecCapabilitySet[],
   effectiveCapabilitySetId: number,
 ): void {
-  const label = `policy program ${program.programId}`;
-  const { batchFields, allocationStrategies } = textShaperAbi.policy;
+  const label = `codec program ${program.programId}`;
+  const { batchFields, allocationStrategies } = textShaperAbi.codec;
   const primitiveKind = program.primitiveKind ?? 'glyph';
-  policyPrimitiveKind(primitiveKind, `${label} primitiveKind`);
+  codecPrimitiveKind(primitiveKind, `${label} primitiveKind`);
   // Decoration programs draw without raster resources; every other kind must accept some.
   if ((program.resourceKindMask ?? 1) === 0 && primitiveKind !== 'decoration') {
     throw new RangeError(`${label} accepts no resource kinds but does not publish decoration records`);
@@ -1159,7 +1153,7 @@ function preflightProgramSemantics(
   if (strategy !== allocationStrategies.orderedDirect && strategy !== allocationStrategies.stableIndirect) {
     throw new RangeError(`${label} allocationStrategy is not a known strategy`);
   }
-  const requiredCapability: PolicyCapability =
+  const requiredCapability: CodecCapability =
     strategy === allocationStrategies.orderedDirect ? 'ordered-direct' : 'stable-indirect';
 
   preflightProgramBody(program);
@@ -1169,24 +1163,24 @@ function preflightProgramSemantics(
       (effectiveCapabilitySetId === 0 || effectiveCapabilitySetId === index + 1) &&
       !set.capabilities.includes(requiredCapability)
     ) {
-      throw new RangeError(`policy capability set ${index} lacks the allocation support ${label} needs`);
+      throw new RangeError(`codec capability set ${index} lacks the allocation support ${label} needs`);
     }
   }
 }
 
 function resolveCapabilitySetId(
-  capabilitySet: PolicyCapabilitySet | undefined,
+  capabilitySet: CodecCapabilitySet | undefined,
   capabilityIds: ReadonlyMap<string, number>,
   programLabel: string,
 ): number {
   if (capabilitySet === undefined) return 0;
-  const normalized = normalizePolicyCapabilitySet(capabilitySet, `${programLabel} capability set`);
+  const normalized = normalizeCodecCapabilitySet(capabilitySet, `${programLabel} capability set`);
   const capabilityId = capabilityIds.get(capabilitySetKey(normalized));
   if (capabilityId === undefined) throw new TypeError(`${programLabel} references an undeclared capability set`);
   return capabilityId;
 }
 
-function capabilitySetKey(set: PolicyCapabilitySet): string {
+function capabilitySetKey(set: CodecCapabilitySet): string {
   return [
     [...set.capabilities].sort().join(','),
     set.maxBufferBytes,
@@ -1202,33 +1196,33 @@ function capabilitySetKey(set: PolicyCapabilitySet): string {
 }
 
 /** Buffer schemas, exact input counts, and the straight-line operation graph from validate_program. */
-function preflightProgramBody(program: PolicyProgram): void {
-  const label = `policy program ${program.programId}`;
-  if (program.f32InputCount > MAX_POLICY_REGISTERS || program.u32InputCount > MAX_POLICY_REGISTERS) {
-    throw new RangeError(`${label} input counts exceed the ${MAX_POLICY_REGISTERS}-slot register file`);
+function preflightProgramBody(program: CodecProgram): void {
+  const label = `codec program ${program.programId}`;
+  if (program.f32InputCount > MAX_CODEC_REGISTERS || program.u32InputCount > MAX_CODEC_REGISTERS) {
+    throw new RangeError(`${label} input counts exceed the ${MAX_CODEC_REGISTERS}-slot register file`);
   }
   if (program.inputs.length !== program.f32InputCount + program.u32InputCount) {
     throw new TypeError(`${label} input table length must equal its declared f32 and u32 input counts`);
   }
 
   if (program.buffers.length === 0) throw new RangeError(`${label} declares no buffers`);
-  if (program.buffers.length > MAX_BUFFERS_PER_POLICY_PROGRAM) {
-    throw new RangeError(`${label} declares more than ${MAX_BUFFERS_PER_POLICY_PROGRAM} buffers`);
+  if (program.buffers.length > MAX_BUFFERS_PER_CODEC_PROGRAM) {
+    throw new RangeError(`${label} declares more than ${MAX_BUFFERS_PER_CODEC_PROGRAM} buffers`);
   }
-  const { bufferUsage } = textShaperAbi.policy;
+  const { bufferUsage } = textShaperAbi.codec;
   const knownUsages = bufferUsage.vertex | bufferUsage.storage | bufferUsage.copyDst;
-  const byteWidths: Readonly<Record<PolicyScalarType, number>> = { f32: 4, u32: 4, u16: 2 };
+  const byteWidths: Readonly<Record<CodecScalarType, number>> = { f32: 4, u32: 4, u16: 2 };
   for (const [index, buffer] of program.buffers.entries()) {
     const bufferLabel = `${label} buffer ${index}`;
-    policyScalarType(buffer.scalar, `${bufferLabel} scalar`);
+    codecScalarType(buffer.scalar, `${bufferLabel} scalar`);
     const byteWidth = byteWidths[buffer.scalar];
     if (buffer.id === 0) throw new TypeError(`${bufferLabel} uses the reserved zero id`);
-    if (buffer.vectorWidth < 1 || buffer.vectorWidth > MAX_POLICY_VECTOR_WIDTH) {
-      throw new RangeError(`${bufferLabel} vectorWidth needs 1..${MAX_POLICY_VECTOR_WIDTH}`);
+    if (buffer.vectorWidth < 1 || buffer.vectorWidth > MAX_CODEC_VECTOR_WIDTH) {
+      throw new RangeError(`${bufferLabel} vectorWidth needs 1..${MAX_CODEC_VECTOR_WIDTH}`);
     }
     const alignment = buffer.alignment ?? byteWidth;
-    if (!isPowerOfTwo(alignment) || alignment > MAX_POLICY_ALIGNMENT) {
-      throw new RangeError(`${bufferLabel} alignment needs a power of two up to ${MAX_POLICY_ALIGNMENT}`);
+    if (!isPowerOfTwo(alignment) || alignment > MAX_CODEC_ALIGNMENT) {
+      throw new RangeError(`${bufferLabel} alignment needs a power of two up to ${MAX_CODEC_ALIGNMENT}`);
     }
     const stride = buffer.stride ?? byteWidth * buffer.vectorWidth;
     if (stride < byteWidth * buffer.vectorWidth || stride % alignment !== 0) {
@@ -1242,11 +1236,11 @@ function preflightProgramBody(program: PolicyProgram): void {
   }
 
   if (program.operations.length === 0) throw new RangeError(`${label} declares no operations`);
-  if (program.operations.length > MAX_OPERATIONS_PER_POLICY_PROGRAM) {
-    throw new RangeError(`${label} declares more than ${MAX_OPERATIONS_PER_POLICY_PROGRAM} operations`);
+  if (program.operations.length > MAX_OPERATIONS_PER_CODEC_PROGRAM) {
+    throw new RangeError(`${label} declares more than ${MAX_OPERATIONS_PER_CODEC_PROGRAM} operations`);
   }
 
-  const registers = new Uint8Array(MAX_POLICY_REGISTERS);
+  const registers = new Uint8Array(MAX_CODEC_REGISTERS);
   const storedLanes = new Map<number, number>();
   for (const [index, operation] of program.operations.entries()) {
     preflightOperation(operation, index, program, registers, storedLanes);
@@ -1259,14 +1253,14 @@ function preflightProgramBody(program: PolicyProgram): void {
 }
 
 function preflightOperation(
-  operation: PolicyOperation,
+  operation: CodecOperation,
   index: number,
-  program: PolicyProgram,
+  program: CodecProgram,
   registers: Uint8Array,
   storedLanes: Map<number, number>,
 ): void {
-  const label = `policy program ${program.programId} operation ${index}`;
-  const { opcodes } = textShaperAbi.policy;
+  const label = `codec program ${program.programId} operation ${index}`;
+  const { opcodes } = textShaperAbi.codec;
   switch (operation.opcode) {
     case opcodes.loadF32:
       if ((operation.operand0 ?? 0) >= program.f32InputCount) {
@@ -1322,22 +1316,22 @@ function preflightOperation(
       return;
     }
     default:
-      throw new RangeError(`${label} opcode ${operation.opcode} is not a known policy opcode`);
+      throw new RangeError(`${label} opcode ${operation.opcode} is not a known codec opcode`);
   }
 }
 
 function validateStore(
-  operation: PolicyOperation,
+  operation: CodecOperation,
   index: number,
-  program: PolicyProgram,
+  program: CodecProgram,
   storedLanes: Map<number, number>,
 ): void {
-  const label = `policy program ${program.programId} operation ${index}`;
-  const { opcodes } = textShaperAbi.policy;
+  const label = `codec program ${program.programId} operation ${index}`;
+  const { opcodes } = textShaperAbi.codec;
   const bufferId = operation.immediate0 ?? 0;
   const schema = program.buffers.find((candidate) => candidate.id === bufferId);
   if (schema === undefined) throw new TypeError(`${label} stores into undeclared buffer ${bufferId}`);
-  const expectedScalar: PolicyScalarType =
+  const expectedScalar: CodecScalarType =
     operation.opcode === opcodes.storeF32 ? 'f32' : operation.opcode === opcodes.storeU32 ? 'u32' : 'u16';
   if (schema.scalar !== expectedScalar) {
     throw new TypeError(`${label} stores ${expectedScalar} lanes into a ${schema.scalar} buffer`);
@@ -1351,7 +1345,7 @@ function validateStore(
   storedLanes.set(bufferId, (storedLanes.get(bufferId) ?? 0) | mask);
 }
 
-function policyCapability(value: unknown, label: string): PolicyCapability {
+function codecCapability(value: unknown, label: string): CodecCapability {
   if (
     value !== 'storage-buffers' &&
     value !== 'indirect-draws' &&
@@ -1360,14 +1354,14 @@ function policyCapability(value: unknown, label: string): PolicyCapability {
     value !== 'ordered-direct' &&
     value !== 'stable-indirect'
   ) {
-    throw new TypeError(`${label} is not a known policy capability`);
+    throw new TypeError(`${label} is not a known codec capability`);
   }
   return value;
 }
 
-function policyCapabilityFlags(set: PolicyCapabilitySet): number {
-  const flags = textShaperAbi.policy.capabilityFlags;
-  const values: Readonly<Record<PolicyCapability, number>> = {
+function codecCapabilityFlags(set: CodecCapabilitySet): number {
+  const flags = textShaperAbi.codec.capabilityFlags;
+  const values: Readonly<Record<CodecCapability, number>> = {
     'storage-buffers': flags.storageBuffers,
     'indirect-draws': flags.indirectDraws,
     'alias-vec2': flags.aliasVec2,
@@ -1378,27 +1372,27 @@ function policyCapabilityFlags(set: PolicyCapabilitySet): number {
   return set.capabilities.reduce((combined, capability) => combined | values[capability], 0);
 }
 
-function policyScalarType(value: unknown, label: string): number {
-  const scalarTypes = textShaperAbi.policy.scalarTypes;
+function codecScalarType(value: unknown, label: string): number {
+  const scalarTypes = textShaperAbi.codec.scalarTypes;
   if (value === 'f32') return scalarTypes.f32;
   if (value === 'u32') return scalarTypes.u32;
   if (value === 'u16') return scalarTypes.u16;
   throw new TypeError(`${label} is not f32, u32, or u16`);
 }
 
-function policyPrimitiveKind(value: unknown, label: string): number {
+function codecPrimitiveKind(value: unknown, label: string): number {
   if (value === 'glyph') return textShaperAbi.engine.primitiveKinds.glyph;
   if (value === 'decoration') return textShaperAbi.engine.primitiveKinds.decoration;
   throw new TypeError(`${label} is not glyph or decoration`);
 }
 
 function initializeRegister(registers: Uint8Array, target: number, type: number, label: string): void {
-  if (target >= MAX_POLICY_REGISTERS) throw new RangeError(`${label} targets a register beyond the register file`);
+  if (target >= MAX_CODEC_REGISTERS) throw new RangeError(`${label} targets a register beyond the register file`);
   registers[target] = type;
 }
 
 function requireRegister(registers: Uint8Array, source: number, type: number, label: string): void {
-  if (source >= MAX_POLICY_REGISTERS) throw new RangeError(`${label} reads a register beyond the register file`);
+  if (source >= MAX_CODEC_REGISTERS) throw new RangeError(`${label} reads a register beyond the register file`);
   const actual = registers[source];
   if (actual === REGISTER_UNINITIALIZED) throw new TypeError(`${label} reads register ${source} before it is written`);
   if (actual !== type) throw new TypeError(`${label} register ${source} holds the other wire type`);
@@ -1424,7 +1418,7 @@ function u8(value: number, label: string): number {
 }
 
 function sum<T>(values: readonly T[], measure: (value: T) => number): number {
-  return values.reduce((total, value) => checkedAdd(total, measure(value), 'policy record count'), 0);
+  return values.reduce((total, value) => checkedAdd(total, measure(value), 'codec record count'), 0);
 }
 
 function align(value: number, alignment: number, label: string): number {

@@ -92,22 +92,22 @@ export const bitmap: RasterFormat<
 });
 
 import { f32, techniqueProgram } from '../config/codec-program.js';
-import { id, type PolicyBufferId } from '../config/codec.js';
+import { id, type CodecBufferId } from '../config/codec.js';
 import type { RasterPlanProgram } from '../config/raster.js';
 import { registerGlyphRasterPlanProgram } from '../config/raster.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
-const BITMAP_ORIGIN_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/origin');
-const BITMAP_SIZE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/size');
-const BITMAP_UV_ORIGIN_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/uv-origin');
-const BITMAP_UV_SIZE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/uv-size');
-const BITMAP_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/color');
-const BITMAP_PAGE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/page');
+const BITMAP_ORIGIN_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.bitmap/origin');
+const BITMAP_SIZE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.bitmap/size');
+const BITMAP_UV_ORIGIN_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.bitmap/uv-origin');
+const BITMAP_UV_SIZE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.bitmap/uv-size');
+const BITMAP_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.bitmap/color');
+const BITMAP_PAGE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.bitmap/page');
 
 /**
  * The authoritative physical shape of the Bitmap format: binding field order matches
  * the strike tables the binding compiler emits; buffer ids and lanes are the contract
- * every policy program and shader realization derives from.
+ * every codec program and shader realization derives from.
  */
 export const bitmapSchema: TechniqueSchema<
   {
@@ -177,7 +177,7 @@ export const bitmapSchema: TechniqueSchema<
 export const bitmapPlanProgram: RasterPlanProgram<typeof bitmap, typeof bitmapSchema> = registerGlyphRasterPlanProgram({
   raster: bitmap,
   schema: bitmapSchema,
-  policyBody(system) {
+  codecBody(system) {
     const p = techniqueProgram(bitmapSchema, { system });
     const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
     const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, page } = p.binding;

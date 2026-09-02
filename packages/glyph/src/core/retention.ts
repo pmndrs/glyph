@@ -22,7 +22,7 @@
  *   those instead of re-uploading whole arrays. The internal command-buffer projection exposes
  *   them as typed buffer updates without publishing the raw wire rows.
  * - **Identity survives updates by construction.** Paragraph ids are caller-chosen handles,
- *   durable until removal. Glyph identity is the policy's stable-glyph-id lane, which survives
+ *   durable until removal. Glyph identity is the codec's stable-glyph-id lane, which survives
  *   reflow within a paragraph's lifetime. Engine storage is keyed by `(id, generation)`:
  *   a changed generation is new storage, and a retirement naming `(kind, id, generation)` is
  *   the only signal to release the old renderer resource. Atlas and texture resources follow the same rule

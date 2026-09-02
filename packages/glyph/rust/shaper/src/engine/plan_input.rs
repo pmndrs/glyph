@@ -1,6 +1,6 @@
 //! Allocation-strategy-neutral glyph input for render-plan compilation.
 
-use super::policy::TechniqueId;
+use super::codec::TechniqueId;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlanGlyph {

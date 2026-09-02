@@ -2,6 +2,16 @@ use alloc::string::{String, ToString};
 use core::mem::{align_of, offset_of, size_of};
 use serde_json::json;
 
+use crate::engine::codec::{
+    ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL,
+    BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BATCH_TRANSFORM,
+    BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BUFFER_USAGE_VERTEX, CAP_ALIAS_VEC2,
+    CAP_ALIAS_VEC4, CAP_INDIRECT_DRAWS, CAP_ORDERED_DIRECT, CAP_STABLE_INDIRECT,
+    CAP_STORAGE_BUFFERS, INPUT_GLYPH, INPUT_RESOURCE, INPUT_SEMANTIC, INPUT_STRIKE, OP_ADD_F32,
+    OP_CONSTANT_F32, OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32, OP_LOAD_F32,
+    OP_LOAD_U32, OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16, OP_STORE_U32,
+    OP_SUBTRACT_F32, ScalarType,
+};
 use crate::engine::frame::{
     ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START, AXIS_AT_MOST, AXIS_EXACT,
     AXIS_UNCONSTRAINED, BASELINE_ALPHABETIC, BASELINE_MIDDLE, BASELINE_TEXT_BOTTOM,
@@ -30,23 +40,13 @@ use crate::engine::frame::{
     TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD,
     WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
 };
-use crate::engine::policy::{
-    ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL,
-    BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BATCH_TRANSFORM,
-    BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BUFFER_USAGE_VERTEX, CAP_ALIAS_VEC2,
-    CAP_ALIAS_VEC4, CAP_INDIRECT_DRAWS, CAP_ORDERED_DIRECT, CAP_STABLE_INDIRECT,
-    CAP_STORAGE_BUFFERS, INPUT_GLYPH, INPUT_RESOURCE, INPUT_SEMANTIC, INPUT_STRIKE, OP_ADD_F32,
-    OP_CONSTANT_F32, OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32, OP_LOAD_F32,
-    OP_LOAD_U32, OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16, OP_STORE_U32,
-    OP_SUBTRACT_F32, ScalarType,
-};
 use crate::engine::render_plan::{
-    BUFFER_ORDERED_DIRECT, BUFFER_STABLE_INDIRECT, BufferRecord, DiagnosticRecord, DrawRecord,
-    PATCH_ALLOCATE_OR_RESIZE, PATCH_COPY, PATCH_FILL, PATCH_RETIRE, PATCH_WRITE,
-    POLICY_BUFFER_ORDER, PRIMITIVE_CLIP, PRIMITIVE_DECORATION, PRIMITIVE_GLYPH,
-    PRIMITIVE_INLINE_OBJECT, PRIMITIVE_POLICY, PatchRecord, PrimitiveRecord,
-    RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE, RETIRE_BUFFER,
-    RETIRE_OUTPUT_BYTES, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, ResourceRecord, RetirementRecord,
+    BUFFER_ORDERED_DIRECT, BUFFER_STABLE_INDIRECT, BufferRecord, CODEC_BUFFER_ORDER,
+    DiagnosticRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_COPY, PATCH_FILL, PATCH_RETIRE,
+    PATCH_WRITE, PRIMITIVE_CLIP, PRIMITIVE_CODEC, PRIMITIVE_DECORATION, PRIMITIVE_GLYPH,
+    PRIMITIVE_INLINE_OBJECT, PatchRecord, PrimitiveRecord, RESOURCE_ACTION_CREATE,
+    RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE, RETIRE_BUFFER, RETIRE_OUTPUT_BYTES,
+    RETIRE_RESOURCE, RETIRE_SLOT_RANGE, ResourceRecord, RetirementRecord,
 };
 use crate::engine::semantic_view::{
     SEMANTIC_CARET, SEMANTIC_CLUSTER, SEMANTIC_FRAGMENT, SEMANTIC_GLYPH, SEMANTIC_INSERTED_GLYPH,
@@ -61,7 +61,7 @@ pub const HARFRUST_COMMIT: &str = "60b28ea22b5261710018d69c168a762bcb28794c";
 pub const UNICODE_VERSION: &str = "17.0.0";
 
 #[repr(C)]
-struct PolicyRequestHeader {
+struct CodecRequestHeader {
     byte_length: u32,
     capability_sets_offset: u32,
     capability_set_count: u32,
@@ -76,7 +76,7 @@ struct PolicyRequestHeader {
 }
 
 #[repr(C)]
-struct PolicyCapabilitySetRecord {
+struct CodecCapabilitySetRecord {
     id: u32,
     flags: u32,
     max_buffer_bytes: u32,
@@ -92,7 +92,7 @@ struct PolicyCapabilitySetRecord {
 }
 
 #[repr(C)]
-struct PolicyProgramRecord {
+struct CodecProgramRecord {
     technique_id: u32,
     program_id: u32,
     capability_set_id: u32,
@@ -117,7 +117,7 @@ struct PolicyProgramRecord {
 }
 
 #[repr(C)]
-struct PolicyInputRecord {
+struct CodecInputRecord {
     scope: u8,
     field: u8,
     reserved: u16,
@@ -168,7 +168,7 @@ struct FontBindingResourceRecord {
 }
 
 #[repr(C)]
-struct PolicyBufferRecord {
+struct CodecBufferRecord {
     id: u16,
     scalar: u8,
     vector_width: u8,
@@ -180,7 +180,7 @@ struct PolicyBufferRecord {
 }
 
 #[repr(C)]
-struct PolicyOperationRecord {
+struct CodecOperationRecord {
     opcode: u8,
     target: u8,
     operand0: u8,
@@ -198,7 +198,7 @@ struct EngineUpdateRequestHeader {
     expected_engine_revision: u32,
     consumed_plan_revision: u32,
     acknowledged_publication_generation: u32,
-    policy_handle: u32,
+    codec_handle: u32,
     capability_set: u32,
     flags: u32,
     semantic_view_mask: u32,
@@ -221,8 +221,8 @@ struct EngineUpdateRequestHeader {
     exclusion_count: u32,
     inline_objects_offset: u32,
     inline_object_count: u32,
-    policy_parameters_offset: u32,
-    policy_parameters_length: u32,
+    codec_parameters_offset: u32,
+    codec_parameters_length: u32,
     max_paragraphs: u32,
     paragraph_mutations_offset: u32,
     paragraph_mutation_count: u32,
@@ -413,10 +413,10 @@ struct EngineResultHeader {
     required_request_capacity: u32,
     result_capacity: u32,
     required_result_capacity: u32,
-    policy_handle: u32,
+    codec_handle: u32,
     capability_set: u32,
-    policy_fingerprint_low: u32,
-    policy_fingerprint_high: u32,
+    codec_fingerprint_low: u32,
+    codec_fingerprint_high: u32,
     semantic_views_offset: u32,
     semantic_view_count: u32,
     resources_offset: u32,
@@ -456,34 +456,34 @@ macro_rules! layout {
 }
 
 layout!(
-    POLICY_REQUEST_HEADER_SIZE,
-    POLICY_REQUEST_HEADER_ALIGNMENT,
-    PolicyRequestHeader
+    CODEC_REQUEST_HEADER_SIZE,
+    CODEC_REQUEST_HEADER_ALIGNMENT,
+    CodecRequestHeader
 );
 layout!(
-    POLICY_CAPABILITY_SET_RECORD_SIZE,
-    POLICY_CAPABILITY_SET_RECORD_ALIGNMENT,
-    PolicyCapabilitySetRecord
+    CODEC_CAPABILITY_SET_RECORD_SIZE,
+    CODEC_CAPABILITY_SET_RECORD_ALIGNMENT,
+    CodecCapabilitySetRecord
 );
 layout!(
-    POLICY_PROGRAM_RECORD_SIZE,
-    POLICY_PROGRAM_RECORD_ALIGNMENT,
-    PolicyProgramRecord
+    CODEC_PROGRAM_RECORD_SIZE,
+    CODEC_PROGRAM_RECORD_ALIGNMENT,
+    CodecProgramRecord
 );
 layout!(
-    POLICY_BUFFER_RECORD_SIZE,
-    POLICY_BUFFER_RECORD_ALIGNMENT,
-    PolicyBufferRecord
+    CODEC_BUFFER_RECORD_SIZE,
+    CODEC_BUFFER_RECORD_ALIGNMENT,
+    CodecBufferRecord
 );
 layout!(
-    POLICY_OPERATION_RECORD_SIZE,
-    POLICY_OPERATION_RECORD_ALIGNMENT,
-    PolicyOperationRecord
+    CODEC_OPERATION_RECORD_SIZE,
+    CODEC_OPERATION_RECORD_ALIGNMENT,
+    CodecOperationRecord
 );
 layout!(
-    POLICY_INPUT_RECORD_SIZE,
-    POLICY_INPUT_RECORD_ALIGNMENT,
-    PolicyInputRecord
+    CODEC_INPUT_RECORD_SIZE,
+    CODEC_INPUT_RECORD_ALIGNMENT,
+    CodecInputRecord
 );
 layout!(
     FONT_BINDING_REQUEST_HEADER_SIZE,
@@ -591,187 +591,171 @@ macro_rules! field_offset {
     };
 }
 
-field_offset!(POLICY_BYTE_LENGTH, PolicyRequestHeader, byte_length);
+field_offset!(CODEC_BYTE_LENGTH, CodecRequestHeader, byte_length);
 field_offset!(
-    POLICY_CAPABILITY_SETS_OFFSET,
-    PolicyRequestHeader,
+    CODEC_CAPABILITY_SETS_OFFSET,
+    CodecRequestHeader,
     capability_sets_offset
 );
 field_offset!(
-    POLICY_CAPABILITY_SET_COUNT,
-    PolicyRequestHeader,
+    CODEC_CAPABILITY_SET_COUNT,
+    CodecRequestHeader,
     capability_set_count
 );
-field_offset!(POLICY_PROGRAMS_OFFSET, PolicyRequestHeader, programs_offset);
-field_offset!(POLICY_PROGRAM_COUNT, PolicyRequestHeader, program_count);
-field_offset!(POLICY_BUFFERS_OFFSET, PolicyRequestHeader, buffers_offset);
-field_offset!(POLICY_BUFFER_COUNT, PolicyRequestHeader, buffer_count);
+field_offset!(CODEC_PROGRAMS_OFFSET, CodecRequestHeader, programs_offset);
+field_offset!(CODEC_PROGRAM_COUNT, CodecRequestHeader, program_count);
+field_offset!(CODEC_BUFFERS_OFFSET, CodecRequestHeader, buffers_offset);
+field_offset!(CODEC_BUFFER_COUNT, CodecRequestHeader, buffer_count);
 field_offset!(
-    POLICY_OPERATIONS_OFFSET,
-    PolicyRequestHeader,
+    CODEC_OPERATIONS_OFFSET,
+    CodecRequestHeader,
     operations_offset
 );
-field_offset!(POLICY_OPERATION_COUNT, PolicyRequestHeader, operation_count);
-field_offset!(POLICY_INPUTS_OFFSET, PolicyRequestHeader, inputs_offset);
-field_offset!(POLICY_INPUT_COUNT, PolicyRequestHeader, input_count);
-field_offset!(POLICY_CAPABILITY_SET_ID, PolicyCapabilitySetRecord, id);
+field_offset!(CODEC_OPERATION_COUNT, CodecRequestHeader, operation_count);
+field_offset!(CODEC_INPUTS_OFFSET, CodecRequestHeader, inputs_offset);
+field_offset!(CODEC_INPUT_COUNT, CodecRequestHeader, input_count);
+field_offset!(CODEC_CAPABILITY_SET_ID, CodecCapabilitySetRecord, id);
+field_offset!(CODEC_CAPABILITY_SET_FLAGS, CodecCapabilitySetRecord, flags);
 field_offset!(
-    POLICY_CAPABILITY_SET_FLAGS,
-    PolicyCapabilitySetRecord,
-    flags
-);
-field_offset!(
-    POLICY_CAPABILITY_SET_MAX_BUFFER_BYTES,
-    PolicyCapabilitySetRecord,
+    CODEC_CAPABILITY_SET_MAX_BUFFER_BYTES,
+    CodecCapabilitySetRecord,
     max_buffer_bytes
 );
 field_offset!(
-    POLICY_CAPABILITY_SET_UPDATE_ALIGNMENT,
-    PolicyCapabilitySetRecord,
+    CODEC_CAPABILITY_SET_UPDATE_ALIGNMENT,
+    CodecCapabilitySetRecord,
     update_alignment
 );
 field_offset!(
-    POLICY_CAPABILITY_SET_COALESCE_GAP_BYTES,
-    PolicyCapabilitySetRecord,
+    CODEC_CAPABILITY_SET_COALESCE_GAP_BYTES,
+    CodecCapabilitySetRecord,
     coalesce_gap_bytes
 );
 field_offset!(
-    POLICY_CAPABILITY_SET_RANGE_CALL_PENALTY_BYTES,
-    PolicyCapabilitySetRecord,
+    CODEC_CAPABILITY_SET_RANGE_CALL_PENALTY_BYTES,
+    CodecCapabilitySetRecord,
     range_call_penalty_bytes
 );
 field_offset!(
-    POLICY_CAPABILITY_SET_MAX_BUFFERS_PER_DRAW,
-    PolicyCapabilitySetRecord,
+    CODEC_CAPABILITY_SET_MAX_BUFFERS_PER_DRAW,
+    CodecCapabilitySetRecord,
     max_buffers_per_draw
 );
 field_offset!(
-    POLICY_CAPABILITY_SET_MAX_RESOURCES_PER_DRAW,
-    PolicyCapabilitySetRecord,
+    CODEC_CAPABILITY_SET_MAX_RESOURCES_PER_DRAW,
+    CodecCapabilitySetRecord,
     max_resources_per_draw
 );
 field_offset!(
-    POLICY_CAPABILITY_SET_MAX_INDIRECT_DRAWS,
-    PolicyCapabilitySetRecord,
+    CODEC_CAPABILITY_SET_MAX_INDIRECT_DRAWS,
+    CodecCapabilitySetRecord,
     max_indirect_draws
 );
 field_offset!(
-    POLICY_CAPABILITY_SET_FRAGMENTATION_BUDGET,
-    PolicyCapabilitySetRecord,
+    CODEC_CAPABILITY_SET_FRAGMENTATION_BUDGET,
+    CodecCapabilitySetRecord,
     fragmentation_budget
 );
 field_offset!(
-    POLICY_CAPABILITY_SET_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS,
-    PolicyCapabilitySetRecord,
+    CODEC_CAPABILITY_SET_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS,
+    CodecCapabilitySetRecord,
     whole_buffer_threshold_basis_points
 );
 field_offset!(
-    POLICY_CAPABILITY_SET_RESERVED,
-    PolicyCapabilitySetRecord,
+    CODEC_CAPABILITY_SET_RESERVED,
+    CodecCapabilitySetRecord,
     reserved
 );
+field_offset!(CODEC_PROGRAM_TECHNIQUE_ID, CodecProgramRecord, technique_id);
+field_offset!(CODEC_PROGRAM_ID, CodecProgramRecord, program_id);
 field_offset!(
-    POLICY_PROGRAM_TECHNIQUE_ID,
-    PolicyProgramRecord,
-    technique_id
-);
-field_offset!(POLICY_PROGRAM_ID, PolicyProgramRecord, program_id);
-field_offset!(
-    POLICY_PROGRAM_CAPABILITY_SET_ID,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_CAPABILITY_SET_ID,
+    CodecProgramRecord,
     capability_set_id
 );
 field_offset!(
-    POLICY_PROGRAM_RESOURCE_KIND_MASK,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_RESOURCE_KIND_MASK,
+    CodecProgramRecord,
     resource_kind_mask
 );
 field_offset!(
-    POLICY_PROGRAM_SEMANTIC_VIEW_MASK,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_SEMANTIC_VIEW_MASK,
+    CodecProgramRecord,
     semantic_view_mask
 );
 field_offset!(
-    POLICY_PROGRAM_STORAGE_KEY_MASK,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_STORAGE_KEY_MASK,
+    CodecProgramRecord,
     storage_key_mask
 );
-field_offset!(POLICY_PROGRAM_VARIANT, PolicyProgramRecord, variant);
+field_offset!(CODEC_PROGRAM_VARIANT, CodecProgramRecord, variant);
 field_offset!(
-    POLICY_PROGRAM_F32_INPUT_COUNT,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_F32_INPUT_COUNT,
+    CodecProgramRecord,
     f32_input_count
 );
 field_offset!(
-    POLICY_PROGRAM_U32_INPUT_COUNT,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_U32_INPUT_COUNT,
+    CodecProgramRecord,
     u32_input_count
 );
 field_offset!(
-    POLICY_PROGRAM_PAINT_CAPABILITIES,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_PAINT_CAPABILITIES,
+    CodecProgramRecord,
     paint_capabilities
 );
 field_offset!(
-    POLICY_PROGRAM_COMPOSITING_CAPABILITIES,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_COMPOSITING_CAPABILITIES,
+    CodecProgramRecord,
     compositing_capabilities
 );
+field_offset!(CODEC_PROGRAM_BUFFER_START, CodecProgramRecord, buffer_start);
+field_offset!(CODEC_PROGRAM_BUFFER_COUNT, CodecProgramRecord, buffer_count);
 field_offset!(
-    POLICY_PROGRAM_BUFFER_START,
-    PolicyProgramRecord,
-    buffer_start
-);
-field_offset!(
-    POLICY_PROGRAM_BUFFER_COUNT,
-    PolicyProgramRecord,
-    buffer_count
-);
-field_offset!(
-    POLICY_PROGRAM_PRIMITIVE_KIND,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_PRIMITIVE_KIND,
+    CodecProgramRecord,
     primitive_kind
 );
 field_offset!(
-    POLICY_PROGRAM_OPERATION_START,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_OPERATION_START,
+    CodecProgramRecord,
     operation_start
 );
 field_offset!(
-    POLICY_PROGRAM_OPERATION_COUNT,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_OPERATION_COUNT,
+    CodecProgramRecord,
     operation_count
 );
 field_offset!(
-    POLICY_PROGRAM_ALLOCATION_STRATEGY,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_ALLOCATION_STRATEGY,
+    CodecProgramRecord,
     allocation_strategy
 );
 field_offset!(
-    POLICY_PROGRAM_DRAW_KEY_MASK,
-    PolicyProgramRecord,
+    CODEC_PROGRAM_DRAW_KEY_MASK,
+    CodecProgramRecord,
     draw_key_mask
 );
-field_offset!(POLICY_PROGRAM_INPUT_START, PolicyProgramRecord, input_start);
-field_offset!(POLICY_PROGRAM_INPUT_COUNT, PolicyProgramRecord, input_count);
-field_offset!(POLICY_PROGRAM_RESERVED1, PolicyProgramRecord, reserved1);
-field_offset!(POLICY_BUFFER_ID, PolicyBufferRecord, id);
-field_offset!(POLICY_BUFFER_SCALAR, PolicyBufferRecord, scalar);
-field_offset!(POLICY_BUFFER_VECTOR_WIDTH, PolicyBufferRecord, vector_width);
-field_offset!(POLICY_BUFFER_ALIGNMENT, PolicyBufferRecord, alignment);
-field_offset!(POLICY_BUFFER_STRIDE, PolicyBufferRecord, stride);
-field_offset!(POLICY_BUFFER_USAGE, PolicyBufferRecord, usage);
+field_offset!(CODEC_PROGRAM_INPUT_START, CodecProgramRecord, input_start);
+field_offset!(CODEC_PROGRAM_INPUT_COUNT, CodecProgramRecord, input_count);
+field_offset!(CODEC_PROGRAM_RESERVED1, CodecProgramRecord, reserved1);
+field_offset!(CODEC_BUFFER_ID, CodecBufferRecord, id);
+field_offset!(CODEC_BUFFER_SCALAR, CodecBufferRecord, scalar);
+field_offset!(CODEC_BUFFER_VECTOR_WIDTH, CodecBufferRecord, vector_width);
+field_offset!(CODEC_BUFFER_ALIGNMENT, CodecBufferRecord, alignment);
+field_offset!(CODEC_BUFFER_STRIDE, CodecBufferRecord, stride);
+field_offset!(CODEC_BUFFER_USAGE, CodecBufferRecord, usage);
 field_offset!(
-    POLICY_BUFFER_CAPACITY_CLASS,
-    PolicyBufferRecord,
+    CODEC_BUFFER_CAPACITY_CLASS,
+    CodecBufferRecord,
     capacity_class
 );
-field_offset!(POLICY_BUFFER_RESERVED0, PolicyBufferRecord, reserved0);
-field_offset!(POLICY_OPERATION_OPCODE, PolicyOperationRecord, opcode);
-field_offset!(POLICY_OPERATION_TARGET, PolicyOperationRecord, target);
-field_offset!(POLICY_INPUT_SCOPE, PolicyInputRecord, scope);
-field_offset!(POLICY_INPUT_FIELD, PolicyInputRecord, field);
-field_offset!(POLICY_INPUT_RESERVED, PolicyInputRecord, reserved);
+field_offset!(CODEC_BUFFER_RESERVED0, CodecBufferRecord, reserved0);
+field_offset!(CODEC_OPERATION_OPCODE, CodecOperationRecord, opcode);
+field_offset!(CODEC_OPERATION_TARGET, CodecOperationRecord, target);
+field_offset!(CODEC_INPUT_SCOPE, CodecInputRecord, scope);
+field_offset!(CODEC_INPUT_FIELD, CodecInputRecord, field);
+field_offset!(CODEC_INPUT_RESERVED, CodecInputRecord, reserved);
 field_offset!(
     FONT_BINDING_ABI_VERSION,
     FontBindingRequestHeader,
@@ -908,23 +892,11 @@ field_offset!(
     FontBindingResourceRecord,
     reference
 );
-field_offset!(POLICY_OPERATION_OPERAND0, PolicyOperationRecord, operand0);
-field_offset!(POLICY_OPERATION_OPERAND1, PolicyOperationRecord, operand1);
-field_offset!(
-    POLICY_OPERATION_IMMEDIATE0,
-    PolicyOperationRecord,
-    immediate0
-);
-field_offset!(
-    POLICY_OPERATION_IMMEDIATE1,
-    PolicyOperationRecord,
-    immediate1
-);
-field_offset!(
-    POLICY_OPERATION_IMMEDIATE2,
-    PolicyOperationRecord,
-    immediate2
-);
+field_offset!(CODEC_OPERATION_OPERAND0, CodecOperationRecord, operand0);
+field_offset!(CODEC_OPERATION_OPERAND1, CodecOperationRecord, operand1);
+field_offset!(CODEC_OPERATION_IMMEDIATE0, CodecOperationRecord, immediate0);
+field_offset!(CODEC_OPERATION_IMMEDIATE1, CodecOperationRecord, immediate1);
+field_offset!(CODEC_OPERATION_IMMEDIATE2, CodecOperationRecord, immediate2);
 field_offset!(
     ENGINE_UPDATE_ABI_VERSION,
     EngineUpdateRequestHeader,
@@ -972,9 +944,9 @@ field_offset!(
     acknowledged_publication_generation
 );
 field_offset!(
-    ENGINE_UPDATE_POLICY_HANDLE,
+    ENGINE_UPDATE_CODEC_HANDLE,
     EngineUpdateRequestHeader,
-    policy_handle
+    codec_handle
 );
 field_offset!(
     ENGINE_UPDATE_CAPABILITY_SET,
@@ -1083,14 +1055,14 @@ field_offset!(
     inline_object_count
 );
 field_offset!(
-    ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET,
+    ENGINE_UPDATE_CODEC_PARAMETERS_OFFSET,
     EngineUpdateRequestHeader,
-    policy_parameters_offset
+    codec_parameters_offset
 );
 field_offset!(
-    ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH,
+    ENGINE_UPDATE_CODEC_PARAMETERS_LENGTH,
     EngineUpdateRequestHeader,
-    policy_parameters_length
+    codec_parameters_length
 );
 field_offset!(
     ENGINE_UPDATE_MAX_PARAGRAPHS,
@@ -1680,25 +1652,21 @@ field_offset!(
     EngineResultHeader,
     required_result_capacity
 );
-field_offset!(
-    ENGINE_RESULT_POLICY_HANDLE,
-    EngineResultHeader,
-    policy_handle
-);
+field_offset!(ENGINE_RESULT_CODEC_HANDLE, EngineResultHeader, codec_handle);
 field_offset!(
     ENGINE_RESULT_CAPABILITY_SET,
     EngineResultHeader,
     capability_set
 );
 field_offset!(
-    ENGINE_RESULT_POLICY_FINGERPRINT_LOW,
+    ENGINE_RESULT_CODEC_FINGERPRINT_LOW,
     EngineResultHeader,
-    policy_fingerprint_low
+    codec_fingerprint_low
 );
 field_offset!(
-    ENGINE_RESULT_POLICY_FINGERPRINT_HIGH,
+    ENGINE_RESULT_CODEC_FINGERPRINT_HIGH,
     EngineResultHeader,
-    policy_fingerprint_high
+    codec_fingerprint_high
 );
 field_offset!(
     ENGINE_RESULT_SEMANTICS_OFFSET,
@@ -1820,7 +1788,7 @@ field_offset!(RESOURCE_AUXILIARY1, ResourceRecord, auxiliary1);
 field_offset!(BUFFER_ID, BufferRecord, id);
 field_offset!(BUFFER_GENERATION, BufferRecord, generation);
 field_offset!(BUFFER_PROGRAM_ID, BufferRecord, program_id);
-field_offset!(BUFFER_POLICY_BUFFER_ID, BufferRecord, policy_buffer_id);
+field_offset!(BUFFER_CODEC_BUFFER_ID, BufferRecord, codec_buffer_id);
 field_offset!(BUFFER_SCALAR_TYPE, BufferRecord, scalar_type);
 field_offset!(BUFFER_VECTOR_WIDTH, BufferRecord, vector_width);
 field_offset!(BUFFER_STRATEGY, BufferRecord, strategy);
@@ -1939,9 +1907,9 @@ pub fn json() -> String {
             "registerFontBinding": "pmndrs_glyph_engine_register_font_binding",
             "disposeFontBinding": "pmndrs_glyph_engine_dispose_font_binding",
             "fontBindingCount": "pmndrs_glyph_engine_font_binding_count",
-            "registerPolicy": "pmndrs_glyph_engine_register_policy",
-            "disposePolicy": "pmndrs_glyph_engine_dispose_policy",
-            "policyCount": "pmndrs_glyph_engine_policy_count",
+            "registerCodec": "pmndrs_glyph_engine_register_codec",
+            "disposeCodec": "pmndrs_glyph_engine_dispose_codec",
+            "codecCount": "pmndrs_glyph_engine_codec_count",
             "createPlanner": "pmndrs_glyph_engine_create_planner",
             "reservePlanner": "pmndrs_glyph_engine_reserve_planner",
             "disposePlanner": "pmndrs_glyph_engine_dispose_planner",
@@ -1958,91 +1926,91 @@ pub fn json() -> String {
             "copyDecorations": "pmndrs_glyph_engine_copy_decorations"
         },
         "layouts": {
-            "policyRequest": {
-                "size": POLICY_REQUEST_HEADER_SIZE,
-                "alignment": POLICY_REQUEST_HEADER_ALIGNMENT,
-                "byteLength": POLICY_BYTE_LENGTH,
-                "capabilitySetsOffset": POLICY_CAPABILITY_SETS_OFFSET,
-                "capabilitySetCount": POLICY_CAPABILITY_SET_COUNT,
-                "programsOffset": POLICY_PROGRAMS_OFFSET,
-                "programCount": POLICY_PROGRAM_COUNT,
-                "buffersOffset": POLICY_BUFFERS_OFFSET,
-                "bufferCount": POLICY_BUFFER_COUNT,
-                "operationsOffset": POLICY_OPERATIONS_OFFSET,
-                "operationCount": POLICY_OPERATION_COUNT,
-                "inputsOffset": POLICY_INPUTS_OFFSET,
-                "inputCount": POLICY_INPUT_COUNT
+            "codecRequest": {
+                "size": CODEC_REQUEST_HEADER_SIZE,
+                "alignment": CODEC_REQUEST_HEADER_ALIGNMENT,
+                "byteLength": CODEC_BYTE_LENGTH,
+                "capabilitySetsOffset": CODEC_CAPABILITY_SETS_OFFSET,
+                "capabilitySetCount": CODEC_CAPABILITY_SET_COUNT,
+                "programsOffset": CODEC_PROGRAMS_OFFSET,
+                "programCount": CODEC_PROGRAM_COUNT,
+                "buffersOffset": CODEC_BUFFERS_OFFSET,
+                "bufferCount": CODEC_BUFFER_COUNT,
+                "operationsOffset": CODEC_OPERATIONS_OFFSET,
+                "operationCount": CODEC_OPERATION_COUNT,
+                "inputsOffset": CODEC_INPUTS_OFFSET,
+                "inputCount": CODEC_INPUT_COUNT
             },
-            "policyCapabilitySet": {
-                "size": POLICY_CAPABILITY_SET_RECORD_SIZE,
-                "alignment": POLICY_CAPABILITY_SET_RECORD_ALIGNMENT,
-                "id": POLICY_CAPABILITY_SET_ID,
-                "flags": POLICY_CAPABILITY_SET_FLAGS,
-                "maxBufferBytes": POLICY_CAPABILITY_SET_MAX_BUFFER_BYTES,
-                "updateAlignment": POLICY_CAPABILITY_SET_UPDATE_ALIGNMENT,
-                "coalesceGapBytes": POLICY_CAPABILITY_SET_COALESCE_GAP_BYTES,
-                "rangeCallPenaltyBytes": POLICY_CAPABILITY_SET_RANGE_CALL_PENALTY_BYTES,
-                "maxBuffersPerDraw": POLICY_CAPABILITY_SET_MAX_BUFFERS_PER_DRAW,
-                "maxResourcesPerDraw": POLICY_CAPABILITY_SET_MAX_RESOURCES_PER_DRAW,
-                "maxIndirectDraws": POLICY_CAPABILITY_SET_MAX_INDIRECT_DRAWS,
-                "fragmentationBudget": POLICY_CAPABILITY_SET_FRAGMENTATION_BUDGET,
-                "wholeBufferThresholdBasisPoints": POLICY_CAPABILITY_SET_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS,
-                "reserved": POLICY_CAPABILITY_SET_RESERVED
+            "codecCapabilitySet": {
+                "size": CODEC_CAPABILITY_SET_RECORD_SIZE,
+                "alignment": CODEC_CAPABILITY_SET_RECORD_ALIGNMENT,
+                "id": CODEC_CAPABILITY_SET_ID,
+                "flags": CODEC_CAPABILITY_SET_FLAGS,
+                "maxBufferBytes": CODEC_CAPABILITY_SET_MAX_BUFFER_BYTES,
+                "updateAlignment": CODEC_CAPABILITY_SET_UPDATE_ALIGNMENT,
+                "coalesceGapBytes": CODEC_CAPABILITY_SET_COALESCE_GAP_BYTES,
+                "rangeCallPenaltyBytes": CODEC_CAPABILITY_SET_RANGE_CALL_PENALTY_BYTES,
+                "maxBuffersPerDraw": CODEC_CAPABILITY_SET_MAX_BUFFERS_PER_DRAW,
+                "maxResourcesPerDraw": CODEC_CAPABILITY_SET_MAX_RESOURCES_PER_DRAW,
+                "maxIndirectDraws": CODEC_CAPABILITY_SET_MAX_INDIRECT_DRAWS,
+                "fragmentationBudget": CODEC_CAPABILITY_SET_FRAGMENTATION_BUDGET,
+                "wholeBufferThresholdBasisPoints": CODEC_CAPABILITY_SET_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS,
+                "reserved": CODEC_CAPABILITY_SET_RESERVED
             },
-            "policyProgram": {
-                "size": POLICY_PROGRAM_RECORD_SIZE,
-                "alignment": POLICY_PROGRAM_RECORD_ALIGNMENT,
-                "techniqueId": POLICY_PROGRAM_TECHNIQUE_ID,
-                "programId": POLICY_PROGRAM_ID,
-                "capabilitySetId": POLICY_PROGRAM_CAPABILITY_SET_ID,
-                "resourceKindMask": POLICY_PROGRAM_RESOURCE_KIND_MASK,
-                "semanticViewMask": POLICY_PROGRAM_SEMANTIC_VIEW_MASK,
-                "storageKeyMask": POLICY_PROGRAM_STORAGE_KEY_MASK,
-                "drawKeyMask": POLICY_PROGRAM_DRAW_KEY_MASK,
-                "variant": POLICY_PROGRAM_VARIANT,
-                "f32InputCount": POLICY_PROGRAM_F32_INPUT_COUNT,
-                "u32InputCount": POLICY_PROGRAM_U32_INPUT_COUNT,
-                "paintCapabilities": POLICY_PROGRAM_PAINT_CAPABILITIES,
-                "compositingCapabilities": POLICY_PROGRAM_COMPOSITING_CAPABILITIES,
-                "bufferStart": POLICY_PROGRAM_BUFFER_START,
-                "bufferCount": POLICY_PROGRAM_BUFFER_COUNT,
-                "primitiveKind": POLICY_PROGRAM_PRIMITIVE_KIND,
-                "operationStart": POLICY_PROGRAM_OPERATION_START,
-                "operationCount": POLICY_PROGRAM_OPERATION_COUNT,
-                "allocationStrategy": POLICY_PROGRAM_ALLOCATION_STRATEGY,
-                "inputStart": POLICY_PROGRAM_INPUT_START,
-                "inputCount": POLICY_PROGRAM_INPUT_COUNT,
-                "reserved1": POLICY_PROGRAM_RESERVED1
+            "codecProgram": {
+                "size": CODEC_PROGRAM_RECORD_SIZE,
+                "alignment": CODEC_PROGRAM_RECORD_ALIGNMENT,
+                "techniqueId": CODEC_PROGRAM_TECHNIQUE_ID,
+                "programId": CODEC_PROGRAM_ID,
+                "capabilitySetId": CODEC_PROGRAM_CAPABILITY_SET_ID,
+                "resourceKindMask": CODEC_PROGRAM_RESOURCE_KIND_MASK,
+                "semanticViewMask": CODEC_PROGRAM_SEMANTIC_VIEW_MASK,
+                "storageKeyMask": CODEC_PROGRAM_STORAGE_KEY_MASK,
+                "drawKeyMask": CODEC_PROGRAM_DRAW_KEY_MASK,
+                "variant": CODEC_PROGRAM_VARIANT,
+                "f32InputCount": CODEC_PROGRAM_F32_INPUT_COUNT,
+                "u32InputCount": CODEC_PROGRAM_U32_INPUT_COUNT,
+                "paintCapabilities": CODEC_PROGRAM_PAINT_CAPABILITIES,
+                "compositingCapabilities": CODEC_PROGRAM_COMPOSITING_CAPABILITIES,
+                "bufferStart": CODEC_PROGRAM_BUFFER_START,
+                "bufferCount": CODEC_PROGRAM_BUFFER_COUNT,
+                "primitiveKind": CODEC_PROGRAM_PRIMITIVE_KIND,
+                "operationStart": CODEC_PROGRAM_OPERATION_START,
+                "operationCount": CODEC_PROGRAM_OPERATION_COUNT,
+                "allocationStrategy": CODEC_PROGRAM_ALLOCATION_STRATEGY,
+                "inputStart": CODEC_PROGRAM_INPUT_START,
+                "inputCount": CODEC_PROGRAM_INPUT_COUNT,
+                "reserved1": CODEC_PROGRAM_RESERVED1
             },
-            "policyBuffer": {
-                "size": POLICY_BUFFER_RECORD_SIZE,
-                "alignment": POLICY_BUFFER_RECORD_ALIGNMENT,
-                "id": POLICY_BUFFER_ID,
-                "scalar": POLICY_BUFFER_SCALAR,
-                "vectorWidth": POLICY_BUFFER_VECTOR_WIDTH,
-                "alignment": POLICY_BUFFER_ALIGNMENT,
-                "stride": POLICY_BUFFER_STRIDE,
-                "usage": POLICY_BUFFER_USAGE,
-                "capacityClass": POLICY_BUFFER_CAPACITY_CLASS,
-                "reserved0": POLICY_BUFFER_RESERVED0
+            "codecBuffer": {
+                "size": CODEC_BUFFER_RECORD_SIZE,
+                "alignment": CODEC_BUFFER_RECORD_ALIGNMENT,
+                "id": CODEC_BUFFER_ID,
+                "scalar": CODEC_BUFFER_SCALAR,
+                "vectorWidth": CODEC_BUFFER_VECTOR_WIDTH,
+                "alignment": CODEC_BUFFER_ALIGNMENT,
+                "stride": CODEC_BUFFER_STRIDE,
+                "usage": CODEC_BUFFER_USAGE,
+                "capacityClass": CODEC_BUFFER_CAPACITY_CLASS,
+                "reserved0": CODEC_BUFFER_RESERVED0
             },
-            "policyOperation": {
-                "size": POLICY_OPERATION_RECORD_SIZE,
-                "alignment": POLICY_OPERATION_RECORD_ALIGNMENT,
-                "opcode": POLICY_OPERATION_OPCODE,
-                "target": POLICY_OPERATION_TARGET,
-                "operand0": POLICY_OPERATION_OPERAND0,
-                "operand1": POLICY_OPERATION_OPERAND1,
-                "immediate0": POLICY_OPERATION_IMMEDIATE0,
-                "immediate1": POLICY_OPERATION_IMMEDIATE1,
-                "immediate2": POLICY_OPERATION_IMMEDIATE2
+            "codecOperation": {
+                "size": CODEC_OPERATION_RECORD_SIZE,
+                "alignment": CODEC_OPERATION_RECORD_ALIGNMENT,
+                "opcode": CODEC_OPERATION_OPCODE,
+                "target": CODEC_OPERATION_TARGET,
+                "operand0": CODEC_OPERATION_OPERAND0,
+                "operand1": CODEC_OPERATION_OPERAND1,
+                "immediate0": CODEC_OPERATION_IMMEDIATE0,
+                "immediate1": CODEC_OPERATION_IMMEDIATE1,
+                "immediate2": CODEC_OPERATION_IMMEDIATE2
             },
-            "policyInput": {
-                "size": POLICY_INPUT_RECORD_SIZE,
-                "alignment": POLICY_INPUT_RECORD_ALIGNMENT,
-                "scope": POLICY_INPUT_SCOPE,
-                "field": POLICY_INPUT_FIELD,
-                "reserved": POLICY_INPUT_RESERVED
+            "codecInput": {
+                "size": CODEC_INPUT_RECORD_SIZE,
+                "alignment": CODEC_INPUT_RECORD_ALIGNMENT,
+                "scope": CODEC_INPUT_SCOPE,
+                "field": CODEC_INPUT_FIELD,
+                "reserved": CODEC_INPUT_RESERVED
             },
             "fontBindingRequest": {
                 "size": FONT_BINDING_REQUEST_HEADER_SIZE,
@@ -2097,7 +2065,7 @@ pub fn json() -> String {
                 "expectedEngineRevision": ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
                 "consumedPlanRevision": ENGINE_UPDATE_CONSUMED_PLAN_REVISION,
                 "acknowledgedPublicationGeneration": ENGINE_UPDATE_ACKNOWLEDGED_PUBLICATION_GENERATION,
-                "policyHandle": ENGINE_UPDATE_POLICY_HANDLE,
+                "codecHandle": ENGINE_UPDATE_CODEC_HANDLE,
                 "capabilitySet": ENGINE_UPDATE_CAPABILITY_SET,
                 "flags": ENGINE_UPDATE_FLAGS,
                 "semanticViewMask": ENGINE_UPDATE_SEMANTIC_VIEW_MASK,
@@ -2120,8 +2088,8 @@ pub fn json() -> String {
                 "exclusionCount": ENGINE_UPDATE_EXCLUSION_COUNT,
                 "inlineObjectsOffset": ENGINE_UPDATE_INLINE_OBJECTS_OFFSET,
                 "inlineObjectCount": ENGINE_UPDATE_INLINE_OBJECT_COUNT,
-                "policyParametersOffset": ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET,
-                "policyParametersLength": ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH,
+                "codecParametersOffset": ENGINE_UPDATE_CODEC_PARAMETERS_OFFSET,
+                "codecParametersLength": ENGINE_UPDATE_CODEC_PARAMETERS_LENGTH,
                 "maxParagraphs": ENGINE_UPDATE_MAX_PARAGRAPHS,
                 "paragraphMutationsOffset": ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET,
                 "paragraphMutationCount": ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT
@@ -2310,10 +2278,10 @@ pub fn json() -> String {
                 "requiredRequestCapacity": ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY,
                 "resultCapacity": ENGINE_RESULT_RESULT_CAPACITY,
                 "requiredResultCapacity": ENGINE_RESULT_REQUIRED_RESULT_CAPACITY,
-                "policyHandle": ENGINE_RESULT_POLICY_HANDLE,
+                "codecHandle": ENGINE_RESULT_CODEC_HANDLE,
                 "capabilitySet": ENGINE_RESULT_CAPABILITY_SET,
-                "policyFingerprintLow": ENGINE_RESULT_POLICY_FINGERPRINT_LOW,
-                "policyFingerprintHigh": ENGINE_RESULT_POLICY_FINGERPRINT_HIGH,
+                "codecFingerprintLow": ENGINE_RESULT_CODEC_FINGERPRINT_LOW,
+                "codecFingerprintHigh": ENGINE_RESULT_CODEC_FINGERPRINT_HIGH,
                 "semanticViewsOffset": ENGINE_RESULT_SEMANTICS_OFFSET,
                 "semanticViewCount": ENGINE_RESULT_SEMANTICS_COUNT,
                 "resourcesOffset": ENGINE_RESULT_RESOURCES_OFFSET,
@@ -2378,7 +2346,7 @@ pub fn json() -> String {
                 "id": BUFFER_ID,
                 "generation": BUFFER_GENERATION,
                 "programId": BUFFER_PROGRAM_ID,
-                "policyBufferId": BUFFER_POLICY_BUFFER_ID,
+                "codecBufferId": BUFFER_CODEC_BUFFER_ID,
                 "scalarType": BUFFER_SCALAR_TYPE,
                 "vectorWidth": BUFFER_VECTOR_WIDTH,
                 "strategy": BUFFER_STRATEGY,
@@ -2477,7 +2445,7 @@ pub fn json() -> String {
                 "end": FEATURE_END
             },
         },
-        "policy": {
+        "codec": {
             "capabilityFlags": {
                 "storageBuffers": CAP_STORAGE_BUFFERS,
                 "indirectDraws": CAP_INDIRECT_DRAWS,
@@ -2710,7 +2678,7 @@ pub fn json() -> String {
                 "stableIndirect": BUFFER_STABLE_INDIRECT
             },
             "internalBufferBindings": {
-                "order": POLICY_BUFFER_ORDER
+                "order": CODEC_BUFFER_ORDER
             },
             "patchOpcodes": {
                 "allocateOrResize": PATCH_ALLOCATE_OR_RESIZE,
@@ -2724,7 +2692,7 @@ pub fn json() -> String {
                 "decoration": PRIMITIVE_DECORATION,
                 "inlineObject": PRIMITIVE_INLINE_OBJECT,
                 "clip": PRIMITIVE_CLIP,
-                "policy": PRIMITIVE_POLICY
+                "codec": PRIMITIVE_CODEC
             },
             "retirementKinds": {
                 "resource": RETIRE_RESOURCE,
@@ -2742,8 +2710,8 @@ pub fn json() -> String {
             "fontMissing": 5,
             "invalidRequest": 6,
             "resultTooLarge": 7,
-            "policyConflict": 8,
-            "policyMissing": 9,
+            "codecConflict": 8,
+            "codecMissing": 9,
             "plannerConflict": 10,
             "plannerMissing": 11,
             "revisionConflict": 12,

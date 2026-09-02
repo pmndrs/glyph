@@ -114,7 +114,7 @@ const EDIT_CLASSES = [
  * by accident. Distinct positions, sizes, and colours make each of those lanes carry a value that
  * identifies its own slot.
  *
- * `rasterPixelRatio` is not itself a packed lane -- no first-party program in `render-policy.ts`
+ * `rasterPixelRatio` is not itself a packed lane -- no first-party codec program
  * reads it -- but it is one of the two resource-selection inputs, so varying it per node drives
  * the gather's selection-change branch, the one that widens a narrow change mask to every input.
  * It cannot select a DIFFERENT resource here: these fixtures bake one strike and one page each,

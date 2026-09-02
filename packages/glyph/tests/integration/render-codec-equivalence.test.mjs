@@ -6,7 +6,7 @@ import { id } from '../../dist/config/codec.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { threeCodecBytes, threeCodecDescriptor } from '../../dist/three/codec.js';
 
-const fixtureUrl = new URL('../fixtures/render-policy/hand-numbered-policy-bytes.json', import.meta.url);
+const fixtureUrl = new URL('../fixtures/render-codec/hand-numbered-codec-bytes.json', import.meta.url);
 const THREE_PROGRAM_IDS = new Map([
   [id.technique('pmndrs.bitmap'), id.program('pmndrs.bitmap', 'three')],
   [id.technique('pmndrs.msdf'), id.program('pmndrs.msdf', 'three')],
@@ -14,8 +14,8 @@ const THREE_PROGRAM_IDS = new Map([
   [id.technique('pmndrs.decoration'), id.program('pmndrs.decoration', 'three')],
 ]);
 
-test('Three rejects counterfeit render ID factories at policy assembly', () => {
-  assert.throws(() => threeCodecDescriptor({}), /raster policy ids must be/);
+test('Three rejects counterfeit render ID factories at codec assembly', () => {
+  assert.throws(() => threeCodecDescriptor({}), /raster codec ids must be/);
 });
 
 /**
@@ -27,13 +27,13 @@ test('Three rejects counterfeit render ID factories at policy assembly', () => {
  * byte streams and compares exactly that. Named buffer IDs deliberately differ
  * from the retired hand-numbered fixture, so buffers and stores compare by order.
  */
-test('the Three render policy is semantically identical to the hand-numbered fixture', async () => {
+test('the Three render codec is semantically identical to the hand-numbered fixture', async () => {
   const fixtures = JSON.parse(await readFile(fixtureUrl, 'utf8'));
   for (const transform of ['direct', 'indexed']) {
     for (const allocation of ['ordered', 'stable']) {
       const key = `${transform}/${allocation}`;
-      const fixture = decodePolicy(Buffer.from(fixtures[key], 'base64'));
-      const current = decodePolicy(threeCodecBytes(undefined, transform, [], allocation));
+      const fixture = decodeCodec(Buffer.from(fixtures[key], 'base64'));
+      const current = decodeCodec(threeCodecBytes(undefined, transform, [], allocation));
       assert.equal(current.programs.length, fixture.programs.length, `${key}: program count`);
       assert.deepEqual(current.capabilitySets, fixture.capabilitySets, `${key}: capability sets`);
       for (const [index, historical] of fixture.programs.entries()) {
@@ -60,8 +60,8 @@ test('the Three render policy is semantically identical to the hand-numbered fix
 
 function withMsdfTextEffects(program) {
   if (program.metadata.techniqueId !== id.technique('pmndrs.msdf')) return program;
-  const semantic = textShaperAbi.policy.inputScopes.semantic;
-  const binding = textShaperAbi.policy.inputScopes.glyph;
+  const semantic = textShaperAbi.codec.inputScopes.semantic;
+  const binding = textShaperAbi.codec.inputScopes.glyph;
   const f32 = textShaperAbi.engine.semanticF32Fields;
   const u32 = textShaperAbi.engine.semanticU32Fields;
   const systemBufferCount = program.buffers.length - 7;
@@ -126,15 +126,15 @@ function withMsdfTextEffects(program) {
   };
 }
 
-function decodePolicy(bytes) {
+function decodeCodec(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const request = textShaperAbi.layouts.policyRequest;
-  const programLayout = textShaperAbi.layouts.policyProgram;
-  const operationLayout = textShaperAbi.layouts.policyOperation;
-  const inputLayout = textShaperAbi.layouts.policyInput;
-  const bufferLayout = textShaperAbi.layouts.policyBuffer;
-  const capabilityLayout = textShaperAbi.layouts.policyCapabilitySet;
-  const opcodes = textShaperAbi.policy.opcodes;
+  const request = textShaperAbi.layouts.codecRequest;
+  const programLayout = textShaperAbi.layouts.codecProgram;
+  const operationLayout = textShaperAbi.layouts.codecOperation;
+  const inputLayout = textShaperAbi.layouts.codecInput;
+  const bufferLayout = textShaperAbi.layouts.codecBuffer;
+  const capabilityLayout = textShaperAbi.layouts.codecCapabilitySet;
+  const opcodes = textShaperAbi.codec.opcodes;
   const opcodeNames = new Map(Object.entries(opcodes).map(([name, value]) => [value, name]));
 
   const capabilitySets = [];
@@ -229,7 +229,7 @@ function decodePolicy(bytes) {
       } else if (name === 'storeF32' || name === 'storeU32' || name === 'storeU16') {
         stores.set(`${name}:buffer${required(bufferOrder, immediate0)}:lane${operand1}`, required(registers, operand0));
       } else {
-        throw new Error(`unexpected policy opcode ${String(name)}`);
+        throw new Error(`unexpected codec opcode ${String(name)}`);
       }
     }
     programs.push({ metadata, inputs, buffers, stores: Object.fromEntries([...stores.entries()].sort()) });

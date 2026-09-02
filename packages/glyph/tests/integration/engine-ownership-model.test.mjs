@@ -6,7 +6,7 @@ import { GlyphHandleState } from '../../dist/internal/handle-state.js';
 import { assertGlyphId, id } from '../../dist/config/codec.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
-import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
+import { engineUpdateBytes, renderCodecBytes } from '../support/engine-abi.mjs';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 
@@ -14,18 +14,18 @@ test('one Wasm engine rejects double ownership and cross-handle codec resolution
   const shaper = await createRuntimeShaper({ wasm: await readFile(wasmUrl) });
   const first = new GlyphHandleState(shaper);
   const second = new GlyphHandleState(shaper);
-  const sharedPolicy = id.policy('engine-ownership/shared-policy');
-  const firstPolicy = first.id('policy', 'engine-ownership/first-policy');
-  const secondPolicy = second.id('policy', 'engine-ownership/second-policy');
+  const sharedCodec = id.codec('engine-ownership/shared-codec');
+  const firstCodec = first.id('codec', 'engine-ownership/first-codec');
+  const secondCodec = second.id('codec', 'engine-ownership/second-codec');
   const plannerHandle = first.id('planner', 'engine-ownership/first-transport');
   try {
-    first.registerCodec(sharedPolicy, renderPolicyBytes(textShaperAbi));
+    first.registerCodec(sharedCodec, renderCodecBytes(textShaperAbi));
     assert.throws(
-      () => second.registerCodec(sharedPolicy, renderPolicyBytes(textShaperAbi)),
+      () => second.registerCodec(sharedCodec, renderCodecBytes(textShaperAbi)),
       /already owned by another Glyph handle state/u,
     );
-    first.registerCodec(firstPolicy, renderPolicyBytes(textShaperAbi));
-    second.registerCodec(secondPolicy, renderPolicyBytes(textShaperAbi));
+    first.registerCodec(firstCodec, renderCodecBytes(textShaperAbi));
+    second.registerCodec(secondCodec, renderCodecBytes(textShaperAbi));
     const transport = first._createPlanTransport({
       handle: plannerHandle,
       requestCapacity: 4096,
@@ -34,14 +34,14 @@ test('one Wasm engine rejects double ownership and cross-handle codec resolution
     const accepted = transport.update(
       engineUpdateBytes(textShaperAbi, {
         plannerId: plannerHandle,
-        policyHandle: firstPolicy,
+        codecHandle: firstCodec,
         expectedEngineRevision: 0,
         consumedPlanRevision: 0,
       }),
     );
     const foreign = engineUpdateBytes(textShaperAbi, {
       plannerId: plannerHandle,
-      policyHandle: secondPolicy,
+      codecHandle: secondCodec,
       expectedEngineRevision: accepted.engineRevision,
       consumedPlanRevision: accepted.planRevision,
     });
@@ -62,15 +62,15 @@ test('registration retains a scoped ID independently of the scope that minted it
   const shaper = await createRuntimeShaper({ wasm: await readFile(wasmUrl) });
   const minter = new GlyphHandleState(shaper);
   const owner = new GlyphHandleState(shaper);
-  const policyHandle = minter.id('policy', 'engine-ownership/adopted-policy');
+  const codecHandle = minter.id('codec', 'engine-ownership/adopted-codec');
   const plannerHandle = owner.id('planner', 'engine-ownership/adopted-transport');
   try {
-    owner.registerCodec(policyHandle, renderPolicyBytes(textShaperAbi));
+    owner.registerCodec(codecHandle, renderCodecBytes(textShaperAbi));
     minter.dispose();
-    assert.equal(assertGlyphId(policyHandle, 'policy', 'policy handle'), policyHandle);
+    assert.equal(assertGlyphId(codecHandle, 'codec', 'codec handle'), codecHandle);
     const request = engineUpdateBytes(textShaperAbi, {
       plannerId: plannerHandle,
-      policyHandle,
+      codecHandle,
       expectedEngineRevision: 0,
       consumedPlanRevision: 0,
     });
@@ -79,23 +79,23 @@ test('registration retains a scoped ID independently of the scope that minted it
       requestCapacity: request.byteLength,
       resultCapacity: textShaperAbi.layouts.engineResult.size,
     });
-    assert.equal(transport.update(request).policyHandle, policyHandle);
+    assert.equal(transport.update(request).codecHandle, codecHandle);
   } finally {
     owner.dispose();
     minter.dispose();
     shaper.dispose();
   }
-  assert.throws(() => assertGlyphId(policyHandle, 'policy', 'policy handle'), /must come from id/u);
+  assert.throws(() => assertGlyphId(codecHandle, 'codec', 'codec handle'), /must come from id/u);
 });
 
 test('successful individual disposal releases registration ID provenance', async () => {
   const shaper = await createRuntimeShaper({ wasm: await readFile(wasmUrl) });
   const handleState = new GlyphHandleState(shaper);
-  const policyHandle = handleState.id('policy', 'engine-ownership/disposed-policy');
+  const codecHandle = handleState.id('codec', 'engine-ownership/disposed-codec');
   try {
-    handleState.registerCodec(policyHandle, renderPolicyBytes(textShaperAbi));
-    handleState.disposeCodec(policyHandle);
-    assert.throws(() => assertGlyphId(policyHandle, 'policy', 'policy handle'), /must come from id/u);
+    handleState.registerCodec(codecHandle, renderCodecBytes(textShaperAbi));
+    handleState.disposeCodec(codecHandle);
+    assert.throws(() => assertGlyphId(codecHandle, 'codec', 'codec handle'), /must come from id/u);
   } finally {
     handleState.dispose();
     shaper.dispose();

@@ -8,7 +8,7 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
   if (exports.pmndrs_glyph_kernel_lab_backend() !== expectedBackend) {
     throw new Error(`${name} artifact selected the wrong compile-time kernel backend`);
   }
-  registerPolicy(exports, input.policy);
+  registerCodec(exports, input.codec);
   const aligned = createMemoryFixture(exports, input, 0);
   const unaligned = createMemoryFixture(exports, input, 4);
   const uniform = createMemoryFixture(exports, { ...input, levels: new Uint8Array(input.glyphs) }, 0);
@@ -80,7 +80,7 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
     transitionMixedX2: measure(() => checkedCall(() => callTransitionScan(exports, mixed, 2)), iterations * 4, options),
     transitionMixedX4: measure(() => checkedCall(() => callTransitionScan(exports, mixed, 4)), iterations * 4, options),
     transitionMixedX8: measure(() => checkedCall(() => callTransitionScan(exports, mixed, 8)), iterations * 4, options),
-    policy: measure(() => checkedCall(() => callPolicy(exports, aligned, false)), iterations, options),
+    codec: measure(() => checkedCall(() => callCodec(exports, aligned, false)), iterations, options),
     chunk32: measure(() => checkedCall(() => callSummaries(exports, aligned, 32)), iterations * 2, options),
     chunk64: measure(() => checkedCall(() => callSummaries(exports, aligned, 64)), iterations * 2, options),
     chunk128: measure(() => checkedCall(() => callSummaries(exports, aligned, 128)), iterations * 2, options),
@@ -152,9 +152,9 @@ function createMemoryFixture(exports, input, skew) {
   const spaceSums = reserve(summaryCapacity, 8, 8);
   const flagsOr = reserve(summaryCapacity, 1, 1);
   const scanChecksum = reserve(1, 8, 8);
-  const policyF32 = reserve(count * 4, 4, 4);
-  const policyU32 = reserve(count, 4, 4);
-  const policyU16 = reserve(count, 2, 2);
+  const codecF32 = reserve(count * 4, 4, 4);
+  const codecU32 = reserve(count, 4, 4);
+  const codecU16 = reserve(count, 2, 2);
   if (cursor > allocationPointer + allocationLength) throw new Error('kernel-lab memory layout exceeds its allocation');
 
   new Float32Array(exports.memory.buffer, x, count).set(input.x);
@@ -194,9 +194,9 @@ function createMemoryFixture(exports, input, skew) {
     spaceSums,
     flagsOr,
     scanChecksum,
-    policyF32,
-    policyU32,
-    policyU16,
+    codecF32,
+    codecU32,
+    codecU16,
     summaryCapacity,
     memory: exports.memory,
   };
@@ -220,15 +220,15 @@ async function executeAndHash(exports, fixture, vertical) {
       throw new Error(`bidi-mask x${groupCount} output differs from the x1 oracle`);
     }
   }
-  checkedCall(() => callPolicy(exports, fixture, vertical));
+  checkedCall(() => callCodec(exports, fixture, vertical));
   const parts = [
     bytes(fixture, fixture.origins, fixture.count * 2 * 4),
     bytes(fixture, fixture.sizes, fixture.count * 2 * 4),
     ...breakOracle,
     ...bidiOracle,
-    bytes(fixture, fixture.policyF32, fixture.count * 4 * 4),
-    bytes(fixture, fixture.policyU32, fixture.count * 4),
-    bytes(fixture, fixture.policyU16, fixture.count * 2),
+    bytes(fixture, fixture.codecF32, fixture.count * 4 * 4),
+    bytes(fixture, fixture.codecU32, fixture.count * 4),
+    bytes(fixture, fixture.codecU16, fixture.count * 2),
   ];
   for (const chunkSize of CHUNK_SIZES) {
     checkedCall(() => callSummaries(exports, fixture, chunkSize));
@@ -331,8 +331,8 @@ function callTransitionScan(exports, fixture, groupCount) {
   );
 }
 
-function callPolicy(exports, fixture, vertical) {
-  return exports.pmndrs_glyph_kernel_lab_policy(
+function callCodec(exports, fixture, vertical) {
+  return exports.pmndrs_glyph_kernel_lab_codec(
     1,
     1,
     0,
@@ -342,9 +342,9 @@ function callPolicy(exports, fixture, vertical) {
     fixture.fontSize,
     fixture.planeLeft,
     fixture.advances,
-    fixture.policyF32,
-    fixture.policyU32,
-    fixture.policyU16,
+    fixture.codecF32,
+    fixture.codecU32,
+    fixture.codecU16,
   );
 }
 
@@ -399,10 +399,10 @@ function alignWithSkew(value, alignment, skew) {
   return Math.ceil((value - skew) / alignment) * alignment + skew;
 }
 
-function registerPolicy(exports, policy) {
-  const pointer = exports.pmndrs_glyph_shaper_alloc(policy.byteLength);
-  if (pointer === 0) throw new Error('kernel-lab policy allocation failed');
-  new Uint8Array(exports.memory.buffer, pointer, policy.byteLength).set(policy);
-  checkedCall(() => exports.pmndrs_glyph_engine_register_policy(1, pointer, policy.byteLength));
-  exports.pmndrs_glyph_shaper_dealloc(pointer, policy.byteLength);
+function registerCodec(exports, codec) {
+  const pointer = exports.pmndrs_glyph_shaper_alloc(codec.byteLength);
+  if (pointer === 0) throw new Error('kernel-lab codec allocation failed');
+  new Uint8Array(exports.memory.buffer, pointer, codec.byteLength).set(codec);
+  checkedCall(() => exports.pmndrs_glyph_engine_register_codec(1, pointer, codec.byteLength));
+  exports.pmndrs_glyph_shaper_dealloc(pointer, codec.byteLength);
 }

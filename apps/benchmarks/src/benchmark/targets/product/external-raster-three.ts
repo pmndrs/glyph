@@ -96,7 +96,7 @@ function floatBuffer(
     buffer.scalarType !== threeCodecAbi.scalarTypes.f32 ||
     buffer.vectorWidth !== vectorWidth
   ) {
-    throw new TypeError(`glyph-example draw requires f32x${vectorWidth} policy buffer "${name}"`);
+    throw new TypeError(`glyph-example draw requires f32x${vectorWidth} codec buffer "${name}"`);
   }
   return buffer;
 }

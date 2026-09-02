@@ -7,10 +7,10 @@ use crate::{FontGlyphExtents, FontMetrics, bidi::BidiAnalysis};
 use super::{
     EngineError, FrameFault,
     cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SPACE, ClusterArena},
+    codec_gather::LayoutGlyph,
     flow_composition::{FlowFragment, FlowLayoutArena, FlowLine},
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
     identity_index::{IdentityIndex, IdentityIndexError},
-    policy_gather::LayoutGlyph,
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapingRun},
     style_state::{ResolvedStyle, StyleSegment},
 };
@@ -2133,7 +2133,7 @@ mod tests {
             &arena(ALIGN_CENTER, 17.0),
             &arena(ALIGN_CENTER, 25.0)
         ));
-        // A final line under the auto last-line policy never justifies, so a
+        // A final line under the auto last-line codec never justifies, so a
         // width change is genuinely a positioning no-op there.
         assert!(equivalent(
             &arena(ALIGN_JUSTIFY, 17.0),
@@ -2275,17 +2275,17 @@ mod tests {
     }
 
     #[test]
-    fn last_line_policy_justifies_final_and_hard_broken_lines() {
+    fn last_line_codec_justifies_final_and_hard_broken_lines() {
         let (_text, clusters, line, fragment) = justify_fixture();
         let auto = JustifyControls::default();
         let final_auto = justification_adjustment(line, fragment, true, &clusters, 0, 7, 0.0, auto);
         assert_eq!(final_auto.per_space_units, 0);
-        let policy = JustifyControls {
+        let codec = JustifyControls {
             last_line_justify: true,
             ..JustifyControls::default()
         };
         let final_justified =
-            justification_adjustment(line, fragment, true, &clusters, 0, 7, 0.0, policy);
+            justification_adjustment(line, fragment, true, &clusters, 0, 7, 0.0, codec);
         assert_eq!(final_justified.per_space_units, 327_680);
     }
 

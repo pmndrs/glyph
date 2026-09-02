@@ -20,15 +20,15 @@ import {
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from './engine-encoding.js';
 import { createGlyphEngine, createGlyphHandleState, type GlyphEngine } from './glyph-engine.js';
 import type { HandleFontStackBinding, CodecRegistration, GlyphHandleState } from './internal/handle-state.js';
-import { createRasterPolicyProgram, resolveRasterPlanProgram, type RasterPlanProgram } from './config/raster.js';
+import { createRasterCodecProgram, resolveRasterPlanProgram, type RasterPlanProgram } from './config/raster.js';
 import {
   createMeasurementPlanner,
   type MeasurementPlanner,
   type RetainedText,
   type RetainedTextOptions,
 } from './core/render-planner.js';
-import { type PolicyCapabilitySet, type PolicyDescriptor, type RenderIdFactory, id } from './config/codec.js';
-import { definePolicyBuffers, type AnyTechniqueSchema } from './config/schema.js';
+import { type CodecCapabilitySet, type CodecDescriptor, type CodecIdFactory, id } from './config/codec.js';
+import { defineCodecBuffers, type AnyTechniqueSchema } from './config/schema.js';
 
 const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const MAX_PARAGRAPH_TEXT_UNITS = 0x00ff_ffff;
@@ -40,7 +40,7 @@ const MEASUREMENT_PROGRAM_NAMESPACE = 'paragraph-measurement';
 const MAX_CACHED_PARAGRAPH_CONSTRAINTS = 3;
 const MEASUREMENT_STABLE_GLYPH_BUFFER_ID = id.buffer('glyph-paragraph/stable-glyph');
 
-const measurementSystemBuffers = definePolicyBuffers({
+const measurementSystemBuffers = defineCodecBuffers({
   stableGlyphId: {
     id: MEASUREMENT_STABLE_GLYPH_BUFFER_ID,
     scalar: 'u32',
@@ -48,7 +48,7 @@ const measurementSystemBuffers = definePolicyBuffers({
   },
 });
 
-const measurementCapabilities: PolicyCapabilitySet = Object.freeze({
+const measurementCapabilities: CodecCapabilitySet = Object.freeze({
   capabilities: Object.freeze([
     'storage-buffers',
     'alias-vec2',
@@ -308,7 +308,7 @@ class ParagraphEngine {
     let planner: MeasurementPlanner | undefined;
     let text: RetainedText | undefined;
     try {
-      codec = handleState.installCodec((identities) => measurementPolicyDescriptor(identities, desired));
+      codec = handleState.installCodec((identities) => measurementCodecDescriptor(identities, desired));
       planner = createMeasurementPlanner(handleState, {
         codec,
         limits: measurementLimits(),
@@ -440,16 +440,16 @@ function disposeBindings(bindings: readonly HandleFontStackBinding[]): void {
   if (failure !== undefined) throw failure;
 }
 
-function measurementPolicyDescriptor(
-  identities: RenderIdFactory,
+function measurementCodecDescriptor(
+  identities: CodecIdFactory,
   desired: ResolvedParagraphState<AnyRasterFormat>,
-): PolicyDescriptor {
+): CodecDescriptor {
   const programs = uniqueTechniques(desired).map((technique) => {
     const program = resolveRasterPlanProgram(technique.id);
     if (program === undefined) {
       throw new TypeError(`no portable raster plan program is registered for "${technique.id}"`);
     }
-    return createRasterPolicyProgram(program as RasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>, {
+    return createRasterCodecProgram(program as RasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>, {
       namespace: MEASUREMENT_PROGRAM_NAMESPACE,
       system: measurementSystemBuffers,
       capabilitySet: measurementCapabilities,

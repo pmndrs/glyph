@@ -2,7 +2,7 @@
 
 use alloc::vec::Vec;
 
-use super::policy::TechniqueId;
+use super::codec::TechniqueId;
 
 pub const MAX_BINDING_FIELDS: u8 = 32;
 pub const MISSING_RESOURCE_INDEX: u32 = u32::MAX;

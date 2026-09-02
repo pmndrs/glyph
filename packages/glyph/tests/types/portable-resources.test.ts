@@ -32,7 +32,7 @@ const instanceAttribute = {
   ],
 } as const;
 
-// @ts-expect-error Per-record data belongs in named policy buffers, not finite geometry streams.
+// @ts-expect-error Per-record data belongs in named codec buffers, not finite geometry streams.
 const impossibleAttribute: PortableGeometryPayload = instanceAttribute;
 void impossibleAttribute;
 

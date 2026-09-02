@@ -17,7 +17,7 @@ import type {
   TypedProgram,
   TypedResource,
 } from '../glyph-config.js';
-import type { PolicyBuffer, PolicyDescriptor, PolicyProgram } from '../config/codec.js';
+import type { CodecBuffer, CodecDescriptor, CodecProgram } from '../config/codec.js';
 import { bindPatch, bindRetirement } from '../internal/bind-command-buffer.js';
 import { mapBorrowedSequence, TypedCommandBufferMapper } from '../internal/typed-command-buffer.js';
 
@@ -45,7 +45,7 @@ export interface CreateEngineOptions<Bindings extends AnyGlyphBindings, Root> {
     schema: GlyphSchema<Bindings, Root>;
     resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
   }>;
-  readonly codec: Readonly<{ descriptor: PolicyDescriptor }>;
+  readonly codec: Readonly<{ descriptor: CodecDescriptor }>;
   readonly root: Root;
   /** Core-owned association from an opaque plan identity to the adapter-authored value. */
   readonly materialInput: (binding: HandleMaterialBinding) => Bindings['materialInput'];
@@ -69,7 +69,7 @@ class CommandBindingEngine<Bindings extends AnyGlyphBindings, Root> implements G
   readonly #materialInput: CreateEngineOptions<Bindings, Root>['materialInput'];
   readonly #transformInput: CreateEngineOptions<Bindings, Root>['transformInput'];
   readonly #mapper = new TypedCommandBufferMapper();
-  readonly #programsById: ReadonlyMap<number, PolicyProgram>;
+  readonly #programsById: ReadonlyMap<number, CodecProgram>;
   readonly #programs = new WeakMap<object, Bindings['program']>();
   readonly #buffers = new WeakMap<object, Bindings['buffer']>();
   readonly #materials = new WeakMap<object, Bindings['material']>();
@@ -407,7 +407,7 @@ class CommandBindingEngine<Bindings extends AnyGlyphBindings, Root> implements G
   #bufferDeclaration(programId: number, bindingId: number | 'order') {
     if (bindingId === 'order') return Object.freeze({ kind: 'order' as const });
     const program = this.#programsById.get(programId)!;
-    const declaration = program.buffers.find((buffer: PolicyBuffer) => (buffer.id as number) === bindingId)!;
+    const declaration = program.buffers.find((buffer: CodecBuffer) => (buffer.id as number) === bindingId)!;
     return Object.freeze({ kind: 'codec' as const, value: declaration });
   }
 

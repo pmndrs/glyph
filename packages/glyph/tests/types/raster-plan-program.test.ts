@@ -65,7 +65,7 @@ registerRasterPlanProgram({
   raster: otherTechnique,
   // @ts-expect-error Raster plans publish glyph resources, so their schema cannot be resource-free.
   schema: otherSchema,
-  policyBody: () => otherBody,
+  codecBody: () => otherBody,
   compileFont() {
     throw new Error('unreachable');
   },
@@ -74,7 +74,7 @@ registerRasterPlanProgram({
 const program = registerRasterPlanProgram({
   raster: technique,
   schema,
-  policyBody: () => body,
+  codecBody: () => body,
   compileFont(compiler) {
     compiler.retain('colors', colors, { kind: 'buffer', bytes: new Uint8Array(4) });
     compiler.retain('mesh', mesh, {
@@ -100,7 +100,7 @@ registerRasterPlanProgram({
   raster: technique,
   // @ts-expect-error A plan schema must carry the same technique identity as its technique.
   schema: otherSchema,
-  policyBody: () => otherBody,
+  codecBody: () => otherBody,
   compileFont() {
     throw new Error('unreachable');
   },
@@ -109,7 +109,7 @@ registerRasterPlanProgram({
 registerRasterPlanProgram({
   raster: technique,
   schema,
-  policyBody: () => body,
+  codecBody: () => body,
   // @ts-expect-error Font compilation is synchronous and must return compiler.compile directly.
   async compileFont(compiler) {
     return compiler.compile({
@@ -124,7 +124,7 @@ registerRasterPlanProgram({
 registerRasterPlanProgram({
   raster: technique,
   schema,
-  policyBody: () => body,
+  codecBody: () => body,
   compileFont(compiler) {
     // @ts-expect-error Retention names are derived from the exact schema.
     compiler.retain('atlas', colors, { kind: 'buffer', bytes: new Uint8Array(4) });
@@ -143,7 +143,7 @@ registerRasterPlanProgram({
 registerRasterPlanProgram({
   raster: technique,
   schema,
-  policyBody: () => body,
+  codecBody: () => body,
   compileFont(compiler) {
     return compiler.compile({
       strikes: [0],

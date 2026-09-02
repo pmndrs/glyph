@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { copyIntoAllocation, engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
+import { copyIntoAllocation, engineUpdateBytes, renderCodecBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const plannerId = 5;
-const policyHandle = 11;
+const codecHandle = 11;
 
 test('publishes retained frame transactions through aligned A/B Wasm arenas', async () => {
   const wasm = await readFile(wasmUrl);
@@ -37,10 +37,10 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.equal(instance.exports.pmndrs_glyph_engine_dispose_session, undefined);
   assert.equal(instance.exports.pmndrs_glyph_engine_session_count, undefined);
 
-  const policy = renderPolicyBytes(abi);
-  const policyPointer = copyIntoAllocation(memory, fn.allocate, policy);
-  assert.equal(fn.registerPolicy(policyHandle, policyPointer, policy.byteLength), abi.status.ok);
-  fn.deallocate(policyPointer, policy.byteLength);
+  const codec = renderCodecBytes(abi);
+  const codecPointer = copyIntoAllocation(memory, fn.allocate, codec);
+  assert.equal(fn.registerCodec(codecHandle, codecPointer, codec.byteLength), abi.status.ok);
+  fn.deallocate(codecPointer, codec.byteLength);
 
   const requestLayout = abi.layouts.engineUpdateRequest;
   const resultLayout = abi.layouts.engineResult;
@@ -301,7 +301,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.equal(fn.plannerCount(), 0);
   assert.equal(fn.disposePlanner(plannerId), abi.status.plannerMissing);
   assert.equal(fn.textUpdate(plannerId, requestPointer, requestLayout.size), 0);
-  assert.equal(fn.disposePolicy(policyHandle), abi.status.ok);
+  assert.equal(fn.disposeCodec(codecHandle), abi.status.ok);
 });
 
 function writeRequest(
@@ -315,7 +315,7 @@ function writeRequest(
 ) {
   const bytes = engineUpdateBytes(abi, {
     plannerId,
-    policyHandle,
+    codecHandle,
     expectedEngineRevision,
     consumedPlanRevision,
     acknowledgedPublicationGeneration,
@@ -339,7 +339,7 @@ function geometryRequestBytes(abi, expectedEngineRevision, consumedPlanRevision,
   bytes.set(
     engineUpdateBytes(abi, {
       plannerId,
-      policyHandle,
+      codecHandle,
       expectedEngineRevision,
       consumedPlanRevision,
       acknowledgedPublicationGeneration,
@@ -416,17 +416,17 @@ function assertResult(memory, pointer, abi, expected) {
     assert.equal(view.getUint32(layout[field], true), value, field);
   }
   if (expected.status === abi.status.ok) {
-    assert.equal(view.getUint32(layout.policyHandle, true), policyHandle);
+    assert.equal(view.getUint32(layout.codecHandle, true), codecHandle);
     assert.equal(view.getUint32(layout.capabilitySet, true), 1);
     assert.notEqual(
-      view.getUint32(layout.policyFingerprintLow, true) | view.getUint32(layout.policyFingerprintHigh, true),
+      view.getUint32(layout.codecFingerprintLow, true) | view.getUint32(layout.codecFingerprintHigh, true),
       0,
-      'a successful plan identifies its validated policy bytes',
+      'a successful plan identifies its validated codec bytes',
     );
   } else {
-    assert.equal(view.getUint32(layout.policyHandle, true), 0);
-    assert.equal(view.getUint32(layout.policyFingerprintLow, true), 0);
-    assert.equal(view.getUint32(layout.policyFingerprintHigh, true), 0);
+    assert.equal(view.getUint32(layout.codecHandle, true), 0);
+    assert.equal(view.getUint32(layout.codecFingerprintLow, true), 0);
+    assert.equal(view.getUint32(layout.codecFingerprintHigh, true), 0);
   }
   for (const field of [
     'semanticsCount',

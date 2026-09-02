@@ -14,7 +14,7 @@ import {
   type GlyphSchema,
   type RendererContext,
 } from '../glyph-config.js';
-import type { PolicyProgram as CodecProgram } from '../config/codec.js';
+import type { CodecProgram } from '../config/codec.js';
 import type { PortableResource } from '../config/resources.js';
 import type { AnyFontFaceSelection, FontFaceRasterOf } from '../font-face.js';
 import type { Font } from '../font.js';

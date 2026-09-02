@@ -18,8 +18,8 @@ export type GlyphEngineStatusCode =
   | 'font-missing'
   | 'invalid-request'
   | 'result-too-large'
-  | 'policy-conflict'
-  | 'policy-missing'
+  | 'codec-conflict'
+  | 'codec-missing'
   | 'planner-conflict'
   | 'planner-missing'
   | 'revision-conflict'
@@ -41,8 +41,8 @@ const GLYPH_ENGINE_STATUS_CODES: ReadonlyMap<number, GlyphEngineStatusCode> = ne
   [textShaperAbi.status.fontMissing, 'font-missing'],
   [textShaperAbi.status.invalidRequest, 'invalid-request'],
   [textShaperAbi.status.resultTooLarge, 'result-too-large'],
-  [textShaperAbi.status.policyConflict, 'policy-conflict'],
-  [textShaperAbi.status.policyMissing, 'policy-missing'],
+  [textShaperAbi.status.codecConflict, 'codec-conflict'],
+  [textShaperAbi.status.codecMissing, 'codec-missing'],
   [textShaperAbi.status.plannerConflict, 'planner-conflict'],
   [textShaperAbi.status.plannerMissing, 'planner-missing'],
   [textShaperAbi.status.revisionConflict, 'revision-conflict'],

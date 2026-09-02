@@ -30,13 +30,15 @@ mod state;
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) mod transport;
 
+pub mod codec;
+pub mod codec_gather;
+#[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
+pub(crate) mod codec_wire;
 pub mod ordered_plan;
 mod plan_draw;
 mod plan_error;
 pub mod plan_input;
 mod plan_packing;
-pub mod policy;
-pub mod policy_gather;
 mod positioning;
 pub mod render_plan;
 pub mod render_plan_compiler;
@@ -52,7 +54,5 @@ pub mod stable_plan;
 mod stable_pool;
 mod staged;
 mod style_state;
-#[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
-pub(crate) mod wire;
 
 pub use state::{EngineError, FrameFault, TextEngine};

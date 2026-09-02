@@ -3,8 +3,8 @@ import test from 'node:test';
 
 import { defineRasterFormat } from '@pmndrs/glyph';
 import {
-  createRasterCodecProgram as createRasterPolicyProgram,
-  defineCodecBuffers as definePolicyBuffers,
+  createRasterCodecProgram,
+  defineCodecBuffers,
   defineTechniqueSchema,
   registerRasterPlanProgram,
   techniqueProgram,
@@ -13,14 +13,14 @@ import {
 
 const TEST_PROGRAM_VARIANT = 3;
 const TEST_PROGRAM_NAMESPACE = 'test-renderer';
-const ORIGIN_BUFFER_ID = id.buffer('test.raster-policy-program/origin');
-const SYSTEM_BUFFER_ID = id.buffer('test.raster-policy-program/system/stable-glyph-id');
-const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.raster-policy-program/system/other-stable-glyph-id');
+const ORIGIN_BUFFER_ID = id.buffer('test.raster-codec-program/origin');
+const SYSTEM_BUFFER_ID = id.buffer('test.raster-codec-program/system/stable-glyph-id');
+const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.raster-codec-program/system/other-stable-glyph-id');
 
 const technique = defineRasterFormat({
-  id: 'test.raster-policy-program',
+  id: 'test.raster-codec-program',
   kind: 'test',
-  extension: 'TEST_policy_program',
+  extension: 'TEST_codec_program',
   version: 0,
   textEffects: [],
   descriptor: () => ({}),
@@ -31,7 +31,7 @@ const technique = defineRasterFormat({
 });
 const wrongSystemTechnique = defineRasterFormat({
   ...technique,
-  id: 'test.raster-policy-program-wrong-system',
+  id: 'test.raster-codec-program-wrong-system',
 });
 const schema = defineTechniqueSchema({
   technique: technique.id,
@@ -49,10 +49,10 @@ const wrongSystemSchema = defineTechniqueSchema({
   resources: { payload: { kind: 'buffer' } },
   render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
 });
-const system = definePolicyBuffers({
+const system = defineCodecBuffers({
   stableGlyphId: { id: SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
-const otherSystem = definePolicyBuffers({
+const otherSystem = defineCodecBuffers({
   stableGlyphId: { id: OTHER_SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 const capabilitySet = {
@@ -68,22 +68,22 @@ const capabilitySet = {
   wholeBufferThresholdBasisPoints: 10_000,
 };
 
-function plan(policyBody) {
+function plan(codecBody) {
   return registerRasterPlanProgram({
     raster: technique,
     schema,
     programVariant: TEST_PROGRAM_VARIANT,
-    policyBody,
+    codecBody,
     compileFont() {
-      throw new Error('not used by policy assembly');
+      throw new Error('not used by codec assembly');
     },
   });
 }
 
-let policyBodyCalls = 0;
+let codecBodyCalls = 0;
 let receivedFrozenHostInputs = false;
 const portable = plan((hostSystem, hostCapabilitySet) => {
-  policyBodyCalls += 1;
+  codecBodyCalls += 1;
   receivedFrozenHostInputs =
     Object.isFrozen(hostSystem) && Object.isFrozen(hostSystem.stableGlyphId) && Object.isFrozen(hostCapabilitySet);
   const p = techniqueProgram(schema, { system: hostSystem });
@@ -93,17 +93,17 @@ const wrongSystemPortable = registerRasterPlanProgram({
   raster: wrongSystemTechnique,
   schema: wrongSystemSchema,
   programVariant: TEST_PROGRAM_VARIANT,
-  policyBody() {
+  codecBody() {
     const p = techniqueProgram(wrongSystemSchema, { system: otherSystem });
     return p.compile({ origin: [p.semantics.inlineOrigin, p.semantics.blockOrigin] });
   },
   compileFont() {
-    throw new Error('not used by policy assembly');
+    throw new Error('not used by codec assembly');
   },
 });
 
-test('portable policy assembly rejects host inputs before invoking technique code', () => {
-  const calls = policyBodyCalls;
+test('portable codec assembly rejects host inputs before invoking technique code', () => {
+  const calls = codecBodyCalls;
   const valid = {
     namespace: TEST_PROGRAM_NAMESPACE,
     system,
@@ -122,13 +122,13 @@ test('portable policy assembly rejects host inputs before invoking technique cod
     [{ ...valid, identityRegistry: id }, /renamed to ids/],
   ];
   for (const [options, message] of invalid) {
-    assert.throws(() => createRasterPolicyProgram(portable, options), message);
+    assert.throws(() => createRasterCodecProgram(portable, options), message);
   }
-  assert.equal(policyBodyCalls, calls);
+  assert.equal(codecBodyCalls, calls);
 });
 
-test('portable policy assembly owns host identities, system buffers, and variant metadata', () => {
-  const compiled = createRasterPolicyProgram(portable, {
+test('portable codec assembly owns host identities, system buffers, and variant metadata', () => {
+  const compiled = createRasterCodecProgram(portable, {
     namespace: TEST_PROGRAM_NAMESPACE,
     system,
     capabilitySet,
@@ -147,10 +147,10 @@ test('portable policy assembly owns host identities, system buffers, and variant
   );
 });
 
-test('portable policy assembly rejects a body compiled for different host system lanes', () => {
+test('portable codec assembly rejects a body compiled for different host system lanes', () => {
   assert.throws(
     () =>
-      createRasterPolicyProgram(wrongSystemPortable, {
+      createRasterCodecProgram(wrongSystemPortable, {
         namespace: TEST_PROGRAM_NAMESPACE,
         system,
         capabilitySet,
@@ -161,10 +161,10 @@ test('portable policy assembly rejects a body compiled for different host system
   );
 });
 
-test('portable policy assembly rejects structurally copied programs', () => {
+test('portable codec assembly rejects structurally copied programs', () => {
   assert.throws(
     () =>
-      createRasterPolicyProgram(
+      createRasterCodecProgram(
         { ...portable },
         {
           namespace: TEST_PROGRAM_NAMESPACE,

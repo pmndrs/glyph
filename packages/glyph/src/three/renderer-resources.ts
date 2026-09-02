@@ -1,5 +1,5 @@
 import type { Codec } from '../glyph-config.js';
-import type { RenderIdFactory as CodecIdFactory } from '../config/codec.js';
+import type { CodecIdFactory } from '../config/codec.js';
 import type { ThreeTextMaterial } from './material.js';
 import {
   compiledThreeRasterPlanPrograms,

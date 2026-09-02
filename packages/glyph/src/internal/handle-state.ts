@@ -16,17 +16,17 @@ import {
 import { markOwnedPlanPublication, PlanPublicationExpiredError, type OwnedPlanPublication } from '../core/retention.js';
 import {
   assertGlyphId,
-  compileRenderPolicy,
+  compileCodec,
   createHandleIdFactory,
   GlyphIdScope,
-  RenderIdScope,
+  CodecIdScope,
   type FontBindingHandle,
   type FontStackHandle,
   type HandleIdFactory,
   type ParagraphId,
-  type PolicyDescriptor,
-  type PolicyHandle,
-  type RenderIdFactory,
+  type CodecDescriptor,
+  type CodecHandle,
+  type CodecIdFactory,
   type StyleId,
   type PlannerHandle,
 } from '../config/codec.js';
@@ -47,15 +47,15 @@ export interface GlyphHandleStateOptions {
   readonly integration: string;
 }
 
-/** A counted handle-local render-policy installation. */
+/** A counted handle-local render-codec installation. */
 export interface CodecRegistration {
   readonly [codecRegistrationBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-/** Builds one policy descriptor using the handle's collision-checked wire identities. */
-export type CodecFactory = (ids: RenderIdFactory) => PolicyDescriptor;
+/** Builds one codec descriptor using the handle's collision-checked wire identities. */
+export type CodecFactory = (ids: CodecIdFactory) => CodecDescriptor;
 
 /** A counted handle-local binding of one immutable font. */
 export interface HandleFontBinding<Format extends AnyRasterFormat = AnyRasterFormat> {
@@ -129,7 +129,7 @@ export interface PlanPublication {
   readonly publicationGeneration: number;
   readonly outputSlot: number;
   readonly flags: number;
-  readonly policyHandle: PolicyHandle | 0;
+  readonly codecHandle: CodecHandle | 0;
   readonly capabilitySet: number;
   readonly semanticViewCount: number;
   readonly primitiveCount: number;
@@ -197,8 +197,8 @@ function headerFault(header: DataView): GlyphEngineFault {
 }
 
 interface InstalledCodecRegistration {
-  readonly handle: PolicyHandle;
-  readonly descriptor: PolicyDescriptor;
+  readonly handle: CodecHandle;
+  readonly descriptor: CodecDescriptor;
   readonly techniqueIds: ReadonlySet<number>;
   leases: number;
   disposed: boolean;
@@ -270,13 +270,13 @@ const handleOpaqueBindings = new WeakMap<
 export class GlyphHandleState {
   readonly integration: string;
   readonly #identityNamespace: string;
-  readonly #wireIdentities = new RenderIdScope();
+  readonly #wireIdentities = new CodecIdScope();
   readonly #ids = new GlyphIdScope();
   readonly #exports;
   readonly #owners: EngineRegistrationOwners;
   readonly #planners = new Set<{ dispose(): void }>();
   readonly #transports = new Set<PlanTransport>();
-  readonly #codecs = new Set<PolicyHandle>();
+  readonly #codecs = new Set<CodecHandle>();
   readonly #fontStacks = new Map<FontStackHandle, readonly FontBindingHandle[]>();
   readonly #fontBindings = new Set<FontBindingHandle>();
   readonly #installedCodecs = new Set<InstalledCodecRegistration>();
@@ -334,14 +334,14 @@ export class GlyphHandleState {
   /** @internal Derive one branded ID retained until its registration or this handle is disposed. */
   readonly id: HandleIdFactory = createHandleIdFactory(this.#ids, () => this.#assertActive());
 
-  /** Installs one renderer policy for this handle and returns its counted lease. */
+  /** Installs one renderer codec for this handle and returns its counted lease. */
   installCodec(factory: CodecFactory): CodecRegistration {
     this.#assertActive();
-    if (typeof factory !== 'function') throw new TypeError('text engine policy must be a factory');
-    const snapshot = snapshotPolicyDescriptor(factory(this.#wireIdentities));
-    const bytes = compileRenderPolicy(snapshot);
+    if (typeof factory !== 'function') throw new TypeError('text engine codec must be a factory');
+    const snapshot = snapshotCodecDescriptor(factory(this.#wireIdentities));
+    const bytes = compileCodec(snapshot);
     const ordinal = this.#nextCodecOrdinal;
-    const handle = this.id('policy', `${this.#identityNamespace}/policy/${ordinal}`);
+    const handle = this.id('codec', `${this.#identityNamespace}/codec/${ordinal}`);
     this.registerCodec(handle, bytes);
     this.#nextCodecOrdinal = ordinal + 1;
     const state: InstalledCodecRegistration = {
@@ -352,9 +352,9 @@ export class GlyphHandleState {
       disposed: false,
     };
     this.#installedCodecs.add(state);
-    const policy = new CodecRegistrationImpl(this, state) as CodecRegistration;
-    handleCodecs.set(policy, { handleState: this, state });
-    return policy;
+    const codec = new CodecRegistrationImpl(this, state) as CodecRegistration;
+    handleCodecs.set(codec, { handleState: this, state });
+    return codec;
   }
 
   /** Binds one immutable font's shaping and portable raster resources to this handle. */
@@ -366,8 +366,8 @@ export class GlyphHandleState {
     const engineBinding = this.#bindEngineFont(font);
     try {
       const techniqueId = this.#wireIdentities.technique(font.raster);
-      if (![...this.#installedCodecs].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
-        throw new TypeError(`Glyph handle state has no installed policy for "${font.raster.id}"`);
+      if (![...this.#installedCodecs].some((codec) => !codec.disposed && codec.techniqueIds.has(techniqueId))) {
+        throw new TypeError(`Glyph handle state has no installed codec for "${font.raster.id}"`);
       }
       const existing = this.#retainedFontBindings.get(engineBinding.identity);
       if (existing !== undefined && !existing.disposed) {
@@ -416,8 +416,8 @@ export class GlyphHandleState {
     const fonts = immutableFontStackFonts(stack as FontStack<AnyRasterFormat, Font<AnyRasterFormat>>);
     for (const font of fonts) {
       const techniqueId = this.#wireIdentities.technique(font.raster);
-      if (![...this.#installedCodecs].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
-        throw new TypeError(`Glyph handle state has no installed policy for "${font.raster.id}"`);
+      if (![...this.#installedCodecs].some((codec) => !codec.disposed && codec.techniqueIds.has(techniqueId))) {
+        throw new TypeError(`Glyph handle state has no installed codec for "${font.raster.id}"`);
       }
     }
     const existing = this.#retainedFontStacks.get(stack);
@@ -467,12 +467,12 @@ export class GlyphHandleState {
 
   /** @internal */
   _retainInstalledCodec(
-    policy: CodecRegistration,
-  ): Readonly<{ handle: PolicyHandle; descriptor: PolicyDescriptor; dispose(): void }> {
+    codec: CodecRegistration,
+  ): Readonly<{ handle: CodecHandle; descriptor: CodecDescriptor; dispose(): void }> {
     this.#assertActive();
-    const entry = handleCodecs.get(policy as object);
-    if (entry === undefined || entry.handleState !== this || entry.state.disposed || policy.disposed) {
-      throw new TypeError('codec must be a live policy installed by this Glyph handle state');
+    const entry = handleCodecs.get(codec as object);
+    if (entry === undefined || entry.handleState !== this || entry.state.disposed || codec.disposed) {
+      throw new TypeError('codec must be a live codec installed by this Glyph handle state');
     }
     entry.state.leases += 1;
     let disposed = false;
@@ -720,33 +720,33 @@ export class GlyphHandleState {
   }
 
   /** @internal */
-  registerCodec(handle: PolicyHandle, bytes: Uint8Array): void {
+  registerCodec(handle: CodecHandle, bytes: Uint8Array): void {
     this.#assertActive();
-    handle = assertGlyphId(handle, 'policy', 'policy handle');
-    const adopted = this.#ids.retain(handle, 'policy', 'policy handle');
+    handle = assertGlyphId(handle, 'codec', 'codec handle');
+    const adopted = this.#ids.retain(handle, 'codec', 'codec handle');
     let claimed = false;
     try {
-      claimed = this.#claim(this.#owners.codecs, handle, 'render policy');
+      claimed = this.#claim(this.#owners.codecs, handle, 'render codec');
       this.#withBytes(bytes, (pointer, length) =>
-        requireStatus(this.#exports.registerPolicy(handle, pointer, length), 'register render policy'),
+        requireStatus(this.#exports.registerCodec(handle, pointer, length), 'register render codec'),
       );
       this.#codecs.add(handle);
     } catch (error) {
       this.#rollbackClaim(this.#owners.codecs, handle, claimed);
-      if (adopted) this.#ids.release(handle, 'policy');
+      if (adopted) this.#ids.release(handle, 'codec');
       throw error;
     }
   }
 
   /** @internal */
-  disposeCodec(handle: PolicyHandle): void {
+  disposeCodec(handle: CodecHandle): void {
     this.#assertActive();
-    handle = assertGlyphId(handle, 'policy', 'policy handle');
-    if (!this.#codecs.has(handle)) throw new Error(`render policy ${handle} is not owned by this Glyph handle state`);
-    requireStatus(this.#exports.disposePolicy(handle), 'dispose render policy');
+    handle = assertGlyphId(handle, 'codec', 'codec handle');
+    if (!this.#codecs.has(handle)) throw new Error(`render codec ${handle} is not owned by this Glyph handle state`);
+    requireStatus(this.#exports.disposeCodec(handle), 'dispose render codec');
     this.#codecs.delete(handle);
     this.#releaseClaim(this.#owners.codecs, handle);
-    this.#ids.release(handle, 'policy');
+    this.#ids.release(handle, 'codec');
   }
 
   /** Creates a render planner whose delivery mode is selected by its target. */
@@ -821,7 +821,7 @@ export class GlyphHandleState {
     this.#assertActive();
   }
 
-  /** Disposes this handle and every policy, binding, planner, and transport it owns. */
+  /** Disposes this handle and every codec, binding, planner, and transport it owns. */
   dispose(): void {
     if (this.#disposed) return;
     this.#assertEngineAvailable?.();
@@ -846,10 +846,10 @@ export class GlyphHandleState {
     for (const handle of [...this.#fontBindings]) {
       if (!retainedFontHandles.has(handle)) attempt(() => this.disposeFontBinding(handle));
     }
-    const installedPolicyHandles = new Set([...this.#installedCodecs].map((policy) => policy.handle));
-    for (const policy of [...this.#installedCodecs]) attempt(() => this.#disposeInstalledCodec(policy));
+    const installedCodecHandles = new Set([...this.#installedCodecs].map((codec) => codec.handle));
+    for (const codec of [...this.#installedCodecs]) attempt(() => this.#disposeInstalledCodec(codec));
     for (const handle of [...this.#codecs]) {
-      if (!installedPolicyHandles.has(handle)) attempt(() => this.disposeCodec(handle));
+      if (!installedCodecHandles.has(handle)) attempt(() => this.disposeCodec(handle));
     }
     if (
       this.#transports.size !== 0 ||
@@ -877,8 +877,8 @@ export class GlyphHandleState {
     if (references.plannerHandle !== plannerHandle) {
       throw new TypeError(`text update belongs to planner ${references.plannerHandle}, not ${plannerHandle}`);
     }
-    if (this.#owners.codecs.get(references.policyHandle) !== this) {
-      throw new TypeError(`render policy ${references.policyHandle} is not owned by this Glyph handle state`);
+    if (this.#owners.codecs.get(references.codecHandle) !== this) {
+      throw new TypeError(`render codec ${references.codecHandle} is not owned by this Glyph handle state`);
     }
     for (const handle of references.fontStackHandles) {
       if (this.#owners.fontStacks.get(handle) !== this) {
@@ -1274,11 +1274,11 @@ class HandleOpaqueBindingImpl implements HandleMaterialBinding, HandleResourceBi
   }
 }
 
-function snapshotPolicyDescriptor(descriptor: PolicyDescriptor): PolicyDescriptor {
+function snapshotCodecDescriptor(descriptor: CodecDescriptor): CodecDescriptor {
   try {
-    return structuredClone(descriptor) as PolicyDescriptor;
+    return structuredClone(descriptor) as CodecDescriptor;
   } catch (cause) {
-    throw new TypeError('policy descriptor must contain cloneable data', { cause });
+    throw new TypeError('codec descriptor must contain cloneable data', { cause });
   }
 }
 
@@ -1568,7 +1568,7 @@ export class PlanTransport {
   copyGlyphs(
     paragraphId: ParagraphId,
     stableIds: ArrayLike<number>,
-    policyHandle: PolicyHandle,
+    codecHandle: CodecHandle,
     capabilitySet: number,
     maxOutputBytes: number,
   ): PlanPublication {
@@ -1598,7 +1598,7 @@ export class PlanTransport {
       const resultPointer = this.#exports.copyGlyphs(
         this.#handle,
         paragraphId,
-        policyHandle,
+        codecHandle,
         uint32(capabilitySet, 'glyph copy capability set'),
         uint32(maxOutputBytes, 'glyph copy max output bytes'),
         pointer,
@@ -1613,7 +1613,7 @@ export class PlanTransport {
   /** @internal Copies one committed paragraph's decorations into a complete query checkpoint. */
   copyDecorations(
     paragraphId: ParagraphId,
-    policyHandle: PolicyHandle,
+    codecHandle: CodecHandle,
     capabilitySet: number,
     maxOutputBytes: number,
   ): PlanPublication {
@@ -1623,7 +1623,7 @@ export class PlanTransport {
     const initialMemoryBuffer = this.#exports.memory.buffer;
     const resultPointer = this.#exports.copyDecorations(
       this.#handle,
-      policyHandle,
+      codecHandle,
       uint32(capabilitySet, 'decoration copy capability set'),
       paragraphId,
       uint32(maxOutputBytes, 'decoration copy max output bytes'),
@@ -1675,7 +1675,7 @@ export class PlanTransport {
       publicationGeneration: header.getUint32(layout.publicationGeneration, true),
       outputSlot: header.getUint32(layout.outputSlot, true),
       flags: header.getUint32(layout.flags, true),
-      policyHandle: uint32(header.getUint32(layout.policyHandle, true), 'result policy handle') as PolicyHandle | 0,
+      codecHandle: uint32(header.getUint32(layout.codecHandle, true), 'result codec handle') as CodecHandle | 0,
       capabilitySet: header.getUint32(layout.capabilitySet, true),
       semanticViewCount: header.getUint32(layout.semanticViewCount, true),
       primitiveCount: header.getUint32(layout.primitiveCount, true),
@@ -1705,7 +1705,7 @@ export class PlanTransport {
 
 interface FrameRegistrationReferences {
   readonly plannerHandle: number;
-  readonly policyHandle: number;
+  readonly codecHandle: number;
   readonly fontStackHandles: ReadonlySet<number>;
 }
 
@@ -1737,7 +1737,7 @@ function frameRegistrationReferences(bytes: Uint8Array): FrameRegistrationRefere
   }
   return {
     plannerHandle: uint32Handle(view.getUint32(request.plannerId, true), 'frame planner handle'),
-    policyHandle: uint32Handle(view.getUint32(request.policyHandle, true), 'frame policy handle'),
+    codecHandle: uint32Handle(view.getUint32(request.codecHandle, true), 'frame codec handle'),
     fontStackHandles,
   };
 }

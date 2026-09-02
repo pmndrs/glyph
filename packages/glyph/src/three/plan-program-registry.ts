@@ -1,13 +1,13 @@
 import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/webgpu';
 
-import { createRasterPolicyProgram as createRasterCodecProgram, resolveRasterPlanProgram } from '../config/raster.js';
-import type { PolicyScalarType as CodecScalarType, RenderIdFactory as CodecIdFactory } from '../config/codec.js';
-import type { PolicyProgram as CodecProgram } from '../config/codec.js';
+import { createRasterCodecProgram, resolveRasterPlanProgram } from '../config/raster.js';
+import type { CodecIdFactory, CodecScalarType } from '../config/codec.js';
+import type { CodecProgram } from '../config/codec.js';
 import type { PortableResource, PortableTextureFormat } from '../config/resources.js';
 import type {
   AnyTechniqueSchema,
-  PolicyBufferDeclarations as CodecBufferDeclarations,
-  PolicyScalarKind as CodecScalarKind,
+  CodecBufferDeclarations,
+  CodecScalarKind,
   TechniqueGeometryDeclaration,
   TechniqueResourceDeclaration,
   TechniqueResourceDeclarations,

@@ -1,5 +1,60 @@
 // Generated from Rust compiler layout facts. Do not edit.
 export const textShaperAbi = {
+  "codec": {
+    "allocationStrategies": {
+      "orderedDirect": 1,
+      "stableIndirect": 2
+    },
+    "batchFields": {
+      "clip": 16,
+      "depth": 32,
+      "material": 8,
+      "order": 64,
+      "program": 4,
+      "resource": 2,
+      "technique": 1,
+      "transform": 128
+    },
+    "bufferUsage": {
+      "copyDst": 4,
+      "storage": 2,
+      "vertex": 1
+    },
+    "capabilityFlags": {
+      "aliasVec2": 4,
+      "aliasVec4": 8,
+      "indirectDraws": 2,
+      "orderedDirect": 16,
+      "stableIndirect": 32,
+      "storageBuffers": 1
+    },
+    "inputScopes": {
+      "glyph": 2,
+      "resource": 3,
+      "semantic": 1,
+      "strike": 4
+    },
+    "opcodes": {
+      "addF32": 5,
+      "constantF32": 3,
+      "constantU32": 4,
+      "convertU32ToF32": 10,
+      "lessThanF32": 8,
+      "loadF32": 1,
+      "loadU32": 2,
+      "multiplyF32": 7,
+      "selectF32": 9,
+      "storeF32": 11,
+      "storeU16": 13,
+      "storeU32": 12,
+      "subtractF32": 6
+    },
+    "scalarTypes": {
+      "f32": 1,
+      "u16": 3,
+      "u32": 2
+    }
+  },
   "endianness": "little",
   "engine": {
     "axisModes": {
@@ -91,10 +146,10 @@ export const textShaperAbi = {
     },
     "primitiveKinds": {
       "clip": 4,
+      "codec": 5,
       "decoration": 2,
       "glyph": 1,
-      "inlineObject": 3,
-      "policy": 5
+      "inlineObject": 3
     },
     "resourceActions": {
       "create": 1,
@@ -204,15 +259,16 @@ export const textShaperAbi = {
   },
   "functions": {
     "allocate": "pmndrs_glyph_shaper_alloc",
+    "codecCount": "pmndrs_glyph_engine_codec_count",
     "copyDecorations": "pmndrs_glyph_engine_copy_decorations",
     "copyGlyphs": "pmndrs_glyph_engine_copy_glyphs",
     "createPlanner": "pmndrs_glyph_engine_create_planner",
     "deallocate": "pmndrs_glyph_shaper_dealloc",
+    "disposeCodec": "pmndrs_glyph_engine_dispose_codec",
     "disposeFont": "pmndrs_glyph_shaper_dispose_font",
     "disposeFontBinding": "pmndrs_glyph_engine_dispose_font_binding",
     "disposeFontStack": "pmndrs_glyph_engine_dispose_font_stack",
     "disposePlanner": "pmndrs_glyph_engine_dispose_planner",
-    "disposePolicy": "pmndrs_glyph_engine_dispose_policy",
     "fontBindingCount": "pmndrs_glyph_engine_font_binding_count",
     "fontCount": "pmndrs_glyph_shaper_font_count",
     "fontStackCount": "pmndrs_glyph_engine_font_stack_count",
@@ -220,11 +276,10 @@ export const textShaperAbi = {
     "measureParagraph": "pmndrs_glyph_engine_measure_paragraph",
     "planCount": "pmndrs_glyph_shaper_plan_count",
     "plannerCount": "pmndrs_glyph_engine_planner_count",
-    "policyCount": "pmndrs_glyph_engine_policy_count",
+    "registerCodec": "pmndrs_glyph_engine_register_codec",
     "registerFont": "pmndrs_glyph_shaper_register_font",
     "registerFontBinding": "pmndrs_glyph_engine_register_font_binding",
     "registerFontStack": "pmndrs_glyph_engine_register_font_stack",
-    "registerPolicy": "pmndrs_glyph_engine_register_policy",
     "requestCapacity": "pmndrs_glyph_engine_request_capacity",
     "requestPointer": "pmndrs_glyph_engine_request_ptr",
     "reservePlanner": "pmndrs_glyph_engine_reserve_planner",
@@ -236,16 +291,101 @@ export const textShaperAbi = {
     "updateBatchPointer": "pmndrs_glyph_engine_update_batch_ptr"
   },
   "layouts": {
+    "codecBuffer": {
+      "alignment": 4,
+      "capacityClass": 12,
+      "id": 0,
+      "reserved0": 14,
+      "scalar": 2,
+      "size": 16,
+      "stride": 6,
+      "usage": 8,
+      "vectorWidth": 3
+    },
+    "codecCapabilitySet": {
+      "alignment": 4,
+      "coalesceGapBytes": 16,
+      "flags": 4,
+      "fragmentationBudget": 30,
+      "id": 0,
+      "maxBufferBytes": 8,
+      "maxBuffersPerDraw": 24,
+      "maxIndirectDraws": 28,
+      "maxResourcesPerDraw": 26,
+      "rangeCallPenaltyBytes": 20,
+      "reserved": 34,
+      "size": 40,
+      "updateAlignment": 12,
+      "wholeBufferThresholdBasisPoints": 32
+    },
+    "codecInput": {
+      "alignment": 2,
+      "field": 1,
+      "reserved": 2,
+      "scope": 0,
+      "size": 4
+    },
+    "codecOperation": {
+      "alignment": 4,
+      "immediate0": 4,
+      "immediate1": 8,
+      "immediate2": 12,
+      "opcode": 0,
+      "operand0": 2,
+      "operand1": 3,
+      "size": 16,
+      "target": 1
+    },
+    "codecProgram": {
+      "alignment": 4,
+      "allocationStrategy": 46,
+      "bufferCount": 42,
+      "bufferStart": 32,
+      "capabilitySetId": 8,
+      "compositingCapabilities": 28,
+      "drawKeyMask": 52,
+      "f32InputCount": 48,
+      "inputCount": 60,
+      "inputStart": 56,
+      "operationCount": 44,
+      "operationStart": 36,
+      "paintCapabilities": 24,
+      "primitiveKind": 50,
+      "programId": 4,
+      "reserved1": 62,
+      "resourceKindMask": 12,
+      "semanticViewMask": 16,
+      "size": 64,
+      "storageKeyMask": 20,
+      "techniqueId": 0,
+      "u32InputCount": 49,
+      "variant": 40
+    },
+    "codecRequest": {
+      "alignment": 4,
+      "bufferCount": 24,
+      "buffersOffset": 20,
+      "byteLength": 0,
+      "capabilitySetCount": 8,
+      "capabilitySetsOffset": 4,
+      "inputCount": 40,
+      "inputsOffset": 36,
+      "operationCount": 32,
+      "operationsOffset": 28,
+      "programCount": 16,
+      "programsOffset": 12,
+      "size": 44
+    },
     "engineBuffer": {
       "alignment": 4,
       "byteLength": 28,
       "capacityRecords": 24,
+      "codecBufferId": 12,
       "flags": 18,
       "generation": 4,
       "id": 0,
       "liveRecords": 20,
       "orderBufferId": 32,
-      "policyBufferId": 12,
       "programId": 8,
       "scalarType": 14,
       "size": 36,
@@ -453,6 +593,9 @@ export const textShaperAbi = {
       "buffersOffset": 88,
       "byteLength": 4,
       "capabilitySet": 60,
+      "codecFingerprintHigh": 68,
+      "codecFingerprintLow": 64,
+      "codecHandle": 56,
       "diagnosticCount": 132,
       "diagnosticsOffset": 128,
       "drawCount": 116,
@@ -466,9 +609,6 @@ export const textShaperAbi = {
       "patchesOffset": 96,
       "planRevision": 24,
       "plannerId": 16,
-      "policyFingerprintHigh": 68,
-      "policyFingerprintLow": 64,
-      "policyHandle": 56,
       "primitiveCount": 108,
       "primitivesOffset": 104,
       "publicationGeneration": 32,
@@ -584,6 +724,9 @@ export const textShaperAbi = {
       "alignment": 4,
       "byteLength": 4,
       "capabilitySet": 28,
+      "codecHandle": 24,
+      "codecParametersLength": 120,
+      "codecParametersOffset": 116,
       "constraintCount": 88,
       "constraintsOffset": 84,
       "consumedPlanRevision": 16,
@@ -604,9 +747,6 @@ export const textShaperAbi = {
       "paragraphMutationCount": 132,
       "paragraphMutationsOffset": 128,
       "plannerId": 8,
-      "policyHandle": 24,
-      "policyParametersLength": 120,
-      "policyParametersOffset": 116,
       "regionCount": 96,
       "regionsOffset": 92,
       "semanticViewMask": 36,
@@ -667,152 +807,14 @@ export const textShaperAbi = {
       "ppem": 0,
       "reserved": 4,
       "size": 8
-    },
-    "policyBuffer": {
-      "alignment": 4,
-      "capacityClass": 12,
-      "id": 0,
-      "reserved0": 14,
-      "scalar": 2,
-      "size": 16,
-      "stride": 6,
-      "usage": 8,
-      "vectorWidth": 3
-    },
-    "policyCapabilitySet": {
-      "alignment": 4,
-      "coalesceGapBytes": 16,
-      "flags": 4,
-      "fragmentationBudget": 30,
-      "id": 0,
-      "maxBufferBytes": 8,
-      "maxBuffersPerDraw": 24,
-      "maxIndirectDraws": 28,
-      "maxResourcesPerDraw": 26,
-      "rangeCallPenaltyBytes": 20,
-      "reserved": 34,
-      "size": 40,
-      "updateAlignment": 12,
-      "wholeBufferThresholdBasisPoints": 32
-    },
-    "policyInput": {
-      "alignment": 2,
-      "field": 1,
-      "reserved": 2,
-      "scope": 0,
-      "size": 4
-    },
-    "policyOperation": {
-      "alignment": 4,
-      "immediate0": 4,
-      "immediate1": 8,
-      "immediate2": 12,
-      "opcode": 0,
-      "operand0": 2,
-      "operand1": 3,
-      "size": 16,
-      "target": 1
-    },
-    "policyProgram": {
-      "alignment": 4,
-      "allocationStrategy": 46,
-      "bufferCount": 42,
-      "bufferStart": 32,
-      "capabilitySetId": 8,
-      "compositingCapabilities": 28,
-      "drawKeyMask": 52,
-      "f32InputCount": 48,
-      "inputCount": 60,
-      "inputStart": 56,
-      "operationCount": 44,
-      "operationStart": 36,
-      "paintCapabilities": 24,
-      "primitiveKind": 50,
-      "programId": 4,
-      "reserved1": 62,
-      "resourceKindMask": 12,
-      "semanticViewMask": 16,
-      "size": 64,
-      "storageKeyMask": 20,
-      "techniqueId": 0,
-      "u32InputCount": 49,
-      "variant": 40
-    },
-    "policyRequest": {
-      "alignment": 4,
-      "bufferCount": 24,
-      "buffersOffset": 20,
-      "byteLength": 0,
-      "capabilitySetCount": 8,
-      "capabilitySetsOffset": 4,
-      "inputCount": 40,
-      "inputsOffset": 36,
-      "operationCount": 32,
-      "operationsOffset": 28,
-      "programCount": 16,
-      "programsOffset": 12,
-      "size": 44
     }
   },
   "memory": "memory",
   "name": "pmndrs-glyph-shaper",
   "pointerWidth": 32,
-  "policy": {
-    "allocationStrategies": {
-      "orderedDirect": 1,
-      "stableIndirect": 2
-    },
-    "batchFields": {
-      "clip": 16,
-      "depth": 32,
-      "material": 8,
-      "order": 64,
-      "program": 4,
-      "resource": 2,
-      "technique": 1,
-      "transform": 128
-    },
-    "bufferUsage": {
-      "copyDst": 4,
-      "storage": 2,
-      "vertex": 1
-    },
-    "capabilityFlags": {
-      "aliasVec2": 4,
-      "aliasVec4": 8,
-      "indirectDraws": 2,
-      "orderedDirect": 16,
-      "stableIndirect": 32,
-      "storageBuffers": 1
-    },
-    "inputScopes": {
-      "glyph": 2,
-      "resource": 3,
-      "semantic": 1,
-      "strike": 4
-    },
-    "opcodes": {
-      "addF32": 5,
-      "constantF32": 3,
-      "constantU32": 4,
-      "convertU32ToF32": 10,
-      "lessThanF32": 8,
-      "loadF32": 1,
-      "loadU32": 2,
-      "multiplyF32": 7,
-      "selectF32": 9,
-      "storeF32": 11,
-      "storeU16": 13,
-      "storeU32": 12,
-      "subtractF32": 6
-    },
-    "scalarTypes": {
-      "f32": 1,
-      "u16": 3,
-      "u32": 2
-    }
-  },
   "status": {
+    "codecConflict": 8,
+    "codecMissing": 9,
     "fontInUse": 14,
     "fontMetricsMissing": 19,
     "fontMissing": 5,
@@ -825,8 +827,6 @@ export const textShaperAbi = {
     "ok": 0,
     "plannerConflict": 10,
     "plannerMissing": 11,
-    "policyConflict": 8,
-    "policyMissing": 9,
     "registrationInUse": 20,
     "resultTooLarge": 7,
     "revisionConflict": 12,

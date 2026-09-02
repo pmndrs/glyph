@@ -6,14 +6,14 @@ import type {
   InlineObjectId,
   MaterialHandle,
   ParagraphId,
-  PolicyHandle,
-  PolicyCapabilitySetSelection,
+  CodecHandle,
+  CodecCapabilitySetSelection,
   RegionId,
   ResourceHandle,
   StyleId,
   PlannerHandle,
 } from '../config/codec.js';
-import { policyCapabilitySetSelectionId } from '../config/codec.js';
+import { codecCapabilitySetSelectionId } from '../config/codec.js';
 
 const MAX_U32 = 0xffff_ffff;
 export const MAX_TEXT_ENGINE_OUTPUT_BYTES: number = 64 * 1024 * 1024;
@@ -193,9 +193,9 @@ export interface PlannerInlineObject {
 
 export interface PlannerFrameUpdate {
   readonly plannerId: PlannerHandle;
-  readonly policyHandle: PolicyHandle;
-  /** Opaque multi-profile selection; omit it to use the policy's first profile. */
-  readonly capabilitySet?: PolicyCapabilitySetSelection;
+  readonly codecHandle: CodecHandle;
+  /** Opaque multi-profile selection; omit it to use the codec's first profile. */
+  readonly capabilitySet?: CodecCapabilitySetSelection;
   readonly expectedEngineRevision: number;
   readonly consumedPlanRevision: number;
   readonly acknowledgedPublicationGeneration: number;
@@ -684,10 +684,10 @@ function writeHeader(view: DataView, frame: PlannerFrameUpdate, byteLength: numb
     ['expectedEngineRevision', frame.expectedEngineRevision],
     ['consumedPlanRevision', frame.consumedPlanRevision],
     ['acknowledgedPublicationGeneration', frame.acknowledgedPublicationGeneration],
-    ['policyHandle', frame.policyHandle],
+    ['codecHandle', frame.codecHandle],
     [
       'capabilitySet',
-      frame.capabilitySet === undefined ? 1 : policyCapabilitySetSelectionId(frame.capabilitySet, frame.policyHandle),
+      frame.capabilitySet === undefined ? 1 : codecCapabilitySetSelectionId(frame.capabilitySet, frame.codecHandle),
     ],
     ['semanticViewMask', frame.semanticViewMask ?? 0],
     ['maxParagraphs', limits.maxParagraphs],
@@ -712,8 +712,8 @@ function writeHeader(view: DataView, frame: PlannerFrameUpdate, byteLength: numb
     ['exclusionCount', frame.exclusions?.length ?? 0],
     ['inlineObjectsOffset', offsets.inlineObjectOffset],
     ['inlineObjectCount', frame.inlineObjects?.length ?? 0],
-    ['policyParametersOffset', 0],
-    ['policyParametersLength', 0],
+    ['codecParametersOffset', 0],
+    ['codecParametersLength', 0],
   ] as const) {
     view.setUint32(layout[field], u32(value, field), true);
   }

@@ -1,9 +1,9 @@
 /**
  * The single authority for a Codec program family's physical shape. A schema declares —
  * once, colocated with the technique — the buffer ids, scalar kinds, and lane
- * meanings that its policy programs produce and its shader realizations consume,
+ * meanings that its codec programs produce and its shader realizations consume,
  * plus the portable render contract: named resources and declared geometry.
- * Policy stores, binding compilers, plan executors, and shader interfaces all
+ * Codec stores, binding compilers, plan executors, and shader interfaces all
  * derive from the declaration; none of them restate it.
  */
 
@@ -14,22 +14,22 @@ import {
   type PortableTextureFormat,
   type PortableVertexInput,
 } from './resources.js';
-import { assertGlyphId, type PolicyBuffer, type PolicyBufferId } from './codec.js';
+import { assertGlyphId, type CodecBuffer, type CodecBufferId } from './codec.js';
 
-export type PolicyScalarKind = 'f32' | 'u32';
+export type CodecScalarKind = 'f32' | 'u32';
 
-export interface PolicyBufferDeclaration<
-  Scalar extends PolicyScalarKind = PolicyScalarKind,
+export interface CodecBufferDeclaration<
+  Scalar extends CodecScalarKind = CodecScalarKind,
   Lanes extends readonly string[] = readonly string[],
 > {
   /** Wire buffer id — nonzero, unique within the owning program. */
-  readonly id: PolicyBufferId;
+  readonly id: CodecBufferId;
   readonly scalar: Scalar;
   /** One name per lane; the lane count is the buffer's vector width. */
   readonly lanes: Lanes;
 }
 
-export type PolicyBufferDeclarations = Readonly<Record<string, PolicyBufferDeclaration>>;
+export type CodecBufferDeclarations = Readonly<Record<string, CodecBufferDeclaration>>;
 
 const techniqueSchemaBrand: unique symbol = Symbol('glyph.technique-schema');
 const techniqueSchemaInstances = new WeakSet<object>();
@@ -40,36 +40,36 @@ const techniqueSchemaInstances = new WeakSet<object>();
  * mutated (rejection leaves it untouched), and caller accessors are read once
  * here so they can never change a validated width afterwards.
  */
-export function definePolicyBuffers<const Buffers extends PolicyBufferDeclarations>(buffers: Buffers): Buffers {
-  if (!isNonArrayObject(buffers)) throw new TypeError('policy buffers need a declaration object');
+export function defineCodecBuffers<const Buffers extends CodecBufferDeclarations>(buffers: Buffers): Buffers {
+  if (!isNonArrayObject(buffers)) throw new TypeError('codec buffers need a declaration object');
   const seen = new Set<number>();
-  const owned: Record<string, PolicyBufferDeclaration> = Object.create(null);
+  const owned: Record<string, CodecBufferDeclaration> = Object.create(null);
   for (const [name, buffer] of Object.entries(buffers)) {
-    if (name.length === 0) throw new TypeError('policy buffer names must not be empty');
+    if (name.length === 0) throw new TypeError('codec buffer names must not be empty');
     const sourceLanes = isNonArrayObject(buffer) ? buffer.lanes : undefined;
     if (!Array.isArray(sourceLanes)) {
-      throw new TypeError(`policy buffer "${name}" needs a declaration with named lanes`);
+      throw new TypeError(`codec buffer "${name}" needs a declaration with named lanes`);
     }
-    const id = assertGlyphId(buffer.id, 'buffer', `policy buffer "${name}" id`);
+    const id = assertGlyphId(buffer.id, 'buffer', `codec buffer "${name}" id`);
     const scalar = buffer.scalar;
     const lanes = sourceLanes.map((lane, index) => {
       if (typeof lane !== 'string' || lane.length === 0) {
-        throw new TypeError(`policy buffer "${name}" lane ${index} needs a nonempty name`);
+        throw new TypeError(`codec buffer "${name}" lane ${index} needs a nonempty name`);
       }
       return lane;
     });
     if (!Number.isSafeInteger(id) || id <= 0 || id > 0xffff) {
-      throw new RangeError(`policy buffer "${name}" needs a nonzero u16 id`);
+      throw new RangeError(`codec buffer "${name}" needs a nonzero u16 id`);
     }
-    if (seen.has(id)) throw new TypeError(`policy buffer "${name}" reuses id ${id}`);
+    if (seen.has(id)) throw new TypeError(`codec buffer "${name}" reuses id ${id}`);
     seen.add(id);
     if (scalar !== 'f32' && scalar !== 'u32') {
-      throw new TypeError(`policy buffer "${name}" needs an f32 or u32 scalar kind`);
+      throw new TypeError(`codec buffer "${name}" needs an f32 or u32 scalar kind`);
     }
     if (lanes.length === 0 || lanes.length > 4) {
-      throw new RangeError(`policy buffer "${name}" needs one to four named lanes`);
+      throw new RangeError(`codec buffer "${name}" needs one to four named lanes`);
     }
-    if (new Set(lanes).size !== lanes.length) throw new TypeError(`policy buffer "${name}" repeats a lane name`);
+    if (new Set(lanes).size !== lanes.length) throw new TypeError(`codec buffer "${name}" repeats a lane name`);
     owned[name] = Object.freeze({ id, scalar, lanes: Object.freeze(lanes) });
   }
   // The copy carries exactly the declared keys read above, so it satisfies Buffers.
@@ -199,10 +199,10 @@ type GeometryResourceNames<Resources extends TechniqueResourceDeclarations> = st
     }[keyof Resources] &
       string;
 
-type GlyphOriginBufferNames<Buffers extends PolicyBufferDeclarations> = string extends keyof Buffers
+type GlyphOriginBufferNames<Buffers extends CodecBufferDeclarations> = string extends keyof Buffers
   ? string
   : {
-      [Name in keyof Buffers]: Buffers[Name] extends PolicyBufferDeclaration<
+      [Name in keyof Buffers]: Buffers[Name] extends CodecBufferDeclaration<
         'f32',
         readonly [string, string, ...string[]]
       >
@@ -212,7 +212,7 @@ type GlyphOriginBufferNames<Buffers extends PolicyBufferDeclarations> = string e
       string;
 
 export interface TechniqueSchemaDeclaration<
-  Buffers extends PolicyBufferDeclarations = PolicyBufferDeclarations,
+  Buffers extends CodecBufferDeclarations = CodecBufferDeclarations,
   Binding extends TechniqueBindingDeclaration = TechniqueBindingDeclaration,
   Resources extends TechniqueResourceDeclarations = TechniqueResourceDeclarations,
   TechniqueId extends string = string,
@@ -243,7 +243,7 @@ export interface TechniqueSchemaDeclaration<
 }
 
 export interface TechniqueSchema<
-  Buffers extends PolicyBufferDeclarations = PolicyBufferDeclarations,
+  Buffers extends CodecBufferDeclarations = CodecBufferDeclarations,
   Binding extends TechniqueBindingDeclaration = TechniqueBindingDeclaration,
   Resources extends TechniqueResourceDeclarations = NoTechniqueResources,
   TechniqueId extends string = string,
@@ -264,7 +264,7 @@ export interface AnyTechniqueSchema {
   readonly technique: string;
   readonly scope: 'glyph' | 'strike' | 'resource';
   readonly binding: TechniqueBindingDeclaration;
-  readonly buffers: PolicyBufferDeclarations;
+  readonly buffers: CodecBufferDeclarations;
   readonly resources: TechniqueResourceDeclarations;
   readonly render: TechniqueRenderDeclaration;
   readonly glyphOrigin?: { readonly buffer: string };
@@ -287,7 +287,7 @@ type DefinedTechniqueResources<Resources> = Resources extends TechniqueResourceD
 /** Validate and freeze one technique's authoritative schema. */
 export function defineTechniqueSchema<
   const TechniqueId extends RasterFormatId | string,
-  const Buffers extends PolicyBufferDeclarations,
+  const Buffers extends CodecBufferDeclarations,
   const Binding extends TechniqueBindingDeclaration,
   const Resources = NoTechniqueResources,
   const Geometry extends TechniqueGeometryDeclaration<GeometryResourceNames<DefinedTechniqueResources<Resources>>> = {
@@ -337,7 +337,7 @@ export function defineTechniqueSchema<
   if (new Set(names).size !== names.length) {
     throw new TypeError(`technique "${technique}" repeats a binding field name`);
   }
-  const buffers = definePolicyBuffers(declaration.buffers);
+  const buffers = defineCodecBuffers(declaration.buffers);
   let resources: Readonly<Record<string, TechniqueResourceDeclaration>> = Object.freeze(
     Object.create(null) as Record<string, TechniqueResourceDeclaration>,
   );
@@ -393,7 +393,7 @@ export function defineTechniqueSchema<
     if (typeof bufferName !== 'string') {
       throw new TypeError(`technique "${technique}" glyphOrigin needs a buffer name`);
     }
-    const origin: PolicyBufferDeclaration | undefined = Object.hasOwn(buffers, bufferName)
+    const origin: CodecBufferDeclaration | undefined = Object.hasOwn(buffers, bufferName)
       ? buffers[bufferName]
       : undefined;
     if (origin === undefined) {
@@ -607,7 +607,7 @@ function isPortableTextureFormat(value: unknown): value is PortableTextureFormat
   return typeof value === 'string' && portableTextureFormats.includes(value as PortableTextureFormat);
 }
 
-function copyBindingNames(value: unknown, technique: string, scalar: PolicyScalarKind): readonly string[] | undefined {
+function copyBindingNames(value: unknown, technique: string, scalar: CodecScalarKind): readonly string[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) throw new TypeError(`technique "${technique}" ${scalar} binding needs a name list`);
   const names = value.map((name, index) => {
@@ -627,7 +627,7 @@ function isNonArrayObject(value: unknown): value is Record<string, unknown> {
  * Derive the wire buffer list a technique's programs publish, in declaration
  * order — the schema is the only witness to ids, scalar kinds, and widths.
  */
-export function schemaPolicyBuffers(schema: AnyTechniqueSchema): PolicyBuffer[] {
+export function schemaCodecBuffers(schema: AnyTechniqueSchema): CodecBuffer[] {
   return Object.values(schema.buffers).map((buffer) => ({
     id: buffer.id,
     scalar: buffer.scalar,

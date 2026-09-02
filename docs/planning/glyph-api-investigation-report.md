@@ -30,9 +30,9 @@ sources:
   - id: current-three-plan-target
     resource: ../../packages/glyph/src/three/engine-plan-target.ts
     title: Current Three render-plan executor
-  - id: current-three-policy
+  - id: current-three-codec
     resource: ../../packages/glyph/src/three/codec.ts
-    title: Current Three render policy
+    title: Current Three Codec
   - id: current-three-material
     resource: ../../packages/glyph/src/three/material.ts
     title: Current Three material extension

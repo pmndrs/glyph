@@ -1,24 +1,24 @@
 import {
-  compileRenderPolicy as compileCodec,
-  createProgram as createCodecProgram,
+  compileCodec,
+  createCodecProgram,
   id,
-  type PolicyAllocationMode as CodecAllocationMode,
-  type PolicyBuffer as CodecBuffer,
-  type PolicyBufferId as CodecBufferId,
-  type PolicyCapabilitySet as CodecCapabilitySet,
-  type PolicyDescriptor as CodecDescriptor,
-  type PolicyProgram as CodecProgram,
-  type PolicyTransformMode as CodecTransformMode,
-  type RenderIdFactory as CodecIdFactory,
-  type RenderProgramId,
-  type RenderTechniqueId,
+  type CodecAllocationMode,
+  type CodecBuffer,
+  type CodecBufferId,
+  type CodecCapabilitySet,
+  type CodecDescriptor,
+  type CodecProgram,
+  type CodecTransformMode,
+  type CodecIdFactory,
+  type CodecProgramId,
+  type CodecTechniqueId,
 } from '../config/codec.js';
 import { techniqueProgram } from '../config/codec-program.js';
-import { createRasterPolicyProgram as createRasterCodecProgram } from '../config/raster.js';
+import { createRasterCodecProgram } from '../config/raster.js';
 import {
-  definePolicyBuffers as defineCodecBuffers,
+  defineCodecBuffers,
   defineTechniqueSchema,
-  schemaPolicyBuffers as schemaCodecBuffers,
+  schemaCodecBuffers,
   type AnyTechniqueSchema,
   type TechniqueSchema,
 } from '../config/schema.js';
@@ -183,8 +183,8 @@ export function threeCodecCapabilitySet(): CodecCapabilitySet {
  * start, and the paint arrives through the binding's packed u32 pair.
  */
 function decorationProgram(
-  techniqueId: RenderTechniqueId,
-  programId: RenderProgramId,
+  techniqueId: CodecTechniqueId,
+  programId: CodecProgramId,
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): CodecProgram {

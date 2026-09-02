@@ -5,11 +5,11 @@ use crate::{
     abi_contract::*,
     engine::render_plan::{
         BufferRecord, DiagnosticRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_COPY,
-        PATCH_FILL, PATCH_RETIRE, PATCH_WRITE, PRIMITIVE_CLIP, PRIMITIVE_DECORATION,
-        PRIMITIVE_GLYPH, PRIMITIVE_INLINE_OBJECT, PRIMITIVE_POLICY, PatchRecord, PrimitiveRecord,
-        RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE, RETIRE_BUFFER,
-        RETIRE_OUTPUT_BYTES, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, RenderPlanView, ResourceRecord,
-        RetirementRecord,
+        PATCH_FILL, PATCH_RETIRE, PATCH_WRITE, PRIMITIVE_CLIP, PRIMITIVE_CODEC,
+        PRIMITIVE_DECORATION, PRIMITIVE_GLYPH, PRIMITIVE_INLINE_OBJECT, PatchRecord,
+        PrimitiveRecord, RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE,
+        RETIRE_BUFFER, RETIRE_OUTPUT_BYTES, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, RenderPlanView,
+        ResourceRecord, RetirementRecord,
     },
     engine::semantic_view::{
         SEMANTIC_CARET, SEMANTIC_CLUSTER, SEMANTIC_FRAGMENT, SEMANTIC_GLYPH,
@@ -237,7 +237,7 @@ pub(crate) fn publication_layout(
 }
 
 fn validate_plan(plan: RenderPlanView<'_>, semantic_views: &[SemanticRecord]) -> Result<(), u32> {
-    if plan.policy_handle == 0 {
+    if plan.codec_handle == 0 {
         return Err(STATUS_INVALID_REQUEST);
     }
     for record in semantic_views {
@@ -284,7 +284,7 @@ fn validate_plan(plan: RenderPlanView<'_>, semantic_views: &[SemanticRecord]) ->
         if record.id == 0
             || record.generation == 0
             || record.program_id == 0
-            || record.policy_buffer_id == 0
+            || record.codec_buffer_id == 0
             || !matches!(record.scalar_type, 1..=3)
             || !matches!(record.vector_width, 1..=4)
             || !matches!(record.strategy, 1..=2)
@@ -330,7 +330,7 @@ fn validate_plan(plan: RenderPlanView<'_>, semantic_views: &[SemanticRecord]) ->
                     | PRIMITIVE_DECORATION
                     | PRIMITIVE_INLINE_OBJECT
                     | PRIMITIVE_CLIP
-                    | PRIMITIVE_POLICY
+                    | PRIMITIVE_CODEC
             )
             || record.record_count == 0
             || !finite4(
@@ -510,7 +510,7 @@ fn write_buffer(bytes: &mut [u8], at: usize, value: BufferRecord) {
     u32_at(bytes, at, BUFFER_ID, value.id);
     u32_at(bytes, at, BUFFER_GENERATION, value.generation);
     u32_at(bytes, at, BUFFER_PROGRAM_ID, value.program_id);
-    u16_at(bytes, at, BUFFER_POLICY_BUFFER_ID, value.policy_buffer_id);
+    u16_at(bytes, at, BUFFER_CODEC_BUFFER_ID, value.codec_buffer_id);
     u8_at(bytes, at, BUFFER_SCALAR_TYPE, value.scalar_type);
     u8_at(bytes, at, BUFFER_VECTOR_WIDTH, value.vector_width);
     u16_at(bytes, at, BUFFER_STRATEGY, value.strategy);
@@ -718,7 +718,7 @@ mod tests {
             id: 6,
             generation: 7,
             program_id: 8,
-            policy_buffer_id: 9,
+            codec_buffer_id: 9,
             scalar_type: 1,
             vector_width: 4,
             strategy: BUFFER_ORDERED_DIRECT,
@@ -773,9 +773,9 @@ mod tests {
             ..DiagnosticRecord::default()
         }];
         let plan = RenderPlanView {
-            policy_handle: 15,
+            codec_handle: 15,
             capability_set: 16,
-            policy_fingerprint: 17,
+            codec_fingerprint: 17,
             resources: &resource,
             buffers: &buffer,
             patches: &patch,
@@ -820,7 +820,7 @@ mod tests {
             ..PatchRecord::default()
         }];
         let plan = RenderPlanView {
-            policy_handle: 1,
+            codec_handle: 1,
             patches: &patch,
             payload: &[1, 2, 3],
             ..RenderPlanView::default()

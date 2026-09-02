@@ -2,29 +2,29 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { copyIntoAllocation, engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
+import { copyIntoAllocation, engineUpdateBytes, renderCodecBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const mutationCount = 64;
 
-test('fixed-seed policy and frame mutations fail safely, deterministically, and recoverably', async () => {
+test('fixed-seed codec and frame mutations fail safely, deterministically, and recoverably', async () => {
   const wasm = await readFile(wasmUrl);
   const abi = textShaperAbi;
   const module = await WebAssembly.compile(wasm);
-  const policyCases = mutations(renderPolicyBytes(abi), 0x504f_4c59);
+  const codecCases = mutations(renderCodecBytes(abi), 0x504f_4c59);
   const frameCases = mutations(frameBytes(abi, 1), 0x4652_414d);
-  const first = await execute(module, abi, policyCases, frameCases);
-  const second = await execute(module, abi, policyCases, frameCases);
+  const first = await execute(module, abi, codecCases, frameCases);
+  const second = await execute(module, abi, codecCases, frameCases);
 
   assert.deepEqual(second, first);
   assert.ok(
-    first.some(({ policyStatus }) => policyStatus === abi.status.ok),
-    'mutations must retain valid policy paths',
+    first.some(({ codecStatus }) => codecStatus === abi.status.ok),
+    'mutations must retain valid codec paths',
   );
   assert.ok(
-    first.some(({ policyStatus }) => policyStatus !== abi.status.ok),
-    'mutations must retain malformed policy paths',
+    first.some(({ codecStatus }) => codecStatus !== abi.status.ok),
+    'mutations must retain malformed codec paths',
   );
   assert.ok(
     first.some(({ frameStatus }) => frameStatus === abi.status.ok),
@@ -36,7 +36,7 @@ test('fixed-seed policy and frame mutations fail safely, deterministically, and 
   );
 });
 
-async function execute(module, abi, policyCases, frameCases) {
+async function execute(module, abi, codecCases, frameCases) {
   const statuses = new Set(Object.values(abi.status));
   const outcomes = [];
   for (let index = 0; index < mutationCount; index += 1) {
@@ -47,16 +47,16 @@ async function execute(module, abi, policyCases, frameCases) {
     );
     assert.equal(fn.initialize(), abi.status.ok);
 
-    const validPolicy = renderPolicyBytes(abi);
-    const validPolicyPointer = copyIntoAllocation(memory, fn.allocate, validPolicy);
-    assert.equal(fn.registerPolicy(1, validPolicyPointer, validPolicy.byteLength), abi.status.ok);
-    fn.deallocate(validPolicyPointer, validPolicy.byteLength);
+    const validCodec = renderCodecBytes(abi);
+    const validCodecPointer = copyIntoAllocation(memory, fn.allocate, validCodec);
+    assert.equal(fn.registerCodec(1, validCodecPointer, validCodec.byteLength), abi.status.ok);
+    fn.deallocate(validCodecPointer, validCodec.byteLength);
 
-    const policyCase = policyCases[index];
-    const policyPointer = copyIntoAllocation(memory, fn.allocate, policyCase.bytes);
-    const policyStatus = fn.registerPolicy(2, policyPointer, policyCase.length);
-    fn.deallocate(policyPointer, policyCase.bytes.byteLength);
-    assert.ok(statuses.has(policyStatus));
+    const codecCase = codecCases[index];
+    const codecPointer = copyIntoAllocation(memory, fn.allocate, codecCase.bytes);
+    const codecStatus = fn.registerCodec(2, codecPointer, codecCase.length);
+    fn.deallocate(codecPointer, codecCase.bytes.byteLength);
+    assert.ok(statuses.has(codecStatus));
 
     const frameCase = frameCases[index];
     const requestCapacity = Math.max(abi.layouts.engineUpdateRequest.size, frameCase.bytes.byteLength);
@@ -79,7 +79,7 @@ async function execute(module, abi, policyCases, frameCases) {
     );
     assert.equal(recoveryStatus, abi.status.ok, `mutation ${index} poisoned the next valid transaction`);
     assert.equal(fn.disposePlanner(3), abi.status.ok);
-    outcomes.push({ policyStatus, frameStatus });
+    outcomes.push({ codecStatus, frameStatus });
   }
   return outcomes;
 }
@@ -87,7 +87,7 @@ async function execute(module, abi, policyCases, frameCases) {
 function frameBytes(abi, plannerId) {
   return engineUpdateBytes(abi, {
     plannerId,
-    policyHandle: 1,
+    codecHandle: 1,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
   });

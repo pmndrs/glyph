@@ -24,10 +24,10 @@ use crate::{
         FONT_BINDING_STRIKES_OFFSET, FONT_BINDING_TECHNIQUE_ID,
     },
     engine::{
+        codec::TechniqueId,
         font_binding::{
             FieldTable, FontRenderBinding, FontResource, FontStrike, MAX_BINDING_FIELDS,
         },
-        policy::TechniqueId,
     },
     wire::{array, read_u16, read_u32},
 };

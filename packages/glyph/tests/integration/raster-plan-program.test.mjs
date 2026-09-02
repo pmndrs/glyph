@@ -76,7 +76,7 @@ function validCompile(compiler, colorBytes = new Uint8Array([1, 2, 3, 4])) {
 test('registration preserves authenticated technique and schema witnesses', () => {
   const value = technique('test.plan-registration');
   const schema = schemaFor(value);
-  const source = { raster: value, schema, policyBody: body, compileFont: validCompile };
+  const source = { raster: value, schema, codecBody: body, compileFont: validCompile };
   const registered = registerRasterPlanProgram(source);
 
   assert.equal(registered.raster, value);
@@ -98,7 +98,7 @@ test('registration rejects structural techniques and reserved Glyph identities',
       registerRasterPlanProgram({
         raster: structural,
         schema: defineTechniqueSchema({ technique: structural.id, scope: 'glyph', binding: {}, buffers: {} }),
-        policyBody: body,
+        codecBody: body,
         compileFont() {},
       }),
     /need a technique/,
@@ -110,7 +110,7 @@ test('registration rejects structural techniques and reserved Glyph identities',
       registerRasterPlanProgram({
         raster: reserved,
         schema: schemaFor(reserved),
-        policyBody: body,
+        codecBody: body,
         compileFont: validCompile,
       }),
     /reserved for Glyph-owned techniques/,
@@ -130,7 +130,7 @@ test('registration rejects a resource-free schema before it can become an unusab
       registerRasterPlanProgram({
         raster: value,
         schema,
-        policyBody: body,
+        codecBody: body,
         compileFont() {},
       }),
     /needs at least one declared resource/,
@@ -143,7 +143,7 @@ test('the same string ID cannot substitute a different technique data witness', 
   registerRasterPlanProgram({
     raster: first,
     schema: schemaFor(first),
-    policyBody: body,
+    codecBody: body,
     compileFont: validCompile,
   });
   assert.throws(() => compileRasterFont(loaded(second), glyphId), /does not match the registered program/);
@@ -155,7 +155,7 @@ test('font compilation accepts only live package fonts and exposes a constrained
   registerRasterPlanProgram({
     raster: value,
     schema: schemaFor(value),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       reader = compiler.font;
       assert.deepEqual(Object.keys(reader).sort(), ['data', 'glyphCount', 'raster']);
@@ -179,7 +179,7 @@ test('font compilation owns binding metadata and normalizes retained payloads', 
   registerRasterPlanProgram({
     raster: value,
     schema: schemaFor(value),
-    policyBody: body,
+    codecBody: body,
     compileFont: (compiler) => validCompile(compiler, sourceBytes),
   });
   const compiled = compileRasterFont(loaded(value), glyphId);
@@ -204,7 +204,7 @@ test('compiled font views expose named fields and selected portable resources wi
   const program = registerRasterPlanProgram({
     raster: value,
     schema: schemaFor(value),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array([1, 2, 3, 4]), stride: 4 });
       compiler.retain('mesh', MESH, indexedQuadGeometry());
@@ -239,7 +239,7 @@ test('resource selection receives explicit glyph and strike coordinates', () => 
   registerRasterPlanProgram({
     raster: value,
     schema: schemaFor(value),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) });
       compiler.retain('mesh', MESH, indexedQuadGeometry());
@@ -279,7 +279,7 @@ test('authored resource identities remain stable across independent compiler cal
   registerRasterPlanProgram({
     raster: value,
     schema: schemaFor(value),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       invocation += 1;
       return validCompile(compiler, new Uint8Array([invocation, 2, 3, 4]));
@@ -302,7 +302,7 @@ test('standalone font compilation scopes dynamic resource collisions to one call
   const program = registerRasterPlanProgram({
     raster: value,
     schema: schemaFor(value),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       const colors = compiler.font.glyphCount === 2 ? COLLIDING_RESOURCE_A : COLLIDING_RESOURCE_B;
       compiler.retain('colors', colors, { kind: 'buffer', bytes: new Uint8Array(4), stride: 4 });
@@ -332,7 +332,7 @@ test('one loaded font reuses its immutable compilation across engine identity re
   registerRasterPlanProgram({
     raster: value,
     schema: schemaFor(value),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       calls += 1;
       return validCompile(compiler);
@@ -352,7 +352,7 @@ test('independent Font leases over one immutable variant share compilation', () 
   registerRasterPlanProgram({
     raster: value,
     schema: schemaFor(value),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       calls += 1;
       return validCompile(compiler);
@@ -428,7 +428,7 @@ test('retention rejects undeclared, duplicate, missing, and wrong-kind resources
     registerRasterPlanProgram({
       raster: value,
       schema: schemaFor(value),
-      policyBody: body,
+      codecBody: body,
       compileFont(compiler) {
         const result = act(compiler);
         return result ?? validCompile(compiler);
@@ -443,7 +443,7 @@ test('binding readers and selected resources reject at compiler.compile', () => 
   registerRasterPlanProgram({
     raster: missingReader,
     schema: schemaFor(missingReader),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) });
       compiler.retain('mesh', MESH, indexedQuadGeometry());
@@ -456,7 +456,7 @@ test('binding readers and selected resources reject at compiler.compile', () => 
   registerRasterPlanProgram({
     raster: unknownResource,
     schema: schemaFor(unknownResource),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) });
       compiler.retain('mesh', MESH, indexedQuadGeometry());
@@ -478,7 +478,7 @@ test('binding compilation snapshots reader accessors before serialization', () =
   registerRasterPlanProgram({
     raster: value,
     schema: schemaFor(value),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) });
       compiler.retain('mesh', MESH, indexedQuadGeometry());
@@ -510,7 +510,7 @@ test('a caught compiler input failure is terminal for that callback', () => {
   registerRasterPlanProgram({
     raster: value,
     schema: schemaFor(value),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       try {
         compiler.retain('foreign', OTHER, { kind: 'buffer', bytes: new Uint8Array(4) });
@@ -529,7 +529,7 @@ test('compileFont must synchronously return this compiler invocation result', ()
   registerRasterPlanProgram({
     raster: asynchronous,
     schema: schemaFor(asynchronous),
-    policyBody: body,
+    codecBody: body,
     async compileFont(compiler) {
       return validCompile(compiler);
     },
@@ -540,7 +540,7 @@ test('compileFont must synchronously return this compiler invocation result', ()
   registerRasterPlanProgram({
     raster: counterfeit,
     schema: schemaFor(counterfeit),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       validCompile(compiler);
       return { binding: new Uint8Array(), resources: new Map(), declaredResources: new Map() };
@@ -555,7 +555,7 @@ test('the compiler is revoked after its callback returns', () => {
   registerRasterPlanProgram({
     raster: value,
     schema: schemaFor(value),
-    policyBody: body,
+    codecBody: body,
     compileFont(compiler) {
       escaped = compiler;
       return validCompile(compiler);
