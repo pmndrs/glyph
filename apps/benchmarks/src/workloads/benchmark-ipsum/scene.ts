@@ -36,8 +36,8 @@ export const BENCHMARK_IPSUM_PARAGRAPHS = [
 
 export const BENCHMARK_IPSUM_TEXT = BENCHMARK_IPSUM_PARAGRAPHS.join('\n\n');
 
-/** Exact rendered glyph count for the pinned Inter 4.1 fixture with default features. */
-export const BENCHMARK_IPSUM_INTER_GLYPH_COUNT = 1_151;
+/** Exact shaped glyph count for the pinned Inter 4.1 fixture with default features. */
+export const BENCHMARK_IPSUM_INTER_GLYPH_COUNT = 1_350;
 
 const EMPTY_FONT_FEATURES = [] as const;
 

@@ -212,6 +212,7 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
         // Activation committed the configuration this scene was constructed from; catch up with whatever the surface
         // has moved on to since, then hand later changes to the synchronous effect below.
         activeSceneRef.current = created;
+        setSettledWorkload(configuration.workload);
         cancelInitialUpdate = applySdfLiveTextUpdate(created, sceneConfiguration(), {
           onCommitted: publishCommitted,
           onError: publishError,
@@ -550,6 +551,7 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
         // Activation committed the configuration this scene was constructed from; catch up with whatever the surface
         // has moved on to since, then hand later changes to the synchronous effect below.
         activeSceneRef.current = created;
+        setSettledWorkload(configuration.workload);
         cancelInitialUpdate = applySdfLiveTextUpdate(created, sceneConfiguration(), {
           onCommitted: publishCommitted,
           onError: publishError,
