@@ -358,7 +358,6 @@ const coreJavaScript = await measureJavaScript(
       '/packages/glyph/dist/font-baker/index.js',
       '/packages/glyph/dist/font-baker/validator.js',
       '/packages/glyph/dist/font-baker/wasm-url.js',
-      '/packages/glyph/dist/internal/unicode.js',
     ],
   },
 );
@@ -607,11 +606,6 @@ const entries: SizeEntry[] = [
     'portable-baker-wasm',
     'Font baker Wasm',
     new URL('../../../packages/glyph/dist/font-baker.wasm', import.meta.url),
-  ),
-  await measureJavaScript(
-    'unicode-analysis-js',
-    'Unicode 17 analysis JS',
-    new URL('../size-entries/unicode-analysis.ts', import.meta.url),
   ),
 ];
 

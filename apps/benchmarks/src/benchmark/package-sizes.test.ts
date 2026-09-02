@@ -42,7 +42,6 @@ describe('independent package-size report', () => {
       'slug-baker-wasm',
       'portable-baker-js',
       'portable-baker-wasm',
-      'unicode-analysis-js',
     ]) {
       const entry = report.entries.find((candidate) => candidate.id === id);
       expect(entry?.status).toBe('measured');
@@ -113,16 +112,6 @@ describe('independent package-size report', () => {
     expect(core.minifiedBytes).toBeLessThan(validator.minifiedBytes);
   });
 
-  it('reports Unicode analysis as a separate measured artifact', () => {
-    const core = report.entries.find((candidate) => candidate.id === 'browser-core');
-    const unicode = report.entries.find((candidate) => candidate.id === 'unicode-analysis-js');
-    expect(core?.status).toBe('measured');
-    expect(unicode?.status).toBe('measured');
-    if (core?.status !== 'measured' || unicode?.status !== 'measured') return;
-    expect(unicode.minifiedBytes).toBeGreaterThan(0);
-    expect(unicode.sha256).not.toBe(core.sha256);
-  });
-
   it('keeps foreign-host native-tool variance inside complete reviewed budgets', () => {
     const foreign = structuredClone(report);
     foreign.measurementHost = { platform: 'linux', architecture: 'x64' };
@@ -134,7 +123,6 @@ describe('independent package-size report', () => {
       'text-shaper-wasm': [692_111, 692_111, 258_524, 202_634],
       'portable-baker-js': [10_046, 6_647, 2_338, 2_060],
       'portable-baker-wasm': [433_755, 433_755, 168_266, 136_961],
-      'unicode-analysis-js': [164_786, 139_936, 42_047, 30_989],
     } as const;
     for (const [id, [rawBytes, minifiedBytes, gzipBytes, brotliBytes]] of Object.entries(linuxX64Measurements)) {
       const entry = foreign.entries.find((candidate) => candidate.id === id);

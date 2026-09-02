@@ -199,9 +199,6 @@ importers:
 
   packages/glyph:
     dependencies:
-      '@cto.af/linebreak':
-        specifier: 4.0.3
-        version: 4.0.3
       ajv:
         specifier: 6.15.0
         version: 6.15.0
@@ -215,6 +212,9 @@ importers:
         specifier: 0.15.0
         version: 0.15.0
     devDependencies:
+      '@cto.af/linebreak':
+        specifier: 4.0.3
+        version: 4.0.3
       '@react-three/fiber':
         specifier: 10.0.0-alpha.3
         version: 10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)

@@ -213,12 +213,4 @@ export const packageSizeBudgets = {
     gzipBytes: 391_000,
     brotliBytes: 305_000,
   },
-  // Raw and minified rose for the allocation-free grapheme script resolution; the growth is comment-dominated, at
-  // +3,010 raw against +298 Brotli, because the parallel-array form needs its reasoning recorded next to it.
-  'unicode-analysis-js': {
-    rawBytes: 171_000,
-    minifiedBytes: 143_000,
-    gzipBytes: 42_500,
-    brotliBytes: 31_500,
-  },
 } as const;

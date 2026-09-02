@@ -312,17 +312,6 @@
       "minifiedBytes": 1081312,
       "gzipBytes": 388915,
       "brotliBytes": 303266
-    },
-    {
-      "id": "unicode-analysis-js",
-      "label": "Unicode 17 analysis JS",
-      "status": "measured",
-      "format": "javascript",
-      "sha256": "4a9cf5a19d86d82de8ca8f17784a85a9f4f8b57c95713e551f2da54ee93a995c",
-      "rawBytes": 168666,
-      "minifiedBytes": 141167,
-      "gzipBytes": 42456,
-      "brotliBytes": 31324
     }
   ]
 }

@@ -1,9 +1,9 @@
 /* @workflow
 {
   "name": "glyph:unicode-data:generate",
-  "summary": "Regenerate Unicode script and bidi tables.",
+  "summary": "Regenerate the Rust Unicode script, bidi, and line-break tables.",
   "requirements": "Repository-pinned Node.js.",
-  "writes": "Generated Unicode TypeScript data.",
+  "writes": "Generated Rust Unicode data.",
   "args": ["generate-data"]
 }
 */

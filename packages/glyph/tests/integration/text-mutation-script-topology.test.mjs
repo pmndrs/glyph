@@ -61,11 +61,11 @@ import {
   timeout,
   unmount,
 } from '../support/text-mutation-lanes.mjs';
+import { findLineBreaks } from '../support/unicode-line-breaks.mjs';
 
-// The engine's own grapheme segmentation. `Intl.Segmenter` is a DIFFERENT implementation of UAX #29
-// and the two disagree on degenerate sequences, so snapping a span boundary with ICU can still land
-// it inside a cluster the engine sees -- which the engine rejects outright.
-import { findGraphemeBoundaries, findLineBreaks } from '../../dist/internal/unicode.js';
+// The package-pinned preflight segmentation. `Intl.Segmenter` follows host ICU and can disagree on
+// degenerate sequences, so it cannot be the oracle for the span compiler's deterministic behavior.
+import { findGraphemeBoundaries } from '../../dist/internal/graphemes.js';
 
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
