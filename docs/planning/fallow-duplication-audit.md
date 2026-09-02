@@ -912,9 +912,9 @@ The prioritized residual list is unchanged outside the four completed items:
 2. The stable Bitmap/MSDF/Slug TypeScript baker response envelopes remain candidates for small protocol helpers.
 3. Raster artifact validators still repeat shared envelope invariants that belong in
    `internal/raster-artifact-validation.ts`.
-4. Public raw `RenderPlan*Record` types/readers remain an accepted documented `/core` compatibility surface and a manual
-   semantic mirror of Rust. Changing them requires an explicit public-contract decision; they are not part of normal
-   `GlyphConfig` rendering.
+4. **Resolved by D-313.** The raw `RenderPlan*Record` types/readers and their manual semantic mirror of Rust are deleted.
+   `RenderPlanView` now owns framing, alignment, and bounds only; integrators receive the canonical typed
+   `CommandBufferView` through `GlyphConfig`.
 5. Per-technique Three material DSL branches and zero-copy typed view constructors remain intentional parallel structure.
 
 ### Fresh build and size evidence
