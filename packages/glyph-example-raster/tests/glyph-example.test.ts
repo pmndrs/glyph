@@ -6,7 +6,7 @@ import { basename, join } from 'node:path';
 import {
   createFontLibrary,
   defineRasterResourceId,
-  defineRasterTechnique,
+  defineRasterFormat,
   glyph,
   loadFont,
   type RasterKey,
@@ -53,7 +53,7 @@ declare module '@pmndrs/glyph/three' {
     readonly 'studio.glyph-example': Readonly<{
       root: ThreeRootContext;
       kind: 'glyph';
-      technique: 'studio.glyph-example';
+      format: 'studio.glyph-example';
       outputs: ReadonlyMap<string, THREE.Node>;
       position: THREE.Node<'vec3'>;
       createDefaultMaterial(): THREE.NodeMaterial;
@@ -112,11 +112,11 @@ describe('public external raster proof', () => {
     const library = createFontLibrary({ fetch });
     const font = await library.loadFont(
       { baked: 'https://glyph.invalid/inter.font.glb' },
-      { technique: glyphExample, options: { paletteSeed: 7 } },
+      { raster: glyphExample, options: { paletteSeed: 7 } },
     );
 
     try {
-      expect(font.technique).toBe(glyphExample);
+      expect(font.raster).toBe(glyphExample);
       expect(font.glyphCount).toBeGreaterThan(0);
       expect(
         fetch.mock.calls.map(([input]) =>
@@ -140,7 +140,7 @@ describe('public external raster proof', () => {
     expect(() =>
       loadFont(
         { baked: { bytes, ownership: 'copy' } },
-        { technique: glyphExample, options: { paletteSeed: 7 } },
+        { raster: glyphExample, options: { paletteSeed: 7 } },
         { signal: controller.signal },
       ),
     ).toThrowError(expect.objectContaining({ name: 'AbortError' }));
@@ -155,10 +155,10 @@ describe('public external raster proof', () => {
     const loader = new FontLoader();
     const font = await loader.loadAsync({
       input: { baked: dataUrl(await readFile(core.file)) },
-      raster: { technique: glyphExample, options: { paletteSeed: 7 } },
+      raster: { raster: glyphExample, options: { paletteSeed: 7 } },
     });
     const material = defineTextMaterial((context) => {
-      if (context.kind !== 'glyph' || context.technique !== glyphExample.id) return context.createDefaultMaterial();
+      if (context.kind !== 'glyph' || context.format !== glyphExample.id) return context.createDefaultMaterial();
       genericMaterialContexts.push(context);
       const realized = context.createDefaultMaterial();
       realized.depthTest = true;
@@ -178,7 +178,7 @@ describe('public external raster proof', () => {
       expect(draw?.renderOrder).toBe(200);
       expect((draw?.material as THREE.Material | undefined)?.depthTest).toBe(true);
       expect(genericMaterialContexts).toHaveLength(1);
-      expect(genericMaterialContexts[0]?.technique).toBe(glyphExample.id);
+      expect(genericMaterialContexts[0]?.format).toBe(glyphExample.id);
       expect([...genericMaterialContexts[0]!.outputs.keys()]).toEqual(['position', 'color', 'opacity']);
       const geometry = draw?.geometry as THREE.InstancedBufferGeometry;
       expect(geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.origin.id))).toBeDefined();
@@ -228,7 +228,7 @@ describe('public external raster proof', () => {
     const loader = new FontLoader();
     const font = await loader.loadAsync({
       input: { baked: dataUrl(await readFile(core.file)) },
-      raster: { technique: suppliedGlyphExample, options: { paletteSeed: 7 } },
+      raster: { raster: suppliedGlyphExample, options: { paletteSeed: 7 } },
     });
     const text = three.createText({ font, text: 'STRIP QUAD', style: { fontSize: 48 } });
     const group = three.createTextGroup();
@@ -291,7 +291,7 @@ function rootDraws(scene: THREE.Scene): THREE.Mesh[] {
   );
 }
 
-const suppliedGlyphExample = defineRasterTechnique({
+const suppliedGlyphExample = defineRasterFormat({
   ...glyphExample,
   id: 'studio.glyph-example-supplied',
 });
@@ -321,7 +321,7 @@ const suppliedGlyphExampleSchema = defineTechniqueSchema({
 const stripGeometry = triangleStripGeometry(glyphExampleIndexedQuadGeometry);
 
 registerRasterPlanProgram({
-  technique: suppliedGlyphExample,
+  raster: suppliedGlyphExample,
   schema: suppliedGlyphExampleSchema,
   policyBody(system) {
     const p = techniqueProgram(suppliedGlyphExampleSchema, { system });
@@ -360,7 +360,7 @@ registerRasterPlanProgram({
 });
 
 const suppliedThreeProgram = {
-  technique: suppliedGlyphExample,
+  raster: suppliedGlyphExample,
   schema: suppliedGlyphExampleSchema,
   variant: {
     id: 'tsl-strip',
@@ -379,7 +379,7 @@ const suppliedThreeProgram = {
 };
 
 const threeProgram = {
-  technique: glyphExamplePlanProgram.technique,
+  raster: glyphExamplePlanProgram.raster,
   schema: glyphExamplePlanProgram.schema,
   variant: {
     id: 'tsl',
@@ -424,7 +424,7 @@ function createThreeMaterial(context: ThreePlanProgramMaterialContext): THREE.No
     context.material?.create({
       root: context.root,
       kind: 'glyph',
-      technique: glyphExample.id,
+      format: glyphExample.id,
       outputs: new Map<string, THREE.Node>([
         ['position', shader.position],
         ['color', shader.color],

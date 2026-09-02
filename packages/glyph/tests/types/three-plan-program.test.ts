@@ -1,5 +1,5 @@
 import { defineTechniqueSchema, type PortableResource, id } from '../../src/index.js';
-import { defineRasterTechnique } from '../../src/raster-technique.js';
+import { defineRasterFormat } from '../../src/raster-format.js';
 import {
   registerThreeRasterPlanProgram,
   type ThreePlanProgramMaterialContext,
@@ -11,7 +11,7 @@ declare const materialContext: ThreePlanProgramMaterialContext;
 const namedResource: PortableResource | undefined = materialContext.namedResources.get('atlas');
 void namedResource;
 
-const technique = defineRasterTechnique({
+const technique = defineRasterFormat({
   id: 'probe.three-exact-schema',
   kind: 'probe',
   extension: 'PROBE_three_exact_schema',
@@ -64,7 +64,7 @@ const variant = {
   },
 } as const satisfies Variant;
 
-registerThreeRasterPlanProgram({ technique, schema, variant });
+registerThreeRasterPlanProgram({ raster: technique, schema, variant });
 
 const wrongScalar: Variant = {
   ...variant,

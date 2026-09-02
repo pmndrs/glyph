@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { RasterTextEffect } from '../raster-technique.js';
+import type { RasterTextEffect } from '../raster-format.js';
 import type { PolicyBufferId, PolicyInput, PolicyInputScope, PolicyOperation } from './render-policy.js';
 import type { PolicyBufferDeclaration, AnyTechniqueSchema } from './technique-schema.js';
 import { isTechniqueSchema } from './technique-schema.js';

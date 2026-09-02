@@ -47,7 +47,7 @@ import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { createFontCache, edit, lanes, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { findGraphemeBoundaries, findLineBreaks } from '../../dist/internal/unicode.js';
 
-const bitmap16 = { technique: bitmap, options: { strikes: [16] } };
+const bitmap16 = { raster: bitmap, options: { strikes: [16] } };
 const fonts = createFontCache({
   amiri: { file: 'amiri-bitmap-16.font.glb', raster: bitmap16 },
   inter: { file: 'inter-bitmap-16.font.glb', raster: bitmap16 },

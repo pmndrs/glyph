@@ -275,7 +275,7 @@ test('text_update advances missing clusters through an ordered font stack', asyn
       true,
     ),
     2,
-    'the fallback glyph must retain its own raster technique in the Rust render plan',
+    'the fallback glyph must retain its own raster format in the Rust render plan',
   );
   assert.equal(
     fn.planCount(),

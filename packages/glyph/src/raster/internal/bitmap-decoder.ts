@@ -19,8 +19,8 @@ import {
 } from '../../internal/raster-atlas.js';
 import { decodeRasterCoverage } from '../../internal/raster-coverage-artifact.js';
 import type { RasterDecodeArtifact } from '../../raster.js';
-import { defineRasterResourceId } from '../../raster-technique.js';
-import type { BitmapData, BitmapPageData, BitmapStrikeData } from '../bitmap-technique.js';
+import { defineRasterResourceId } from '../../raster-format.js';
+import type { BitmapData, BitmapPageData, BitmapStrikeData } from '../bitmap.js';
 
 const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE;
 const MAX_RUNTIME_TEXTURE_BYTES = 256 * 1024 * 1024;

@@ -27,7 +27,7 @@ interface TargetV1ComposeResult {
  * canonical glyph footprint while changing the paint is what proves it reuses the exported technique shader.
  */
 const composedMaterial = defineTextMaterial((context) => {
-  if (context.kind !== 'glyph' || context.technique !== bitmap.id) {
+  if (context.kind !== 'glyph' || context.format !== bitmap.id) {
     return context.createDefaultMaterial();
   }
   const material = context.createDefaultMaterial();
@@ -63,7 +63,7 @@ async function render(): Promise<TargetV1ComposeResult> {
 
     canonicalFont = await loader.loadAsync({
       input: { baked: '/fixtures/rendering/inter-bitmap-16.font.glb' },
-      raster: { technique: bitmap, options: { strikes: [16] } },
+      raster: { raster: bitmap, options: { strikes: [16] } },
     });
     canonicalText = root.createText({
       font: canonicalFont,

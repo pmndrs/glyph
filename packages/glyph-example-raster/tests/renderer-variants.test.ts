@@ -37,10 +37,10 @@ test('renderer languages share one exact portable shader contract', () => {
 
 test('a Three consumer manually registers the example TSL realization', () => {
   expect(glyphExampleTslVariant.language).toBe('tsl');
-  expect(glyphExampleTslVariant.techniqueId).toBe(glyphExamplePlanProgram.technique.id);
+  expect(glyphExampleTslVariant.techniqueId).toBe(glyphExamplePlanProgram.raster.id);
 
   const program = {
-    technique: glyphExamplePlanProgram.technique,
+    raster: glyphExamplePlanProgram.raster,
     schema: glyphExamplePlanProgram.schema,
     variant: {
       id: 'tsl',
@@ -91,7 +91,7 @@ test('a Three consumer manually registers the example TSL realization', () => {
     ['color', { scalarType: 'f32' as const, vectorWidth: 4, attribute }],
   ]);
   const material = program.variant.createMaterial({
-    technique: glyphExamplePlanProgram.technique,
+    raster: glyphExamplePlanProgram.raster,
     schema: glyphExamplePlanProgram.schema,
     variantId: 'tsl',
     language: 'tsl',
@@ -115,7 +115,7 @@ test('the TypeGPU realization matches the same contract and resolves to WGSL', (
     buffers: glyphExampleTslVariant.buffers,
   });
   expect(glyphExampleShaderContract).toMatchObject({
-    techniqueId: glyphExamplePlanProgram.technique.id,
+    techniqueId: glyphExamplePlanProgram.raster.id,
     geometry: glyphExampleSchema.render?.geometry,
     buffers: {
       origin: { id: glyphExampleSchema.buffers.origin.id, vectorWidth: glyphExampleSchema.buffers.origin.lanes.length },

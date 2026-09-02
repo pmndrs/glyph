@@ -74,7 +74,7 @@ export async function loadSlugFontAsset(
   if (delivery === 'runtime') {
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { technique: slugTechnique },
+      raster: { raster: slugTechnique },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
       library,
       ...(signal === undefined ? {} : { signal }),
@@ -93,7 +93,7 @@ export async function loadSlugFontAsset(
   const artifact = await fetchAuthenticatedGzipAsset(source.url, source, 'Slug font fixture', signal);
   const loaded = await loadBakedFont({
     artifact,
-    raster: { technique: slugTechnique },
+    raster: { raster: slugTechnique },
     library,
     ...(signal === undefined ? {} : { signal }),
   });

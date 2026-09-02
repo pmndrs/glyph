@@ -2,7 +2,7 @@ import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { Font } from '../font.js';
 import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
+import type { AnyRasterFormat } from '../raster-format.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import { compileRasterFont, resolveRasterPlanProgram, type CompiledRasterFont } from '../core/raster-plan-program.js';
 import { portableResourceIdentity, type PortableResource } from '../core/portable-resources.js';
@@ -57,9 +57,9 @@ export interface CodecRegistration {
 export type CodecFactory = (ids: RenderIdFactory) => PolicyDescriptor;
 
 /** A counted handle-local binding of one immutable font. */
-export interface HandleFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+export interface HandleFontBinding<Format extends AnyRasterFormat = AnyRasterFormat> {
   readonly [handleFontBindingBrand]: true;
-  readonly technique: Technique;
+  readonly raster: Format;
   readonly disposed: boolean;
   dispose(): void;
 }
@@ -100,8 +100,8 @@ declare const handleResourceBindingBrand: unique symbol;
 declare const handleTransformBindingBrand: unique symbol;
 
 /** @internal Runtime-owned shaping registration supplied only by GlyphEngine. */
-export interface HandleEngineFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
-  readonly technique: Technique;
+export interface HandleEngineFontBinding<Format extends AnyRasterFormat = AnyRasterFormat> {
+  readonly raster: Format;
   readonly handle: FontHandle;
   readonly identity: object;
   readonly disposed: boolean;
@@ -109,7 +109,7 @@ export interface HandleEngineFontBinding<Technique extends AnyRasterTechnique = 
 }
 
 /** @internal Engine callback installed when it constructs handle state. */
-export type HandleEngineFontBinder = <Technique extends AnyRasterTechnique>(
+export type HandleEngineFontBinder = <Technique extends AnyRasterFormat>(
   font: Font<Technique>,
 ) => HandleEngineFontBinding<Technique>;
 
@@ -295,7 +295,7 @@ interface InstalledCodecRegistration {
 
 interface RetainedHandleFontBinding {
   readonly identity: object;
-  readonly technique: AnyRasterTechnique;
+  readonly raster: AnyRasterFormat;
   readonly handle: FontBindingHandle;
   readonly engineBinding: HandleEngineFontBinding;
   readonly payloads: ReadonlyMap<number, RetainedPortablePayload>;
@@ -447,31 +447,31 @@ export class GlyphHandleState {
   }
 
   /** Binds one immutable font's shaping and portable raster resources to this handle. */
-  bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): HandleFontBinding<Technique> {
+  bindFont<Technique extends AnyRasterFormat>(font: Font<Technique>): HandleFontBinding<Technique> {
     this.#assertActive();
     if (this.#bindEngineFont === undefined) {
       throw new Error('Glyph handle state was not created by a glyph engine');
     }
     const engineBinding = this.#bindEngineFont(font);
     try {
-      const techniqueId = this.#wireIdentities.technique(font.technique);
+      const techniqueId = this.#wireIdentities.technique(font.raster);
       if (![...this.#installedCodecs].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
-        throw new TypeError(`Glyph handle state has no installed policy for "${font.technique.id}"`);
+        throw new TypeError(`Glyph handle state has no installed policy for "${font.raster.id}"`);
       }
       const existing = this.#retainedFontBindings.get(engineBinding.identity);
       if (existing !== undefined && !existing.disposed) {
-        if (existing.technique !== font.technique) throw new Error('engine font identity changed raster technique');
+        if (existing.raster !== font.raster) throw new Error('engine font identity changed raster format');
         engineBinding.dispose();
         existing.leases += 1;
         return new HandleFontBindingImpl(this, existing) as unknown as HandleFontBinding<Technique>;
       }
       const compiled = compileRasterFont(font, this.#wireIdentities);
       if (compiled === undefined) {
-        throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
+        throw new TypeError(`no portable raster plan program is registered for "${font.raster.id}"`);
       }
       const ordinal = this.#nextFontBindingOrdinal;
       const handle = this.id('font-binding', `${this.#identityNamespace}/font/${ordinal}`);
-      const payloads = this.#retainPortablePayloads(font.technique, compiled);
+      const payloads = this.#retainPortablePayloads(font.raster, compiled);
       try {
         this.registerFontBinding(handle, engineBinding.handle, compiled.binding);
       } catch (error) {
@@ -481,7 +481,7 @@ export class GlyphHandleState {
       this.#nextFontBindingOrdinal = ordinal + 1;
       const state: RetainedHandleFontBinding = {
         identity: engineBinding.identity,
-        technique: font.technique,
+        raster: font.raster,
         handle,
         engineBinding,
         payloads,
@@ -498,15 +498,15 @@ export class GlyphHandleState {
   }
 
   /** Binds an ordered immutable font stack to this handle. */
-  bindFontStack<Technique extends AnyRasterTechnique>(
+  bindFontStack<Technique extends AnyRasterFormat>(
     stack: FontStack<Technique, Font<Technique>>,
   ): HandleFontStackBinding {
     this.#assertActive();
-    const fonts = immutableFontStackFonts(stack as FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>);
+    const fonts = immutableFontStackFonts(stack as FontStack<AnyRasterFormat, Font<AnyRasterFormat>>);
     for (const font of fonts) {
-      const techniqueId = this.#wireIdentities.technique(font.technique);
+      const techniqueId = this.#wireIdentities.technique(font.raster);
       if (![...this.#installedCodecs].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
-        throw new TypeError(`Glyph handle state has no installed policy for "${font.technique.id}"`);
+        throw new TypeError(`Glyph handle state has no installed policy for "${font.raster.id}"`);
       }
     }
     const existing = this.#retainedFontStacks.get(stack);
@@ -580,7 +580,7 @@ export class GlyphHandleState {
   _retainFontStackBinding(binding: HandleFontStackBinding): Readonly<{
     handle: FontStackHandle;
     binding: HandleFontStackBinding;
-    techniques: readonly AnyRasterTechnique[];
+    techniques: readonly AnyRasterFormat[];
     dispose(): void;
   }> {
     this.#assertActive();
@@ -594,7 +594,7 @@ export class GlyphHandleState {
     return Object.freeze({
       handle: entry.state.handle,
       binding: retained,
-      techniques: Object.freeze(entry.state.bindings.map((fontBinding) => fontBinding.technique)),
+      techniques: Object.freeze(entry.state.bindings.map((fontBinding) => fontBinding.raster)),
       dispose: () => retained.dispose(),
     });
   }
@@ -988,7 +988,7 @@ export class GlyphHandleState {
   }
 
   #retainPortablePayloads(
-    technique: AnyRasterTechnique,
+    raster: AnyRasterFormat,
     compiled: CompiledRasterFont,
   ): ReadonlyMap<number, RetainedPortablePayload> {
     const resourceNames = new Map<string, string>();
@@ -1006,7 +1006,7 @@ export class GlyphHandleState {
           retained = {
             referenceId,
             identity: portableResourceIdentity(payload),
-            techniqueId: technique.id,
+            techniqueId: raster.id,
             resourceName,
             payload,
             group: undefined,
@@ -1015,7 +1015,7 @@ export class GlyphHandleState {
           };
           this.#portablePayloads.set(referenceId, retained);
         } else if (
-          retained.techniqueId !== technique.id ||
+          retained.techniqueId !== raster.id ||
           retained.resourceName !== resourceName ||
           !samePortableResource(retained.payload, payload)
         ) {
@@ -1024,7 +1024,7 @@ export class GlyphHandleState {
         retained.owners += 1;
         payloads.set(referenceId, retained);
       }
-      this.#bindPortablePayloadGroups(technique, compiled, payloads);
+      this.#bindPortablePayloadGroups(raster, compiled, payloads);
       return payloads;
     } catch (error) {
       this.#releasePortablePayloadOwners(payloads);
@@ -1033,14 +1033,14 @@ export class GlyphHandleState {
   }
 
   #bindPortablePayloadGroups(
-    technique: AnyRasterTechnique,
+    raster: AnyRasterFormat,
     compiled: CompiledRasterFont,
     payloads: ReadonlyMap<number, RetainedPortablePayload>,
   ): void {
-    const program = resolveRasterPlanProgram(technique.id);
-    if (program === undefined) throw new Error(`portable plan program "${technique.id}" is no longer registered`);
+    const program = resolveRasterPlanProgram(raster.id);
+    if (program === undefined) throw new Error(`portable plan program "${raster.id}" is no longer registered`);
     const selectedName = program.schema.render.resource;
-    if (selectedName === undefined) throw new Error(`portable plan program "${technique.id}" has no render resource`);
+    if (selectedName === undefined) throw new Error(`portable plan program "${raster.id}" has no render resource`);
     const companions: RetainedPortablePayload[] = [];
     for (const [name, keys] of compiled.declaredResources) {
       if (name === selectedName || program.schema.resources[name]?.cardinality === 'many') continue;
@@ -1296,8 +1296,8 @@ class HandleFontBindingImpl {
     this.#state = state;
   }
 
-  get technique(): AnyRasterTechnique {
-    return this.#state.technique;
+  get raster(): AnyRasterFormat {
+    return this.#state.raster;
   }
 
   get disposed(): boolean {

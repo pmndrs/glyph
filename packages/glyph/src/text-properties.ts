@@ -2,7 +2,7 @@ import type { FontFeature } from './font-feature.js';
 import type { TextInput } from './formatted-text.js';
 import type { FontSelection } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
-import type { AnyRasterTechnique } from './raster-technique.js';
+import type { AnyRasterFormat } from './raster-format.js';
 
 export interface GlyphBufferCapacity {
   readonly size: number;
@@ -118,7 +118,7 @@ export interface TextDecorationStyle {
   readonly offset?: number;
 }
 
-export interface ParagraphBaseProperties<Technique extends AnyRasterTechnique> {
+export interface ParagraphBaseProperties<Technique extends AnyRasterFormat> {
   readonly font: FontSelection<Technique>;
   /** Text shaping and presentation properties inherited by inline spans. */
   readonly style?: PropertyList<TextStyle>;
@@ -130,11 +130,11 @@ export interface ParagraphBaseProperties<Technique extends AnyRasterTechnique> {
   readonly order?: number;
 }
 
-export type ParagraphContentProperties<Technique extends AnyRasterTechnique> = Readonly<{
+export type ParagraphContentProperties<Technique extends AnyRasterFormat> = Readonly<{
   text: TextInput<Technique>;
 }>;
 
-export type ParagraphProperties<Technique extends AnyRasterTechnique> = ParagraphBaseProperties<Technique> &
+export type ParagraphProperties<Technique extends AnyRasterFormat> = ParagraphBaseProperties<Technique> &
   ParagraphContentProperties<Technique>;
 
 interface PropertyRegistry<Value extends object> {

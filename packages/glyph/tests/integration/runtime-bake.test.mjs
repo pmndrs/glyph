@@ -334,7 +334,7 @@ test('one portable source load sends its normalized ranges and complete raster t
         { start: 0x20, end: 0x7e },
       ],
     },
-    [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
+    [{ raster: bitmap, options: { strikes: [32] } }, { raster: msdf }, { raster: slug }],
   );
   t.after(() => {
     slugFont.dispose();
@@ -373,9 +373,9 @@ test('external techniques bake through their own declared baker, never the Worke
     ],
   });
   const artifact = await readFile(stubOutput);
-  const { defineRasterTechnique } = await import('@pmndrs/glyph');
+  const { defineRasterFormat } = await import('@pmndrs/glyph');
   const { workerRasterKinds } = await import('@pmndrs/glyph/runtime-bake');
-  const external = defineRasterTechnique({
+  const external = defineRasterFormat({
     id: 'test.external-route',
     kind: 'testExternal',
     extension: 'TEST_external_route',
@@ -412,7 +412,7 @@ test('external techniques bake through their own declared baker, never the Worke
         source: `data:font/ttf;base64,${Buffer.from(source).toString('base64')}`,
         runtimeBake,
       },
-      [{ technique: bitmap, options: { strikes: [32] } }, { technique: external }],
+      [{ raster: bitmap, options: { strikes: [32] } }, { raster: external }],
     ),
     /external-route-sentinel/,
     'the external technique must reach its own declared baker',

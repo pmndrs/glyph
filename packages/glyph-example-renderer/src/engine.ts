@@ -1,10 +1,4 @@
-import type {
-  AnyRasterTechnique,
-  ColorInput,
-  FontSelection,
-  GlyphRootServices,
-  GlyphTextController,
-} from '@pmndrs/glyph';
+import type { AnyRasterFormat, ColorInput, FontSelection, GlyphRootServices, GlyphTextController } from '@pmndrs/glyph';
 
 import type { ExampleDrawList } from './draw-list.js';
 import type { ExampleBindings, ExampleRootContext, ExampleTransform } from './config.js';
@@ -12,8 +6,8 @@ import type { ExampleBindings, ExampleRootContext, ExampleTransform } from './co
 const MAX_LINES = 4_096;
 
 /** Initial state for one retained example-renderer text instance. */
-export interface ExampleTextOptions<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
-  readonly font: FontSelection<Technique>;
+export interface ExampleTextOptions<Format extends AnyRasterFormat = AnyRasterFormat> {
+  readonly font: FontSelection<Format>;
   readonly text: string;
   readonly fontSize?: number;
   readonly width?: number;
@@ -24,21 +18,19 @@ export interface ExampleTextOptions<Technique extends AnyRasterTechnique = AnyRa
 }
 
 /** Desired-state changes accepted by an example-renderer text instance. */
-export type ExampleTextUpdate<Technique extends AnyRasterTechnique = AnyRasterTechnique> = Partial<
-  ExampleTextOptions<Technique>
->;
+export type ExampleTextUpdate<Format extends AnyRasterFormat = AnyRasterFormat> = Partial<ExampleTextOptions<Format>>;
 
 /** One retained Text owned by the root services supplied through GlyphConfig.root. */
-export class ExampleText<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+export class ExampleText<Format extends AnyRasterFormat = AnyRasterFormat> {
   readonly #services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>;
-  readonly #controller: GlyphTextController<Technique, ExampleBindings['materialInput'], ExampleTransform>;
+  readonly #controller: GlyphTextController<Format, ExampleBindings['materialInput'], ExampleTransform>;
   readonly #transform: ExampleTransform = Object.freeze({ kind: 'example-transform' });
-  #state: NormalizedExampleTextOptions<Technique>;
+  #state: NormalizedExampleTextOptions<Format>;
   #disposed = false;
 
   constructor(
     services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>,
-    options: ExampleTextOptions<Technique>,
+    options: ExampleTextOptions<Format>,
   ) {
     this.#services = services;
     this.#state = normalizeTextOptions(options);
@@ -49,7 +41,7 @@ export class ExampleText<Technique extends AnyRasterTechnique = AnyRasterTechniq
     return this.#state.text;
   }
 
-  update(update: ExampleTextUpdate<Technique>): void {
+  update(update: ExampleTextUpdate<Format>): void {
     this.#assertActive();
     if (typeof update !== 'object' || update === null || Array.isArray(update)) {
       throw new TypeError('example text updates must be objects');
@@ -70,7 +62,7 @@ export class ExampleText<Technique extends AnyRasterTechnique = AnyRasterTechniq
     this.#controller.dispose();
   }
 
-  #coreState(state: NormalizedExampleTextOptions<Technique>) {
+  #coreState(state: NormalizedExampleTextOptions<Format>) {
     return {
       font: state.font,
       text: state.text,
@@ -94,14 +86,14 @@ export class ExampleText<Technique extends AnyRasterTechnique = AnyRasterTechniq
   }
 }
 
-type NormalizedExampleTextOptions<Technique extends AnyRasterTechnique> = Required<
-  Omit<ExampleTextOptions<Technique>, 'font' | 'color' | 'opacity'>
+type NormalizedExampleTextOptions<Format extends AnyRasterFormat> = Required<
+  Omit<ExampleTextOptions<Format>, 'font' | 'color' | 'opacity'>
 > &
-  Pick<ExampleTextOptions<Technique>, 'font' | 'color' | 'opacity'>;
+  Pick<ExampleTextOptions<Format>, 'font' | 'color' | 'opacity'>;
 
-function normalizeTextOptions<Technique extends AnyRasterTechnique>(
-  options: ExampleTextOptions<Technique>,
-): NormalizedExampleTextOptions<Technique> {
+function normalizeTextOptions<Format extends AnyRasterFormat>(
+  options: ExampleTextOptions<Format>,
+): NormalizedExampleTextOptions<Format> {
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {
     throw new TypeError('example text options must be an object');
   }

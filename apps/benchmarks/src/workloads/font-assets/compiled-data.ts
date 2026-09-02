@@ -154,9 +154,9 @@ function compiledView(font: Font<typeof bitmap | typeof msdf | typeof slug>): {
   readonly view: CompiledRasterFontView;
 } {
   const compiled = compileRasterFont(font);
-  if (compiled === undefined) throw new TypeError(`no portable program is registered for "${font.technique.id}"`);
-  const program = resolveRasterPlanProgram(font.technique.id);
-  if (program === undefined) throw new TypeError(`no portable program is registered for "${font.technique.id}"`);
+  if (compiled === undefined) throw new TypeError(`no portable program is registered for "${font.raster.id}"`);
+  const program = resolveRasterPlanProgram(font.raster.id);
+  if (program === undefined) throw new TypeError(`no portable program is registered for "${font.raster.id}"`);
   return { compiled, view: readCompiledRasterFont(compiled, program) };
 }
 

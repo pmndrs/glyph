@@ -66,7 +66,7 @@ export const glyphExampleSchema: TechniqueSchema<
 const GLYPH_EXAMPLE_PROGRAM_VARIANT = 0;
 
 export const glyphExamplePlanProgramDefinition: RasterPlanProgram<typeof glyphExample, typeof glyphExampleSchema> = {
-  technique: glyphExample,
+  raster: glyphExample,
   schema: glyphExampleSchema,
   programVariant: GLYPH_EXAMPLE_PROGRAM_VARIANT,
   policyBody(system, _capabilities) {

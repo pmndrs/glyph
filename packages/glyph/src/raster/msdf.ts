@@ -7,12 +7,7 @@ import {
   type MsdfOptions,
 } from '../internal/msdf-contract.js';
 import { DENSE_GLYPH_RECORD_STRIDE, type RasterAtlasPage } from '../internal/raster-atlas.js';
-import {
-  defineRasterTechnique,
-  type RasterResourceId,
-  type RasterTechnique,
-  type RasterTechniqueId,
-} from '../raster-technique.js';
+import { defineRasterFormat, type RasterResourceId, type RasterFormat, type RasterFormatId } from '../raster-format.js';
 
 export {
   MSDF_EXTENSION,
@@ -58,13 +53,13 @@ export interface MsdfData {
 }
 
 /** Renderer-neutral MSDF identity, decoding, and ownership. */
-export const msdf: RasterTechnique<
-  RasterTechniqueId & 'pmndrs.msdf',
+export const msdf: RasterFormat<
+  RasterFormatId & 'pmndrs.msdf',
   typeof MSDF_KIND,
   MsdfOptions | undefined,
   MsdfDescriptor,
   MsdfData
-> = defineRasterTechnique({
+> = defineRasterFormat({
   id: 'pmndrs.msdf',
   kind: MSDF_KIND,
   extension: MSDF_EXTENSION,
@@ -200,7 +195,7 @@ export const msdfSchema: TechniqueSchema<
 });
 
 export const msdfPlanProgram: RasterPlanProgram<typeof msdf, typeof msdfSchema> = registerGlyphRasterPlanProgram({
-  technique: msdf,
+  raster: msdf,
   schema: msdfSchema,
   policyBody(system) {
     const p = techniqueProgram(msdfSchema, { textEffects: msdf.textEffects, system });

@@ -1,6 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { Font } from '../font.js';
-import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
+import type { AnyRasterFormat, RasterResourceId } from '../raster-format.js';
 import {
   assertRenderIdFactory,
   RenderIdScope,
@@ -59,12 +59,12 @@ export interface FontBindingDescriptor {
 
 /** Compile one immutable font's binding bytes; portable resources are dropped from this byte-only projection. */
 export function fontBindingBytes(
-  font: Font<AnyRasterTechnique>,
+  font: Font<AnyRasterFormat>,
   identities: RenderIdFactory = new RenderIdScope(),
 ): Uint8Array {
   const compiled = compileRasterFont(font, identities);
   if (compiled !== undefined) return compiled.binding;
-  throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
+  throw new TypeError(`no portable raster plan program is registered for "${font.raster.id}"`);
 }
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {

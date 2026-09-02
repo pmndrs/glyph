@@ -4,7 +4,7 @@ import {
   type GlyphEngineFault,
   type GlyphEngineStatusCode,
 } from '../index.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
+import type { AnyRasterFormat } from '../raster-format.js';
 import type { Text, TextSpan } from './text.js';
 
 /**
@@ -14,7 +14,7 @@ import type { Text, TextSpan } from './text.js';
  * meaningful to a consumer. They are resolved here into the objects the consumer actually wrote:
  * the `Text` and, when one span owns the cause, that span together with its index in `Text.spans`.
  */
-export type TextFrameSubject<Technique extends AnyRasterTechnique = AnyRasterTechnique> =
+export type TextFrameSubject<Technique extends AnyRasterFormat = AnyRasterFormat> =
   | Readonly<{ kind: 'span'; text: Text<Technique>; index: number; span: TextSpan<Technique> }>
   | Readonly<{ kind: 'paragraph'; text: Text<Technique> }>
   | Readonly<{ kind: 'unattributed' }>;
@@ -25,7 +25,7 @@ export type TextFrameSubject<Technique extends AnyRasterTechnique = AnyRasterTec
  * `engine` is the residual: a status the engine does not classify further, including every internal
  * invariant violation. Treat it as a defect report rather than something to correct in the input.
  */
-export type TextFrameRejection<Technique extends AnyRasterTechnique = AnyRasterTechnique> =
+export type TextFrameRejection<Technique extends AnyRasterFormat = AnyRasterFormat> =
   /** A span's `[start, end)` is inverted, reaches past the text, or splits a UTF-16 surrogate pair. */
   | Readonly<{ cause: 'span-range'; subject: TextFrameSubject<Technique> }>
   /** A style boundary falls inside an extended grapheme cluster. */

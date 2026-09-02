@@ -55,7 +55,7 @@ try {
       import { glyphExampleTslVariant } from '@pmndrs/glyph-example-raster/tsl';
 
       registerThreeRasterPlanProgram({
-        technique: glyphExamplePlanProgram.technique,
+        raster: glyphExamplePlanProgram.raster,
         schema: glyphExamplePlanProgram.schema,
         variant: {
           ...glyphExampleTslVariant,

@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test, { after, before } from 'node:test';
 
-import { FontLoader, FontLoadError, FontRegistry } from '../../dist/loader.js';
+import { createFontLibrary, FontLoader, FontLoadError, FontRegistry, openFontFaceSource } from '../../dist/loader.js';
+import { immutableFontResources } from '../../dist/loaded-font.js';
+import { bitmap } from '../../dist/raster/bitmap.js';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
@@ -437,6 +439,47 @@ test('external raster loading resolves relative to the baked core and authentica
     otherRegistry.attachRaster(otherFont, embeddedBytes),
     (error) => error instanceof FontLoadError && error.code === 'RASTER_ARTIFACT_HASH',
   );
+});
+
+test('FontFace source leases share one canonical main and lazily loaded sidecar dependency graph', async () => {
+  const calls = [];
+  const coreUrl = 'https://assets.test/generated/Inter-Regular.font.glb';
+  const rasterUrl = `https://assets.test/generated/${externalRasterId}`;
+  const library = createFontLibrary({
+    fetch: fixtureFetch(
+      new Map([
+        [coreUrl, externalCoreBytes],
+        [rasterUrl, externalRasterBytes],
+      ]),
+      calls,
+    ),
+  });
+
+  const [first, second] = await Promise.all([
+    openFontFaceSource(library, { baked: `${coreUrl}#first` }, []),
+    openFontFaceSource(library, new URL(`${coreUrl}#second`), []),
+  ]);
+  assert.deepEqual(calls, [coreUrl]);
+  assert.deepEqual(first.formats, ['bitmap']);
+  assert.equal(first.formats, second.formats);
+  assert.equal(Object.isFrozen(first.formats), true);
+
+  const request = bitmap({ strikes: [16] });
+  const [firstFont, secondFont] = await Promise.all([first.load(request), second.load(request)]);
+  assert.deepEqual(calls, [coreUrl, rasterUrl]);
+  assert.equal(immutableFontResources(firstFont).font, immutableFontResources(secondFont).font);
+
+  firstFont.dispose();
+  first.dispose();
+  assert.equal(secondFont.disposed, false);
+  assert.equal(secondFont.glyphCount, 2937);
+  secondFont.dispose();
+  second.dispose();
+
+  const replacement = await openFontFaceSource(library, coreUrl, []);
+  assert.deepEqual(calls, [coreUrl, rasterUrl, coreUrl]);
+  replacement.dispose();
+  library.dispose();
 });
 
 test('registries isolate generations, own their bytes, enforce limits, and invalidate disposal', async () => {

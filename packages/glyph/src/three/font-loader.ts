@@ -13,7 +13,7 @@ import {
   type RuntimeFontBake,
 } from '../loader.js';
 import { glyphFontLibrary } from '../glyph.js';
-import type { AnyRasterTechnique, RasterTechniqueInput } from '../raster-technique.js';
+import type { AnyRasterFormat, RasterFormatInput } from '../raster-format.js';
 
 export interface ThreeFontLoaderOptions {
   readonly runtimeBake?: RuntimeFontBake;
@@ -22,14 +22,14 @@ export interface ThreeFontLoaderOptions {
 }
 
 /** Font request accepted by the Three LoadingManager adapter, with cancellation. */
-export interface ThreeFontLoadRequest<Technique extends AnyRasterTechnique> {
+export interface ThreeFontLoadRequest<Technique extends AnyRasterFormat> {
   readonly input: LoadFontInput;
-  readonly raster: RasterTechniqueInput<Technique>;
+  readonly raster: RasterFormatInput<Technique>;
   readonly signal?: AbortSignal;
 }
 
 /** Three loading-manager adapter that returns canonical root-package Font values. */
-export class FontLoader extends THREE.Loader<Font<AnyRasterTechnique>, ThreeFontLoadRequest<AnyRasterTechnique>> {
+export class FontLoader extends THREE.Loader<Font<AnyRasterFormat>, ThreeFontLoadRequest<AnyRasterFormat>> {
   readonly #options: ThreeFontLoaderOptions;
   readonly #library: FontLibrary;
   #disposed = false;
@@ -44,7 +44,7 @@ export class FontLoader extends THREE.Loader<Font<AnyRasterTechnique>, ThreeFont
     this.#library = options.library ?? glyphFontLibrary();
   }
 
-  override load<Technique extends AnyRasterTechnique>(
+  override load<Technique extends AnyRasterFormat>(
     request: ThreeFontLoadRequest<Technique>,
     onLoad: (font: Font<Technique>) => void,
     _onProgress?: (event: ProgressEvent) => void,
@@ -70,7 +70,7 @@ export class FontLoader extends THREE.Loader<Font<AnyRasterTechnique>, ThreeFont
     );
   }
 
-  override loadAsync<Technique extends AnyRasterTechnique>(
+  override loadAsync<Technique extends AnyRasterFormat>(
     request: ThreeFontLoadRequest<Technique>,
     onProgress?: (event: ProgressEvent) => void,
   ): Promise<Font<Technique>> {
@@ -110,9 +110,7 @@ export class FontLoader extends THREE.Loader<Font<AnyRasterTechnique>, ThreeFont
     this.#disposed = true;
   }
 
-  async #load<Technique extends AnyRasterTechnique>(
-    request: ThreeFontLoadRequest<Technique>,
-  ): Promise<Font<Technique>> {
+  async #load<Technique extends AnyRasterFormat>(request: ThreeFontLoadRequest<Technique>): Promise<Font<Technique>> {
     const { input, raster, signal } = request;
     signal?.throwIfAborted();
     const normalizedInput = normalizeInput(input, this.#options.runtimeBake);
@@ -142,7 +140,7 @@ function normalizeInput(input: LoadFontInput, runtimeBake: RuntimeFontBake | und
   return input;
 }
 
-function assertThreeFontLoadRequest(value: unknown): asserts value is ThreeFontLoadRequest<AnyRasterTechnique> {
+function assertThreeFontLoadRequest(value: unknown): asserts value is ThreeFontLoadRequest<AnyRasterFormat> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TypeError('Three font load request must be an object');
   }
@@ -153,7 +151,7 @@ function assertThreeFontLoadRequest(value: unknown): asserts value is ThreeFontL
   fontLoadSignal(signal === undefined ? {} : { signal });
 }
 
-function requestUrl<Technique extends AnyRasterTechnique>(request: ThreeFontLoadRequest<Technique>): string {
+function requestUrl<Technique extends AnyRasterFormat>(request: ThreeFontLoadRequest<Technique>): string {
   return requestInputUrl(request.input);
 }
 

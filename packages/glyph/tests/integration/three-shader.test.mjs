@@ -24,7 +24,7 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: { bytes: await readFile(fontUrl) } },
-    raster: { technique: bitmap, options: { strikes: [16] } },
+    raster: { raster: bitmap, options: { strikes: [16] } },
   });
   const built = [];
   const material = defineTextMaterial((context) => {
@@ -44,7 +44,7 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
   assert.equal(built.length, 1, 'the material factory must run once for one retained realization');
   const { context, material: realized } = built[0];
   assert.equal(context.kind, 'glyph');
-  assert.equal(context.technique, bitmap.id);
+  assert.equal(context.format, bitmap.id);
   assert.deepEqual(Object.keys(context.shader).sort(), [
     'atlasUv',
     'clipPosition',
@@ -73,11 +73,11 @@ test('the same custom material factory may override a separate decoration realiz
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: { bytes: await readFile(fontUrl) } },
-    raster: { technique: bitmap, options: { strikes: [16] } },
+    raster: { raster: bitmap, options: { strikes: [16] } },
   });
   const realizations = [];
   const material = defineTextMaterial((context) => {
-    realizations.push(context.kind === 'glyph' ? context.technique : context.kind);
+    realizations.push(context.kind === 'glyph' ? context.format : context.kind);
     const realized = context.createDefaultMaterial();
     if (context.kind === 'decoration') realized.colorNode = context.shader.color.mul(0.5);
     return realized;
@@ -108,7 +108,7 @@ test('Bitmap pixel snapping is an explicit opt-in graph specialization', async (
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: { bytes: await readFile(fontUrl) } },
-    raster: { technique: bitmap, options: { strikes: [16] } },
+    raster: { raster: bitmap, options: { strikes: [16] } },
   });
   const clipPositions = [];
   const material = defineTextMaterial((context) => {

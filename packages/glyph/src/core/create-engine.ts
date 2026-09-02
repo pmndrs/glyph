@@ -124,7 +124,7 @@ class CommandBindingEngine<Bindings extends AnyGlyphBindings, Root> implements G
           try {
             const companions = new Map(payload.resources.map((entry) => [entry.resourceName, entry.payload]));
             lease = this.#config.resolve({
-              technique: payload.techniqueId,
+              format: payload.techniqueId,
               resourceKind: String(record.resourceKind),
               resourceName: payload.resourceName,
               payload: payload.payload,

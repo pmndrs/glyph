@@ -47,7 +47,7 @@ export interface RasterSelection<Kind extends string = string> {
   readonly kind?: Kind;
 }
 
-/** Immutable artifact reader exposed to a raster technique during decode. */
+/** Immutable artifact reader exposed to a raster format during decode. */
 export interface RasterDecodeArtifact<Kind extends string = string> {
   readonly rasterKey: RasterKey;
   readonly kind: Kind;

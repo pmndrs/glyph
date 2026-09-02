@@ -1,5 +1,5 @@
 /**
- * The single authority for a raster technique's physical shape. A schema declares —
+ * The single authority for a Codec program family's physical shape. A schema declares —
  * once, colocated with the technique — the buffer ids, scalar kinds, and lane
  * meanings that its policy programs produce and its shader realizations consume,
  * plus the portable render contract: named resources and declared geometry.
@@ -7,7 +7,7 @@
  * derive from the declaration; none of them restate it.
  */
 
-import type { RasterTechniqueId } from '../raster-technique.js';
+import type { RasterFormatId } from '../raster-format.js';
 import {
   assertPortableVertexSemantic,
   portableTextureFormats,
@@ -286,7 +286,7 @@ type DefinedTechniqueResources<Resources> = Resources extends TechniqueResourceD
   : NoTechniqueResources;
 /** Validate and freeze one technique's authoritative schema. */
 export function defineTechniqueSchema<
-  const TechniqueId extends RasterTechniqueId | string,
+  const TechniqueId extends RasterFormatId | string,
   const Buffers extends PolicyBufferDeclarations,
   const Binding extends TechniqueBindingDeclaration,
   const Resources = NoTechniqueResources,

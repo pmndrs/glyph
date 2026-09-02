@@ -17,14 +17,14 @@ afterEach(async () => {
 });
 
 /**
- * The published external contract, end to end: an external technique's raster
+ * The published external contract, end to end: an external raster format
  * never rides the Worker font-bake plan and instead bakes host-side through
  * the baker its own declaration names. The stub stands in for the Worker and
  * enforces its real contract by rejecting any kind outside the declared set;
  * it returns a core artifact baked from the same source so the host-side
  * attachment passes the provenance check.
  */
-test('the example technique bakes host-side while the Worker plan stays first-party', async () => {
+test('the example raster format bakes host-side while the Worker plan stays first-party', async () => {
   const source = await readFile(new URL('Inter-Regular.ttf', fixtureDirectory));
   const outputRoot = await mkdtemp(join(tmpdir(), 'glyph-example-routing-'));
   cleanups.push(() => rm(outputRoot, { recursive: true, force: true }));
@@ -52,7 +52,7 @@ test('the example technique bakes host-side while the Worker plan stays first-pa
       source: `data:font/ttf;base64,${source.toString('base64')}`,
       runtimeBake,
     },
-    [{ technique: glyphExample, options: { paletteSeed: 17, inset: 0.1 } }],
+    [{ raster: glyphExample, options: { paletteSeed: 17, inset: 0.1 } }],
   );
 
   assert.equal(requests.length, 1, 'the source load bakes its core through the Worker path once');
@@ -61,7 +61,7 @@ test('the example technique bakes host-side while the Worker plan stays first-pa
     [],
     'the Worker plan carries no external kinds',
   );
-  assert.equal(example.technique, glyphExample);
+  assert.equal(example.raster, glyphExample);
   assert.ok(example.glyphCount > 0, 'the external raster decodes from its host-baked artifact');
   example.dispose();
 });

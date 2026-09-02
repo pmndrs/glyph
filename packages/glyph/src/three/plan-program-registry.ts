@@ -14,7 +14,7 @@ import {
   type TechniqueResourceDeclarations,
   type RenderPlanScalarType,
 } from '../index.js';
-import { isRasterTechnique, type AnyRasterTechnique } from '../raster-technique.js';
+import { isRasterFormat, type AnyRasterFormat } from '../raster-format.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { threeCodecCapabilitySet, threeSystemBuffers } from './codec.js';
 
@@ -27,8 +27,8 @@ export interface ThreePlanProgramBuffer {
 export interface ThreePlanProgramMaterialContext {
   /** Publication root selected by the configured Three handle. */
   readonly root: ThreeRootContext;
-  /** Portable technique selected for this draw. */
-  readonly technique: AnyRasterTechnique;
+  /** Portable raster selected for this draw. */
+  readonly raster: AnyRasterFormat;
   /** The portable schema selected for this draw. */
   readonly schema: AnyTechniqueSchema;
   /** The selected renderer variant's stable identity. */
@@ -96,14 +96,14 @@ export interface ThreeRasterPlanVariant<Schema extends AnyTechniqueSchema = AnyT
   createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
 }
 
-export interface ThreeRasterPlanProgram<Technique extends AnyRasterTechnique, Schema extends AnyTechniqueSchema> {
-  readonly technique: Technique;
+export interface ThreeRasterPlanProgram<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema> {
+  readonly raster: Technique;
   readonly schema: Schema & { readonly technique: Technique['id'] };
   readonly variant: NoInfer<ThreeRasterPlanVariant<Schema>>;
 }
 
 export interface CompiledThreeRasterPlanProgram {
-  readonly technique: AnyRasterTechnique;
+  readonly raster: AnyRasterFormat;
   readonly schema: AnyTechniqueSchema;
   readonly variant: ThreeRasterPlanVariant;
   readonly techniqueId: number;
@@ -112,8 +112,8 @@ export interface CompiledThreeRasterPlanProgram {
   createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
 }
 
-const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
-const registeredSources = new WeakMap<object, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
+const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>>();
+const registeredSources = new WeakMap<object, ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>>();
 const snapshotsByRegistry = new WeakMap<CodecIdFactory, WeakRef<CodecIdFactory>[]>();
 const snapshotReferences = new Set<WeakRef<CodecIdFactory>>();
 const snapshotFinalizer = new FinalizationRegistry<WeakRef<CodecIdFactory>>((reference) => {
@@ -129,15 +129,15 @@ const THREE_RESERVED_ATTRIBUTE_WIDTHS: Readonly<Record<string, readonly number[]
 
 /** Register only the renderer-specific resource and material half of a portable program. */
 export function registerThreeRasterPlanProgram<
-  const Technique extends AnyRasterTechnique,
+  const Technique extends AnyRasterFormat,
   const Schema extends AnyTechniqueSchema,
 >(program: ThreeRasterPlanProgram<Technique, Schema>): void {
   if (typeof program !== 'object' || program === null || Array.isArray(program)) {
     throw new TypeError('Three raster plan programs need a program object');
   }
   const source = program as ThreeRasterPlanProgram<Technique, Schema> & Record<string, unknown>;
-  const technique = source.technique;
-  const techniqueId = isRasterTechnique(technique) ? technique.id : undefined;
+  const technique = source.raster;
+  const techniqueId = isRasterFormat(technique) ? technique.id : undefined;
   if (typeof techniqueId !== 'string' || techniqueId.length === 0) {
     throw new TypeError('Three raster plan programs need a technique with a nonempty id');
   }
@@ -166,9 +166,9 @@ export function registerThreeRasterPlanProgram<
   }
   const registered = registeredSources.get(program as object);
   if (registered !== undefined) {
-    if (registered.technique.id !== techniqueId || registered.variant.id !== variantId) {
+    if (registered.raster.id !== techniqueId || registered.variant.id !== variantId) {
       throw new TypeError(
-        `Three raster plan program source changed identity from "${registered.technique.id}/${registered.variant.id}" to "${techniqueId}/${variantId}"`,
+        `Three raster plan program source changed identity from "${registered.raster.id}/${registered.variant.id}" to "${techniqueId}/${variantId}"`,
       );
     }
     return;
@@ -182,7 +182,7 @@ export function registerThreeRasterPlanProgram<
   const resources = normalizeResourceCapabilities(techniqueId, variantId, variant.resources, portable.schema);
   const outputs = normalizeOutputs(techniqueId, variantId, variant.outputs);
   const snapshot = Object.freeze({
-    technique: portable.technique,
+    raster: portable.raster,
     schema: portable.schema,
     variant: Object.freeze({
       id: variantId,
@@ -193,7 +193,7 @@ export function registerThreeRasterPlanProgram<
       geometry: expectedGeometry,
       createMaterial,
     }),
-  }) as ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>;
+  }) as ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>;
   const existing = programs.get(techniqueId);
   if (existing !== undefined) {
     throw new TypeError(
@@ -216,7 +216,7 @@ export function compiledThreeRasterPlanPrograms(
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct' = 'indexed',
 ): readonly CompiledThreeRasterPlanProgram[] {
-  const selected = [...programs.values()].sort((left, right) => left.technique.id.localeCompare(right.technique.id));
+  const selected = [...programs.values()].sort((left, right) => left.raster.id.localeCompare(right.raster.id));
   const compiled = selected.map((program) => compileProgram(program, identities, transformMode));
   const reference = new WeakRef(identities);
   const references = snapshotsByRegistry.get(identities) ?? [];
@@ -237,7 +237,7 @@ export function assertThreeGeometryPayload(
   const payload = resources.get(geometry.resource);
   if (payload?.kind !== 'geometry') {
     throw new TypeError(
-      `Three raster variant "${program.technique.id}/${program.variant.id}" needs geometry resource "${geometry.resource}"`,
+      `Three raster variant "${program.raster.id}/${program.variant.id}" needs geometry resource "${geometry.resource}"`,
     );
   }
   for (const attribute of payload.attributes) {
@@ -246,7 +246,7 @@ export function assertThreeGeometryPayload(
       throw new TypeError(`portable geometry attribute "${attribute.semantic}" has no accessor`);
     }
     assertThreeAttributeWidth(
-      program.technique.id,
+      program.raster.id,
       program.variant.id,
       attribute.semantic,
       accessor.components,
@@ -288,13 +288,13 @@ export const threeCodecAbi: ThreeCodecAbi = Object.freeze({
 });
 
 function compileProgram(
-  program: ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>,
+  program: ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>,
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterPlanProgram {
-  const portable = resolveRasterPlanProgram(program.technique.id);
+  const portable = resolveRasterPlanProgram(program.raster.id);
   if (portable === undefined)
-    throw new Error(`no portable raster plan program is registered for "${program.technique.id}"`);
+    throw new Error(`no portable raster plan program is registered for "${program.raster.id}"`);
   const system = transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
   const codec = createRasterCodecProgram(portable, {
     namespace: 'three',
@@ -305,7 +305,7 @@ function compileProgram(
     ids: identities,
   });
   return {
-    technique: program.technique,
+    raster: program.raster,
     schema: portable.schema,
     variant: program.variant,
     techniqueId: codec.techniqueId,

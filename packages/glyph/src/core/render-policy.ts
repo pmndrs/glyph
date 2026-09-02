@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
+import type { AnyRasterFormat, RasterResourceId } from '../raster-format.js';
 
 const MAX_U32 = 0xffff_ffff;
 
@@ -404,16 +404,16 @@ function renderWireId(identity: string): number {
   }
   let hash = 0x811c_9dc5;
   for (const byte of encoder.encode(identity)) hash = Math.imul(hash ^ byte, 0x0100_0193) >>> 0;
-  if (hash === 0) throw new RangeError('raster technique ID hashes to the reserved zero wire identity');
+  if (hash === 0) throw new RangeError('render program family ID hashes to the reserved zero wire identity');
   return hash;
 }
 
 /** Collision-checked render identities used while assembling policy programs and font bindings. */
 export interface RenderIdFactory {
-  /** Derive the stable wire identity of one portable raster technique. */
-  technique(technique: AnyRasterTechnique | string): RenderTechniqueId;
+  /** Derive the stable wire identity of one Codec program family. */
+  technique(technique: AnyRasterFormat | string): RenderTechniqueId;
   /** Derive one renderer program identity, optionally naming a variant. */
-  program(technique: AnyRasterTechnique | string, namespace: string, variant?: string): RenderProgramId;
+  program(technique: AnyRasterFormat | string, namespace: string, variant?: string): RenderProgramId;
   /** Derive the wire identity of one authored baked-resource key. */
   resource(resource: RasterResourceId): RenderResourceId;
 }
@@ -438,11 +438,11 @@ export class RenderIdScope implements RenderIdFactory {
     return wireId;
   }
 
-  technique(technique: AnyRasterTechnique | string): RenderTechniqueId {
+  technique(technique: AnyRasterFormat | string): RenderTechniqueId {
     return this.idFor(rasterTechniqueIdentity(technique)) as RenderTechniqueId;
   }
 
-  program(technique: AnyRasterTechnique | string, namespace: string, variant = 'default'): RenderProgramId {
+  program(technique: AnyRasterFormat | string, namespace: string, variant = 'default'): RenderProgramId {
     return this.idFor(programWireKey(technique, namespace, variant)) as RenderProgramId;
   }
 
@@ -516,8 +516,8 @@ const authoredId = Object.assign(
     exclusion: (name: string) => permanentGlyphId('exclusion', name),
     inlineObject: (name: string) => permanentGlyphId('inline-object', name),
     resourceHandle: (name: string) => permanentGlyphId('resource', name),
-    technique: (technique: AnyRasterTechnique | string) => permanentRenderIds.technique(technique),
-    program: (technique: AnyRasterTechnique | string, namespace: string, variant = 'default') =>
+    technique: (technique: AnyRasterFormat | string) => permanentRenderIds.technique(technique),
+    program: (technique: AnyRasterFormat | string, namespace: string, variant = 'default') =>
       permanentRenderIds.program(technique, namespace, variant),
     resource: (resource: RasterResourceId) => permanentRenderIds.resource(resource),
   },
@@ -527,7 +527,7 @@ renderIdFactories.add(authoredId);
 /** Derive a collision-checked, branded numeric ID from a stable authored name. */
 export const id: IdFactory = Object.freeze(authoredId);
 
-function programWireKey(technique: AnyRasterTechnique | string, namespace: string, variant: string): string {
+function programWireKey(technique: AnyRasterFormat | string, namespace: string, variant: string): string {
   if (typeof namespace !== 'string' || namespace.length === 0) {
     throw new TypeError('render program namespace must be a nonempty string');
   }
@@ -537,7 +537,7 @@ function programWireKey(technique: AnyRasterTechnique | string, namespace: strin
   return JSON.stringify(['glyph-program-v1', rasterTechniqueIdentity(technique), namespace, variant]);
 }
 
-function rasterTechniqueIdentity(technique: AnyRasterTechnique | string): string {
+function rasterTechniqueIdentity(technique: AnyRasterFormat | string): string {
   const identity = typeof technique === 'string' ? technique : technique?.id;
   if (typeof identity !== 'string' || identity.length === 0) {
     throw new TypeError('render technique identity must be a nonempty string');

@@ -1,6 +1,6 @@
-import { bitmap, type BitmapData, type BitmapTechniqueOptions } from '../../src/raster/bitmap-technique.js';
+import { bitmap, type BitmapData, type BitmapFormatOptions } from '../../src/raster/bitmap.js';
 import { msdf, type MsdfData } from '../../src/raster/msdf.js';
-import { slug, type SlugData } from '../../src/raster/slug-technique.js';
+import { slug, type SlugData } from '../../src/raster/slug.js';
 import type { RasterDataOf, RasterOptionsOf } from '../../src/index.js';
 
 type Equal<Left, Right> =
@@ -8,6 +8,6 @@ type Equal<Left, Right> =
 type Expect<Value extends true> = Value;
 
 type _BitmapData = Expect<Equal<RasterDataOf<typeof bitmap>, BitmapData>>;
-type _BitmapOptions = Expect<Equal<RasterOptionsOf<typeof bitmap>, BitmapTechniqueOptions>>;
+type _BitmapOptions = Expect<Equal<RasterOptionsOf<typeof bitmap>, BitmapFormatOptions>>;
 type _MsdfData = Expect<Equal<RasterDataOf<typeof msdf>, MsdfData>>;
 type _SlugData = Expect<Equal<RasterDataOf<typeof slug>, SlugData>>;

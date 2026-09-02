@@ -15,7 +15,7 @@ const METRICS = Object.freeze({
   strikeoutSize: 50,
 });
 
-export function immutableTestFont(technique, data = {}, glyphCount = 2) {
+export function immutableTestFont(format, data = {}, glyphCount = 2) {
   const registered = {
     glyphCount,
     metrics: METRICS,
@@ -24,7 +24,7 @@ export function immutableTestFont(technique, data = {}, glyphCount = 2) {
   const backing = createImmutableFontBacking(registered);
   const variant = createImmutableFontVariant({
     backing,
-    technique,
+    format,
     raster: { dispose() {} },
     data,
   });

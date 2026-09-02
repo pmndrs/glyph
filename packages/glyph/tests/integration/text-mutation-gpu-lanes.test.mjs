@@ -7,7 +7,7 @@
  * record slot holding its pre-edit occupant therefore passes every engine-side check while
  * rendering the wrong glyph, which is exactly the defect this file exists to catch.
  *
- * This file owns the Latin corpus and the three raster techniques. The differential oracle it
+ * This file owns the Latin corpus and the three raster formats. The differential oracle it
  * asserts lives in `../support/text-mutation-lanes.mjs`, shared with the script-topology and span
  * files so the invariant cannot drift between them.
  *
@@ -51,9 +51,9 @@ const style = { fontSize: 6, lineHeight: 1 };
 const paint = { color: '#ffffff' };
 
 const TECHNIQUES = {
-  bitmap: { file: 'inter-bitmap-16.font.glb', raster: { technique: bitmap, options: { strikes: [16] } } },
-  msdf: { file: 'inter-mtsdf.font.glb.gz', raster: { technique: msdf } },
-  slug: { file: 'inter-slug.font.glb.gz', raster: { technique: slug } },
+  bitmap: { file: 'inter-bitmap-16.font.glb', raster: { raster: bitmap, options: { strikes: [16] } } },
+  msdf: { file: 'inter-mtsdf.font.glb.gz', raster: { raster: msdf } },
+  slug: { file: 'inter-slug.font.glb.gz', raster: { raster: slug } },
 };
 
 const fonts = createFontCache(TECHNIQUES);

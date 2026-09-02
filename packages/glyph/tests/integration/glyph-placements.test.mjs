@@ -19,7 +19,7 @@ async function loadFont() {
   loader = new FontLoader();
   loaded = await loader.loadAsync({
     input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
-    raster: { technique: bitmap, options: { strikes: [16, 32] } },
+    raster: { raster: bitmap, options: { strikes: [16, 32] } },
   });
   return loaded;
 }

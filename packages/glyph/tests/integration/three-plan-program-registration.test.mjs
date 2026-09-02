@@ -17,7 +17,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { defineRasterTechnique, glyph } from '@pmndrs/glyph';
+import { defineRasterFormat, glyph } from '@pmndrs/glyph';
 import { registerThreeRasterPlanProgram, ThreeConfig } from '@pmndrs/glyph/three';
 import {
   defineTechniqueGeometryKind,
@@ -44,7 +44,7 @@ const portablePrograms = new Map();
 const planProgram = (techniqueIdentity, declaration = {}) => {
   let portable = portablePrograms.get(techniqueIdentity);
   if (portable === undefined) {
-    const technique = defineRasterTechnique({
+    const technique = defineRasterFormat({
       id: techniqueIdentity,
       kind: 'test',
       extension: 'TEST_raster',
@@ -71,9 +71,9 @@ const planProgram = (techniqueIdentity, declaration = {}) => {
       resources,
       render,
     });
-    portable = { technique, schema };
+    portable = { raster: technique, schema };
     registerRasterPlanProgram({
-      technique,
+      raster: technique,
       schema,
       policyBody(system) {
         const program = techniqueProgram(schema, { system });
@@ -107,7 +107,7 @@ const planProgram = (techniqueIdentity, declaration = {}) => {
     ]),
   );
   return {
-    technique: portable.technique,
+    raster: portable.raster,
     schema: portable.schema,
     variant: {
       id: 'test',
@@ -213,7 +213,7 @@ test('variant registration rejects incompatible capabilities before an engine ex
 
   const witnessed = planProgram('test-wrong-schema-witness');
   witnessed.schema = defineTechniqueSchema({
-    technique: witnessed.technique.id,
+    technique: witnessed.raster.id,
     scope: 'glyph',
     binding: {},
     buffers: {},
@@ -222,7 +222,7 @@ test('variant registration rejects incompatible capabilities before an engine ex
 
   assert.throws(() => {
     const anchor = planProgram('test-portable-registration-anchor');
-    const unregisteredTechnique = defineRasterTechnique({
+    const unregisteredTechnique = defineRasterFormat({
       id: 'test-no-portable',
       kind: 'test',
       extension: 'TEST_raster',
@@ -236,16 +236,16 @@ test('variant registration rejects incompatible capabilities before an engine ex
     });
     registerThreeRasterPlanProgram({
       ...anchor,
-      technique: unregisteredTechnique,
+      raster: unregisteredTechnique,
     });
   }, /no portable raster plan program is registered/);
 });
 
 test('registration selects one renderer variant per technique before engine construction', async () => {
   const primary = planProgram('test-variant-selection');
-  const unsupported = planProgram('test-portable-without-three').technique;
+  const unsupported = planProgram('test-portable-without-three').raster;
   const secondary = {
-    technique: primary.technique,
+    raster: primary.raster,
     schema: primary.schema,
     variant: { ...primary.variant, id: 'second' },
   };
@@ -292,7 +292,7 @@ test('a technique registered after an engine exists is refused, not silently dro
 });
 
 test('engine construction rejects a portable body compiled for different system lanes', async () => {
-  const technique = defineRasterTechnique({
+  const technique = defineRasterFormat({
     id: 'test-wrong-system-lanes',
     kind: 'test',
     extension: 'TEST_raster',
@@ -313,7 +313,7 @@ test('engine construction rejects a portable body compiled for different system 
     render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
   });
   const portable = registerRasterPlanProgram({
-    technique,
+    raster: technique,
     schema,
     policyBody() {
       const authoring = techniqueProgram(schema, {
@@ -327,7 +327,7 @@ test('engine construction rejects a portable body compiled for different system 
     compileFont() {},
   });
   registerThreeRasterPlanProgram({
-    technique: portable.technique,
+    raster: portable.raster,
     schema: portable.schema,
     variant: {
       id: 'test',
@@ -355,7 +355,7 @@ async function fontForTechnique(technique) {
   );
   const variant = createImmutableFontVariant({
     backing: createImmutableFontBacking(registered),
-    technique,
+    format: technique,
     raster: { dispose() {} },
     data: {},
   });

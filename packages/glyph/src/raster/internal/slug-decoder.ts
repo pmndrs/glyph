@@ -18,8 +18,8 @@ import {
   SLUG_PLANE_UNITS_PER_EM,
 } from '../../internal/slug-contract.js';
 import type { JsonValue, RasterDecodeArtifact, RasterResourceSource } from '../../raster.js';
-import { defineRasterResourceId } from '../../raster-technique.js';
-import type { SlugData, SlugPageData } from '../slug-technique.js';
+import { defineRasterResourceId } from '../../raster-format.js';
+import type { SlugData, SlugPageData } from '../slug.js';
 
 const ABSENT_PAGE = 0xffff;
 const MAX_TEXTURE_DIMENSION = 16_384;

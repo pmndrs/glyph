@@ -1,4 +1,4 @@
-import type { AnyRasterTechnique, Font, FontLibrary } from '@pmndrs/glyph';
+import type { AnyRasterFormat, Font, FontLibrary } from '@pmndrs/glyph';
 
 import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
 
@@ -7,7 +7,7 @@ export interface LiveFontFixtureUpdate {
 }
 
 export interface RetainedFontFixtureAsset {
-  readonly font: Font<AnyRasterTechnique>;
+  readonly font: Font<AnyRasterFormat>;
 }
 
 export interface RetainedFontFixtureState<Asset extends RetainedFontFixtureAsset> {

@@ -10,7 +10,7 @@ import {
   createImmutableFontVariant,
 } from '../../dist/loaded-font.js';
 import { FontRegistry } from '../../dist/loader.js';
-import { defineRasterResourceId, defineRasterTechnique } from '../../dist/raster-technique.js';
+import { defineRasterResourceId, defineRasterFormat } from '../../dist/raster-format.js';
 import { markStorageAttributeUpdated } from '../../dist/three/engine-plan-target.js';
 import { registerThreeRasterPlanProgram, ThreeConfig } from '../../dist/three.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
@@ -19,7 +19,7 @@ import * as THREE from 'three/webgpu';
 const fixtureUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const ORIGIN_BUFFER_ID = id.buffer('test.three-supplied-geometry/origin');
 
-const suppliedGeometryTechnique = defineRasterTechnique({
+const suppliedGeometryTechnique = defineRasterFormat({
   id: 'test.three-supplied-geometry',
   kind: 'test',
   extension: 'TEST_three_supplied_geometry',
@@ -51,7 +51,7 @@ const suppliedGeometrySchema = defineTechniqueSchema({
 });
 
 registerRasterPlanProgram({
-  technique: suppliedGeometryTechnique,
+  raster: suppliedGeometryTechnique,
   schema: suppliedGeometrySchema,
   policyBody(system) {
     const program = techniqueProgram(suppliedGeometrySchema, { system });
@@ -65,7 +65,7 @@ registerRasterPlanProgram({
 });
 
 registerThreeRasterPlanProgram({
-  technique: suppliedGeometryTechnique,
+  raster: suppliedGeometryTechnique,
   schema: suppliedGeometrySchema,
   variant: {
     id: 'test-tsl',
@@ -140,7 +140,7 @@ function fontVariant(backing, resource, geometry) {
   return createImmutableFontLease(
     createImmutableFontVariant({
       backing,
-      technique: suppliedGeometryTechnique,
+      format: suppliedGeometryTechnique,
       raster: { dispose() {} },
       data: { resource, geometry },
     }),

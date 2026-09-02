@@ -52,7 +52,7 @@ async function render(): Promise<TargetV1MtsdfResult> {
     fontUrl = URL.createObjectURL(new Blob([artifact], { type: 'model/gltf-binary' }));
     font = await loader.loadAsync({
       input: { baked: fontUrl },
-      raster: { technique: mtsdf },
+      raster: { raster: mtsdf },
     });
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-128, 128, 64, -64, 0.1, 10);

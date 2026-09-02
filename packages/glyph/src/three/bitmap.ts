@@ -18,8 +18,8 @@ import {
   type BitmapOptions,
   type BitmapPageData,
   type BitmapStrikeData,
-  type BitmapTechniqueOptions,
-} from '../raster/bitmap-technique.js';
+  type BitmapFormatOptions,
+} from '../raster/bitmap.js';
 import { registerThreeBitmapShader } from './internal/builtin-shaders.js';
 
 registerThreeBitmapShader(bitmapShader);
@@ -39,4 +39,4 @@ export {
   canonicalizeBitmapDescriptor,
   selectBitmapStrikePpem,
 };
-export type { BitmapData, BitmapDescriptor, BitmapOptions, BitmapPageData, BitmapStrikeData, BitmapTechniqueOptions };
+export type { BitmapData, BitmapDescriptor, BitmapOptions, BitmapPageData, BitmapStrikeData, BitmapFormatOptions };

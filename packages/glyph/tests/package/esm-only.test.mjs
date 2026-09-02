@@ -24,15 +24,15 @@ test('the published contract is ESM-only', async () => {
   });
   assert.deepEqual(manifest.bin, { glyph: './bin/glyph.js' });
   assert.deepEqual(manifest.sideEffects, [
-    './src/raster/bitmap-technique.ts',
+    './src/raster/bitmap.ts',
     './src/raster/msdf.ts',
-    './src/raster/slug-technique.ts',
+    './src/raster/slug.ts',
     './src/three/bitmap.ts',
     './src/three/msdf.ts',
     './src/three/slug.ts',
-    './dist/raster/bitmap-technique.js',
+    './dist/raster/bitmap.js',
     './dist/raster/msdf.js',
-    './dist/raster/slug-technique.js',
+    './dist/raster/slug.js',
     './dist/three/bitmap.js',
     './dist/three/msdf.js',
     './dist/three/slug.js',

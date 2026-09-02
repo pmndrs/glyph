@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 
 import type { GlyphCopy } from '../index.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
+import type { AnyRasterFormat } from '../raster-format.js';
 import { ThreeTextRenderPlanExecutor, type ThreeTextEnginePlanOwner } from './engine-plan-target.js';
 import type { ThreeRootBinding } from './handle.js';
 import type { ThreeRendererResources } from './renderer-resources.js';
@@ -9,7 +9,7 @@ import type { Text } from './text.js';
 import { copyCurrentLocalTransform } from './detached-object.js';
 
 /** @internal Constructed only by `Text.breakApart()`. */
-interface DecorationsOptions<Technique extends AnyRasterTechnique> {
+interface DecorationsOptions<Technique extends AnyRasterFormat> {
   readonly source: Text<Technique>;
   readonly copy: (renderer: ThreeTextRenderPlanExecutor, boundary: ThreeRootBinding) => GlyphCopy<void>;
   readonly resources: ThreeRendererResources;
@@ -17,14 +17,14 @@ interface DecorationsOptions<Technique extends AnyRasterTechnique> {
 }
 
 const decorationsConstructorToken: unique symbol = Symbol('pmndrs.glyph.Decorations');
-let constructDecorations: ((options: DecorationsOptions<AnyRasterTechnique>) => Decorations) | undefined;
+let constructDecorations: ((options: DecorationsOptions<AnyRasterFormat>) => Decorations) | undefined;
 let decorationsHaveDraws: ((decorations: Decorations) => boolean) | undefined;
 let inspectDecorationDraws:
   | ((decorations: Decorations) => Readonly<{ under: readonly THREE.Mesh[]; over: readonly THREE.Mesh[] }>)
   | undefined;
 
 /** @internal Constructs the detached branch while keeping the public class receive-only. */
-export function createDecorations(options: DecorationsOptions<AnyRasterTechnique>): Decorations | undefined {
+export function createDecorations(options: DecorationsOptions<AnyRasterFormat>): Decorations | undefined {
   if (constructDecorations === undefined || decorationsHaveDraws === undefined) {
     throw new Error('Decorations constructor is unavailable');
   }
@@ -64,7 +64,7 @@ export class Decorations extends THREE.Object3D {
     };
   }
 
-  private constructor(token: typeof decorationsConstructorToken, options: DecorationsOptions<AnyRasterTechnique>) {
+  private constructor(token: typeof decorationsConstructorToken, options: DecorationsOptions<AnyRasterFormat>) {
     super();
     if (token !== decorationsConstructorToken) {
       throw new TypeError('Decorations objects are created by Text.breakApart()');

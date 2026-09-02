@@ -36,7 +36,7 @@ export function createThreeCodec(
 ): ThreeCodec {
   const programs = compiledThreeRasterPlanPrograms(ids, transformMode);
   const resources = new ThreeRendererResources(
-    new Map(programs.map((program) => [program.technique.id, program])),
+    new Map(programs.map((program) => [program.raster.id, program])),
     material,
   );
   let disposed = false;

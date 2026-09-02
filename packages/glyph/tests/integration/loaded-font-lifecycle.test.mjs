@@ -9,14 +9,14 @@ import {
   observeImmutableFontVariantRelease,
 } from '../../dist/loaded-font.js';
 import { loadFont } from '../../dist/loader.js';
-import { bitmap } from '../../dist/raster/bitmap-technique.js';
+import { bitmap } from '../../dist/raster/bitmap.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 
 test('immutable-font disposal remains total when one observer fails', async () => {
   const font = await loadFont(
     { baked: { bytes: await readFile(fontUrl) } },
-    { technique: bitmap, options: { strikes: [16] } },
+    { raster: bitmap, options: { strikes: [16] } },
   );
   const registered = immutableFontResources(font).font;
   let failingObserverCalls = 0;

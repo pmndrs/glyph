@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { defineRasterResourceId, defineRasterTechnique } from '../../dist/index.js';
+import { defineRasterResourceId, defineRasterFormat } from '../../dist/index.js';
 import {
   compileRasterFont,
   defineTechniqueSchema,
@@ -24,7 +24,7 @@ const COLLIDING_RESOURCE_B = defineRasterResourceId('pmndrs.msdf/b6cd/16');
 const body = () => ({ inputs: [], operations: [], f32InputCount: 0, u32InputCount: 0 });
 
 function technique(id) {
-  return defineRasterTechnique({
+  return defineRasterFormat({
     id,
     kind: 'test',
     extension: 'TEST_raster',
@@ -76,10 +76,10 @@ function validCompile(compiler, colorBytes = new Uint8Array([1, 2, 3, 4])) {
 test('registration preserves authenticated technique and schema witnesses', () => {
   const value = technique('test.plan-registration');
   const schema = schemaFor(value);
-  const source = { technique: value, schema, policyBody: body, compileFont: validCompile };
+  const source = { raster: value, schema, policyBody: body, compileFont: validCompile };
   const registered = registerRasterPlanProgram(source);
 
-  assert.equal(registered.technique, value);
+  assert.equal(registered.raster, value);
   assert.equal(registered.schema, schema);
   assert.equal(resolveRasterPlanProgram(value.id), registered);
   assert.equal(registerRasterPlanProgram(source), registered);
@@ -96,7 +96,7 @@ test('registration rejects structural techniques and reserved Glyph identities',
   assert.throws(
     () =>
       registerRasterPlanProgram({
-        technique: structural,
+        raster: structural,
         schema: defineTechniqueSchema({ technique: structural.id, scope: 'glyph', binding: {}, buffers: {} }),
         policyBody: body,
         compileFont() {},
@@ -108,7 +108,7 @@ test('registration rejects structural techniques and reserved Glyph identities',
   assert.throws(
     () =>
       registerRasterPlanProgram({
-        technique: reserved,
+        raster: reserved,
         schema: schemaFor(reserved),
         policyBody: body,
         compileFont: validCompile,
@@ -128,7 +128,7 @@ test('registration rejects a resource-free schema before it can become an unusab
   assert.throws(
     () =>
       registerRasterPlanProgram({
-        technique: value,
+        raster: value,
         schema,
         policyBody: body,
         compileFont() {},
@@ -141,7 +141,7 @@ test('the same string ID cannot substitute a different technique data witness', 
   const first = technique('test.plan-witness');
   const second = technique('test.plan-witness');
   registerRasterPlanProgram({
-    technique: first,
+    raster: first,
     schema: schemaFor(first),
     policyBody: body,
     compileFont: validCompile,
@@ -153,19 +153,19 @@ test('font compilation accepts only live package fonts and exposes a constrained
   const value = technique('test.plan-authentic-font');
   let reader;
   registerRasterPlanProgram({
-    technique: value,
+    raster: value,
     schema: schemaFor(value),
     policyBody: body,
     compileFont(compiler) {
       reader = compiler.font;
-      assert.deepEqual(Object.keys(reader).sort(), ['data', 'glyphCount', 'technique']);
-      assert.equal(reader.technique, value);
+      assert.deepEqual(Object.keys(reader).sort(), ['data', 'glyphCount', 'raster']);
+      assert.equal(reader.raster, value);
       assert.equal(reader.glyphCount, 3);
       return validCompile(compiler);
     },
   });
 
-  assert.throws(() => compileRasterFont({ technique: value, disposed: false }, glyphId), /not created by this package/);
+  assert.throws(() => compileRasterFont({ raster: value, disposed: false }, glyphId), /not created by this package/);
   const font = loaded(value, 3);
   assert.ok(compileRasterFont(font, glyphId));
   assert.throws(() => reader.data, /no longer active/);
@@ -177,7 +177,7 @@ test('font compilation owns binding metadata and normalizes retained payloads', 
   const value = technique('test.plan-compile');
   const sourceBytes = new Uint8Array([1, 2, 3, 4]);
   registerRasterPlanProgram({
-    technique: value,
+    raster: value,
     schema: schemaFor(value),
     policyBody: body,
     compileFont: (compiler) => validCompile(compiler, sourceBytes),
@@ -202,7 +202,7 @@ test('font compilation owns binding metadata and normalizes retained payloads', 
 test('compiled font views expose named fields and selected portable resources without decoded data', () => {
   const value = technique('test.plan-read-compiled');
   const program = registerRasterPlanProgram({
-    technique: value,
+    raster: value,
     schema: schemaFor(value),
     policyBody: body,
     compileFont(compiler) {
@@ -237,7 +237,7 @@ test('resource selection receives explicit glyph and strike coordinates', () => 
   const value = technique('test.plan-resource-coordinates');
   const calls = [];
   registerRasterPlanProgram({
-    technique: value,
+    raster: value,
     schema: schemaFor(value),
     policyBody: body,
     compileFont(compiler) {
@@ -277,7 +277,7 @@ test('authored resource identities remain stable across independent compiler cal
   const value = technique('test.plan-stable-resource-identity');
   let invocation = 0;
   registerRasterPlanProgram({
-    technique: value,
+    raster: value,
     schema: schemaFor(value),
     policyBody: body,
     compileFont(compiler) {
@@ -300,7 +300,7 @@ test('authored resource identities remain stable across independent compiler cal
 test('standalone font compilation scopes dynamic resource collisions to one call', () => {
   const value = technique('test.plan-independent-default-identities');
   const program = registerRasterPlanProgram({
-    technique: value,
+    raster: value,
     schema: schemaFor(value),
     policyBody: body,
     compileFont(compiler) {
@@ -330,7 +330,7 @@ test('one loaded font reuses its immutable compilation across engine identity re
   const value = technique('test.plan-compile-once');
   let calls = 0;
   registerRasterPlanProgram({
-    technique: value,
+    raster: value,
     schema: schemaFor(value),
     policyBody: body,
     compileFont(compiler) {
@@ -350,7 +350,7 @@ test('independent Font leases over one immutable variant share compilation', () 
   const value = technique('test.plan-compile-shared-variant');
   let calls = 0;
   registerRasterPlanProgram({
-    technique: value,
+    raster: value,
     schema: schemaFor(value),
     policyBody: body,
     compileFont(compiler) {
@@ -426,7 +426,7 @@ test('retention rejects undeclared, duplicate, missing, and wrong-kind resources
   for (const [id, act, expected] of cases) {
     const value = technique(id);
     registerRasterPlanProgram({
-      technique: value,
+      raster: value,
       schema: schemaFor(value),
       policyBody: body,
       compileFont(compiler) {
@@ -441,7 +441,7 @@ test('retention rejects undeclared, duplicate, missing, and wrong-kind resources
 test('binding readers and selected resources reject at compiler.compile', () => {
   const missingReader = technique('test.plan-missing-reader');
   registerRasterPlanProgram({
-    technique: missingReader,
+    raster: missingReader,
     schema: schemaFor(missingReader),
     policyBody: body,
     compileFont(compiler) {
@@ -454,7 +454,7 @@ test('binding readers and selected resources reject at compiler.compile', () => 
 
   const unknownResource = technique('test.plan-unknown-selected-resource');
   registerRasterPlanProgram({
-    technique: unknownResource,
+    raster: unknownResource,
     schema: schemaFor(unknownResource),
     policyBody: body,
     compileFont(compiler) {
@@ -476,7 +476,7 @@ test('binding compilation snapshots reader accessors before serialization', () =
   let resourceReads = 0;
   let opacityReads = 0;
   registerRasterPlanProgram({
-    technique: value,
+    raster: value,
     schema: schemaFor(value),
     policyBody: body,
     compileFont(compiler) {
@@ -508,7 +508,7 @@ test('binding compilation snapshots reader accessors before serialization', () =
 test('a caught compiler input failure is terminal for that callback', () => {
   const value = technique('test.plan-terminal-failure');
   registerRasterPlanProgram({
-    technique: value,
+    raster: value,
     schema: schemaFor(value),
     policyBody: body,
     compileFont(compiler) {
@@ -527,7 +527,7 @@ test('a caught compiler input failure is terminal for that callback', () => {
 test('compileFont must synchronously return this compiler invocation result', () => {
   const asynchronous = technique('test.plan-async');
   registerRasterPlanProgram({
-    technique: asynchronous,
+    raster: asynchronous,
     schema: schemaFor(asynchronous),
     policyBody: body,
     async compileFont(compiler) {
@@ -538,7 +538,7 @@ test('compileFont must synchronously return this compiler invocation result', ()
 
   const counterfeit = technique('test.plan-counterfeit');
   registerRasterPlanProgram({
-    technique: counterfeit,
+    raster: counterfeit,
     schema: schemaFor(counterfeit),
     policyBody: body,
     compileFont(compiler) {
@@ -553,7 +553,7 @@ test('the compiler is revoked after its callback returns', () => {
   const value = technique('test.plan-revoked');
   let escaped;
   registerRasterPlanProgram({
-    technique: value,
+    raster: value,
     schema: schemaFor(value),
     policyBody: body,
     compileFont(compiler) {
