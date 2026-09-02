@@ -1,4 +1,5 @@
-import react from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defaultClientConditions, defineConfig } from 'vite';
@@ -52,7 +53,8 @@ export default defineConfig({
   },
   base: '/examples/',
   build: { emptyOutDir: true, outDir: '../dist/examples', target: 'es2022' },
-  plugins: [react()],
+  // The React Compiler memoizes the scenes; a scene that cannot be compiled fails the `react/react-compiler` lint.
+  plugins: [react(), babel({ presets: [reactCompilerPreset()] })],
   root: 'examples',
   server: {
     host: true,

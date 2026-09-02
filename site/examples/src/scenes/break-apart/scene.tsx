@@ -23,7 +23,6 @@ export default function BreakApart() {
   const scene = useThree((state) => state.scene);
   const detached = useRef<{ glyphs: Glyphs; decorations: Decorations | undefined } | undefined>(undefined);
   const seeds = useRef<Vector3[]>([]);
-  const elapsed = useRef(0);
 
   useEffect(
     () => () => {
@@ -34,8 +33,7 @@ export default function BreakApart() {
     [],
   );
 
-  useFrame((_state, delta) => {
-    elapsed.current += delta;
+  useFrame(({ elapsed }) => {
     const source = text.current;
     if (source === null) return;
 
@@ -60,7 +58,7 @@ export default function BreakApart() {
     }
 
     // 0 → 1 explodes, 1 → 2 holds, 2 → 3 returns, 3 → 4 rests.
-    const phase = elapsed.current % CYCLE;
+    const phase = elapsed % CYCLE;
     const out = phase < 1 ? ease(phase) : phase < 2 ? 1 : phase < 3 ? 1 - ease(phase - 2) : 0;
 
     const { glyphs } = detached.current;

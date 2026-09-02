@@ -1,7 +1,7 @@
 import { Text } from '@pmndrs/glyph/react';
 import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import { useFrame } from '@react-three/fiber/webgpu';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { INTER } from '../../fonts';
 import { ACCENT, PAPER, PAPER_DIM } from '../../stage';
@@ -15,19 +15,17 @@ const PROSE =
   'Text goes through five stages, each owned by the layer best placed to do it exactly once. JavaScript owns Unicode analysis and the render loop. Rust owns shaping, layout, and the plan.';
 
 const COLUMNS = [
-  ['wrap: word · align: start', { wrap: 'word', align: 'start' }],
-  ['align: justify · lastLine: auto', { wrap: 'word', align: 'justify', lastLine: 'auto' }],
-  ['maxLines: 4 · overflow: ellipsis', { wrap: 'word', align: 'start', maxLines: 4, overflow: 'ellipsis' }],
+  ['wrap: word, align: start', { wrap: 'word', align: 'start' }],
+  ['align: justify, lastLine: auto', { wrap: 'word', align: 'justify', lastLine: 'auto' }],
+  ['maxLines: 4, overflow: ellipsis', { wrap: 'word', align: 'start', maxLines: 4, overflow: 'ellipsis' }],
 ] as const;
 
 export default function ParagraphLayout() {
   const inter = useMsdf(INTER);
-  const elapsed = useRef(0);
   const [width, setWidth] = useState(3);
 
-  useFrame((_state, delta) => {
-    elapsed.current += delta;
-    setWidth(2.6 + Math.sin(elapsed.current * 0.6) * 0.7);
+  useFrame(({ elapsed }) => {
+    setWidth(2.6 + Math.sin(elapsed * 0.6) * 0.7);
   });
 
   return (

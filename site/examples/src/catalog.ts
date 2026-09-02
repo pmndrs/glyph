@@ -45,6 +45,12 @@ export const EXAMPLES = {
     stage: { orthographic: true },
     load: () => import('./scenes/text-ladder/scene'),
   },
+  zoom: {
+    title: 'Zoom',
+    page: '/docs/fonts/techniques',
+    stage: { orthographic: true },
+    load: () => import('./scenes/zoom/scene'),
+  },
   groups: {
     title: 'Roots and groups',
     page: '/docs/text/text-and-groups',
@@ -62,6 +68,18 @@ export const EXAMPLES = {
     page: '/docs/text/paragraph-layout',
     stage: {},
     load: () => import('./scenes/paragraph-layout/scene'),
+  },
+  justify: {
+    title: 'Justification and columns',
+    page: '/docs/text/paragraph-layout',
+    stage: {},
+    load: () => import('./scenes/justify/scene'),
+  },
+  decorations: {
+    title: 'Decorations',
+    page: '/docs/text/styling',
+    stage: {},
+    load: () => import('./scenes/decorations/scene'),
   },
   'rich-text': {
     title: 'Rich text',
@@ -122,6 +140,18 @@ export const EXAMPLES = {
     page: '/docs/text/break-apart',
     stage: {},
     load: () => import('./scenes/arc/scene'),
+  },
+  batching: {
+    title: 'Batching',
+    page: '/docs/advanced/performance',
+    stage: {},
+    load: () => import('./scenes/batching/scene'),
+  },
+  shaping: {
+    title: 'Shaping',
+    page: '/docs/advanced/how-it-works',
+    stage: {},
+    load: () => import('./scenes/shaping/scene'),
   },
 } as const satisfies Record<string, ExampleEntry>;
 

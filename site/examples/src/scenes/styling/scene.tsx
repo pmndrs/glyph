@@ -2,7 +2,7 @@ import { TextStyle } from '@pmndrs/glyph';
 import { Text } from '@pmndrs/glyph/react';
 import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import { useFrame } from '@react-three/fiber/webgpu';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { INTER } from '../../fonts';
 import { ACCENT, PAPER, PAPER_DIM } from '../../stage';
@@ -20,23 +20,23 @@ const styles = TextStyle.create({
 
 const ROWS = [
   ['fontSize', { fontSize: 0.52 }],
+  ['lineHeight', { lineHeight: 0.8 }],
   ['letterSpacing', { letterSpacing: 0.06 }],
   ['wordSpacing', { wordSpacing: 0.25 }],
   ['color', { color: ACCENT }],
-  ['outline', { outline: { color: '#0a0c12', width: 0.02 }, color: '#ffffff' }],
-  ['shadow', { shadow: { color: [0, 0, 0, 0.6], offset: [0.03, -0.03] } }],
-  ['decoration', { decoration: { underline: true } }],
+  ['outline', { outline: { color: ACCENT, width: 0.02 }, color: '#0a0c12' }],
+  ['shadow', { shadow: { color: [1, 0.82, 0.4, 0.85], offset: [0.04, -0.04] } }],
+  ['decoration', { decoration: { underline: true, color: ACCENT } }],
   ['features', { features: [{ tag: 'smcp' }, { tag: 'tnum' }] }],
+  ['language', { language: 'tr', features: [{ tag: 'locl' }] }],
 ] as const;
 
 export default function Styling() {
   const inter = useMsdf(INTER);
-  const elapsed = useRef(0);
   const [opacity, setOpacity] = useState(1);
 
-  useFrame((_state, delta) => {
-    elapsed.current += delta;
-    setOpacity(0.55 + 0.45 * Math.sin(elapsed.current * 1.4));
+  useFrame(({ elapsed }) => {
+    setOpacity(0.55 + 0.45 * Math.sin(elapsed * 1.4));
   });
 
   const rows = [...ROWS, ['opacity', { opacity }] as const];
@@ -44,7 +44,7 @@ export default function Styling() {
   return (
     <>
       {rows.map(([name, override], index) => (
-        <group key={name} position={[0, 2.2 - index * 0.55, 0]}>
+        <group key={name} position={[0, 2.4 - index * 0.47, 0]}>
           <Text
             font={inter}
             style={styles.caption}

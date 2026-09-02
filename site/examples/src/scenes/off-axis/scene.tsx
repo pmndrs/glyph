@@ -17,11 +17,9 @@ import { PAPER } from '../../stage';
 export default function OffAxis() {
   const inter = useSlug(INTER);
   const panel = useRef<Group>(null);
-  const elapsed = useRef(0);
 
-  useFrame((_state, delta) => {
-    elapsed.current += delta;
-    const p = elapsed.current * 0.55;
+  useFrame(({ elapsed }) => {
+    const p = elapsed * 0.55;
     const node = panel.current;
     if (node === null) return;
     node.rotation.set(

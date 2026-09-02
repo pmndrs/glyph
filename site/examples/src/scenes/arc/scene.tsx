@@ -23,7 +23,6 @@ export default function Arc() {
   const inter = useMsdf(INTER);
   const text = useRef<ThreeText<typeof msdf>>(null);
   const ring = useRef<{ glyphs: Glyphs; decorations: Decorations | undefined; radius: number } | undefined>(undefined);
-  const elapsed = useRef(0);
 
   useEffect(
     () => () => {
@@ -34,8 +33,7 @@ export default function Arc() {
     [],
   );
 
-  useFrame((_state, delta) => {
-    elapsed.current += delta;
+  useFrame(({ elapsed }) => {
     const source = text.current;
     if (source === null) return;
 
@@ -51,7 +49,7 @@ export default function Arc() {
     }
 
     const { glyphs, radius } = ring.current;
-    glyphs.rotation.y = -elapsed.current * 0.35;
+    glyphs.rotation.y = -elapsed * 0.35;
     const m = new Matrix4();
     const home = new Vector3();
     const q = new Quaternion();

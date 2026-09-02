@@ -31,10 +31,8 @@ const TILT = 0.5;
 export default function Labels() {
   const inter = useMsdf(INTER);
   const system = useRef<Group>(null);
-  const elapsed = useRef(0);
 
-  useFrame(({ camera, scene }, delta) => {
-    elapsed.current += delta;
+  useFrame(({ camera, scene, elapsed }) => {
     // The stage moves the camera to fit the viewport; keep the fog band where the bodies are.
     if (scene.fog instanceof Fog) {
       scene.fog.near = camera.position.z - 1;
@@ -45,7 +43,7 @@ export default function Labels() {
     for (const [index, body] of BODIES.entries()) {
       const node = group.children[index];
       if (node === undefined) continue;
-      const angle = body.phase + elapsed.current * body.speed;
+      const angle = body.phase + elapsed * body.speed;
       node.position.set(
         Math.cos(angle) * body.orbit,
         Math.sin(angle) * body.orbit * Math.sin(TILT),

@@ -1,7 +1,7 @@
 import { Text } from '@pmndrs/glyph/react';
 import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import { useFrame } from '@react-three/fiber/webgpu';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { INTER } from '../../fonts';
 
@@ -15,12 +15,10 @@ import { INTER } from '../../fonts';
  */
 export default function Effects() {
   const inter = useMsdf(INTER);
-  const elapsed = useRef(0);
   const [color, setColor] = useState('#ffd166');
 
-  useFrame((_state, delta) => {
-    elapsed.current += delta;
-    setColor(hueHex((elapsed.current * 24) % 360));
+  useFrame(({ elapsed }) => {
+    setColor(hueHex((elapsed * 24) % 360));
   });
 
   return (

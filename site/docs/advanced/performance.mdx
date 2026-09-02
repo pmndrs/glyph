@@ -39,11 +39,14 @@ three.setCompositing('independent');
 ```
 
 {/* prose: measured on the landing chorus — 505 draws ordered → 121 independent, 6 → 60 FPS with the DPR clamp.
-Every Text on a root shares its planner; `TextGroup` adds no boundary. */}
+Measured in the batching example — a standalone `Text` plans one draw each (60 labels → 60 draws); the same labels
+in a `TextGroup` with one material fold to 2; thirty labels in a group alternating two materials plan 30, and the
+same thirty sorted into one run per material plan 2. `compositing: 'independent'` did not reduce the interleaved
+case on the current tree (still 30); what folds is adjacency. */}
 
 <iframe
   src="/examples/?example=batching"
-  title="Draw calls versus compositing mode"
+  title="Interleaved versus contiguous materials in one TextGroup"
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />
@@ -69,12 +72,8 @@ keeps the last draw. Size a root to its content with `setCapacity` or `defineThr
 {/* prose: the landing's post chain allocated 732 MB of float targets at native DPR; clamping to 1.5 cut it to
 243 MB. `rasterPixelRatio` picks raster density independently of the canvas DPR — Bitmap strikes especially. */}
 
-<iframe
-  src="/examples/?example=off-axis"
-  title="Steep angles, DPR, rasterPixelRatio"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+{/* prose: a paragraph seen larger than authored is the case `rasterPixelRatio` exists for; the steep-angle
+scene on [Text in 3D](/docs/text/in-3d#steep-angles) is the same trade-off seen from the format side. */}
 
 ## Pixel snapping
 
