@@ -158,8 +158,20 @@ const GlyphHandleContext = createContext<GlyphReactContext | undefined>(undefine
 const defaultThreeHandleName = '@pmndrs/glyph/react:default';
 const rootIds = new WeakMap<ThreeRoot, number>();
 type R3fRootStore = ReturnType<typeof useStore>;
-const defaultContexts = new WeakMap<R3fRootStore, GlyphReactContext>();
+interface DefaultGlyphContextResource {
+  readonly context: GlyphReactContext;
+  retain(): () => void;
+  dispose(): void;
+}
+const defaultContexts = new WeakMap<R3fRootStore, DefaultGlyphContextResource>();
 const defaultRootNames = new WeakMap<R3fRootStore, string>();
+const defaultRootFinalizer = new FinalizationRegistry<ThreeRoot>((root) => {
+  try {
+    root.dispose();
+  } catch {
+    // A finalizer is only an abandoned-render safety net; explicit React cleanup owns correctness.
+  }
+});
 const emptyFontFaces: ReadonlyMap<string, AnyFontFace> = new Map();
 let nextHandleId = 1;
 let nextDefaultRootId = 1;
@@ -199,9 +211,11 @@ export function GlyphProvider({
     throw new Error('GlyphProvider handle and fontFaces are immutable; remount the provider to replace them');
   }
   let selection: Readonly<{ handle: ThreeHandle; root: ThreeRoot }>;
+  let defaultResource: DefaultGlyphContextResource | undefined;
   if (handle === undefined) {
     const defaultHandle = getInitializedDefaultThreeHandle() ?? use(defaultThreeHandle());
-    selection = defaultGlyphContext(store, defaultHandle);
+    defaultResource = defaultGlyphContext(store, defaultHandle);
+    selection = defaultResource.context;
   } else {
     selection = selectReactRoot(handle);
   }
@@ -217,6 +231,7 @@ export function GlyphProvider({
     },
     [faces],
   );
+  useLayoutEffect(() => defaultResource?.retain(), [defaultResource]);
 
   let content: ReactNode = createElement(GlyphHandleContext.Provider, { value: context }, children);
   if (fontFaces !== undefined || fallback !== undefined) {
@@ -235,15 +250,18 @@ function useSelectedHandle(): ThreeHandle {
 function useSelectedGlyphContext(): GlyphReactContext {
   const store = useStore();
   const provided = use(GlyphHandleContext);
+  const handle = provided === undefined ? (getInitializedDefaultThreeHandle() ?? use(defaultThreeHandle())) : undefined;
+  const resource = handle === undefined ? undefined : defaultGlyphContext(store, handle);
+  useLayoutEffect(() => resource?.retain(), [resource]);
   if (provided !== undefined) return provided;
-  const handle = getInitializedDefaultThreeHandle() ?? use(defaultThreeHandle());
-  return defaultGlyphContext(store, handle);
+  if (resource === undefined) throw new Error('R3F default Glyph context was not created');
+  return resource.context;
 }
 
-function defaultGlyphContext(store: R3fRootStore, handle: ThreeHandle): GlyphReactContext {
+function defaultGlyphContext(store: R3fRootStore, handle: ThreeHandle): DefaultGlyphContextResource {
   assertUsableHandle(handle);
   const existing = defaultContexts.get(store);
-  if (existing !== undefined && existing.handle === handle && !existing.root.disposed) return existing;
+  if (existing !== undefined && existing.context.handle === handle && !existing.context.root.disposed) return existing;
   let rootName = defaultRootNames.get(store);
   if (rootName === undefined) {
     rootName = `@pmndrs/glyph/react:root:${nextDefaultRootId}`;
@@ -251,8 +269,37 @@ function defaultGlyphContext(store: R3fRootStore, handle: ThreeHandle): GlyphRea
     defaultRootNames.set(store, rootName);
   }
   const context = Object.freeze({ handle, root: handle(rootName), fontFaces: emptyFontFaces });
-  defaultContexts.set(store, context);
-  return context;
+  let references = 0;
+  let releaseRevision = 0;
+  let disposed = false;
+  const resource: DefaultGlyphContextResource = Object.freeze({
+    context,
+    retain(): () => void {
+      if (disposed) throw new Error('R3F cannot retain a disposed default Glyph root');
+      references += 1;
+      releaseRevision += 1;
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        references -= 1;
+        if (references !== 0) return;
+        const revision = ++releaseRevision;
+        queueMicrotask(() => {
+          if (references === 0 && releaseRevision === revision) resource.dispose();
+        });
+      };
+    },
+    dispose(): void {
+      if (disposed) return;
+      disposed = true;
+      defaultRootFinalizer.unregister(resource);
+      context.root.dispose();
+    },
+  });
+  defaultRootFinalizer.register(store, context.root, resource);
+  defaultContexts.set(store, resource);
+  return resource;
 }
 
 function createProviderFontFaces(table: GlyphProviderProps['fontFaces']): ProviderFontFaces {
