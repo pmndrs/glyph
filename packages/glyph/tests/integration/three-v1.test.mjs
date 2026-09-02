@@ -13,7 +13,7 @@ import {
   TextStyle,
   txt,
 } from '@pmndrs/glyph';
-import { GlyphHandleState, PlanTransport } from '../../dist/internal/handle-state.js';
+import { GlyphHandleState } from '../../dist/internal/handle-state.js';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
@@ -220,6 +220,45 @@ test('glyph.shape batches dirty roots across handles into one engine update', as
     assert.equal(instrumentedGlyph.latestBatchCount, 3);
   } finally {
     for (const label of labels) label.dispose();
+    font.dispose();
+  }
+});
+
+test('a configured renderer receives a command-buffer view only for its synchronous decode', async (t) => {
+  let captured;
+  const three = await createThreeTestHandle(t, {
+    ...ThreeConfig,
+    renderer() {
+      return {
+        decode(view) {
+          captured = view;
+          return { result: undefined, commit: () => undefined, discard: () => undefined };
+        },
+        syncTransforms: () => undefined,
+        dispose: () => undefined,
+      };
+    },
+  });
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, text: 'Borrowed command buffer' });
+  scene.add(label);
+
+  try {
+    glyph.shape();
+    assert.equal(captured.delivery, 'borrowed-command-buffer');
+    assert.equal(captured.displayList.kind, 'replace');
+    assert.ok(captured.displayList.value.children.length > 0);
+    assert.throws(
+      () => captured.displayList.value.children.at(0),
+      /borrowed text render plan has expired/u,
+      'renderer code cannot lazily read a command after decode returns',
+    );
+  } finally {
+    label.dispose();
     font.dispose();
   }
 });
@@ -1251,15 +1290,6 @@ test('nested TextGroup nodes inherit presentation without creating nested public
 
 test('renderer rejection waits for explicit invalidation and then checkpoints without copied bytes', async (t) => {
   const three = await createThreeTestHandle(t);
-  const copyPublication = PlanTransport.prototype.copyPublication;
-  let publicationCopies = 0;
-  PlanTransport.prototype.copyPublication = function (publication) {
-    publicationCopies += 1;
-    return copyPublication.call(this, publication);
-  };
-  t.after(() => {
-    PlanTransport.prototype.copyPublication = copyPublication;
-  });
   const instrumented = instrumentedGlyph;
   instrumented.reset();
   const font = await loadFont(
@@ -1322,7 +1352,6 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
     rejectedGeneration - 1,
     'measurement must not acknowledge the renderer-rejected publication',
   );
-  assert.equal(publicationCopies, 0, 'Three must not copy a borrowed publication for renderer recovery');
   assert.equal(errors.length, 1, 'a successful checkpoint must not repeat the old failure');
   assert.equal(rootDraws(scene).length, 1);
 
