@@ -258,10 +258,12 @@ main GLB without fetching sidecars and returns its frozen, ordered format keys. 
 result identity; rejected calls are evicted for retry. The consuming handle supplies its configured default key when an
 undeclared face is passed to Text; imperative Three rejects an unloaded selected format before creating retained state.
 
-The FontFace source cache currently coalesces canonical-equivalent locators, shares the parsed main font and per-format
-variants across declarations, loads sidecars and their resources only on demand, and retires the shared node after its
-last source lease. Different locators that return identical bytes do not yet converge onto one content-addressed node;
-the stronger content graph in D-297 remains pending rather than being implied by the locator cache.
+The FontFace source cache coalesces canonical-equivalent locators before I/O and converges different locators onto one
+parsed main-font node after their complete GLB bytes have the same SHA-256 content identity. Every acquisition base is
+retained on that node, so a relative sidecar may fall back across equivalent acquisitions without using its filename as
+identity. Per-format variants load lazily and the shared main node retires after its last source lease. Authenticated
+content nodes for raster sidecars and their external resources remain the unfinished portion of D-297; the main-node
+convergence does not imply that the complete dependency graph is implemented yet.
 
 React's `useFont(source, config?)` declares through that same FontFace path, asks the selected Three handle which exact
 format the declaration denotes, conditionally calls React 19 `use()` only while that format is unloaded, and returns

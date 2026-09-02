@@ -96,20 +96,24 @@ export type AnyFontFaceSelection = FontFaceSelection<FontFaceFormat | undefined>
 
 export type FontFormatMap = Readonly<object>;
 
+interface FontFaceResourceOwner {
+  readonly records: Map<AnyRasterFormat, LoadedFaceRecord>;
+  sourcePromise: Promise<FontFaceSourceLease> | undefined;
+  sourceLease: FontFaceSourceLease | undefined;
+  sourceController: AbortController | undefined;
+  disposed: boolean;
+}
+
 interface FontFaceState {
   readonly library: FontLibrary;
   readonly source: FontFaceSource;
   readonly family: string;
   readonly formats: readonly FontFaceFormat[];
+  readonly owner: FontFaceResourceOwner;
   readonly selections: ReadonlyMap<string, AnyFontFaceSelection>;
-  readonly records: Map<AnyRasterFormat, LoadedFaceRecord>;
-  sourcePromise: Promise<FontFaceSourceLease> | undefined;
-  sourceLease: FontFaceSourceLease | undefined;
-  sourceController: AbortController | undefined;
   formatsPromise: Promise<readonly string[]> | undefined;
   aggregatePromise: Promise<AnyFontFace> | undefined;
   aggregateLoaded: boolean;
-  disposed: boolean;
 }
 
 interface FontFaceSelectionState {
@@ -127,7 +131,7 @@ interface CatalogEntry {
 interface FinalizerRecord {
   readonly family: string;
   readonly generation: number;
-  readonly state: FontFaceState;
+  readonly owner: FontFaceResourceOwner;
 }
 
 const faceStates = new WeakMap<object, FontFaceSelectionState>();
@@ -139,7 +143,7 @@ let nextCatalogGeneration = 1;
 let nextSourceId = 1;
 
 const faceFinalizer = new FinalizationRegistry<FinalizerRecord>((record) => {
-  disposeFontFaceState(record.state);
+  disposeFontFaceResourceOwner(record.owner);
   const current = catalog.get(record.family);
   if (current?.generation === record.generation && current.face.deref() === undefined) catalog.delete(record.family);
 });
@@ -160,20 +164,23 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
 
   const formats = formatList(config.format);
   const selections = new Map<string, AnyFontFaceSelection>();
+  const owner: FontFaceResourceOwner = {
+    records: new Map(),
+    sourcePromise: undefined,
+    sourceLease: undefined,
+    sourceController: undefined,
+    disposed: false,
+  };
   const state: FontFaceState = {
     library,
     source,
     family,
     formats,
+    owner,
     selections,
-    records: new Map(),
-    sourcePromise: undefined,
-    sourceLease: undefined,
-    sourceController: undefined,
     formatsPromise: undefined,
     aggregatePromise: undefined,
     aggregateLoaded: false,
-    disposed: false,
   };
   let face!: AnyFontFace;
   const defaultFormat = formats[0];
@@ -188,7 +195,7 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
       return face;
     },
     get disposed(): boolean {
-      return state.disposed;
+      return owner.disposed;
     },
     load(): Promise<AnyFontFace> {
       return loadFontFace(face);
@@ -228,7 +235,7 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
 
   const generation = nextCatalogGeneration++;
   catalog.set(family, { generation, face: new WeakRef(face) });
-  faceFinalizer.register(face, { family, generation, state }, face);
+  faceFinalizer.register(face, { family, generation, owner }, face);
   return face as FontFace<FontFaceDeclaredFormat<Declaration>>;
 }
 
@@ -251,7 +258,7 @@ export function disposeFontFace(face: AnyFontFace): void {
   if (selection.format !== face.format || selection.face.family !== face.family) {
     throw new TypeError('FontFace.dispose() must be called on the declaration, not a format selection');
   }
-  if (selection.face.disposed) return;
+  if (selection.face.owner.disposed) return;
   faceFinalizer.unregister(face);
   disposeFontFaceState(selection.face);
   const current = catalog.get(selection.face.family);
@@ -265,7 +272,9 @@ export function fontFaceSelectionState(selection: unknown): FontFaceSelectionSta
   }
   const state = faceStates.get(selection);
   if (state === undefined) throw new TypeError('font was not created by glyph.fontFace()');
-  if (state.face.disposed) throw new TypeError(`FontFace ${JSON.stringify(state.face.family)} has been disposed`);
+  if (state.face.owner.disposed) {
+    throw new TypeError(`FontFace ${JSON.stringify(state.face.family)} has been disposed`);
+  }
   return state;
 }
 
@@ -273,7 +282,7 @@ export function fontFaceSelectionState(selection: unknown): FontFaceSelectionSta
 export function isFontFaceSelection(selection: unknown): selection is AnyFontFaceSelection {
   if ((typeof selection !== 'object' && typeof selection !== 'function') || selection === null) return false;
   const state = faceStates.get(selection);
-  return state !== undefined && !state.face.disposed;
+  return state !== undefined && !state.face.owner.disposed;
 }
 
 /** @internal Canonical identity shared by React declarations and the loader's raster request policy. */
@@ -372,7 +381,7 @@ function loadFontFace(face: AnyFontFace): Promise<AnyFontFace> {
   let promise!: Promise<AnyFontFace>;
   promise = operation.then(
     () => {
-      if (state.disposed || state.aggregatePromise !== promise) {
+      if (state.owner.disposed || state.aggregatePromise !== promise) {
         throw new DOMException('FontFace load owner was disposed', 'AbortError');
       }
       state.aggregateLoaded = true;
@@ -390,8 +399,9 @@ function loadFontFace(face: AnyFontFace): Promise<AnyFontFace> {
 }
 
 async function loadAllFontFaceFormats(state: FontFaceState): Promise<void> {
+  const owner = state.owner;
   const declared = state.formats.map(resolveDeclaredFormat);
-  const source = await ensureFontFaceSource(state, declared);
+  const source = await ensureFontFaceSource(owner, state.library, state.source, declared);
   const operations: Promise<readonly Font<AnyRasterFormat>[]>[] = [
     ...declared.map((raster) => source.load(raster).then((font) => [font])),
     source.loadAdvertised(declared.map(rasterOf)),
@@ -413,17 +423,17 @@ async function loadAllFontFaceFormats(state: FontFaceState): Promise<void> {
       `FontFace ${JSON.stringify(state.family)} advertises no raster formats; runtime font sources must declare the formats to bake`,
     );
   }
-  if (state.disposed) {
+  if (owner.disposed) {
     for (const font of fonts) font.dispose();
     throw new DOMException('FontFace load owner was disposed', 'AbortError');
   }
   for (const font of fonts) {
-    const existing = state.records.get(font.raster);
+    const existing = owner.records.get(font.raster);
     if (existing !== undefined) {
       font.dispose();
       continue;
     }
-    state.records.set(font.raster, {
+    owner.records.set(font.raster, {
       raster: font.raster,
       promise: Promise.resolve(font),
       font,
@@ -454,10 +464,17 @@ function loadFontFaceFormat(
   const format = rasterOf(raster);
   const existingPromise = selected.promises.get(format);
   if (existingPromise !== undefined) return existingPromise;
-  let record = selected.face.records.get(format);
+  let record = selected.face.owner.records.get(format);
   if (record === undefined) {
-    record = createLoadedFaceRecord(selected.face, raster, format);
-    selected.face.records.set(format, record);
+    record = createLoadedFaceRecord(
+      selected.face.owner,
+      selected.face.family,
+      selected.face.library,
+      selected.face.source,
+      raster,
+      format,
+    );
+    selected.face.owner.records.set(format, record);
   }
   const exact = record;
   let promise!: Promise<AnyFontFaceSelection>;
@@ -473,16 +490,19 @@ function loadFontFaceFormat(
 }
 
 function createLoadedFaceRecord(
-  state: FontFaceState,
+  owner: FontFaceResourceOwner,
+  family: string,
+  library: FontLibrary,
+  fontSource: FontFaceSource,
   raster: RasterFormatInput<AnyRasterFormat>,
   format: AnyRasterFormat,
 ): LoadedFaceRecord {
   let record!: LoadedFaceRecord;
-  const promise = ensureFontFaceSource(state, [raster])
+  const promise = ensureFontFaceSource(owner, library, fontSource, [raster])
     .then((source) => source.load(raster))
     .then(
       (font) => {
-        if (state.disposed || state.records.get(format) !== record) {
+        if (owner.disposed || owner.records.get(format) !== record) {
           font.dispose();
           throw new DOMException('FontFace load owner was disposed', 'AbortError');
         }
@@ -490,14 +510,14 @@ function createLoadedFaceRecord(
         return font;
       },
       (error: unknown) => {
-        if (state.records.get(format) === record) state.records.delete(format);
+        if (owner.records.get(format) === record) owner.records.delete(format);
         if (
           error instanceof FontLoadError &&
           (error.code === 'RASTER_NOT_FOUND' || error.code === 'RASTER_SOURCE_UNAVAILABLE')
         ) {
           throw new FontLoadError(
             'FONT_FACE_FORMAT_UNAVAILABLE',
-            `FontFace ${JSON.stringify(state.family)} does not implement the declared ${JSON.stringify(format.kind)} format`,
+            `FontFace ${JSON.stringify(family)} does not implement the declared ${JSON.stringify(format.kind)} format`,
             { cause: error },
           );
         }
@@ -514,7 +534,7 @@ function fontFaceFormats(face: AnyFontFace): Promise<readonly string[]> {
   const state = selected.face;
   if (state.formatsPromise !== undefined) return state.formatsPromise;
   let promise!: Promise<readonly string[]>;
-  promise = ensureFontFaceSource(state, []).then(
+  promise = ensureFontFaceSource(state.owner, state.library, state.source, []).then(
     (source) => source.formats,
     (error: unknown) => {
       if (state.formatsPromise === promise) state.formatsPromise = undefined;
@@ -526,33 +546,35 @@ function fontFaceFormats(face: AnyFontFace): Promise<readonly string[]> {
 }
 
 function ensureFontFaceSource(
-  state: FontFaceState,
+  owner: FontFaceResourceOwner,
+  library: FontLibrary,
+  fontSource: FontFaceSource,
   initialRasters: readonly RasterFormatInput<AnyRasterFormat>[],
 ): Promise<FontFaceSourceLease> {
-  if (state.sourcePromise !== undefined) return state.sourcePromise;
+  if (owner.sourcePromise !== undefined) return owner.sourcePromise;
   const controller = new AbortController();
-  state.sourceController = controller;
+  owner.sourceController = controller;
   let promise!: Promise<FontFaceSourceLease>;
-  promise = fontFaceLoadInput(state.source)
-    .then((input) => openFontFaceSource(state.library, input, initialRasters, { signal: controller.signal }))
+  promise = fontFaceLoadInput(fontSource)
+    .then((input) => openFontFaceSource(library, input, initialRasters, { signal: controller.signal }))
     .then(
       (source) => {
-        if (state.disposed || state.sourcePromise !== promise) {
+        if (owner.disposed || owner.sourcePromise !== promise) {
           source.dispose();
           throw new DOMException('FontFace source owner was disposed', 'AbortError');
         }
-        state.sourceLease = source;
+        owner.sourceLease = source;
         return source;
       },
       (error: unknown) => {
-        if (state.sourcePromise === promise) {
-          state.sourcePromise = undefined;
-          state.sourceController = undefined;
+        if (owner.sourcePromise === promise) {
+          owner.sourcePromise = undefined;
+          owner.sourceController = undefined;
         }
         throw error;
       },
     );
-  state.sourcePromise = promise;
+  owner.sourcePromise = promise;
   return promise;
 }
 
@@ -563,7 +585,7 @@ function isFontFaceLoaded(face: AnyFontFace): boolean {
 }
 
 function isFontFaceFormatLoaded(selection: AnyFontFaceSelection, raster: RasterFormatInput<AnyRasterFormat>): boolean {
-  return fontFaceSelectionState(selection).face.records.get(rasterOf(raster))?.font !== undefined;
+  return fontFaceSelectionState(selection).face.owner.records.get(rasterOf(raster))?.font !== undefined;
 }
 
 function requiredFontFaceFormat(
@@ -572,7 +594,7 @@ function requiredFontFaceFormat(
 ): Font<AnyRasterFormat> {
   const selected = fontFaceSelectionState(selection);
   const format = rasterOf(raster);
-  const font = selected.face.records.get(format)?.font;
+  const font = selected.face.owner.records.get(format)?.font;
   if (font === undefined) {
     throw new FontLoadError(
       'FONT_FACE_FORMAT_NOT_LOADED',
@@ -603,21 +625,25 @@ function rasterOf(raster: RasterFormatInput<AnyRasterFormat>): AnyRasterFormat {
 }
 
 function disposeFontFaceState(state: FontFaceState): void {
-  if (state.disposed) return;
-  state.disposed = true;
   state.aggregateLoaded = false;
-  state.sourceController?.abort(new DOMException('FontFace load owner was disposed', 'AbortError'));
-  state.sourceController = undefined;
   state.aggregatePromise = undefined;
   state.formatsPromise = undefined;
-  for (const record of state.records.values()) {
+  disposeFontFaceResourceOwner(state.owner);
+}
+
+function disposeFontFaceResourceOwner(owner: FontFaceResourceOwner): void {
+  if (owner.disposed) return;
+  owner.disposed = true;
+  owner.sourceController?.abort(new DOMException('FontFace load owner was disposed', 'AbortError'));
+  owner.sourceController = undefined;
+  for (const record of owner.records.values()) {
     record.font?.dispose();
     record.font = undefined;
   }
-  state.records.clear();
-  state.sourceLease?.dispose();
-  state.sourceLease = undefined;
-  state.sourcePromise = undefined;
+  owner.records.clear();
+  owner.sourceLease?.dispose();
+  owner.sourceLease = undefined;
+  owner.sourcePromise = undefined;
 }
 
 function formatList(format: FontFaceConfig['format']): readonly FontFaceFormat[] {

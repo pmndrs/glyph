@@ -30,6 +30,8 @@ export interface RegisteredRasterResourceCandidate {
 export interface RegisteredFontData {
   /** Complete immutable GLB backing. Every embedded payload is a view into this allocation. */
   readonly artifactBytes: Uint8Array<ArrayBuffer>;
+  /** Content identity of the complete main GLB, independent of its locator or shaping payload. */
+  readonly artifactHash: string;
   readonly fontFaceIndex: number;
   readonly sourceHash: string;
   sourceBytes?: Uint8Array;
