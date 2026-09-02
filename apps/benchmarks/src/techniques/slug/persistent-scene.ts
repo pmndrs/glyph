@@ -260,6 +260,27 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
     return { canvasSurface, camera, line, scene, state: committedState };
   };
 
+  const releaseActivationResources = (): void => {
+    updateRevision += 1;
+    presentation?.transition.dispose();
+    presentation = undefined;
+    line?.removeFromParent();
+    line?.dispose();
+    if (glyphRoot !== undefined) disposeBenchmarkThreeRoot(glyphRoot);
+    if (fontFixture === undefined) loadedFont?.dispose();
+    else fontFixture.dispose();
+    canvasSurface?.dispose();
+    line = undefined;
+    glyphRoot = undefined;
+    loadedFont = undefined;
+    committedState = undefined;
+    fontFixture = undefined;
+    activationSignal = undefined;
+    canvasSurface = undefined;
+    camera = undefined;
+    scene = undefined;
+  };
+
   /** Commits one validated generation; `Text.set()` leaves desired state unchanged when it rejects. */
   const commitState = (activeLine: Text<typeof slug>, next: SlugTextState): void => {
     applyState(activeLine, next);
@@ -370,80 +391,86 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       if (disposed) throw new DOMException('The Slug scene is disposed', 'InvalidStateError');
       if (scene !== undefined) throw new DOMException('The Slug scene is already active', 'InvalidStateError');
       context.signal.throwIfAborted();
-      activationSignal = context.signal;
-      rendererInitMs = context.rendererInitMs;
-      width = positiveViewportSize(context.viewport.width, 'Slug scene width');
-      height = positiveViewportSize(context.viewport.height, 'Slug scene height');
-      committedContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
-      scene = new THREE.Scene();
-      glyphRoot = createBenchmarkThreeRoot(`slug-text-scene-${backend}`);
-      camera = new THREE.OrthographicCamera(0, width, 0, -height, 0.1, 1_000);
-      camera.position.z = 500;
-      camera.updateProjectionMatrix();
-      // CanvasSurface consumes only render-state methods; the host still withholds renderer lifecycle ownership.
-      canvasSurface = createCanvasSurface(context.renderer as THREE.WebGPURenderer, width, height, gridVisible);
-      const fontStarted = performance.now();
-      const loaded = await loadSlugFontAsset({
-        technique: 'slug',
-        fixture: initialFontFixture,
-        delivery,
-        library,
-        signal: context.signal,
-        ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
-      });
-      loadedFont = loaded.loaded;
-      const fontLoadMs = performance.now() - fontStarted;
-      context.signal.throwIfAborted();
-      const rasterConfiguration = slugDataConfiguration(loaded.data);
-      fontFixture = createRetainedFontFixtureController(
-        library,
-        {
+      try {
+        activationSignal = context.signal;
+        rendererInitMs = context.rendererInitMs;
+        width = positiveViewportSize(context.viewport.width, 'Slug scene width');
+        height = positiveViewportSize(context.viewport.height, 'Slug scene height');
+        committedContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
+        scene = new THREE.Scene();
+        glyphRoot = createBenchmarkThreeRoot(`slug-text-scene-${backend}`);
+        camera = new THREE.OrthographicCamera(0, width, 0, -height, 0.1, 1_000);
+        camera.position.z = 500;
+        camera.updateProjectionMatrix();
+        // CanvasSurface consumes only render-state methods; the host still withholds renderer lifecycle ownership.
+        canvasSurface = createCanvasSurface(context.renderer as THREE.WebGPURenderer, width, height, gridVisible);
+        const fontStarted = performance.now();
+        const loaded = await loadSlugFontAsset({
+          technique: 'slug',
           fixture: initialFontFixture,
-          asset: { font: loaded.loaded, fontLoadMs, loaded, loadedFont, rasterConfiguration },
-        },
-        // Dispose the application Font lease; live renderer bindings retain their own counted lease.
-        { dispose: (asset) => asset.loadedFont.dispose() },
-      );
-      const textStarted = performance.now();
-      const identity: ShapedTextIdentity = { fontFixture: initialFontFixture, text, language, direction, features };
-      const state: SlugTextState = {
-        font: loadedFont,
-        identity,
-        constraints: slugConstraints(committedContentWidth),
-        layout: slugLayout(textAlign),
-        style: slugStyle(fontSize, identity),
-        rasterPixelRatio: context.viewport.dpr,
-      };
-      line = glyphRoot.createText({
-        font: state.font,
-        text: state.identity.text,
-        constraints: state.constraints,
-        layout: state.layout,
-        style: state.style,
-        rasterPixelRatio: state.rasterPixelRatio,
-      });
-      const activeLine = line;
-      const scheduledAt = performance.now();
-      // `Text` reconciles while it is parented, so attaching and forcing one world update is what commits the layout.
-      scene.add(activeLine);
-      activeLine.updateMatrixWorld(true);
-      if (activeLine.error !== undefined) throw activeLine.error;
-      committedState = state;
-      updateSlugDrawVisibility(activeLine);
-      const readyAt = performance.now();
-      context.signal.throwIfAborted();
-      textReadyMs = performance.now() - textStarted;
-      const sceneStartedAt = performance.now();
-      positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
-      const sceneFinishedAt = performance.now();
-      textUpdateTelemetry.record({
-        scheduleMs: scheduledAt - textStarted,
-        readyMs: readyAt - scheduledAt,
-        sceneMs: sceneFinishedAt - sceneStartedAt,
-        totalMs: sceneFinishedAt - textStarted,
-      });
-      startupMs = performance.now() - startupStarted;
-      activationGate.resolve();
+          delivery,
+          library,
+          signal: context.signal,
+          ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
+        });
+        loadedFont = loaded.loaded;
+        const fontLoadMs = performance.now() - fontStarted;
+        context.signal.throwIfAborted();
+        const rasterConfiguration = slugDataConfiguration(loaded.data);
+        fontFixture = createRetainedFontFixtureController(
+          library,
+          {
+            fixture: initialFontFixture,
+            asset: { font: loaded.loaded, fontLoadMs, loaded, loadedFont, rasterConfiguration },
+          },
+          // Dispose the application Font lease; live renderer bindings retain their own counted lease.
+          { dispose: (asset) => asset.loadedFont.dispose() },
+        );
+        const textStarted = performance.now();
+        const identity: ShapedTextIdentity = { fontFixture: initialFontFixture, text, language, direction, features };
+        const state: SlugTextState = {
+          font: loadedFont,
+          identity,
+          constraints: slugConstraints(committedContentWidth),
+          layout: slugLayout(textAlign),
+          style: slugStyle(fontSize, identity),
+          rasterPixelRatio: context.viewport.dpr,
+        };
+        line = glyphRoot.createText({
+          font: state.font,
+          text: state.identity.text,
+          constraints: state.constraints,
+          layout: state.layout,
+          style: state.style,
+          rasterPixelRatio: state.rasterPixelRatio,
+        });
+        const activeLine = line;
+        const scheduledAt = performance.now();
+        // `Text` reconciles while it is parented, so attaching and forcing one world update is what commits the layout.
+        scene.add(activeLine);
+        activeLine.updateMatrixWorld(true);
+        if (activeLine.error !== undefined) throw activeLine.error;
+        committedState = state;
+        updateSlugDrawVisibility(activeLine);
+        const readyAt = performance.now();
+        context.signal.throwIfAborted();
+        textReadyMs = performance.now() - textStarted;
+        const sceneStartedAt = performance.now();
+        positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
+        const sceneFinishedAt = performance.now();
+        textUpdateTelemetry.record({
+          scheduleMs: scheduledAt - textStarted,
+          readyMs: readyAt - scheduledAt,
+          sceneMs: sceneFinishedAt - sceneStartedAt,
+          totalMs: sceneFinishedAt - textStarted,
+        });
+        startupMs = performance.now() - startupStarted;
+        activationGate.resolve();
+      } catch (error) {
+        releaseActivationResources();
+        activationGate.reject(error);
+        throw error;
+      }
     },
     frame(context) {
       if (closing || disposed) return;
@@ -609,24 +636,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       if (line === undefined) {
         activationGate.reject(new DOMException('The Slug persistent scene was deactivated', 'AbortError'));
       }
-      updateRevision += 1;
-      presentation?.transition.dispose();
-      presentation = undefined;
-      line?.removeFromParent();
-      line?.dispose();
-      if (glyphRoot !== undefined) disposeBenchmarkThreeRoot(glyphRoot);
-      if (fontFixture === undefined) loadedFont?.dispose();
-      else fontFixture.dispose();
-      canvasSurface?.dispose();
-      line = undefined;
-      glyphRoot = undefined;
-      loadedFont = undefined;
-      committedState = undefined;
-      fontFixture = undefined;
-      activationSignal = undefined;
-      canvasSurface = undefined;
-      camera = undefined;
-      scene = undefined;
+      releaseActivationResources();
     },
   };
 }

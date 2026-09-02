@@ -17,7 +17,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
-import { StrictMode, Suspense, createElement, useLayoutEffect } from 'react';
+import { Fragment, StrictMode, Suspense, createElement, useLayoutEffect } from 'react';
 
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
@@ -27,6 +27,7 @@ import '../support/browser-globals.mjs';
 
 import { GlyphProvider, Text, TextGroup, useFont } from '@pmndrs/glyph/react';
 import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import * as THREE from 'three/webgpu';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const multiFormatFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
@@ -204,6 +205,53 @@ test('GlyphProvider selects one terminal named root without rebinding the anonym
     fixture.dispose();
   }
   assert.equal(hud.textCount, 0);
+});
+
+test('an R3F portal selects a distinct terminal root for its target Scene', async () => {
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const { createPortal } = await import('@react-three/fiber/webgpu');
+  const fixture = await loadFixture();
+  const world = r3fHandle('portal-world');
+  const hud = r3fHandle('portal-hud');
+  const hudScene = new THREE.Scene();
+  let worldText;
+  let hudText;
+  const renderer = await create(
+    createElement(
+      Fragment,
+      null,
+      createElement(
+        GlyphProvider,
+        { handle: world },
+        createElement(Text, { font: fixture.font, ref: (value) => void (worldText = value ?? worldText) }, 'world'),
+      ),
+      createPortal(
+        createElement(
+          GlyphProvider,
+          { handle: hud },
+          createElement(Text, { font: fixture.font, ref: (value) => void (hudText = value ?? hudText) }, 'hud'),
+        ),
+        hudScene,
+      ),
+    ),
+  );
+  try {
+    assert.ok(worldText !== undefined && hudText !== undefined);
+    const worldScene = nearestScene(worldText);
+    assert.ok(worldScene !== undefined);
+    worldScene.updateMatrixWorld(true);
+    hudScene.updateMatrixWorld(true);
+    assert.equal(world.textCount, 1);
+    assert.equal(hud.textCount, 1);
+    assert.equal(world.drawRoot.parent, worldScene);
+    assert.equal(hud.drawRoot.parent, hudScene);
+    assert.notEqual(world.drawRoot.parent, hud.drawRoot.parent);
+  } finally {
+    await renderer.unmount();
+    fixture.dispose();
+    world.dispose();
+    hud.dispose();
+  }
 });
 
 test('StrictMode remount cycles balance their paragraph leases', async () => {
@@ -467,4 +515,11 @@ function BitmapFontText({ input, name, observed, options }) {
     };
   }, [font, name, observed]);
   return createElement(Text, { font, name }, name);
+}
+
+function nearestScene(object) {
+  for (let current = object; current !== null; current = current.parent) {
+    if (current.isScene === true) return current;
+  }
+  return undefined;
 }
