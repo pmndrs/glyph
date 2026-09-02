@@ -1,6 +1,6 @@
 import type { Font, RasterTechniqueInput } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, Text, type TextStyle } from '@pmndrs/glyph/three';
+import { FontLoader, type Text, type TextStyle } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import amiriBitmapFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
@@ -14,6 +14,7 @@ import {
 } from '../../../workloads/advanced-shaping/scene';
 import type { BenchmarkTarget } from '../../contracts';
 import { hashParagraphLayout, paragraphLayoutBytes } from '../../paragraph-layout-digest';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
 type BitmapTechnique = typeof bitmap;
 
@@ -95,100 +96,105 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
 
       // A standalone Text only binds a paragraph batch while it has a parent, so every case shapes inside a scene.
       const scene = new THREE.Scene();
-      for (const definition of ADVANCED_SHAPING_CASES) {
-        const font = state.fonts.get(definition.fontFixture);
-        if (font === undefined) throw new Error(`Missing ${definition.fontFixture} fixture`);
-        const caseFrames = frames.filter((frame) => frame.caseDefinition.id === definition.id);
-        let text: Text<BitmapTechnique> | undefined;
-        try {
-          for (const frame of caseFrames) {
-            const style: TextStyle = {
-              fontSize: FONT_SIZE,
-              language: definition.language,
-              direction: definition.direction,
-              // Target v1 validates an unbounded feature as a non-empty UTF-16 range over the paragraph, so the empty
-              // opening frame of each timeline states no features instead of an unsatisfiable whole-paragraph range.
-              ...(frame.text.length === 0 ? {} : { features: definition.features }),
-            };
-            const properties = {
-              text: frame.text,
-              constraints: {
-                width: {
-                  mode: 'exact',
-                  size: Math.max(120, (VIEWPORT_WIDTH * frame.widthPermille) / 1000),
+      const root = createBenchmarkThreeRoot('advanced-shaping-conformance');
+      try {
+        for (const definition of ADVANCED_SHAPING_CASES) {
+          const font = state.fonts.get(definition.fontFixture);
+          if (font === undefined) throw new Error(`Missing ${definition.fontFixture} fixture`);
+          const caseFrames = frames.filter((frame) => frame.caseDefinition.id === definition.id);
+          let text: Text<BitmapTechnique> | undefined;
+          try {
+            for (const frame of caseFrames) {
+              const style: TextStyle = {
+                fontSize: FONT_SIZE,
+                language: definition.language,
+                direction: definition.direction,
+                // Target v1 validates an unbounded feature as a non-empty UTF-16 range over the paragraph, so the empty
+                // opening frame of each timeline states no features instead of an unsatisfiable whole-paragraph range.
+                ...(frame.text.length === 0 ? {} : { features: definition.features }),
+              };
+              const properties = {
+                text: frame.text,
+                constraints: {
+                  width: {
+                    mode: 'exact',
+                    size: Math.max(120, (VIEWPORT_WIDTH * frame.widthPermille) / 1000),
+                  },
                 },
-              },
-              style,
-            } as const;
-            if (text === undefined) {
-              text = new Text({ font, ...properties });
-              scene.add(text);
-              coldReadyObservationCount += 1;
-            } else {
-              text.set(properties);
-              warmLifecyclePublicationCount += 1;
+                style,
+              } as const;
+              if (text === undefined) {
+                text = root.createText({ font, ...properties });
+                scene.add(text);
+                coldReadyObservationCount += 1;
+              } else {
+                text.set(properties);
+                warmLifecyclePublicationCount += 1;
+              }
+              // Target v1 publishes shaping, layout, and draws during the world-matrix update instead of through an
+              // awaited readiness promise, so failures surface on the object rather than as a rejected wait.
+              text.updateMatrixWorld(true);
+              // Headless runs read this across a page boundary that cannot transfer a cause, so the frame that failed
+              // and the underlying reason both belong in the message.
+              if (text.error !== undefined) {
+                throw new Error(`${definition.id}:${frame.tick} failed to publish: ${String(text.error)}`, {
+                  cause: text.error,
+                });
+              }
+              const layout = text.glyphs();
+              if (layout === undefined) throw new Error(`${definition.id}:${frame.tick} has no layout`);
+              const rendered = renderedGlyphs(scene, root.name);
+              const draws = bitmapDraws(scene, root.name);
+              const missing = layout.glyphIds.reduce((count, glyphId) => count + (glyphId === 0 ? 1 : 0), 0);
+              if (missing !== 0) {
+                throw new Error(`${definition.id}:${frame.tick} contains missing glyphs`);
+              }
+              if (frame.text.length > 0 && rendered === 0) {
+                throw new Error(`${definition.id}:${frame.tick} produced no bitmap instances`);
+              }
+              layoutByteCount += paragraphLayoutBytes(layout);
+              glyphCount += layout.glyphIds.length;
+              missingGlyphCount += missing;
+              renderedGlyphCount += rendered;
+              drawCount += draws;
+              frameHashes.push(
+                [
+                  definition.id,
+                  frame.tick,
+                  frame.widthPermille,
+                  hashText(frame.text),
+                  hashParagraphLayout(layout),
+                  rendered,
+                  draws,
+                ].join(':'),
+              );
             }
-            // Target v1 publishes shaping, layout, and draws during the world-matrix update instead of through an
-            // awaited readiness promise, so failures surface on the object rather than as a rejected wait.
-            text.updateMatrixWorld(true);
-            // Headless runs read this across a page boundary that cannot transfer a cause, so the frame that failed
-            // and the underlying reason both belong in the message.
-            if (text.error !== undefined) {
-              throw new Error(`${definition.id}:${frame.tick} failed to publish: ${String(text.error)}`, {
-                cause: text.error,
-              });
-            }
-            const layout = text.glyphs();
-            if (layout === undefined) throw new Error(`${definition.id}:${frame.tick} has no layout`);
-            const rendered = renderedGlyphs(text);
-            const draws = bitmapDraws(text);
-            const missing = layout.glyphIds.reduce((count, glyphId) => count + (glyphId === 0 ? 1 : 0), 0);
-            if (missing !== 0) {
-              throw new Error(`${definition.id}:${frame.tick} contains missing glyphs`);
-            }
-            if (frame.text.length > 0 && rendered === 0) {
-              throw new Error(`${definition.id}:${frame.tick} produced no bitmap instances`);
-            }
-            layoutByteCount += paragraphLayoutBytes(layout);
-            glyphCount += layout.glyphIds.length;
-            missingGlyphCount += missing;
-            renderedGlyphCount += rendered;
-            drawCount += draws;
-            frameHashes.push(
-              [
-                definition.id,
-                frame.tick,
-                frame.widthPermille,
-                hashText(frame.text),
-                hashParagraphLayout(layout),
-                rendered,
-                draws,
-              ].join(':'),
-            );
+          } finally {
+            text?.removeFromParent();
+            text?.dispose();
           }
-        } finally {
-          text?.removeFromParent();
-          text?.dispose();
         }
-      }
 
-      return {
-        bytes: layoutByteCount,
-        hash: hashText(frameHashes.join('|')),
-        metrics: {
-          caseCount: ADVANCED_SHAPING_CASES.length,
-          frameCount: frames.length,
-          finalFrameCount: ADVANCED_SHAPING_CASES.length,
-          layoutBytes: layoutByteCount,
-          glyphCount,
-          missingGlyphCount,
-          renderedGlyphCount,
-          drawCount,
-          coldReadyObservationCount,
-          warmLifecyclePublicationCount,
-          warmReadyWaitCount: 0,
-        },
-      };
+        return {
+          bytes: layoutByteCount,
+          hash: hashText(frameHashes.join('|')),
+          metrics: {
+            caseCount: ADVANCED_SHAPING_CASES.length,
+            frameCount: frames.length,
+            finalFrameCount: ADVANCED_SHAPING_CASES.length,
+            layoutBytes: layoutByteCount,
+            glyphCount,
+            missingGlyphCount,
+            renderedGlyphCount,
+            drawCount,
+            coldReadyObservationCount,
+            warmLifecyclePublicationCount,
+            warmReadyWaitCount: 0,
+          },
+        };
+      } finally {
+        disposeBenchmarkThreeRoot(root);
+      }
     },
     dispose: async () => {
       if (state.kind !== 'ready') return;
@@ -200,9 +206,9 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
   };
 }
 
-function renderedGlyphs(object: THREE.Object3D): number {
+function renderedGlyphs(scene: THREE.Scene, rootName: string | undefined): number {
   let count = 0;
-  object.traverse((child) => {
+  drawRoot(scene, rootName)?.traverse((child) => {
     if (child instanceof THREE.Mesh && child.geometry instanceof THREE.InstancedBufferGeometry) {
       count += child.geometry.instanceCount;
     }
@@ -210,12 +216,16 @@ function renderedGlyphs(object: THREE.Object3D): number {
   return count;
 }
 
-function bitmapDraws(object: THREE.Object3D): number {
+function bitmapDraws(scene: THREE.Scene, rootName: string | undefined): number {
   let count = 0;
-  object.traverse((child) => {
+  drawRoot(scene, rootName)?.traverse((child) => {
     if (child instanceof THREE.Mesh) count += 1;
   });
   return count;
+}
+
+function drawRoot(scene: THREE.Scene, rootName: string | undefined): THREE.Object3D | undefined {
+  return scene.getObjectByName(rootName === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${rootName}`);
 }
 
 function hashText(value: string): string {

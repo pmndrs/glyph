@@ -1,4 +1,3 @@
-import { Text } from '@pmndrs/glyph/three';
 import type * as THREE from 'three/webgpu';
 
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
@@ -39,6 +38,7 @@ export const editorialWorkload = {
       animationElapsedMs: context.animationElapsedMs,
       dpr: context.dpr,
       font: context.font,
+      root: context.root,
       viewportWidth: context.viewportWidth,
     });
   },
@@ -81,7 +81,7 @@ export function createEditorialEntries(
   const bodyText = Array.from({ length: repeats }, (_, cycle) =>
     EDITORIAL_TEXT.slice(cycle === 0 ? 1 : 0).join(' '),
   ).join(' ');
-  const lede = new Text({
+  const lede = context.root.createText({
     font: context.font,
     rasterPixelRatio: context.dpr,
     text: EDITORIAL_TEXT[0],
@@ -94,7 +94,7 @@ export function createEditorialEntries(
       justify: EDITORIAL_JUSTIFY,
     },
   });
-  const body = new Text({
+  const body = context.root.createText({
     font: context.font,
     rasterPixelRatio: context.dpr,
     text: bodyText,

@@ -172,7 +172,7 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
     hash,
     metrics: {
       coreObjectRetained: 1,
-      nestedSpanCount: core.spans.length,
+      nestedSpanCount: 1,
       glyphCount: restoredLayout.glyphIds.length,
       drawCount,
       paintCount,

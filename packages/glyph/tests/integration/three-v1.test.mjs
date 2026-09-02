@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
 import {
@@ -11,6 +11,7 @@ import {
   loadFont,
   ParagraphLayout,
   TextStyle,
+  txt,
 } from '@pmndrs/glyph';
 import { GlyphBackend } from '@pmndrs/glyph/core';
 import { PlanTransport } from '../../dist/core/backend.js';
@@ -21,8 +22,7 @@ import {
   defineTextMaterial,
   FontLoader,
   localToWorldMatrix,
-  Text,
-  TextGroup,
+  span as textSpan,
   ThreeConfig,
   worldToLocalMatrix,
 } from '@pmndrs/glyph/three';
@@ -30,7 +30,7 @@ import * as THREE from 'three/webgpu';
 import { bitmapSchema } from '../../dist/raster/bitmap-technique.js';
 import { msdfSchema } from '../../dist/raster/msdf.js';
 import { slugSchema } from '../../dist/raster/slug-technique.js';
-import { threeEngineDomainReport, threeSharedRenderResourceCount } from '../../dist/three/engine-domain.js';
+import { threeHandleDomain } from '../../dist/three/handle.js';
 import { decorationSchema, threeSystemBuffers } from '../../dist/three/render-policy.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
@@ -49,12 +49,26 @@ const iconSlugFontUrl = new URL(
 );
 const multiTechniqueFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
 const glyphAttribute = (bufferId) => `_pmndrsGlyph_${bufferId}`;
+const instrumentedGlyph = instrumentNextGlyphEngine();
+let nextThreeTestHandle = 1;
+after(() => instrumentedGlyph.restoreInstantiate());
+
+async function createThreeTestHandle(t, config = ThreeConfig) {
+  await glyph.init();
+  const handle = glyph.handle(`three:integration:case:${String(nextThreeTestHandle++)}`, config);
+  t.after(() => handle.dispose());
+  return handle;
+}
 
 test('one initialized Glyph runtime creates independent named Three handles over immutable root fonts', async () => {
   const firstInit = glyph.init();
   const secondInit = glyph.init();
   assert.equal(firstInit, secondInit, 'concurrent initialization shares one operation');
-  await firstInit;
+  try {
+    await firstInit;
+  } finally {
+    instrumentedGlyph.restoreInstantiate();
+  }
   assert.equal(glyph.init(), firstInit, 'successful initialization keeps one settled promise forever');
 
   const font = await loadFont(
@@ -204,7 +218,8 @@ test('detached matrix helpers round-trip aliased and independent targets with a 
   }
 });
 
-test('Text.breakApart imports a planner-assisted copy with exact world alignment and full matrices', async () => {
+test('Text.breakApart imports a planner-assisted copy with exact world alignment and full matrices', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: dataUrl(await readFile(fontUrl)) },
@@ -216,7 +231,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
   sourceParent.rotation.set(0.15, -0.3, 0.25);
   sourceParent.scale.set(1.2, 0.8, 1.1);
   scene.add(sourceParent);
-  const label = new Text({ font, text: 'Glyphs move', style: { fontSize: 16 } });
+  const label = three.createText({ font, text: 'Glyphs move', style: { fontSize: 16 } });
   label.position.set(7, -3, 2);
   sourceParent.add(label);
   scene.updateMatrixWorld(true);
@@ -229,11 +244,11 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
 
   let detached;
   try {
-    const sourceResourceCount = threeSharedRenderResourceCount();
+    const sourceResourceCount = threeHandleDomain(three).coordinator.sharedRenderResourceCount;
     assert.ok(sourceResourceCount > 0, 'the committed source realizes its atlas resource');
     [detached] = label.breakApart();
     assert.equal(
-      threeSharedRenderResourceCount(),
+      threeHandleDomain(three).coordinator.sharedRenderResourceCount,
       sourceResourceCount,
       'the detached executor leases the source atlas instead of uploading a duplicate',
     );
@@ -292,7 +307,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     scene.updateMatrixWorld(true);
 
     const draw = detached.children.find((child) => child.isMesh);
-    const sourceDraw = label.children.find(
+    const sourceDraw = rootDraws(scene).find(
       (child) => child.isMesh && child.userData.pmndrsGlyphPrimitiveKind === 'glyph',
     );
     assert.ok(sourceDraw);
@@ -402,7 +417,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     assert.equal(detached.matrix.elements[12], rootX + 3, 'ordinary Three TRS edits must update the detached root');
     detached.dispose();
     assert.equal(
-      threeSharedRenderResourceCount(),
+      threeHandleDomain(three).coordinator.sharedRenderResourceCount,
       sourceResourceCount,
       'disposing the detached lease must retain the source atlas',
     );
@@ -417,41 +432,43 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
   }
 });
 
-test('detached glyphs retain their engine domain after the source and font owners are disposed', async () => {
+test('detached glyphs retain their engine domain after the source and font owners are disposed', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
   const scene = new THREE.Scene();
-  const label = new Text({ font, text: 'outlives source', style: { fontSize: 16 } });
+  const label = three.createText({ font, text: 'outlives source', style: { fontSize: 16 } });
   scene.add(label);
   scene.updateMatrixWorld(true);
   const [detached] = label.breakApart();
+  const domain = threeHandleDomain(three);
   scene.add(detached);
   label.dispose();
   font.dispose();
   loader.dispose();
+  three.dispose();
   try {
-    assert.equal(threeEngineDomainReport().active, true, 'the detached object owns a domain lease');
-    assert.ok(threeSharedRenderResourceCount() > 0);
+    assert.ok(domain.coordinator.sharedRenderResourceCount > 0, 'the detached object owns a handle-domain lease');
     assert.ok(detached.materials.length > 0);
     detached.getMatrixAt(0, new THREE.Matrix4());
   } finally {
     detached.dispose();
   }
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
-  assert.equal(threeSharedRenderResourceCount(), 0);
+  assert.equal(domain.coordinator.sharedRenderResourceCount, 0);
 });
 
-test('Text.breakApart returns a paragraph-scoped independent decoration plan when one exists', async () => {
+test('Text.breakApart returns a paragraph-scoped independent decoration plan when one exists', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
   const scene = new THREE.Scene();
-  const label = new Text({
+  const label = three.createText({
     font,
     text: 'decorated text',
     style: { decoration: { underline: true, color: '#38bdf8' }, fontSize: 16 },
@@ -471,7 +488,7 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
     const copiedDraws = decorations.children.filter((child) => child.isMesh);
     assert.ok(copiedDraws.length > 0);
     assert.ok(copiedDraws.every((draw) => draw.userData.pmndrsGlyphPrimitiveKind === 'decoration'));
-    const sourceDraw = label.children.find(
+    const sourceDraw = rootDraws(scene).find(
       (child) => child.isMesh && child.userData.pmndrsGlyphPrimitiveKind === 'decoration',
     );
     assert.ok(sourceDraw);
@@ -511,7 +528,7 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
     detached.dispose();
     detached = undefined;
 
-    plain = new Text({ font, text: 'plain text', style: { fontSize: 16 } });
+    plain = three.createText({ font, text: 'plain text', style: { fontSize: 16 } });
     scene.add(plain);
     scene.updateMatrixWorld(true);
     const plainParts = plain.breakApart();
@@ -530,7 +547,8 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
   }
 });
 
-test('Text.breakApart preserves TextGroup paint order across detached roots', async () => {
+test('Text.breakApart preserves TextGroup paint order across detached roots', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: dataUrl(await readFile(fontUrl)) },
@@ -539,9 +557,9 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
   const scene = new THREE.Scene();
   const layer = new THREE.Group();
   layer.renderOrder = 3;
-  const group = new TextGroup({ renderOrder: 20 });
-  const before = new Text({ font, text: 'earlier sibling', style: { fontSize: 16, color: '#f97316' } });
-  const label = new Text({
+  const group = three.createTextGroup({ renderOrder: 20 });
+  const before = three.createText({ font, text: 'earlier sibling', style: { fontSize: 16, color: '#f97316' } });
+  const label = three.createText({
     font,
     text: 'layered decorations',
     style: {
@@ -568,7 +586,7 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
     const over = decorations.children.filter((child) => child.isMesh && child.userData.pmndrsGlyphDepthKey === 2);
     assert.ok(glyphDraws.length > 0 && under.length > 0 && over.length > 0);
     const labelStableIds = new Set(label.glyphs().glyphStableIds);
-    const sourceGlyphOrders = group.children
+    const sourceGlyphOrders = rootDraws(scene)
       .filter((child) => child.isMesh && child.userData.pmndrsGlyphPrimitiveKind === 'glyph')
       .filter((draw) => {
         const stableIds = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.stableGlyphId.id));
@@ -606,7 +624,8 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
   }
 });
 
-test('Text.breakApart preserves per-span material routing with independently owned instances', async () => {
+test('Text.breakApart preserves per-span material routing with independently owned instances', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: dataUrl(await readFile(fontUrl)) },
@@ -620,19 +639,19 @@ test('Text.breakApart preserves per-span material routing with independently own
     });
   const base = namedMaterial('detached-base');
   const accent = namedMaterial('detached-accent');
+  const accented = textSpan(accent);
   const scene = new THREE.Scene();
-  const label = new Text({
+  const label = three.createText({
     font,
-    text: 'AB',
+    text: txt`A${accented`B`}`,
     material: base,
-    spans: [{ start: 1, end: 2, material: accent }],
   });
   scene.add(label);
   scene.updateMatrixWorld(true);
 
   let detached;
   try {
-    const sourceNames = new Set(label.children.filter((child) => child.isMesh).map((draw) => draw.material.name));
+    const sourceNames = new Set(rootDraws(scene).map((draw) => draw.material.name));
     assert.deepEqual(sourceNames, new Set(['detached-base', 'detached-accent']));
     [detached] = label.breakApart();
     scene.add(detached);
@@ -672,7 +691,8 @@ test('one portable request returns typed resources for every declared technique'
   slugFont.dispose();
 });
 
-test('Three carries supported text effects into MSDF lanes and rejects them for unsupported techniques', async () => {
+test('Three carries supported text effects into MSDF lanes and rejects them for unsupported techniques', async (t) => {
+  const three = await createThreeTestHandle(t);
   const bytes = await readFile(multiTechniqueFontUrl);
   const loader = new FontLoader();
   const [bitmapFont, msdfFont, slugFont] = await loader.loadFontsAsync({ baked: dataUrl(bytes) }, [
@@ -687,14 +707,15 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
     outline: { color: '#ff000080', width: 2 },
     shadow: { color: '#0000ff80', offset: [3, 4] },
   };
-  assert.throws(() => new Text({ font: bitmapFont, text: 'A', style: effectStyle }), /pmndrs\.bitmap.*outline/);
-  assert.throws(() => new Text({ font: slugFont, text: 'A', style: effectStyle }), /pmndrs\.slug.*outline/);
+  assert.throws(() => three.createText({ font: bitmapFont, text: 'A', style: effectStyle }), /pmndrs\.bitmap.*outline/);
+  assert.throws(() => three.createText({ font: slugFont, text: 'A', style: effectStyle }), /pmndrs\.slug.*outline/);
 
   const scene = new THREE.Scene();
-  const group = new TextGroup();
-  const label = new Text({
+  const group = three.createTextGroup();
+  const smaller = textSpan({ fontSize: 24 });
+  const label = three.createText({
     font: msdfFont,
-    text: { text: 'A', spans: [{ start: 0, end: 1, style: { fontSize: 24 } }] },
+    text: txt`${smaller`A`}`,
     style: effectStyle,
   });
   try {
@@ -702,7 +723,7 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
     scene.add(group);
     scene.updateMatrixWorld(true);
     assert.equal(label.error, undefined);
-    const draw = group.children.find((child) => child.isMesh);
+    const draw = rootDraws(scene)[0];
     assert.ok(draw, 'MSDF effect text must publish a draw');
     const effects = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.effectColor.id)).array;
     const page = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.page.id)).array;
@@ -757,7 +778,8 @@ test('Three font loading rejects malformed arguments before starting LoadingMana
   loader.dispose();
 });
 
-test('Three domain ownership follows immutable variants across loaders and user-font disposal', async () => {
+test('Three handle ownership follows immutable variants across loaders and user-font disposal', async (t) => {
+  const three = await createThreeTestHandle(t);
   const library = createFontLibrary();
   const firstLoader = new FontLoader(undefined, { library });
   const secondLoader = new FontLoader(undefined, { library });
@@ -767,29 +789,28 @@ test('Three domain ownership follows immutable variants across loaders and user-
   };
   const [first, second] = await Promise.all([firstLoader.loadAsync(request), secondLoader.loadAsync(request)]);
   assert.notEqual(first, second, 'each caller owns an independent Font lease');
-  assert.deepEqual(threeEngineDomainReport(), { active: true, loaders: 2, fonts: 1, leases: 0 });
 
-  const label = new Text({ font: second, text: 'retained' });
+  const label = three.createText({ font: second, text: 'retained' });
   first.dispose();
   firstLoader.dispose();
   secondLoader.dispose();
   second.dispose();
   assert.ok(label.measure().glyphCount > 0, 'a live Text retains everything needed after loader and Font disposal');
-  assert.deepEqual(threeEngineDomainReport(), { active: true, loaders: 0, fonts: 1, leases: 2 });
 
   label.dispose();
   library.dispose();
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(label.disposed, true);
 });
 
-test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose through the scene graph', async () => {
+test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose through the scene graph', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
   const emptyScene = new THREE.Scene();
-  const initiallyEmpty = new Text({ font, text: '' });
+  const initiallyEmpty = three.createText({ font, text: '' });
   emptyScene.add(initiallyEmpty);
   emptyScene.updateMatrixWorld(true);
   assert.equal(initiallyEmpty.error, undefined, 'an empty paragraph must publish without a no-op text mutation');
@@ -799,56 +820,28 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(initiallyEmpty.measure().glyphCount, 1);
   initiallyEmpty.dispose();
 
-  const editedSpans = new Text({
-    font,
-    text: 'ABCD',
-    spans: [
-      { start: 0, end: 2, style: { color: '#ff0000' } },
-      { start: 2, end: 4, style: { color: '#00ff00' } },
-    ],
-  });
-  // Text and its spans are authored together. A caller that changes the string states the ranges
-  // that string has, and `set` still derives the narrow engine edit from the two strings.
+  const red = textSpan({ color: '#ff0000' });
+  const green = textSpan({ color: '#00ff00' });
+  const editedSpans = three.createText({ font, text: txt`${red`AB`}${green`CD`}` });
+  // Text and structural span fragments are authored together. `set` receives a new document and
+  // still derives the narrow engine edit from the two flattened strings.
   editedSpans.set({
-    text: 'AXBYCD',
-    spans: [
-      { start: 0, end: 3, style: { color: '#ff0000' } },
-      { start: 4, end: 6, style: { color: '#00ff00' } },
-    ],
+    text: txt`${red`AXB`}Y${green`CD`}`,
   });
-  assert.deepEqual(
-    editedSpans.spans.map(({ start, end }) => ({ start, end })),
-    [
-      { start: 0, end: 3 },
-      { start: 4, end: 6 },
-    ],
-    'authored ranges are stored as authored when every boundary is already a cluster boundary',
-  );
+  assert.equal(editedSpans.text, 'AXBYCD');
   editedSpans.set({
-    text: 'ACD',
-    spans: [
-      { start: 0, end: 1, style: { color: '#ff0000' } },
-      { start: 1, end: 3, style: { color: '#00ff00' } },
-    ],
+    text: txt`${red`A`}${green`CD`}`,
   });
   assert.equal(editedSpans.text, 'ACD');
-  assert.deepEqual(
-    editedSpans.spans.map(({ start, end }) => ({ start, end })),
-    [
-      { start: 0, end: 1 },
-      { start: 1, end: 3 },
-    ],
-  );
-  // Stating `text` without `spans` clears them: replacement text carries its own formatting, and
-  // retaining the previous ranges would reinterpret them against unrelated text.
+  // Stating a plain string replaces the structural document rather than retaining hidden ranges.
   editedSpans.text = 'ACD!';
-  assert.deepEqual(editedSpans.spans, []);
+  assert.equal(editedSpans.text, 'ACD!');
   editedSpans.dispose();
 
   const scene = new THREE.Scene();
-  const group = new TextGroup({ renderOrder: 12 });
+  const group = three.createTextGroup({ renderOrder: 12 });
   const container = new THREE.Object3D();
-  const label = new Text({ font, text: 'First frame' });
+  const label = three.createText({ font, text: 'First frame' });
   container.add(label);
   group.add(container);
   scene.add(group);
@@ -859,7 +852,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(label.textGroup, group);
   assert.equal(group.textCount, 1);
   assert.equal(group.error, undefined);
-  const firstDraws = group.children.filter((child) => child.isMesh);
+  const firstDraws = rootDraws(scene);
   assert.ok(firstDraws.length > 0);
   assert.equal(firstDraws[0].geometry.instanceCount, 10, 'the GPU plan omits the non-rendering space glyph');
   assert.equal(firstDraws[0].renderOrder, 12);
@@ -884,7 +877,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   const repeatedInspection = label.glyphs();
   assert.notEqual(repeatedInspection, inspection, 'each inspection owns the mutable columns it exposes');
   assert.equal(repeatedInspection.x[0], expectedFirstX, 'caller mutation cannot corrupt the retained inspection');
-  assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
+  assert.equal(rootDraws(scene)[0], firstDraws[0]);
 
   const displayedGlyphs = label.measureGlyphs();
   assert.equal(displayedGlyphs?.length, measurement.glyphCount);
@@ -897,14 +890,14 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
 
   label.renderOrder = 7;
   scene.updateMatrixWorld();
-  assert.equal(group.children.filter((child) => child.isMesh)[0].renderOrder, 20);
+  assert.equal(rootDraws(scene)[0].renderOrder, 20);
   assert.equal(firstDraws[0].geometry.instanceCount, 10, 'render-order-only updates must preserve the Rust plan');
 
   label.text = 'Only the final desired value';
   label.text = 'Updated';
   scene.updateMatrixWorld();
-  assert.ok(group.children.some((child) => child.isMesh));
-  assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
+  assert.ok(rootDraws(scene).length > 0);
+  assert.equal(rootDraws(scene)[0], firstDraws[0]);
   assert.equal(
     firstDraws[0].geometry.instanceCount,
     7,
@@ -924,8 +917,8 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   group.dispose();
   assert.equal(group.disposed, true);
   assert.equal(label.disposed, false);
-  assert.equal(label.bound, false);
-  assert.equal(label.textGroup, undefined);
+  assert.equal(label.bound, true, 'TextGroup disposal cannot tear down its root-owned publication');
+  assert.equal(label.textGroup, group, 'scene hierarchy remains authoritative until the host reparents the Text');
 
   scene.add(label);
   scene.updateMatrixWorld();
@@ -933,9 +926,9 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
 
   // Typography tier: first-line indent shifts the pen and the measured width;
   // paragraph spacing shifts the first baseline and carries in the block extent.
-  const plainShort = new Text({ font, text: 'Whisper' });
-  const indented = new Text({ font, text: 'Whisper', layout: { firstLineIndent: 30 } });
-  const spaced = new Text({ font, text: 'Whisper', layout: { spaceBefore: 8, spaceAfter: 6 } });
+  const plainShort = three.createText({ font, text: 'Whisper' });
+  const indented = three.createText({ font, text: 'Whisper', layout: { firstLineIndent: 30 } });
+  const spaced = three.createText({ font, text: 'Whisper', layout: { spaceBefore: 8, spaceAfter: 6 } });
   for (const paragraph of [plainShort, indented, spaced]) scene.add(paragraph);
   scene.updateMatrixWorld();
   const plainMeasure = plainShort.measure();
@@ -961,19 +954,19 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     lastLine,
   });
   const justifyConstraints = { width: { mode: 'exact', size: 300 } };
-  const natural = new Text({
+  const natural = three.createText({
     font,
     text: 'pack my box',
     constraints: justifyConstraints,
     layout: justifyLayout(undefined, 'auto'),
   });
-  const filled = new Text({
+  const filled = three.createText({
     font,
     text: 'pack my box',
     constraints: justifyConstraints,
     layout: justifyLayout(undefined, 'justify'),
   });
-  const capped = new Text({
+  const capped = three.createText({
     font,
     text: 'pack my box',
     constraints: justifyConstraints,
@@ -1004,7 +997,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   // slack) must push the tail of the text into the second column.
   const columnText = 'the quick brown fox jumps over the lazy dog and keeps running until the column turns';
   const columnMeasureWidth = (420 - 20) / 2;
-  const reference = new Text({
+  const reference = three.createText({
     font,
     text: columnText,
     constraints: { width: { mode: 'exact', size: columnMeasureWidth } },
@@ -1014,7 +1007,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   const referenceMeasure = reference.measure();
   assert.ok(referenceMeasure.lineCount >= 4, 'the fixture text must wrap well past two lines at the column measure');
   const columnHeight = Math.ceil(referenceMeasure.contentHeight * 0.6);
-  const twoColumns = new Text({
+  const twoColumns = three.createText({
     font,
     text: columnText,
     constraints: { width: { mode: 'exact', size: 420 }, height: { mode: 'exact', size: columnHeight } },
@@ -1035,13 +1028,13 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     'glyphs must flow into the second column',
   );
   assert.throws(
-    () => new Text({ font, text: columnText, layout: { columns: { count: 2 } } }),
+    () => three.createText({ font, text: columnText, layout: { columns: { count: 2 } } }),
     /columns/,
     'columns without an exact width must be rejected',
   );
   assert.throws(
     () =>
-      new Text({
+      three.createText({
         font,
         text: columnText,
         constraints: { width: { mode: 'exact', size: 420 } },
@@ -1061,7 +1054,59 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   loader.dispose();
 });
 
+test('nested TextGroup nodes inherit presentation without creating nested publication boundaries', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const inheritedMaterial = defineTextMaterial((context) => {
+    const material = context.createDefaultMaterial();
+    material.name = 'outer-inherited';
+    return material;
+  });
+  const scene = new THREE.Scene();
+  const outer = three.createTextGroup({ material: inheritedMaterial, pixelSnapping: true, renderOrder: 31 });
+  const inner = three.createTextGroup();
+  const label = three.createText({ font, text: 'Nested hierarchy' });
+  inner.add(label);
+  outer.add(inner);
+  scene.add(outer);
+  scene.updateMatrixWorld(true);
+
+  try {
+    const draws = rootDraws(scene);
+    assert.equal(draws.length, 1, 'compatible nested descendants remain in the root-wide batch stream');
+    assert.equal(draws[0].material.name, 'outer-inherited');
+    assert.equal(draws[0].renderOrder, 31);
+    assert.equal(label.textGroup, inner, 'Text exposes its nearest hierarchy parent');
+    assert.equal(inner.children.includes(label), true);
+    assert.equal(outer.children.includes(inner), true);
+    assert.equal(
+      inner.children.some((child) => child.isMesh),
+      false,
+    );
+    assert.equal(
+      outer.children.some((child) => child.isMesh),
+      false,
+    );
+    assert.equal(
+      scene.children.filter((child) => child.name.startsWith('@pmndrs/glyph:')).length,
+      1,
+      'nested groups do not create draw roots',
+    );
+  } finally {
+    label.dispose();
+    inner.dispose();
+    outer.dispose();
+    font.dispose();
+    loader.dispose();
+  }
+});
+
 test('renderer rejection waits for explicit invalidation and then checkpoints without copied bytes', async (t) => {
+  const three = await createThreeTestHandle(t);
   const copyPublication = PlanTransport.prototype.copyPublication;
   let publicationCopies = 0;
   PlanTransport.prototype.copyPublication = function (publication) {
@@ -1071,9 +1116,9 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   t.after(() => {
     PlanTransport.prototype.copyPublication = copyPublication;
   });
-  const instrumented = await createInstrumentedEngine();
-  const fontDomain = instrumented.fontDomain;
-  const font = await fontDomain.loadFont(
+  const instrumented = instrumentedGlyph;
+  instrumented.reset();
+  const font = await loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },
     { technique: bitmap, options: { strikes: [16] } },
   );
@@ -1087,8 +1132,8 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
     return context.createDefaultMaterial();
   });
   const scene = new THREE.Scene();
-  const group = new TextGroup();
-  label = new Text({ font, material, text: 'Retry me' });
+  const group = three.createTextGroup();
+  label = three.createText({ font, material, text: 'Retry me' });
   const errors = [];
   group.onError = (error) => errors.push(error);
   group.add(label);
@@ -1099,7 +1144,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   assert.equal(label.error, group.error, 'group-owned failures must remain visible from the child Text');
   assert.equal(instrumented.crossings, 1);
   const rejectedGeneration = instrumented.latestUpdateGeneration;
-  assert.equal(group.children.filter((child) => child.isMesh).length, 0);
+  assert.equal(rootDraws(scene).length, 0);
   assert.equal(errors.length, 1);
   assert.ok(label.measure().glyphCount > 0, 'measurement remains independent of material realization');
   assert.equal(instrumented.crossings, 1, 'measurement must not retry or consume renderer publication');
@@ -1121,7 +1166,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   scene.updateMatrixWorld();
   assert.match(String(group.error), /deliberate material realization failure/u);
   assert.equal(instrumented.crossings, 1, 'an unchanged frame must not retry a renderer implementation failure');
-  assert.equal(group.children.filter((child) => child.isMesh).length, 0);
+  assert.equal(rootDraws(scene).length, 0);
 
   label.material = material;
   scene.updateMatrixWorld();
@@ -1135,22 +1180,23 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   );
   assert.equal(publicationCopies, 0, 'Three must not copy a borrowed publication for renderer recovery');
   assert.equal(errors.length, 1, 'a successful checkpoint must not repeat the old failure');
-  assert.equal(group.children.filter((child) => child.isMesh).length, 1);
+  assert.equal(rootDraws(scene).length, 1);
 
   label.text = 'New input after recovery';
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
   assert.equal(label.error, undefined);
   assert.equal(instrumented.crossings, 3, 'new input after recovery must publish normally');
-  assert.equal(group.children.filter((child) => child.isMesh).length, 1);
+  assert.equal(rootDraws(scene).length, 1);
 
   group.dispose();
   label.dispose();
   font.dispose();
-  fontDomain.dispose();
 });
 
 test('a rejected fixed-capacity candidate releases its provisional font-stack lease', async (t) => {
+  const three = await createThreeTestHandle(t);
+  three.setCapacity({ size: 1, policy: 'fixed' });
   const registerFontStack = GlyphBackend.prototype.registerFontStack;
   const disposeFontStack = GlyphBackend.prototype.disposeFontStack;
   let registrations = 0;
@@ -1174,7 +1220,7 @@ test('a rejected fixed-capacity candidate releases its provisional font-stack le
     { technique: bitmap, options: { strikes: [16] } },
   );
   const scene = new THREE.Scene();
-  const label = new Text({ font, text: 'over budget', capacity: { size: 1, policy: 'fixed' } });
+  const label = three.createText({ font, text: 'over budget' });
   try {
     scene.add(label);
     scene.updateMatrixWorld();
@@ -1188,25 +1234,26 @@ test('a rejected fixed-capacity candidate releases its provisional font-stack le
   }
 });
 
-test('TextGroup drops disposed descendants and reuses their committed transform identities', async () => {
+test('TextGroup drops disposed descendants and reuses their committed transform identities', async (t) => {
+  const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },
     { technique: bitmap, options: { strikes: [16] } },
   );
   const scene = new THREE.Scene();
-  const group = new TextGroup();
-  const survivor = new Text({ font, text: 'A' });
+  const group = three.createTextGroup();
+  const survivor = three.createText({ font, text: 'A' });
   group.add(survivor);
   scene.add(group);
   scene.updateMatrixWorld();
 
   let retainedTransformBytes;
   for (let index = 0; index < 12; index += 1) {
-    const transient = new Text({ font, text: 'B' });
+    const transient = three.createText({ font, text: 'B' });
     group.add(transient);
     scene.updateMatrixWorld();
-    const draw = group.children.find((child) => child.isMesh);
+    const draw = rootDraws(scene)[0];
     assert.ok(draw);
     const transformBytes = draw.geometry.getAttribute('_pmndrsGlyphTransforms').array.byteLength;
     retainedTransformBytes ??= transformBytes;
@@ -1222,7 +1269,7 @@ test('TextGroup drops disposed descendants and reuses their committed transform 
     transient.removeFromParent();
   }
 
-  const draw = group.children.find((child) => child.isMesh);
+  const draw = rootDraws(scene)[0];
   assert.equal(draw.geometry.instanceCount, 1);
   group.dispose();
   survivor.dispose();
@@ -1230,7 +1277,9 @@ test('TextGroup drops disposed descendants and reuses their committed transform 
   fontDomain.dispose();
 });
 
-test('Three retires materials bound to a replaced buffer generation', async () => {
+test('Three retires materials bound to a replaced buffer generation', async (t) => {
+  const three = await createThreeTestHandle(t);
+  three.setCapacity({ size: 2, policy: 'grow' });
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },
@@ -1245,12 +1294,12 @@ test('Three retires materials bound to a replaced buffer generation', async () =
     return created;
   });
   const scene = new THREE.Scene();
-  const group = new TextGroup({ capacity: { size: 2, policy: 'grow' } });
-  const label = new Text({ font, material, text: 'AB' });
+  const group = three.createTextGroup();
+  const label = three.createText({ font, material, text: 'AB' });
   group.add(label);
   scene.add(group);
   scene.updateMatrixWorld();
-  const initialMaterial = group.children.find((child) => child.isMesh)?.material;
+  const initialMaterial = rootDraws(scene)[0]?.material;
   assert.equal(initialMaterial, materials[0]);
 
   label.text = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -1264,7 +1313,8 @@ test('Three retires materials bound to a replaced buffer generation', async () =
   fontDomain.dispose();
 });
 
-test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () => {
+test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t) => {
+  const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
   const [latin, icon] = await Promise.all([
     fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, { technique: bitmap, options: { strikes: [16] } }),
@@ -1279,7 +1329,7 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () 
     return context.createDefaultMaterial();
   });
   const scene = new THREE.Scene();
-  const label = new Text({
+  const label = three.createText({
     font: createFontStack(latin, icon),
     material,
     text: 'Hello \uf0ac',
@@ -1287,7 +1337,7 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () 
   scene.add(label);
   scene.updateMatrixWorld();
 
-  const draws = label.children.filter((child) => child.isMesh);
+  const draws = rootDraws(scene);
   assert.equal(label.error, undefined);
   assert.equal(draws.length, 2, 'Rust must partition fallback glyphs by renderer program and resource');
   assert.equal(
@@ -1348,17 +1398,18 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () 
   fontDomain.dispose();
 });
 
-test('TextGroup realizes two public Text objects as one indexed Rust draw', async () => {
-  const instrumented = await createInstrumentedEngine();
-  const fontDomain = instrumented.fontDomain;
-  const font = await fontDomain.loadFont(
+test('one Three root realizes two public Text objects as one indexed Rust draw', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const instrumented = instrumentedGlyph;
+  instrumented.reset();
+  const font = await loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },
     { technique: bitmap, options: { strikes: [16] } },
   );
   const scene = new THREE.Scene();
-  const group = new TextGroup({ renderOrder: 3 });
-  const left = new Text({ font, text: 'AB' });
-  const right = new Text({ font, text: 'CD' });
+  const group = three.createTextGroup({ renderOrder: 3 });
+  const left = three.createText({ font, text: 'AB' });
+  const right = three.createText({ font, text: 'CD' });
   left.position.x = 2;
   right.position.x = 5;
   group.add(left, right);
@@ -1366,7 +1417,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   scene.updateMatrixWorld();
 
   assert.equal(group.error, undefined);
-  const draws = group.children.filter((child) => child.isMesh);
+  const draws = rootDraws(scene);
   assert.equal(draws.length, 1, 'compatible paragraphs must batch in Rust before Three sees the plan');
   assert.equal(draws[0].geometry.instanceCount, 4);
   const start = draws[0].userData.pmndrsGlyphRunStart;
@@ -1449,14 +1500,14 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   };
   group.position.x = 11;
   scene.updateMatrixWorld();
-  assert.equal(transforms.version, version, 'moving the shared root must not upload unchanged relative transforms');
+  assert.equal(transforms.version, version + 1, 'moving a TextGroup must patch its descendant transforms');
   assert.equal(forcedTextWorldUpdates, 0, 'moving the shared root must not force each Text world matrix a second time');
 
   right.position.x = 7;
   scene.updateMatrixWorld();
-  assert.equal(group.children.filter((child) => child.isMesh)[0], draws[0]);
-  assert.equal(transforms.version, version + 1);
-  assert.equal(transforms.array[2 * 16 + 12], 7);
+  assert.equal(rootDraws(scene)[0], draws[0]);
+  assert.equal(transforms.version, version + 2);
+  assert.equal(transforms.array[2 * 16 + 12], 18);
   assert.equal(forcedTextWorldUpdates, 0, 'the normal Three traversal supplies current matrices to transform patches');
 
   const nestedParent = new THREE.Group();
@@ -1464,7 +1515,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   nestedParent.add(right);
   nestedParent.position.x = 3;
   scene.updateMatrixWorld();
-  assert.equal(transforms.array[2 * 16 + 12], 10, 'nested parent motion patches only the affected transform path');
+  assert.equal(transforms.array[2 * 16 + 12], 21, 'nested parent motion patches only the affected transform path');
   nestedParent.visible = false;
   scene.updateMatrixWorld();
   assert.deepEqual(
@@ -1487,7 +1538,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   assert.equal(replacedMeasurement?.glyphCount, 3);
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 1, 'text replacement and demanded measurement must share one text_update');
-  const replacedDraws = group.children.filter((child) => child.isMesh);
+  const replacedDraws = rootDraws(scene);
   assert.equal(replacedDraws.length, 1);
   assert.equal(replacedDraws[0].geometry.instanceCount, 5, 'the published command buffer must include the new glyph');
 
@@ -1512,7 +1563,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
     'detached instance transforms cannot alias the sibling Text transform',
   );
   assert.equal(
-    group.children.find((child) => child.isMesh),
+    rootDraws(scene)[0],
     replacedDraws[0],
     'the live TextGroup draw remains installed after a detached copy',
   );
@@ -1522,10 +1573,9 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   left.dispose();
   right.dispose();
   font.dispose();
-  fontDomain.dispose();
 });
 
-async function createInstrumentedEngine() {
+function instrumentNextGlyphEngine() {
   const abi = textShaperAbi;
   const originalInstantiate = WebAssembly.instantiate;
   let crossings = 0;
@@ -1565,15 +1615,8 @@ async function createInstrumentedEngine() {
     restored = true;
     WebAssembly.instantiate = originalInstantiate;
   };
-  const fontDomain = createThreeFontDomain(async (load) => {
-    try {
-      return await load();
-    } finally {
-      restore();
-    }
-  }, restore);
   return {
-    fontDomain,
+    restoreInstantiate: restore,
     get crossings() {
       return crossings;
     },
@@ -1622,20 +1665,21 @@ async function createInstrumentedEngine() {
   };
 }
 
-test('Text.measure answers attached first-frame state without traversing matrices or realizing draws', async () => {
-  const instrumented = await createInstrumentedEngine();
-  const font = await instrumented.fontDomain.loadFont(
+test('Text.measure answers attached first-frame state without traversing matrices or realizing draws', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },
     { technique: bitmap, options: { strikes: [16] } },
   );
   const scene = new THREE.Scene();
-  const group = new TextGroup();
-  const first = new Text({
+  const group = three.createTextGroup();
+  const first = three.createText({
     font,
     text: 'measure me before the frame',
     constraints: { width: { mode: 'exact', size: 180 } },
   });
-  const second = new Text({ font, text: 'and me too' });
+  const second = three.createText({ font, text: 'and me too' });
   first.position.set(12, 34, 0);
   second.position.set(56, 78, 0);
 
@@ -1644,15 +1688,15 @@ test('Text.measure answers attached first-frame state without traversing matrice
   group.add(first, second);
   scene.add(group);
   const matricesBefore = [first, second, group, scene].map((object) => Array.from(object.matrix.elements));
-  instrumented.reset();
+  instrumentedGlyph.reset();
 
   const firstMeasurement = first.measure();
   const secondMeasurement = second.measure();
   assert.ok(firstMeasurement.lineCount > 0);
   assert.ok(secondMeasurement.glyphCount > 0);
   assert.equal(firstMeasurement.inkBounds, undefined, 'the fast measurement path does not position glyph ink');
-  assert.equal(instrumented.crossings, 0, 'measurement must not publish a full engine frame');
-  assert.equal(instrumented.measureCrossings, 2, 'each new paragraph uses one scoped query');
+  assert.equal(instrumentedGlyph.crossings, 0, 'measurement must not publish a full engine frame');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'each new paragraph uses one scoped query');
   assert.equal(group.gpuBytes, 0, 'measurement must not realize renderer buffers');
   assert.equal(group.children.length, 2, 'measurement must not add renderer draw objects');
   for (const [index, object] of [first, second, group, scene].entries()) {
@@ -1663,20 +1707,20 @@ test('Text.measure answers attached first-frame state without traversing matrice
 
   scene.updateMatrixWorld(true);
   assert.equal(group.error, undefined);
-  assert.equal(instrumented.crossings, 1, 'the first traversal publishes exactly one full frame');
+  assert.equal(instrumentedGlyph.crossings, 1, 'the first traversal publishes exactly one full frame');
   assert.equal(
-    instrumented.latestUpdateFlags & textShaperAbi.engine.resultFlags.checkpoint,
+    instrumentedGlyph.latestUpdateFlags & textShaperAbi.engine.resultFlags.checkpoint,
     textShaperAbi.engine.resultFlags.checkpoint,
     "the planner's first render plan is necessarily its initial checkpoint",
   );
-  assert.equal(instrumented.measureCrossings, 2, 'publication must not repeat the host measurement query');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'publication must not repeat the host measurement query');
   assert.equal(first.commitState().status, 'committed');
   assert.equal(second.commitState().status, 'committed');
   assert.equal(first.boundingBox.isEmpty(), false, 'the first positioned publication must install ink bounds');
   assert.ok(first.boundingBox.max.x > first.boundingBox.min.x);
   assert.ok(first.boundingBox.max.y > first.boundingBox.min.y);
   assert.equal(
-    instrumented.measureCrossings,
+    instrumentedGlyph.measureCrossings,
     2,
     'reading first-frame bounds must reuse the measurement published beside the render plan',
   );
@@ -1685,30 +1729,31 @@ test('Text.measure answers attached first-frame state without traversing matrice
   first.dispose();
   second.dispose();
   font.dispose();
-  instrumented.fontDomain.dispose();
+  fontDomain.dispose();
 });
 
-test('standalone Text.measure creates only its implicit measurement batch before traversal', async () => {
-  const instrumented = await createInstrumentedEngine();
-  const font = await instrumented.fontDomain.loadFont(
+test('root-owned Text.measure creates only its implicit measurement batch before traversal', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },
     { technique: bitmap, options: { strikes: [16] } },
   );
   const scene = new THREE.Scene();
-  const label = new Text({ font, text: 'standalone first-frame measurement' });
+  const label = three.createText({ font, text: 'standalone first-frame measurement' });
   label.position.set(19, 23, 0);
   scene.add(label);
   const matricesBefore = [label, scene].map((object) => Array.from(object.matrix.elements));
-  instrumented.reset();
+  instrumentedGlyph.reset();
 
   assert.ok(label.measure().glyphCount > 0);
-  assert.equal(instrumented.crossings, 0);
-  assert.equal(instrumented.measureCrossings, 1);
+  assert.equal(instrumentedGlyph.crossings, 0);
+  assert.equal(instrumentedGlyph.measureCrossings, 1);
   const inspection = label.glyphs();
   assert.ok(inspection.inkBounds, 'explicit positioned inspection provides pre-frame ink bounds');
-  assert.equal(instrumented.measureCrossings, 2);
+  assert.equal(instrumentedGlyph.measureCrossings, 2);
   assert.equal(label.boundingBox.isEmpty(), false);
-  assert.equal(instrumented.measureCrossings, 2, 'the Three box reuses the positioned inspection');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'the Three box reuses the positioned inspection');
   assert.equal(label.gpuBytes, 0);
   assert.equal(label.children.length, 0);
   for (const [index, object] of [label, scene].entries()) {
@@ -1717,24 +1762,29 @@ test('standalone Text.measure creates only its implicit measurement batch before
   assert.deepEqual(label.commitState(), { status: 'pending' });
 
   scene.updateMatrixWorld(true);
-  assert.equal(instrumented.crossings, 1);
-  assert.equal(instrumented.measureCrossings, 2, 'publication adopts the explicit queries instead of repeating them');
+  assert.equal(instrumentedGlyph.crossings, 1);
+  assert.equal(
+    instrumentedGlyph.measureCrossings,
+    2,
+    'publication adopts the explicit queries instead of repeating them',
+  );
   assert.equal(label.commitState().status, 'committed');
 
   label.dispose();
   font.dispose();
-  instrumented.fontDomain.dispose();
+  fontDomain.dispose();
 });
 
-test('Bitmap strike changes fully initialize a replacement indexed batch', async () => {
+test('Bitmap strike changes fully initialize a replacement indexed batch', async (t) => {
+  const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(densityFontUrl)) },
     { technique: bitmap, options: { strikes: [16, 32] } },
   );
   const scene = new THREE.Scene();
-  const group = new TextGroup();
-  const label = new Text({
+  const group = three.createTextGroup();
+  const label = three.createText({
     font,
     rasterPixelRatio: 2,
     text: 'AB',
@@ -1746,7 +1796,7 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   scene.add(group);
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
-  const initialDraw = group.children.find((child) => child.isMesh);
+  const initialDraw = rootDraws(scene)[0];
   assert.ok(initialDraw);
   const initialStart = initialDraw.userData.pmndrsGlyphRunStart;
   const initialOrigins = initialDraw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id)).array;
@@ -1755,7 +1805,7 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   label.style = { ...label.style, fontSize: 16 };
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined, 'crossing from the 16 ppem strike to 32 ppem must publish successfully');
-  const draw = group.children.find((child) => child.isMesh);
+  const draw = rootDraws(scene)[0];
   assert.ok(draw);
   const start = draw.userData.pmndrsGlyphRunStart;
   const transforms = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id)).array;
@@ -1777,15 +1827,16 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   fontDomain.dispose();
 });
 
-test('multi-page Bitmap strikes remain one ordered texture-array draw', async () => {
+test('multi-page Bitmap strikes remain one ordered texture-array draw', async (t) => {
+  const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(densityFontUrl)) },
     { technique: bitmap, options: { strikes: [16, 32] } },
   );
   const scene = new THREE.Scene();
-  const group = new TextGroup();
-  const label = new Text({
+  const group = three.createTextGroup();
+  const label = three.createText({
     font,
     rasterPixelRatio: 2,
     text: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 !?.,;:'.repeat(24),
@@ -1797,7 +1848,7 @@ test('multi-page Bitmap strikes remain one ordered texture-array draw', async ()
   scene.add(group);
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
-  const draws = group.children.filter((child) => child.isMesh);
+  const draws = rootDraws(scene);
   assert.equal(draws.length, 1, 'atlas page changes must select texture-array layers without fragmenting draws');
   assert.ok(
     draws[0].geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.page.id)),
@@ -1810,7 +1861,8 @@ test('multi-page Bitmap strikes remain one ordered texture-array draw', async ()
   fontDomain.dispose();
 });
 
-test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () => {
+test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async (t) => {
+  const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(amiriFontUrl)) },
@@ -1819,7 +1871,7 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () =
   const text = 'مرحبا بالعالم';
 
   const scene = new THREE.Scene();
-  const label = new Text({
+  const label = three.createText({
     font,
     text,
     style: { fontSize: 16 },
@@ -1845,34 +1897,36 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () =
   fontDomain.dispose();
 });
 
-test('TextGroup atomically replaces child paragraphs without multiplying retained text capacity', async () => {
+test('one Three root atomically replaces child paragraphs without multiplying retained text capacity', async (t) => {
+  const three = await createThreeTestHandle(t);
+  three.setCapacity({ size: 4_096, policy: 'grow' });
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },
     { technique: bitmap, options: { strikes: [16] } },
   );
   const scene = new THREE.Scene();
-  const group = new TextGroup({ capacity: { size: 4_096, policy: 'grow' } });
-  const first = [new Text({ font, text: 'A' }), new Text({ font, text: 'B' })];
+  const group = three.createTextGroup();
+  const first = [three.createText({ font, text: 'A' }), three.createText({ font, text: 'B' })];
   group.add(...first);
   scene.add(group);
   scene.updateMatrixWorld();
 
-  const second = ['C', 'D', 'E'].map((text) => new Text({ font, text }));
+  const second = ['C', 'D', 'E'].map((text) => three.createText({ font, text }));
   group.remove(...first);
   group.add(...second);
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
-  assert.equal(group.children.filter((child) => child.isMesh).length, 1);
-  assert.equal(group.children.find((child) => child.isMesh).geometry.instanceCount, 3);
+  assert.equal(rootDraws(scene).length, 1);
+  assert.equal(rootDraws(scene)[0].geometry.instanceCount, 3);
 
-  const third = ['Y', 'Z'].map((text) => new Text({ font, text }));
+  const third = ['Y', 'Z'].map((text) => three.createText({ font, text }));
   group.remove(...second);
   group.add(...third);
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined, 'a recycled Rust paragraph must not retain its previous semantic contents');
-  assert.equal(group.children.filter((child) => child.isMesh).length, 1);
-  assert.equal(group.children.find((child) => child.isMesh).geometry.instanceCount, 2);
+  assert.equal(rootDraws(scene).length, 1);
+  assert.equal(rootDraws(scene)[0].geometry.instanceCount, 2);
 
   group.dispose();
   for (const text of [...first, ...second, ...third]) text.dispose();
@@ -1880,22 +1934,24 @@ test('TextGroup atomically replaces child paragraphs without multiplying retaine
   fontDomain.dispose();
 });
 
-test('TextGroup grows aggregate glyph storage without reserving one aggregate-sized paragraph', async () => {
+test('one Three root grows aggregate glyph storage without reserving one aggregate-sized paragraph', async (t) => {
+  const three = await createThreeTestHandle(t);
+  three.setCapacity({ size: 4_096, policy: 'chunk' });
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },
     { technique: bitmap, options: { strikes: [16] } },
   );
   const scene = new THREE.Scene();
-  const group = new TextGroup({ capacity: { size: 4_096, policy: 'chunk' } });
-  const labels = Array.from({ length: 684 }, (_, index) => new Text({ font, text: `icon-${String(index)}` }));
+  const group = three.createTextGroup();
+  const labels = Array.from({ length: 684 }, (_, index) => three.createText({ font, text: `icon-${String(index)}` }));
   group.add(...labels);
   scene.add(group);
   scene.updateMatrixWorld();
 
   assert.equal(group.error, undefined);
   assert.equal(group.textCount, labels.length);
-  assert.equal(group.children.filter((child) => child.isMesh).length, 1);
+  assert.equal(rootDraws(scene).length, 1);
 
   for (let cycle = 0; cycle < 200; cycle += 1) {
     for (let offset = 0; offset < 48; offset += 1) {
@@ -1918,15 +1974,16 @@ test('TextGroup grows aggregate glyph storage without reserving one aggregate-si
  * publication flips, no revision burn — and the following ordinary frame adopts the
  * speculative work without a checkpoint rebuild.
  */
-test('repeated layout under changing constraints stays on the paragraph query path', async () => {
+test('repeated layout under changing constraints stays on the paragraph query path', async (t) => {
   const abi = textShaperAbi;
-  const instrumented = await createInstrumentedEngine();
-  const font = await instrumented.fontDomain.loadFont(
+  const three = await createThreeTestHandle(t);
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },
     { technique: bitmap, options: { strikes: [16] } },
   );
   const scene = new THREE.Scene();
-  const label = new Text({
+  const label = three.createText({
     font,
     text: 'alpha beta gamma delta',
     constraints: { width: { mode: 'exact', size: 300 } },
@@ -1934,8 +1991,8 @@ test('repeated layout under changing constraints stays on the paragraph query pa
   scene.add(label);
   scene.updateMatrixWorld(true);
   assert.equal(label.error, undefined);
-  const committedGeneration = instrumented.latestUpdateGeneration;
-  instrumented.reset();
+  const committedGeneration = instrumentedGlyph.latestUpdateGeneration;
+  instrumentedGlyph.reset();
 
   const widths = [90, 150, 90, 240];
   for (const width of widths) {
@@ -1950,43 +2007,44 @@ test('repeated layout under changing constraints stays on the paragraph query pa
     );
     assert.ok(measurement.lineCount >= 1, 'layout reports laid-out lines');
   }
-  assert.equal(instrumented.crossings, 0, 'measurement never drives a full engine update');
-  assert.equal(instrumented.measureCrossings, widths.length, 'each constraint change measures through one query');
+  assert.equal(instrumentedGlyph.crossings, 0, 'measurement never drives a full engine update');
+  assert.equal(instrumentedGlyph.measureCrossings, widths.length, 'each constraint change measures through one query');
   assert.equal(
-    instrumented.latestUpdateGeneration,
+    instrumentedGlyph.latestUpdateGeneration,
     committedGeneration,
     'queries never flip the publication generation',
   );
 
   scene.updateMatrixWorld(true);
   assert.equal(label.error, undefined);
-  assert.equal(instrumented.crossings, 1, 'one ordinary frame commits the final constraint');
+  assert.equal(instrumentedGlyph.crossings, 1, 'one ordinary frame commits the final constraint');
   assert.equal(
-    instrumented.latestUpdateFlags & abi.engine.resultFlags.checkpoint,
+    instrumentedGlyph.latestUpdateFlags & abi.engine.resultFlags.checkpoint,
     0,
     'the committing frame proceeds from pre-layout revisions without a checkpoint rebuild',
   );
   assert.equal(label.measure().contentWidth <= 240 + 1e-3, true);
   label.dispose();
   font.dispose();
-  instrumented.fontDomain.dispose();
+  fontDomain.dispose();
 });
 
-test('a standard ligature that absorbs a grapheme publishes and keeps typing', async () => {
+test('a standard ligature that absorbs a grapheme publishes and keeps typing', async (t) => {
   // A ligature reports one glyph at the first grapheme of the pair, so the trailing
   // grapheme's cluster owns no glyph. It still belongs to the shaped run and positioning
   // still derives a scale for it, so the cluster arena must record the owning font's
   // units-per-em for it as well. Amiri applies `liga` to Latin f-pairs; Inter as baked
   // does not, which is why every existing Latin fixture missed this.
+  const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(amiriFontUrl)) },
     { technique: bitmap, options: { strikes: [16] } },
   );
   const scene = new THREE.Scene();
-  const group = new TextGroup({ batching: 'group' });
+  const group = three.createTextGroup();
   scene.add(group);
-  const text = new Text({
+  const text = three.createText({
     font,
     text: '',
     style: { fontSize: 20, lineHeight: 1.25 },
@@ -2041,4 +2099,9 @@ function createThreeFontDomain(firstLoad, onDispose = () => {}) {
 
 function dataUrl(bytes) {
   return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
+}
+
+function rootDraws(scene, name = undefined) {
+  const drawRoot = scene.getObjectByName(name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${name}`);
+  return drawRoot?.children.filter((child) => child.isMesh) ?? [];
 }

@@ -3,12 +3,26 @@ import {
   threePolicyAbi,
   type ThreePlanProgramBuffer,
   type ThreePlanProgramMaterialContext,
+  type ThreeRootContext,
 } from '@pmndrs/glyph/three';
 import { positionLocal, storage, uv } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 import { glyphExamplePlanProgram, glyphExampleShaderContract } from '@pmndrs/glyph-example-raster';
 import { glyphExampleTslShader, glyphExampleTslVariant } from '@pmndrs/glyph-example-raster/tsl';
+
+declare module '@pmndrs/glyph/three' {
+  interface ThreeTextMaterialContextMap {
+    readonly 'studio.glyph-example': Readonly<{
+      root: ThreeRootContext;
+      kind: 'glyph';
+      technique: 'studio.glyph-example';
+      outputs: ReadonlyMap<string, THREE.Node>;
+      position: THREE.Node<'vec3'>;
+      createDefaultMaterial(): THREE.NodeMaterial;
+    }>;
+  }
+}
 
 /** The external consumer's Three implementation of the portable glyph-example plan. */
 const externalGlyphExampleThreeProgram = {
@@ -51,7 +65,9 @@ const externalGlyphExampleThreeProgram = {
       };
       return (
         context.material?.create({
-          technique: context.technique,
+          root: context.root,
+          kind: 'glyph',
+          technique: glyphExamplePlanProgram.technique.id,
           outputs: new Map<string, THREE.Node>([
             ['position', shader.position],
             ['color', shader.color],

@@ -27,7 +27,6 @@ import '../support/browser-globals.mjs';
 
 import { GlyphProvider, Text, TextGroup, useFont } from '@pmndrs/glyph/react';
 import { useBitmap } from '@pmndrs/glyph/react/bitmap';
-import { threeEngineDomainReport } from '../../dist/three/engine-domain.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const multiFormatFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
@@ -83,7 +82,7 @@ test('mounting and unmounting a React Text returns every paragraph lease', async
     await renderer.unmount();
 
     fixture.dispose();
-    assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+    assert.equal(r3fHandle.textCount, 0);
   } finally {
     fixture.dispose();
   }
@@ -111,7 +110,8 @@ test('Text and TextGroup share the built-in Three handle without a provider', as
     await renderer.unmount();
 
     fixture.dispose();
-    assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+    assert.equal(mountedText.at(-1)?.disposed, true);
+    assert.equal(mountedGroup.at(-1)?.disposed, true);
   } finally {
     fixture.dispose();
   }
@@ -166,7 +166,7 @@ test('Text and TextGroup reject untyped object-level handle selection', async ()
   } finally {
     fixture.dispose();
   }
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(r3fHandle.textCount, 0);
 });
 
 test('GlyphProvider rejects a handle change instead of rebinding mounted objects', async () => {
@@ -185,7 +185,25 @@ test('GlyphProvider rejects a handle change instead of rebinding mounted objects
     fixture.dispose();
     replacement.dispose();
   }
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(r3fHandle.textCount, 0);
+});
+
+test('GlyphProvider selects one terminal named root without rebinding the anonymous root', async () => {
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const fixture = await loadFixture();
+  const hud = r3fHandle('hud');
+  const renderer = await create(
+    createElement(GlyphProvider, { handle: hud }, createElement(Text, { font: fixture.font }, 'named root')),
+  );
+  try {
+    assert.equal(hud.textCount, 1);
+    assert.equal(r3fHandle.textCount, 0, 'the handle continues to front only its anonymous root');
+    assert.equal(r3fHandle('hud'), hud, 'React uses the same idempotent named root as imperative Three');
+  } finally {
+    await renderer.unmount();
+    fixture.dispose();
+  }
+  assert.equal(hud.textCount, 0);
 });
 
 test('StrictMode remount cycles balance their paragraph leases', async () => {
@@ -222,7 +240,7 @@ test('StrictMode remount cycles balance their paragraph leases', async () => {
     }
 
     fixture.dispose();
-    assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+    assert.equal(r3fHandle.textCount, 0);
   } finally {
     fixture.dispose();
   }
@@ -251,10 +269,10 @@ test('user font and loader handles may dispose before React releases its Text le
 
   fixture.dispose();
   assert.equal(font.disposed, true);
-  assert.equal(threeEngineDomainReport().active, true, 'the mounted Text keeps its renderer domain alive');
+  assert.equal(r3fHandle.textCount, 1, 'the mounted Text remains retained by the selected handle root');
   await renderer.unmount();
   fixture.dispose();
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(r3fHandle.textCount, 0);
 });
 
 test('R3F-cached React consumers receive independent Font leases under StrictMode', async () => {
@@ -281,7 +299,7 @@ test('R3F-cached React consumers receive independent Font leases under StrictMod
     await renderer.unmount();
     clearRequest(request);
   }
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(observed.size, 0);
 });
 
 test('clearing a React font resource leaves its mounted consumer lease live', async () => {
@@ -303,7 +321,7 @@ test('clearing a React font resource leaves its mounted consumer lease live', as
   } finally {
     await renderer.unmount();
   }
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(observed.size, 0);
 });
 
 test('the generic useFont cache survives StrictMode replay and releases its runtime domain', async () => {
@@ -325,7 +343,7 @@ test('the generic useFont cache survives StrictMode replay and releases its runt
   assert.equal(observed.get('generic')?.disposed, false);
   await renderer.unmount();
   clearRequest(request);
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(observed.size, 0);
 });
 
 test('technique convenience preload and hook share the R3F resource', async () => {
@@ -353,7 +371,7 @@ test('technique convenience preload and hook share the R3F resource', async () =
   } finally {
     await renderer.unmount();
   }
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(observed.size, 0);
 });
 
 test('a rejected preload is evicted so the next call creates a new operation', async () => {
@@ -390,7 +408,7 @@ test('clearing a loaded R3F font resource permits a later preload and mount', as
   await waitFor(() => observed.has('retry'));
   await renderer.unmount();
   useFont.clear(input, config);
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(observed.size, 0);
 });
 
 function hookFontTree(request, observed, names) {

@@ -8,7 +8,7 @@ import {
   type TextStyle,
 } from '@pmndrs/glyph';
 import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
-import { Text } from '@pmndrs/glyph/three';
+import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
@@ -49,6 +49,7 @@ import {
   type ShapedTextIdentity,
 } from '../shared/glyph-origin-transition';
 import { mtsdfDataConfiguration, type MtsdfRasterConfiguration } from './metadata';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../three-root';
 
 export interface MtsdfTextLiveStats {
   readonly technique: 'mtsdf';
@@ -191,6 +192,7 @@ interface MtsdfPersistentActivation {
   readonly fontFixture: RetainedFontFixtureController<MtsdfPersistentFontFixture>;
   readonly gpuTimingSupported: boolean;
   readonly line: Text<typeof mtsdf>;
+  readonly root: ThreeRoot;
   presentation: MtsdfPresentation | undefined;
   readonly rendererInitMs: number;
   readonly scene: THREE.Scene;
@@ -324,6 +326,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       let loadedFont: Font<typeof mtsdf> | undefined;
       let fontFixtureController: RetainedFontFixtureController<MtsdfPersistentFontFixture> | undefined;
       let line: Text<typeof mtsdf> | undefined;
+      const glyphRoot = createBenchmarkThreeRoot(options.id ?? 'mtsdf-text');
       try {
         const fontStartedAt = performance.now();
         const loaded = await loadMtsdfFontAsset({
@@ -363,7 +366,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
           style: mtsdfStyle(fontSize, identity),
           rasterPixelRatio: context.viewport.dpr,
         };
-        line = new Text({
+        line = glyphRoot.createText({
           font: state.font,
           text: state.identity.text,
           constraints: state.constraints,
@@ -402,6 +405,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
           fontFixture: fontFixtureController,
           gpuTimingSupported: persistentGpuTimingSupported(options.backend, context.renderer),
           line: activeLine,
+          root: glyphRoot,
           presentation: undefined,
           rendererInitMs: context.rendererInitMs,
           scene,
@@ -414,6 +418,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       } catch (error) {
         line?.removeFromParent();
         line?.dispose();
+        disposeBenchmarkThreeRoot(glyphRoot);
         if (fontFixtureController === undefined) loadedFont?.dispose();
         else fontFixtureController.dispose();
         canvasSurface.dispose();
@@ -573,6 +578,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       resources.presentation?.transition.dispose();
       resources.line.removeFromParent();
       resources.line.dispose();
+      disposeBenchmarkThreeRoot(resources.root);
       resources.fontFixture.dispose();
       resources.canvasSurface.dispose();
     },

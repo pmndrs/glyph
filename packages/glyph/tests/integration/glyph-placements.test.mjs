@@ -4,8 +4,10 @@ import test, { after } from 'node:test';
 
 import { glyphFlags } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
+
+import { createThreeTestHandle } from '../support/three-handle.mjs';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url);
 
@@ -27,10 +29,11 @@ after(() => {
   loader?.dispose();
 });
 
-function mount(font, text, properties = {}) {
+async function mount(testContext, font, text, properties = {}) {
+  const three = await createThreeTestHandle(testContext);
   const scene = new THREE.Scene();
-  const group = new TextGroup({});
-  const node = new Text({ font, style: { fontSize: 16 }, text, ...properties });
+  const group = three.createTextGroup();
+  const node = three.createText({ font, style: { fontSize: 16 }, text, ...properties });
   scene.add(group);
   group.add(node);
   scene.updateMatrixWorld(true);
@@ -42,8 +45,8 @@ function unmount({ group, node }) {
   group.dispose();
 }
 
-test('measureGlyphs publishes local geometry without traversing world matrices', async () => {
-  const mounted = mount(await loadFont(), 'Wavy');
+test('measureGlyphs publishes local geometry without traversing world matrices', async (t) => {
+  const mounted = await mount(t, await loadFont(), 'Wavy');
   try {
     mounted.node.position.set(7, -3, 2);
     mounted.scene.updateMatrixWorld(true);
@@ -73,8 +76,8 @@ test('measureGlyphs publishes local geometry without traversing world matrices',
   }
 });
 
-test('glyph advances and ink extents agree with independently published paragraph measurements', async () => {
-  const mounted = mount(await loadFont(), 'Wavy');
+test('glyph advances and ink extents agree with independently published paragraph measurements', async (t) => {
+  const mounted = await mount(t, await loadFont(), 'Wavy');
   try {
     const inspection = mounted.node.glyphs();
     const summary = mounted.node.measure();
@@ -102,8 +105,8 @@ test('glyph advances and ink extents agree with independently published paragrap
   }
 });
 
-test('caret and selection helpers resolve clusters without exposing a mutable snapshot', async () => {
-  const mounted = mount(await loadFont(), 'hi there');
+test('caret and selection helpers resolve clusters without exposing a mutable snapshot', async (t) => {
+  const mounted = await mount(t, await loadFont(), 'hi there');
   try {
     const line = mounted.node.glyphs().lines[0];
     const start = mounted.node.caretAt(-1_000, line.baseline);
@@ -123,12 +126,12 @@ test('caret and selection helpers resolve clusters without exposing a mutable sn
   }
 });
 
-test('word and caret ranges preserve UTF-16 clusters and bidi direction', async () => {
+test('word and caret ranges preserve UTF-16 clusters and bidi direction', async (t) => {
   const font = await loadFont();
   const astralText = 'A😀';
-  const astral = mount(font, astralText);
-  const combining = mount(font, 'e\u0301');
-  const rtl = mount(font, 'אב', {
+  const astral = await mount(t, font, astralText);
+  const combining = await mount(t, font, 'e\u0301');
+  const rtl = await mount(t, font, 'אב', {
     style: { fontSize: 16, direction: 'rtl' },
     constraints: { width: { mode: 'exact', size: 100 } },
   });
@@ -156,8 +159,8 @@ test('word and caret ranges preserve UTF-16 clusters and bidi direction', async 
   }
 });
 
-test('glyph flags decode through exported names rather than remembered indices', async () => {
-  const mounted = mount(await loadFont(), 'flags');
+test('glyph flags decode through exported names rather than remembered indices', async (t) => {
+  const mounted = await mount(t, await loadFont(), 'flags');
   try {
     const inspection = mounted.node.glyphs();
     assert.equal(inspection.glyphFlags.length, inspection.glyphCount);
@@ -168,8 +171,8 @@ test('glyph flags decode through exported names rather than remembered indices',
   }
 });
 
-test('breakApart carries stable line and word metadata without presentation overrides', async () => {
-  const mounted = mount(await loadFont(), 'one two three', {
+test('breakApart carries stable line and word metadata without presentation overrides', async (t) => {
+  const mounted = await mount(t, await loadFont(), 'one two three', {
     constraints: { width: { mode: 'exact', size: 60 } },
     layout: { wrap: 'word' },
   });
@@ -203,8 +206,8 @@ test('breakApart carries stable line and word metadata without presentation over
   }
 });
 
-test('detached glyph keys survive movement-only reflow and change when text reshapes', async () => {
-  const mounted = mount(await loadFont(), 'ABCD');
+test('detached glyph keys survive movement-only reflow and change when text reshapes', async (t) => {
+  const mounted = await mount(t, await loadFont(), 'ABCD');
   let before;
   let resized;
   let reshaped;
@@ -240,10 +243,11 @@ test('detached glyph keys survive movement-only reflow and change when text resh
   }
 });
 
-test('commit state distinguishes unbound, pending, and committed paragraph state', async () => {
+test('commit state distinguishes unbound, pending, and committed paragraph state', async (t) => {
+  const three = await createThreeTestHandle(t);
   const font = await loadFont();
   const scene = new THREE.Scene();
-  const node = new Text({ font, style: { fontSize: 16 }, text: 'ready' });
+  const node = three.createText({ font, style: { fontSize: 16 }, text: 'ready' });
   try {
     assert.deepEqual(node.commitState(), { status: 'unbound' });
     assert.throws(() => node.breakApart(), /before its renderer state is committed/);

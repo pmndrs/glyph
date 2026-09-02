@@ -7,7 +7,7 @@ import * as THREE from 'three/webgpu';
 import { createParagraph, defineRasterResourceId, defineRasterTechnique, txt } from '@pmndrs/glyph';
 import { defineTechniqueSchema, registerRasterPlanProgram, techniqueProgram } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, Text } from '@pmndrs/glyph/three';
+import { FontLoader } from '@pmndrs/glyph/three';
 
 import {
   createImmutableFontLease,
@@ -15,6 +15,7 @@ import {
   immutableFontVariantIdentity,
 } from '../../dist/loaded-font.js';
 import { paragraphMeasurementServiceReport } from '../../dist/paragraph.js';
+import { createThreeTestHandle } from '../support/three-handle.mjs';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 
@@ -87,10 +88,11 @@ const CONSTRAINTS = [
  * byte-identical to the same value obtained through the Three.js Text scene-graph commit,
  * which was the only measurement route before this API existed.
  */
-test('Paragraph.measure agrees byte-for-byte with the Three.js Text measurement route', async () => {
+test('Paragraph.measure agrees byte-for-byte with the Three.js Text measurement route', async (t) => {
+  const three = await createThreeTestHandle(t);
   await using boot = await bootstrap();
   const scene = new THREE.Scene();
-  const text = new Text({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+  const text = three.createText({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
   scene.add(text);
   try {
     const paragraph = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
@@ -109,11 +111,12 @@ test('Paragraph.measure agrees byte-for-byte with the Three.js Text measurement 
   }
 });
 
-test('glyphs() positioned columns agree byte-for-byte with the Three.js Text inspection route', async () => {
+test('glyphs() positioned columns agree byte-for-byte with the Three.js Text inspection route', async (t) => {
+  const three = await createThreeTestHandle(t);
   await using boot = await bootstrap();
   const scene = new THREE.Scene();
   const box = { width: { mode: 'exact', size: 300 }, height: { mode: 'at-most', size: 200 } };
-  const text = new Text({ font: boot.font, text: TEXT, style: { fontSize: 16 }, constraints: box });
+  const text = three.createText({ font: boot.font, text: TEXT, style: { fontSize: 16 }, constraints: box });
   scene.add(text);
   try {
     const paragraph = await createParagraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
@@ -416,11 +419,14 @@ test('formatted paragraph text is the only authority for its spans', async () =>
   const formatted = txt`formatted`;
   await assert.rejects(
     createParagraph({ font: boot.font, text: formatted, spans: [] }),
-    /formatted paragraph text owns its spans/,
+    /cannot declare raw spans; compose formatted text with txt and span/,
   );
   const paragraph = await createParagraph({ font: boot.font, text: 'plain' });
   try {
-    assert.throws(() => paragraph.update({ text: formatted, spans: [] }), /formatted paragraph text owns its spans/);
+    assert.throws(
+      () => paragraph.update({ text: formatted, spans: [] }),
+      /cannot declare raw spans; compose formatted text with txt and span/,
+    );
     assert.equal(paragraph.text, 'plain', 'a rejected update leaves desired state unchanged');
   } finally {
     paragraph.dispose();

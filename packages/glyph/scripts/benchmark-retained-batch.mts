@@ -4,7 +4,7 @@
   "requirements": "Built package: pnpm --filter @pmndrs/glyph build. Accepts --texts, --reps, and --warmup.",
   "writes": "stdout only"
 } */
-import { Text, TextGroup } from '../dist/three.js';
+import * as THREE from 'three/webgpu';
 
 import { loadParagraphBenchmarkFixture } from './support/paragraph-benchmark-fixture.mts';
 
@@ -15,8 +15,7 @@ const reports: Array<Readonly<{ texts: number; medianMs: number; p95Ms: number; 
 try {
   for (const count of options.counts) reports.push(measureBatch(count));
 } finally {
-  fixture.loaded.dispose();
-  fixture.loader.dispose();
+  fixture.dispose();
 }
 
 console.log('\nretained texts     median        p95   per text');
@@ -27,20 +26,22 @@ for (const report of reports) {
 }
 
 function measureBatch(count: number) {
-  const group = new TextGroup({ capacity: { size: count * 16, policy: 'grow' } });
-  const texts = Array.from(
-    { length: count },
-    (_, index) =>
-      new Text({
-        font: fixture.loaded,
-        text: `alpha ${index}`,
-        style: { fontSize: 16 },
-        layout: { wrap: 'word' },
-        constraints: { width: { mode: 'exact', size: 160 } },
-      }),
+  const root = fixture.root();
+  root.setCapacity({ size: count * 16, policy: 'grow' });
+  const group = root.createTextGroup();
+  const texts = Array.from({ length: count }, (_, index) =>
+    root.createText({
+      font: fixture.loaded,
+      text: `alpha ${index}`,
+      style: { fontSize: 16 },
+      layout: { wrap: 'word' },
+      constraints: { width: { mode: 'exact', size: 160 } },
+    }),
   );
   group.add(...texts);
-  group.updateMatrixWorld(true);
+  const scene = new THREE.Scene();
+  scene.add(group);
+  scene.updateMatrixWorld(true);
   if (group.error !== undefined) throw group.error;
   const samples: number[] = [];
   try {
@@ -48,7 +49,7 @@ function measureBatch(count: number) {
       const prefix = repetition % 2 === 0 ? 'bravo' : 'alpha';
       const started = performance.now();
       for (const [index, text] of texts.entries()) text.text = `${prefix} ${index}`;
-      group.updateMatrixWorld(true);
+      scene.updateMatrixWorld(true);
       const duration = performance.now() - started;
       if (group.error !== undefined) throw group.error;
       if (repetition >= options.warmup) samples.push(duration);
@@ -56,6 +57,7 @@ function measureBatch(count: number) {
   } finally {
     group.dispose();
     for (const text of texts) text.dispose();
+    root.dispose();
   }
   samples.sort((left, right) => left - right);
   const medianMs = percentile(samples, 0.5);

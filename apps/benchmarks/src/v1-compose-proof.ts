@@ -1,8 +1,9 @@
 import type { Font } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { defineTextMaterial, FontLoader, Text } from '@pmndrs/glyph/three';
+import { defineTextMaterial, FontLoader, type Text } from '@pmndrs/glyph/three';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from './three-root';
 
 declare global {
   interface Window {
@@ -26,7 +27,9 @@ interface TargetV1ComposeResult {
  * canonical glyph footprint while changing the paint is what proves it reuses the exported technique shader.
  */
 const composedMaterial = defineTextMaterial((context) => {
-  if (context.technique !== bitmap.id) throw new TypeError('compose proof requires the Bitmap material context');
+  if (context.kind !== 'glyph' || context.technique !== bitmap.id) {
+    return context.createDefaultMaterial();
+  }
   const material = context.createDefaultMaterial();
   material.colorNode = context.shader.color.mul(TSL.vec3(1, 0, 0));
   return material;
@@ -41,6 +44,7 @@ async function render(): Promise<TargetV1ComposeResult> {
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, forceWebGL });
   const loader = new FontLoader();
   const target = new THREE.RenderTarget(256, 128, { format: THREE.RGBAFormat, type: THREE.UnsignedByteType });
+  const root = createBenchmarkThreeRoot('v1-compose');
   target.texture.colorSpace = THREE.NoColorSpace;
   let canonicalText: Text<typeof bitmap> | undefined;
   let composedText: Text<typeof bitmap> | undefined;
@@ -61,7 +65,7 @@ async function render(): Promise<TargetV1ComposeResult> {
       input: { baked: '/fixtures/rendering/inter-bitmap-16.font.glb' },
       raster: { technique: bitmap, options: { strikes: [16] } },
     });
-    canonicalText = new Text({
+    canonicalText = root.createText({
       font: canonicalFont,
       text: 'Target v1 Bitmap',
       style: { fontSize: 28, color: '#ffffff' },
@@ -74,7 +78,7 @@ async function render(): Promise<TargetV1ComposeResult> {
     canonicalText.dispose();
     canonicalText = undefined;
 
-    composedText = new Text({
+    composedText = root.createText({
       font: canonicalFont,
       text: 'Target v1 Bitmap',
       style: { fontSize: 28, color: '#ffffff' },
@@ -87,7 +91,9 @@ async function render(): Promise<TargetV1ComposeResult> {
 
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
-      drawCount: composedText.children.filter((child) => child instanceof THREE.Mesh).length,
+      drawCount:
+        scene.getObjectByName('@pmndrs/glyph:v1-compose')?.children.filter((child) => child instanceof THREE.Mesh)
+          .length ?? 0,
       glyphCount: composedText.measure().glyphCount,
       litPixels: composed.lit,
       redPixels: composed.red,
@@ -102,6 +108,7 @@ async function render(): Promise<TargetV1ComposeResult> {
     composedText?.dispose();
     canonicalFont?.dispose();
     loader.dispose();
+    disposeBenchmarkThreeRoot(root);
     target.dispose();
     renderer.dispose();
   }

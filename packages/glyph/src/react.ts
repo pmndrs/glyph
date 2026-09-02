@@ -52,7 +52,7 @@ import {
   type ThreeRoot,
   type ThreeTextMaterial,
 } from './three.js';
-import type { TextSpan as ThreeTextSpanRecord } from './three/text.js';
+import { threeTextConstructionToken, type TextSpan as ThreeTextSpanRecord } from './three/text.js';
 
 type Object3DProps = Omit<ThreeElements['object3D'], 'children' | 'ref'>;
 
@@ -89,7 +89,6 @@ export type R3fTextProps<Technique extends AnyRasterTechnique> = Object3DProps &
   readonly constraints?: PropertyList<Constraints>;
   readonly rasterPixelRatio?: number;
   readonly material?: ThreeTextMaterial;
-  readonly capacity?: StandaloneTextProperties<Technique>['capacity'];
   readonly pixelSnapping?: boolean;
   readonly onError?: ((error: unknown) => void) | undefined;
   readonly ref?: Ref<ThreeText<Technique>>;
@@ -445,10 +444,21 @@ function TextObject({
   readonly publishObject: (value: ThreeText<AnyRasterTechnique> | null) => void;
 }): ReactElement {
   const [constructorArguments] = useState<
-    [StandaloneTextProperties<AnyRasterTechnique>, ReturnType<typeof threeHandleDomain>, readonly [], ThreeRoot]
-  >(() => [desired as StandaloneTextProperties<AnyRasterTechnique>, threeHandleDomain(handle), [], root]);
+    [
+      typeof threeTextConstructionToken,
+      StandaloneTextProperties<AnyRasterTechnique>,
+      ReturnType<typeof threeHandleDomain>,
+      readonly [],
+      ThreeRoot,
+    ]
+  >(() => [
+    threeTextConstructionToken,
+    desired as StandaloneTextProperties<AnyRasterTechnique>,
+    threeHandleDomain(handle),
+    [],
+    root,
+  ]);
   const appliedRef = useRef(desired);
-  const capacityRef = useRef(desired.capacity);
   const [store] = useState(() => createObjectStore<ThreeText<AnyRasterTechnique>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
@@ -462,13 +472,11 @@ function TextObject({
 
   useLayoutEffect(() => {
     if (object === undefined) return;
-    const { capacity, pixelSnapping: _pixelSnapping, ...update } = desired;
+    const { pixelSnapping: _pixelSnapping, ...update } = desired;
     if (!sameDesiredText(appliedRef.current, desired)) {
       object.set(update);
       appliedRef.current = desired;
     }
-    if (capacity !== undefined && !sameCapacity(capacity, capacityRef.current)) object.setCapacity(capacity);
-    capacityRef.current = capacity;
     invalidate();
   }, [desired, invalidate, object]);
 
@@ -492,7 +500,7 @@ export const TextGroup: (input: R3fTextGroupProps) => ReactElement | null = forw
   const [object, publishObject] = useState<ThreeTextGroup | null>(null);
   useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
   return createElement(TextGroupObject, {
-    key: `${rootId(root)}:${properties.compositing ?? 'ordered'}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
+    key: `${rootId(root)}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
     handle,
     root,
     object: groupObjectProperties(properties),
@@ -514,10 +522,11 @@ function TextGroupObject({
   readonly options: Omit<R3fTextGroupProps, 'ref'>;
   readonly publishObject: (value: ThreeTextGroup | null) => void;
 }): ReactElement {
-  const [constructorArguments] = useState<[TextGroupOptions, ReturnType<typeof threeHandleDomain>, ThreeRoot]>(() => [
+  const [constructorArguments] = useState<
+    [typeof threeTextConstructionToken, TextGroupOptions, ReturnType<typeof threeHandleDomain>, ThreeRoot]
+  >(() => [
+    threeTextConstructionToken,
     {
-      ...(options.capacity === undefined ? {} : { capacity: options.capacity }),
-      ...(options.compositing === undefined ? {} : { compositing: options.compositing }),
       ...(options.renderOrder === undefined ? {} : { renderOrder: options.renderOrder }),
       ...(options.material === undefined ? {} : { material: options.material }),
       ...(options.pixelSnapping === undefined ? {} : { pixelSnapping: options.pixelSnapping }),
@@ -538,10 +547,9 @@ function TextGroupObject({
 
   useLayoutEffect(() => {
     if (object === undefined) return;
-    if (options.capacity !== undefined && !sameCapacity(options.capacity, object)) object.setCapacity(options.capacity);
     object.setMaterial(options.material);
     invalidate();
-  }, [invalidate, object, options.capacity, options.material]);
+  }, [invalidate, object, options.material]);
 
   return createElement(
     ThreeTextGroupElement,
@@ -778,7 +786,6 @@ function textProperties<Technique extends AnyRasterTechnique>(
     ...(properties.constraints === undefined ? {} : { constraints: properties.constraints }),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
-    ...(properties.capacity === undefined ? {} : { capacity: properties.capacity }),
     ...(properties.pixelSnapping === undefined ? {} : { pixelSnapping: properties.pixelSnapping }),
   });
 }
@@ -793,7 +800,6 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
     'constraints',
     'rasterPixelRatio',
     'material',
-    'capacity',
     'pixelSnapping',
     'onError',
     'ref',
@@ -804,8 +810,7 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
 
 function groupObjectProperties(properties: R3fTextGroupProps): TextGroupElementProps {
   const object = { ...properties } as Record<string, unknown>;
-  for (const key of ['capacity', 'compositing', 'material', 'pixelSnapping', 'children', 'onError', 'ref'])
-    delete object[key];
+  for (const key of ['material', 'pixelSnapping', 'children', 'onError', 'ref']) delete object[key];
   return object as TextGroupElementProps;
 }
 
@@ -813,17 +818,6 @@ function assertNoHandleProp(properties: object, owner: 'Text' | 'TextGroup'): vo
   if (Object.hasOwn(properties, 'handle')) {
     throw new TypeError(`R3F ${owner} does not accept a handle prop; select custom handles with GlyphProvider`);
   }
-}
-
-function sameCapacity(
-  capacity: NonNullable<StandaloneTextProperties<AnyRasterTechnique>['capacity']>,
-  owner:
-    | NonNullable<StandaloneTextProperties<AnyRasterTechnique>['capacity']>
-    | { readonly capacity?: NonNullable<StandaloneTextProperties<AnyRasterTechnique>['capacity']> }
-    | undefined,
-): boolean {
-  const current = owner === undefined ? undefined : 'size' in owner ? owner : owner.capacity;
-  return current?.size === capacity.size && current.policy === capacity.policy;
 }
 
 function sameDesiredText<Technique extends AnyRasterTechnique>(

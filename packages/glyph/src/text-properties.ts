@@ -15,6 +15,20 @@ export interface GlyphBufferCapacity {
   readonly policy: 'grow' | 'chunk' | 'fixed';
 }
 
+/** @internal Validate and freeze one publication-capacity input at its user boundary. */
+export function normalizeGlyphBufferCapacity(value: GlyphBufferCapacity, label: string): GlyphBufferCapacity {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${label} must be an object`);
+  }
+  if (!Number.isSafeInteger(value.size) || value.size <= 0) {
+    throw new RangeError(`${label} size must be a positive safe integer`);
+  }
+  if (value.policy !== 'grow' && value.policy !== 'chunk' && value.policy !== 'fixed') {
+    throw new TypeError(`${label} policy must be grow, chunk, or fixed`);
+  }
+  return Object.freeze({ size: value.size, policy: value.policy });
+}
+
 /** An object or nested, left-to-right property list; false and null entries are ignored. */
 export type PropertyList<Value> = Value | false | null | undefined | readonly PropertyList<Value>[];
 

@@ -7,6 +7,7 @@ import {
   createFontLibrary,
   defineRasterResourceId,
   defineRasterTechnique,
+  glyph,
   loadFont,
   rasterBake,
   type RasterKey,
@@ -24,12 +25,12 @@ import {
   registerThreeRasterPlanProgram,
   defineTextMaterial,
   FontLoader,
+  ThreeConfig,
   threePolicyAbi,
-  Text,
-  TextGroup,
   type ThreePlanProgramBuffer,
   type ThreePlanProgramMaterialContext,
-  type ThreeTextGenericMaterialContext,
+  type ThreeRootContext,
+  type ThreeTextMaterialContextMap,
 } from '@pmndrs/glyph/three';
 import { positionLocal, storage, uv } from 'three/tsl';
 import * as THREE from 'three/webgpu';
@@ -47,10 +48,25 @@ import {
   type GlyphExampleData,
 } from '../src/index.js';
 
+declare module '@pmndrs/glyph/three' {
+  interface ThreeTextMaterialContextMap {
+    readonly 'studio.glyph-example': Readonly<{
+      root: ThreeRootContext;
+      kind: 'glyph';
+      technique: 'studio.glyph-example';
+      outputs: ReadonlyMap<string, THREE.Node>;
+      position: THREE.Node<'vec3'>;
+      createDefaultMaterial(): THREE.NodeMaterial;
+    }>;
+  }
+}
+
+type GlyphExampleMaterialContext = ThreeTextMaterialContextMap['studio.glyph-example'];
+
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const temporaryDirectories: string[] = [];
 const materials: THREE.NodeMaterial[] = [];
-const genericMaterialContexts: ThreeTextGenericMaterialContext[] = [];
+const genericMaterialContexts: GlyphExampleMaterialContext[] = [];
 const suppliedMaterialContexts: ThreePlanProgramMaterialContext[] = [];
 
 afterEach(async () => {
@@ -132,6 +148,7 @@ describe('public external raster proof', () => {
 
   test('manually registers the TSL realization and preserves Three draw reuse', async () => {
     registerThreeRasterPlanProgram(threeProgram);
+    const three = await createThreeHandle();
     const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
@@ -141,14 +158,14 @@ describe('public external raster proof', () => {
       raster: { technique: glyphExample, options: { paletteSeed: 7 } },
     });
     const material = defineTextMaterial((context) => {
-      if (typeof context.technique === 'string') throw new TypeError('expected a generic material context');
+      if (context.kind !== 'glyph' || context.technique !== glyphExample.id) return context.createDefaultMaterial();
       genericMaterialContexts.push(context);
       const realized = context.createDefaultMaterial();
       realized.depthTest = true;
       return realized;
     });
-    const text = new Text({ font, text: 'PUBLIC RASTER', style: { fontSize: 48 }, material });
-    const group = new TextGroup({ renderOrder: 200 });
+    const text = three.createText({ font, text: 'PUBLIC RASTER', style: { fontSize: 48 }, material });
+    const group = three.createTextGroup({ renderOrder: 200 });
     group.add(text);
     const scene = new THREE.Scene();
     scene.add(group);
@@ -156,12 +173,12 @@ describe('public external raster proof', () => {
 
     try {
       expect(group.error).toBeUndefined();
-      const draw = group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+      const draw = rootDraws(scene)[0];
       expect(draw).toBeDefined();
       expect(draw?.renderOrder).toBe(200);
       expect((draw?.material as THREE.Material | undefined)?.depthTest).toBe(true);
       expect(genericMaterialContexts).toHaveLength(1);
-      expect(genericMaterialContexts[0]?.technique.id).toBe(glyphExample.id);
+      expect(genericMaterialContexts[0]?.technique).toBe(glyphExample.id);
       expect([...genericMaterialContexts[0]!.outputs.keys()]).toEqual(['position', 'color', 'opacity']);
       const geometry = draw?.geometry as THREE.InstancedBufferGeometry;
       expect(geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.origin.id))).toBeDefined();
@@ -191,18 +208,20 @@ describe('public external raster proof', () => {
       text.text = 'PLUGIN UPDATE';
       scene.updateMatrixWorld();
       expect(group.error).toBeUndefined();
-      expect(group.children.find((child) => child instanceof THREE.Mesh)).toBe(draw);
+      expect(rootDraws(scene)[0]).toBe(draw);
       expect(draw?.geometry).toBe(geometry);
     } finally {
       group.dispose();
       text.dispose();
       font.dispose();
       loader.dispose();
+      three.dispose();
     }
   });
 
   test('realizes and reuses supplied indexed triangle-strip geometry through Three', async () => {
     registerThreeRasterPlanProgram(suppliedThreeProgram);
+    const three = await createThreeHandle();
     const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
@@ -211,8 +230,8 @@ describe('public external raster proof', () => {
       input: { baked: dataUrl(await readFile(core.file)) },
       raster: { technique: suppliedGlyphExample, options: { paletteSeed: 7 } },
     });
-    const text = new Text({ font, text: 'STRIP QUAD', style: { fontSize: 48 } });
-    const group = new TextGroup();
+    const text = three.createText({ font, text: 'STRIP QUAD', style: { fontSize: 48 } });
+    const group = three.createTextGroup();
     group.add(text);
     const scene = new THREE.Scene();
     scene.add(group);
@@ -221,7 +240,7 @@ describe('public external raster proof', () => {
     let materialDisposals = 0;
     try {
       expect(group.error).toBeUndefined();
-      const draw = group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+      const draw = rootDraws(scene)[0];
       expect(draw).toBeDefined();
       const geometry = draw?.geometry as THREE.InstancedBufferGeometry;
       const drawMaterial = draw?.material;
@@ -241,7 +260,7 @@ describe('public external raster proof', () => {
       text.text = 'QUAD STRIP';
       scene.updateMatrixWorld();
       expect(group.error).toBeUndefined();
-      expect(group.children.find((child) => child instanceof THREE.Mesh)).toBe(draw);
+      expect(rootDraws(scene)[0]).toBe(draw);
       expect(draw?.geometry).toBe(geometry);
       expect(geometry.drawRange).toEqual({ start: 0, count: 6 });
     } finally {
@@ -249,10 +268,28 @@ describe('public external raster proof', () => {
       text.dispose();
       font.dispose();
       loader.dispose();
+      three.dispose();
     }
     expect(materialDisposals).toBe(1);
   });
 });
+
+let nextThreeHandle = 1;
+
+async function createThreeHandle() {
+  await glyph.init();
+  const handle = glyph.handle(`three:glyph-example:${String(nextThreeHandle)}`, ThreeConfig);
+  nextThreeHandle += 1;
+  return handle;
+}
+
+function rootDraws(scene: THREE.Scene): THREE.Mesh[] {
+  return (
+    scene
+      .getObjectByName('@pmndrs/glyph:anonymous')
+      ?.children.filter((child): child is THREE.Mesh => child instanceof THREE.Mesh) ?? []
+  );
+}
 
 const suppliedGlyphExample = defineRasterTechnique({
   ...glyphExample,
@@ -385,7 +422,9 @@ function createThreeMaterial(context: ThreePlanProgramMaterialContext): THREE.No
   };
   return (
     context.material?.create({
-      technique: context.technique,
+      root: context.root,
+      kind: 'glyph',
+      technique: glyphExample.id,
       outputs: new Map<string, THREE.Node>([
         ['position', shader.position],
         ['color', shader.color],

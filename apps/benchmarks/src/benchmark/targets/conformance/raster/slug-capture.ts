@@ -1,6 +1,6 @@
 import type { Font, GlyphLayout } from '@pmndrs/glyph';
 import { slug } from '@pmndrs/glyph/three/slug';
-import { FontLoader, Text, type TextSpan } from '@pmndrs/glyph/three';
+import { FontLoader, type Text, type ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { TargetRunOutput } from '../../../contracts';
@@ -31,6 +31,7 @@ import {
   type SourceOutlineFidelityCapture,
 } from '../../../low-level/raster/source-outline-reference';
 import type { RasterConformanceSession } from './contracts';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../../three-root';
 
 const WIDTH = 512;
 const FLAT_CONFORMANCE_HEIGHT = 512;
@@ -147,6 +148,7 @@ interface FlatSlugConformanceResources {
   readonly font: Font<typeof slug>;
   readonly data: SlugCpuReferenceData;
   readonly line: Text<typeof slug>;
+  readonly root: ThreeRoot;
   readonly sourceTypes?: SlugRasterSourceTypes;
 }
 
@@ -158,7 +160,6 @@ interface FlatSlugSceneOptions {
   readonly originX: number;
   readonly originY: number;
   readonly text: string;
-  readonly spans?: readonly TextSpan<typeof slug>[];
   readonly language: string;
   readonly direction: 'ltr' | 'rtl';
 }
@@ -600,6 +601,7 @@ async function createFlatSlugConformanceResources({
   let target: THREE.RenderTarget | undefined;
   let font: Font<typeof slug> | undefined;
   let line: Text<typeof slug> | undefined;
+  const root = createBenchmarkThreeRoot(`slug-conformance-${backend}`);
   try {
     const loaded =
       loadFont === undefined
@@ -608,9 +610,8 @@ async function createFlatSlugConformanceResources({
     font = loaded.font;
     const data = loaded.data;
     const specimen = sceneOptions ?? rasterConformanceSpecimen(fontFixture);
-    line = new Text({
+    line = root.createText({
       text: specimen.text,
-      ...(sceneOptions?.spans === undefined ? {} : { spans: sceneOptions.spans }),
       font,
       rasterPixelRatio: dpr,
       // An exact width is what centre and end alignment measure against; `at-most` would collapse them onto the start.
@@ -661,10 +662,12 @@ async function createFlatSlugConformanceResources({
       font,
       data,
       line,
+      root,
       ...(sourceTypes === undefined ? {} : { sourceTypes }),
     };
   } catch (error) {
     line?.dispose();
+    disposeBenchmarkThreeRoot(root);
     font?.dispose();
     target?.dispose();
     if (ownedRenderer !== undefined) await disposeConfiguredRenderer(ownedRenderer);
@@ -985,6 +988,7 @@ function committedLayout(line: Text<typeof slug>): GlyphLayout {
 async function disposeFlatSlugConformanceResources(resources: FlatSlugConformanceResources): Promise<void> {
   resources.line.removeFromParent();
   resources.line.dispose();
+  disposeBenchmarkThreeRoot(resources.root);
   resources.font.dispose();
   resources.target.dispose();
   if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);

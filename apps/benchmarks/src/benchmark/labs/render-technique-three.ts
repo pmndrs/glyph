@@ -1,6 +1,6 @@
 import type { AnyRasterTechnique, Font } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
-import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, type Text, type TextGroup } from '@pmndrs/glyph/three';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import * as THREE from 'three/webgpu';
 
@@ -10,6 +10,7 @@ import {
   measuredRuntimeFontBake,
   sourceUrlForFixture,
 } from '../../workloads/font-assets/runtime';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../three-root';
 
 registerExternalGlyphExampleThree();
 
@@ -97,8 +98,10 @@ function measureTechnique(
   samples: number,
 ): RenderTechniqueThreeLabResult {
   const firstStarted = performance.now();
-  const text = new Text({ font, text: INITIAL_TEXT, style: { fontSize: 48 } });
-  const group = new TextGroup();
+  const rootName = `technique-lab-${font.technique.id}`;
+  const root = createBenchmarkThreeRoot(rootName);
+  const text = root.createText({ font, text: INITIAL_TEXT, style: { fontSize: 48 } });
+  const group = root.createTextGroup();
   const scene = new THREE.Scene();
   group.add(text);
   scene.add(group);
@@ -106,7 +109,7 @@ function measureTechnique(
   const firstRealizationMs = performance.now() - firstStarted;
   try {
     if (group.error !== undefined) throw group.error;
-    const draw = onlyDraw(group);
+    const draw = onlyDraw(scene, rootName);
     const geometry = draw.geometry;
     if (!(geometry instanceof THREE.InstancedBufferGeometry)) {
       throw new TypeError('Three render-technique lab expected instanced geometry');
@@ -114,11 +117,11 @@ function measureTechnique(
     if (!Number.isSafeInteger(geometry.instanceCount) || geometry.instanceCount < 1) {
       throw new Error('Three render-technique lab expected a non-empty draw');
     }
-    for (let index = 0; index < warmup; index += 1) update(index, text, scene, group, draw, geometry);
+    for (let index = 0; index < warmup; index += 1) update(index, text, scene, group, rootName, draw, geometry);
     const durations: number[] = [];
     for (let index = 0; index < samples; index += 1) {
       const started = performance.now();
-      update(index + warmup, text, scene, group, draw, geometry);
+      update(index + warmup, text, scene, group, rootName, draw, geometry);
       durations.push(performance.now() - started);
     }
     const ordered = durations.toSorted((left, right) => left - right);
@@ -126,13 +129,14 @@ function measureTechnique(
       firstRealizationMs,
       warmMedianMs: percentile(ordered, 0.5),
       warmP95Ms: percentile(ordered, 0.95),
-      draws: group.children.filter((child) => child instanceof THREE.Mesh).length,
+      draws: rootDraws(scene, rootName).length,
       instances: geometry.instanceCount,
-      retainedGeometry: onlyDraw(group).geometry === geometry,
+      retainedGeometry: onlyDraw(scene, rootName).geometry === geometry,
     });
   } finally {
     group.dispose();
     text.dispose();
+    disposeBenchmarkThreeRoot(root);
   }
 }
 
@@ -141,22 +145,31 @@ function update(
   text: Text<AnyRasterTechnique>,
   scene: THREE.Scene,
   group: TextGroup,
+  rootName: string,
   draw: THREE.Mesh,
   geometry: THREE.BufferGeometry,
 ): void {
   text.text = index % 2 === 0 ? UPDATED_TEXT : INITIAL_TEXT;
   scene.updateMatrixWorld(true);
   if (group.error !== undefined) throw group.error;
-  const current = onlyDraw(group);
+  const current = onlyDraw(scene, rootName);
   if (current !== draw || current.geometry !== geometry) {
     throw new Error('Three render-technique lab lost its retained draw or geometry');
   }
 }
 
-function onlyDraw(group: TextGroup): THREE.Mesh {
-  const draws = group.children.filter((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+function onlyDraw(scene: THREE.Scene, rootName: string): THREE.Mesh {
+  const draws = rootDraws(scene, rootName);
   if (draws.length !== 1) throw new Error(`Three render-technique lab expected one draw, received ${draws.length}`);
   return draws[0]!;
+}
+
+function rootDraws(scene: THREE.Scene, rootName: string): THREE.Mesh[] {
+  return (
+    scene
+      .getObjectByName(`@pmndrs/glyph:${rootName}`)
+      ?.children.filter((child): child is THREE.Mesh => child instanceof THREE.Mesh) ?? []
+  );
 }
 
 function percentile(ordered: readonly number[], quantile: number): number {

@@ -74,7 +74,11 @@ export class ThreeMaterialRealizer {
   }
 
   key(material: MaterialSelection): string {
-    return material === undefined ? 'default' : `material:${this.#bindingId(material)}`;
+    if (material === undefined) return 'default:snap=0';
+    const factory = material.material;
+    return `${factory === undefined ? 'default' : `material:${this.#bindingId(factory)}`}:snap=${
+      material.pixelSnapping ? 1 : 0
+    }`;
   }
 
   decoration(

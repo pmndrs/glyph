@@ -8,7 +8,7 @@ import {
   type TextStyle,
 } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, type Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import amiriFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
@@ -21,6 +21,7 @@ import { exactValue } from '../../exact-value';
 import { paragraphCjkCoverageText } from '../../paragraph-contract-corpus';
 import { hashParagraphLayouts, paragraphLayoutBytes, paragraphLayoutContract } from '../../paragraph-layout-digest';
 import { createUikitLayoutFixture, YogaMeasureMode } from '../../uikit-layout-fixture';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
 type BitmapFont = Font<typeof bitmap>;
 
@@ -162,7 +163,10 @@ export function createParagraphContractsConformanceTarget(): BenchmarkTarget {
 }
 
 async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, signal: AbortSignal | undefined) {
-  const group = new TextGroup({ capacity: { size: 4_096, policy: 'grow' } });
+  const root = createBenchmarkThreeRoot('paragraph-contracts', { capacity: { size: 4_096, policy: 'grow' } });
+  const group = root.createTextGroup();
+  const scene = new THREE.Scene();
+  scene.add(group);
   const texts: Text<typeof bitmap>[] = [];
   const expected: Array<{ readonly id: string; readonly golden: LayoutGolden; readonly full: boolean }> = [];
   const add = (
@@ -174,7 +178,7 @@ async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, s
     golden: LayoutGolden,
     full: boolean,
   ) => {
-    const value = new Text({
+    const value = root.createText({
       font,
       text,
       style,
@@ -211,7 +215,7 @@ async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, s
   let uikitParagraph: Paragraph<typeof bitmap> | undefined;
   try {
     signal?.throwIfAborted();
-    group.updateMatrixWorld(true);
+    scene.updateMatrixWorld(true);
     if (group.error !== undefined) throw group.error;
     const layouts = texts.map((text, index) => {
       const layout = text.glyphs();
@@ -286,6 +290,7 @@ async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, s
     uikitParagraph?.dispose();
     for (const text of texts) text.dispose();
     group.dispose();
+    disposeBenchmarkThreeRoot(root);
   }
 }
 

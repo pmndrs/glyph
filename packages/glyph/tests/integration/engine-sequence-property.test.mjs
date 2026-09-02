@@ -17,10 +17,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
-import { threeEngineDomainReport } from '../../dist/three/engine-domain.js';
+import { createThreeTestHandle } from '../support/three-handle.mjs';
 
 const fixtures = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
 
@@ -167,8 +167,8 @@ class Subject {
     };
   }
 
-  create(group) {
-    this.node = new Text({
+  create(root, group) {
+    this.node = root.createText({
       font: this.fonts[this.fontKey],
       text: this.text,
       style: { ...this.style(), ...{ color: this.color } },
@@ -287,10 +287,10 @@ function checkSubject(subject, context) {
   assert.ok(measured.contentWidth >= 0, `${context}: content width was negative`);
 }
 
-async function runSequence({ seed, steps, paragraphs, fonts }) {
+async function runSequence({ seed, steps, paragraphs, fonts, root }) {
   const random = seededRandom(seed);
   const scene = new THREE.Scene();
-  const group = new TextGroup({ batching: 'group' });
+  const group = root.createTextGroup();
   scene.add(group);
   const subjects = Array.from({ length: paragraphs }, () => new Subject(fonts, random));
   const journal = [];
@@ -301,7 +301,7 @@ async function runSequence({ seed, steps, paragraphs, fonts }) {
   };
 
   try {
-    for (const subject of subjects) subject.create(group);
+    for (const subject of subjects) subject.create(root, group);
     sync('create');
     for (const [index, subject] of subjects.entries()) checkSubject(subject, `seed ${seed} create p${index}`);
 
@@ -322,7 +322,7 @@ async function runSequence({ seed, steps, paragraphs, fonts }) {
         } else if (churn === 'recreate') {
           if (subject.attached) group.remove(subject.node);
           subject.node.dispose();
-          subject.create(group);
+          subject.create(root, group);
         }
       } else {
         const operation = pick(random, OPERATIONS);
@@ -360,31 +360,33 @@ async function runSequence({ seed, steps, paragraphs, fonts }) {
   }
 }
 
-test('randomized interactive sequences never fail to publish valid input', async () => {
+test('randomized interactive sequences never fail to publish valid input', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loaded = await loadFonts();
   const { fonts } = loaded;
   try {
     // A fixed seed list keeps the gate deterministic. Widen it deliberately when a new
     // defect class appears, and add the reproducing seed here rather than re-rolling.
     for (const seed of [1, 2, 3, 5, 8, 13, 21, 34]) {
-      await runSequence({ seed, steps: 24, paragraphs: 3, fonts });
+      await runSequence({ seed, steps: 24, paragraphs: 3, fonts, root: three(`seed:${String(seed)}`) });
     }
   } finally {
     loaded.dispose();
   }
 });
 
-test('the authored shaping timeline types, wraps, and restyles without desynchronizing', async () => {
+test('the authored shaping timeline types, wraps, and restyles without desynchronizing', async (t) => {
+  const three = await createThreeTestHandle(t);
   // The seed corpus replayed exactly: every case typed one grapheme at a time under an
   // oscillating width, with the case switch changing font, direction, language, and
   // features together. This is the live Advanced-shaping workload's sequence.
   const loaded = await loadFonts();
   const { fonts } = loaded;
   const scene = new THREE.Scene();
-  const group = new TextGroup({ batching: 'group' });
+  const group = three.createTextGroup();
   scene.add(group);
   const nodes = Array.from({ length: 4 }, () => {
-    const node = new Text({
+    const node = three.createText({
       font: fonts.inter,
       text: '',
       style: { fontSize: 20, lineHeight: 1.25 },
@@ -444,15 +446,16 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
   }
 });
 
-test('font and loader teardown is total while Text retains the renderer domain', async () => {
+test('font and loader teardown is total while Text retains its handle-owned renderer leases', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loaded = await loadFonts();
   const { fonts } = loaded;
   const scene = new THREE.Scene();
-  const group = new TextGroup({ batching: 'group' });
+  const group = three.createTextGroup();
   scene.add(group);
   const texts = [];
   for (let index = 0; index < 4; index += 1) {
-    const text = new Text({
+    const text = three.createText({
       font: fonts.inter,
       text: 'retained',
       style: { fontSize: 20, lineHeight: 1.25 },
@@ -468,7 +471,7 @@ test('font and loader teardown is total while Text retains the renderer domain',
     loaded.dispose();
     loaded.dispose();
     assert.ok(Object.values(fonts).every((font) => font.disposed));
-    assert.equal(threeEngineDomainReport().active, true, 'live Text leases keep the renderer domain valid');
+    assert.equal(three.textCount, texts.length, 'live Text values remain owned by the selected handle root');
     for (const text of texts) assert.ok(text.measure().glyphCount > 0);
     group.dispose();
     group.dispose();
@@ -477,17 +480,18 @@ test('font and loader teardown is total while Text retains the renderer domain',
     group.dispose();
     loaded.dispose();
   }
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(three.textCount, 0);
 });
 
-test('renderer leases may dispose before their user font and loader handles', async () => {
+test('renderer leases may dispose before their user font and loader handles', async (t) => {
+  const three = await createThreeTestHandle(t);
   const loaded = await loadFonts();
   const { fonts } = loaded;
   const scene = new THREE.Scene();
-  const group = new TextGroup({ batching: 'group' });
+  const group = three.createTextGroup();
   scene.add(group);
   const texts = Array.from({ length: 3 }, () => {
-    const node = new Text({
+    const node = three.createText({
       font: fonts.inter,
       text: 'deferred',
       style: { fontSize: 20, lineHeight: 1.25 },
@@ -511,5 +515,5 @@ test('renderer leases may dispose before their user font and loader handles', as
     loaded.dispose();
   }
   assert.ok(Object.values(fonts).every((font) => font.disposed));
-  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.equal(three.textCount, 0);
 });

@@ -1,6 +1,6 @@
 import type { Font, GlyphLayout } from '@pmndrs/glyph';
 import { selectBitmapStrikePpem, type bitmap, type BitmapData } from '@pmndrs/glyph/three/bitmap';
-import { Text } from '@pmndrs/glyph/three';
+import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import { LIVE_TEXT_LINE_HEIGHT } from '../../workloads/shared/text-style';
@@ -30,7 +30,8 @@ export interface BitmapConformanceLine {
  * layout and its draws observable, and lets a preparation failure surface as a thrown error instead of an empty frame.
  */
 export function createBitmapConformanceLine(
-  parent: THREE.Object3D,
+  scene: THREE.Scene,
+  root: ThreeRoot,
   font: Font<typeof bitmap>,
   data: BitmapData,
   text: string,
@@ -39,7 +40,7 @@ export function createBitmapConformanceLine(
   signal?: AbortSignal,
 ): BitmapConformanceLine {
   signal?.throwIfAborted();
-  const object = new Text({
+  const object = root.createText({
     font,
     text,
     pixelSnapping: true,
@@ -54,7 +55,7 @@ export function createBitmapConformanceLine(
     },
     rasterPixelRatio,
   });
-  parent.add(object);
+  scene.add(object);
   try {
     object.updateMatrixWorld(true);
     if (object.error !== undefined) throw object.error;
@@ -68,9 +69,9 @@ export function createBitmapConformanceLine(
       height: layout.height,
       width: layout.width,
       cssFontSize,
-      glyphCount: countRenderedGlyphs(object),
+      glyphCount: layout.glyphIds.length,
       missingGlyphCount,
-      drawCount: countDraws(object),
+      drawCount: countDraws(scene, root),
       strikePpem: selectBitmapStrikePpem(data.strikes, cssFontSize, rasterPixelRatio),
     };
   } catch (error) {
@@ -88,20 +89,11 @@ function disposeText(object: Text<typeof bitmap>): void {
   object.dispose();
 }
 
-function countDraws(object: THREE.Object3D): number {
+function countDraws(scene: THREE.Scene, root: ThreeRoot): number {
   let count = 0;
-  object.traverse((child) => {
+  const name = root.name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${root.name}`;
+  scene.getObjectByName(name)?.traverse((child) => {
     if (child instanceof THREE.Mesh) count += 1;
-  });
-  return count;
-}
-
-function countRenderedGlyphs(object: THREE.Object3D): number {
-  let count = 0;
-  object.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.geometry instanceof THREE.InstancedBufferGeometry) {
-      count += child.geometry.instanceCount;
-    }
   });
   return count;
 }

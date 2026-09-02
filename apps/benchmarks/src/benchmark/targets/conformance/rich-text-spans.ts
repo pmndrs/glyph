@@ -1,7 +1,7 @@
 import type { Font, GlyphLayout, RasterTechniqueInput } from '@pmndrs/glyph';
 import { id as hashId } from '@pmndrs/glyph/core';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, type Text, type TextGroup, type ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import interBitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
@@ -19,6 +19,7 @@ import {
 } from '../../../workloads/rich-text/scene';
 import type { BenchmarkTarget } from '../../contracts';
 import { policyAttributeName, requiredPolicyAttribute } from '../three-policy-buffer-evidence';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
 type BitmapTechnique = typeof bitmap;
 
@@ -152,19 +153,21 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
       const { body, companions } = state;
 
       const scene = new THREE.Scene();
+      const root = createBenchmarkThreeRoot('rich-text-spans', { capacity: { size: 4_096, policy: 'grow' } });
       // One group so every case packs through the same batch the live workload uses, rather than through a
       // standalone-Text path the workload never takes.
-      const group = new TextGroup({ capacity: { size: 4_096, policy: 'grow' } });
+      const group = root.createTextGroup();
       scene.add(group);
       const evidence = new Map<RichTextCaseId, CaseEvidence>();
       try {
         for (const caseId of CASE_IDS) {
-          evidence.set(caseId, measureCase(group, body, companions, caseId));
+          evidence.set(caseId, measureCase(root, scene, group, body, companions, caseId));
         }
       } finally {
         group.clear();
         group.removeFromParent();
         group.dispose();
+        disposeBenchmarkThreeRoot(root);
       }
 
       const composed = required(evidence, 'composed');
@@ -300,6 +303,8 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
 }
 
 function measureCase(
+  root: ThreeRoot,
+  scene: THREE.Scene,
   group: TextGroup,
   body: Font<BitmapTechnique>,
   companions: RichTextCompanionFonts,
@@ -319,7 +324,7 @@ function measureCase(
   };
   const literal = richTextLiteral(fonts, composition);
   assertRichTextSpans(literal, composition);
-  const text = new Text({
+  const text = root.createText({
     font: body,
     text: literal,
     style: { fontSize: BODY_FONT_SIZE, lineHeight: 1.25, color: '#ffffff' },
@@ -330,7 +335,7 @@ function measureCase(
     group.add(text);
     // Target v1 publishes shaping, layout, and draws during the world-matrix update instead of through an awaited
     // readiness promise, so failures surface on the object rather than as a rejected wait.
-    group.updateMatrixWorld(true);
+    scene.updateMatrixWorld(true);
     // Headless runs read this across a page boundary that cannot transfer a cause, so the case that failed and the
     // underlying reason both belong in the message.
     const failure = group.error ?? text.error;
@@ -339,7 +344,7 @@ function measureCase(
     }
     const layout = text.glyphs();
     if (layout === undefined) throw new Error(`${caseId} has no layout`);
-    return readEvidence(group, layout);
+    return readEvidence(scene, root, layout);
   } finally {
     text.removeFromParent();
     text.dispose();
@@ -354,13 +359,16 @@ function measureCase(
  * raster resource rather than by paragraph position, so the result is the paragraph's multiset of resolved colours and
  * not a per-cluster mapping — which is why the paint evidence is expressed as counts and differences between cases.
  */
-function readEvidence(text: THREE.Object3D, layout: GlyphLayout): CaseEvidence {
+function readEvidence(scene: THREE.Scene, root: ThreeRoot, layout: GlyphLayout): CaseEvidence {
   const colors: string[] = [];
   let drawCount = 0;
   let renderedGlyphCount = 0;
   let underlineCount = 0;
   let lineThroughCount = 0;
-  text.traverse((child) => {
+  const drawRoot = scene.getObjectByName(
+    root.name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${root.name}`,
+  );
+  drawRoot?.traverse((child) => {
     if (!(child instanceof THREE.Mesh) || !(child.geometry instanceof THREE.InstancedBufferGeometry)) return;
     if (child.userData.pmndrsGlyphPrimitiveKind === 'decoration') {
       const rect = requiredPolicyAttribute(child.geometry, DECORATION_RECT_ATTRIBUTE, 'decoration rect evidence');

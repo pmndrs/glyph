@@ -9,7 +9,7 @@ import {
   type TextStyle,
 } from '@pmndrs/glyph';
 import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/glyph/three/bitmap';
-import { Text } from '@pmndrs/glyph/three';
+import type { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
@@ -50,6 +50,7 @@ import {
   type ShapedTextIdentity,
 } from '../shared/glyph-origin-transition';
 import { bitmapAtlasConfiguration, type BitmapAtlasPageStats } from './metadata';
+import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../three-root';
 
 export interface BitmapTextLiveStats {
   readonly technique: 'bitmap';
@@ -401,6 +402,7 @@ async function activateBitmapTextPersistentScene(
   let loadedFont: Font<typeof bitmap> | undefined;
   let fontFixtureController: RetainedFontFixtureController<BitmapPersistentFontFixture> | undefined;
   let line: Text<typeof bitmap> | undefined;
+  const glyphRoot = createBenchmarkThreeRoot(options.id ?? 'bitmap-text');
   try {
     const fontStarted = performance.now();
     const loadedAsset = await loadBitmapFontAsset({
@@ -424,7 +426,7 @@ async function activateBitmapTextPersistentScene(
       layout: bitmapLayout(currentTextAlign),
       style: bitmapStyle(fontSize, currentShaping),
     };
-    line = new Text({
+    line = glyphRoot.createText({
       font: committedState.font,
       text: committedState.text,
       constraints: committedState.constraints,
@@ -788,6 +790,7 @@ async function activateBitmapTextPersistentScene(
         disposePresentation();
         activeText.removeFromParent();
         activeText.dispose();
+        disposeBenchmarkThreeRoot(glyphRoot);
         activeFontFixture.dispose();
         canvasSurface.dispose();
       },
@@ -797,6 +800,7 @@ async function activateBitmapTextPersistentScene(
       line.removeFromParent();
       line.dispose();
     }
+    disposeBenchmarkThreeRoot(glyphRoot);
     if (fontFixtureController === undefined) loadedFont?.dispose();
     else fontFixtureController.dispose();
     canvasSurface.dispose();

@@ -6,10 +6,12 @@ import {
   Decorations,
   FontLoader,
   Glyphs,
+  Text,
+  TextGroup,
+  ThreeRoot,
   ThreeConfig,
   defineTextMaterial,
   span as threeSpan,
-  txt as threeTxt,
   type ThreeHandle,
 } from '../../src/three.js';
 
@@ -27,6 +29,18 @@ const constraints = Constraints.create({
   naturalHeight: { height: { mode: 'unconstrained' } },
 });
 const three: ThreeHandle = glyph.handle('three:type-fixture', ThreeConfig);
+const hud = three('hud');
+hud.createText({ font: bitmapFont, text: 'Named root' });
+// @ts-expect-error Calling a handle only creates or selects named roots.
+three();
+// @ts-expect-error A named root is terminal; roots cannot create nested roots.
+hud('nested');
+// @ts-expect-error Text construction is owned by a Three handle root.
+new Text({ font: bitmapFont, text: 'rootless' });
+// @ts-expect-error TextGroup construction is owned by a Three handle root.
+new TextGroup();
+// @ts-expect-error ThreeRoot construction is owned by a Three handle.
+new ThreeRoot(undefined, undefined, () => undefined);
 const inter = glyph.fontFace('/fonts/Inter.font.glb', {
   family: 'Inter',
   format: [slug, bitmap({ strikes: [8, 16] })] as const,
@@ -47,9 +61,11 @@ const label = three.createText({
   style: [styles.base, false, null, styles.accent],
   layout: [layouts.centered, layouts.wrapped],
 });
-const labels = three.createTextGroup({ compositing: 'independent', pixelSnapping: true });
-three.createText({ font: bitmapFont, text: threeTxt`Warning: ${warning`100`}` });
-const compositing: 'ordered' | 'independent' = labels.compositing;
+const labels = three.createTextGroup({ pixelSnapping: true });
+three.setCompositing('independent');
+three.setCapacity({ size: 4_096, policy: 'chunk' });
+three.createText({ font: bitmapFont, text: txt`Warning: ${warning`100`}` });
+const compositing: 'ordered' | 'independent' = three.compositing;
 labels.add(label);
 label.shape();
 labels.shape();
@@ -57,10 +73,8 @@ label.text = 'Updated';
 label.text = 'Updated!';
 label.text = txt`${green`Updated`}`;
 label.constraints = [constraints.card, constraints.naturalHeight];
-label.setCapacity({ size: 64, policy: 'grow' });
 const measurement = label.measure();
 void measurement.contentWidth;
-labels.setCapacity({ size: 4_096, policy: 'chunk' });
 
 labels.add(three.createText({ font: mtsdfFont, text: 'Mixed technique' }));
 

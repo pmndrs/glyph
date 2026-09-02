@@ -40,6 +40,7 @@ import { bitmap } from '../raster/bitmap-technique.js';
 import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
+import { normalizeGlyphBufferCapacity, type GlyphBufferCapacity } from '../text-properties.js';
 import { registerDefaultThreeConfig, ThreeTextEngineCoordinator } from './engine-coordinator.js';
 import type { PortableResource } from '../core.js';
 import type { ThreeEngineDomainLease } from './engine-domain.js';
@@ -50,8 +51,11 @@ import {
   Text,
   TextGroup,
   ThreeRoot,
+  normalizeThreeRootCompositing,
+  threeTextConstructionToken,
   type StandaloneTextProperties,
   type TextGroupOptions,
+  type ThreeRootOptions,
   type ThreeRootDomainProvider,
 } from './text.js';
 
@@ -118,16 +122,22 @@ interface ThreeTextFactory {
   createTextGroup(options?: TextGroupOptions): TextGroup;
 }
 
-/** Callable Three handle. Its direct factories delegate to the one anonymous root. */
-export interface ThreeHandle extends GlyphHandle<ThreeRoot>, ThreeTextFactory {
+interface ThreeRootApi extends ThreeTextFactory {
   readonly textCount: number;
   readonly gpuBytes: number;
+  readonly capacity: GlyphBufferCapacity;
+  readonly compositing: 'ordered' | 'independent';
   material: ThreeTextMaterial | undefined;
+  setCapacity(value: GlyphBufferCapacity): void;
+  setCompositing(value: 'ordered' | 'independent'): void;
   setMaterial(value: ThreeTextMaterial | undefined): void;
   shape(): void;
 }
 
-export interface ThreeConfigOptions {
+/** Callable Three handle. Its direct factories delegate to the one anonymous root. */
+export interface ThreeHandle extends GlyphHandle<ThreeRoot>, ThreeRootApi {}
+
+export interface ThreeConfigOptions extends ThreeRootOptions {
   readonly transformMode?: ThreeTransformMode;
   readonly allocationMode?: ThreeAllocationMode;
   readonly defaultFontFormat?: keyof ThreeFontTechniques;
@@ -170,7 +180,7 @@ export type ThreeGlyphConfig = GlyphConfig<
   ThreeFontTechniques,
   ThreeRootBinding
 > &
-  Readonly<{ material?: ThreeTextMaterial }>;
+  Readonly<ThreeRootOptions & { material?: ThreeTextMaterial }>;
 const handleDomains = new WeakMap<ThreeHandle, ThreeHandleDomain>();
 const rootDomains = new WeakMap<ThreeRoot, ThreeHandleDomain>();
 
@@ -263,6 +273,8 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
         createTextGroup: { enumerable: true, value: anonymous.createTextGroup.bind(anonymous) },
         textCount: { enumerable: true, get: () => anonymous.textCount },
         gpuBytes: { enumerable: true, get: () => anonymous.gpuBytes },
+        capacity: { enumerable: true, get: () => anonymous.capacity },
+        compositing: { enumerable: true, get: () => anonymous.compositing },
         material: {
           enumerable: true,
           get: () => anonymous.material,
@@ -270,6 +282,8 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
             anonymous.material = value;
           },
         },
+        setCapacity: { enumerable: true, value: anonymous.setCapacity.bind(anonymous) },
+        setCompositing: { enumerable: true, value: anonymous.setCompositing.bind(anonymous) },
         setMaterial: { enumerable: true, value: anonymous.setMaterial.bind(anonymous) },
         shape: { enumerable: true, value: anonymous.shape.bind(anonymous) },
       });
@@ -283,6 +297,12 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
       registerFontFaceHandleStore(handle, domain.fonts);
       return handle;
     },
+    ...(options.capacity === undefined
+      ? {}
+      : { capacity: normalizeGlyphBufferCapacity(options.capacity, 'ThreeConfig capacity') }),
+    ...(options.compositing === undefined
+      ? {}
+      : { compositing: normalizeThreeRootCompositing(options.compositing, 'ThreeConfig compositing') }),
     ...(options.material === undefined ? {} : { material: options.material }),
   }) as ThreeGlyphConfig;
 }
@@ -296,6 +316,7 @@ class ThreeHandleDomain implements ThreeRootDomainProvider {
   readonly fonts: FontFaceHandleStore;
   readonly roots: GlyphRootRegistry<ThreeRoot>;
   readonly #config: ThreeGlyphConfig;
+  readonly #rootOptions: ThreeRootOptions;
   #leases = 0;
   #handleReleased = false;
   #disposed = false;
@@ -303,12 +324,16 @@ class ThreeHandleDomain implements ThreeRootDomainProvider {
 
   constructor(engine: GlyphEngine, config: AnyGlyphConfig) {
     this.#config = config as ThreeGlyphConfig;
+    this.#rootOptions = Object.freeze({
+      ...(this.#config.capacity === undefined ? {} : { capacity: this.#config.capacity }),
+      ...(this.#config.compositing === undefined ? {} : { compositing: this.#config.compositing }),
+    });
     const fonts = this.#config.fonts;
     if (fonts === undefined) throw new TypeError('Three GlyphConfig must declare its font techniques');
     this.fonts = new FontFaceHandleStore(glyphFontLibrary(), fonts.techniques, fonts.default);
     this.coordinator = new ThreeTextEngineCoordinator(engine, {}, this.#config);
     this.roots = createGlyphRootRegistry((name, release) => {
-      const root = new ThreeRoot(name, this, release);
+      const root = new ThreeRoot(threeTextConstructionToken, name, this, release, this.#rootOptions);
       rootDomains.set(root, this);
       return root;
     });
@@ -342,7 +367,7 @@ class ThreeHandleDomain implements ThreeRootDomainProvider {
     this.assertActive();
     const selection = this.#resolveFontSelection(properties.font);
     if (!isFontFaceSelection(selection)) {
-      return new Text(properties as StandaloneTextProperties<Technique>, this, [], root);
+      return new Text(threeTextConstructionToken, properties as StandaloneTextProperties<Technique>, this, [], root);
     }
     if (!this.fonts.isLoaded(selection)) {
       throw new FontLoadError(
@@ -352,7 +377,13 @@ class ThreeHandleDomain implements ThreeRootDomainProvider {
     }
     const font = this.fonts.acquire<Technique>(selection);
     try {
-      return new Text({ ...properties, font } as StandaloneTextProperties<Technique>, this, [font], root);
+      return new Text(
+        threeTextConstructionToken,
+        { ...properties, font } as StandaloneTextProperties<Technique>,
+        this,
+        [font],
+        root,
+      );
     } catch (error) {
       font.dispose();
       throw error;

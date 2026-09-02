@@ -31,8 +31,7 @@ export async function captureKernelWorkloads(targets: readonly number[]): Promis
   try {
     return targets.map((target) => captureWorkload(fixture, target, policy));
   } finally {
-    fixture.loaded.dispose();
-    fixture.loader.dispose();
+    fixture.dispose();
   }
 }
 

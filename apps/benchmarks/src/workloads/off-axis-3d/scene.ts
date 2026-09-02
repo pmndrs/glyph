@@ -1,8 +1,8 @@
-import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { createOklabColorCycle } from '../shared/oklab-color-cycle';
+import { formatStyledRanges } from '../shared/formatted-ranges';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 
 import {
@@ -45,6 +45,7 @@ export const offAxis3dWorkload = {
       ...context.configuration,
       dpr: context.dpr,
       font: context.font,
+      root: context.root,
       viewportWidth: context.viewportWidth,
     });
   },
@@ -68,11 +69,10 @@ export function createOffAxis3dEntries(
   },
 ): readonly ComparisonWorkloadEntry[] {
   const spans = OFF_AXIS_SPANS.map((span) => ({ ...span, style: { ...span.style } }));
-  const text = new Text({
+  const text = context.root.createText({
     font: context.font,
     rasterPixelRatio: context.dpr,
-    text: OFF_AXIS_TEXT,
-    spans,
+    text: formatStyledRanges(OFF_AXIS_TEXT, spans),
     style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT, color: paintColor(LIVE_TEXT_COLOR) },
     constraints: {
       width: exactWidth(benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio, undefined, 2)),
@@ -88,7 +88,6 @@ export function createOffAxis3dEntries(
       sourceText: OFF_AXIS_TEXT,
       text,
       offAxisSpans: spans,
-      offAxisPaintUpdate: { text: OFF_AXIS_TEXT, spans },
     },
   ];
 }
@@ -122,14 +121,14 @@ export function animateOffAxis3dEntries(
   );
   entry.node.position.z = -(320 + Math.sin(phase * 0.61) * 60) * strength;
   if (!configuration.animationEnabled) return;
-  if (entry.offAxisSpans === undefined || entry.offAxisPaintUpdate === undefined) {
+  if (entry.offAxisSpans === undefined) {
     throw new Error('off-axis text is missing its retained color spans');
   }
   const colorPhase = (timestamp / 32_000) * animationRate(configuration.animationSpeed);
   for (let index = 0; index < entry.offAxisSpans.length; index += 1) {
     entry.offAxisSpans[index]!.style.color = paintColor(offAxisColorAt(index, colorPhase));
   }
-  entry.text.set(entry.offAxisPaintUpdate);
+  entry.text.set({ text: formatStyledRanges(OFF_AXIS_TEXT, entry.offAxisSpans) });
 }
 
 function animationRate(animationSpeed: number): number {
