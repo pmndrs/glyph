@@ -13,19 +13,19 @@ sources:
     title: Package manifest
   - id: engine-driver
     resource: ../../packages/glyph-example-renderer/src/engine.ts
-    title: Retention-protocol frame driver
+    title: Root-services Text implementation
   - id: glyph-config
     resource: ../../packages/glyph-example-renderer/src/config.ts
     title: Example GlyphConfig and named handle
   - id: configured-plan-target
     resource: ../../packages/glyph/src/core/glyph-plan-target.ts
     title: Internal configured publication target
-  - id: policy
+  - id: codec
     resource: ../../packages/glyph-example-renderer/src/codec.ts
     title: Renderer-authored system lanes and Codec
   - id: draw-list
     resource: ../../packages/glyph-example-renderer/src/draw-list.ts
-    title: Device-neutral draw list owned by the backend
+    title: Device-neutral draw list owned by the renderer
   - id: device
     resource: ../../packages/glyph-example-renderer/src/device.ts
     title: Deterministic renderer validation oracle
@@ -81,7 +81,7 @@ named buffers, geometry, resources, ordered batches/root instances, and instance
 state. It validates only renderer and user/config requirements; it does not revalidate trusted Rust hierarchy semantics.
 Rejected candidates discard staging and leave accepted state untouched.
 
-`TypeGpuExampleRendererDevice` is the concrete backend. It realizes GLB-like position, UV, and index accessors; creates
+`TypeGpuExampleRendererDevice` is the concrete renderer device. It realizes GLB-like position, UV, and index accessors; creates
 TypeGPU/WebGPU vertex, index, and instance buffers; builds the selected pipeline; encodes an indexed instanced pass; and
 submits to an offscreen `rgba8unorm` target. Empty idle deltas produce no submission, while accepted removal clears the
 target. The hardware recovery proof disposes the lost-device handle and creates a new handle with a new configured device,
