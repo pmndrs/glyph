@@ -21,7 +21,7 @@ import {
 
 import type { ExampleBindings, ExampleBufferBinding, ExampleResolvedResource } from './config.js';
 import type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord } from './draw-list.js';
-import { EXAMPLE_RENDERER_PROGRAM_NAMESPACE } from './policy.js';
+import { EXAMPLE_RENDERER_PROGRAM_NAMESPACE } from './codec.js';
 
 /** One named instance-buffer input required by an example renderer shader. */
 export interface ExampleRendererShaderBuffer {

@@ -31,7 +31,7 @@ sources:
     resource: ../../packages/glyph/src/three/engine-plan-target.ts
     title: Current Three render-plan executor
   - id: current-three-policy
-    resource: ../../packages/glyph/src/three/render-policy.ts
+    resource: ../../packages/glyph/src/three/codec.ts
     title: Current Three render policy
   - id: current-three-material
     resource: ../../packages/glyph/src/three/material.ts
@@ -774,7 +774,7 @@ function defineThreeCodec(options: ThreeCodecOptions) {
 }
 ```
 
-`defineEncode()` is the valuable generic utility: it validates and compiles the Codec descriptor, ensures that the declared capability set matches the config, and prevents host objects such as `Texture`, `Material`, or `Mesh` from entering the engine input. The current implementation—still using policy-named symbols—already has reusable builders for schemas, buffers, raster programs, transform modes, and allocation modes ([render-policy.ts:1-20](../../packages/glyph/src/three/render-policy.ts#L1-L20), [51-122](../../packages/glyph/src/three/render-policy.ts#L51-L122)).
+`defineEncode()` is the valuable generic utility: it validates and compiles the Codec descriptor, ensures that the declared capability set matches the config, and prevents host objects such as `Texture`, `Material`, or `Mesh` from entering the engine input. The current implementation already has reusable builders for schemas, buffers, raster programs, transform modes, and allocation modes ([codec.ts:1-20](../../packages/glyph/src/three/codec.ts#L1-L20), [51-122](../../packages/glyph/src/three/codec.ts#L51-L122)).
 
 The common decoder is explicit in the config rather than hidden:
 

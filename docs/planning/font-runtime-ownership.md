@@ -14,9 +14,9 @@ sources:
   - id: current-engine
     resource: ../../packages/glyph/src/glyph-engine.ts
     title: Current Glyph engine
-  - id: current-backend
-    resource: ../../packages/glyph/src/core/backend.ts
-    title: Current renderer-neutral backend and plan transport
+  - id: current-handle-state
+    resource: ../../packages/glyph/src/internal/handle-state.ts
+    title: Current internal handle state and Wasm command transport
   - id: current-paragraph
     resource: ../../packages/glyph/src/paragraph.ts
     title: Current renderer-free measurement path

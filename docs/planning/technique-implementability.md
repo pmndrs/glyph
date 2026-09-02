@@ -26,26 +26,26 @@ Three may expose a renderer-local `createMaterial(context)` helper. That helper 
 
 ## What is already fixed
 
-`GlyphBackend` accepts arbitrary binding and policy bytes (`packages/glyph/src/core/backend.ts`), and core resolves every
-registered portable technique program through one binding compiler (`packages/glyph/src/core/font-binding.ts`). This
+Each `GlyphConfig` handle installs the Codec returned by `encode`, while internal handle state resolves every registered
+portable technique program through one binding compiler (`packages/glyph/src/core/font-binding.ts`). This
 fixes the old asymmetry where Paragraph called `loadedFontBindingBytes` without the lookup that Three performed and
 removes the duplicate first-party binding compilers.
 
 The current branch also provides:
 
-- a portable schema and policy-body factory;
-- host-specific policy assembly;
+- a portable schema and Codec-body factory;
+- host-specific Codec assembly;
 - a renderer-neutral compiled font result containing binding bytes and resources;
 - core technique-id lookup and binding composition;
 - Three resource/program retention;
 - a non-Three example engine with a deterministic recording oracle plus a concrete TypeGPU/WebGPU device,
   supplied-geometry realization, and changing-pixel acceptance.
 
-The closure review also binds capability selections to their registered policy handle, validates declared group members
+The closure review also binds capability selections to their registered Codec handle, validates declared group members
 and texture formats through the public resource validator, and makes font-binding/resource registration one reversible
 transaction. These checks reject contradictory inputs before frame allocation or device realization.
 
-Those boundaries remain. The work below must not move Three policy numbers, Three materials, or shader-language types into `/core`.
+Those boundaries remain. The work below must not move Three Codec numbers, Three materials, or shader-language types into renderer-neutral internals.
 
 ## Source audit: closed holes
 
@@ -75,11 +75,11 @@ The change is not to ban `createMaterial(context)`. The change is to place it co
 - the generic Three executor creates the context from named retained bindings, resources, instance addressing, primitive data, and transforms;
 - the executor selects and invokes the helper without requiring the portable plan to know Three.
 
-The context must consume logical names, not require a technique helper to hard-code host policy numbers.
+The context must consume logical names, not require a technique helper to hard-code host Codec numbers.
 
 Bitmap, MSDF, and Slug now register their renderer-neutral plans from their raster modules and use the same compiled-font
 and named portable-resource path as extensions. Three still dispatches to its built-in material functions by technique
-identity, which is renderer-owned shader/material selection rather than a second policy or binding implementation.
+identity, which is renderer-owned shader/material selection rather than a second Codec or binding implementation.
 
 ### Portable resources are too opaque for a generic renderer
 
@@ -103,17 +103,17 @@ role must retain the cardinality its schema promises.
 
 The existing `enginePrimitive` wire record has no geometry-resource field (`packages/glyph/src/generated/text-shaper-abi.ts:373-394`). Do not add an ad hoc renderer reference to that record. A supplied geometry declaration names a geometry resource in the technique contract; the compiled resource table carries its immutable bytes, vertex accessors, attributes, indices, topology, and draw range. The renderer combines that declaration with the primitive's existing record span. Geometry never declares an instance count or an instance-rate accessor: the primitive's retained `recordCount` is the sole draw-instance authority, and named policy buffers carry per-record data. Indexed geometry uses its index count and draw range. `synthetic-quad` remains the no-resource path.
 
-Resource realization and geometry views must therefore distinguish the shared geometry payload from per-record policy buffers. A geometry resource may be shared by many records, while every per-record shader input binds through a named policy buffer. The contract must reject mismatched index/component layouts and renderer-owned instance metadata before a device is touched.
+Resource realization and geometry views must therefore distinguish the shared geometry payload from per-record Codec buffers. A geometry resource may be shared by many records, while every per-record shader input binds through a named Codec buffer. The contract must reject mismatched index/component layouts and renderer-owned instance metadata before a device is touched.
 
 ### Decoration remains a renderer-owned built-in
 
-`pmndrs.decoration` is currently a Three-policy-reserved, resource-free branch rather than a portable raster program (`packages/glyph/src/three/render-policy.ts:40-62,235-266`). The generic executor must preserve that branch while raster programs move to the variant path; the built-in migration layer must explicitly test decoration before deleting or simplifying the old executor branches (`packages/glyph/src/three/engine-plan-target.ts:484-490,501-525,731-771`). It is not silently converted into a raster package in this change.
+`pmndrs.decoration` is currently a Three-Codec-reserved, resource-free branch rather than a portable raster program (`packages/glyph/src/three/codec.ts:40-62,235-266`). The generic executor must preserve that branch while raster programs move to the variant path; the built-in migration layer must explicitly test decoration before deleting or simplifying the old executor branches (`packages/glyph/src/three/engine-plan-target.ts:484-490,501-525,731-771`). It is not silently converted into a raster package in this change.
 
 ## Target ownership model
 
 ```text
 portable technique package
-  identity, baker, decoder, schema, policy body, binding compiler
+  identity, baker, decoder, schema, Codec body, binding compiler
   logical render contract and portable resources
 
 shader variant package
@@ -121,15 +121,15 @@ shader variant package
   optional renderer-local material/pipeline helper
 
 renderer package
-  policy assembly with host-owned ids
+  Codec assembly with handle-owned ids
   generic resource realization and named binding
   primitive realization, material creation, transforms, submission
 ```
 
 The compiled font owns immutable portable payloads; it does not own their GPU lifetime. A renderer realizes those
-payloads in a device-scoped pool keyed by the plan's stable resource identity and leases the same texture, buffer, or
-geometry to compatible render planners. `GlyphBackend` owns Wasm registrations and `RenderPlanner` owns one revisioned
-plan lifetime; neither is a scene, device, pass, or implicit global batch. This lets a TypeGPU, TSL, WGSL, or GLSL backend
+payloads in a device-scoped pool keyed by the command buffer's stable resource identity and leases the same texture,
+buffer, or geometry to compatible roots. Internal handle state owns Wasm registrations and each root owns one revisioned
+publication lifetime; neither is a scene, device, pass, or implicit global batch. This lets a TypeGPU, TSL, WGSL, or GLSL renderer
 reuse the same portable plan without moving renderer concepts into `/core`.
 
 The portable plan does not carry shader source. The technique package publishes shader realizations as optional subpath modules; each realization consumes the same logical contract regardless of whether it was authored in TypeGPU, TSL, WGSL, or GLSL.

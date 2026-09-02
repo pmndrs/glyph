@@ -15,7 +15,7 @@ import { bitmap } from '../../dist/raster/bitmap-technique.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
 import { createFontStack, immutableFontResources } from '../../dist/loaded-font.js';
 import { loadFont } from '../../dist/loader.js';
-import { threeCodecCapabilitySet, threeCodecDescriptor, threeSystemBuffers } from '../../dist/three/render-policy.js';
+import { threeCodecCapabilitySet, threeCodecDescriptor, threeSystemBuffers } from '../../dist/three/codec.js';
 import {
   acquireEngineFontBinding,
   createGlyphEngine,

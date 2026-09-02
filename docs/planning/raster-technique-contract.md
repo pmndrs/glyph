@@ -22,7 +22,7 @@ sources:
     resource: ../../packages/glyph/src/core/policy-program.ts
     title: Policy-program expression DSL
   - id: three-policy
-    resource: ../../packages/glyph/src/three/render-policy.ts
+    resource: ../../packages/glyph/src/three/codec.ts
     title: Three render policy programs
   - id: font-binding
     resource: ../../packages/glyph/src/core/font-binding.ts
@@ -59,7 +59,7 @@ flowchart TB
     shader["bitmap-shader.ts\nreads uvOrigin, uvSize, color\n(names = implicit schema)"]
   end
   subgraph three ["@pmndrs/glyph/three"]
-    policy["render-policy.ts\nBITMAP_COLOR = 5\n(ids = declared here)"]
+    policy["codec.ts\nBITMAP_COLOR = 5\n(ids = declared here)"]
     exec["engine-plan-target.ts\nbyPolicyId.get(1)\n(ids = known again, by hand)"]
     material["material wiring\nprivate Three key → color node\n(ids = known a third time)"]
   end

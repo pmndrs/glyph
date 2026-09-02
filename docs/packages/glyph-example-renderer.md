@@ -5,7 +5,7 @@ description: Proves the root GlyphConfig integration surface through a real Type
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:bd853ba9d1b18675ab766efdc7e7ac15d039a820a39426ff1978e3fa61a410c6'
+source_digest: 'sha256:46f419dfef9b2c957182e246f0f655bfd9819e4852b3924afef278ebf361a8e7'
 tags: [package, glyph-config, codec, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -21,7 +21,7 @@ sources:
     resource: ../../packages/glyph/src/core/glyph-plan-target.ts
     title: Internal configured publication target
   - id: policy
-    resource: ../../packages/glyph-example-renderer/src/policy.ts
+    resource: ../../packages/glyph-example-renderer/src/codec.ts
     title: Renderer-authored system lanes and Codec
   - id: draw-list
     resource: ../../packages/glyph-example-renderer/src/draw-list.ts

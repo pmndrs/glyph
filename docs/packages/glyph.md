@@ -47,9 +47,9 @@ sources:
   - id: rust-engine
     resource: ../../packages/glyph/rust/shaper/src/engine/state.rs
     title: Retained Rust text engine
-  - id: backend
-    resource: ../../packages/glyph/src/core/backend.ts
-    title: Internal Glyph backend and Wasm command transport
+  - id: handle-state
+    resource: ../../packages/glyph/src/internal/handle-state.ts
+    title: Internal Glyph handle state and Wasm command transport
   - id: tsl-shaders
     resource: ../../packages/glyph/src/tsl.ts
     title: Technique shader library layer

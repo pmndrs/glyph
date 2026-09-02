@@ -21,7 +21,7 @@ import type { ExampleRendererDevice } from './device.js';
 import { exampleRendererShader, RecordingExampleRendererDevice } from './device.js';
 import type { ExampleDrawList } from './draw-list.js';
 import { ExampleText, type ExampleTextOptions } from './engine.js';
-import { exampleCodecDescriptor } from './policy.js';
+import { exampleCodecDescriptor } from './codec.js';
 
 export interface ExampleResolvedResource {
   readonly name: string;

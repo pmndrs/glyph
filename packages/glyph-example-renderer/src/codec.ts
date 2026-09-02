@@ -1,8 +1,8 @@
 /**
  * The example renderer's own Codec, authored through the root GlyphConfig vocabulary.
  *
- * A host does not borrow the Three policy: it supplies its own system lanes and compiles the
- * shared portable technique body into validated policy bytes.
+ * A host supplies its own system lanes and compiles the shared portable technique body
+ * into validated Codec bytes.
  */
 import {
   compileCodec,
