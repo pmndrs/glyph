@@ -3,7 +3,7 @@
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 
-import type { BorrowedBoundCommandBuffer, PortableGeometryPayload } from '@pmndrs/glyph/core';
+import type { CommandBufferView, PortableGeometryPayload } from '@pmndrs/glyph/core';
 import {
   TypeGpuGlyphExampleFragmentInput,
   TypeGpuGlyphExampleVertexInput,
@@ -159,9 +159,9 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   }
 
   /** Stages one bound publication, including portable resources, buffers, and GPU submission. */
-  prepare(frame: BorrowedBoundCommandBuffer<ExampleBindings>): ExamplePendingSubmission {
+  decode(frame: CommandBufferView<ExampleBindings>): ExamplePendingSubmission {
     this.#assertActive();
-    const pending = this.#recording.prepare(frame);
+    const pending = this.#recording.decode(frame);
     if (!pending.replacesRenderState) {
       let active = true;
       return Object.freeze({

@@ -59,16 +59,22 @@ import { ThreeConfig } from '@pmndrs/glyph/three';
 
 await glyph.init();
 const labels = glyph.handle('labels', ThreeConfig);
-const hud = glyph.handle('hud', { ...ThreeConfig, decode: instrumentedDecoder });
+const hud = glyph.handle('hud', {
+  ...ThreeConfig,
+  renderer(context) {
+    const renderer = ThreeConfig.renderer(context);
+    return { ...renderer, decode: (view) =&gt; instrument(renderer.decode(view)) };
+  },
+});
 
 labels.dispose();
 hud.dispose();</code></pre>
 
 Concurrent or repeated <code>glyph.init()</code> calls share the same initialization. A live name is unique; disposal releases the name for reuse. Handles share only immutable root assets and the initialized engine. Each handle owns its adapter backend, Codec registration, bound font/resource state, and factories. Multiple handles and multiple scenes may coexist; a handle is neither a scene nor a render pass.
 
-<code>GlyphConfig.encode()</code> supplies the adapter's <code>Codec</code>. The engine creates the canonical borrowed typed command buffer. <code>decode</code> is explicit in the config and normally points to <code>defaultDecoder</code>; a type-safe wrapper may inspect phases or substitute a compatible decoder. <code>resolve</code> returns counted resource leases. Finally <code>renderer.prepare()</code> receives a borrowed <code>BorrowedBoundCommandBuffer</code> organized into resource, buffer, patch, primitive, draw, and retirement phases. All renderer-facing identities are objects chosen by the config's binding vocabulary; ordinary renderer code never receives numeric plan IDs.
+<code>GlyphConfig.encode()</code> supplies the adapter's <code>Codec</code>. The engine owns its encoded command buffer and internally projects a borrowed <code>CommandBufferView</code>. <code>resolve</code> returns counted resource leases. Finally <code>renderer.decode()</code> receives that view, organized into resource, buffer, patch, ordered <code>DisplayList</code>, and retirement phases. The display list is a nested view over the same command buffer, not a separately parsed representation. All renderer-facing identities are objects chosen by the config's binding vocabulary; ordinary renderer code never receives numeric plan IDs.
 
-<code>applyGlyphPublication()</code> is the renderer-neutral decode → prepare → commit/discard transaction shared by the built-in Three adapter and the example renderer. <code>GlyphCommandBufferBinder</code> retains stable bindings across publications and settles candidate-only resource leases on acceptance or rejection. These helpers are the preferred implementation seam for another adapter; the lower-level planner/target readers below remain available when an integration needs to own the complete transport.
+<code>applyGlyphPublication()</code> is the renderer-neutral project → decode → commit/discard transaction shared by the built-in Three adapter and the example renderer. The internal display-list projector retains stable bindings across publications and settles candidate-only resource leases on acceptance or rejection. A config instruments this flow by wrapping its renderer; there is no configurable intermediate decoder.
 
 ## Application-owned fonts
 

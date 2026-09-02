@@ -77,7 +77,6 @@ test('one initialized Glyph runtime creates independent named Three handles over
   );
   const first = glyph.handle('three:integration:first', ThreeConfig);
   let wrappedEncodeCalls = 0;
-  let wrappedDecodeCalls = 0;
   let wrappedResolveCalls = 0;
   let wrappedRendererFactories = 0;
   let wrappedPrepareCalls = 0;
@@ -88,10 +87,6 @@ test('one initialized Glyph runtime creates independent named Three handles over
       wrappedEncodeCalls += 1;
       return ThreeConfig.encode(context);
     },
-    decode(source, context) {
-      wrappedDecodeCalls += 1;
-      return ThreeConfig.decode(source, context);
-    },
     resolve(context) {
       wrappedResolveCalls += 1;
       return ThreeConfig.resolve(context);
@@ -100,11 +95,11 @@ test('one initialized Glyph runtime creates independent named Three handles over
       wrappedRendererFactories += 1;
       const renderer = ThreeConfig.renderer(context);
       return {
-        prepare(frame) {
+        decode(frame) {
           wrappedPrepareCalls += 1;
-          assert.equal(frame.delivery, 'borrowed-bound');
-          assert.ok(frame.group.kind === 'unchanged' || frame.group.kind === 'replace');
-          return renderer.prepare(frame);
+          assert.equal(frame.delivery, 'borrowed-command-buffer');
+          assert.ok(frame.displayList.kind === 'unchanged' || frame.displayList.kind === 'replace');
+          return renderer.decode(frame);
         },
         syncTransforms(updates) {
           wrappedTransformSyncCalls += 1;
@@ -136,19 +131,16 @@ test('one initialized Glyph runtime creates independent named Three handles over
     group.shape();
     assert.equal(wrappedEncodeCalls, 1, 'a spread config participates in its handle backend construction');
     assert.equal(wrappedRendererFactories, 1, 'one config renderer is created for the TextGroup boundary');
-    assert.ok(wrappedDecodeCalls > 0, 'the selected decoder handles semantic publications');
     assert.ok(wrappedResolveCalls > 0, 'the selected resolver binds acquired portable resources');
     assert.ok(wrappedPrepareCalls > 0, 'the selected renderer prepares the bound command buffer');
     assert.ok(wrappedTransformSyncCalls > 0, 'transform synchronization uses the renderer side path');
     const semanticCounts = {
-      decode: wrappedDecodeCalls,
       resolve: wrappedResolveCalls,
       prepare: wrappedPrepareCalls,
       transforms: wrappedTransformSyncCalls,
     };
     grouped.position.x += 1;
     group.shape();
-    assert.equal(wrappedDecodeCalls, semanticCounts.decode, 'transform-only shape does not decode');
     assert.equal(wrappedResolveCalls, semanticCounts.resolve, 'transform-only shape does not resolve');
     assert.equal(wrappedPrepareCalls, semanticCounts.prepare, 'transform-only shape does not prepare semantic state');
     assert.ok(wrappedTransformSyncCalls > semanticCounts.transforms, 'transform-only shape synchronizes the renderer');

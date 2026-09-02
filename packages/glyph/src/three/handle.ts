@@ -1,7 +1,6 @@
 import * as THREE from 'three/webgpu';
 
 import {
-  defaultDecoder,
   createGlyphRootRegistry,
   defineGlyphConfig,
   defineGlyphSchema,
@@ -228,7 +227,6 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
     schema: ThreeSchema,
     fonts: { default: defaultFontFormat, techniques: ThreeFontTechniques, loadTechnique: loadThreeTechnique },
     encode: ({ ids }) => ({ descriptor: threeRenderPolicyDescriptor(ids, transformMode, [], allocationMode) }),
-    decode: defaultDecoder,
     resolve: ({ technique, resourceName, resources }) =>
       resourceLease(
         Object.freeze({

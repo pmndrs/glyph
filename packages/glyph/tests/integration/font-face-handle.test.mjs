@@ -4,13 +4,7 @@ import test from 'node:test';
 import { Scene } from 'three/webgpu';
 
 import { FontLoadError, glyph } from '@pmndrs/glyph';
-import {
-  createGlyphRootRegistry,
-  defaultDecoder,
-  defineGlyphConfig,
-  defineGlyphSchema,
-  resourceLease,
-} from '@pmndrs/glyph/core';
+import { createGlyphRootRegistry, defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/glyph/core';
 import { bitmap as portableBitmap } from '@pmndrs/glyph/raster/bitmap';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
@@ -40,7 +34,6 @@ function defineFontAwareConfig() {
     schema,
     fonts: { default: 'bitmap', techniques: { bitmap: portableBitmap } },
     encode: () => ({ descriptor: { capabilitySets: [], programs: [] } }),
-    decode: defaultDecoder,
     resolve: ({ payload }) => resourceLease({ payload }, () => undefined),
     renderer: () => ({
       prepare: () => ({ result: undefined, commit: () => undefined, discard: () => undefined }),

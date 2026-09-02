@@ -113,7 +113,7 @@ The package owns six runtime layers:
 
 | Layer                   | Owner                 | Responsibility                                                                                                                         |
 | ----------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Root runtime and config | TypeScript core       | Initialize one Glyph engine, construct named adapter handles, and coordinate typed decode/bind/prepare transactions.                   |
+| Root runtime and config | TypeScript core       | Initialize one Glyph engine, construct named adapter handles, and coordinate projection/decode/commit transactions.                    |
 | Font and raster loading | TypeScript core       | Validate portable GLB assets, register shaping payloads, decode selected raster resources, and retain font identity.                   |
 | Shaping and layout      | Rust/Wasm             | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                     |
 | Policy and render plan  | Rust/Wasm             | Interpret a validated renderer policy, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.     |
@@ -129,9 +129,10 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 
 The root `glyph` runtime initializes one engine idempotently. `glyph.handle(name, config)` creates an adapter-owned backend
 and independent mutable handle state; live names are unique and become reusable after disposal. `GlyphConfig` selects the
-public Codec, explicit decoder, resource resolver, phase-structured renderer preparation, and handle factory. The engine
-owns the canonical typed command buffer and built-in default decoder. The shared publication helper settles decode,
-prepare, commit/discard, and resource-binding ownership synchronously while plan bytes are borrowed.
+public Codec, resource resolver, phase-structured renderer decoder, and handle factory. The engine owns the internal encoded
+command buffer and projects its trusted data into a borrowed `CommandBufferView` whose ordered `DisplayList` is one nested
+phase. The shared publication helper settles projection, renderer decode, commit/discard, and resource-binding ownership
+synchronously while command bytes are borrowed. There is no configurable intermediate decoder.
 `defineGlyphConfig()` preserves the schema, font vocabulary, renderer result, boundary, handle, and adapter extension fields
 as one inferred relationship. It packages handle construction while those types are known; the heterogeneous root registry
 invokes that common operation without recovering or casting a concrete config type. When a config declares fonts, Glyph
@@ -160,7 +161,7 @@ that turns those payloads into textures, buffers, and geometry and leases them a
 | `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                              |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                                 |
 | `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                          |
-| `@pmndrs/glyph/core`         | `GlyphConfig`, bound command phases, publication helpers, engine/backend/planners, plan readers, technique schemas, and Codec policy ABI. |
+| `@pmndrs/glyph/core`         | `GlyphConfig`, `CommandBufferView`/`DisplayList` contracts, publication helpers, engine/backend/planners, technique schemas, and Codec ABI. |
 | `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                          |
 | `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.                   |
 | `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                          |

@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-import type { BorrowedCommandSequence, BoundBatch, BoundRootInstance } from '../../core.js';
+import type { BorrowedCommandSequence, DisplayListBatch, DisplayListRootInstance } from '../../core.js';
 import type { ThreeTextEngineCoordinator } from '../engine-coordinator.js';
 import type {
   ThreeBatchBinding,
@@ -37,7 +37,8 @@ interface DrawOwner {
 interface PrepareDrawReplacementOptions {
   readonly root: THREE.Object3D;
   readonly children: BorrowedCommandSequence<
-    BoundBatch<ThreeBatchBinding, ThreeInstanceSpanBinding> | BoundRootInstance<ThreeInstanceBinding, THREE.Object3D>
+    | DisplayListBatch<ThreeBatchBinding, ThreeInstanceSpanBinding>
+    | DisplayListRootInstance<ThreeInstanceBinding, THREE.Object3D>
   >;
   readonly context: PreparationContext;
   readonly coordinator: ThreeTextEngineCoordinator;
