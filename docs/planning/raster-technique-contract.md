@@ -25,7 +25,7 @@ sources:
     resource: ../../packages/glyph/src/three/codec.ts
     title: Three render policy programs
   - id: font-binding
-    resource: ../../packages/glyph/src/core/font-binding.ts
+    resource: ../../packages/glyph/src/internal/font-binding.ts
     title: Font-binding compiler and per-technique tables
   - id: plan-executor
     resource: ../../packages/glyph/src/three/engine-plan-target.ts

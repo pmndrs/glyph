@@ -9,7 +9,7 @@ import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
-import { fontBindingBytes } from '../../dist/core/font-binding.js';
+import { fontBindingBytes } from '../../dist/internal/font-binding.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap.js';
 import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
 import { slug, slugDescriptor } from '../../dist/raster/slug.js';

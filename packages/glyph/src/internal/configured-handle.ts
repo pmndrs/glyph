@@ -13,7 +13,7 @@ import {
   type CodecRegistration,
   type HandleTransformBinding,
 } from './handle-state.js';
-import { createGlyphPlanTarget, type GlyphPlanTarget } from '../core/glyph-plan-target.js';
+import { createGlyphPlanTarget, type GlyphPlanTarget } from './glyph-plan-target.js';
 import type {
   AnyGlyphBindings,
   Codec,
@@ -43,8 +43,8 @@ import type {
   RetainedText,
   RetainedTextOptions,
   StagedRenderPlanner,
-} from '../core/render-planner.js';
-import { observeRenderPlannerDirty, stageRenderPlanner } from '../core/render-planner.js';
+} from './render-planner.js';
+import { observeRenderPlannerDirty, stageRenderPlanner } from './render-planner.js';
 
 const DEFAULT_LIMITS: GlyphCommandLimits = Object.freeze({
   maxParagraphs: 4_096,

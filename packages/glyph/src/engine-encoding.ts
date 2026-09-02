@@ -7,7 +7,7 @@ import type {
   PlannerFrameLimits,
   PlannerRegion,
   PlannerStyleValue,
-} from './core/frame-wire.js';
+} from './internal/frame-wire.js';
 import type { HandleIdFactory, ParagraphId, StyleId } from './config/codec.js';
 
 /**

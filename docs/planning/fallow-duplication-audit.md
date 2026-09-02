@@ -22,10 +22,10 @@ sources:
     resource: ../../packages/glyph-example-renderer/src/engine.ts
     title: Example renderer plan target
   - id: create-engine
-    resource: ../../packages/glyph/src/core/create-engine.ts
+    resource: ../../packages/glyph/src/internal/create-engine.ts
     title: Renderer-neutral command binding engine
   - id: plan-view
-    resource: ../../packages/glyph/src/core/plan-view.ts
+    resource: ../../packages/glyph/src/internal/plan-view.ts
     title: Raw render-plan view and semantic record decoders
   - id: example-device
     resource: ../../packages/glyph-example-renderer/src/device.ts
@@ -437,7 +437,7 @@ The first report's F1 and F2 describe the earlier dirty-tree snapshot, not the s
   renderer-local resource/buffer transaction is gone.
 - `packages/glyph/src/three/command-buffer.ts:14-49` is also now a thin wrapper. Its old renderer-local mapper and
   resource/buffer transaction are gone.
-- `packages/glyph/src/core/create-engine.ts:76-77,340-373` now keys decoded frames by source and disposes a staged frame
+- `packages/glyph/src/internal/create-engine.ts:76-77,340-373` now keys decoded frames by source and disposes a staged frame
   even when a wrapping decoder throws before returning it. This closes F2 for integrations using `createEngine`.
 - The example wrapper still records the candidate and calls `readCandidate` at
   `packages/glyph-example-renderer/src/command-buffer.ts:31-52`. That is now the principal example-renderer bridge to
@@ -746,7 +746,7 @@ evidence rather than Fallow metrics.
 | Three and external raw-plan reconstruction       | **Resolved for normal config rendering.** `ThreeCommandBufferBinder` is a thin `createEngine` wrapper, and the example target calls decode/bind/renderer without a raw fallback. `PlanCandidate` remains only the planner boundary input.                          | `glyph/src/three/command-buffer.ts:14-48`, `glyph-example-renderer/src/engine.ts:269-277`                                                                   |
 | React versus core raster request identity        | **Resolved in implementation.** React preload/load/clear use the same descriptor-derived `fontFaceResourceKey()` as core. The former React-only raw option serializer is gone.                                                                                     | `glyph/src/font-face.ts:249-254,488-514`, `glyph/src/react.ts:529-560`, `tests/package/raster-identity.test.mjs:7-41`                                       |
 | Stale semantic validation of trusted Rust output | **Resolved in renderer paths.** Example and Three consume the typed/bound hierarchy. Their remaining checks are config, portable asset, host-resource, or renderer capability assertions.                                                                          | `glyph-example-renderer/src/device.ts:337-555`, `glyph/src/three/internal/draw-realizer.ts:108-249`, `glyph/src/three/internal/material-realizer.ts:75-515` |
-| Manual TypeScript ABI shadows                    | **Accepted compatibility boundary, not resolved.** The hand-written raw records/readers remain public and documented under `/core`; ordinary `GlyphConfig` consumers receive `TypedGroup` and do not receive numeric IDs.                                          | `glyph/src/core/plan-view.ts:227-575`, `glyph/src/core.ts:130-161`, `docs/guides/renderer-integration.md:251-315,405-415`                                   |
+| Manual TypeScript ABI shadows                    | **Superseded by D-314 and D-317.** The trusted wire readers remain package-private under `src/internal`; ordinary `GlyphConfig` consumers receive `CommandBufferView` and do not receive numeric IDs.                                          | `glyph/src/internal/plan-view.ts`, `docs/guides/renderer-integration.md`                                   |
 | Rust Wasm response and progress duplication      | **Unresolved.** MTSDF and Slug still duplicate allocation and segmented-response ownership; three progress modules remain byte-identical.                                                                                                                          | `mtsdf-baker/src/wasm.rs:314-576`, `slug-baker/src/wasm.rs:256-515`, each baker's `src/progress.rs`                                                         |
 | JavaScript code volume and release size          | **Improved and passing, but tight.** The Three executor is decomposed and raw bridges are deleted. The built `/three` entry retains only 805 raw and 1,136 gzip bytes of budget headroom.                                                                          | Current source-size table and `release:size:check` results below                                                                                            |
 
@@ -873,8 +873,8 @@ repository workflows after the four small TypeScript remediations landed; no pro
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | Example synchronous/asynchronous commit swap | **Resolved.** Both publication paths call one `commitPreparedState()`; the async path still exclusively owns the in-flight guard. Fallow no longer reports `dup:a7bdfa37`.      | `glyph-example-renderer/src/device.ts:219-254`                                                                  |
 | Three `visibleBelowRoot()`                   | **Resolved.** One helper is imported by both consumers. Fallow no longer reports `dup:b36b1cfb`.                                                                                | `glyph/src/three/internal/scene-tree.ts:1-11`, `engine-plan-target.ts:38,637`, `transform-synchronizer.ts:3,42` |
-| Admitted table descriptors                   | **Resolved.** Bind validation returns frozen descriptors, stores them on the view, and `table()` performs only the bound-state lookup. Fallow no longer reports `dup:cf36ced0`. | `glyph/src/core/plan-view.ts:65-109,179-222`                                                                    |
-| Trusted resource reference                   | **Resolved.** The planner uses the internal generated-offset accessor instead of the public semantic decoder.                                                                   | `glyph/src/core/plan-view.ts:224-232`, `glyph/src/core/render-planner.ts:1187-1205`                             |
+| Admitted table descriptors                   | **Resolved.** Bind validation returns frozen descriptors, stores them on the view, and `table()` performs only the bound-state lookup. Fallow no longer reports `dup:cf36ced0`. | `glyph/src/internal/plan-view.ts:65-109,179-222`                                                                    |
+| Trusted resource reference                   | **Resolved.** The planner uses the internal generated-offset accessor instead of the public semantic decoder.                                                                   | `glyph/src/internal/plan-view.ts:224-232`, `glyph/src/internal/render-planner.ts:1187-1205`                             |
 
 The trusted accessor retains `plan.record()` and `plan.u32()` bounds checks. Those are framing safety on a borrowed view,
 not semantic revalidation of Rust output.

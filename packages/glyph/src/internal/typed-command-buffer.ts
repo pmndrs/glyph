@@ -1,7 +1,7 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { HandleMaterialBinding, HandleTransformBinding } from './handle-state.js';
-import type { RenderPlanTable } from '../core/plan-view.js';
-import type { PlanCandidate, RenderPlanReader, ResolvedPlanTransform } from '../core/render-planner.js';
+import type { RenderPlanTable } from './plan-view.js';
+import type { PlanCandidate, RenderPlanReader, ResolvedPlanTransform } from './render-planner.js';
 import type {
   BatchIdentity,
   BorrowedCommandSequence,

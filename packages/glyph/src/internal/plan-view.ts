@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { PlanPublication } from '../internal/handle-state.js';
+import type { PlanPublication } from './handle-state.js';
 import type { ResourceHandle } from '../config/codec.js';
 
 /** Byte span, record count, and fixed stride for one validated plan table. */

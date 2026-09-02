@@ -9,7 +9,7 @@ import {
   type CodecF32Value,
   id,
 } from '../../dist/index.js';
-import { schemaFieldTable, type FontBindingFieldTable } from '../../dist/core/font-binding.js';
+import { schemaFieldTable, type FontBindingFieldTable } from '../../dist/internal/font-binding.js';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 
 // A technique schema is the single authority: buffer ids, scalar kinds, and lane

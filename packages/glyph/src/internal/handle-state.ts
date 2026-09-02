@@ -12,8 +12,8 @@ import {
   type RenderPlannerFor,
   type RenderPlannerOptions,
   type RenderPlanTarget,
-} from '../core/render-planner.js';
-import { markOwnedPlanPublication, PlanPublicationExpiredError, type OwnedPlanPublication } from '../core/retention.js';
+} from './render-planner.js';
+import { markOwnedPlanPublication, PlanPublicationExpiredError, type OwnedPlanPublication } from './retention.js';
 import {
   assertGlyphId,
   compileCodec,
@@ -116,7 +116,7 @@ export type HandleEngineFontBinder = <Technique extends AnyRasterFormat>(
 
 /**
  * One borrowed A/B render-plan publication. Its bytes point into Wasm memory and expire when
- * this transport answers any later call; see `core/retention.ts` for the protocol.
+ * this transport answers any later call; see `internal/retention.ts` for the protocol.
  * `copyPublication` validates and owns bytes that must survive the borrow.
  */
 export interface PlanPublication {

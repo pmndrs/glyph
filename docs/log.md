@@ -322,7 +322,7 @@
 ## 2026-08-23
 
 - **A retained host can now hold the render plan without holding a hazard** — item 11 of the API surface
-  audit landed as a retention and ownership protocol on the existing plan surface (`core/retention.ts`
+  audit landed as a retention and ownership protocol on the existing plan surface (`internal/retention.ts`
   is its specification; no new draw-batch API). Publications are still borrowed by default, but expiry
   is now cheap and loud instead of documented folklore: `session.isExpired` is two integer compares,
   `session.assertLive` throws `TextEnginePublicationExpiredError` naming both generations, and a

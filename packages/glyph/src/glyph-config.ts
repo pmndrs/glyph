@@ -8,7 +8,7 @@ import type { Constraints, ParagraphLayout, TextStyle } from './text-properties.
 import { createConfiguredGlyphHandle } from './internal/configured-handle.js';
 import type { PortableResource } from './config/resources.js';
 import type { CodecBuffer, CodecDescriptor, CodecIdFactory, CodecProgram } from './config/codec.js';
-import type { PlanAcceptance, PlanCandidate } from './core/render-planner.js';
+import type { PlanAcceptance, PlanCandidate } from './internal/render-planner.js';
 
 declare const typedCommandBufferBrand: unique symbol;
 declare const typedCommandIdentityBrand: unique symbol;

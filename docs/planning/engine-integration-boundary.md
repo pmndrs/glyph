@@ -409,7 +409,7 @@ Implement and prove this layer in this order:
 
 ### 5c. Bind the hierarchy through `GlyphConfig.decode`
 
-Status: implemented. `packages/glyph/src/core/create-engine.ts` owns renderer-neutral schema binding, resolver leases,
+Status: implemented. `packages/glyph/src/internal/create-engine.ts` owns renderer-neutral schema binding, resolver leases,
 stable accepted overlays, default decoding, and settlement. Both `ThreeConfig` and `defineExampleConfig()` wire
 `defaultDecoder`; their renderers consume `BorrowedBoundCommandBuffer` and retain only accepted host state. Three keeps its
 separate transform synchronizer, R3F injects only the selected handle at construction, and the paired live examples prove

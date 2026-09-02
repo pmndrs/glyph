@@ -18,7 +18,7 @@ sources:
     resource: ../../packages/glyph-example-renderer/src/config.ts
     title: Example GlyphConfig and named handle
   - id: configured-plan-target
-    resource: ../../packages/glyph/src/core/glyph-plan-target.ts
+    resource: ../../packages/glyph/src/internal/glyph-plan-target.ts
     title: Internal configured publication target
   - id: codec
     resource: ../../packages/glyph-example-renderer/src/codec.ts
