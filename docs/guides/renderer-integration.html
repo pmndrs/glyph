@@ -488,9 +488,15 @@ if (publication.draws.length === 0) throw new Error('the renderer produced no dr
           </tbody>
         </table>
         <h3>Actual example config</h3>
-        <pre><code>export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
+        <pre><code>export type ExampleGlyphConfig = GlyphConfigFor&lt;
+  typeof ExampleSchema,
+  ExampleRoot,
+  ExampleDrawList
+&gt;;
+
+export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
   const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
-  return defineGlyphConfig({
+  const config = defineGlyphConfig({
     schema: ExampleSchema,
     encode: ({ ids }) =&gt; ({ descriptor: exampleCodecDescriptor(ids) }),
     resolve: ({ technique, resourceName, payload }) =&gt; {
@@ -514,6 +520,8 @@ if (publication.draws.length === 0) throw new Error('the renderer produced no dr
       },
     },
   });
+  config satisfies ExampleGlyphConfig;
+  return config;
 }</code></pre>
         <p>
           Optional command tuning is plain config data: <code>{ requestBytes, resultBytes, textUnits, limits }</code>.

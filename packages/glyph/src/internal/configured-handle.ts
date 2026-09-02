@@ -63,29 +63,18 @@ export function createConfiguredGlyphHandle<
   Root extends GlyphRoot,
   Bindings extends AnyGlyphBindings,
   RendererResult,
-  PortableResource,
-  FontTechniques extends { readonly [Key in keyof FontTechniques]: AnyRasterTechnique },
+  FontTechniques extends object,
   Boundary,
   CodecValue extends Codec,
   ConfigExtension extends object,
 >(
   input: HandleInput,
-  config: GlyphConfig<
-    Root,
-    Bindings,
-    RendererResult,
-    PortableResource,
-    FontTechniques,
-    Boundary,
-    CodecValue,
-    ConfigExtension
-  >,
+  config: GlyphConfig<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue, ConfigExtension>,
 ): GlyphHandle<Root> {
   return new ConfiguredHandleDomain<
     Root,
     Bindings,
     RendererResult,
-    PortableResource,
     FontTechniques,
     Boundary,
     CodecValue,
@@ -97,24 +86,14 @@ class ConfiguredHandleDomain<
   Root extends GlyphRoot,
   Bindings extends AnyGlyphBindings,
   RendererResult,
-  PortableResource,
-  FontTechniques extends { readonly [Key in keyof FontTechniques]: AnyRasterTechnique },
+  FontTechniques extends object,
   Boundary,
   CodecValue extends Codec,
   ConfigExtension extends object,
 > {
   readonly handle: GlyphHandle<Root>;
   readonly #input: HandleInput;
-  readonly #config: GlyphConfig<
-    Root,
-    Bindings,
-    RendererResult,
-    PortableResource,
-    FontTechniques,
-    Boundary,
-    CodecValue,
-    ConfigExtension
-  >;
+  readonly #config: GlyphConfig<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue, ConfigExtension>;
   readonly #handleState: GlyphHandleState;
   readonly #codecRegistration;
   readonly #codec: CodecValue;
@@ -125,16 +104,7 @@ class ConfiguredHandleDomain<
 
   constructor(
     input: HandleInput,
-    config: GlyphConfig<
-      Root,
-      Bindings,
-      RendererResult,
-      PortableResource,
-      FontTechniques,
-      Boundary,
-      CodecValue,
-      ConfigExtension
-    >,
+    config: GlyphConfig<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue, ConfigExtension>,
   ) {
     this.#input = input;
     this.#config = config;
@@ -184,7 +154,7 @@ class ConfiguredHandleDomain<
     this.#assertActive();
     const existing = this.#roots.get(name);
     if (existing !== undefined) return existing;
-    const services = new ConfiguredRootServices<Bindings, RendererResult, PortableResource, Boundary>(
+    const services = new ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>(
       this.#handleState,
       this.#codecRegistration,
       this.#codec,
@@ -232,7 +202,7 @@ class ConfiguredHandleDomain<
   #createRootProxy<Extension extends object>(
     name: string | undefined,
     extension: Extension,
-    services: ConfiguredRootServices<Bindings, RendererResult, PortableResource, Boundary>,
+    services: ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>,
     disposeHost: (() => void) | undefined,
   ): Extension & GlyphRoot {
     let disposed = false;
@@ -392,23 +362,23 @@ class ConfiguredHandleDomain<
   }
 }
 
-interface RootRuntimeConfig<Bindings extends AnyGlyphBindings, RendererResult, PortableResource, Boundary> {
+interface RootRuntimeConfig<Bindings extends AnyGlyphBindings, RendererResult, Boundary, CodecValue extends Codec> {
   readonly schema: GlyphSchema<Bindings, Boundary>;
   readonly commands?: Partial<import('../core/glyph-config.js').GlyphCommandCapacity>;
-  resolve(context: ResolveContext<PortableResource, Bindings['resource']>): ResourceLease<Bindings['resource']>;
-  renderer(context: RendererContext<Bindings, RendererResult>): GlyphRenderer<Bindings, RendererResult>;
+  resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
+  renderer(context: RendererContext<Bindings, RendererResult, CodecValue>): GlyphRenderer<Bindings, RendererResult>;
 }
 
 class ConfiguredRootServices<
   Bindings extends AnyGlyphBindings,
   RendererResult,
-  PortableResource,
   Boundary,
+  CodecValue extends Codec,
 > implements GlyphRootServices<Bindings, RendererResult, Boundary> {
   readonly #handleState: GlyphHandleState;
   readonly #codecRegistration: CodecRegistration;
-  readonly #codec: Codec;
-  readonly #config: RootRuntimeConfig<Bindings, RendererResult, PortableResource, Boundary>;
+  readonly #codec: CodecValue;
+  readonly #config: RootRuntimeConfig<Bindings, RendererResult, Boundary, CodecValue>;
   readonly #retainCopy: () => () => void;
   readonly #singleFontStacks = new WeakMap<
     Font<AnyRasterTechnique>,
@@ -432,8 +402,8 @@ class ConfiguredRootServices<
   constructor(
     handleState: GlyphHandleState,
     codecRegistration: CodecRegistration,
-    codec: Codec,
-    config: RootRuntimeConfig<Bindings, RendererResult, PortableResource, Boundary>,
+    codec: CodecValue,
+    config: RootRuntimeConfig<Bindings, RendererResult, Boundary, CodecValue>,
     retainCopy: () => () => void,
   ) {
     this.#handleState = handleState;
@@ -733,17 +703,17 @@ class ConfiguredTextController<
   Technique extends AnyRasterTechnique,
   Bindings extends AnyGlyphBindings,
   RendererResult,
-  PortableResource,
   Boundary,
+  CodecValue extends Codec,
 > implements GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']> {
-  readonly #services: ConfiguredRootServices<Bindings, RendererResult, PortableResource, Boundary>;
+  readonly #services: ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>;
   readonly #text: RetainedText;
   #bound: BoundTextState;
   #disposed = false;
 
   constructor(
     planner: RenderPlanner,
-    services: ConfiguredRootServices<Bindings, RendererResult, PortableResource, Boundary>,
+    services: ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>,
     state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
   ) {
     this.#services = services;

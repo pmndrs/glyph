@@ -5,7 +5,7 @@ description: Proves the root GlyphConfig integration surface through a real Type
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:46f419dfef9b2c957182e246f0f655bfd9819e4852b3924afef278ebf361a8e7'
+source_digest: 'sha256:fbd2c1347c47783a9a7c6f26a45f509bbd68de13a072888ea7da68bc9bf23130'
 tags: [package, glyph-config, codec, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -65,6 +65,11 @@ config uses `schema`, optional `fonts`, `encode`, `resolve`, `renderer`, `root`,
 `exampleCodecDescriptor(ids)`. `resolve()` leases portable resources. The internal trusted projector binds schema values
 and gives the configured renderer a borrowed `CommandBufferView<ExampleBindings>` whose nested `DisplayList` preserves
 Rust-authored order. Numeric IDs and raw plan tables never reach the renderer.
+
+The implementation first infers its complete config from `defineGlyphConfig({...})` and then checks it with
+`satisfies ExampleGlyphConfig`. The exported `ExampleGlyphConfig` is
+`GlyphConfigFor<typeof ExampleSchema, ExampleRoot, ExampleDrawList>`, so isolated declaration emit has a stable name while
+bindings and the root boundary remain derived from the schema instead of being repeated as a corrective generic tuple.
 
 The package's `ExampleRootImplementation` receives only constrained `GlyphRootServices`. It creates adapter `ExampleText`
 objects and publishes through `services.shape()`; it never constructs or receives a public engine, backend, planner, or
