@@ -732,7 +732,7 @@ async function loadExternalSlugFont(
     try {
       font = await loader.loadAsync({
         input: { baked: artifactUrl },
-        raster: { technique: slug },
+        raster: { raster: slug },
         ...(signal === undefined ? {} : { signal }),
       });
     } catch (error) {

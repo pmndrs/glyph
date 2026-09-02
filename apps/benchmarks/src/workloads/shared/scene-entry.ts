@@ -1,4 +1,4 @@
-import type { AnyRasterTechnique, Font, ParagraphLayoutSummary } from '@pmndrs/glyph';
+import type { AnyRasterFormat, Font, ParagraphLayoutSummary } from '@pmndrs/glyph';
 import { TextGroup, type Text, type ThreeRoot } from '@pmndrs/glyph/three';
 import type * as THREE from 'three/webgpu';
 
@@ -7,8 +7,8 @@ import type * as THREE from 'three/webgpu';
  * hands every scene the same erased identity, so a single `ComparisonWorkloadDefinition` can serve Bitmap, MTSDF, and
  * Slug without threading a type parameter through the registry.
  */
-export type WorkloadFont = Font<AnyRasterTechnique>;
-export type WorkloadText = Text<AnyRasterTechnique>;
+export type WorkloadFont = Font<AnyRasterFormat>;
+export type WorkloadText = Text<AnyRasterFormat>;
 export type WorkloadTextGroup = TextGroup;
 
 export interface MutableSpanPaint {

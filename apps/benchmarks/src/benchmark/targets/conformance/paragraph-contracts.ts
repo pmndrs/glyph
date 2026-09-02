@@ -123,7 +123,7 @@ export function createParagraphContractsConformanceTarget(): BenchmarkTarget {
           loader.loadAsync({
             input: { baked: url },
             raster: {
-              technique: bitmap,
+              raster: bitmap,
               options: { strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) },
             },
             ...(context?.signal === undefined ? {} : { signal: context.signal }),

@@ -1,12 +1,12 @@
 import {
   defineRasterResourceId,
-  defineRasterTechnique,
-  type AnyRasterTechnique,
+  defineRasterFormat,
+  type AnyRasterFormat,
   type RasterDataOf,
   type RasterOptionsOf,
-  type RasterTechniqueDescriptorOf,
-  type RasterTechniqueId,
-  type RasterTechniqueRequest,
+  type RasterFormatDescriptorOf,
+  type RasterFormatId,
+  type RasterFormatRequest,
 } from '../../src/index.js';
 
 type Equal<Left, Right> =
@@ -21,7 +21,7 @@ interface TestData {
 const page = defineRasterResourceId('test/page/0');
 void page;
 
-const technique = defineRasterTechnique({
+const technique = defineRasterFormat({
   id: 'test.msdf',
   kind: 'test-msdf',
   extension: 'TEST_font_mtsdf',
@@ -36,26 +36,24 @@ const technique = defineRasterTechnique({
   dispose() {},
 });
 
-type _TechniqueId = Expect<Equal<typeof technique.id, RasterTechniqueId & 'test.msdf'>>;
+type _TechniqueId = Expect<Equal<typeof technique.id, RasterFormatId & 'test.msdf'>>;
 type _Options = Expect<Equal<RasterOptionsOf<typeof technique>, { readonly quality: 'small' | 'large' }>>;
-type _Descriptor = Expect<
-  Equal<RasterTechniqueDescriptorOf<typeof technique>, { readonly quality: 'small' | 'large' }>
->;
+type _Descriptor = Expect<Equal<RasterFormatDescriptorOf<typeof technique>, { readonly quality: 'small' | 'large' }>>;
 type _Data = Expect<Equal<RasterDataOf<typeof technique>, TestData>>;
 
-const request: RasterTechniqueRequest<typeof technique> = { technique, options: { quality: 'small' } };
+const request: RasterFormatRequest<typeof technique> = { raster: technique, options: { quality: 'small' } };
 void request;
 // @ts-expect-error Required technique options cannot be omitted.
-const missingOptions: RasterTechniqueRequest<typeof technique> = { technique };
+const missingOptions: RasterFormatRequest<typeof technique> = { raster: technique };
 void missingOptions;
 
-const erased: AnyRasterTechnique = technique;
+const erased: AnyRasterFormat = technique;
 void erased;
-type _ErasedDataIsUnknown = Expect<Equal<RasterDataOf<AnyRasterTechnique>, unknown>>;
-type _ErasedDataIsNotAny = Expect<Equal<IsAny<RasterDataOf<AnyRasterTechnique>>, false>>;
+type _ErasedDataIsUnknown = Expect<Equal<RasterDataOf<AnyRasterFormat>, unknown>>;
+type _ErasedDataIsNotAny = Expect<Equal<IsAny<RasterDataOf<AnyRasterFormat>>, false>>;
 
 // @ts-expect-error Every technique must state its supported text effects.
-defineRasterTechnique({
+defineRasterFormat({
   id: 'test.missing-effects',
   kind: 'test-missing-effects',
   extension: 'TEST_missing_effects',
@@ -67,7 +65,7 @@ defineRasterTechnique({
   dispose() {},
 });
 
-defineRasterTechnique({
+defineRasterFormat({
   id: 'test.invalid-descriptor',
   kind: 'test-invalid',
   extension: 'TEST_invalid',

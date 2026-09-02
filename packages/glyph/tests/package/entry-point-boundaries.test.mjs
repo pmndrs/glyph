@@ -4,7 +4,7 @@
  * The package publishes one root integration vocabulary and several renderer subpaths. A name has
  * exactly one home, so a reader never has to guess which subpath to import it from:
  *
- *   `.`        what text IS -- fonts, authoring, layout and measurement types, raster techniques,
+ *   `.`        what text IS -- fonts, authoring, layout and measurement types, raster formats,
  *              paint. Every consumer speaks it, whether they render with Three.js or drive the
  *              engine themselves.
  *   `.`        also carries the GlyphConfig, Codec, schema, and technique DSL required to build an

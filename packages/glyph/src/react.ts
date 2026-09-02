@@ -34,7 +34,7 @@ import { FontLoadError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
 import { type Constraints, type ParagraphLayout, type PropertyList, type TextStyle } from './text-properties.js';
-import type { AnyRasterTechnique } from './raster-technique.js';
+import type { AnyRasterFormat } from './raster-format.js';
 import {
   acquireThreeHandleFont,
   isThreeHandleFontLoaded,
@@ -62,7 +62,7 @@ type Object3DProps = Omit<ThreeElements['object3D'], 'children' | 'ref'>;
 type TextElementProps = Omit<ThreeElement<typeof ThreeText>, 'children' | 'ref'>;
 type TextGroupElementProps = Omit<ThreeElement<typeof ThreeTextGroup>, 'children' | 'ref'>;
 
-export type R3fTextChild<Technique extends AnyRasterTechnique> =
+export type R3fTextChild<Technique extends AnyRasterFormat> =
   | string
   | number
   | null
@@ -70,7 +70,7 @@ export type R3fTextChild<Technique extends AnyRasterTechnique> =
   | ReactElement<R3fTextProps<Technique>>
   | readonly R3fTextChild<Technique>[];
 
-type R3fFontSelection<Technique extends AnyRasterTechnique> = FontSelection<Technique> | AnyFontFaceSelection | string;
+type R3fFontSelection<Technique extends AnyRasterFormat> = FontSelection<Technique> | AnyFontFaceSelection | string;
 
 type FontSelectionTechnique<Selection> =
   Selection extends Font<infer Technique>
@@ -79,7 +79,7 @@ type FontSelectionTechnique<Selection> =
       ? Technique
       : never;
 
-export type R3fTextProps<Technique extends AnyRasterTechnique> = Object3DProps & {
+export type R3fTextProps<Technique extends AnyRasterFormat> = Object3DProps & {
   readonly font?: R3fFontSelection<Technique>;
   readonly children?: R3fTextChild<Technique>;
   /** Text shaping and presentation properties inherited by nested Text spans. */
@@ -102,23 +102,23 @@ export type R3fTextGroupProps = Object3DProps &
     readonly ref?: Ref<ThreeTextGroup>;
   };
 
-interface FlattenedText<Technique extends AnyRasterTechnique> {
+interface FlattenedText<Technique extends AnyRasterFormat> {
   readonly text: string;
   readonly spans: readonly ThreeTextSpanRecord<Technique>[];
 }
 
-interface InlineProperties<Technique extends AnyRasterTechnique> {
+interface InlineProperties<Technique extends AnyRasterFormat> {
   readonly font?: R3fFontSelection<Technique>;
   readonly style?: TextStyle;
   readonly material?: ThreeTextMaterial;
 }
 
-type DesiredR3fTextProperties<Technique extends AnyRasterTechnique> = Partial<StandaloneTextProperties<Technique>> & {
+type DesiredR3fTextProperties<Technique extends AnyRasterFormat> = Partial<StandaloneTextProperties<Technique>> & {
   readonly font: FontSelection<Technique>;
   readonly text: TextInput<Technique>;
 };
 
-type DesiredR3fTextInput<Technique extends AnyRasterTechnique> = Omit<
+type DesiredR3fTextInput<Technique extends AnyRasterFormat> = Omit<
   Partial<StandaloneTextProperties<Technique>>,
   'font'
 > & {
@@ -128,11 +128,11 @@ type DesiredR3fTextInput<Technique extends AnyRasterTechnique> = Omit<
 
 type HookFontConfig<Format extends FontFaceFormat = FontFaceFormat> = Omit<FontFaceConfig<Format>, 'family'>;
 
-type TechniqueOfHookFormat<Format> = Format extends AnyRasterTechnique
+type TechniqueOfHookFormat<Format> = Format extends AnyRasterFormat
   ? Format
-  : Format extends { readonly technique: infer Technique extends AnyRasterTechnique }
+  : Format extends { readonly raster: infer Technique extends AnyRasterFormat }
     ? Technique
-    : AnyRasterTechnique;
+    : AnyRasterFormat;
 
 /** Generic R3F font hook over the selected Three handle's FontFace cache. */
 export interface UseFont {
@@ -429,16 +429,16 @@ function rootId(root: ThreeRoot): number {
 }
 
 interface TextComponent {
-  <const Selection, Technique extends AnyRasterTechnique = FontSelectionTechnique<Selection>>(
+  <const Selection, Technique extends AnyRasterFormat = FontSelectionTechnique<Selection>>(
     input: Omit<R3fTextProps<Technique>, 'font'> & {
       readonly font: Selection & ([FontSelectionTechnique<Selection>] extends [never] ? never : unknown);
     },
   ): ReactElement | null;
-  <Technique extends AnyRasterTechnique>(input: R3fTextProps<Technique>): ReactElement | null;
+  <Technique extends AnyRasterFormat>(input: R3fTextProps<Technique>): ReactElement | null;
 }
 
 /** R3F paragraph component backed by one retained Three text instance. */
-export const Text = forwardRef(function Text<Technique extends AnyRasterTechnique>(
+export const Text = forwardRef(function Text<Technique extends AnyRasterFormat>(
   properties: Omit<R3fTextProps<Technique>, 'ref'>,
   forwardedRef: Ref<ThreeText<Technique>>,
 ): ReactElement | null {
@@ -456,10 +456,10 @@ export const Text = forwardRef(function Text<Technique extends AnyRasterTechniqu
     key: `${rootId(root)}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
     handle,
     root,
-    desired: desired as DesiredR3fTextInput<AnyRasterTechnique>,
+    desired: desired as DesiredR3fTextInput<AnyRasterFormat>,
     object: objectProperties(properties),
     onError: properties.onError,
-    publishObject: publishObject as (value: ThreeText<AnyRasterTechnique> | null) => void,
+    publishObject: publishObject as (value: ThreeText<AnyRasterFormat> | null) => void,
   };
   return isFontFaceSelection(selected)
     ? createElement(TextFontFaceObject, { ...child, selection: selected })
@@ -472,12 +472,12 @@ function TextFontFaceObject({
   ...properties
 }: {
   readonly selection: AnyFontFaceSelection;
-  readonly desired: DesiredR3fTextInput<AnyRasterTechnique>;
+  readonly desired: DesiredR3fTextInput<AnyRasterFormat>;
   readonly handle: ThreeHandle;
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
   readonly onError: ((error: unknown) => void) | undefined;
-  readonly publishObject: (value: ThreeText<AnyRasterTechnique> | null) => void;
+  readonly publishObject: (value: ThreeText<AnyRasterFormat> | null) => void;
 }): ReactElement {
   const font = useHandleFontFace(properties.handle, selection);
   const { handle: _handle, ...renderedProperties } = properties;
@@ -485,9 +485,9 @@ function TextFontFaceObject({
 }
 
 function resolveReactTextFont(
-  selection: R3fFontSelection<AnyRasterTechnique>,
+  selection: R3fFontSelection<AnyRasterFormat>,
   context: GlyphReactContext,
-): FontSelection<AnyRasterTechnique> | AnyFontFaceSelection {
+): FontSelection<AnyRasterFormat> | AnyFontFaceSelection {
   if (typeof selection !== 'string') return selection;
   const face = context.fontFaces.get(selection) ?? resolveFontFace(selection);
   if (face === undefined) {
@@ -497,9 +497,9 @@ function resolveReactTextFont(
 }
 
 function bindDesiredFont(
-  desired: DesiredR3fTextInput<AnyRasterTechnique>,
-  font: FontSelection<AnyRasterTechnique>,
-): DesiredR3fTextProperties<AnyRasterTechnique> {
+  desired: DesiredR3fTextInput<AnyRasterFormat>,
+  font: FontSelection<AnyRasterFormat>,
+): DesiredR3fTextProperties<AnyRasterFormat> {
   return Object.freeze({ ...desired, font });
 }
 
@@ -510,21 +510,21 @@ function TextObject({
   onError,
   publishObject: publishCommittedObject,
 }: {
-  readonly desired: DesiredR3fTextProperties<AnyRasterTechnique>;
+  readonly desired: DesiredR3fTextProperties<AnyRasterFormat>;
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
   readonly onError: ((error: unknown) => void) | undefined;
-  readonly publishObject: (value: ThreeText<AnyRasterTechnique> | null) => void;
+  readonly publishObject: (value: ThreeText<AnyRasterFormat> | null) => void;
 }): ReactElement {
   const [constructorArguments] = useState<
-    [typeof threeTextConstructionToken, StandaloneTextProperties<AnyRasterTechnique>, readonly [], ThreeRoot]
-  >(() => [threeTextConstructionToken, desired as StandaloneTextProperties<AnyRasterTechnique>, [], root]);
+    [typeof threeTextConstructionToken, StandaloneTextProperties<AnyRasterFormat>, readonly [], ThreeRoot]
+  >(() => [threeTextConstructionToken, desired as StandaloneTextProperties<AnyRasterFormat>, [], root]);
   const appliedRef = useRef(desired);
-  const [store] = useState(() => createObjectStore<ThreeText<AnyRasterTechnique>>());
+  const [store] = useState(() => createObjectStore<ThreeText<AnyRasterFormat>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
   const publishObject = useMemo(
-    () => (value: ThreeText<AnyRasterTechnique> | null) => {
+    () => (value: ThreeText<AnyRasterFormat> | null) => {
       store.publish(value ?? undefined);
       publishCommittedObject(value);
     },
@@ -625,7 +625,7 @@ const reactFontFaces = new WeakMap<ThreeHandle, Map<string, ReactFontFaceResourc
 const defaultFontPreloads = new Map<string, Promise<void>>();
 
 /** Load through the selected handle; React owns only the mounted immutable Font lease. */
-export const useFont = ((input: FontFaceSource, config: HookFontConfig = {}): Font<AnyRasterTechnique> => {
+export const useFont = ((input: FontFaceSource, config: HookFontConfig = {}): Font<AnyRasterFormat> => {
   const handle = useSelectedHandle();
   return useHandleFontFace(handle, reactFontFaceResource(handle, input, config).face);
 }) as UseFont;
@@ -655,7 +655,7 @@ useFont.clear = (input: FontFaceSource, config: HookFontConfig = {}): void => {
   });
 };
 
-function useHandleFontFace<Technique extends AnyRasterTechnique>(
+function useHandleFontFace<Technique extends AnyRasterFormat>(
   handle: ThreeHandle,
   selection: AnyFontFaceSelection,
 ): Font<Technique> {
@@ -717,13 +717,13 @@ function assignRef<Value>(ref: Ref<Value> | undefined, value: Value | undefined)
 
 interface MountedFontStore {
   readonly subscribe: (listener: () => void) => () => void;
-  readonly getSnapshot: () => Font<AnyRasterTechnique>;
+  readonly getSnapshot: () => Font<AnyRasterFormat>;
 }
 
 function createMountedFontStore(handle: ThreeHandle, selection: AnyFontFaceSelection): MountedFontStore {
   const source = threeHandleFontSource(handle, selection);
   let current = source;
-  let mounted: Font<AnyRasterTechnique> | undefined;
+  let mounted: Font<AnyRasterFormat> | undefined;
   const listeners = new Set<() => void>();
   return {
     subscribe(listener) {
@@ -755,7 +755,7 @@ function createMountedFontStore(handle: ThreeHandle, selection: AnyFontFaceSelec
  * settles those joins against the finished text under the one rule `compose` uses on the
  * `txt`/`span` tree: the fused cluster takes the style of its base, which is the earlier child's.
  */
-function flattenText<Technique extends AnyRasterTechnique>(
+function flattenText<Technique extends AnyRasterFormat>(
   children: R3fTextChild<Technique> | undefined,
 ): FlattenedText<Technique> {
   const chunks: string[] = [];
@@ -790,7 +790,7 @@ function flattenText<Technique extends AnyRasterTechnique>(
   return Object.freeze({ text, spans: Object.freeze(resolveRangesToClusters(text, spans)) });
 }
 
-function loadedInlineProperties<Technique extends AnyRasterTechnique>(
+function loadedInlineProperties<Technique extends AnyRasterFormat>(
   properties: InlineProperties<Technique>,
 ): Readonly<{ font?: FontSelection<Technique>; style?: TextStyle; material?: ThreeTextMaterial }> {
   const { font, ...rest } = properties;
@@ -801,7 +801,7 @@ function loadedInlineProperties<Technique extends AnyRasterTechnique>(
   return { ...rest, font };
 }
 
-function inlineProperties<Technique extends AnyRasterTechnique>(
+function inlineProperties<Technique extends AnyRasterFormat>(
   properties: R3fTextProps<Technique>,
   inherited: InlineProperties<Technique>,
 ): InlineProperties<Technique> {
@@ -819,13 +819,13 @@ function inlineProperties<Technique extends AnyRasterTechnique>(
 
 const INLINE_TEXT_PROPERTIES = new Set(['children', 'font', 'material', 'style']);
 
-function assertInlineTextProperties<Technique extends AnyRasterTechnique>(properties: R3fTextProps<Technique>): void {
+function assertInlineTextProperties<Technique extends AnyRasterFormat>(properties: R3fTextProps<Technique>): void {
   for (const key of Object.keys(properties)) {
     if (!INLINE_TEXT_PROPERTIES.has(key)) throw new TypeError(`nested R3F Text cannot use the box property ${key}`);
   }
 }
 
-function textProperties<Technique extends AnyRasterTechnique>(
+function textProperties<Technique extends AnyRasterFormat>(
   properties: R3fTextProps<Technique>,
   flattened: FlattenedText<Technique>,
 ): DesiredR3fTextInput<Technique> {
@@ -844,7 +844,7 @@ function textProperties<Technique extends AnyRasterTechnique>(
   });
 }
 
-function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fTextProps<Technique>): TextElementProps {
+function objectProperties<Technique extends AnyRasterFormat>(properties: R3fTextProps<Technique>): TextElementProps {
   const object = { ...properties } as Record<string, unknown>;
   for (const key of [
     'font',
@@ -874,7 +874,7 @@ function assertNoHandleProp(properties: object, owner: 'Text' | 'TextGroup'): vo
   }
 }
 
-function sameDesiredText<Technique extends AnyRasterTechnique>(
+function sameDesiredText<Technique extends AnyRasterFormat>(
   left: (Partial<StandaloneTextProperties<Technique>> & { readonly text: TextInput<Technique> }) | undefined,
   right: Partial<StandaloneTextProperties<Technique>> & { readonly text: TextInput<Technique> },
 ): boolean {

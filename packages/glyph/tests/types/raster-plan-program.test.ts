@@ -4,17 +4,17 @@ import {
   type CompiledCodecProgramBody,
   type RasterFontBinding,
 } from '../../dist/index.js';
-import type { RasterResourceId, RasterTechnique, RasterTechniqueId } from '../../dist/index.js';
+import type { RasterResourceId, RasterFormat, RasterFormatId } from '../../dist/index.js';
 
-declare const technique: RasterTechnique<
-  RasterTechniqueId & 'vendor.plan-contract',
+declare const technique: RasterFormat<
+  RasterFormatId & 'vendor.plan-contract',
   'plan-contract',
   never,
   {},
   { readonly opacity: number }
 >;
-declare const otherTechnique: RasterTechnique<
-  RasterTechniqueId & 'vendor.other-contract',
+declare const otherTechnique: RasterFormat<
+  RasterFormatId & 'vendor.other-contract',
   'other-contract',
   never,
   {},
@@ -62,7 +62,7 @@ declare const body: CompiledCodecProgramBody<typeof schema>;
 declare const otherBody: CompiledCodecProgramBody<typeof otherSchema>;
 
 registerRasterPlanProgram({
-  technique: otherTechnique,
+  raster: otherTechnique,
   // @ts-expect-error Raster plans publish glyph resources, so their schema cannot be resource-free.
   schema: otherSchema,
   policyBody: () => otherBody,
@@ -72,7 +72,7 @@ registerRasterPlanProgram({
 });
 
 const program = registerRasterPlanProgram({
-  technique,
+  raster: technique,
   schema,
   policyBody: () => body,
   compileFont(compiler) {
@@ -97,7 +97,7 @@ const program = registerRasterPlanProgram({
 void program.schema.resources.mesh;
 
 registerRasterPlanProgram({
-  technique,
+  raster: technique,
   // @ts-expect-error A plan schema must carry the same technique identity as its technique.
   schema: otherSchema,
   policyBody: () => otherBody,
@@ -107,7 +107,7 @@ registerRasterPlanProgram({
 });
 
 registerRasterPlanProgram({
-  technique,
+  raster: technique,
   schema,
   policyBody: () => body,
   // @ts-expect-error Font compilation is synchronous and must return compiler.compile directly.
@@ -122,7 +122,7 @@ registerRasterPlanProgram({
 });
 
 registerRasterPlanProgram({
-  technique,
+  raster: technique,
   schema,
   policyBody: () => body,
   compileFont(compiler) {
@@ -141,7 +141,7 @@ registerRasterPlanProgram({
 });
 
 registerRasterPlanProgram({
-  technique,
+  raster: technique,
   schema,
   policyBody: () => body,
   compileFont(compiler) {

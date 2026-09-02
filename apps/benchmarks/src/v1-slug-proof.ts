@@ -52,7 +52,7 @@ async function render(): Promise<TargetV1SlugResult> {
     fontUrl = URL.createObjectURL(new Blob([artifact], { type: 'model/gltf-binary' }));
     font = await loader.loadAsync({
       input: { baked: fontUrl },
-      raster: { technique: slug },
+      raster: { raster: slug },
     });
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-128, 128, 64, -64, 0.1, 10);

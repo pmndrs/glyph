@@ -213,7 +213,7 @@ export type {
   FontFaceFormatDeclaration,
   FontFaceSelection,
   FontFaceSource,
-  FontFaceTechniqueOf,
+  FontFaceRasterOf,
 } from './font-face.js';
 
 export type {
@@ -225,7 +225,7 @@ export type {
   FontInputOf,
   FontMetrics,
   RasterDecodeFont,
-  FontRasterTechniqueOf,
+  FontRasterFormatOf,
   FontSourceOverride,
   FontToken,
 } from './font.js';
@@ -312,20 +312,19 @@ export type {
 } from './raster.js';
 
 export type {
-  AnyRasterTechnique,
+  AnyRasterFormat,
   RasterDataOf,
   RasterResourceId,
-  RasterTechnique,
-  RasterTechniqueDescriptorOf,
-  RasterTechniqueId,
+  RasterFormat,
+  RasterFormatDescriptorOf,
+  RasterFormatId,
   RasterOptionsOf,
-  RasterTechniqueOptionsOf,
-  RasterTechniqueInput,
-  RasterTechniqueRequest,
-  RasterTechniqueTypesOf,
+  RasterFormatInput,
+  RasterFormatRequest,
+  RasterFormatTypesOf,
   RasterTextEffect,
-} from './raster-technique.js';
-export { defineRasterResourceId, defineRasterTechnique } from './raster-technique.js';
+} from './raster-format.js';
+export { defineRasterResourceId, defineRasterFormat } from './raster-format.js';
 
 export type { RasterCoverage, RasterUnicodeRange } from './raster-coverage.js';
 

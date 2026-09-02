@@ -80,7 +80,7 @@ export async function loadBitmapFontAsset(
   if (delivery === 'runtime') {
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { technique: bitmapTechnique, options: { strikes } },
+      raster: { raster: bitmapTechnique, options: { strikes } },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
       library,
       ...(signal === undefined ? {} : { signal }),
@@ -102,7 +102,7 @@ export async function loadBitmapFontAsset(
   signal?.throwIfAborted();
   const loaded = await loadBakedFont({
     artifact: bytes,
-    raster: { technique: bitmapTechnique, options: { strikes } },
+    raster: { raster: bitmapTechnique, options: { strikes } },
     library,
     ...(signal === undefined ? {} : { signal }),
   });

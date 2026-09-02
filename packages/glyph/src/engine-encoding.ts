@@ -1,5 +1,5 @@
 import type { ParagraphSpan } from './formatted-text.js';
-import type { AnyRasterTechnique } from './raster-technique.js';
+import type { AnyRasterFormat } from './raster-format.js';
 import type { AxisConstraint, Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
 import type {
   PlannerConstraint,
@@ -198,15 +198,15 @@ export function engineStyleValue(
 /** @internal Reject effects at the public call that accepted a style. */
 export function assertTextEffectsSupported(
   style: TextStyle,
-  techniques: readonly AnyRasterTechnique[],
+  techniques: readonly AnyRasterFormat[],
   label: string,
 ): void {
   for (const technique of techniques) {
     if (style.outline !== undefined && !technique.textEffects.includes('outline')) {
-      throw new TypeError(`raster technique ${technique.id} does not support outline in ${label}`);
+      throw new TypeError(`raster format ${technique.id} does not support outline in ${label}`);
     }
     if (style.shadow !== undefined && !technique.textEffects.includes('shadow')) {
-      throw new TypeError(`raster technique ${technique.id} does not support shadow in ${label}`);
+      throw new TypeError(`raster format ${technique.id} does not support shadow in ${label}`);
     }
   }
 }
@@ -237,7 +237,7 @@ function engineDecoration(decoration: NonNullable<TextStyle['decoration']>, styl
  * costing the paragraph. Style ids stay contiguous from the emitted order because the removal pass
  * that trims a shrunken style list counts on it.
  */
-export function styledSpans<Span extends ParagraphSpan<AnyRasterTechnique>>(
+export function styledSpans<Span extends ParagraphSpan<AnyRasterFormat>>(
   spans: readonly Span[] | undefined,
 ): readonly Span[] {
   // Only a collapsed span is dropped. An INVERTED span is a caller arithmetic error whose owner

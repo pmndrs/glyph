@@ -27,7 +27,7 @@ type ThreeDecorationMaterialContext = ThreeMaterialRootContext &
 type ThreeBitmapMaterialContext = ThreeMaterialRootContext &
   Readonly<{
     kind: 'glyph';
-    technique: 'pmndrs.bitmap';
+    format: 'pmndrs.bitmap';
     shader: TslBitmapShaderOutput;
     /** Final renderer-local position including Codec-selected transform indirection. */
     position: Node<'vec3'>;
@@ -37,7 +37,7 @@ type ThreeBitmapMaterialContext = ThreeMaterialRootContext &
 type ThreeMsdfMaterialContext = ThreeMaterialRootContext &
   Readonly<{
     kind: 'glyph';
-    technique: 'pmndrs.msdf';
+    format: 'pmndrs.msdf';
     shader: TslMsdfShaderOutput;
     position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
@@ -46,13 +46,13 @@ type ThreeMsdfMaterialContext = ThreeMaterialRootContext &
 type ThreeSlugMaterialContext = ThreeMaterialRootContext &
   Readonly<{
     kind: 'glyph';
-    technique: 'pmndrs.slug';
+    format: 'pmndrs.slug';
     shader: TslSlugShaderOutput;
     position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
   }>;
 
-/** Custom Three techniques augment this map with their literal technique key and exact material context. */
+/** Custom Three rasters augment this map with their literal format key and exact material context. */
 export interface ThreeTextMaterialContextMap {
   readonly decoration: ThreeDecorationMaterialContext;
   readonly 'pmndrs.bitmap': ThreeBitmapMaterialContext;

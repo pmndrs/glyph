@@ -1,13 +1,13 @@
 import {
   createFontLibrary,
   defineFont,
-  defineRasterTechnique,
+  defineRasterFormat,
   loadFont,
-  type AnyRasterTechnique,
+  type AnyRasterFormat,
   type FontInputOf,
   type Font,
   type FontBytesInput,
-  type FontRasterTechniqueOf,
+  type FontRasterFormatOf,
   type RasterBakeDescriptorOf,
   type RasterBakeRequest,
   type RasterCoverage,
@@ -44,7 +44,7 @@ interface MsdfResource {
   readonly texture: unknown;
 }
 
-const msdf = defineRasterTechnique({
+const msdf = defineRasterFormat({
   id: 'test.msdf',
   kind: 'msdf',
   extension: 'PMNDRS_font_distance_field',
@@ -62,7 +62,7 @@ const msdf = defineRasterTechnique({
 type _MsdfKind = Expect<Equal<RasterKindOf<typeof msdf>, 'msdf'>>;
 type _MsdfResource = Expect<Equal<RasterDataOf<typeof msdf>, MsdfResource>>;
 
-const configurable = defineRasterTechnique({
+const configurable = defineRasterFormat({
   id: 'studio.configurable-raster',
   kind: 'studio.configurable-raster',
   extension: 'STUDIO_font_configurable',
@@ -78,7 +78,7 @@ const configurable = defineRasterTechnique({
 });
 type _ConfigurableOptions = Expect<Equal<RasterOptionsOf<typeof configurable>, { readonly quality: 'low' | 'high' }>>;
 
-const acceptsExternal: AnyRasterTechnique = configurable;
+const acceptsExternal: AnyRasterFormat = configurable;
 void acceptsExternal;
 
 declare const decodeFont: RasterDecodeFont;
@@ -96,7 +96,7 @@ msdf.decode(decodeFont, slugArtifact);
 
 const titleFont = defineFont('/fonts/Inter-Regular.ttf', msdf);
 type _TitleInput = Expect<Equal<FontInputOf<typeof titleFont>, '/fonts/Inter-Regular.ttf'>>;
-type _TitleRaster = Expect<Equal<FontRasterTechniqueOf<typeof titleFont>, typeof msdf>>;
+type _TitleRaster = Expect<Equal<FontRasterFormatOf<typeof titleFont>, typeof msdf>>;
 const loadedTitle: Promise<Font<typeof msdf>> = loadFont(titleFont);
 void loadedTitle;
 
@@ -115,17 +115,17 @@ void transferredBytes;
 loadFont({ baked: fontBytes }, msdf);
 
 const configuredFont = defineFont('/fonts/Inter-Regular.ttf', {
-  technique: configurable,
+  raster: configurable,
   options: { quality: 'high' },
 });
 void configuredFont;
 
-// @ts-expect-error A configurable raster technique requires its options.
+// @ts-expect-error A configurable raster format requires its options.
 defineFont('/fonts/Inter-Regular.ttf', configurable);
 // @ts-expect-error A configured raster request cannot omit its options.
-defineFont('/fonts/Inter-Regular.ttf', { technique: configurable });
+defineFont('/fonts/Inter-Regular.ttf', { raster: configurable });
 // @ts-expect-error Raster package option literals remain package-owned.
-defineFont('/fonts/Inter-Regular.ttf', { technique: configurable, options: { quality: 'ultra' } });
+defineFont('/fonts/Inter-Regular.ttf', { raster: configurable, options: { quality: 'ultra' } });
 
 const relocatedFont = defineFont(
   {

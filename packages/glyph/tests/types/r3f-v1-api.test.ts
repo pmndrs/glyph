@@ -8,9 +8,9 @@ import { useMsdf } from '../../src/react/msdf.js';
 import { useSlug } from '../../src/react/slug.js';
 import type { R3fTextChild, R3fTextProps } from '../../src/react.js';
 import { ThreeConfig, type ThreeHandle, type ThreeTextMaterial } from '../../src/three.js';
-import { bitmap } from '../../src/raster/bitmap-technique.js';
+import { bitmap } from '../../src/raster/bitmap.js';
 import { msdf } from '../../src/raster/msdf.js';
-import { slug } from '../../src/raster/slug-technique.js';
+import { slug } from '../../src/raster/slug.js';
 
 declare const bitmapFont: Font<typeof bitmap>;
 declare const mtsdfFont: Font<typeof msdf>;
@@ -44,7 +44,7 @@ createElement(TextGroup, { handle: three }, label);
 function FontConsumer(): null {
   const loaded: Font<typeof bitmap> = useFont(
     { baked: '/fonts/Inter.font.glb' },
-    { format: { technique: bitmap, options: { strikes: [16] } } },
+    { format: { raster: bitmap, options: { strikes: [16] } } },
   );
   useBitmap({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Font<typeof bitmap>;
   useMsdf({ baked: '/fonts/Inter.font.glb' }) satisfies Font<typeof msdf>;
@@ -62,14 +62,14 @@ function FontConsumer(): null {
 const consumer = createElement(FontConsumer);
 const preloaded: Promise<void> = useFont.preload(
   { baked: '/fonts/Inter.font.glb' },
-  { format: { technique: bitmap, options: { strikes: [16] } } },
+  { format: { raster: bitmap, options: { strikes: [16] } } },
 );
-useFont.clear({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } });
+useFont.clear({ baked: '/fonts/Inter.font.glb' }, { format: { raster: bitmap, options: { strikes: [16] } } });
 useFont.preload(
   { baked: '/fonts/Inter.font.glb' },
-  { format: { technique: bitmap, options: { strikes: [16] } } },
+  { format: { raster: bitmap, options: { strikes: [16] } } },
 ) satisfies Promise<void>;
-useFont.clear({ baked: '/fonts/Inter.font.glb' }, { format: { technique: bitmap, options: { strikes: [16] } } });
+useFont.clear({ baked: '/fonts/Inter.font.glb' }, { format: { raster: bitmap, options: { strikes: [16] } } });
 useBitmap.preload({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Promise<void>;
 useBitmap.clear({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] });
 useMsdf.preload({ baked: '/fonts/Inter.font.glb' }) satisfies Promise<void>;

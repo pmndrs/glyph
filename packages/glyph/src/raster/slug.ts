@@ -6,12 +6,7 @@ import {
   slugDescriptor,
   type SlugDescriptor,
 } from '../internal/slug-contract.js';
-import {
-  defineRasterTechnique,
-  type RasterResourceId,
-  type RasterTechnique,
-  type RasterTechniqueId,
-} from '../raster-technique.js';
+import { defineRasterFormat, type RasterResourceId, type RasterFormat, type RasterFormatId } from '../raster-format.js';
 
 export {
   SLUG_DEFAULT_BAND_COUNT,
@@ -50,31 +45,26 @@ export interface SlugData {
 }
 
 /** Renderer-neutral Slug identity, decoding, and ownership. */
-export const slug: RasterTechnique<
-  RasterTechniqueId & 'pmndrs.slug',
-  typeof SLUG_KIND,
-  undefined,
-  SlugDescriptor,
-  SlugData
-> = defineRasterTechnique({
-  id: 'pmndrs.slug',
-  kind: SLUG_KIND,
-  extension: SLUG_EXTENSION,
-  version: SLUG_FORMAT_VERSION,
-  textEffects: [],
-  runtimeBaker: () => import('../runtime-bakers/slug.js'),
-  descriptor(): SlugDescriptor {
-    return slugDescriptor();
-  },
-  async decode(font, raster, signal): Promise<SlugData> {
-    signal?.throwIfAborted();
-    const { decodeSlugData } = await import('./internal/slug-decoder.js');
-    const data = await decodeSlugData(font, raster, signal);
-    signal?.throwIfAborted();
-    return data;
-  },
-  dispose() {},
-});
+export const slug: RasterFormat<RasterFormatId & 'pmndrs.slug', typeof SLUG_KIND, undefined, SlugDescriptor, SlugData> =
+  defineRasterFormat({
+    id: 'pmndrs.slug',
+    kind: SLUG_KIND,
+    extension: SLUG_EXTENSION,
+    version: SLUG_FORMAT_VERSION,
+    textEffects: [],
+    runtimeBaker: () => import('../runtime-bakers/slug.js'),
+    descriptor(): SlugDescriptor {
+      return slugDescriptor();
+    },
+    async decode(font, raster, signal): Promise<SlugData> {
+      signal?.throwIfAborted();
+      const { decodeSlugData } = await import('./internal/slug-decoder.js');
+      const data = await decodeSlugData(font, raster, signal);
+      signal?.throwIfAborted();
+      return data;
+    },
+    dispose() {},
+  });
 
 import { f32, techniqueProgram, u32 } from '../core/policy-program.js';
 import { id, type PolicyBufferId } from '../core/render-policy.js';
@@ -91,7 +81,7 @@ const SLUG_TABLE_STARTS_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/table
 const SLUG_BAND_COUNTS_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/band-counts');
 
 /**
- * The authoritative physical shape of the Slug technique.
+ * The authoritative physical shape of the Slug format.
  */
 export const slugSchema: TechniqueSchema<
   {
@@ -218,7 +208,7 @@ export const slugSchema: TechniqueSchema<
 });
 
 export const slugPlanProgram: RasterPlanProgram<typeof slug, typeof slugSchema> = registerGlyphRasterPlanProgram({
-  technique: slug,
+  raster: slug,
   schema: slugSchema,
   policyBody(system) {
     const p = techniqueProgram(slugSchema, { inverseFontSize: true, system });

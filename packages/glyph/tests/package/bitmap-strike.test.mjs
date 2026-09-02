@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { selectBitmapStrikePpem } from '../../dist/raster/bitmap-technique.js';
+import { selectBitmapStrikePpem } from '../../dist/raster/bitmap.js';
 
 const strikes = [{ ppem: 16 }, { ppem: 32 }, { ppem: 48 }];
 

@@ -3,11 +3,11 @@ import * as THREE from 'three/webgpu';
 
 import type { AnyTechniqueSchema, CodecBufferDeclaration, CodecBufferDeclarations } from '../../index.js';
 import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../index.js';
-import { bitmapSchema, bitmap } from '../../raster/bitmap-technique.js';
+import { bitmapSchema, bitmap } from '../../raster/bitmap.js';
 import { msdfSchema } from '../../raster/msdf.js';
 import { msdf } from '../../raster/msdf.js';
-import { slugSchema } from '../../raster/slug-technique.js';
-import { slug } from '../../raster/slug-technique.js';
+import { slugSchema } from '../../raster/slug.js';
+import { slug } from '../../raster/slug.js';
 import { decorationShader } from '@pmndrs/glyph/tsl/decoration';
 import type { ThreeRendererResources } from '../renderer-resources.js';
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
@@ -124,9 +124,9 @@ export class ThreeMaterialRealizer {
     addressing: RecordAddressing,
   ): THREE.NodeMaterial {
     const resolved = resource.resolved;
-    if (resolved.technique === bitmap.id) return this.#bitmap(resource, buffers, selection, transform, addressing);
-    if (resolved.technique === msdf.id) return this.#msdf(resource, buffers, selection, transform, addressing);
-    if (resolved.technique === slug.id) return this.#slug(resource, buffers, selection, transform, addressing);
+    if (resolved.format === bitmap.id) return this.#bitmap(resource, buffers, selection, transform, addressing);
+    if (resolved.format === msdf.id) return this.#msdf(resource, buffers, selection, transform, addressing);
+    if (resolved.format === slug.id) return this.#slug(resource, buffers, selection, transform, addressing);
     if (resolved.program !== undefined) {
       return this.#external(
         resource,
@@ -173,7 +173,7 @@ export class ThreeMaterialRealizer {
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'glyph',
-      technique: bitmap.id,
+      format: bitmap.id,
       shader,
       position,
       createDefaultMaterial: () => bitmapMaterial(shader, position),
@@ -225,7 +225,7 @@ export class ThreeMaterialRealizer {
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'glyph',
-      technique: msdf.id,
+      format: msdf.id,
       shader,
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
@@ -295,7 +295,7 @@ export class ThreeMaterialRealizer {
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'glyph',
-      technique: slug.id,
+      format: slug.id,
       shader,
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
@@ -329,7 +329,7 @@ export class ThreeMaterialRealizer {
     }
     const material = this.#own(
       resolved.program.createMaterial({
-        technique: resolved.program.technique,
+        raster: resolved.program.raster,
         schema: resolved.program.schema,
         variantId: resolved.program.variant.id,
         language: resolved.program.variant.language,
@@ -517,7 +517,7 @@ const techniqueSchemas: ReadonlyMap<string, AnyTechniqueSchema> = new Map<string
 ]);
 
 export function glyphOriginBuffer(resource: ThreeHostResource): CodecBufferDeclaration | undefined {
-  const schema = resource.program?.schema ?? techniqueSchemas.get(resource.technique);
+  const schema = resource.program?.schema ?? techniqueSchemas.get(resource.format);
   if (schema?.glyphOrigin === undefined) return undefined;
   return schema.buffers[schema.glyphOrigin.buffer];
 }

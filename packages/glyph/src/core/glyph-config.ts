@@ -3,7 +3,7 @@ import type { GlyphEngine } from '../glyph-engine.js';
 import type { AnyFontFaceSelection } from '../font-face.js';
 import type { GlyphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
 import type { FontSelection } from '../loaded-font.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
+import type { AnyRasterFormat } from '../raster-format.js';
 import type { Constraints, ParagraphLayout, TextStyle } from '../text-properties.js';
 import { createConfiguredGlyphHandle } from '../internal/configured-handle.js';
 import type { PortableResource } from './portable-resources.js';
@@ -367,7 +367,7 @@ export interface ResourceLease<Value extends object> {
 }
 
 export interface ResolveContext<Previous extends object = object> {
-  readonly technique: string;
+  readonly format: string;
   readonly resourceKind: string;
   readonly resourceName: string;
   readonly payload: PortableResource;
@@ -594,7 +594,7 @@ export type GlyphHandle<Root extends GlyphRoot = GlyphRoot> = ((name: string) =>
   };
 
 /** One adapter-authored formatted span before core interns its renderer identities. */
-export interface GlyphTextSpan<Technique extends AnyRasterTechnique, MaterialInput> {
+export interface GlyphTextSpan<Technique extends AnyRasterFormat, MaterialInput> {
   readonly start: number;
   readonly end: number;
   readonly font?: FontSelection<Technique>;
@@ -603,13 +603,13 @@ export interface GlyphTextSpan<Technique extends AnyRasterTechnique, MaterialInp
 }
 
 /** Adapter-authored formatted content accepted by a root Text controller. */
-export interface GlyphFormattedText<Technique extends AnyRasterTechnique, MaterialInput> {
+export interface GlyphFormattedText<Technique extends AnyRasterFormat, MaterialInput> {
   readonly text: string;
   readonly spans: readonly GlyphTextSpan<Technique, MaterialInput>[];
 }
 
 /** Complete desired Text state; adapters own partial-update and inheritance semantics above it. */
-export interface GlyphTextState<Technique extends AnyRasterTechnique, MaterialInput, TransformInput> {
+export interface GlyphTextState<Technique extends AnyRasterFormat, MaterialInput, TransformInput> {
   readonly font: FontSelection<Technique>;
   readonly text: string | GlyphFormattedText<Technique, MaterialInput>;
   readonly transform: TransformInput;
@@ -622,7 +622,7 @@ export interface GlyphTextState<Technique extends AnyRasterTechnique, MaterialIn
 }
 
 /** Narrow integration controller held privately by an adapter's Text object. */
-export interface GlyphTextController<Technique extends AnyRasterTechnique, MaterialInput, TransformInput> {
+export interface GlyphTextController<Technique extends AnyRasterFormat, MaterialInput, TransformInput> {
   readonly disposed: boolean;
   update(state: GlyphTextState<Technique, MaterialInput, TransformInput>): void;
   measure(): ParagraphLayoutSummary;
@@ -638,13 +638,13 @@ export interface GlyphShapeOptions {
 
 /** Core-owned shaping/publication services scoped to exactly one anonymous or named root. */
 export interface GlyphRootServices<Bindings extends AnyGlyphBindings, RendererResult, Boundary = unknown> {
-  createText<Technique extends AnyRasterTechnique>(
+  createText<Technique extends AnyRasterFormat>(
     state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']>;
   shape(options?: GlyphShapeOptions): RendererResult;
   syncTransforms(): void;
   copy(
-    text: GlyphTextController<AnyRasterTechnique, Bindings['materialInput'], Bindings['transformInput']>,
+    text: GlyphTextController<AnyRasterFormat, Bindings['materialInput'], Bindings['transformInput']>,
     request: GlyphCopyRequest,
     destination: GlyphCopyDestination<Bindings, RendererResult, Boundary>,
   ): GlyphCopy<RendererResult>;
@@ -745,9 +745,9 @@ export interface GlyphRootRecipe<
 export interface GlyphHandleFonts {
   isLoaded(selection: AnyFontFaceSelection): boolean;
   load(selection: AnyFontFaceSelection): Promise<AnyFontFaceSelection>;
-  acquire<Technique extends AnyRasterTechnique>(selection: AnyFontFaceSelection): Font<Technique>;
+  acquire<Technique extends AnyRasterFormat>(selection: AnyFontFaceSelection): Font<Technique>;
   /** Borrow the store-owned immutable source. Callers must not dispose this value. */
-  peek(selection: AnyFontFaceSelection): Font<AnyRasterTechnique>;
+  peek(selection: AnyFontFaceSelection): Font<AnyRasterFormat>;
 }
 
 interface GlyphHandleFactoryInput {
@@ -757,18 +757,18 @@ interface GlyphHandleFactoryInput {
   readonly released: (handle: GlyphHandle) => void;
 }
 
-/** Handle-relative technique keys used to resolve FontFace format declarations. */
-type GlyphFontTechniqueKey<Techniques extends object> = [keyof Techniques] extends [never]
+/** Handle-relative format keys used to resolve FontFace format declarations. */
+type GlyphFontFormatKey<Formats extends object> = [keyof Formats] extends [never]
   ? string
-  : Extract<keyof Techniques, string>;
-export interface GlyphFontConfig<Techniques extends object> {
-  readonly default: GlyphFontTechniqueKey<Techniques>;
-  readonly techniques: Techniques & { readonly [Key in keyof Techniques]: AnyRasterTechnique };
+  : Extract<keyof Formats, string>;
+export interface GlyphFontConfig<Formats extends object> {
+  readonly default: GlyphFontFormatKey<Formats>;
+  readonly formats: Formats & { readonly [Key in keyof Formats]: AnyRasterFormat };
 }
 
 interface AnyGlyphFontConfig {
   readonly default: string;
-  readonly techniques: Readonly<object>;
+  readonly formats: Readonly<object>;
 }
 
 interface GlyphConfigContract<
@@ -908,11 +908,11 @@ export function defineGlyphConfig<
     }
     if (
       typeof config.fonts.default !== 'string' ||
-      typeof config.fonts.techniques !== 'object' ||
-      config.fonts.techniques === null ||
-      Array.isArray(config.fonts.techniques)
+      typeof config.fonts.formats !== 'object' ||
+      config.fonts.formats === null ||
+      Array.isArray(config.fonts.formats)
     ) {
-      throw new TypeError('GlyphConfig.fonts needs a default key and technique map');
+      throw new TypeError('GlyphConfig.fonts needs a default key and format map');
     }
   }
   type DefinedConfig = GlyphConfig<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue>;

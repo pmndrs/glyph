@@ -8,20 +8,20 @@ import {
   type UnboundSpanTag,
 } from '../formatted-text.js';
 import type { FontSelection } from '../loaded-font.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
+import type { AnyRasterFormat } from '../raster-format.js';
 import type { ThreeTextMaterial } from './material.js';
 
-type ThreeSpanFormat<Technique extends AnyRasterTechnique> = SpanFormat<Technique> | ThreeTextMaterial;
+type ThreeSpanFormat<Technique extends AnyRasterFormat> = SpanFormat<Technique> | ThreeTextMaterial;
 
 /** Structural Three span tag with an optional renderer-owned material selector. */
 export function span(
   ...formats: readonly [SpanStyle | ThreeTextMaterial, ...(SpanStyle | ThreeTextMaterial)[]]
 ): UnboundSpanTag;
-export function span<Technique extends AnyRasterTechnique>(
+export function span<Technique extends AnyRasterFormat>(
   font: FontSelection<Technique>,
   ...formats: readonly ThreeSpanFormat<NoInfer<Technique>>[]
 ): SpanTag<Technique>;
-export function span<Technique extends AnyRasterTechnique>(
+export function span<Technique extends AnyRasterFormat>(
   first: FontSelection<Technique> | SpanStyle | ThreeTextMaterial,
   ...rest: readonly ThreeSpanFormat<Technique>[]
 ): SpanTag<Technique> | UnboundSpanTag {

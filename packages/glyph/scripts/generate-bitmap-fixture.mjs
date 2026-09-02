@@ -7,7 +7,7 @@ import { fontBakerWasmUrl } from '@pmndrs/glyph/bake';
 import { bitmapBakerFromCore, createBitmapBaker } from '../dist/bakers/bitmap.js';
 import { validateBitmapArtifact } from '../dist/bakers/bitmap-validator.js';
 import { composeFontBake } from '../dist/internal/compose-bake.js';
-import { bitmapDescriptor, bitmapRasterKey } from '../dist/raster/bitmap-technique.js';
+import { bitmapDescriptor, bitmapRasterKey } from '../dist/raster/bitmap.js';
 
 const sourceUrl = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const wasmUrl = new URL('../dist/bitmap-baker.wasm', import.meta.url);

@@ -1,7 +1,7 @@
 import { Constraints, glyph, ParagraphLayout, span, TextStyle, txt, type Font } from '../../src/index.js';
-import { bitmap } from '../../src/raster/bitmap-technique.js';
+import { bitmap } from '../../src/raster/bitmap.js';
 import { msdf } from '../../src/raster/msdf.js';
-import { slug } from '../../src/raster/slug-technique.js';
+import { slug } from '../../src/raster/slug.js';
 import {
   Decorations,
   FontLoader,
@@ -53,6 +53,9 @@ void inter.bitmap;
 // @ts-expect-error Undeclared formats are not present on a typed FontFace.
 void inter.msdf;
 inter.slug.load() satisfies Promise<typeof inter.slug>;
+inter.formats() satisfies Promise<readonly string[]>;
+// @ts-expect-error Format selections inspect through their owning FontFace declaration.
+inter.slug.formats();
 const discovered = glyph.fontFace('/fonts/discovered.font.glb');
 // @ts-expect-error Omitted format declarations do not synthesize technique members.
 void discovered.slug;
@@ -116,7 +119,7 @@ Constraints.create({
 const loader = new FontLoader();
 const loaded = loader.loadAsync({
   input: { baked: '/fonts/Inter.font.glb' },
-  raster: { technique: bitmap, options: { strikes: [16] } },
+  raster: { raster: bitmap, options: { strikes: [16] } },
 });
 void loaded;
 void labels;

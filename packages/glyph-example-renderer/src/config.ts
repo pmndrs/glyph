@@ -1,4 +1,4 @@
-import type { AnyRasterTechnique } from '@pmndrs/glyph';
+import type { AnyRasterFormat } from '@pmndrs/glyph';
 import {
   defineGlyphConfig,
   defineGlyphSchema,
@@ -84,7 +84,7 @@ export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = d
 });
 
 interface ExampleRootExtension {
-  createText<Technique extends AnyRasterTechnique>(options: ExampleTextOptions<Technique>): ExampleText<Technique>;
+  createText<Format extends AnyRasterFormat>(options: ExampleTextOptions<Format>): ExampleText<Format>;
   publish(): ExampleDrawList;
 }
 
@@ -98,9 +98,9 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
   const config = defineGlyphConfig({
     schema: ExampleSchema,
     encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
-    resolve: ({ technique, resourceName, payload }) => {
-      if (technique !== techniqueId) {
-        throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${technique}"`);
+    resolve: ({ format, resourceName, payload }) => {
+      if (format !== techniqueId) {
+        throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${format}"`);
       }
       return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () => undefined);
     },
@@ -130,7 +130,7 @@ class ExampleRootImplementation implements ExampleRootExtension {
     this.#services = services;
   }
 
-  createText<Technique extends AnyRasterTechnique>(options: ExampleTextOptions<Technique>): ExampleText<Technique> {
+  createText<Format extends AnyRasterFormat>(options: ExampleTextOptions<Format>): ExampleText<Format> {
     return new ExampleText(this.#services, options);
   }
 

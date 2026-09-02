@@ -44,7 +44,7 @@ async function render(): Promise<TargetV1BitmapResult> {
     await renderer.init();
     font = await loader.loadAsync({
       input: { baked: '/fixtures/rendering/inter-bitmap-16.font.glb' },
-      raster: { technique: bitmap, options: { strikes: [16] } },
+      raster: { raster: bitmap, options: { strikes: [16] } },
     });
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-128, 128, 64, -64, 0.1, 10);

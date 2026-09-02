@@ -207,11 +207,11 @@ anonymous root, or `handle(name).createText()` and `handle(name).createTextGroup
 
 Successful initialization retains one settled `Promise<void>` forever: concurrent and later `glyph.init()` calls receive
 the same object. React still checks synchronous initialized and loaded state first, so ready renders do not call `use()`
-or cross a microtask. FontFace loads retain one Promise only for the lifetime of their handle-owned load record; disposing
-the face or handle releases that record, and a rejected operation is evicted for retry.
+or cross a microtask. Each FontFace selection retains one Promise for the lifetime of its declaration-owned load record;
+disposing the face releases that record, and a rejected operation is evicted so the next call can retry.
 
-The R3F `Text` component infers the technique union from a required outer font selection, including a font stack chosen
-from runtime state. Callers do not widen dynamic selections to `AnyRasterTechnique`. A nested `Text` is flattened into
+The R3F `Text` component infers the raster-format union from a required outer font selection, including a font stack chosen
+from runtime state. Callers do not widen dynamic selections to `AnyRasterFormat`. A nested `Text` is flattened into
 an inline styled run and may omit `font` because it inherits from its enclosing paragraph; a rendered outer `Text`
 without a font is invalid. Nested text creates no Three object and accepts only `children`, `font`, `style`, `paint`, and
 `material`. Because JSX erases the generic element identity needed to reject every box-only prop statically, the
@@ -247,18 +247,24 @@ keep its identity registry alive or permanently poison later registration after 
 `ParagraphLayoutSummary`, `GlyphLayoutInspection`, `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a
 `/three` importer can name what `Text.measure()`, `Text.glyphs()`, and `TextStyle.features` give it.
 
-One baked GLB may expose several raster techniques without repeating its input identity. Root
+One baked GLB may expose several raster formats without repeating its input identity. Root
 `loadFont(input, rasters, options?)` accepts a nonempty raster tuple and returns a position-preserving tuple of `Font`
-values, fetching and validating the artifact once while retaining each technique's exact data type. The new declaration
+values, fetching and validating the artifact once while retaining each format's exact data type. The declaration
 surface is `glyph.fontFace(source, { family?, format? })`. The face is its aggregate/default selection, `.default` aliases
-it, and declared format keys such as `.bitmap`, `.msdf`, or `.slug` are distinct inferred technique selections. The
-declaration owns loading: `face.load()` loads every declared format (or every imported format advertised by an undeclared
-main font), while `face.slug.load()` loads only that exact declared technique. Both calls preserve one successful Promise,
-and `isLoaded()` is the synchronous readiness query. The consuming handle supplies its default key when an undeclared face
-is passed to Text; imperative Three rejects an unloaded selected technique before it creates retained state.
+it, and declared keys such as `.bitmap`, `.msdf`, or `.slug` are distinct inferred format selections. The declaration
+owns loading: `face.load()` loads every authoritative imported format advertised by the main font plus every declared
+exact format, while `face.slug.load()` loads only that exact declared format. `face.formats()` inspects the authoritative
+main GLB without fetching sidecars and returns its frozen, ordered format keys. Successful calls preserve Promise and
+result identity; rejected calls are evicted for retry. The consuming handle supplies its configured default key when an
+undeclared face is passed to Text; imperative Three rejects an unloaded selected format before creating retained state.
+
+The FontFace source cache currently coalesces canonical-equivalent locators, shares the parsed main font and per-format
+variants across declarations, loads sidecars and their resources only on demand, and retires the shared node after its
+last source lease. Different locators that return identical bytes do not yet converge onto one content-addressed node;
+the stronger content graph in D-297 remains pending rather than being implied by the locator cache.
 
 React's `useFont(source, config?)` declares through that same FontFace path, asks the selected Three handle which exact
-technique the declaration denotes, conditionally calls React 19 `use()` only while that technique is unloaded, and returns
+format the declaration denotes, conditionally calls React 19 `use()` only while that format is unloaded, and returns
 an independently mounted immutable Font lease. Single-technique
 consumers may import `useBitmap`, `useMsdf`, or `useSlug` from the matching `/react/*` subpath. Each wrapper only builds its
 typed format request and delegates to `useFont`; readiness, canonical source/format identity, and mounted disposal have
@@ -272,14 +278,14 @@ font it loads for finite, positive-thickness values. Decoration rendering consum
 spans declare `decoration` (solid underline, overline, and line-through; other line styles are rejected at the
 boundary), the engine cascade stamps the CSS decorating box so one continuous line spans nested font-size changes at
 the declaring span's scale, and records flow through both planners as resource-free rows of the reserved
-`pmndrs.decoration` technique. Plan programs carry a primitive kind in the former reserved wire field; underline and
+`pmndrs.decoration` Codec technique. Plan programs carry a primitive kind in the former reserved wire field; underline and
 overline rows precede the paragraph's glyphs while line-through follows them, matching CSS paint order, and Three
-realizes decorations as separate ordered draw objects. The same `defineTextMaterial()` factory used by glyph techniques
+realizes decorations as separate ordered draw objects. The same `defineTextMaterial()` factory used by glyph formats
 receives a `kind: 'glyph' | 'decoration'` discriminated context and may keep or override the default flat-quad TSL
 material without mutating the glyph draw. `ThreeTextMaterialContextMap` supplies the exact built-in payloads and is the
-augmentation point for a custom Three program's literal technique and output types; it does not add an untyped string
-fallback. Only glyph branches carry a raster `technique`; `pmndrs.decoration` remains an internal policy/command-buffer
-identifier. Decorated render planners rebuild their gather output; the undecorated retained fast path is unchanged.
+augmentation point for a custom Three program's literal format and output types; it does not add an untyped string
+fallback. Only glyph branches carry a raster `format`; `pmndrs.decoration` remains an internal Codec/command-buffer
+technique identifier. Decorated render planners rebuild their gather output; the undecorated retained fast path is unchanged.
 
 When runtime baking is required, one Worker request normalizes the Unicode ranges, prepares the selected source once,
 and feeds those exact prepared bytes to the shaping bake and every requested Bitmap, MSDF, or Slug bake. The Worker
@@ -391,21 +397,21 @@ splitting a paragraph into hundreds of draws. The multi-page integration fixture
 Chrome run reduced the sampled Paragraph Stress CPU frame from roughly 80 ms before the correction to 0.47–1.3 ms after
 it; the sampled GPU frame remained a separate 1–5 ms concern.
 
-## Font fallback and techniques
+## Font fallback and raster formats
 
-`createFontStack()` accepts fonts from one runtime in explicit fallback order. Members may use different techniques. The
-font carries both shaping identity and raster binding, so `Text` has no redundant technique property. Rust resolves the
-font for each cluster and partitions the render plan according to the active renderer's supported technique programs.
+`createFontStack()` accepts fonts from one runtime in explicit fallback order. Members may use different raster formats.
+The font carries both shaping identity and raster binding, so `Text` has no redundant format property. Rust resolves the
+font for each cluster and partitions the render plan according to the active renderer's supported Codec programs.
 
 This permits an MSDF or Bitmap prose font to fall back to a Slug emoji font while keeping third-party renderers safe: an
-unregistered technique fails at the Codec boundary instead of producing an unsupported draw.
+unregistered raster format fails at the Codec boundary instead of producing an unsupported draw.
 A public compiled-Wasm integration loads Bitmap Inter plus Slug Font Awesome, shapes one paragraph through that ordered
 fallback stack, and observes two Rust-planned draws with exact Bitmap `vec2` and Slug `vec4` physical records. The
-selected font binding—not a `Text` technique selector—carries the renderer program and resource.
+selected font binding—not a `Text` format selector—carries the renderer program and resource.
 
-Techniques explicitly declare the text effects their portable Codec and shader implement. MSDF supports outline and
+Raster formats explicitly declare the text effects their portable Codec and shader implement. MSDF supports outline and
 shadow; Bitmap and Slug currently support neither. Three, `Paragraph`, and root-configured integrations validate
-the selected font techniques at the call that accepts a style, so an unsupported effect cannot become a malformed or
+the selected font formats at the call that accepts a style, so an unsupported effect cannot become a malformed or
 silently degraded render plan. The semantic ABI carries effect color, width, offset, and inherited opacity only for
 technique programs that opt in.
 
@@ -570,7 +576,7 @@ centered glyph row, content height, and complete layout hash exactly; no runtime
 
 The Rust command buffer is the only glyph-packing implementation. The former TypeScript `RasterRuntime`, raster
 candidate/commit transaction, `select`, `createStorage`, and `writeStorage` surfaces are deleted from production source
-and public exports. Current raster techniques own identity, artifact decoding, retained CPU resource data, and disposal;
+and public exports. Current raster formats own identity, artifact decoding, retained CPU resource data, and disposal;
 Rust policy programs own instance packing and dirty-range publication. The package gate retains production render-plan,
 font-binding, Three execution, artifact-validation, and Unicode conformance coverage instead of test-only TypeScript
 packers.

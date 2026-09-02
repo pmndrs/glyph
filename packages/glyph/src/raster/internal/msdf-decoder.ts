@@ -25,7 +25,7 @@ import {
 } from '../../internal/raster-atlas.js';
 import { decodeRasterCoverage } from '../../internal/raster-coverage-artifact.js';
 import type { JsonValue, RasterDecodeArtifact } from '../../raster.js';
-import { defineRasterResourceId } from '../../raster-technique.js';
+import { defineRasterResourceId } from '../../raster-format.js';
 import type { MsdfData, MsdfPageData } from '../msdf.js';
 
 const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE;

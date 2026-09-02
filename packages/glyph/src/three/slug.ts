@@ -15,7 +15,7 @@ import {
   type SlugData,
   type SlugDescriptor,
   type SlugPageData,
-} from '../raster/slug-technique.js';
+} from '../raster/slug.js';
 import { registerThreeSlugShader } from './internal/builtin-shaders.js';
 
 registerThreeSlugShader(slugShader);

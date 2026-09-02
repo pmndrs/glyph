@@ -29,7 +29,7 @@ const slugOutput = slugShader(slugInstance, slugResources);
 const customMaterial = defineTextMaterial((context) => {
   const material = context.createDefaultMaterial();
   material.depthTest = true;
-  if (context.kind === 'glyph' && context.technique === 'pmndrs.slug') material.opacityNode = context.shader.opacity;
+  if (context.kind === 'glyph' && context.format === 'pmndrs.slug') material.opacityNode = context.shader.opacity;
   if (context.kind === 'decoration') material.colorNode = context.shader.color;
   return material;
 });

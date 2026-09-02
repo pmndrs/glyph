@@ -9,12 +9,7 @@ import {
 import { nearestBitmapStrikeIndex } from '../internal/bitmap-strike.js';
 import { DENSE_GLYPH_RECORD_STRIDE, type RasterAtlasPage } from '../internal/raster-atlas.js';
 import type { RasterCoverage } from '../raster-coverage.js';
-import {
-  defineRasterTechnique,
-  type RasterResourceId,
-  type RasterTechnique,
-  type RasterTechniqueId,
-} from '../raster-technique.js';
+import { defineRasterFormat, type RasterResourceId, type RasterFormat, type RasterFormatId } from '../raster-format.js';
 
 export {
   BITMAP_EXTENSION,
@@ -33,7 +28,7 @@ export {
 const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE;
 const MAX_RUNTIME_TEXTURE_BYTES = 256 * 1024 * 1024;
 
-export interface BitmapTechniqueOptions {
+export interface BitmapFormatOptions {
   readonly strikes: readonly [number, ...number[]];
   readonly coverage?: RasterCoverage;
 }
@@ -69,20 +64,20 @@ export function selectBitmapStrikePpem(
 }
 
 /** Renderer-neutral Bitmap identity, decoding, and ownership. */
-export const bitmap: RasterTechnique<
-  RasterTechniqueId & 'pmndrs.bitmap',
+export const bitmap: RasterFormat<
+  RasterFormatId & 'pmndrs.bitmap',
   typeof BITMAP_KIND,
-  BitmapTechniqueOptions,
+  BitmapFormatOptions,
   BitmapDescriptor,
   BitmapData
-> = defineRasterTechnique({
+> = defineRasterFormat({
   id: 'pmndrs.bitmap',
   kind: BITMAP_KIND,
   extension: BITMAP_EXTENSION,
   version: BITMAP_FORMAT_VERSION,
   textEffects: [],
   runtimeBaker: () => import('../runtime-bakers/bitmap.js'),
-  descriptor(options: BitmapTechniqueOptions): BitmapDescriptor {
+  descriptor(options: BitmapFormatOptions): BitmapDescriptor {
     const normalized = normalizeBitmapOptions(options);
     return canonicalizeBitmapDescriptor(normalized.strikes, normalized.coverage);
   },
@@ -110,7 +105,7 @@ const BITMAP_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/color');
 const BITMAP_PAGE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/page');
 
 /**
- * The authoritative physical shape of the Bitmap technique: binding field order matches
+ * The authoritative physical shape of the Bitmap format: binding field order matches
  * the strike tables the binding compiler emits; buffer ids and lanes are the contract
  * every policy program and shader realization derives from.
  */
@@ -180,7 +175,7 @@ export const bitmapSchema: TechniqueSchema<
 });
 
 export const bitmapPlanProgram: RasterPlanProgram<typeof bitmap, typeof bitmapSchema> = registerGlyphRasterPlanProgram({
-  technique: bitmap,
+  raster: bitmap,
   schema: bitmapSchema,
   policyBody(system) {
     const p = techniqueProgram(bitmapSchema, { system });

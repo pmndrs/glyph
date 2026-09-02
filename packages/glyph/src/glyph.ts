@@ -67,7 +67,7 @@ class GlyphRuntime implements Glyph {
     if (this.#handles.has(name)) throw new Error(`Glyph handle ${JSON.stringify(name)} already exists`);
 
     const fonts =
-      config.fonts === undefined ? undefined : new FontFaceHandleStore(config.fonts.techniques, config.fonts.default);
+      config.fonts === undefined ? undefined : new FontFaceHandleStore(config.fonts.formats, config.fonts.default);
     const context = Object.freeze({
       name,
       engine,

@@ -1,11 +1,11 @@
 import {
-  type AnyRasterTechnique,
+  type AnyRasterFormat,
   type BakeProgressListener,
   type FontLibrary,
   type Font,
   type RuntimeFontBake,
   type RuntimeFontBakeRequest,
-  type RasterTechniqueInput,
+  type RasterFormatInput,
 } from '@pmndrs/glyph';
 import { FontLoader } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -84,17 +84,17 @@ const fontLoaders = new WeakMap<THREE.LoadingManager, FontLoader>();
  * Loads one font from artifact bytes the caller already fetched and authenticated. `LoadedFontInput` accepts URLs
  * rather than bytes, so the authenticated artifact is published as a blob URL that is revoked once the load settles.
  */
-export async function loadBakedFont<Technique extends AnyRasterTechnique>({
+export async function loadBakedFont<Format extends AnyRasterFormat>({
   artifact,
   raster,
   library,
   signal,
 }: {
   readonly artifact: Uint8Array<ArrayBuffer>;
-  readonly raster: RasterTechniqueInput<Technique>;
+  readonly raster: RasterFormatInput<Format>;
   readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
-}): Promise<Font<Technique>> {
+}): Promise<Font<Format>> {
   const url = URL.createObjectURL(new Blob([artifact], { type: 'model/gltf-binary' }));
   try {
     return await fontLoader(library).loadAsync({
@@ -108,7 +108,7 @@ export async function loadBakedFont<Technique extends AnyRasterTechnique>({
 }
 
 /** Loads one font from its source URL, baking the core artifact and the selected raster through the measured bakers. */
-export function loadSourceFont<Technique extends AnyRasterTechnique>({
+export function loadSourceFont<Format extends AnyRasterFormat>({
   source,
   raster,
   runtimeBake,
@@ -116,11 +116,11 @@ export function loadSourceFont<Technique extends AnyRasterTechnique>({
   signal,
 }: {
   readonly source: string;
-  readonly raster: RasterTechniqueInput<Technique>;
+  readonly raster: RasterFormatInput<Format>;
   readonly runtimeBake: RuntimeFontBake;
   readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
-}): Promise<Font<Technique>> {
+}): Promise<Font<Format>> {
   return fontLoader(library).loadAsync({
     input: { source, runtimeBake },
     raster,

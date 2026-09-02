@@ -15,12 +15,12 @@ import {
   type RendererContext,
   type CodecProgram,
 } from '../index.js';
-import type { AnyFontFaceSelection, FontFaceTechniqueOf } from '../font-face.js';
+import type { AnyFontFaceSelection, FontFaceRasterOf } from '../font-face.js';
 import type { Font } from '../font.js';
-import { bitmap } from '../raster/bitmap-technique.js';
+import { bitmap } from '../raster/bitmap.js';
 import { msdf } from '../raster/msdf.js';
-import { slug } from '../raster/slug-technique.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
+import { slug } from '../raster/slug.js';
+import type { AnyRasterFormat } from '../raster-format.js';
 import { normalizeGlyphBufferCapacity } from '../text-properties.js';
 import type { PortableResource } from '../index.js';
 import { threeCodecDescriptor } from './codec.js';
@@ -55,7 +55,7 @@ export interface ThreeInstanceBinding {
 }
 
 export interface ThreePortableResource {
-  readonly technique: string;
+  readonly format: string;
   readonly resourceName: string;
   readonly resources: ReadonlyMap<string, PortableResource>;
 }
@@ -93,18 +93,18 @@ export type ThreeHandle = GlyphHandle<ThreeRoot>;
 export interface ThreeConfigOptions extends ThreeRootOptions {
   readonly transformMode?: ThreeTransformMode;
   readonly allocationMode?: ThreeAllocationMode;
-  readonly defaultFontFormat?: keyof ThreeFontTechniques;
+  readonly defaultFontFormat?: keyof ThreeFontFormats;
   /** Renderer-wide fallback after span, Text, TextGroup, and root material selection. */
   readonly material?: ThreeTextMaterial;
 }
 
-export interface ThreeFontTechniques {
+export interface ThreeFontFormats {
   readonly bitmap: typeof bitmap;
   readonly msdf: typeof msdf;
   readonly slug: typeof slug;
 }
 
-export const ThreeFontTechniques: ThreeFontTechniques = Object.freeze({ bitmap, msdf, slug });
+export const ThreeFontFormats: ThreeFontFormats = Object.freeze({ bitmap, msdf, slug });
 
 /** Config-facing binding for one Three publication root. */
 export interface ThreeRootBinding {
@@ -126,7 +126,7 @@ export const ThreeSchema: GlyphSchema<ThreeBindings, ThreeRootBinding> = defineG
   instanceSpan: (_root, input) => Object.freeze({ kind: 'three-instance-span', input }),
 });
 
-export type ThreeGlyphConfig = GlyphConfigFor<typeof ThreeSchema, ThreeRoot, void, ThreeCodec, ThreeFontTechniques>;
+export type ThreeGlyphConfig = GlyphConfigFor<typeof ThreeSchema, ThreeRoot, void, ThreeCodec, ThreeFontFormats>;
 
 /** @internal Resolve the anonymous root fronted by a Three handle. */
 export function threeHandleRoot(handle: ThreeHandle): ThreeRoot {
@@ -145,12 +145,12 @@ export function threeRootHandle(root: ThreeRoot): ThreeHandle {
 export function acquireThreeHandleFont<const Selection extends AnyFontFaceSelection>(
   handle: ThreeHandle,
   selection: Selection,
-): Font<FontFaceTechniqueOf<Selection>> {
-  return threeHandleRoot(handle).acquireFont<FontFaceTechniqueOf<Selection>>(selection);
+): Font<FontFaceRasterOf<Selection>> {
+  return threeHandleRoot(handle).acquireFont<FontFaceRasterOf<Selection>>(selection);
 }
 
 /** @internal Borrow the handle store's immutable source for a render-phase snapshot. */
-export function threeHandleFontSource(handle: ThreeHandle, selection: AnyFontFaceSelection): Font<AnyRasterTechnique> {
+export function threeHandleFontSource(handle: ThreeHandle, selection: AnyFontFaceSelection): Font<AnyRasterFormat> {
   return threeHandleRoot(handle).fontSource(selection);
 }
 
@@ -183,7 +183,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
       : normalizeThreeRootCompositing(options.compositing, 'ThreeConfig compositing');
   const config = defineGlyphConfig({
     schema: ThreeSchema,
-    fonts: { default: defaultFontFormat, techniques: ThreeFontTechniques },
+    fonts: { default: defaultFontFormat, formats: ThreeFontFormats },
     encode: ({ ids }) =>
       createThreeCodec(
         ids,
@@ -197,10 +197,10 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
           ),
         options.material,
       ),
-    resolve: ({ technique, resourceName, resources }) =>
+    resolve: ({ format, resourceName, resources }) =>
       resourceLease(
         Object.freeze({
-          technique,
+          format,
           resourceName,
           resources,
         }),
@@ -229,7 +229,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
     },
     root: {
       create: (context) => {
-        if (context.fonts === undefined) throw new TypeError('Three GlyphConfig must declare font techniques');
+        if (context.fonts === undefined) throw new TypeError('Three GlyphConfig must declare font formats');
         const rootOptions: ThreeRootOptions = {
           ...(capacity === undefined ? {} : { capacity }),
           ...(compositing === undefined ? {} : { compositing }),

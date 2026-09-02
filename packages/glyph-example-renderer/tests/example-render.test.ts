@@ -70,7 +70,7 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
   const bytes = await readFile(output);
   const font = await loadFont(
     { baked: `data:model/gltf-binary;base64,${bytes.toString('base64')}` },
-    { technique: glyphExample, options: { paletteSeed: 7 } },
+    { raster: glyphExample, options: { paletteSeed: 7 } },
   );
   try {
     const text = handle.createText({

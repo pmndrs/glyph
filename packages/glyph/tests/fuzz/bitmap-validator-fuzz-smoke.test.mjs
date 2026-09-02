@@ -5,7 +5,7 @@ import test from 'node:test';
 
 import { bitmapBakerFromCore, createBitmapBaker } from '../../dist/bakers/bitmap.js';
 import { BitmapArtifactValidationError, validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
-import { bitmapDescriptor, bitmapRasterKey } from '../../dist/raster/bitmap-technique.js';
+import { bitmapDescriptor, bitmapRasterKey } from '../../dist/raster/bitmap.js';
 import { ARTIFACT_FUZZ_SEED, mutateArtifact } from '../support/artifact-mutations.mjs';
 
 const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09';

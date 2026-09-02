@@ -1,23 +1,29 @@
 import type { Font } from './font.js';
 import { cloneImmutableFont } from './loaded-font.js';
-import { FontLoadError, loadAdvertisedFontFormats, type FontLibrary, type LoadFontInput } from './loader.js';
 import {
-  isRasterTechnique,
-  rasterTechniqueForFormatKey,
-  type AnyRasterTechnique,
-  type RasterTechniqueInput,
-  type RasterTechniqueRequest,
-} from './raster-technique.js';
+  FontLoadError,
+  openFontFaceSource,
+  type FontFaceSourceLease,
+  type FontLibrary,
+  type LoadFontInput,
+} from './loader.js';
+import {
+  isRasterFormat,
+  rasterFormatForKey,
+  type AnyRasterFormat,
+  type RasterFormatInput,
+  type RasterFormatRequest,
+} from './raster-format.js';
 import { canonicalJson } from './internal/raster-identity.js';
 
 /** Source accepted by a reusable FontFace declaration. */
 export type FontFaceSource = LoadFontInput | Blob;
 
 /** One format assertion accepted by a FontFace declaration. */
-export type FontFaceFormat<Technique extends AnyRasterTechnique = AnyRasterTechnique> =
+export type FontFaceFormat<Format extends AnyRasterFormat = AnyRasterFormat> =
   | string
-  | Technique
-  | RasterTechniqueRequest<Technique>;
+  | Format
+  | RasterFormatRequest<Format>;
 
 export type FontFaceFormatDeclaration = FontFaceFormat | readonly [FontFaceFormat, ...FontFaceFormat[]];
 
@@ -31,24 +37,22 @@ export interface FontFaceConfig<Declaration extends FontFaceFormatDeclaration = 
   readonly format?: Declaration;
 }
 
-type TechniqueOfFormat<Format> = Format extends AnyRasterTechnique
+type RasterOfFormat<Format> = Format extends AnyRasterFormat
   ? Format
-  : Format extends RasterTechniqueRequest<infer Technique>
-    ? Technique
-    : AnyRasterTechnique;
+  : Format extends RasterFormatRequest<infer Raster>
+    ? Raster
+    : AnyRasterFormat;
 
-/** Concrete technique carried by a typed FontFace selection; string/default selections remain handle-relative. */
-export type FontFaceTechniqueOf<Selection> =
-  Selection extends FontFaceSelection<infer Format>
-    ? TechniqueOfFormat<Exclude<Format, undefined>>
-    : AnyRasterTechnique;
+/** Concrete raster carried by a typed FontFace selection; string/default selections remain handle-relative. */
+export type FontFaceRasterOf<Selection> =
+  Selection extends FontFaceSelection<infer Format> ? RasterOfFormat<Exclude<Format, undefined>> : AnyRasterFormat;
 
 type FormatKey<Format> = Format extends string
   ? Format
-  : Format extends AnyRasterTechnique
+  : Format extends AnyRasterFormat
     ? Format['kind']
-    : Format extends RasterTechniqueRequest<infer Technique>
-      ? Technique['kind']
+    : Format extends RasterFormatRequest<infer Raster>
+      ? Raster['kind']
       : never;
 
 type FormatForKey<Format, Key extends PropertyKey> = Format extends unknown
@@ -62,7 +66,7 @@ export interface FontFaceSelection<Format extends FontFaceFormat | undefined = F
   readonly family: string;
   readonly format: Format;
   readonly face: AnyFontFace;
-  /** Load this exact declared technique selection. */
+  /** Load this exact declared format selection. */
   load(): Promise<FontFaceSelection<Format>>;
   /** Read this selection's readiness without observing its Promise. */
   isLoaded(): boolean;
@@ -74,6 +78,8 @@ interface FontFaceBase<Formats extends FontFaceFormat> extends Omit<FontFaceSele
   readonly disposed: boolean;
   /** Load every declared format, or every imported format advertised by an undeclared main font. */
   load(): Promise<FontFace<Formats>>;
+  /** Inspect the ordered format keys advertised by the authoritative main font. */
+  formats(): Promise<readonly string[]>;
   dispose(): void;
 }
 
@@ -82,13 +88,13 @@ export type FontFace<Formats extends FontFaceFormat = never> = FontFaceBase<Form
   readonly [Key in FormatKey<Formats>]: FontFaceSelection<FormatForKey<Formats, Key>>;
 };
 
-/** Technique-erased FontFace used at catalog and integration boundaries. */
+/** Format-erased FontFace used at catalog and integration boundaries. */
 export type AnyFontFace = FontFace<FontFaceFormat>;
 
-/** Technique-erased FontFace selection used at handle boundaries. */
+/** Format-erased FontFace selection used at handle boundaries. */
 export type AnyFontFaceSelection = FontFaceSelection<FontFaceFormat | undefined>;
 
-export type FontTechniqueMap = Readonly<object>;
+export type FontFormatMap = Readonly<object>;
 
 interface FontFaceState {
   readonly library: FontLibrary;
@@ -96,9 +102,12 @@ interface FontFaceState {
   readonly family: string;
   readonly formats: readonly FontFaceFormat[];
   readonly selections: ReadonlyMap<string, AnyFontFaceSelection>;
-  readonly records: Map<AnyRasterTechnique, LoadedFaceRecord>;
+  readonly records: Map<AnyRasterFormat, LoadedFaceRecord>;
+  sourcePromise: Promise<FontFaceSourceLease> | undefined;
+  sourceLease: FontFaceSourceLease | undefined;
+  sourceController: AbortController | undefined;
+  formatsPromise: Promise<readonly string[]> | undefined;
   aggregatePromise: Promise<AnyFontFace> | undefined;
-  aggregateController: AbortController | undefined;
   aggregateLoaded: boolean;
   disposed: boolean;
 }
@@ -107,7 +116,7 @@ interface FontFaceSelectionState {
   readonly face: FontFaceState;
   readonly format: FontFaceFormat | undefined;
   readonly aggregate: boolean;
-  readonly promises: Map<AnyRasterTechnique, Promise<AnyFontFaceSelection>>;
+  readonly promises: Map<AnyRasterFormat, Promise<AnyFontFaceSelection>>;
 }
 
 interface CatalogEntry {
@@ -158,8 +167,11 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
     formats,
     selections,
     records: new Map(),
+    sourcePromise: undefined,
+    sourceLease: undefined,
+    sourceController: undefined,
+    formatsPromise: undefined,
     aggregatePromise: undefined,
-    aggregateController: undefined,
     aggregateLoaded: false,
     disposed: false,
   };
@@ -180,6 +192,9 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
     },
     load(): Promise<AnyFontFace> {
       return loadFontFace(face);
+    },
+    formats(): Promise<readonly string[]> {
+      return fontFaceFormats(face);
     },
     isLoaded(): boolean {
       return isFontFaceLoaded(face);
@@ -267,60 +282,59 @@ export function fontFaceResourceKey(source: FontFaceSource, format: FontFaceConf
 }
 
 interface LoadedFaceRecord {
-  readonly controller: AbortController;
-  readonly technique: AnyRasterTechnique;
-  promise: Promise<Font<AnyRasterTechnique>>;
-  font: Font<AnyRasterTechnique> | undefined;
+  readonly raster: AnyRasterFormat;
+  promise: Promise<Font<AnyRasterFormat>>;
+  font: Font<AnyRasterFormat> | undefined;
 }
 
 /** Handle-local format selection over FontFace-owned immutable loads. */
 export class FontFaceHandleStore {
-  readonly #techniques: Readonly<Record<string, AnyRasterTechnique>>;
+  readonly #formats: Readonly<Record<string, AnyRasterFormat>>;
   readonly #defaultFormat: string;
   #disposed = false;
 
-  constructor(techniques: FontTechniqueMap, defaultFormat: string) {
+  constructor(formats: FontFormatMap, defaultFormat: string) {
     if (typeof defaultFormat !== 'string' || defaultFormat.length === 0) {
       throw new TypeError('font default format must be a nonempty string');
     }
-    const entries = Object.entries(techniques as Readonly<Record<string, unknown>>);
-    if (entries.length === 0) throw new TypeError('font technique map must not be empty');
-    const normalized: Record<string, AnyRasterTechnique> = {};
-    for (const [key, technique] of entries) {
-      if (key.length === 0 || !isRasterTechnique(technique)) {
-        throw new TypeError('font technique map must contain authentic techniques under nonempty keys');
+    const entries = Object.entries(formats as Readonly<Record<string, unknown>>);
+    if (entries.length === 0) throw new TypeError('font format map must not be empty');
+    const normalized: Record<string, AnyRasterFormat> = {};
+    for (const [key, raster] of entries) {
+      if (key.length === 0 || !isRasterFormat(raster)) {
+        throw new TypeError('font format map must contain authentic raster formats under nonempty keys');
       }
-      normalized[key] = technique;
+      normalized[key] = raster;
     }
     if (normalized[defaultFormat] === undefined) {
       throw new TypeError(`font default format ${JSON.stringify(defaultFormat)} is not registered`);
     }
-    this.#techniques = Object.freeze(normalized);
+    this.#formats = Object.freeze(normalized);
     this.#defaultFormat = defaultFormat;
   }
 
   isLoaded(selection: AnyFontFaceSelection): boolean {
     this.#assertActive();
-    return isFontFaceTechniqueLoaded(selection, this.#resolveFormat(fontFaceSelectionState(selection).format));
+    return isFontFaceFormatLoaded(selection, this.#resolveFormat(fontFaceSelectionState(selection).format));
   }
 
   load(selection: AnyFontFaceSelection): Promise<AnyFontFaceSelection> {
     this.#assertActive();
-    return loadFontFaceTechnique(selection, this.#resolveFormat(fontFaceSelectionState(selection).format));
+    return loadFontFaceFormat(selection, this.#resolveFormat(fontFaceSelectionState(selection).format));
   }
 
-  acquire<Technique extends AnyRasterTechnique>(selection: FontFaceSelection): Font<Technique> {
+  acquire<Format extends AnyRasterFormat>(selection: FontFaceSelection): Font<Format> {
     this.#assertActive();
     const raster = this.#resolveFormat(fontFaceSelectionState(selection).format);
-    const font = requiredFontFaceTechnique(selection as AnyFontFaceSelection, raster);
-    return cloneImmutableFont(font) as Font<Technique>;
+    const font = requiredFontFaceFormat(selection as AnyFontFaceSelection, raster);
+    return cloneImmutableFont(font) as Font<Format>;
   }
 
   /** Borrow the store-owned immutable source. Callers must not dispose this value. */
-  peek(selection: FontFaceSelection): Font<AnyRasterTechnique> {
+  peek(selection: FontFaceSelection): Font<AnyRasterFormat> {
     this.#assertActive();
     const raster = this.#resolveFormat(fontFaceSelectionState(selection).format);
-    return requiredFontFaceTechnique(selection as AnyFontFaceSelection, raster);
+    return requiredFontFaceFormat(selection as AnyFontFaceSelection, raster);
   }
 
   dispose(): void {
@@ -328,18 +342,18 @@ export class FontFaceHandleStore {
     this.#disposed = true;
   }
 
-  #resolveFormat(format: FontFaceFormat | undefined): RasterTechniqueInput<AnyRasterTechnique> {
-    if (format === undefined) return this.#techniques[this.#defaultFormat]!;
+  #resolveFormat(format: FontFaceFormat | undefined): RasterFormatInput<AnyRasterFormat> {
+    if (format === undefined) return this.#formats[this.#defaultFormat]!;
     if (typeof format === 'string') {
-      const technique = this.#techniques[format];
-      if (technique === undefined) throw new TypeError(`font format ${JSON.stringify(format)} is not supported`);
-      return technique;
+      const raster = this.#formats[format];
+      if (raster === undefined) throw new TypeError(`font format ${JSON.stringify(format)} is not supported`);
+      return raster;
     }
     const request = format;
-    const technique = isRasterTechnique(request) ? request : request.technique;
-    const configured = Object.values(this.#techniques).find((candidate) => candidate === technique);
+    const raster = isRasterFormat(request) ? request : request.raster;
+    const configured = Object.values(this.#formats).find((candidate) => candidate === raster);
     if (configured === undefined) {
-      throw new TypeError(`font technique ${JSON.stringify(technique.kind)} is not supported`);
+      throw new TypeError(`font format ${JSON.stringify(raster.kind)} is not supported`);
     }
     return request;
   }
@@ -354,19 +368,7 @@ function loadFontFace(face: AnyFontFace): Promise<AnyFontFace> {
   const state = selection.face;
   if (!selection.aggregate) throw new TypeError('FontFace aggregate loading requires the declaration object');
   if (state.aggregatePromise !== undefined) return state.aggregatePromise;
-  const controller = new AbortController();
-  state.aggregateController = controller;
-  const operation = Promise.resolve().then(() =>
-    state.formats.length === 0
-      ? loadUndeclaredFontFace(state, controller.signal)
-      : Promise.all(
-          state.formats.map((format) => {
-            const declared = state.selections.get(formatName(format));
-            if (declared === undefined) throw new Error('FontFace declared selection is missing');
-            return loadFontFaceTechnique(declared, resolveDeclaredFormat(format));
-          }),
-        ).then(() => undefined),
-  );
+  const operation = Promise.resolve().then(() => loadAllFontFaceFormats(state));
   let promise!: Promise<AnyFontFace>;
   promise = operation.then(
     () => {
@@ -379,7 +381,6 @@ function loadFontFace(face: AnyFontFace): Promise<AnyFontFace> {
     (error: unknown) => {
       if (state.aggregatePromise === promise) {
         state.aggregatePromise = undefined;
-        state.aggregateController = undefined;
       }
       throw error;
     },
@@ -388,23 +389,42 @@ function loadFontFace(face: AnyFontFace): Promise<AnyFontFace> {
   return promise;
 }
 
-async function loadUndeclaredFontFace(state: FontFaceState, signal: AbortSignal): Promise<void> {
-  const input = await fontFaceLoadInput(state.source);
-  const fonts = await loadAdvertisedFontFormats(state.library, input, { signal });
+async function loadAllFontFaceFormats(state: FontFaceState): Promise<void> {
+  const declared = state.formats.map(resolveDeclaredFormat);
+  const source = await ensureFontFaceSource(state, declared);
+  const operations: Promise<readonly Font<AnyRasterFormat>[]>[] = [
+    ...declared.map((raster) => source.load(raster).then((font) => [font])),
+    source.loadAdvertised(declared.map(rasterOf)),
+  ];
+  let groups: readonly (readonly Font<AnyRasterFormat>[])[];
+  try {
+    groups = await Promise.all(operations);
+  } catch (error) {
+    const settled = await Promise.allSettled(operations);
+    for (const result of settled) {
+      if (result.status === 'fulfilled') for (const font of result.value) font.dispose();
+    }
+    throw error;
+  }
+  const fonts = groups.flat();
+  if (fonts.length === 0) {
+    throw new FontLoadError(
+      'FONT_FACE_FORMAT_REQUIRED',
+      `FontFace ${JSON.stringify(state.family)} advertises no raster formats; runtime font sources must declare the formats to bake`,
+    );
+  }
   if (state.disposed) {
     for (const font of fonts) font.dispose();
     throw new DOMException('FontFace load owner was disposed', 'AbortError');
   }
   for (const font of fonts) {
-    const existing = state.records.get(font.technique);
+    const existing = state.records.get(font.raster);
     if (existing !== undefined) {
       font.dispose();
       continue;
     }
-    const controller = new AbortController();
-    state.records.set(font.technique, {
-      controller,
-      technique: font.technique,
+    state.records.set(font.raster, {
+      raster: font.raster,
       promise: Promise.resolve(font),
       font,
     });
@@ -414,56 +434,55 @@ async function loadUndeclaredFontFace(state: FontFaceState, signal: AbortSignal)
 function loadDeclaredFontFaceSelection(selection: AnyFontFaceSelection): Promise<AnyFontFaceSelection> {
   const selected = fontFaceSelectionState(selection);
   if (selected.aggregate || selected.format === undefined) {
-    throw new TypeError('FontFace technique loading requires a declared format member');
+    throw new TypeError('FontFace format loading requires a declared format member');
   }
-  return loadFontFaceTechnique(selection, resolveDeclaredFormat(selected.format));
+  return loadFontFaceFormat(selection, resolveDeclaredFormat(selected.format));
 }
 
 function isDeclaredFontFaceSelectionLoaded(selection: AnyFontFaceSelection): boolean {
   const selected = fontFaceSelectionState(selection);
   if (selected.aggregate || selected.format === undefined) return false;
   const raster = tryResolveDeclaredFormat(selected.format);
-  return raster !== undefined && isFontFaceTechniqueLoaded(selection, raster);
+  return raster !== undefined && isFontFaceFormatLoaded(selection, raster);
 }
 
-function loadFontFaceTechnique(
+function loadFontFaceFormat(
   selection: AnyFontFaceSelection,
-  raster: RasterTechniqueInput<AnyRasterTechnique>,
+  raster: RasterFormatInput<AnyRasterFormat>,
 ): Promise<AnyFontFaceSelection> {
   const selected = fontFaceSelectionState(selection);
-  const technique = techniqueOf(raster);
-  const existingPromise = selected.promises.get(technique);
+  const format = rasterOf(raster);
+  const existingPromise = selected.promises.get(format);
   if (existingPromise !== undefined) return existingPromise;
-  let record = selected.face.records.get(technique);
+  let record = selected.face.records.get(format);
   if (record === undefined) {
-    record = createLoadedFaceRecord(selected.face, raster, technique);
-    selected.face.records.set(technique, record);
+    record = createLoadedFaceRecord(selected.face, raster, format);
+    selected.face.records.set(format, record);
   }
   const exact = record;
   let promise!: Promise<AnyFontFaceSelection>;
   promise = exact.promise.then(
     () => selection,
     (error: unknown) => {
-      if (selected.promises.get(technique) === promise) selected.promises.delete(technique);
+      if (selected.promises.get(format) === promise) selected.promises.delete(format);
       throw error;
     },
   );
-  selected.promises.set(technique, promise);
+  selected.promises.set(format, promise);
   return promise;
 }
 
 function createLoadedFaceRecord(
   state: FontFaceState,
-  raster: RasterTechniqueInput<AnyRasterTechnique>,
-  technique: AnyRasterTechnique,
+  raster: RasterFormatInput<AnyRasterFormat>,
+  format: AnyRasterFormat,
 ): LoadedFaceRecord {
-  const controller = new AbortController();
   let record!: LoadedFaceRecord;
-  const promise = fontFaceLoadInput(state.source)
-    .then((input) => state.library.loadFont(input, raster, { signal: controller.signal }))
+  const promise = ensureFontFaceSource(state, [raster])
+    .then((source) => source.load(raster))
     .then(
       (font) => {
-        if (state.disposed || state.records.get(technique) !== record) {
+        if (state.disposed || state.records.get(format) !== record) {
           font.dispose();
           throw new DOMException('FontFace load owner was disposed', 'AbortError');
         }
@@ -471,93 +490,134 @@ function createLoadedFaceRecord(
         return font;
       },
       (error: unknown) => {
-        if (state.records.get(technique) === record) state.records.delete(technique);
+        if (state.records.get(format) === record) state.records.delete(format);
         if (
           error instanceof FontLoadError &&
           (error.code === 'RASTER_NOT_FOUND' || error.code === 'RASTER_SOURCE_UNAVAILABLE')
         ) {
           throw new FontLoadError(
-            'FONT_FACE_TECHNIQUE_UNAVAILABLE',
-            `FontFace ${JSON.stringify(state.family)} does not implement the declared ${JSON.stringify(technique.kind)} technique`,
+            'FONT_FACE_FORMAT_UNAVAILABLE',
+            `FontFace ${JSON.stringify(state.family)} does not implement the declared ${JSON.stringify(format.kind)} format`,
             { cause: error },
           );
         }
         throw error;
       },
     );
-  record = { controller, technique, promise, font: undefined };
+  record = { raster: format, promise, font: undefined };
   return record;
+}
+
+function fontFaceFormats(face: AnyFontFace): Promise<readonly string[]> {
+  const selected = fontFaceSelectionState(face);
+  if (!selected.aggregate) throw new TypeError('FontFace format inspection requires the declaration object');
+  const state = selected.face;
+  if (state.formatsPromise !== undefined) return state.formatsPromise;
+  let promise!: Promise<readonly string[]>;
+  promise = ensureFontFaceSource(state, []).then(
+    (source) => source.formats,
+    (error: unknown) => {
+      if (state.formatsPromise === promise) state.formatsPromise = undefined;
+      throw error;
+    },
+  );
+  state.formatsPromise = promise;
+  return promise;
+}
+
+function ensureFontFaceSource(
+  state: FontFaceState,
+  initialRasters: readonly RasterFormatInput<AnyRasterFormat>[],
+): Promise<FontFaceSourceLease> {
+  if (state.sourcePromise !== undefined) return state.sourcePromise;
+  const controller = new AbortController();
+  state.sourceController = controller;
+  let promise!: Promise<FontFaceSourceLease>;
+  promise = fontFaceLoadInput(state.source)
+    .then((input) => openFontFaceSource(state.library, input, initialRasters, { signal: controller.signal }))
+    .then(
+      (source) => {
+        if (state.disposed || state.sourcePromise !== promise) {
+          source.dispose();
+          throw new DOMException('FontFace source owner was disposed', 'AbortError');
+        }
+        state.sourceLease = source;
+        return source;
+      },
+      (error: unknown) => {
+        if (state.sourcePromise === promise) {
+          state.sourcePromise = undefined;
+          state.sourceController = undefined;
+        }
+        throw error;
+      },
+    );
+  state.sourcePromise = promise;
+  return promise;
 }
 
 function isFontFaceLoaded(face: AnyFontFace): boolean {
   const selected = fontFaceSelectionState(face);
   if (!selected.aggregate) return false;
-  const state = selected.face;
-  if (state.formats.length === 0) return state.aggregateLoaded;
-  return state.formats.every((format) => {
-    const raster = tryResolveDeclaredFormat(format);
-    return raster !== undefined && state.records.get(techniqueOf(raster))?.font !== undefined;
-  });
+  return selected.face.aggregateLoaded;
 }
 
-function isFontFaceTechniqueLoaded(
-  selection: AnyFontFaceSelection,
-  raster: RasterTechniqueInput<AnyRasterTechnique>,
-): boolean {
-  return fontFaceSelectionState(selection).face.records.get(techniqueOf(raster))?.font !== undefined;
+function isFontFaceFormatLoaded(selection: AnyFontFaceSelection, raster: RasterFormatInput<AnyRasterFormat>): boolean {
+  return fontFaceSelectionState(selection).face.records.get(rasterOf(raster))?.font !== undefined;
 }
 
-function requiredFontFaceTechnique(
+function requiredFontFaceFormat(
   selection: AnyFontFaceSelection,
-  raster: RasterTechniqueInput<AnyRasterTechnique>,
-): Font<AnyRasterTechnique> {
+  raster: RasterFormatInput<AnyRasterFormat>,
+): Font<AnyRasterFormat> {
   const selected = fontFaceSelectionState(selection);
-  const technique = techniqueOf(raster);
-  const font = selected.face.records.get(technique)?.font;
+  const format = rasterOf(raster);
+  const font = selected.face.records.get(format)?.font;
   if (font === undefined) {
     throw new FontLoadError(
-      'FONT_FACE_TECHNIQUE_NOT_LOADED',
-      `FontFace ${JSON.stringify(selection.family)} technique ${JSON.stringify(technique.kind)} is not loaded`,
+      'FONT_FACE_FORMAT_NOT_LOADED',
+      `FontFace ${JSON.stringify(selection.family)} format ${JSON.stringify(format.kind)} is not loaded`,
     );
   }
   return font;
 }
 
-function resolveDeclaredFormat(format: FontFaceFormat): RasterTechniqueInput<AnyRasterTechnique> {
+function resolveDeclaredFormat(format: FontFaceFormat): RasterFormatInput<AnyRasterFormat> {
   const resolved = tryResolveDeclaredFormat(format);
   if (resolved === undefined) {
     throw new FontLoadError(
-      'FONT_FACE_TECHNIQUE_UNAVAILABLE',
-      `font format ${JSON.stringify(format)} does not name an imported raster technique`,
+      'FONT_FACE_FORMAT_UNAVAILABLE',
+      `font format ${JSON.stringify(format)} does not name an imported raster format`,
     );
   }
   return resolved;
 }
 
-function tryResolveDeclaredFormat(format: FontFaceFormat): RasterTechniqueInput<AnyRasterTechnique> | undefined {
-  if (typeof format === 'string') return rasterTechniqueForFormatKey(format);
+function tryResolveDeclaredFormat(format: FontFaceFormat): RasterFormatInput<AnyRasterFormat> | undefined {
+  if (typeof format === 'string') return rasterFormatForKey(format);
   return format;
 }
 
-function techniqueOf(raster: RasterTechniqueInput<AnyRasterTechnique>): AnyRasterTechnique {
-  return isRasterTechnique(raster) ? raster : raster.technique;
+function rasterOf(raster: RasterFormatInput<AnyRasterFormat>): AnyRasterFormat {
+  return isRasterFormat(raster) ? raster : raster.raster;
 }
 
 function disposeFontFaceState(state: FontFaceState): void {
   if (state.disposed) return;
   state.disposed = true;
   state.aggregateLoaded = false;
-  state.aggregateController?.abort(new DOMException('FontFace load owner was disposed', 'AbortError'));
-  state.aggregateController = undefined;
+  state.sourceController?.abort(new DOMException('FontFace load owner was disposed', 'AbortError'));
+  state.sourceController = undefined;
   state.aggregatePromise = undefined;
+  state.formatsPromise = undefined;
   for (const record of state.records.values()) {
-    if (!record.controller.signal.aborted) {
-      record.controller.abort(new DOMException('FontFace load owner was disposed', 'AbortError'));
-    }
     record.font?.dispose();
     record.font = undefined;
   }
   state.records.clear();
+  state.sourceLease?.dispose();
+  state.sourceLease = undefined;
+  state.sourcePromise = undefined;
 }
 
 function formatList(format: FontFaceConfig['format']): readonly FontFaceFormat[] {
@@ -575,21 +635,21 @@ function assertFormat(value: unknown): asserts value is FontFaceFormat {
     if (value.length === 0) throw new TypeError('FontFace format key must not be empty');
     return;
   }
-  if (isRasterTechnique(value)) return;
+  if (isRasterFormat(value)) return;
   if (
     typeof value !== 'object' ||
     value === null ||
     Array.isArray(value) ||
-    !Object.hasOwn(value, 'technique') ||
-    !isRasterTechnique((value as { readonly technique?: unknown }).technique)
+    !Object.hasOwn(value, 'raster') ||
+    !isRasterFormat((value as { readonly raster?: unknown }).raster)
   ) {
-    throw new TypeError('FontFace format must be a key, technique, or technique request');
+    throw new TypeError('FontFace format must be a key, raster format, or raster-format request');
   }
 }
 
 function formatName(format: FontFaceFormat): string {
   if (typeof format === 'string') return format;
-  return isRasterTechnique(format) ? format.kind : format.technique.kind;
+  return isRasterFormat(format) ? format.kind : format.raster.kind;
 }
 
 function assertFontFaceConfig(config: unknown): asserts config is FontFaceConfig {
@@ -649,11 +709,11 @@ function fontFaceFormatIdentity(format: FontFaceConfig['format']): string {
 
 function singleFormatIdentity(format: FontFaceFormat): string {
   if (typeof format === 'string') return `key:${format}`;
-  const request = isRasterTechnique(format) ? { technique: format, options: undefined } : format;
-  const operation = request.technique as AnyRasterTechnique & {
+  const request = isRasterFormat(format) ? { raster: format, options: undefined } : format;
+  const operation = request.raster as AnyRasterFormat & {
     descriptor(options: unknown): Parameters<typeof canonicalJson>[0];
   };
-  return `raster:${request.technique.id}:${canonicalJson(operation.descriptor(request.options))}`;
+  return `raster:${request.raster.id}:${canonicalJson(operation.descriptor(request.options))}`;
 }
 
 function normalizedFamily(family: unknown): string {

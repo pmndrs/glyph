@@ -22,15 +22,15 @@
   ],
   "type": "module",
   "sideEffects": [
-    "./src/raster/bitmap-technique.ts",
+    "./src/raster/bitmap.ts",
     "./src/raster/msdf.ts",
-    "./src/raster/slug-technique.ts",
+    "./src/raster/slug.ts",
     "./src/three/bitmap.ts",
     "./src/three/msdf.ts",
     "./src/three/slug.ts",
-    "./dist/raster/bitmap-technique.js",
+    "./dist/raster/bitmap.js",
     "./dist/raster/msdf.js",
-    "./dist/raster/slug-technique.js",
+    "./dist/raster/slug.js",
     "./dist/three/bitmap.js",
     "./dist/three/msdf.js",
     "./dist/three/slug.js"
@@ -166,11 +166,11 @@
     },
     "./raster/bitmap": {
       "types": {
-        "source": "./src/raster/bitmap-technique.ts",
-        "default": "./dist/raster/bitmap-technique.d.ts"
+        "source": "./src/raster/bitmap.ts",
+        "default": "./dist/raster/bitmap.d.ts"
       },
-      "source": "./src/raster/bitmap-technique.ts",
-      "import": "./dist/raster/bitmap-technique.js"
+      "source": "./src/raster/bitmap.ts",
+      "import": "./dist/raster/bitmap.js"
     },
     "./raster/msdf": {
       "types": {
@@ -182,11 +182,11 @@
     },
     "./raster/slug": {
       "types": {
-        "source": "./src/raster/slug-technique.ts",
-        "default": "./dist/raster/slug-technique.d.ts"
+        "source": "./src/raster/slug.ts",
+        "default": "./dist/raster/slug.d.ts"
       },
-      "source": "./src/raster/slug-technique.ts",
-      "import": "./dist/raster/slug-technique.js"
+      "source": "./src/raster/slug.ts",
+      "import": "./dist/raster/slug.js"
     },
     "./bakers/bitmap": {
       "types": {

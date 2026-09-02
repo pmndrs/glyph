@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { defineRasterResourceId, defineRasterTechnique } from '@pmndrs/glyph';
+import { defineRasterResourceId, defineRasterFormat } from '@pmndrs/glyph';
 
-function technique(id) {
-  return defineRasterTechnique({
+function format(id) {
+  return defineRasterFormat({
     id,
     kind: 'test',
     extension: 'TEST_raster',
@@ -20,14 +20,14 @@ function technique(id) {
   });
 }
 
-test('portable raster technique definitions retain their public identity', () => {
-  const value = technique('test.technique');
-  assert.equal(value.id, 'test.technique');
+test('portable raster format definitions retain their public identity', () => {
+  const value = format('test.format');
+  assert.equal(value.id, 'test.format');
   assert.equal(value.kind, 'test');
   assert.equal(Object.isFrozen(value), true);
 });
 
-test('defined techniques own a frozen snapshot of their associated callbacks', () => {
+test('defined formats own a frozen snapshot of their associated callbacks', () => {
   const source = {
     id: 'test.snapshot',
     kind: 'test',
@@ -40,7 +40,7 @@ test('defined techniques own a frozen snapshot of their associated callbacks', (
     },
     dispose() {},
   };
-  const value = defineRasterTechnique(source);
+  const value = defineRasterFormat(source);
   source.textEffects.push('shadow');
   source.descriptor = () => ({ version: 2 });
   assert.deepEqual(value.descriptor(), { version: 1 });
@@ -49,11 +49,11 @@ test('defined techniques own a frozen snapshot of their associated callbacks', (
 });
 
 test('portable raster identities reject empty strings at their definition boundary', () => {
-  assert.throws(() => technique(''), /raster technique ID must not be empty/);
+  assert.throws(() => format(''), /raster format ID must not be empty/);
   assert.throws(() => defineRasterResourceId(''), /raster resource ID must not be empty/);
 });
 
-test('portable raster techniques reject unknown or duplicate text effects', () => {
+test('portable raster formats reject unknown or duplicate text effects', () => {
   const source = {
     id: 'test.effects',
     kind: 'test',
@@ -65,9 +65,9 @@ test('portable raster techniques reject unknown or duplicate text effects', () =
     },
     dispose() {},
   };
-  assert.throws(() => defineRasterTechnique({ ...source, textEffects: ['glow'] }), /not supported/);
+  assert.throws(() => defineRasterFormat({ ...source, textEffects: ['glow'] }), /not supported/);
   assert.throws(
-    () => defineRasterTechnique({ ...source, textEffects: ['outline', 'outline'] }),
+    () => defineRasterFormat({ ...source, textEffects: ['outline', 'outline'] }),
     /must not contain duplicates/,
   );
 });

@@ -50,7 +50,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       },
-      { technique: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
+      { raster: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
     );
     text = handle.createText({
       font,

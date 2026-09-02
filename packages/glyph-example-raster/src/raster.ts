@@ -4,11 +4,11 @@ import type {
   RasterResourceSource,
   RasterDecodeArtifact,
   RasterDecodeFont,
-  RasterTechnique,
-  RasterTechniqueId,
+  RasterFormat,
+  RasterFormatId,
   Sha256Hex,
 } from '@pmndrs/glyph';
-import { defineRasterResourceId, defineRasterTechnique } from '@pmndrs/glyph';
+import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph';
 
 import { isGlyphExampleHeader, type GlyphExampleExtension } from './artifact.js';
 import {
@@ -31,16 +31,16 @@ export interface GlyphExampleData {
 }
 
 /**
- * A third-party portable raster technique. It owns identity, decoding, and resource lifetime and never mentions a
+ * A third-party portable raster format. It owns identity, decoding, and resource lifetime and never mentions a
  * renderer; its shader subpaths consume the plan's named buffers and supplied geometry contract.
  */
-export const glyphExample: RasterTechnique<
-  RasterTechniqueId & 'studio.glyph-example',
+export const glyphExample: RasterFormat<
+  RasterFormatId & 'studio.glyph-example',
   typeof GLYPH_EXAMPLE_KIND,
   GlyphExampleOptions | undefined,
   GlyphExampleDescriptor,
   GlyphExampleData
-> = defineRasterTechnique({
+> = defineRasterFormat({
   id: 'studio.glyph-example',
   kind: GLYPH_EXAMPLE_KIND,
   extension: GLYPH_EXAMPLE_EXTENSION,

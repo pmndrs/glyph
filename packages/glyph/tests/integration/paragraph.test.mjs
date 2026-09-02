@@ -7,7 +7,7 @@ import * as THREE from 'three/webgpu';
 import {
   createParagraph,
   defineRasterResourceId,
-  defineRasterTechnique,
+  defineRasterFormat,
   defineTechniqueSchema,
   registerRasterPlanProgram,
   techniqueProgram,
@@ -28,7 +28,7 @@ const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bi
 
 const TEXT = 'The quick brown fox jumps over the lazy dog';
 const PORTABLE_RESOURCE = defineRasterResourceId('test.paragraph.portable-resource');
-const portableTechnique = defineRasterTechnique({
+const portableTechnique = defineRasterFormat({
   id: 'test.paragraph.portable-technique',
   kind: 'test',
   extension: 'TEST_paragraph_portable',
@@ -50,7 +50,7 @@ const portableSchema = defineTechniqueSchema({
 });
 let portableCompileCalls = 0;
 registerRasterPlanProgram({
-  technique: portableTechnique,
+  raster: portableTechnique,
   schema: portableSchema,
   policyBody(system) {
     const program = techniqueProgram(portableSchema, { system });
@@ -71,7 +71,7 @@ async function bootstrap() {
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: { bytes: await readFile(fontUrl) } },
-    raster: { technique: bitmap, options: { strikes: [16] } },
+    raster: { raster: bitmap, options: { strikes: [16] } },
   });
   return {
     loader,
@@ -186,7 +186,7 @@ test('Paragraphs share one service host and compile a third-party font binding o
   const font = createImmutableFontLease(
     createImmutableFontVariant({
       backing: bitmapVariant.backing,
-      technique: portableTechnique,
+      format: portableTechnique,
       raster: { dispose() {} },
       data: {},
     }),

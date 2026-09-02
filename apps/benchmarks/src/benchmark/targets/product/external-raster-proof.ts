@@ -128,7 +128,7 @@ async function createResources(
     // technique loaded through the public loader, and a Three program resolved from the public program registry.
     font = await loadSourceFont({
       source: sourceUrlForFixture('inter'),
-      raster: { technique: glyphExample, options: { paletteSeed: 17, inset: 0.1 } },
+      raster: { raster: glyphExample, options: { paletteSeed: 17, inset: 0.1 } },
       runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       ...(signal === undefined ? {} : { signal }),
     });

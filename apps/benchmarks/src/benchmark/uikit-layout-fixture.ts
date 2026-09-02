@@ -1,5 +1,5 @@
 import type {
-  AnyRasterTechnique,
+  AnyRasterFormat,
   AxisConstraint,
   Constraints,
   GlyphLayoutInspection,
@@ -22,8 +22,8 @@ type Size = readonly [width: number, height: number];
  * needs. Measurement never materializes positioned arrays; the final resolved content box
  * is the only call that does.
  */
-export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
-  paragraph: Paragraph<Technique>,
+export function createUikitLayoutFixture<Format extends AnyRasterFormat>(
+  paragraph: Paragraph<Format>,
   layout: ParagraphLayout = {},
 ) {
   let currentLayout: ParagraphLayout = { ...layout };
@@ -68,7 +68,7 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
     get layout(): ParagraphLayout {
       return currentLayout;
     },
-    get paragraph(): Paragraph<Technique> {
+    get paragraph(): Paragraph<Format> {
       return paragraph;
     },
     customLayouting,
@@ -118,7 +118,7 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
         centeredY: Float32Array.from(inspection.y, (value) => contentTop - value),
       };
     },
-    updateParagraph(input: ParagraphUpdate<Technique>) {
+    updateParagraph(input: ParagraphUpdate<Format>) {
       paragraph.update(input);
       dirtyCount += 1;
     },

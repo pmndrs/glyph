@@ -1,4 +1,4 @@
-import type { Font, GlyphLayout, RasterTechniqueInput } from '@pmndrs/glyph';
+import type { Font, GlyphLayout, RasterFormatInput } from '@pmndrs/glyph';
 import { id as hashId } from '@pmndrs/glyph';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, type Text, type TextGroup, type ThreeRoot } from '@pmndrs/glyph/three';
@@ -42,8 +42,8 @@ const DECORATION_PACKED_ATTRIBUTE = codecAttributeName(hashId.buffer('glyph-thre
 const DECORATION_UNDERLINE_FLAG = 0b0001;
 const DECORATION_LINE_THROUGH_FLAG = 0b0100;
 const DECORATION_SOLID_STYLE = 1;
-const bitmapRaster: RasterTechniqueInput<BitmapTechnique> = {
-  technique: bitmap,
+const bitmapRaster: RasterFormatInput<BitmapTechnique> = {
+  raster: bitmap,
   options: { strikes: [16] },
 };
 
@@ -135,7 +135,7 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
           const values = [underlinePosition, underlineThickness, strikeoutPosition, strikeoutSize];
           if (!values.every(Number.isFinite) || underlineThickness <= 0 || strikeoutSize <= 0) {
             throw new Error(
-              `baked decoration metrics are missing or degenerate for ${loadedFont.technique.id}: ` +
+              `baked decoration metrics are missing or degenerate for ${loadedFont.raster.id}: ` +
                 `underline ${underlinePosition}/${underlineThickness}, strikeout ${strikeoutPosition}/${strikeoutSize}`,
             );
           }

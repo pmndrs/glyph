@@ -1,4 +1,4 @@
-import { glyph, type AnyRasterTechnique } from '@pmndrs/glyph';
+import { glyph, type AnyRasterFormat } from '@pmndrs/glyph';
 import { ThreeConfig, type Text } from '@pmndrs/glyph/three';
 import { Color, NoToneMapping, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu';
 
@@ -7,7 +7,7 @@ import latinFontUrl from '../assets/inter-latin.font.glb?url';
 interface ThreeExampleState {
   readonly renderer: WebGPURenderer;
   readonly scene: Scene;
-  readonly text: Text<AnyRasterTechnique>;
+  readonly text: Text<AnyRasterFormat>;
 }
 
 let mountedState: ThreeExampleState | undefined;
@@ -21,7 +21,7 @@ export async function mountThreeExample(root: HTMLElement): Promise<() => void> 
   const renderer = new WebGPURenderer({ antialias: true });
   const scene = new Scene();
   const camera = new OrthographicCamera();
-  let text: Text<AnyRasterTechnique> | undefined;
+  let text: Text<AnyRasterFormat> | undefined;
   let disposed = false;
 
   renderer.domElement.dataset.example = 'three';
@@ -95,7 +95,7 @@ function resizeThreeExample(
   root: HTMLElement,
   renderer: WebGPURenderer,
   camera: OrthographicCamera,
-  text: Text<AnyRasterTechnique>,
+  text: Text<AnyRasterFormat>,
 ): void {
   const width = root.clientWidth;
   const height = root.clientHeight;

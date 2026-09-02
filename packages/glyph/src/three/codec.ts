@@ -20,9 +20,9 @@ import {
   type TechniqueSchema,
   id,
 } from '../index.js';
-import { bitmapPlanProgram } from '../raster/bitmap-technique.js';
+import { bitmapPlanProgram } from '../raster/bitmap.js';
 import { msdfPlanProgram } from '../raster/msdf.js';
-import { slugPlanProgram } from '../raster/slug-technique.js';
+import { slugPlanProgram } from '../raster/slug.js';
 
 const THREE_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/stable-glyph');
 const THREE_TRANSFORM_INDEX_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/transform-index');
@@ -82,7 +82,7 @@ export type ThreeTransformMode = CodecTransformMode;
 
 export type ThreeAllocationMode = CodecAllocationMode;
 
-export interface ThreeTechniqueTransformModes {
+export interface ThreeFormatTransformModes {
   readonly bitmap: ThreeTransformMode;
   readonly msdf: ThreeTransformMode;
   readonly slug: ThreeTransformMode;
@@ -90,10 +90,10 @@ export interface ThreeTechniqueTransformModes {
 
 const THREE_PROGRAM_NAMESPACE = 'three';
 
-/** Compiler-mapped Three Codec covering every first-party raster technique in one registration. */
+/** Compiler-mapped Three Codec covering every first-party raster format in one registration. */
 export function threeCodecBytes(
   ids: CodecIdFactory = id,
-  transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
+  transformMode: ThreeTransformMode | ThreeFormatTransformModes = 'indexed',
   additionalPrograms: readonly CodecProgram[] = [],
   allocationMode: ThreeAllocationMode = 'ordered',
 ): Uint8Array {
@@ -103,7 +103,7 @@ export function threeCodecBytes(
 /** @internal Assemble the descriptor retained by the Three adapter alongside its compiled wire Codec. */
 export function threeCodecDescriptor(
   ids: CodecIdFactory = id,
-  transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
+  transformMode: ThreeTransformMode | ThreeFormatTransformModes = 'indexed',
   additionalPrograms: readonly CodecProgram[] = [],
   allocationMode: ThreeAllocationMode = 'ordered',
 ): CodecDescriptor {

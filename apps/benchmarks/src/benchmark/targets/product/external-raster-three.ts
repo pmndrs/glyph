@@ -16,7 +16,7 @@ declare module '@pmndrs/glyph/three' {
     readonly 'studio.glyph-example': Readonly<{
       root: ThreeRootContext;
       kind: 'glyph';
-      technique: 'studio.glyph-example';
+      format: 'studio.glyph-example';
       outputs: ReadonlyMap<string, THREE.Node>;
       position: THREE.Node<'vec3'>;
       createDefaultMaterial(): THREE.NodeMaterial;
@@ -26,7 +26,7 @@ declare module '@pmndrs/glyph/three' {
 
 /** The external consumer's Three implementation of the portable glyph-example plan. */
 const externalGlyphExampleThreeProgram = {
-  technique: glyphExamplePlanProgram.technique,
+  raster: glyphExamplePlanProgram.raster,
   schema: glyphExamplePlanProgram.schema,
   variant: {
     id: 'tsl',
@@ -67,7 +67,7 @@ const externalGlyphExampleThreeProgram = {
         context.material?.create({
           root: context.root,
           kind: 'glyph',
-          technique: glyphExamplePlanProgram.technique.id,
+          format: glyphExamplePlanProgram.raster.id,
           outputs: new Map<string, THREE.Node>([
             ['position', shader.position],
             ['color', shader.color],

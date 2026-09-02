@@ -1,4 +1,4 @@
-import type { AnyRasterTechnique, Font } from '@pmndrs/glyph';
+import type { AnyRasterFormat, Font } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { FontLoader, type Text, type TextGroup } from '@pmndrs/glyph/three';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
@@ -55,7 +55,7 @@ export async function runRenderTechniqueThreeLab({
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       },
-      raster: { technique: glyphExample, options: { paletteSeed: 17, inset: 0.1 } },
+      raster: { raster: glyphExample, options: { paletteSeed: 17, inset: 0.1 } },
     });
     const genericFontLoadMs = performance.now() - genericStarted;
 
@@ -65,7 +65,7 @@ export async function runRenderTechniqueThreeLab({
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       },
-      raster: { technique: bitmap, options: { strikes: [16] } },
+      raster: { raster: bitmap, options: { strikes: [16] } },
     });
     const bitmapFontLoadMs = performance.now() - bitmapStarted;
 
@@ -92,13 +92,9 @@ export async function runRenderTechniqueThreeLab({
   }
 }
 
-function measureTechnique(
-  font: Font<AnyRasterTechnique>,
-  warmup: number,
-  samples: number,
-): RenderTechniqueThreeLabResult {
+function measureTechnique(font: Font<AnyRasterFormat>, warmup: number, samples: number): RenderTechniqueThreeLabResult {
   const firstStarted = performance.now();
-  const rootName = `technique-lab-${font.technique.id}`;
+  const rootName = `technique-lab-${font.raster.id}`;
   const root = createBenchmarkThreeRoot(rootName);
   const text = root.createText({ font, text: INITIAL_TEXT, style: { fontSize: 48 } });
   const group = root.createTextGroup();
@@ -142,7 +138,7 @@ function measureTechnique(
 
 function update(
   index: number,
-  text: Text<AnyRasterTechnique>,
+  text: Text<AnyRasterFormat>,
   scene: THREE.Scene,
   group: TextGroup,
   rootName: string,

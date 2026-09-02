@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { defineRasterTechnique } from '@pmndrs/glyph';
+import { defineRasterFormat } from '@pmndrs/glyph';
 import {
   createRasterCodecProgram as createRasterPolicyProgram,
   defineCodecBuffers as definePolicyBuffers,
@@ -17,7 +17,7 @@ const ORIGIN_BUFFER_ID = id.buffer('test.raster-policy-program/origin');
 const SYSTEM_BUFFER_ID = id.buffer('test.raster-policy-program/system/stable-glyph-id');
 const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.raster-policy-program/system/other-stable-glyph-id');
 
-const technique = defineRasterTechnique({
+const technique = defineRasterFormat({
   id: 'test.raster-policy-program',
   kind: 'test',
   extension: 'TEST_policy_program',
@@ -29,7 +29,7 @@ const technique = defineRasterTechnique({
   },
   dispose() {},
 });
-const wrongSystemTechnique = defineRasterTechnique({
+const wrongSystemTechnique = defineRasterFormat({
   ...technique,
   id: 'test.raster-policy-program-wrong-system',
 });
@@ -70,7 +70,7 @@ const capabilitySet = {
 
 function plan(policyBody) {
   return registerRasterPlanProgram({
-    technique,
+    raster: technique,
     schema,
     programVariant: TEST_PROGRAM_VARIANT,
     policyBody,
@@ -90,7 +90,7 @@ const portable = plan((hostSystem, hostCapabilitySet) => {
   return p.compile({ origin: [p.semantics.inlineOrigin, p.semantics.blockOrigin] });
 });
 const wrongSystemPortable = registerRasterPlanProgram({
-  technique: wrongSystemTechnique,
+  raster: wrongSystemTechnique,
   schema: wrongSystemSchema,
   programVariant: TEST_PROGRAM_VARIANT,
   policyBody() {

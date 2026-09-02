@@ -499,7 +499,7 @@ function topLevelUsage(): string {
 Portable font baking for @pmndrs/glyph.
 
 Commands:
-  bake                  Bake font shaping data and optional raster techniques
+  bake                  Bake font shaping data and optional raster formats
   glyphs <font>         List Unicode mappings and font-provided glyph names
 
 Global options:

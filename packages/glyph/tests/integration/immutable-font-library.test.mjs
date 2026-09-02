@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { bitmap } from '../../dist/raster/bitmap-technique.js';
+import { bitmap } from '../../dist/raster/bitmap.js';
 import { defineFont } from '../../dist/font.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
 import { createFontStack, immutableFontResources } from '../../dist/loaded-font.js';
 import { createFontLibrary, loadFont } from '../../dist/loader.js';
 
 const fixtureUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
-const raster = { technique: bitmap, options: { strikes: [16] } };
+const raster = { raster: bitmap, options: { strikes: [16] } };
 
 test('copy input creates one private GLB backing and exposes no mutable implementation handles', async () => {
   const source = await readFile(fixtureUrl);
@@ -17,12 +17,12 @@ test('copy input creates one private GLB backing and exposes no mutable implemen
   source.fill(0);
   const font = await pending;
 
-  assert.equal(font.technique, bitmap);
+  assert.equal(font.raster, bitmap);
   assert.equal(font.metrics.unitsPerEm, 2048);
   assert.equal(font.glyphCount, 2937);
   assert.equal('data' in font, false);
   assert.equal('font' in font, false);
-  assert.equal('raster' in font, false);
+  assert.equal('raster' in font, true);
   assert.equal('handle' in font, false);
 
   const resources = immutableFontResources(font);
@@ -71,7 +71,7 @@ test('loadFont accepts the static defineFont discovery token directly', async ()
   const bytes = await readFile(fixtureUrl);
   const font = await loadFont(defineFont({ baked: { bytes } }, raster));
 
-  assert.equal(font.technique, bitmap);
+  assert.equal(font.raster, bitmap);
   assert.equal(font.glyphCount, 2937);
   font.dispose();
 });
@@ -185,11 +185,11 @@ test('font library and load options reject malformed values at their calls', asy
   const library = createFontLibrary();
   const request = { input: { baked: 'https://fonts.test/invalid-options.glb' }, raster };
   assert.throws(() => library.loadFont(request.input, request.raster, null), /load options must be an object/);
-  assert.throws(() => loadFont(request.input), /requires a raster technique/);
-  assert.throws(() => loadFont(request.input, []), /at least one raster technique/);
+  assert.throws(() => loadFont(request.input), /requires a raster format/);
+  assert.throws(() => loadFont(request.input, []), /at least one raster format/);
   assert.throws(() => loadFont(request.input, request.raster, { retry: true }), /only accept signal/);
   assert.throws(() => loadFont(defineFont(request.input, request.raster), request.raster), /only accept signal/);
-  assert.throws(() => library.clear(request.input), /requires a raster technique/);
+  assert.throws(() => library.clear(request.input), /requires a raster format/);
   library.dispose();
 });
 

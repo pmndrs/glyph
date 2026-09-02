@@ -5,13 +5,13 @@ import test from 'node:test';
 import {
   createRasterCodecProgram as createRasterPolicyProgram,
   defineRasterResourceId,
-  defineRasterTechnique,
+  defineRasterFormat,
   defineTechniqueSchema,
   id,
   registerRasterPlanProgram,
   techniqueProgram,
 } from '../../dist/index.js';
-import { bitmap } from '../../dist/raster/bitmap-technique.js';
+import { bitmap } from '../../dist/raster/bitmap.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
 import { createFontStack, immutableFontResources } from '../../dist/loaded-font.js';
 import { loadFont } from '../../dist/loader.js';
@@ -28,13 +28,13 @@ import {
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const raster = { technique: bitmap, options: { strikes: [16] } };
+const raster = { raster: bitmap, options: { strikes: [16] } };
 const COLLIDING_RESOURCE_A = defineRasterResourceId('pmndrs.msdf/4wzx/16');
 const COLLIDING_RESOURCE_B = defineRasterResourceId('pmndrs.msdf/b6cd/16');
 const COLLISION_ORIGIN_BUFFER_ID = id.buffer('test.handle-state-font-binding/collision-origin');
 
 function collisionTechnique(name) {
-  return defineRasterTechnique({
+  return defineRasterFormat({
     id: `test.handleState-font-binding.${name}`,
     kind: bitmap.kind,
     extension: bitmap.extension,
@@ -56,7 +56,7 @@ function collisionPlan(technique, resource) {
     render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
   });
   return registerRasterPlanProgram({
-    technique,
+    raster: technique,
     schema,
     policyBody(system) {
       const program = techniqueProgram(schema, { system });
@@ -180,8 +180,8 @@ test('a glyph-engine-owned handle state installs a complete codec and deduplicat
   const policy = handleState.installCodec(threeCodecDescriptor);
   const first = handleState.bindFont(font);
   const second = handleState.bindFont(font);
-  assert.equal(first.technique, bitmap);
-  assert.equal(second.technique, bitmap);
+  assert.equal(first.raster, bitmap);
+  assert.equal(second.raster, bitmap);
   assert.equal(shaper.memoryReport().fontCount, 1);
 
   font.dispose();
@@ -197,8 +197,8 @@ test('a glyph-engine-owned handle state installs a complete codec and deduplicat
 test('one handle state rejects colliding resource identities when the second font binds', async () => {
   const bytes = await readFile(fontUrl);
   const [firstFont, secondFont] = await Promise.all([
-    loadFont({ baked: { bytes } }, { technique: firstCollisionTechnique, options: { strikes: [16] } }),
-    loadFont({ baked: { bytes } }, { technique: secondCollisionTechnique, options: { strikes: [16] } }),
+    loadFont({ baked: { bytes } }, { raster: firstCollisionTechnique, options: { strikes: [16] } }),
+    loadFont({ baked: { bytes } }, { raster: secondCollisionTechnique, options: { strikes: [16] } }),
   ]);
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);

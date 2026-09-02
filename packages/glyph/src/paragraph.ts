@@ -2,7 +2,7 @@ import { alignSpansToClusters, type FormattedText, type ParagraphSpan } from './
 import type { Font } from './font.js';
 import { createFontStack, immutableFontSelectionFonts, type FontSelection, type FontStack } from './loaded-font.js';
 import { copyGlyphLayoutInspection, type GlyphLayoutInspection, type ParagraphMetrics } from './layout.js';
-import type { AnyRasterTechnique } from './raster-technique.js';
+import type { AnyRasterFormat } from './raster-format.js';
 import { mergePropertyList } from './property-list.js';
 import type {
   ParagraphContentProperties,
@@ -71,7 +71,7 @@ const measurementCapabilities: PolicyCapabilitySet = Object.freeze({
   wholeBufferThresholdBasisPoints: 7_500,
 });
 
-interface ParagraphBaseOptions<Technique extends AnyRasterTechnique> {
+interface ParagraphBaseOptions<Technique extends AnyRasterFormat> {
   readonly font: FontSelection<Technique>;
   /** Text shaping and presentation properties inherited by inline spans. */
   readonly style?: PropertyList<TextStyle>;
@@ -80,17 +80,17 @@ interface ParagraphBaseOptions<Technique extends AnyRasterTechnique> {
   readonly layout?: PropertyList<ParagraphLayout>;
 }
 
-export type ParagraphOptions<Technique extends AnyRasterTechnique> = ParagraphBaseOptions<Technique> &
+export type ParagraphOptions<Technique extends AnyRasterFormat> = ParagraphBaseOptions<Technique> &
   ParagraphContentProperties<Technique>;
 
-type ParagraphContentUpdate<Technique extends AnyRasterTechnique> = Readonly<{
+type ParagraphContentUpdate<Technique extends AnyRasterFormat> = Readonly<{
   text?: ParagraphOptions<Technique>['text'];
 }>;
 
-export type ParagraphUpdate<Technique extends AnyRasterTechnique> = Partial<ParagraphBaseOptions<Technique>> &
+export type ParagraphUpdate<Technique extends AnyRasterFormat> = Partial<ParagraphBaseOptions<Technique>> &
   ParagraphContentUpdate<Technique>;
 
-interface ResolvedParagraphState<Technique extends AnyRasterTechnique> {
+interface ResolvedParagraphState<Technique extends AnyRasterFormat> {
   readonly font: FontSelection<Technique>;
   readonly text: string;
   readonly spans: readonly ParagraphSpan<Technique>[];
@@ -111,7 +111,7 @@ interface MeasurementService {
 }
 
 /** A renderer-free retained paragraph whose queries are synchronous after async construction. */
-export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+export class Paragraph<Technique extends AnyRasterFormat = AnyRasterFormat> {
   #desired: ResolvedParagraphState<Technique>;
   #engine: ParagraphEngine;
   readonly #serviceLease: MeasurementServiceLease;
@@ -134,7 +134,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
   }
 
   /** @internal The root factory owns asynchronous engine acquisition. */
-  static _create<Technique extends AnyRasterTechnique>(
+  static _create<Technique extends AnyRasterFormat>(
     desired: ResolvedParagraphState<Technique>,
     serviceLease: MeasurementServiceLease,
     engine: ParagraphEngine,
@@ -277,7 +277,7 @@ function writeParagraphQueryCache<Value>(cache: Map<string, Value>, key: string,
 }
 
 /** Initialize renderer-free measurement, then return a synchronously queryable Paragraph. */
-export async function createParagraph<Technique extends AnyRasterTechnique>(
+export async function createParagraph<Technique extends AnyRasterFormat>(
   options: ParagraphOptions<Technique>,
 ): Promise<Paragraph<Technique>> {
   if (options === undefined) throw new TypeError('paragraph options are required');
@@ -300,15 +300,12 @@ class ParagraphEngine {
   readonly codec: CodecRegistration;
   readonly planner: MeasurementPlanner;
   readonly text: RetainedText;
-  readonly #singleFontStacks = new WeakMap<
-    Font<AnyRasterTechnique>,
-    FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>
-  >();
+  readonly #singleFontStacks = new WeakMap<Font<AnyRasterFormat>, FontStack<AnyRasterFormat, Font<AnyRasterFormat>>>();
   #disposed = false;
 
   constructor(
     handleState: GlyphHandleState,
-    desired: ResolvedParagraphState<AnyRasterTechnique>,
+    desired: ResolvedParagraphState<AnyRasterFormat>,
     constraints: Constraints,
   ) {
     let codec: CodecRegistration | undefined;
@@ -347,7 +344,7 @@ class ParagraphEngine {
     this.text = text;
   }
 
-  update(desired: ResolvedParagraphState<AnyRasterTechnique>, constraints: Constraints): void {
+  update(desired: ResolvedParagraphState<AnyRasterFormat>, constraints: Constraints): void {
     this.#assertActive();
     const bindings: HandleFontStackBinding[] = [];
     try {
@@ -379,9 +376,9 @@ class ParagraphEngine {
 function createEngineText(
   handleState: GlyphHandleState,
   planner: MeasurementPlanner,
-  desired: ResolvedParagraphState<AnyRasterTechnique>,
+  desired: ResolvedParagraphState<AnyRasterFormat>,
   constraints: Constraints,
-  singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
+  singleFontStacks: WeakMap<Font<AnyRasterFormat>, FontStack<AnyRasterFormat, Font<AnyRasterFormat>>>,
 ): RetainedText {
   const bindings: HandleFontStackBinding[] = [];
   try {
@@ -393,10 +390,10 @@ function createEngineText(
 
 function engineTextOptions(
   handleState: GlyphHandleState,
-  desired: ResolvedParagraphState<AnyRasterTechnique>,
+  desired: ResolvedParagraphState<AnyRasterFormat>,
   constraints: Constraints,
   bindings: HandleFontStackBinding[],
-  singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
+  singleFontStacks: WeakMap<Font<AnyRasterFormat>, FontStack<AnyRasterFormat, Font<AnyRasterFormat>>>,
 ): RetainedTextOptions {
   const font = bindSelection(handleState, desired.font, bindings, singleFontStacks);
   const spans = desired.spans.map((span) => ({
@@ -417,14 +414,14 @@ function engineTextOptions(
 
 function bindSelection(
   handleState: GlyphHandleState,
-  selection: FontSelection<AnyRasterTechnique>,
+  selection: FontSelection<AnyRasterFormat>,
   bindings: HandleFontStackBinding[],
-  singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
+  singleFontStacks: WeakMap<Font<AnyRasterFormat>, FontStack<AnyRasterFormat, Font<AnyRasterFormat>>>,
 ): HandleFontStackBinding {
   const fonts = immutableFontSelectionFonts(selection);
-  let stack: FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>;
+  let stack: FontStack<AnyRasterFormat, Font<AnyRasterFormat>>;
   if ('fonts' in selection) {
-    stack = selection as FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>;
+    stack = selection as FontStack<AnyRasterFormat, Font<AnyRasterFormat>>;
   } else {
     const font = fonts[0];
     stack = singleFontStacks.get(font) ?? createFontStack(font);
@@ -449,14 +446,14 @@ function disposeBindings(bindings: readonly HandleFontStackBinding[]): void {
 
 function measurementPolicyDescriptor(
   identities: RenderIdFactory,
-  desired: ResolvedParagraphState<AnyRasterTechnique>,
+  desired: ResolvedParagraphState<AnyRasterFormat>,
 ): PolicyDescriptor {
   const programs = uniqueTechniques(desired).map((technique) => {
     const program = resolveRasterPlanProgram(technique.id);
     if (program === undefined) {
       throw new TypeError(`no portable raster plan program is registered for "${technique.id}"`);
     }
-    return createRasterPolicyProgram(program as RasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>, {
+    return createRasterPolicyProgram(program as RasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>, {
       namespace: MEASUREMENT_PROGRAM_NAMESPACE,
       system: measurementSystemBuffers,
       capabilitySet: measurementCapabilities,
@@ -481,25 +478,25 @@ function measurementLimits() {
   });
 }
 
-function uniqueTechniques(desired: ResolvedParagraphState<AnyRasterTechnique>): readonly AnyRasterTechnique[] {
-  const byId = new Map<string, AnyRasterTechnique>();
-  const selections: FontSelection<AnyRasterTechnique>[] = [desired.font];
+function uniqueTechniques(desired: ResolvedParagraphState<AnyRasterFormat>): readonly AnyRasterFormat[] {
+  const byId = new Map<string, AnyRasterFormat>();
+  const selections: FontSelection<AnyRasterFormat>[] = [desired.font];
   for (const span of desired.spans) if (span.font !== undefined) selections.push(span.font);
   for (const selection of selections) {
     for (const font of immutableFontSelectionFonts(selection)) {
-      const existing = byId.get(font.technique.id);
-      if (existing !== undefined && existing !== font.technique) {
-        throw new TypeError(`font techniques reuse the id "${font.technique.id}" with different objects`);
+      const existing = byId.get(font.raster.id);
+      if (existing !== undefined && existing !== font.raster) {
+        throw new TypeError(`font techniques reuse the id "${font.raster.id}" with different objects`);
       }
-      byId.set(font.technique.id, font.technique);
+      byId.set(font.raster.id, font.raster);
     }
   }
   return [...byId.values()];
 }
 
 function sameTechniqueSet(
-  left: ResolvedParagraphState<AnyRasterTechnique>,
-  right: ResolvedParagraphState<AnyRasterTechnique>,
+  left: ResolvedParagraphState<AnyRasterFormat>,
+  right: ResolvedParagraphState<AnyRasterFormat>,
 ): boolean {
   const leftIds = uniqueTechniques(left)
     .map(({ id: techniqueId }) => techniqueId)
@@ -526,7 +523,7 @@ function axisKey(constraints: Constraints): string {
   return `${key(constraints.width)}|${key(constraints.height)}`;
 }
 
-function hasParagraphChange<Technique extends AnyRasterTechnique>(update: ParagraphUpdate<Technique>): boolean {
+function hasParagraphChange<Technique extends AnyRasterFormat>(update: ParagraphUpdate<Technique>): boolean {
   return ['font', 'text', 'style', 'rasterPixelRatio', 'layout'].some((key) => Object.hasOwn(update, key));
 }
 
@@ -539,7 +536,7 @@ function frozenDeep<Value>(value: Value): Value {
   return Object.freeze(copy) as Value;
 }
 
-function normalizeParagraphState<Technique extends AnyRasterTechnique>(
+function normalizeParagraphState<Technique extends AnyRasterFormat>(
   properties: ParagraphOptions<Technique>,
   previous?: ResolvedParagraphState<Technique>,
 ): ResolvedParagraphState<Technique> {
@@ -566,13 +563,13 @@ function normalizeParagraphState<Technique extends AnyRasterTechnique>(
   assertTextStyle(style, 'paragraph style');
   assertTextStyleFeatureRanges(style, 0, text.length, 'paragraph style');
   assertParagraphLayout(layout, 'paragraph layout');
-  const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.technique);
+  const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
   assertTextEffectsSupported(
     style,
     [
       ...rootTechniques,
       ...spans.flatMap((span) =>
-        span.font === undefined ? [] : immutableFontSelectionFonts(span.font).map((font) => font.technique),
+        span.font === undefined ? [] : immutableFontSelectionFonts(span.font).map((font) => font.raster),
       ),
     ],
     'paragraph style',
@@ -581,7 +578,7 @@ function normalizeParagraphState<Technique extends AnyRasterTechnique>(
     if (span.style === undefined) continue;
     assertTextEffectsSupported(
       span.style,
-      span.font === undefined ? rootTechniques : immutableFontSelectionFonts(span.font).map((font) => font.technique),
+      span.font === undefined ? rootTechniques : immutableFontSelectionFonts(span.font).map((font) => font.raster),
       `paragraph span ${index} style`,
     );
   }

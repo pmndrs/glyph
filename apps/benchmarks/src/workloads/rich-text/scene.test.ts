@@ -1,4 +1,4 @@
-import type { AnyRasterTechnique, Font } from '@pmndrs/glyph';
+import type { AnyRasterFormat, Font } from '@pmndrs/glyph';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -19,8 +19,8 @@ import {
  * load — which is what keeps this guard on the authored ranges cheap enough to run beside the rest of the unit suite.
  */
 const companionFonts = {
-  emphasis: { technique: 'emphasis' } as unknown as Font<AnyRasterTechnique>,
-  foreign: { technique: 'foreign' } as unknown as Font<AnyRasterTechnique>,
+  emphasis: { raster: 'emphasis' } as unknown as Font<AnyRasterFormat>,
+  foreign: { raster: 'foreign' } as unknown as Font<AnyRasterFormat>,
 } satisfies RichTextCompanionFonts;
 
 const BODY = 16;

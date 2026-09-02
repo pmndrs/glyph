@@ -48,7 +48,7 @@ async function loadFixture() {
   const loader = new FontLoader();
   const font = await loader.loadAsync({
     input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
-    raster: { technique: bitmap, options: { strikes: [16] } },
+    raster: { raster: bitmap, options: { strikes: [16] } },
   });
   return {
     font,
@@ -363,7 +363,7 @@ test('R3F-cached React consumers receive independent Font leases under StrictMod
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
   const request = {
     input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
-    raster: { technique: bitmap, options: { strikes: [16] } },
+    raster: { raster: bitmap, options: { strikes: [16] } },
   };
   const observed = new Map();
   await preloadRequest(request);
@@ -390,7 +390,7 @@ test('clearing a React font resource leaves its mounted consumer lease live', as
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
   const request = {
     input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
-    raster: { technique: bitmap, options: { strikes: [16] } },
+    raster: { raster: bitmap, options: { strikes: [16] } },
   };
   const observed = new Map();
   await preloadRequest(request);
@@ -412,7 +412,7 @@ test('the generic useFont cache survives StrictMode replay and releases its runt
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
   const request = {
     input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
-    raster: { technique: bitmap, options: { strikes: [16] } },
+    raster: { raster: bitmap, options: { strikes: [16] } },
   };
   const observed = new Map();
   await preloadRequest(request);
@@ -474,11 +474,11 @@ test('clearing a loaded R3F font resource permits a later preload and mount', as
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
   const input = { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } };
   const options = { strikes: [16] };
-  const config = { format: { technique: bitmap, options } };
+  const config = { format: { raster: bitmap, options } };
   const firstPreload = useFont.preload(input, config);
   await firstPreload;
   const firstObserved = new Map();
-  const firstRequest = { input, raster: { technique: bitmap, options } };
+  const firstRequest = { input, raster: { raster: bitmap, options } };
   const firstRenderer = await create(hookFontTree(firstRequest, firstObserved, ['first']));
   await waitFor(() => firstObserved.has('first'));
   await firstRenderer.unmount();
@@ -487,7 +487,7 @@ test('clearing a loaded R3F font resource permits a later preload and mount', as
   assert.notEqual(secondPreload, firstPreload, 'clear evicts the fulfilled preload operation');
   await secondPreload;
   const observed = new Map();
-  const request = { input, raster: { technique: bitmap, options } };
+  const request = { input, raster: { raster: bitmap, options } };
   const renderer = await create(hookFontTree(request, observed, ['retry']));
   await waitFor(() => observed.has('retry'));
   await renderer.unmount();
@@ -509,7 +509,7 @@ function hookFontTree(request, observed, names) {
 
 function HookFontText({ name, observed, request }) {
   const font = useFont(request.input, {
-    format: { technique: request.raster.technique, options: request.raster.options },
+    format: { raster: request.raster.raster, options: request.raster.options },
   });
   useLayoutEffect(() => {
     observed.set(name, font);
@@ -532,13 +532,13 @@ function HookFontText({ name, observed, request }) {
 
 function preloadRequest(request) {
   return useFont.preload(request.input, {
-    format: { technique: request.raster.technique, options: request.raster.options },
+    format: { raster: request.raster.raster, options: request.raster.options },
   });
 }
 
 function clearRequest(request) {
   useFont.clear(request.input, {
-    format: { technique: request.raster.technique, options: request.raster.options },
+    format: { raster: request.raster.raster, options: request.raster.options },
   });
 }
 

@@ -82,7 +82,7 @@ export async function loadMtsdfFontAsset(
     }
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { technique: mtsdfTechnique },
+      raster: { raster: mtsdfTechnique },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
       library,
       ...(signal === undefined ? {} : { signal }),
@@ -105,7 +105,7 @@ export async function loadMtsdfFontAsset(
   );
   const loaded = await loadBakedFont({
     artifact,
-    raster: { technique: mtsdfTechnique },
+    raster: { raster: mtsdfTechnique },
     library,
     ...(signal === undefined ? {} : { signal }),
   });

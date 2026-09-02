@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 
 import type { GlyphCopy } from '../index.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
+import type { AnyRasterFormat } from '../raster-format.js';
 import type { GlyphPlacement, GlyphPlacements } from '../glyph-placement.js';
 import {
   markStorageAttributeUpdated,
@@ -49,7 +49,7 @@ export function localToWorldMatrix(
 }
 
 /** @internal Constructed only by `Text.breakApart()`. */
-interface GlyphsOptions<Technique extends AnyRasterTechnique> {
+interface GlyphsOptions<Technique extends AnyRasterFormat> {
   readonly source: Text<Technique>;
   readonly placements: GlyphPlacements;
   readonly geometry?: ReadonlyMap<number, ThreeGlyphGeometrySource>;
@@ -59,11 +59,11 @@ interface GlyphsOptions<Technique extends AnyRasterTechnique> {
 }
 
 const glyphsConstructorToken: unique symbol = Symbol('pmndrs.glyph.Glyphs');
-let constructGlyphs: ((options: GlyphsOptions<AnyRasterTechnique>) => Glyphs) | undefined;
+let constructGlyphs: ((options: GlyphsOptions<AnyRasterFormat>) => Glyphs) | undefined;
 let configureGlyphDrawOrder: ((glyphs: Glyphs, start: number) => number) | undefined;
 
 /** @internal Constructs the detached branch while keeping the public class receive-only. */
-export function createGlyphs(options: GlyphsOptions<AnyRasterTechnique>): Glyphs {
+export function createGlyphs(options: GlyphsOptions<AnyRasterFormat>): Glyphs {
   if (constructGlyphs === undefined) {
     throw new Error('Glyphs constructor is unavailable');
   }
@@ -130,7 +130,7 @@ export class Glyphs extends THREE.Object3D {
     };
   }
 
-  private constructor(token: typeof glyphsConstructorToken, options: GlyphsOptions<AnyRasterTechnique>) {
+  private constructor(token: typeof glyphsConstructorToken, options: GlyphsOptions<AnyRasterFormat>) {
     super();
     if (token !== glyphsConstructorToken) throw new TypeError('Glyphs objects are created by Text.breakApart()');
     let target: ThreeTextRenderPlanExecutor | undefined;
