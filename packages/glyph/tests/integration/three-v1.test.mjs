@@ -183,6 +183,48 @@ test('one initialized Glyph runtime creates independent named Three handles over
   reused.dispose();
 });
 
+test('one Three root binds one Scene and exposes its semantic name to material factories', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
+  const root = three('semantic-hud');
+  const first = root.createText({ font, text: 'first scene' });
+  const second = root.createText({ font, text: 'second scene' });
+  const firstScene = new THREE.Scene();
+  const secondScene = new THREE.Scene();
+  const materialRoots = [];
+  root.setMaterial(
+    defineTextMaterial((context) => {
+      materialRoots.push(context.root);
+      return context.createDefaultMaterial();
+    }),
+  );
+  firstScene.add(first);
+  secondScene.add(second);
+
+  try {
+    assert.throws(
+      () => root.shape(),
+      /spans more than one Scene; select a different handle root for each Scene/,
+      'a root cannot ambiguously publish into two host scenes',
+    );
+    firstScene.add(second);
+    root.shape();
+    assert.equal(root.drawRoot.parent, firstScene);
+    assert.equal(materialRoots.length > 0, true);
+    assert.equal(materialRoots[0], root, 'material factories receive the selected root object');
+    assert.equal(materialRoots[0].name, 'semantic-hud', 'the semantic root name is not derived from Scene.uuid');
+    assert.equal(materialRoots[0].scene, firstScene);
+  } finally {
+    first.dispose();
+    second.dispose();
+    root.dispose();
+    font.dispose();
+  }
+});
+
 test('text property registries validate and freeze reusable rules', () => {
   for (const [registry, rules] of [
     [TextStyle, { body: { fontSize: 16 } }],
