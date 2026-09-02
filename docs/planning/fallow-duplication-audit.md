@@ -15,12 +15,12 @@ sources:
   - id: typed-command-buffer
     resource: ../../packages/glyph/src/internal/typed-command-buffer.ts
     title: Canonical typed command-buffer mapper
-  - id: three-command-buffer
-    resource: ../../packages/glyph/src/three/command-buffer.ts
-    title: Three command-buffer binder
-  - id: example-command-buffer
-    resource: ../../packages/glyph-example-renderer/src/command-buffer.ts
-    title: Example renderer command-buffer binder
+  - id: three-plan-target
+    resource: ../../packages/glyph/src/three/engine-plan-target.ts
+    title: Three configured plan target
+  - id: example-engine
+    resource: ../../packages/glyph-example-renderer/src/engine.ts
+    title: Example renderer plan target
   - id: create-engine
     resource: ../../packages/glyph/src/core/create-engine.ts
     title: Renderer-neutral command binding engine

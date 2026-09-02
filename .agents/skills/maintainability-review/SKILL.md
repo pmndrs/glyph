@@ -9,6 +9,10 @@ Run a two-phase, evidence-led review. Preserve behavior and public boundaries un
 
 Read the canonical [engineering house style](../../../docs/engineering/code-style.md) and the [review rubric](references/review-rubric.md) before auditing or changing code. The engineering standard owns durable code rules; this skill owns the review procedure. Do not restate the standard in findings, plans, or package documentation.
 
+When a review includes complexity ceilings, metric-driven refactoring, or type-erasure/inference concerns, also read the
+[complexity and type-integrity guide](references/complexity-and-type-integrity.md). It defines the repository thresholds,
+measurement limits, anti-gaming rules, and current evidence-led refactor candidates.
+
 ## 1. Establish the baseline
 
 1. Read repository instructions, canonical plans, package knowledge, ADRs, and recent change logs.

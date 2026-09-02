@@ -78,9 +78,9 @@ sources:
   - id: current-example
     resource: ../../packages/glyph-example-renderer/src/engine.ts
     title: Current example renderer
-  - id: current-example-binder
-    resource: ../../packages/glyph-example-renderer/src/command-buffer.ts
-    title: Current example command-buffer binder
+  - id: configured-plan-target
+    resource: ../../packages/glyph/src/core/glyph-plan-target.ts
+    title: Shared configured plan target
   - id: implemented-glyph-runtime
     resource: ../../packages/glyph/src/glyph.ts
     title: Implemented root Glyph runtime
@@ -90,9 +90,9 @@ sources:
   - id: implemented-three-config
     resource: ../../packages/glyph/src/three/handle.ts
     title: Implemented ThreeConfig and handle lifecycle
-  - id: implemented-three-binder
-    resource: ../../packages/glyph/src/three/command-buffer.ts
-    title: Implemented Three command-buffer binder
+  - id: implemented-three-target
+    resource: ../../packages/glyph/src/three/engine-plan-target.ts
+    title: Implemented Three configured plan target
   - id: implemented-transform-sync
     resource: ../../packages/glyph/src/three/transform-synchronizer.ts
     title: Implemented cheap Three transform path
@@ -189,7 +189,7 @@ then-proposed design. The implementation outcome above is authoritative for the 
 | The current executor decodes, resolves, realizes, commits, and retires.                         | Verified.                                                | Its state includes buffers, resources, textures/pages, materials, transforms, origins, draws, and preparation state ([engine-plan-target.ts:250-275](../../packages/glyph/src/three/engine-plan-target.ts#L250-L275)); `accept()` calls `prepare()` then `commit()` transactionally ([301-309](../../packages/glyph/src/three/engine-plan-target.ts#L301-L309), [473-608](../../packages/glyph/src/three/engine-plan-target.ts#L473-L608)).                                              |
 | Current R3F uses no Glyph context.                                                              | Verified.                                                | `react.ts` imports React hooks but creates no context or provider; `Text` and `TextGroup` construct the existing Three classes through R3F `extend()` ([react.ts:1-14](../../packages/glyph/src/react.ts#L1-L14), [126-202](../../packages/glyph/src/react.ts#L126-L202), [204-265](../../packages/glyph/src/react.ts#L204-L265)).                                                                                                                                                       |
 | R3F nested `<Text>` creates no Three object.                                                    | Verified.                                                | `flattenText()` recognizes nested `Text`, derives string ranges, and emits spans into the outer paragraph ([react.ts:442-485](../../packages/glyph/src/react.ts#L442-L485)).                                                                                                                                                                                                                                                                                                             |
-| The example renderer is a second consumer of the same portable plan.                            | Verified and migrated.                                   | It creates a backend/policy/planner behind `defineExampleConfig()`, delegates canonical mapping and resource settlement to the renderer-neutral core binder, consumes the bound hierarchy in its device transaction, commits a submission, and retires resources ([config.ts](../../packages/glyph-example-renderer/src/config.ts), [command-buffer.ts](../../packages/glyph-example-renderer/src/command-buffer.ts), [device.ts](../../packages/glyph-example-renderer/src/device.ts)). |
+| The example renderer is a second consumer of the same portable plan.                            | Verified and migrated.                                   | It creates a backend/policy/planner behind `defineExampleConfig()`, delegates canonical mapping and resource settlement to the renderer-neutral configured plan target, consumes the bound hierarchy in its device transaction, commits a submission, and retires resources ([config.ts](../../packages/glyph-example-renderer/src/config.ts), [glyph-plan-target.ts](../../packages/glyph/src/core/glyph-plan-target.ts), [device.ts](../../packages/glyph-example-renderer/src/device.ts)). |
 | `decode => BoundCommandBuffer`, `GlyphConfig`, handles, and `shape()` existed before this work. | Not in the audited baseline; implemented after approval. | The prior published integrator boundary was `PlanCandidate`/`PlanTarget`. D-293 and the implementation outcome above record the added ordinary-adapter surface.                                                                                                                                                                                                                                                                                                                          |
 
 ## 1. Verified current lifecycle: imperative Three
@@ -263,7 +263,7 @@ One subtle ordering fact matters for the redesign: `TextGroup.updateMatrixWorld(
 5. The pre-change `readCandidate()` copied operational tables. The migrated target instead delegates admitted plan mapping,
    stable identity, resolver leases, and default decoding to core `createEngine()`. Its device walks the borrowed bound
    hierarchy during `prepare()` and retains only accepted renderer-owned draw/buffer/resource state
-   ([command-buffer.ts](../../packages/glyph-example-renderer/src/command-buffer.ts),
+   ([glyph-plan-target.ts](../../packages/glyph/src/core/glyph-plan-target.ts),
    [device.ts](../../packages/glyph-example-renderer/src/device.ts)).
 6. Without a device, the target stores the decoded list and accepts it. With a device, it acquires missing portable payload leases, validates technique compatibility, stages and commits resources, stages and commits the whole submission, then publishes the new list/maps and releases payloads no longer referenced by the accepted resource generations ([example engine.ts:255-328](../../packages/glyph-example-renderer/src/engine.ts#L255-L328)).
 7. A preparation or submission failure discards candidate state and releases newly acquired leases; the target returns a rejection rather than corrupting its previous accepted state ([example engine.ts:292-313](../../packages/glyph-example-renderer/src/engine.ts#L292-L313), [329-332](../../packages/glyph-example-renderer/src/engine.ts#L329-L332)).
