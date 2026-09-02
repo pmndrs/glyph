@@ -597,6 +597,29 @@ test('exact FontFace transfers progressively converge on one receiving content g
   receiverLibrary.dispose();
 });
 
+test('serialized FontFace claiming admits only a safe envelope before lazy identity validation', async () => {
+  const sourceLibrary = createFontLibrary();
+  const source = await openFontFaceSource(sourceLibrary, { baked: { bytes: multiFormatBytes, ownership: 'copy' } }, []);
+  const sourceFont = await source.load(msdf);
+  const snapshot = await source.snapshot([sourceFont]);
+
+  assert.throws(
+    () => claimSerializedFontFace({ ...snapshot, data: new Uint8Array(snapshot.data) }),
+    /SerializedFontFace\.data must be a nonempty, attached ArrayBuffer/,
+  );
+  const claimed = claimSerializedFontFace({ ...snapshot, artifactHash: 'forged' });
+  sourceFont.dispose();
+  source.dispose();
+  sourceLibrary.dispose();
+
+  const receiverLibrary = createFontLibrary();
+  await assert.rejects(
+    openSerializedFontFaceSource(receiverLibrary, claimed),
+    (error) => error instanceof FontLoadError && error.code === 'FONT_FACE_TRANSFER_IDENTITY',
+  );
+  receiverLibrary.dispose();
+});
+
 test('FontFace source leases converge identical main content across locators and retain every dependency base', async () => {
   const calls = [];
   const firstCoreUrl = 'https://first.test/fonts/Inter-Regular.font.glb';
@@ -614,10 +637,9 @@ test('FontFace source leases converge identical main content across locators and
     ),
   });
 
-  const [first, second] = await Promise.all([
-    openFontFaceSource(library, firstCoreUrl, []),
-    openFontFaceSource(library, secondCoreUrl, []),
-  ]);
+  // Establish the missing dependency base first so this test deterministically proves fallback to the equivalent source.
+  const first = await openFontFaceSource(library, firstCoreUrl, []);
+  const second = await openFontFaceSource(library, secondCoreUrl, []);
   const request = bitmap({ strikes: [16] });
   const firstFont = await first.load(request);
   const secondFont = await second.load(request);

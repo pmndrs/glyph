@@ -1,8 +1,4 @@
-import type {
-  SerializedFontFace,
-  SerializedFontFaceRaster,
-  SerializedFontFaceResource,
-} from '../font-face-transfer.js';
+import type { SerializedFontFace } from '../font-face-transfer.js';
 
 /** Recognize the public discriminator without accepting the remaining payload on trust. */
 export function isSerializedFontFace(value: unknown): value is SerializedFontFace {
@@ -11,9 +7,9 @@ export function isSerializedFontFace(value: unknown): value is SerializedFontFac
 
 /** Validate and synchronously claim every application-owned buffer without copying its bytes. */
 export function claimSerializedFontFace(value: unknown): SerializedFontFace {
-  assertSerializedFontFace(value);
-  const transfer = serializedFontFaceBuffers(value);
-  const claimed = structuredClone(value, { transfer }) as SerializedFontFace;
+  const normalized = normalizeSerializedFontFace(value);
+  const transfer = serializedFontFaceBuffers(normalized);
+  const claimed = structuredClone(normalized, { transfer });
   return freezeSerializedFontFace(claimed);
 }
 
@@ -42,115 +38,73 @@ export function freezeSerializedFontFace(value: SerializedFontFace): SerializedF
   return Object.freeze(value);
 }
 
-function assertSerializedFontFace(value: unknown): asserts value is SerializedFontFace {
+function normalizeSerializedFontFace(value: unknown): SerializedFontFace {
   if (!isRecord(value) || value.kind !== 'glyph-font-face' || value.version !== 1) {
     throw new TypeError('SerializedFontFace must use glyph-font-face version 1');
   }
-  exactKeys(value, ['kind', 'version', 'data', 'artifactHash', 'rasters', 'resources'], 'SerializedFontFace');
-  assertBuffer(value.data, 'SerializedFontFace.data');
-  assertHash(value.artifactHash, 'SerializedFontFace.artifactHash');
+  const data = requiredBuffer(value.data, 'SerializedFontFace.data');
   if (!Array.isArray(value.rasters)) throw new TypeError('SerializedFontFace.rasters must be an array');
-  const rasterKeys = new Set<string>();
-  const referencedResources = new Set<string>();
-  value.rasters.forEach((raster, index) => {
-    assertRaster(raster, `SerializedFontFace.rasters[${index}]`, referencedResources);
-    if (rasterKeys.has(raster.rasterKey)) throw new TypeError('SerializedFontFace raster keys must be unique');
-    rasterKeys.add(raster.rasterKey);
-  });
   if (!Array.isArray(value.resources)) throw new TypeError('SerializedFontFace.resources must be an array');
-  const resourceIdentities = new Set<string>();
-  value.resources.forEach((resource, index) => {
+  const rasters = value.rasters.map((raster, index) => {
+    const path = `SerializedFontFace.rasters[${index}]`;
+    if (!isRecord(raster)) throw new TypeError(`${path} must be an object`);
+    if (!Array.isArray(raster.resources)) throw new TypeError(`${path}.resources must be an array`);
+    const rasterData = raster.data === undefined ? undefined : requiredBuffer(raster.data, `${path}.data`);
+    return {
+      rasterKey: requiredString(raster.rasterKey, `${path}.rasterKey`),
+      kind: requiredString(raster.kind, `${path}.kind`),
+      extension: requiredString(raster.extension, `${path}.extension`),
+      version: requiredInteger(raster.version, `${path}.version`, 0),
+      ...(rasterData === undefined ? {} : { data: rasterData }),
+      ...(raster.artifactHash === undefined
+        ? {}
+        : { artifactHash: requiredString(raster.artifactHash, `${path}.artifactHash`) }),
+      resources: raster.resources.map((resource, resourceIndex) => {
+        const resourcePath = `${path}.resources[${resourceIndex}]`;
+        if (!isRecord(resource)) throw new TypeError(`${resourcePath} must be an object`);
+        return {
+          artifactHash: requiredString(resource.artifactHash, `${resourcePath}.artifactHash`),
+          byteLength: requiredInteger(resource.byteLength, `${resourcePath}.byteLength`, 1),
+        };
+      }),
+    };
+  });
+  const resources = value.resources.map((resource, index) => {
     const path = `SerializedFontFace.resources[${index}]`;
-    assertResource(resource, path);
-    const identity = `${resource.artifactHash}:${resource.byteLength}`;
-    if (resourceIdentities.has(identity)) {
-      throw new TypeError('SerializedFontFace.resources must contain unique content identities');
-    }
-    resourceIdentities.add(identity);
+    if (!isRecord(resource)) throw new TypeError(`${path} must be an object`);
+    return {
+      artifactHash: requiredString(resource.artifactHash, `${path}.artifactHash`),
+      byteLength: requiredInteger(resource.byteLength, `${path}.byteLength`, 1),
+      data: requiredBuffer(resource.data, `${path}.data`),
+    };
   });
-  for (const identity of referencedResources) {
-    if (!resourceIdentities.has(identity)) {
-      throw new TypeError('SerializedFontFace raster references a missing external resource');
-    }
-  }
-  for (const identity of resourceIdentities) {
-    if (!referencedResources.has(identity)) {
-      throw new TypeError('SerializedFontFace carries an external resource no raster references');
-    }
-  }
-  serializedFontFaceBuffers(value as unknown as SerializedFontFace);
+  return {
+    kind: 'glyph-font-face',
+    version: 1,
+    data,
+    artifactHash: requiredString(value.artifactHash, 'SerializedFontFace.artifactHash'),
+    rasters,
+    resources,
+  };
 }
 
-function assertRaster(
-  value: unknown,
-  path: string,
-  referencedResources: Set<string>,
-): asserts value is SerializedFontFaceRaster {
-  if (!isRecord(value)) throw new TypeError(`${path} must be an object`);
-  exactKeys(value, ['rasterKey', 'kind', 'extension', 'version', 'data', 'artifactHash', 'resources'], path);
-  nonemptyString(value.rasterKey, `${path}.rasterKey`);
-  nonemptyString(value.kind, `${path}.kind`);
-  nonemptyString(value.extension, `${path}.extension`);
-  if (!Number.isSafeInteger(value.version) || Number(value.version) < 0) {
-    throw new TypeError(`${path}.version must be a nonnegative safe integer`);
-  }
-  if ((value.data === undefined) !== (value.artifactHash === undefined)) {
-    throw new TypeError(`${path}.data and artifactHash must either both be present or both be omitted`);
-  }
-  if (value.data !== undefined) assertBuffer(value.data, `${path}.data`);
-  if (value.artifactHash !== undefined) assertHash(value.artifactHash, `${path}.artifactHash`);
-  if (!Array.isArray(value.resources)) throw new TypeError(`${path}.resources must be an array`);
-  const localResources = new Set<string>();
-  value.resources.forEach((resource, index) => {
-    const resourcePath = `${path}.resources[${index}]`;
-    if (!isRecord(resource)) throw new TypeError(`${resourcePath} must be an object`);
-    exactKeys(resource, ['artifactHash', 'byteLength'], resourcePath);
-    const identity = assertResourceIdentity(resource, resourcePath);
-    if (localResources.has(identity)) throw new TypeError(`${path}.resources must contain unique content identities`);
-    localResources.add(identity);
-    referencedResources.add(identity);
-  });
-}
-
-function assertResource(value: unknown, path: string): asserts value is SerializedFontFaceResource {
-  if (!isRecord(value)) throw new TypeError(`${path} must be an object`);
-  exactKeys(value, ['artifactHash', 'byteLength', 'data'], path);
-  assertResourceIdentity(value, path);
-  assertBuffer(value.data, `${path}.data`);
-  if (value.data.byteLength !== value.byteLength) {
-    throw new TypeError(`${path}.data must match its declared byteLength`);
-  }
-}
-
-function assertResourceIdentity(value: unknown, path: string): string {
-  if (!isRecord(value)) throw new TypeError(`${path} must be an object`);
-  assertHash(value.artifactHash, `${path}.artifactHash`);
-  if (!Number.isSafeInteger(value.byteLength) || Number(value.byteLength) <= 0) {
-    throw new TypeError(`${path}.byteLength must be a positive safe integer`);
-  }
-  return `${value.artifactHash}:${value.byteLength}`;
-}
-
-function assertBuffer(value: unknown, path: string): asserts value is ArrayBuffer {
+function requiredBuffer(value: unknown, path: string): ArrayBuffer {
   if (!(value instanceof ArrayBuffer) || value.byteLength === 0) {
     throw new TypeError(`${path} must be a nonempty, attached ArrayBuffer`);
   }
+  return value;
 }
 
-function assertHash(value: unknown, path: string): asserts value is string {
-  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
-    throw new TypeError(`${path} must be a lowercase SHA-256 identity`);
-  }
-}
-
-function nonemptyString(value: unknown, path: string): asserts value is string {
+function requiredString(value: unknown, path: string): string {
   if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${path} must be a nonempty string`);
+  return value;
 }
 
-function exactKeys(value: Record<string, unknown>, keys: readonly string[], path: string): void {
-  const allowed = new Set(keys);
-  const unknown = Object.keys(value).find((key) => !allowed.has(key));
-  if (unknown !== undefined) throw new TypeError(`${path} does not accept ${JSON.stringify(unknown)}`);
+function requiredInteger(value: unknown, path: string, minimum: number): number {
+  if (!Number.isSafeInteger(value) || Number(value) < minimum) {
+    throw new TypeError(`${path} must be a safe integer greater than or equal to ${minimum}`);
+  }
+  return Number(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
