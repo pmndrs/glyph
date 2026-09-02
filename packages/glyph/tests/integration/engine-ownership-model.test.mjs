@@ -10,7 +10,7 @@ import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs'
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 
-test('one Wasm engine rejects double ownership and cross-backend policy resolution', async () => {
+test('one Wasm engine rejects double ownership and cross-handle codec resolution', async () => {
   const shaper = await createRuntimeShaper({ wasm: await readFile(wasmUrl) });
   const first = new GlyphHandleState(shaper);
   const second = new GlyphHandleState(shaper);
@@ -22,7 +22,7 @@ test('one Wasm engine rejects double ownership and cross-backend policy resoluti
     first.registerCodec(sharedPolicy, renderPolicyBytes(textShaperAbi));
     assert.throws(
       () => second.registerCodec(sharedPolicy, renderPolicyBytes(textShaperAbi)),
-      /already owned by another glyph backend/u,
+      /already owned by another Glyph handle state/u,
     );
     first.registerCodec(firstPolicy, renderPolicyBytes(textShaperAbi));
     second.registerCodec(secondPolicy, renderPolicyBytes(textShaperAbi));
@@ -45,7 +45,7 @@ test('one Wasm engine rejects double ownership and cross-backend policy resoluti
       expectedEngineRevision: accepted.engineRevision,
       consumedPlanRevision: accepted.planRevision,
     });
-    assert.throws(() => transport.update(foreign), /not owned by this glyph backend/u);
+    assert.throws(() => transport.update(foreign), /not owned by this Glyph handle state/u);
     assert.equal(
       transport.isExpired(accepted),
       false,
@@ -90,14 +90,14 @@ test('registration retains a scoped ID independently of the scope that minted it
 
 test('successful individual disposal releases registration ID provenance', async () => {
   const shaper = await createRuntimeShaper({ wasm: await readFile(wasmUrl) });
-  const backend = new GlyphHandleState(shaper);
-  const policyHandle = backend.id('policy', 'engine-ownership/disposed-policy');
+  const handleState = new GlyphHandleState(shaper);
+  const policyHandle = handleState.id('policy', 'engine-ownership/disposed-policy');
   try {
-    backend.registerCodec(policyHandle, renderPolicyBytes(textShaperAbi));
-    backend.disposeCodec(policyHandle);
+    handleState.registerCodec(policyHandle, renderPolicyBytes(textShaperAbi));
+    handleState.disposeCodec(policyHandle);
     assert.throws(() => assertGlyphId(policyHandle, 'policy', 'policy handle'), /must come from id/u);
   } finally {
-    backend.dispose();
+    handleState.dispose();
     shaper.dispose();
   }
 });

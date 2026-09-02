@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { BackendMaterialBinding, BackendTransformBinding } from './handle-state.js';
+import type { HandleMaterialBinding, HandleTransformBinding } from './handle-state.js';
 import type { RenderPlanTable } from '../core/plan-view.js';
 import type { PlanCandidate, RenderPlanReader } from '../core/render-planner.js';
 import type {
@@ -37,7 +37,7 @@ interface TypedSourceState {
   readonly instanceDescriptors: WeakMap<InstanceIdentity, InternalInstanceDescriptor>;
   readonly instanceSpanDescriptors: WeakMap<InstanceSpanIdentity, InternalInstanceSpanDescriptor>;
   transformBindings:
-    | ReadonlyMap<number, Readonly<{ binding: BackendTransformBinding; recordIndex: number }>>
+    | ReadonlyMap<number, Readonly<{ binding: HandleTransformBinding; recordIndex: number }>>
     | undefined;
 }
 
@@ -79,7 +79,7 @@ export interface InternalInstanceSpanBindingDescriptor {
 }
 
 export interface InternalTransformBindingDescriptor {
-  readonly binding: BackendTransformBinding;
+  readonly binding: HandleTransformBinding;
   readonly recordIndex: number;
 }
 
@@ -121,10 +121,10 @@ export class TypedCommandBufferMapper {
   readonly #batches = new Map<number, BatchIdentity>();
   readonly #instances = new Map<number, InstanceIdentity>();
   readonly #instanceSpans = new Map<number, InstanceSpanIdentity>();
-  readonly #materials = new WeakMap<BackendMaterialBinding, TypedMaterial>();
-  readonly #materialBindings = new WeakMap<TypedMaterial, BackendMaterialBinding>();
-  readonly #transforms = new WeakMap<BackendTransformBinding, TransformIdentity>();
-  readonly #transformBindings = new WeakMap<TransformIdentity, BackendTransformBinding>();
+  readonly #materials = new WeakMap<HandleMaterialBinding, TypedMaterial>();
+  readonly #materialBindings = new WeakMap<TypedMaterial, HandleMaterialBinding>();
+  readonly #transforms = new WeakMap<HandleTransformBinding, TransformIdentity>();
+  readonly #transformBindings = new WeakMap<TransformIdentity, HandleTransformBinding>();
   readonly #transformIndices = new WeakMap<TransformIdentity, number>();
   readonly #clips = new Map<number, ClipIdentity>();
   readonly #semantics = new Map<number, SemanticIdentity>();
@@ -234,11 +234,11 @@ export class TypedCommandBufferMapper {
     return this.#programIdentities.get(program)!;
   }
 
-  materialBinding(material: TypedMaterial): BackendMaterialBinding {
+  materialBinding(material: TypedMaterial): HandleMaterialBinding {
     return this.#materialBindings.get(material)!;
   }
 
-  transformBinding(transform: TransformIdentity): BackendTransformBinding {
+  transformBinding(transform: TransformIdentity): HandleTransformBinding {
     return this.#transformBindings.get(transform)!;
   }
 
@@ -897,8 +897,8 @@ function intern<Value extends object>(values: Map<number, Value>, id: number): V
 
 function transformBindingMap(
   transforms: PlanCandidate['transforms'],
-): ReadonlyMap<number, Readonly<{ binding: BackendTransformBinding; recordIndex: number }>> {
-  const bindings = new Map<number, Readonly<{ binding: BackendTransformBinding; recordIndex: number }>>();
+): ReadonlyMap<number, Readonly<{ binding: HandleTransformBinding; recordIndex: number }>> {
+  const bindings = new Map<number, Readonly<{ binding: HandleTransformBinding; recordIndex: number }>>();
   for (const { transformIndex, instanceId, binding } of transforms) {
     const record = Object.freeze({ binding, recordIndex: transformIndex as number });
     bindings.set(transformIndex as number, record);

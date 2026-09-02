@@ -4,14 +4,15 @@ import { createFontStack, immutableFontSelectionFonts, type FontSelection, type 
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import {
   GlyphHandleState,
-  type BackendMaterialBinding,
+  type HandleMaterialBinding,
   type CodecRegistration,
-  type BackendTransformBinding,
+  type HandleTransformBinding,
 } from './handle-state.js';
 import { createGlyphPlanTarget, type GlyphPlanTarget } from '../core/glyph-plan-target.js';
 import type {
   AnyGlyphBindings,
   Codec,
+  GlyphCommandLimits,
   GlyphConfig,
   GlyphCopy,
   GlyphCopyDestination,
@@ -22,6 +23,7 @@ import type {
   GlyphRoot,
   GlyphRootCreateOptions,
   GlyphRootServices,
+  GlyphShapeOptions,
   GlyphRenderer,
   GlyphSchema,
   RendererContext,
@@ -30,17 +32,15 @@ import type {
   GlyphTextController,
   GlyphTextState,
 } from '../core/glyph-config.js';
-import type { BackendFontStackBinding } from './handle-state.js';
+import type { HandleFontStackBinding } from './handle-state.js';
 import type {
   RenderPlanner,
-  RenderPlannerLimits,
-  RenderPlannerPublishOptions,
   RetainedFormattedText,
   RetainedText,
   RetainedTextOptions,
 } from '../core/render-planner.js';
 
-const DEFAULT_LIMITS: RenderPlannerLimits = Object.freeze({
+const DEFAULT_LIMITS: GlyphCommandLimits = Object.freeze({
   maxParagraphs: 4_096,
   maxClusters: 65_536,
   maxLines: 65_536,
@@ -402,15 +402,15 @@ class ConfiguredRootServices<
     Font<AnyRasterTechnique>,
     FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>
   >();
-  readonly #materials = new WeakMap<BackendMaterialBinding, Bindings['materialInput']>();
+  readonly #materials = new WeakMap<HandleMaterialBinding, Bindings['materialInput']>();
   readonly #materialBindings = new Map<
     Bindings['materialInput'],
-    { readonly canonical: BackendMaterialBinding; references: number }
+    { readonly canonical: HandleMaterialBinding; references: number }
   >();
-  readonly #transforms = new WeakMap<BackendTransformBinding, Bindings['transformInput']>();
+  readonly #transforms = new WeakMap<HandleTransformBinding, Bindings['transformInput']>();
   readonly #transformBindings = new Map<
     Bindings['transformInput'],
-    { readonly canonical: BackendTransformBinding; references: number }
+    { readonly canonical: HandleTransformBinding; references: number }
   >();
   #planner: RenderPlanner | undefined;
   #target: GlyphPlanTarget<Bindings, RendererResult> | undefined;
@@ -467,7 +467,7 @@ class ConfiguredRootServices<
     return new ConfiguredTextController(planner, this, state);
   }
 
-  shape(options?: RenderPlannerPublishOptions): RendererResult {
+  shape(options?: GlyphShapeOptions): RendererResult {
     const planner = this.#requiredPlanner();
     if (this.#publishing) throw new Error('Glyph root publication cannot be reentered');
     this.#publishing = true;
@@ -613,7 +613,7 @@ class ConfiguredRootServices<
     });
   }
 
-  #bindFontSelection(selection: FontSelection<AnyRasterTechnique>): BackendFontStackBinding {
+  #bindFontSelection(selection: FontSelection<AnyRasterTechnique>): HandleFontStackBinding {
     const fonts = immutableFontSelectionFonts(selection);
     let stack: FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>;
     if ('fonts' in selection) {
@@ -626,7 +626,7 @@ class ConfiguredRootServices<
     return this.#handleState.bindFontStack(stack);
   }
 
-  #bindMaterial(input: Bindings['materialInput'], leases: Array<{ dispose(): void }>): BackendMaterialBinding {
+  #bindMaterial(input: Bindings['materialInput'], leases: Array<{ dispose(): void }>): HandleMaterialBinding {
     let shared = this.#materialBindings.get(input);
     if (shared === undefined || shared.canonical.disposed) {
       const canonical = this.#handleState.createMaterialBinding();
@@ -640,19 +640,19 @@ class ConfiguredRootServices<
     return lease.binding;
   }
 
-  #requiredMaterial(binding: BackendMaterialBinding): Bindings['materialInput'] {
+  #requiredMaterial(binding: HandleMaterialBinding): Bindings['materialInput'] {
     const input = this.#materials.get(binding);
     if (input === undefined) throw new Error('command references an unknown adapter material');
     return input;
   }
 
-  #requiredTransform(binding: BackendTransformBinding): Bindings['transformInput'] {
+  #requiredTransform(binding: HandleTransformBinding): Bindings['transformInput'] {
     const input = this.#transforms.get(binding);
     if (input === undefined) throw new Error('command references an unknown adapter transform');
     return input;
   }
 
-  #bindTransform(input: Bindings['transformInput'], leases: Array<{ dispose(): void }>): BackendTransformBinding {
+  #bindTransform(input: Bindings['transformInput'], leases: Array<{ dispose(): void }>): HandleTransformBinding {
     let shared = this.#transformBindings.get(input);
     if (shared === undefined || shared.canonical.disposed) {
       const canonical = this.#handleState.createTransformBinding();
@@ -668,7 +668,7 @@ class ConfiguredRootServices<
 
   #sharedMaterialLease(
     input: Bindings['materialInput'],
-    shared: { readonly canonical: BackendMaterialBinding; references: number },
+    shared: { readonly canonical: HandleMaterialBinding; references: number },
     lease: { dispose(): void },
   ): { dispose(): void } {
     let disposed = false;
@@ -687,7 +687,7 @@ class ConfiguredRootServices<
 
   #sharedTransformLease(
     input: Bindings['transformInput'],
-    shared: { readonly canonical: BackendTransformBinding; references: number },
+    shared: { readonly canonical: HandleTransformBinding; references: number },
     lease: { dispose(): void },
   ): { dispose(): void } {
     let disposed = false;

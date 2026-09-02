@@ -134,7 +134,7 @@ test('one initialized Glyph runtime creates independent named Three handles over
     label.shape();
     secondSceneLabel.shape();
     group.shape();
-    assert.equal(wrappedEncodeCalls, 1, 'a spread config participates in its handle backend construction');
+    assert.equal(wrappedEncodeCalls, 1, 'a spread config participates in its handle construction');
     assert.equal(wrappedRendererFactories, 1, 'one config renderer is created for the TextGroup boundary');
     assert.ok(wrappedResolveCalls > 0, 'the selected resolver binds acquired portable resources');
     assert.ok(wrappedPrepareCalls > 0, 'the selected renderer prepares the bound command buffer');

@@ -79,8 +79,8 @@ export type ExclusionId = GlyphId<'exclusion'>;
 export type InlineObjectId = GlyphId<'inline-object'>;
 /** Host-local resource identity carried by inline objects and renderer callbacks. */
 export type ResourceHandle = GlyphId<'resource'>;
-/** @internal Backend-scoped identity minting with explicit wire domains. */
-export interface BackendIdFactory {
+/** @internal Handle-scoped identity minting with explicit wire domains. */
+export interface HandleIdFactory {
   <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind>;
   buffer(name: string): PolicyBufferId;
   policy(name: string): PolicyHandle;
@@ -155,8 +155,8 @@ export class GlyphIdScope {
   }
 }
 
-/** @internal Bind the method-based ID vocabulary to one backend-owned provenance scope. */
-export function createBackendIdFactory(scope: GlyphIdScope, assertActive: () => void): BackendIdFactory {
+/** @internal Bind the method-based ID vocabulary to one handle-owned provenance scope. */
+export function createHandleIdFactory(scope: GlyphIdScope, assertActive: () => void): HandleIdFactory {
   const mint = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
     assertActive();
     return scope.id(kind, name);
@@ -187,10 +187,10 @@ export function assertGlyphId<const Kind extends GlyphIdKind>(
   label: string,
 ): GlyphId<Kind> {
   if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > MAX_U32) {
-    throw new TypeError(`${label} must come from ${glyphIdFactoryLabel(kind)} or a backend-managed ID`);
+    throw new TypeError(`${label} must come from ${glyphIdFactoryLabel(kind)} or a handle-managed ID`);
   }
   if (!namedIds.has(`${kind}:${value as number}`)) {
-    throw new TypeError(`${label} must come from ${glyphIdFactoryLabel(kind)} or a backend-managed ID`);
+    throw new TypeError(`${label} must come from ${glyphIdFactoryLabel(kind)} or a handle-managed ID`);
   }
   return value as GlyphId<Kind>;
 }
@@ -454,7 +454,7 @@ export class RenderIdScope implements RenderIdFactory {
 /** @internal Reject render-ID providers not created or supplied by this module instance. */
 export function assertRenderIdFactory(value: unknown, label: string): RenderIdFactory {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null || !renderIdFactories.has(value)) {
-    throw new TypeError(`${label} must be the id utility or a backend-supplied RenderIdFactory`);
+    throw new TypeError(`${label} must be the id utility or a handle-supplied RenderIdFactory`);
   }
   return value as RenderIdFactory;
 }
@@ -487,7 +487,7 @@ export interface IdFactory extends RenderIdFactory {
   exclusion(name: string): ExclusionId;
   /** Derive an authored inline-object identity. */
   inlineObject(name: string): InlineObjectId;
-  /** Derive a live backend resource handle; baked resource keys use `id.resource`. */
+  /** Derive a live handle resource identity; baked resource keys use `id.resource`. */
   resourceHandle(name: string): ResourceHandle;
 }
 

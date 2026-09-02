@@ -31,11 +31,11 @@ const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const raster = { technique: bitmap, options: { strikes: [16] } };
 const COLLIDING_RESOURCE_A = defineRasterResourceId('pmndrs.msdf/4wzx/16');
 const COLLIDING_RESOURCE_B = defineRasterResourceId('pmndrs.msdf/b6cd/16');
-const COLLISION_ORIGIN_BUFFER_ID = id.buffer('test.backend-font-binding/collision-origin');
+const COLLISION_ORIGIN_BUFFER_ID = id.buffer('test.handle-state-font-binding/collision-origin');
 
 function collisionTechnique(name) {
   return defineRasterTechnique({
-    id: `test.backend-font-binding.${name}`,
+    id: `test.handleState-font-binding.${name}`,
     kind: bitmap.kind,
     extension: bitmap.extension,
     version: bitmap.version,
@@ -169,17 +169,17 @@ test('glyph engine font binding inputs are rejected at their calls', async () =>
   font.dispose();
 });
 
-test('a glyph-engine-owned backend installs complete policies and deduplicates opaque font bindings', async () => {
+test('a glyph-engine-owned handle state installs a complete codec and deduplicates opaque font bindings', async () => {
   const font = await fixtureFont();
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);
-  const backend = createGlyphHandleState(glyphEngine, { integration: 'test.backend-font-binding' });
+  const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.handle-state-font-binding' });
 
-  assert.throws(() => backend.bindFont(font), /no installed policy/);
+  assert.throws(() => handleState.bindFont(font), /no installed policy/);
   assert.equal(shaper.memoryReport().fontCount, 0);
-  const policy = backend.installCodec(threeCodecDescriptor);
-  const first = backend.bindFont(font);
-  const second = backend.bindFont(font);
+  const policy = handleState.installCodec(threeCodecDescriptor);
+  const first = handleState.bindFont(font);
+  const second = handleState.bindFont(font);
   assert.equal(first.technique, bitmap);
   assert.equal(second.technique, bitmap);
   assert.equal(shaper.memoryReport().fontCount, 1);
@@ -190,11 +190,11 @@ test('a glyph-engine-owned backend installs complete policies and deduplicates o
   second.dispose();
   assert.equal(shaper.memoryReport().fontCount, 0);
   policy.dispose();
-  backend.dispose();
+  handleState.dispose();
   glyphEngine.dispose();
 });
 
-test('one backend rejects colliding resource identities when the second font binds', async () => {
+test('one handle state rejects colliding resource identities when the second font binds', async () => {
   const bytes = await readFile(fontUrl);
   const [firstFont, secondFont] = await Promise.all([
     loadFont({ baked: { bytes } }, { technique: firstCollisionTechnique, options: { strikes: [16] } }),
@@ -202,11 +202,11 @@ test('one backend rejects colliding resource identities when the second font bin
   ]);
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);
-  const backend = createGlyphHandleState(glyphEngine, { integration: 'test.backend-font-binding-collision' });
-  const policy = backend.installCodec((ids) => {
+  const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.handle-state-font-binding-collision' });
+  const policy = handleState.installCodec((ids) => {
     const capabilitySet = threeCodecCapabilitySet();
     const options = {
-      namespace: 'test.backend-font-binding-collision',
+      namespace: 'test.handle-state-font-binding-collision',
       system: threeSystemBuffers,
       capabilitySet,
       transformMode: 'indexed',
@@ -218,30 +218,30 @@ test('one backend rejects colliding resource identities when the second font bin
       createRasterPolicyProgram(secondCollisionPlan, options),
     ]);
   });
-  const first = backend.bindFont(firstFont);
+  const first = handleState.bindFont(firstFont);
 
-  assert.throws(() => backend.bindFont(secondFont), /render wire identity collision/);
+  assert.throws(() => handleState.bindFont(secondFont), /render wire identity collision/);
   assert.equal(shaper.memoryReport().fontCount, 1, 'a rejected binding must release its engine registration');
 
   first.dispose();
   policy.dispose();
-  backend.dispose();
+  handleState.dispose();
   glyphEngine.dispose();
   firstFont.dispose();
   secondFont.dispose();
 });
 
-test('a glyph-engine-owned backend binds immutable font stacks and retains their fonts', async () => {
+test('a glyph-engine-owned handle state binds immutable font stacks and retains their fonts', async () => {
   const font = await fixtureFont();
   const stack = createFontStack(font);
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);
-  const backend = createGlyphHandleState(glyphEngine, { integration: 'test.backend-font-stack-binding' });
-  const policy = backend.installCodec(threeCodecDescriptor);
+  const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.handle-state-font-stack-binding' });
+  const policy = handleState.installCodec(threeCodecDescriptor);
 
-  assert.throws(() => backend.bindFontStack({ fonts: [font] }), /font stack was not created by this package/);
-  const first = backend.bindFontStack(stack);
-  const second = backend.bindFontStack(stack);
+  assert.throws(() => handleState.bindFontStack({ fonts: [font] }), /font stack was not created by this package/);
+  const first = handleState.bindFontStack(stack);
+  const second = handleState.bindFontStack(stack);
   assert.equal(shaper.memoryReport().fontCount, 1);
 
   font.dispose();
@@ -250,6 +250,6 @@ test('a glyph-engine-owned backend binds immutable font stacks and retains their
   second.dispose();
   assert.equal(shaper.memoryReport().fontCount, 0);
   policy.dispose();
-  backend.dispose();
+  handleState.dispose();
   glyphEngine.dispose();
 });

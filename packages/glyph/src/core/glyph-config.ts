@@ -12,12 +12,7 @@ import type {
   PolicyProgram as CodecProgram,
   RenderIdFactory as CodecIdFactory,
 } from './render-policy.js';
-import type {
-  PlanAcceptance,
-  PlanCandidate,
-  RenderPlannerLimits,
-  RenderPlannerPublishOptions,
-} from './render-planner.js';
+import type { PlanAcceptance, PlanCandidate } from './render-planner.js';
 
 declare const typedCommandBufferBrand: unique symbol;
 declare const typedCommandIdentityBrand: unique symbol;
@@ -636,12 +631,18 @@ export interface GlyphTextController<Technique extends AnyRasterTechnique, Mater
   dispose(): void;
 }
 
+/** Optional semantic products and compositing contract for the next `shape()` publication. */
+export interface GlyphShapeOptions {
+  readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection' | 'all';
+  readonly compositing?: 'ordered' | 'independent';
+}
+
 /** Core-owned shaping/publication services scoped to exactly one anonymous or named root. */
 export interface GlyphRootServices<Bindings extends AnyGlyphBindings, RendererResult, Boundary = unknown> {
   createText<Technique extends AnyRasterTechnique>(
     state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']>;
-  shape(options?: RenderPlannerPublishOptions): RendererResult;
+  shape(options?: GlyphShapeOptions): RendererResult;
   syncTransforms(): void;
   copy(
     text: GlyphTextController<AnyRasterTechnique, Bindings['materialInput'], Bindings['transformInput']>,
@@ -666,9 +667,21 @@ export interface GlyphCopy<RendererResult> {
   dispose(): void;
 }
 
-/** Initial capacities for core's root-owned synchronous publication planner. */
+/** Fixed safety and capacity limits for one configured root's command publication. */
+export interface GlyphCommandLimits {
+  readonly maxParagraphs: number;
+  readonly maxClusters: number;
+  readonly maxLines: number;
+  readonly maxRegions: number;
+  readonly maxExclusions: number;
+  readonly maxInlineObjects: number;
+  readonly maxSlotsPerBand: number;
+  readonly maxOutputBytes: number;
+}
+
+/** Initial capacities for one configured root's command publication. */
 export interface GlyphCommandCapacity {
-  readonly limits: RenderPlannerLimits;
+  readonly limits: GlyphCommandLimits;
   readonly requestBytes: number;
   readonly resultBytes: number;
   readonly textUnits: number;

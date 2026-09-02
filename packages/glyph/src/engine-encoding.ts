@@ -8,7 +8,7 @@ import type {
   PlannerRegion,
   PlannerStyleValue,
 } from './core/frame-wire.js';
-import type { BackendIdFactory, ParagraphId, StyleId } from './core/render-policy.js';
+import type { HandleIdFactory, ParagraphId, StyleId } from './core/render-policy.js';
 
 /**
  * The single implementation of the paragraph-to-engine encodings shared by every host:
@@ -47,7 +47,7 @@ export function normalizedColumns(
 }
 
 export function compileEngineGeometry(
-  id: BackendIdFactory,
+  id: HandleIdFactory,
   paragraphId: ParagraphId,
   transformIndex: number,
   geometryRevision: number,
@@ -118,7 +118,7 @@ export function compileEngineGeometry(
   };
 }
 
-export function engineStyleId(id: BackendIdFactory, paragraphId: ParagraphId, index: number): StyleId {
+export function engineStyleId(id: HandleIdFactory, paragraphId: ParagraphId, index: number): StyleId {
   if (!Number.isSafeInteger(index) || index < 1) throw new RangeError('style index must be a positive integer');
   return id.style(`paragraph/${paragraphId}/style/${index}`);
 }

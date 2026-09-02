@@ -19,7 +19,7 @@ import {
 } from './text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from './engine-encoding.js';
 import { createGlyphEngine, createGlyphHandleState, type GlyphEngine } from './glyph-engine.js';
-import type { BackendFontStackBinding, CodecRegistration, GlyphHandleState } from './internal/handle-state.js';
+import type { HandleFontStackBinding, CodecRegistration, GlyphHandleState } from './internal/handle-state.js';
 import {
   createRasterPolicyProgram,
   resolveRasterPlanProgram,
@@ -349,7 +349,7 @@ class ParagraphEngine {
 
   update(desired: ResolvedParagraphState<AnyRasterTechnique>, constraints: Constraints): void {
     this.#assertActive();
-    const bindings: BackendFontStackBinding[] = [];
+    const bindings: HandleFontStackBinding[] = [];
     try {
       this.text.update(engineTextOptions(this.handleState, desired, constraints, bindings, this.#singleFontStacks));
     } finally {
@@ -383,7 +383,7 @@ function createEngineText(
   constraints: Constraints,
   singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
 ): RetainedText {
-  const bindings: BackendFontStackBinding[] = [];
+  const bindings: HandleFontStackBinding[] = [];
   try {
     return planner.createText(engineTextOptions(handleState, desired, constraints, bindings, singleFontStacks));
   } finally {
@@ -395,7 +395,7 @@ function engineTextOptions(
   handleState: GlyphHandleState,
   desired: ResolvedParagraphState<AnyRasterTechnique>,
   constraints: Constraints,
-  bindings: BackendFontStackBinding[],
+  bindings: HandleFontStackBinding[],
   singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
 ): RetainedTextOptions {
   const font = bindSelection(handleState, desired.font, bindings, singleFontStacks);
@@ -418,9 +418,9 @@ function engineTextOptions(
 function bindSelection(
   handleState: GlyphHandleState,
   selection: FontSelection<AnyRasterTechnique>,
-  bindings: BackendFontStackBinding[],
+  bindings: HandleFontStackBinding[],
   singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
-): BackendFontStackBinding {
+): HandleFontStackBinding {
   const fonts = immutableFontSelectionFonts(selection);
   let stack: FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>;
   if ('fonts' in selection) {
@@ -435,7 +435,7 @@ function bindSelection(
   return binding;
 }
 
-function disposeBindings(bindings: readonly BackendFontStackBinding[]): void {
+function disposeBindings(bindings: readonly HandleFontStackBinding[]): void {
   let failure: unknown;
   for (const binding of [...bindings].reverse()) {
     try {
