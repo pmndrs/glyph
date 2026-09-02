@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 
-import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
+import { threeCodecBytes } from '../../dist/three/render-policy.js';
 
 /**
  * Byte identity for the DSL-authored Three render policy. Register numbering is
@@ -21,7 +21,7 @@ const GOLDEN = new Map([
 test('the Three render policy compiles to its golden bytes for every variant', () => {
   for (const transform of ['direct', 'indexed']) {
     for (const allocation of ['ordered', 'stable']) {
-      const bytes = threeRenderPolicyBytes(undefined, transform, [], allocation);
+      const bytes = threeCodecBytes(undefined, transform, [], allocation);
       const digest = createHash('sha256').update(bytes).digest('hex');
       assert.equal(
         digest,

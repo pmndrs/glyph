@@ -12,7 +12,7 @@ import {
   type GlyphInstanceSpanBindingInput,
   type GlyphRootInstanceBindingInput,
   type GlyphSchema,
-  type PolicyProgram,
+  type CodecProgram,
 } from '../index.js';
 import type { AnyFontFaceSelection, FontFaceTechniqueOf } from '../font-face.js';
 import type { Font } from '../font.js';
@@ -23,7 +23,7 @@ import type { AnyRasterTechnique } from '../raster-technique.js';
 import { normalizeGlyphBufferCapacity } from '../text-properties.js';
 import type { PortableResource } from '../index.js';
 import { loadThreeTechnique } from './internal/builtin-shaders.js';
-import { threeRenderPolicyDescriptor } from './render-policy.js';
+import { threeCodecDescriptor } from './render-policy.js';
 import type { ThreeAllocationMode, ThreeTransformMode } from './render-policy.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { createThreeCodec, type ThreeCodec } from './renderer-resources.js';
@@ -31,7 +31,7 @@ import { ThreeRoot, normalizeThreeRootCompositing, threeTextConstructionToken, t
 
 export interface ThreeProgramBinding {
   readonly kind: 'three-program';
-  readonly program: PolicyProgram;
+  readonly program: CodecProgram;
 }
 
 export interface ThreeBufferBinding {
@@ -178,10 +178,10 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
         ids,
         transformMode,
         (programs) =>
-          threeRenderPolicyDescriptor(
+          threeCodecDescriptor(
             ids,
             transformMode,
-            programs.map((program) => program.policy),
+            programs.map((program) => program.codec),
             allocationMode,
           ),
         options.material,

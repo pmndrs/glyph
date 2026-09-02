@@ -1,4 +1,4 @@
-import type { Codec, RenderIdFactory } from '../index.js';
+import type { Codec, CodecIdFactory } from '../index.js';
 import type { ThreeTextMaterial } from './material.js';
 import {
   compiledThreeRasterPlanPrograms,
@@ -29,7 +29,7 @@ export interface ThreeCodec extends Codec {
 
 /** Creates the complete Three Codec, including every renderer program used by its command buffer. */
 export function createThreeCodec(
-  ids: RenderIdFactory,
+  ids: CodecIdFactory,
   transformMode: 'direct' | 'indexed',
   descriptor: (programs: readonly CompiledThreeRasterPlanProgram[]) => Codec['descriptor'],
   material: ThreeTextMaterial | undefined,

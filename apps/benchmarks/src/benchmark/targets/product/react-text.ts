@@ -11,7 +11,7 @@ import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-l
 import bitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
 import { hashParagraphLayout } from '../../paragraph-layout-digest';
-import { policyAttribute, policyAttributeName } from '../three-policy-buffer-evidence';
+import { codecAttribute, codecAttributeName } from '../three-policy-buffer-evidence';
 import { createConfiguredRenderer, disposeConfiguredRenderer } from '../../../renderer/webgpu-renderer';
 
 type BitmapTechnique = typeof bitmap;
@@ -27,7 +27,7 @@ const TEXT_PREFIX = 'office ';
 const TEXT_ACCENT = 'AVATAR';
 const TEXT_SUFFIX = ' café — ffi, kerning, marks, and wrapping.';
 const NARROW_WIDTH = 360;
-const BITMAP_COLOR_ATTRIBUTE = policyAttributeName(bitmapSchema.buffers.color.id);
+const BITMAP_COLOR_ATTRIBUTE = codecAttributeName(bitmapSchema.buffers.color.id);
 /**
  * Target v1 merges a Text update into the state it already holds, so omitting constraints would keep the previous
  * width instead of restoring natural measurement. The unconstrained axis has to be stated.
@@ -348,7 +348,7 @@ function countUniquePaints(object: BitmapTextObject): number {
   const paints = new Set<string>();
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
-    const colors = policyAttribute(child.geometry, BITMAP_COLOR_ATTRIBUTE);
+    const colors = codecAttribute(child.geometry, BITMAP_COLOR_ATTRIBUTE);
     if (colors === undefined) return;
     // One physical batch backs every run of a paragraph, so a draw reads its own window of the shared paint buffer.
     const start = (child.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;

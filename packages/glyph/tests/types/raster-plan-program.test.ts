@@ -1,7 +1,7 @@
 import {
   defineTechniqueSchema,
   registerRasterPlanProgram,
-  type CompiledPolicyProgramBody,
+  type CompiledCodecProgramBody,
   type RasterFontBinding,
 } from '../../dist/index.js';
 import type { RasterResourceId, RasterTechnique, RasterTechniqueId } from '../../dist/index.js';
@@ -58,8 +58,8 @@ void resourceCoordinates;
 // @ts-expect-error Resource selection always receives both glyph and strike coordinates.
 const incompleteResourceCoordinates: ResourceCoordinates = [0];
 void incompleteResourceCoordinates;
-declare const body: CompiledPolicyProgramBody<typeof schema>;
-declare const otherBody: CompiledPolicyProgramBody<typeof otherSchema>;
+declare const body: CompiledCodecProgramBody<typeof schema>;
+declare const otherBody: CompiledCodecProgramBody<typeof otherSchema>;
 
 registerRasterPlanProgram({
   technique: otherTechnique,

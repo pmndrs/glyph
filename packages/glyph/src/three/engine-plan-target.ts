@@ -16,7 +16,7 @@ import {
   commitTransforms,
   includeMutationRange,
   scalarArray,
-  threePolicyAttributeName,
+  threeCodecAttributeName,
   transformAttribute,
   type RetainedBuffer,
   type StagedBufferMutations,
@@ -429,7 +429,7 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
     for (const command of frame.updates.buffers) {
       if (buffers.has(command.buffer)) continue;
       const declaration = command.buffer.input.declaration;
-      const policyBufferId = declaration.kind === 'order' ? 'order' : declaration.value.id;
+      const codecBufferId = declaration.kind === 'order' ? 'order' : declaration.value.id;
       const array = scalarArray(command.scalarType, command.byteLength);
       const attribute = new THREE.StorageInstancedBufferAttribute(array, command.vectorWidth);
       attribute.setUsage(THREE.DynamicDrawUsage);
@@ -437,8 +437,8 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
       buffers.set(command.buffer, {
         binding: command.buffer,
         storageKey: `buffer:${this.#bindingId(command.buffer)}`,
-        policyBufferId,
-        threeAttributeName: threePolicyAttributeName(policyBufferId),
+        codecBufferId,
+        threeAttributeName: threeCodecAttributeName(codecBufferId),
         scalarType: command.scalarType,
         vectorWidth: command.vectorWidth,
         capacityRecords: command.capacityRecords,

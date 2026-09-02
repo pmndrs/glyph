@@ -1,12 +1,12 @@
 import {
-  definePolicyBuffers,
+  defineCodecBuffers,
   defineTechniqueGeometryKind,
   defineTechniqueSchema,
   f32,
-  schemaPolicyBuffers,
+  schemaCodecBuffers,
   techniqueProgram,
-  type PolicyBuffer,
-  type PolicyF32Value,
+  type CodecBuffer,
+  type CodecF32Value,
   id,
 } from '../../dist/index.js';
 import { schemaFieldTable, type FontBindingFieldTable } from '../../dist/core/font-binding.js';
@@ -111,13 +111,13 @@ defineTechniqueSchema({
   glyphOrigin: { buffer: 'page' },
 });
 
-const system = definePolicyBuffers({
+const system = defineCodecBuffers({
   stableGlyphId: { id: id.buffer('type-schema/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
 } as const);
 const p = techniqueProgram(schema, { system });
 const { fontSize } = p.semantics;
 const { bearingX, size, page } = p.binding;
-const scaled: PolicyF32Value = f32.mul(size, fontSize);
+const scaled: CodecF32Value = f32.mul(size, fontSize);
 void p.compile({ rect: [f32.mul(bearingX, fontSize), scaled, scaled, scaled], page: [page] });
 
 // @ts-expect-error Every declared buffer is required by the exact compile map.
@@ -129,16 +129,16 @@ p.compile({
   page: [page],
 });
 
-const foreignBuffers = definePolicyBuffers({
+const foreignBuffers = defineCodecBuffers({
   rect: { id: id.buffer('type-schema/foreign-rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
 } as const);
 void foreignBuffers;
-// @ts-expect-error Policy buffer declarations reject arbitrary numeric IDs.
-definePolicyBuffers({ raw: { id: 1, scalar: 'u32', lanes: ['value'] } });
+// @ts-expect-error Codec buffer declarations reject arbitrary numeric IDs.
+defineCodecBuffers({ raw: { id: 1, scalar: 'u32', lanes: ['value'] } });
 p.compile({
   rect: [scaled, scaled, scaled, scaled],
   page: [page],
-  // @ts-expect-error A policy cannot compile an undeclared buffer.
+  // @ts-expect-error A Codec cannot compile an undeclared buffer.
   foreign: [scaled],
 });
 
@@ -155,7 +155,7 @@ const bitmapColorId: number = bitmapSchema.buffers.color.id;
 void bitmapColorId;
 
 // Wire buffer lists and binding tables derive from the same declaration.
-const wire: PolicyBuffer[] = schemaPolicyBuffers(schema);
+const wire: CodecBuffer[] = schemaCodecBuffers(schema);
 void wire;
 const table: FontBindingFieldTable = schemaFieldTable(['bearingX', 'size'] as const, 4, {
   bearingX: (row) => row,

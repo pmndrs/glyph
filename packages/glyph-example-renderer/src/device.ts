@@ -5,7 +5,7 @@ import {
   resolveRasterPlanProgram,
   type BufferPatch,
   type CommandBufferView,
-  type PolicyBufferId,
+  type CodecBufferId,
   type PortableGeometryPayload,
   type RenderPlanScalarType,
   type TechniqueGeometryDeclaration,
@@ -25,7 +25,7 @@ import { EXAMPLE_RENDERER_PROGRAM_NAMESPACE } from './policy.js';
 
 /** One named instance-buffer input required by an example renderer shader. */
 export interface ExampleRendererShaderBuffer {
-  readonly id: PolicyBufferId;
+  readonly id: CodecBufferId;
   readonly scalar: 'f32' | 'u32';
   readonly vectorWidth: number;
 }

@@ -10,7 +10,7 @@ export type {
   ThreeTextMaterialContext,
   ThreeTextMaterialContextMap,
 } from './three/material.js';
-export { registerThreeRasterPlanProgram, threePolicyAbi } from './three/plan-program-registry.js';
+export { registerThreeRasterPlanProgram, threeCodecAbi } from './three/plan-program-registry.js';
 export type {
   ThreePlanProgramBuffer,
   ThreePlanProgramMaterialContext,

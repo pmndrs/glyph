@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { f32, policyProgram, id } from '../../dist/index.js';
+import { f32, codecProgram as policyProgram, id } from '../../dist/index.js';
 
 const OPTIONS = { scope: 'glyph', bindingF32: ['bearingX'] };
 const BUFFER = { id: id.buffer('test.policy-provenance/position'), scalar: 'f32', lanes: ['x', 'y'] };

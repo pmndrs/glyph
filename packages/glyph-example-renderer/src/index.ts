@@ -2,7 +2,7 @@
  * A custom renderer built only from the public root GlyphConfig vocabulary.
  *
  * It exists to keep the engine-integration surface honest: if a second renderer cannot
- * be written against `/core` without reaching into package internals, this package
+ * be written against the root GlyphConfig surface without reaching into package internals, this package
  * stops compiling. See `docs/planning/example-renderer.md`.
  */
 export type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResourceRecord } from './draw-list.js';

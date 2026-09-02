@@ -1,8 +1,4 @@
-import {
-  assertPortableResource,
-  type PortableGeometryPayload,
-  type TechniqueGeometryDeclaration,
-} from '@pmndrs/glyph';
+import { assertPortableResource, type PortableGeometryPayload, type TechniqueGeometryDeclaration } from '@pmndrs/glyph';
 
 /** The technique's small indexed GLB-like unit quad. */
 const bytes = new Uint8Array(92);

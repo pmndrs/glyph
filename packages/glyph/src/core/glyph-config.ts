@@ -6,7 +6,12 @@ import type { FontSelection } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { Constraints, ParagraphLayout, TextStyle } from '../text-properties.js';
 import { createConfiguredGlyphHandle } from '../internal/configured-handle.js';
-import type { PolicyBuffer, PolicyDescriptor, PolicyProgram, RenderIdFactory } from './render-policy.js';
+import type {
+  PolicyBuffer as CodecBuffer,
+  PolicyDescriptor as CodecDescriptor,
+  PolicyProgram as CodecProgram,
+  RenderIdFactory as CodecIdFactory,
+} from './render-policy.js';
 import type {
   PlanAcceptance,
   PlanCandidate,
@@ -208,7 +213,7 @@ export type AnyGlyphBindings = GlyphBindings<
   unknown
 >;
 
-export type GlyphBufferDeclaration = Readonly<{ kind: 'codec'; value: PolicyBuffer }> | Readonly<{ kind: 'order' }>;
+export type GlyphBufferDeclaration = Readonly<{ kind: 'codec'; value: CodecBuffer }> | Readonly<{ kind: 'order' }>;
 
 export interface GlyphBufferBindingInput<Bindings extends AnyGlyphBindings> {
   readonly program: Bindings['program'];
@@ -262,7 +267,7 @@ export interface GlyphRootInstanceBindingInput<
 /** Config-owned schema that binds trusted engine meanings to renderer payloads. */
 export interface GlyphSchema<Bindings extends AnyGlyphBindings, Boundary> {
   drawRoot(boundary: Boundary): Bindings['drawRoot'];
-  program(boundary: Boundary, program: PolicyProgram): Bindings['program'];
+  program(boundary: Boundary, program: CodecProgram): Bindings['program'];
   buffer(boundary: Boundary, input: GlyphBufferBindingInput<Bindings>): Bindings['buffer'];
   material(boundary: Boundary, material: Bindings['materialInput']): Bindings['material'];
   transform(boundary: Boundary, transform: Bindings['transformInput'], recordIndex: number): Bindings['transform'];
@@ -353,7 +358,7 @@ export function defineGlyphSchema<
 
 /** Codec selected by `GlyphConfig.encode`; policy-named values remain an internal ABI detail. */
 export interface Codec {
-  readonly descriptor: PolicyDescriptor;
+  readonly descriptor: CodecDescriptor;
   /** Selects one descriptor capability set; omission selects the descriptor's first set. */
   readonly capabilitySet?: number;
   /** Releases encode-owned registrations after every root and font lease has stopped. */
@@ -363,8 +368,8 @@ export interface Codec {
 export interface EncodeContext {
   /** Renderer integration identity used only for diagnostics. */
   readonly integration: string;
-  /** Collision-checked identities supplied by the handle's engine backend. */
-  readonly ids: RenderIdFactory;
+  /** Collision-checked identities supplied by the handle's engine state. */
+  readonly ids: CodecIdFactory;
 }
 
 export interface ResourceLease<Value extends object> {

@@ -95,15 +95,15 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
       }
       const draw = child.value.input;
       const transformId = child.kind === 'instance' ? (transformIds.get(child.transform!) ?? 0) : 0;
-      const byPolicyId = new Map<ThreeBufferBindingId, RetainedBuffer>();
+      const byCodecId = new Map<ThreeBufferBindingId, RetainedBuffer>();
       for (const binding of draw.buffers) {
         const buffer = retained(binding);
-        byPolicyId.set(buffer.policyBufferId, buffer);
+        byCodecId.set(buffer.codecBufferId, buffer);
       }
       const addressing: RecordAddressing = {
         order: draw.indirect === undefined ? undefined : retained(draw.indirect.buffer),
       };
-      const transform = transformRealization(byPolicyId, transformId);
+      const transform = transformRealization(byCodecId, transformId);
       const materialKey = materials.key(draw.material);
       const renderOrderBase = owner.renderOrderBase ?? draw.material?.renderOrder ?? 0;
       const clipId = draw.clip === undefined ? 0 : bindingId(draw.clip);
@@ -120,12 +120,12 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
         const resolvedResource = resource?.resolved;
         const drawGeometry = resolveDrawGeometry(resolvedResource);
         const material = decoration
-          ? materials.decoration(byPolicyId, draw.material, transform, addressing)
-          : materials.glyph(resource!, byPolicyId, draw.material, transform, addressing);
+          ? materials.decoration(byCodecId, draw.material, transform, addressing)
+          : materials.glyph(resource!, byCodecId, draw.material, transform, addressing);
         const originDeclaration =
           decoration || resolvedResource === undefined ? undefined : glyphOriginBuffer(resolvedResource);
-        const origins = originDeclaration === undefined ? undefined : byPolicyId.get(originDeclaration.id);
-        const stableIds = decoration ? undefined : byPolicyId.get(threeSystemBuffers.stableGlyphId.id);
+        const origins = originDeclaration === undefined ? undefined : byCodecId.get(originDeclaration.id);
+        const stableIds = decoration ? undefined : byCodecId.get(threeSystemBuffers.stableGlyphId.id);
         if (originDeclaration !== undefined && origins !== undefined && stableIds !== undefined) {
           nextOriginSegments.push({
             origins,
@@ -142,7 +142,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           `program:${bindingId(draw.program)}`,
           resource === undefined ? 'decoration' : `resource:${bindingId(resource.binding)}`,
           materialKey,
-          byPolicyId,
+          byCodecId,
           clipId,
           draw.depthKey,
           transform,
@@ -169,7 +169,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
         }
 
         const geometry = realizeGeometry(drawGeometry, span.recordCount);
-        for (const buffer of byPolicyId.values()) geometry.setAttribute(buffer.threeAttributeName, buffer.attribute);
+        for (const buffer of byCodecId.values()) geometry.setAttribute(buffer.threeAttributeName, buffer.attribute);
         const glyphStorage = stableIds === undefined ? undefined : owner.glyphStorage?.(glyphStorageKey(stableIds));
         if (glyphStorage !== undefined) {
           geometry.setAttribute('_pmndrsGlyphInstanceTransforms', glyphStorage.transforms);
@@ -226,7 +226,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
 function prepareOwnerGlyphStorage(buffers: ReadonlyMap<ThreeBufferBinding, RetainedBuffer>, owner: DrawOwner): void {
   if (owner.prepareGlyphStorage === undefined) return;
   for (const buffer of buffers.values()) {
-    if (buffer.policyBufferId === threeSystemBuffers.stableGlyphId.id) {
+    if (buffer.codecBufferId === threeSystemBuffers.stableGlyphId.id) {
       owner.prepareGlyphStorage(glyphStorageKey(buffer), buffer.capacityRecords);
     }
   }

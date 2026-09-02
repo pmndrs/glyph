@@ -1,26 +1,26 @@
 import type { BufferAttribute, BufferGeometry, InterleavedBufferAttribute } from 'three/webgpu';
-import type { PolicyBufferId } from '@pmndrs/glyph';
+import type { CodecBufferId } from '@pmndrs/glyph';
 
-/** Convert one policy-buffer identity to Three's geometry attribute key. */
-export function policyAttributeName(id: PolicyBufferId): string {
+/** Convert one Codec-buffer identity to Three's geometry attribute key. */
+export function codecAttributeName(id: CodecBufferId): string {
   return `_pmndrsGlyph_${id}`;
 }
 
-/** Read one realized policy buffer by its exact identity. */
-export function policyAttribute(
+/** Read one realized Codec buffer by its exact identity. */
+export function codecAttribute(
   geometry: BufferGeometry,
   name: string,
 ): BufferAttribute | InterleavedBufferAttribute | undefined {
   return geometry.getAttribute(name);
 }
 
-/** Require one realized policy buffer by its exact identity. */
-export function requiredPolicyAttribute(
+/** Require one realized Codec buffer by its exact identity. */
+export function requiredCodecAttribute(
   geometry: BufferGeometry,
   name: string,
   label: string,
 ): BufferAttribute | InterleavedBufferAttribute {
-  const attribute = policyAttribute(geometry, name);
-  if (attribute === undefined) throw new Error(`${label} is missing policy attribute "${name}"`);
+  const attribute = codecAttribute(geometry, name);
+  if (attribute === undefined) throw new Error(`${label} is missing Codec attribute "${name}"`);
   return attribute;
 }

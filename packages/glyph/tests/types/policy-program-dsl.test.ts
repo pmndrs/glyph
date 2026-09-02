@@ -1,8 +1,8 @@
-import { f32, policyProgram, u32, type PolicyF32Value, type PolicyU32Value, id } from '../../dist/index.js';
+import { f32, codecProgram, u32, type CodecF32Value, type CodecU32Value, id } from '../../dist/index.js';
 
 // A program declares its named inputs once; every later reference is a handle,
 // never a number.
-const p = policyProgram({
+const p = codecProgram({
   scope: 'strike',
   bindingF32: ['bearingX', 'bearingY', 'width', 'height'] as const,
   bindingU32: ['page'] as const,
@@ -11,8 +11,8 @@ const p = policyProgram({
 const { inlineOrigin, blockOrigin, fontSize, color, transformIndex, stableGlyphId } = p.semantics;
 const { bearingX, bearingY, width, height, page } = p.binding;
 
-const left: PolicyF32Value = f32.add(inlineOrigin, f32.mul(bearingX, fontSize));
-const top: PolicyF32Value = f32.sub(blockOrigin, f32.mul(bearingY, fontSize));
+const left: CodecF32Value = f32.add(inlineOrigin, f32.mul(bearingX, fontSize));
+const top: CodecF32Value = f32.sub(blockOrigin, f32.mul(bearingY, fontSize));
 p.storeF32(id.buffer('type-test/rect'), [left, top, f32.mul(width, fontSize), f32.mul(height, fontSize)]);
 p.storeF32(id.buffer('type-test/color'), [color.red, color.green, color.blue, color.alpha]);
 p.storeF32(id.buffer('type-test/page-f32'), [u32.toF32(page), f32.const(0), f32.const(0), f32.const(0)]);
@@ -27,7 +27,7 @@ const u32Count: number = compiled.u32InputCount;
 void f32Count;
 void u32Count;
 
-declare const u32Value: PolicyU32Value;
+declare const u32Value: CodecU32Value;
 // @ts-expect-error A u32 value cannot feed f32 arithmetic without an explicit conversion.
 f32.add(inlineOrigin, u32Value);
 // @ts-expect-error An f32 value cannot be stored into a u32 buffer lane.

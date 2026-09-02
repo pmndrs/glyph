@@ -3,8 +3,8 @@ import test from 'node:test';
 
 import { defineRasterTechnique } from '@pmndrs/glyph';
 import {
-  createRasterPolicyProgram,
-  definePolicyBuffers,
+  createRasterCodecProgram as createRasterPolicyProgram,
+  defineCodecBuffers as definePolicyBuffers,
   defineTechniqueSchema,
   registerRasterPlanProgram,
   techniqueProgram,

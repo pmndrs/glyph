@@ -2,7 +2,7 @@ import {
   defineTechniqueSchema,
   f32,
   techniqueProgram,
-  type PolicyBufferId,
+  type CodecBufferId,
   type RasterPlanProgram,
   type TechniqueSchema,
   id,
@@ -11,20 +11,20 @@ import {
 import { glyphExampleIndexedQuadGeometry, glyphExampleSuppliedGeometryDeclaration } from './geometry-fixture.js';
 import { glyphExample } from './raster.js';
 
-const GLYPH_EXAMPLE_ORIGIN_BUFFER_ID: PolicyBufferId = id.buffer('glyph-example-raster/origin');
-const GLYPH_EXAMPLE_SIZE_BUFFER_ID: PolicyBufferId = id.buffer('glyph-example-raster/size');
-const GLYPH_EXAMPLE_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('glyph-example-raster/color');
+const GLYPH_EXAMPLE_ORIGIN_BUFFER_ID: CodecBufferId = id.buffer('glyph-example-raster/origin');
+const GLYPH_EXAMPLE_SIZE_BUFFER_ID: CodecBufferId = id.buffer('glyph-example-raster/size');
+const GLYPH_EXAMPLE_COLOR_BUFFER_ID: CodecBufferId = id.buffer('glyph-example-raster/color');
 
 export const glyphExampleSchema: TechniqueSchema<
   {
-    readonly origin: { readonly id: PolicyBufferId; readonly scalar: 'f32'; readonly lanes: readonly ['left', 'top'] };
+    readonly origin: { readonly id: CodecBufferId; readonly scalar: 'f32'; readonly lanes: readonly ['left', 'top'] };
     readonly size: {
-      readonly id: PolicyBufferId;
+      readonly id: CodecBufferId;
       readonly scalar: 'f32';
       readonly lanes: readonly ['widthX', 'heightY'];
     };
     readonly color: {
-      readonly id: PolicyBufferId;
+      readonly id: CodecBufferId;
       readonly scalar: 'f32';
       readonly lanes: readonly ['red', 'green', 'blue', 'alpha'];
     };

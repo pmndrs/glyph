@@ -1,20 +1,20 @@
 import {
-  compileRenderPolicy,
-  createProgram,
-  createRasterPolicyProgram,
-  definePolicyBuffers,
+  compileCodec,
+  createCodecProgram,
+  createRasterCodecProgram,
+  defineCodecBuffers,
   defineTechniqueSchema,
-  schemaPolicyBuffers,
+  schemaCodecBuffers,
   techniqueProgram,
-  type PolicyAllocationMode,
-  type PolicyBuffer,
-  type PolicyBufferId,
-  type PolicyCapabilitySet,
-  type PolicyDescriptor,
-  type PolicyProgram,
-  type PolicyTransformMode,
+  type CodecAllocationMode,
+  type CodecBuffer,
+  type CodecBufferId,
+  type CodecCapabilitySet,
+  type CodecDescriptor,
+  type CodecProgram,
+  type CodecTransformMode,
   type RenderProgramId,
-  type RenderIdFactory,
+  type CodecIdFactory,
   type RenderTechniqueId,
   type AnyTechniqueSchema,
   type TechniqueSchema,
@@ -24,12 +24,12 @@ import { bitmapPlanProgram } from '../raster/bitmap-technique.js';
 import { msdfPlanProgram } from '../raster/msdf.js';
 import { slugPlanProgram } from '../raster/slug-technique.js';
 
-const THREE_STABLE_GLYPH_BUFFER_ID: PolicyBufferId = id.buffer('glyph-three/stable-glyph');
-const THREE_TRANSFORM_INDEX_BUFFER_ID: PolicyBufferId = id.buffer('glyph-three/transform-index');
-const DECORATION_RECT_BUFFER_ID: PolicyBufferId = id.buffer('glyph-three/decoration/rect');
-const DECORATION_PACKED_BUFFER_ID: PolicyBufferId = id.buffer('glyph-three/decoration/packed');
+const THREE_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/stable-glyph');
+const THREE_TRANSFORM_INDEX_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/transform-index');
+const DECORATION_RECT_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/decoration/rect');
+const DECORATION_PACKED_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/decoration/packed');
 
-/** Buffers the Three policy itself owns, shared by every program in it. */
+/** Buffers the Three Codec itself owns, shared by every program in it. */
 export const threeSystemBuffers: {
   readonly stableGlyphId: {
     readonly id: typeof THREE_STABLE_GLYPH_BUFFER_ID;
@@ -41,17 +41,17 @@ export const threeSystemBuffers: {
     readonly scalar: 'u32';
     readonly lanes: readonly ['transformIndex'];
   };
-} = definePolicyBuffers({
+} = defineCodecBuffers({
   stableGlyphId: { id: THREE_STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
   transformIndex: { id: THREE_TRANSFORM_INDEX_BUFFER_ID, scalar: 'u32', lanes: ['transformIndex'] },
 });
 
-export const TRANSFORM_BUFFER_ID: PolicyBufferId = threeSystemBuffers.transformIndex.id;
+export const TRANSFORM_BUFFER_ID: CodecBufferId = threeSystemBuffers.transformIndex.id;
 
-export const STABLE_GLYPH_BUFFER_ID: PolicyBufferId = threeSystemBuffers.stableGlyphId.id;
+export const STABLE_GLYPH_BUFFER_ID: CodecBufferId = threeSystemBuffers.stableGlyphId.id;
 
 /**
- * Decoration is a reserved technique of the Three policy rather than a raster
+ * Decoration is a reserved technique of the Three Codec rather than a raster
  * technique: rows are resource-free and fill the gather lanes directly.
  */
 export const decorationSchema: TechniqueSchema<
@@ -78,9 +78,9 @@ export const decorationSchema: TechniqueSchema<
   },
 });
 
-export type ThreeTransformMode = PolicyTransformMode;
+export type ThreeTransformMode = CodecTransformMode;
 
-export type ThreeAllocationMode = PolicyAllocationMode;
+export type ThreeAllocationMode = CodecAllocationMode;
 
 export interface ThreeTechniqueTransformModes {
   readonly bitmap: ThreeTransformMode;
@@ -90,24 +90,24 @@ export interface ThreeTechniqueTransformModes {
 
 const THREE_PROGRAM_NAMESPACE = 'three';
 
-/** Compiler-mapped Three policy covering every first-party raster technique in one registration. */
-export function threeRenderPolicyBytes(
-  ids: RenderIdFactory = id,
+/** Compiler-mapped Three Codec covering every first-party raster technique in one registration. */
+export function threeCodecBytes(
+  ids: CodecIdFactory = id,
   transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
-  additionalPrograms: readonly PolicyProgram[] = [],
+  additionalPrograms: readonly CodecProgram[] = [],
   allocationMode: ThreeAllocationMode = 'ordered',
 ): Uint8Array {
-  return compileRenderPolicy(threeRenderPolicyDescriptor(ids, transformMode, additionalPrograms, allocationMode));
+  return compileCodec(threeCodecDescriptor(ids, transformMode, additionalPrograms, allocationMode));
 }
 
-/** @internal Assemble the descriptor retained by the Three adapter alongside its compiled wire policy. */
-export function threeRenderPolicyDescriptor(
-  ids: RenderIdFactory = id,
+/** @internal Assemble the descriptor retained by the Three adapter alongside its compiled wire Codec. */
+export function threeCodecDescriptor(
+  ids: CodecIdFactory = id,
   transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
-  additionalPrograms: readonly PolicyProgram[] = [],
+  additionalPrograms: readonly CodecProgram[] = [],
   allocationMode: ThreeAllocationMode = 'ordered',
-): PolicyDescriptor {
-  if (!Array.isArray(additionalPrograms)) throw new TypeError('Three additional policy programs need an array');
+): CodecDescriptor {
+  if (!Array.isArray(additionalPrograms)) throw new TypeError('Three additional Codec programs need an array');
   if (allocationMode !== 'ordered' && allocationMode !== 'stable') {
     throw new TypeError('Three allocation mode must be "ordered" or "stable"');
   }
@@ -120,28 +120,28 @@ export function threeRenderPolicyDescriptor(
       throw new TypeError(`Three ${name} transform mode must be "direct" or "indexed"`);
     }
   }
-  const capabilitySet = threePolicyCapabilitySet();
+  const capabilitySet = threeCodecCapabilitySet();
   // The portable assembler validates the backend-supplied factory before Three invokes it directly.
-  const rasterPrograms: PolicyProgram[] = [
-    createRasterPolicyProgram(bitmapPlanProgram, {
+  const rasterPrograms: CodecProgram[] = [
+    createRasterCodecProgram(bitmapPlanProgram, {
       namespace: THREE_PROGRAM_NAMESPACE,
-      system: policySystemBuffers(modes.bitmap),
+      system: codecSystemBuffers(modes.bitmap),
       capabilitySet,
       transformMode: modes.bitmap,
       allocationMode,
       ids,
     }),
-    createRasterPolicyProgram(msdfPlanProgram, {
+    createRasterCodecProgram(msdfPlanProgram, {
       namespace: THREE_PROGRAM_NAMESPACE,
-      system: policySystemBuffers(modes.msdf),
+      system: codecSystemBuffers(modes.msdf),
       capabilitySet,
       transformMode: modes.msdf,
       allocationMode,
       ids,
     }),
-    createRasterPolicyProgram(slugPlanProgram, {
+    createRasterCodecProgram(slugPlanProgram, {
       namespace: THREE_PROGRAM_NAMESPACE,
-      system: policySystemBuffers(modes.slug),
+      system: codecSystemBuffers(modes.slug),
       capabilitySet,
       transformMode: modes.slug,
       allocationMode,
@@ -150,7 +150,7 @@ export function threeRenderPolicyDescriptor(
   ];
   const DECORATION_TECHNIQUE_ID = ids.technique(decorationSchema.technique);
   const DECORATION_PROGRAM_ID = ids.program(decorationSchema.technique, THREE_PROGRAM_NAMESPACE);
-  const programs: PolicyProgram[] = [
+  const programs: CodecProgram[] = [
     ...rasterPrograms,
     decorationProgram(DECORATION_TECHNIQUE_ID, DECORATION_PROGRAM_ID, modes.bitmap, allocationMode),
     ...additionalPrograms,
@@ -158,7 +158,7 @@ export function threeRenderPolicyDescriptor(
   return { capabilitySets: [capabilitySet], programs };
 }
 
-export function threePolicyCapabilitySet(): PolicyCapabilitySet {
+export function threeCodecCapabilitySet(): CodecCapabilitySet {
   return {
     capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct', 'stable-indirect'],
     maxBufferBytes: 64 * 1024 * 1024,
@@ -185,11 +185,11 @@ function decorationProgram(
   programId: RenderProgramId,
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
-): PolicyProgram {
-  const p = techniqueProgram(decorationSchema, { system: policySystemBuffers(transformMode) });
+): CodecProgram {
+  const p = techniqueProgram(decorationSchema, { system: codecSystemBuffers(transformMode) });
   const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
   return {
-    ...createProgram(
+    ...createCodecProgram(
       techniqueId,
       programId,
       p.compile({
@@ -205,20 +205,20 @@ function decorationProgram(
   };
 }
 
-function policySystemBuffers(transformMode: ThreeTransformMode) {
+function codecSystemBuffers(transformMode: ThreeTransformMode) {
   return transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
 }
 
-/** Every Three program publishes its schema's buffers, then the policy's own system buffers. */
-function programBuffers(schema: AnyTechniqueSchema, transformMode: ThreeTransformMode): PolicyBuffer[] {
+/** Every Three program publishes its schema's buffers, then the Codec's own system buffers. */
+function programBuffers(schema: AnyTechniqueSchema, transformMode: ThreeTransformMode): CodecBuffer[] {
   return [
-    ...schemaPolicyBuffers(schema),
+    ...schemaCodecBuffers(schema),
     stableGlyphIdBuffer(),
     ...(transformMode === 'indexed' ? [transformIndexBuffer()] : []),
   ];
 }
 
-function transformIndexBuffer(): PolicyBuffer {
+function transformIndexBuffer(): CodecBuffer {
   return {
     id: TRANSFORM_BUFFER_ID,
     scalar: 'u32',
@@ -226,7 +226,7 @@ function transformIndexBuffer(): PolicyBuffer {
   };
 }
 
-function stableGlyphIdBuffer(): PolicyBuffer {
+function stableGlyphIdBuffer(): CodecBuffer {
   return {
     id: STABLE_GLYPH_BUFFER_ID,
     scalar: 'u32',

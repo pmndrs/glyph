@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { id } from '../../dist/core/render-policy.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
-import { threeRenderPolicyBytes, threeRenderPolicyDescriptor } from '../../dist/three/render-policy.js';
+import { threeCodecBytes, threeCodecDescriptor } from '../../dist/three/render-policy.js';
 
 const fixtureUrl = new URL('../fixtures/render-policy/hand-numbered-policy-bytes.json', import.meta.url);
 const THREE_PROGRAM_IDS = new Map([
@@ -15,7 +15,7 @@ const THREE_PROGRAM_IDS = new Map([
 ]);
 
 test('Three rejects counterfeit render ID factories at policy assembly', () => {
-  assert.throws(() => threeRenderPolicyDescriptor({}), /raster policy ids must be/);
+  assert.throws(() => threeCodecDescriptor({}), /raster policy ids must be/);
 });
 
 /**
@@ -33,7 +33,7 @@ test('the Three render policy is semantically identical to the hand-numbered fix
     for (const allocation of ['ordered', 'stable']) {
       const key = `${transform}/${allocation}`;
       const fixture = decodePolicy(Buffer.from(fixtures[key], 'base64'));
-      const current = decodePolicy(threeRenderPolicyBytes(undefined, transform, [], allocation));
+      const current = decodePolicy(threeCodecBytes(undefined, transform, [], allocation));
       assert.equal(current.programs.length, fixture.programs.length, `${key}: program count`);
       assert.deepEqual(current.capabilitySets, fixture.capabilitySets, `${key}: capability sets`);
       for (const [index, historical] of fixture.programs.entries()) {

@@ -1,6 +1,6 @@
 import {
   registerThreeRasterPlanProgram,
-  threePolicyAbi,
+  threeCodecAbi,
   type ThreePlanProgramBuffer,
   type ThreePlanProgramMaterialContext,
   type ThreeRootContext,
@@ -93,7 +93,7 @@ function floatBuffer(
   const buffer = buffers.get(name);
   if (
     buffer === undefined ||
-    buffer.scalarType !== threePolicyAbi.scalarTypes.f32 ||
+    buffer.scalarType !== threeCodecAbi.scalarTypes.f32 ||
     buffer.vectorWidth !== vectorWidth
   ) {
     throw new TypeError(`glyph-example draw requires f32x${vectorWidth} policy buffer "${name}"`);

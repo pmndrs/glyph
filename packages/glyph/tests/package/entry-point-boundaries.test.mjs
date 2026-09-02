@@ -43,8 +43,17 @@ test('GlyphConfig is the only public engine-integration surface', async () => {
   const root = published(await declaration('index.d.ts'));
   const manifest = JSON.parse(await declaration('../package.json'));
   assert.equal(manifest.exports['./core'], undefined, 'backend/planner internals must not have a public subpath');
-  for (const name of ['defineGlyphConfig', 'defineGlyphSchema', 'createRasterPolicyProgram', 'techniqueProgram']) {
+  for (const name of [
+    'defineGlyphConfig',
+    'defineGlyphSchema',
+    'compileCodec',
+    'createRasterCodecProgram',
+    'techniqueProgram',
+  ]) {
     assert.equal(root.has(name), true, `the root integration DSL must publish ${name}`);
+  }
+  for (const retired of ['compileRenderPolicy', 'createRasterPolicyProgram', 'definePolicyBuffers', 'policyProgram']) {
+    assert.equal(root.has(retired), false, `the root integration DSL must not publish retired ${retired}`);
   }
 });
 
