@@ -252,6 +252,7 @@ export class FontRegistry {
   ): Promise<RegisteredFont> {
     this.#checkArtifactSize(bytes.byteLength);
     const owned = ownFontBytes(bytes, ownership);
+    const artifactHash = (await sha256(owned)) as Sha256Hex;
     const validator = await loadValidator();
     let validated: ValidatedFontArtifact;
     try {
@@ -319,6 +320,7 @@ export class FontRegistry {
     const rasterSources = new Map<string, RegisteredRasterSourceData>();
     setRegisteredFontData(font, {
       artifactBytes: owned,
+      artifactHash,
       fontFaceIndex,
       sourceHash,
       ...(context.sourceBytes === undefined ? {} : { sourceBytes: context.sourceBytes }),
@@ -927,6 +929,7 @@ class FontLibraryImpl implements FontLibrary {
   readonly #entries = new Map<string, FontLibraryEntry>();
   readonly #pending = new Map<string, SharedImmutableLoad>();
   readonly #fontFaceSources = new Map<string, SharedFontFaceSourceLoad>();
+  readonly #fontFaceContent = new Map<string, FontFaceSourceNode>();
   readonly #resources = new Map<object, FontLibraryOwnedResource<unknown>>();
   #disposed = false;
 
@@ -1014,9 +1017,8 @@ class FontLibraryImpl implements FontLibrary {
     const prepared = prepareFontFaceSourceRequest(input, initialRasters, this.#config);
     let shared = this.#fontFaceSources.get(prepared.key);
     if (shared === undefined || shared.controller.signal.aborted) {
-      const created = createSharedFontFaceSourceLoad(ownPreparedFontFaceSourceBytes(prepared), this.#config, () => {
-        if (this.#fontFaceSources.get(prepared.key) === created) this.#fontFaceSources.delete(prepared.key);
-      });
+      const owned = ownPreparedFontFaceSourceBytes(prepared);
+      const created = createSharedFontFaceSourceLoad((sourceSignal) => this.#loadFontFaceSource(owned, sourceSignal));
       shared = created;
       this.#fontFaceSources.set(prepared.key, created);
       void created.promise.catch(() => {
@@ -1065,6 +1067,7 @@ class FontLibraryImpl implements FontLibrary {
       shared.value?.dispose();
     }
     this.#fontFaceSources.clear();
+    this.#fontFaceContent.clear();
     for (const entry of this.#entries.values()) releaseImmutableVariants(entry.variants);
     this.#entries.clear();
   }
@@ -1080,6 +1083,27 @@ class FontLibraryImpl implements FontLibrary {
 
   #assertActive(): void {
     if (this.#disposed) throw new FontLoadError('FONT_LIBRARY_DISPOSED', 'font library has been disposed');
+  }
+
+  async #loadFontFaceSource(prepared: PreparedFontFaceSourceRequest, signal: AbortSignal): Promise<FontFaceSourceNode> {
+    const candidate = await loadFontFaceSourceFont(prepared, this.#config, signal);
+    signal.throwIfAborted();
+    const contentHash = getRegisteredFontData(candidate).artifactHash;
+    const existing = this.#fontFaceContent.get(contentHash);
+    if (existing !== undefined) {
+      existing.mergeAcquisition(candidate);
+      candidate.dispose();
+      return existing;
+    }
+    let node!: FontFaceSourceNode;
+    node = new FontFaceSourceNode(candidate, () => {
+      if (this.#fontFaceContent.get(contentHash) === node) this.#fontFaceContent.delete(contentHash);
+      for (const [key, shared] of this.#fontFaceSources) {
+        if (shared.value === node) this.#fontFaceSources.delete(key);
+      }
+    });
+    this.#fontFaceContent.set(contentHash, node);
+    return node;
   }
 
   resource<Value>(key: object, create: () => FontLibraryOwnedResource<Value>): Value {
@@ -1141,19 +1165,17 @@ function createSharedImmutableLoad(
 }
 
 function createSharedFontFaceSourceLoad(
-  prepared: PreparedFontFaceSourceRequest,
-  config: ImmutableLoaderConfig,
-  remove: () => void,
+  load: (signal: AbortSignal) => Promise<FontFaceSourceNode>,
 ): SharedFontFaceSourceLoad {
   const controller = new AbortController();
   let created!: SharedFontFaceSourceLoad;
   const promise = Promise.resolve()
-    .then(() => loadFontFaceSourceNode(prepared, config, controller.signal, remove))
+    .then(() => load(controller.signal))
     .then(
       (node) => {
         created.settled = true;
         created.value = node;
-        if (created.consumers === 0) node.dispose();
+        if (created.consumers === 0 && node.leaseCount === 0) node.dispose();
         return node;
       },
       (error: unknown) => {
@@ -1358,6 +1380,11 @@ class FontFaceSourceNode {
     return this.#leases;
   }
 
+  mergeAcquisition(candidate: RegisteredFont): void {
+    this.#assertActive();
+    mergeRegisteredFontAcquisition(this.#font, candidate);
+  }
+
   acquire(): FontFaceSourceLease {
     this.#assertActive();
     this.#leases += 1;
@@ -1511,12 +1538,11 @@ class FontFaceSourceLeaseImpl implements FontFaceSourceLease {
   }
 }
 
-async function loadFontFaceSourceNode(
+async function loadFontFaceSourceFont(
   prepared: PreparedFontFaceSourceRequest,
   config: ImmutableLoaderConfig,
   signal: AbortSignal,
-  remove: () => void,
-): Promise<FontFaceSourceNode> {
+): Promise<RegisteredFont> {
   const registry = new FontRegistry({
     ...(config.maxArtifactBytes === undefined ? {} : { maxArtifactBytes: config.maxArtifactBytes }),
     ...(config.maxBufferViews === undefined ? {} : { maxBufferViews: config.maxBufferViews }),
@@ -1548,7 +1574,7 @@ async function loadFontFaceSourceNode(
   });
   const font = await loader.load(prepared.input, { signal });
   signal.throwIfAborted();
-  return new FontFaceSourceNode(font, remove);
+  return font;
 }
 
 async function loadAdvertisedVariant(
@@ -2207,6 +2233,45 @@ class RegisteredRasterImpl implements RegisteredRaster {
   #assertActive(): void {
     this.#owner.assertActive();
     if (this.#disposed) throw new FontLoadError('STALE_RASTER_HANDLE', 'raster has been disposed');
+  }
+}
+
+function mergeRegisteredFontAcquisition(target: RegisteredFont, candidate: RegisteredFont): void {
+  const targetData = getRegisteredFontData(target);
+  const candidateData = getRegisteredFontData(candidate);
+  if (targetData.sourceBytes === undefined && candidateData.sourceBytes !== undefined) {
+    targetData.sourceBytes = candidateData.sourceBytes;
+  }
+  for (const source of candidateData.sourceCandidates) {
+    if (
+      !targetData.sourceCandidates.some(
+        (current) =>
+          current.sourceHash === source.sourceHash &&
+          current.sourceUrl === source.sourceUrl &&
+          current.fetch === source.fetch,
+      )
+    ) {
+      targetData.sourceCandidates.push(source);
+    }
+  }
+  for (const [rasterKey, source] of candidateData.rasterSources) {
+    const targetSource = targetData.rasterSources.get(rasterKey)!;
+    for (const external of source.externalCandidates) {
+      if (
+        !targetSource.externalCandidates.some(
+          (current) =>
+            sameExternalSource(current.source, external.source) &&
+            current.artifactUrl === external.artifactUrl &&
+            current.fetch === external.fetch,
+        )
+      ) {
+        targetSource.externalCandidates.push(external);
+      }
+    }
+    const resources = mergeResourceCandidates(targetSource.resourceCandidates, source.resourceCandidates);
+    targetSource.resourceCandidates.splice(0, targetSource.resourceCandidates.length, ...resources);
+    const raster = target.getRaster(rasterKey);
+    if (raster instanceof RegisteredRasterImpl) raster.addResourceCandidates(source.resourceCandidates);
   }
 }
 

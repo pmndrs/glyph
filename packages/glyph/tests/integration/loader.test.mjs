@@ -482,6 +482,44 @@ test('FontFace source leases share one canonical main and lazily loaded sidecar 
   library.dispose();
 });
 
+test('FontFace source leases converge identical main content across locators and retain every dependency base', async () => {
+  const calls = [];
+  const firstCoreUrl = 'https://first.test/fonts/Inter-Regular.font.glb';
+  const secondCoreUrl = 'https://second.test/fonts/Inter-Regular.font.glb';
+  const firstRasterUrl = `https://first.test/fonts/${externalRasterId}`;
+  const secondRasterUrl = `https://second.test/fonts/${externalRasterId}`;
+  const library = createFontLibrary({
+    fetch: fixtureFetch(
+      new Map([
+        [firstCoreUrl, externalCoreBytes],
+        [secondCoreUrl, externalCoreBytes],
+        [secondRasterUrl, externalRasterBytes],
+      ]),
+      calls,
+    ),
+  });
+
+  const [first, second] = await Promise.all([
+    openFontFaceSource(library, firstCoreUrl, []),
+    openFontFaceSource(library, secondCoreUrl, []),
+  ]);
+  const request = bitmap({ strikes: [16] });
+  const firstFont = await first.load(request);
+  const secondFont = await second.load(request);
+
+  assert.equal(immutableFontResources(firstFont).font, immutableFontResources(secondFont).font);
+  assert.equal(calls.filter((url) => url === firstCoreUrl).length, 1);
+  assert.equal(calls.filter((url) => url === secondCoreUrl).length, 1);
+  assert.equal(calls.filter((url) => url === firstRasterUrl).length, 1);
+  assert.equal(calls.filter((url) => url === secondRasterUrl).length, 1);
+
+  firstFont.dispose();
+  secondFont.dispose();
+  first.dispose();
+  second.dispose();
+  library.dispose();
+});
+
 test('registries isolate generations, own their bytes, enforce limits, and invalidate disposal', async () => {
   const firstRegistry = new FontRegistry();
   const secondRegistry = new FontRegistry();
