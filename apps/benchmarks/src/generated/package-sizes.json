@@ -10,11 +10,11 @@
       "label": "GlyphConfig integration DSL",
       "status": "measured",
       "format": "javascript",
-      "sha256": "c2452fe2afa5f76a221ec1d8a8c07aa50c5c335d670c7b2d614eeb3b263765bc",
-      "rawBytes": 425833,
-      "minifiedBytes": 276584,
-      "gzipBytes": 67612,
-      "brotliBytes": 56715
+      "sha256": "5f951543ab85bc2865bc4f1d3c2b1976b7562ad537abed2394535e1d56c70f42",
+      "rawBytes": 417660,
+      "minifiedBytes": 273745,
+      "gzipBytes": 67041,
+      "brotliBytes": 56348
     },
     {
       "id": "tsl-subpath-js",
@@ -43,11 +43,11 @@
       "label": "Core JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "3755161c2535abdc9fecc4d8d9e090820ed27a3d92622937e08f65444fa27b2d",
-      "rawBytes": 610416,
-      "minifiedBytes": 395741,
-      "gzipBytes": 96732,
-      "brotliBytes": 80167
+      "sha256": "dd3601a14490a309c1819fdb42b1ef59d68f86a9d1e824c358f86cf830ac8113",
+      "rawBytes": 602243,
+      "minifiedBytes": 392902,
+      "gzipBytes": 96179,
+      "brotliBytes": 79790
     },
     {
       "id": "text-shaper-wasm",
@@ -65,11 +65,11 @@
       "label": "Three.js adapter JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "1a737a8727fd4ac98db5b71300a121249e650ecee46fc0b7dc8d75dd6cdeb984",
-      "rawBytes": 815380,
-      "minifiedBytes": 521641,
-      "gzipBytes": 129321,
-      "brotliBytes": 106368
+      "sha256": "06cd24689d47c20b02c64fb00a344288f3681506d5a7bc163358350629ae1165",
+      "rawBytes": 807207,
+      "minifiedBytes": 518795,
+      "gzipBytes": 128739,
+      "brotliBytes": 105976
     },
     {
       "id": "font-inter-bitmap-16-32",

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:1138953b61927fa0a881d360f76f0bab0d8fd0b7cc5bb8e2369bcacdd07ee669'
+source_digest: 'sha256:6ba27e0bc0d4a521bd1a86abb3eb199dfe6b400468514da0a9b6eda5b7e3cb81'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -586,7 +586,9 @@ returns; renderer commit/discard settles the corresponding publication before th
 branch copied every plan, resolved a second payload manifest, awaited a separate target, and pooled returned buffers, but
 no GlyphConfig integration could use it and it could not participate in the engine-wide shape batch. Cross-realm font
 movement remains the explicit lazy `FontFace.clone()` operation; render-plan transfer is not a parallel publication API.
-The example renderer proves TypeGPU and WebGPU realization directly against the same borrowed Rust command plan.
+The former direct planner/transport update path is also gone: it had no production caller and would have restored one
+Wasm crossing per root beside the staged batch. The example renderer proves TypeGPU and WebGPU realization directly
+against the same borrowed Rust command plan.
 
 ## Current correctness evidence
 

@@ -8,7 +8,6 @@ import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import { compileRasterFont, resolveRasterPlanProgram, type CompiledRasterFont } from '../config/raster.js';
 import { portableResourceIdentity, type PortableResource } from '../config/resources.js';
 import { createRenderPlanner, type RenderPlanner, type RenderPlannerOptions } from './render-planner.js';
-import { markOwnedPlanPublication, PlanPublicationExpiredError, type OwnedPlanPublication } from './retention.js';
 import {
   assertGlyphId,
   compileCodec,
@@ -111,8 +110,7 @@ export type HandleEngineFontBinder = <Technique extends AnyRasterFormat>(
 
 /**
  * One borrowed A/B render-plan publication. Its bytes point into Wasm memory and expire when
- * this transport answers any later call; see `internal/retention.ts` for the protocol.
- * `copyPublication` validates and owns bytes that must survive the borrow.
+ * this transport answers any later call. Configured renderers consume publications synchronously.
  */
 export interface PlanPublication {
   readonly bytes: Uint8Array;
@@ -1292,8 +1290,6 @@ export class PlanTransport {
   #epoch = 0;
   /** The epoch each issued borrow was published under, keyed by publication identity. */
   readonly #issued = new WeakMap<PlanPublication, number>();
-  /** Owned copies made by this transport; unlike borrows, they never expire. */
-  readonly #owned = new WeakSet<PlanPublication>();
   #latestGeneration = 0;
   #stagedUpdate: { readonly requestLength: number; readonly initialMemoryBuffer: ArrayBuffer } | undefined;
 
@@ -1322,12 +1318,8 @@ export class PlanTransport {
     return this.#handle;
   }
 
-  /**
-   * Whether this transport's publication has expired. An owned copy always answers false.
-   * A borrow expires after another answer, Wasm memory growth, or transport disposal.
-   */
+  /** Whether this transport's borrow expired after another answer, memory growth, or disposal. */
   isExpired(publication: PlanPublication): boolean {
-    if (this.#owned.has(publication)) return false;
     if (this.#issued.get(publication) === undefined) {
       throw new TypeError('publication was not issued by this plan transport');
     }
@@ -1336,33 +1328,6 @@ export class PlanTransport {
       this.#issued.get(publication) !== this.#epoch ||
       publication.memoryBuffer !== this.#exports.memory.buffer
     );
-  }
-
-  /**
-   * Takes ownership with one contiguous copy of the whole encoded result — header,
-   * every plan table, and every patch payload. Never expires; safe to hold across
-   * asynchronous work and later engine calls in this JavaScript realm. Transfer its
-   * self-owned bytes to a worker as untrusted boundary data; runtime provenance is realm-local.
-   */
-  copyPublication(publication: PlanPublication): OwnedPlanPublication {
-    this.#assertPublicationCurrent(publication);
-    const bytes = publication.bytes.slice();
-    const owned = markOwnedPlanPublication(
-      Object.freeze({
-        ...publication,
-        bytes,
-        memoryBuffer: bytes.buffer,
-        memoryGrew: false,
-      }),
-    );
-    this.#owned.add(owned);
-    return owned;
-  }
-
-  #assertPublicationCurrent(publication: PlanPublication): void {
-    if (this.isExpired(publication)) {
-      throw new PlanPublicationExpiredError(publication.publicationGeneration, this.#latestGeneration);
-    }
   }
 
   #invalidate(): void {
@@ -1447,58 +1412,6 @@ export class PlanTransport {
     if (this.#disposed) return;
     if (this.#stagedUpdate === undefined) return;
     this.#stagedUpdate = undefined;
-  }
-
-  update(request: Uint8Array): PlanPublication {
-    this.#assertActive();
-    if (!(request instanceof Uint8Array) || request.byteLength === 0) {
-      throw new TypeError('text update request must be a nonempty Uint8Array');
-    }
-    this.#assertRequestOwnership(request);
-    this.#invalidate();
-    const requestLength = uint32(request.byteLength, 'text update byte length');
-    const initialMemoryBuffer = this.#exports.memory.buffer;
-    if (requestLength > this.#requestCapacity || requestLength > this.#exports.requestCapacity(this.#handle)) {
-      this.reserve(requestLength, this.#resultCapacity);
-    }
-    let retriedResultGrowth = false;
-    for (;;) {
-      const requestPointer = this.#exports.requestPointer(this.#handle);
-      if (requestPointer === 0)
-        throw engineStatusError('resolve text request arena', textShaperAbi.status.plannerMissing);
-      const pinnedMemoryBuffer = this.#exports.memory.buffer;
-      new Uint8Array(pinnedMemoryBuffer, requestPointer, requestLength).set(request);
-      const resultPointer = this.#exports.textUpdate(this.#handle, requestPointer, requestLength);
-      const memoryBuffer = this.#exports.memory.buffer;
-      if (resultPointer === 0) throw engineStatusError('publish text update', textShaperAbi.status.resultTooLarge);
-      const layout = textShaperAbi.layouts.engineResult;
-      if (resultPointer + layout.size > memoryBuffer.byteLength) {
-        throw new RangeError('text engine returned an out-of-bounds result header');
-      }
-      const header = new DataView(memoryBuffer, resultPointer, layout.size);
-      const status = header.getUint32(layout.status, true);
-      const requiredRequestCapacity = header.getUint32(layout.requiredRequestCapacity, true);
-      const requiredResultCapacity = header.getUint32(layout.requiredResultCapacity, true);
-      if (
-        status === textShaperAbi.status.resultTooLarge &&
-        !retriedResultGrowth &&
-        requiredResultCapacity > this.#resultCapacity
-      ) {
-        retriedResultGrowth = true;
-        this.reserve(Math.max(requestLength, requiredRequestCapacity), requiredResultCapacity);
-        continue;
-      }
-      if (status !== textShaperAbi.status.ok) {
-        throw engineStatusError(
-          'publish text update',
-          status,
-          requiredRequestCapacity,
-          requiredResultCapacity,
-          headerFault(header),
-        );
-      }
-      return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
-    }
   }
 
   /**

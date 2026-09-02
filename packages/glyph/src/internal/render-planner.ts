@@ -251,18 +251,13 @@ export interface RenderPlannerPublishOptions {
   readonly compositing?: 'ordered' | 'independent';
 }
 
-interface RenderPlannerBase {
+/** One retained-text planner staged only through the engine-wide shape batch. */
+export interface RenderPlanner {
   readonly disposed: boolean;
   /** Creates one retained text instance in this planner. */
   createText(options: RetainedTextOptions): RetainedText;
   /** Disposes every retained text instance and releases this planner. */
   dispose(): void;
-}
-
-/** A synchronous producer of transient render plans for a synchronous target. */
-export interface RenderPlanner extends RenderPlannerBase {
-  /** Compiles and synchronously offers current desired state to the plan target. */
-  publish(options?: RenderPlannerPublishOptions): PlanAcceptance;
 }
 
 /** Construction options for one retained-text planner and render target. */
@@ -299,9 +294,6 @@ export class RenderPlannerDisposedError extends Error {
     this.name = 'RenderPlannerDisposedError';
   }
 }
-
-/** Thrown when fixed transport capacity cannot encode the requested work. */
-export class PlanTransportCapacityError extends Error {}
 
 interface ResolvedSpan {
   readonly start: number;
@@ -552,13 +544,6 @@ class RenderPlannerImpl {
     return text;
   }
 
-  publish(options?: RenderPlannerPublishOptions): PlanAcceptance {
-    this.#assertMutable();
-    if (this.#target === undefined) throw new Error('measurement-only planners cannot publish render plans');
-    const normalized = normalizePublishOptions(options);
-    return this.#publishBorrowed(normalized);
-  }
-
   /** @internal */
   _updateText(state: RetainedTextState, update: RetainedTextUpdate): void {
     this.#assertMutable();
@@ -774,36 +759,6 @@ class RenderPlannerImpl {
     attempt(() => this.#codec.dispose());
     this.#handleState._detachPlanner(this);
     if (failure !== undefined) throw failure;
-  }
-
-  #publishBorrowed(options: NormalizedPublishOptions): PlanAcceptance {
-    const pending = this.#publishEngine(options);
-    const { publication } = pending;
-    const lease = new BorrowedPlanLease(publication, this.#transport);
-    const candidate = this.#candidate(lease);
-    const leaveBorrow = this.#handleState._enterBorrowedPlan();
-    let result: PlanAcceptance;
-    try {
-      const answer = (this.#target as PlanTarget).accept(candidate, this.#targetController.signal);
-      if (isPromiseLike(answer)) throw new TypeError('a borrowed plan target must answer synchronously');
-      result = assertAcceptance(answer);
-    } finally {
-      lease.expire();
-      leaveBorrow();
-    }
-    if (result.accepted) this.#accept(pending);
-    return result;
-  }
-
-  #publishEngine(options: NormalizedPublishOptions): PendingPublication {
-    this.#ensureTextCapacity();
-    const checkpointGeneration = this.#checkpointGeneration;
-    const frame = this.#compileFrame(options, checkpointGeneration);
-    const publication = this.#transport.update(frame);
-    this.#engineRevision = publication.engineRevision;
-    this.#cacheSemanticViews(publication, options.semanticViewMask);
-    this.#commitDesiredState();
-    return { publication, checkpointGeneration };
   }
 
   #cacheSemanticViews(publication: PlanPublication, semanticViewMask: number): void {

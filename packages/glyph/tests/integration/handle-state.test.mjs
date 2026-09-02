@@ -9,17 +9,10 @@ import { GlyphHandleState } from '../../dist/internal/handle-state.js';
 import { assertGlyphId, id } from '../../dist/config/codec.js';
 import { threeCodecBytes } from '../../dist/three/codec.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
-import {
-  engineFrameUpdateBytes,
-  engineUpdateBytes,
-  fontBindingBytes,
-  renderCodecBytes,
-} from '../support/engine-abi.mjs';
+import { engineUpdateBytes, fontBindingBytes, renderCodecBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const TEST_CODEC_HANDLE = id.codec('test.text-engine-handle-state/default');
-const TEST_PLANNER_HANDLE = id.planner('test.text-engine-handle-state/default');
 const THREE_CODEC_HANDLE = id.codec('test.text-engine-handle-state/three');
 
 test('a glyph engine owns every configured-handle state it creates', async () => {
@@ -44,58 +37,7 @@ test('a glyph engine owns every configured-handle state it creates', async () =>
   assert.equal(handleState.integration, 'test.glyphEngine-owner');
   glyphEngine.dispose();
   assert.throws(() => handleState.id('planner', 'test.glyphEngine-owner/stale'), /disposed/u);
-  assert.throws(() => transport.update(request), /disposed/u);
-});
-
-test('a Glyph handle state publishes borrowed A/B plans through the engine shaper', async () => {
-  const wasm = await readFile(wasmUrl);
-  const abi = textShaperAbi;
-  const shaper = await createRuntimeShaper({ wasm });
-  const handleState = new GlyphHandleState(shaper);
-  const codecHandle = TEST_CODEC_HANDLE;
-  const plannerId = TEST_PLANNER_HANDLE;
-  handleState.registerCodec(codecHandle, renderCodecBytes(abi));
-  const firstRequest = engineUpdateBytes(abi, {
-    plannerId,
-    codecHandle,
-    expectedEngineRevision: 0,
-    consumedPlanRevision: 0,
-  });
-  const transport = handleState._createPlanTransport({
-    handle: plannerId,
-    requestCapacity: firstRequest.byteLength,
-    resultCapacity: abi.layouts.engineResult.size,
-  });
-
-  const first = transport.update(firstRequest);
-  assert.equal(first.engineRevision, 1);
-  assert.equal(first.planRevision, 1);
-  assert.equal(first.requiredBaseRevision, 0);
-  assert.equal(first.publicationGeneration, 1);
-  assert.equal(first.outputSlot, 0);
-  assert.equal(first.codecHandle, codecHandle);
-  assert.equal(first.bytes.byteLength, abi.layouts.engineResult.size);
-  const retainedFirst = first.bytes.slice();
-
-  const second = transport.update(
-    engineUpdateBytes(abi, {
-      plannerId,
-      codecHandle,
-      expectedEngineRevision: first.engineRevision,
-      consumedPlanRevision: first.planRevision,
-      acknowledgedPublicationGeneration: first.publicationGeneration,
-    }),
-  );
-  assert.equal(second.engineRevision, 2);
-  assert.equal(second.planRevision, 2);
-  assert.equal(second.requiredBaseRevision, first.planRevision);
-  assert.equal(second.publicationGeneration, 2);
-  assert.equal(second.outputSlot, 1);
-  assert.deepEqual(first.bytes, retainedFirst, 'publishing slot B must not mutate borrowed slot A');
-
-  handleState.dispose();
-  assert.throws(() => transport.update(firstRequest), /disposed/);
-  shaper.dispose();
+  assert.throws(() => transport.stageUpdate(request), /disposed/u);
 });
 
 test('handle-scoped ID provenance expires with its owning handle state', async () => {
@@ -143,38 +85,8 @@ test('font bindings cannot be disposed while an owned stack still references the
     assert.throws(() => handleState.disposeFontBinding(bindingHandle), /still used by font stack/u);
     assert.throws(() => shaper.disposeFont(font), /retained by a registered font stack/u);
     assert.equal(shaper.memoryReport().fontCount, 1, 'a refused disposal must keep the shaper registration owned');
-    const codecHandle = handleState.id('codec', 'test.text-engine-handle-state/lifecycle-codec');
-    const plannerHandle = handleState.id('planner', 'test.text-engine-handle-state/lifecycle-transport');
-    handleState.registerCodec(codecHandle, renderCodecBytes(textShaperAbi));
-    const request = engineFrameUpdateBytes(textShaperAbi, {
-      plannerId: plannerHandle,
-      codecHandle,
-      fontStackHandle: stackHandle,
-      textMutation: { start: 0, deleteCount: 0, insert: [0x41] },
-      style: { textEnd: 1, fontSize: 16, lineHeight: 19.2, rasterPixelRatio: 1 },
-      geometry: { width: 100, height: 100, maxLines: 4, revision: 1 },
-      limits: { maxClusters: 16, maxLines: 4, maxOutputBytes: 128 * 1024 },
-    });
-    const transport = handleState._createPlanTransport({
-      handle: plannerHandle,
-      requestCapacity: request.byteLength,
-      resultCapacity: 128 * 1024,
-    });
-    transport.update(request);
-    assert.throws(
-      () => handleState.disposeFontStack(stackHandle),
-      (error) => error.code === 'registration-in-use',
-      'a committed transport must retain the stack named by its styles',
-    );
-    assert.throws(
-      () => handleState.disposeCodec(codecHandle),
-      (error) => error.code === 'registration-in-use',
-      'a committed transport must retain its codec',
-    );
-    transport.dispose();
     handleState.disposeFontStack(stackHandle);
     handleState.disposeFontBinding(bindingHandle);
-    handleState.disposeCodec(codecHandle);
     assert.throws(() => handleState.disposeFontBinding(bindingHandle), /must come from id/u);
     shaper.disposeFont(font);
     assert.equal(shaper.memoryReport().fontCount, 0);
