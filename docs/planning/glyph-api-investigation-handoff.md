@@ -22,13 +22,13 @@ sources:
     resource: ../../packages/glyph/src/react.ts
     title: Current R3F wrapper
   - id: current-plan-view
-    resource: ../../packages/glyph/src/core/plan-view.ts
+    resource: ../../packages/glyph/src/internal/plan-view.ts
     title: Current render-plan tables and readers
   - id: current-example
     resource: ../../packages/glyph-example-renderer/src/engine.ts
     title: Current example renderer
   - id: configured-plan-target
-    resource: ../../packages/glyph/src/core/glyph-plan-target.ts
+    resource: ../../packages/glyph/src/internal/glyph-plan-target.ts
     title: Shared configured plan target
 generated:
   by: openai-codex/gpt-5.6

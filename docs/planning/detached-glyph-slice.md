@@ -5,7 +5,7 @@ description: Defines the synchronous copy contract that turns committed paragrap
 tags: [render-plan, glyphs, threejs, instancing, physics]
 sources:
   - id: core-planner
-    resource: ../../packages/glyph/src/core/render-planner.ts
+    resource: ../../packages/glyph/src/internal/render-planner.ts
     title: Renderer-neutral planner copy surface
   - id: rust-copy
     resource: ../../packages/glyph/rust/shaper/src/engine/state.rs

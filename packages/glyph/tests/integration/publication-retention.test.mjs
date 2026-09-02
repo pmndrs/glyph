@@ -4,10 +4,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { GlyphHandleState } from '../../dist/internal/handle-state.js';
-import { RenderPlanView } from '../../dist/core/plan-view.js';
+import { RenderPlanView } from '../../dist/internal/plan-view.js';
 import { id } from '../../dist/config/codec.js';
-import { assertOwnedPlanPublication, PlanPublicationExpiredError } from '../../dist/core/retention.js';
-import { compilePlannerFrameUpdate } from '../../dist/core/frame-wire.js';
+import { assertOwnedPlanPublication, PlanPublicationExpiredError } from '../../dist/internal/retention.js';
+import { compilePlannerFrameUpdate } from '../../dist/internal/frame-wire.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { threeCodecBytes } from '../../dist/three/codec.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';

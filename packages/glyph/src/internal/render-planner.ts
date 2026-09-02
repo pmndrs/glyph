@@ -10,7 +10,7 @@ import {
   type ParagraphLayout,
   type TextStyle,
 } from '../text-properties.js';
-import { createExactFrameBufferPool, type ExactFrameBufferPool } from '../internal/frame-transfer-pool.js';
+import { createExactFrameBufferPool, type ExactFrameBufferPool } from './frame-transfer-pool.js';
 import {
   compileEngineGeometry,
   assertTextEffectsSupported,
@@ -41,7 +41,7 @@ import type {
   GlyphHandleState,
   PlanPublication,
   PlanTransport,
-} from '../internal/handle-state.js';
+} from './handle-state.js';
 import { RenderPlanView, readTrustedRenderPlanResourceReferenceId, type RenderPlanTable } from './plan-view.js';
 import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
 import type { PortableResource } from '../config/resources.js';

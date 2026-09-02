@@ -10,7 +10,7 @@ import {
   resolveRasterPlanProgram,
   id as glyphId,
 } from '../../dist/index.js';
-import { fontBindingResources } from '../../dist/core/font-binding.js';
+import { fontBindingResources } from '../../dist/internal/font-binding.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { createImmutableFontLease, immutableFontVariantIdentity } from '../../dist/loaded-font.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';

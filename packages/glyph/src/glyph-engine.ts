@@ -13,7 +13,7 @@ import { createRuntimeShaper, runtimeShaperEngineExports, type RuntimeShaper } f
 import { GlyphEngineStatusError } from './engine-error.js';
 import { GlyphHandleState, type GlyphHandleStateOptions } from './internal/handle-state.js';
 import type { FontHandle } from './identity.js';
-import type { PlanAcceptance, StagedRenderPlanner } from './core/render-planner.js';
+import type { PlanAcceptance, StagedRenderPlanner } from './internal/render-planner.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
 
 /** Options for constructing one independent Wasm shaping engine. */

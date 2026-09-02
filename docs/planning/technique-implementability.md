@@ -27,7 +27,7 @@ Three may expose a renderer-local `createMaterial(context)` helper. That helper 
 ## What is already fixed
 
 Each `GlyphConfig` handle installs the Codec returned by `encode`, while internal handle state resolves every registered
-portable technique program through one binding compiler (`packages/glyph/src/core/font-binding.ts`). This
+portable technique program through one binding compiler (`packages/glyph/src/internal/font-binding.ts`). This
 fixes the old asymmetry where Paragraph called `loadedFontBindingBytes` without the lookup that Three performed and
 removes the duplicate first-party binding compilers.
 

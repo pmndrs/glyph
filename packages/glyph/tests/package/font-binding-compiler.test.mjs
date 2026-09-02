@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compileFontBinding, emptyFontBindingTable, schemaFieldTable } from '../../dist/core/font-binding.js';
+import { compileFontBinding, emptyFontBindingTable, schemaFieldTable } from '../../dist/internal/font-binding.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const MISSING_RESOURCE = 0xffff_ffff;

@@ -11,7 +11,7 @@ import {
   type TransformUpdate,
 } from '../glyph-config.js';
 import type { Codec } from '../glyph-config.js';
-import type { HandleMaterialBinding, HandleTransformBinding } from '../internal/handle-state.js';
+import type { HandleMaterialBinding, HandleTransformBinding } from './handle-state.js';
 import type { PlanAcceptance, PlanCandidate, PlanTarget } from './render-planner.js';
 
 type PlanTargetConfig<Bindings extends AnyGlyphBindings, Result, Root, CodecValue extends Codec> = Readonly<{

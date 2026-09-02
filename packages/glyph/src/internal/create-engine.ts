@@ -1,5 +1,5 @@
 import type { PortablePayloadLease } from './render-planner.js';
-import type { HandleMaterialBinding, HandleTransformBinding } from '../internal/handle-state.js';
+import type { HandleMaterialBinding, HandleTransformBinding } from './handle-state.js';
 import type {
   AnyGlyphBindings,
   BorrowedTypedCommandBuffer,
@@ -18,8 +18,8 @@ import type {
   TypedResource,
 } from '../glyph-config.js';
 import type { CodecBuffer, CodecDescriptor, CodecProgram } from '../config/codec.js';
-import { bindPatch, bindRetirement } from '../internal/bind-command-buffer.js';
-import { mapBorrowedSequence, TypedCommandBufferMapper } from '../internal/typed-command-buffer.js';
+import { bindPatch, bindRetirement } from './bind-command-buffer.js';
+import { mapBorrowedSequence, TypedCommandBufferMapper } from './typed-command-buffer.js';
 
 interface RetainedResource<Resource extends object> {
   readonly generation: number;

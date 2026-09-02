@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:3c51618908947ef0eacab1464070332277c3c5e5a07411e6f15806fa9144a1f1'
+source_digest: 'sha256:6aedd5e7cd53fd881f06ba7e4158be8ebccf773c9daefb5b1678482bab94484d'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -66,7 +66,7 @@ sources:
     resource: ../../packages/glyph/src/three/handle.ts
     title: Built-in ThreeConfig and handle factories
   - id: configured-plan-target
-    resource: ../../packages/glyph/src/core/glyph-plan-target.ts
+    resource: ../../packages/glyph/src/internal/glyph-plan-target.ts
     title: Internal configured publication target
   - id: three-transform-sync
     resource: ../../packages/glyph/src/three/transform-synchronizer.ts

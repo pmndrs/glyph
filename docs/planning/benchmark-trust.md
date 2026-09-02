@@ -218,9 +218,9 @@ The measured spread also confirms the planning formula: 1.40 × 2.1 % = 2.9 % ag
 
 ## What is measured
 
-Scope is the core API in Node against `@pmndrs/glyph/core` and the packaged release Wasm. The eight paths map almost one-to-one onto modules under `packages/glyph/src/core/`, which is a good sign that the taxonomy is real rather than invented for this document.
+Scope is the root Glyph API in Node against `@pmndrs/glyph`, the built-in `@pmndrs/glyph/three` config, and the packaged release Wasm. The renderer-neutral engine, wire, planner, and binding machinery being measured remains package-private under `packages/glyph/src/internal/`; it is not a second integrator surface.
 
-Every measurement bench binds to **root `Paragraph`, not `Text` from `/three`**. It is the stable framework-neutral surface, it needs no scene graph, and its two-query split -- `measure()` for sizes, `glyphs()` for the positioned columns -- is exactly the boundary these benches price. Font-loading benches use root `loadFont()`; renderer integration benches then create `/core` `GlyphEngine`, `GlyphBackend`, and `RenderPlanner` values and bind that immutable font. This prices the real ownership seam rather than a raw shaper shortcut.
+Every measurement bench binds through the public Glyph/Three handle and retained paragraph surface. The fixture initializes `glyph`, creates one configured handle and named roots, loads an immutable font, and uses `measure()` and `glyphs()` for the pre-render query split. Renderer-integration measurements publish through `glyph.shape()` and synchronize the public Three objects; they do not construct internal engine, planner, or wire values. This prices the real ownership seam rather than a raw shaper shortcut.
 
 All eight paths run in plain Node against the packaged Wasm with no browser, canvas, or GPU. That is established, not assumed: `glyph:rust-layout-benchmark` drives the raw ABI in Node today, and `glyph:layout-benchmark` drives the full path including render-plan application in Node. The one Node-specific wrinkle is that the shaper defaults to `fetch`-ing its Wasm relative to the module URL, so the benches pass the Wasm path explicitly, as the existing fixture helper already does.
 

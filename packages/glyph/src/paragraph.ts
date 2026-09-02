@@ -26,7 +26,7 @@ import {
   type MeasurementPlanner,
   type RetainedText,
   type RetainedTextOptions,
-} from './core/render-planner.js';
+} from './internal/render-planner.js';
 import { type CodecCapabilitySet, type CodecDescriptor, type CodecIdFactory, id } from './config/codec.js';
 import { defineCodecBuffers, type AnyTechniqueSchema } from './config/schema.js';
 

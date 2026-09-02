@@ -7,7 +7,7 @@ import {
   emptyFontBindingTable,
   fontBindingResources,
   schemaFieldTable,
-} from '../core/font-binding.js';
+} from '../internal/font-binding.js';
 import {
   normalizePortableResource,
   type PortableBufferPayload,
