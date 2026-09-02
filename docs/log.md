@@ -2,6 +2,11 @@
 
 ## 2026-09-02
 
+- **Proved the real FontFace Worker boundary** — Added an actual `worker_threads` transfer through the public FontFace
+  declaration API. Posting the clone detaches every transferred buffer in the sender; the receiving realm reconstructs
+  and loads the exact Bitmap selection with `fetch` disabled, preserves selection Promise identity, and leaves Glyph's
+  shaping engine uninitialized in both realms. D-313's remaining executable proof is complete.
+
 - **Single-owned transferred-font identity validation** — Reduced the eager `SerializedFontFace` claim to a canonical
   safe transport envelope and non-aliasing ownership transfer. The lazy importer remains the sole semantic authority:
   it checks declared identities against authoritative GLB and dependency bytes before admitting missing graph nodes.

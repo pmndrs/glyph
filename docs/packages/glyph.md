@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:a2367db7bfe87eecc10bb39eedba2e782aa71ca02e85880541cf5a45e59ba2b0'
+source_digest: 'sha256:823281167917181148f7e7f5832252e35bb75ca6787f61d1fbea00ba270b378f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -297,7 +297,9 @@ partial transfers may progressively add formats to that graph. No live FontFace,
 resource crosses the realm boundary, and no normal `load()`, Text construction, `glyph.shape()`, or renderer path invokes
 the snapshot code. The initial package graph retains only the synchronous serialized-value discriminator and ownership
 claim needed by `glyph.fontFace(serialized)`. Copying a loaded graph and reconstructing missing transferred nodes live in
-one package-private dynamic chunk reached only by explicit `clone()` or by loading a serialized declaration.
+one package-private dynamic chunk reached only by explicit `clone()` or by loading a serialized declaration. A real
+Worker transfer test proves every posted clone buffer detaches in the sender, the receiver reconstructs the selected
+format with fetching disabled, and neither realm initializes the shaping engine.
 
 React's `useFont(source, config?)` declares through that same FontFace path, asks the selected Three handle which exact
 format the declaration denotes, conditionally calls React 19 `use()` only while that format is unloaded, and returns
