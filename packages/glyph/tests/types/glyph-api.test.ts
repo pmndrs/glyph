@@ -1,4 +1,4 @@
-import { glyph, type GlyphHandle } from '../../src/index.js';
+import { glyph, type GlyphConfig, type GlyphHandle } from '../../src/index.js';
 import {
   defaultDecoder,
   createGlyphRootRegistry,
@@ -10,7 +10,6 @@ import {
   type BorrowedBoundCommandBuffer,
   type BorrowedTypedCommandBuffer,
   type DecodeContext,
-  type GlyphConfig,
   type GlyphRoot,
 } from '../../src/core.js';
 
@@ -25,7 +24,6 @@ interface RecordingHandle extends GlyphHandle<RecordingRoot> {
 type RecordingBindings = AnyGlyphBindings;
 
 const recordingConfig = defineGlyphConfig<RecordingHandle, RecordingBindings, void>({
-  capabilities: Object.freeze([]),
   schema: defineGlyphSchema<RecordingBindings>()({
     drawRoot: () => undefined,
     program: () => ({}),

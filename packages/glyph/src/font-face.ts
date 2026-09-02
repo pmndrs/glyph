@@ -19,9 +19,7 @@ export type FontFaceFormat<Technique extends AnyRasterTechnique = AnyRasterTechn
   | Technique
   | RasterTechniqueRequest<Technique>;
 
-export type FontFaceFormatDeclaration =
-  | FontFaceFormat
-  | readonly [FontFaceFormat, ...FontFaceFormat[]];
+export type FontFaceFormatDeclaration = FontFaceFormat | readonly [FontFaceFormat, ...FontFaceFormat[]];
 
 export type FontFaceDeclaredFormat<Declaration> = Declaration extends readonly FontFaceFormat[]
   ? Declaration[number]
@@ -40,9 +38,10 @@ type TechniqueOfFormat<Format> = Format extends AnyRasterTechnique
     : AnyRasterTechnique;
 
 /** Concrete technique carried by a typed FontFace selection; string/default selections remain handle-relative. */
-export type FontFaceTechniqueOf<Selection> = Selection extends FontFaceSelection<infer Format>
-  ? TechniqueOfFormat<Exclude<Format, undefined>>
-  : AnyRasterTechnique;
+export type FontFaceTechniqueOf<Selection> =
+  Selection extends FontFaceSelection<infer Format>
+    ? TechniqueOfFormat<Exclude<Format, undefined>>
+    : AnyRasterTechnique;
 
 type FormatKey<Format> = Format extends string
   ? Format
@@ -247,10 +246,7 @@ export function isFontFaceSelection(selection: unknown): selection is AnyFontFac
 }
 
 /** @internal Canonical identity shared by React declarations and the loader's raster request policy. */
-export function fontFaceResourceKey(
-  source: FontFaceSource,
-  format: FontFaceConfig['format'],
-): string {
+export function fontFaceResourceKey(source: FontFaceSource, format: FontFaceConfig['format']): string {
   return `${fontFaceSourceKey(source)}:${fontFaceFormatIdentity(format)}`;
 }
 
@@ -267,10 +263,16 @@ export class FontFaceHandleStore {
   readonly #library: FontLibrary;
   readonly #techniques: Readonly<Record<string, AnyRasterTechnique>>;
   readonly #defaultFormat: string;
+  readonly #loadTechnique: ((technique: AnyRasterTechnique) => Promise<void>) | undefined;
   readonly #records = new Map<AnyFontFaceSelection, LoadedFaceRecord>();
   #disposed = false;
 
-  constructor(library: FontLibrary, techniques: FontTechniqueMap, defaultFormat: string) {
+  constructor(
+    library: FontLibrary,
+    techniques: FontTechniqueMap,
+    defaultFormat: string,
+    loadTechnique?: (technique: AnyRasterTechnique) => Promise<void>,
+  ) {
     if (typeof defaultFormat !== 'string' || defaultFormat.length === 0) {
       throw new TypeError('font default format must be a nonempty string');
     }
@@ -289,6 +291,7 @@ export class FontFaceHandleStore {
     this.#library = library;
     this.#techniques = Object.freeze(normalized);
     this.#defaultFormat = defaultFormat;
+    this.#loadTechnique = loadTechnique;
   }
 
   isLoaded(selection: AnyFontFaceSelection): boolean {
@@ -303,6 +306,7 @@ export class FontFaceHandleStore {
     const existing = this.#records.get(selection);
     if (existing !== undefined) return existing.promise;
     const raster = this.#resolveFormat(selected.format);
+    const technique = isRasterTechnique(raster) ? raster : raster.technique;
     const controller = new AbortController();
     const record: LoadedFaceRecord = {
       controller,
@@ -314,22 +318,24 @@ export class FontFaceHandleStore {
     const releaseFace = (): void => this.#releaseRecord(selection, record);
     selected.face.releaseListeners.add(releaseFace);
     record.releaseFace = releaseFace;
-    const promise = fontFaceLoadInput(selected.face.source).then((input) =>
-      this.#library.loadFont(input, raster, { signal: controller.signal }),
-    ).then(
-      (font) => {
-        if (this.#records.get(selection) !== record || selected.face.disposed || this.#disposed) {
-          font.dispose();
-          throw new DOMException('FontFace load owner was disposed', 'AbortError');
-        }
-        record.font = font;
-        return selection;
-      },
-      (error: unknown) => {
-        this.#releaseRecord(selection, record, false);
-        throw error;
-      },
-    );
+    const activated = this.#loadTechnique?.(technique) ?? Promise.resolve();
+    const promise = activated
+      .then(() => fontFaceLoadInput(selected.face.source))
+      .then((input) => this.#library.loadFont(input, raster, { signal: controller.signal }))
+      .then(
+        (font) => {
+          if (this.#records.get(selection) !== record || selected.face.disposed || this.#disposed) {
+            font.dispose();
+            throw new DOMException('FontFace load owner was disposed', 'AbortError');
+          }
+          record.font = font;
+          return selection;
+        },
+        (error: unknown) => {
+          this.#releaseRecord(selection, record, false);
+          throw error;
+        },
+      );
     record.promise = promise;
     this.#records.set(selection, record);
     return promise;

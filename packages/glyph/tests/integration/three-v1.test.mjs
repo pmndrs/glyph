@@ -225,6 +225,57 @@ test('one Three root binds one Scene and exposes its semantic name to material f
   }
 });
 
+test('a root releases its renderer publication when its final Text is disposed', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
+  const root = three('transient');
+  const scene = new THREE.Scene();
+  const first = root.createText({ font, text: 'first' });
+  scene.add(first);
+  first.shape();
+  assert.equal(root.drawRoot.parent, scene);
+  assert.ok(root.gpuBytes > 0);
+
+  first.dispose();
+  assert.equal(root.textCount, 0);
+  assert.equal(root.drawRoot.parent, null, 'the empty root no longer retains its Scene');
+  assert.equal(root.gpuBytes, 0, 'the empty root releases its planner and renderer resources');
+
+  const second = root.createText({ font, text: 'second' });
+  scene.add(second);
+  second.shape();
+  assert.equal(root.drawRoot.parent, scene, 'the same idempotent root can publish again');
+  second.dispose();
+  font.dispose();
+});
+
+test('TextGroup ancestry cannot smuggle a Text across Glyph roots', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
+  const world = three('world');
+  const hud = three('hud');
+  const worldGroup = world.createTextGroup();
+  const bridge = new THREE.Group();
+  const hudText = hud.createText({ font, text: 'wrong root' });
+  const scene = new THREE.Scene();
+  worldGroup.add(bridge);
+  bridge.add(hudText);
+  scene.add(worldGroup);
+  try {
+    assert.throws(() => hudText.shape(), /different Glyph roots/);
+  } finally {
+    hudText.dispose();
+    worldGroup.dispose();
+    font.dispose();
+  }
+});
+
 test('text property registries validate and freeze reusable rules', () => {
   for (const [registry, rules] of [
     [TextStyle, { body: { fontSize: 16 } }],

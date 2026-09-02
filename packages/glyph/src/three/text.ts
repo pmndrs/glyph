@@ -332,7 +332,15 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   /** @internal Remove one retained leaf from this publication root. */
   unregister(text: Text<AnyRasterTechnique>): void {
     this.#texts.delete(text);
-    this.#binding?.removeText(text);
+    if (this.#texts.size !== 0 || this.#binding === undefined) return;
+    const binding = this.#binding;
+    this.#binding = undefined;
+    try {
+      binding.dispose();
+    } finally {
+      this.#drawRoot.removeFromParent();
+      this.#scene = undefined;
+    }
   }
 
   /** @internal Stable semantic order assigned once for one Text lifetime. */
@@ -816,8 +824,8 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#root.unregister(eraseTextTechnique(this));
     this.#unbind();
+    this.#root.unregister(eraseTextTechnique(this));
     disposeFontBindings(this.#fontBindings);
     for (const font of this.#ownedFonts) font.dispose();
     this.#transform.dispose();
@@ -884,6 +892,7 @@ interface TextGroupRenderOrderState {
 }
 
 const textGroupRenderOrders = new WeakMap<TextGroup, TextGroupRenderOrderState>();
+const textGroupRoots = new WeakMap<TextGroup, ThreeRoot>();
 const textPresentations = new WeakMap<Text<AnyRasterTechnique>, TextPresentation>();
 
 export class TextGroup extends THREE.Object3D {
@@ -934,6 +943,7 @@ export class TextGroup extends THREE.Object3D {
       stated: options.renderOrder,
       observed: this.renderOrder,
     });
+    textGroupRoots.set(this, root);
   }
 
   get textCount(): number {
@@ -998,6 +1008,9 @@ export class TextGroup extends THREE.Object3D {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    textGroupRenderOrders.delete(this);
+    textGroupRoots.delete(this);
+    if (!this.#root.disposed) this.#root.invalidateMaterial();
   }
 
   #reportError(error: unknown): void {
@@ -1672,6 +1685,7 @@ function orderedTexts(
 }
 
 function resolveTextPresentation(text: Text<AnyRasterTechnique>): TextPresentation {
+  const root = reconciler.root(text);
   let group: TextGroup | undefined;
   let material: ThreeTextMaterial | undefined;
   let pixelSnapping: boolean | undefined;
@@ -1679,6 +1693,13 @@ function resolveTextPresentation(text: Text<AnyRasterTechnique>): TextPresentati
   let parent = text.parent;
   while (parent !== null) {
     if (parent instanceof TextGroup) {
+      if (parent.disposed) {
+        parent = parent.parent;
+        continue;
+      }
+      if (textGroupRoots.get(parent) !== root) {
+        throw new TypeError('one Three TextGroup cannot contain Text objects from different Glyph roots');
+      }
       group ??= parent;
       material ??= parent.material;
       pixelSnapping ??= parent.pixelSnapping;

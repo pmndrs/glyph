@@ -463,9 +463,11 @@ export interface GlyphRenderer<Bindings extends AnyGlyphBindings, Result> {
   dispose(): void;
 }
 
-export interface RendererContext<Bindings extends AnyGlyphBindings> {
+export interface RendererContext<Bindings extends AnyGlyphBindings, Result = unknown> {
   readonly drawRoot: Bindings['drawRoot'];
   readonly signal: AbortSignal;
+  /** Built-in renderer selected by an adapter before a config wrapper is applied. */
+  readonly defaultRenderer?: GlyphRenderer<Bindings, Result>;
 }
 
 /**
@@ -541,6 +543,8 @@ export interface GlyphHandleFactoryContext {
 export interface GlyphFontConfig<Techniques extends { readonly [Key in keyof Techniques]: AnyRasterTechnique }> {
   readonly default: Extract<keyof Techniques, string>;
   readonly techniques: Techniques;
+  /** Finish adapter-specific technique activation before a FontFace load becomes observable. */
+  loadTechnique?(technique: Techniques[keyof Techniques]): Promise<void>;
 }
 
 export interface GlyphConfig<
@@ -548,20 +552,18 @@ export interface GlyphConfig<
   Bindings extends AnyGlyphBindings,
   RendererResult,
   PortableResource = unknown,
-  Capabilities = unknown,
   FontTechniques extends { readonly [Key in keyof FontTechniques]: AnyRasterTechnique } = Readonly<
     Record<string, AnyRasterTechnique>
   >,
   Boundary = unknown,
 > {
   readonly [glyphConfigBrand]: true;
-  readonly capabilities: Capabilities;
   readonly schema: GlyphSchema<Bindings, Boundary>;
   readonly fonts?: GlyphFontConfig<FontTechniques>;
   encode(context: EncodeContext): Codec;
   readonly decode: Decoder<Bindings>;
   resolve(context: ResolveContext<PortableResource, Bindings['resource']>): ResourceLease<Bindings['resource']>;
-  renderer(context: RendererContext<Bindings>): GlyphRenderer<Bindings, RendererResult>;
+  renderer(context: RendererContext<Bindings, RendererResult>): GlyphRenderer<Bindings, RendererResult>;
   createHandle(context: GlyphHandleFactoryContext): Handle;
 }
 
@@ -582,17 +584,16 @@ export function defineGlyphConfig<
   Bindings extends AnyGlyphBindings,
   RendererResult,
   PortableResource = unknown,
-  Capabilities = unknown,
   FontTechniques extends { readonly [Key in keyof FontTechniques]: AnyRasterTechnique } = Readonly<
     Record<string, AnyRasterTechnique>
   >,
   Boundary = unknown,
 >(
   config: Omit<
-    GlyphConfig<Handle, Bindings, RendererResult, PortableResource, Capabilities, FontTechniques, Boundary>,
+    GlyphConfig<Handle, Bindings, RendererResult, PortableResource, FontTechniques, Boundary>,
     typeof glyphConfigBrand
   >,
-): GlyphConfig<Handle, Bindings, RendererResult, PortableResource, Capabilities, FontTechniques, Boundary> {
+): GlyphConfig<Handle, Bindings, RendererResult, PortableResource, FontTechniques, Boundary> {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw new TypeError('GlyphConfig must be an object');
   }
@@ -627,7 +628,7 @@ export function defineGlyphConfig<
       throw new TypeError('GlyphConfig.fonts needs a default key and technique map');
     }
   }
-  return Object.freeze({ ...config, [glyphConfigBrand]: true });
+  return Object.freeze({ ...config, [glyphConfigBrand]: true as const });
 }
 
 /** Creates an idempotent, exactly-once resource lease. */

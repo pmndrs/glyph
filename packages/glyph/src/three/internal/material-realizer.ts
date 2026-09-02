@@ -8,13 +8,14 @@ import { msdfSchema } from '../../raster/msdf.js';
 import { msdf } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug-technique.js';
 import { slug } from '../../raster/slug-technique.js';
-import { bitmapShader, decorationShader, msdfShader, slugShader } from '../../tsl.js';
+import { decorationShader } from '../../tsl/decoration-shader.js';
 import type { ThreeTextEngineCoordinator } from '../engine-coordinator.js';
 import type { ThreeRootContext, ThreeTextMaterial, ThreeTextMaterialContext } from '../material.js';
 import type { ThreePlanProgramBuffer } from '../plan-program-registry.js';
 import { decorationSchema, threeSystemBuffers } from '../render-policy.js';
 import type { ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../handle.js';
 import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
+import { threeBitmapShader, threeMsdfShader, threeSlugShader } from './builtin-shaders.js';
 import {
   dataTexture,
   f32BufferMember,
@@ -156,7 +157,7 @@ export class ThreeMaterialRealizer {
     if (cached !== undefined) return cached.material;
     const texture = this.#textureArray(resource.binding, atlas, 'bitmap');
     const instance = physicalInstance(runInstance(), addressing);
-    const shader = bitmapShader(
+    const shader = threeBitmapShader()(
       {
         origin: storageVec2(part.origin, instance),
         size: storageVec2(part.size, instance),
@@ -200,7 +201,7 @@ export class ThreeMaterialRealizer {
     const rect = field(part.rect);
     const uvRect = field(part.uvRect);
     const page = field(part.page);
-    const shader = msdfShader(
+    const shader = threeMsdfShader()(
       {
         origin: rect.xy,
         size: rect.zw,
@@ -271,7 +272,7 @@ export class ThreeMaterialRealizer {
     const viewport = TSL.uniform(new THREE.Vector2(1, 1)).onRenderUpdate(({ renderer }, self) =>
       renderer?.getDrawingBufferSize(self.value),
     );
-    const shader = slugShader(
+    const shader = threeSlugShader()(
       {
         origin: rect.xy,
         size: rect.zw,

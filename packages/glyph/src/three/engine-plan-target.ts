@@ -1,23 +1,21 @@
 import * as THREE from 'three/webgpu';
 
 import {
+  type BackendMaterialBinding,
+  type BackendTransformBinding,
   type PlanAcceptance,
   applyGlyphPublication,
   type BorrowedBoundCommandBuffer,
   type BoundTransformUpdate,
   type GlyphRenderer,
+  createEngine,
+  type GlyphCommandBufferBinder,
   type PlanCandidate,
   type PlanTarget,
 } from '../core.js';
 import type { ThreeTextEngineCoordinator } from './engine-coordinator.js';
 import type { ThreeGlyphGeometrySource } from './glyph-measurement.js';
-import { ThreeCommandBufferBinder } from './command-buffer.js';
-import type {
-  ThreeBindings,
-  ThreeBufferBinding,
-  ThreeRendererContext,
-  ThreeResolvedResourceBinding,
-} from './handle.js';
+import type { ThreeBindings, ThreeBufferBinding, ThreeRootBinding, ThreeResolvedResourceBinding } from './handle.js';
 import { ThreeTransformSynchronizer } from './transform-synchronizer.js';
 import {
   commitBufferMutations,
@@ -100,7 +98,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   readonly #bindingIds = new WeakMap<object, number>();
   #nextBindingId = 1;
   #preparation: PreparationContext | undefined;
-  readonly #binder: ThreeCommandBufferBinder;
+  readonly #binder: GlyphCommandBufferBinder<ThreeBindings>;
   readonly #renderer: GlyphRenderer<ThreeBindings, void>;
   readonly #rendererAbort = new AbortController();
   #pendingTransformSync:
@@ -113,14 +111,31 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     this.#coordinator = coordinator;
     this.#owner = owner;
     const config = coordinator.config;
-    this.#binder = new ThreeCommandBufferBinder(coordinator, owner, config);
+    const rootContext: ThreeRootContext =
+      owner.root ?? Object.freeze({ name: undefined, scene: undefined, drawRoot: owner.drawRoot });
+    const root: ThreeRootBinding = Object.freeze({
+      drawRoot: owner.drawRoot,
+      resolveMaterial: (binding: BackendMaterialBinding) => {
+        const selected = coordinator.resolveMaterial(binding);
+        return Object.freeze({
+          ...selected,
+          material: selected.material ?? config.material,
+          root: rootContext,
+        });
+      },
+      resolveTransform: (binding: BackendTransformBinding, recordIndex: number) => {
+        const source = coordinator.resolveTransform(binding);
+        return owner.objectForTransform?.(recordIndex, source) ?? source;
+      },
+    });
+    this.#binder = createEngine({ config, codec: coordinator.codec, root });
     const defaultRenderer: GlyphRenderer<ThreeBindings, void> = Object.freeze({
       prepare: (frame: BorrowedBoundCommandBuffer<ThreeBindings>) => this.#prepareRendererCommit(frame),
       syncTransforms: (updates: readonly BoundTransformUpdate<THREE.Object3D>[]) => this.#syncBoundTransforms(updates),
       dispose: () => this.#disposeRendererState(),
     });
-    const context: ThreeRendererContext = Object.freeze({
-      drawRoot: owner.drawRoot,
+    const context = Object.freeze({
+      drawRoot: config.schema.drawRoot(root),
       signal: this.#rendererAbort.signal,
       defaultRenderer,
     });

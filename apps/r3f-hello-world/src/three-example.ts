@@ -47,7 +47,8 @@ export async function mountThreeExample(root: HTMLElement): Promise<() => void> 
 
     resizeThreeExample(root, renderer, camera, text);
 
-    // shape() publishes semantic state and attaches the planned Mesh children to Text.
+    // shape() publishes semantic state and attaches planned Mesh batches to the handle root's
+    // scene-level draw object. Text remains the semantic/transform node rather than owning draws.
     // No scene, canvas, or host renderer was needed before this point.
     text.shape();
 

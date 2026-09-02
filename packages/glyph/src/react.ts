@@ -1,4 +1,4 @@
-import { extend, useThree, type ThreeElement, type ThreeElements } from '@react-three/fiber/webgpu';
+import { extend, useStore, useThree, type ThreeElement, type ThreeElements } from '@react-three/fiber/webgpu';
 import {
   Component,
   Suspense,
@@ -163,8 +163,12 @@ interface GlyphReactContext {
 const GlyphHandleContext = createContext<GlyphReactContext | undefined>(undefined);
 const defaultThreeHandleName = '@pmndrs/glyph/react:default';
 const rootIds = new WeakMap<ThreeRoot, number>();
-const defaultContexts = new WeakMap<ThreeHandle, GlyphReactContext>();
+type R3fRootStore = ReturnType<typeof useStore>;
+const defaultContexts = new WeakMap<R3fRootStore, GlyphReactContext>();
+const defaultRootNames = new WeakMap<R3fRootStore, string>();
+const emptyFontFaces: ReadonlyMap<string, AnyFontFace> = new Map();
 let nextHandleId = 1;
+let nextDefaultRootId = 1;
 let defaultThreeHandleValue: ThreeHandle | undefined;
 let defaultThreeHandlePromise: Promise<ThreeHandle> | undefined;
 
@@ -195,12 +199,12 @@ export function GlyphProvider({
   errorFallback,
   children,
 }: GlyphProviderProps): ReactElement {
-  const selected = handle ?? getInitializedDefaultThreeHandle() ?? use(defaultThreeHandle());
+  const store = useStore();
   const [initial] = useState(() => ({ handle, fontFaces }));
   if (handle !== initial.handle || fontFaces !== initial.fontFaces) {
     throw new Error('GlyphProvider handle and fontFaces are immutable; remount the provider to replace them');
   }
-  const selection = selectReactRoot(selected);
+  const selection = handle === undefined ? useDefaultGlyphContext(store) : selectReactRoot(handle);
   assertUsableHandle(selection.handle);
   assertUsableRoot(selection.root);
   const [faces] = useState(() => createProviderFontFaces(fontFaces));
@@ -229,14 +233,25 @@ function useSelectedHandle(): ThreeHandle {
 }
 
 function useSelectedGlyphContext(): GlyphReactContext {
+  const store = useStore();
   const provided = use(GlyphHandleContext);
   if (provided !== undefined) return provided;
+  return useDefaultGlyphContext(store);
+}
+
+function useDefaultGlyphContext(store: R3fRootStore): GlyphReactContext {
   const handle = getInitializedDefaultThreeHandle() ?? use(defaultThreeHandle());
   assertUsableHandle(handle);
-  const existing = defaultContexts.get(handle);
-  if (existing !== undefined) return existing;
-  const context = Object.freeze({ handle, root: threeHandleRoot(handle), fontFaces: new Map<string, AnyFontFace>() });
-  defaultContexts.set(handle, context);
+  const existing = defaultContexts.get(store);
+  if (existing !== undefined && existing.handle === handle && !existing.root.disposed) return existing;
+  let rootName = defaultRootNames.get(store);
+  if (rootName === undefined) {
+    rootName = `@pmndrs/glyph/react:root:${nextDefaultRootId}`;
+    nextDefaultRootId += 1;
+    defaultRootNames.set(store, rootName);
+  }
+  const context = Object.freeze({ handle, root: handle(rootName), fontFaces: emptyFontFaces });
+  defaultContexts.set(store, context);
   return context;
 }
 
@@ -305,6 +320,11 @@ class GlyphFontErrorBoundary extends Component<GlyphFontErrorBoundaryProps, Glyp
 }
 
 function getInitializedDefaultThreeHandle(): ThreeHandle | undefined {
+  if (defaultThreeHandleValue?.disposed === true) {
+    defaultThreeHandleValue = undefined;
+    defaultThreeHandlePromise = undefined;
+    defaultFontPreloads.clear();
+  }
   if (defaultThreeHandleValue !== undefined) return defaultThreeHandleValue;
   if (!glyph.initialized) return undefined;
   const handle = glyph.handle(defaultThreeHandleName, ThreeConfig);
@@ -313,12 +333,12 @@ function getInitializedDefaultThreeHandle(): ThreeHandle | undefined {
 }
 
 function defaultThreeHandle(): Promise<ThreeHandle> {
-  if (defaultThreeHandlePromise !== undefined) return defaultThreeHandlePromise;
   const ready = getInitializedDefaultThreeHandle();
   if (ready !== undefined) {
-    defaultThreeHandlePromise = Promise.resolve(ready);
+    defaultThreeHandlePromise ??= Promise.resolve(ready);
     return defaultThreeHandlePromise;
   }
+  if (defaultThreeHandlePromise !== undefined) return defaultThreeHandlePromise;
   const initialization = glyph.init().then(() => {
     const initialized = getInitializedDefaultThreeHandle();
     if (initialized === undefined) throw new Error('Glyph initialization completed without an engine');
