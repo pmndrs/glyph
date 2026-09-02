@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import type { BakeProgress } from '@pmndrs/glyph';
 
@@ -13,7 +13,7 @@ export function useBakeProgress(label: string): {
   const [value, setValue] = useState<BakeProgress>();
   const [active, setActive] = useState(false);
   const lastConsoleKey = useRef('');
-  const publish = (progress: BakeProgress): void => {
+  const publish = useCallback((progress: BakeProgress): void => {
     setValue(progress);
     setActive(true);
     if (!import.meta.env.DEV) return;
@@ -23,8 +23,8 @@ export function useBakeProgress(label: string): {
     if (key === lastConsoleKey.current) return;
     lastConsoleKey.current = key;
     console.info(`[pmndrs/glyph] ${label} ${progress.stage} bake: ${progress.phase} ${String(percentage)}%`);
-  };
-  const finish = (): void => setActive(false);
+  }, [label]);
+  const finish = useCallback((): void => setActive(false), []);
   return { value, active, publish, finish };
 }
 

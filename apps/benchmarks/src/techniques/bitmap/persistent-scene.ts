@@ -219,7 +219,7 @@ function countDraws(object: THREE.Object3D): number {
   return count;
 }
 
-function countRenderedGlyphs(text: Text<typeof bitmap>): number {
+function countShapedGlyphs(text: Text<typeof bitmap>): number {
   return text.measure().glyphCount;
 }
 
@@ -424,9 +424,9 @@ async function activateBitmapTextPersistentScene(
     if (expectedGlyphCount !== undefined) {
       const missing = countMissingGlyphs(initialLayout);
       if (missing !== 0) throw new Error(`benchmark specimen contains ${missing} missing glyphs`);
-      const glyphCount = countRenderedGlyphs(activeText);
+      const glyphCount = countShapedGlyphs(activeText);
       if (glyphCount !== expectedGlyphCount) {
-        throw new Error(`live workload rendered ${glyphCount} glyphs; expected ${expectedGlyphCount}`);
+        throw new Error(`live workload shaped ${glyphCount} glyphs; expected ${expectedGlyphCount}`);
       }
     }
     const textReadyMs = performance.now() - textStarted;
@@ -486,7 +486,7 @@ async function activateBitmapTextPersistentScene(
     let presentation: BitmapTextPresentation = {
       kind: 'settled',
       revision: 0,
-      presented: { transitioned: false, matchedGlyphs: 0, targetGlyphs: countRenderedGlyphs(activeText) },
+      presented: { transitioned: false, matchedGlyphs: 0, targetGlyphs: countShapedGlyphs(activeText) },
     };
     const disposePresentation = (): void => {
       if (presentation.kind !== 'transitioning') return;
@@ -498,7 +498,7 @@ async function activateBitmapTextPersistentScene(
         ...presentation.presented,
         revision: presentation.revision,
         presentationProgress: presentation.kind === 'settled' ? 1 : presentation.progress,
-        glyphCount: countRenderedGlyphs(activeText),
+        glyphCount: countShapedGlyphs(activeText),
         lineCount: layout.lineCount,
         layoutWidth: layout.width,
         layoutHeight: layout.height,
@@ -612,9 +612,9 @@ async function activateBitmapTextPersistentScene(
         activeText.position.set(committedPosition[0], committedPosition[1], 0);
         return committedAt;
       });
-      if (currentExpectedGlyphCount !== undefined && countRenderedGlyphs(activeText) !== currentExpectedGlyphCount) {
+      if (currentExpectedGlyphCount !== undefined && countShapedGlyphs(activeText) !== currentExpectedGlyphCount) {
         throw new Error(
-          `live workload rendered ${countRenderedGlyphs(activeText)} glyphs; expected ${currentExpectedGlyphCount}`,
+          `live workload shaped ${countShapedGlyphs(activeText)} glyphs; expected ${currentExpectedGlyphCount}`,
         );
       }
       const reflowSceneStartedAt = performance.now();
@@ -690,7 +690,7 @@ async function activateBitmapTextPersistentScene(
           dpr: viewport.dpr,
           showGrid: gridVisible,
           ...snapshot,
-          glyphCount: countRenderedGlyphs(activeText),
+          glyphCount: countShapedGlyphs(activeText),
           missingGlyphCount: countMissingGlyphs(layout),
           drawCount: countDraws(scene),
           layoutWidth: layout.width,

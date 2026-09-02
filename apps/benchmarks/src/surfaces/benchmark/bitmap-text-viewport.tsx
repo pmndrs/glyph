@@ -341,6 +341,7 @@ export function BitmapTextViewport({
       // Activation committed the configuration this scene was constructed from; catch up with whatever the surface
       // has moved on to since, then hand later changes to the synchronous effect below.
       activeSceneRef.current = created;
+      setSettledWorkload(configuration.workload);
       cancelInitialUpdate = applyLiveTextUpdate(created, sceneConfiguration(), false, {
         onPresentation: publishPresentation,
         onSettled: publishSettled,
