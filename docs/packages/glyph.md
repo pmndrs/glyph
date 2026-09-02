@@ -50,9 +50,6 @@ sources:
   - id: backend
     resource: ../../packages/glyph/src/core/backend.ts
     title: Glyph backend and Wasm plan transport
-  - id: core-api
-    resource: ../../packages/glyph/src/core.ts
-    title: Renderer-neutral core layer
   - id: tsl-shaders
     resource: ../../packages/glyph/src/tsl.ts
     title: Technique shader library layer
@@ -311,6 +308,10 @@ Three's ordinary scene traversal owns world-matrix composition. The root observe
 publishes semantic changes once at its renderer-owned draw node, and patches root-relative transforms through a separate
 engine-free side path. Camera motion does not republish text. Text, nested `TextGroup`, and other ancestor motion,
 visibility, reparenting, and manual matrix changes patch only affected renderer-local slots and do not enter Wasm.
+Each traversed Text reports only its own current Scene. When that Scene and the renderer-owned draw object are unchanged,
+observation returns without allocating or scanning sibling Text instances. A full membership scan is reserved for an
+actual Scene transition or a detached draw object, including recovery after a host clears and reattaches the authored
+scene tree.
 
 Rust publishes one revision containing:
 
