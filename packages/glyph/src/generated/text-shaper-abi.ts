@@ -228,8 +228,12 @@ export const textShaperAbi = {
     "requestCapacity": "pmndrs_glyph_engine_request_capacity",
     "requestPointer": "pmndrs_glyph_engine_request_ptr",
     "reservePlanner": "pmndrs_glyph_engine_reserve_planner",
+    "reserveUpdateBatch": "pmndrs_glyph_engine_reserve_update_batch",
     "retainedFontBytes": "pmndrs_glyph_shaper_retained_font_bytes",
-    "textUpdate": "pmndrs_glyph_engine_update"
+    "textUpdate": "pmndrs_glyph_engine_update",
+    "textUpdateBatch": "pmndrs_glyph_engine_update_batch",
+    "updateBatchCapacity": "pmndrs_glyph_engine_update_batch_capacity",
+    "updateBatchPointer": "pmndrs_glyph_engine_update_batch_ptr"
   },
   "layouts": {
     "engineBuffer": {
@@ -565,6 +569,14 @@ export const textShaperAbi = {
       "reserved0": 2,
       "size": 24,
       "textStart": 4
+    },
+    "engineUpdateBatchEntry": {
+      "alignment": 4,
+      "plannerId": 0,
+      "requestLength": 4,
+      "resultPointer": 8,
+      "size": 16,
+      "status": 12
     },
     "engineUpdateRequest": {
       "abiVersion": 0,

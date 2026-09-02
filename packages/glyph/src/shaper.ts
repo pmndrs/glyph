@@ -85,7 +85,11 @@ interface ShaperExports {
   readonly disposePlanner: (handle: number) => number;
   readonly requestPointer: (handle: number) => number;
   readonly requestCapacity: (handle: number) => number;
+  readonly reserveUpdateBatch: (count: number) => number;
+  readonly updateBatchPointer: () => number;
+  readonly updateBatchCapacity: () => number;
   readonly textUpdate: (handle: number, pointer: number, length: number) => number;
+  readonly textUpdateBatch: (entriesPointer: number, count: number) => number;
   readonly measureParagraph: (handle: number, pointer: number, length: number, paragraphId: number) => number;
   readonly copyGlyphs: (
     handle: number,
@@ -271,7 +275,11 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       disposePlanner: exportedFunction(instance, functions.disposePlanner),
       requestPointer: exportedFunction(instance, functions.requestPointer),
       requestCapacity: exportedFunction(instance, functions.requestCapacity),
+      reserveUpdateBatch: exportedFunction(instance, functions.reserveUpdateBatch),
+      updateBatchPointer: exportedFunction(instance, functions.updateBatchPointer),
+      updateBatchCapacity: exportedFunction(instance, functions.updateBatchCapacity),
       textUpdate: exportedFunction(instance, functions.textUpdate),
+      textUpdateBatch: exportedFunction(instance, functions.textUpdateBatch),
       measureParagraph: exportedFunction(instance, functions.measureParagraph),
       copyGlyphs: exportedFunction(instance, functions.copyGlyphs),
       copyDecorations: exportedFunction(instance, functions.copyDecorations),

@@ -20,7 +20,9 @@ use crate::{
         ENGINE_RESULT_RESOURCES_OFFSET, ENGINE_RESULT_RESULT_CAPACITY,
         ENGINE_RESULT_RETIREMENT_COUNT, ENGINE_RESULT_RETIREMENTS_OFFSET,
         ENGINE_RESULT_SEMANTICS_COUNT, ENGINE_RESULT_SEMANTICS_OFFSET, ENGINE_RESULT_STATUS,
-        ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+        ENGINE_UPDATE_BATCH_ENTRY_SIZE, ENGINE_UPDATE_BATCH_PLANNER_ID,
+        ENGINE_UPDATE_BATCH_REQUEST_LENGTH, ENGINE_UPDATE_BATCH_RESULT_POINTER,
+        ENGINE_UPDATE_BATCH_STATUS, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     },
     engine::{
         frame::{CommittedUpdate, PlannerRevision, RESULT_FLAG_CHECKPOINT},
@@ -29,11 +31,139 @@ use crate::{
         semantic_view::SemanticRecord,
         state::FrameFault,
     },
-    wire::write_u32,
+    wire::{read_u32, write_u32},
 };
 
 const ARENA_ALIGNMENT: usize = 16;
 const MAX_ARENA_BYTES: u32 = 64 * 1024 * 1024;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct UpdateBatchResult {
+    pub result_pointer: u32,
+    pub status: u32,
+}
+
+#[derive(Default)]
+pub(crate) struct UpdateBatchTransport {
+    arena: AlignedArena,
+    planner_ids: Vec<u32>,
+}
+
+impl UpdateBatchTransport {
+    pub fn reserve(&mut self, count: u32) -> Result<(), u32> {
+        let required = count
+            .checked_mul(ENGINE_UPDATE_BATCH_ENTRY_SIZE)
+            .ok_or(STATUS_RESULT_TOO_LARGE)?;
+        let target = growth_capacity(self.arena.capacity(), required)?;
+        let target_count = usize::try_from(target / ENGINE_UPDATE_BATCH_ENTRY_SIZE)
+            .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
+        if target_count > self.planner_ids.capacity() {
+            self.planner_ids
+                .try_reserve_exact(target_count - self.planner_ids.len())
+                .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
+        }
+        self.arena.reserve(required)
+    }
+
+    pub fn pointer(&self) -> usize {
+        if self.arena.capacity() == 0 {
+            0
+        } else {
+            self.arena.pointer()
+        }
+    }
+
+    pub fn capacity(&self) -> u32 {
+        self.arena.capacity() / ENGINE_UPDATE_BATCH_ENTRY_SIZE
+    }
+
+    /// Validates the complete descriptor table before invoking any entry. This makes duplicate
+    /// planner IDs and malformed table bounds batch-level errors with no planner mutation.
+    pub fn process(
+        &mut self,
+        entries_pointer: usize,
+        count: u32,
+        mut update: impl FnMut(u32, u32) -> UpdateBatchResult,
+    ) -> u32 {
+        let Some(byte_length) = count.checked_mul(ENGINE_UPDATE_BATCH_ENTRY_SIZE) else {
+            return STATUS_INVALID_REQUEST;
+        };
+        if entries_pointer != self.pointer() || count > self.capacity() {
+            return STATUS_INVALID_REQUEST;
+        }
+        let Ok(byte_length) = usize::try_from(byte_length) else {
+            return STATUS_INVALID_REQUEST;
+        };
+        let Some(entries) = self.arena.bytes().get(..byte_length) else {
+            return STATUS_INVALID_REQUEST;
+        };
+        self.planner_ids.clear();
+        for index in 0..count as usize {
+            let Some(planner_id) = entry_u32(entries, index, ENGINE_UPDATE_BATCH_PLANNER_ID) else {
+                return STATUS_INVALID_REQUEST;
+            };
+            if planner_id == 0 {
+                return STATUS_INVALID_REQUEST;
+            }
+            if self.planner_ids.len() == self.planner_ids.capacity() {
+                return STATUS_RESULT_TOO_LARGE;
+            }
+            self.planner_ids.push(planner_id);
+        }
+        self.planner_ids.sort_unstable();
+        if self.planner_ids.windows(2).any(|pair| pair[0] == pair[1]) {
+            return STATUS_INVALID_REQUEST;
+        }
+        for index in 0..count as usize {
+            let planner_id =
+                match entry_u32(self.arena.bytes(), index, ENGINE_UPDATE_BATCH_PLANNER_ID) {
+                    Some(value) => value,
+                    None => return STATUS_INVALID_REQUEST,
+                };
+            let request_length = match entry_u32(
+                self.arena.bytes(),
+                index,
+                ENGINE_UPDATE_BATCH_REQUEST_LENGTH,
+            ) {
+                Some(value) => value,
+                None => return STATUS_INVALID_REQUEST,
+            };
+            let result = update(planner_id, request_length);
+            let Some(entry) = entry_mut(self.arena.bytes_mut(), index) else {
+                return STATUS_INVALID_REQUEST;
+            };
+            write_u32(
+                entry,
+                ENGINE_UPDATE_BATCH_RESULT_POINTER,
+                result.result_pointer,
+            );
+            write_u32(entry, ENGINE_UPDATE_BATCH_STATUS, result.status);
+        }
+        0
+    }
+
+    #[cfg(test)]
+    fn entries_mut(&mut self) -> &mut [u8] {
+        self.arena.bytes_mut()
+    }
+}
+
+fn entry_u32(bytes: &[u8], index: usize, field: usize) -> Option<u32> {
+    let entry = entry(bytes, index)?;
+    read_u32(entry, field).ok()
+}
+
+fn entry(bytes: &[u8], index: usize) -> Option<&[u8]> {
+    let size = ENGINE_UPDATE_BATCH_ENTRY_SIZE as usize;
+    let start = index.checked_mul(size)?;
+    bytes.get(start..start.checked_add(size)?)
+}
+
+fn entry_mut(bytes: &mut [u8], index: usize) -> Option<&mut [u8]> {
+    let size = ENGINE_UPDATE_BATCH_ENTRY_SIZE as usize;
+    let start = index.checked_mul(size)?;
+    bytes.get_mut(start..start.checked_add(size)?)
+}
 
 #[repr(C, align(16))]
 #[derive(Clone, Copy)]
@@ -87,6 +217,13 @@ impl FrameTransport {
         self.outputs[0].capacity().min(self.outputs[1].capacity())
     }
 
+    pub fn result_status(&self, pointer: usize) -> Option<u32> {
+        self.outputs
+            .iter()
+            .find(|output| output.pointer() == pointer)
+            .and_then(|output| read_u32(output.bytes(), ENGINE_RESULT_STATUS).ok())
+    }
+
     pub fn request_at(&self, pointer: usize, length: u32) -> Result<&[u8], u32> {
         if pointer != self.request.pointer() || length > self.request.capacity() {
             return Err(STATUS_INVALID_REQUEST);
@@ -97,12 +234,23 @@ impl FrameTransport {
             .ok_or(STATUS_INVALID_REQUEST)
     }
 
+    pub fn request_at_current(&self, length: u32) -> Result<&[u8], u32> {
+        self.request_at(self.request.pointer(), length)
+    }
+
     pub fn ensure_publish_capacity(&self, byte_length: u32) -> Result<(), u32> {
         if byte_length <= self.result_capacity() {
             Ok(())
         } else {
             Err(STATUS_RESULT_TOO_LARGE)
         }
+    }
+
+    /// Grows only the inactive output. The currently published pointer remains valid until the
+    /// normal next successful publication for this planner switches A/B ownership.
+    pub fn reserve_publish_capacity(&mut self, byte_length: u32) -> Result<(), u32> {
+        let slot = self.inactive_slot();
+        self.outputs[slot].reserve(byte_length)
     }
 
     pub fn next_publication_generation(&self) -> Result<u32, u32> {
@@ -406,6 +554,7 @@ fn write_span(
     write_u32(bytes, count_field, span.count);
 }
 
+#[derive(Default)]
 struct AlignedArena {
     blocks: Vec<ArenaBlock>,
 }
@@ -418,15 +567,10 @@ impl AlignedArena {
     }
 
     fn reserve(&mut self, required: u32) -> Result<(), u32> {
-        let required = aligned_capacity(required)?;
         let current = self.capacity();
-        if required <= current {
+        let target = growth_capacity(current, required)?;
+        if target == current {
             return Ok(());
-        }
-        let doubled = current.checked_mul(2).unwrap_or(MAX_ARENA_BYTES);
-        let target = required.max(doubled).min(MAX_ARENA_BYTES);
-        if target < required {
-            return Err(STATUS_RESULT_TOO_LARGE);
         }
         let target_blocks =
             usize::try_from(target).map_err(|_| STATUS_RESULT_TOO_LARGE)? / ARENA_ALIGNMENT;
@@ -469,6 +613,20 @@ impl AlignedArena {
     }
 }
 
+fn growth_capacity(current: u32, required: u32) -> Result<u32, u32> {
+    let required = aligned_capacity(required)?;
+    if required <= current {
+        return Ok(current);
+    }
+    let doubled = current.checked_mul(2).unwrap_or(MAX_ARENA_BYTES);
+    let target = required.max(doubled).min(MAX_ARENA_BYTES);
+    if target < required {
+        Err(STATUS_RESULT_TOO_LARGE)
+    } else {
+        Ok(target)
+    }
+}
+
 fn aligned_capacity(required: u32) -> Result<u32, u32> {
     if required > MAX_ARENA_BYTES {
         return Err(STATUS_RESULT_TOO_LARGE);
@@ -487,9 +645,13 @@ const _: () = assert!(ENGINE_RESULT_HEADER_ALIGNMENT as usize == ARENA_ALIGNMENT
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wire::read_u32;
     use crate::{
-        abi_contract::{ENGINE_RESULT_POLICY_HANDLE, PATCH_PAYLOAD_OFFSET},
+        STATUS_PLANNER_MISSING,
+        abi_contract::{
+            ENGINE_RESULT_POLICY_HANDLE, ENGINE_UPDATE_BATCH_PLANNER_ID,
+            ENGINE_UPDATE_BATCH_REQUEST_LENGTH, ENGINE_UPDATE_BATCH_RESULT_POINTER,
+            ENGINE_UPDATE_BATCH_STATUS, PATCH_PAYLOAD_OFFSET,
+        },
         engine::render_plan::{BUFFER_ORDERED_DIRECT, BufferRecord, PATCH_WRITE, PatchRecord},
     };
 
@@ -506,6 +668,224 @@ mod tests {
             .unwrap();
         assert_eq!(transport.request_capacity(), initial * 2);
         assert_eq!(transport.request.bytes()[0], 7);
+    }
+
+    #[test]
+    fn update_batch_processes_every_unique_planner_and_isolates_entry_failures() {
+        let mut batch = UpdateBatchTransport::default();
+        batch.reserve(2).unwrap();
+        write_batch_entry(batch.entries_mut(), 0, 3, 80, 0xaaaa_aaaa, 0xbbbb_bbbb);
+        write_batch_entry(batch.entries_mut(), 1, 7, 96, 0xcccc_cccc, 0xdddd_dddd);
+        let pointer = batch.pointer();
+        let mut visited = Vec::new();
+
+        assert_eq!(
+            batch.process(pointer, 2, |planner_id, request_length| {
+                visited.push((planner_id, request_length));
+                if planner_id == 3 {
+                    UpdateBatchResult {
+                        result_pointer: 0x1000,
+                        status: 0,
+                    }
+                } else {
+                    UpdateBatchResult {
+                        result_pointer: 0,
+                        status: STATUS_PLANNER_MISSING,
+                    }
+                }
+            }),
+            0
+        );
+        assert_eq!(visited, [(3, 80), (7, 96)]);
+        assert_eq!(
+            entry_u32(batch.arena.bytes(), 0, ENGINE_UPDATE_BATCH_RESULT_POINTER),
+            Some(0x1000)
+        );
+        assert_eq!(
+            entry_u32(batch.arena.bytes(), 0, ENGINE_UPDATE_BATCH_STATUS),
+            Some(0)
+        );
+        assert_eq!(
+            entry_u32(batch.arena.bytes(), 1, ENGINE_UPDATE_BATCH_RESULT_POINTER),
+            Some(0)
+        );
+        assert_eq!(
+            entry_u32(batch.arena.bytes(), 1, ENGINE_UPDATE_BATCH_STATUS),
+            Some(STATUS_PLANNER_MISSING)
+        );
+    }
+
+    #[test]
+    fn update_batch_reserves_duplicate_scratch_for_its_full_advertised_capacity() {
+        let mut batch = UpdateBatchTransport::default();
+        batch.reserve(2).unwrap();
+        batch.reserve(3).unwrap();
+        assert_eq!(
+            batch.capacity(),
+            4,
+            "arena doubling is visible as entry capacity"
+        );
+        for index in 0..batch.capacity() as usize {
+            write_batch_entry(
+                batch.entries_mut(),
+                index,
+                index as u32 + 1,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                0,
+                0,
+            );
+        }
+        let pointer = batch.pointer();
+        let capacity = batch.capacity();
+        let mut calls = 0;
+
+        assert_eq!(
+            batch.process(pointer, capacity, |_, _| {
+                calls += 1;
+                UpdateBatchResult {
+                    result_pointer: 1,
+                    status: 0,
+                }
+            }),
+            0
+        );
+        assert_eq!(calls, 4);
+    }
+
+    #[test]
+    fn rejected_update_batch_growth_and_bounds_preserve_the_owned_arena() {
+        let mut batch = UpdateBatchTransport::default();
+        batch.reserve(2).unwrap();
+        let pointer = batch.pointer();
+        let capacity = batch.capacity();
+        let mut calls = 0;
+
+        assert_eq!(batch.reserve(u32::MAX), Err(STATUS_RESULT_TOO_LARGE));
+        assert_eq!(batch.pointer(), pointer);
+        assert_eq!(batch.capacity(), capacity);
+        assert_eq!(
+            batch.process(pointer + ARENA_ALIGNMENT, 1, |_, _| {
+                calls += 1;
+                UpdateBatchResult {
+                    result_pointer: 0,
+                    status: 0,
+                }
+            }),
+            STATUS_INVALID_REQUEST
+        );
+        assert_eq!(
+            batch.process(pointer, capacity + 1, |_, _| {
+                calls += 1;
+                UpdateBatchResult {
+                    result_pointer: 0,
+                    status: 0,
+                }
+            }),
+            STATUS_INVALID_REQUEST
+        );
+        assert_eq!(calls, 0);
+    }
+
+    #[test]
+    fn update_batch_keeps_each_planner_output_pointer_live() {
+        let mut batch = UpdateBatchTransport::default();
+        batch.reserve(2).unwrap();
+        write_batch_entry(batch.entries_mut(), 0, 3, 80, 0, 0);
+        write_batch_entry(batch.entries_mut(), 1, 7, 96, 0, 0);
+        let pointer = batch.pointer();
+        let mut transports = [
+            (3, FrameTransport::new(256, 256).unwrap()),
+            (7, FrameTransport::new(256, 256).unwrap()),
+        ];
+        let mut published = Vec::new();
+
+        assert_eq!(
+            batch.process(pointer, 2, |planner_id, _| {
+                let transport = transports
+                    .iter_mut()
+                    .find(|(id, _)| *id == planner_id)
+                    .map(|(_, transport)| transport)
+                    .unwrap();
+                let staged = transport.stage_plan(plan()).unwrap();
+                let native_pointer = transport.publish_success(commit_for(planner_id, 1), staged);
+                published.push((planner_id, native_pointer));
+                UpdateBatchResult {
+                    // Native pointers do not fit the Wasm32 wire field. The token proves each
+                    // descriptor keeps its own returned identity; `published` verifies that the
+                    // actual arena pointers and bytes remain live after the complete batch.
+                    result_pointer: 0x1000 + planner_id,
+                    status: 0,
+                }
+            }),
+            0
+        );
+
+        for (index, (planner_id, transport)) in transports.iter().enumerate() {
+            let result_pointer = entry_u32(
+                batch.arena.bytes(),
+                index,
+                ENGINE_UPDATE_BATCH_RESULT_POINTER,
+            )
+            .unwrap();
+            assert_eq!(result_pointer, 0x1000 + planner_id);
+            let native_pointer = published
+                .iter()
+                .find(|(id, _)| id == planner_id)
+                .map(|(_, pointer)| *pointer)
+                .unwrap();
+            assert_eq!(transport.result_status(native_pointer), Some(0));
+            let output = transport
+                .outputs
+                .iter()
+                .find(|output| output.pointer() == native_pointer)
+                .unwrap();
+            assert_eq!(
+                read_u32(output.bytes(), ENGINE_RESULT_PLANNER_ID).unwrap(),
+                *planner_id
+            );
+        }
+    }
+
+    #[test]
+    fn duplicate_update_batch_planners_are_rejected_before_outputs_or_planners_mutate() {
+        let mut batch = UpdateBatchTransport::default();
+        batch.reserve(2).unwrap();
+        write_batch_entry(batch.entries_mut(), 0, 3, 80, 0xaaaa_aaaa, 0xbbbb_bbbb);
+        write_batch_entry(batch.entries_mut(), 1, 3, 96, 0xcccc_cccc, 0xdddd_dddd);
+        let before = batch.arena.bytes().to_vec();
+        let pointer = batch.pointer();
+        let mut calls = 0;
+
+        assert_eq!(
+            batch.process(pointer, 2, |_, _| {
+                calls += 1;
+                UpdateBatchResult {
+                    result_pointer: 0,
+                    status: 0,
+                }
+            }),
+            STATUS_INVALID_REQUEST
+        );
+        assert_eq!(calls, 0);
+        assert_eq!(batch.arena.bytes(), before);
+    }
+
+    #[test]
+    fn growing_an_inactive_output_preserves_the_active_publication_pointer() {
+        let mut transport = FrameTransport::new(256, 256).unwrap();
+        let first_plan = transport.stage_plan(plan()).unwrap();
+        let first = transport.publish_success(commit(1), first_plan);
+        let first_header =
+            transport.outputs[0].bytes()[..ENGINE_RESULT_HEADER_SIZE as usize].to_vec();
+
+        transport.reserve_publish_capacity(1024).unwrap();
+
+        assert_eq!(first, transport.outputs[0].pointer());
+        assert_eq!(
+            &transport.outputs[0].bytes()[..ENGINE_RESULT_HEADER_SIZE as usize],
+            first_header
+        );
+        assert!(transport.outputs[1].capacity() >= 1024);
     }
 
     #[test]
@@ -631,8 +1011,12 @@ mod tests {
     }
 
     fn commit(revision: u32) -> CommittedUpdate {
+        commit_for(3, revision)
+    }
+
+    fn commit_for(planner_id: u32, revision: u32) -> CommittedUpdate {
         CommittedUpdate {
-            planner_id: 3,
+            planner_id,
             revision: PlannerRevision {
                 engine: revision,
                 plan: revision,
@@ -647,5 +1031,20 @@ mod tests {
             policy_handle: 1,
             ..RenderPlanView::default()
         }
+    }
+
+    fn write_batch_entry(
+        bytes: &mut [u8],
+        index: usize,
+        planner_id: u32,
+        request_length: u32,
+        result_pointer: u32,
+        status: u32,
+    ) {
+        let entry = entry_mut(bytes, index).unwrap();
+        write_u32(entry, ENGINE_UPDATE_BATCH_PLANNER_ID, planner_id);
+        write_u32(entry, ENGINE_UPDATE_BATCH_REQUEST_LENGTH, request_length);
+        write_u32(entry, ENGINE_UPDATE_BATCH_RESULT_POINTER, result_pointer);
+        write_u32(entry, ENGINE_UPDATE_BATCH_STATUS, status);
     }
 }

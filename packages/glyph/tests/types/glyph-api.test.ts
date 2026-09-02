@@ -78,7 +78,7 @@ type RecordingBindings = GlyphBindings<
 
 interface RecordingRoot extends GlyphRoot {
   readonly kind: 'recording-root';
-  publish(): Readonly<{ readonly kind: 'recording-result' }>;
+  readonly result: Readonly<{ readonly kind: 'recording-result' }> | undefined;
 }
 
 const recordingSchema: GlyphSchema<RecordingBindings, RecordingBoundary> = {
@@ -115,14 +115,23 @@ const recordingConfig = defineGlyphConfig({
     create: (context) => {
       context.codec.codecLabel satisfies 'recording';
       context.services.createText satisfies (typeof context.services)['createText'];
-      const extension = Object.freeze({
+      let result: Readonly<{ readonly kind: 'recording-result' }> | undefined;
+      const extension = {
         kind: 'recording-root' as const,
-        publish: () => context.services.shape(),
-      });
+        get result() {
+          return result;
+        },
+      };
       return context.create(extension, {
         boundary: Object.freeze({
           drawRoot: Object.freeze({ kind: 'recording-draw-root' as const }),
         }),
+        shape: {
+          accepted: (accepted) => {
+            accepted.kind satisfies 'recording-result';
+            result = accepted;
+          },
+        },
       });
     },
   },
@@ -163,7 +172,7 @@ async function configureGlyph(): Promise<void> {
   first.name satisfies undefined;
   first.disposed satisfies boolean;
   first.kind satisfies 'recording-root';
-  first.publish().kind satisfies 'recording-result';
+  first.result?.kind satisfies 'recording-result' | undefined;
   first.handle satisfies GlyphHandle<RecordingRoot>;
   const hud = first('hud');
   hud.kind satisfies 'recording-root';

@@ -134,9 +134,8 @@ test('one initialized Glyph runtime creates independent named Three handles over
   secondScene.add(secondSceneLabel);
 
   try {
-    label.shape();
-    secondSceneLabel.shape();
-    group.shape();
+    scene.updateMatrixWorld(true);
+    secondScene.updateMatrixWorld(true);
     assert.equal(wrappedEncodeCalls, 1, 'a spread config participates in its handle construction');
     assert.equal(wrappedRendererFactories, 1, 'one config renderer is created for the TextGroup boundary');
     assert.ok(wrappedResolveCalls > 0, 'the selected resolver binds acquired portable resources');
@@ -148,7 +147,7 @@ test('one initialized Glyph runtime creates independent named Three handles over
       transforms: wrappedTransformSyncCalls,
     };
     grouped.position.x += 1;
-    group.shape();
+    scene.updateMatrixWorld(true);
     assert.equal(wrappedResolveCalls, semanticCounts.resolve, 'transform-only shape does not resolve');
     assert.equal(wrappedPrepareCalls, semanticCounts.prepare, 'transform-only shape does not prepare semantic state');
     assert.ok(wrappedTransformSyncCalls > semanticCounts.transforms, 'transform-only shape synchronizes the renderer');
@@ -183,6 +182,48 @@ test('one initialized Glyph runtime creates independent named Three handles over
   reused.dispose();
 });
 
+test('glyph.shape batches dirty roots across handles into one engine update', async (t) => {
+  const first = await createThreeTestHandle(t);
+  const second = await createThreeTestHandle(t);
+  const named = first('batch-scene');
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
+  const firstScene = new THREE.Scene();
+  const secondScene = new THREE.Scene();
+  const thirdScene = new THREE.Scene();
+  const labels = [
+    first.createText({ font, text: 'anonymous' }),
+    named.createText({ font, text: 'named' }),
+    second.createText({ font, text: 'second handle' }),
+  ];
+  firstScene.add(labels[0]);
+  secondScene.add(labels[1]);
+  thirdScene.add(labels[2]);
+  instrumentedGlyph.reset();
+
+  try {
+    glyph.shape();
+    assert.equal(instrumentedGlyph.crossings, 1, 'all dirty roots share one engine update call');
+    assert.equal(instrumentedGlyph.latestBatchCount, 3, 'the batch carries every dirty root exactly once');
+    assert.ok(rootDraws(firstScene).length > 0);
+    assert.ok(rootDraws(secondScene, 'batch-scene').length > 0);
+    assert.ok(rootDraws(thirdScene).length > 0);
+
+    glyph.shape();
+    assert.equal(instrumentedGlyph.crossings, 1, 'an unchanged global shape performs no engine update');
+
+    for (const [index, label] of labels.entries()) label.text = `updated ${String(index)}`;
+    glyph.shape();
+    assert.equal(instrumentedGlyph.crossings, 2);
+    assert.equal(instrumentedGlyph.latestBatchCount, 3);
+  } finally {
+    for (const label of labels) label.dispose();
+    font.dispose();
+  }
+});
+
 test('one Three root binds one Scene and exposes its semantic name to material factories', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont(
@@ -206,12 +247,12 @@ test('one Three root binds one Scene and exposes its semantic name to material f
 
   try {
     assert.throws(
-      () => root.shape(),
+      () => glyph.shape(),
       /spans more than one Scene; select a different handle root for each Scene/,
       'a root cannot ambiguously publish into two host scenes',
     );
     firstScene.add(second);
-    root.shape();
+    firstScene.updateMatrixWorld(true);
     assert.equal(root.drawRoot.parent, firstScene);
     assert.equal(materialRoots.length > 0, true);
     assert.equal(materialRoots[0], root, 'material factories receive the selected root object');
@@ -235,7 +276,7 @@ test('a root releases its renderer publication when its final Text is disposed',
   const scene = new THREE.Scene();
   const first = root.createText({ font, text: 'first' });
   scene.add(first);
-  first.shape();
+  scene.updateMatrixWorld(true);
   assert.equal(root.drawRoot.parent, scene);
   assert.ok(root.gpuBytes > 0);
 
@@ -246,7 +287,7 @@ test('a root releases its renderer publication when its final Text is disposed',
 
   const second = root.createText({ font, text: 'second' });
   scene.add(second);
-  second.shape();
+  scene.updateMatrixWorld(true);
   assert.equal(root.drawRoot.parent, scene, 'the same idempotent root can publish again');
   second.dispose();
   font.dispose();
@@ -292,7 +333,7 @@ test('TextGroup ancestry cannot smuggle a Text across Glyph roots', async (t) =>
   bridge.add(hudText);
   scene.add(worldGroup);
   try {
-    assert.throws(() => hudText.shape(), /different Glyph roots/);
+    assert.throws(() => glyph.shape(), /different Glyph roots/);
   } finally {
     hudText.dispose();
     worldGroup.dispose();
@@ -1229,7 +1270,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   let label;
   const material = defineTextMaterial((context) => {
     if (failMaterial) {
-      assert.throws(() => label.measure(), /cannot reenter publication/u);
+      assert.throws(() => glyph.shape(), /cannot be reentered while a borrowed render plan is active/u);
       throw new Error('deliberate material realization failure');
     }
     return context.createDefaultMaterial();
@@ -1683,6 +1724,7 @@ function instrumentNextGlyphEngine() {
   let latestRequest;
   let latestUpdateFlags = 0;
   let latestUpdateGeneration = 0;
+  let latestBatchCount = 0;
   WebAssembly.instantiate = async (source, imports) => {
     const instance = await originalInstantiate(source, imports);
     const exports = { ...instance.exports };
@@ -1690,6 +1732,7 @@ function instrumentNextGlyphEngine() {
     assert.equal(typeof update, 'function', 'instrumented shaper must export text_update');
     exports[abi.functions.textUpdate] = (...arguments_) => {
       crossings += 1;
+      latestBatchCount = 1;
       const [, pointer, length] = arguments_;
       latestRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
       const resultPointer = update(...arguments_);
@@ -1699,6 +1742,33 @@ function instrumentNextGlyphEngine() {
         latestUpdateGeneration = header.getUint32(abi.layouts.engineResult.publicationGeneration, true);
       }
       return resultPointer;
+    };
+    const updateBatch = exports[abi.functions.textUpdateBatch];
+    const requestPointer = exports[abi.functions.requestPointer];
+    assert.equal(typeof updateBatch, 'function', 'instrumented shaper must export text_update_batch');
+    assert.equal(typeof requestPointer, 'function', 'instrumented shaper must export request_ptr');
+    exports[abi.functions.textUpdateBatch] = (pointer, count) => {
+      crossings += 1;
+      latestBatchCount = count;
+      const entry = abi.layouts.engineUpdateBatchEntry;
+      const before = new DataView(exports.memory.buffer, pointer, count * entry.size);
+      for (let index = 0; index < count; index += 1) {
+        const offset = index * entry.size;
+        const plannerId = before.getUint32(offset + entry.plannerId, true);
+        const length = before.getUint32(offset + entry.requestLength, true);
+        const request = requestPointer(plannerId);
+        latestRequest = new Uint8Array(exports.memory.buffer, request, length).slice();
+      }
+      const status = updateBatch(pointer, count);
+      const results = new DataView(exports.memory.buffer, pointer, count * entry.size);
+      for (let index = 0; index < count; index += 1) {
+        const resultPointer = results.getUint32(index * entry.size + entry.resultPointer, true);
+        if (resultPointer === 0) continue;
+        const header = new DataView(exports.memory.buffer, resultPointer, abi.layouts.engineResult.size);
+        latestUpdateFlags = header.getUint32(abi.layouts.engineResult.flags, true);
+        latestUpdateGeneration = header.getUint32(abi.layouts.engineResult.publicationGeneration, true);
+      }
+      return status;
     };
     const measure = exports[abi.functions.measureParagraph];
     if (typeof measure === 'function') {
@@ -1728,6 +1798,9 @@ function instrumentNextGlyphEngine() {
     },
     get latestUpdateGeneration() {
       return latestUpdateGeneration;
+    },
+    get latestBatchCount() {
+      return latestBatchCount;
     },
     get latestAcknowledgedGeneration() {
       assert.ok(latestRequest, 'a text update request must have been captured');

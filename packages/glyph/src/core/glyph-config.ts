@@ -641,13 +641,24 @@ export interface GlyphRootServices<Bindings extends AnyGlyphBindings, RendererRe
   createText<Technique extends AnyRasterFormat>(
     state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']>;
-  shape(options?: GlyphShapeOptions): RendererResult;
+  /** Schedules root-owned semantic or presentation state for the next top-level `glyph.shape()`. */
+  invalidate(): void;
   syncTransforms(): void;
   copy(
     text: GlyphTextController<AnyRasterFormat, Bindings['materialInput'], Bindings['transformInput']>,
     request: GlyphCopyRequest,
     destination: GlyphCopyDestination<Bindings, RendererResult, Boundary>,
   ): GlyphCopy<RendererResult>;
+}
+
+/** Renderer-neutral lifecycle hooks surrounding one root's contribution to `glyph.shape()`. */
+export interface GlyphRootShapeHooks<RendererResult> {
+  /** Reconciles retained adapter state. Returning false defers this root until its next invalidation. */
+  prepare?(): GlyphShapeOptions | false | undefined;
+  /** Runs after the renderer accepted this root and the borrowed command buffer expired. */
+  accepted?(result: RendererResult): void;
+  /** Runs after this root failed without changing its last accepted renderer state. */
+  rejected?(error: unknown): void;
 }
 
 export type GlyphCopyRequest =
@@ -690,6 +701,7 @@ export interface GlyphCommandCapacity {
 export interface GlyphRootCreateOptions<Bindings extends AnyGlyphBindings, RendererResult, Boundary> {
   readonly boundary: Boundary;
   readonly defaultRenderer?: GlyphRenderer<Bindings, RendererResult>;
+  readonly shape?: GlyphRootShapeHooks<RendererResult>;
   readonly dispose?: () => void;
 }
 

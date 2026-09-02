@@ -1389,6 +1389,7 @@ export class PlanTransport {
   /** Owned copies made by this transport; unlike borrows, they never expire. */
   readonly #owned = new WeakSet<PlanPublication>();
   #latestGeneration = 0;
+  #stagedUpdate: { readonly requestLength: number; readonly initialMemoryBuffer: ArrayBuffer } | undefined;
 
   /** @internal Plan transports are created by the render-planner implementation. */
   constructor(
@@ -1480,6 +1481,66 @@ export class PlanTransport {
   /** @internal Reserve one paragraph's retained text scratch without changing transport capacities. */
   _reserveText(textCapacity: number): void {
     this.reserve(this.#requestCapacity, this.#resultCapacity, textCapacity);
+  }
+
+  /** @internal Stage one root request in its retained Wasm arena without invoking the engine. */
+  stageUpdate(request: Uint8Array): number {
+    this.#assertActive();
+    if (this.#stagedUpdate !== undefined) throw new Error('text update request is already staged');
+    if (!(request instanceof Uint8Array) || request.byteLength === 0) {
+      throw new TypeError('text update request must be a nonempty Uint8Array');
+    }
+    this.#assertRequestOwnership(request);
+    this.#invalidate();
+    const requestLength = uint32(request.byteLength, 'text update byte length');
+    const initialMemoryBuffer = this.#exports.memory.buffer;
+    if (requestLength > this.#requestCapacity || requestLength > this.#exports.requestCapacity(this.#handle)) {
+      this.reserve(requestLength, this.#resultCapacity);
+    }
+    const requestPointer = this.#exports.requestPointer(this.#handle);
+    if (requestPointer === 0) {
+      throw engineStatusError('resolve text request arena', textShaperAbi.status.plannerMissing);
+    }
+    new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
+    this.#stagedUpdate = { requestLength, initialMemoryBuffer };
+    return requestLength;
+  }
+
+  /** @internal Decode the publication produced for the currently staged batch request. */
+  consumeStagedUpdate(resultPointer: number, memoryBuffer: ArrayBuffer): PlanPublication {
+    if (this.#disposed) throw new Error('plan transport is disposed');
+    const staged = this.#stagedUpdate;
+    if (staged === undefined) throw new Error('no text update request is staged');
+    this.#stagedUpdate = undefined;
+    if (memoryBuffer !== this.#exports.memory.buffer) {
+      throw new Error('text update batch supplied stale Wasm memory');
+    }
+    if (resultPointer === 0) {
+      throw engineStatusError('publish text update', textShaperAbi.status.resultTooLarge);
+    }
+    const layout = textShaperAbi.layouts.engineResult;
+    if (resultPointer + layout.size > memoryBuffer.byteLength) {
+      throw new RangeError('text engine returned an out-of-bounds result header');
+    }
+    const header = new DataView(memoryBuffer, resultPointer, layout.size);
+    const status = header.getUint32(layout.status, true);
+    if (status !== textShaperAbi.status.ok) {
+      throw engineStatusError(
+        'publish text update',
+        status,
+        header.getUint32(layout.requiredRequestCapacity, true),
+        header.getUint32(layout.requiredResultCapacity, true),
+        headerFault(header),
+      );
+    }
+    return this.#decodeResult(header, resultPointer, memoryBuffer, staged.initialMemoryBuffer);
+  }
+
+  /** @internal Abandon a staged request when the batch could not produce this planner's result. */
+  discardStagedUpdate(): void {
+    if (this.#disposed) return;
+    if (this.#stagedUpdate === undefined) return;
+    this.#stagedUpdate = undefined;
   }
 
   update(request: Uint8Array): PlanPublication {
@@ -1719,6 +1780,7 @@ export class PlanTransport {
     if (this.#disposed) return;
     this.#assertEngineAvailable();
     requireStatus(this.#exports.disposePlanner(this.#handle), 'dispose render planner');
+    this.#stagedUpdate = undefined;
     this.#invalidate();
     this.#disposed = true;
     this.#onDispose();

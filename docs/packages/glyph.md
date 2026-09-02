@@ -22,7 +22,7 @@ sources:
     title: Root Glyph runtime and named handle registry
   - id: font-face
     resource: ../../packages/glyph/src/font-face.ts
-    title: FontFace declarations and handle-relative loading
+    title: Renderer-neutral FontFace declarations and loading
   - id: glyph-config
     resource: ../../packages/glyph/src/core/glyph-config.ts
     title: Reusable GlyphConfig publication contracts
@@ -120,14 +120,17 @@ The package owns six runtime layers:
 Runtime Rust and all shared Rust code remain `no_std + alloc` compatible with the package allocator contract. The optional
 font-baker Wasm alone enables a feature-gated `std` adapter for Fontations subsetting; the same crate continues to
 pass its `wasm32-unknown-unknown --no-default-features` build. The text engine uses the existing compile-time direct-memory mapping
-for font registrations and the single mutating
-`pmndrs_glyph_engine_update(plannerId, requestOffset, requestLength)` export for render planners.
+for font registrations. Ordinary publication enters once through
+`pmndrs_glyph_engine_update_batch(entriesPointer, count)`, whose entries address the already-written request slice and
+existing A/B result storage for each dirty planner. Paragraph-scoped semantic queries remain separate synchronous calls.
 TypeScript does not independently shape, lay out, or pack paragraphs.
 
 The root `glyph` runtime initializes one engine idempotently. `glyph.handle(name, config)` creates independent mutable
 adapter state; live names are unique and become reusable after disposal. Every handle owns one anonymous root and fronts
 that root's API directly. Calling `handle(name)` selects one idempotent live terminal sibling root, so roots cannot nest and
-Text/TextGroup objects cannot be rootless.
+Text/TextGroup objects cannot be rootless. `glyph.shape()` stages every dirty root across all live handles and submits them
+in one engine batch; unchanged roots do not cross into Wasm, and renderer-specific transform synchronization remains a
+separate cheap path.
 
 `GlyphConfig` contains `schema`, optional `fonts`, `encode`, `resolve`, `renderer`, `root`, and optional `commands`.
 `encode()` selects the Codec that defines packed command-buffer data. The engine owns those internal bytes and projects

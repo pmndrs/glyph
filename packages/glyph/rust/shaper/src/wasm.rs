@@ -14,7 +14,7 @@ use crate::{
         policy::CapabilitySetId,
         render_plan_compiler::RenderPlanCompilerError,
         render_plan_wire::{publication_layout, query_layout},
-        transport::FrameTransport,
+        transport::{FrameTransport, UpdateBatchResult, UpdateBatchTransport},
         wire::parse_policy,
     },
 };
@@ -353,6 +353,24 @@ pub extern "C" fn pmndrs_glyph_engine_request_capacity(handle: u32) -> u32 {
     })
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_reserve_update_batch(count: u32) -> u32 {
+    with_state(|state| match state.update_batch.reserve(count) {
+        Ok(()) => STATUS_OK,
+        Err(status) => status,
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_update_batch_ptr() -> u32 {
+    with_state(|state| u32::try_from(state.update_batch.pointer()).unwrap_or(0))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_update_batch_capacity() -> u32 {
+    with_state(|state| state.update_batch.capacity())
+}
+
 #[cfg(feature = "kernel-lab")]
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_kernel_lab_backend() -> u32 {
@@ -597,90 +615,187 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
     request_len: u32,
 ) -> u32 {
     with_state(|state| {
-        let revision = match state.engine.planner_revision(planner_id) {
-            Ok(revision) => revision,
-            Err(_) => return 0,
+        update(
+            state,
+            planner_id,
+            Some(request_offset as usize),
+            request_len,
+            false,
+        )
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_glyph_engine_update_batch(entries_pointer: u32, count: u32) -> u32 {
+    with_state(|state| {
+        // Moving the arena wrapper out permits each entry to borrow the remaining engine state.
+        // The arena's allocation itself does not move, so the validated host pointer stays exact.
+        let mut batch = core::mem::take(&mut state.update_batch);
+        let status = batch.process(
+            entries_pointer as usize,
+            count,
+            |planner_id, request_length| {
+                let result_pointer = update(state, planner_id, None, request_length, true);
+                let status = if result_pointer == 0 {
+                    STATUS_PLANNER_MISSING
+                } else {
+                    state
+                        .frames
+                        .get(&planner_id)
+                        .and_then(|transport| transport.result_status(result_pointer as usize))
+                        .unwrap_or(STATUS_INVALID_REQUEST)
+                };
+                UpdateBatchResult {
+                    result_pointer,
+                    status,
+                }
+            },
+        );
+        state.update_batch = batch;
+        status
+    })
+}
+
+fn update(
+    state: &mut WasmState,
+    planner_id: u32,
+    request_pointer: Option<usize>,
+    request_len: u32,
+    grow_output: bool,
+) -> u32 {
+    let revision = match state.engine.planner_revision(planner_id) {
+        Ok(revision) => revision,
+        Err(_) => return 0,
+    };
+    let request = {
+        let Some(transport) = state.frames.get(&planner_id) else {
+            return 0;
         };
-        let request = {
-            let Some(transport) = state.frames.get(&planner_id) else {
-                return 0;
-            };
-            let bytes = match transport.request_at(request_offset as usize, request_len) {
-                Ok(bytes) => bytes,
-                Err(status) => {
-                    return publish_failure(state, planner_id, revision, status, request_len, 0);
-                }
-            };
-            match parse_update_request(bytes, planner_id) {
-                Ok(request) => request,
-                Err(status) => {
-                    return publish_failure(state, planner_id, revision, status, 0, 0);
-                }
+        let request_bytes = match request_pointer {
+            Some(pointer) => transport.request_at(pointer, request_len),
+            None => transport.request_at_current(request_len),
+        };
+        let bytes = match request_bytes {
+            Ok(bytes) => bytes,
+            Err(status) => {
+                return publish_failure(state, planner_id, revision, status, request_len, 0);
             }
         };
-        let publication_generation = match state
+        match parse_update_request(bytes, planner_id) {
+            Ok(request) => request,
+            Err(status) => {
+                return publish_failure(state, planner_id, revision, status, 0, 0);
+            }
+        }
+    };
+    let publication_generation = match state
+        .frames
+        .get(&planner_id)
+        .and_then(|transport| transport.next_publication_generation().ok())
+    {
+        Some(generation) => generation,
+        None => {
+            return publish_failure(state, planner_id, revision, STATUS_RESULT_TOO_LARGE, 0, 0);
+        }
+    };
+    let prepared = match state.engine.prepare_update_with_shaper(
+        &mut state.registry,
+        request,
+        publication_generation,
+    ) {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            return publish_engine_failure(state, planner_id, revision, error);
+        }
+    };
+    let plan = match state.engine.prepared_plan(prepared) {
+        Ok(plan) => plan,
+        Err(error) => {
+            return publish_prepared_failure(
+                state,
+                prepared,
+                revision,
+                engine_status(error),
+                error.fault(),
+                0,
+                0,
+            );
+        }
+    };
+    let semantic_views = match state.engine.prepared_semantic_views(prepared) {
+        Ok(views) => views,
+        Err(error) => {
+            return publish_prepared_failure(
+                state,
+                prepared,
+                revision,
+                engine_status(error),
+                error.fault(),
+                0,
+                0,
+            );
+        }
+    };
+    let required_output = match publication_layout(plan, semantic_views) {
+        Ok(layout) => layout.byte_length,
+        Err(status) => {
+            return publish_prepared_failure(
+                state,
+                prepared,
+                revision,
+                status,
+                FrameFault::default(),
+                0,
+                0,
+            );
+        }
+    };
+    if required_output > request.limits.max_output_bytes {
+        return publish_prepared_failure(
+            state,
+            prepared,
+            revision,
+            STATUS_RESULT_TOO_LARGE,
+            FrameFault::default(),
+            0,
+            required_output,
+        );
+    }
+    if !state.frames.contains_key(&planner_id) {
+        let _ = state.engine.abort_update(prepared);
+        return 0;
+    }
+    let capacity = if grow_output {
+        state
+            .frames
+            .get_mut(&planner_id)
+            .ok_or(STATUS_PLANNER_MISSING)
+            .and_then(|transport| transport.reserve_publish_capacity(required_output))
+    } else {
+        state
             .frames
             .get(&planner_id)
-            .and_then(|transport| transport.next_publication_generation().ok())
-        {
-            Some(generation) => generation,
-            None => {
-                return publish_failure(state, planner_id, revision, STATUS_RESULT_TOO_LARGE, 0, 0);
-            }
-        };
-        let prepared = match state.engine.prepare_update_with_shaper(
-            &mut state.registry,
-            request,
-            publication_generation,
-        ) {
-            Ok(prepared) => prepared,
-            Err(error) => {
-                return publish_engine_failure(state, planner_id, revision, error);
-            }
-        };
-        let plan = match state.engine.prepared_plan(prepared) {
-            Ok(plan) => plan,
-            Err(error) => {
-                return publish_prepared_failure(
-                    state,
-                    prepared,
-                    revision,
-                    engine_status(error),
-                    error.fault(),
-                    0,
-                    0,
-                );
-            }
-        };
-        let semantic_views = match state.engine.prepared_semantic_views(prepared) {
-            Ok(views) => views,
-            Err(error) => {
-                return publish_prepared_failure(
-                    state,
-                    prepared,
-                    revision,
-                    engine_status(error),
-                    error.fault(),
-                    0,
-                    0,
-                );
-            }
-        };
-        let required_output = match publication_layout(plan, semantic_views) {
-            Ok(layout) => layout.byte_length,
-            Err(status) => {
-                return publish_prepared_failure(
-                    state,
-                    prepared,
-                    revision,
-                    status,
-                    FrameFault::default(),
-                    0,
-                    0,
-                );
-            }
-        };
-        if required_output > request.limits.max_output_bytes {
+            .ok_or(STATUS_PLANNER_MISSING)
+            .and_then(|transport| transport.ensure_publish_capacity(required_output))
+    };
+    if let Err(status) = capacity {
+        return publish_prepared_failure(
+            state,
+            prepared,
+            revision,
+            status,
+            FrameFault::default(),
+            0,
+            required_output,
+        );
+    }
+    let staged = match state
+        .frames
+        .get_mut(&planner_id)
+        .and_then(|transport| transport.stage_publication(plan, semantic_views).ok())
+    {
+        Some(staged) => staged,
+        None => {
             return publish_prepared_failure(
                 state,
                 prepared,
@@ -691,62 +806,29 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
                 required_output,
             );
         }
-        let Some(transport) = state.frames.get(&planner_id) else {
-            let _ = state.engine.abort_update(prepared);
-            return 0;
-        };
-        if let Err(status) = transport.ensure_publish_capacity(required_output) {
+    };
+    let commit = match state.engine.commit_update(prepared) {
+        Ok(commit) => commit,
+        Err(error) => {
             return publish_prepared_failure(
                 state,
                 prepared,
                 revision,
-                status,
-                FrameFault::default(),
+                engine_status(error),
+                error.fault(),
                 0,
-                required_output,
+                0,
             );
         }
-        let staged = match state
-            .frames
-            .get_mut(&planner_id)
-            .and_then(|transport| transport.stage_publication(plan, semantic_views).ok())
-        {
-            Some(staged) => staged,
-            None => {
-                return publish_prepared_failure(
-                    state,
-                    prepared,
-                    revision,
-                    STATUS_RESULT_TOO_LARGE,
-                    FrameFault::default(),
-                    0,
-                    required_output,
-                );
-            }
-        };
-        let commit = match state.engine.commit_update(prepared) {
-            Ok(commit) => commit,
-            Err(error) => {
-                return publish_prepared_failure(
-                    state,
-                    prepared,
-                    revision,
-                    engine_status(error),
-                    error.fault(),
-                    0,
-                    0,
-                );
-            }
-        };
-        let Some(transport) = state.frames.get_mut(&planner_id) else {
-            return 0;
-        };
-        debug_assert_eq!(
-            transport.next_publication_generation().ok(),
-            Some(publication_generation)
-        );
-        u32::try_from(transport.publish_success(commit, staged)).unwrap_or(0)
-    })
+    };
+    let Some(transport) = state.frames.get_mut(&planner_id) else {
+        return 0;
+    };
+    debug_assert_eq!(
+        transport.next_publication_generation().ok(),
+        Some(publication_generation)
+    );
+    u32::try_from(transport.publish_success(commit, staged)).unwrap_or(0)
 }
 
 /// Publishes a complete checkpoint containing only the requested committed glyph records.
@@ -955,6 +1037,7 @@ struct WasmState {
     registry: ShaperRegistry,
     engine: TextEngine,
     frames: BTreeMap<u32, FrameTransport>,
+    update_batch: UpdateBatchTransport,
     allocations: Vec<Allocation>,
 }
 

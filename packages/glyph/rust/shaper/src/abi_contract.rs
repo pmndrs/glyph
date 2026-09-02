@@ -229,6 +229,14 @@ struct EngineUpdateRequestHeader {
 }
 
 #[repr(C)]
+struct EngineUpdateBatchEntry {
+    planner_id: u32,
+    request_length: u32,
+    result_pointer: u32,
+    status: u32,
+}
+
+#[repr(C)]
 struct EngineParagraphMutationRecord {
     opcode: u8,
     flags: u8,
@@ -496,6 +504,11 @@ layout!(
     ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     ENGINE_UPDATE_REQUEST_HEADER_ALIGNMENT,
     EngineUpdateRequestHeader
+);
+layout!(
+    ENGINE_UPDATE_BATCH_ENTRY_SIZE,
+    ENGINE_UPDATE_BATCH_ENTRY_ALIGNMENT,
+    EngineUpdateBatchEntry
 );
 layout!(
     ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE,
@@ -917,6 +930,22 @@ field_offset!(
     EngineUpdateRequestHeader,
     abi_version
 );
+field_offset!(
+    ENGINE_UPDATE_BATCH_PLANNER_ID,
+    EngineUpdateBatchEntry,
+    planner_id
+);
+field_offset!(
+    ENGINE_UPDATE_BATCH_REQUEST_LENGTH,
+    EngineUpdateBatchEntry,
+    request_length
+);
+field_offset!(
+    ENGINE_UPDATE_BATCH_RESULT_POINTER,
+    EngineUpdateBatchEntry,
+    result_pointer
+);
+field_offset!(ENGINE_UPDATE_BATCH_STATUS, EngineUpdateBatchEntry, status);
 field_offset!(
     ENGINE_UPDATE_BYTE_LENGTH,
     EngineUpdateRequestHeader,
@@ -1919,7 +1948,11 @@ pub fn json() -> String {
             "plannerCount": "pmndrs_glyph_engine_planner_count",
             "requestPointer": "pmndrs_glyph_engine_request_ptr",
             "requestCapacity": "pmndrs_glyph_engine_request_capacity",
+            "reserveUpdateBatch": "pmndrs_glyph_engine_reserve_update_batch",
+            "updateBatchPointer": "pmndrs_glyph_engine_update_batch_ptr",
+            "updateBatchCapacity": "pmndrs_glyph_engine_update_batch_capacity",
             "textUpdate": "pmndrs_glyph_engine_update",
+            "textUpdateBatch": "pmndrs_glyph_engine_update_batch",
             "measureParagraph": "pmndrs_glyph_engine_measure_paragraph",
             "copyGlyphs": "pmndrs_glyph_engine_copy_glyphs",
             "copyDecorations": "pmndrs_glyph_engine_copy_decorations"
@@ -2092,6 +2125,14 @@ pub fn json() -> String {
                 "maxParagraphs": ENGINE_UPDATE_MAX_PARAGRAPHS,
                 "paragraphMutationsOffset": ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET,
                 "paragraphMutationCount": ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT
+            },
+            "engineUpdateBatchEntry": {
+                "size": ENGINE_UPDATE_BATCH_ENTRY_SIZE,
+                "alignment": ENGINE_UPDATE_BATCH_ENTRY_ALIGNMENT,
+                "plannerId": ENGINE_UPDATE_BATCH_PLANNER_ID,
+                "requestLength": ENGINE_UPDATE_BATCH_REQUEST_LENGTH,
+                "resultPointer": ENGINE_UPDATE_BATCH_RESULT_POINTER,
+                "status": ENGINE_UPDATE_BATCH_STATUS
             },
             "engineParagraphMutation": {
                 "size": ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE,

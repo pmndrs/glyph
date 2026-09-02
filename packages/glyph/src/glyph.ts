@@ -1,4 +1,4 @@
-import { createGlyphEngine, type GlyphEngine, type GlyphEngineOptions } from './glyph-engine.js';
+import { createGlyphEngine, shapeGlyphEngine, type GlyphEngine, type GlyphEngineOptions } from './glyph-engine.js';
 import {
   invokeGlyphConfigHandleFactory,
   type AnyGlyphConfig,
@@ -19,6 +19,7 @@ import { createFontLibrary, type FontLibrary } from './loader.js';
 export interface Glyph {
   readonly initialized: boolean;
   init(options?: GlyphEngineOptions): Promise<void>;
+  shape(): void;
   handle<Config extends AnyGlyphConfig>(name: string, config: Config): GlyphConfigHandle<Config>;
   fontFace<const Declaration extends FontFaceFormatDeclaration = never>(
     source: FontFaceSource,
@@ -88,6 +89,12 @@ class GlyphRuntime implements Glyph {
     })();
     this.#handles.set(name, handle);
     return handle;
+  }
+
+  shape(): void {
+    const engine = this.#engine;
+    if (engine === undefined) throw new Error('await glyph.init() before calling glyph.shape()');
+    shapeGlyphEngine(engine);
   }
 
   fontFace<const Declaration extends FontFaceFormatDeclaration = never>(
