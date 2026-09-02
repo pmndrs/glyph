@@ -23,7 +23,7 @@ interface RecordingHandle extends GlyphHandle<RecordingRoot> {
 
 type RecordingBindings = AnyGlyphBindings;
 
-const recordingConfig = defineGlyphConfig<RecordingHandle, RecordingBindings, void>({
+const recordingConfig = defineGlyphConfig({
   schema: defineGlyphSchema<RecordingBindings>()({
     drawRoot: () => undefined,
     program: () => ({}),
@@ -42,7 +42,14 @@ const recordingConfig = defineGlyphConfig<RecordingHandle, RecordingBindings, vo
     syncTransforms: () => undefined,
     dispose: () => undefined,
   }),
+  adapterLabel: 'recording' as const,
   createHandle: (context) => {
+    context.config.schema satisfies (typeof context.config)['schema'];
+    context.config.decode satisfies (typeof context.config)['decode'];
+    context.config.renderer satisfies (typeof context.config)['renderer'];
+    context.config.adapterLabel satisfies 'recording';
+    // @ts-expect-error The selected config surface is exact rather than an open AnyGlyphConfig bag.
+    context.config.notAConfigHook;
     const roots = createGlyphRootRegistry<RecordingRoot>((name, release) => {
       let disposed = false;
       return Object.freeze({
@@ -74,7 +81,7 @@ const tracedDecoder = defineDecoder<RecordingBindings>(
   },
 );
 
-const tracedConfig = defineGlyphConfig({ ...recordingConfig, decode: tracedDecoder });
+const tracedConfig = { ...recordingConfig, decode: tracedDecoder } satisfies typeof recordingConfig;
 
 async function configureGlyph(): Promise<void> {
   await glyph.init();

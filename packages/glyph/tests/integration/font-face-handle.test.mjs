@@ -4,6 +4,14 @@ import test from 'node:test';
 import { Scene } from 'three/webgpu';
 
 import { FontLoadError, glyph } from '@pmndrs/glyph';
+import {
+  createGlyphRootRegistry,
+  defaultDecoder,
+  defineGlyphConfig,
+  defineGlyphSchema,
+  resourceLease,
+} from '@pmndrs/glyph/core';
+import { bitmap as portableBitmap } from '@pmndrs/glyph/raster/bitmap';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
@@ -16,6 +24,111 @@ const multiFormatBytes = await readFile(
   new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
 );
 await glyph.init();
+
+function defineFontAwareConfig() {
+  const schema = defineGlyphSchema()({
+    drawRoot: () => undefined,
+    program: () => ({}),
+    buffer: () => ({}),
+    material: () => ({}),
+    transform: () => ({}),
+    batch: () => ({}),
+    instance: () => ({}),
+    instanceSpan: () => ({}),
+  });
+  return defineGlyphConfig({
+    schema,
+    fonts: { default: 'bitmap', techniques: { bitmap: portableBitmap } },
+    encode: () => ({ descriptor: { capabilitySets: [], programs: [] } }),
+    decode: defaultDecoder,
+    resolve: ({ payload }) => resourceLease({ payload }, () => undefined),
+    renderer: () => ({
+      prepare: () => ({ result: undefined, commit: () => undefined, discard: () => undefined }),
+      syncTransforms: () => undefined,
+      dispose: () => undefined,
+    }),
+    createHandle: (context) => {
+      assert.ok(context.fonts, 'a config with font techniques receives its runtime-owned font store');
+      const roots = createGlyphRootRegistry((name, release) => {
+        let disposed = false;
+        return Object.freeze({
+          name,
+          get disposed() {
+            return disposed;
+          },
+          dispose() {
+            if (disposed) return;
+            disposed = true;
+            release();
+          },
+        });
+      });
+      return context.create(
+        Object.assign((name) => roots.get(name), {
+          acquireFont: (selection) => context.fonts.acquire(selection),
+        }),
+        () => roots.dispose(),
+      );
+    },
+  });
+}
+
+test('Glyph owns FontFace loading for a non-Three configured handle', async () => {
+  const handle = glyph.handle('font-face:portable-config', defineFontAwareConfig());
+  const face = glyph.fontFace(
+    { baked: { bytes, ownership: 'copy' } },
+    { family: 'FontFacePortableConfig', format: portableBitmap({ strikes: [16] }) },
+  );
+  try {
+    const load = face.load(handle);
+    assert.equal(face.load(handle), load);
+    await load;
+    const font = handle.acquireFont(face);
+    assert.equal(font.technique, portableBitmap);
+    font.dispose();
+  } finally {
+    face.dispose();
+    handle.dispose();
+  }
+});
+
+test('a packaged config factory honors spread overrides and releases a handle created before failure', () => {
+  const base = defineFontAwareConfig();
+  let releases = 0;
+  const failing = {
+    ...base,
+    createHandle(context) {
+      const roots = createGlyphRootRegistry((name, release) => {
+        let disposed = false;
+        return Object.freeze({
+          name,
+          get disposed() {
+            return disposed;
+          },
+          dispose() {
+            if (disposed) return;
+            disposed = true;
+            release();
+          },
+        });
+      });
+      context.create(
+        (name) => roots.get(name),
+        () => {
+          releases += 1;
+          roots.dispose();
+        },
+      );
+      throw new Error('intentional config factory failure');
+    },
+  };
+
+  assert.throws(() => glyph.handle('font-face:factory-failure', failing), /intentional config factory failure/);
+  assert.equal(releases, 1, 'the root operation releases partially constructed handle state exactly once');
+
+  const reused = glyph.handle('font-face:factory-failure', base);
+  reused.dispose();
+});
 
 test('a loaded FontFace constructs an imperative Three Text and owns its hidden Font lease', async () => {
   const handle = glyph.handle('three:font-face-imperative', ThreeConfig);

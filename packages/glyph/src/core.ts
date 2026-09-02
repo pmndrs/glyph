@@ -2,6 +2,11 @@
 export { createGlyphEngine, type GlyphEngine, type GlyphEngineOptions } from './glyph-engine.js';
 export { createEngine, type CreateEngineOptions } from './core/create-engine.js';
 export {
+  createGlyphPlanTarget,
+  type CreateGlyphPlanTargetOptions,
+  type GlyphPlanTarget,
+} from './core/glyph-plan-target.js';
+export {
   defaultDecoder,
   applyGlyphPublication,
   defineDecoder,
@@ -41,6 +46,7 @@ export {
   type GlyphConfigHandle,
   type GlyphHandle,
   type GlyphHandleFactoryContext,
+  type GlyphHandleFonts,
   type GlyphRoot,
   type GlyphFontConfig,
   type GlyphRenderer,

@@ -6,7 +6,6 @@ import {
   defineGlyphConfig,
   defineGlyphSchema,
   resourceLease,
-  type AnyGlyphConfig,
   type BackendMaterialBinding,
   type BackendTransformBinding,
   type GlyphBindings,
@@ -14,6 +13,7 @@ import {
   type GlyphBufferBindingInput,
   type GlyphConfig,
   type GlyphHandle,
+  type GlyphHandleFonts,
   type GlyphRootRegistry,
   type GlyphInstanceSpanBindingInput,
   type GlyphRootInstanceBindingInput,
@@ -22,16 +22,12 @@ import {
 } from '../core.js';
 import type { GlyphEngine } from '../glyph-engine.js';
 import {
-  FontFaceHandleStore,
   isFontFaceSelection,
-  registerFontFaceHandleStore,
   resolveFontFace,
-  unregisterFontFaceHandleStore,
   type AnyFontFaceSelection,
   type FontFaceTechniqueOf,
 } from '../font-face.js';
 import type { Font } from '../font.js';
-import { glyphFontLibrary } from '../glyph.js';
 import { FontLoadError } from '../loader.js';
 import type { FontSelection } from '../loaded-font.js';
 import { bitmap } from '../raster/bitmap-technique.js';
@@ -39,7 +35,7 @@ import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import { normalizeGlyphBufferCapacity, type GlyphBufferCapacity } from '../text-properties.js';
-import { registerDefaultThreeConfig, ThreeTextEngineCoordinator } from './engine-coordinator.js';
+import { ThreeTextEngineCoordinator } from './engine-coordinator.js';
 import type { PortableResource } from '../core.js';
 import type { ThreeEngineDomainLease } from './engine-domain.js';
 import { loadThreeTechnique } from './internal/builtin-shaders.js';
@@ -176,9 +172,9 @@ export type ThreeGlyphConfig = GlyphConfig<
   void,
   PortableResource,
   ThreeFontTechniques,
-  ThreeRootBinding
-> &
-  Readonly<ThreeRootOptions & { material?: ThreeTextMaterial }>;
+  ThreeRootBinding,
+  ThreeRootOptions & { material?: ThreeTextMaterial }
+>;
 const handleDomains = new WeakMap<ThreeHandle, ThreeHandleDomain>();
 const rootDomains = new WeakMap<ThreeRoot, ThreeHandleDomain>();
 
@@ -228,7 +224,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
   const transformMode = options.transformMode ?? 'indexed';
   const allocationMode = options.allocationMode ?? 'ordered';
   const defaultFontFormat = options.defaultFontFormat ?? 'msdf';
-  return defineGlyphConfig<ThreeHandle, ThreeBindings, void, PortableResource, ThreeFontTechniques, ThreeRootBinding>({
+  return defineGlyphConfig({
     schema: ThreeSchema,
     fonts: { default: defaultFontFormat, techniques: ThreeFontTechniques, loadTechnique: loadThreeTechnique },
     encode: ({ ids }) => ({ descriptor: threeRenderPolicyDescriptor(ids, transformMode, [], allocationMode) }),
@@ -238,7 +234,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
         Object.freeze({
           technique,
           resourceName,
-          resources: resources as ReadonlyMap<string, PortableResource>,
+          resources,
         }),
         () => undefined,
       ),
@@ -249,12 +245,23 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
       return context.defaultRenderer;
     },
     createHandle: (context) => {
-      const domain = new ThreeHandleDomain(context.engine, context.config);
+      if (context.fonts === undefined) throw new TypeError('Three GlyphConfig must declare its font techniques');
+      const domain = new ThreeHandleDomain(context.engine, context.config, context.fonts);
       const anonymous = domain.roots.anonymous;
-      const selectRoot = (name: string): ThreeRoot => domain.roots.get(name);
+      const selectRoot = Object.assign((name: string): ThreeRoot => domain.roots.get(name), {
+        createText: anonymous.createText.bind(anonymous),
+        createTextGroup: anonymous.createTextGroup.bind(anonymous),
+        textCount: anonymous.textCount,
+        gpuBytes: anonymous.gpuBytes,
+        capacity: anonymous.capacity,
+        compositing: anonymous.compositing,
+        material: anonymous.material,
+        setCapacity: anonymous.setCapacity.bind(anonymous),
+        setCompositing: anonymous.setCompositing.bind(anonymous),
+        setMaterial: anonymous.setMaterial.bind(anonymous),
+        shape: anonymous.shape.bind(anonymous),
+      });
       Object.defineProperties(selectRoot, {
-        createText: { enumerable: true, value: anonymous.createText.bind(anonymous) },
-        createTextGroup: { enumerable: true, value: anonymous.createTextGroup.bind(anonymous) },
         textCount: { enumerable: true, get: () => anonymous.textCount },
         gpuBytes: { enumerable: true, get: () => anonymous.gpuBytes },
         capacity: { enumerable: true, get: () => anonymous.capacity },
@@ -266,19 +273,10 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
             anonymous.material = value;
           },
         },
-        setCapacity: { enumerable: true, value: anonymous.setCapacity.bind(anonymous) },
-        setCompositing: { enumerable: true, value: anonymous.setCompositing.bind(anonymous) },
-        setMaterial: { enumerable: true, value: anonymous.setMaterial.bind(anonymous) },
-        shape: { enumerable: true, value: anonymous.shape.bind(anonymous) },
       });
-      let handle!: ThreeHandle;
-      handle = context.create(selectRoot, () => {
-        unregisterFontFaceHandleStore(handle);
-        domain.releaseHandle();
-      }) as ThreeHandle;
+      const handle = context.create(selectRoot, () => domain.releaseHandle());
       handleDomains.set(handle, domain);
       domain.attachHandle(handle);
-      registerFontFaceHandleStore(handle, domain.fonts);
       return handle;
     },
     ...(options.capacity === undefined
@@ -288,38 +286,34 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
       ? {}
       : { compositing: normalizeThreeRootCompositing(options.compositing, 'ThreeConfig compositing') }),
     ...(options.material === undefined ? {} : { material: options.material }),
-  }) as ThreeGlyphConfig;
+  });
 }
 
 /** Built-in indexed/ordered Three adapter. Spreading it preserves hooks without shared handle state. */
 export const ThreeConfig: ThreeGlyphConfig = defineThreeConfig();
-registerDefaultThreeConfig(ThreeConfig);
 
 class ThreeHandleDomain implements ThreeRootDomainProvider {
   readonly coordinator: ThreeTextEngineCoordinator;
-  readonly fonts: FontFaceHandleStore;
+  readonly fonts: GlyphHandleFonts;
   readonly roots: GlyphRootRegistry<ThreeRoot>;
-  readonly #config: ThreeGlyphConfig;
+  readonly #config: ConstructorParameters<typeof ThreeTextEngineCoordinator>[1];
   readonly #rootOptions: ThreeRootOptions;
   #leases = 0;
   #handleReleased = false;
   #disposed = false;
   #handle: ThreeHandle | undefined;
 
-  constructor(engine: GlyphEngine, config: AnyGlyphConfig) {
-    this.#config = config as ThreeGlyphConfig;
+  constructor(
+    engine: GlyphEngine,
+    config: ConstructorParameters<typeof ThreeTextEngineCoordinator>[1],
+    fonts: GlyphHandleFonts,
+  ) {
+    this.#config = config;
     this.#rootOptions = Object.freeze({
-      ...(this.#config.capacity === undefined ? {} : { capacity: this.#config.capacity }),
-      ...(this.#config.compositing === undefined ? {} : { compositing: this.#config.compositing }),
+      ...(config.capacity === undefined ? {} : { capacity: config.capacity }),
+      ...(config.compositing === undefined ? {} : { compositing: config.compositing }),
     });
-    const fonts = this.#config.fonts;
-    if (fonts === undefined) throw new TypeError('Three GlyphConfig must declare its font techniques');
-    this.fonts = new FontFaceHandleStore(
-      glyphFontLibrary(),
-      fonts.techniques,
-      fonts.default,
-      fonts.loadTechnique as ((technique: AnyRasterTechnique) => Promise<void>) | undefined,
-    );
+    this.fonts = fonts;
     this.coordinator = new ThreeTextEngineCoordinator(engine, this.#config);
     this.roots = createGlyphRootRegistry((name, release) => {
       const root = new ThreeRoot(threeTextConstructionToken, name, this, release, this.#rootOptions);
@@ -400,7 +394,6 @@ class ThreeHandleDomain implements ThreeRootDomainProvider {
       }
     };
     release(() => this.roots.dispose());
-    release(() => this.fonts.dispose());
     release(() => this.#maybeDispose());
     if (failure !== undefined) throw failure;
   }

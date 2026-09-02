@@ -1,4 +1,6 @@
 import type { GlyphEngine } from '../glyph-engine.js';
+import type { Font } from '../font.js';
+import type { AnyFontFaceSelection } from '../font-face.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { BackendMaterialBinding, BackendTransformBinding } from './backend.js';
 import type { PolicyBuffer, PolicyDescriptor, PolicyProgram, RenderIdFactory } from './render-policy.js';
@@ -7,6 +9,7 @@ import type { PlanAcceptance, PlanCandidate } from './render-planner.js';
 declare const typedCommandBufferBrand: unique symbol;
 declare const typedCommandIdentityBrand: unique symbol;
 const glyphConfigBrand: unique symbol = Symbol('pmndrs.glyph.config');
+const glyphConfigHandleFactory: unique symbol = Symbol('pmndrs.glyph.config.handle-factory');
 
 /** One lazily projected borrowed sequence. Values expire with their command buffer. */
 export interface BorrowedCommandSequence<Value> extends Iterable<Value> {
@@ -295,7 +298,7 @@ export interface ResolveContext<PortableResource = unknown, Previous extends obj
   readonly resourceName: string;
   readonly payload: PortableResource;
   /** All singleton companions selected from the same compiled font, keyed by schema name. */
-  readonly resources: ReadonlyMap<string, unknown>;
+  readonly resources: ReadonlyMap<string, PortableResource>;
   readonly previous: Previous | undefined;
   readonly signal: AbortSignal;
 }
@@ -528,16 +531,57 @@ export interface GlyphHandle<Root extends GlyphRoot = GlyphRoot> {
   dispose(): void;
 }
 
-export interface GlyphHandleFactoryContext {
+/** Runtime-owned FontFace state made available to one configured renderer handle. */
+export interface GlyphHandleFonts {
+  isLoaded(selection: AnyFontFaceSelection): boolean;
+  load(selection: AnyFontFaceSelection): Promise<AnyFontFaceSelection>;
+  acquire<Technique extends AnyRasterTechnique>(selection: AnyFontFaceSelection): Font<Technique>;
+  /** Borrow the store-owned immutable source. Callers must not dispose this value. */
+  peek(selection: AnyFontFaceSelection): Font<AnyRasterTechnique>;
+}
+
+interface GlyphHandleFactoryInput {
   readonly name: string;
   readonly engine: GlyphEngine;
-  readonly config: AnyGlyphConfig;
+  /** Present when the config declares a font-technique vocabulary. Glyph owns its lifecycle. */
+  readonly fonts: GlyphHandleFonts | undefined;
   /** Stamps handle lifecycle onto the adapter's callable root selector. */
-  create<Root extends GlyphRoot, Extension extends (name: string) => Root>(
+  create<Extension extends (name: string) => GlyphRoot>(
     extension: Extension,
     dispose: () => void,
-  ): GlyphHandle<Root> & Extension;
+  ): GlyphHandle<ReturnType<Extension>> & Extension;
 }
+
+export interface GlyphHandleFactoryContext<Config extends object> extends GlyphHandleFactoryInput {
+  readonly config: Config;
+}
+
+type GlyphConfigContractKey = 'schema' | 'fonts' | 'encode' | 'decode' | 'resolve' | 'renderer' | 'createHandle';
+
+type GlyphConfigExtensionValue<ConfigExtension extends object> = {
+  readonly [Key in keyof ConfigExtension as Key extends GlyphConfigContractKey ? never : Key]: ConfigExtension[Key];
+};
+
+type SelectedGlyphConfig<
+  Bindings extends AnyGlyphBindings,
+  RendererResult,
+  PortableResource,
+  FontTechniques extends { readonly [Key in keyof FontTechniques]: AnyRasterTechnique },
+  Boundary,
+  ConfigExtension extends object,
+> = Pick<
+  GlyphConfigContract<
+    GlyphHandle,
+    Bindings,
+    RendererResult,
+    PortableResource,
+    FontTechniques,
+    Boundary,
+    ConfigExtension
+  >,
+  'schema' | 'fonts' | 'encode' | 'decode' | 'resolve' | 'renderer'
+> &
+  Readonly<ConfigExtension>;
 
 /** Handle-relative technique keys used to resolve FontFace format declarations. */
 export interface GlyphFontConfig<Techniques extends { readonly [Key in keyof Techniques]: AnyRasterTechnique }> {
@@ -547,7 +591,13 @@ export interface GlyphFontConfig<Techniques extends { readonly [Key in keyof Tec
   loadTechnique?(technique: Techniques[keyof Techniques]): Promise<void>;
 }
 
-export interface GlyphConfig<
+interface AnyGlyphFontConfig {
+  readonly default: string;
+  readonly techniques: Readonly<object>;
+  loadTechnique?(technique: AnyRasterTechnique): Promise<void>;
+}
+
+interface GlyphConfigContract<
   Handle extends GlyphHandle,
   Bindings extends AnyGlyphBindings,
   RendererResult,
@@ -556,6 +606,7 @@ export interface GlyphConfig<
     Record<string, AnyRasterTechnique>
   >,
   Boundary = unknown,
+  ConfigExtension extends object = object,
 > {
   readonly [glyphConfigBrand]: true;
   readonly schema: GlyphSchema<Bindings, Boundary>;
@@ -564,17 +615,58 @@ export interface GlyphConfig<
   readonly decode: Decoder<Bindings>;
   resolve(context: ResolveContext<PortableResource, Bindings['resource']>): ResourceLease<Bindings['resource']>;
   renderer(context: RendererContext<Bindings, RendererResult>): GlyphRenderer<Bindings, RendererResult>;
-  createHandle(context: GlyphHandleFactoryContext): Handle;
+  createHandle(
+    context: GlyphHandleFactoryContext<
+      SelectedGlyphConfig<Bindings, RendererResult, PortableResource, FontTechniques, Boundary, ConfigExtension>
+    >,
+  ): Handle;
+}
+
+export type GlyphConfig<
+  Handle extends GlyphHandle,
+  Bindings extends AnyGlyphBindings,
+  RendererResult,
+  PortableResource = unknown,
+  FontTechniques extends { readonly [Key in keyof FontTechniques]: AnyRasterTechnique } = Readonly<
+    Record<string, AnyRasterTechnique>
+  >,
+  Boundary = unknown,
+  ConfigExtension extends object = object,
+> = GlyphConfigContract<Handle, Bindings, RendererResult, PortableResource, FontTechniques, Boundary, ConfigExtension> &
+  Readonly<ConfigExtension> &
+  GlyphConfigHandleFactory;
+
+interface GlyphConfigHandleFactory {
+  [glyphConfigHandleFactory]<Config extends this>(
+    config: Config,
+    input: GlyphHandleFactoryInput,
+  ): GlyphConfigHandle<Config>;
 }
 
 /** Minimal covariant surface the root runtime needs to construct an inferred handle. */
 export interface AnyGlyphConfig {
   readonly [glyphConfigBrand]: true;
-  createHandle(context: GlyphHandleFactoryContext): GlyphHandle;
+  readonly fonts?: AnyGlyphFontConfig;
+  /** The heterogeneous root registry needs only this packaged common operation. */
+  [glyphConfigHandleFactory]<Config extends this>(
+    config: Config,
+    input: GlyphHandleFactoryInput,
+  ): GlyphConfigHandle<Config>;
+}
+
+/** @internal Invoke the handle operation packaged while the config's associated types were known. */
+export function invokeGlyphConfigHandleFactory<Config extends AnyGlyphConfig>(
+  config: Config,
+  input: GlyphHandleFactoryInput,
+): GlyphConfigHandle<Config> {
+  if (typeof config[glyphConfigHandleFactory] !== 'function') {
+    throw new TypeError('Glyph handle config must be created by defineGlyphConfig()');
+  }
+  return config[glyphConfigHandleFactory](config, input);
 }
 
 export type GlyphConfigHandle<Config> = Config extends {
-  createHandle(context: GlyphHandleFactoryContext): infer Handle extends GlyphHandle;
+  createHandle(...args: never[]): infer Handle extends GlyphHandle;
 }
   ? Handle
   : never;
@@ -588,12 +680,30 @@ export function defineGlyphConfig<
     Record<string, AnyRasterTechnique>
   >,
   Boundary = unknown,
+  const Input extends object = object,
 >(
   config: Omit<
-    GlyphConfig<Handle, Bindings, RendererResult, PortableResource, FontTechniques, Boundary>,
+    GlyphConfigContract<
+      Handle,
+      Bindings,
+      RendererResult,
+      PortableResource,
+      FontTechniques,
+      Boundary,
+      GlyphConfigExtensionValue<Input>
+    >,
     typeof glyphConfigBrand
-  >,
-): GlyphConfig<Handle, Bindings, RendererResult, PortableResource, FontTechniques, Boundary> {
+  > &
+    Readonly<Input>,
+): GlyphConfig<
+  Handle,
+  Bindings,
+  RendererResult,
+  PortableResource,
+  FontTechniques,
+  Boundary,
+  GlyphConfigExtensionValue<Input>
+> {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw new TypeError('GlyphConfig must be an object');
   }
@@ -628,7 +738,25 @@ export function defineGlyphConfig<
       throw new TypeError('GlyphConfig.fonts needs a default key and technique map');
     }
   }
-  return Object.freeze({ ...config, [glyphConfigBrand]: true as const });
+  type DefinedConfig = GlyphConfig<
+    Handle,
+    Bindings,
+    RendererResult,
+    PortableResource,
+    FontTechniques,
+    Boundary,
+    GlyphConfigExtensionValue<Input>
+  >;
+  let defined: DefinedConfig;
+  const createHandle = <Config extends DefinedConfig>(selected: Config, input: GlyphHandleFactoryInput): Handle =>
+    selected.createHandle(Object.freeze({ ...input, config: selected }));
+  // This constructor is the sole witness that joins inferred extension fields to the validated config contract.
+  defined = Object.freeze({
+    ...config,
+    [glyphConfigBrand]: true as const,
+    [glyphConfigHandleFactory]: createHandle,
+  }) as unknown as DefinedConfig;
+  return defined;
 }
 
 /** Creates an idempotent, exactly-once resource lease. */

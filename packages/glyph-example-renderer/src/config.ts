@@ -106,14 +106,7 @@ export type ExampleGlyphConfig = GlyphConfig<
 
 export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
   const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
-  return defineGlyphConfig<
-    ExampleHandle,
-    ExampleBindings,
-    ExampleDrawList,
-    PortableResource,
-    Readonly<Record<string, AnyRasterTechnique>>,
-    ExampleRootContext
-  >({
+  return defineGlyphConfig({
     schema: ExampleSchema,
     encode: ({ ids }) => ({ descriptor: exampleRenderPolicyDescriptor(ids) }),
     decode: defaultDecoder,
@@ -133,8 +126,7 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
     },
     createHandle: (context) => {
       const roots = createGlyphRootRegistry(
-        (name, release) =>
-          new ExampleRootImplementation(name, context.engine, context.config as ExampleGlyphConfig, release),
+        (name, release) => new ExampleRootImplementation(name, context.engine, context.config, release),
       );
       const anonymous = roots.anonymous;
       const selectRoot = Object.assign((name: string) => roots.get(name), {
@@ -154,7 +146,12 @@ class ExampleRootImplementation implements ExampleRoot {
   readonly #release: () => void;
   #disposed = false;
 
-  constructor(name: string | undefined, engine: GlyphEngine, config: ExampleGlyphConfig, release: () => void) {
+  constructor(
+    name: string | undefined,
+    engine: GlyphEngine,
+    config: ConstructorParameters<typeof ExampleTextEngine>[1],
+    release: () => void,
+  ) {
     this.name = name;
     this.#engine = new ExampleTextEngine(engine, config, Object.freeze({ name }));
     this.#release = release;

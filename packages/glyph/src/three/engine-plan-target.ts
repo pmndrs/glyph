@@ -4,12 +4,11 @@ import {
   type BackendMaterialBinding,
   type BackendTransformBinding,
   type PlanAcceptance,
-  applyGlyphPublication,
   type BorrowedBoundCommandBuffer,
   type BoundTransformUpdate,
   type GlyphRenderer,
-  createEngine,
-  type GlyphCommandBufferBinder,
+  createGlyphPlanTarget,
+  type GlyphPlanTarget,
   type PlanCandidate,
   type PlanTarget,
 } from '../core.js';
@@ -98,13 +97,10 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   readonly #bindingIds = new WeakMap<object, number>();
   #nextBindingId = 1;
   #preparation: PreparationContext | undefined;
-  readonly #binder: GlyphCommandBufferBinder<ThreeBindings>;
-  readonly #renderer: GlyphRenderer<ThreeBindings, void>;
-  readonly #rendererAbort = new AbortController();
+  readonly #target: GlyphPlanTarget<ThreeBindings, void>;
   #pendingTransformSync:
     | Readonly<{ ids: readonly number[]; worldMatricesCurrent: boolean; changed: number }>
     | undefined;
-  #disposing = false;
   #disposed = false;
 
   constructor(coordinator: ThreeTextEngineCoordinator, owner: ThreeTextEnginePlanOwner) {
@@ -119,7 +115,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
         const selected = coordinator.resolveMaterial(binding);
         return Object.freeze({
           ...selected,
-          material: selected.material ?? config.material,
+          material: selected.material ?? coordinator.material,
           root: rootContext,
         });
       },
@@ -128,18 +124,12 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
         return owner.objectForTransform?.(recordIndex, source) ?? source;
       },
     });
-    this.#binder = createEngine({ config, codec: coordinator.codec, root });
     const defaultRenderer: GlyphRenderer<ThreeBindings, void> = Object.freeze({
       prepare: (frame: BorrowedBoundCommandBuffer<ThreeBindings>) => this.#prepareRendererCommit(frame),
       syncTransforms: (updates: readonly BoundTransformUpdate<THREE.Object3D>[]) => this.#syncBoundTransforms(updates),
       dispose: () => this.#disposeRendererState(),
     });
-    const context = Object.freeze({
-      drawRoot: config.schema.drawRoot(root),
-      signal: this.#rendererAbort.signal,
-      defaultRenderer,
-    });
-    this.#renderer = config.renderer(context);
+    this.#target = createGlyphPlanTarget({ config, codec: coordinator.codec, root, defaultRenderer });
   }
 
   get draws(): readonly THREE.Mesh[] {
@@ -166,9 +156,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     if (this.#disposed) throw new Error('Three text-engine plan target has been disposed');
     if (signal.aborted) return { accepted: false, error: signal.reason };
     try {
-      return this.#coordinator.applyPlan(() =>
-        applyGlyphPublication(candidate, signal, this.#coordinator.config.decode, this.#binder, this.#renderer),
-      );
+      return this.#coordinator.applyPlan(() => this.#target.accept(candidate, signal));
     } catch (error) {
       return { accepted: false, error };
     }
@@ -255,7 +243,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
     });
     this.#pendingTransformSync = { ids, worldMatricesCurrent, changed: 0 };
     try {
-      this.#renderer.syncTransforms(updates);
+      this.#target.syncTransforms(updates);
       return this.#pendingTransformSync.changed;
     } finally {
       this.#pendingTransformSync = undefined;
@@ -291,16 +279,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
   }
 
   dispose(): void {
-    if (this.#disposed || this.#disposing) return;
-    this.#disposing = true;
-    this.#rendererAbort.abort(new DOMException('Three publication boundary disposed', 'AbortError'));
-    try {
-      this.#renderer.dispose();
-    } finally {
-      this.#disposeRendererState();
-      this.#binder.dispose();
-      this.#disposing = false;
-    }
+    this.#target.dispose();
   }
 
   #disposeRendererState(): void {

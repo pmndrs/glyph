@@ -68,9 +68,9 @@ sources:
   - id: three-config
     resource: ../../packages/glyph/src/three/handle.ts
     title: Built-in ThreeConfig and handle factories
-  - id: three-command-buffer
-    resource: ../../packages/glyph/src/three/command-buffer.ts
-    title: Three bound command-buffer binder
+  - id: configured-plan-target
+    resource: ../../packages/glyph/src/core/glyph-plan-target.ts
+    title: Shared configured plan target
   - id: three-transform-sync
     resource: ../../packages/glyph/src/three/transform-synchronizer.ts
     title: Engine-free Three transform synchronization
@@ -132,6 +132,10 @@ and independent mutable handle state; live names are unique and become reusable 
 public Codec, explicit decoder, resource resolver, phase-structured renderer preparation, and handle factory. The engine
 owns the canonical typed command buffer and built-in default decoder. The shared publication helper settles decode,
 prepare, commit/discard, and resource-binding ownership synchronously while plan bytes are borrowed.
+`defineGlyphConfig()` preserves the schema, font vocabulary, renderer result, boundary, handle, and adapter extension fields
+as one inferred relationship. It packages handle construction while those types are known; the heterogeneous root registry
+invokes that common operation without recovering or casting a concrete config type. When a config declares fonts, Glyph
+also creates and disposes the handle-local FontFace store over the process-wide immutable FontLibrary cache.
 
 `GlyphBackend` is the cold registration owner within one engine: it claims policies, font bindings, font stacks, and
 render planners, retains every claimed ID's provenance, and rejects cross-backend references before a live borrow expires.

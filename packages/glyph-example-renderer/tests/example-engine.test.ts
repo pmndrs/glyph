@@ -86,6 +86,45 @@ describe('a retained engine driven through the published core surface', () => {
     }
   });
 
+  test('discards a failed renderer preparation and accepts the next publication', async () => {
+    await glyph.init({ wasm: await wasmBytes() });
+    const base = defineExampleConfig();
+    let attempts = 0;
+    let discards = 0;
+    const config: ExampleGlyphConfig = {
+      ...base,
+      renderer(context) {
+        const renderer = base.renderer(context);
+        return {
+          prepare(frame) {
+            attempts += 1;
+            if (attempts === 1) throw new Error('intentional preparation failure');
+            const prepared = renderer.prepare(frame);
+            return {
+              result: prepared.result,
+              commit: () => prepared.commit(),
+              discard: () => {
+                discards += 1;
+                prepared.discard();
+              },
+            };
+          },
+          syncTransforms: (updates) => renderer.syncTransforms(updates),
+          dispose: () => renderer.dispose(),
+        };
+      },
+    };
+    const handle = glyph.handle('example:preparation-recovery', config);
+    try {
+      expect(() => handle.publish()).toThrow(/intentional preparation failure/);
+      expect(handle.publish().draws).toEqual([]);
+      expect(attempts).toBe(2);
+      expect(discards).toBe(0);
+    } finally {
+      handle.dispose();
+    }
+  });
+
   test('expires borrowed plans and prevents sibling Wasm re-entry', async () => {
     const glyphEngine = await createGlyphEngine({ wasm: await wasmBytes() });
     const backend = glyphEngine.createBackend({ integration: 'glyph-example-renderer-test/borrow' });
