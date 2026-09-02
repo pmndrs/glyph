@@ -175,6 +175,10 @@ await Promise.all([
     { check: process.env.CI === 'true' },
   ),
 ]);
+await run(process.execPath, [
+  'scripts/generate-font-schema-types.mjs',
+  ...(process.env.CI === 'true' ? ['--check'] : []),
+]);
 
 await run(
   'cargo',

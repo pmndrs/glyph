@@ -423,10 +423,14 @@ const threeRuntime = await measureJavaScript(
   true,
   true,
   {
-    // Artifact validation is a cold font-load dependency. It must remain a dynamic boundary rather than joining the
-    // Three adapter's initial graph through a shared bundler runtime helper.
-    expectedDynamic: ['/packages/glyph/dist/font-baker/validator.js'],
-    excludedInitial: ['/packages/glyph/dist/font-baker/validator.js'],
+    // Bake owns schema and Khronos validation. Rendering reads only the package extension
+    // identity and the byte ranges needed to create safe typed-array views.
+    expectedDynamic: [],
+    excludedInitial: [
+      '/packages/glyph/dist/font-baker/validator.js',
+      '/node_modules/ajv/',
+      '/node_modules/gltf-validator/',
+    ],
   },
 );
 const interBitmap = await measureFontAsset(

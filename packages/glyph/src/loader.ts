@@ -1,4 +1,3 @@
-import type { ParsedGlb, ValidatedFontArtifact } from './font-baker/validator.js';
 import {
   FONT_BAKER_VERSION as CORE_BAKER_VERSION,
   FONT_FORMAT_VERSION as CORE_FORMAT_VERSION,
@@ -16,6 +15,8 @@ import {
 } from './loaded-font.js';
 import type { SerializedFontFace, SerializedFontFaceRaster } from './font-face-transfer.js';
 import { freezeSerializedFontFace } from './internal/font-face-transfer.js';
+import { readBufferViews, readRuntimeFontArtifact } from './internal/font-artifact-reader.js';
+import { readGlb, type ParsedGlb } from './internal/glb-reader.js';
 import type { FontHandle, FontKey, RasterHandle, RasterKey, Sha256Hex } from './identity.js';
 import {
   deleteRegisteredFontData,
@@ -68,7 +69,6 @@ let nextRegistryId = 1;
 let nextFontHandle = 1;
 let nextRasterHandle = 1;
 let nextObjectIdentity = 1;
-let validatorPromise: Promise<typeof import('./font-baker/validator.js')> | undefined;
 let defaultRuntimeBakePromise: Promise<RuntimeFontBake> | undefined;
 const objectIdentities = new WeakMap<object, number>();
 
@@ -257,28 +257,22 @@ export class FontRegistry {
     this.#checkArtifactSize(bytes.byteLength);
     const owned = ownFontBytes(bytes, ownership);
     const artifactHash = (await sha256(owned)) as Sha256Hex;
-    const validator = await loadValidator();
-    let validated: ValidatedFontArtifact;
+    let artifact: ReturnType<typeof readRuntimeFontArtifact>;
     try {
-      validated = await validator.validateFontArtifact(owned);
+      artifact = readRuntimeFontArtifact(owned);
     } catch (error) {
-      throw validationError('INVALID_FONT_ASSET', 'font artifact validation failed', error);
+      throw validationError('INVALID_FONT_ASSET', 'font artifact could not be read', error);
     }
-    const document = validated.document;
-    const fontExtension = requireNonArrayObject(
-      requireNonArrayObject(document.extensions, 'extensions').PMNDRS_font,
-      'PMNDRS_font',
-    );
-    const metricsValue = requireNonArrayObject(fontExtension.metrics, 'PMNDRS_font.metrics');
-    const provenance = requireNonArrayObject(fontExtension.provenance, 'PMNDRS_font.provenance');
+    const { parsed, extension: fontExtension, bufferViews: views } = artifact;
+    const document = parsed.document;
+    const metricsValue = fontExtension.metrics;
+    const provenance = fontExtension.provenance;
     const sourceHash = string(provenance.sourceHash, 'provenance.sourceHash');
     const fontFaceIndex = await authenticatedFontFaceIndex(provenance);
     if (context.sourceBytes !== undefined && (await sha256(context.sourceBytes)) !== sourceHash) {
       throw new FontLoadError('FONT_SOURCE_IDENTITY', 'runtime source bytes do not match the baked font provenance');
     }
     const references = rasterReferences(fontExtension.rasters);
-    const parsed = validator.parseGlb(owned);
-    const views = bufferViews(document, parsed.declaredBinLength);
     const binaryBytes = parsed.bin.subarray(0, parsed.declaredBinLength);
     if (views.length > this.#maxBufferViews) {
       throw new FontLoadError(
@@ -292,7 +286,7 @@ export class FontRegistry {
         `font artifact has ${references.length} raster references; limit is ${this.#maxRasters}`,
       );
     }
-    const shapingHash = validated.shapingHash as Sha256Hex;
+    const shapingHash = artifact.shapingHash;
     const existing = this.#fontsByHash.get(shapingHash);
     if (existing !== undefined) {
       existing.assertActive();
@@ -309,7 +303,7 @@ export class FontRegistry {
       key,
       handle,
       shapingHash,
-      glyphCount: validated.glyphCount,
+      glyphCount: integer(metricsValue.glyphCount, 'metrics.glyphCount'),
       metrics: {
         unitsPerEm: integer(metricsValue.unitsPerEm, 'metrics.unitsPerEm'),
         ascender: integer(metricsValue.ascender, 'metrics.ascender'),
@@ -338,9 +332,9 @@ export class FontRegistry {
                 ...(context.fetch === undefined ? {} : { fetch: context.fetch }),
               },
             ],
-      shapingSfnt: validated.shapingSfnt,
-      glyphExtents: validated.glyphExtents,
-      glyphExtentsAvailability: validated.glyphExtentsAvailability,
+      shapingSfnt: artifact.shapingSfnt,
+      glyphExtents: artifact.glyphExtents,
+      glyphExtentsAvailability: artifact.glyphExtentsAvailability,
       rasterSources,
       resources: new Map(),
       unicodeVersion: string(provenance.unicodeVersion, 'provenance.unicodeVersion'),
@@ -384,15 +378,14 @@ export class FontRegistry {
     const registered = this.#ownedFont(font);
     this.#checkArtifactSize(bytes.byteLength);
     const owned = ownFontBytes(bytes, ownership);
-    const validator = await loadValidator();
     let parsed: ParsedGlb;
+    let views: readonly RegisteredBufferView[];
     try {
-      parsed = validator.parseGlb(owned);
-      await validator.validateWithKhronos(owned, parsed.document);
+      parsed = readGlb(owned);
+      views = readBufferViews(parsed);
     } catch (error) {
-      throw validationError('INVALID_RASTER_ASSET', 'raster artifact validation failed', error);
+      throw validationError('INVALID_RASTER_ASSET', 'raster artifact could not be read', error);
     }
-    const views = bufferViews(parsed.document, parsed.declaredBinLength);
     if (views.length > this.#maxBufferViews) {
       throw new FontLoadError(
         'FONT_RESOURCE_LIMIT',
@@ -437,15 +430,14 @@ export class FontRegistry {
     const registered = this.#ownedFont(font);
     this.#checkArtifactSize(bytes.byteLength);
     const owned = copyView(bytes);
-    const validator = await loadValidator();
     let parsed: ParsedGlb;
+    let views: readonly RegisteredBufferView[];
     try {
-      parsed = validator.parseGlb(owned);
-      await validator.validateWithKhronos(owned, parsed.document);
+      parsed = readGlb(owned);
+      views = readBufferViews(parsed);
     } catch (error) {
-      throw validationError('INVALID_RASTER_ASSET', 'raster artifact validation failed', error);
+      throw validationError('INVALID_RASTER_ASSET', 'raster artifact could not be read', error);
     }
-    const views = bufferViews(parsed.document, parsed.declaredBinLength);
     if (views.length > this.#maxBufferViews) {
       throw new FontLoadError(
         'FONT_RESOURCE_LIMIT',
@@ -2821,28 +2813,6 @@ function rasterSource(value: Record<string, unknown>, path: string): RasterRefer
   };
 }
 
-function bufferViews(
-  document: Readonly<Record<string, unknown>>,
-  declaredBinLength: number,
-): readonly RegisteredBufferView[] {
-  if (!Array.isArray(document.bufferViews)) throw new TypeError('bufferViews must be an array');
-  return document.bufferViews.map((entry, index) => {
-    const value = requireNonArrayObject(entry, `bufferViews[${index}]`);
-    if (value.buffer !== 0) throw new FontLoadError('BUFFER_VIEW_BUFFER', 'bufferView must use buffer 0');
-    const byteOffset = value.byteOffset === undefined ? 0 : integer(value.byteOffset, 'byteOffset');
-    const byteLength = integer(value.byteLength, 'byteLength');
-    if (
-      byteOffset < 0 ||
-      byteLength < 0 ||
-      !Number.isSafeInteger(byteOffset + byteLength) ||
-      byteOffset + byteLength > declaredBinLength
-    ) {
-      throw new FontLoadError('BUFFER_VIEW_RANGE', 'bufferView exceeds the declared binary data');
-    }
-    return { byteOffset, byteLength };
-  });
-}
-
 function resolveFontRequest(input: FontInput, baseUrl: URL | undefined): ResolvedFontRequest {
   const value = normalizeFontInput(input);
   if (value.source === undefined) {
@@ -2971,10 +2941,6 @@ function consumeSharedLoad(shared: SharedFontLoad, signal: AbortSignal | undefin
       },
     );
   });
-}
-
-function loadValidator(): Promise<typeof import('./font-baker/validator.js')> {
-  return (validatorPromise ??= import('./font-baker/validator.js'));
 }
 
 async function readResponseBytes(

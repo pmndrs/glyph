@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:2e35a869ba21c62c088451c81123314aa04320d6e517f4105aa4dc0d4a6c6194'
+source_digest: 'sha256:762b521b0b25bc60e521fbe7acfd385f477a3c6d8aa0e5119db4cc72837cedce'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -111,7 +111,7 @@ The package owns six runtime layers:
 | Layer                   | Owner                 | Responsibility                                                                                                                        |
 | ----------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Root runtime and config | TypeScript core       | Initialize one Glyph engine, construct named adapter handles, and coordinate projection/decode/commit transactions.                   |
-| Font and raster loading | TypeScript core       | Validate portable GLB assets, register shaping payloads, decode selected raster resources, and retain font identity.                  |
+| Font and raster loading | TypeScript core       | Read portable GLB envelopes, register shaping payloads, decode selected raster resources, and retain font identity.                  |
 | Shaping and layout      | Rust/Wasm             | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                    |
 | Codec and command plan  | Rust/Wasm             | Interpret a validated Codec, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.              |
 | Three.js integration    | `@pmndrs/glyph/three` | Compile Codec programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
@@ -138,6 +138,12 @@ trusted data through the schema and resolver into a borrowed `CommandBufferView`
 authoritative batch/root-instance order. `GlyphRenderer.decode(view)` stages retained host objects and returns the
 transactional result/commit/discard boundary. The host renderer later traverses or submits committed objects. There is no
 configurable intermediate decoder and ordinary renderer code receives no numeric IDs.
+
+Portable fonts are schema-validated when Glyph bakes them. The rendering loader does not ship AJV or the Khronos glTF
+validator: it checks the GLB envelope, the reserved `PMNDRS_font` extension and compatible version identity, then proves
+only the buffer-view ranges needed to create safe typed-array views. Generated TypeScript types preserve the checked-in
+extension schema at that trust boundary. A malformed payload throws when its required data is read or decoded; runtime
+does not repeat bake-time schema, SFNT, checksum, or whole-document semantic validation.
 
 `defineGlyphConfig()` preserves the schema, font vocabulary, renderer result, boundary, root, and Codec as one inferred
 relationship. `GlyphConfigFor<typeof Schema, Root, Result>` gives isolated declaration boundaries a nameable contract
@@ -252,7 +258,7 @@ keep its identity registry alive or permanently poison later registration after 
 
 One baked GLB may expose several raster formats without repeating its input identity. Root
 `loadFont(input, rasters, options?)` accepts a nonempty raster tuple and returns a position-preserving tuple of `Font`
-values, fetching and validating the artifact once while retaining each format's exact data type. The declaration
+values, fetching and reading the artifact once while retaining each format's exact data type. The declaration
 surface is `glyph.fontFace(source, { family?, format? })`. The face is its aggregate/default selection, `.default` aliases
 it, and declared keys such as `.bitmap`, `.msdf`, or `.slug` are distinct inferred format selections. The declaration
 owns loading: `face.load()` loads every authoritative imported format advertised by the main font plus every declared
