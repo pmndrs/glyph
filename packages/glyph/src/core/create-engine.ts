@@ -17,6 +17,7 @@ import type {
   TypedResource,
 } from './glyph-config.js';
 import type { PolicyBuffer, PolicyDescriptor, PolicyProgram } from './render-policy.js';
+import type { AnyRasterTechnique } from '../raster-technique.js';
 import { bindPatch, bindRetirement } from '../internal/bind-command-buffer.js';
 import { mapBorrowedSequence, TypedCommandBufferMapper } from '../internal/typed-command-buffer.js';
 
@@ -40,7 +41,17 @@ interface DecodedState<Bindings extends AnyGlyphBindings> {
 
 /** Inputs for the renderer-neutral command binding engine used by one publication root. */
 export interface CreateEngineOptions<Bindings extends AnyGlyphBindings, Root, PortableResource> {
-  readonly config: GlyphConfig<any, Bindings, any, PortableResource, any, Root>;
+  readonly config: Pick<
+    GlyphConfig<
+      import('./glyph-config.js').GlyphHandle,
+      Bindings,
+      unknown,
+      PortableResource,
+      Readonly<Record<string, AnyRasterTechnique>>,
+      Root
+    >,
+    'schema' | 'resolve'
+  >;
   readonly codec: Readonly<{ descriptor: PolicyDescriptor }>;
   readonly root: Root;
 }

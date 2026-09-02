@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:a27a4534ecfffa2598efd7f302b2e4dd0385340fd710a374da5779a97859739a'
+source_digest: 'sha256:15c2726ad628b6e72d4c87cb9349307697b3fa6df7dbadf58d3873bca07d83cd'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -17,9 +17,9 @@ sources:
   - id: glyph-config
     resource: ../../packages/glyph-example-renderer/src/config.ts
     title: Example GlyphConfig and named handle
-  - id: command-binder
-    resource: ../../packages/glyph-example-renderer/src/command-buffer.ts
-    title: Example bound command-buffer binder
+  - id: configured-plan-target
+    resource: ../../packages/glyph/src/core/glyph-plan-target.ts
+    title: Shared configured plan target
   - id: policy
     resource: ../../packages/glyph-example-renderer/src/policy.ts
     title: Backend-authored system lanes and render policy
@@ -67,11 +67,12 @@ phase-structured bound frames to a configured renderer. The same config can be s
 decode, resolve, preparation, transform synchronization, and disposal. Two handle publications prove this path without
 exposing plan IDs to the config renderer.
 
-`ExampleCommandBufferBinder` is independent from Three and deliberately thin: it delegates to the renderer-neutral core
-`createEngine({ config, codec, root })` helper. Core therefore owns admitted-plan projection, stable opaque identity,
-resource acquisition/settlement, default decoding, and borrowed-frame expiry once for every integration. The config
-schema binds programs, buffers, materials, transforms, batches, root instances, and instance spans to example-owned
-object types. Numeric wire IDs and raw plan tables never reach the configured renderer.
+The example delegates its entire root publication boundary to the renderer-neutral
+`createGlyphPlanTarget({ config, codec, root })` helper. Core therefore owns admitted-plan projection, stable opaque
+identity, resource acquisition/settlement, default decoding, transactional renderer preparation, the last committed
+result, transform synchronization, disposal, and borrowed-frame expiry once for every integration. The config schema
+binds programs, buffers, materials, transforms, batches, root instances, and instance spans to example-owned object
+types. Numeric wire IDs and raw plan tables never reach the configured renderer.
 
 The package's internal `ExampleTextEngine` is only the handle implementation behind `defineExampleConfig()`; it is not
 exported from the package entry point and is not an alternative application API. It receives the root engine from the
@@ -80,11 +81,12 @@ operations only through `ExampleHandle`. Applications and benchmarks use `glyph.
 Three. The render planner still owns paragraph/style/flow identities and one `PlanTarget`; callers author no raw IDs,
 revisions, acknowledgments, request bytes, or ABI numbers.
 
-The plan target consumes the borrowed publication synchronously through `applyGlyphPublication()`. Its configured device
-receives `BorrowedBoundCommandBuffer<ExampleBindings>` and walks the Rust-authored ordered group hierarchy during
+The shared plan target consumes each borrowed publication synchronously through `applyGlyphPublication()`. Its configured
+device receives `BorrowedBoundCommandBuffer<ExampleBindings>` and walks the Rust-authored ordered group hierarchy during
 `prepare()`. Candidate resources, retained buffers, patches, geometry, and draws are staged in local maps; commit swaps
 them atomically, while discard leaves the previous accepted device state untouched. Only accepted renderer state is
-retained after the borrowed frame expires.
+retained after the borrowed frame expires. The example-specific target is now only a small naming adapter for
+`lastDrawList`; it does not duplicate the binding or transaction implementation.
 
 `RecordingExampleRendererDevice` is the deterministic CPU oracle. It reads already-bound technique, program, variant,
 named buffers, geometry, resources, ordered batches/root instances, and instance spans before one commit changes accepted

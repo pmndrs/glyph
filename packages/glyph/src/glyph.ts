@@ -1,7 +1,15 @@
 import { createGlyphEngine, type GlyphEngine, type GlyphEngineOptions } from './glyph-engine.js';
-import type { AnyGlyphConfig, GlyphConfigHandle, GlyphHandle, GlyphHandleFactoryContext } from './core/glyph-config.js';
+import {
+  invokeGlyphConfigHandleFactory,
+  type AnyGlyphConfig,
+  type GlyphConfigHandle,
+  type GlyphHandle,
+} from './core/glyph-config.js';
 import {
   createFontFace,
+  FontFaceHandleStore,
+  registerFontFaceHandleStore,
+  unregisterFontFaceHandleStore,
   type FontFace,
   type FontFaceConfig,
   type FontFaceDeclaredFormat,
@@ -23,9 +31,13 @@ export interface Glyph {
 
 class GlyphRuntime implements Glyph {
   readonly #handles = new Map<string, GlyphHandle>();
-  readonly fontLibrary: FontLibrary = createFontLibrary();
+  readonly fontLibrary: FontLibrary;
   #engine: GlyphEngine | undefined;
   #initializing: Promise<void> | undefined;
+
+  constructor(fontLibrary: FontLibrary) {
+    this.fontLibrary = fontLibrary;
+  }
 
   get initialized(): boolean {
     return this.#engine !== undefined;
@@ -57,15 +69,26 @@ class GlyphRuntime implements Glyph {
     }
     if (this.#handles.has(name)) throw new Error(`Glyph handle ${JSON.stringify(name)} already exists`);
 
+    const fonts =
+      config.fonts === undefined
+        ? undefined
+        : new FontFaceHandleStore(
+            this.fontLibrary,
+            config.fonts.techniques,
+            config.fonts.default,
+            config.fonts.loadTechnique,
+          );
     let created = false;
-    const context: GlyphHandleFactoryContext = Object.freeze({
+    let createdHandle: GlyphHandle | undefined;
+    let handle: GlyphConfigHandle<Config> | undefined;
+    const context = Object.freeze({
       name,
       engine,
-      config,
-      create: <Root extends import('./core/glyph-config.js').GlyphRoot, Extension extends (name: string) => Root>(
+      fonts,
+      create: <Extension extends (name: string) => import('./core/glyph-config.js').GlyphRoot>(
         extension: Extension,
         release: () => void,
-      ): GlyphHandle<Root> & Extension => {
+      ): GlyphHandle<ReturnType<Extension>> & Extension => {
         if (created) throw new Error('GlyphConfig.createHandle() may create only one handle');
         if (typeof extension !== 'function') {
           throw new TypeError('Glyph handle extension must be a callable root selector');
@@ -84,23 +107,57 @@ class GlyphRuntime implements Glyph {
               if (disposed) return;
               disposed = true;
               runtime.#handles.delete(name);
-              release();
+              const registeredHandle = handle ?? createdHandle;
+              if (registeredHandle !== undefined) unregisterFontFaceHandleStore(registeredHandle);
+              let failure: unknown;
+              try {
+                release();
+              } catch (error) {
+                failure = error;
+              }
+              try {
+                fonts?.dispose();
+              } catch (error) {
+                failure ??= error;
+              }
+              if (failure !== undefined) throw failure;
             },
           },
         });
-        return Object.freeze(extension) as GlyphHandle<Root> & Extension;
+        const configured = Object.freeze(extension) as GlyphHandle<ReturnType<Extension>> & Extension;
+        createdHandle = configured;
+        return configured;
       },
     });
 
-    const handle = config.createHandle(context) as GlyphConfigHandle<Config>;
-    if (!created || handle.name !== name || typeof handle.dispose !== 'function') {
+    try {
+      handle = invokeGlyphConfigHandleFactory(config, context);
+    } catch (error) {
+      try {
+        createdHandle?.dispose();
+      } catch {
+        // Preserve the config factory failure as the primary error.
+      }
+      fonts?.dispose();
+      throw error;
+    }
+    if (!created || handle !== createdHandle || handle.name !== name || typeof handle.dispose !== 'function') {
       try {
         handle.dispose();
       } catch {
         // Preserve the invalid factory result as the primary failure.
       }
+      if (createdHandle !== handle) {
+        try {
+          createdHandle?.dispose();
+        } catch {
+          // Preserve the invalid factory result as the primary failure.
+        }
+      }
+      fonts?.dispose();
       throw new TypeError('GlyphConfig.createHandle() must return context.create(...)');
     }
+    if (fonts !== undefined) registerFontFaceHandleStore(handle, fonts);
     this.#handles.set(name, handle);
     return handle;
   }
@@ -114,9 +171,11 @@ class GlyphRuntime implements Glyph {
 }
 
 /** The process-local Glyph runtime. Successful initialization occurs at most once. */
-export const glyph: Glyph = new GlyphRuntime();
+const sharedFontLibrary = createFontLibrary();
+const glyphRuntime = new GlyphRuntime(sharedFontLibrary);
+export const glyph: Glyph = glyphRuntime;
 
 /** @internal Shared semantic font cache used by every configured handle. */
 export function glyphFontLibrary(): FontLibrary {
-  return (glyph as GlyphRuntime).fontLibrary;
+  return sharedFontLibrary;
 }

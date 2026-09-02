@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { defineRasterTechnique } from '@pmndrs/glyph';
-import { registerThreeRasterPlanProgram } from '@pmndrs/glyph/three';
+import { registerThreeRasterPlanProgram, ThreeConfig } from '@pmndrs/glyph/three';
 import {
   defineTechniqueGeometryKind,
   createGlyphEngine,
@@ -260,7 +260,7 @@ test('registration selects one renderer variant per technique before engine cons
     /already selected raster variant "test" for technique "test-variant-selection"/,
   );
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(shaperWasmUrl) });
-  const coordinator = new ThreeTextEngineCoordinator(glyphEngine);
+  const coordinator = new ThreeTextEngineCoordinator(glyphEngine, ThreeConfig);
   const font = await fontForTechnique(unsupported);
   assert.throws(
     () => coordinator.bindFontStack(font),
@@ -273,7 +273,7 @@ test('registration selects one renderer variant per technique before engine cons
 
 test('a technique registered after an engine exists is refused, not silently dropped', async () => {
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(shaperWasmUrl) });
-  const coordinator = new ThreeTextEngineCoordinator(glyphEngine);
+  const coordinator = new ThreeTextEngineCoordinator(glyphEngine, ThreeConfig);
 
   const late = planProgram('test-late-technique');
   assert.throws(
@@ -353,7 +353,7 @@ test('engine construction rejects a portable body compiled for different system 
 
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(shaperWasmUrl) });
   assert.throws(
-    () => new ThreeTextEngineCoordinator(glyphEngine),
+    () => new ThreeTextEngineCoordinator(glyphEngine, ThreeConfig),
     /policy body does not use the requested system buffers/,
   );
   glyphEngine.dispose();

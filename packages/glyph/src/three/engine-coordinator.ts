@@ -11,7 +11,6 @@ import {
   type BackendPolicy,
   type BackendTransformBinding,
   type Codec,
-  type EncodeContext,
   type PolicyCapabilitySet,
   type RenderIdFactory,
   type GlyphBackend,
@@ -26,18 +25,9 @@ import {
 import type * as THREE from 'three/webgpu';
 import type { ThreeGlyphConfig, ThreeMaterialBinding } from './handle.js';
 
+type SelectedThreeConfig = Parameters<ThreeGlyphConfig['createHandle']>[0]['config'];
+
 const builtInThreeTechniques = new Set<string>([bitmap.id, msdf.id, slug.id]);
-
-interface ThreeConfigEncode {
-  encode(context: EncodeContext): Codec;
-}
-
-let defaultThreeConfig: ThreeGlyphConfig | undefined;
-
-/** @internal Routes the default imperative Three surface through the same immutable built-in GlyphConfig. */
-export function registerDefaultThreeConfig(config: ThreeGlyphConfig): void {
-  defaultThreeConfig ??= config;
-}
 
 /** Counted Three material binding; dispose releases this lease without disposing the material. */
 export interface ThreeMaterialBindingLease {
@@ -75,7 +65,8 @@ export class ThreeTextEngineCoordinator {
   readonly codec: Codec;
   /** @internal Collision-checked static identities captured while installing this renderer policy. */
   readonly identities: RenderIdFactory;
-  readonly config: ThreeGlyphConfig;
+  readonly config: SelectedThreeConfig;
+  readonly material: ThreeTextMaterial | undefined;
   readonly #planPrograms: ReadonlyMap<string, CompiledThreeRasterPlanProgram>;
   readonly #singleFontStacks = new WeakMap<
     Font<AnyRasterTechnique>,
@@ -89,13 +80,8 @@ export class ThreeTextEngineCoordinator {
   #applyingPlan = false;
   #disposed = false;
 
-  constructor(glyphEngine: GlyphEngine, config?: ThreeConfigEncode) {
+  constructor(glyphEngine: GlyphEngine, config: SelectedThreeConfig) {
     const backend = glyphEngine.createBackend({ integration: '@pmndrs/glyph/three' });
-    const activeConfig = (config ?? defaultThreeConfig) as ThreeGlyphConfig | undefined;
-    if (activeConfig === undefined) {
-      backend.dispose();
-      throw new Error('ThreeTextEngineCoordinator requires the built-in ThreeConfig or an explicit GlyphConfig');
-    }
     let snapshot = false;
     let policy: BackendPolicy | undefined;
     let identities: RenderIdFactory | undefined;
@@ -104,7 +90,7 @@ export class ThreeTextEngineCoordinator {
     try {
       policy = backend.installPolicy((backendIdentities) => {
         identities = backendIdentities;
-        const codec = activeConfig.encode({ integration: '@pmndrs/glyph/three', ids: backendIdentities });
+        const codec = config.encode({ integration: '@pmndrs/glyph/three', ids: backendIdentities });
         if (typeof codec !== 'object' || codec === null || Array.isArray(codec)) {
           throw new TypeError('ThreeConfig.encode() must return a Codec');
         }
@@ -137,7 +123,8 @@ export class ThreeTextEngineCoordinator {
     this.codec = Object.freeze({ descriptor });
     this.backend = backend;
     this.policy = policy;
-    this.config = activeConfig;
+    this.config = config;
+    this.material = config.material;
   }
 
   bindFontStack(selection: FontSelection<AnyRasterTechnique>): BackendFontStackBinding {

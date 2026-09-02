@@ -24,7 +24,7 @@ import { defineRasterResourceId, defineRasterTechnique } from '../../dist/raster
 import { createGlyphEngine } from '../../dist/glyph-engine.js';
 import { markStorageAttributeUpdated, ThreeTextRenderPlanExecutor } from '../../dist/three/engine-plan-target.js';
 import { ThreeTextEngineCoordinator } from '../../dist/three/engine-coordinator.js';
-import { registerThreeRasterPlanProgram } from '../../dist/three.js';
+import { registerThreeRasterPlanProgram, ThreeConfig } from '../../dist/three.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 
 const fixtureUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -133,7 +133,7 @@ function fontVariant(backing, resource, geometry) {
 
 async function rendererHarness() {
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(wasmUrl) });
-  const coordinator = new ThreeTextEngineCoordinator(glyphEngine);
+  const coordinator = new ThreeTextEngineCoordinator(glyphEngine, ThreeConfig);
   const drawRoot = new THREE.Object3D();
   const object = new THREE.Object3D();
   drawRoot.add(object);
@@ -371,7 +371,7 @@ test('an async target must return the same unmodified transferred publication', 
   const resource = defineRasterResourceId('test/three-async-transport/mesh');
   const font = fontVariant(backing, resource, indexedQuadGeometry());
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(wasmUrl) });
-  const coordinator = new ThreeTextEngineCoordinator(glyphEngine);
+  const coordinator = new ThreeTextEngineCoordinator(glyphEngine, ThreeConfig);
   let corruptReturn = false;
   let holdReturn = false;
   let growEngineDuringAcceptance = false;

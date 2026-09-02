@@ -7,31 +7,16 @@ import {
   type PlanCandidate,
   type PlanTarget,
   type RenderPlanner,
-  type RendererContext,
   type RetainedText,
   type GlyphEngine,
-  applyGlyphPublication,
-  type BorrowedBoundCommandBuffer,
   type Codec,
-  type GlyphRenderer,
-  createEngine,
-  type GlyphCommandBufferBinder,
+  createGlyphPlanTarget,
+  type GlyphPlanTarget,
 } from '@pmndrs/glyph/core';
 
 import type { ExampleDrawList } from './draw-list.js';
 import { exampleCapabilitySet, exampleRenderPolicyDescriptor } from './policy.js';
 import type { ExampleBindings, ExampleGlyphConfig, ExampleRootContext } from './config.js';
-
-type ExampleAbortSignal = RendererContext<ExampleBindings>['signal'];
-interface ExampleAbortController {
-  readonly signal: ExampleAbortSignal;
-  abort(reason?: unknown): void;
-}
-const ExampleAbortController = (
-  globalThis as unknown as {
-    readonly AbortController: new () => ExampleAbortController;
-  }
-).AbortController;
 
 const EXAMPLE_LIMITS = Object.freeze({
   maxParagraphs: 64,
@@ -76,7 +61,11 @@ export class ExampleTextEngine {
   #planner: RenderPlanner | undefined;
   #disposed = false;
 
-  constructor(glyphEngine: GlyphEngine, config: ExampleGlyphConfig, root: ExampleRootContext) {
+  constructor(
+    glyphEngine: GlyphEngine,
+    config: Parameters<ExampleGlyphConfig['createHandle']>[0]['config'],
+    root: ExampleRootContext,
+  ) {
     this.#backend = glyphEngine.createBackend({ integration: '@pmndrs/glyph-example-renderer' });
     let codec: Codec | undefined;
     try {
@@ -217,71 +206,26 @@ export class ExampleText {
 
 class ExamplePlanTarget implements PlanTarget {
   readonly delivery = 'borrowed' as const;
-  #lastDrawList: ExampleDrawList | undefined;
-  readonly #config: ExampleGlyphConfig;
-  readonly #binder: GlyphCommandBufferBinder<ExampleBindings>;
-  readonly #renderer: GlyphRenderer<ExampleBindings, ExampleDrawList>;
-  readonly #rendererAbort = new ExampleAbortController();
-  #disposed = false;
+  readonly #target: GlyphPlanTarget<ExampleBindings, ExampleDrawList>;
 
-  constructor(config: ExampleGlyphConfig, codec: Codec, root: ExampleRootContext) {
-    this.#config = config;
-    this.#binder = createEngine({ config, codec, root });
-    const configured = config.renderer(
-      Object.freeze({
-        drawRoot: config.schema.drawRoot(root),
-        signal: this.#rendererAbort.signal,
-      }),
-    );
-    this.#renderer = Object.freeze({
-      prepare: (frame: BorrowedBoundCommandBuffer<ExampleBindings>) => {
-        const prepared = configured.prepare(frame);
-        let settled = false;
-        return Object.freeze({
-          result: prepared.result,
-          commit: () => {
-            if (settled) throw new Error('example renderer preparation is already settled');
-            settled = true;
-            prepared.commit();
-            this.#lastDrawList = prepared.result;
-          },
-          discard: () => {
-            if (settled) return;
-            settled = true;
-            prepared.discard();
-          },
-        });
-      },
-      syncTransforms: (updates: Parameters<typeof configured.syncTransforms>[0]) => configured.syncTransforms(updates),
-      dispose: () => configured.dispose(),
-    });
+  constructor(
+    config: Parameters<ExampleGlyphConfig['createHandle']>[0]['config'],
+    codec: Codec,
+    root: ExampleRootContext,
+  ) {
+    this.#target = createGlyphPlanTarget({ config, codec, root });
   }
 
   get lastDrawList(): ExampleDrawList {
-    if (this.#lastDrawList === undefined) throw new Error('example renderer has not accepted a plan');
-    return this.#lastDrawList;
+    return this.#target.lastResult;
   }
 
   accept(candidate: PlanCandidate, signal: Parameters<PlanTarget['accept']>[1]) {
-    if (this.#disposed) return { accepted: false as const, error: new Error('example plan target is disposed') };
-    return applyGlyphPublication(candidate, signal, this.#config.decode, this.#binder, this.#renderer);
+    return this.#target.accept(candidate, signal);
   }
 
   dispose(): void {
-    if (this.#disposed) return;
-    this.#disposed = true;
-    this.#rendererAbort.abort(new Error('example publication boundary disposed'));
-    let failure: unknown;
-    const attempt = (release: () => void): void => {
-      try {
-        release();
-      } catch (error) {
-        failure ??= error;
-      }
-    };
-    attempt(() => this.#renderer.dispose());
-    attempt(() => this.#binder.dispose());
-    if (failure !== undefined) throw failure;
+    this.#target.dispose();
   }
 }
 
