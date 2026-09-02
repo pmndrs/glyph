@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { FontRegistry } from '../../dist/loader.js';
-import { createGlyphEngine } from '../../dist/glyph-engine.js';
+import { createGlyphEngine, createGlyphHandleState } from '../../dist/glyph-engine.js';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { GlyphBackend } from '../../dist/core/backend.js';
 import { assertGlyphId, id } from '../../dist/core/render-policy.js';
@@ -22,10 +22,10 @@ const TEST_POLICY_HANDLE = id.policy('test.text-engine-backend/default');
 const TEST_PLANNER_HANDLE = id.planner('test.text-engine-backend/default');
 const THREE_POLICY_HANDLE = id.policy('test.text-engine-backend/three');
 
-test('a glyph engine owns every backend it creates', async () => {
+test('a glyph engine owns every configured-handle state it creates', async () => {
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(wasmUrl) });
-  assert.throws(() => glyphEngine.createBackend({ integration: '' }), /nonempty string/u);
-  const backend = glyphEngine.createBackend({ integration: 'test.glyphEngine-owner' });
+  assert.throws(() => createGlyphHandleState(glyphEngine, { integration: '' }), /nonempty string/u);
+  const backend = createGlyphHandleState(glyphEngine, { integration: 'test.glyphEngine-owner' });
   const plannerHandle = backend.id('planner', 'test.glyphEngine-owner/transport');
   const policyHandle = backend.id('policy', 'test.glyphEngine-owner/policy');
   backend.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));

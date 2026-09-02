@@ -10,6 +10,8 @@ glyphEngine.disposed satisfies boolean;
 void glyphEngine.registry;
 // @ts-expect-error Font loading is engine-independent root vocabulary.
 void glyphEngine.loadFont;
+// @ts-expect-error Renderer integration state is created only by glyph.handle(name, config).
+void glyphEngine.createBackend;
 
 async function loadPortableFonts(): Promise<void> {
   const created = await createGlyphEngine();

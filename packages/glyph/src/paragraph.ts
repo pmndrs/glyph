@@ -18,7 +18,7 @@ import {
   assertTextStyleFeatureRanges,
 } from './text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from './engine-encoding.js';
-import { createGlyphEngine, type GlyphEngine } from './glyph-engine.js';
+import { createGlyphEngine, createGlyphHandleState, type GlyphEngine } from './glyph-engine.js';
 import type { BackendFontStackBinding, BackendPolicy, GlyphBackend } from './core/backend.js';
 import {
   createRasterPolicyProgram,
@@ -643,7 +643,10 @@ function acquireMeasurementService(): Promise<MeasurementServiceLease> {
 async function createMeasurementService(): Promise<MeasurementService> {
   const glyphEngine = await createGlyphEngine();
   try {
-    return { glyphEngine, backend: glyphEngine.createBackend({ integration: '@pmndrs/glyph/paragraph' }) };
+    return {
+      glyphEngine,
+      backend: createGlyphHandleState(glyphEngine, { integration: '@pmndrs/glyph/paragraph' }),
+    };
   } catch (error) {
     glyphEngine.dispose();
     throw error;

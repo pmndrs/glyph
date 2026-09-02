@@ -1,5 +1,5 @@
 import type { Font } from '../font.js';
-import type { GlyphEngine } from '../glyph-engine.js';
+import { createGlyphHandleState, type GlyphEngine } from '../glyph-engine.js';
 import { createFontStack, immutableFontSelectionFonts, type FontSelection, type FontStack } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import {
@@ -138,7 +138,7 @@ class ConfiguredHandleDomain<
   ) {
     this.#input = input;
     this.#config = config;
-    this.#backend = input.engine.createBackend({ integration: input.name });
+    this.#backend = createGlyphHandleState(input.engine, { integration: input.name });
     let codec: CodecValue | undefined;
     try {
       this.#policy = this.#backend.installPolicy((ids) => {

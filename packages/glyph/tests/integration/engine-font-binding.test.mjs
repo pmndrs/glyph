@@ -23,6 +23,7 @@ import {
 import {
   acquireEngineFontBinding,
   createGlyphEngine,
+  createGlyphHandleState,
   observeGlyphEngineDispose,
   engineFontBindingHandle,
   engineFontBindingResources,
@@ -176,7 +177,7 @@ test('a glyph-engine-owned backend installs complete policies and deduplicates o
   const font = await fixtureFont();
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);
-  const backend = glyphEngine.createBackend({ integration: 'test.backend-font-binding' });
+  const backend = createGlyphHandleState(glyphEngine, { integration: 'test.backend-font-binding' });
 
   assert.throws(() => backend.bindFont(font), /no installed policy/);
   assert.equal(shaper.memoryReport().fontCount, 0);
@@ -205,7 +206,7 @@ test('one backend rejects colliding resource identities when the second font bin
   ]);
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);
-  const backend = glyphEngine.createBackend({ integration: 'test.backend-font-binding-collision' });
+  const backend = createGlyphHandleState(glyphEngine, { integration: 'test.backend-font-binding-collision' });
   const policy = backend.installPolicy((ids) => {
     const capabilitySet = threePolicyCapabilitySet();
     const options = {
@@ -239,7 +240,7 @@ test('a glyph-engine-owned backend binds immutable font stacks and retains their
   const stack = createFontStack(font);
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);
-  const backend = glyphEngine.createBackend({ integration: 'test.backend-font-stack-binding' });
+  const backend = createGlyphHandleState(glyphEngine, { integration: 'test.backend-font-stack-binding' });
   const policy = backend.installPolicy(threeRenderPolicyDescriptor);
 
   assert.throws(() => backend.bindFontStack({ fonts: [font] }), /font stack was not created by this package/);
