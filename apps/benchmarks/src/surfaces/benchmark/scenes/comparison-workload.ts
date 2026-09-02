@@ -925,9 +925,9 @@ async function createComparisonWorkloadRuntime(
           configuration.workload === 'zoom-text' ? entries[zoomAnimationState.phraseIndex] : undefined;
         const zoomScale = activeZoomEntry?.node.scale.x ?? 1;
         if (configuration.workload === 'icon-grid') {
-          measureIconGridRenderMetrics(entries, batchRoot, visibleEntryMetrics, visibleGeometryScratch);
+          measureIconGridRenderMetrics(entries, glyphRoot.drawRoot, visibleEntryMetrics, visibleGeometryScratch);
         } else {
-          measureVisibleEntries(entries, batchRoot, zoomScale, visibleEntryMetrics, visibleGeometryScratch);
+          measureVisibleEntries(entries, glyphRoot.drawRoot, zoomScale, visibleEntryMetrics, visibleGeometryScratch);
         }
         const effectiveCssFontSize =
           configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX * zoomScale : configuration.fontSize;
@@ -1614,7 +1614,7 @@ function disposeEntries(entries: readonly WorkloadEntry[]): void {
 
 function measureVisibleEntries(
   entries: readonly WorkloadEntry[],
-  batchRoot: THREE.Object3D,
+  drawRoot: THREE.Object3D,
   zoomScale: number,
   metrics: MutableVisibleEntryMetrics,
   geometries: Set<THREE.InstancedBufferGeometry>,
@@ -1627,9 +1627,9 @@ function measureVisibleEntries(
   metrics.missingGlyphCount = 0;
   metrics.sourceTextLength = 0;
   geometries.clear();
-  // Rust-planned TextGroup draws are siblings of the authored entry nodes. Traversing each entry therefore reports
-  // zero even though the shared command buffer submits one draw; traverse the realized batch root exactly once.
-  measureVisibleObject(batchRoot, metrics, geometries);
+  // Renderer-owned draws are siblings of the authored Text/TextGroup tree beneath the Glyph root's draw object.
+  // Traverse that realized tree once; the authored batch root intentionally contains no renderer meshes.
+  measureVisibleObject(drawRoot, metrics, geometries);
   for (const entry of entries) {
     if (!entry.node.visible) continue;
     measureVisibleLayout(committedTextMetrics(entry.text), zoomScale, metrics);
@@ -1640,7 +1640,7 @@ function measureVisibleEntries(
 
 function measureIconGridRenderMetrics(
   entries: readonly WorkloadEntry[],
-  batchRoot: THREE.Object3D,
+  drawRoot: THREE.Object3D,
   metrics: MutableVisibleEntryMetrics,
   geometries: Set<THREE.InstancedBufferGeometry>,
 ): void {
@@ -1652,7 +1652,7 @@ function measureIconGridRenderMetrics(
   metrics.missingGlyphCount = 0;
   metrics.sourceTextLength = 0;
   geometries.clear();
-  measureVisibleObject(batchRoot, metrics, geometries);
+  measureVisibleObject(drawRoot, metrics, geometries);
   for (const entry of entries) {
     if (!entry.node.visible) continue;
     metrics.sourceTextLength += entry.sourceText.length;
