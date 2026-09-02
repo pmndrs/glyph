@@ -18,14 +18,10 @@ export interface GlyphEngineOptions {
   readonly wasm?: BufferSource | WebAssembly.Module;
 }
 
-/** Owns one Wasm shaping domain and every backend created from it. */
+/** Owns one Wasm shaping domain and every configured handle attached to it. */
 export interface GlyphEngine {
   readonly disposed: boolean;
-
-  /** Creates a renderer integration backend owned by this engine. */
-  createBackend(options: GlyphBackendOptions): GlyphBackend;
-
-  /** Disposes every owned backend and releases this engine's Wasm shaping domain. */
+  /** Disposes every owned handle state and releases this engine's Wasm shaping domain. */
   dispose(): void;
 }
 
@@ -122,6 +118,12 @@ export function observeGlyphEngineDispose(glyphEngine: GlyphEngine, dispose: () 
   return glyphEngine._observeDispose(dispose);
 }
 
+/** @internal Creates the engine-local state owned by one configured Glyph handle. */
+export function createGlyphHandleState(glyphEngine: GlyphEngine, options: GlyphBackendOptions): GlyphBackend {
+  if (!(glyphEngine instanceof GlyphEngineImpl)) throw new TypeError('glyph engine was not created by this package');
+  return glyphEngine._createHandleState(options);
+}
+
 /** @internal Acquire one counted engine-local Wasm shaping registration. */
 export function acquireEngineFontBinding<Technique extends AnyRasterTechnique>(
   glyphEngine: GlyphEngine,
@@ -153,13 +155,13 @@ class GlyphEngineImpl implements GlyphEngine {
   readonly #fontRegistry: EngineFontRegistry;
   readonly #shaper: RuntimeShaper;
   readonly #disposeObservers = new Set<() => void>();
-  readonly #backends = new Set<GlyphBackend>();
+  readonly #handleStates = new Set<GlyphBackend>();
   readonly #fontRegistrations = new WeakMap<RegisteredFont, EngineFontRegistration>();
   readonly #liveFontRegistrations = new Set<EngineFontRegistration>();
   #disposed = false;
   #disposing = false;
   #borrowedPlanActive = false;
-  #nextBackendOrdinal = 1;
+  #nextHandleOrdinal = 1;
 
   constructor(fontRegistry: EngineFontRegistry, shaper: RuntimeShaper) {
     this.#fontRegistry = fontRegistry;
@@ -170,25 +172,25 @@ class GlyphEngineImpl implements GlyphEngine {
     return this.#disposed;
   }
 
-  /** Creates a renderer integration backend owned by this engine. */
-  createBackend(options: GlyphBackendOptions): GlyphBackend {
+  /** @internal */
+  _createHandleState(options: GlyphBackendOptions): GlyphBackend {
     this.#assertActive();
-    const ordinal = this.#nextBackendOrdinal;
+    const ordinal = this.#nextHandleOrdinal;
     const nextOrdinal = ordinal + 1;
-    if (!Number.isSafeInteger(nextOrdinal)) throw new RangeError('glyph backend identities are exhausted');
-    let backend!: GlyphBackend;
-    backend = new GlyphBackend(
+    if (!Number.isSafeInteger(nextOrdinal)) throw new RangeError('glyph handle identities are exhausted');
+    let state!: GlyphBackend;
+    state = new GlyphBackend(
       this.#shaper,
       options,
-      () => this.#backends.delete(backend),
+      () => this.#handleStates.delete(state),
       (font) => this._acquireFont(font),
       () => this.#assertBackendAvailable(),
       () => this.#enterBorrowedPlan(),
-      `${options.integration}/backend/${ordinal}`,
+      `${options.integration}/handle/${ordinal}`,
     );
-    this.#backends.add(backend);
-    this.#nextBackendOrdinal = nextOrdinal;
-    return backend;
+    this.#handleStates.add(state);
+    this.#nextHandleOrdinal = nextOrdinal;
+    return state;
   }
 
   /**
@@ -214,14 +216,14 @@ class GlyphEngineImpl implements GlyphEngine {
       }
     }
     this.#disposeObservers.clear();
-    for (const backend of [...this.#backends]) {
+    for (const state of [...this.#handleStates]) {
       try {
-        backend.dispose();
+        state.dispose();
       } catch (error) {
-        report('disposing a glyph backend', error);
+        report('disposing Glyph handle state', error);
       }
     }
-    this.#backends.clear();
+    this.#handleStates.clear();
     for (const registration of [...this.#liveFontRegistrations]) {
       try {
         this.#disposeFontRegistration(registration);
