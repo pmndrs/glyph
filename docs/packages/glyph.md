@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:617a8feb48017d7eb69958404e3c87289c423afbb86855efaba193767e66bff6'
+source_digest: 'sha256:a2367db7bfe87eecc10bb39eedba2e782aa71ca02e85880541cf5a45e59ba2b0'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -288,8 +288,11 @@ worker.postMessage(serialized, { transfer });
 selection. Both return fresh full-span `ArrayBuffer`s, so transferring them may detach the clone without changing the
 originating FontFace, immutable Font values, or cache. The receiving realm passes the inert, versioned
 `SerializedFontFace` directly to `glyph.fontFace(serialized)`. Glyph synchronously claims its buffers into private
-ownership and imports the main GLB, selected raster sidecars, and only their resolved external resources into the same
-content graph used by URL, Request, Blob, and byte declarations. A complete existing graph is reused without fetching;
+ownership after checking and canonicalizing only the safe structured-clone envelope: version, arrays, scalar fields,
+live full-span buffers, and non-aliasing buffer ownership. The lazy importer then performs the single semantic identity
+check against the authoritative GLB and dependency bytes while importing the main GLB, selected raster sidecars, and
+only their resolved external resources into the same content graph used by URL, Request, Blob, and byte declarations.
+A complete existing graph is reused without fetching;
 partial transfers may progressively add formats to that graph. No live FontFace, Font, Promise, handle, or renderer
 resource crosses the realm boundary, and no normal `load()`, Text construction, `glyph.shape()`, or renderer path invokes
 the snapshot code. The initial package graph retains only the synchronous serialized-value discriminator and ownership
