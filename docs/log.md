@@ -2,7 +2,14 @@
 
 ## 2026-09-02
 
-- **Made FontFace transfer explicit and content-addressed** — D-312 adds `FontFace.clone()` as the only path that copies
+- **Kept explicit FontFace transfer off the initial graph** — Moved snapshot copying and transferred-graph reconstruction
+  behind the existing asynchronous `clone()` and serialized-load boundary while preserving the synchronous discriminator
+  and ownership claim. Initial Core drops by 2,888 raw / 1,050 gzip bytes and Three by 5,246 raw / 1,424 gzip bytes;
+  package graph assertions keep the transfer runtime lazy. The 933-test package/integration lane passed, the loader fuzz
+  smoke now asserts GLB-envelope safety instead of the removed validator's rejection volume, and the live 33-cell WebGPU
+  presentation sweep rendered every workload with zero missing glyphs and zero frames over 20 ms.
+
+- **Made FontFace transfer explicit and content-addressed** — D-313 adds `FontFace.clone()` as the only path that copies
   font data for another JavaScript realm. Exact selections carry only their raster sidecar and the external resources
   that raster actually resolved; aggregate clones carry every loaded authoritative format. The returned
   `[SerializedFontFace, transfer]` uses fresh full-span buffers, so transfer detaches the clone without invalidating the

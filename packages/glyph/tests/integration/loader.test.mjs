@@ -521,7 +521,7 @@ test('a serialized FontFace carries an external raster and its resolved resource
   const font = await source.load(request);
   await immutableFontResources(font).raster.resource(pageSource);
 
-  const snapshot = source.snapshot([font]);
+  const snapshot = await source.snapshot([font]);
   assert.equal(snapshot.rasters.length, 1);
   assert.ok(snapshot.rasters[0].data instanceof ArrayBuffer, 'the external raster sidecar is carried');
   assert.equal(snapshot.resources.length, 1);
@@ -557,9 +557,9 @@ test('exact FontFace transfers progressively converge on one receiving content g
   const sourceLibrary = createFontLibrary();
   const source = await openFontFaceSource(sourceLibrary, { baked: { bytes: multiFormatBytes, ownership: 'copy' } }, []);
   const sourceMsdf = await source.load(msdf);
-  const msdfSnapshot = claimSerializedFontFace(source.snapshot([sourceMsdf]));
+  const msdfSnapshot = claimSerializedFontFace(await source.snapshot([sourceMsdf]));
   const sourceSlug = await source.load(slug);
-  const slugSnapshot = claimSerializedFontFace(source.snapshot([sourceSlug]));
+  const slugSnapshot = claimSerializedFontFace(await source.snapshot([sourceSlug]));
   sourceMsdf.dispose();
   sourceSlug.dispose();
   source.dispose();

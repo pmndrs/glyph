@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:6aedd5e7cd53fd881f06ba7e4158be8ebccf773c9daefb5b1678482bab94484d'
+source_digest: 'sha256:617a8feb48017d7eb69958404e3c87289c423afbb86855efaba193767e66bff6'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -111,7 +111,7 @@ The package owns six runtime layers:
 | Layer                   | Owner                 | Responsibility                                                                                                                        |
 | ----------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Root runtime and config | TypeScript core       | Initialize one Glyph engine, construct named adapter handles, and coordinate projection/decode/commit transactions.                   |
-| Font and raster loading | TypeScript core       | Read portable GLB envelopes, register shaping payloads, decode selected raster resources, and retain font identity.                  |
+| Font and raster loading | TypeScript core       | Read portable GLB envelopes, register shaping payloads, decode selected raster resources, and retain font identity.                   |
 | Shaping and layout      | Rust/Wasm             | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                    |
 | Codec and command plan  | Rust/Wasm             | Interpret a validated Codec, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.              |
 | Three.js integration    | `@pmndrs/glyph/three` | Compile Codec programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
@@ -292,7 +292,9 @@ ownership and imports the main GLB, selected raster sidecars, and only their res
 content graph used by URL, Request, Blob, and byte declarations. A complete existing graph is reused without fetching;
 partial transfers may progressively add formats to that graph. No live FontFace, Font, Promise, handle, or renderer
 resource crosses the realm boundary, and no normal `load()`, Text construction, `glyph.shape()`, or renderer path invokes
-the snapshot code.
+the snapshot code. The initial package graph retains only the synchronous serialized-value discriminator and ownership
+claim needed by `glyph.fontFace(serialized)`. Copying a loaded graph and reconstructing missing transferred nodes live in
+one package-private dynamic chunk reached only by explicit `clone()` or by loading a serialized declaration.
 
 React's `useFont(source, config?)` declares through that same FontFace path, asks the selected Three handle which exact
 format the declaration denotes, conditionally calls React 19 `use()` only while that format is unloaded, and returns

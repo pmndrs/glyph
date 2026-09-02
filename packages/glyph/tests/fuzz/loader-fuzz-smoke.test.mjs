@@ -18,16 +18,16 @@ test('fixed-seed loader artifact mutations fail safely, purely, and deterministi
     descriptor: { formatVersion: 0, fontFaceIndex: 0 },
   }).artifacts[0].bytes;
 
-  let rejected = 0;
   for (const mutation of mutateArtifact(artifact, 128)) {
     const before = Buffer.from(mutation.bytes);
     const first = await outcome(mutation.bytes);
     const second = await outcome(mutation.bytes);
     assert.deepEqual(second, first, `mutation ${mutation.id} from seed ${mutation.seed}`);
     assert.deepEqual(Buffer.from(mutation.bytes), before, `mutation ${mutation.id} changed input`);
-    if (!first.ok) rejected += 1;
+    if (mutation.mode === 1 || mutation.mode === 3 || mutation.mode === 4) {
+      assert.equal(first.ok, false, `length-changing mutation ${mutation.id} must violate the GLB envelope`);
+    }
   }
-  assert(rejected > 100, `seed ${ARTIFACT_FUZZ_SEED} must exercise hostile loader paths`);
 });
 
 async function outcome(bytes) {

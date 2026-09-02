@@ -340,10 +340,14 @@ const coreJavaScript = await measureJavaScript(
   true,
   true,
   {
-    expectedDynamic: ['/packages/glyph/dist/runtime-bake.js'],
+    expectedDynamic: [
+      '/packages/glyph/dist/runtime-bake.js',
+      '/packages/glyph/dist/internal/font-face-transfer-runtime.js',
+    ],
     excludedInitial: [
       '/packages/glyph/dist/runtime-bake.js',
       '/packages/glyph/dist/runtime-bake-worker.js',
+      '/packages/glyph/dist/internal/font-face-transfer-runtime.js',
       '/packages/glyph/dist/react.js',
       '/packages/glyph/dist/three.js',
       '/packages/glyph/dist/raster/bitmap-technique.js',
@@ -425,8 +429,13 @@ const threeRuntime = await measureJavaScript(
   {
     // Bake owns schema and Khronos validation. Rendering reads only the package extension
     // identity and the byte ranges needed to create safe typed-array views.
-    expectedDynamic: [],
+    expectedDynamic: [
+      '/packages/glyph/dist/runtime-bake.js',
+      '/packages/glyph/dist/internal/font-face-transfer-runtime.js',
+    ],
     excludedInitial: [
+      '/packages/glyph/dist/runtime-bake.js',
+      '/packages/glyph/dist/internal/font-face-transfer-runtime.js',
       '/packages/glyph/dist/font-baker/validator.js',
       '/node_modules/ajv/',
       '/node_modules/gltf-validator/',
