@@ -1,45 +1,77 @@
 ---
 title: Introduction
-description: Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for three.js.
+description: Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for every Canvas.
 nav: 0
 ---
 
 <Intro>
-  `@pmndrs/glyph` shapes and lays out text in Rust/Wasm, publishes a retained render plan, and lets three.js draw it.
-  One baked font file carries the shaping data plus any of three raster techniques — Bitmap, MSDF, and Slug — and the
-  same `Text` object works from React Three Fiber or plain three.js, on WebGPU with three's own WebGL2 fallback.
+  `@pmndrs/glyph` retains authored text, shapes and lays it out in Rust/Wasm, then publishes a transient render plan
+  for the active renderer. The maintained three.js integration supports Bitmap, MSDF, and Slug through WebGPU and
+  three's WebGL fallback.
 </Intro>
 
 ```bash
 npm install three @react-three/fiber @pmndrs/glyph
 ```
 
-## What does it look like?
-
-{/* prose: one sentence framing the example — a font, a Text, nothing else. */}
+## Render text with React Three Fiber
 
 ```tsx
-import { Canvas } from '@react-three/fiber/webgpu';
-import { Text } from '@pmndrs/glyph/react';
-import { useMSDF } from '@pmndrs/glyph/react/msdf';
+import { Text, TextGroup } from '@pmndrs/glyph/react';
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
 
-function Hello() {
-  const inter = useMSDF({ baked: '/fonts/inter.font.glb' });
-  return (
-    <Text font={inter} style={{ fontSize: 1, color: '#f4f7ff' }}>
-      Hello world
-    </Text>
-  );
-}
+const VT323 = '/fonts/VT323.font.glb';
+const INTER = '/fonts/Inter.font.glb';
+const LOVERS_QUARREL = '/fonts/LoversQuarrel.font.glb';
 
-export default function App() {
+void useMsdf.preload(INTER);
+
+function Labels() {
+  const inter = useMsdf(INTER);
+  const loversQuarrel = useSlug(LOVERS_QUARREL);
+  const vt323 = useBitmap(VT323, { strikes: [8, 16] });
+
   return (
-    <Canvas>
-      <Hello />
-    </Canvas>
+    <>
+      <Text
+        font={loversQuarrel}
+        style={{ fontSize: 32, color: '#f7f7f7' }}
+        layout={{ align: 'center' }}
+        constraints={{ width: { mode: 'exact', size: 480 } }}
+        position={[0, -4, 0]}
+      >
+        Lorem <Text style={{ color: '#f70000' }}>Ipsum</Text>
+      </Text>
+      <TextGroup>
+        <Text
+          font={inter}
+          style={{ fontSize: 32, color: '#f7f7f7' }}
+          layout={{ align: 'center' }}
+          constraints={{ width: { mode: 'exact', size: 480 } }}
+          position={[0, -1, 0]}
+        >
+          Eos tempor iusto mollit reprehenderit dolor cillum.
+        </Text>
+      </TextGroup>
+      <Text
+        font={vt323}
+        style={{ fontSize: 8, color: '#f7f7f7' }}
+        layout={{ wrap: 'word' }}
+        constraints={{ width: { mode: 'at-most', size: 480 } }}
+        position={[0, 0, 0]}
+      >
+        lorem ipsum dolor sit amet consectetur adipiscing elit eiusmod anim vel proident nam sint quo laborum
+      </Text>
+    </>
   );
 }
 ```
+
+{/* prose (from the README): an outer Text is a retained paragraph and a Three Object3D; a nested Text is an inline
+run that inherits font, style, and material and creates no scene object; TextGroup is a scene-hierarchy parent. Three
+fonts, three raster formats, one component. */}
 
 <iframe
   src="/examples/hello/"
@@ -48,31 +80,57 @@ export default function App() {
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />
 
-The same text from plain three.js, without React:
+## Render text with three.js
 
 ```ts
-import { glyph, loadFont } from '@pmndrs/glyph';
+import { glyph, span, txt } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
-import { msdf } from '@pmndrs/glyph/three/msdf';
 
 await glyph.init();
 const three = glyph.handle('main', ThreeConfig);
-const inter = await loadFont({ baked: '/fonts/inter.font.glb' }, msdf);
+const interFace = glyph.fontFace({ baked: '/fonts/Inter.font.glb' });
+await interFace.load();
 
-const label = three.createText({ font: inter, text: 'Hello world', style: { fontSize: 1 } });
+const accent = span({ color: '#70d6ff' });
+const label = three.createText({
+  font: interFace,
+  text: txt`Hello ${accent`world`}`,
+  style: { fontSize: 32, lineHeight: 1.2, color: '#f4f7ff' },
+  layout: { wrap: 'word' },
+  constraints: { width: { mode: 'at-most', size: 480 } },
+});
+
 scene.add(label);
+glyph.shape();                  // publish every dirty root; Mesh children now sit below label
+renderer.render(scene, camera); // three performs the actual draw
 ```
+
+{/* prose (from the README): the root `glyph` is the runtime — `init()` once, a named handle per adapter, a FontFace
+declared once and loaded once; `createText` returns an ordinary Object3D, not a canvas or renderer; `shape()` attaches
+planned meshes; `renderer.render` draws them. Three uses `txt`/`span` where React uses nested Text. */}
+
+## Measure before you render
+
+```ts
+scene.add(label);
+const measured = label.measure();
+label.position.x = -measured.contentWidth / 2;
+glyph.shape();
+renderer.render(scene, camera);
+```
+
+{/* prose: measurement needs no world matrix, renderer resource, or committed frame; `Paragraph` measures with no
+scene object at all. Link Measurement. */}
 
 ## Does it need WebGPU?
 
-{/* prose: no. `WebGPURenderer` carries a WebGL2 backend and falls back on its own when `navigator.gpu` is absent
-(which it is on any plain-http origin). Every technique renders on both. */}
+{/* prose: no — `WebGPURenderer` carries a WebGL2 backend and falls back on its own when `navigator.gpu` is absent
+(which it is on any plain-http origin). Every format renders on both. */}
 
 ## Is it slower than sprites or a canvas texture?
 
-{/* prose: no — text is instanced, batched, and retained. One `TextGroup` becomes one planner; compatible glyphs share
-buffers and the plan emits only the draw boundaries a technique, resource, material, clip, or compositing policy
-actually requires. Point at Performance for the numbers. */}
+{/* prose: no — text is instanced, batched, and retained. Every Text on a root shares one planner; the plan emits only
+the draw boundaries a format, resource, material, clip, or compositing policy requires. Point at Performance. */}
 
 ## Which scripts and languages?
 
@@ -82,28 +140,27 @@ Link the shaping example. */}
 
 ## Can I use my own shader?
 
-{/* prose: yes — `defineTextMaterial` hands you the technique's TSL coverage/color nodes and you return any
-NodeMaterial, including a lit PBR one. Link Materials. */}
+{/* prose: yes — `defineTextMaterial` hands you the format's TSL coverage/color nodes and takes back any NodeMaterial,
+lit PBR included. Link Materials. */}
 
 ## Where does layout happen?
 
-{/* prose: Rust, in integer F26.6 units with one rounding contract; JavaScript owns Unicode analysis and the render
+{/* prose: Rust, in integer F26.6 units under one rounding contract; JavaScript owns Unicode analysis and the render
 loop. Link How it works. */}
 
 <Keypoints title="Where to next">
   <KeypointsItem>[Your first text](./your-first-text) — bake a font, render it, style it, measure it.</KeypointsItem>
-  <KeypointsItem>[Raster techniques](../fonts/techniques) — when to use Bitmap, MSDF, or Slug.</KeypointsItem>
-  <KeypointsItem>[Text and TextGroup](../text/text-and-groups) — what a text object owns and what a group batches.</KeypointsItem>
+  <KeypointsItem>[Raster formats](../fonts/techniques) — when to use Bitmap, MSDF, or Slug.</KeypointsItem>
+  <KeypointsItem>[Text, roots, and TextGroup](../text/text-and-groups) — what a text owns and what a root batches.</KeypointsItem>
   <KeypointsItem>[Examples](./examples) — one small example per feature.</KeypointsItem>
 </Keypoints>
 
 ## Ecosystem
 
 - `@react-three/fiber` — the WebGPU entry is the maintained renderer target
-- `@react-three/drei` — helpers; environment maps and lights pair well with lit text materials
-- `@react-three/uikit` — layout UI; see the integration notes in the repository
-- `three/tsl` display nodes — bloom, lens flare, and chromatic aberration through `useRenderPipeline`
+- `@react-three/drei` — environment maps and lights pair well with lit text materials
+- `three/tsl` display nodes — bloom, lens flare, chromatic aberration through `useRenderPipeline`
 
 ## How to contribute
 
-{/* prose: repo link, Discord, the benchmark harness as the way to prove a change. */}
+{/* prose: repository, Discord, and the benchmark harness as the way to prove a change. */}

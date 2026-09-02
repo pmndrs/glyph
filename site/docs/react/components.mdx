@@ -1,6 +1,6 @@
 ---
 title: Components
-description: GlyphProvider, Text, and TextGroup — props, nesting rules, the implicit default handle, and how React commit reaches the scene.
+description: GlyphProvider, Text, and TextGroup — props, nesting rules, the implicit default handle, named roots, and how React commit reaches the scene.
 nav: 40
 sourcecode: packages/glyph/src/react.ts
 ---
@@ -8,13 +8,13 @@ sourcecode: packages/glyph/src/react.ts
 <Intro>
   `<Text>` and `<TextGroup>` are the same three.js objects the imperative API creates, reconciled by React Three
   Fiber. Ordinary use needs no provider: the first text initializes the runtime and a default handle. A
-  `GlyphProvider` exists to select a handle you made yourself.
+  `GlyphProvider` selects a handle or root you made yourself and can name fonts for its subtree.
 </Intro>
 
 ```tsx
 import { Text, TextGroup } from '@pmndrs/glyph/react';
 
-<TextGroup compositing="independent">
+<TextGroup renderOrder={1}>
   <Text font={inter} style={{ fontSize: 0.5 }} layout={{ wrap: 'word' }} constraints={{ width: { mode: 'at-most', size: 6 } }}>
     Hello <Text style={{ color: '#ffd166' }}>world</Text>
   </Text>
@@ -28,16 +28,15 @@ import { Text, TextGroup } from '@pmndrs/glyph/react';
 
 | Prop | Type | Notes |
 | --- | --- | --- |
-| `font` | `Font \| FontStack` | required on an outer Text; inferred technique |
+| `font` | `Font \| FontStack \| FontFaceSelection \| string` | required on an outer Text; a string resolves through the provider's `fontFaces`, then the root catalog by family |
 | `children` | string, number, nested `<Text>`, arrays | the paragraph's content |
 | `style` | `PropertyList<TextStyle>` | inherited by nested spans |
 | `layout` | `PropertyList<ParagraphLayout>` | outer Text only |
 | `constraints` | `PropertyList<Constraints>` | outer Text only |
 | `rasterPixelRatio` | `number` | raster density override |
 | `material` | `ThreeTextMaterial` | see Materials |
-| `capacity` | `{ size, policy }` | standalone capacity |
 | `pixelSnapping` | `boolean` | Bitmap vertex snapping |
-| `onError` | `(error) => void` | retained traversal errors |
+| `onError` | `(error) => void` | retained publication errors |
 | `ref` | `Ref<Text>` | the three.js object — `measure()`, `breakApart()`, … |
 | …`Object3DProps` | | `position`, `rotation`, `scale`, `name`, events |
 
@@ -45,21 +44,27 @@ import { Text, TextGroup } from '@pmndrs/glyph/react';
 
 ### Nested Text
 
-{/* prose: a nested `<Text>` is an inline run: inherits font and style, accepts only `children`, `font`, `style`,
-`material`; no transform, no Object3D; a box prop is named and rejected at mount rather than dropped. */}
+{/* prose: a nested `<Text>` is an inline run: inherits font, style, and material; accepts only `children`, `font`,
+`style`, `material`; no transform, no Object3D; a box prop is named and rejected at mount rather than dropped. */}
+
+### Fonts
+
+{/* prose: a loaded `Font` from a hook renders immediately; a FontFace selection or a string is checked with
+`isLoaded()` and suspends on its stable load promise only when not ready. An unknown string throws
+`FONT_FACE_NOT_FOUND`. */}
 
 ## `<TextGroup>`
 
 | Prop | Type |
 | --- | --- |
-| `capacity` | `{ size, policy: 'grow' \| 'chunk' \| 'fixed' }` |
-| `compositing` | `'ordered' \| 'independent'` |
 | `renderOrder` | `number` |
 | `material` | `ThreeTextMaterial` |
 | `pixelSnapping` | `boolean` |
 | `onError`, `ref`, …`Object3DProps` | |
 
-{/* prose: a group owns batching and compositing, never font inheritance. */}
+{/* prose: a scene-hierarchy parent — transform, visibility, material, pixel snapping, render order. It is not a
+batching boundary: every Text on a root already shares that root's planner. Capacity and compositing live on the
+root. */}
 
 ## `<GlyphProvider>`
 
@@ -69,38 +74,43 @@ import { ThreeConfig } from '@pmndrs/glyph/three';
 import { GlyphProvider } from '@pmndrs/glyph/react';
 
 await glyph.init();
-const hud = glyph.handle('hud', { ...ThreeConfig, decode: instrumentedDecoder });
+const hud = glyph.handle('hud', ThreeConfig);
 
-<GlyphProvider handle={hud}>
-  <TextGroup>…</TextGroup>
+<GlyphProvider handle={hud('overlay')} fontFaces={{ Inter: '/fonts/inter.font.glb' }} fallback={null}>
+  <Text font="Inter">HP 100</Text>
 </GlyphProvider>;
 ```
 
+| Prop | Meaning |
+| --- | --- |
+| `handle` | a `ThreeHandle` (its anonymous root) or a named `ThreeRoot` from `handle(name)` |
+| `fontFaces` | `{ Name: source \| face \| { src, format } }` — names for `font="Name"` in this subtree |
+| `fallback` | Suspense fallback while mapped faces load |
+| `errorFallback` | node or `(error: FontLoadError) => node`; catches only font load errors, rethrows the rest |
+
 <iframe
   src="/examples/provider/"
-  title="Two handles, two providers, one font"
+  title="Two roots, two providers, one font"
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />
 
-{/* prose: the provider captures its initial handle, never updates the context value, throws on a changed `handle`
-prop, and never disposes the handle. To select another, remount with a `key`. `Text`/`TextGroup` expose no handle
-prop. Context is constructor injection only — no second engine, renderer, scene, or canvas. */}
+{/* prose: the provider captures its initial `handle` and `fontFaces` and throws if either prop changes — remount
+with a `key` to select another. It disposes only faces it declared from shorthand entries, never an externally
+created handle or face. `fontFaces` and `fallback` add a local Suspense boundary. `Text`/`TextGroup` expose no
+handle prop. */}
 
 ## The default handle
 
-{/* prose: without a provider, the first mounted text `use()`s one shared promise that calls `glyph.init()` and
-creates a module-owned `ThreeConfig` handle; wrap in Suspense if you want a fallback while it initializes. */}
+{/* prose: without a provider, the first mounted text initializes `glyph` and creates one module-owned `ThreeConfig`
+handle with a root per R3F store; the initialized path is synchronous, so ready renders never call `use()`. */}
+
+## Two scenes
+
+{/* prose: a root binds at most one `Scene`. A portal into another Scene needs its own root — wrap that subtree in a
+`GlyphProvider handle={three('portal')}`. */}
 
 ## Commit timing
 
-{/* prose: components register their objects with R3F during host commit, so React `Activity` can pre-render hidden
-text; property changes apply and call `invalidate()`; the next traversal publishes or syncs transforms before the
-host builds its render list. */}
-
-## Fonts on the provider
-
-> [!NOTE]
-> Direction, not yet implemented (D-296): `fonts={{ Inter: url }}` names faces the subtree may load, `fallback` is
-> the provider's Suspense fallback, and `errorFallback` handles only that map's load errors. A string `font="Inter"`
-> then resolves through the provider.
+{/* prose: components construct their objects during R3F host commit, so React `Activity` can pre-render hidden text;
+property changes call `set()` and `invalidate()`; R3F's frame runs `glyph.shape()` before the host renders. */}

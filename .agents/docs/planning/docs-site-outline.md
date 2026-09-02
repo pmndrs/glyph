@@ -39,10 +39,17 @@ code evidence, and reader guidance already in place; the prose is what remains t
 a reader who has never seen the library: what it is, how to get text on screen, how to feed it fonts, how to shape
 what it draws, and only then how it works underneath.
 
-The API it documents is the handle/config surface recorded in D-293 and D-294 (implemented on the
-`pmndrs-text-font-baker-core` working tree, nine commits ahead of `main`, whose investigation report is
-`docs/planning/glyph-api-investigation-report.md` there), plus the FontFace direction in D-296, which is approved but
-not implemented. Every page that depends on D-296 says so in a callout rather than pretending.
+The API it documents is the one on the `pmndrs-text-font-baker-core` working tree, read from its source rather than
+its planning documents, several of which lag the code. The facts the pages rest on, with the decision that fixed each:
+`glyph.fontFace(source, { family?, format? })` as the one load boundary with `face.default === face` and every other
+declared format a distinct member (D-297, D-310); lowercase `useMsdf`/`useBitmap`/`useSlug` over
+`useFont(source, { format })`, and a `GlyphProvider` that takes `handle | root`, `fontFaces`, `fallback`, and
+`errorFallback` (D-301, D-302); a handle that owns an anonymous root and yields named siblings through `handle(name)`,
+with `TextGroup` demoted to a scene-hierarchy parent (D-307); `glyph.shape()` as the sole publication call, with no
+`shape()` on `Text` (D-312); `RasterFormat` as the public vocabulary and a material context discriminated on `kind`
+then `format` (D-306, D-308, D-311); `GlyphConfig` as `schema / fonts / encode / resolve / renderer / root` with no
+decode hook and no `/core` subpath (D-309, D-314); explicit `face.clone()` for cross-realm transfer (D-313). The
+current `three-api.md` there still describes `label.shape()` and group-owned capacity; the stubs follow the code.
 
 ## House style
 
@@ -73,11 +80,11 @@ Global `nav` numbers are assigned in blocks so a page can be inserted without re
 | 2 | getting-started/your-first-text | Your first text | Tutorial: bake → load → render → style → measure |
 | 3 | getting-started/examples | Examples | Gallery of every hosted example |
 | 10 | fonts/baking | Baking fonts | `glyph bake`, `glyph glyphs`, Node API, discovery, `--check` |
-| 11 | fonts/techniques | Raster techniques | Bitmap, MSDF, Slug: what, when, options, cost |
+| 11 | fonts/techniques | Raster formats | Bitmap, MSDF, Slug: what, when, options, cost |
 | 12 | fonts/loading | Loading fonts | `loadFont`, hooks, preload, libraries, `FontLoader`, FontFace (pending) |
 | 13 | fonts/fallback-stacks | Fallback stacks | `createFontStack`, per-cluster resolution, icons, CJK |
 | 14 | fonts/runtime-baking | Runtime baking | Source fonts in the browser, Worker, CacheStorage |
-| 20 | text/text-and-groups | Text and TextGroup | Handles, draw roots, capacity, compositing, ownership |
+| 20 | text/text-and-groups | Text, roots, and TextGroup | Handles, roots, `glyph.shape()`, capacity, compositing, ownership |
 | 21 | text/styling | Styling | `TextStyle`: size, spacing, color, opacity, outline, shadow, decoration, features |
 | 22 | text/paragraph-layout | Paragraph layout | `ParagraphLayout` + `Constraints`: wrap, align, overflow, justify, columns |
 | 23 | text/rich-text | Rich text | Spans, `txt`/`span`, nested `<Text>`, cluster rule, editing |
@@ -92,8 +99,8 @@ Global `nav` numbers are assigned in blocks so a page can be inserted without re
 | 51 | advanced/pitfalls | Pitfalls | The mistakes the API lets you make, and their fix |
 | 52 | advanced/how-it-works | How it works | Shaper → planner → render plan → renderer, with diagrams |
 | 53 | advanced/topologies | Deployment topologies | Handles, canvases, workers, OffscreenCanvas |
-| 54 | advanced/custom-renderers | Custom renderers | `/core`: `GlyphConfig`, Codec, decode, resolve |
-| 55 | advanced/custom-techniques | Custom techniques | `defineRasterTechnique`, bakers, `/tsl`, `/typegpu` |
+| 54 | advanced/custom-renderers | Custom renderers | `defineGlyphConfig`: schema, encode, resolve, renderer, root |
+| 55 | advanced/custom-techniques | Custom raster formats | `defineRasterFormat`, bakers, `/tsl/*`, `/typegpu/*` |
 | 56 | advanced/typescript | TypeScript | Technique inference, `PropertyList`, branded ids |
 | 57 | advanced/testing | Testing | Node, test-renderer, headless GPU |
 | 58 | advanced/migration | Migration | From the pre-handle API |
@@ -103,10 +110,13 @@ The earlier `core-api/introduction.mdx` shell is superseded by `text/measurement
 
 ## Examples
 
-Examples are small, one feature each, and hosted by the site's own Vite build at `/examples/<slug>/` so the docs can
-iframe them from the same origin. They share one harness (`site/examples/_harness/`) that owns the canvas, camera,
-lights, and a dark stage, so each example file is only the text it demonstrates. Art is generated — gradients, noise,
-simple lit materials — never loaded, to keep the bundle small.
+Examples are small, one feature each, and run as React Three Fiber scenes in the maintained examples package
+(`apps/r3f-hello-world`, published as `@pmndrs/glyph-examples`, D-304), which selects a scene by `?example=<slug>`. The
+site build hosts that app at `/examples/` so the docs can iframe `/examples/?example=<slug>` from the same origin. Each
+example ships two files: the R3F scene that runs, and a three.js twin that is typechecked but never executed, so a
+reader sees the imperative parallel beside the component. A shared stage owns the canvas, camera, lights, and dark
+ground, so each scene file is only the text it demonstrates. Art is generated — gradients, noise, simple lit
+materials — never loaded, to keep the bundle small.
 
 | Slug | Page | Shows |
 | --- | --- | --- |

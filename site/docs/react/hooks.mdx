@@ -1,27 +1,32 @@
 ---
 title: Hooks
-description: useFont and its typed wrappers — signatures, the cache key, preload and clear, and why StrictMode is safe.
+description: useFont and its typed wrappers — signatures, what they declare, preload and clear, and why a ready font never suspends.
 nav: 41
 sourcecode: packages/glyph/src/react.ts
 ---
 
 <Intro>
-  One generic hook loads any technique; three typed wrappers make the common cases one line. All of them suspend,
-  share R3F's loader cache, and keep a lease ledger so that clearing a cache entry can never dispose a font a mounted
-  component still holds.
+  One generic hook declares a FontFace on the selected handle and returns a loaded `Font`; three typed wrappers make
+  the common formats one line. A ready font renders synchronously — the hook checks `isLoaded()` first and only
+  suspends on the stable load promise when it must.
 </Intro>
 
 ```ts
 import { useFont } from '@pmndrs/glyph/react';
-import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
-import { useMSDF } from '@pmndrs/glyph/react/msdf';
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import { useSlug } from '@pmndrs/glyph/react/slug';
 
-useFont(input, technique, options?)   // Font<typeof technique>
-useBitmapFont(input, { strikes })     // Font<typeof bitmap>
-useMSDF(input, options?)              // Font<typeof msdf>
-useSlug(input)                        // Font<typeof slug>
+useFont(source, { format })            // Font<that format>
+useMsdf(source, options?)              // Font<typeof msdf>
+useBitmap(source, { strikes })         // Font<typeof bitmap>
+useSlug(source)                        // Font<typeof slug>
 ```
+
+| Argument | Accepts |
+| --- | --- |
+| `source` | a URL string, `{ baked }`, `{ source, runtimeBake }`, a `Blob`, or a `SerializedFontFace` |
+| `format` | a format value (`msdf`), a request `{ raster: msdf, options }`, or a string key the handle knows |
 
 <iframe
   src="/examples/hooks/"
@@ -30,43 +35,50 @@ useSlug(input)                        // Font<typeof slug>
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />
 
-## The cache key
+## What a hook does
 
-{/* prose: input + technique + options, canonicalized — `useMSDF(url)` and `useMSDF(url, { emSize: 32 })` are two
-entries, matching two rasters. One component that needs two techniques calls two hooks. */}
+```mermaid
+flowchart LR
+  A[useMsdf source] --> B[glyph.fontFace source, format — cached per handle]
+  B --> C{selection.isLoaded?}
+  C -->|yes| D[return the mounted Font lease]
+  C -->|no| E["use(selection.load())"] --> D
+```
+
+{/* prose: the declaration is cached per handle by source + format; the mounted component owns an independent Font
+lease; no second cache exists beside Glyph's own resource graph. */}
 
 ## preload
 
 ```ts
-useMSDF.preload({ baked: '/fonts/inter.font.glb' });
+void useMsdf.preload('/fonts/inter.font.glb'); // Promise<void>, at module scope
 ```
 
-{/* prose: module scope, before render — the same cache entry the hook will read; the way to avoid a load
-waterfall for fonts the first scene uses. */}
+{/* prose: starts the default handle's load before render; the hook later finds `isLoaded()` true and never
+suspends. Returns the actual promise. */}
 
 ## clear
 
 ```ts
-useMSDF.clear({ baked: '/fonts/inter.font.glb' });
+useMsdf.clear('/fonts/inter.font.glb');
 ```
 
-{/* prose: removes the cache entry; a mounted consumer keeps its own cloned lease; a later hook call reloads. */}
+{/* prose: drops the hook's declaration for that key and disposes the FontFace it declared; a mounted component's
+lease survives until it unmounts. */}
 
 ## StrictMode and Suspense
 
 | Event | Effect |
 | --- | --- |
-| mount / unmount / remount | leases clone and release; the cached font is not disposed |
+| mount / unmount / remount | leases clone and release; the face is not disposed |
 | Suspense retry | the same stable promise; no second fetch |
+| load rejection | the record is evicted so the next render can retry |
 | `clear()` while mounted | the mounted lease survives |
 
-{/* prose: R3F's `useLoader`/`suspend-react` cache owns the promise and value; Glyph adds only deterministic
-lease disposal beside it. Root `FontLibrary` is for imperative apps and is not a second React cache. */}
-
-## Third-party techniques
+## Custom formats
 
 ```ts
-const font = useFont({ baked: '/fonts/x.font.glb' }, myTechnique, myOptions);
+const font = useFont('/fonts/acme.font.glb', { format: { raster: acmeSdf, options: { spread: 4 } } });
 ```
 
-{/* prose: `useFont` is the extension point; the typed wrappers only build a typed request and delegate. */}
+{/* prose: `useFont` is the extension point; the typed wrappers only build the request and delegate. */}

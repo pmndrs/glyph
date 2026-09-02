@@ -6,9 +6,9 @@ sourcecode: packages/glyph/src/runtime-bake.ts
 ---
 
 <Intro>
-  The same baker that runs in the CLI runs in a module Worker. Hand `loadFont` a source font and a runtime baker and it
-  produces the identical GLB on the client, caching the validated result in CacheStorage. It is the fallback for fonts
-  you cannot pre-bake, never the production default.
+  The same baker that runs in the CLI runs in a module Worker. Give a FontFace a source font and a runtime baker and
+  it produces the identical GLB on the client, caching the validated result in CacheStorage. It is the fallback for
+  fonts you cannot pre-bake, never the production default.
 </Intro>
 
 | Approach | Best for | Tradeoff |
@@ -17,13 +17,19 @@ sourcecode: packages/glyph/src/runtime-bake.ts
 | Runtime bake | user-supplied fonts, fast iteration | the baker Wasm and a Worker load on demand; a bake per new font |
 
 ```ts
-import { loadFont } from '@pmndrs/glyph';
+import { glyph } from '@pmndrs/glyph';
 import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 
-const font = await loadFont({ source: '/fonts/Inter-Regular.ttf', runtimeBake: bakeFontInWorker }, msdf, {
-  coverage: { unicodeRanges: [{ start: 0x20, end: 0x7e }] },
-});
+const Upload = glyph.fontFace(
+  { source: '/fonts/Inter-Regular.ttf', runtimeBake: bakeFontInWorker, unicodeRanges: [{ start: 0x20, end: 0x7e }] },
+  { format: msdf },
+);
+await Upload.load();
+```
+
+```tsx
+const upload = useMsdf({ source: fileUrl, runtimeBake: bakeFontInWorker });
 ```
 
 <iframe
@@ -49,10 +55,10 @@ Quota eviction, privacy modes, and corruption are transparent misses. */}
 ## Bundle boundary
 
 {/* prose: the root entry has no static edge to the baker; `@pmndrs/glyph/runtime-bake` is the explicit import that
-loads it. Nothing reaches the Worker unless a `source` input is used. */}
+loads it, split into its own chunk. Nothing reaches the Worker unless a `source` input is used. */}
 
-## When a baked GLB misses
+## A baked GLB never re-bakes
 
-{/* prose: a request whose raster options differ from the artifact's descriptor finds no raster; runtime baking runs
-only when the GLB retains source bytes and a baker was supplied. Otherwise the load rejects with a diagnostic that
-names the descriptor. Link Techniques → Options are identity. */}
+{/* prose: a face member whose exact descriptor a baked GLB does not advertise rejects with
+`FONT_FACE_FORMAT_UNAVAILABLE`; runtime baking runs only for a `source` input. Link Raster formats → Options are
+identity. */}

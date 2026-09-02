@@ -1,15 +1,16 @@
 ---
-title: Raster techniques
+title: Raster formats
 description: Bitmap, MSDF, and Slug — what each renders, where it wins, what it costs, and how its options become part of the font's identity.
 nav: 11
 ---
 
 <Intro>
-  One baked font can carry all three rasters. Bitmap is exact pixels at a few sizes, MSDF is a scalable field that
-  covers most text, and Slug draws the outline analytically for large or zoomed type. Pick per use, not per project.
+  One baked font can carry all three raster formats. Bitmap is exact pixels at a few sizes, MSDF is a scalable field
+  that covers most text, and Slug draws the outline analytically for large or zoomed type. Pick per use, not per
+  project.
 </Intro>
 
-| Technique | Best at | Texture | Options | Cost |
+| Format | Best at | Texture | Options | Cost |
 | --- | --- | --- | --- | --- |
 | `bitmap` | small UI text at known device sizes; pixel-exact | `r8unorm` strikes | `strikes: [8, 16]`, `coverage?` | tiny; one strike per size |
 | `msdf` | everything in between; the default | `rgba8unorm` atlas | `emSize?` (64), `pixelRange?` (8), `coverage?` | atlas ∝ emSize² |
@@ -22,13 +23,33 @@ nav: 11
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />
 
-## Bitmap
+## Selecting a format
 
 ```ts
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+import { slug } from '@pmndrs/glyph/three/slug';
 
-const ui = await loadFont({ baked: '/fonts/inter.font.glb' }, bitmap, { strikes: [16, 32] });
+const Inter = glyph.fontFace('/fonts/inter.font.glb', {
+  format: [msdf, slug, { raster: bitmap, options: { strikes: [16, 32] } }],
+});
+
+three.createText({ font: Inter, text: 'body' });          // default: the first declared format
+three.createText({ font: Inter.slug, text: 'Title' });     // Slug
+three.createText({ font: Inter.bitmap, text: 'ui' });      // Bitmap, strikes 16 and 32
 ```
+
+```tsx
+const body = useMsdf(url);
+const title = useSlug(url);
+const ui = useBitmap(url, { strikes: [16, 32] });
+```
+
+{/* prose: a format value is the request for its defaults; `{ raster, options }` is an exact request; a string key
+names one the handle's config knows (`'msdf'`, `'slug'`, `'bitmap'`). The face's first declared format is its default;
+`ThreeConfig` defaults an undeclared face to MSDF. */}
+
+## Bitmap
 
 {/* prose: rasterized at bake time at exact ppem strikes; the renderer picks the strike for the requested size and
 `rasterPixelRatio`; `pixelSnapping` aligns quads to physical pixels. Renders fill and opacity only — outline and shadow
@@ -36,24 +57,11 @@ are rejected at the boundary rather than degraded. */}
 
 ## MSDF
 
-```ts
-import { msdf } from '@pmndrs/glyph/three/msdf';
-
-const body = await loadFont({ baked: '/fonts/inter.font.glb' }, msdf);
-const small = await loadFont({ baked: '/fonts/inter-small.font.glb' }, msdf, { emSize: 32, pixelRange: 6 });
-```
-
-{/* prose: multi-channel signed distance field reconstructs the edge from the screen-space gradient, so it is correct
-at any subpixel placement and any size within the field's range. Supports outline and shadow. `emSize` bounds the
-atlas; `pixelRange` bounds how far the field reaches — larger for bigger outlines. */}
+{/* prose: a multi-channel signed distance field reconstructs the edge from the screen-space gradient, so it is
+correct at any subpixel placement and any size within the field's range. Supports outline and shadow. `emSize` bounds
+the atlas; `pixelRange` bounds how far the field reaches — larger for bigger outlines. */}
 
 ## Slug
-
-```ts
-import { slug } from '@pmndrs/glyph/three/slug';
-
-const title = await loadFont({ baked: '/fonts/playwrite.font.glb' }, slug);
-```
 
 {/* prose: analytic coverage from the glyph's curves; no atlas, no distance field, no resolution ceiling; the
 landing page's wordmark is Slug. Costs per fragment, so reserve it for large text. */}
@@ -61,27 +69,41 @@ landing page's wordmark is Slug. Costs per fragment, so reserve it for large tex
 ## Options are identity
 
 > [!IMPORTANT]
-> The raster key hashes the technique's descriptor. `msdf` with `{ emSize: 32 }` is a different raster from `msdf`
-> with the default 64. A load request whose options differ from the bake finds no matching raster and — only when the
-> GLB retains source bytes and a runtime baker is supplied — bakes a new one; otherwise it fails with a diagnostic that
-> names the descriptor.
+> The raster key hashes the format's descriptor. `msdf` with `{ emSize: 32 }` is a different raster from `msdf` with
+> the default 64. A face member whose exact descriptor the GLB does not advertise rejects with
+> `FONT_FACE_FORMAT_UNAVAILABLE`; a baked miss never triggers runtime baking. Write the options once and pass them to
+> both the bake and the declaration.
 
-{/* prose: the practical rule — write the options once in a shared constant and pass it to both the bake and the load. */}
-
-## Mixing techniques
-
-{/* prose: one paragraph may draw from several techniques through a fallback stack, and one GLB may carry all three.
-Link Fallback stacks. Show the tuple load: */}
+```bash
+glyph bake --input Inter-Regular.ttf --output inter-small.font.glb --msdf em-size=32,pixel-range=6
+```
 
 ```ts
-const [body, title] = await loadFont({ baked: '/fonts/inter.font.glb' }, [msdf, slug]);
+const InterSmall = glyph.fontFace('/fonts/inter-small.font.glb', {
+  format: { raster: msdf, options: { emSize: 32, pixelRange: 6 } },
+});
+```
+
+{/* prose: `await Inter.formats()` reports what the GLB actually carries, without loading anything. */}
+
+## Mixing formats
+
+{/* prose: one face declares several formats and each member is a distinct selection; one paragraph may draw from
+several formats through a fallback stack; a tuple `loadFont` returns typed `Font`s for renderer-free code: */}
+
+```ts
+const [interBitmap, interMsdf, interSlug] = await loadFont({ baked: '/fonts/inter.font.glb' }, [
+  { raster: bitmap, options: { strikes: [32] } },
+  msdf,
+  slug,
+]);
 ```
 
 ## Quality across sizes
 
 <iframe
   src="/examples/text-ladder/"
-  title="8 to 1024 px, one technique per row"
+  title="8 to 1024 px, one format per row"
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />

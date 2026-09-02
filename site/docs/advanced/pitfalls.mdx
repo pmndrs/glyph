@@ -8,41 +8,51 @@ nav: 51
   Every entry here was hit for real. Each is one paragraph: what you see, why, what to do.
 </Intro>
 
-## The font never matches the bake
+## The declared format is not in the GLB
 
-{/* symptom: a load rejects naming a descriptor, or runtime baking kicks in unexpectedly. cause: raster options are
-part of the raster key — `msdf` default (64/8) ≠ `msdf { emSize: 32 }`. fix: one shared constant for bake and load. */}
+{/* symptom: `FONT_FACE_FORMAT_UNAVAILABLE`. cause: raster options are part of the raster key — `msdf` default (64/8)
+≠ `{ raster: msdf, options: { emSize: 32 } }`; a baked GLB never re-bakes. fix: one shared constant for the bake and
+the declaration; `await face.formats()` to see what the GLB carries. */}
+
+## Text throws "not loaded"
+
+{/* symptom: `createText` or `text.font =` throws synchronously. cause: imperative text cannot suspend; the selection
+was not awaited. fix: `await Inter.load()` (or `await Inter.slug.load()`) first. React suspends instead. */}
 
 ## An outer `<Text>` without a font
 
 {/* symptom: mount error naming `font`. cause: only nested Text inherits. fix: pass `font` on the paragraph. */}
 
-## `text =` cleared my spans
+## Nothing draws in plain three.js
 
-{/* symptom: styled ranges vanish after assignment. cause: replacement text carries its own formatting; retaining
-old ranges would restyle unrelated text. fix: `set({ text, spans })` from a model that rebased its own offsets. */}
+{/* symptom: a Text is in the scene, `renderer.render` shows nothing. cause: no `glyph.shape()` call — R3F does it for
+you, imperative code does not. fix: call `glyph.shape()` after edits and before `renderer.render`. */}
 
 ## A span boundary moved
 
 {/* symptom: `text.spans` differs from what was authored. cause: the boundary split a grapheme cluster and was
-resolved forward to the cluster end — a base keeps its style. fix: author on cluster boundaries;
-`alignSpansToClusters` to check. */}
+resolved forward to the cluster end — a base keeps its style. fix: author on cluster boundaries. */}
+
+## Two scenes, one root
+
+{/* symptom: an error naming two scenes. cause: a root binds at most one `Scene`. fix: `handle('other')` for the
+second scene; in R3F, a `GlyphProvider handle={three('other')}` around the portal. */}
 
 ## Nothing changes with `fixed` capacity
 
-{/* symptom: text stops updating; `commitState()` stays `pending`. cause: desired UTF-16 length exceeds `size`; the
-last draw is kept by design. fix: shorten, or `setCapacity`. */}
+{/* symptom: text stops updating; `commitState()` stays `pending`. cause: desired UTF-16 length exceeds the root's
+`size`; the last draw is kept by design. fix: shorten, or `root.setCapacity`. */}
 
-## Measuring a detached text
+## `caretAt` returns `undefined`
 
-{/* symptom: `measure()` on a Text that was never attached is fine; but interaction queries return `undefined`.
-cause: measurement is desired-state, `caretAt` is accepted-state. fix: attach and traverse once, or use `Paragraph`
-for renderer-free measurement. */}
+{/* symptom: measurement works, interaction does not. cause: measurement is desired-state, `caretAt` is
+accepted-state — nothing has been shaped yet. fix: shape once (R3F: wait a frame), or use `measure()`/`glyphs()`
+for desired positions. */}
 
 ## Disposing in the wrong order
 
-{/* symptom: a text renders nothing after its font was disposed. cause: fonts are leased; disposing the font first
-is allowed but the text keeps the lease until it disposes. fix: text → group → font → handle. */}
+{/* symptom: a text renders nothing after its face was disposed. cause: leases are counted; a disposed face keeps the
+text alive until the text disposes, but nothing new can bind. fix: text → group → root/handle → face. */}
 
 ## No WebGPU on the LAN
 
@@ -65,8 +75,8 @@ per-glyph em space (`renderCoordinate`). fix: derive it from `positionLocal` nor
 face with tall ascent/descent wins. fix: faces with similar vertical metrics, or a `lineHeight` that fits the
 tallest. */}
 
-## Suspense retries forever
+## A font load rejects again and again
 
-{/* symptom: a rejected font load re-fetches without bound. cause: a rejected promise evicted from the cache; React
-retries against an empty cache. fix: keep the rejection cached (suspend-react does); wrap in an error boundary.
-Fixed on the font-identity branch. */}
+{/* symptom: repeated fetches after a failed load. cause: a rejected load is evicted so a retry is a new operation —
+by design — and something keeps retrying. fix: an error boundary (`GlyphProvider errorFallback` for font errors) so
+the failure is shown once rather than re-rendered. */}

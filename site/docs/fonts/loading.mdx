@@ -1,128 +1,104 @@
 ---
 title: Loading fonts
-description: loadFont, the React hooks, preloading, libraries, and the Three Loader — and who owns a font once it is loaded.
+description: Declare a FontFace once, load the formats you use, and let every handle bind it — plus the React hooks, preloading, and the lower-level loaders.
 nav: 12
-sourcecode: packages/glyph/src/loader.ts
+sourcecode: packages/glyph/src/font-face.ts
 ---
 
 <Intro>
-  A loaded font is an immutable value. Load it once, bind it to any number of texts, handles, or scenes, and dispose it
-  after the text that used it. Nothing about a font belongs to a renderer.
+  A FontFace is a declaration: one source, an optional family name, the raster formats you intend to use. `load()` is
+  the one load boundary. The declaration is itself its default selection, each declared format is a distinct member,
+  and every handle binds the loaded face without loading it again.
 </Intro>
 
 <Keypoints title="What you'll learn">
-  <KeypointsItem>`loadFont(input, technique, options?)` and the tuple form for several techniques from one GLB</KeypointsItem>
-  <KeypointsItem>The React hooks, what they cache, and when to `preload()`</KeypointsItem>
-  <KeypointsItem>`FontLibrary` for explicit caching and `FontLoader` for `LoadingManager`</KeypointsItem>
-  <KeypointsItem>Where the FontFace declaration is heading</KeypointsItem>
+  <KeypointsItem>`glyph.fontFace(source, config?)` and what `face`, `face.default`, and `face.slug` each mean</KeypointsItem>
+  <KeypointsItem>`load()`, `isLoaded()`, `formats()`, and why imperative text throws on an unloaded face</KeypointsItem>
+  <KeypointsItem>The React hooks and how they declare through the same call</KeypointsItem>
+  <KeypointsItem>Where `loadFont`, `FontLibrary`, and the Three `FontLoader` still fit</KeypointsItem>
 </Keypoints>
 
-## loadFont
+## Declare and load
 
 ```ts
-import { loadFont } from '@pmndrs/glyph';
+import { glyph } from '@pmndrs/glyph';
+
+const Inter = glyph.fontFace({ baked: '/fonts/inter.font.glb' }, { family: 'Inter' });
+await Inter.load();
+
+const label = three.createText({ font: Inter, text: 'Hello' });
+```
+
+{/* prose: one argument is enough — `glyph.fontFace(source)` names the family `Font{n}` and denotes the handle's default
+format (MSDF for `ThreeConfig`). `load()` is idempotent and resolves to the same face, so `font: await Inter.load()` is
+equivalent. */}
+
+## Formats are members
+
+```ts
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
 
-const body = await loadFont({ baked: '/fonts/inter.font.glb' }, msdf);
-const [copy, title] = await loadFont({ baked: '/fonts/inter.font.glb' }, [msdf, slug]);
+const Inter = glyph.fontFace(
+  { baked: '/fonts/inter.font.glb' },
+  { family: 'Inter', format: [msdf, slug, { raster: bitmap, options: { strikes: [16, 32] } }] },
+);
+
+Inter.default === Inter;   // the first declared format is the face's default
+Inter.slug !== Inter;      // every other declared format is its own selection
+await Inter.slug.load();   // loads only Slug
+await Inter.load();        // loads every declared format
+await Inter.formats();     // ['bitmap', 'msdf', 'slug'] — what the GLB actually carries, without loading sidecars
 ```
 
-{/* prose: one fetch, one validation, per-technique typed results. `options` after the technique; `{ signal }` in the
-trailing `FontLoadOptions`. */}
+| Selection | Loads | Use when |
+| --- | --- | --- |
+| `Inter` / `Inter.default` | the default format | ordinary text |
+| `Inter.msdf`, `Inter.slug`, `Inter.bitmap` | that format only | a title in Slug, UI in Bitmap |
+| `Inter.load()` | every declared format | you will use several |
 
-| Input | Meaning |
-| --- | --- |
-| `{ baked: url \| bytes }` | A pre-baked `.font.glb` |
-| `{ source: url \| bytes, runtimeBake }` | A TTF/OTF baked on the client through a supplied Worker baker |
+{/* prose: a declared member the GLB does not advertise rejects with `FONT_FACE_FORMAT_UNAVAILABLE`; a baked miss never
+triggers runtime baking. Options are part of the format: `{ raster: msdf, options: { emSize: 32 } }` matches only a
+bake made with those values. */}
+
+## Load before use
+
+> [!IMPORTANT]
+> Imperative `createText` and `text.font =` throw synchronously on an unloaded selection. Await the selection first.
+> React suspends instead — see below.
+
+```ts
+const title = three.createText({ font: await Inter.slug.load(), text: 'Title' });
+Inter.slug.isLoaded(); // true, synchronously, after the promise settles
+```
 
 ## React hooks
 
 ```tsx
 import { useFont } from '@pmndrs/glyph/react';
-import { useMSDF } from '@pmndrs/glyph/react/msdf';
-import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
 import { useSlug } from '@pmndrs/glyph/react/slug';
 
-const body = useMSDF({ baked: '/fonts/inter.font.glb' });
-const ui = useBitmapFont({ baked: '/fonts/inter.font.glb' }, { strikes: [16, 32] });
+const body = useMsdf({ baked: '/fonts/inter.font.glb' });
+const ui = useBitmap({ baked: '/fonts/inter.font.glb' }, { strikes: [16, 32] });
 const title = useSlug({ baked: '/fonts/playwrite.font.glb' });
-const custom = useFont({ baked: '/fonts/x.font.glb' }, myTechnique, myOptions);
+const custom = useFont({ baked: '/fonts/x.font.glb' }, { format: { raster: myFormat, options } });
 ```
 
-{/* prose: each hook suspends; the typed hooks are thin wrappers over `useFont`; one component that needs two
-techniques calls two hooks. The cache is R3F's `useLoader` cache, keyed by input + technique + options. */}
+{/* prose: each hook declares a FontFace through `glyph.fontFace` on the selected handle, checks `isLoaded()` first,
+and only then conditionally `use()`s the same stable load promise — a ready font renders without a Promise or a
+microtask. The mounted component owns an independent `Font` lease. */}
 
 ### Preload
 
 ```ts
-useMSDF.preload({ baked: '/fonts/inter.font.glb' });
+useMsdf.preload({ baked: '/fonts/inter.font.glb' }); // Promise<void>, at module scope
 ```
 
-{/* prose: call at module scope to start the fetch before the first render; same cache entry. `.clear()` drops the
-cache entry without disposing a font a mounted component still holds — StrictMode mount/unmount/remount is safe. */}
-
-## FontLibrary
-
-```ts
-import { createFontLibrary } from '@pmndrs/glyph';
-
-const library = createFontLibrary();
-const body = await library.load({ baked: '/fonts/inter.font.glb' }, msdf);
-```
-
-{/* prose: an explicit application cache with leases; top-level `loadFont` only coalesces in-flight requests and
-keeps no global cache. */}
-
-## Three's Loader
-
-```ts
-import { FontLoader } from '@pmndrs/glyph/three';
-
-const loader = new FontLoader(manager);
-const body = await loader.loadAsync({ input: { baked: '/fonts/inter.font.glb' }, raster: { technique: msdf } });
-```
-
-{/* prose: for applications built on `THREE.LoadingManager` progress. Same immutable `Font` result. */}
-
-## Ownership
-
-| Object | Dispose when | Then |
-| --- | --- | --- |
-| `Text` | it leaves the scene for good | its font leases release |
-| `Font` | no text uses it | backing memory releases once the last lease ends |
-| `FontLoader` | done loading | its runtime claim releases |
-
-{/* prose: a font disposed before its text keeps the text alive until the text disposes — leases are counted; disposal
-is the correctness mechanism, not finalization. */}
-
-## FontFace
-
-> [!NOTE]
-> Approved direction, not yet implemented (D-296). A root declaration owns a family, its ordered sources, and its
-> formats; `load()` is the one load boundary, and React authorizes automatic loading through the provider's font map.
-
-```ts
-const Inter = glyph.fontFace({
-  family: 'Inter',
-  src: [
-    { url: '/fonts/inter.font.glb', format: [bitmap({ strikes: [8, 16] }), msdf, slug] },
-    { url: '/fonts/inter.slug.font.glb', format: slug },
-  ],
-});
-
-await Inter.load(); // the default (MSDF)
-const label = three.createText({ font: Inter, text: 'Hello' });
-const title = three.createText({ font: await Inter.slug.load(), text: 'Title' });
-```
-
-```tsx
-<GlyphProvider fonts={{ Inter: interUrl }} fallback={<LoadingFonts />}>
-  <Text font="Inter">Hello</Text>
-</GlyphProvider>
-```
-
-{/* prose: what changes for readers when it lands — no unloaded-font construction, no separate preload API. */}
+{/* prose: starts the default handle's load before render; the hook later finds it loaded. `.clear()` drops the
+hook's declaration cache and disposes the face it declared; a mounted lease is unaffected. */}
 
 <iframe
   src="/examples/hooks/"
@@ -130,3 +106,63 @@ const title = three.createText({ font: await Inter.slug.load(), text: 'Title' })
   loading="lazy"
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />
+
+## Strings and the provider
+
+```tsx
+<GlyphProvider fontFaces={{ Inter: '/fonts/inter.font.glb', Title: { src: titleUrl, format: slug } }}>
+  <Text font="Inter">Hello</Text>
+  <Text font="Title">Hello</Text>
+</GlyphProvider>
+```
+
+{/* prose: a string resolves through the nearest provider's `fontFaces` table, then the root catalog by family; an
+unknown name throws `FONT_FACE_NOT_FOUND`. The table declares names; it does not gate loading — a resolved selection
+still follows the same isLoaded/use path. Supplying `fontFaces` adds a local Suspense boundary. */}
+
+## Sources
+
+| Source | Meaning |
+| --- | --- |
+| `{ baked: url \| Request \| bytes }` | a pre-baked `.font.glb` |
+| `{ source: url \| bytes, runtimeBake }` | a TTF/OTF baked on the client — see Runtime baking |
+| `Blob` | an in-memory font |
+| `SerializedFontFace` | a face cloned from another realm — see below |
+
+{/* prose: one internal content-addressed graph backs every face and handle; two declarations over the same URL share
+one fetched, parsed core artifact and acquire only the raster artifacts their selected formats request. Family names
+are aliases, never cache keys. */}
+
+## Across realms
+
+```ts
+const [serialized, transfer] = await Inter.slug.clone();
+worker.postMessage(serialized, transfer);
+// worker:
+const Inter = glyph.fontFace(serialized);
+```
+
+{/* prose: an explicit data clone of the loaded main GLB and the selected format's dependencies into fresh buffers;
+nothing ordinary ever copies font bytes. */}
+
+## Lower-level loaders
+
+```ts
+import { loadFont, createFontStack, createFontLibrary } from '@pmndrs/glyph';
+import { FontLoader } from '@pmndrs/glyph/three';
+```
+
+{/* prose: `loadFont(input, format, options?)` and the tuple form return immutable `Font` values without a FontFace —
+for renderer-free `Paragraph` measurement, custom integrations, and stacks; `createFontLibrary` is an explicit cache
+with leases; the Three `FontLoader` adapts to `LoadingManager`. All of them enter the same resource graph. */}
+
+## Ownership
+
+| Object | Dispose when | Then |
+| --- | --- | --- |
+| `Text` | it leaves the scene for good | its font lease releases |
+| `FontFace` | no text or hook uses it | pending loads abort; its graph leases release |
+| handle | the adapter is finished | after existing leases end |
+
+{/* prose: a face disposed before its text keeps the text alive until the text disposes — leases are counted.
+Disposal is the correctness mechanism; finalizers are only a safety net for abandoned React roots. */}

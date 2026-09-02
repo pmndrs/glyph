@@ -1,65 +1,76 @@
 ---
 title: Deployment topologies
-description: Handles, canvases, workers, and OffscreenCanvas — which objects to share and which to keep separate.
+description: Handles, roots, scenes, workers, and OffscreenCanvas — which objects to share and which to keep separate.
 nav: 53
 ---
 
 <Intro>
-  A handle is neither a scene nor a renderer. Fonts bind to any number of handles, a handle's text can live in any
-  number of scenes, and each independently advancing surface wants its own planner. The rules below say which
-  boundary each object owns.
+  A handle is an adapter configuration; a root is a publication stream bound to at most one scene; a FontFace is
+  shared by every handle. The rules below say which boundary each object owns, so two canvases, a worker, or a
+  second renderer stop being guesswork.
 </Intro>
 
 ## One application, one canvas
 
 ```mermaid
 flowchart LR
-  F[Font assets] --> H[glyph.handle] --> G[TextGroup] --> R[WebGPURenderer] --> C[Canvas]
+  F[FontFace] --> H[glyph.handle 'main' — anonymous root] --> S[Scene] --> R[WebGPURenderer] --> C[Canvas]
 ```
 
-## Two canvases
+## Two scenes
 
 ```mermaid
 flowchart LR
-  F[Fonts] --> H[one handle]
-  H --> G1[TextGroup A] --> R[one renderer or two] --> C1[Canvas A]
-  H --> G2[TextGroup B] --> R --> C2[Canvas B]
+  F[FontFace] --> H[handle]
+  H --> R1[handle — anonymous root] --> S1[Scene A]
+  H --> R2["handle('hud') — named root"] --> S2[Scene B]
+  S1 --> C1[Canvas A]
+  S2 --> C2[Canvas B]
 ```
 
-{/* prose: share the handle and fonts; give each independently advancing surface its own group so revisions and
-acceptance do not couple. An `Object3D` still has one parent. */}
+```ts
+const three = glyph.handle('main', ThreeConfig);
+scene.add(three.createText({ font: Inter, text: 'world' }));
+hudScene.add(three('hud').createText({ font: Inter, text: 'HP 100' }));
+```
+
+{/* prose: a root discovers its scene from its attached texts and refuses to span two; a second scene is a second
+named root. Roots are terminal; names are yours, never a `Scene.uuid`. R3F: a portal into another scene gets a
+`GlyphProvider handle={three('portal')}`. */}
 
 ## Two handles
 
 ```ts
 const labels = glyph.handle('labels', ThreeConfig);
-const hud = glyph.handle('hud', defineThreeConfig({ transformMode: 'direct' }));
+const hud = glyph.handle('hud', defineThreeConfig({ transformMode: 'direct', compositing: 'independent' }));
 ```
 
-{/* prose: a handle per adapter configuration or teardown boundary; one group cannot mix handles; a React subtree
-selects a handle by provider remount. */}
+{/* prose: a handle per adapter configuration or teardown boundary; both bind the same FontFace without loading it
+twice. */}
 
 ## Workers and OffscreenCanvas
 
 ```mermaid
 flowchart LR
-  UI[main-thread authored state] -->|messages| W[worker: engine + handle + renderer] --> OC[transferred OffscreenCanvas]
+  UI[main-thread authored state] -->|messages| W[worker: glyph.init + handle + renderer] --> OC[transferred OffscreenCanvas]
+  UI -.->|face.clone once| W
 ```
 
-{/* prose: the whole stack in the worker is the ordinary path; a worker requires its own engine (its own Wasm copy);
-font backing can be transferred or loaded independently, engine registrations never cross realms. Shaping in a
-worker with a main-thread renderer is a `/core` integration (`AsyncPlanTarget`, `bindBytes()`). */}
+{/* prose: the whole stack in the worker is the ordinary path; a worker has its own engine (its own Wasm copy);
+move a font with `await face.clone()` and `glyph.fontFace(serialized)` on the other side — an explicit data copy,
+never implicit. Engine registrations and handles never cross realms. */}
+
+## Device loss
+
+{/* prose: dispose the lost-device handle and create a new named handle over the same FontFace; nothing is replayed
+as new content. three's renderer owns the device. */}
 
 ## Cardinality
 
 | Relationship | Cardinality | Rule |
 | --- | --- | --- |
-| `Font` → handle | many-to-many | each binding holds an independent lease |
-| handle → `TextGroup` | one-to-many | a group cannot move between handles |
-| `TextGroup` → planner | one-to-one | the group is the publication boundary |
+| `FontFace` → handle | many-to-many | one shared resource graph; each binding a counted lease |
+| handle → root | one anonymous + many named | roots cannot nest |
+| root → `Scene` | at most one | two scenes, two roots |
+| root → planner | one | the root is the publication boundary |
 | engine → JavaScript realm | one | Wasm memory and borrowed views do not cross realms |
-
-## Device loss
-
-{/* prose: three's renderer owns the device; on loss, text requests a checkpoint from the last consumed revision after
-the renderer rebuilds — nothing is replayed as new content. */}
