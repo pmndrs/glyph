@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" role="img" aria-labelledby="t d">
+  <title id="t">Bitmap, MSDF, Slug</title>
+  <desc id="d">Three cards. Bitmap bakes pixels at chosen sizes and samples one texel per pixel. MSDF bakes a multi-channel distance field once and decodes an edge per pixel, with outline and shadow. Slug stores the outline's curves in bands and solves them per pixel at any size.</desc>
+  <defs>
+    <style>
+      .bg { fill: #07080b; }
+      .card { fill: #0e1118; stroke: #1c2130; stroke-width: 1; rx: 12; }
+      .name { font: 700 22px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .tag { font: 600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.12em; }
+      .k { font: 600 12px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; letter-spacing: 0.08em; }
+      .v { font: 400 14px/1.35 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .mono { font: 500 12.5px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .amber { fill: #ffd166; } .rose { fill: #fb7185; } .pink { fill: #ff4dc4; }
+      .grid { stroke: #2a3247; stroke-width: 1; }
+      .px { fill: #e7ecf6; } .pxd { fill: #4a5570; }
+      .field { fill: url(#sdf); }
+      .curve { fill: none; stroke: #ff4dc4; stroke-width: 2.5; }
+      .band { stroke: #ff4dc4; stroke-opacity: 0.25; stroke-width: 1; }
+    </style>
+    <linearGradient id="sdf" x1="0" x2="1"><stop offset="0" stop-color="#0e1118"/><stop offset="0.5" stop-color="#fb7185"/><stop offset="1" stop-color="#0e1118"/></linearGradient>
+  </defs>
+  <rect class="bg" width="960" height="400" rx="14"/>
+
+  <!-- Bitmap -->
+  <rect class="card" x="24" y="24" width="296" height="352"/>
+  <text class="tag amber" x="44" y="52">PIXELS AT BAKED SIZES</text>
+  <text class="name" x="44" y="82">Bitmap</text>
+  <g transform="translate(44 100)">
+    <g class="grid"><path d="M0 0h96M0 12h96M0 24h96M0 36h96M0 48h96M0 0v48M12 0v48M24 0v48M36 0v48M48 0v48M60 0v48M72 0v48M84 0v48M96 0v48"/></g>
+    <rect class="px" x="12" y="0" width="12" height="48"/><rect class="px" x="24" y="0" width="12" height="12"/><rect class="pxd" x="36" y="0" width="12" height="12"/>
+    <rect class="px" x="24" y="24" width="12" height="12"/><rect class="pxd" x="36" y="24" width="12" height="12"/>
+    <rect class="px" x="60" y="12" width="12" height="36"/><rect class="pxd" x="72" y="12" width="12" height="12"/><rect class="px" x="72" y="24" width="12" height="12"/><rect class="pxd" x="84" y="24" width="12" height="12"/>
+  </g>
+  <text class="k" x="44" y="180">BAKES</text><text class="v" x="44" y="200">an r8 atlas per strike</text>
+  <text class="k" x="44" y="228">PER PIXEL</text><text class="v" x="44" y="248">one texel fetch</text>
+  <text class="k" x="44" y="276">BEST AT</text><text class="v" x="44" y="296">UI at sizes you chose,</text><text class="v" x="44" y="316">snapped to the device grid</text>
+  <text class="k" x="44" y="344">CANNOT</text><text class="v" x="44" y="364">outline, shadow, zoom past a strike</text>
+
+  <!-- MSDF -->
+  <rect class="card" x="332" y="24" width="296" height="352"/>
+  <text class="tag rose" x="352" y="52">A DISTANCE FIELD, DECODED</text>
+  <text class="name" x="352" y="82">MSDF</text>
+  <g transform="translate(352 100)">
+    <rect class="field" x="0" y="0" width="96" height="48" rx="3"/>
+    <path d="M48 0v48" stroke="#e7ecf6" stroke-width="1.5" stroke-dasharray="3 3"/>
+  </g>
+  <text class="k" x="352" y="180">BAKES</text><text class="v" x="352" y="200">one rgba8 field, emSize texels per em</text>
+  <text class="k" x="352" y="228">PER PIXEL</text><text class="v" x="352" y="248">two fetches, an edge from derivatives</text>
+  <text class="k" x="352" y="276">BEST AT</text><text class="v" x="352" y="296">body copy and labels at any</text><text class="v" x="352" y="316">position, with outline and shadow</text>
+  <text class="k" x="352" y="344">CANNOT</text><text class="v" x="352" y="364">stay true past emSize under zoom</text>
+
+  <!-- Slug -->
+  <rect class="card" x="640" y="24" width="296" height="352"/>
+  <text class="tag pink" x="660" y="52">THE OUTLINE, SOLVED</text>
+  <text class="name" x="660" y="82">Slug</text>
+  <g transform="translate(660 100)">
+    <g class="band"><path d="M0 8h96M0 16h96M0 24h96M0 32h96M0 40h96"/></g>
+    <path class="curve" d="M6 46 C 10 4, 40 4, 48 24 S 86 44, 92 4"/>
+  </g>
+  <text class="k" x="660" y="180">BAKES</text><text class="v" x="660" y="200">curves in 16×16 bands, f16 textures</text>
+  <text class="k" x="660" y="228">PER PIXEL</text><text class="v" x="660" y="248">walk two bands, solve each curve</text>
+  <text class="k" x="660" y="276">BEST AT</text><text class="v" x="660" y="296">titles, zoom, 3D surfaces,</text><text class="v" x="660" y="316">steep angles, any size</text>
+  <text class="k" x="660" y="344">CANNOT</text><text class="v" x="660" y="364">outline, shadow; costs the most per pixel</text>
+</svg>

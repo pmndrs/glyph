@@ -1,54 +1,181 @@
 ---
 title: Custom raster formats
-description: Define a raster format, ship its baker, realize its shader in TSL or TypeGPU, and register its three.js program so it loads, stacks, and batches like the built-ins.
-nav: 55
+description: Define a raster format with its identity and decoder, write the plan program that turns its records into codec lanes, ship a baker and a shader, and register it so it loads, stacks, and batches like the built-ins.
+nav: 57
 sourcecode: packages/glyph/src/raster-format.ts
 ---
 
 <Intro>
-  Bitmap, MSDF, and Slug are ordinary raster formats built on a public contract. A third-party format defines its
-  descriptor and decoder, optionally a portable baker, a shader realization, and a three.js plan program — and then
-  declares on a FontFace, loads through the hooks, stacks, and batches exactly like the built-ins.
+  Bitmap, MSDF, and Slug are ordinary raster formats on a public contract, and the repository keeps a third,
+  `@pmndrs/glyph-example-raster`, that exists to prove it. A format owns three things: an identity and a decoder for
+  its artifact, a plan program that says how its records become codec lanes and which resources a draw binds, and a
+  baker. Renderers add shaders. This page reads the contract through the example.
 </Intro>
+
+<Keypoints title="What to know">
+  <KeypointsItem>`defineRasterFormat` is identity plus decoding. It never mentions a renderer.</KeypointsItem>
+  <KeypointsItem>A plan program pairs a technique schema with a `codecBody` and a `compileFont`; `registerRasterPlanProgram` makes it renderer-neutral.</KeypointsItem>
+  <KeypointsItem>Options become the descriptor; the descriptor becomes the raster key; the key is what the artifact and the declaration must agree on.</KeypointsItem>
+  <KeypointsItem>The `pmndrs.` id prefix is reserved. `textEffects` may name only `outline` and `shadow`.</KeypointsItem>
+</Keypoints>
+
+## The pieces
+
+| Piece | Entry | Owns |
+| --- | --- | --- |
+| format | `defineRasterFormat` | `id`, `kind`, `extension`, `version`, `textEffects`, `descriptor(options)`, `decode(font, raster, signal)`, `dispose(data)`, `runtimeBaker?` |
+| plan program | `registerRasterPlanProgram({ raster, schema, programVariant, codecBody, compileFont })` | the technique schema, the lane program, and how a decoded font fills binding rows and retains resources |
+| baker | a portable baker for build time; `runtimeBaker` for the browser | the artifact |
+| shaders | a `tsl` and a `typegpu` module per format | reading the schema's buffers and resources on one backend |
+| three material typing | augment `ThreeTextMaterialContextMap` at your `kind` | `defineTextMaterial` stays exhaustive over your format |
+
+## The format
 
 ```ts
 import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph';
 
-export const acmeSdf = defineRasterFormat({
-  kind: 'acme.sdf',
-  // descriptor, options normalization, decode(artifact) → data, resources, records
+export const glyphExample = defineRasterFormat({
+  id: 'studio.glyph-example',      // wire identity; `pmndrs.` is reserved
+  kind: 'glyphExample',            // the key a handle's fonts map and `face.glyphExample` use
+  extension: 'STUDIO_glyph_example',
+  version: 0,
+  textEffects: [],                 // only 'outline' and 'shadow' are legal here
+  runtimeBaker: () => import('./runtime-baker.js'),
+  descriptor(options) {
+    return glyphExampleDescriptor(options);   // canonical, sorted, defaults folded in
+  },
+  async decode(font, raster, signal) {
+    const extension = decodeExtension(font, raster);        // identity checks, below
+    const colors = Uint8Array.from(await raster.resource(extension.records, signal));
+    if (colors.byteLength !== font.glyphCount * extension.recordStride) throw new RangeError('…');
+    return {
+      resource: defineRasterResourceId(`studio.glyph-example/${font.shapingHash}/${raster.rasterKey}`),
+      inset: extension.descriptor.inset,
+      colors,
+      glyphCount: font.glyphCount,
+    };
+  },
+  dispose(data) {
+    data.colors.fill(0);
+  },
 });
 ```
 
-## Pieces
+`decode` receives the registered font — its `shapingHash` and `glyphCount` — and the raster's `extensionData`,
+`rasterKey`, a `view(bufferView)` reader, and `resource(source, signal)` for record payloads that may be embedded or
+external. The example's `decodeExtension` refuses the artifact unless `version`, `rasterKey`, `shapingHash`,
+`glyphCount`, `glyphIdWidth`, and `recordStride` all match, and unless the descriptor's generator version is one it
+knows; the built-ins do the same. That reciprocal check is what lets one GLB carry several formats safely.
 
-| Piece | Entry | Job |
-| --- | --- | --- |
-| format | `defineRasterFormat` | descriptor, raster key, decode portable data, partition and pack records |
-| resources | `defineRasterResourceId` | named portable resources a shader expects |
-| baker | `defineRasterBaker` / `rasterBake` (`/bake`) | produce the artifact at build time |
-| shader | `/tsl/*` or `/typegpu/*` | the canonical realization for a backend |
-| three program | `registerThreeRasterPlanProgram` (`/three`) | binds the shader and material factory to the plan |
-| material typing | augment `ThreeTextMaterialContextMap` at your `kind` | `defineTextMaterial` stays exhaustive |
-
-## Registration order
-
-> [!WARNING]
-> `registerThreeRasterPlanProgram` refuses a format registered after a runtime has already read the registry, and
-> names the format. Import format modules before the first handle is created.
-
-## Declaring and using it
+## The plan program
 
 ```ts
-const Acme = glyph.fontFace('/fonts/acme.font.glb', { format: { raster: acmeSdf, options: { spread: 4 } } });
-const font = useFont('/fonts/acme.font.glb', { format: { raster: acmeSdf, options: { spread: 4 } } });
+import { defineTechniqueSchema, techniqueProgram, registerRasterPlanProgram, f32, id } from '@pmndrs/glyph';
+
+export const glyphExampleSchema = defineTechniqueSchema({
+  technique: glyphExample.id,
+  scope: 'glyph',
+  binding: { f32: ['inset', 'red', 'green', 'blue', 'alpha'] },     // per-glyph values from the decoded records
+  buffers: {
+    origin: { id: id.buffer('glyph-example-raster/origin'), scalar: 'f32', lanes: ['left', 'top'] },
+    size:   { id: id.buffer('glyph-example-raster/size'),   scalar: 'f32', lanes: ['widthX', 'heightY'] },
+    color:  { id: id.buffer('glyph-example-raster/color'),  scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+  },
+  resources: { glyphGeometry: { kind: 'geometry', attributes: [{ semantic: 'position', componentType: 'f32', components: 3 }, { semantic: 'uv', componentType: 'f32', components: 2 }] } },
+  render: { resource: 'glyphGeometry', geometry: glyphExampleSuppliedGeometryDeclaration },
+  glyphOrigin: { buffer: 'origin' },                                   // lanes 0–1 of `origin` are the glyph origin
+});
+
+export const glyphExamplePlanProgram = registerRasterPlanProgram({
+  raster: glyphExample,
+  schema: glyphExampleSchema,
+  programVariant: 0,
+  codecBody(system) {
+    const p = techniqueProgram(glyphExampleSchema, { system });
+    const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
+    const { inset, red, green, blue, alpha } = p.binding;
+    const insetPixels = f32.mul(inset, fontSize);
+    const twice = f32.mul(insetPixels, f32.const(2));
+    return p.compile({
+      origin: [f32.add(inlineOrigin, insetPixels), f32.sub(blockOrigin, insetPixels)],
+      size: [f32.sub(f32.mul(fontSize, f32.const(0.65)), twice), f32.sub(fontSize, twice)],
+      color: [f32.mul(color.red, red), f32.mul(color.green, green), f32.mul(color.blue, blue), f32.mul(color.alpha, alpha)],
+    });
+  },
+  compileFont(compiler) {
+    const data = compiler.font.data;
+    compiler.retain('glyphGeometry', data.resource, glyphExampleIndexedQuadGeometry);   // a supplied unit quad
+    return compiler.compile({
+      strikes: [0],                                     // one scalable strike
+      resource: () => data.resource,
+      f32: {
+        inset: () => data.inset,
+        red: (row) => data.colors[row * 4] / 255,
+        green: (row) => data.colors[row * 4 + 1] / 255,
+        blue: (row) => data.colors[row * 4 + 2] / 255,
+        alpha: (row) => data.colors[row * 4 + 3] / 255,
+      },
+    });
+  },
+});
 ```
 
-{/* prose: the format's `kind` is its key — `Acme.acme` is not a thing; a custom key resolves through the handle's
-config font map when you name it as a string. Materials see the augmented map branch for your kind. */}
+Two halves. `codecBody` is the codec program from [Building a codec](/docs/advanced/codec): semantics in, lanes out.
+`compileFont` runs once per bound font: it retains the named resources a draw will bind — here a supplied quad
+geometry, for the built-ins the atlas texture arrays or Slug's page group — and fills each binding row from the
+decoded data, one closure per binding name, called with the row index. `strikes` lists the ppem of each strike; a
+single `0` is the scalable strike Bitmap does not have.
+
+> [!WARNING]
+> Register before the first handle. `registerRasterPlanProgram` is renderer-neutral and runs at import; a renderer's
+> program registry snapshots it when an engine is created, and a format registered after that is refused by name.
+> Import your format module at the top of the app.
+
+## Identity
+
+`descriptor(options)` returns the canonical descriptor: options normalised, defaults folded in so that "no options"
+and "the defaults spelled out" are one descriptor. The raster key is a SHA-256 over the canonical JSON of
+`{ descriptor, extension, kind, version }`, computed identically by the baker and by the runtime, and the artifact
+records it. A declaration `{ raster: glyphExample, options }` derives the key from `options` and looks it up in the
+file's raster directory; no match is `FONT_FACE_FORMAT_UNAVAILABLE`, never a silent fallback and never a runtime bake.
 
 ## The artifact
 
-{/* prose: the `PMNDRS_font` GLB family — one shaping core, typed raster companions with reciprocal identity;
-embedded and external forms share a schema; a companion is validated against shaping hash, glyph count, raster key,
-and version before it attaches. Link the raster-technique-api and technique-implementation-report docs. */}
+A format's companion extension carries `version`, `rasterKey`, `shapingHash`, `glyphCount`, `glyphIdWidth`, its
+`descriptor`, and its payload — for the example, a `records` source with a fixed `recordStride`, either a buffer view
+in the GLB or an external file with a byte length and a SHA-256. The core `PMNDRS_font` extension lists it in the
+raster directory; composition rebases its buffer views into the single binary chunk and checks the reciprocal
+identity fields before attaching it. [Baking fonts](/docs/fonts/baking) describes the container.
+
+## The baker
+
+A portable baker produces the artifact at build time from the prepared, already subset source font — the same bytes
+the shaping payload was cut from, so records and cmap agree. `runtimeBaker` is a lazy import of a Worker-side baker
+so the browser can produce the same artifact from a source font; the example ships both, and the built-ins ship
+Wasm bakers. Whatever the baker cannot rasterise it must mark absent in its records rather than omit, so the record
+table always has `glyphCount` rows.
+
+## Shaders
+
+A format publishes one shader module per backend it supports, `tsl` for three.js and `typegpu` for TypeGPU, each
+reading the schema's buffers by name and the retained resources by their declared kind. The example's TypeGPU shader
+draws the supplied quad at `origin` and `size`, coloured by `color`. On three.js, a plan program is bound to a
+material factory through the program registry, and augmenting `ThreeTextMaterialContextMap` at your `kind` gives
+`defineTextMaterial` a typed branch for it, so `context.shader` carries the nodes your TSL module publishes.
+
+## Using it
+
+```ts
+import { glyphExample } from '@pmndrs/glyph-example-raster';
+
+const Face = glyph.fontFace({ baked: '/fonts/example.font.glb' }, { format: { raster: glyphExample, options: { inset: 0.05 } } });
+await Face.load();
+```
+
+```tsx
+const face = useFont({ baked: '/fonts/example.font.glb' }, { format: { raster: glyphExample, options: { inset: 0.05 } } });
+```
+
+The format's `kind` is its member key on a face and its key in a handle's `fonts.formats`; a string format name
+resolves through that map. The example renderer on [Integrating a renderer](/docs/advanced/custom-renderers)
+declares exactly this format and nothing else.

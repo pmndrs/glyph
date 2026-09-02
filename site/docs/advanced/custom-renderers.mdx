@@ -1,90 +1,186 @@
 ---
-title: Custom renderers
-description: The GlyphConfig contract a renderer adapter implements — schema, encode, resolve, renderer, root — and the borrowed CommandBufferView it decodes.
+title: Integrating a renderer
+description: defineGlyphConfig is the whole integrator contract — a schema that names your objects, the codec, a resolver for resources, a renderer that decodes publications, and a root recipe — walked through the example renderer that proves it.
 nav: 54
 sourcecode: packages/glyph/src/glyph-config.ts
 ---
 
 <Intro>
-  three.js is one adapter. `defineGlyphConfig` from the root entry is the whole integrator contract: a schema that
-  names your renderer's objects, a Codec that packs command data, a resolver that turns portable payloads into
-  leased resources, a renderer that decodes one borrowed view into retained host objects, and a root recipe. The
-  example renderer in the repository implements it against a raw device oracle.
+  three.js is one adapter. Everything it does with the engine goes through `defineGlyphConfig`, and the same call is
+  open to you: name the objects your renderer owns, hand the engine a codec, lease it resources, decode what it
+  publishes, and give it a root to hang text on. The repository keeps a second implementation,
+  `@pmndrs/glyph-example-renderer`, whose only job is to prove that contract with no three.js in sight. This page
+  reads the contract through that example.
 </Intro>
 
-```ts
-import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph';
+<Keypoints title="What to know">
+  <KeypointsItem>Seven fields: `schema`, `fonts`, `encode`, `resolve`, `renderer`, `root`, `commands`. Five are required; every one is called at a known moment.</KeypointsItem>
+  <KeypointsItem>The engine never hands you a numeric id. Your schema returns the objects the display list will be made of.</KeypointsItem>
+  <KeypointsItem>`decode` is synchronous and stages; `commit` is the only place the host changes; `discard` cleans up.</KeypointsItem>
+  <KeypointsItem>A handle fronts its anonymous root; `handle(name)` returns one idempotent named root; roots are terminal.</KeypointsItem>
+</Keypoints>
 
-const MyConfig = defineGlyphConfig({
-  schema: MySchema,
-  encode: ({ ids }) => ({ descriptor: myCodecDescriptor(ids) }),
-  resolve: ({ format, resourceName, payload }) => resourceLease(realize(format, resourceName, payload), () => release()),
-  renderer: () => ({
-    decode: (view) => device.decode(view),   // stage retained host objects; return commit / discard
-    syncTransforms: (updates) => device.moveInstances(updates),
-    dispose: () => device.reset(),
-  }),
-  root: {
-    create(context) {
-      return context.create(new MyRoot(context.services), { boundary: Object.freeze({ name: context.name }) });
-    },
-  },
+![The engine in the middle; around it the schema, fonts, encode, resolve, renderer, root and commands, each annotated with when the engine calls it.](/examples/diagrams/config-parts.svg)
+
+## The shape of a config
+
+This is the example renderer's config, trimmed of nothing that matters:
+
+```ts
+import { defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/glyph';
+import { glyphExample } from '@pmndrs/glyph-example-raster';
+
+export const ExampleSchema = defineGlyphSchema({
+  drawRoot: () => undefined,                                   // no scene graph to attach to
+  program: (_root, program) => Object.freeze({ kind: 'example-program', program }),
+  buffer: (_root, input) => Object.freeze({ kind: 'example-buffer', input }),
+  material: (_root, material) => material,
+  transform: (_root, transform) => transform,
+  batch: (_root, input) => Object.freeze({ kind: 'example-batch', input }),
+  instance: (_root, input) => Object.freeze({ kind: 'example-instance', input }),
+  instanceSpan: (_root, input) => Object.freeze({ kind: 'example-instance-span', input }),
 });
 
-const mine = glyph.handle('mine', MyConfig);
+export function defineExampleConfig(device = new RecordingExampleRendererDevice()) {
+  return defineGlyphConfig({
+    schema: ExampleSchema,
+    fonts: { default: glyphExample.kind, formats: { glyphExample } },
+    encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
+    resolve: ({ format, resourceName, payload }) => {
+      if (format !== device.shader.variant.techniqueId) throw new TypeError(`cannot render "${format}"`);
+      return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () => undefined);
+    },
+    renderer: () => ({
+      decode: (view) => device.decode(view),
+      syncTransforms: () => undefined,
+      dispose: () => device.reset(),
+    }),
+    root: {
+      create: (context) => {
+        if (context.fonts === undefined) throw new TypeError('example GlyphConfig must declare font formats');
+        const extension = new ExampleRootImplementation(context.fonts, context.services);
+        return context.create(extension, {
+          boundary: Object.freeze({ name: context.name }),
+          shape: { accepted: (drawList) => extension.accept(drawList) },
+        });
+      },
+    },
+  });
+}
+
+const handle = glyph.handle('example', defineExampleConfig());
 ```
 
-## The contract
+Its output is a retained draw list — a plain object with `engineRevision`, `planRevision`, `checkpoint`, and one
+entry per span — which its tests read, and which a TypeGPU device turns into an offscreen texture. Nothing touches a
+DOM, a canvas, or a console.
 
-| Field | Required | Job |
+## Each part
+
+| Field | Required | Called | Receives → returns |
+| --- | --- | --- | --- |
+| `schema` | yes | see below | eight callbacks that name your objects |
+| `fonts` | no | read once at `glyph.handle()` | `{ default: key, formats: Record<key, RasterFormat> }`; becomes `context.fonts` for the root recipe |
+| `encode` | yes | once per handle, in the constructor; the descriptor is compiled and registered in Wasm immediately | `{ integration: handleName, ids }` → `{ descriptor, capabilitySet?, dispose? }` |
+| `resolve` | yes | during projection, for every `(resourceId, generation)` new to a root; again for every `breakApart` copy | `{ format, resourceKind, resourceName, payload, resources, previous, signal }` → `ResourceLease` from `resourceLease(value, release)` |
+| `renderer` | yes | once per root, when the root is created; once per copy | `{ drawRoot, signal, codec, defaultRenderer? }` → `{ decode, syncTransforms, dispose }` |
+| `root` | yes | anonymous root eagerly in the handle constructor; each named root on first `handle(name)` | `{ name, codec, config, fonts, services, create }` → must call `context.create(extension, options)` exactly once and return it |
+| `commands` | no | read once per root when its planner activates | `{ limits, requestBytes, resultBytes, textUnits }`; defaults 64 KiB request, 256 KiB result, 256 text units |
+
+`context.create(extension, options)` takes a `boundary` (required; it is the first argument to every schema callback
+and reaches `renderer` as its context), an optional `defaultRenderer` the config may hand back, optional `shape`
+hooks `{ prepare, accepted, rejected }`, and an optional `dispose` for host cleanup. It returns a proxy over your
+extension that adds `name`, `handle`, `disposed`, and `dispose`. A config is a frozen, branded object; spreading one
+and replacing a field keeps the brand, so `{ ...ThreeConfig, renderer }` is a legal way to wrap three's.
+
+## The schema
+
+Every callback receives your `boundary` first. What it returns is what the display list will contain — the engine
+stores it opaquely and hands it back in `decode`, in retirements, and in transform updates.
+
+| Callback | Receives | Frequency |
 | --- | --- | --- |
-| `schema` | yes | binds trusted meanings — program, buffer, material, transform, batch, instance — to renderer-owned objects; defines `drawRoot` |
-| `fonts` | no | the handle's raster-format keys, its default key, and typed font loading |
-| `encode` | yes | selects the Codec that defines packed command-buffer data |
-| `resolve` | yes | creates or updates leased renderer resources from portable payloads |
-| `renderer` | yes | a root-scoped `{ decode, syncTransforms, dispose }` |
-| `root` | yes | constructs the anonymous or a named root through constrained root services |
-| `commands` | no | overrides initial command-buffer and retained-text capacities |
+| `drawRoot(boundary)` | — | once per root, once per `replace` display list |
+| `program(boundary, program)` | the `CodecProgram` from your descriptor | once per program, memoised |
+| `buffer(boundary, { program, declaration })` | `{ kind: 'codec', value: CodecBuffer }` or `{ kind: 'order' }` for the engine's order buffer | once per buffer `(id, generation)`; the map survives across publications |
+| `material(boundary, input)` | the value a text or span passed as `material` | once per identity, memoised |
+| `transform(boundary, input, recordIndex)` | the value bound as a transform, and its row in the transform table | once per binding, memoised |
+| `instanceSpan(boundary, input)` | kind, program, resource, buffer, `recordIndex`, `recordCount`, `logicalOrder`, clip, extents | every span of every `replace` |
+| `batch(boundary, input)` | a draw's program, material, buffers, resources, clip, depth, order, indirect buffer, plus its bound `instances` | every batch child |
+| `instance(boundary, input)` | the same as a batch, plus one `transform` and one span | every root-instance child |
 
-{/* prose: there is no `decode` hook on the config and no configurable intermediate decoder. The engine projects its
-trusted output into the view; your `renderer.decode(view)` is the decoder. */}
+three's schema returns its own objects — `Object3D` for transforms and the draw root, a frozen wrapper carrying the
+root for materials — and lets the boundary remap transform objects, which is how a detached `Glyphs` copy drives its
+own matrices.
 
-## The view
+## Lifecycle
 
-```
-CommandBufferView
-  resources    create · update · retain leased resources
-  storage      buffers your schema named
-  patches      byte ranges to write, fill, copy, retire
-  displayList  the engine-authored ordered tree of batches and root instances
-  retirements  generations to release after the acknowledged fence
-```
+1. `await glyph.init()` instantiates the Wasm shaper once; concurrent calls share the promise.
+2. `glyph.handle(name, config)` — requires init and a unique name; builds the font store if `fonts` is declared; calls `encode` and registers the codec bytes; calls `root.create` for the anonymous root, which activates a planner, registers the root with `shape`, and constructs the plan target, which calls `schema.drawRoot` and `renderer`.
+3. `handle(name)` runs the same recipe once per name and returns the same root afterwards.
+4. Fonts: `glyph.fontFace(source, { format })` declares; `face.load()` loads; `root.loadFont(face)` binds the handle's format; `root.createText({ font: face })` acquires an immutable `Font` lease the text owns. An unloaded selection throws `FONT_FACE_FORMAT_NOT_LOADED`.
+5. Text state reaches the planner through `services.createText` and `controller.update`; that is where fonts enter Wasm, as registrations and stacks.
+6. `glyph.shape()` — synchronous, non-reentrant, a no-op when nothing is dirty. Each dirty root's `prepare` hook may skip it; the rest are staged; **one Wasm crossing** serves every staged root across every handle; then, per root, the publication is adopted and `accept` runs: project, `decode`, `commit`, settle. A throw runs `discard` and settles as rejected; `shape()` rethrows one error or an `AggregateError` after every root has been visited.
+7. `accepted` and `rejected` hooks run per root. three's `accepted` marks committed revisions and publishes measurements; the example renderer's stores the draw list.
+8. Every frame afterwards, `syncTransforms` receives the retained transform list from the last `replace` and never enters Wasm. `measure()` and `glyphs()` are separate synchronous engine calls and never consume a publication.
+9. Dispose in this order: text (controller, then owned fonts) → root (`services.dispose` before your `dispose`) → handle (every root, the font store, then codec and engine state — deferred while a `breakApart` copy is alive).
 
-{/* prose: every reference in the view is already a stable object your schema chose — never a numeric plan id, and
-never a Rust table. `View` is a lifetime claim like `ArrayBufferView`: read it only during the synchronous `decode`
-call; retain nothing from it but the host objects you built. */}
+Errors from the engine arrive as `GlyphEngineStatusError` with codes such as `style-range-invalid`,
+`font-stack-missing`, and `result-too-large`. three swallows the throw from `shape()` inside its traversal and
+attributes it to every render member and its groups: `text.error`, `text.onError`, `group.error`, and
+`commitState()` reporting `{ status: 'failed', error }`. An unchanged frame is not retried; recovery needs an
+invalidating change.
 
-## Transactional commit
+> [!NOTE]
+> `TextFrameError`, with its `rejection.cause` union, is exported from `/three` but nothing constructs it in the
+> current tree. Handle the raw engine and renderer errors until it is wired.
 
-```mermaid
-sequenceDiagram
-  participant G as glyph.shape()
-  participant R as renderer.decode(view)
-  G->>R: borrowed view for one dirty root
-  R-->>G: { commit } or { discard, error }
-  Note over G: committed roots settle; a discarded root keeps its last accepted state
-```
+## Roots
 
-{/* prose: prepare everything, then commit or discard as a unit; a rejected candidate never substitutes stale
-resources. `syncTransforms` is the cheap path for matrix-only frames and never enters Wasm. */}
+| Rule | Consequence |
+| --- | --- |
+| a handle fronts its anonymous root | `handle.name` is `undefined`, `handle.handle === handle`, every root member reflects through it |
+| `handle(name)` interns one root per name | roots are terminal; there is no nesting; a named root's `handle` is its owner |
+| each root owns one planner, one codec lease, one plan target with its own projector and renderer | resources resolved for one root are leased to that root |
+| capacity `{ size, policy }` with `grow`, `chunk`, or `fixed` | three defaults to 4096 `chunk`; under `fixed` a frame whose text exceeds `size` is skipped at `prepare` and the text stays `pending` |
+| compositing `'ordered'` or `'independent'` | sent with every prepare; `setCompositing` invalidates the root |
+| one `Scene` per three root | a root whose texts span two scenes throws and names the fix: pick another root per scene |
+| a publication exists from the first member to the last disposal | a root can publish again later |
+| `breakApart` asks the config for a fresh `renderer` and re-resolves resources | the handle's infrastructure outlives `handle.dispose()` until the copy is disposed |
 
-## When you need a device
+## Fonts through the config
 
-{/* prose: three's resolver creates three.js objects with no renderer, scene, canvas, or `GPUDevice`; a raw WebGPU
-adapter captures its device in the config closure at its first `device.create*`; a canvas only when it presents.
-Device loss: dispose the lost-device handle and create a new named handle over the same immutable fonts. */}
+`fonts: { default, formats }` builds a per-handle store with `isLoaded`, `load` (narrowed to the handle's format),
+`acquire` (a clone the caller disposes), and `peek`. A format key resolves `undefined` to the default, a string to a
+map key, and a `RasterFormat` object only if it is one of the configured formats. What `resolve` sees for a bound
+font is the compiled font's portable payloads — `buffer`, `texture`, `texture-array`, `geometry`, or `group` — keyed
+by the technique id and the schema's resource name, with the companions of the same font in `resources`. three keeps
+`resolve` trivial and realises textures and storage attributes at decode time, sharing GPU resources per handle
+through a registry owned by the codec `encode` returned.
 
-## Where to go
+## Minimal versus three
 
-{/* prose: link the renderer-integration guide (eleven steps, from vocabulary to disposal order) and
-`packages/glyph-example-renderer`; the guide's TypeGPU example is the canonical minimal config. */}
+| Concern | Required by the engine | Example renderer | three.js config |
+| --- | --- | --- | --- |
+| `schema.drawRoot` | any value | `undefined` | an `Object3D` draw parent under the scene |
+| `renderer()` | `{ decode, syncTransforms, dispose }` | wraps a device; `syncTransforms` is a no-op | returns `context.defaultRenderer`, the root-built executor |
+| `root.create` options | `boundary` | `boundary`, `shape.accepted` | `boundary`, `defaultRenderer`, three hooks, `dispose` |
+| `shape.prepare` | optional | absent | reconciles scene members, enforces one scene, applies `fixed` capacity, sets compositing |
+| `fonts` | optional | one custom format | bitmap, msdf, slug |
+| `encode` | any `Codec` | descriptor only | descriptor plus a shared GPU resource registry and `dispose` |
+| transforms | optional per frame | constant | `Object3D` matrices synced every traversal |
+| extension surface | anything | `createText`, `drawList` | `createText`, `createTextGroup`, capacity, compositing, material, `gpuBytes` |
+
+## What the example proves
+
+Its integration test bakes a real font with the example baker, creates a handle with an injectable device, loads a
+face, and creates a text. Then it asserts that an injected `decode` failure makes `glyph.shape()` throw and leaves
+zero accepted resources; that the next update publishes with `changed: true`, the `glyphGeometry` resource and the
+`origin`, `size`, and `color` buffers present, and every draw's `instanceCount` equal to its span's `recordCount`;
+that an unchanged `shape()` returns the same draw list and submits nothing; that a text update republishes; that
+disposing the text releases every resource; and that `handle.dispose()` keeps them at zero. A boundary test forbids
+the package from importing anything but `@pmndrs/glyph`.
+
+Where to go next: [Building a codec](/docs/advanced/codec) for what `encode` returns, [Reading the render
+plan](/docs/advanced/render-plan) for what `decode` receives, and [Custom raster formats](/docs/advanced/custom-techniques)
+for the format side of the same example.

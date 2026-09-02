@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 410" width="960" height="410" role="img" aria-labelledby="t d">
+  <title id="t">Anatomy of a publication</title>
+  <desc id="d">A 144-byte header, then six tables: resources, buffers, patches, primitives, draws, retirements. Draws point at primitives, buffers and resources; patches carry byte edits, and their payloads, into buffers the renderer owns.</desc>
+  <defs>
+    <style>
+      .bg { fill: #07080b; }
+      .seg { fill: #141927; stroke: #2a3247; stroke-width: 1.25; }
+      .seg.head { stroke: #ffd166; } .seg.res { stroke: #34d399; } .seg.buf { stroke: #70d6ff; } .seg.pat { stroke: #a855f7; } .seg.prim { stroke: #fb7185; } .seg.draw { stroke: #ff4dc4; } .seg.ret { stroke: #97a1b4; } .seg.pay { stroke: #a855f7; stroke-dasharray: 4 3; }
+      .name { font: 600 13px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .sub { font: 400 12px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; }
+      .mono { font: 500 11.5px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; fill: #97a1b4; }
+      .mono.hi { fill: #e7ecf6; }
+      .edge { fill: none; stroke: #4a5570; stroke-width: 1.25; marker-end: url(#arrow); }
+      .edge.pink { stroke: #ff4dc4; marker-end: url(#arrowp); } .edge.violet { stroke: #a855f7; marker-end: url(#arrowv); }
+      .lanename { font: 600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; letter-spacing: 0.12em; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5570"/></marker>
+    <marker id="arrowp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ff4dc4"/></marker>
+    <marker id="arrowv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7"/></marker>
+  </defs>
+  <rect class="bg" width="960" height="410" rx="14"/>
+  <text class="lanename" x="40" y="44">ONE BYTE RANGE, BORROWED FROM WASM MEMORY</text>
+
+  <!-- byte strip -->
+  <rect class="seg head" x="40" y="60" width="100" height="44" rx="6"/><text class="name" x="52" y="79">header</text><text class="mono" x="52" y="96">144 B</text>
+  <rect class="seg res" x="144" y="60" width="118" height="44" rx="6"/><text class="name" x="156" y="79">resources</text><text class="mono" x="156" y="96">40 B each</text>
+  <rect class="seg buf" x="266" y="60" width="118" height="44" rx="6"/><text class="name" x="278" y="79">buffers</text><text class="mono" x="278" y="96">36 B each</text>
+  <rect class="seg pat" x="388" y="60" width="118" height="44" rx="6"/><text class="name" x="400" y="79">patches</text><text class="mono" x="400" y="96">36 B each</text>
+  <rect class="seg prim" x="510" y="60" width="118" height="44" rx="6"/><text class="name" x="522" y="79">primitives</text><text class="mono" x="522" y="96">64 B each</text>
+  <rect class="seg draw" x="632" y="60" width="118" height="44" rx="6"/><text class="name" x="644" y="79">draws</text><text class="mono" x="644" y="96">64 B each</text>
+  <rect class="seg ret" x="754" y="60" width="72" height="44" rx="6"/><text class="name" x="762" y="79">retire</text><text class="mono" x="762" y="96">24 B</text>
+  <rect class="seg pay" x="830" y="60" width="90" height="44" rx="6"/><text class="name" x="842" y="79">payloads</text><text class="mono" x="842" y="96">bytes</text>
+
+  <!-- header detail -->
+  <text class="lanename" x="40" y="146">HEADER</text>
+  <text class="mono hi" x="40" y="166">status · flags.checkpoint</text>
+  <text class="mono hi" x="40" y="184">engineRevision · planRevision</text>
+  <text class="mono hi" x="40" y="202">publicationGeneration</text>
+  <text class="mono hi" x="40" y="220">codecHandle · codecFingerprint</text>
+  <text class="mono" x="40" y="238">offset + count per table</text>
+  <text class="mono" x="40" y="256">faultParagraphId · faultStyleId</text>
+
+  <!-- draw detail -->
+  <text class="lanename" x="330" y="146">ONE DRAW</text>
+  <rect class="seg draw" x="330" y="156" width="270" height="120" rx="8"/>
+  <text class="mono hi" x="344" y="178">programId · programVariant</text>
+  <text class="mono hi" x="344" y="196">materialId · clipId · depthKey</text>
+  <text class="mono hi" x="344" y="214">transformId  (0 = indexed batch)</text>
+  <text class="mono hi" x="344" y="232">primitiveStart · bufferStart · bufferCount</text>
+  <text class="mono hi" x="344" y="250">resourceStart · resourceCount</text>
+  <text class="mono hi" x="344" y="268">orderToken  (paint order, already resolved)</text>
+
+  <!-- primitive detail -->
+  <text class="lanename" x="640" y="146">ITS PRIMITIVE</text>
+  <rect class="seg prim" x="640" y="156" width="280" height="76" rx="8"/>
+  <text class="mono hi" x="654" y="178">kind: glyph | decoration</text>
+  <text class="mono hi" x="654" y="196">bufferId · recordIndex · recordCount</text>
+  <text class="mono hi" x="654" y="214">techniqueId · resourceId · generation</text>
+
+  <!-- patch detail -->
+  <text class="lanename" x="610" y="284">A PATCH</text>
+  <rect class="seg pat" x="610" y="292" width="320" height="94" rx="8"/>
+  <text class="mono hi" x="624" y="314">opcode: allocate · write · fill · copy · retire</text>
+  <text class="mono hi" x="624" y="332">bufferId · bufferGeneration</text>
+  <text class="mono hi" x="624" y="350">destinationOffset · byteLength</text>
+  <text class="mono hi" x="624" y="368">payloadOffset → copy before returning</text>
+
+  <!-- links -->
+  <path class="edge pink" d="M 691 104 L 470 156"/>
+  <path class="edge" d="M 590 200 L 640 200"/>
+  <path class="edge violet" d="M 447 104 C 447 140, 470 330, 610 330"/>
+  <path class="edge" d="M 325 104 C 325 130, 340 240, 590 250"/>
+  <text class="sub" x="40" y="394">a draw names its buffers by (id, generation); a patch edits the same buffers by (id, generation)</text>
+</svg>

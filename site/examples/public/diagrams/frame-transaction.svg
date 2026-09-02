@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" width="960" height="340" role="img" aria-labelledby="t d">
+  <title id="t">The retained frame transaction</title>
+  <desc id="d">An app assigns desired state to Text objects; glyph.shape publishes each dirty root once; the planner lends the renderer a borrowed plan; the renderer decodes, resolves and prepares, then commits the whole root or discards it and keeps the last accepted draw.</desc>
+  <defs>
+    <style>
+      .bg { fill: #07080b; }
+      .actor { fill: #141927; stroke: #2a3247; stroke-width: 1.25; rx: 8; }
+      .actor.js { stroke: #70d6ff; }
+      .actor.rs { stroke: #ffd166; }
+      .actor.out { stroke: #a855f7; }
+      .label { font: 600 14px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .sub { font: 400 12px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; }
+      .msg { font: 500 12.5px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .mono { font: 500 12px/1 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; fill: #ffd166; }
+      .mono.ok { fill: #34d399; }
+      .mono.no { fill: #fb7185; }
+      .life { stroke: #2a3247; stroke-width: 1; stroke-dasharray: 3 4; }
+      .edge { fill: none; stroke: #4a5570; stroke-width: 1.5; marker-end: url(#arrow); }
+      .edge.back { stroke: #a855f7; marker-end: url(#arrowv); }
+      .edge.ok { stroke: #34d399; marker-end: url(#arrowg); }
+      .edge.no { stroke: #fb7185; marker-end: url(#arrowr); }
+      .alt { fill: none; stroke: #2a3247; stroke-width: 1; stroke-dasharray: 5 4; rx: 6; }
+      .alttag { font: 600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; letter-spacing: 0.1em; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5570"/></marker>
+    <marker id="arrowv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7"/></marker>
+    <marker id="arrowg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/></marker>
+    <marker id="arrowr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#fb7185"/></marker>
+  </defs>
+  <rect class="bg" width="960" height="340" rx="14"/>
+
+  <!-- actors -->
+  <rect class="actor js" x="40" y="28" width="150" height="48"/>
+  <text class="label" x="56" y="49">Your app</text>
+  <text class="sub" x="56" y="66">assigns desired state</text>
+  <rect class="actor js" x="270" y="28" width="150" height="48"/>
+  <text class="label" x="286" y="49">Text · root</text>
+  <text class="sub" x="286" y="66">retained, dirty-tracked</text>
+  <rect class="actor rs" x="500" y="28" width="150" height="48"/>
+  <text class="label" x="516" y="49">Planner</text>
+  <text class="sub" x="516" y="66">Rust · Wasm</text>
+  <rect class="actor out" x="730" y="28" width="190" height="48"/>
+  <text class="label" x="746" y="49">renderer.decode()</text>
+  <text class="sub" x="746" y="66">your config</text>
+
+  <!-- lifelines -->
+  <line class="life" x1="115" y1="76" x2="115" y2="320"/>
+  <line class="life" x1="345" y1="76" x2="345" y2="320"/>
+  <line class="life" x1="575" y1="76" x2="575" y2="320"/>
+  <line class="life" x1="825" y1="76" x2="825" y2="320"/>
+
+  <!-- messages -->
+  <path class="edge" d="M 115 106 L 341 106"/>
+  <text class="msg" x="130" y="98">text.set({ style }) · text.text = …</text>
+
+  <path class="edge" d="M 345 146 L 571 146"/>
+  <text class="msg" x="360" y="138">publish once per dirty root</text>
+  <text class="mono" x="360" y="162">glyph.shape()</text>
+
+  <path class="edge back" d="M 575 190 L 821 190"/>
+  <text class="msg" x="590" y="182">borrowed plan · A/B slot · expires on the next answer</text>
+
+  <!-- alt block -->
+  <rect class="alt" x="290" y="212" width="640" height="108"/>
+  <text class="alttag" x="304" y="230">DECODE → RESOLVE → PREPARE, THEN ONE OF</text>
+  <path class="edge ok" d="M 821 258 L 349 258"/>
+  <text class="mono ok" x="362" y="250">commit → commitState() = { status: 'committed', revision }</text>
+  <path class="edge no" d="M 821 300 L 349 300"/>
+  <text class="mono no" x="362" y="292">discard → last accepted draw stays · error retained · onError(error)</text>
+</svg>

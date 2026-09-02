@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" role="img" aria-labelledby="t d">
+  <title id="t">What a codec program does</title>
+  <desc id="d">Semantics from the engine and binding values from the font's raster records enter a straight-line program compiled per technique; the planner runs it per glyph to fill the lanes of each declared buffer; the lanes arrive in the publication as patches to renderer-owned storage buffers, which the shader reads by instance.</desc>
+  <defs>
+    <style>
+      .bg { fill: #07080b; }
+      .lane { fill: #0e1118; stroke: #1c2130; stroke-width: 1; }
+      .box { fill: #141927; stroke: #2a3247; stroke-width: 1.25; rx: 8; }
+      .box.js { stroke: #70d6ff; } .box.rs { stroke: #ffd166; } .box.out { stroke: #a855f7; } .box.gpu { stroke: #34d399; }
+      .label { font: 600 15px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .sub { font: 400 12.5px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; }
+      .lanename { font: 600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; letter-spacing: 0.12em; }
+      .mono { font: 500 12px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; fill: #ffd166; }
+      .mono.cyan { fill: #70d6ff; } .mono.violet { fill: #a855f7; } .mono.green { fill: #34d399; } .mono.dim { fill: #97a1b4; }
+      .edge { fill: none; stroke: #4a5570; stroke-width: 1.5; marker-end: url(#arrow); }
+      .edge.hot { stroke: #a855f7; marker-end: url(#arrowv); }
+      .cell { fill: #0b0e15; stroke: #2a3247; stroke-width: 1; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5570"/></marker>
+    <marker id="arrowv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7"/></marker>
+  </defs>
+  <rect class="bg" width="960" height="360" rx="14"/>
+
+  <rect class="lane" x="24" y="40" width="250" height="296" rx="10"/>
+  <text class="lanename" x="40" y="62">INPUTS · PER GLYPH</text>
+  <rect class="box rs" x="40" y="80" width="218" height="104"/>
+  <text class="label" x="56" y="102">semantics</text>
+  <text class="mono" x="56" y="124">inlineOrigin blockOrigin</text>
+  <text class="mono" x="56" y="142">fontSize color.{r,g,b,a}</text>
+  <text class="mono" x="56" y="160">outline? shadow?</text>
+  <text class="mono dim" x="56" y="178">transformIndex stableGlyphId</text>
+  <rect class="box js" x="40" y="204" width="218" height="112"/>
+  <text class="label" x="56" y="226">binding</text>
+  <text class="sub" x="56" y="244">from the font's raster records</text>
+  <text class="mono cyan" x="56" y="266">bearingX bearingY width</text>
+  <text class="mono cyan" x="56" y="284">height uvOrigin uvSize</text>
+  <text class="mono cyan" x="56" y="302">page …</text>
+
+  <rect class="lane" x="298" y="40" width="392" height="296" rx="10"/>
+  <text class="lanename" x="314" y="62">PROGRAM · COMPILED ONCE, RUN PER GLYPH</text>
+  <rect class="box rs" x="314" y="80" width="360" height="236"/>
+  <text class="label" x="330" y="104">compile({ buffer: [lane, lane, …] })</text>
+  <text class="sub" x="330" y="124">straight-line f32 · u32 ops, ≤ 32 registers</text>
+  <text class="mono" x="330" y="154">rect: [</text>
+  <text class="mono" x="346" y="172">add(inlineOrigin, mul(bearingX, fontSize)),</text>
+  <text class="mono" x="346" y="190">sub(blockOrigin, mul(bearingY, fontSize)),</text>
+  <text class="mono" x="346" y="208">mul(width, fontSize), mul(height, fontSize) ]</text>
+  <text class="mono" x="330" y="236">uvRect: [uvOriginX, uvOriginY, uvSizeX, uvSizeY]</text>
+  <text class="mono" x="330" y="254">color:  [color.red, .green, .blue, .alpha]</text>
+  <text class="mono" x="330" y="272">page:   [shadow.x, shadow.y, outline.width, page]</text>
+  <text class="sub" x="330" y="300">every lane of every buffer written exactly once</text>
+
+  <rect class="lane" x="714" y="40" width="222" height="296" rx="10"/>
+  <text class="lanename" x="730" y="62">OUTPUT · YOUR BUFFERS</text>
+  <g transform="translate(730 80)">
+    <text class="mono violet" x="0" y="14">rect  f32 × 4</text>
+    <rect class="cell" x="0" y="22" width="46" height="22"/><rect class="cell" x="46" y="22" width="46" height="22"/><rect class="cell" x="92" y="22" width="46" height="22"/><rect class="cell" x="138" y="22" width="46" height="22"/>
+    <text class="mono dim" x="8" y="37">x</text><text class="mono dim" x="54" y="37">y</text><text class="mono dim" x="100" y="37">w</text><text class="mono dim" x="146" y="37">h</text>
+    <text class="mono violet" x="0" y="72">uvRect  f32 × 4</text>
+    <rect class="cell" x="0" y="80" width="46" height="22"/><rect class="cell" x="46" y="80" width="46" height="22"/><rect class="cell" x="92" y="80" width="46" height="22"/><rect class="cell" x="138" y="80" width="46" height="22"/>
+    <text class="mono violet" x="0" y="130">page  f32 × 4</text>
+    <rect class="cell" x="0" y="138" width="46" height="22"/><rect class="cell" x="46" y="138" width="46" height="22"/><rect class="cell" x="92" y="138" width="46" height="22"/><rect class="cell" x="138" y="138" width="46" height="22"/>
+    <text class="sub" x="0" y="190">one record per instance,</text>
+    <text class="sub" x="0" y="208">delivered as patches,</text>
+    <text class="sub" x="0" y="226">read in the shader by</text>
+    <text class="mono green" x="0" y="248">storage(b).element(i)</text>
+  </g>
+
+  <path class="edge" d="M 258 132 L 314 132"/>
+  <path class="edge" d="M 258 260 L 314 260"/>
+  <path class="edge hot" d="M 674 198 L 730 198"/>
+</svg>

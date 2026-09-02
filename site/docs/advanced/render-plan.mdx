@@ -1,0 +1,141 @@
+---
+title: Reading the render plan
+description: What the planner publishes on every accepted update — one borrowed byte range with a header and six tables — how draws are batched, when a plan is a checkpoint, why it expires, and the sequence a renderer follows to consume it.
+nav: 56
+sourcecode: packages/glyph/src/internal/plan-view.ts
+---
+
+<Intro>
+  Every accepted update produces one publication: a header and six tables, laid out in Wasm memory and lent to the
+  renderer for the duration of one synchronous call. Draws point at primitives, buffers, and resources; patches
+  carry byte edits into buffers the renderer owns; retirements say what to drop. Read it all, copy what you keep,
+  return — and the lease is gone.
+</Intro>
+
+<Keypoints title="What to know">
+  <KeypointsItem>The publication is borrowed. Its bytes alias Wasm memory and expire the moment `accept` returns or the engine answers anything else.</KeypointsItem>
+  <KeypointsItem>A checkpoint replaces everything; an incremental plan carries only the ranges that changed, as patches.</KeypointsItem>
+  <KeypointsItem>Draws are already in paint order. Batching is decided by the codec's masks, not by the renderer.</KeypointsItem>
+  <KeypointsItem>Consumption is a transaction: decode stages, commit applies, discard cleans up, and settle records the revision either way.</KeypointsItem>
+</Keypoints>
+
+![A 144-byte header, then six tables — resources, buffers, patches, primitives, draws, retirements — and the patch payloads; draws point at primitives, buffers and resources, and patches carry byte edits into buffers the renderer owns.](/examples/diagrams/publication-anatomy.svg)
+
+## The header
+
+144 bytes, 16-byte aligned. The reader validates `abiVersion`, `byteLength`, and `status` before anything else is
+touched, and checks every table offset for alignment and bounds.
+
+| Field | Meaning |
+| --- | --- |
+| `flags` | bit 1 is `checkpoint`: this plan replaces every buffer and resource |
+| `engineRevision`, `planRevision` | both advance by one per accepted update |
+| `requiredBaseRevision` | 0 on a checkpoint, otherwise the plan revision this one patches |
+| `publicationGeneration` | a fence the renderer acknowledges on its next request |
+| `outputSlot` | which of the two output slots this answer lives in |
+| `codecHandle`, `capabilitySet`, `codecFingerprint` | the codec this plan was compiled against |
+| `…Offset`, `…Count` × 6 | where each table starts and how many records it holds; a count of 0 means an offset of 0 |
+| `faultParagraphId`, `faultStyleId` | which paragraph or style a rejection blames; 0 means none |
+
+## The tables
+
+| Table | Stride | One record per | Fields that matter |
+| --- | --- | --- | --- |
+| `resources` | 40 | `(resourceId, generation)` a glyph draw uses | `techniqueId`, `resourceKind`, `action` (create 1, update 2, retain 3), `referenceId` |
+| `buffers` | 36 | program buffer per storage batch | `id`, `generation`, `programId`, `codecBufferId` (`0xffff` is the order buffer), `scalarType`, `vectorWidth`, `strategy`, `liveRecords`, `capacityRecords`, `byteLength` |
+| `patches` | 36 | byte edit to one buffer | `opcode` (allocate-or-resize 1, write 2, fill 3, copy 4, retire 5), `bufferId`, `bufferGeneration`, `destinationOffset`, `byteLength`, `payloadOffset`, `sourceBufferId`, `sourceOffset`, `fillValue` |
+| `primitives` | 64 | draw span | `kind` (glyph 1, decoration 2), `techniqueId`, `resourceId`, `programId`, `bufferId`, `recordIndex`, `recordCount`, `logicalOrder`, `clipId`, extents |
+| `draws` | 64 | draw span | `programId`, `programVariant`, `materialId`, `clipId`, `depthKey`, `transformId`, `primitiveStart`, `bufferStart`/`Count`, `resourceStart`/`Count`, `orderToken`, `indirectBufferId` |
+| `retirements` | 24 | thing to drop | `kind` (resource 1, buffer 2, slot range 3, output bytes 4), `id`, `generation`, `afterPublicationGeneration` |
+
+A patch's `payloadOffset` is relative to the publication start, so a `write` payload is `bytes(payloadOffset,
+byteLength)` — a view into Wasm memory, valid only until the lease ends. `fill` carries its value inline; `copy`
+names a source buffer and offset. Decoration draws have `resourceCount = 0`. `transformId` is non-zero for a
+root instance with a direct matrix and zero for a batch addressed through the transform table.
+
+## How draws are batched
+
+The planner walks glyphs in logical order. Each glyph joins a **storage batch** keyed by technique, program variant,
+program, and resource — plus material, clip, or depth only when the program's `storageKeyMask` includes that bit. A
+**draw span** extends while the next glyph is in the same batch, occupies the next slot, and agrees on every key in
+the program's `drawKeyMask`; it also ends at 65 535 records.
+
+```
+storage batch key = technique · programVariant · programId · resource(id, generation)   [+ material · clip · depth]
+draw span ends when: batch differs, slots are not contiguous, a drawKeyMask key differs, or 65 535 records
+```
+
+Under `ordered` compositing the `draws` table is already in paint order. Under `independent` compositing spans form
+per batch without the contiguity requirement and the table is sorted by `orderToken` afterwards. `materialId` and
+`transformId` on a draw are zero unless the program's mask splits on them.
+
+## Revisions, checkpoints, and expiry
+
+Each request carries the renderer's `expectedEngineRevision`, `consumedPlanRevision`, and
+`acknowledgedPublicationGeneration`. The engine rejects a request whose engine revision is stale, whose consumed
+revision is ahead of it, or whose acknowledgement is not monotonic. A plan is a **checkpoint** when the renderer has
+never consumed one or when its consumed revision is not the current one: every buffer gets `allocate-or-resize` and
+a full rewrite, every resource is `create`. Otherwise patches cover changed ranges only.
+
+Acknowledging a generation releases the stable slots quarantined behind it; the planner records the accepted
+generation and echoes it on the next frame. A rejected accept leaves every revision untouched, which is how a bad
+frame never corrupts the next one.
+
+The borrow expires when any of these happens: the engine answers another call (its epoch advances), Wasm memory
+grows (`memoryGrew` is true and the old buffer is detached), or the transport is disposed. The planner expires the
+lease in a `finally` right after `accept` returns; every reader call after that throws.
+
+| Data | You may |
+| --- | --- |
+| `patch` payloads | read them during `accept`; copy anything you keep |
+| draw, primitive, buffer, resource scalars | read them during `accept` |
+| `PortableResource` payloads | retain — they come from the compiled font, not from the publication |
+| buffer and resource identities | rely on: interned per `(id, generation)`, stable across frames |
+
+## Consuming one
+
+`glyph.shape()` stages a frame, adopts the publication, and hands it to the root's target. What the target does,
+in order:
+
+```
+source   = projector.source(candidate)        typed views over the six tables
+update   = projector.project(source)          resolve resources, buffers, materials, transforms to your bindings
+prepared = renderer.decode(update)            stage: allocate, read, copy — mutate nothing the host sees
+prepared.commit()                             apply, then settle(committed: true)
+on throw: prepared.discard()                  clean up, then settle(committed: false)
+```
+
+Projection is where the config's callbacks run: every new `(resourceId, generation)` goes through `resolve`, every
+buffer through the schema's `buffer` callback, every patch is bound to the buffer it targets, and retirements drop
+superseded generations. The result, an `update`, has a display list whose kind is `replace` when any table is
+non-empty and `unchanged` when only patches arrived, and whose children each carry `program`, `material`, the
+`buffers` and `resources` they read, `clip`, `depthKey`, `order`, and either an `instances` span list for a batch or a
+`transform` for a root instance.
+
+The three.js executor is the reference consumer:
+
+1. On `replace`, copy the retained maps into a candidate; otherwise mutate in place.
+2. Look up each resource's program by format.
+3. For each buffer, allocate a typed array of `byteLength` and a storage attribute named `_pmndrsGlyph_<bufferId>` with `vectorWidth` as its item size.
+4. Walk `children` in table order: pick `direct` or `indexed` transforms from `transformId`; key buffers by `codecBufferId`; realise a material per span (`glyph` routed by format, or `decoration`); build geometry from the schema; set `instanceCount = recordCount` and `userData.pmndrsGlyphRunStart = recordIndex`; set `renderOrder = base + drawIndex`.
+5. Apply retirements: drop the buffer or resource and any material or texture that referenced it.
+6. Prepare transforms: indexed rows at `transformId × 16` in the shared table, or one matrix per direct draw.
+7. Stage `write`, `fill`, and `copy` patches with merged upload ranges; `allocate-or-resize` and `retire` were handled in step 3.
+8. `commit`: apply the byte edits, upload the ranges, swap the maps, add and remove scene objects, dispose what retired. `discard`: dispose the candidates only.
+9. Every frame afterwards, `syncTransforms` re-uploads only the matrices that changed and never enters Wasm.
+
+## What a consumer must uphold
+
+1. `accept` returns synchronously; a returned promise is an error.
+2. Read every field and copy every payload before `accept` returns; never retain `publication.bytes`.
+3. `decode` stages; `commit` is the only place the host changes; `discard` cleans up; both run once.
+4. The order is fixed: source, project, decode, commit, settle. On a throw: discard, then settle as not committed. Once `commit` began, settlement is the committed branch even if cleanup throws.
+5. Do not call the engine while holding a borrow; any call advances the epoch and voids it.
+6. A `checkpoint` means replace everything; an `unchanged` display list means keep your draws and apply the patches.
+7. Buffer identity is `(id, generation)`; a retirement for an older generation must not touch a newer one; `codecBufferId === 0xffff` is the engine's logical-to-physical order buffer for stable-indirect programs.
+8. `recordIndex` is the first physical record of a span and `recordCount` its instance count, in the buffers the draw names.
+9. Iterate `children` in table order; `order` and `depthKey` are already resolved.
+10. Register technique shader variants before an engine snapshots the registry.
+
+Everything above is what the three.js config does in `engine-plan-target.ts`; the example renderer in the
+repository does the same with a draw list, and it is the shortest complete reading of a publication.

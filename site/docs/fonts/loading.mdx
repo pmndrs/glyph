@@ -122,16 +122,36 @@ still follows the same isLoaded/use path. Supplying `fontFaces` adds a local Sus
 
 ## Sources
 
-| Source | Meaning |
+| Source | Resolves to |
 | --- | --- |
-| `{ baked: url \| Request \| bytes }` | a pre-baked `.font.glb` |
-| `{ source: url \| bytes, runtimeBake }` | a TTF/OTF baked on the client — see Runtime baking |
+| `'/fonts/inter.font.glb'` or a `URL` ending in `.glb` | baked only; a miss is `BAKED_FONT_MISSING` |
+| `'/fonts/Inter.ttf'` or any other URL | the source font, and a probe for the sibling `Inter.font.glb`; a missing sibling warns in development and bakes at runtime |
+| `{ baked: url \| Request \| bytes }` | baked only |
+| `{ source: url \| bytes, baked: null }` | the source with no sibling probe |
+| `{ source, runtimeBake, unicodeRanges? }` | baked on the client, optionally subset first — see [Runtime baking](/docs/fonts/runtime-baking) |
 | `Blob` | an in-memory font |
 | `SerializedFontFace` | a face cloned from another realm — see below |
 
-{/* prose: one internal content-addressed graph backs every face and handle; two declarations over the same URL share
-one fetched, parsed core artifact and acquire only the raster artifacts their selected formats request. Family names
-are aliases, never cache keys. */}
+One content-addressed graph backs every face and handle: two declarations over the same URL share one fetched
+artifact and acquire only the raster artifacts their selected formats request. Family names are aliases, never
+cache keys.
+
+## Errors
+
+| Code | When |
+| --- | --- |
+| `BAKED_FONT_MISSING` | a baked-only source answered 404 or 410 |
+| `BAKED_FONT_FETCH` | any other HTTP failure |
+| `BAKED_FONT_INVALID`, `BAKED_FONT_INCOMPATIBLE` | the bytes are not a `PMNDRS_font` GLB, or its version pins do not match this runtime |
+| `BAKED_FONT_RESOURCE_LIMIT` | over 64 MiB, more than 4096 buffer views, or more than 256 rasters |
+| `FONT_FACE_FORMAT_UNAVAILABLE` | the declared format and options name a raster key the file does not carry |
+| `FONT_FACE_FORMAT_REQUIRED` | `load()` found no declared or decodable format |
+| `FONT_FACE_FORMAT_NOT_LOADED` | imperative `createText` on a selection that has not loaded |
+| `RUNTIME_BAKER_UNAVAILABLE` | a source font needed baking and the runtime baker could not be imported |
+
+`face.load()` loads every declared format and every format the file advertises for which a decoder module has been
+imported; `face.slug.load()` loads one. Decoding rechecks each raster's identity, validates the record table and
+its KTX2 pages, and enforces a 256 MiB texture budget. GPU upload happens on first draw.
 
 ## Across realms
 

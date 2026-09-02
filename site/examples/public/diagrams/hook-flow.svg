@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 220" width="960" height="220" role="img" aria-labelledby="t d">
+  <title id="t">What a font hook does</title>
+  <desc id="d">useMsdf turns a source into a FontFace cached per handle; if the selection is loaded it returns the mounted Font lease, otherwise it suspends on the load and returns the lease when it resolves.</desc>
+  <defs>
+    <style>
+      .bg { fill: #07080b; }
+      .lane { fill: #0e1118; stroke: #1c2130; stroke-width: 1; }
+      .box { fill: #141927; stroke: #2a3247; stroke-width: 1.25; rx: 8; }
+      .box.js { stroke: #70d6ff; } .box.rs { stroke: #ffd166; } .box.out { stroke: #a855f7; } .box.gpu { stroke: #34d399; } .box.dim { stroke: #2a3247; }
+      .label { font: 600 16px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .sub { font: 400 13px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; }
+      .lanename { font: 600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; letter-spacing: 0.12em; }
+      .mono { font: 500 12.5px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; fill: #ffd166; }
+      .mono.cyan { fill: #70d6ff; } .mono.green { fill: #34d399; }
+      .edge { fill: none; stroke: #4a5570; stroke-width: 1.5; marker-end: url(#arrow); }
+      .edge.hot { stroke: #a855f7; marker-end: url(#arrowv); } .edge.fast { stroke: #34d399; marker-end: url(#arrowg); } .edge.dash { stroke-dasharray: 5 4; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5570"/></marker>
+    <marker id="arrowv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7"/></marker>
+    <marker id="arrowg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/></marker>
+  </defs>
+  <rect class="bg" width="960" height="220" rx="14"/>
+  <rect class="box js" x="40" y="86" width="190" height="48"/><text class="label" x="56" y="108">useMsdf(src)</text><text class="sub" x="56" y="126">in a component</text>
+  <rect class="box js" x="280" y="86" width="230" height="48"/><text class="label" x="296" y="108">glyph.fontFace(src)</text><text class="sub" x="296" y="126">cached per handle and format</text>
+  <rect class="box dim" x="560" y="86" width="150" height="48"/><text class="label" x="576" y="108">isLoaded()?</text><text class="sub" x="576" y="126">selection state</text>
+  <rect class="box gpu" x="760" y="36" width="170" height="48"/><text class="label" x="776" y="58">Font lease</text><text class="sub" x="776" y="76">mounted, immutable</text>
+  <rect class="box out" x="760" y="136" width="170" height="48"/><text class="label" x="776" y="158">use(load())</text><text class="sub" x="776" y="176">suspends, then the lease</text>
+  <path class="edge" d="M 230 110 L 280 110"/><path class="edge" d="M 510 110 L 560 110"/>
+  <path class="edge fast" d="M 710 110 C 735 110, 735 60, 760 60"/><text class="mono green" x="720" y="80">yes</text>
+  <path class="edge hot" d="M 710 110 C 735 110, 735 160, 760 160"/><text class="mono" x="722" y="152">no</text>
+  <path class="edge dash" d="M 845 136 L 845 84"/>
+</svg>

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" role="img" aria-labelledby="t d">
+  <title id="t">The parts of a GlyphConfig</title>
+  <desc id="d">The engine sits in the middle. A config gives it a schema that names the renderer's objects, fonts it may bind, an encode function that returns the codec, a resolve function that leases resources, a renderer that decodes publications, a root recipe, and optional command capacities. Each part is called at a known moment.</desc>
+  <defs>
+    <style>
+      .bg { fill: #07080b; }
+      .core { fill: #141927; stroke: #ffd166; stroke-width: 1.5; rx: 12; }
+      .box { fill: #0e1118; stroke: #2a3247; stroke-width: 1.25; rx: 8; }
+      .box.js { stroke: #70d6ff; } .box.out { stroke: #a855f7; } .box.gpu { stroke: #34d399; } .box.dim { stroke: #2a3247; stroke-dasharray: 4 3; }
+      .label { font: 600 15px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .sub { font: 400 12.5px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; }
+      .when { font: 500 11.5px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; fill: #ffd166; }
+      .edge { fill: none; stroke: #4a5570; stroke-width: 1.25; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5570"/></marker>
+  </defs>
+  <rect class="bg" width="960" height="400" rx="14"/>
+
+  <rect class="core" x="350" y="150" width="210" height="100"/>
+  <text class="label" x="366" y="178">Engine · handle</text>
+  <text class="sub" x="366" y="198">shaper, layout, planner in Wasm</text>
+  <text class="sub" x="366" y="216">one codec, N roots, one publication</text>
+  <text class="sub" x="366" y="234">per root per shape()</text>
+
+  <rect class="box js" x="30" y="40" width="270" height="72"/>
+  <text class="label" x="46" y="62">schema</text>
+  <text class="sub" x="46" y="80">names your objects: drawRoot, program, buffer,</text>
+  <text class="sub" x="46" y="96">material, transform, batch, instance, instanceSpan</text>
+  <text class="when" x="56" y="106" dy="-72" opacity="0"/>
+
+  <rect class="box js" x="30" y="164" width="270" height="72"/>
+  <text class="label" x="46" y="186">fonts</text>
+  <text class="sub" x="46" y="204">the formats a handle may bind, and its default</text>
+  <text class="when" x="46" y="224">read at glyph.handle()</text>
+
+  <rect class="box js" x="30" y="288" width="270" height="72"/>
+  <text class="label" x="46" y="310">encode(ctx) → Codec</text>
+  <text class="sub" x="46" y="328">the descriptor naming your programs and buffers</text>
+  <text class="when" x="46" y="348">once per handle, compiled into Wasm</text>
+
+  <rect class="box out" x="610" y="40" width="320" height="72"/>
+  <text class="label" x="626" y="62">resolve(ctx) → lease</text>
+  <text class="sub" x="626" y="80">a portable payload becomes your GPU resource</text>
+  <text class="when" x="626" y="100">per new (resource, generation)</text>
+
+  <rect class="box out" x="610" y="164" width="320" height="72"/>
+  <text class="label" x="626" y="186">renderer(ctx) → { decode, sync, dispose }</text>
+  <text class="sub" x="626" y="204">decode stages, commit applies, discard cleans up</text>
+  <text class="when" x="626" y="224">once per root; decode once per publication</text>
+
+  <rect class="box gpu" x="610" y="288" width="320" height="72"/>
+  <text class="label" x="626" y="310">root.create(ctx)</text>
+  <text class="sub" x="626" y="328">your root; call ctx.create(extension, options) once</text>
+  <text class="when" x="626" y="348">anonymous root eagerly, named on handle(name)</text>
+
+  <rect class="box dim" x="350" y="300" width="210" height="60"/>
+  <text class="label" x="366" y="322">commands</text>
+  <text class="sub" x="366" y="340">optional capacities: limits, request</text>
+  <text class="sub" x="366" y="354">and result bytes, text units</text>
+
+  <path class="edge" d="M 300 76 C 325 76, 325 172, 350 172"/>
+  <path class="edge" d="M 300 200 L 350 200"/>
+  <path class="edge" d="M 300 324 C 325 324, 325 228, 350 228"/>
+  <path class="edge" d="M 560 172 C 585 172, 585 76, 610 76"/>
+  <path class="edge" d="M 560 200 L 610 200"/>
+  <path class="edge" d="M 560 228 C 585 228, 585 324, 610 324"/>
+  <path class="edge" d="M 455 300 L 455 250"/>
+</svg>

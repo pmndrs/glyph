@@ -1,0 +1,192 @@
+---
+title: Building a codec
+description: A codec is the contract between the planner and your shader — the per-instance buffers, the lanes they carry, and the program that fills each lane from the engine's semantics and the font's raster records.
+nav: 55
+sourcecode: packages/glyph/src/config/codec-program.ts
+---
+
+<Intro>
+  The planner does not know what a vertex shader wants. It knows, per glyph, where the glyph sits, how big it is,
+  what colour and effects it carries, and what the font's raster record says about it. A codec is the small program
+  that turns those facts into the exact lanes your shader reads — and the declaration of which buffers those lanes
+  live in. You write it once per technique; the planner runs it for every glyph, on every accepted update, and
+  ships the results to you as patches.
+</Intro>
+
+<Keypoints title="What to know">
+  <KeypointsItem>A technique schema declares the buffers and their lanes; a program fills every lane exactly once from semantics and bindings.</KeypointsItem>
+  <KeypointsItem>The program is straight-line arithmetic — `add`, `sub`, `mul`, constants, `toF32` — compiled to at most 32 registers and 128 operations.</KeypointsItem>
+  <KeypointsItem>Ids are hashes of names. Buffer ids are 16-bit, technique and program ids 32-bit, all derived from the strings you pass.</KeypointsItem>
+  <KeypointsItem>The `storageKeyMask` and `drawKeyMask` a program declares decide where the planner splits batches and draws.</KeypointsItem>
+</Keypoints>
+
+![Semantics and binding values enter a compiled program; the planner runs it per glyph to fill each buffer's lanes; the lanes arrive as patches into buffers you own and your shader reads by instance.](/examples/diagrams/codec-lanes.svg)
+
+## Step 1 — declare the technique
+
+```ts
+import { defineTechniqueSchema, id } from '@pmndrs/glyph';
+
+const msdfSchema = defineTechniqueSchema({
+  technique: 'pmndrs.msdf',            // the wire identity; `pmndrs.` is reserved for built-ins
+  scope: 'glyph',                      // one binding row per glyph ('strike' and 'resource' also exist)
+  binding: {                           // values the font's raster records supply per row
+    f32: ['bearingX', 'bearingY', 'width', 'height', 'uvOriginX', 'uvOriginY', 'uvSizeX', 'uvSizeY', 'uvMaxX', 'uvMaxY'],
+    u32: ['page'],
+  },
+  buffers: {                           // what the shader will read, one record per instance
+    rect:        { id: id.buffer('msdf/rect'),        scalar: 'f32', lanes: ['x', 'y', 'w', 'h'] },
+    uvRect:      { id: id.buffer('msdf/uvRect'),      scalar: 'f32', lanes: ['x', 'y', 'w', 'h'] },
+    uvBounds:    { id: id.buffer('msdf/uvBounds'),    scalar: 'f32', lanes: ['x0', 'y0', 'x1', 'y1'] },
+    color:       { id: id.buffer('msdf/color'),       scalar: 'f32', lanes: ['r', 'g', 'b', 'a'] },
+    effectColor: { id: id.buffer('msdf/effectColor'), scalar: 'u32', lanes: ['outline', 'shadow'] },
+    page:        { id: id.buffer('msdf/page'),        scalar: 'f32', lanes: ['shadowX', 'shadowY', 'outlineWidth', 'page'] },
+  },
+  resources: { atlas: 'texture-array' }, // named GPU resources the draw binds
+  render: { geometry: { kind: 'synthetic-quad' } },
+});
+```
+
+| Field | Rule |
+| --- | --- |
+| `technique` | a string; `id.technique()` hashes it to the 32-bit wire id; must be unique in a descriptor |
+| `scope` | `'glyph'`, `'strike'`, or `'resource'` — how many binding rows the font supplies |
+| `binding` | names the raster record fields the program may read, typed `f32` or `u32` |
+| `buffers` | each has an `id` from `id.buffer(name)`, one `scalar`, and 1 to 4 named lanes; the lane count is the vector width |
+| `resources` | `buffer`, `texture`, `texture-array`, `geometry`, or `group`, by name |
+| `render` | geometry kind; `synthetic-quad` is the default |
+| `glyphOrigin` | optionally names the `f32` buffer whose first two lanes are the glyph origin, for measurement queries |
+
+## Step 2 — write the program
+
+`techniqueProgram(schema, { system, textEffects? })` hands you three things: `semantics`, what the engine knows per
+glyph; `binding`, the typed record values you named; and `compile`, which takes one tuple per buffer.
+
+```ts
+import { techniqueProgram, f32, u32 } from '@pmndrs/glyph';
+
+function msdfBody(system: CodecSystemBuffers) {
+  const p = techniqueProgram(msdfSchema, { textEffects: ['outline', 'shadow'], system });
+  const { inlineOrigin, blockOrigin, fontSize, color, outline, shadow } = p.semantics;
+  const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, uvMaxX, uvMaxY, page } = p.binding;
+
+  return p.compile({
+    rect: [
+      f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
+      f32.sub(blockOrigin, f32.mul(bearingY, fontSize)),
+      f32.mul(width, fontSize),
+      f32.mul(height, fontSize),
+    ],
+    uvRect: [uvOriginX, uvOriginY, uvSizeX, uvSizeY],
+    uvBounds: [uvOriginX, uvOriginY, uvMaxX, uvMaxY],
+    color: [color.red, color.green, color.blue, color.alpha],
+    effectColor: [outline.color, shadow.color],
+    page: [shadow.offsetXEm, shadow.offsetYEm, outline.widthEm, u32.toF32(page)],
+  });
+}
+```
+
+| Semantic | Type | Meaning |
+| --- | --- | --- |
+| `inlineOrigin`, `blockOrigin` | `f32` | the glyph's pen position in paragraph-local units |
+| `fontSize` | `f32` | resolved size, so `binding × fontSize` is a length in paragraph units |
+| `color.{red,green,blue,alpha}` | `f32` | linear fill colour with opacity applied |
+| `outline.{color,widthEm}`, `shadow.{color,offsetXEm,offsetYEm}` | `u32`, `f32` | present only when `textEffects` lists them; colours are packed sRGB |
+| `inverseFontSize` | `f32` | present when asked for; Slug uses it |
+| `transformIndex`, `stableGlyphId` | `u32` | system lanes; `compile` stores them for you |
+
+Rules `compile` enforces: exactly `lanes.length` values per buffer, of the buffer's scalar; every lane of every buffer
+written exactly once; one `compile` per builder. The system lanes — `stableGlyphId` always, `transformIndex` when
+the config runs in `indexed` transform mode — are appended to your stores automatically.
+
+## Step 3 — make it a program
+
+```ts
+import { createCodecProgram } from '@pmndrs/glyph';
+
+const program = {
+  ...createCodecProgram(
+    id.technique('pmndrs.msdf'),
+    id.program('pmndrs.msdf', 'my-renderer'),      // technique, namespace, optional variant
+    msdfBody(system),
+    [...schemaCodecBuffers(msdfSchema), stableGlyphIdBuffer(), transformIndexBuffer()],
+    { transformMode: 'indexed', allocationMode: 'ordered', partitionBy: ['material', 'clip', 'depth'] },
+  ),
+  primitiveKind: 'glyph',   // or 'decoration'
+  resourceKindMask: 1,      // 0 is legal only for decoration programs
+};
+```
+
+What comes back is frozen: the two ids, the input counts and operations, the buffer snapshot, and two masks.
+
+| Mask | Bits | Effect |
+| --- | --- | --- |
+| `storageKeyMask` | technique, program, resource | which keys separate **storage batches** — the buffers glyphs are packed into |
+| `drawKeyMask` | the above plus `partitionBy` bits (material, clip, depth), order, and transform in `direct` mode | which keys end a **draw span** |
+
+Bit values on the wire: technique 1, resource 2, program 4, material 8, clip 16, depth 32, order 64, transform 128.
+
+A `CodecBuffer` may also state `alignment`, `stride`, `usage` (`storage | copyDst`, and `copyDst` is required), and a
+`capacityClass`. Every buffer is delivered as bytes, so the renderer decides the GPU usage flags.
+
+## Step 4 — put programs in a descriptor
+
+Programs join a descriptor with a capability set, are preflighted by `compileCodec`, and are registered with the
+engine per handle. The limits the validator enforces:
+
+| Limit | Value |
+| --- | --- |
+| capability sets per descriptor | 8 |
+| programs per descriptor | 32 |
+| buffers per program | 16 |
+| operations per program | 128 |
+| registers | 32, allocated for you |
+| `(capabilitySet, technique, variant)` | unique per descriptor |
+
+The three.js config assembles bitmap, MSDF, Slug, and decoration programs this way, with `createRasterCodecProgram`
+wrapping steps 2 and 3 for a raster format and `codecSystemBuffers` adding `transformIndex` only in `indexed` mode.
+
+## The decoration program
+
+A decoration is the smallest useful codec: a rectangle and a packed colour, no font resource.
+
+```ts
+const decorationSchema = defineTechniqueSchema({
+  technique: 'pmndrs.decoration',
+  scope: 'glyph',
+  binding: { u32: ['color', 'flags'] },
+  buffers: {
+    rect:   { id: id.buffer('glyph-three/decoration/rect'),   scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    packed: { id: id.buffer('glyph-three/decoration/packed'), scalar: 'u32', lanes: ['color', 'flags'] },
+  },
+});
+
+const p = techniqueProgram(decorationSchema, { system });
+const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
+const body = p.compile({
+  rect: [inlineOrigin, blockOrigin, fontSize, color.red], // for decorations the gather lanes 0–3 already are the rect
+  packed: [p.binding.color, p.binding.flags],
+});
+const decoration = {
+  ...createCodecProgram(techniqueId, programId, body, buffers, { transformMode, allocationMode, partitionBy: ['material', 'depth'] }),
+  primitiveKind: 'decoration',
+  resourceKindMask: 0,
+};
+```
+
+## How the lanes reach your shader
+
+The output side is the render plan, described on [Reading the render plan](/docs/advanced/render-plan). In one line
+each: every program buffer appears in the plan's `buffers` table per storage batch, identified by `(id, generation)`
+and sized in bytes; its contents arrive as `patches` whose payloads are exactly the lanes your program wrote; each
+`draw` names the buffers it reads and a span of records, `recordIndex` and `recordCount`, which is the instance range.
+
+The three.js renderer binds every buffer as a `StorageInstancedBufferAttribute` named `_pmndrsGlyph_<bufferId>`,
+with the buffer's lane count as its item size, and reads lanes in TSL as
+`storage(attribute, 'vec4', count).element(instanceIndex + runStart)`, where `runStart` is the span's
+`recordIndex`. Under `indexed` transforms the `transformIndex` lane selects four `vec4` columns from a shared
+`_pmndrsGlyphTransforms` table; under `direct` transforms each draw carries its own matrix.
+
+> [!NOTE]
+> Nothing in a codec is three.js-specific. The same schema and program feed the TypeGPU subpath, which is why the
+> raster formats publish their schemas from `@pmndrs/glyph/raster/*` and the renderers only add shaders.

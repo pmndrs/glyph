@@ -37,13 +37,7 @@ useSlug(source)                        // Font<typeof slug>
 
 ## What a hook does
 
-```mermaid
-flowchart LR
-  A[useMsdf source] --> B[glyph.fontFace source, format — cached per handle]
-  B --> C{selection.isLoaded?}
-  C -->|yes| D[return the mounted Font lease]
-  C -->|no| E["use(selection.load())"] --> D
-```
+![What a font hook does: the source becomes a FontFace cached per handle; a loaded selection returns the mounted Font lease, otherwise the hook suspends on the load.](/examples/diagrams/hook-flow.svg)
 
 {/* prose: the declaration is cached per handle by source + format; the mounted component owns an independent Font
 lease; no second cache exists beside Glyph's own resource graph. */}

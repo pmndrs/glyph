@@ -11,14 +11,7 @@ sourcecode: packages/glyph/src/text-properties.ts
   box can change without restating the rule.
 </Intro>
 
-```mermaid
-flowchart LR
-  S[style · inherited] --> P((paragraph))
-  L[layout · flow policy] --> P
-  C[constraints · parent box] --> P
-  P --> M[measure]
-  P --> D[draw]
-```
+![What a paragraph is made of: inherited style, the paragraph's layout policy, and the constraints its parent gives it meet in one paragraph that can be measured and drawn.](/examples/diagrams/paragraph-model.svg)
 
 ```tsx
 <Text
