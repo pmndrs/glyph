@@ -13,6 +13,10 @@ When a review includes complexity ceilings, metric-driven refactoring, or type-e
 [complexity and type-integrity guide](references/complexity-and-type-integrity.md). It defines the repository thresholds,
 measurement limits, anti-gaming rules, and current evidence-led refactor candidates.
 
+When a review adds, removes, consolidates, or evaluates tests, also read the
+[test portfolio guide](references/test-portfolio.md). It defines how to assign one authoritative test to each product
+invariant without deleting focused trust-boundary, failure, type-contract, or hot-path evidence.
+
 ## 1. Establish the baseline
 
 1. Read repository instructions, canonical plans, package knowledge, ADRs, and recent change logs.
