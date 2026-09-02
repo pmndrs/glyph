@@ -60,10 +60,12 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       height: 192,
     });
     try {
-      const initial = text.publish();
+      glyph.shape();
+      const initial = handle.drawList;
       const initialPixels = await renderer.readPixels();
       text.update({ text: 'Updated WebGPU', color: '#ff40a0' });
-      const updated = text.publish();
+      glyph.shape();
+      const updated = handle.drawList;
       const updatedPixels = await renderer.readPixels();
       gpuDevice.destroy();
       text.dispose();
@@ -81,13 +83,15 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
         width: 768,
         height: 192,
       });
-      const recovered = text.publish();
+      glyph.shape();
+      const recovered = handle.drawList;
       const recoveredPixels = await renderer.readPixels();
       const submissionSamples: number[] = [];
       for (let index = 0; index < SUBMISSION_WARMUP + SUBMISSION_SAMPLES; index += 1) {
         text.update({ text: index % 2 === 0 ? 'Pipeline WebGPU' : 'Updated WebGPU' });
         const started = performance.now();
-        const sampled = text.publish();
+        glyph.shape();
+        const sampled = handle.drawList;
         const duration = performance.now() - started;
         if (sampled.draws.length === 0) throw new Error('the TypeGPU submission benchmark produced no draw');
         if (index >= SUBMISSION_WARMUP) submissionSamples.push(duration);
@@ -97,11 +101,11 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       if (submissionsBeforeIdle !== 1 + SUBMISSION_WARMUP + SUBMISSION_SAMPLES) {
         throw new Error('the TypeGPU renderer lab did not submit every measured frame');
       }
-      text.publish();
+      glyph.shape();
       const idleGpuSubmissions = renderer.submittedPasses - submissionsBeforeIdle;
       const submissionsBeforeDispose = renderer.submittedPasses;
       text.dispose();
-      handle.publish();
+      glyph.shape();
       textDisposed = true;
       const clearedPixels = await renderer.readPixels();
       const report = Object.freeze({

@@ -245,6 +245,11 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
         const selected = context.create(root, {
           boundary: root.boundary(options.material),
           defaultRenderer: root.renderer,
+          shape: {
+            prepare: () => root.prepareShape(),
+            accepted: () => root.acceptShape(),
+            rejected: (error) => root.rejectShape(error),
+          },
           dispose: () => root.disposeHost(),
         });
         root.bindPublicRoot(selected);

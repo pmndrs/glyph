@@ -412,6 +412,21 @@ interface PendingPublication {
   readonly checkpointGeneration: number;
 }
 
+interface StagedBatchPublication {
+  readonly checkpointGeneration: number;
+  readonly semanticViewMask: number;
+}
+
+/** @internal One retained synchronous planner staged for the engine-wide shape batch. */
+export interface StagedRenderPlanner {
+  readonly plannerId: number;
+  readonly requestLength: number;
+  adopt(resultPointer: number, memoryBuffer: ArrayBuffer): void;
+  consume(): PlanAcceptance;
+  settle(): void;
+  discard(): void;
+}
+
 const textStates = new WeakMap<object, Readonly<{ planner: RenderPlannerImpl; state: RetainedTextState }>>();
 
 /** @internal Constructed only after GlyphHandleState validates handle ownership. */
@@ -428,6 +443,22 @@ export function createMeasurementPlanner(
   options: MeasurementPlannerOptions,
 ): MeasurementPlanner {
   return new RenderPlannerImpl(handleState, options, true);
+}
+
+/** @internal Schedule callbacks for semantic mutations on one package-created renderer planner. */
+export function observeRenderPlannerDirty(planner: RenderPlanner, listener: () => void): () => void {
+  if (!(planner instanceof RenderPlannerImpl)) throw new TypeError('render planner was not created by this package');
+  return planner._observeDirty(listener);
+}
+
+/** @internal Stage one synchronous root without crossing into Wasm. */
+export function stageRenderPlanner(
+  planner: RenderPlanner,
+  options?: RenderPlannerPublishOptions,
+  force = false,
+): StagedRenderPlanner | undefined {
+  if (!(planner instanceof RenderPlannerImpl)) throw new TypeError('render planner was not created by this package');
+  return planner._stageBatch(normalizePublishOptions(options), force);
 }
 
 class RenderPlannerImpl {
@@ -463,6 +494,11 @@ class RenderPlannerImpl {
   #textCapacity: number;
   #pending = false;
   #disposed = false;
+  #stagedBatch: StagedBatchPublication | undefined;
+  #stagedRequestLength = 0;
+  #stagedPublication: PendingPublication | undefined;
+  #stagedAcceptance: PendingPublication | undefined;
+  #dirtyListener: (() => void) | undefined;
 
   constructor(
     handleState: GlyphHandleState,
@@ -501,6 +537,7 @@ class RenderPlannerImpl {
     const control = new TargetControlState(() => {
       this.#assertActive();
       this.#checkpointGeneration = checkedNextCheckpointGeneration(this.#checkpointGeneration);
+      this.#dirtyListener?.();
     });
     try {
       const capabilitySet =
@@ -583,6 +620,7 @@ class RenderPlannerImpl {
     this.#texts.add(state);
     this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
     this.#nextTextOrdinal = nextOrdinal;
+    this.#dirtyListener?.();
     return text;
   }
 
@@ -619,6 +657,7 @@ class RenderPlannerImpl {
     if (previousOrder !== nextOrder) {
       this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
     }
+    this.#dirtyListener?.();
   }
 
   /** @internal */
@@ -678,12 +717,102 @@ class RenderPlannerImpl {
     state.removed = true;
     state.dirty = true;
     this.#removed.add(state);
+    this.#dirtyListener?.();
+  }
+
+  /** @internal */
+  _observeDirty(listener: () => void): () => void {
+    this.#assertActive();
+    if (typeof listener !== 'function') throw new TypeError('render planner dirty listener must be a function');
+    if (this.#dirtyListener !== undefined) throw new Error('render planner already has a dirty listener');
+    this.#dirtyListener = listener;
+    if (this.#isDirty()) listener();
+    return () => {
+      if (this.#dirtyListener === listener) this.#dirtyListener = undefined;
+    };
+  }
+
+  /** @internal */
+  _stageBatch(options: NormalizedPublishOptions, force: boolean): StagedRenderPlanner | undefined {
+    this.#assertMutable();
+    if (this.#target === undefined) throw new Error('measurement-only planners cannot publish render plans');
+    if (this.#target.delivery !== 'borrowed') {
+      throw new TypeError('glyph.shape() requires a synchronous borrowed renderer target');
+    }
+    if (this.#stagedBatch !== undefined) throw new Error('render planner is already staged');
+    if (!force && !this.#isDirty()) return undefined;
+    this.#ensureTextCapacity();
+    const checkpointGeneration = this.#checkpointGeneration;
+    const frame = this.#compileFrame(options, checkpointGeneration);
+    this.#stagedRequestLength = this.#transport.stageUpdate(frame);
+    this.#stagedBatch = { checkpointGeneration, semanticViewMask: options.semanticViewMask };
+    return this;
+  }
+
+  get plannerId(): number {
+    if (this.#stagedBatch === undefined) throw new Error('render planner is not staged');
+    return this.#transport.handle;
+  }
+
+  get requestLength(): number {
+    if (this.#stagedBatch === undefined) throw new Error('render planner is not staged');
+    return this.#stagedRequestLength;
+  }
+
+  adopt(resultPointer: number, memoryBuffer: ArrayBuffer): void {
+    const staged = this.#stagedBatch;
+    if (staged === undefined) throw new Error('render planner is not staged');
+    if (this.#stagedPublication !== undefined) throw new Error('render planner already adopted a staged publication');
+    this.#stagedBatch = undefined;
+    this.#stagedRequestLength = 0;
+    const publication = this.#transport.consumeStagedUpdate(resultPointer, memoryBuffer);
+    this.#engineRevision = publication.engineRevision;
+    this.#cacheSemanticViews(publication, staged.semanticViewMask);
+    this.#commitDesiredState();
+    this.#stagedPublication = { publication, checkpointGeneration: staged.checkpointGeneration };
+  }
+
+  consume(): PlanAcceptance {
+    const pending = this.#stagedPublication;
+    if (pending === undefined) throw new Error('render planner has no adopted staged publication to consume');
+    this.#stagedPublication = undefined;
+    const { publication } = pending;
+    const lease = new BorrowedPlanLease(publication, this.#transport);
+    const candidate = this.#candidate(lease);
+    let result: PlanAcceptance;
+    try {
+      const answer = (this.#target as PlanTarget).accept(candidate, this.#targetController.signal);
+      if (isPromiseLike(answer)) throw new TypeError('a borrowed plan target must answer synchronously');
+      result = assertAcceptance(answer);
+    } finally {
+      lease.expire();
+    }
+    if (result.accepted) this.#stagedAcceptance = pending;
+    return result;
+  }
+
+  settle(): void {
+    const pending = this.#stagedAcceptance;
+    if (pending === undefined) throw new Error('render planner has no accepted staged publication to settle');
+    this.#stagedAcceptance = undefined;
+    this.#accept(pending);
+  }
+
+  discard(): void {
+    this.#stagedPublication = undefined;
+    this.#stagedAcceptance = undefined;
+    if (this.#stagedBatch === undefined) return;
+    this.#stagedBatch = undefined;
+    this.#stagedRequestLength = 0;
+    this.#transport.discardStagedUpdate();
   }
 
   dispose(): void {
     if (this.#disposed) return;
     this.#handleState._assertEngineMutationAllowed();
     this.#disposed = true;
+    this.#dirtyListener = undefined;
+    this.discard();
     this.#targetController.abort(new RenderPlannerDisposedError());
     this.#control?.dispose();
     let failure: unknown;
@@ -1320,6 +1449,14 @@ class RenderPlannerImpl {
   #assertTextQueryable(state: RetainedTextState): void {
     this.#assertMutable();
     if (state.disposed) throw new Error('text engine text has been disposed');
+  }
+
+  #isDirty(): boolean {
+    return (
+      this.#dirtyTextCount !== 0 ||
+      this.#removed.size !== 0 ||
+      this.#checkpointGeneration !== this.#acceptedCheckpointGeneration
+    );
   }
 
   #ensureTextCapacity(): void {

@@ -17,6 +17,7 @@ import {
 } from '../layout.js';
 import { immutableFontSelectionFonts, type FontSelection } from '../loaded-font.js';
 import { FontLoadError } from '../loader.js';
+import { glyph } from '../glyph.js';
 import type { AnyRasterFormat } from '../raster-format.js';
 import { mergePropertyList } from '../property-list.js';
 import type {
@@ -158,6 +159,7 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   #publicRoot: ThreeRoot | undefined;
   #scene: THREE.Scene | undefined;
   #binding: ThreeRootPublication | undefined;
+  #needsInitialTransformSync = false;
   #capacity: GlyphBufferCapacity;
   #compositing: 'ordered' | 'independent';
   #material: ThreeTextMaterial | undefined;
@@ -281,17 +283,6 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   createTextGroup(options: TextGroupOptions = {}): TextGroup {
     this.#assertActive();
     return new TextGroup(threeTextConstructionToken, options, this);
-  }
-
-  /** Publishes all retained descendants and synchronizes their current Three transforms. */
-  shape(): void {
-    this.#assertActive();
-    try {
-      this.#synchronize(false);
-    } catch (error) {
-      this.#reportError(error, this.#renderMembers());
-      throw error;
-    }
   }
 
   /** @internal Host cleanup invoked after core stops publication for this root. */
@@ -430,7 +421,9 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
     if (this.#disposed) return;
     const scene = nearestScene(text);
     if (scene === this.#scene && (scene === undefined || this.#drawRoot.parent === scene)) return;
-    this.#bindScene(this.#renderMembers());
+    this.#services.invalidate();
+    const texts = this.#renderMembers();
+    if (this.#bindScene(texts)) this.#commitTraversal(false);
   }
 
   /** @internal Stable root membership snapshot used by measurement reconciliation. */
@@ -438,32 +431,57 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
     return [...this.#texts].filter((text) => !text.disposed);
   }
 
-  #synchronize(worldMatricesCurrent: boolean): void {
+  /** @internal Reconcile this root before the engine stages its contribution to `glyph.shape()`. */
+  prepareShape(): import('../core/glyph-config.js').GlyphShapeOptions | false {
+    this.#assertActive();
+    const texts = this.#renderMembers();
+    this.#needsInitialTransformSync ||= this.#bindScene(texts);
+    if (texts.length === 0) {
+      if (this.#binding === undefined) return false;
+      this.#binding.reconcile([]);
+    } else {
+      validateTextDomains(texts);
+      this.#rootBinding().reconcile(texts);
+    }
+    return this.#binding?.prepareShape() ?? false;
+  }
+
+  /** @internal Apply adapter bookkeeping after this root's renderer accepts its command buffer. */
+  acceptShape(): void {
+    this.#binding?.acceptShape();
+    this.#clearErrors(this.#renderMembers());
+    if (this.#needsInitialTransformSync) {
+      this.#needsInitialTransformSync = false;
+      this.#syncTransforms(false);
+    }
+  }
+
+  /** @internal Preserve the last accepted draw state and attribute this root's rejected shape. */
+  rejectShape(error: unknown): void {
+    this.#binding?.rejectShape();
+    this.#reportError(error, this.#renderMembers());
+  }
+
+  #syncTransforms(worldMatricesCurrent: boolean): void {
     const texts = this.#renderMembers();
     if (!worldMatricesCurrent) {
       for (const text of texts) text.updateWorldMatrix(true, false);
     }
-    this.#bindScene(texts);
     this.#drawRoot.updateMatrixWorldWithoutCommit(true);
-    if (texts.length === 0) {
-      if (this.#binding !== undefined) {
-        this.#binding.reconcile([]);
-        this.#binding.synchronize(worldMatricesCurrent);
-      }
-      this.#clearErrors(texts);
-      return;
-    }
-    validateTextDomains(texts);
-    const binding = this.#rootBinding();
-    binding.reconcile(texts);
-    binding.synchronize(worldMatricesCurrent);
-    if (!binding.hasRejectedRendererUpdate) this.#clearErrors(texts);
+    this.#binding?.syncTransforms(worldMatricesCurrent);
   }
 
   #commitTraversal(worldMatricesCurrent: boolean): void {
     if (this.#disposed) return;
+    const texts = this.#renderMembers();
+    if (this.#binding?.needsReconcile(texts) === true) this.#services.invalidate();
     try {
-      this.#synchronize(worldMatricesCurrent);
+      glyph.shape();
+    } catch {
+      // Every participating root received its attributed error before the global call threw.
+    }
+    try {
+      this.#syncTransforms(worldMatricesCurrent);
     } catch (error) {
       this.#reportError(error, this.#renderMembers());
     }
@@ -518,7 +536,7 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
     return current === scene && scene.visible;
   }
 
-  #bindScene(texts: readonly Text<AnyRasterFormat>[]): void {
+  #bindScene(texts: readonly Text<AnyRasterFormat>[]): boolean {
     let scene: THREE.Scene | undefined;
     for (const text of texts) {
       const candidate = nearestScene(text);
@@ -530,16 +548,13 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
       }
       scene = candidate;
     }
-    if (scene === this.#scene && (scene === undefined || this.#drawRoot.parent === scene)) return;
+    if (scene === this.#scene && (scene === undefined || this.#drawRoot.parent === scene)) return false;
     this.#drawRoot.removeFromParent();
     this.#scene = scene;
     if (scene !== undefined) {
       scene.add(this.#drawRoot);
-      // Three snapshots a parent's child count before traversing it. When a Text discovers its
-      // Scene during that traversal, the newly attached draw root would otherwise miss the first
-      // frame. Commit it once here; later frames reach the stable draw-root child normally.
-      this.#commitTraversal(false);
     }
+    return scene !== undefined;
   }
 
   #renderMembers(): readonly Text<AnyRasterFormat>[] {
@@ -848,12 +863,6 @@ export class Text<Technique extends AnyRasterFormat> extends THREE.Object3D {
     this.#root.observeHostTree(this);
   }
 
-  /** Publishes pending semantic state immediately, then synchronizes current transforms. */
-  shape(): void {
-    this.#assertActive();
-    this.#root.shape();
-  }
-
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -1011,12 +1020,6 @@ export class TextGroup extends THREE.Object3D {
     throw new Error('TextGroup cannot be copied');
   }
 
-  /** Publishes pending descendant semantic state immediately, then synchronizes current transforms. */
-  shape(): void {
-    this.#assertActive();
-    this.#root.shape();
-  }
-
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -1077,7 +1080,6 @@ class ThreeRootPublication {
   readonly #materialBindings = new ThreeMaterialBindingCache();
   #capacity: GlyphBufferCapacity;
   #compositing: 'ordered' | 'independent';
-  #pendingPublication = false;
   #rendererUpdateRejected = false;
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #materialInvalidated = false;
@@ -1097,9 +1099,6 @@ class ThreeRootPublication {
   get gpuBytes(): number {
     return this.#target.gpuBytes;
   }
-  get hasRejectedRendererUpdate(): boolean {
-    return this.#rendererUpdateRejected;
-  }
   get capacityExceeded(): { readonly required: number; readonly size: number } | undefined {
     return this.#capacityExceeded;
   }
@@ -1107,18 +1106,19 @@ class ThreeRootPublication {
   setCapacity(capacity: GlyphBufferCapacity): void {
     this.#assertActive();
     this.#capacity = capacity;
-    if (this.#capacityExceeded !== undefined) this.#pendingPublication = true;
+    if (this.#capacityExceeded !== undefined) this.#services.invalidate();
   }
 
   setCompositing(compositing: 'ordered' | 'independent'): void {
     this.#assertActive();
     this.#compositing = compositing;
-    this.#pendingPublication = true;
+    this.#services.invalidate();
   }
 
   invalidateMaterial(): void {
     this.#assertActive();
     this.#materialInvalidated = true;
+    this.#services.invalidate();
   }
 
   reconcile(texts: readonly Text<AnyRasterFormat>[]): void {
@@ -1145,6 +1145,23 @@ class ThreeRootPublication {
     this.#materialInvalidated = false;
   }
 
+  needsReconcile(texts: readonly Text<AnyRasterFormat>[]): boolean {
+    this.#assertActive();
+    if (this.#materialInvalidated || texts.length !== this.#entries.size) return true;
+    for (const text of texts) {
+      const entry = this.#entries.get(text);
+      if (
+        entry === undefined ||
+        entry.stagedRevision !== reconciler.desiredRevision(text) ||
+        entry.stagedOrder !== this.#root.publicationOrder(text) ||
+        !sameTextPresentation(entry.stagedPresentation, resolveTextPresentation(text))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   stageUpdate(text: Text<AnyRasterFormat>, desired: DesiredTextState<AnyRasterFormat>, revision: number): void {
     this.#assertActive();
     const entry = this.#entries.get(text);
@@ -1161,7 +1178,6 @@ class ThreeRootPublication {
     entry.handle.dispose();
     this.#entries.delete(text);
     this.#inspections.delete(text);
-    this.#pendingPublication = true;
     reconciler.unbindFrom(text, this);
   }
 
@@ -1232,27 +1248,20 @@ class ThreeRootPublication {
     return this.#services.copy(entry.handle, { kind: 'decorations' }, { boundary, renderer });
   }
 
-  synchronize(worldMatricesCurrent: boolean): void {
+  prepareShape(): import('../core/glyph-config.js').GlyphShapeOptions | false {
     this.#assertActive();
-    const required = [...this.#entries.keys()].reduce((total, text) => total + text.text.length, 0);
+    let required = 0;
+    for (const text of this.#entries.keys()) required += text.text.length;
     if (this.#capacity.policy === 'fixed' && required > this.#capacity.size) {
       this.#capacityExceeded = Object.freeze({ required, size: this.#capacity.size });
-      this.#target.synchronizeTransforms(worldMatricesCurrent, () => this.#services.syncTransforms());
-      return;
+      return false;
     }
     this.#capacityExceeded = undefined;
-    if (!this.#pendingPublication) {
-      this.#target.synchronizeTransforms(worldMatricesCurrent, () => this.#services.syncTransforms());
-      return;
-    }
-    try {
-      this.#services.shape({ semanticViews: 'measurement', compositing: this.#compositing });
-    } catch (error) {
-      this.#pendingPublication = false;
-      this.#rendererUpdateRejected = true;
-      throw error;
-    }
-    this.#pendingPublication = false;
+    return Object.freeze({ semanticViews: 'measurement', compositing: this.#compositing });
+  }
+
+  acceptShape(): void {
+    this.#assertActive();
     this.#rendererUpdateRejected = false;
     this.#inspections.clear();
     for (const [text, entry] of this.#entries) {
@@ -1260,6 +1269,15 @@ class ThreeRootPublication {
       reconciler.markCommitted(text);
       reconciler.publishMeasurement(text, entry.handle.measure());
     }
+  }
+
+  rejectShape(): void {
+    this.#assertActive();
+    this.#rendererUpdateRejected = true;
+  }
+
+  syncTransforms(worldMatricesCurrent: boolean): void {
+    this.#assertActive();
     this.#target.synchronizeTransforms(worldMatricesCurrent, () => this.#services.syncTransforms());
   }
 
@@ -1311,7 +1329,6 @@ class ThreeRootPublication {
       previous.stagedPresentation = presentation;
     }
     this.#inspections.delete(text);
-    this.#pendingPublication = true;
   }
 
   #canonicalInspection(text: Text<AnyRasterFormat>): GlyphLayoutInspection | undefined {

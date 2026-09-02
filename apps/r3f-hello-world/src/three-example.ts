@@ -33,7 +33,7 @@ export async function mountThreeExample(root: HTMLElement): Promise<() => void> 
   root.append(renderer.domElement);
 
   try {
-    // The FontFace owns the declaration; loading is explicitly relative to this handle.
+    // The FontFace owns renderer-neutral loading; the handle binds its selected format when Text uses it.
     await inter.load();
     text = handle.createText({
       constraints: { width: { mode: 'exact', size: root.clientWidth } },
@@ -50,7 +50,7 @@ export async function mountThreeExample(root: HTMLElement): Promise<() => void> 
     // shape() publishes semantic state and attaches planned Mesh batches to the handle root's
     // scene-level draw object. Text remains the semantic/transform node rather than owning draws.
     // No scene, canvas, or host renderer was needed before this point.
-    text.shape();
+    glyph.shape();
 
     // WebGPURenderer owns the canvas/backend and performs the actual host draw later.
     await renderer.init();
@@ -68,7 +68,7 @@ export async function mountThreeExample(root: HTMLElement): Promise<() => void> 
   const onResize = (): void => {
     if (disposed || text === undefined) return;
     resizeThreeExample(root, renderer, camera, text);
-    text.shape();
+    glyph.shape();
     renderer.render(scene, camera);
   };
   window.addEventListener('resize', onResize);

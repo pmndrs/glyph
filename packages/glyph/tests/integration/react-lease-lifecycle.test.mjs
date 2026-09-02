@@ -137,8 +137,7 @@ test('provider-free R3F roots isolate independent Canvas stores', async () => {
     const secondScene = nearestScene(secondText);
     assert.ok(firstScene !== undefined && secondScene !== undefined);
     assert.notEqual(firstScene, secondScene);
-    firstText.shape();
-    secondText.shape();
+    glyph.shape();
     firstDrawRoot = firstScene.children.find((child) => child.name.startsWith('@pmndrs/glyph:'));
     secondDrawRoot = secondScene.children.find((child) => child.name.startsWith('@pmndrs/glyph:'));
     assert.ok(firstDrawRoot !== undefined && secondDrawRoot !== undefined);

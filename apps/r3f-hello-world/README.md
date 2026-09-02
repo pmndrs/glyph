@@ -7,8 +7,8 @@ font assets. The root page dynamically loads only the selected integration:
 - `?example=r3f` runs `src/r3f-example.tsx` and `src/app.tsx` (the default).
 
 The imperative example is the smallest complete public lifecycle. It initializes Glyph once, creates a Three handle,
-declares and loads one FontFace through that handle, creates a `Text`, and attaches it to an ordinary Three scene. Its
-explicit `text.shape()` call publishes the semantic state and attaches the planned `Mesh` below the `Text` before the
+declares and loads one renderer-neutral FontFace, creates a `Text`, and attaches it to an ordinary Three scene. Its
+explicit `glyph.shape()` call publishes every dirty root and attaches the planned `Mesh` below the `Text` before the
 application initializes `WebGPURenderer`; only `renderer.render(scene, camera)` performs the host draw.
 
 The R3F twin renders `Hello world` through the public React adapter, binds the globe span to a subsetted Font Awesome

@@ -22,7 +22,6 @@ export type ExampleTextUpdate<Format extends AnyRasterFormat = AnyRasterFormat> 
 
 /** One retained Text owned by the root services supplied through GlyphConfig.root. */
 export class ExampleText<Format extends AnyRasterFormat = AnyRasterFormat> {
-  readonly #services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>;
   readonly #controller: GlyphTextController<Format, ExampleBindings['materialInput'], ExampleTransform>;
   readonly #transform: ExampleTransform = Object.freeze({ kind: 'example-transform' });
   #state: NormalizedExampleTextOptions<Format>;
@@ -32,7 +31,6 @@ export class ExampleText<Format extends AnyRasterFormat = AnyRasterFormat> {
     services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>,
     options: ExampleTextOptions<Format>,
   ) {
-    this.#services = services;
     this.#state = normalizeTextOptions(options);
     this.#controller = services.createText(this.#coreState(this.#state));
   }
@@ -49,11 +47,6 @@ export class ExampleText<Format extends AnyRasterFormat = AnyRasterFormat> {
     const next = normalizeTextOptions({ ...this.#state, ...update });
     this.#controller.update(this.#coreState(next));
     this.#state = next;
-  }
-
-  publish(): ExampleDrawList {
-    this.#assertActive();
-    return this.#services.shape();
   }
 
   dispose(): void {

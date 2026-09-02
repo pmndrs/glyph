@@ -85,7 +85,7 @@ export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = d
 
 interface ExampleRootExtension {
   createText<Format extends AnyRasterFormat>(options: ExampleTextOptions<Format>): ExampleText<Format>;
-  publish(): ExampleDrawList;
+  readonly drawList: ExampleDrawList;
 }
 
 export type ExampleRoot = GlyphRoot & ExampleRootExtension;
@@ -115,7 +115,10 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
     root: {
       create: (context) => {
         const extension = new ExampleRootImplementation(context.services);
-        return context.create(extension, { boundary: Object.freeze({ name: context.name }) });
+        return context.create(extension, {
+          boundary: Object.freeze({ name: context.name }),
+          shape: { accepted: (drawList) => extension.accept(drawList) },
+        });
       },
     },
   });
@@ -134,7 +137,14 @@ class ExampleRootImplementation implements ExampleRootExtension {
     return new ExampleText(this.#services, options);
   }
 
-  publish(): ExampleDrawList {
-    return this.#services.shape();
+  #drawList: ExampleDrawList | undefined;
+
+  get drawList(): ExampleDrawList {
+    if (this.#drawList === undefined) throw new Error('example root has not accepted a shaped draw list');
+    return this.#drawList;
+  }
+
+  accept(drawList: ExampleDrawList): void {
+    this.#drawList = drawList;
   }
 }

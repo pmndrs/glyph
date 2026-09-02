@@ -82,11 +82,13 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
     });
 
     device.failNextPreparation = true;
-    expect(() => text.publish()).toThrow('injected renderer preparation failure');
+    expect(() => glyph.shape()).toThrow('injected renderer preparation failure');
     expect(device.discarded).toBe(1);
     expect(device.primary.resources.size).toBe(0);
 
-    const accepted = text.publish();
+    text.update({ text: 'Glyph!' });
+    glyph.shape();
+    const accepted = handle.drawList;
     expect(accepted.changed).toBe(true);
     expect(accepted.draws.length).toBeGreaterThan(0);
     expect(device.primary.resourcesByName.has('glyphGeometry')).toBe(true);
@@ -109,19 +111,21 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
     }
 
     const acceptedDraws = [...device.primary.realizedDraws];
-    const idle = handle.publish();
-    expect(idle.changed).toBe(false);
-    expect(idle.draws).toEqual([]);
+    const acceptedSubmissions = device.primary.submissions.length;
+    glyph.shape();
+    expect(handle.drawList).toBe(accepted);
+    expect(device.primary.submissions).toHaveLength(acceptedSubmissions);
     expect(device.primary.realizedDraws).toEqual(acceptedDraws);
 
     text.update({ text: 'updated', color: '#ff8040' });
-    const updated = text.publish();
+    glyph.shape();
+    const updated = handle.drawList;
     expect(updated.changed).toBe(true);
     expect(updated.draws.length).toBeGreaterThan(0);
     expect(text.text).toBe('updated');
 
     text.dispose();
-    handle.publish();
+    glyph.shape();
     expect(device.primary.resources.size).toBe(0);
   } finally {
     handle.dispose();

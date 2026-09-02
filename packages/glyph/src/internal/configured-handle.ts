@@ -1,5 +1,10 @@
 import type { Font } from '../font.js';
-import { createGlyphHandleState, type GlyphEngine } from '../glyph-engine.js';
+import {
+  createGlyphHandleState,
+  registerGlyphShapeParticipant,
+  type GlyphEngine,
+  type GlyphShapeRegistration,
+} from '../glyph-engine.js';
 import { createFontStack, immutableFontSelectionFonts, type FontSelection, type FontStack } from '../loaded-font.js';
 import type { AnyRasterFormat } from '../raster-format.js';
 import {
@@ -23,7 +28,6 @@ import type {
   GlyphRoot,
   GlyphRootCreateOptions,
   GlyphRootServices,
-  GlyphShapeOptions,
   GlyphRenderer,
   GlyphSchema,
   RendererContext,
@@ -38,7 +42,9 @@ import type {
   RetainedFormattedText,
   RetainedText,
   RetainedTextOptions,
+  StagedRenderPlanner,
 } from '../core/render-planner.js';
+import { observeRenderPlannerDirty, stageRenderPlanner } from '../core/render-planner.js';
 
 const DEFAULT_LIMITS: GlyphCommandLimits = Object.freeze({
   maxParagraphs: 4_096,
@@ -155,6 +161,7 @@ class ConfiguredHandleDomain<
     const existing = this.#roots.get(name);
     if (existing !== undefined) return existing;
     const services = new ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>(
+      this.#input.engine,
       this.#handleState,
       this.#codecRegistration,
       this.#codec,
@@ -375,6 +382,7 @@ class ConfiguredRootServices<
   Boundary,
   CodecValue extends Codec,
 > implements GlyphRootServices<Bindings, RendererResult, Boundary> {
+  readonly #engine: GlyphEngine;
   readonly #handleState: GlyphHandleState;
   readonly #codecRegistration: CodecRegistration;
   readonly #codec: CodecValue;
@@ -393,16 +401,21 @@ class ConfiguredRootServices<
   >();
   #planner: RenderPlanner | undefined;
   #target: GlyphPlanTarget<Bindings, RendererResult> | undefined;
+  #shapeRegistration: GlyphShapeRegistration | undefined;
+  #stopObservingDirty: (() => void) | undefined;
+  #shapeHooks: GlyphRootCreateOptions<Bindings, RendererResult, Boundary>['shape'];
+  #forceShape = false;
   #disposed = false;
-  #publishing = false;
 
   constructor(
+    engine: GlyphEngine,
     handleState: GlyphHandleState,
     codecRegistration: CodecRegistration,
     codec: CodecValue,
     config: RootRuntimeConfig<Bindings, RendererResult, Boundary, CodecValue>,
     retainCopy: () => () => void,
   ) {
+    this.#engine = engine;
     this.#handleState = handleState;
     this.#codecRegistration = codecRegistration;
     this.#codec = codec;
@@ -420,10 +433,13 @@ class ConfiguredRootServices<
       materialInput: (binding) => this.#requiredMaterial(binding),
       transformInput: (binding) => this.#requiredTransform(binding),
     });
+    let planner: RenderPlanner | undefined;
+    let registration: GlyphShapeRegistration | undefined;
+    let stopObservingDirty: (() => void) | undefined;
     try {
       const commands = this.#config.commands;
       const capabilitySet = this.#codec.descriptor.capabilitySets[this.#codec.capabilitySet ?? 0];
-      this.#planner = this.#handleState.createRootPlanner({
+      planner = this.#handleState.createRootPlanner({
         codec: this.#codecRegistration,
         ...(capabilitySet === undefined ? {} : { capabilitySet }),
         target: () => target,
@@ -432,9 +448,35 @@ class ConfiguredRootServices<
         resultCapacity: commands?.resultBytes ?? 256 * 1024,
         textCapacity: commands?.textUnits ?? 256,
       });
+      registration = registerGlyphShapeParticipant(this.#engine, {
+        stage: () => this.#stageShape(),
+        accepted: () => this.#acceptShape(),
+        rejected: (error) => this.#rejectShape(error),
+      });
+      const activeRegistration = registration;
+      stopObservingDirty = observeRenderPlannerDirty(planner, () => activeRegistration.invalidate());
+      this.#planner = planner;
       this.#target = target;
+      this.#shapeHooks = options.shape;
+      this.#shapeRegistration = registration;
+      this.#stopObservingDirty = stopObservingDirty;
     } catch (error) {
-      target.dispose();
+      try {
+        stopObservingDirty?.();
+      } catch {
+        // Preserve the activation failure.
+      }
+      try {
+        registration?.dispose();
+      } catch {
+        // Preserve the activation failure.
+      }
+      try {
+        if (planner === undefined) target.dispose();
+        else planner.dispose();
+      } catch {
+        // Preserve the activation failure.
+      }
       throw error;
     }
   }
@@ -446,17 +488,10 @@ class ConfiguredRootServices<
     return new ConfiguredTextController(planner, this, state);
   }
 
-  shape(options?: GlyphShapeOptions): RendererResult {
-    const planner = this.#requiredPlanner();
-    if (this.#publishing) throw new Error('Glyph root publication cannot be reentered');
-    this.#publishing = true;
-    try {
-      const result = planner.publish(options);
-      if (!result.accepted) throw result.error;
-      return this.#target!.lastResult;
-    } finally {
-      this.#publishing = false;
-    }
+  invalidate(): void {
+    this.#requiredPlanner();
+    this.#forceShape = true;
+    this.#shapeRegistration!.invalidate();
   }
 
   syncTransforms(): void {
@@ -560,6 +595,11 @@ class ConfiguredRootServices<
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    this.#stopObservingDirty?.();
+    this.#stopObservingDirty = undefined;
+    this.#shapeRegistration?.dispose();
+    this.#shapeRegistration = undefined;
+    this.#shapeHooks = undefined;
     this.#planner?.dispose();
     this.#planner = undefined;
     this.#target = undefined;
@@ -685,9 +725,27 @@ class ConfiguredRootServices<
 
   #requiredPlanner(): RenderPlanner {
     if (this.#disposed) throw new Error('Glyph root services have been disposed');
-    if (this.#publishing) throw new Error('Glyph text updates and queries cannot reenter publication');
     if (this.#planner === undefined) throw new Error('Glyph root services were used before context.create()');
     return this.#planner;
+  }
+
+  #stageShape(): StagedRenderPlanner | undefined {
+    const planner = this.#requiredPlanner();
+    const force = this.#forceShape;
+    this.#forceShape = false;
+    const prepared = this.#shapeHooks?.prepare?.();
+    if (prepared === false) return undefined;
+    return stageRenderPlanner(planner, prepared, force);
+  }
+
+  #acceptShape(): void {
+    const target = this.#target;
+    if (target === undefined) throw new Error('Glyph root accepted shape after disposal');
+    this.#shapeHooks?.accepted?.(target.lastResult);
+  }
+
+  #rejectShape(error: unknown): void {
+    this.#shapeHooks?.rejected?.(error);
   }
 }
 
