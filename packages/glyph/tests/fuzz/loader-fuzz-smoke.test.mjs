@@ -5,7 +5,7 @@ import test from 'node:test';
 import { FontLoadError, FontRegistry } from '../../dist/loader.js';
 import { createFontBaker } from '@pmndrs/glyph/bake';
 
-import { ARTIFACT_FUZZ_SEED, mutateArtifact } from '../support/artifact-mutations.mjs';
+import { mutateArtifact } from '../support/artifact-mutations.mjs';
 
 test('fixed-seed loader artifact mutations fail safely, purely, and deterministically', async () => {
   const [source, wasm] = await Promise.all([
