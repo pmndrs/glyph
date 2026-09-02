@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A complete guide to integrating a custom renderer with Glyph through GlyphConfig, using TypeGPU and WebGPU as the concrete implementation."
+    />
+    <title>Integrate a renderer with Glyph</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: light-dark(#f3f1ea, #101416);
+        --surface: light-dark(#fffefa, #191f22);
+        --surface-2: light-dark(#eae7de, #222a2e);
+        --text: light-dark(#202628, #eef3f5);
+        --muted: light-dark(#657176, #a8b3b9);
+        --line: light-dark(#d5d1c6, #384249);
+        --blue: light-dark(#11647e, #65cae5);
+        --amber: light-dark(#885313, #edaa58);
+        --violet: light-dark(#7139aa, #c69af5);
+        --green: light-dark(#176a46, #6fd5a1);
+        --red: light-dark(#9b3c23, #ff9375);
+        --code: light-dark(#e8e5dc, #0c1012);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 15% -10%, color-mix(in srgb, var(--blue) 13%, transparent), transparent 34rem),
+          var(--bg);
+        color: var(--text);
+        font:
+          15px/1.62 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+      }
+      main {
+        width: min(1160px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 44px 0 88px;
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.15;
+        letter-spacing: -0.025em;
+      }
+      h1 {
+        max-width: 950px;
+        margin: 8px 0 14px;
+        font-size: clamp(2.6rem, 7vw, 5.3rem);
+      }
+      h2 {
+        margin: 64px 0 18px;
+        font-size: clamp(1.7rem, 3vw, 2.35rem);
+      }
+      h3 {
+        margin: 28px 0 10px;
+        font-size: 1.2rem;
+      }
+      p,
+      li {
+        max-width: 920px;
+      }
+      a {
+        color: var(--blue);
+      }
+      code {
+        font:
+          0.91em/1.55 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Monaco,
+          Consolas,
+          monospace;
+      }
+      :not(pre) > code {
+        padding: 0.12em 0.35em;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: var(--surface-2);
+      }
+      pre {
+        overflow: auto;
+        margin: 16px 0 24px;
+        padding: 18px 20px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--code);
+      }
+      nav {
+        position: sticky;
+        z-index: 5;
+        top: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px 17px;
+        margin: 30px 0 0;
+        padding: 13px 0;
+        border-block: 1px solid var(--line);
+        background: color-mix(in srgb, var(--bg) 92%, transparent);
+        backdrop-filter: blur(12px);
+      }
+      nav a {
+        color: var(--muted);
+        font-size: 0.84rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      nav a:hover {
+        color: var(--blue);
+      }
+      section {
+        scroll-margin-top: 74px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--surface);
+      }
+      th,
+      td {
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-size: 0.76rem;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      .eyebrow {
+        color: var(--blue);
+        font-size: 0.76rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .lede {
+        max-width: 930px;
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(1.08rem, 2vw, 1.3rem);
+      }
+      .source-link {
+        display: inline-block;
+        margin-top: 22px;
+        padding: 9px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .callout {
+        max-width: 940px;
+        margin: 22px 0;
+        padding: 15px 18px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--blue);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+      .callout.warn {
+        border-left-color: var(--red);
+      }
+      .callout.good {
+        border-left-color: var(--green);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+        gap: 14px;
+      }
+      .card {
+        padding: 17px 18px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+      }
+      .card h3 {
+        margin-top: 0;
+      }
+      .diagram {
+        overflow-x: auto;
+        margin: 22px 0 28px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+      }
+      .diagram svg {
+        display: block;
+        width: 100%;
+        min-width: 760px;
+        height: auto;
+      }
+      .box {
+        fill: var(--surface-2);
+        stroke: var(--line);
+        stroke-width: 1.5;
+        rx: 9;
+      }
+      .box.blue {
+        stroke: var(--blue);
+      }
+      .box.amber {
+        stroke: var(--amber);
+      }
+      .box.violet {
+        stroke: var(--violet);
+      }
+      .box.green {
+        stroke: var(--green);
+      }
+      .edge {
+        fill: none;
+        stroke: var(--muted);
+        stroke-width: 1.6;
+      }
+      .edge.dash {
+        stroke-dasharray: 6 5;
+      }
+      .label {
+        fill: var(--text);
+        font:
+          700 14px ui-sans-serif,
+          system-ui,
+          sans-serif;
+      }
+      .minor {
+        fill: var(--muted);
+        font:
+          12px ui-sans-serif,
+          system-ui,
+          sans-serif;
+      }
+      .phase {
+        fill: var(--blue);
+        font:
+          800 11px ui-sans-serif,
+          system-ui,
+          sans-serif;
+        letter-spacing: 0.08em;
+      }
+      footer {
+        margin-top: 70px;
+        padding-top: 22px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+      }
+      @media (max-width: 680px) {
+        main {
+          width: min(100% - 22px, 1160px);
+        }
+        h2 {
+          margin-top: 48px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="eyebrow">Glyph · custom renderer guide</div>
+        <h1>Integrate a renderer with Glyph</h1>
+        <p class="lede">
+          Build one public <code>GlyphConfig</code>, retain Text state, decode a borrowed ordered display list into host
+          objects, and realize those objects with TypeGPU 0.12 and WebGPU.
+        </p>
+        <a class="source-link" href="renderer-integration.md">Read the canonical Markdown source</a>
+      </header>
+
+      <nav aria-label="Guide sections">
+        <a href="#boundary">Boundary</a><a href="#quickstart">Quick start</a><a href="#flow">Lifecycle</a>
+        <a href="#config">GlyphConfig</a><a href="#decode">Decode</a><a href="#roots">Roots</a>
+        <a href="#fonts">Fonts</a><a href="#typegpu">TypeGPU</a><a href="#host">Host draw</a>
+        <a href="#ownership">Ownership</a><a href="#verify">Verify</a><a href="#gaps">Gaps</a>
+      </nav>
+
+      <section id="boundary">
+        <h2>One public integration boundary</h2>
+        <p>
+          A custom integration imports its complete Glyph vocabulary from <code>@pmndrs/glyph</code>. Portable raster
+          packages and explicit shader subpaths remain separate so unused techniques and shaders can tree-shake.
+        </p>
+        <div class="diagram">
+          <svg viewBox="0 0 1080 390" role="img" aria-labelledby="boundary-title boundary-desc">
+            <title id="boundary-title">Public package and dependency boundary</title>
+            <desc id="boundary-desc">
+              Applications and integrations use the Glyph root package. Portable technique packages feed Codec metadata
+              into Glyph, while explicit TypeGPU shader subpaths feed the host renderer. Rust and Wasm stay private.
+            </desc>
+            <defs>
+              <marker id="arrow-a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M0 0L8 4L0 8Z" fill="var(--muted)" />
+              </marker>
+            </defs>
+            <text class="phase" x="50" y="35">APPLICATION</text>
+            <text class="phase" x="420" y="35">PUBLIC GLYPH CONTRACT</text>
+            <text class="phase" x="790" y="35">HOST REALIZATION</text>
+            <rect class="box blue" x="40" y="70" width="235" height="70" />
+            <text class="label" x="157" y="99" text-anchor="middle">Application</text>
+            <text class="minor" x="157" y="120" text-anchor="middle">Text · FontFace · handle</text>
+            <rect class="box blue" x="40" y="220" width="235" height="70" />
+            <text class="label" x="157" y="249" text-anchor="middle">Custom integration</text>
+            <text class="minor" x="157" y="270" text-anchor="middle">schema · root · renderer</text>
+            <rect class="box green" x="410" y="70" width="260" height="70" />
+            <text class="label" x="540" y="99" text-anchor="middle">@pmndrs/glyph</text>
+            <text class="minor" x="540" y="120" text-anchor="middle">complete public config vocabulary</text>
+            <rect class="box amber" x="410" y="220" width="260" height="70" />
+            <text class="label" x="540" y="249" text-anchor="middle">portable technique package</text>
+            <text class="minor" x="540" y="270" text-anchor="middle">schema · Codec program</text>
+            <rect class="box violet" x="795" y="70" width="245" height="70" />
+            <text class="label" x="917" y="99" text-anchor="middle">technique /typegpu</text>
+            <text class="minor" x="917" y="120" text-anchor="middle">typed shader functions</text>
+            <rect class="box violet" x="795" y="220" width="245" height="70" />
+            <text class="label" x="917" y="249" text-anchor="middle">host renderer</text>
+            <text class="minor" x="917" y="270" text-anchor="middle">TypeGPU · device · resources</text>
+            <rect class="box" x="410" y="325" width="260" height="45" />
+            <text class="minor" x="540" y="353" text-anchor="middle">private trusted Rust/Wasm engine</text>
+            <path class="edge" d="M275 105H410" marker-end="url(#arrow-a)" />
+            <path class="edge" d="M275 255H410" marker-end="url(#arrow-a)" />
+            <path class="edge" d="M540 220V140" marker-end="url(#arrow-a)" />
+            <path class="edge" d="M670 255H795" marker-end="url(#arrow-a)" />
+            <path class="edge" d="M917 140V220" marker-end="url(#arrow-a)" />
+            <path class="edge" d="M540 140V325" marker-end="url(#arrow-a)" />
+          </svg>
+        </div>
+        <div class="callout warn">
+          <strong>Current proof boundary.</strong> The TypeGPU example owns an offscreen texture and submits during
+          transactional commit. A caller-owned canvas/context/pass seam remains unimplemented.
+        </div>
+      </section>
+
+      <section id="quickstart">
+        <h2>First success</h2>
+        <pre><code>import { glyph, loadFont } from '@pmndrs/glyph';
+import { glyphExample } from '@pmndrs/glyph-example-raster';
+import { defineExampleConfig, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
+
+await glyph.init();
+const adapter = await navigator.gpu.requestAdapter();
+if (adapter === null) throw new Error('WebGPU is unavailable');
+
+const device = await adapter.requestDevice();
+const rendererDevice = new TypeGpuExampleRendererDevice({ device, width: 768, height: 192 });
+const handle = glyph.handle('typegpu:main', defineExampleConfig(rendererDevice));
+const font = await loadFont(
+  { baked: new URL('./Inter-glyph-example.font.glb', import.meta.url) },
+  { technique: glyphExample, options: { paletteSeed: 17 } },
+);
+const text = handle.createText({ font, text: 'Portable TypeGPU', fontSize: 64, width: 768, height: 192 });
+const publication = text.publish();
+if (publication.draws.length === 0) throw new Error('the renderer produced no draw');</code></pre>
+        <p>
+          <code>glyph.init()</code> is idempotent. <code>glyph.handle(name, config)</code> requires a unique nonempty
+          handle name and infers the concrete handle. The example's <code>publish()</code> delegates to
+          <code>GlyphRootServices.shape()</code>.
+        </p>
+      </section>
+
+      <section id="flow">
+        <h2>Codec, command view, decoder, host draw</h2>
+        <p>
+          <code>GlyphConfig.encode()</code> selects the Codec that defines packed command-buffer data. Glyph's trusted
+          internal projection produces a borrowed <code>CommandBufferView</code> with an ordered nested
+          <code>DisplayList</code>. The configured renderer's <code>decode(view)</code> stages retained host objects.
+          The host renderer later traverses or submits accepted objects.
+        </p>
+        <div class="diagram">
+          <svg viewBox="0 0 1120 520" role="img" aria-labelledby="flow-title flow-desc">
+            <title id="flow-title">Publication sequence from application state to host rendering</title>
+            <desc id="flow-desc">
+              Application state is retained by Text, shape publishes through Rust using the Codec, internal projection
+              resolves resources and creates a borrowed command view, renderer decode stages a transaction, commit
+              changes retained host state, transform synchronization is a separate path, and the host renders later.
+            </desc>
+            <defs>
+              <marker id="arrow-b" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M0 0L8 4L0 8Z" fill="var(--muted)" />
+              </marker>
+            </defs>
+            <g class="minor">
+              <text x="75" y="40">APP</text>
+              <text x="225" y="40">TEXT</text>
+              <text x="370" y="40">ROOT</text>
+              <text x="520" y="40">RUST</text>
+              <text x="680" y="40">PROJECTION</text>
+              <text x="850" y="40">DECODE</text>
+              <text x="1030" y="40">HOST</text>
+            </g>
+            <g stroke="var(--line)" stroke-dasharray="4 5">
+              <line x1="75" y1="55" x2="75" y2="480" />
+              <line x1="225" y1="55" x2="225" y2="480" />
+              <line x1="370" y1="55" x2="370" y2="480" />
+              <line x1="520" y1="55" x2="520" y2="480" />
+              <line x1="680" y1="55" x2="680" y2="480" />
+              <line x1="850" y1="55" x2="850" y2="480" />
+              <line x1="1030" y1="55" x2="1030" y2="480" />
+            </g>
+            <path class="edge" d="M75 90H225" marker-end="url(#arrow-b)" />
+            <text class="minor" x="150" y="82" text-anchor="middle">retain content/style</text>
+            <path class="edge" d="M75 145H370" marker-end="url(#arrow-b)" />
+            <text class="minor" x="222" y="137" text-anchor="middle">shape / publish</text>
+            <path class="edge" d="M370 200H520" marker-end="url(#arrow-b)" />
+            <text class="minor" x="445" y="192" text-anchor="middle">selected Codec plan</text>
+            <path class="edge" d="M520 255H680" marker-end="url(#arrow-b)" />
+            <text class="minor" x="600" y="247" text-anchor="middle">trusted packed data</text>
+            <path class="edge" d="M680 310H850" marker-end="url(#arrow-b)" />
+            <text class="minor" x="765" y="302" text-anchor="middle">borrowed view + DisplayList</text>
+            <path class="edge" d="M850 365H370" marker-end="url(#arrow-b)" />
+            <text class="minor" x="610" y="357" text-anchor="middle">result · commit · discard</text>
+            <path class="edge dash" d="M225 415H850" marker-end="url(#arrow-b)" />
+            <text class="minor" x="535" y="407" text-anchor="middle">transform-only sync, no shape</text>
+            <path class="edge" d="M850 465H1030" marker-end="url(#arrow-b)" />
+            <text class="minor" x="940" y="457" text-anchor="middle">accepted objects rendered later</text>
+          </svg>
+        </div>
+        <p>
+          Every borrowed sequence and byte slice expires when <code>decode()</code> returns. Renderer code may retain
+          schema-created object identities and copied scalar state, never the view itself.
+        </p>
+      </section>
+
+      <section id="config">
+        <h2>The complete GlyphConfig DSL</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Required</th>
+              <th>Responsibility</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>schema</code></td>
+              <td>yes</td>
+              <td>Host binding types and <code>drawRoot</code>.</td>
+            </tr>
+            <tr>
+              <td><code>fonts</code></td>
+              <td>no</td>
+              <td>Handle-relative technique map and default.</td>
+            </tr>
+            <tr>
+              <td><code>encode</code></td>
+              <td>yes</td>
+              <td>Codec descriptor for packed command data.</td>
+            </tr>
+            <tr>
+              <td><code>resolve</code></td>
+              <td>yes</td>
+              <td>Portable-resource realization and leases.</td>
+            </tr>
+            <tr>
+              <td><code>renderer</code></td>
+              <td>yes</td>
+              <td>Root-scoped decode, transform sync, and disposal.</td>
+            </tr>
+            <tr>
+              <td><code>root</code></td>
+              <td>yes</td>
+              <td>Anonymous/named host root and boundary construction.</td>
+            </tr>
+            <tr>
+              <td><code>commands</code></td>
+              <td>no</td>
+              <td>Initial command capacities and limits.</td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>Actual example config</h3>
+        <pre><code>export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
+  const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
+  return defineGlyphConfig({
+    schema: ExampleSchema,
+    encode: ({ ids }) =&gt; ({ descriptor: exampleRenderPolicyDescriptor(ids) }),
+    resolve: ({ technique, resourceName, payload }) =&gt; {
+      if (technique !== techniqueId) {
+        throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${technique}"`);
+      }
+      return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () =&gt; undefined);
+    },
+    renderer: () =&gt; {
+      const selectedDevice = device ?? new RecordingExampleRendererDevice();
+      return {
+        decode: (view) =&gt; selectedDevice.decode(view),
+        syncTransforms: () =&gt; undefined,
+        dispose: () =&gt; selectedDevice.reset(),
+      };
+    },
+    root: {
+      create: (context) =&gt; {
+        const extension = new ExampleRootImplementation(context.services);
+        return context.create(extension, { boundary: Object.freeze({ name: context.name }) });
+      },
+    },
+  });
+}</code></pre>
+        <p>
+          Optional command tuning is plain config data: <code>{ requestBytes, resultBytes, textUnits, limits }</code>.
+          Omit it until measurements justify changing defaults.
+        </p>
+
+        <h3>Schema and type inference</h3>
+        <pre><code>export const ExampleSchema: GlyphSchema&lt;ExampleBindings, ExampleRootContext&gt; =
+  defineGlyphSchema({
+    drawRoot: () =&gt; undefined,
+    program: (_root: ExampleRootContext, program) =&gt; Object.freeze({ kind: 'example-program', program }),
+    buffer: (_root, input) =&gt; Object.freeze({ kind: 'example-buffer', input }),
+    material: (_root, material) =&gt; material,
+    transform: (_root, transform) =&gt; transform,
+    batch: (_root, input) =&gt; Object.freeze({ kind: 'example-batch', input }),
+    instance: (_root, input) =&gt; Object.freeze({ kind: 'example-instance', input }),
+    instanceSpan: (_root, input) =&gt; Object.freeze({ kind: 'example-instance-span', input }),
+  });</code></pre>
+        <p>
+          <code>drawRoot</code> is schema-defined. It can be a scene node, render layer, or <code>undefined</code> as in
+          the offscreen example. The direct helper infers from its argument, but the example still needs the explicit
+          variable annotation <code>GlyphSchema&lt;ExampleBindings, ExampleRootContext&gt;</code> to witness the
+          complete binding relationship. That is the remaining DSL inference gap, not permission to add corrective casts
+          elsewhere.
+        </p>
+        <div class="diagram">
+          <svg viewBox="0 0 1100 320" role="img" aria-labelledby="types-title types-desc">
+            <title id="types-title">Type flow from Codec to renderer payload</title>
+            <desc id="types-desc">
+              Codec defines packed data, trusted internal projection binds it through the schema and resolve leases into
+              a borrowed command view with an ordered display list, and renderer decode stages concrete host objects.
+            </desc>
+            <defs>
+              <marker id="arrow-c" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M0 0L8 4L0 8Z" fill="var(--muted)" />
+              </marker>
+            </defs>
+            <rect class="box amber" x="35" y="90" width="190" height="90" />
+            <text class="label" x="130" y="122" text-anchor="middle">encode → Codec</text>
+            <text class="minor" x="130" y="145" text-anchor="middle">packed layouts</text>
+            <text class="minor" x="130" y="164" text-anchor="middle">batching · order</text>
+            <rect class="box" x="285" y="90" width="210" height="90" />
+            <text class="label" x="390" y="122" text-anchor="middle">trusted projection</text>
+            <text class="minor" x="390" y="145" text-anchor="middle">schema bindings</text>
+            <text class="minor" x="390" y="164" text-anchor="middle">resolve leases</text>
+            <rect class="box blue" x="555" y="70" width="235" height="130" />
+            <text class="label" x="672" y="108" text-anchor="middle">CommandBufferView</text>
+            <text class="minor" x="672" y="132" text-anchor="middle">updates: resource · buffer</text>
+            <text class="minor" x="672" y="151" text-anchor="middle">patch · retirement</text>
+            <text class="minor" x="672" y="177" text-anchor="middle">ordered DisplayList</text>
+            <rect class="box violet" x="850" y="90" width="215" height="90" />
+            <text class="label" x="957" y="122" text-anchor="middle">renderer.decode</text>
+            <text class="minor" x="957" y="145" text-anchor="middle">retained host objects</text>
+            <text class="minor" x="957" y="164" text-anchor="middle">commit / discard</text>
+            <path class="edge" d="M225 135H285" marker-end="url(#arrow-c)" />
+            <path class="edge" d="M495 135H555" marker-end="url(#arrow-c)" />
+            <path class="edge" d="M790 135H850" marker-end="url(#arrow-c)" />
+            <text class="minor" x="550" y="255" text-anchor="middle">
+              No numeric IDs or trusted wire readers reach ordinary renderer code.
+            </text>
+          </svg>
+        </div>
+      </section>
+
+      <section id="decode">
+        <h2>Decode transactionally</h2>
+        <p>
+          <code>GlyphRenderer.decode(view)</code> is the only public decoder hook. It consumes resource, buffer, patch,
+          retirement, and display-list phases synchronously. A replacement display list is already ordered.
+        </p>
+        <pre><code>function retainDraws(frame: CommandBufferView&lt;ExampleBindings&gt;): readonly ExampleDraw[] {
+  if (frame.displayList.kind !== 'replace') return [];
+  const draws: ExampleDraw[] = [];
+  for (const child of frame.displayList.value.children) {
+    const input = child.value.input;
+    const instances = child.kind === 'batch' ? child.instances : [child.value.input.instance];
+    for (const instance of instances) {
+      const primitive = instance.value.input;
+      draws.push(Object.freeze({
+        kind: child.kind,
+        program: input.program.program,
+        material: input.material,
+        buffers: Object.freeze(Array.from(input.buffers)),
+        resources: Object.freeze(Array.from(input.resources)),
+        order: input.order,
+        transform: child.kind === 'instance' ? child.transform : undefined,
+        primitive,
+      }));
+    }
+  }
+  return Object.freeze(draws);
+}</code></pre>
+        <pre><code>return Object.freeze({
+  result,
+  commit: () =&gt; publish(() =&gt; undefined),
+  discard: () =&gt; { active = false },
+});</code></pre>
+        <p>
+          Stage all fallible work before commit. Discard candidate-only objects on failure and preserve the previous
+          accepted display list. Instrument by wrapping <code>renderer(context)</code> and its
+          <code>decode(view)</code>.
+        </p>
+      </section>
+
+      <section id="roots">
+        <h2>Construct one anonymous root and named siblings</h2>
+        <pre><code>root: {
+  create: (context) =&gt; {
+    const extension = new ExampleRootImplementation(context.services);
+    return context.create(extension, {
+      boundary: Object.freeze({ name: context.name }),
+    });
+  },
+},</code></pre>
+        <p>
+          Services exist before the host root; <code>context.create()</code> activates the boundary and renderer. Call
+          it once and return its result. The handle fronts its anonymous root. <code>handle('hud')</code> returns one
+          live, idempotent, terminal named sibling. Roots cannot nest, and Text cannot exist without a root.
+        </p>
+        <pre><code>const handle = glyph.handle('typegpu:main', config);
+const worldText = handle.createText({ font, text: 'World' });
+const hud = handle('hud');
+console.assert(hud === handle('hud'));
+const hudText = hud.createText({ font, text: 'Score: 42' });</code></pre>
+        <p>
+          Root names are customization labels, not inferred scene UUIDs. A scene-like host boundary belongs in the
+          schema boundary object. TextGroup remains nested hierarchy and inheritance inside a root.
+        </p>
+      </section>
+
+      <section id="fonts">
+        <h2>Optional handle-relative FontFace loading</h2>
+        <pre><code>fonts: {
+  default: 'glyphExample',
+  techniques: { glyphExample },
+},</code></pre>
+        <p>
+          With <code>fonts</code> configured, root construction receives <code>context.fonts</code> with
+          <code>isLoaded</code>, <code>load</code>, <code>acquire</code>, and <code>peek</code>. Acquire returns an
+          independent immutable Font lease; peek borrows the store-owned value and must not be disposed.
+        </p>
+        <pre><code>const Inter = glyph.fontFace(new URL('./Inter.font.glb', import.meta.url), {
+  family: 'Inter',
+  format: glyphExample({ paletteSeed: 17 }),
+});
+await Inter.load(handle);
+console.assert(Inter.isLoaded(handle));</code></pre>
+        <p>
+          A synchronous Text constructor throws when its selected font is not loaded. React may suspend on the same load
+          promise; its immutable context carries only the selected handle/root and never becomes another Glyph runtime.
+        </p>
+      </section>
+
+      <section id="typegpu">
+        <h2>Realize TypeGPU 0.12 resources</h2>
+        <pre><code>const root = tgpu.initFromDevice({ device });
+const target = root
+  .createTexture({ size: [width, height], format: 'rgba8unorm' })
+  .$overrideFlags(GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC);
+const targetView = target.createView('render');
+const viewport = root.createUniform(d.vec2f, [width, height]);
+const viewportGroup = root.createBindGroup(viewportLayout, { viewport });
+
+const pipeline = root.createRenderPipeline({
+  attribs: {
+    position: positionLayout.attrib,
+    uv: uvLayout.attrib,
+    origin: originLayout.attrib,
+    size: sizeLayout.attrib,
+    color: colorLayout.attrib,
+  },
+  vertex: vertexMain,
+  fragment: fragmentMain,
+  targets: {
+    format: 'rgba8unorm',
+    blend: {
+      color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+      alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+    },
+  },
+  primitive: { topology: 'triangle-list' },
+});
+pipeline.initSync();</code></pre>
+        <p>
+          The caller supplies and owns <code>GPUDevice</code>. Supplied geometry becomes vertex/index buffers; packed
+          Codec lanes become instance buffers. Typed shaders come from
+          <code>@pmndrs/glyph-example-raster/typegpu</code>. The integration adds target format, blending, layouts, and
+          viewport projection.
+        </p>
+      </section>
+
+      <section id="host">
+        <h2>Let the host renderer submit</h2>
+        <div class="diagram">
+          <svg viewBox="0 0 1100 300" role="img" aria-labelledby="host-title host-desc">
+            <title id="host-title">Desired caller-owned host rendering seam</title>
+            <desc id="host-desc">
+              Committed Glyph host objects join a caller-owned canvas, GPU canvas context, presentation target, and
+              render pass. A host draw method encodes glyph commands into the caller's queue submission or render graph.
+            </desc>
+            <defs>
+              <marker id="arrow-d" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M0 0L8 4L0 8Z" fill="var(--muted)" />
+              </marker>
+            </defs>
+            <rect class="box blue" x="35" y="55" width="205" height="65" />
+            <text class="label" x="137" y="84" text-anchor="middle">committed host objects</text>
+            <text class="minor" x="137" y="104" text-anchor="middle">ordered display list</text>
+            <rect class="box" x="35" y="185" width="205" height="65" />
+            <text class="label" x="137" y="214" text-anchor="middle">caller canvas/context</text>
+            <text class="minor" x="137" y="234" text-anchor="middle">presentation texture</text>
+            <rect class="box violet" x="360" y="120" width="220" height="65" />
+            <text class="label" x="470" y="149" text-anchor="middle">host draw method</text>
+            <text class="minor" x="470" y="169" text-anchor="middle">caller render pass</text>
+            <rect class="box amber" x="700" y="120" width="170" height="65" />
+            <text class="label" x="785" y="149" text-anchor="middle">encoded draws</text>
+            <text class="minor" x="785" y="169" text-anchor="middle">buffers + bindings</text>
+            <rect class="box green" x="930" y="120" width="140" height="65" />
+            <text class="label" x="1000" y="149" text-anchor="middle">submission</text>
+            <text class="minor" x="1000" y="169" text-anchor="middle">queue / graph</text>
+            <path class="edge" d="M240 88C300 88 320 125 360 140" marker-end="url(#arrow-d)" />
+            <path class="edge" d="M240 218C300 218 320 180 360 165" marker-end="url(#arrow-d)" />
+            <path class="edge" d="M580 152H700" marker-end="url(#arrow-d)" />
+            <path class="edge" d="M870 152H930" marker-end="url(#arrow-d)" />
+          </svg>
+        </div>
+        <p>The current offscreen proof records and submits inside its commit callback:</p>
+        <pre><code>const encoder = root['~unstable'].createCommandEncoder();
+const pass = encoder.beginRenderPass({
+  colorAttachments: [{ view: targetView, clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: 'clear', storeOp: 'store' }],
+});
+
+for (const realized of realizedDraws) {
+  pipeline
+    .with(viewportGroup)
+    .with(positionLayout, geometry.position)
+    .with(uvLayout, geometry.uv)
+    .with(originLayout, origin)
+    .with(sizeLayout, size)
+    .with(colorLayout, color)
+    .with(pass)
+    .withIndexBuffer(geometry.indices, 'uint16')
+    .drawIndexed(realized.geometry.indexCount, realized.geometry.instanceCount,
+      realized.geometry.indexStart, 0, realized.primitive.recordIndex);
+}
+pass.end();
+device.queue.submit([encoder.finish()]);</code></pre>
+        <p>The command/pass API is under TypeGPU 0.12's <code>~unstable</code> surface.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Object</th>
+              <th>First required</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Glyph runtime</td>
+              <td>Before <code>glyph.handle()</code>; await <code>glyph.init()</code>.</td>
+            </tr>
+            <tr>
+              <td>Immutable Font</td>
+              <td>Before synchronous Text creation or update.</td>
+            </tr>
+            <tr>
+              <td><code>GPUDevice</code></td>
+              <td>Before physical GPU resources; never for shaping.</td>
+            </tr>
+            <tr>
+              <td>Canvas</td>
+              <td>Only for onscreen presentation.</td>
+            </tr>
+            <tr>
+              <td><code>GPUCanvasContext</code></td>
+              <td>When configuring canvas presentation and acquiring its current texture.</td>
+            </tr>
+            <tr>
+              <td>Scene-like object</td>
+              <td>Only if the host uses one; bind it through schema and <code>drawRoot</code>.</td>
+            </tr>
+            <tr>
+              <td>Render pass</td>
+              <td>During host draw recording, after retained state commits.</td>
+            </tr>
+            <tr>
+              <td>Camera/frame uniforms</td>
+              <td>At host drawing or transform sync unless they affect semantic layout.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="ownership">
+        <h2>Ownership and disposal</h2>
+        <div class="diagram">
+          <svg viewBox="0 0 1100 460" role="img" aria-labelledby="owner-title owner-desc">
+            <title id="owner-title">Glyph and TypeGPU ownership lifetimes</title>
+            <desc id="owner-desc">
+              The process Glyph singleton owns configured handles. A handle owns its Codec, anonymous and named roots,
+              and font records. Roots own Text controllers and renderer state. Renderer state owns TypeGPU resources but
+              only borrows the caller GPU device. FontFace records share immutable font cache entries.
+            </desc>
+            <defs>
+              <marker id="arrow-e" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M0 0L8 4L0 8Z" fill="var(--muted)" />
+              </marker>
+            </defs>
+            <rect class="box blue" x="430" y="25" width="240" height="60" />
+            <text class="label" x="550" y="52" text-anchor="middle">Glyph singleton</text>
+            <text class="minor" x="550" y="71" text-anchor="middle">process lifetime</text>
+            <rect class="box green" x="430" y="125" width="240" height="65" />
+            <text class="label" x="550" y="153" text-anchor="middle">configured handle</text>
+            <text class="minor" x="550" y="173" text-anchor="middle">Codec · roots · font records</text>
+            <rect class="box" x="95" y="240" width="225" height="65" />
+            <text class="label" x="207" y="268" text-anchor="middle">anonymous / named root</text>
+            <text class="minor" x="207" y="288" text-anchor="middle">Text · TextGroup · renderer</text>
+            <rect class="box amber" x="435" y="240" width="230" height="65" />
+            <text class="label" x="550" y="268" text-anchor="middle">FontFace load record</text>
+            <text class="minor" x="550" y="288" text-anchor="middle">immutable Font cache lease</text>
+            <rect class="box violet" x="785" y="240" width="220" height="65" />
+            <text class="label" x="895" y="268" text-anchor="middle">TypeGPU resources</text>
+            <text class="minor" x="895" y="288" text-anchor="middle">buffers · texture · pipeline</text>
+            <rect class="box" x="95" y="370" width="225" height="60" />
+            <text class="label" x="207" y="397" text-anchor="middle">Text controller</text>
+            <text class="minor" x="207" y="416" text-anchor="middle">desired state + Font lease</text>
+            <rect class="box" x="435" y="370" width="230" height="60" />
+            <text class="label" x="550" y="397" text-anchor="middle">shared Font cache</text>
+            <text class="minor" x="550" y="416" text-anchor="middle">sources · dependencies · bake</text>
+            <rect class="box" x="785" y="370" width="220" height="60" />
+            <text class="label" x="895" y="397" text-anchor="middle">caller GPUDevice</text>
+            <text class="minor" x="895" y="416" text-anchor="middle">borrowed; destroyed last</text>
+            <path class="edge" d="M550 85V125" marker-end="url(#arrow-e)" />
+            <path class="edge" d="M475 190C410 220 300 225 245 240" marker-end="url(#arrow-e)" />
+            <path class="edge" d="M550 190V240" marker-end="url(#arrow-e)" />
+            <path class="edge" d="M625 190C695 220 800 225 850 240" marker-end="url(#arrow-e)" />
+            <path class="edge" d="M207 305V370" marker-end="url(#arrow-e)" />
+            <path class="edge" d="M550 305V370" marker-end="url(#arrow-e)" />
+            <path class="edge dash" d="M895 370V305" marker-end="url(#arrow-e)" />
+          </svg>
+        </div>
+        <pre><code>text.dispose();
+handle.dispose();
+font.dispose();
+rendererDevice.dispose();
+device.destroy();</code></pre>
+        <p>
+          Handle disposal cascades roots, Codec state, and handle-relative font records. The renderer device destroys
+          its TypeGPU resources but never the caller's device. Public disposals are idempotent; finalization is only a
+          leak safety net for abandoned FontFace declarations.
+        </p>
+      </section>
+
+      <section id="verify">
+        <h2>Verification checklist</h2>
+        <ol>
+          <li>Use only root Glyph imports, technique packages, and explicit shader subpaths.</li>
+          <li>Infer the concrete handle without casts or explicit Glyph generics.</li>
+          <li>Prove Codec lanes, capability selection, batching, and order.</li>
+          <li>Receive ordered batches and root instances with no numeric IDs.</li>
+          <li>Prove exactly-once resource lease acquisition, replacement, retirement, and disposal.</li>
+          <li>Produce pixels from supplied geometry, buffers, bind groups, and a pipeline.</li>
+          <li>Retain accepted draws across idle publications.</li>
+          <li>Inject decode and commit failures; keep accepted state and discard candidates.</li>
+          <li>Synchronize transforms without shape or Rust work.</li>
+          <li>Prove anonymous-root projection and idempotent terminal named roots.</li>
+          <li>Reconstruct physical state after device loss from immutable Font and desired Text state.</li>
+          <li>Keep canvas, context, pass, shadows, targets, and post-processing under host ownership.</li>
+        </ol>
+      </section>
+
+      <section id="gaps">
+        <h2>Current gaps—do not paper over these</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>Schema inference</h3>
+            <p>
+              <code>defineGlyphSchema(schema)</code> is direct, but the example still needs an explicit
+              <code>GlyphSchema&lt;ExampleBindings, ExampleRootContext&gt;</code> variable annotation.
+            </p>
+          </article>
+          <article class="card">
+            <h3>FontFace convenience</h3>
+            <p>The example Text accepts immutable Font values and has no FontFace-taking wrapper.</p>
+          </article>
+          <article class="card">
+            <h3>Transform proof</h3>
+            <p>The example transform sync is a no-op; Three supplies the live synchronization proof.</p>
+          </article>
+          <article class="card">
+            <h3>Host pass seam</h3>
+            <p>The TypeGPU proof owns its offscreen target and submission; no caller-pass method exists.</p>
+          </article>
+          <article class="card">
+            <h3>Semantic name</h3>
+            <p>
+              The example says <code>publish()</code>; the root service and intended adapter operation are
+              <code>shape()</code>.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Snippet checking</h3>
+            <p>Repository docs validation does not compile fenced examples; snippets mirror checked package source.</p>
+          </article>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          This self-contained rendering accompanies the <a href="renderer-integration.md">canonical Markdown guide</a>.
+          It contains no remote scripts, fonts, styles, or diagram dependencies. API evidence is pinned to Glyph commit
+          <code>98b4b6fd</code> and TypeGPU 0.12.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>
