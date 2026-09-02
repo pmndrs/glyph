@@ -431,7 +431,7 @@ async function cloneFontFace(selection: AnyFontFaceSelection): Promise<FontFaceT
     selected.face.source,
     selected.face.formats.map(resolveDeclaredFormat),
   );
-  const serialized = source.snapshot(fonts);
+  const serialized = await source.snapshot(fonts);
   return [serialized, serializedFontFaceBuffers(serialized)];
 }
 
