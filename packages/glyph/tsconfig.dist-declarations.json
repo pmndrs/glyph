@@ -5,7 +5,8 @@
     "strict": true,
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "target": "es2023",
+    "target": "es2025",
+    "lib": ["es2025", "dom", "dom.iterable", "dom.asynciterable", "esnext.disposable"],
     "types": []
   },
   "files": ["dist/index.d.ts", "dist/tsl.d.ts"]
