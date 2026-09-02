@@ -381,7 +381,6 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         scene.add(activeLine);
         activeLine.updateMatrixWorld(true);
         if (activeLine.error !== undefined) throw activeLine.error;
-        updateMtsdfDrawVisibility(activeLine);
         const readyAt = performance.now();
         context.signal.throwIfAborted();
         const textReadyMs = performance.now() - textStartedAt;
@@ -431,7 +430,6 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       const resources = active();
       const startedAt = performance.now();
       advancePresentation(resources, context, options.onError);
-      updateMtsdfDrawVisibility(resources.line);
       resources.canvasSurface.render(resources.scene, resources.camera);
       if (resources.firstDrawMs === 0) resources.firstDrawMs = performance.now() - startedAt;
     },
@@ -453,7 +451,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         ...snapshot,
         glyphCount: renderedGlyphCount(resources.line),
         missingGlyphCount: missingGlyphCount(layout),
-        drawCount: drawCount(resources.line),
+        drawCount: drawCount(resources.scene),
         layoutWidth: layout.width,
         layoutHeight: layout.height,
         lineCount: layout.lineCount,
@@ -538,7 +536,6 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       };
       const before = originsToInterpolate(resources, identity, next.animatePresentation);
       resources.fontFixture.commit(nextFixture, (fontFixture) => {
-        if (next.text.length === 0) resources.line.visible = false;
         commitState(resources, {
           font: fontFixture.loadedFont,
           identity,
@@ -547,7 +544,6 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
           style: mtsdfStyle(nextFontSize, identity),
           rasterPixelRatio: resources.viewport.dpr,
         });
-        updateMtsdfDrawVisibility(resources.line);
         fontSize = nextFontSize;
         anchor = next.anchor;
         textAlign = next.textAlign;
@@ -594,6 +590,7 @@ function applyState(line: Text<typeof mtsdf>, next: MtsdfTextState): void {
     style: next.style,
     rasterPixelRatio: next.rasterPixelRatio,
   });
+  line.visible = next.identity.text.length > 0;
   line.updateMatrixWorld(true);
   if (line.error !== undefined) throw line.error;
 }
@@ -696,30 +693,8 @@ function assertLayoutWidthRatio(value: number): void {
   }
 }
 
-function renderedGlyphCount(object: THREE.Object3D): number {
-  let count = 0;
-  object.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.geometry instanceof THREE.InstancedBufferGeometry) {
-      count += child.geometry.instanceCount;
-    }
-  });
-  return count;
-}
-
-function updateMtsdfDrawVisibility(object: THREE.Object3D): void {
-  let glyphCount = 0;
-  object.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
-    const availableVertexCount = child.geometry.index?.count ?? child.geometry.getAttribute('position')?.count ?? 0;
-    const vertexCount = Number.isFinite(child.geometry.drawRange.count)
-      ? Math.min(availableVertexCount, child.geometry.drawRange.count)
-      : availableVertexCount;
-    const instanceCount =
-      child.geometry instanceof THREE.InstancedBufferGeometry ? child.geometry.instanceCount : vertexCount > 0 ? 1 : 0;
-    child.visible = vertexCount > 0 && instanceCount > 0;
-    if (child.geometry instanceof THREE.InstancedBufferGeometry) glyphCount += child.geometry.instanceCount;
-  });
-  object.visible = glyphCount > 0;
+function renderedGlyphCount(text: Text<typeof mtsdf>): number {
+  return text.measure().glyphCount;
 }
 
 function drawCount(object: THREE.Object3D): number {

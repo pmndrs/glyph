@@ -219,30 +219,8 @@ function countDraws(object: THREE.Object3D): number {
   return count;
 }
 
-function countRenderedGlyphs(object: THREE.Object3D): number {
-  let count = 0;
-  object.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.geometry instanceof THREE.InstancedBufferGeometry) {
-      count += child.geometry.instanceCount;
-    }
-  });
-  return count;
-}
-
-function updateBitmapDrawVisibility(object: THREE.Object3D): void {
-  let glyphCount = 0;
-  object.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
-    const availableVertexCount = child.geometry.index?.count ?? child.geometry.getAttribute('position')?.count ?? 0;
-    const vertexCount = Number.isFinite(child.geometry.drawRange.count)
-      ? Math.min(availableVertexCount, child.geometry.drawRange.count)
-      : availableVertexCount;
-    const instanceCount =
-      child.geometry instanceof THREE.InstancedBufferGeometry ? child.geometry.instanceCount : vertexCount > 0 ? 1 : 0;
-    child.visible = vertexCount > 0 && instanceCount > 0;
-    if (child.geometry instanceof THREE.InstancedBufferGeometry) glyphCount += child.geometry.instanceCount;
-  });
-  object.visible = glyphCount > 0;
+function countRenderedGlyphs(text: Text<typeof bitmap>): number {
+  return text.measure().glyphCount;
 }
 
 function countMissingGlyphs(layout: ParagraphLayoutSummary): number {
@@ -452,7 +430,6 @@ async function activateBitmapTextPersistentScene(
       }
     }
     const textReadyMs = performance.now() - textStarted;
-    updateBitmapDrawVisibility(activeText);
     const atlas = bitmapAtlasConfiguration(loadedAsset.data);
     fontFixtureController = createRetainedFontFixtureController(
       library,
@@ -498,6 +475,7 @@ async function activateBitmapTextPersistentScene(
         layout: next.layout,
         style: next.style,
       });
+      activeText.visible = next.text.length > 0;
       activeText.updateMatrixWorld(true);
       if (activeText.error !== undefined) throw activeText.error;
     };
@@ -540,7 +518,6 @@ async function activateBitmapTextPersistentScene(
         return presentationSnapshot();
       }
       presentation.transition.setProgress(progress);
-      updateBitmapDrawVisibility(activeText);
       activeText.position.set(
         presentation.fromX + (presentation.toX - presentation.fromX) * progress,
         presentation.fromY + (presentation.toY - presentation.fromY) * progress,
@@ -549,7 +526,6 @@ async function activateBitmapTextPersistentScene(
       presentation.progress = progress;
       if (progress === 1) {
         presentation.transition.finish();
-        updateBitmapDrawVisibility(activeText);
         presentation = { kind: 'settled', revision: presentation.revision, presented: presentation.presented };
       }
       return presentationSnapshot();
@@ -617,7 +593,6 @@ async function activateBitmapTextPersistentScene(
       // Capturing origins allocates one map entry per glyph, so a reflow that will snap never pays for the match.
       const previousOrigins = policy === 'transition' ? captureGlyphOrigins(activeText) : undefined;
       const readyUpdateAt = activeFontFixture.commit(targetFixture, (fixture) => {
-        if (nextText.length === 0) activeText.visible = false;
         commitState({
           font: fixture.loadedFont,
           text: nextText,
@@ -626,7 +601,6 @@ async function activateBitmapTextPersistentScene(
           style: bitmapStyle(targetFontSize, targetShaping),
         });
         const committedAt = performance.now();
-        updateBitmapDrawVisibility(activeText);
         currentFontSize = targetFontSize;
         currentTextAlign = targetTextAlign;
         currentShaping = targetShaping;
@@ -650,7 +624,6 @@ async function activateBitmapTextPersistentScene(
         const targetPosition = targetLinePosition();
         const transition = createGlyphOriginTransition(activeText, previousOrigins);
         transition.setProgress(0);
-        updateBitmapDrawVisibility(activeText);
         activeText.position.set(fromX, fromY, 0);
         presentation = {
           kind: 'transitioning',
@@ -697,7 +670,6 @@ async function activateBitmapTextPersistentScene(
       frame() {
         if (closing || disposed) return;
         const startedAt = performance.now();
-        updateBitmapDrawVisibility(activeText);
         canvasSurface.render(scene, camera);
         if (firstDrawMs === 0) firstDrawMs = performance.now() - startedAt;
       },
@@ -720,7 +692,7 @@ async function activateBitmapTextPersistentScene(
           ...snapshot,
           glyphCount: countRenderedGlyphs(activeText),
           missingGlyphCount: countMissingGlyphs(layout),
-          drawCount: countDraws(activeText),
+          drawCount: countDraws(scene),
           layoutWidth: layout.width,
           layoutHeight: layout.height,
           lineCount: layout.lineCount,

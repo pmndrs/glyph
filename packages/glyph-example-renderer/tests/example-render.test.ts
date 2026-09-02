@@ -2,8 +2,9 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { createFontStack, glyph, loadFont, rasterBake } from '@pmndrs/glyph';
+import { createFontStack, glyph, loadFont } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
+import { rasterBake } from '@pmndrs/glyph/baker';
 import { afterEach, expect, test } from 'vitest';
 
 import glyphExampleBaker from '@pmndrs/glyph-example-raster/baker';

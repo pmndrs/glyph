@@ -1,4 +1,4 @@
-import { defineRasterBaker, type RasterBakerModule } from '@pmndrs/glyph';
+import { defineRasterBaker, type RasterBakerModule } from '@pmndrs/glyph/baker';
 
 import { bakeGlyphExampleArtifact } from './artifact.js';
 import {
