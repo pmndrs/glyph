@@ -10,6 +10,11 @@ the lowest boundary that must be real for the result to count. Prefer the highes
 the whole invariant and still reports a causal failure. Once that test is independently authoritative, remove lower-order
 assertions that merely replay the same successful path with mocked collaborators or implementation-shaped snapshots.
 
+Apply one retention question to every test: name a realistic change to production behavior that makes this test fail. If
+the answer is only changing the test, unplugging its own mock, or cannot be understood after tracing the assertion into
+the production path, delete the test. Uncertainty is not a reason to preserve test code; an unreadable proof does not help
+the next maintainer distinguish a regression from incidental implementation shape.
+
 Keep a focused test when it owns evidence the higher-order test cannot provide cheaply or precisely:
 
 - validation at a caller-controlled, network, Worker, artifact, or Wasm trust boundary;
@@ -85,14 +90,18 @@ invariant, not the regex match, and do not add an unpinned `deslop` command to r
 
 ## Consolidation procedure
 
-1. Inventory tests and named product/live workflows in the affected package.
+1. Establish one baseline for the scoped suite, then inventory tests and named product/live workflows in the affected
+   package.
 2. Map each test to one observable invariant and one unique failure mode.
 3. Nominate the authoritative test and identify which lower assertions it truly subsumes.
 4. Strengthen the authority with a causal signal or independent assertion before deleting anything.
 5. Keep focused boundary, failure, type, conformance, and hot-path tests; remove only exact semantic duplicates.
 6. Extract duplicated setup/inspection separately from changing coverage.
-7. Run formatter and type checks, the authoritative focused tests, the affected package suite, the live lane, and then the
-   repository check as appropriate. A green result after deletion is necessary but does not prove retained coverage.
+7. For a test-only consolidation, complete the coherent deletion sweep before rebuilding or rerunning the suite; do not
+   pay a compile cycle per removed case. Then run formatter and type checks, the authoritative focused tests, the affected
+   package suite, the live lane, and the repository check as appropriate. If the final run exposes an ordering, setup, or
+   shared-fixture dependency, restore only the necessary hunk and record why. Production changes still verify narrowly as
+   they are made. A green result after deletion is necessary but does not prove retained coverage.
 
 For compile-time public API coverage, use public package specifiers and inference assertions. Prove associated
 relationships from one runtime witness through schema callbacks, config extensions, `resolve`, renderer construction and

@@ -106,9 +106,14 @@ This standard is the canonical code-quality policy for `pmndrs/glyph`. It suppor
 - End-to-end tests exercise a shipped product surface with real, licensed assets when behavior is observable there.
 - Use deterministic fuzzing for parsers, wire formats, and boundary state machines. Keep the root Rust version stable and the cargo-fuzz nightly isolated and exactly pinned.
 - Prefer official conformance suites, independent implementations, exact artifact authentication, and externally derived invariants over implementation-shaped assertions.
+- Retain a test only when a reader can name a realistic production behavior change that makes it fail. Delete tests whose
+  only failure requires changing their own mock, expectation, or copied implementation; uncertainty is not evidence of
+  value.
+- Prefer the highest-order deterministic test that proves an invariant, keeping lower-order coverage only for a distinct
+  boundary, failure mode, public type contract, conformance oracle, or measured hot-path property.
 - Do not use sleeps, timer cushions, arbitrary retries, frame counts, or random luck as correctness mechanisms. A live browser/GPU lane must use causal completion signals and negative controls.
 - Regenerate a golden only when an intentional source or generator change explains it. A changed fingerprint is evidence to investigate, not permission to accept new output.
-- Verify formatter and static checks first, then focused tests, integration/fuzz lanes, strict Rust linting, product-level browser/GPU evidence when applicable, repository checks, generated contracts, size gates, and OKF validation.
+- Verify formatter and static checks first, then focused tests, integration/fuzz lanes, strict Rust linting, product-level browser/GPU evidence when applicable, repository checks, generated contracts, size gates, and OKF validation. For a broad test-only deletion sweep, establish one baseline and run these checks after the coherent sweep rather than recompiling after every deletion.
 
 ## Generated code, comments, and documentation
 
