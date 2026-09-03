@@ -7,7 +7,7 @@ import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import type { Group } from 'three/webgpu';
 
-import { TextOnPath } from '../../components/text';
+import { LiveTextOnPath } from '../../components/text';
 import { INTER } from '../../fonts';
 import { circle } from '../../lib/paths';
 import { passageAt, passageFrame, splitCurrentWord } from '../../lib/typewriter';
@@ -15,7 +15,7 @@ import { Ground } from './components/Ground';
 import { Knot } from './components/Knot';
 import { PassageLine } from './components/PassageLine';
 import { StripTile, useStripTile } from './components/StripTile';
-import { KNOT_POSITION, RINGS, RING_LETTER_SPACING, ringText } from './config';
+import { KNOT_POSITION, RINGS, RING_LETTER_SPACING } from './config';
 import { pathInk } from './materials';
 
 /**
@@ -26,9 +26,11 @@ import { pathInk } from './materials';
  * rendered to a strip every frame; the knot's material wraps that strip once
  * around the tube, turned so the passage rides the front, so the words being
  * written run along the knot the moment they exist, the current one in the
- * accent. Two rings of Slug glyphs orbit the knot, copied out with
- * `breakApart()` and placed by matrix, each tumbling slowly like a gyroscope
- * and depth-tested so the knot hides them as they pass behind; they cast
+ * accent. Two rings of Slug glyphs orbit the knot: ring buffers of words,
+ * each word written at a moving head the moment the typist completes it,
+ * shaped once, copied out with `breakApart()` and placed by matrix, and
+ * dropped when the head laps it; each ring tumbles slowly like a gyroscope
+ * and is depth-tested so the knot hides it as it passes behind; they cast
  * shadows onto the knot, and because the ring material masks the shadow pass
  * with Slug's analytic coverage, the shadows are the letters themselves. The
  * passage itself runs as a quiet line along the bottom.
@@ -75,15 +77,23 @@ export default function Kinetic() {
       />
       <Knot skin={tile.texture} />
       {RINGS.map((ring, index) => (
-        <Ring key={index} ring={ring} font={inter} />
+        <Ring key={index} ring={ring} font={inter} text={typed.toUpperCase()} />
       ))}
       <PassageLine typed={typed} done={frame.shown >= passage.length} />
     </>
   );
 }
 
-/** One orbital ring, its axis wandering slowly: a gyroscope that never settles. */
-function Ring({ ring, font }: { readonly ring: (typeof RINGS)[number]; readonly font: Font<typeof slug> }) {
+/** One orbital ring, its axis wandering slowly: a gyroscope that never settles, written word by word. */
+function Ring({
+  ring,
+  font,
+  text,
+}: {
+  readonly ring: (typeof RINGS)[number];
+  readonly font: Font<typeof slug>;
+  readonly text: string;
+}) {
   const group = useRef<Group>(null);
   const path = useMemo(() => circle(ring.radius), [ring.radius]);
   useFrame(({ elapsed }) => {
@@ -98,18 +108,17 @@ function Ring({ ring, font }: { readonly ring: (typeof RINGS)[number]; readonly 
   });
   return (
     <group ref={group} position={[...KNOT_POSITION]}>
-      <TextOnPath
+      <LiveTextOnPath
         font={font}
         path={path}
+        text={text}
         speed={ring.speed}
         size={ring.size}
         color="#d3dbea"
         letterSpacing={RING_LETTER_SPACING}
         material={pathInk}
         castShadow
-      >
-        {ringText(ring)}
-      </TextOnPath>
+      />
     </group>
   );
 }
