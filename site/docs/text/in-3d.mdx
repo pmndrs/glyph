@@ -147,6 +147,39 @@ warped surface every tick.
 > and a Slug draw whose `positionNode` is replaced did not draw in the current tree. Keep Slug for the flat,
 > razor-sharp word and put the warped surfaces in MSDF.
 
+## Text as a texture: render targets
+
+```tsx
+const surface = new Scene();                       // its own root: a root spans at most one Scene
+const target = new RenderTarget(2048, 128);
+const tube = surfaceMaterial(target.texture, { x: knot.length / 64, y: 3 });
+
+useFrame(({ renderer }) => {
+  renderer.setRenderTarget(target);
+  renderer.render(surface, camera);                 // shapes the surface root, draws one line of Slug
+  renderer.setRenderTarget(null);                   // the main scene draws after this callback
+});
+
+{createPortal(
+  <GlyphProvider handle={handle('surface')}>
+    <Text font={inter} style={{ fontSize: 2.6, color: '#ffffff' }}>{typed}</Text>
+  </GlyphProvider>,
+  surface,
+)}
+```
+
+```ts
+// the tube's material: the Codrops fract-repeat-and-scroll over the live texture
+const scrolled = uv().mul(vec2(repeat.x, repeat.y)).add(vec2(scroll.negate(), 0)).fract();
+material.colorNode = mix(color('#141a26'), color('#e7ecf6'), texture(target.texture, scrolled).r);
+```
+
+Sometimes the surface is the point and the text should follow every fold of it. Render the text to a render target
+and let a material sample it: the texture is a live scene, so it can type, reflow, and recolour every frame, and
+the surface can be any geometry with a UV map. The second scene needs its own root — a root spans at most one
+`Scene` — which is one `handle('surface')` away. The kinetic showcase does exactly this for the knot's skin and
+keeps the rings as real glyphs on paths beside it.
+
 ## Post-processing
 
 ```tsx
