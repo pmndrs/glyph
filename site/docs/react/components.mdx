@@ -195,7 +195,6 @@ const hud = glyph.handle('hud', ThreeConfig);
 | `fallback` | Suspense fallback while mapped faces load |
 | `errorFallback` | node or `(error: FontLoadError) => node`; catches only font load errors, rethrows the rest |
 
-<glyph-proxy fit="cover" root="scenes" data-scene="provider" aria-label="Two roots, two providers, one font" aspect="16 / 9" />
 
 {/*
 write
@@ -221,9 +220,7 @@ notes · internals
 - `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` adds a boundary that rethrows anything
   but `FontLoadError` — `react.ts:243–249`, `:361–374`
 - `Text`/`TextGroup` reject a `handle` prop — `react.ts:871–875`
-- the scene — `site/examples/src/scenes/provider/scene.tsx`: three providers by string, two roots, one face; a text
-  with no provider on the store's default root; the roots read back off the scene by their `@pmndrs/glyph:<root>`
-  draw objects. The twin `three.ts` is `handle(name)` three times
+- no scene here by design: which root a text draws on is not visible; the snippet is the whole lesson
 */}
 
 ## The default handle

@@ -113,6 +113,11 @@ The earlier `core-api/introduction.mdx` shell is superseded by `text/measurement
 
 ## Examples
 
+The canon rule (Justin, 2026-09-03): a scene must teach a rendering technique visually, showing the difference of
+things that have visual impact; a scene whose payload is the text of a hook call, a root name, an error message, or
+a millisecond count teaches nothing and does not exist. Not every section gets a scene. Removed under the rule:
+`hello`, `errors`, `provider`, `hooks`, and the planned `fallback-stack`, `runtime-bake`, `raster-ratio`.
+
 Examples are small, one feature each, and run as React Three Fiber scenes in the maintained examples package
 (`apps/r3f-hello-world`, published as `@pmndrs/glyph-examples`, D-304), which selects a scene by `?example=<slug>`. The
 site build hosts that app at `/examples/` so the docs can iframe `/examples/?example=<slug>` from the same origin. Each
@@ -124,12 +129,9 @@ materials — never loaded, to keep the bundle small.
 | Slug | Page | Shows |
 | --- | --- | --- |
 | kinetic | getting-started/examples, text/in-3d | showcase after Codrops' kinetic typography: a live Slug strip (the passage typing in) rendered to a RenderTarget on its own named root and wrapped around a lit torus knot by `fract(uv * repeat - scroll)`; two rings of Slug glyphs on circle paths by `breakApart()` matrices, depth-tested; the current word spotlit |
-| hello | getting-started/introduction | one `<Text>`, one font, one line |
 | first-text | getting-started/your-first-text | the tutorial's finished state |
 | techniques | fonts/techniques | the same word in Bitmap, MSDF, Slug at three sizes |
 | text-ladder | fonts/techniques | 8 → 1024 px, one technique per row |
-| fallback-stack | fonts/fallback-stacks | Latin + icon + CJK stack, per-cluster face |
-| runtime-bake | fonts/runtime-baking | load a TTF, watch the Worker bake it |
 | groups | text/text-and-groups | many labels, draw count with and without a group |
 | styling | text/styling | every `TextStyle` property, one control each |
 | decorations | text/styling | underline, overline, line-through, every line style, thickness and offset, a gradient decoration material |
@@ -147,11 +149,7 @@ materials — never loaded, to keep the bundle small.
 | bloom | text/in-3d | one bright word through `bloom`, strength animated as a uniform |
 | break-apart | text/break-apart | explode, physics-free tumble, reset |
 | arc | text/break-apart | a line bent into a ring: advance → angle, radius from `measure().contentWidth` |
-| errors | text/errors | provoke each `TextFrameError` cause |
-| provider | react/components | two handles, two providers, one font |
-| hooks | react/hooks | preload, Suspense, StrictMode |
 | batching | advanced/performance | the same labels in a `TextGroup`, materials interleaved (30 draws) vs sorted into runs (2) |
-| raster-ratio | advanced/performance | DPR and `rasterPixelRatio` on a paragraph seen larger than authored |
 | zoom | advanced/performance | continuous zoom across techniques |
 | shaping | advanced/how-it-works | Arabic joining, Indic reordering, mixed bidi, CJK breaks |
 
@@ -530,7 +528,7 @@ The pane the examples are verified in is hidden between tool calls (`document.hi
 | Lit-text normal | the materials scene derives its normal from `positionLocal` (per-glyph unit quad, per `tsl/*-shader.ts` docstrings) while its comment claims paragraph space | text/materials "Lit text" asks for a render of both |
 | Bitmap custom materials and snapping | the default routes `clipPosition` into `vertexNode` (`three/material-realizer.ts:616–623`); a factory setting only `positionNode` likely loses `pixelSnapping` | text/materials [verify] |
 | Corrections to earlier docs claims (text pages) | `inkBounds === undefined` means "did not position", never "empty" (`layout.ts:80–89`); `root.error` does not exist, only `text.error` / `group.error`; Bitmap's shader output includes `opacity`; `errorFallback` catches any `FontLoadError` beneath it (`react.ts:371`); `caretAt` takes paragraph space, so a three.js local point needs `-local.y` | fixed in the scaffolds' notes |
-| Missing example scenes | `hooks`, `fallback-stack`, `runtime-bake` are referenced by proxies but absent from `site/examples/src/catalog.ts`; the carousel/flag warp behind the "Slug ignores `positionNode`" finding is no longer in `kinetic` | pending examples; each proxy carries [verify] |
+| Missing example scenes | none: the planned `fallback-stack` and `runtime-bake` proxies were removed under the canon rule; the carousel/flag warp behind the "Slug ignores `positionNode`" finding is no longer in `kinetic` | pending examples; each proxy carries [verify] |
 | Unicode analysis location | UAX 9/14/24/29 run in Rust (`rust/shaper/src/unicode.rs`, `bidi.rs`, `line_break.rs`; D-320 deleted the TS analyzer); only grapheme segmentation for span alignment stays in JS | advanced/how-it-works corrected |
 | Layout unit format | `layout_units.rs:1–34` is F16.16 (`LAYOUT_UNIT_BITS = 16`); D-254 and `docs/planning/integer-layout-units.md` still say F26.6 | advanced/how-it-works [in flight] until the register catches up |
 | Implicit shaping in plain three.js | scene traversal shapes through the root's draw object (`three/text.ts:139–142`, `:478–493`, `:421–429`) and swallows rejections into `text.error`; only an explicit `glyph.shape()` throws | advanced/pitfalls "nothing draws and nothing threw" |
