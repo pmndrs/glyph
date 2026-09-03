@@ -114,8 +114,8 @@ notes · internals
 - runner: `node --test` over `tests/package`, `tests/integration`, `tests/fuzz` — `scripts/test.mts:33–35`
 - what is proven in Node — `docs/packages/glyph.md:598–618` (sequence property gate: fixed seeds, no wall clock, no
   retry; StrictMode lease accounting; teardown in r3f's order)
-- [in flight] `createParagraph` (renderer-free measurement) takes an immutable `Font` at HEAD, not a face member —
-  `paragraph.ts:71`, `:549`; show it only once it accepts `Inter.msdf`
+- `createParagraph({ font })` takes a face selection as well as an immutable font — `paragraph.ts:77`; renderer-free
+  it requires an explicit imported format on the face and never guesses a handle default — D-326 (codex `98c86c8a6`)
 - [verify] the test-renderer snippet is `no-check` because the site does not install `@react-three/test-renderer`;
   typecheck it in the package before publishing. The `node:test` wrapper is `no-check` because the site's snippet
   tsconfig has `types: ["vite/client"]` and no Node types (`site/tsconfig.json`); the Glyph half is checked

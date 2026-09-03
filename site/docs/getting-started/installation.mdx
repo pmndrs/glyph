@@ -67,17 +67,17 @@ write
   itself when its module is imported, and `/three` imports all three, so an ordinary three.js app needs nothing
   beyond `/three`. The React layer pulls `/three` and R3F's WebGPU entry. Baking is Node, or an explicit Worker you
   opt into.
-- Avoid: the immutable-Font names still on the root at HEAD (the [in flight] items below).
+- Avoid: `createFontStack` and `useFont`, still on the root and `/react` at HEAD (the [in flight] items below).
 - Shape: one paragraph.
 
 notes · internals
 - root value exports — `packages/glyph/src/index.ts:21` (`glyph`), `:215` (`glyphFlags`), `:230` (`createParagraph`,
   `Paragraph`), `:261` (`TextStyle`, `ParagraphLayout`, `Constraints`), `:274` (`span`, `txt`), `:245`
   (`FontLoadError`); types `FontFace` `:181`, `Font` `:201`
-- [in flight] `loadFont`, `createFontLibrary`, and `FontLibrary` left the root in codex `2d48a6688`; they live on
-  the integrator leaf `@pmndrs/glyph/config/font-library` (`package.json` exports; D-299 as revised). The root still
-  exports `createFontStack` (`index.ts:238`) and `defineFont` (`:211`): the immutable-Font path the other agent is
-  removing. Not in the table on purpose.
+- `loadFont`, `createFontLibrary`, `FontLibrary`, `defineFont`, and the token inputs are gone from the public surface
+  and the `/config/font-library` leaf is removed — `index.ts` exports only `Font`, `FontMetrics`, `RasterDecodeFont`
+  from `font.ts`; D-326 (codex `98c86c8a6`). Still on the root: `createFontStack` (`index.ts:225`) — [in flight], the face-level
+  stack is undefined
 - the shaper Wasm resolves beside `dist` and loads inside `glyph.init()` — `shaper.ts:236`
   (`new URL('../dist/text-shaper.wasm', import.meta.url)`), `glyph-engine.ts:108–116`
 - `/three` imports the three format modules for their side effect — `three.ts:1–3`; its exports — `three.ts:5–66`

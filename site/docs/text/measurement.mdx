@@ -180,9 +180,8 @@ notes · internals
 - three-entry LRU — `paragraph.ts#MAX_CACHED_PARAGRAPH_CONSTRAINTS` (`:40`), `#writeParagraphQueryCache` (`:267–273`); D-288
 - `update()` rejects malformed input before state changes and clears the caches — `paragraph.ts:201–220`
 - `dispose()` and `[Symbol.dispose]` — `paragraph.ts:223–244`
-- [in flight] `ParagraphOptions.font` is a loaded immutable `FontSelection` at HEAD (`paragraph.ts:71`); the
-  renderer-neutral path has no handle to bind a face through, so `font: Inter.msdf` is the canonical form and is
-  opted out of the check — D-310 binds faces only into Text; raise as an API question
+- `ParagraphOptions.font` is `FontSelection | AnyFontFaceSelection` — `paragraph.ts:77`; a renderer-free Paragraph
+  acquires its own immutable lease from the loaded face and releases it on dispose — D-326 (codex `98c86c8a6`)
 */}
 
 ## When you can measure

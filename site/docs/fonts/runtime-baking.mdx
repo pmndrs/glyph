@@ -97,9 +97,9 @@ notes · internals
 - `bakeFontInWorker` — `runtime-bake.ts:56–59`; the request carries `unicodeRanges`, normalized — `:35–37`;
   `RuntimeFontBakeRequest` — `loader.ts:153–163`
 - the hook accepts the same sources — `react/msdf.ts:16–17`
-- [in flight] `{ source, runtimeBake, unicodeRanges }` is the `LoadFontInput` runtime-bake form — `loader.ts:86–92`;
-  D-297 lists URL, Request, Blob, and bytes as the only sources and names no `runtimeBake` or `unicodeRanges` on the
-  declaration. Confirm the subset-and-pin form survives before documenting the third block.
+- [in flight] runtime baking has no public entry at codex `98c86c8a6`: the `{ source, runtimeBake }` form lived on
+  the loader that D-326 (codex `98c86c8a6`) made private, and `index.ts` exports nothing named `runtimeBake`; hold the page's
+  application sections until a FontFace-level form lands
 */}
 
 

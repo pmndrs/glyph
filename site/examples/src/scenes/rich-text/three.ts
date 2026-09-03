@@ -1,20 +1,19 @@
 import { glyph, txt } from '@pmndrs/glyph';
-import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { ThreeConfig, defineTextMaterial, span } from '@pmndrs/glyph/three';
 import { slug } from '@pmndrs/glyph/raster/slug';
 import { color as tslColor } from 'three/tsl';
 import type { Scene } from 'three/webgpu';
 
-import { INTER, PLAYWRITE } from '../../fonts';
+import { INTER } from '../../fonts';
 
 /**
  * The imperative twin: `txt` and `span` where React uses nested Text. A span
- * takes a loaded `Font`, styles, and — from `/three` — one material; the
- * document is the tree, and no offset is ever written by hand.
+ * takes styles and — from `/three` — one material; the document is the tree,
+ * and no offset is ever written by hand.
  *
- * A span's font shares the paragraph's raster format: the literal is typed by
- * one format, so both faces here are Slug. Mix formats with a stack on the
- * paragraph, not through spans.
+ * The React scene also gives one run its own face. `span(font)` still takes
+ * the immutable `Font` that D-326 made private, so this twin cannot; the run
+ * is the paragraph's face until spans take a face member.
  */
 const tint = defineTextMaterial((context) => {
   const material = context.createDefaultMaterial();
@@ -25,12 +24,12 @@ const tint = defineTextMaterial((context) => {
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:rich-text', ThreeConfig);
-  // A span takes an immutable Font, which the face path does not hand out; the integrator loader does.
-  const [inter, script] = await Promise.all([loadFont(INTER, slug), loadFont(PLAYWRITE, slug)]);
+  const inter = glyph.fontFace(INTER, { format: slug });
+  await inter.load();
 
   const accent = span({ color: '#ffd166' });
   const caps = span({ letterSpacing: 0.08, features: [{ tag: 'smcp' }] });
-  const hand = span(script, { fontSize: 0.6 });
+  const hand = span({ fontSize: 0.6 });
   const tinted = span(tint);
 
   const paragraph = three.createText({
@@ -46,7 +45,6 @@ export async function mount(scene: Scene): Promise<() => void> {
 
   return () => {
     paragraph.dispose();
-    script.dispose();
     inter.dispose();
     three.dispose();
   };
