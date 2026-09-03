@@ -182,8 +182,11 @@ notes · internals
 - doc and shape — `text-properties.ts:73–79`; count 1..16 — `:257–263`
 - exact width required when `count > 1` — `engine-encoding.ts#normalizedColumns` (`:21–37`), called at construction —
   `three/text.ts:1441`
-- [verify] the exact throw message at `engine-encoding.ts:37–40` before quoting it
-- [verify] the landing chorus is three columns: read `site/` landing source before naming it
+- the throw: `layout columns require an exact width constraint to derive the column measure` (`TypeError`) —
+  `engine-encoding.ts:37–39`; a negative or non-finite gap is `layout columns gap must be a nonnegative finite
+  number` (`RangeError`, `:35`)
+- the landing chorus is three full-height columns at desktop width, fewer as the viewport narrows: one stream
+  overflowing bounded columns — `site/landing/src/chorus.tsx:17–19`; the column count by width — `:104–108`
 */}
 
 ## Overflow and ellipsis
