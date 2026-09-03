@@ -98,26 +98,24 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
         if (sourceFile === undefined || sourceFile.isDeclarationFile || !within(projectRoot, fileName)) continue;
         options.signal?.throwIfAborted();
         const visit = (node: ts.Node): void => {
-          if (ts.isCallExpression(node)) {
-            const binding = importedBinding(node.expression, checker, project);
-            if (binding?.module === '@pmndrs/glyph' && binding.exported === 'defineFont') {
-              const sourceOffset = node.getStart(sourceFile);
-              analyses.push(
-                analyzeDefinition(
-                  node.arguments[0],
-                  node.arguments[1],
-                  node.getText(sourceFile),
-                  sourceFile,
-                  checker,
-                  project,
-                  assetRoots,
-                ).then((result) => {
-                  if (result === undefined) return;
-                  if ('font' in result) fonts.push({ value: result.font, sourceOffset });
-                  else diagnostics.push({ value: result.diagnostic, sourceOffset });
-                }),
-              );
-            }
+          if (ts.isCallExpression(node) && isGlyphFontFaceCall(node.expression, checker, project)) {
+            const sourceOffset = node.getStart(sourceFile);
+            analyses.push(
+              analyzeDefinition(
+                node.arguments[0],
+                node.arguments[1],
+                node.getText(sourceFile),
+                sourceFile,
+                checker,
+                project,
+                assetRoots,
+              ).then((result) => {
+                if (result === undefined) return;
+                if ('fonts' in result) {
+                  for (const font of result.fonts) fonts.push({ value: font, sourceOffset });
+                } else diagnostics.push({ value: result.diagnostic, sourceOffset });
+              }),
+            );
           }
           node.forEachChild(visit);
         };
@@ -137,20 +135,18 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
 }
 
 async function analyzeDefinition(
-  input: ts.Expression | undefined,
-  rasterExpression: ts.Expression | undefined,
+  sourceExpression: ts.Expression | undefined,
+  configExpression: ts.Expression | undefined,
   expression: string,
   sourceFile: ts.SourceFile,
   checker: Checker,
   project: Project,
   assetRoots: readonly string[],
-): Promise<{ font: DiscoveredFontDefinition } | { diagnostic: DiscoveryDiagnostic } | undefined> {
-  if (input === undefined) {
-    return failure('dynamic-font-source', 'defineFont has no source input', sourceFile, expression);
+): Promise<{ fonts: readonly DiscoveredFontDefinition[] } | { diagnostic: DiscoveryDiagnostic } | undefined> {
+  if (sourceExpression === undefined) {
+    return failure('dynamic-font-source', 'glyph.fontFace() has no source input', sourceFile, expression);
   }
-  const selection = fontSourceSelection(input, checker, project);
-  if (selection?.baked === true) return undefined;
-  const source = selection === undefined ? undefined : staticString(selection.source, checker, project);
+  const source = staticString(sourceExpression, checker, project);
   if (source === undefined) {
     return failure(
       'dynamic-font-source',
@@ -159,6 +155,8 @@ async function analyzeDefinition(
       expression,
     );
   }
+  const sourcePath = source.exact ?? source.suffix ?? source.moduleRelative ?? '';
+  if (/\.glb(?:[?#]|$)/iu.test(sourcePath)) return undefined;
   const resolved = await resolveFontSource(source, sourceFile.fileName, assetRoots);
   if (resolved.resolvedFile === undefined) {
     return failure(
@@ -168,35 +166,71 @@ async function analyzeDefinition(
       expression,
     );
   }
-  const raster = await resolveRaster(rasterExpression, checker, project, sourceFile);
-  if ('diagnostic' in raster) return raster;
+  const resolvedFile = resolved.resolvedFile;
+  const rasters = await resolveFontFaceRasters(configExpression, checker, project, sourceFile);
+  if ('diagnostic' in rasters) return rasters;
   return {
-    font: {
+    fonts: rasters.rasters.map((raster) => ({
       expression,
       sourceFile: sourceFile.fileName,
-      resolvedFile: resolved.resolvedFile,
+      resolvedFile,
       assetRoot: resolved.assetRoot!,
       publicPathname: resolved.publicPathname!,
-      raster: raster.raster,
-    },
+      raster,
+    })),
   };
 }
 
-function fontSourceSelection(
-  expression: ts.Expression,
+function isGlyphFontFaceCall(expression: ts.Expression, checker: Checker, project: Project): boolean {
+  const value = unwrap(expression);
+  if (!ts.isPropertyAccessExpression(value) || value.name.text !== 'fontFace') return false;
+  const binding = importedBinding(value.expression, checker, project);
+  return binding?.module === '@pmndrs/glyph' && binding.exported === 'glyph';
+}
+
+async function resolveFontFaceRasters(
+  configExpression: ts.Expression | undefined,
   checker: Checker,
   project: Project,
-  seen = new Set<number>(),
-): { readonly source: ts.Expression; readonly baked?: false } | { readonly baked: true } | undefined {
-  const value = unwrap(expression);
-  if (ts.isIdentifier(value)) {
-    const initializer = constantInitializer(value, checker, project, seen);
-    if (initializer !== undefined) return fontSourceSelection(initializer, checker, project, seen);
+  sourceFile: ts.SourceFile,
+): Promise<{ rasters: readonly ResolvedRasterBaker[] } | { diagnostic: DiscoveryDiagnostic }> {
+  if (configExpression === undefined) return { rasters: await defaultRasterBakers(sourceFile.fileName) };
+  const config = constantExpression(configExpression, checker, project);
+  if (!ts.isObjectLiteralExpression(config)) {
+    return failure(
+      'invalid-raster-options',
+      'FontFace config must be a statically visible object',
+      sourceFile,
+      configExpression.getText(sourceFile),
+    );
   }
-  if (!ts.isObjectLiteralExpression(value)) return { source: value };
-  const source = objectPropertyExpression(value, 'source');
-  if (source !== undefined) return { source };
-  return objectPropertyExpression(value, 'baked') === undefined ? undefined : { baked: true };
+  const format = objectPropertyExpression(config, 'format');
+  if (format === undefined) return { rasters: await defaultRasterBakers(sourceFile.fileName) };
+  const selected = constantExpression(format, checker, project);
+  const expressions = ts.isArrayLiteralExpression(selected) ? [...selected.elements] : [selected];
+  if (expressions.length === 0) {
+    return failure(
+      'invalid-raster-options',
+      'FontFace format array must not be empty',
+      sourceFile,
+      format.getText(sourceFile),
+    );
+  }
+  const rasters: ResolvedRasterBaker[] = [];
+  for (const expression of expressions) {
+    if (ts.isSpreadElement(expression)) {
+      return failure(
+        'invalid-raster-options',
+        'FontFace formats must be statically visible',
+        sourceFile,
+        format.getText(sourceFile),
+      );
+    }
+    const raster = await resolveRaster(expression, checker, project, sourceFile);
+    if ('diagnostic' in raster) return raster;
+    rasters.push(raster.raster);
+  }
+  return { rasters };
 }
 
 async function resolveRaster(
@@ -210,10 +244,22 @@ async function resolveRaster(
   if (value === undefined) {
     return failure('invalid-raster-options', 'raster must be a statically visible factory call', sourceFile, text);
   }
+  if (ts.isStringLiteralLikeNode(value)) {
+    try {
+      return { raster: await builtInRasterBaker(value.text, sourceFile.fileName) };
+    } catch (error) {
+      return failure(
+        'invalid-raster-manifest',
+        error instanceof Error ? error.message : String(error),
+        sourceFile,
+        text,
+      );
+    }
+  }
   const moduleExpression = ts.isCallExpression(value)
     ? value.expression
     : ts.isObjectLiteralExpression(value)
-      ? objectPropertyExpression(value, 'module')
+      ? objectPropertyExpression(value, 'raster')
       : value;
   const optionsExpression = ts.isCallExpression(value)
     ? value.arguments[0]
@@ -234,6 +280,26 @@ async function resolveRaster(
   } catch (error) {
     return failure('invalid-raster-manifest', error instanceof Error ? error.message : String(error), sourceFile, text);
   }
+}
+
+async function defaultRasterBakers(sourceFile: string): Promise<readonly ResolvedRasterBaker[]> {
+  return Promise.all([
+    builtInRasterBaker('bitmap', sourceFile, { strikes: [8, 16] }),
+    builtInRasterBaker('msdf', sourceFile),
+    builtInRasterBaker('slug', sourceFile),
+  ]);
+}
+
+async function builtInRasterBaker(
+  kind: string,
+  sourceFile: string,
+  options: unknown = {},
+): Promise<ResolvedRasterBaker> {
+  if (kind !== 'bitmap' && kind !== 'msdf' && kind !== 'slug') {
+    throw new Error(`FontFace format key ${JSON.stringify(kind)} has no statically imported raster baker`);
+  }
+  const manifest = await rasterManifest({ module: '@pmndrs/glyph', exported: kind }, sourceFile);
+  return { ...manifest, options };
 }
 
 async function rasterManifest(

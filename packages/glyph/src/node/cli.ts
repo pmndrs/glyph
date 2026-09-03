@@ -534,7 +534,7 @@ function bakeUsage(): string {
   glyph bake [discovery options]
   glyph bake --input <font> --output <font.glb> [options]
 
-Bake one known font directly, or discover defineFont() declarations in a project.
+Bake one known font directly, or discover glyph.fontFace() declarations in a project.
 Direct options and discovery options cannot be mixed. With no bake options, discovery
 scans the current project and writes beside each source asset.
 

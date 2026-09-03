@@ -2,6 +2,13 @@
 
 ## 2026-09-02
 
+- **Retired the duplicate public font-loader story** — `glyph.fontFace()` now owns the only application loading path and
+  static bake discovery. Root and `/config` no longer export `loadFont`, `FontLibrary`, `createFontLibrary`, `defineFont`,
+  or font tokens. Renderer-free Paragraph accepts a loaded explicit FontFace selection and owns an independent immutable
+  Font lease, while configured handles resolve omitted defaults through `GlyphConfig.fonts`. Focused package tests retain
+  private loader access only when they prove the underlying resource graph; benchmark transport and timing injection is
+  confined to one harness-owned module.
+
 - **Removed the full validator from runtime baking** — The runtime OTF/TTF Worker now trusts the core and raster GLBs
   produced by Glyph's own bakers, reading only the GLB envelope, reserved extension identity, compatible versions, and
   ranges required to pass core metadata into raster baking and composition. Node `/bake` explicitly supplies the full

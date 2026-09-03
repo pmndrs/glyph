@@ -11,6 +11,7 @@ async function project() {
   await Promise.all([
     mkdir(join(root, 'src'), { recursive: true }),
     mkdir(join(root, 'public', 'fonts'), { recursive: true }),
+    mkdir(join(root, 'node_modules', '@pmndrs', 'glyph', 'bakers'), { recursive: true }),
     mkdir(join(root, 'node_modules', '@fixture', 'raster'), { recursive: true }),
   ]);
   await writeFile(
@@ -28,6 +29,33 @@ async function project() {
       include: ['src'],
     }),
   );
+  await writeFile(
+    join(root, 'node_modules', '@pmndrs', 'glyph', 'package.json'),
+    JSON.stringify({
+      name: '@pmndrs/glyph',
+      type: 'module',
+      exports: {
+        '.': { types: './index.d.ts', import: './index.js' },
+        './bakers/bitmap': { import: './bakers/bitmap.js' },
+        './bakers/msdf': { import: './bakers/msdf.js' },
+        './bakers/slug': { import: './bakers/slug.js' },
+        './package.json': './package.json',
+      },
+      pmndrs: {
+        glyph: { bitmap: './bakers/bitmap', msdf: './bakers/msdf', slug: './bakers/slug' },
+      },
+    }),
+  );
+  await Promise.all([
+    writeFile(
+      join(root, 'node_modules', '@pmndrs', 'glyph', 'index.d.ts'),
+      'export declare const glyph: { fontFace(source: unknown, config?: unknown): unknown }\n',
+    ),
+    writeFile(join(root, 'node_modules', '@pmndrs', 'glyph', 'index.js'), 'export const glyph = {}\n'),
+    ...['bitmap', 'msdf', 'slug'].map((kind) =>
+      writeFile(join(root, 'node_modules', '@pmndrs', 'glyph', 'bakers', `${kind}.js`), 'export {}\n'),
+    ),
+  ]);
   await writeFile(
     join(root, 'node_modules', '@fixture', 'raster', 'package.json'),
     JSON.stringify({
@@ -51,7 +79,32 @@ async function project() {
   return root;
 }
 
-test('discovers aliased defineFont and immutable raster options through TypeScript symbols', async (t) => {
+test('an omitted format discovers the default Bitmap, MSDF, and Slug bake set', async (t) => {
+  const root = await project();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'public', 'fonts', 'Defaults.ttf'), 'font');
+  await writeFile(
+    join(root, 'src', 'main.ts'),
+    `
+      import { glyph } from '@pmndrs/glyph'
+      glyph.fontFace('/fonts/Defaults.ttf')
+    `,
+  );
+
+  const report = await discoverProjectFonts({ projectRoot: root });
+
+  assert.deepEqual(report.diagnostics, []);
+  assert.deepEqual(
+    report.fonts.map(({ raster }) => [raster.kind, raster.options]),
+    [
+      ['bitmap', { strikes: [8, 16] }],
+      ['msdf', {}],
+      ['slug', {}],
+    ],
+  );
+});
+
+test('discovers glyph.fontFace and immutable raster options through TypeScript symbols', async (t) => {
   const root = await project();
   t.after(() => rm(root, { recursive: true, force: true }));
   const fontPath = join(root, 'public', 'fonts', 'Inter Regular.ttf');
@@ -59,16 +112,16 @@ test('discovers aliased defineFont and immutable raster options through TypeScri
   await writeFile(
     join(root, 'src', 'main.ts'),
     `
-      import { defineFont as declareFont } from '@pmndrs/glyph'
+      import { glyph as text } from '@pmndrs/glyph'
       import { bitmap as makeBitmap } from '@fixture/raster'
       declare function assetOrigin(): string
       const origin = assetOrigin()
       const strikes = [16, 32] as const
-      export const prose = declareFont(
+      export const prose = text.fontFace(
         \`\${origin}/fonts/Inter%20Regular.ttf?v=4#ignored\`,
-        makeBitmap({ strikes }),
+        { format: makeBitmap({ strikes }) },
       )
-      // defineFont('/fonts/not-real.ttf') must not be discovered from text.
+      // glyph.fontFace('/fonts/not-real.ttf') must not be discovered from text.
     `,
   );
 
@@ -98,19 +151,19 @@ test('discovers plain JavaScript and JSX with the same symbol and constant seman
     writeFile(
       join(root, 'src', 'main.js'),
       `
-        import { defineFont as declareFont } from '@pmndrs/glyph'
+        import { glyph } from '@pmndrs/glyph'
         import { bitmap as makeBitmap } from '@fixture/raster'
         const source = '/fonts/JavaScript.ttf'
         const strikes = [16, 32]
-        export const prose = declareFont(source, makeBitmap({ strikes }))
+        export const prose = glyph.fontFace(source, { format: makeBitmap({ strikes }) })
       `,
     ),
     writeFile(
       join(root, 'src', 'view.jsx'),
       `
-        import { defineFont } from '@pmndrs/glyph'
+        import { glyph } from '@pmndrs/glyph'
         import { bitmap } from '@fixture/raster'
-        export const label = defineFont('/fonts/JavaScriptJsx.ttf', bitmap({ strikes: [16] }))
+        export const label = glyph.fontFace('/fonts/JavaScriptJsx.ttf', { format: bitmap({ strikes: [16] }) })
         export const Label = () => <span>{label ? 'ready' : 'pending'}</span>
       `,
     ),
@@ -140,7 +193,7 @@ test('resolves new URL inputs relative to the declaring module', async (t) => {
     `
       import * as text from '@pmndrs/glyph'
       import { bitmap } from '@fixture/raster'
-      text.defineFont(new URL('./fonts/Local.otf', import.meta.url), bitmap({ strikes: [16] }))
+      text.glyph.fontFace(new URL('./fonts/Local.otf', import.meta.url), { format: bitmap({ strikes: [16] }) })
     `,
   );
 
@@ -165,14 +218,14 @@ test('follows imported constants and resolves literal, concatenated, and absolut
   await writeFile(
     join(root, 'src', 'main.ts'),
     `
-      import { defineFont } from '@pmndrs/glyph'
+      import { glyph } from '@pmndrs/glyph'
       import { bitmap } from '@fixture/raster'
       import { moduleFont } from './paths.js'
       const directory = '/fonts/'
       const name = 'Combined'
-      defineFont(moduleFont, bitmap({ strikes: [16] }))
-      defineFont(directory + name + '.ttf', bitmap({ strikes: [16] }))
-      defineFont(new URL('https://cdn.example/fonts/Remote.ttf?v=4#ignored'), bitmap({ strikes: [16] }))
+      glyph.fontFace(moduleFont, { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace(directory + name + '.ttf', { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace(new URL('https://cdn.example/fonts/Remote.ttf?v=4#ignored'), { format: bitmap({ strikes: [16] }) })
     `,
   );
 
@@ -186,7 +239,7 @@ test('follows imported constants and resolves literal, concatenated, and absolut
   ]);
 });
 
-test('discovers raw and composed raster requests, resolves source overrides, and skips baked-only inputs', async (t) => {
+test('discovers single and array format requests and skips baked GLB inputs', async (t) => {
   const root = await project();
   t.after(() => rm(root, { recursive: true, force: true }));
   await Promise.all([
@@ -196,12 +249,11 @@ test('discovers raw and composed raster requests, resolves source overrides, and
   await writeFile(
     join(root, 'src', 'main.tsx'),
     `
-      import { defineFont } from '@pmndrs/glyph'
+      import { glyph } from '@pmndrs/glyph'
       import { bitmap } from '@fixture/raster'
-      defineFont('/fonts/Core.ttf', bitmap({ strikes: [16] }))
-      const override = { source: '/fonts/Override.ttf', baked: '/fonts/custom.glb' } as const
-      defineFont(override, { module: bitmap, options: { strikes: [16, 32] } })
-      defineFont({ baked: '/fonts/Already.font.glb' }, bitmap({ strikes: [16] }))
+      glyph.fontFace('/fonts/Core.ttf', { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace('/fonts/Override.ttf', { format: [bitmap({ strikes: [16, 32] })] })
+      glyph.fontFace('/fonts/Already.font.glb', { format: bitmap({ strikes: [16] }) })
     `,
   );
 
@@ -225,16 +277,16 @@ test('orders fonts and diagnostics by lexical source position despite concurrent
   await writeFile(
     join(root, 'src', 'main.ts'),
     `
-      import { defineFont } from '@pmndrs/glyph'
+      import { glyph } from '@pmndrs/glyph'
       import { bitmap } from '@fixture/raster'
       declare function dynamic(): string
-      defineFont('/fonts/Zeta.ttf', bitmap({ strikes: [16] }))
-      defineFont('/fonts/Alpha.ttf', bitmap({ strikes: [16] }))
-      defineFont('/fonts/Repeat.ttf', bitmap({ strikes: [16] }))
-      defineFont('/fonts/Repeat.ttf', bitmap({ strikes: [16] }))
-      defineFont(dynamic(), bitmap({ strikes: [16] }))
-      defineFont('/fonts/Missing.ttf', bitmap({ strikes: [16] }))
-      defineFont(dynamic(), bitmap({ strikes: [16] }))
+      glyph.fontFace('/fonts/Zeta.ttf', { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace('/fonts/Alpha.ttf', { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace('/fonts/Repeat.ttf', { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace('/fonts/Repeat.ttf', { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace(dynamic(), { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace('/fonts/Missing.ttf', { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace(dynamic(), { format: bitmap({ strikes: [16] }) })
     `,
   );
 
@@ -261,15 +313,15 @@ test('reports ambiguity, unsafe paths, missing files, dynamic options, and dynam
   await writeFile(
     join(root, 'src', 'main.ts'),
     `
-      import { defineFont } from '@pmndrs/glyph'
+      import { glyph } from '@pmndrs/glyph'
       import { bitmap } from '@fixture/raster'
       declare function source(): string
       declare function strikes(): number[]
-      defineFont('/fonts/Shared.ttf', bitmap({ strikes: [16] }))
-      defineFont('/fonts/%2e%2e/secret.ttf', bitmap({ strikes: [16] }))
-      defineFont('/fonts/Missing.ttf', bitmap({ strikes: [16] }))
-      defineFont('/fonts/Unique.ttf', bitmap({ strikes: strikes() }))
-      defineFont(source(), bitmap({ strikes: [16] }))
+      glyph.fontFace('/fonts/Shared.ttf', { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace('/fonts/%2e%2e/secret.ttf', { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace('/fonts/Missing.ttf', { format: bitmap({ strikes: [16] }) })
+      glyph.fontFace('/fonts/Unique.ttf', { format: bitmap({ strikes: strikes() }) })
+      glyph.fontFace(source(), { format: bitmap({ strikes: [16] }) })
     `,
   );
 
@@ -332,11 +384,11 @@ test('rejects CommonJS and package-escaping raster baker manifests', async (t) =
   await writeFile(
     join(root, 'src', 'main.ts'),
     `
-      import { defineFont } from '@pmndrs/glyph'
+      import { glyph } from '@pmndrs/glyph'
       import { bitmap as commonjs } from '@fixture/commonjs'
       import { bitmap as escaping } from '@fixture/escape'
-      defineFont('/fonts/Valid.ttf', commonjs({ strikes: [16] }))
-      defineFont('/fonts/Valid.ttf', escaping({ strikes: [16] }))
+      glyph.fontFace('/fonts/Valid.ttf', { format: commonjs({ strikes: [16] }) })
+      glyph.fontFace('/fonts/Valid.ttf', { format: escaping({ strikes: [16] }) })
     `,
   );
 

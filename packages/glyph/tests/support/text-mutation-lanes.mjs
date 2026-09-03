@@ -20,7 +20,7 @@ import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 
 import { glyph, span, txt } from '@pmndrs/glyph';
-import { loadFont } from '@pmndrs/glyph/config/font-library';
+import { loadFont } from '../../dist/loader.js';
 import { ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 

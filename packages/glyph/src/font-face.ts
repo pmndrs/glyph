@@ -323,6 +323,27 @@ export function isFontFaceSelection(selection: unknown): selection is AnyFontFac
   return state !== undefined && !state.face.owner.disposed;
 }
 
+/**
+ * @internal Acquire an independent immutable Font lease for a renderer-free consumer.
+ *
+ * A configured renderer may resolve an omitted or string format through its own format table.
+ * Renderer-free APIs have no such config, so they accept only a selection whose declared format
+ * resolves to an imported raster format. The caller owns and must dispose the returned lease.
+ */
+export function acquireLoadedFontFaceSelection<const Selection extends AnyFontFaceSelection>(
+  selection: Selection,
+): Font<FontFaceRasterOf<Selection>> {
+  const selected = fontFaceSelectionState(selection);
+  if (selected.format === undefined) {
+    throw new FontLoadError(
+      'FONT_FACE_FORMAT_REQUIRED',
+      `FontFace ${JSON.stringify(selection.family)} requires an explicit format outside a configured handle`,
+    );
+  }
+  const raster = resolveDeclaredFormat(selected.format);
+  return cloneImmutableFont(requiredFontFaceFormat(selection, raster)) as Font<FontFaceRasterOf<Selection>>;
+}
+
 /** @internal Canonical identity shared by React declarations and the loader's raster request policy. */
 export function fontFaceResourceKey(source: FontFaceSource, format: FontFaceConfig['format']): string {
   return `${fontFaceSourceKey(source)}:${fontFaceFormatIdentity(format)}`;

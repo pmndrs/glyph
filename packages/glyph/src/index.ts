@@ -195,20 +195,7 @@ export type {
   SerializedFontFaceResourceIdentity,
 } from './font-face-transfer.js';
 
-export type {
-  AnyFontToken,
-  BakedFontSource,
-  Font,
-  FontBytesInput,
-  FontInput,
-  FontInputOf,
-  FontMetrics,
-  RasterDecodeFont,
-  FontRasterFormatOf,
-  FontSourceOverride,
-  FontToken,
-} from './font.js';
-export { defineFont } from './font.js';
+export type { Font, FontMetrics, RasterDecodeFont } from './font.js';
 
 export type { FontSlot, LocalGlyphId, RasterKey, Sha256Hex } from './identity.js';
 
@@ -231,7 +218,7 @@ export { createParagraph, Paragraph } from './paragraph.js';
 
 export type { GlyphCaret, GlyphKey } from './glyph-placement.js';
 
-// FontFace loading can throw this application-visible error; loader construction lives on /config/font-library.
+// FontFace loading can throw this application-visible error; loader construction remains package-private.
 export { FontLoadError } from './loader.js';
 
 export type { FontSelection, FontStack } from './loaded-font.js';

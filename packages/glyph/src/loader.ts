@@ -3,7 +3,7 @@ import {
   FONT_FORMAT_VERSION as CORE_FORMAT_VERSION,
 } from './font-baker/contract.js';
 
-import type { AnyFontToken, Font, FontBytesInput, FontInput, FontMetrics, FontToken, RegisteredFont } from './font.js';
+import type { Font, FontBytesInput, FontInput, FontMetrics, RegisteredFont } from './font.js';
 import {
   createImmutableFontBacking,
   createImmutableFontLease,
@@ -121,9 +121,6 @@ export interface FontLibraryOptions {
 /** Application-owned loading boundary over Glyph's immutable font resource graph. */
 export interface FontLibrary {
   readonly disposed: boolean;
-
-  /** Load a statically discoverable Font token. */
-  loadFont<Format extends AnyRasterFormat>(token: FontToken<Format>, options?: FontLoadOptions): Promise<Font<Format>>;
 
   /** Load one typed raster variant of a portable font. */
   loadFont<Format extends AnyRasterFormat>(
@@ -792,43 +789,20 @@ interface ImmutableLoadArguments {
 }
 
 function immutableLoadArguments(
-  inputOrToken: unknown,
+  input: unknown,
   rasterOrOptions: unknown,
   loadOptions: unknown,
 ): ImmutableLoadArguments {
-  if (isFontTokenArgument(inputOrToken)) {
-    if (loadOptions !== undefined) throw new TypeError('font token loading accepts one options argument');
-    return {
-      input: inputOrToken.input,
-      rasters: [
-        {
-          raster: inputOrToken.raster,
-          ...(inputOrToken.options === undefined ? {} : { options: inputOrToken.options }),
-        },
-      ],
-      multiple: false,
-      options: (rasterOrOptions === undefined ? {} : rasterOrOptions) as FontLoadOptions,
-    };
-  }
   if (rasterOrOptions === undefined) throw new TypeError('font loading requires a raster format');
   return {
-    input: inputOrToken as LoadFontInput,
+    input: input as LoadFontInput,
     rasters: Array.isArray(rasterOrOptions) ? rasterOrOptions : [rasterOrOptions],
     multiple: Array.isArray(rasterOrOptions),
     options: loadOptions === undefined ? {} : (loadOptions as FontLoadOptions),
   };
 }
 
-function isFontTokenArgument(value: unknown): value is AnyFontToken {
-  return isNonArrayObject(value) && Object.hasOwn(value, 'input') && Object.hasOwn(value, 'raster');
-}
-
 /** Load a portable Font or position-preserving Font tuple. */
-export function loadFont<Format extends AnyRasterFormat>(
-  token: FontToken<Format>,
-  options?: FontLoadOptions,
-): Promise<Font<Format>>;
-
 export function loadFont<Format extends AnyRasterFormat>(
   input: LoadFontInput,
   raster: RasterFormatInput<Format>,
@@ -911,8 +885,6 @@ class FontLibraryImpl implements FontLibrary {
   get disposed(): boolean {
     return this.#disposed;
   }
-
-  loadFont<Format extends AnyRasterFormat>(token: FontToken<Format>, options?: FontLoadOptions): Promise<Font<Format>>;
 
   loadFont<Format extends AnyRasterFormat>(
     input: LoadFontInput,
