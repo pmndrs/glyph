@@ -44,10 +44,19 @@ test('application types stay at root while integration construction lives on con
   const root = published(await declaration('index.d.ts'));
   const manifest = JSON.parse(await declaration('../package.json'));
   assert.equal(manifest.exports['./core'], undefined, 'handle/planner internals must not have a public subpath');
+  assert.equal(manifest.exports['./loader'], null, 'the legacy low-level font loader must remain package-private');
+  assert.equal(
+    manifest.exports['./config/font-library'],
+    null,
+    'the internal FontLibrary must not become a second public font API',
+  );
   assert.ok(manifest.exports['./config/*'], 'renderer-neutral integration leaves must be public');
 
   for (const name of ['GlyphConfig', 'Codec', 'TechniqueSchema', 'RasterFormat']) {
     assert.equal(root.has(name), true, `applications must be able to name ${name} from the root`);
+  }
+  for (const legacyFontName of ['loadFont', 'createFontLibrary', 'FontLibrary']) {
+    assert.equal(root.has(legacyFontName), false, `root must not publish legacy font API ${legacyFontName}`);
   }
 
   const leaves = {
