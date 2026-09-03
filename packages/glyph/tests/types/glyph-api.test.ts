@@ -4,6 +4,7 @@ import {
   type GlyphConfigBindings,
   type GlyphConfigHandle,
   type GlyphHandle,
+  type GlyphInstanceKind,
   type GlyphRoot,
   type GlyphSchema,
   type PortableResource,
@@ -13,6 +14,16 @@ import * as GlyphConfigApi from '@pmndrs/glyph/config/glyph';
 
 // @ts-expect-error Handle construction is package-owned, not part of the public GlyphConfig DSL.
 void GlyphConfigApi.invokeGlyphConfigHandleFactory;
+// @ts-expect-error The pre-binding typed wire view is package-owned; renderers receive CommandBufferView.
+type _BorrowedWireIsPrivate = GlyphConfigApi.BorrowedTypedCommandBuffer;
+// @ts-expect-error Publication transaction machinery is package-owned.
+type _ProjectorIsPrivate = GlyphConfigApi.GlyphDisplayListProjector<RecordingBindings>;
+// @ts-expect-error Integrators implement renderer.decode instead of driving projection themselves.
+void GlyphConfigApi.applyGlyphPublication;
+
+const instanceKinds: readonly GlyphInstanceKind[] = ['glyph', 'decoration', 'inline-object', 'clip', 'codec'];
+// @ts-expect-error Renderer-facing instance kinds are a closed semantic union.
+instanceKinds satisfies readonly ('glyph' | 'decoration')[];
 
 type IsAny<Value> = 0 extends 1 & Value ? true : false;
 

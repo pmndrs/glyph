@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:6d891eb7a0169f0757d2f2434f0da1830b67a243dea8300441358a1896b67c64'
+source_digest: 'sha256:07ad6560231253b524bb524b5a927be685d20fccee9115505555a45fd1e508f9'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -590,6 +590,13 @@ such as `defineGlyphConfig`, Codec authoring, schema binding, raster-format defi
 explicit `@pmndrs/glyph/config/*` leaves. D-306 and D-308 supersede D-249's former public `/core` engine-driving layer. Internal projection,
 identity mapping, planning, settlement, and Wasm transport are package machinery rather than an application or integrator
 API. The explicit `/tsl` and `/typegpu` shader subpaths own technique shader realizations and no scene, runtime, or root.
+
+The raw borrowed Rust publication and its typed command tree never cross the integration boundary. The engine projects
+that trusted wire data through the integration's schema and resource resolver, then calls
+`GlyphRenderer.decode(CommandBufferView)`. The bound view is the only renderer input: it preserves authoritative ordered
+display-list children and exposes the closed semantic `GlyphInstanceKind` union, while numeric wire identities,
+projection state, and publication settlement remain private. An integration therefore implements one host-realization
+step rather than selecting or invoking a second decoder.
 
 Three and `packages/glyph-example-renderer` consume the same public root types and `/config/*` helpers available to third-party integrations. The
 example is the standing second-engine proof: its Codec describes storage, the trusted internal projection supplies one

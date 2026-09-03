@@ -6,9 +6,7 @@ import type { AnyRasterFormat } from './raster-format.js';
 import type { Constraints, ParagraphLayout, TextStyle } from '../text-properties.js';
 import type { PortableResource } from './resources.js';
 import type { CodecBuffer, CodecDescriptor, CodecIdFactory, CodecProgram } from './codec.js';
-import type { PlanAcceptance, PlanCandidate } from '../internal/render-planner.js';
 
-declare const typedCommandBufferBrand: unique symbol;
 declare const typedCommandIdentityBrand: unique symbol;
 const glyphConfigBrand: unique symbol = Symbol('pmndrs.glyph.config');
 declare const glyphConfigRootType: unique symbol;
@@ -51,107 +49,8 @@ export interface SemanticIdentity {
   readonly [typedCommandIdentityBrand]: 'semantic';
 }
 
-export type TypedResourceCommand = Readonly<{
-  kind: 'acquire' | 'update' | 'retain';
-  resource: TypedResource;
-}>;
-
-export type TypedBufferCommand = Readonly<{
-  kind: 'ensure';
-  buffer: TypedBuffer;
-  program: TypedProgram;
-  scalarType: 'f32' | 'u32' | 'u16';
-  vectorWidth: number;
-  capacityRecords: number;
-  byteLength: number;
-}>;
-
-export type TypedPatchCommand =
-  | Readonly<{
-      kind: 'allocate-or-resize';
-      buffer: TypedBuffer;
-      destinationOffset: number;
-      byteLength: number;
-    }>
-  | Readonly<{ kind: 'write'; buffer: TypedBuffer; destinationOffset: number; payload: Uint8Array }>
-  | Readonly<{
-      kind: 'fill';
-      buffer: TypedBuffer;
-      destinationOffset: number;
-      byteLength: number;
-      value: number;
-    }>
-  | Readonly<{
-      kind: 'copy';
-      source: TypedBuffer;
-      sourceOffset: number;
-      destination: TypedBuffer;
-      destinationOffset: number;
-      byteLength: number;
-    }>
-  | Readonly<{
-      kind: 'retire';
-      buffer: TypedBuffer;
-      destinationOffset: number;
-      byteLength: number;
-    }>;
-
-export interface TypedInstanceSpan {
-  readonly identity: InstanceSpanIdentity;
-  readonly kind: 'glyph' | 'decoration' | 'inline-object' | 'clip' | 'codec';
-  readonly recordIndex: number;
-  readonly recordCount: number;
-  readonly logicalOrder: number;
-}
-
-export interface TypedBatch {
-  readonly kind: 'batch';
-  readonly identity: BatchIdentity;
-  readonly instances: BorrowedCommandSequence<TypedInstanceSpan>;
-}
-
-export interface TypedRootInstance {
-  readonly kind: 'instance';
-  readonly identity: InstanceIdentity;
-  readonly transform: TransformIdentity | undefined;
-}
-
-export type TypedGroupChild = TypedBatch | TypedRootInstance;
-
-export interface TypedGroup {
-  /** Rust draw order is authoritative; batches and root instances remain interleaved. */
-  readonly children: BorrowedCommandSequence<TypedGroupChild>;
-}
-
-export type TypedGroupPhase = Readonly<{ kind: 'unchanged' }> | Readonly<{ kind: 'replace'; value: TypedGroup }>;
-
-export type TypedRetirementCommand =
-  | Readonly<{ kind: 'resource'; resource: TypedResource }>
-  | Readonly<{ kind: 'buffer'; buffer: TypedBuffer }>
-  | Readonly<{ kind: 'slot-range'; byteOffset: number; byteLength: number }>
-  | Readonly<{ kind: 'output-bytes'; byteOffset: number; byteLength: number }>;
-
-export interface TypedUpdatePhases {
-  readonly resources: BorrowedCommandSequence<TypedResourceCommand>;
-  readonly buffers: BorrowedCommandSequence<TypedBufferCommand>;
-  readonly patches: BorrowedCommandSequence<TypedPatchCommand>;
-  readonly retirements: BorrowedCommandSequence<TypedRetirementCommand>;
-}
-
-/**
- * Engine-owned zero-copy view offered to exactly one synchronous decoder call.
- * Scalar fields remain in the trusted Rust publication; only opaque identities are interned.
- */
-export interface BorrowedTypedCommandBuffer {
-  readonly delivery: 'borrowed';
-  readonly engineRevision: number;
-  readonly planRevision: number;
-  readonly publicationGeneration: number;
-  readonly checkpoint: boolean;
-  readonly updates: TypedUpdatePhases;
-  readonly group: TypedGroupPhase;
-  readonly [typedCommandBufferBrand]: true;
-}
+/** Ordered display-list record kinds emitted by the built-in Codec projection. */
+export type GlyphInstanceKind = 'glyph' | 'decoration' | 'inline-object' | 'clip' | 'codec';
 
 /** Renderer binding vocabulary selected by one GlyphConfig. */
 export interface GlyphBindings<
@@ -206,7 +105,7 @@ export interface GlyphBufferBindingInput<Bindings extends AnyGlyphBindings> {
 
 export interface GlyphInstanceSpanBindingInput<Bindings extends AnyGlyphBindings> {
   readonly identity: InstanceSpanIdentity;
-  readonly kind: TypedInstanceSpan['kind'];
+  readonly kind: GlyphInstanceKind;
   readonly program: Bindings['program'];
   readonly programVariant: number;
   readonly resource: Bindings['resource'] | undefined;
@@ -416,7 +315,7 @@ export type BufferPatch<Buffer extends object> =
 
 export interface DisplayListInstanceSpan<InstanceSpan extends object> {
   readonly value: InstanceSpan;
-  readonly kind: 'glyph' | 'decoration' | 'inline-object' | 'clip' | 'codec';
+  readonly kind: GlyphInstanceKind;
   readonly recordIndex: number;
   readonly recordCount: number;
   readonly logicalOrder: number;
@@ -481,14 +380,6 @@ export interface CommandBufferView<Bindings extends AnyGlyphBindings> {
   readonly displayList: DisplayListPhase<Bindings>;
 }
 
-/** Internal retained projector used by one root's renderer publication transaction. */
-export interface GlyphDisplayListProjector<Bindings extends AnyGlyphBindings> {
-  source(candidate: PlanCandidate, signal: AbortSignal): BorrowedTypedCommandBuffer;
-  project(source: BorrowedTypedCommandBuffer): CommandBufferView<Bindings>;
-  settle(source: BorrowedTypedCommandBuffer, update: CommandBufferView<Bindings> | undefined, accepted: boolean): void;
-  dispose(): void;
-}
-
 export interface PreparedRendererCommit<Result> {
   readonly result: Result;
   commit(): void;
@@ -516,46 +407,6 @@ export interface RendererContext<
   readonly codec: CodecValue;
   /** Built-in renderer selected by an adapter before a config wrapper is applied. */
   readonly defaultRenderer?: GlyphRenderer<Bindings, Result>;
-}
-
-/**
- * Runs one borrowed publication transaction. Projection/decode failures discard candidate
- * state; once commit begins, binder state follows the committed host branch even if cleanup throws.
- */
-export function applyGlyphPublication<Bindings extends AnyGlyphBindings, Result>(
-  candidate: PlanCandidate,
-  signal: AbortSignal,
-  projector: GlyphDisplayListProjector<Bindings>,
-  renderer: GlyphRenderer<Bindings, Result>,
-): PlanAcceptance {
-  if (signal.aborted) return { accepted: false, error: signal.reason };
-  let source: BorrowedTypedCommandBuffer | undefined;
-  let update: CommandBufferView<Bindings> | undefined;
-  let prepared: PreparedRendererCommit<Result> | undefined;
-  let commitStarted = false;
-  try {
-    source = projector.source(candidate, signal);
-    update = projector.project(source);
-    prepared = renderer.decode(update);
-    commitStarted = true;
-    prepared.commit();
-    projector.settle(source, update, true);
-    return { accepted: true };
-  } catch (error) {
-    try {
-      prepared?.discard();
-    } catch {
-      // Preserve the decode, preparation, or commit failure as the target rejection.
-    }
-    if (source !== undefined) {
-      try {
-        projector.settle(source, update, commitStarted);
-      } catch {
-        // Preserve the renderer failure if projection settlement also fails.
-      }
-    }
-    return { accepted: false, error };
-  }
 }
 
 /** Renderer-defined publication root selected through one configured handle. */

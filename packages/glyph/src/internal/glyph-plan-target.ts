@@ -1,10 +1,10 @@
-import { createEngine } from './create-engine.js';
+import { createEngine, type GlyphDisplayListProjector } from './create-engine.js';
 import {
-  applyGlyphPublication,
   type AnyGlyphBindings,
   type CommandBufferView,
   type GlyphRenderer,
   type GlyphSchema,
+  type PreparedRendererCommit,
   type RendererContext,
   type ResolveContext,
   type ResourceLease,
@@ -13,6 +13,7 @@ import {
 import type { Codec } from '../config/glyph.js';
 import type { HandleMaterialBinding, HandleTransformBinding } from './handle-state.js';
 import type { PlanAcceptance, PlanCandidate, PlanTarget } from './render-planner.js';
+import type { BorrowedTypedCommandBuffer } from './typed-command-buffer.js';
 
 type PlanTargetConfig<Bindings extends AnyGlyphBindings, Result, Root, CodecValue extends Codec> = Readonly<{
   schema: GlyphSchema<Bindings, Root>;
@@ -50,6 +51,42 @@ export function createGlyphPlanTarget<Bindings extends AnyGlyphBindings, Result,
   options: CreateGlyphPlanTargetOptions<Bindings, Result, Root, CodecValue>,
 ): GlyphPlanTarget<Bindings, Result> {
   return new ConfiguredGlyphPlanTarget(options);
+}
+
+function applyGlyphPublication<Bindings extends AnyGlyphBindings, Result>(
+  candidate: PlanCandidate,
+  signal: AbortSignal,
+  projector: GlyphDisplayListProjector<Bindings>,
+  renderer: GlyphRenderer<Bindings, Result>,
+): PlanAcceptance {
+  if (signal.aborted) return { accepted: false, error: signal.reason };
+  let source: BorrowedTypedCommandBuffer | undefined;
+  let update: CommandBufferView<Bindings> | undefined;
+  let prepared: PreparedRendererCommit<Result> | undefined;
+  let commitStarted = false;
+  try {
+    source = projector.source(candidate, signal);
+    update = projector.project(source);
+    prepared = renderer.decode(update);
+    commitStarted = true;
+    prepared.commit();
+    projector.settle(source, update, true);
+    return { accepted: true };
+  } catch (error) {
+    try {
+      prepared?.discard();
+    } catch {
+      // Preserve the decode, preparation, or commit failure as the target rejection.
+    }
+    if (source !== undefined) {
+      try {
+        projector.settle(source, update, commitStarted);
+      } catch {
+        // Preserve the renderer failure if projection settlement also fails.
+      }
+    }
+    return { accepted: false, error };
+  }
 }
 
 class ConfiguredGlyphPlanTarget<
