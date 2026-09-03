@@ -50,3 +50,36 @@ export function lastWord(text: string): string {
   const words = text.trim().split(' ');
   return words[words.length - 1] ?? '';
 }
+
+export interface TypistRates {
+  readonly typeRate: number;
+  readonly eraseRate: number;
+  readonly hold: number;
+}
+
+/**
+ * The same clock over any list of lines: which line, how many characters
+ * shown. `passageFrame` is this with the passages and their rates.
+ */
+export function typistFrame(
+  lines: readonly string[],
+  elapsed: number,
+  { typeRate, eraseRate, hold }: TypistRates,
+): { line: number; shown: number } {
+  let t = elapsed;
+  for (let cycle = 0; ; cycle += 1) {
+    const index = cycle % lines.length;
+    const line = lines[index] ?? '';
+    const typing = line.length / typeRate;
+    const erasing = line.length / eraseRate;
+    const total = typing + hold + erasing + 0.5;
+    if (t < total) {
+      if (t < typing) return { line: index, shown: Math.floor(t * typeRate) };
+      if (t < typing + hold) return { line: index, shown: line.length };
+      if (t < typing + hold + erasing)
+        return { line: index, shown: line.length - Math.floor((t - typing - hold) * eraseRate) };
+      return { line: index, shown: 0 };
+    }
+    t -= total;
+  }
+}
