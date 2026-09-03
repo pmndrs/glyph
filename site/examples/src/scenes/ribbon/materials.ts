@@ -1,10 +1,10 @@
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { color, mix, normalView, positionWorld } from 'three/tsl';
-import { MeshBasicNodeMaterial } from 'three/webgpu';
+import { DoubleSide, MeshBasicNodeMaterial } from 'three/webgpu';
 
 /**
- * Type on the ribbon: depth-tested, so the ribbon hides the words that pass
- * behind it, and dimmed with distance so the far side reads as far. The quad
+ * Type on the ribbon: depth-tested, so the ribbon hides the words it passes
+ * over, and dimmed with distance so the far side reads as far. The quad
  * still never writes depth.
  */
 export const ribbonInk = defineTextMaterial((context) => {
@@ -17,10 +17,11 @@ export const ribbonInk = defineTextMaterial((context) => {
   return material;
 });
 
-/** A satin tube, shaded by its own facing rather than a light rig: bright where it faces the camera, dark at the rim. */
+/** A satin band, shaded by its own facing rather than a light rig: bright where it faces the camera, dark edge-on. */
 export function ribbonMaterial(): MeshBasicNodeMaterial {
   const material = new MeshBasicNodeMaterial();
-  const facing = normalView.z.clamp(0, 1);
-  material.colorNode = mix(color('#0d1119'), color('#3a4664'), facing.pow(1.6));
+  material.side = DoubleSide;
+  const facing = normalView.z.abs().clamp(0, 1);
+  material.colorNode = mix(color('#0d1119'), color('#3a4664'), facing.pow(1.4));
   return material;
 }
