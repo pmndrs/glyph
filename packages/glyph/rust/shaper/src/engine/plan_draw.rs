@@ -13,6 +13,13 @@ pub enum PlanDrawError {
     ArithmeticOverflow,
 }
 
+/// Stable sort key for display-list draws whose caller permits independent compositing.
+/// Paint layer is the primary key; encounter order remains deterministic within a layer.
+#[inline]
+pub fn independent_draw_sort_key(draw: &DrawRecord) -> u64 {
+    (u64::from(draw.depth_key) << 32) | u64::from(draw.order_token)
+}
+
 #[derive(Clone, Copy)]
 pub struct GlyphDraw {
     pub glyph: PlanGlyph,

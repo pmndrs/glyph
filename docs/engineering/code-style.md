@@ -86,6 +86,7 @@ This standard is the canonical code-quality policy for `pmndrs/glyph`. It suppor
 - Validate and normalize parsed JSON, Worker messages, Wasm metadata, fetched artifacts, persisted data, public JavaScript inputs, and plugin returns once at their trust boundary. Treat third-party callbacks as boundaries even when their declared TypeScript types look trusted.
 - State whether JSON-facing APIs accept only materialized JSON or intentionally apply `JSON.stringify` coercions. Bound depth and size, reject cycles and invalid values where programmatic input can exceed parsed-JSON guarantees, and fuse validation with unavoidable canonicalization when possible.
 - Trust normalized internal values. Do not put generic schema walks or repeated defensive validation in shaping, layout, rendering, or other hot loops.
+- Treat a renderer-side reconciliation state machine as an architecture review trigger. It must be either a measured host-resource cache or evidence that the command buffer/display list is missing canonical hierarchy, ordering, or lifetime data. Changes at that boundary require focused correctness tests and before/after performance evidence.
 - Begin cleanup scope before the first resource acquisition. Track each successful allocation, listener, Worker, handle, or publication independently and release it after any later failure. Either make initialization transactional or make cleanup safe for partial initialization.
 
 ## React

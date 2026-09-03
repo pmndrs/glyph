@@ -69,7 +69,7 @@ function fullDescriptor() {
         primitiveKind: 'decoration',
         resourceKindMask: 0x13_57_9b_df,
         semanticViewMask: 3,
-        storageKeyMask: batchFields.technique | batchFields.resource | batchFields.program,
+        storageKeyMask: batchFields.technique | batchFields.resource | batchFields.program | batchFields.depth,
         drawKeyMask: 255,
         paintCapabilities: 12,
         compositingCapabilities: 34,
@@ -104,8 +104,9 @@ function fullDescriptor() {
         f32InputCount: 0,
         u32InputCount: 1,
         inputs: [{ scope: 'glyph', field: 200 }],
-        storageKeyMask: batchFields.technique | batchFields.resource | batchFields.program,
-        drawKeyMask: batchFields.technique | batchFields.resource | batchFields.program | batchFields.order,
+        storageKeyMask: batchFields.technique | batchFields.resource | batchFields.program | batchFields.depth,
+        drawKeyMask:
+          batchFields.technique | batchFields.resource | batchFields.program | batchFields.depth | batchFields.order,
         buffers: [{ id: SECONDARY_BUFFER_ID, scalar: 'u32', vectorWidth: 1 }],
         operations: [
           { opcode: opcodes.loadU32, target: 0, operand0: 0 },
@@ -161,7 +162,7 @@ test('a fully specified codec retains every serialized value exactly', () => {
   assert.equal(view.getUint32(first + programLayout.semanticViewMask, true), 3);
   assert.equal(
     view.getUint32(first + programLayout.storageKeyMask, true),
-    batchFields.technique | batchFields.resource | batchFields.program,
+    batchFields.technique | batchFields.resource | batchFields.program | batchFields.depth,
   );
   assert.equal(view.getUint32(first + programLayout.drawKeyMask, true), 255);
   assert.equal(view.getUint32(first + programLayout.paintCapabilities, true), 12);

@@ -15,7 +15,7 @@ use super::{
         ValidatedCodec,
     },
     identity_index::IdentitySet,
-    plan_draw::{GlyphDraw, push_glyph_draw},
+    plan_draw::{GlyphDraw, independent_draw_sort_key, push_glyph_draw},
     plan_input::{
         draw_fields_compatible, draw_span_compatible, indexed_span_bounds, span_bounds,
         validate_glyph, validate_input,
@@ -1571,7 +1571,7 @@ impl StablePlanCompiler {
         reserve(&mut self.sort_pairs, self.draws.len())?;
         for (index, draw) in self.draws.iter().enumerate() {
             self.sort_pairs
-                .push((u64::from(draw.order_token), index as u32));
+                .push((independent_draw_sort_key(draw), index as u32));
         }
         sort::sort_pairs(&mut self.sort_pairs);
         sort::apply_pair_order(&mut self.draws, &mut self.sort_pairs);
@@ -2063,7 +2063,10 @@ mod tests {
         assert_eq!(plan.buffers.len(), 4);
         assert_eq!(plan.primitives.len(), 3);
         assert_eq!(plan.draws.len(), 3);
-        assert_eq!(plan.primitives[0].record_count, 2);
+        assert_eq!(
+            plan.primitives[plan.draws[0].primitive_start as usize].record_count,
+            2
+        );
         assert_eq!(plan.draws[0].order_token, 0);
         assert_eq!(plan.draws[1].order_token, 2);
         assert_eq!(plan.draws[2].order_token, 3);
@@ -2109,6 +2112,54 @@ mod tests {
         assert_eq!(plan.primitives[1].record_count, 1);
         assert_eq!(plan.draws[0].order_token, 0);
         assert_eq!(plan.draws[1].order_token, 2);
+        assert!(plan_layout(plan).is_ok(), "{:?}", plan_layout(plan));
+    }
+
+    #[test]
+    fn independent_compositing_flattens_stable_paint_layers() {
+        let codec = codec(false);
+        let mut compiler = StablePlanCompiler::default();
+        let mut over = glyph(1, 1);
+        over.depth_key = 2;
+        let mut under_a = glyph(2, 1);
+        under_a.depth_key = 0;
+        let mut content = glyph(3, 1);
+        content.depth_key = 1;
+        let mut under_b = glyph(4, 1);
+        under_b.depth_key = 0;
+        let glyphs = [over, under_a, content, under_b];
+        compiler
+            .prepare(
+                &codec,
+                CAPABILITY,
+                StablePlanInput {
+                    glyphs: &glyphs,
+                    semantic_change_masks: &[],
+                    f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                true,
+                1,
+                0,
+            )
+            .unwrap();
+        let plan = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+
+        assert_eq!(plan.draws.len(), 3);
+        assert_eq!(
+            plan.draws
+                .iter()
+                .map(|draw| (draw.depth_key, draw.order_token))
+                .collect::<Vec<_>>(),
+            vec![(0, 1), (1, 2), (2, 0)]
+        );
+        assert_eq!(
+            plan.primitives[plan.draws[0].primitive_start as usize].record_count,
+            2
+        );
         assert!(plan_layout(plan).is_ok(), "{:?}", plan_layout(plan));
     }
 
@@ -2446,6 +2497,7 @@ mod tests {
                 storage_key_mask: BATCH_TECHNIQUE
                     | BATCH_PROGRAM
                     | BATCH_RESOURCE
+                    | crate::engine::codec::BATCH_DEPTH
                     | if partition_materials {
                         BATCH_MATERIAL
                     } else {
@@ -2455,6 +2507,7 @@ mod tests {
                     | BATCH_PROGRAM
                     | BATCH_RESOURCE
                     | BATCH_MATERIAL
+                    | crate::engine::codec::BATCH_DEPTH
                     | BATCH_ORDER
                     | crate::engine::codec::BATCH_TRANSFORM,
                 allocation_strategy: ALLOCATION_STABLE_INDIRECT,
