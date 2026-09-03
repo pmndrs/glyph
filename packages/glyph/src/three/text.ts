@@ -53,7 +53,8 @@ import { createDecorations, decorationDraws, type Decorations } from './decorati
 export const threeTextConstructionToken: unique symbol = Symbol('pmndrs.glyph.three.construct');
 
 /** Package-private host identity carried by callable handle/root proxies. */
-const threeRootHosts = new WeakMap<THREE.Object3D, ThreeRootHost>();
+const threeRootIdentity: unique symbol = Symbol('pmndrs.glyph.three.root');
+const threeRootHosts = new WeakMap<object, ThreeRootHost>();
 
 /** One inline Three text run with optional font fallback and material override. */
 export type TextSpan<Technique extends AnyRasterFormat> = Omit<ParagraphSpan<Technique>, 'font'> &
@@ -152,8 +153,6 @@ class ThreeRootDrawObject extends THREE.Object3D {
 /** Public terminal root selected from a Three handle. */
 export interface ThreeRoot extends GlyphRoot {
   readonly handle: import('./handle.js').ThreeHandle;
-  readonly scene: THREE.Scene | undefined;
-  readonly drawRoot: THREE.Object3D;
   readonly textCount: number;
   readonly gpuBytes: number;
   material: ThreeTextMaterial | undefined;
@@ -167,13 +166,81 @@ export interface ThreeRoot extends GlyphRoot {
 
 /** @internal Resolve the package-owned host behind a public root or its lifecycle proxy. */
 export function threeRootHost(root: ThreeRoot): ThreeRootHost {
-  const host = threeRootHosts.get(root.drawRoot);
+  const identity = Reflect.get(root, threeRootIdentity);
+  const host =
+    (typeof identity === 'object' && identity !== null) || typeof identity === 'function'
+      ? threeRootHosts.get(identity)
+      : undefined;
   if (host === undefined) throw new TypeError('root was not created by a Glyph Three handle');
   return host;
 }
 
+class ThreePublicRoot implements ThreeRoot {
+  readonly #host: ThreeRootHost;
+
+  constructor(host: ThreeRootHost) {
+    this.#host = host;
+  }
+
+  get [threeRootIdentity](): object {
+    return this.#host;
+  }
+
+  get name(): string | undefined {
+    return this.#host.name;
+  }
+
+  get handle(): import('./handle.js').ThreeHandle {
+    return this.#host.handle;
+  }
+
+  get disposed(): boolean {
+    return this.#host.disposed;
+  }
+
+  dispose(): void {
+    this.#host.dispose();
+  }
+
+  get textCount(): number {
+    return this.#host.textCount;
+  }
+
+  get gpuBytes(): number {
+    return this.#host.gpuBytes;
+  }
+
+  get material(): ThreeTextMaterial | undefined {
+    return this.#host.material;
+  }
+
+  set material(value: ThreeTextMaterial | undefined) {
+    this.#host.material = value;
+  }
+
+  setMaterial(value: ThreeTextMaterial | undefined): void {
+    this.#host.setMaterial(value);
+  }
+
+  createText<Technique extends AnyRasterFormat>(properties: StandaloneTextProperties<Technique>): Text<Technique>;
+  createText<const Selection extends AnyFontFaceSelection | string>(
+    properties: Omit<StandaloneTextProperties<FontFaceRasterOf<Selection>>, 'font'> & { readonly font: Selection },
+  ): Text<FontFaceRasterOf<Selection>>;
+  createText<Technique extends AnyRasterFormat>(
+    properties:
+      | StandaloneTextProperties<Technique>
+      | (Omit<StandaloneTextProperties<Technique>, 'font'> & { readonly font: AnyFontFaceSelection | string }),
+  ): Text<Technique> {
+    return this.#host.createText(properties);
+  }
+
+  createTextGroup(options?: TextGroupOptions): TextGroup {
+    return this.#host.createTextGroup(options);
+  }
+}
+
 /** @internal Package-owned implementation behind one public Three root. */
-export class ThreeRootHost implements ThreeRoot {
+export class ThreeRootHost {
   readonly name: string | undefined;
   readonly #fonts: import('../config/glyph.js').GlyphHandleFonts;
   readonly #services: GlyphRootServices<ThreeBindings, void, ThreeRootBinding>;
@@ -182,6 +249,7 @@ export class ThreeRootHost implements ThreeRoot {
   readonly #texts = new Set<Text<AnyRasterFormat>>();
   readonly #textOrders = new WeakMap<Text<AnyRasterFormat>, number>();
   readonly #drawRoot: ThreeRootDrawObject;
+  readonly #materialRootContext: ThreeRootContext;
   #publicRoot: ThreeRoot | undefined;
   #scene: THREE.Scene | undefined;
   #binding: ThreeRootPublication | undefined;
@@ -222,7 +290,15 @@ export class ThreeRootHost implements ThreeRoot {
     this.#drawRoot = new ThreeRootDrawObject((worldMatricesCurrent) => this.#commitTraversal(worldMatricesCurrent));
     this.#drawRoot.name = name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${name}`;
     this.#drawRoot.matrixAutoUpdate = false;
-    threeRootHosts.set(this.#drawRoot, this);
+    const implementation = this;
+    this.#materialRootContext = Object.freeze({
+      name,
+      get scene(): THREE.Scene | undefined {
+        return implementation.#scene;
+      },
+      drawRoot: this.#drawRoot,
+    });
+    threeRootHosts.set(this, this);
     this.#renderer = new ThreeTextRenderPlanExecutor(resources, {
       drawRoot: this.#drawRoot,
       root: this,
@@ -256,10 +332,6 @@ export class ThreeRootHost implements ThreeRoot {
     this.#binding?.invalidateMaterial();
   }
 
-  createText<Technique extends AnyRasterFormat>(properties: StandaloneTextProperties<Technique>): Text<Technique>;
-  createText<const Selection extends AnyFontFaceSelection | string>(
-    properties: Omit<StandaloneTextProperties<FontFaceRasterOf<Selection>>, 'font'> & { readonly font: Selection },
-  ): Text<FontFaceRasterOf<Selection>>;
   createText<Technique extends AnyRasterFormat>(
     properties:
       | StandaloneTextProperties<Technique>
@@ -289,6 +361,11 @@ export class ThreeRootHost implements ThreeRoot {
     return new TextGroup(threeTextConstructionToken, options, this);
   }
 
+  /** @internal Restrict the configured root proxy to the application-facing ThreeRoot contract. */
+  publicRoot(): ThreeRoot {
+    return new ThreePublicRoot(this);
+  }
+
   /** @internal Host cleanup invoked after core stops publication for this root. */
   disposeHost(): void {
     if (this.#disposed) return;
@@ -297,7 +374,7 @@ export class ThreeRootHost implements ThreeRoot {
       this.#binding?.dispose();
       this.#binding = undefined;
     } finally {
-      threeRootHosts.delete(this.#drawRoot);
+      threeRootHosts.delete(this);
       this.#drawRoot.removeFromParent();
       this.#scene = undefined;
     }
@@ -344,14 +421,9 @@ export class ThreeRootHost implements ThreeRoot {
 
   /** @internal Config schema boundary for this publication root. */
   boundary(material: ThreeTextMaterial | undefined): ThreeRootBinding {
-    const implementation = this;
     return Object.freeze({
       drawRoot: this.#drawRoot,
-      get root(): ThreeRootContext {
-        const selected = implementation.#publicRoot;
-        if (selected === undefined) throw new Error('Three root public identity has not been bound');
-        return selected.name === undefined ? selected.handle : selected;
-      },
+      root: this.#materialRootContext,
       material,
     });
   }

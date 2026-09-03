@@ -119,7 +119,7 @@ test('a custom Three technique realizes supplied geometry through GlyphConfig', 
   const text = three.createText({ font, text: '12345', style: { fontSize: 16 } });
   scene.add(text);
   scene.updateMatrixWorld(true);
-  const retainedDraw = three.drawRoot.children.find((child) => child.isMesh);
+  const retainedDraw = scene.getObjectByName('@pmndrs/glyph:anonymous')?.children.find((child) => child.isMesh);
   assert.ok(retainedDraw);
   assert.equal(retainedDraw.geometry.instanceCount, 5);
   assert.deepEqual([...retainedDraw.geometry.index.array], [0, 1, 2, 0, 2, 3]);
@@ -129,7 +129,7 @@ test('a custom Three technique realizes supplied geometry through GlyphConfig', 
   text.text = '12';
   scene.updateMatrixWorld(true);
   assert.equal(
-    three.drawRoot.children.find((child) => child.isMesh),
+    scene.getObjectByName('@pmndrs/glyph:anonymous')?.children.find((child) => child.isMesh),
     retainedDraw,
   );
   assert.equal(retainedDraw.geometry.instanceCount, 2);

@@ -206,7 +206,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
           context.codec.resources,
           rootOptions,
         );
-        const selected = context.create(root, {
+        const selected = context.create(root.publicRoot(), {
           boundary: root.boundary(options.material),
           defaultRenderer: root.renderer,
           shape: {
