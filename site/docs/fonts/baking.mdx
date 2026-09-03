@@ -83,8 +83,11 @@ notes · internals
 - no raster flags → shaping-only GLB — `node/cli.ts:555`
 - one embedded raster per companion extension — `internal/compose-bake.ts:130–137`; discovery mode writes a second
   raster of the same kind as an external companion — `node/bake.ts#loadProjectPlans` (`:311–327`)
-- [verify] the repository's own Inter bake command and its size: read the `bake` scripts in this repo's
-  `site/package.json` before claiming "2.4 MB"
+- this repository's Inter: `apps/r3f-hello-world/assets/inter-latin.font.glb` is 2,301 KB with Basic Latin in
+  Bitmap 32, MSDF, and Slug (`site/examples/src/fonts.ts:6–12`); the command is the root `pnpm bake`
+  (`package.json:8`, `node packages/glyph/bin/glyph.js bake`); the landing's script face is 58 KB
+  (`site/landing/assets/playwrite-glyph.font.glb`, Slug only) and the chorus faces are baked by
+  `site/scripts/bake-chorus.mts`. Say "2.3 MB", not 2.4
 */}
 
 ## Subset to what you render
@@ -121,8 +124,9 @@ notes · internals
 - prepared bytes feed the core bake and every raster — `internal/font-bake-pipeline.ts:41–57`, `:71–87`
 - code points, not glyph ids — `node/cli.ts:547`; `font-baker/index.ts:21–25`
 - `.notdef` count — `layout.ts:120–121` (`missingGlyphCount`: positioned glyphs with `glyphId === 0`)
-- [verify] "draws nothing": the raster record for glyph 0 is absent, so no draw is emitted; confirm in
-  `internal/render-planner.ts` or the Rust plan before stating it
+- "draws nothing", confirmed in the encoder: a glyph whose binding selects no raster occupies a source row and
+  commits no record, so it advances source space without advancing record space and nothing is drawn for it —
+  `rust/shaper/src/engine/codec_gather.rs:136–140`, `:498–503`, `:1882–1886`
 */}
 
 ## Choose raster options deliberately
@@ -169,8 +173,11 @@ notes · internals
 - `--check` bakes to `<tmp>/checked.font.glb` and compares with `readFile` — `node/cli.ts#bakeDirect` (`:392–417`);
   the temporary directory is removed in `finally` `:414–416`
 - `STALE_OUTPUT` — `node/cli.ts:406–410`; printed as `CODE: message (path)` — `#writeFailure` (`:488–494`)
-- [verify] where determinism is asserted (a test that bakes twice and compares hashes) and this repository's
-  `bake:check` script name before naming it
+- determinism is asserted per baker: `inter_bitmap_is_deterministic_and_packaging_preserves_records` —
+  `rust/bitmap-baker/src/lib.rs:313`; `inter_mtsdf_is_deterministic_and_packaging_preserves_records` —
+  `rust/mtsdf-baker/src/artifact.rs:733` (ignored by default: the full-Inter integration fixture); this repository's
+  check is `pnpm scripts run benchmark:bake-check` (`apps/benchmarks/scripts/check-bake-fixtures.mts`, "verify every
+  deterministic benchmark bake")
 */}
 
 ## Discover fonts in a project
@@ -282,8 +289,10 @@ notes · internals
   `INVALID_TABLE` for zero glyphs or `unitsPerEm` outside 16..=16384 `:108–120`; `INVALID_GLYPH_EXTENTS` `:317`
 - absent outlines are silent — `rust/bitmap-baker/src/rasterize.rs:154–157` (no outline), `:170–176` (empty or
   zero-size); `rust/mtsdf-baker/src/artifact.rs:243–246`, `:252–258` (`EmptyOutline | InvalidBounds` → absent)
-- [verify] the CFF claim from this repo's outline ("a CFF face bakes shaping data and an empty raster"): read
-  `font_outline_source` in `rust/mtsdf-baker/src/artifact.rs` and the skrifa outline path for CFF before naming CFF
+- [verify] the CFF claim from this repo's outline ("a CFF face bakes shaping data and an empty raster"): there is no
+  `font_outline_source` in `rust/mtsdf-baker/src/artifact.rs` at codex `2c0fbcc4a`; the only CFF-aware code found
+  is glyph naming, `GlyphNameSource::Cff` (`rust/font-baker/src/source_font.rs:65`, `:136`). Find where outlines
+  are read (skrifa's `OutlineGlyphCollection` handles `glyf` and `CFF`/`CFF2` alike) before naming CFF
 */}
 
 ## What is in the file
@@ -320,8 +329,10 @@ notes · internals
 - raster extensions — `internal/bitmap-contract.ts:7`, `internal/msdf-contract.ts:7`, `internal/slug-contract.ts:6`;
   a companion must match `version`, `rasterKey`, `shapingHash`, `glyphCount`, `glyphIdWidth` — `internal/compose-bake.ts:188–205`
 - one GLB, one buffer — `rust/font-baker/src/glb.rs:20–60`
-- [verify] "every page is a lossless KTX2 texture": `internal/raster-ktx.ts#validateNativeKtx2` (`:38`) validates on
-  load; confirm the bakers write KTX2 for Bitmap and Slug pages, not only MSDF, before stating "every"
+- "every page is a lossless KTX2 texture", confirmed: all three bakers encode pages through the shared
+  `raster-artifact` KTX writer — `rust/bitmap-baker/src/glb.rs:50–82`, `rust/slug-baker/src/glb.rs:4,61,72`,
+  `rust/mtsdf-baker/src/glb.rs:4,62,63`, the writer `rust/raster-artifact/src/ktx.rs#encode_ktx2` (`:51`); the loader validates with
+  `internal/raster-ktx.ts#validateNativeKtx2` (`:38`)
 */}
 
 ## Runtime baking

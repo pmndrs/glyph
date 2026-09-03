@@ -235,10 +235,14 @@ notes · internals
   `packages/glyph/node_modules/three/src/renderers/webgpu/WebGPURenderer.js:57–71` (three 0.185.1, the peer floor)
 - the swap runs when backend init fails and `_getFallback` is set — `…/three/src/renderers/common/Renderer.js:785`;
   the WebGPU backend's init asks `navigator.gpu` for an adapter — `…/renderers/webgpu/WebGPUBackend.js:217`
-- [verify] that an absent `navigator.gpu` reaches that fallback branch (rejection, not a throw at `:217`); read
-  `WebGPUBackend.init` around that line before stating "on its own"
+- an absent `navigator.gpu` does reach the fallback: `WebGPUBackend.init` is `async` and its
+  `navigator.gpu.requestAdapter()` (`WebGPUBackend.js:217`) throws inside it, so the promise rejects, and
+  `Renderer.init` catches that rejection and constructs `getFallback(error)` — `Renderer.js:775–790` (three
+  0.185.1); the fallback the constructor installs is `new WebGLBackend(parameters)` with a console warning —
+  `WebGPURenderer.js:57–69`. "On its own" is correct
 - `navigator.gpu` exists only in a secure context, so `http://<lan-ip>` gets WebGL2 — `site/vite.config.ts:12–15`
-  (the comment); [verify] against the WebGPU spec's `[SecureContext]` on `Navigator.gpu`
+  (the comment); the spec marks the `NavigatorGPU` mixin `[SecureContext]` — WebGPU, "navigator.gpu",
+  https://www.w3.org/TR/webgpu/#navigator-gpu
 - one TSL shader per format serves both backends — `three/bitmap.ts:1`, `:25`; `three/msdf.ts:1`, `:29`;
   `three/slug.ts:1`
 - the examples explainer forces WebGL with `?renderer=webgl` — `site/docs/components/explainer/root.tsx`
@@ -264,8 +268,12 @@ notes · internals
 - `compositing: 'independent'` lets Rust reorder compatible draws when order does not matter —
   `three/text.ts:78–82`, `three/handle.ts:180–183`
 - capacity defaults to 4 096 glyphs, chunked growth — `three/text.ts:191–194`
-- [verify] the exact batch-boundary keys (format, resource, material, clip, compositing): derive them from
-  `internal/render-planner.ts` and `rust/shaper/src/engine/plan_draw.rs` before listing them
+- the batch-boundary keys, derived: a draw extends while the pending batch (program + storage) is the same, the
+  order records are contiguous and under `u16::MAX`, the resource id and generation match, and material and
+  transform match only when the program's `draw_key_mask` carries `BATCH_MATERIAL` / `BATCH_TRANSFORM` —
+  `rust/shaper/src/engine/stable_plan.rs:1408–1424`, `#same_draw_span` (`:1585–1605`), mask bits `codec.rs:34`,
+  `:38`, resource `:1434–1442`; the reader-facing table and its cites are on advanced/performance ("Draw
+  boundaries"). Clip and paint layer are three-side realization keys, not engine keys
 - the batching example counts draws — `site/examples/src/scenes/batching/scene.tsx`
 */}
 
@@ -292,9 +300,13 @@ notes · internals
 - JavaScript holds grapheme boundaries only, for span alignment, from `unicode-segmenter` 0.15.0 pinned to the
   same Unicode version as Rust rather than `Intl.Segmenter` — `internal/graphemes.ts:3–16`,
   `packages/glyph/package.json` dependencies
-- [verify] the Unicode version number before writing it: the two pins above and the baked
-  `provenance.unicodeVersion` — `loader.ts:338`, `generated/font-artifact-schema.ts:35`
-- [verify] horizontal only, vertical later — the roadmap in the tree, `docs/roadmap/roadmap.md`
+- Unicode 17.0.0: an artifact whose `provenance.unicodeVersion` is anything else is refused by both the reader
+  and the baker's validator — `internal/font-artifact-reader.ts:48`, `font-baker/validator.ts:266`; the crates —
+  `unicode-segmentation =1.13.3`, `unicode-bidi 0.3.18`, `harfrust 0.12.0` (`rust/shaper/Cargo.toml:25–29`);
+  the field — `generated/font-artifact-schema.ts:35`
+- horizontal only: vertical shaping and layout are deferred while the vertical source tables (`BASE`, `VORG`,
+  `vhea`, `vmtx`) survive baking — `docs/roadmap/roadmap.md:491`, `:498`; vertical writing is backlog item 19
+  (`:769`), listed in 11.18's scope (`:161`)
 - the shaping example and its fonts — `site/examples/src/scenes/shaping/scene.tsx`,
   `site/docs/assets/chorus-*.font.glb`
 */}
