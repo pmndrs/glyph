@@ -1,6 +1,6 @@
 import { glyph, loadFont, txt } from '@pmndrs/glyph';
 import { ThreeConfig, span } from '@pmndrs/glyph/three';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 import { Group, type Scene } from 'three/webgpu';
 
 import { INTER } from '../../fonts';

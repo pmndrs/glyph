@@ -6,9 +6,9 @@
  */
 import type { Font, FontFace } from '@pmndrs/glyph';
 import type { Text, TextGroup, ThreeHandle, ThreeRoot } from '@pmndrs/glyph/three';
-import type { bitmap } from '@pmndrs/glyph/three/bitmap';
-import type { msdf } from '@pmndrs/glyph/three/msdf';
-import type { slug } from '@pmndrs/glyph/three/slug';
+import type { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import type { msdf } from '@pmndrs/glyph/raster/msdf';
+import type { slug } from '@pmndrs/glyph/raster/slug';
 import type { Camera, Scene, WebGPURenderer } from 'three/webgpu';
 
 declare global {

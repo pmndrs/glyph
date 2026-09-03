@@ -84,7 +84,7 @@ notes · internals
 ```tsx
 import { glyph } from '@pmndrs/glyph';
 import { Text } from '@pmndrs/glyph/react';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 
 const Icons = glyph.fontFace('/fonts/icons.font.glb', { format: slug });
 
@@ -96,7 +96,7 @@ const Icons = glyph.fontFace('/fonts/icons.font.glb', { format: slug });
 ```ts no-check
 import { glyph, txt } from '@pmndrs/glyph';
 import { span } from '@pmndrs/glyph/three';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 
 const Icons = glyph.fontFace('/fonts/icons.font.glb', { format: slug });
 await Icons.load();

@@ -1,6 +1,6 @@
 import { glyph, loadFont, txt } from '@pmndrs/glyph';
 import { ThreeConfig, defineTextMaterial, span } from '@pmndrs/glyph/three';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 import { color as tslColor } from 'three/tsl';
 import type { Scene } from 'three/webgpu';
 

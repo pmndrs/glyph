@@ -46,7 +46,7 @@ npm install three @react-three/fiber @pmndrs/glyph
 | --- | --- | --- |
 | `@pmndrs/glyph` | `glyph`, `createParagraph`, `Paragraph`, `TextStyle`, `ParagraphLayout`, `Constraints`, `txt`, `span`, `FontLoadError`, `GlyphEngineStatusError`; types `Font`, `FontFace`, `FontFaceSelection` | the shaper Wasm, on `glyph.init()` |
 | `@pmndrs/glyph/three` | `ThreeConfig`, `defineThreeConfig`, `ThreeFontFormats`, `Text`, `TextGroup`, `ThreeRoot`, `span`, `defineTextMaterial`, `Glyphs`, `Decorations`, `TextFrameError`, `registerThreeRasterPlanProgram` | three.js and all three built-in formats with their TSL shaders |
-| `@pmndrs/glyph/three/bitmap` · `/msdf` · `/slug` | the format value (`bitmap`, `msdf`, `slug`), its constants and option types | that format's decoder and TSL shader, registered on import |
+| `@pmndrs/glyph/raster/bitmap` · `/msdf` · `/slug` | the format value (`bitmap`, `msdf`, `slug`), its constants and option types | that format's decoder and TSL shader, registered on import |
 | `@pmndrs/glyph/react` | `GlyphProvider`, `Text`, `TextGroup` | React Three Fiber (`/webgpu` entry) and `/three` |
 | `@pmndrs/glyph/react/bitmap` · `/msdf` · `/slug` | `useBitmap`, `useMsdf`, `useSlug` | that format |
 | `@pmndrs/glyph/raster/*` | renderer-neutral format contracts | no renderer |
@@ -192,8 +192,8 @@ notes · internals
 
 ```ts
 import type { Font, FontFace } from '@pmndrs/glyph';
-import type { msdf } from '@pmndrs/glyph/three/msdf';
-import type { slug } from '@pmndrs/glyph/three/slug';
+import type { msdf } from '@pmndrs/glyph/raster/msdf';
+import type { slug } from '@pmndrs/glyph/raster/slug';
 
 let body: Font<typeof msdf>;
 let face: FontFace<typeof msdf | typeof slug>;

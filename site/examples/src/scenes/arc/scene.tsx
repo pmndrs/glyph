@@ -1,7 +1,7 @@
 import { Text } from '@pmndrs/glyph/react';
 import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import type { Decorations, Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
-import type { msdf } from '@pmndrs/glyph/three/msdf';
+import type { msdf } from '@pmndrs/glyph/raster/msdf';
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useEffect, useRef } from 'react';
 import { Matrix4, Quaternion, Vector3 } from 'three/webgpu';

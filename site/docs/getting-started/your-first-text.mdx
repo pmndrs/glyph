@@ -176,7 +176,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber/webgpu';
 import { Text } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
-import type { msdf } from '@pmndrs/glyph/three/msdf';
+import type { msdf } from '@pmndrs/glyph/raster/msdf';
 
 function Centered() {
   const ref = useRef<ThreeText<typeof msdf>>(null);

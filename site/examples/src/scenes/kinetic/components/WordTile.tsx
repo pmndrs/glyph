@@ -1,7 +1,7 @@
 import { GlyphProvider, Text } from '@pmndrs/glyph/react';
 import type { Font } from '@pmndrs/glyph';
 import type { ThreeRoot } from '@pmndrs/glyph/three';
-import type { slug } from '@pmndrs/glyph/three/slug';
+import type { slug } from '@pmndrs/glyph/raster/slug';
 import { createPortal, useFrame } from '@react-three/fiber/webgpu';
 import { useEffect, useState } from 'react';
 import {

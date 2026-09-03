@@ -1,6 +1,6 @@
 import { glyph } from '@pmndrs/glyph';
 import { ThreeConfig, worldToLocalMatrix } from '@pmndrs/glyph/three';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 import { Matrix4, Quaternion, Vector3, type Scene } from 'three/webgpu';
 
 import { PLAYWRITE } from '../../fonts';

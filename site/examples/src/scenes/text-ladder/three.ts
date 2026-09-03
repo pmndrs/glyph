@@ -1,8 +1,8 @@
 import { glyph } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { msdf } from '@pmndrs/glyph/three/msdf';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { slug } from '@pmndrs/glyph/raster/slug';
 import type { Scene } from 'three/webgpu';
 
 import { INTER, INTER_STRIKES } from '../../fonts';

@@ -1,7 +1,7 @@
 import { glyph, loadFont, txt } from '@pmndrs/glyph';
 import { ThreeConfig, span } from '@pmndrs/glyph/three';
-import { msdf } from '@pmndrs/glyph/three/msdf';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { slug } from '@pmndrs/glyph/raster/slug';
 import {
   Group,
   LinearMipmapLinearFilter,

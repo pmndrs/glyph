@@ -76,9 +76,9 @@ notes · internals
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { msdf } from '@pmndrs/glyph/three/msdf';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { slug } from '@pmndrs/glyph/raster/slug';
 
 const Inter = glyph.fontFace('/fonts/inter.font.glb', {
   family: 'Inter',
@@ -213,7 +213,7 @@ notes · internals
 
 ```tsx
 import { GlyphProvider, Text } from '@pmndrs/glyph/react';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 
 <GlyphProvider fontFaces={{ Inter: '/fonts/inter.font.glb', Title: { src: '/fonts/playwrite.font.glb', format: slug } }}>
   <Text font="Inter">Hello</Text>

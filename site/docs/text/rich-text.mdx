@@ -55,7 +55,7 @@ three.createText({ font: Inter, text: txt`Status: ${ok`online`} ${glow`●`}` })
 ```ts no-check
 import { glyph, txt } from '@pmndrs/glyph';
 import { span } from '@pmndrs/glyph/three';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 
 const Mono = glyph.fontFace('/fonts/mono.font.glb', { format: msdf });
 await Mono.load();

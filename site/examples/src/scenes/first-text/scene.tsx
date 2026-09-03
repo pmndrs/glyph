@@ -1,7 +1,7 @@
 import { Text } from '@pmndrs/glyph/react';
 import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
-import type { msdf } from '@pmndrs/glyph/three/msdf';
+import type { msdf } from '@pmndrs/glyph/raster/msdf';
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useRef } from 'react';
 
