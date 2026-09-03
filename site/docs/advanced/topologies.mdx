@@ -40,7 +40,7 @@ notes · internals for the page
 ```ts
 import { glyph } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 
 await glyph.init();
 const app = glyph.handle('app', ThreeConfig);
@@ -147,7 +147,7 @@ worker.postMessage(serialized, transfer);
 // text.worker.ts: its own engine, its own handle, the same font without a fetch
 import { glyph, type SerializedFontFace } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 
 self.onmessage = async ({ data }: MessageEvent<SerializedFontFace>) => {
   await glyph.init();

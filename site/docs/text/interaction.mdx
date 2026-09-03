@@ -51,7 +51,7 @@ const rects = text.selectionRects(0, 5); // readonly LayoutBox[] | undefined
 import type { GlyphCaret } from '@pmndrs/glyph';
 import { Text } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
-import type { msdf } from '@pmndrs/glyph/three/msdf';
+import type { msdf } from '@pmndrs/glyph/raster/msdf';
 import { useRef, useState } from 'react';
 
 const ref = useRef<ThreeText<typeof msdf>>(null);

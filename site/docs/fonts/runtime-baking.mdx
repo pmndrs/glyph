@@ -44,7 +44,7 @@ notes · internals for the page
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 
 const Upload = glyph.fontFace('/fonts/Inter-Regular.ttf', { format: msdf });
 await Upload.load(); // probes /fonts/Inter-Regular.font.glb, then bakes MSDF in the Worker
@@ -52,7 +52,7 @@ await Upload.load(); // probes /fonts/Inter-Regular.font.glb, then bakes MSDF in
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 
 declare const file: File; // from <input type="file">
 const Custom = glyph.fontFace(file, { format: msdf });
@@ -62,7 +62,7 @@ await Custom.load();
 ```ts no-check
 import { glyph } from '@pmndrs/glyph';
 import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 
 const Latin = glyph.fontFace(
   { source: '/fonts/Inter-Regular.ttf', runtimeBake: bakeFontInWorker, unicodeRanges: [{ start: 0x20, end: 0x7e }] },

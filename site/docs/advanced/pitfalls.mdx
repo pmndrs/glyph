@@ -29,7 +29,7 @@ notes · internals for the page
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 
 const Inter = glyph.fontFace('/fonts/Inter.glb', { format: msdf({ emSize: 32 }) }); // baked at the default 64
 await Inter.formats(); // ['pmndrs.msdf', …] — the keys, not the options; the mismatch is in the descriptor
@@ -57,7 +57,7 @@ notes · internals
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 
 const Hero = glyph.fontFace('/fonts/Playwrite.glb', { format: slug });
 await Hero.slug.load(); // or Hero.load(); without one of these, createText throws synchronously

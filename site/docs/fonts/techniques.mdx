@@ -78,7 +78,7 @@ notes · internals
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 
 const ui = glyph.fontFace('/fonts/inter.font.glb', { format: bitmap({ strikes: [16, 32] }) }); // the strikes the GLB was baked with
 await ui.load();
@@ -123,7 +123,7 @@ notes · internals
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 
 const body = glyph.fontFace('/fonts/inter.font.glb', { format: msdf }); // emSize 64, pixelRange 8
 await body.load();
@@ -165,14 +165,14 @@ notes · internals
 - screen-space range per axis from `dFdx`/`dFdy`, floored — `tsl/msdf-shader.ts:133–135`
 - effects declared — `raster/msdf.ts:72`; page cap — `rust/mtsdf-baker/src/artifact.rs#MAX_ATLAS_PAGES`
 - KTX2 pages validated on load — `internal/raster-ktx.ts#validateNativeKtx2`
-- [verify] "two fetches" and "no mipmaps": read the sampler setup in `tsl/msdf-shader.ts` and `three/msdf.ts` before stating
+- [verify] "two fetches" and "no mipmaps": read the sampler setup in `tsl/msdf-shader.ts` and `raster/msdf.ts` before stating
 */}
 
 ## Slug
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 
 const hero = glyph.fontFace('/fonts/playwrite.font.glb', { format: slug }); // no options exist
 await hero.load();
@@ -258,7 +258,7 @@ glyph bake --input Inter-Regular.ttf --output inter-small.font.glb --msdf em-siz
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 
 const InterSmall = glyph.fontFace('/fonts/inter-small.font.glb', { format: msdf({ emSize: 32, pixelRange: 6 }) });
 await InterSmall.formats(); // what the GLB actually carries, without loading anything
@@ -292,9 +292,9 @@ notes · internals
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { msdf } from '@pmndrs/glyph/three/msdf';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { slug } from '@pmndrs/glyph/raster/slug';
 
 const Inter = glyph.fontFace('/fonts/inter.font.glb', { format: [msdf, slug, bitmap({ strikes: [16, 32] })] });
 await Inter.load(); // every declared format, one shaping table shared
@@ -340,7 +340,7 @@ notes · internals
 ```ts no-check
 import { glyph, txt } from '@pmndrs/glyph';
 import { span } from '@pmndrs/glyph/three';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 
 const Icons = glyph.fontFace('/fonts/icons.font.glb', { format: slug });
 await Icons.load();

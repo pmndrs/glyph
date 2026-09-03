@@ -1,6 +1,6 @@
 import { createParagraph, glyph, loadFont } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 import type { Scene } from 'three/webgpu';
 
 import { PLAYWRITE } from '../../fonts';

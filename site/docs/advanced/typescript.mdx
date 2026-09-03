@@ -37,9 +37,9 @@ notes · internals for the page
 ```ts
 import { glyph, type Font, type FontFace } from '@pmndrs/glyph';
 import type { Text } from '@pmndrs/glyph/three';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { msdf } from '@pmndrs/glyph/three/msdf';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { slug } from '@pmndrs/glyph/raster/slug';
 
 const Inter = glyph.fontFace('/fonts/Inter.glb', { format: [msdf, slug, bitmap({ strikes: [16, 32] })] });
 const declared: FontFace<typeof msdf | typeof slug | ReturnType<typeof bitmap>> = Inter; // the tuple became a union
@@ -62,7 +62,7 @@ const body: Font<typeof msdf> = inter; // what useMsdf(url) hands you
 import { Text } from '@pmndrs/glyph/react';
 import { useSlug } from '@pmndrs/glyph/react/slug';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
-import type { slug } from '@pmndrs/glyph/three/slug';
+import type { slug } from '@pmndrs/glyph/raster/slug';
 import { useRef } from 'react';
 
 export function Title() {

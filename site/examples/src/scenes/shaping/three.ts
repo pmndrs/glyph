@@ -1,6 +1,6 @@
 import { glyph } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { Group, type Scene } from 'three/webgpu';
 
 import { CHORUS, CHORUS_MSDF, INTER } from '../../fonts';

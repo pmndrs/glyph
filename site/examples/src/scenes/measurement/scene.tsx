@@ -1,7 +1,7 @@
 import { Text } from '@pmndrs/glyph/react';
 import { useSlug } from '@pmndrs/glyph/react/slug';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
-import type { slug } from '@pmndrs/glyph/three/slug';
+import type { slug } from '@pmndrs/glyph/raster/slug';
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useRef, useState } from 'react';
 
