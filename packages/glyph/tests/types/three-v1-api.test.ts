@@ -57,6 +57,8 @@ const extendedThreeConfig = defineGlyphConfig({
 glyph.handle('three:extended-type-fixture', extendedThreeConfig) satisfies ThreeHandle;
 const hud = three('hud');
 hud.createText({ font: bitmapFont, text: 'Named root' });
+// @ts-expect-error Material mutation has one property surface, not a duplicate setter method.
+hud.setMaterial(undefined);
 // @ts-expect-error Renderer draw objects stay behind the Three config schema.
 void three.drawRoot;
 // @ts-expect-error Scene discovery is internal to the Three root host.
@@ -135,6 +137,8 @@ const label = three.createText({
   layout: [layouts.centered, layouts.wrapped],
 });
 const labels = three.createTextGroup({ pixelSnapping: true });
+// @ts-expect-error TextGroup material mutation has one property surface, not a duplicate setter method.
+labels.setMaterial(undefined);
 const independentThree = glyph.handle(
   'three:independent-type-fixture',
   defineThreeConfig({ compositing: 'independent', capacity: { size: 4_096, policy: 'chunk' } }),

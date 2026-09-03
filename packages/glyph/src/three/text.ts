@@ -156,7 +156,6 @@ export interface ThreeRoot extends GlyphRoot {
   readonly textCount: number;
   readonly gpuBytes: number;
   material: ThreeTextMaterial | undefined;
-  setMaterial(value: ThreeTextMaterial | undefined): void;
   createText<Technique extends AnyRasterFormat>(properties: StandaloneTextProperties<Technique>): Text<Technique>;
   createText<const Selection extends AnyFontFaceSelection | string>(
     properties: Omit<StandaloneTextProperties<FontFaceRasterOf<Selection>>, 'font'> & { readonly font: Selection },
@@ -216,10 +215,6 @@ class ThreePublicRoot implements ThreeRoot {
 
   set material(value: ThreeTextMaterial | undefined) {
     this.#host.material = value;
-  }
-
-  setMaterial(value: ThreeTextMaterial | undefined): void {
-    this.#host.setMaterial(value);
   }
 
   createText<Technique extends AnyRasterFormat>(properties: StandaloneTextProperties<Technique>): Text<Technique>;
@@ -1081,10 +1076,6 @@ export class TextGroup extends THREE.Object3D {
     return this.#material;
   }
   set material(value: ThreeTextMaterial | undefined) {
-    this.setMaterial(value);
-  }
-
-  setMaterial(value: ThreeTextMaterial | undefined): void {
     this.#assertActive();
     this.#material = value;
     this.#root.invalidateMaterial();

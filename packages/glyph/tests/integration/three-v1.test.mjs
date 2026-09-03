@@ -300,12 +300,10 @@ test('one Three root binds one Scene and exposes its semantic name to material f
   const firstScene = new THREE.Scene();
   const secondScene = new THREE.Scene();
   const materialRoots = [];
-  root.setMaterial(
-    defineTextMaterial((context) => {
-      materialRoots.push(context.root);
-      return context.createDefaultMaterial();
-    }),
-  );
+  root.material = defineTextMaterial((context) => {
+    materialRoots.push(context.root);
+    return context.createDefaultMaterial();
+  });
   firstScene.add(first);
   secondScene.add(second);
 
