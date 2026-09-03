@@ -62,6 +62,7 @@ export type {
   GlyphFormattedText,
   GlyphHandle,
   GlyphHandleFonts,
+  GlyphInstanceKind,
   GlyphInstanceSpanBindingInput,
   GlyphNamedRoot,
   PreparedRendererCommit,

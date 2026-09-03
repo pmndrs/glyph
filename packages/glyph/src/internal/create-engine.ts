@@ -2,24 +2,34 @@ import type { PortablePayloadLease } from './render-planner.js';
 import type { HandleMaterialBinding, HandleTransformBinding } from './handle-state.js';
 import type {
   AnyGlyphBindings,
-  BorrowedTypedCommandBuffer,
   CommandBufferView,
   DisplayListInstanceSpan,
-  GlyphDisplayListProjector,
   GlyphInstanceSpanBindingInput,
   GlyphSchema,
   ResolveContext,
   Retirement,
   ResourceLease,
   TypedBuffer,
-  TypedInstanceSpan,
   TypedMaterial,
   TypedProgram,
   TypedResource,
 } from '../config/glyph.js';
 import type { CodecBuffer, CodecDescriptor, CodecProgram } from '../config/codec.js';
 import { bindPatch, bindRetirement } from './bind-command-buffer.js';
-import { mapBorrowedSequence, TypedCommandBufferMapper } from './typed-command-buffer.js';
+import {
+  mapBorrowedSequence,
+  TypedCommandBufferMapper,
+  type BorrowedTypedCommandBuffer,
+  type TypedInstanceSpan,
+} from './typed-command-buffer.js';
+
+/** Package-owned retained projector used by one root publication transaction. */
+export interface GlyphDisplayListProjector<Bindings extends AnyGlyphBindings> {
+  source(candidate: import('./render-planner.js').PlanCandidate, signal: AbortSignal): BorrowedTypedCommandBuffer;
+  project(source: BorrowedTypedCommandBuffer): CommandBufferView<Bindings>;
+  settle(source: BorrowedTypedCommandBuffer, update: CommandBufferView<Bindings> | undefined, accepted: boolean): void;
+  dispose(): void;
+}
 
 interface RetainedResource<Resource extends object> {
   readonly generation: number;

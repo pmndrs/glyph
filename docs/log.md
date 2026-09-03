@@ -2,6 +2,11 @@
 
 ## 2026-09-03
 
+- **Closed the raw command-projection surface** — GlyphConfig integrations now receive only the renderer-bound
+  `CommandBufferView` through `GlyphRenderer.decode`. The borrowed Rust publication, typed command tree, projector, and
+  publication transaction moved behind the package boundary; the public closed `GlyphInstanceKind` union retains the
+  semantic display-list vocabulary without exposing numeric wire identities or a second decoder API.
+
 - **Closed the source-condition Three root backdoor** — Public Three handles and terminal roots now expose only retained
   Text/TextGroup construction, identity/lifecycle, counts, and mutable material presentation. Renderer draw roots,
   discovered Scenes, root services, command boundaries, and Font lease acquisition moved behind package-private host

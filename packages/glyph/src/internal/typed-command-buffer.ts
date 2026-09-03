@@ -5,25 +5,116 @@ import type { PlanCandidate, RenderPlanReader, ResolvedPlanTransform } from './r
 import type {
   BatchIdentity,
   BorrowedCommandSequence,
-  BorrowedTypedCommandBuffer,
   ClipIdentity,
+  GlyphInstanceKind,
   InstanceIdentity,
   InstanceSpanIdentity,
   SemanticIdentity,
   TransformIdentity,
-  TypedBatch,
   TypedBuffer,
-  TypedBufferCommand,
-  TypedGroupChild,
-  TypedInstanceSpan,
   TypedMaterial,
-  TypedPatchCommand,
   TypedProgram,
   TypedResource,
-  TypedResourceCommand,
-  TypedRootInstance,
-  TypedRetirementCommand,
 } from '../config/glyph.js';
+
+declare const typedCommandBufferBrand: unique symbol;
+
+export type TypedResourceCommand = Readonly<{
+  kind: 'acquire' | 'update' | 'retain';
+  resource: TypedResource;
+}>;
+
+export type TypedBufferCommand = Readonly<{
+  kind: 'ensure';
+  buffer: TypedBuffer;
+  program: TypedProgram;
+  scalarType: 'f32' | 'u32' | 'u16';
+  vectorWidth: number;
+  capacityRecords: number;
+  byteLength: number;
+}>;
+
+export type TypedPatchCommand =
+  | Readonly<{
+      kind: 'allocate-or-resize';
+      buffer: TypedBuffer;
+      destinationOffset: number;
+      byteLength: number;
+    }>
+  | Readonly<{ kind: 'write'; buffer: TypedBuffer; destinationOffset: number; payload: Uint8Array }>
+  | Readonly<{
+      kind: 'fill';
+      buffer: TypedBuffer;
+      destinationOffset: number;
+      byteLength: number;
+      value: number;
+    }>
+  | Readonly<{
+      kind: 'copy';
+      source: TypedBuffer;
+      sourceOffset: number;
+      destination: TypedBuffer;
+      destinationOffset: number;
+      byteLength: number;
+    }>
+  | Readonly<{
+      kind: 'retire';
+      buffer: TypedBuffer;
+      destinationOffset: number;
+      byteLength: number;
+    }>;
+
+export interface TypedInstanceSpan {
+  readonly identity: InstanceSpanIdentity;
+  readonly kind: GlyphInstanceKind;
+  readonly recordIndex: number;
+  readonly recordCount: number;
+  readonly logicalOrder: number;
+}
+
+export interface TypedBatch {
+  readonly kind: 'batch';
+  readonly identity: BatchIdentity;
+  readonly instances: BorrowedCommandSequence<TypedInstanceSpan>;
+}
+
+export interface TypedRootInstance {
+  readonly kind: 'instance';
+  readonly identity: InstanceIdentity;
+  readonly transform: TransformIdentity | undefined;
+}
+
+export type TypedGroupChild = TypedBatch | TypedRootInstance;
+
+export interface TypedGroup {
+  readonly children: BorrowedCommandSequence<TypedGroupChild>;
+}
+
+export type TypedGroupPhase = Readonly<{ kind: 'unchanged' }> | Readonly<{ kind: 'replace'; value: TypedGroup }>;
+
+export type TypedRetirementCommand =
+  | Readonly<{ kind: 'resource'; resource: TypedResource }>
+  | Readonly<{ kind: 'buffer'; buffer: TypedBuffer }>
+  | Readonly<{ kind: 'slot-range'; byteOffset: number; byteLength: number }>
+  | Readonly<{ kind: 'output-bytes'; byteOffset: number; byteLength: number }>;
+
+export interface TypedUpdatePhases {
+  readonly resources: BorrowedCommandSequence<TypedResourceCommand>;
+  readonly buffers: BorrowedCommandSequence<TypedBufferCommand>;
+  readonly patches: BorrowedCommandSequence<TypedPatchCommand>;
+  readonly retirements: BorrowedCommandSequence<TypedRetirementCommand>;
+}
+
+export interface BorrowedTypedCommandBuffer {
+  readonly delivery: 'borrowed';
+  readonly engineRevision: number;
+  readonly planRevision: number;
+  readonly publicationGeneration: number;
+  readonly checkpoint: boolean;
+  readonly updates: TypedUpdatePhases;
+  readonly group: TypedGroupPhase;
+  readonly [typedCommandBufferBrand]: true;
+}
 
 interface TypedSourceState {
   readonly candidate: PlanCandidate;
