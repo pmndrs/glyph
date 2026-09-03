@@ -73,3 +73,10 @@ GLYPH_SOURCE=/path/to/checkout/packages/glyph pnpm build:examples
 3. Embed it from the page with `<glyph-proxy root="scenes" data-scene="<slug>" aria-label="…" aspect="16 / 9" />`
    under the page's `<glyph-explainer-root id="scenes" data-explainer-page="examples" …/>`. The gallery lists the
    catalog, so it has the card already.
+
+## Attribution
+
+- The kinetic typography showcase is after [Kinetic Typography with Three.js](https://tympanus.net/codrops/2020/06/02/kinetic-typography-with-three-js/) by Mario Carrillo for
+  Codrops (2020): text rendered to a render target and wrapped around a torus knot with a scrolling `uv * repeat`.
+  The engine replaces the bitmap font; the passages are Emily Dickinson (1861) and Walt Whitman (1855), public
+  domain.

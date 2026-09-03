@@ -22,6 +22,7 @@ export function TextOnPath<Technique extends AnyRasterFormat>({
   height = 0,
   angle = 0,
   lift = 0,
+  castShadow = false,
   size = 0.4,
   color = '#e7ecf6',
   letterSpacing = 0.06,
@@ -37,6 +38,8 @@ export function TextOnPath<Technique extends AnyRasterFormat>({
   readonly angle?: number;
   /** How far the type floats off its own plane toward the viewer; lifts it clear of a surface it lies on. */
   readonly lift?: number;
+  /** Flag the copied glyph meshes as shadow casters; the host scene supplies the light and the receiver. */
+  readonly castShadow?: boolean;
   readonly size?: number;
   readonly color?: string;
   readonly letterSpacing?: number;
@@ -59,6 +62,7 @@ export function TextOnPath<Technique extends AnyRasterFormat>({
     if (copy.current === undefined) {
       if (text === null || text.commitState().status !== 'committed') return;
       const [glyphs] = text.breakApart();
+      if (castShadow) glyphs.traverse((object) => void (object.castShadow = true));
       text.parent?.add(glyphs);
       text.visible = false;
       copy.current = { glyphs, width: text.measure().contentWidth };

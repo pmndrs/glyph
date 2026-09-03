@@ -18,7 +18,7 @@ export function Knot({ skin }: { readonly skin: Texture }) {
 
   return (
     <group ref={group} position={[...KNOT_POSITION]}>
-      <mesh material={material}>
+      <mesh material={material} receiveShadow>
         <torusKnotGeometry args={[RADIUS, TUBE, 400, 40, 2, 3]} />
       </mesh>
     </group>
