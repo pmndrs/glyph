@@ -73,7 +73,7 @@ export async function preloadBitmapFontAssets(
     fixtures.map((fixture) =>
       preloadBakedFont({
         artifact: urls[fixture],
-        raster: { raster: bitmapTechnique, options: { strikes } },
+        raster: bitmapTechnique({ strikes }),
         ...(signal === undefined ? {} : { signal }),
       }),
     ),
@@ -90,7 +90,7 @@ export async function loadBitmapFontAsset(
   if (delivery === 'runtime') {
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { raster: bitmapTechnique, options: { strikes } },
+      raster: bitmapTechnique({ strikes }),
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
       ...(signal === undefined ? {} : { signal }),
     });
@@ -109,7 +109,7 @@ export async function loadBitmapFontAsset(
   if (artifactBytes === undefined) throw new RangeError(`Unknown bitmap font fixture: ${fixture}`);
   const loaded = await loadBakedFont({
     artifact: urls[fixture],
-    raster: { raster: bitmapTechnique, options: { strikes } },
+    raster: bitmapTechnique({ strikes }),
     ...(signal === undefined ? {} : { signal }),
   });
   return {

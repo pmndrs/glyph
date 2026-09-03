@@ -14,6 +14,6 @@ export interface UseBitmap {
 
 /** Load one Bitmap font through the shared R3F cache. */
 export const useBitmap = ((input: FontFaceSource, options: BitmapFormatOptions): Font<typeof bitmap> =>
-  useFont(input, { format: { raster: bitmap, options } })) as UseBitmap;
-useBitmap.preload = (input, options) => useFont.preload(input, { format: { raster: bitmap, options } });
-useBitmap.clear = (input, options) => useFont.clear(input, { format: { raster: bitmap, options } });
+  useFont(input, { format: bitmap(options) })) as UseBitmap;
+useBitmap.preload = (input, options) => useFont.preload(input, { format: bitmap(options) });
+useBitmap.clear = (input, options) => useFont.clear(input, { format: bitmap(options) });

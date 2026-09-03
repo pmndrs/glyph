@@ -22,10 +22,7 @@ type BitmapTechnique = typeof bitmap;
 const VIEWPORT_WIDTH = 800;
 const FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
-const bitmapRaster: RasterFormatInput<BitmapTechnique> = {
-  raster: bitmap,
-  options: { strikes: [16] },
-};
+const bitmapRaster: RasterFormatInput<BitmapTechnique> = bitmap({ strikes: [16] });
 const fontUrlByFixture: Readonly<Record<AdvancedShapingFontFixture, string>> = {
   inter: interBitmapFontUrl,
   amiri: amiriBitmapFontUrl,

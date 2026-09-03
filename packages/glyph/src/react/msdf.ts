@@ -14,8 +14,6 @@ export interface UseMsdf {
 
 /** Load one MSDF font through the shared R3F cache. */
 export const useMsdf = ((input: FontFaceSource, options?: MsdfOptions): Font<typeof msdf> =>
-  useFont(input, { format: options === undefined ? msdf : { raster: msdf, options } })) as UseMsdf;
-useMsdf.preload = (input, options) =>
-  useFont.preload(input, { format: options === undefined ? msdf : { raster: msdf, options } });
-useMsdf.clear = (input, options) =>
-  useFont.clear(input, { format: options === undefined ? msdf : { raster: msdf, options } });
+  useFont(input, { format: options === undefined ? msdf : msdf(options) })) as UseMsdf;
+useMsdf.preload = (input, options) => useFont.preload(input, { format: options === undefined ? msdf : msdf(options) });
+useMsdf.clear = (input, options) => useFont.clear(input, { format: options === undefined ? msdf : msdf(options) });

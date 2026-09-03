@@ -51,7 +51,7 @@ describe('baked benchmark font preloads', () => {
       preloadBakedFont({ artifact: '/fixtures/inter.font.glb', raster: bitmap({ strikes: [16] }) }),
       preloadBakedFont({
         artifact: '/fixtures/inter.font.glb',
-        raster: { raster: bitmap, options: { strikes: [8, 16] } },
+        raster: bitmap({ strikes: [8, 16] }),
       }),
     ]);
 
