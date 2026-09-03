@@ -20,6 +20,8 @@ export function TextOnPath<Technique extends AnyRasterFormat>({
   path,
   speed = 0,
   height = 0,
+  angle = 0,
+  lift = 0,
   size = 0.4,
   color = '#e7ecf6',
   letterSpacing = 0.06,
@@ -29,8 +31,12 @@ export function TextOnPath<Technique extends AnyRasterFormat>({
   readonly font: Font<Technique>;
   readonly path: Path;
   readonly speed?: number;
-  /** How far the baseline sits from the path along its normal; a tube's radius puts the type on its surface. */
+  /** How far the baseline sits from the path along the chosen radial; a tube's radius puts the type on its surface. */
   readonly height?: number;
+  /** Where around the path's frame the type stands: 0 is the normal, -π/2 lays it across a band's width. */
+  readonly angle?: number;
+  /** How far the type floats off its own plane toward the viewer; lifts it clear of a surface it lies on. */
+  readonly lift?: number;
   readonly size?: number;
   readonly color?: string;
   readonly letterSpacing?: number;
@@ -64,7 +70,7 @@ export function TextOnPath<Technique extends AnyRasterFormat>({
       if (rest === undefined) continue;
       // The line tiles the path exactly once: advance along the line scales to arc length.
       const s = (rest.originalMatrix.elements[12] ?? 0) * (path.length / width) + elapsed * speed;
-      glyphs.setMatrixAt(i, placeOnPath(path, s, 0, height, rest.originalMatrix, m));
+      glyphs.setMatrixAt(i, placeOnPath(path, s, angle, height, rest.originalMatrix, m, lift));
     }
   });
 

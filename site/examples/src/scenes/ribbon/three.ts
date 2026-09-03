@@ -1,17 +1,18 @@
 import { glyph } from '@pmndrs/glyph';
 import { slug } from '@pmndrs/glyph/raster/slug';
 import { ThreeConfig, type Glyphs } from '@pmndrs/glyph/three';
-import { Group, Matrix4, Mesh, TubeGeometry, type Scene } from 'three/webgpu';
+import { Group, Matrix4, Mesh, Vector3, type Scene } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
+import { bandGeometry } from '../../lib/band';
 import { curvePath, placeOnPath } from '../../lib/paths';
-import { CURVE, LINE, RIBBON } from './config';
+import { CURVE, LINE, REPEATS, RIBBON } from './config';
 import { ribbonInk, ribbonMaterial } from './materials';
 
 /**
- * The imperative twin: a tube on the curve, one line of text shaped once,
- * copied out with `breakApart()` on commit, and every frame each glyph is
- * placed on the same curve by its advance plus time.
+ * The imperative twin: a flat band on an open curve facing the camera, one
+ * line of text shaped once, copied out with `breakApart()` on commit, and
+ * every frame each glyph is laid across the band by its advance plus time.
  */
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
@@ -19,13 +20,12 @@ export async function mount(scene: Scene): Promise<() => void> {
   const Inter = glyph.fontFace(INTER, { format: slug });
   await Inter.load();
 
-  const path = curvePath(CURVE);
+  const path = curvePath(CURVE, new Vector3(0, 0, 1));
   const stage = new Group();
-  stage.rotation.set(0.22, 0, 0.06);
-  const ribbon = new Mesh(new TubeGeometry(CURVE, 480, RIBBON.radius, 14, true), ribbonMaterial());
+  const ribbon = new Mesh(bandGeometry(path, RIBBON.width, 480, false), ribbonMaterial());
   const line = three.createText({
     font: Inter,
-    text: LINE.repeat(3),
+    text: LINE.repeat(REPEATS),
     material: ribbonInk,
     style: { fontSize: RIBBON.size, color: '#e7ecf6', letterSpacing: RIBBON.letterSpacing },
     layout: { wrap: 'none' },
@@ -42,6 +42,7 @@ export async function mount(scene: Scene): Promise<() => void> {
   let elapsed = 0;
   const tick = (): void => {
     elapsed += 1 / 60;
+    stage.rotation.y = Math.sin(elapsed * 0.3) * RIBBON.sway;
     if (glyphs === undefined && line.commitState().status === 'committed') {
       [glyphs] = line.breakApart();
       width = line.measure().contentWidth;
@@ -53,7 +54,11 @@ export async function mount(scene: Scene): Promise<() => void> {
         const rest = glyphs.measurements[i];
         if (rest === undefined) continue;
         const s = (rest.originalMatrix.elements[12] ?? 0) * (path.length / width) + elapsed * RIBBON.speed;
-        glyphs.setMatrixAt(i, placeOnPath(path, s, 0, RIBBON.radius + 0.02, rest.originalMatrix, matrix));
+        // -π/2 lays the glyph across the band's width, centred on it, lifted a little toward the viewer.
+        glyphs.setMatrixAt(
+          i,
+          placeOnPath(path, s, -Math.PI / 2, -RIBBON.size * 0.36, rest.originalMatrix, matrix, 0.03),
+        );
       }
     }
     glyph.shape();

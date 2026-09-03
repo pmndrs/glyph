@@ -77,9 +77,10 @@ export function curvePath(curve: Curve<Vector3>, up = new Vector3(0, 1, 0)): Pat
       const u = (((s % length) + length) % length) / length;
       curve.getPointAt(u, out.position);
       curve.getTangentAt(u, out.tangent);
-      // Type stands on world up wherever the curve goes, the way it does on a circle; the letters never turn over.
-      out.normal.copy(up);
-      out.binormal.copy(out.tangent).cross(up).normalize();
+      // The normal is world up with the tangent's share removed, so it is always perpendicular to the path:
+      // type stands on the tube wherever the curve climbs or dives, and never turns over.
+      out.normal.copy(up).addScaledVector(out.tangent, -up.dot(out.tangent)).normalize();
+      out.binormal.copy(out.tangent).cross(out.normal).normalize();
       return out;
     },
   };
@@ -118,9 +119,10 @@ const scale = new Vector3();
 /**
  * Places one glyph on a path: `s` is its arc position, `angle` its place
  * around the path's frame (0 is the normal), `height` how far its baseline
- * sits from the path, and `originalMatrix` its committed transform, whose
- * scale is kept. The glyph's x runs along the tangent and its y along the
- * chosen radial, so the text reads along the path standing on it.
+ * sits from the path along that radial, `lift` how far it floats off its own
+ * plane toward the viewer, and `originalMatrix` its committed transform,
+ * whose scale is kept. The glyph's x runs along the tangent and its y along
+ * the chosen radial, so the text reads along the path standing on it.
  */
 export function placeOnPath(
   path: Path,
@@ -129,12 +131,13 @@ export function placeOnPath(
   height: number,
   originalMatrix: Matrix4,
   out: Matrix4,
+  lift = 0,
 ): Matrix4 {
   path.frameAt(s, frame);
   radial.copy(frame.normal).multiplyScalar(Math.cos(angle)).addScaledVector(frame.binormal, Math.sin(angle));
   facing.copy(frame.tangent).cross(radial).normalize();
   originalMatrix.decompose(home, q, scale);
-  at.copy(frame.position).addScaledVector(radial, height);
+  at.copy(frame.position).addScaledVector(radial, height).addScaledVector(facing, lift);
   basis.makeBasis(frame.tangent, radial, facing).setPosition(at);
   return out.copy(basis).scale(scale);
 }
