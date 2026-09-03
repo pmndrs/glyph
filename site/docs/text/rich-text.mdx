@@ -265,7 +265,12 @@ notes · internals
 - a measurement query re-sends the whole text rather than a diff — `internal/render-planner.ts:812–819`
 - [verify] the removed helpers `insertText`/`deleteText`/`replaceText`/`setSpan`/`removeSpan`: none exist in
   `three/text.ts` at HEAD (grep); find the decision that removed them before naming them in prose
-- [verify] the `editing` scene is not in `site/examples/src/scenes` at this commit; the proxy below stays for when it lands
+- the scene — `site/examples/src/scenes/editing/scene.tsx`: a typist restates the line as nested runs every
+  keystroke (`config.ts#runsOf`), so the document is always the tree; the counter reads `commitState()` back. The twin
+  `three.ts` assigns `text.text = value` for a keystroke and a `txt` document for the styled line
+- observed: the counter reads `committed` at revision = keystrokes + 1 (the initial state is revision 1), so one
+  keystroke is one revision; `pending` shows for the one frame between a keystroke and the root's next accepted
+  shape
 */}
 
 <glyph-proxy fit="cover" root="scenes" data-scene="editing" aria-label="Keystroke editing with retained runs" aspect="16 / 9" />
