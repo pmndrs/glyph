@@ -375,9 +375,10 @@ async function createComparisonWorkloadRuntime(
     zoomText: zoomAnimationState,
   };
   const scene = new THREE.Scene();
-  const glyphRoot = createBenchmarkThreeRoot(`comparison-${technique}`, {
+  let rootCompositing = workloadCompositing(configuration.workload);
+  let glyphRoot = createBenchmarkThreeRoot(`comparison-${technique}-${rootCompositing}`, {
     capacity: { size: 4_096, policy: 'grow' },
-    compositing: workloadCompositing(configuration.workload),
+    compositing: rootCompositing,
   });
   let camera = createWorkloadCamera(configuration.workload, width, height);
   const textUpdateTelemetry = createTextUpdateTelemetry();
@@ -604,27 +605,45 @@ async function createComparisonWorkloadRuntime(
         next.workload === 'icon-grid' && nextIconGridInstance !== undefined
           ? nextIconGridInstance.activate(next, { height, width })
           : undefined;
+      const nextCompositing = workloadCompositing(next.workload);
+      const previousGlyphRoot = glyphRoot;
+      const nextGlyphRoot =
+        nextCompositing === rootCompositing
+          ? previousGlyphRoot
+          : createBenchmarkThreeRoot(`comparison-${technique}-${nextCompositing}`, {
+              capacity: { size: 4_096, policy: 'grow' },
+              compositing: nextCompositing,
+            });
+      const rootChanged = nextGlyphRoot !== previousGlyphRoot;
       const previous = entries;
       const previousRoot = batchRoot;
       const reuseBatchRoot =
-        previousRoot instanceof TextGroup && comparisonWorkloadDefinition(next.workload).batching !== 'standalone';
-      const previousCompositing = glyphRoot.compositing;
-      glyphRoot.setCompositing(workloadCompositing(next.workload));
-      const nextEntries = createEntries(
-        glyphRoot,
-        activeFont().loaded,
-        technique,
-        next,
-        rendererViewport.pixelRatio,
-        width,
-        height,
-        workloadChanged ? 0 : performance.now() - animationEpoch,
-        options.textLadderSpecimen,
-        nextCompanionFonts.map(({ loaded }) => loaded),
-        initialIconWindow?.scrollX ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollX ?? 0)),
-        initialIconWindow?.scrollY ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollY ?? 0)),
-      );
-      const nextRoot = reuseBatchRoot ? previousRoot : createBatchRoot(glyphRoot, next.workload);
+        !rootChanged &&
+        previousRoot instanceof TextGroup &&
+        comparisonWorkloadDefinition(next.workload).batching !== 'standalone';
+      let nextEntries: readonly WorkloadEntry[] = [];
+      let nextRoot: THREE.Object3D;
+      try {
+        nextEntries = createEntries(
+          nextGlyphRoot,
+          activeFont().loaded,
+          technique,
+          next,
+          rendererViewport.pixelRatio,
+          width,
+          height,
+          workloadChanged ? 0 : performance.now() - animationEpoch,
+          options.textLadderSpecimen,
+          nextCompanionFonts.map(({ loaded }) => loaded),
+          initialIconWindow?.scrollX ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollX ?? 0)),
+          initialIconWindow?.scrollY ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollY ?? 0)),
+        );
+        nextRoot = reuseBatchRoot ? previousRoot : createBatchRoot(nextGlyphRoot, next.workload);
+      } catch (error) {
+        disposeEntries(nextEntries);
+        if (rootChanged) disposeBenchmarkThreeRoot(nextGlyphRoot);
+        throw error;
+      }
       const scheduledAt = performance.now();
       try {
         // Compatible grouped workloads replace their children through one retained Rust session. Creating a second
@@ -638,6 +657,11 @@ async function createComparisonWorkloadRuntime(
           batchRoot = nextRoot;
           disposeEntries(previous);
           if (!reuseBatchRoot) disposeBatchRoot(previousRoot);
+          if (rootChanged) {
+            disposeBenchmarkThreeRoot(previousGlyphRoot);
+            glyphRoot = nextGlyphRoot;
+            rootCompositing = nextCompositing;
+          }
           if (iconGridInstanceChanged) {
             iconGridInstance?.dispose();
             iconGridInstance = next.workload === 'icon-grid' ? nextIconGridInstance : undefined;
@@ -667,6 +691,11 @@ async function createComparisonWorkloadRuntime(
         scene.add(nextRoot);
         disposeEntries(previous);
         if (!reuseBatchRoot) disposeBatchRoot(previousRoot);
+        if (rootChanged) {
+          disposeBenchmarkThreeRoot(previousGlyphRoot);
+          glyphRoot = nextGlyphRoot;
+          rootCompositing = nextCompositing;
+        }
         if (iconGridInstanceChanged) {
           iconGridInstance?.dispose();
           iconGridInstance = next.workload === 'icon-grid' ? nextIconGridInstance : undefined;
@@ -687,8 +716,7 @@ async function createComparisonWorkloadRuntime(
         if (reuseBatchRoot) {
           for (const { node } of nextEntries) nextRoot.remove(node);
           disposeBatchRoot(nextRoot);
-          glyphRoot.setCompositing(previousCompositing);
-          const restoredRoot = createBatchRoot(glyphRoot, configuration.workload);
+          const restoredRoot = createBatchRoot(previousGlyphRoot, configuration.workload);
           try {
             for (const { node } of previous) restoredRoot.add(node);
             publishWorkloadTexts(restoredRoot, previous);
@@ -704,7 +732,7 @@ async function createComparisonWorkloadRuntime(
         }
         disposeEntries(nextEntries);
         if (!reuseBatchRoot) disposeBatchRoot(nextRoot);
-        glyphRoot.setCompositing(previousCompositing);
+        if (rootChanged) disposeBenchmarkThreeRoot(nextGlyphRoot);
         if (iconGridInstanceChanged) nextIconGridInstance?.dispose();
         throw error;
       }

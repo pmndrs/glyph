@@ -21,6 +21,7 @@ import {
   ThreeRoot,
   ThreeConfig,
   ThreeFontFormats,
+  defineThreeConfig,
   defineTextMaterial,
   span as threeSpan,
   type ThreeHandle,
@@ -103,10 +104,16 @@ const label = three.createText({
   layout: [layouts.centered, layouts.wrapped],
 });
 const labels = three.createTextGroup({ pixelSnapping: true });
-three.setCompositing('independent');
+const independentThree = glyph.handle(
+  'three:independent-type-fixture',
+  defineThreeConfig({ compositing: 'independent', capacity: { size: 4_096, policy: 'chunk' } }),
+);
+independentThree.createText({ font: bitmapFont, text: 'Config-owned root policy' });
+// @ts-expect-error Capacity is immutable config policy, not mutable root state.
 three.setCapacity({ size: 4_096, policy: 'chunk' });
+// @ts-expect-error Compositing is immutable config policy, not mutable root state.
+three.setCompositing('independent');
 three.createText({ font: bitmapFont, text: txt`Warning: ${warning`100`}` });
-const compositing: 'ordered' | 'independent' = three.compositing;
 labels.add(label);
 glyph.shape();
 label.text = 'Updated';
@@ -148,4 +155,3 @@ Constraints.create({
 });
 
 void labels;
-void compositing;

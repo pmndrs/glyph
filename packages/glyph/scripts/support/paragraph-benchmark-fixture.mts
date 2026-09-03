@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { glyph } from '../../dist/index.js';
-import { ThreeConfig } from '../../dist/three.js';
+import { defineThreeConfig, type GlyphBufferCapacity } from '../../dist/three.js';
 import { bitmap } from '../../dist/raster/bitmap.js';
 import * as THREE from 'three/webgpu';
 
@@ -32,8 +32,7 @@ let nextFixtureHandle = 1;
 
 export async function loadParagraphBenchmarkFixture(corpus: BenchmarkCorpus = 'latin') {
   await glyph.init();
-  const handle = glyph.handle(`three:paragraph-benchmark:${String(nextFixtureHandle)}`, ThreeConfig);
-  nextFixtureHandle += 1;
+  const fixtureHandle = nextFixtureHandle++;
   const workspaceRoot = new URL('../../../../', import.meta.url);
   const bytes = await readFile(
     new URL(`apps/benchmarks/fixtures/rendering/${corpusFixtures[corpus].font}`, workspaceRoot),
@@ -44,16 +43,17 @@ export async function loadParagraphBenchmarkFixture(corpus: BenchmarkCorpus = 'l
   await loaded.load();
   let nextRoot = 1;
   return {
-    handle,
     loaded,
-    root() {
-      const root = handle(`paragraph:${String(nextRoot)}`);
+    root(capacity: GlyphBufferCapacity) {
+      const root = glyph.handle(
+        `three:paragraph-benchmark:${String(fixtureHandle)}:${String(nextRoot)}`,
+        defineThreeConfig({ capacity }),
+      );
       nextRoot += 1;
       return root;
     },
     dispose() {
       loaded.dispose();
-      handle.dispose();
     },
   };
 }
@@ -63,8 +63,7 @@ export function createBenchmarkParagraph(
   text: string,
   width: number,
 ) {
-  const root = fixture.root();
-  root.setCapacity({ size: Math.max(256, text.length), policy: 'grow' });
+  const root = fixture.root({ size: Math.max(256, text.length), policy: 'grow' });
   const group = root.createTextGroup();
   const paragraph = root.createText({
     font: fixture.loaded,

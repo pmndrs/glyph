@@ -28,8 +28,7 @@ for (const report of reports) {
 }
 
 function measureBatch(count: number) {
-  const root = fixture.root();
-  root.setCapacity({ size: count * 16, policy: 'grow' });
+  const root = fixture.root({ size: count * 16, policy: 'grow' });
   const group = root.createTextGroup();
   const nestedGroup = root.createTextGroup();
   const texts = Array.from({ length: count }, (_, index) =>

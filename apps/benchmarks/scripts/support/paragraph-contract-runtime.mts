@@ -11,7 +11,7 @@ import {
 import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
-import { ThreeConfig } from '@pmndrs/glyph/three';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
 
 await glyph.init();
 let nextContractHandle = 1;
@@ -55,8 +55,10 @@ export async function loadContractFont(url: URL, coverage?: string): Promise<Con
 }
 
 export function createContractText(font: ContractFont, text: string, style: TextStyle) {
-  const handle = glyph.handle(`paragraph-contract:${String(nextContractHandle++)}`, ThreeConfig);
-  handle.setCapacity({ size: Math.max(1_024, text.length * 4), policy: 'grow' });
+  const handle = glyph.handle(
+    `paragraph-contract:${String(nextContractHandle++)}`,
+    defineThreeConfig({ capacity: { size: Math.max(1_024, text.length * 4), policy: 'grow' } }),
+  );
   const group = handle.createTextGroup();
   const value = handle.createText({ font, text, style });
   group.add(value);

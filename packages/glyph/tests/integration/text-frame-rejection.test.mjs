@@ -5,6 +5,7 @@ import '../support/browser-globals.mjs';
 import * as THREE from 'three/webgpu';
 import { span, txt } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
 
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { createThreeTestHandle } from '../support/three-handle.mjs';
@@ -111,8 +112,7 @@ test('a malformed feature range throws while constructing its structural span', 
 });
 
 test('a fixed root budget keeps the last complete revision and self-heals', { timeout }, async (t) => {
-  const three = await createThreeTestHandle(t);
-  three.setCapacity({ size: 8, policy: 'fixed' });
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 8, policy: 'fixed' } }));
   const font = await fonts.load('inter');
   const scene = new THREE.Scene();
   const node = three.createText({

@@ -1,5 +1,5 @@
 import { glyph } from '@pmndrs/glyph';
-import { ThreeConfig, type GlyphBufferCapacity, type ThreeRoot } from '@pmndrs/glyph/three';
+import { defineThreeConfig, type GlyphBufferCapacity, type ThreeHandle, type ThreeRoot } from '@pmndrs/glyph/three';
 
 interface BenchmarkThreeRootOptions {
   readonly capacity?: GlyphBufferCapacity;
@@ -7,22 +7,35 @@ interface BenchmarkThreeRootOptions {
 }
 
 await glyph.init();
-const benchmarkHandle = glyph.handle('benchmarks', ThreeConfig);
+const benchmarkHandles = new Map<string, ThreeHandle>();
+
+function benchmarkHandle(options: BenchmarkThreeRootOptions): ThreeHandle {
+  const capacity = options.capacity ?? { size: 4_096, policy: 'chunk' };
+  const compositing = options.compositing ?? 'ordered';
+  const key = `${String(capacity.size)}:${capacity.policy}:${compositing}`;
+  const existing = benchmarkHandles.get(key);
+  if (existing !== undefined) return existing;
+  const handle = glyph.handle(`benchmarks:${key}`, defineThreeConfig({ capacity, compositing }));
+  benchmarkHandles.set(key, handle);
+  return handle;
+}
 
 /** Create one semantically named benchmark root after all target-specific raster registration has run. */
 export function createBenchmarkThreeRoot(name: string, options: BenchmarkThreeRootOptions = {}): ThreeRoot {
-  const root = benchmarkHandle(name);
-  if (options.capacity !== undefined) root.setCapacity(options.capacity);
-  if (options.compositing !== undefined) root.setCompositing(options.compositing);
-  return root;
+  return benchmarkHandle(options)(name);
 }
 
 /** Dispose one named publication root while preserving the benchmark application's shared handle. */
 export function disposeBenchmarkThreeRoot(root: ThreeRoot): void {
-  if (root.handle !== benchmarkHandle || root.name === undefined) {
+  if (![...benchmarkHandles.values()].includes(root.handle) || root.name === undefined) {
     throw new TypeError('benchmark Three root was not created by createBenchmarkThreeRoot');
   }
   root.dispose();
 }
 
-if (import.meta.hot !== undefined) import.meta.hot.dispose(() => benchmarkHandle.dispose());
+if (import.meta.hot !== undefined) {
+  import.meta.hot.dispose(() => {
+    for (const handle of benchmarkHandles.values()) handle.dispose();
+    benchmarkHandles.clear();
+  });
+}

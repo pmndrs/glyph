@@ -215,14 +215,6 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
     return this.#binding?.gpuBytes ?? 0;
   }
 
-  get capacity(): GlyphBufferCapacity {
-    return this.#capacity;
-  }
-
-  get compositing(): 'ordered' | 'independent' {
-    return this.#compositing;
-  }
-
   get material(): ThreeTextMaterial | undefined {
     return this.#material;
   }
@@ -235,22 +227,6 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
     if (this.#material === value) return;
     this.#material = value;
     this.#binding?.invalidateMaterial();
-  }
-
-  setCapacity(value: GlyphBufferCapacity): void {
-    this.#assertActive();
-    const capacity = normalizeGlyphBufferCapacity(value, 'Three root capacity');
-    if (sameCapacity(this.#capacity, capacity)) return;
-    this.#capacity = capacity;
-    this.#binding?.setCapacity(capacity);
-  }
-
-  setCompositing(value: 'ordered' | 'independent'): void {
-    this.#assertActive();
-    const compositing = normalizeThreeRootCompositing(value, 'Three root compositing');
-    if (this.#compositing === compositing) return;
-    this.#compositing = compositing;
-    this.#binding?.setCompositing(compositing);
   }
 
   createText<Technique extends AnyRasterFormat>(properties: StandaloneTextProperties<Technique>): Text<Technique>;
@@ -1112,18 +1088,6 @@ class ThreeRootPublication {
     return this.#capacityExceeded;
   }
 
-  setCapacity(capacity: GlyphBufferCapacity): void {
-    this.#assertActive();
-    this.#capacity = capacity;
-    if (this.#capacityExceeded !== undefined) this.#services.invalidate();
-  }
-
-  setCompositing(compositing: 'ordered' | 'independent'): void {
-    this.#assertActive();
-    this.#compositing = compositing;
-    this.#services.invalidate();
-  }
-
   invalidateMaterial(): void {
     this.#assertActive();
     this.#materialInvalidated = true;
@@ -1569,10 +1533,6 @@ function assertPairedSurrogates(text: string): void {
     }
     throw new RangeError(`text offset ${index} is an unpaired ${high ? 'high' : 'low'} surrogate`);
   }
-}
-
-function sameCapacity(left: GlyphBufferCapacity, right: GlyphBufferCapacity): boolean {
-  return left.size === right.size && left.policy === right.policy;
 }
 
 /** @internal Validate one root-owned compositing input at its user boundary. */
