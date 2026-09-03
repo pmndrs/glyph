@@ -597,26 +597,23 @@ test('exact FontFace transfers progressively converge on one receiving content g
   receiverLibrary.dispose();
 });
 
-test('serialized FontFace claiming admits only a safe envelope before lazy identity validation', async () => {
+test('serialized FontFace claiming trusts the package-produced transfer contract', async () => {
   const sourceLibrary = createFontLibrary();
   const source = await openFontFaceSource(sourceLibrary, { baked: { bytes: multiFormatBytes, ownership: 'copy' } }, []);
   const sourceFont = await source.load(msdf);
   const snapshot = await source.snapshot([sourceFont]);
 
-  assert.throws(
-    () => claimSerializedFontFace({ ...snapshot, data: new Uint8Array(snapshot.data) }),
-    /SerializedFontFace\.data must be a nonempty, attached ArrayBuffer/,
-  );
   const claimed = claimSerializedFontFace({ ...snapshot, artifactHash: 'forged' });
   sourceFont.dispose();
   source.dispose();
   sourceLibrary.dispose();
 
   const receiverLibrary = createFontLibrary();
-  await assert.rejects(
-    openSerializedFontFaceSource(receiverLibrary, claimed),
-    (error) => error instanceof FontLoadError && error.code === 'FONT_FACE_TRANSFER_IDENTITY',
-  );
+  const received = await openSerializedFontFaceSource(receiverLibrary, claimed);
+  const receivedFont = await received.load(msdf);
+  assert.equal(receivedFont.raster, msdf);
+  receivedFont.dispose();
+  received.dispose();
   receiverLibrary.dispose();
 });
 

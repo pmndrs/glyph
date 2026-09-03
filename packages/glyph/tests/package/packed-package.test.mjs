@@ -134,7 +134,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
 
   const runtimeHost = await readFile(join(installedDirectory, 'dist/runtime-bake.js'), 'utf8');
   const serialWorkerHost = await readFile(join(installedDirectory, 'dist/internal/serial-worker-host.js'), 'utf8');
-  assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\.\/dist\/runtime-bake-worker\.js["']/);
+  assert.match(runtimeHost, /workerUrl:\s*new URL\(["'`]\.\.\/dist\/runtime-bake-worker\.js["'`]/);
   assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/);
   assert.match(serialWorkerHost, /type:\s*["']module["']/);
 

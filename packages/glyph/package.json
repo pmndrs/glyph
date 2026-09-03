@@ -303,6 +303,7 @@
     "oxlint": "1.75.0",
     "react": "19.2.8",
     "three": "0.185.1",
+    "tsdown": "0.22.14",
     "typegpu": "0.12.3",
     "typescript": "7.0.2",
     "unicode-property-value-aliases": "3.9.0",
