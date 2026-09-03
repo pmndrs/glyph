@@ -23,26 +23,42 @@ import {
 } from './config/raster-format.js';
 import { canonicalJson } from './internal/raster-identity.js';
 
-/** Source accepted by a reusable FontFace declaration. */
-export type FontFaceSource = LoadFontInput | Blob | SerializedFontFace;
+/** Canonical source accepted by a reusable FontFace declaration. */
+export type FontFaceSource = string | URL | Blob | SerializedFontFace;
 
 /** One format assertion accepted by a FontFace declaration. */
-export type FontFaceFormat<Format extends AnyRasterFormat = AnyRasterFormat> =
-  | string
-  | Format
-  | RasterFormatRequest<Format>;
+export type FontFaceFormat<Format extends AnyRasterFormat = AnyRasterFormat> = string | RasterFormatInput<Format>;
 
 export type FontFaceFormatDeclaration = FontFaceFormat | readonly [FontFaceFormat, ...FontFaceFormat[]];
+
+type ValidFontFaceFormat<Format> = Format extends AnyRasterFormat
+  ? Format extends RasterFormatInput<Format>
+    ? Format
+    : never
+  : Format extends string | RasterFormatRequest<AnyRasterFormat>
+    ? Format
+    : never;
+
+type ValidFontFaceFormatDeclaration<Declaration> = Declaration extends readonly []
+  ? never
+  : Declaration extends readonly unknown[]
+    ? {
+        readonly [Index in keyof Declaration]: ValidFontFaceFormat<Declaration[Index]>;
+      }
+    : ValidFontFaceFormat<Declaration>;
+
+/** Format input after enforcing option-bearing raster contracts. */
+export type FontFaceFormatInput<Declaration> = Declaration & ValidFontFaceFormatDeclaration<Declaration>;
 
 export type FontFaceDeclaredFormat<Declaration> = Declaration extends readonly FontFaceFormat[]
   ? Declaration[number]
   : Extract<Declaration, FontFaceFormat>;
 
 /** Optional identity and format assertion for one FontFace source. */
-export interface FontFaceConfig<Declaration extends FontFaceFormatDeclaration = FontFaceFormatDeclaration> {
+export type FontFaceConfig<Declaration = FontFaceFormatDeclaration> = {
   readonly family?: string;
-  readonly format?: Declaration;
-}
+  readonly format?: FontFaceFormatInput<Declaration>;
+};
 
 type RasterOfFormat<Format> = Format extends AnyRasterFormat
   ? Format
@@ -68,39 +84,47 @@ type FormatForKey<Format, Key extends PropertyKey> = Format extends unknown
     : never
   : never;
 
-/** One default or named format selection belonging to a FontFace. */
-export interface FontFaceSelection<Format extends FontFaceFormat | undefined = FontFaceFormat | undefined> {
+/** Format-erased FontFace selection used at handle boundaries. */
+export interface AnyFontFaceSelection {
   readonly family: string;
-  readonly format: Format;
+  readonly format: FontFaceFormat | undefined;
   readonly face: AnyFontFace;
   /** Load this exact declared format selection. */
-  load(): Promise<FontFaceSelection<Format>>;
+  load(): Promise<AnyFontFaceSelection>;
   /** Read this selection's readiness without observing its Promise. */
   isLoaded(): boolean;
   /** Explicitly copy this loaded selection into fresh structured-clone transfer buffers. */
   clone(): Promise<FontFaceTransfer>;
 }
 
-interface FontFaceBase<Formats extends FontFaceFormat> extends Omit<FontFaceSelection<Formats | undefined>, 'load'> {
-  readonly default: FontFace<Formats>;
+/** Format-erased FontFace declaration used at catalog and integration boundaries. */
+export interface AnyFontFace extends AnyFontFaceSelection {
+  readonly default: AnyFontFace;
   readonly disposed: boolean;
   /** Load every declared format, or every imported format advertised by an undeclared main font. */
-  load(): Promise<FontFace<Formats>>;
+  load(): Promise<AnyFontFace>;
   /** Inspect the ordered format keys advertised by the authoritative main font. */
   formats(): Promise<readonly string[]>;
   dispose(): void;
 }
 
-/** Reusable FontFace declaration whose keyed selections are inferred from its asserted formats. */
-export type FontFace<Formats extends FontFaceFormat = never> = FontFaceBase<Formats> & {
-  readonly [Key in FormatKey<Formats>]: FontFaceSelection<FormatForKey<Formats, Key>>;
+/** One default or named format selection belonging to a FontFace. */
+export type FontFaceSelection<Format extends FontFaceFormat | undefined = FontFaceFormat | undefined> = Omit<
+  AnyFontFaceSelection,
+  'format' | 'load'
+> & {
+  readonly format: Format;
+  load(): Promise<FontFaceSelection<Format>>;
 };
 
-/** Format-erased FontFace used at catalog and integration boundaries. */
-export type AnyFontFace = FontFace<FontFaceFormat>;
-
-/** Format-erased FontFace selection used at handle boundaries. */
-export type AnyFontFaceSelection = FontFaceSelection<FontFaceFormat | undefined>;
+/** Reusable FontFace declaration whose keyed selections are inferred from its asserted formats. */
+export type FontFace<Formats extends FontFaceFormat = never> = Omit<AnyFontFace, 'default' | 'format' | 'load'> & {
+  readonly default: FontFace<Formats>;
+  readonly format: Formats | undefined;
+  load(): Promise<FontFace<Formats>>;
+} & {
+  readonly [Key in FormatKey<Formats>]: FontFaceSelection<FormatForKey<Formats, Key>>;
+};
 
 export type FontFormatMap = Readonly<object>;
 
@@ -193,7 +217,7 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
   };
   let face!: AnyFontFace;
   const defaultFormat = formats[0];
-  const base = {
+  const base: AnyFontFace = {
     family,
     format: defaultFormat,
     get face(): AnyFontFace {
@@ -221,7 +245,7 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
       disposeFontFace(face);
     },
   };
-  face = base as unknown as AnyFontFace;
+  face = base;
   faceStates.set(face, { face: state, format: defaultFormat, aggregate: true, promises: new Map() });
   for (const format of formats) {
     const key = formatName(format);
@@ -346,18 +370,18 @@ export class FontFaceHandleStore {
     return loadFontFaceFormat(selection, this.#resolveFormat(fontFaceSelectionState(selection).format));
   }
 
-  acquire<Format extends AnyRasterFormat>(selection: FontFaceSelection): Font<Format> {
+  acquire<const Selection extends AnyFontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>> {
     this.#assertActive();
     const raster = this.#resolveFormat(fontFaceSelectionState(selection).format);
-    const font = requiredFontFaceFormat(selection as AnyFontFaceSelection, raster);
-    return cloneImmutableFont(font) as Font<Format>;
+    const font = requiredFontFaceFormat(selection, raster);
+    return cloneImmutableFont(font) as Font<FontFaceRasterOf<Selection>>;
   }
 
   /** Borrow the store-owned immutable source. Callers must not dispose this value. */
-  peek(selection: FontFaceSelection): Font<AnyRasterFormat> {
+  peek<const Selection extends AnyFontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>> {
     this.#assertActive();
     const raster = this.#resolveFormat(fontFaceSelectionState(selection).format);
-    return requiredFontFaceFormat(selection as AnyFontFaceSelection, raster);
+    return requiredFontFaceFormat(selection, raster) as Font<FontFaceRasterOf<Selection>>;
   }
 
   dispose(): void {
@@ -739,14 +763,13 @@ function assertFontFaceConfig(config: unknown): asserts config is FontFaceConfig
 function assertFontFaceSource(source: unknown): asserts source is FontFaceSource {
   if (typeof Blob !== 'undefined' && source instanceof Blob) return;
   if (typeof source === 'string' || source instanceof URL) return;
-  if (typeof source !== 'object' || source === null || Array.isArray(source)) {
-    throw new TypeError('FontFace source must be a URL or font source object');
-  }
+  if (isSerializedFontFace(source)) return;
+  throw new TypeError('FontFace source must be a URL, Blob, or SerializedFontFace');
 }
 
 function fontFaceLoadInput(source: FontFaceSource): Promise<LoadFontInput> {
   if (isSerializedFontFace(source)) throw new TypeError('SerializedFontFace uses the transfer loader');
-  if (!(typeof Blob !== 'undefined' && source instanceof Blob)) return Promise.resolve(source as LoadFontInput);
+  if (typeof source === 'string' || source instanceof URL) return Promise.resolve(source);
   const existing = blobInputs.get(source);
   if (existing !== undefined) return existing;
   const pending = source.arrayBuffer().then((buffer) => {

@@ -267,7 +267,7 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
     if (!isFontFaceSelection(selection)) {
       return new Text(threeTextConstructionToken, properties as StandaloneTextProperties<Technique>, [], this);
     }
-    const font = this.#fonts.acquire<Technique>(selection);
+    const font = this.#fonts.acquire(selection);
     try {
       return new Text(
         threeTextConstructionToken,
@@ -319,12 +319,12 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   }
 
   /** @internal Acquire one mounted immutable Font from this handle's loaded FontFace cache. */
-  acquireFont<Technique extends AnyRasterFormat>(selection: AnyFontFaceSelection): Font<Technique> {
-    return this.#fonts.acquire<Technique>(selection);
+  acquireFont<const Selection extends AnyFontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>> {
+    return this.#fonts.acquire(selection);
   }
 
   /** @internal Borrow the store-owned immutable source for a React render snapshot. */
-  fontSource(selection: AnyFontFaceSelection): Font<AnyRasterFormat> {
+  fontSource<const Selection extends AnyFontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>> {
     return this.#fonts.peek(selection);
   }
 

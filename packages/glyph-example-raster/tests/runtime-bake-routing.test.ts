@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { glyph, type RuntimeFontBakeRequest } from '@pmndrs/glyph';
+import { createFontLibrary, type RuntimeFontBakeRequest } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { workerRasterKinds } from '@pmndrs/glyph/runtime-bake';
 import { afterEach, test } from 'vitest';
@@ -47,21 +47,21 @@ test('the example raster format bakes host-side while the Worker plan stays firs
     return new Uint8Array(artifact.buffer.slice(artifact.byteOffset, artifact.byteOffset + artifact.byteLength));
   };
 
-  const example = glyph.fontFace(
-    {
-      source: `data:font/ttf;base64,${source.toString('base64')}`,
-      runtimeBake,
-    },
-    { format: glyphExample({ paletteSeed: 17, inset: 0.1 }) },
+  const library = createFontLibrary({ runtimeBake });
+  const font = await library.loadFont(
+    { source: `data:font/ttf;base64,${source.toString('base64')}`, baked: null },
+    glyphExample({ paletteSeed: 17, inset: 0.1 }),
   );
-  await example.glyphExample.load();
-
-  assert.equal(requests.length, 1, 'the source load bakes its core through the Worker path once');
-  assert.deepEqual(
-    (requests[0]?.rasters ?? []).map(({ kind }) => kind),
-    [],
-    'the Worker plan carries no external kinds',
-  );
-  assert.equal(example.glyphExample.isLoaded(), true, 'the external raster decodes from its host-baked artifact');
-  example.dispose();
+  try {
+    assert.equal(requests.length, 1, 'the source load bakes its core through the Worker path once');
+    assert.deepEqual(
+      (requests[0]?.rasters ?? []).map(({ kind }) => kind),
+      [],
+      'the Worker plan carries no external kinds',
+    );
+    assert.equal(font.raster, glyphExample, 'the external raster decodes from its host-baked artifact');
+  } finally {
+    font.dispose();
+    library.dispose();
+  }
 });

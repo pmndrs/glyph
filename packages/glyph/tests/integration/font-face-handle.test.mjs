@@ -88,12 +88,83 @@ function defineFontAwareConfig() {
   });
 }
 
+test('FontFace rejects legacy loader request objects at its public boundary', () => {
+  assert.throws(
+    () => glyph.fontFace({ baked: '/fonts/legacy.font.glb' }),
+    /FontFace source must be a URL, Blob, or SerializedFontFace/,
+  );
+  assert.throws(
+    () => glyph.fontFace('/fonts/no-formats.font.glb', { format: [] }),
+    /FontFace format array must not be empty/,
+  );
+});
+
+test('disposing a pending FontFace aborts its load and immediately releases its family alias', async () => {
+  const originalFetch = globalThis.fetch;
+  const started = Promise.withResolvers();
+  let requestSignal;
+  globalThis.fetch = async (_input, init) => {
+    requestSignal = init?.signal;
+    started.resolve();
+    return new Promise((_resolve, reject) => {
+      requestSignal.addEventListener('abort', () => reject(requestSignal.reason), { once: true });
+    });
+  };
+  const source = new URL('https://glyph.invalid/pending-font-face.font.glb');
+  const face = glyph.fontFace(source, {
+    family: 'PendingFontFace',
+    format: bitmap({ strikes: [16] }),
+  });
+  try {
+    const pending = face.bitmap.load();
+    await started.promise;
+    face.dispose();
+    assert.equal(requestSignal.aborted, true);
+    await assert.rejects(pending, (error) => error instanceof DOMException && error.name === 'AbortError');
+    const replacement = glyph.fontFace(source, {
+      family: 'PendingFontFace',
+      format: bitmap({ strikes: [16] }),
+    });
+    replacement.dispose();
+  } finally {
+    face.dispose();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a failed exact-format load is evicted so a later call receives a fresh Promise', async () => {
+  const originalFetch = globalThis.fetch;
+  const source = new URL('https://glyph.invalid/retry-font-face.font.glb');
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests += 1;
+    return new Response(requests === 1 ? new Uint8Array([0, 1, 2, 3]) : bytes);
+  };
+  const face = glyph.fontFace(source, {
+    family: 'RetryFontFace',
+    format: bitmap({ strikes: [16] }),
+  });
+  try {
+    const failed = face.bitmap.load();
+    assert.equal(face.bitmap.load(), failed);
+    await assert.rejects(failed);
+    const retry = face.bitmap.load();
+    assert.notEqual(retry, failed);
+    assert.equal(await retry, face.bitmap);
+    assert.equal(face.bitmap.load(), retry);
+    assert.equal(requests, 2);
+  } finally {
+    face.dispose();
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Glyph owns FontFace loading for a non-Three configured handle', async () => {
   const handle = glyph.handle('font-face:portable-config', defineFontAwareConfig());
-  const face = glyph.fontFace(
-    { baked: { bytes, ownership: 'copy' } },
-    { family: 'FontFacePortableConfig', format: portableBitmap({ strikes: [16] }) },
-  );
+  const face = glyph.fontFace(new Blob([bytes], { type: 'model/gltf-binary' }), {
+    family: 'FontFacePortableConfig',
+    format: portableBitmap({ strikes: [16] }),
+  });
   try {
     const load = face.load();
     assert.equal(face.load(), load);
@@ -129,10 +200,10 @@ test('a packaged config factory honors spread overrides and releases a handle cr
 
 test('a loaded FontFace constructs an imperative Three Text and owns its hidden Font lease', async () => {
   const handle = glyph.handle('three:font-face-imperative', ThreeConfig);
-  const face = glyph.fontFace(
-    { baked: { bytes, ownership: 'copy' } },
-    { family: 'FontFaceImperative', format: bitmap({ strikes: [16] }) },
-  );
+  const face = glyph.fontFace(new Blob([bytes], { type: 'model/gltf-binary' }), {
+    family: 'FontFaceImperative',
+    format: bitmap({ strikes: [16] }),
+  });
   try {
     assert.equal(face.default, face);
     assert.notEqual(face.bitmap, face, 'the aggregate face and exact format selection have distinct load scopes');
@@ -170,10 +241,9 @@ test('a loaded FontFace constructs an imperative Three Text and owns its hidden 
 test('an undeclared FontFace load discovers every authoritative format for different handle defaults', async () => {
   const msdfHandle = glyph.handle('three:font-face-default-msdf', ThreeConfig);
   const slugHandle = glyph.handle('three:font-face-default-slug', defineThreeConfig({ defaultFontFormat: 'slug' }));
-  const face = glyph.fontFace(
-    { baked: { bytes: multiFormatBytes, ownership: 'copy' } },
-    { family: 'FontFaceHandleDefaults' },
-  );
+  const face = glyph.fontFace(new Blob([multiFormatBytes], { type: 'model/gltf-binary' }), {
+    family: 'FontFaceHandleDefaults',
+  });
   let msdfText;
   let slugText;
   try {
@@ -196,10 +266,9 @@ test('an undeclared FontFace load discovers every authoritative format for diffe
 });
 
 test('formats() preserves its successful Promise and reports authoritative format order', async () => {
-  const face = glyph.fontFace(
-    { baked: { bytes: multiFormatBytes, ownership: 'copy' } },
-    { family: 'FontFaceFormatInspection' },
-  );
+  const face = glyph.fontFace(new Blob([multiFormatBytes], { type: 'model/gltf-binary' }), {
+    family: 'FontFaceFormatInspection',
+  });
   try {
     const operation = face.formats();
     assert.equal(face.formats(), operation);
@@ -261,10 +330,10 @@ test('FontFace family aliases reject collisions and Blob declarations load throu
 test('a declared format member loads narrowly before the aggregate FontFace', async () => {
   const msdfHandle = glyph.handle('three:font-face-narrow-msdf', ThreeConfig);
   const slugHandle = glyph.handle('three:font-face-narrow-slug', defineThreeConfig({ defaultFontFormat: 'slug' }));
-  const face = glyph.fontFace(
-    { baked: { bytes: multiFormatBytes, ownership: 'copy' } },
-    { family: 'FontFaceNarrowLoad', format: [msdf, slug] },
-  );
+  const face = glyph.fontFace(new Blob([multiFormatBytes], { type: 'model/gltf-binary' }), {
+    family: 'FontFaceNarrowLoad',
+    format: [msdf, slug],
+  });
   let slugText;
   let msdfText;
   try {
@@ -296,10 +365,10 @@ test('a declared format member loads narrowly before the aggregate FontFace', as
 });
 
 test('an explicit FontFace clone transfers one selected format without invalidating its source', async () => {
-  const source = glyph.fontFace(
-    { baked: { bytes: multiFormatBytes, ownership: 'copy' } },
-    { family: 'FontFaceTransferSource', format: [msdf, slug] },
-  );
+  const source = glyph.fontFace(new Blob([multiFormatBytes], { type: 'model/gltf-binary' }), {
+    family: 'FontFaceTransferSource',
+    format: [msdf, slug],
+  });
   let serialized;
   try {
     const [snapshot, transfer] = await source.slug.clone();
@@ -337,10 +406,10 @@ test('an explicit FontFace clone transfers one selected format without invalidat
 });
 
 test('a declared format rejects when the authoritative font does not implement it', async () => {
-  const face = glyph.fontFace(
-    { baked: { bytes, ownership: 'copy' } },
-    { family: 'FontFaceMissingDeclaredTechnique', format: slug },
-  );
+  const face = glyph.fontFace(new Blob([bytes], { type: 'model/gltf-binary' }), {
+    family: 'FontFaceMissingDeclaredTechnique',
+    format: slug,
+  });
   try {
     await assert.rejects(
       face.slug.load(),

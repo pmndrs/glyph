@@ -601,7 +601,7 @@ export class ExampleText<Selection extends AnyFontFaceSelection> {
     readonly services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>,
     options: ExampleTextOptions<Selection>,
   ) {
-    this.#font = fonts.acquire<FontFaceRasterOf<Selection>>(options.font);
+    this.#font = fonts.acquire(options.font);
     this.#controller = services.createText({
       font: this.#font,
       text: options.text,
@@ -629,7 +629,7 @@ ergonomics in the adapter. `shape()` publishes semantic changes. A matrix-only t
 `services.syncTransforms()` so the renderer can update host transforms without shaping or Codec work. The example's
 transform implementation is intentionally a no-op; Three is the current live proof of matrix-traversal synchronization.
 
-## Declare handle-relative FontFace loading
+## Bind loaded FontFace selections
 
 The example's tested path accepts a loaded FontFace selection. Its config names the exact portable formats the handle can
 bind and selects one default:
@@ -646,8 +646,10 @@ const config = defineGlyphConfig({
 ```
 
 Inside `root.create`, `context.fonts` provides `isLoaded(selection)`, `load(selection)`, `acquire(selection)`, and
-`peek(selection)`. `acquire` returns an independent immutable `Font` lease. `peek` borrows the store-owned value and must
-not be disposed. A root wrapper can enforce the synchronous Text contract:
+`peek(selection)`. Loading remains owned by the FontFace; the handle store selects its configured default for an
+undeclared face and binds that loaded format into this renderer. `acquire` infers its concrete raster from the selection
+and returns an independent immutable `Font` lease. `peek` borrows the store-owned value and must not be disposed. A root
+wrapper can enforce the synchronous Text contract:
 
 ```ts
 function acquireLoadedFont(selection: AnyFontFaceSelection) {
@@ -824,9 +826,9 @@ flowchart TD
   Handle --> Named[named roots]
   Anonymous --> Text["Text / TextGroup<br/>desired state"]
   Named --> Text2["Text / TextGroup<br/>desired state"]
-  Handle --> FaceRecord["handle-relative FontFace load record"]
-  Face[FontFace declaration] --> FaceRecord
-  FaceRecord --> Cache["shared immutable Font cache"]
+  Face["FontFace declaration<br/>load owner"] --> Cache["shared immutable Font cache"]
+  Handle --> Binding["handle format selection<br/>and mounted Font leases"]
+  Cache --> Binding
   Anonymous --> Renderer["renderer decode state + leases"]
   Renderer --> GPU["TypeGPU buffers · texture · pipeline"]
   Device[caller-owned GPUDevice] -. borrowed by .-> GPU
@@ -842,7 +844,8 @@ device.destroy();
 ```
 
 Text releases its controller and mounted font ownership. Root disposal releases its renderer state. Handle disposal
-cascades roots, its Codec, and handle-relative font records. The device object releases TypeGPU resources but never owns
+cascades roots, its Codec, and handle-owned font bindings. FontFace disposal releases only the declaration's load lease;
+independent Text-held leases keep their resources alive. The device object releases TypeGPU resources but never owns
 the caller's `GPUDevice`; destroy that last. Public disposals are idempotent. Finalization is only a leak safety net for
 abandoned FontFace declarations, never the correctness mechanism.
 

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:24097da0cd5a540d3e56b258af57ca3abc80844ade2af0cf54f41388d06788eb'
+source_digest: 'sha256:598019d1586e78b36a59bee16cb49393c6c7acd9d663f087470d29f3a9c5defe'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -162,7 +162,7 @@ their device-relative leases.
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing immutable font/raster contracts, loading, fallback stacks, formatting helpers, and paragraphs. |
 | `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, and portable-resource construction helpers for integration authors.             |
-| `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, material factories, and Codec registration.                                     |
+| `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, material factories, and Codec registration.                                      |
 | `@pmndrs/glyph/three/bitmap` | Compatibility alias re-exporting the renderer-neutral Bitmap raster module.                                                                 |
 | `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                                   |
 | `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                                   |
@@ -295,7 +295,7 @@ originating FontFace, immutable Font values, or cache. The receiving realm passe
 ownership after checking and canonicalizing only the safe structured-clone envelope: version, arrays, scalar fields,
 live full-span buffers, and non-aliasing buffer ownership. The lazy importer then performs the single semantic identity
 check against the authoritative GLB and dependency bytes while importing the main GLB, selected raster sidecars, and
-only their resolved external resources into the same content graph used by URL, Request, Blob, and byte declarations.
+only their resolved external resources into the same content graph used by URL-string, `URL`, and `Blob` declarations.
 A complete existing graph is reused without fetching;
 partial transfers may progressively add formats to that graph. No live FontFace, Font, Promise, handle, or renderer
 resource crosses the realm boundary, and no normal `load()`, Text construction, `glyph.shape()`, or renderer path invokes

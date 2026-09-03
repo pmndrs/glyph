@@ -68,10 +68,9 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
   const device = new RejectOnceExampleRendererDevice();
   const handle = glyph.handle('example:bound-renderer', defineExampleConfig(device));
   const bytes = await readFile(output);
-  const font = glyph.fontFace(
-    { baked: `data:model/gltf-binary;base64,${bytes.toString('base64')}` },
-    { format: glyphExample({ paletteSeed: 7 }) },
-  );
+  const font = glyph.fontFace(new Blob([new Uint8Array(bytes)], { type: 'model/gltf-binary' }), {
+    format: glyphExample({ paletteSeed: 7 }),
+  });
   await font.load();
   try {
     const text = handle.createText({

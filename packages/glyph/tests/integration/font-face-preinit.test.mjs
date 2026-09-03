@@ -12,10 +12,10 @@ const bytes = await readFile(fontUrl);
 
 test('FontFace loading and explicit cloning do not initialize the Glyph engine', async () => {
   assert.equal(glyph.initialized, false);
-  const face = glyph.fontFace(
-    { baked: { bytes, ownership: 'copy' } },
-    { family: 'FontFaceBeforeInit', format: bitmap({ strikes: [16] }) },
-  );
+  const face = glyph.fontFace(new Blob([bytes], { type: 'model/gltf-binary' }), {
+    family: 'FontFaceBeforeInit',
+    format: bitmap({ strikes: [16] }),
+  });
   try {
     const [serialized, transfer] = await face.bitmap.clone();
     assert.equal(glyph.initialized, false);
@@ -28,10 +28,10 @@ test('FontFace loading and explicit cloning do not initialize the Glyph engine',
 
 test('an explicit FontFace clone transfers to a Worker and reconstructs without fetching or initializing Glyph', async () => {
   assert.equal(glyph.initialized, false);
-  const face = glyph.fontFace(
-    { baked: { bytes, ownership: 'copy' } },
-    { family: 'FontFaceWorkerTransfer', format: bitmap({ strikes: [16] }) },
-  );
+  const face = glyph.fontFace(new Blob([bytes], { type: 'model/gltf-binary' }), {
+    family: 'FontFaceWorkerTransfer',
+    format: bitmap({ strikes: [16] }),
+  });
   const worker = new Worker(new URL('../support/font-face-transfer-worker.mjs', import.meta.url));
   try {
     const [serialized, transfer] = await face.bitmap.clone();

@@ -45,10 +45,9 @@ globalThis.requestAnimationFrame ??= () => 0;
 globalThis.cancelAnimationFrame ??= () => undefined;
 
 async function loadFixture() {
-  const face = glyph.fontFace(
-    { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
-    { format: bitmap({ strikes: [16] }) },
-  );
+  const face = glyph.fontFace(new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' }), {
+    format: bitmap({ strikes: [16] }),
+  });
   await face.bitmap.load();
   return {
     font: face.bitmap,
@@ -154,7 +153,7 @@ test('provider-free R3F roots isolate independent Canvas stores', async () => {
 
 test('GlyphProvider resolves a scoped string through its lazy fontFaces table', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const input = { baked: { bytes: await readFile(multiFormatFontUrl), ownership: 'copy' } };
+  const input = new Blob([await readFile(multiFormatFontUrl)], { type: 'model/gltf-binary' });
   const face = glyph.fontFace(input, { format: msdf });
   let mounted = false;
   const tree = createElement(
@@ -360,7 +359,7 @@ test('a FontFace may dispose before React releases its mounted Text lease', asyn
 test('R3F-cached React consumers receive independent Font leases under StrictMode', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
   const request = {
-    input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
+    input: new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' }),
     raster: { raster: bitmap, options: { strikes: [16] } },
   };
   const observed = new Map();
@@ -387,7 +386,7 @@ test('R3F-cached React consumers receive independent Font leases under StrictMod
 test('clearing a React font resource leaves its mounted consumer lease live', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
   const request = {
-    input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
+    input: new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' }),
     raster: { raster: bitmap, options: { strikes: [16] } },
   };
   const observed = new Map();
@@ -409,7 +408,7 @@ test('clearing a React font resource leaves its mounted consumer lease live', as
 test('the generic useFont cache survives StrictMode replay and releases its runtime domain', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
   const request = {
-    input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
+    input: new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' }),
     raster: { raster: bitmap, options: { strikes: [16] } },
   };
   const observed = new Map();
@@ -430,7 +429,7 @@ test('the generic useFont cache survives StrictMode replay and releases its runt
 
 test('technique convenience preload and hook share the R3F resource', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const input = { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } };
+  const input = new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' });
   const options = { strikes: [16] };
   const observed = new Map();
   const preload = useBitmap.preload(input, options);
@@ -457,7 +456,7 @@ test('technique convenience preload and hook share the R3F resource', async () =
 });
 
 test('a rejected preload is evicted so the next call creates a new operation', async () => {
-  const input = { baked: { bytes: new Uint8Array([0]), ownership: 'copy' } };
+  const input = new Blob([new Uint8Array([0])], { type: 'model/gltf-binary' });
   const config = { format: bitmap({ strikes: [16] }) };
   const failed = useFont.preload(input, config);
   assert.equal(useFont.preload(input, config), failed, 'concurrent callers share the failing operation');
@@ -470,7 +469,7 @@ test('a rejected preload is evicted so the next call creates a new operation', a
 
 test('clearing a loaded R3F font resource permits a later preload and mount', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const input = { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } };
+  const input = new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' });
   const options = { strikes: [16] };
   const config = { format: { raster: bitmap, options } };
   const firstPreload = useFont.preload(input, config);

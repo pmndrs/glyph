@@ -18,6 +18,7 @@ import {
 } from 'react';
 
 import {
+  createFontFace,
   fontFaceResourceKey,
   isFontFaceSelection,
   resolveFontFace,
@@ -25,11 +26,12 @@ import {
   type AnyFontFaceSelection,
   type FontFaceConfig,
   type FontFaceFormat,
+  type FontFaceFormatInput,
   type FontFaceSource,
 } from './font-face.js';
 import { resolveRangesToClusters, type FormattedText, type TextInput } from './formatted-text.js';
 import type { Font } from './font.js';
-import { glyph } from './glyph.js';
+import { glyph, glyphFontLibrary } from './glyph.js';
 import { FontLoadError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
@@ -126,7 +128,8 @@ type DesiredR3fTextInput<Technique extends AnyRasterFormat> = Omit<
   readonly text: TextInput<Technique>;
 };
 
-type HookFontConfig<Format extends FontFaceFormat = FontFaceFormat> = Omit<FontFaceConfig<Format>, 'family'>;
+type HookFontConfig<Format> = Readonly<{ format: FontFaceFormatInput<Format> }>;
+type AnyHookFontConfig = Readonly<{ format?: FontFaceFormat }>;
 
 type TechniqueOfHookFormat<Format> = Format extends AnyRasterFormat
   ? Format
@@ -137,20 +140,14 @@ type TechniqueOfHookFormat<Format> = Format extends AnyRasterFormat
 /** Generic R3F font hook over the selected Three handle's FontFace cache. */
 export interface UseFont {
   /** Load one source's default or explicitly requested format and retain its mounted lease through React. */
-  <const Format extends FontFaceFormat = FontFaceFormat>(
-    input: FontFaceSource,
-    config?: HookFontConfig<Format>,
-  ): Font<TechniqueOfHookFormat<Format>>;
+  (input: FontFaceSource): Font<AnyRasterFormat>;
+  <const Format>(input: FontFaceSource, config: HookFontConfig<Format>): Font<TechniqueOfHookFormat<Format>>;
   /** Start the same default-handle load before a component requests it. */
-  preload<const Format extends FontFaceFormat = FontFaceFormat>(
-    input: FontFaceSource,
-    config?: HookFontConfig<Format>,
-  ): Promise<void>;
+  preload(input: FontFaceSource): Promise<void>;
+  preload<const Format>(input: FontFaceSource, config: HookFontConfig<Format>): Promise<void>;
   /** Release the default-handle cache entry without invalidating mounted Font leases. */
-  clear<const Format extends FontFaceFormat = FontFaceFormat>(
-    input: FontFaceSource,
-    config?: HookFontConfig<Format>,
-  ): void;
+  clear(input: FontFaceSource): void;
+  clear<const Format>(input: FontFaceSource, config: HookFontConfig<Format>): void;
 }
 
 const ThreeTextElement = extend(ThreeText);
@@ -319,10 +316,14 @@ function createProviderFontFaces(table: GlyphProviderProps['fontFaces']): Provid
       if (isFontFaceSelection(declaration)) {
         face = declaration.face;
       } else if (isProviderFontFaceConfig(declaration)) {
-        face = glyph.fontFace(declaration.src, declaration.format === undefined ? {} : { format: declaration.format });
+        face = createFontFace(
+          glyphFontLibrary(),
+          declaration.src,
+          declaration.format === undefined ? {} : { format: declaration.format },
+        );
         owned.push(face);
       } else {
-        face = glyph.fontFace(declaration as FontFaceSource);
+        face = createFontFace(glyphFontLibrary(), declaration as FontFaceSource);
         owned.push(face);
       }
       byName.set(name, face);
@@ -625,11 +626,11 @@ const reactFontFaces = new WeakMap<ThreeHandle, Map<string, ReactFontFaceResourc
 const defaultFontPreloads = new Map<string, Promise<void>>();
 
 /** Load through the selected handle; React owns only the mounted immutable Font lease. */
-export const useFont = ((input: FontFaceSource, config: HookFontConfig = {}): Font<AnyRasterFormat> => {
+export const useFont = ((input: FontFaceSource, config: AnyHookFontConfig = {}): Font<AnyRasterFormat> => {
   const handle = useSelectedHandle();
   return useHandleFontFace(handle, reactFontFaceResource(handle, input, config).face);
 }) as UseFont;
-useFont.preload = (input: FontFaceSource, config: HookFontConfig = {}): Promise<void> => {
+useFont.preload = (input: FontFaceSource, config: AnyHookFontConfig = {}): Promise<void> => {
   const key = fontFaceResourceKey(input, config.format);
   const existing = defaultFontPreloads.get(key);
   if (existing !== undefined) return existing;
@@ -643,7 +644,7 @@ useFont.preload = (input: FontFaceSource, config: HookFontConfig = {}): Promise<
   defaultFontPreloads.set(key, pending);
   return pending;
 };
-useFont.clear = (input: FontFaceSource, config: HookFontConfig = {}): void => {
+useFont.clear = (input: FontFaceSource, config: AnyHookFontConfig = {}): void => {
   const key = fontFaceResourceKey(input, config.format);
   defaultFontPreloads.delete(key);
   void defaultThreeHandle().then((handle) => {
@@ -667,7 +668,7 @@ function useHandleFontFace<Technique extends AnyRasterFormat>(
 function reactFontFaceResource(
   handle: ThreeHandle,
   input: FontFaceSource,
-  config: HookFontConfig,
+  config: AnyHookFontConfig,
 ): ReactFontFaceResource {
   let cache = reactFontFaces.get(handle);
   if (cache === undefined) {
@@ -677,7 +678,7 @@ function reactFontFaceResource(
   const key = fontFaceResourceKey(input, config.format);
   const existing = cache.get(key);
   if (existing !== undefined && !existing.face.disposed) return existing;
-  const resource = Object.freeze({ face: glyph.fontFace(input, config) });
+  const resource = Object.freeze({ face: createFontFace(glyphFontLibrary(), input, config) });
   cache.set(key, resource);
   return resource;
 }

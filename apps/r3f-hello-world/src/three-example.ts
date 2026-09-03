@@ -17,7 +17,7 @@ export async function mountThreeExample(root: HTMLElement): Promise<() => void> 
   await glyph.init();
 
   const handle = glyph.handle('examples:three', ThreeConfig);
-  const inter = glyph.fontFace({ baked: latinFontUrl });
+  const inter = glyph.fontFace(latinFontUrl);
   const renderer = new WebGPURenderer({ antialias: true });
   const scene = new Scene();
   const camera = new OrthographicCamera();

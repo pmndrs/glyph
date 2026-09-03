@@ -38,7 +38,9 @@ export async function loadParagraphBenchmarkFixture(corpus: BenchmarkCorpus = 'l
   const bytes = await readFile(
     new URL(`apps/benchmarks/fixtures/rendering/${corpusFixtures[corpus].font}`, workspaceRoot),
   );
-  const loaded = glyph.fontFace({ baked: { bytes, ownership: 'copy' } }, { format: bitmap({ strikes: [16] }) });
+  const loaded = glyph.fontFace(new Blob([new Uint8Array(bytes)], { type: 'model/gltf-binary' }), {
+    format: bitmap({ strikes: [16] }),
+  });
   await loaded.load();
   let nextRoot = 1;
   return {

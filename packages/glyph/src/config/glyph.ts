@@ -1,6 +1,6 @@
 import type { Font } from '../font.js';
 import type { GlyphEngine } from '../glyph-engine.js';
-import type { AnyFontFaceSelection } from '../font-face.js';
+import type { AnyFontFaceSelection, FontFaceRasterOf } from '../font-face.js';
 import type { GlyphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
 import type { FontSelection } from '../loaded-font.js';
 import type { AnyRasterFormat } from './raster-format.js';
@@ -751,9 +751,9 @@ export interface GlyphRootRecipe<
 export interface GlyphHandleFonts {
   isLoaded(selection: AnyFontFaceSelection): boolean;
   load(selection: AnyFontFaceSelection): Promise<AnyFontFaceSelection>;
-  acquire<Technique extends AnyRasterFormat>(selection: AnyFontFaceSelection): Font<Technique>;
+  acquire<const Selection extends AnyFontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>>;
   /** Borrow the store-owned immutable source. Callers must not dispose this value. */
-  peek(selection: AnyFontFaceSelection): Font<AnyRasterFormat>;
+  peek<const Selection extends AnyFontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>>;
 }
 
 interface GlyphHandleFactoryInput {
