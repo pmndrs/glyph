@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:6a17a28a1f01d8f35844d1ac51c6cf270ad4352127694c73d65b7975162811c4'
+source_digest: 'sha256:bb7d1c000e4c7f8ee157d4a75c10a2e8c1a195a423e07a975f994d1363bdcc6e'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -584,6 +584,10 @@ evidence, not a portability claim; a natural bidi-bearing corpus remains require
 The bake-host report separates the consumer phases without timing conformance work. Each offline sample creates a fresh Wasm baker and records initialization plus first bake as cold, then records a second bake on that instance as warm. Each isolated Chromium context queues two requests onto one Worker: first completion contains Worker/Wasm startup plus its bake, while the interval to second completion is the warm reused-instance bake. Three captured arm64/Chromium 149 samples preserve complete artifact parity; medians were 4.16 ms cold / 2.94 ms warm offline and 21.70 ms cold / 3.50 ms warm in the Worker. These are observations, not cross-host thresholds.
 
 A released scene leaves the provider-owned canvas attached with its last complete frame while its replacement effect activates, avoiding a detach/reparent flash; provider teardown or removal of the owning anchor remains the detach boundary. The continuity probe requires the same connected canvas and exactly one renderer through explicit DPR 2→1→2 and Bitmap→MTSDF→Bitmap handoffs.
+
+The finite MTSDF and Slug product scenes require four compatible public `Text` objects to collapse into exactly one
+root draw. Their validation rejects the former per-`Text` draw model as a batching regression while separately proving
+visible pixels, transforms, effects, and technique-specific resources.
 
 The [benchmark plan](../planning/benchmark-plan.md) owns target admission, correctness-before-timing, and product-E2E requirements.[^benchmark-plan]
 

@@ -15,7 +15,7 @@ const sceneMeasurement: BenchmarkMeasurement = {
     sceneCount: 4,
     textObjectCount: 4,
     glyphCount: 174,
-    drawCount: 4,
+    drawCount: 1,
     changedPixels: 14_818,
     distinctRgbColors: 2_800,
     renderTargetGpuBytes: 512 * 320 * 4,
@@ -98,6 +98,14 @@ describe('MTSDF scenario acceptance', () => {
   it('accepts renderer-specific MTSDF pixels but rejects drift within one run', () => {
     const scenario = scenarioById('mtsdf-text-scenes');
     expect(scenario.validate([sceneMeasurement])).toContain('deterministic MTSDF');
+    expect(() =>
+      scenario.validate([
+        {
+          ...sceneMeasurement,
+          metrics: { ...sceneMeasurement.metrics, drawCount: 4 },
+        },
+      ]),
+    ).toThrow('MTSDF text did not preserve');
     expect(() => scenario.validate([sceneMeasurement, { ...sceneMeasurement, hash: 'second-renderer-frame' }])).toThrow(
       'Output hash changed between samples',
     );
