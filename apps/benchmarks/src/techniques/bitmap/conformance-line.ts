@@ -63,15 +63,16 @@ export function createBitmapConformanceLine(
     if (layout === undefined) throw new Error('target-v1 Text did not commit a bitmap layout');
     const missingGlyphCount = layout.glyphIds.reduce((count, glyphId) => count + (glyphId === 0 ? 1 : 0), 0);
     if (missingGlyphCount !== 0) throw new Error(`benchmark specimen contains ${missingGlyphCount} missing glyphs`);
+    const rendered = renderedGeometryStats(scene, root);
     return {
       object,
       layout,
       height: layout.height,
       width: layout.width,
       cssFontSize,
-      glyphCount: layout.glyphIds.length,
+      glyphCount: rendered.glyphs,
       missingGlyphCount,
-      drawCount: countDraws(scene, root),
+      drawCount: rendered.draws,
       strikePpem: selectBitmapStrikePpem(data.strikes, cssFontSize, rasterPixelRatio),
     };
   } catch (error) {
@@ -89,11 +90,17 @@ function disposeText(object: Text<typeof bitmap>): void {
   object.dispose();
 }
 
-function countDraws(scene: THREE.Scene, root: ThreeRoot): number {
-  let count = 0;
+function renderedGeometryStats(
+  scene: THREE.Scene,
+  root: ThreeRoot,
+): { readonly draws: number; readonly glyphs: number } {
+  let draws = 0;
+  let glyphs = 0;
   const name = root.name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${root.name}`;
   scene.getObjectByName(name)?.traverse((child) => {
-    if (child instanceof THREE.Mesh) count += 1;
+    if (!(child instanceof THREE.Mesh)) return;
+    draws += 1;
+    if (child.geometry instanceof THREE.InstancedBufferGeometry) glyphs += child.geometry.instanceCount;
   });
-  return count;
+  return { draws, glyphs };
 }
