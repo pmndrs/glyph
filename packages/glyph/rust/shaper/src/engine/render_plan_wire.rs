@@ -10,7 +10,7 @@ use crate::{
     engine::semantic_view::SemanticRecord,
 };
 
-#[cfg(test)]
+#[cfg(any(test, feature = "debug-validation"))]
 use crate::{
     STATUS_INVALID_REQUEST,
     engine::render_plan::{
@@ -118,7 +118,6 @@ pub(crate) fn encode_publication(
 
 #[cfg(test)]
 pub(crate) fn plan_layout(plan: RenderPlanView<'_>) -> Result<EncodedPlanLayout, u32> {
-    validate_plan(plan, &[])?;
     publication_layout(plan, &[])
 }
 
@@ -165,6 +164,8 @@ pub(crate) fn publication_layout(
     plan: RenderPlanView<'_>,
     semantic_views: &[SemanticRecord],
 ) -> Result<EncodedPlanLayout, u32> {
+    #[cfg(any(test, feature = "debug-validation"))]
+    validate_plan(plan, semantic_views)?;
     let mut cursor = ENGINE_RESULT_HEADER_SIZE;
     let payload_offset = if plan.payload.is_empty() {
         0
@@ -236,7 +237,7 @@ pub(crate) fn publication_layout(
     })
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "debug-validation"))]
 fn validate_plan(plan: RenderPlanView<'_>, semantic_views: &[SemanticRecord]) -> Result<(), u32> {
     if plan.codec_handle == 0 {
         return Err(STATUS_INVALID_REQUEST);
@@ -410,7 +411,7 @@ fn align(value: u32, alignment: u32) -> Result<u32, u32> {
         .ok_or(STATUS_RESULT_TOO_LARGE)
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "debug-validation"))]
 fn range_in(start: u32, count: u32, length: usize) -> bool {
     if count == 0 {
         return start == 0;
@@ -421,7 +422,7 @@ fn range_in(start: u32, count: u32, length: usize) -> bool {
         .is_some_and(|end| end <= length)
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "debug-validation"))]
 fn finite4(first: f32, second: f32, third: f32, fourth: f32) -> bool {
     first.is_finite() && second.is_finite() && third.is_finite() && fourth.is_finite()
 }
@@ -788,7 +789,6 @@ mod tests {
             diagnostics: &diagnostic,
             payload: &[0xaa, 0xbb, 0xcc, 0xdd, 0xee],
         };
-        validate_plan(plan, &semantic).unwrap();
         let expected = publication_layout(plan, &semantic).unwrap();
         let mut bytes = vec![0x7f; expected.byte_length as usize + 16];
         encode_publication(plan, &semantic, expected, &mut bytes).unwrap();
@@ -812,5 +812,4 @@ mod tests {
         );
         assert_eq!(bytes[layout.byte_length as usize..], [0x7f; 16]);
     }
-
 }

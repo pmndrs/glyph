@@ -122,9 +122,6 @@ pub(crate) fn parse_update_request(
         inline_object_count,
         limits,
     )?;
-    text_mutations.validate_disjoint_geometry(geometry)?;
-    style_mutations.validate_disjoint_semantics(text_mutations, geometry)?;
-    paragraph_mutations.validate_disjoint_semantics(text_mutations, style_mutations, geometry)?;
     if paragraph_mutation_count == 0
         && text_mutation_count == 0
         && style_mutation_count == 0

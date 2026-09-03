@@ -133,6 +133,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
       maxOutputBytes: 1_048_576,
     },
     paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 2 }],
+    textMutations: [{ paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 0, insert: 'hello' }],
     styleMutations: [
       {
         opcode: 'upsert',
@@ -262,6 +263,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
   const header = new DataView(bytes.buffer, bytes.byteOffset, request.size);
   assert.equal(header.getUint32(request.flags, true), abi.engine.frameFlags.compositingIndependent);
   assert.equal(header.getUint32(request.byteLength, true), bytes.byteLength);
+  assert.equal(header.getUint32(request.textMutationCount, true), 1);
   assert.equal(header.getUint32(request.styleMutationCount, true), 1);
   assert.equal(header.getUint32(request.regionCount, true), 1);
   assert.equal(header.getUint32(request.exclusionCount, true), 1);
@@ -281,16 +283,13 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
   const inlineObject = abi.layouts.engineInlineObject;
   const inlineObjectView = new DataView(bytes.buffer, bytes.byteOffset + inlineObjectOffset, inlineObject.size);
   assert.equal(inlineObjectView.getUint32(inlineObject.paragraphId, true), PARAGRAPH_ID);
+  assertOwnedFrameRangesDoNotOverlap(bytes, abi);
 });
 
 test('style payloads stay in per-record order when several paragraphs carry language and features', async () => {
-  // The engine proves style payloads neither overlap nor alias the record table in a
-  // single forward pass: every record's payloads must begin at or after the previous
-  // record's payload end. Allocating all languages before all features satisfies that
-  // only for a single record — from the second styled paragraph on, its language would
-  // start behind the first paragraph's features and the whole update is rejected. The
-  // live Advanced-shaping workload hits exactly this, since each case sets a language
-  // and a feature list across four paragraphs.
+  // The compiler owns one monotonic allocation stream. Allocating all languages before
+  // all features would interleave the payload order from the second styled paragraph
+  // onward. The live Advanced-shaping workload covers this shape with four paragraphs.
   const abi = textShaperAbi;
   const styleMutation = (paragraphId) => ({
     opcode: 'upsert',
@@ -462,3 +461,86 @@ test('production frame compiler encodes typography controls and their defaults',
 
   assert.throws(() => compile({ firstLineIndent: Number.NaN }), /firstLineIndent/);
 });
+
+function assertOwnedFrameRangesDoNotOverlap(bytes, abi) {
+  const request = abi.layouts.engineUpdateRequest;
+  const header = new DataView(bytes.buffer, bytes.byteOffset, request.size);
+  const ranges = [];
+  const add = (label, start, count, stride) => {
+    if (count === 0) return;
+    ranges.push({ label, start, end: start + count * stride });
+  };
+  for (const [label, offsetField, countField, layout] of [
+    ['paragraph mutations', 'paragraphMutationsOffset', 'paragraphMutationCount', abi.layouts.engineParagraphMutation],
+    ['text mutations', 'textMutationsOffset', 'textMutationCount', abi.layouts.engineTextMutation],
+    ['style mutations', 'styleMutationsOffset', 'styleMutationCount', abi.layouts.engineStyleMutation],
+    ['constraints', 'constraintsOffset', 'constraintCount', abi.layouts.engineConstraint],
+    ['regions', 'regionsOffset', 'regionCount', abi.layouts.engineRegion],
+    ['exclusions', 'exclusionsOffset', 'exclusionCount', abi.layouts.engineExclusion],
+    ['inline objects', 'inlineObjectsOffset', 'inlineObjectCount', abi.layouts.engineInlineObject],
+  ]) {
+    add(label, header.getUint32(request[offsetField], true), header.getUint32(request[countField], true), layout.size);
+  }
+
+  const addRecordPayloads = (tableName, tableLayout, countField, payloads) => {
+    const tableOffset = header.getUint32(request[`${tableName}Offset`], true);
+    const count = header.getUint32(request[countField], true);
+    for (let index = 0; index < count; index += 1) {
+      const record = new DataView(
+        bytes.buffer,
+        bytes.byteOffset + tableOffset + index * tableLayout.size,
+        tableLayout.size,
+      );
+      for (const [label, offsetField, countFieldName, stride] of payloads) {
+        add(
+          `${label} ${index}`,
+          record.getUint32(tableLayout[offsetField], true),
+          record.getUint16(tableLayout[countFieldName], true),
+          stride,
+        );
+      }
+    }
+  };
+  addRecordPayloads('styleMutations', abi.layouts.engineStyleMutation, 'styleMutationCount', [
+    ['style language', 'languageOffset', 'languageLength', 1],
+    ['style features', 'featuresOffset', 'featureCount', abi.layouts.feature.size],
+  ]);
+
+  const text = abi.layouts.engineTextMutation;
+  const textOffset = header.getUint32(request.textMutationsOffset, true);
+  const textCount = header.getUint32(request.textMutationCount, true);
+  for (let index = 0; index < textCount; index += 1) {
+    const record = new DataView(bytes.buffer, bytes.byteOffset + textOffset + index * text.size, text.size);
+    add(
+      `text payload ${index}`,
+      record.getUint32(text.insertOffset, true),
+      record.getUint32(text.insertCount, true),
+      2,
+    );
+  }
+
+  for (const [tableName, countField, layout] of [
+    ['regions', 'regionCount', abi.layouts.engineRegion],
+    ['exclusions', 'exclusionCount', abi.layouts.engineExclusion],
+  ]) {
+    const tableOffset = header.getUint32(request[`${tableName}Offset`], true);
+    const count = header.getUint32(request[countField], true);
+    for (let index = 0; index < count; index += 1) {
+      const record = new DataView(bytes.buffer, bytes.byteOffset + tableOffset + index * layout.size, layout.size);
+      add(
+        `${tableName} vertices ${index}`,
+        record.getUint32(layout.verticesOffset, true),
+        record.getUint16(layout.vertexCount, true),
+        abi.layouts.engineFlowVertex.size,
+      );
+    }
+  }
+
+  ranges.sort((left, right) => left.start - right.start);
+  let previousEnd = request.size;
+  for (const range of ranges) {
+    assert.ok(range.start >= previousEnd, `${range.label} overlaps the prior package-owned range`);
+    assert.ok(range.end <= bytes.byteLength, `${range.label} exceeds the package-owned request`);
+    previousEnd = range.end;
+  }
+}

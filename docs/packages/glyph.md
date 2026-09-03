@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:ec1fed1ff8ecaa6f2160bf13c0b797785a590bd919ea753a35382ae99e4cf104'
+source_digest: 'sha256:2535cdb18888115278e162c7a0bafc0560c91b502cbff8f5ce73dfddd8597bd3'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -714,9 +714,16 @@ packers.
 Publication layout is computed once at the Wasm boundary, checked against the caller's output limit, and passed unchanged
 to the encoder. The encoder writes that package-owned layout directly; it does not rescan the immutable plan to recreate
 or revalidate the same offsets before publication. Rust transport tests pin every emitted table offset, count, and payload
-range against the compiler-owned plan. The complete record-relationship oracle is compiled only for tests and runs over
-real ordered, stable, and mixed planner outputs; release publication retains only checked size arithmetic and destination
-bounds.
+range against the compiler-owned plan. The complete record-relationship oracle is compiled only for tests and explicitly
+instrumented builds, and runs over real ordered, stable, and mixed planner outputs; release publication retains only
+checked size arithmetic and destination bounds.
+
+The TypeScript request compiler likewise owns one checked, monotonic allocation stream for fixed tables and variable
+payloads. Its product test pins every table, text, language, feature, and polygon range as disjoint and in bounds. Rust
+therefore borrows each individual slice with checked offset, count, alignment, and work limits, but does not compare those
+immutable slices pairwise or quadratically after the package has constructed them. Maintainers can build a deliberately
+instrumented shaper with Cargo feature `debug-validation`; tests enable the publication oracle automatically, while the
+shipping `--release --no-default-features` Wasm build does not contain it.
 
 A Mori 0.19.1 production-source scan (review profile, same-language threshold 0.85, minimum 40 tokens) corroborated the
 deleted parallel path and identified exact shared planner machinery. Ordered and stable planning now use one retained

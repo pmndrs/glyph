@@ -459,29 +459,6 @@ impl GeometryBatch<'_> {
         }
         hash
     }
-
-    fn overlaps_range(self, range: (usize, usize)) -> Result<bool, u32> {
-        for section in [
-            self.constraints,
-            self.regions,
-            self.exclusions,
-            self.inline_objects,
-        ] {
-            if !section.is_empty() && overlaps(range, byte_range(self.request, section)?) {
-                return Ok(true);
-            }
-        }
-        let total = self.regions.len() / abi::ENGINE_REGION_RECORD_SIZE as usize
-            + self.exclusions.len() / abi::ENGINE_EXCLUSION_RECORD_SIZE as usize;
-        for index in 0..total {
-            if indexed_vertex_range(self.request, self.regions, self.exclusions, index)?
-                .is_some_and(|vertices| overlaps(range, vertices))
-            {
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
 }
 
 impl<'a> ParagraphMutationBatch<'a> {
@@ -511,25 +488,6 @@ impl<'a> ParagraphMutationBatch<'a> {
             PARAGRAPH_MUTATION_REMOVE => Some(ParagraphMutation::Remove { paragraph_id }),
             _ => None,
         }
-    }
-
-    pub(crate) fn validate_disjoint_semantics(
-        self,
-        text: TextMutationBatch<'_>,
-        styles: StyleMutationBatch<'_>,
-        geometry: GeometryBatch<'_>,
-    ) -> Result<(), u32> {
-        if self.records.is_empty() {
-            return Ok(());
-        }
-        let range = byte_range(self.request, self.records)?;
-        if text.overlaps_range(range)?
-            || styles.overlaps_range(range)?
-            || geometry.overlaps_range(range)?
-        {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-        Ok(())
     }
 }
 
@@ -614,42 +572,6 @@ impl<'a> TextMutationBatch<'a> {
             mix_bytes(&mut hash, mutation.insert_utf16_le);
         }
         hash
-    }
-
-    pub(crate) fn validate_disjoint_geometry(self, geometry: GeometryBatch<'_>) -> Result<(), u32> {
-        if !self.records.is_empty()
-            && geometry.overlaps_range(byte_range(self.request, self.records)?)?
-        {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-        for record in self
-            .records
-            .chunks_exact(ENGINE_TEXT_MUTATION_RECORD_SIZE as usize)
-        {
-            if let Some(range) = text_payload_range(self.request, record)?
-                && geometry.overlaps_range(range)?
-            {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-        }
-        Ok(())
-    }
-
-    fn overlaps_range(self, range: (usize, usize)) -> Result<bool, u32> {
-        if !self.records.is_empty() && overlaps(range, byte_range(self.request, self.records)?) {
-            return Ok(true);
-        }
-        for record in self
-            .records
-            .chunks_exact(ENGINE_TEXT_MUTATION_RECORD_SIZE as usize)
-        {
-            if text_payload_range(self.request, record)?
-                .is_some_and(|payload| overlaps(range, payload))
-            {
-                return Ok(true);
-            }
-        }
-        Ok(false)
     }
 }
 
@@ -793,52 +715,6 @@ impl<'a> StyleMutationBatch<'a> {
             end: read_u32(record, abi::FEATURE_END).ok()?,
         })
     }
-
-    pub(crate) fn validate_disjoint_semantics(
-        self,
-        text: TextMutationBatch<'_>,
-        geometry: GeometryBatch<'_>,
-    ) -> Result<(), u32> {
-        if !self.records.is_empty() {
-            let records = byte_range(self.request, self.records)?;
-            if text.overlaps_range(records)? || geometry.overlaps_range(records)? {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-        }
-        for record in self
-            .records
-            .chunks_exact(abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize)
-        {
-            for range in style_payload_ranges(self.request, record)?
-                .into_iter()
-                .flatten()
-            {
-                if text.overlaps_range(range)? || geometry.overlaps_range(range)? {
-                    return Err(STATUS_INVALID_REQUEST);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn overlaps_range(self, range: (usize, usize)) -> Result<bool, u32> {
-        if !self.records.is_empty() && overlaps(range, byte_range(self.request, self.records)?) {
-            return Ok(true);
-        }
-        for record in self
-            .records
-            .chunks_exact(abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize)
-        {
-            if style_payload_ranges(self.request, record)?
-                .into_iter()
-                .flatten()
-                .any(|payload| overlaps(range, payload))
-            {
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
 }
 
 pub(crate) fn parse_style_mutations(
@@ -860,55 +736,10 @@ pub(crate) fn parse_style_mutations(
         abi::ENGINE_STYLE_MUTATION_RECORD_SIZE,
         abi::ENGINE_STYLE_MUTATION_RECORD_ALIGNMENT,
     )?;
-    let records_range = byte_range(request, records)?;
-    let mut previous_payload_end = records_range.1;
-    for record in records.chunks_exact(abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize) {
-        let current = style_payload_ranges(request, record)?;
-        for range in current.into_iter().flatten() {
-            if range.0 < previous_payload_end {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-            previous_payload_end = range.1;
-        }
-    }
     for record in records.chunks_exact(abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize) {
         validate_style_record(request, record)?;
     }
     Ok(StyleMutationBatch { request, records })
-}
-
-fn style_payload_ranges(request: &[u8], record: &[u8]) -> Result<[Option<(usize, usize)>; 2], u32> {
-    let mut ranges = [None, None];
-    for (index, (offset_field, count_field, stride, alignment)) in [
-        (
-            abi::ENGINE_STYLE_MUTATION_LANGUAGE_OFFSET,
-            abi::ENGINE_STYLE_MUTATION_LANGUAGE_LENGTH,
-            1,
-            1,
-        ),
-        (
-            abi::ENGINE_STYLE_MUTATION_FEATURES_OFFSET,
-            abi::ENGINE_STYLE_MUTATION_FEATURE_COUNT,
-            abi::FEATURE_RECORD_SIZE,
-            abi::FEATURE_RECORD_ALIGNMENT,
-        ),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let count = u32::from(read_u16(record, count_field)?);
-        if count != 0 {
-            let payload = array(
-                request,
-                read_u32(record, offset_field)?,
-                count,
-                stride,
-                alignment,
-            )?;
-            ranges[index] = Some(byte_range(request, payload)?);
-        }
-    }
-    Ok(ranges)
 }
 
 fn validate_style_record(request: &[u8], record: &[u8]) -> Result<(), u32> {
@@ -1305,14 +1136,7 @@ pub(crate) fn parse_text_mutations(
         ENGINE_TEXT_MUTATION_RECORD_SIZE,
         ENGINE_TEXT_MUTATION_RECORD_ALIGNMENT,
     )?;
-    let record_start = offset as usize;
-    let record_end = record_start
-        .checked_add(records.len())
-        .ok_or(STATUS_INVALID_REQUEST)?;
-    for (index, record) in records
-        .chunks_exact(ENGINE_TEXT_MUTATION_RECORD_SIZE as usize)
-        .enumerate()
-    {
+    for record in records.chunks_exact(ENGINE_TEXT_MUTATION_RECORD_SIZE as usize) {
         if record[ENGINE_TEXT_MUTATION_OPCODE] != TEXT_MUTATION_REPLACE_UTF16
             || record[ENGINE_TEXT_MUTATION_ENCODING] != TEXT_ENCODING_UTF16_LE
             || read_u16(record, ENGINE_TEXT_MUTATION_RESERVED0)? != 0
@@ -1328,37 +1152,9 @@ pub(crate) fn parse_text_mutations(
             }
             continue;
         }
-        let payload = array(request, insert_offset, insert_count, 2, 2)?;
-        let payload_range = byte_range(request, payload)?;
-        if overlaps(payload_range, (record_start, record_end)) {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-        for previous in records[..index * ENGINE_TEXT_MUTATION_RECORD_SIZE as usize]
-            .chunks_exact(ENGINE_TEXT_MUTATION_RECORD_SIZE as usize)
-        {
-            if text_payload_range(request, previous)?
-                .is_some_and(|range| overlaps(payload_range, range))
-            {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-        }
+        array(request, insert_offset, insert_count, 2, 2)?;
     }
     Ok(TextMutationBatch { request, records })
-}
-
-fn text_payload_range(request: &[u8], record: &[u8]) -> Result<Option<(usize, usize)>, u32> {
-    let count = read_u32(record, ENGINE_TEXT_MUTATION_INSERT_COUNT)?;
-    if count == 0 {
-        return Ok(None);
-    }
-    let payload = array(
-        request,
-        read_u32(record, ENGINE_TEXT_MUTATION_INSERT_OFFSET)?,
-        count,
-        2,
-        2,
-    )?;
-    Ok(Some(byte_range(request, payload)?))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1427,13 +1223,10 @@ pub(crate) fn parse_geometry(
         abi::ENGINE_INLINE_OBJECT_RECORD_SIZE,
         abi::ENGINE_INLINE_OBJECT_RECORD_ALIGNMENT,
     )?;
-    let fixed = [constraints, regions, exclusions, inline_objects];
-    reject_overlapping_slices(request, &fixed)?;
     validate_constraints(constraints, region_count, limits)?;
-    validate_regions(request, regions, exclusions, &fixed)?;
-    validate_exclusions(request, exclusions, regions, &fixed)?;
+    validate_regions(request, regions, exclusions)?;
+    validate_exclusions(request, exclusions, regions)?;
     validate_inline_objects(inline_objects)?;
-    reject_overlapping_vertex_payloads(request, regions, exclusions)?;
     Ok(GeometryBatch {
         request,
         constraints,
@@ -1598,12 +1391,7 @@ fn validate_constraints(
     Ok(())
 }
 
-fn validate_regions(
-    request: &[u8],
-    regions: &[u8],
-    exclusions: &[u8],
-    fixed: &[&[u8]],
-) -> Result<(), u32> {
+fn validate_regions(request: &[u8], regions: &[u8], exclusions: &[u8]) -> Result<(), u32> {
     let exclusion_total = exclusions.len() / abi::ENGINE_EXCLUSION_RECORD_SIZE as usize;
     for (index, record) in regions
         .chunks_exact(abi::ENGINE_REGION_RECORD_SIZE as usize)
@@ -1663,7 +1451,6 @@ fn validate_regions(
             abi::ENGINE_REGION_VERTICES_OFFSET,
             abi::ENGINE_REGION_VERTEX_COUNT,
             region_bounds,
-            fixed,
         )?;
         let exclusion_start = usize::from(read_u16(record, abi::ENGINE_REGION_EXCLUSION_START)?);
         let exclusion_count = usize::from(read_u16(record, abi::ENGINE_REGION_EXCLUSION_COUNT)?);
@@ -1685,12 +1472,7 @@ fn validate_regions(
     Ok(())
 }
 
-fn validate_exclusions(
-    request: &[u8],
-    exclusions: &[u8],
-    regions: &[u8],
-    fixed: &[&[u8]],
-) -> Result<(), u32> {
+fn validate_exclusions(request: &[u8], exclusions: &[u8], regions: &[u8]) -> Result<(), u32> {
     for (index, record) in exclusions
         .chunks_exact(abi::ENGINE_EXCLUSION_RECORD_SIZE as usize)
         .enumerate()
@@ -1742,7 +1524,6 @@ fn validate_exclusions(
             abi::ENGINE_EXCLUSION_VERTICES_OFFSET,
             abi::ENGINE_EXCLUSION_VERTEX_COUNT,
             shape_bounds,
-            fixed,
         )?;
     }
     Ok(())
@@ -1792,7 +1573,6 @@ fn validate_shape(
     vertices_offset: usize,
     vertex_count_offset: usize,
     shape_bounds: (f32, f32, f32, f32),
-    fixed: &[&[u8]],
 ) -> Result<(), u32> {
     let shape = byte(record, shape_offset)?;
     let offset = read_u32(record, vertices_offset)?;
@@ -1807,7 +1587,6 @@ fn validate_shape(
                 abi::ENGINE_FLOW_VERTEX_RECORD_SIZE,
                 abi::ENGINE_FLOW_VERTEX_RECORD_ALIGNMENT,
             )?;
-            reject_payload_overlap(request, vertices, fixed)?;
             for vertex in vertices.chunks_exact(abi::ENGINE_FLOW_VERTEX_RECORD_SIZE as usize) {
                 let inline = finite(vertex, abi::ENGINE_FLOW_VERTEX_INLINE)?;
                 let block = finite(vertex, abi::ENGINE_FLOW_VERTEX_BLOCK)?;
@@ -1908,109 +1687,6 @@ fn contains_u32(records: &[u8], stride: u32, field: usize, value: u32) -> Result
         }
     }
     Ok(false)
-}
-
-fn reject_overlapping_slices(request: &[u8], slices: &[&[u8]]) -> Result<(), u32> {
-    for (index, slice) in slices.iter().enumerate() {
-        if slice.is_empty() {
-            continue;
-        }
-        let current = byte_range(request, slice)?;
-        for other in &slices[..index] {
-            if !other.is_empty() && overlaps(current, byte_range(request, other)?) {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-        }
-    }
-    Ok(())
-}
-
-fn reject_payload_overlap(request: &[u8], payload: &[u8], fixed: &[&[u8]]) -> Result<(), u32> {
-    let payload = byte_range(request, payload)?;
-    for table in fixed {
-        if !table.is_empty() && overlaps(payload, byte_range(request, table)?) {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-    }
-    Ok(())
-}
-
-fn reject_overlapping_vertex_payloads(
-    request: &[u8],
-    regions: &[u8],
-    exclusions: &[u8],
-) -> Result<(), u32> {
-    let total = regions.len() / abi::ENGINE_REGION_RECORD_SIZE as usize
-        + exclusions.len() / abi::ENGINE_EXCLUSION_RECORD_SIZE as usize;
-    for index in 0..total {
-        let Some(current) = indexed_vertex_range(request, regions, exclusions, index)? else {
-            continue;
-        };
-        for previous in 0..index {
-            if indexed_vertex_range(request, regions, exclusions, previous)?
-                .is_some_and(|range| overlaps(current, range))
-            {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-        }
-    }
-    Ok(())
-}
-
-fn indexed_vertex_range(
-    request: &[u8],
-    regions: &[u8],
-    exclusions: &[u8],
-    index: usize,
-) -> Result<Option<(usize, usize)>, u32> {
-    let region_count = regions.len() / abi::ENGINE_REGION_RECORD_SIZE as usize;
-    let (record, shape, offset, count) = if index < region_count {
-        let start = index * abi::ENGINE_REGION_RECORD_SIZE as usize;
-        (
-            &regions[start..start + abi::ENGINE_REGION_RECORD_SIZE as usize],
-            abi::ENGINE_REGION_SHAPE,
-            abi::ENGINE_REGION_VERTICES_OFFSET,
-            abi::ENGINE_REGION_VERTEX_COUNT,
-        )
-    } else {
-        let start = (index - region_count) * abi::ENGINE_EXCLUSION_RECORD_SIZE as usize;
-        (
-            &exclusions[start..start + abi::ENGINE_EXCLUSION_RECORD_SIZE as usize],
-            abi::ENGINE_EXCLUSION_SHAPE,
-            abi::ENGINE_EXCLUSION_VERTICES_OFFSET,
-            abi::ENGINE_EXCLUSION_VERTEX_COUNT,
-        )
-    };
-    if byte(record, shape)? != SHAPE_POLYGON {
-        return Ok(None);
-    }
-    let vertices = array(
-        request,
-        read_u32(record, offset)?,
-        u32::from(read_u16(record, count)?),
-        abi::ENGINE_FLOW_VERTEX_RECORD_SIZE,
-        abi::ENGINE_FLOW_VERTEX_RECORD_ALIGNMENT,
-    )?;
-    Ok(Some(byte_range(request, vertices)?))
-}
-
-fn byte_range(request: &[u8], slice: &[u8]) -> Result<(usize, usize), u32> {
-    let request_start = request.as_ptr() as usize;
-    let start = (slice.as_ptr() as usize)
-        .checked_sub(request_start)
-        .ok_or(STATUS_INVALID_REQUEST)?;
-    let end = start
-        .checked_add(slice.len())
-        .ok_or(STATUS_INVALID_REQUEST)?;
-    if end > request.len() {
-        Err(STATUS_INVALID_REQUEST)
-    } else {
-        Ok((start, end))
-    }
-}
-
-fn overlaps(left: (usize, usize), right: (usize, usize)) -> bool {
-    left.0 < right.1 && right.0 < left.1
 }
 
 fn mix_bytes(hash: &mut u64, bytes: &[u8]) {
@@ -2171,7 +1847,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unstated_noncanonical_and_aliased_style_data() {
+    fn rejects_unstated_and_noncanonical_style_data() {
         let mut unstated = valid_style_bytes();
         write_f32(
             &mut unstated,
@@ -2183,14 +1859,6 @@ mod tests {
         let mut density_span = valid_style_bytes();
         density_span[STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_FLAGS] = 0;
         assert!(parse_style_mutations(&density_span, STYLE_OFFSET as u32, 1).is_err());
-
-        let mut aliased = valid_style_bytes();
-        write_u32(
-            &mut aliased,
-            STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_LANGUAGE_OFFSET,
-            STYLE_OFFSET as u32,
-        );
-        assert!(parse_style_mutations(&aliased, STYLE_OFFSET as u32, 1).is_err());
     }
 
     const STYLE_OFFSET: usize = abi::ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
@@ -2360,19 +2028,6 @@ mod tests {
         assert_eq!(present.constraint_count(), 1);
         assert_eq!(present.inline_object_count(), 1);
         assert_eq!((constraint_cursor, inline_cursor), (1, 1));
-    }
-
-    #[test]
-    fn rejects_noncanonical_empty_and_overlapping_payloads() {
-        assert!(parse_text_mutations(&[], 4, 0).is_err());
-        let record_offset = ENGINE_UPDATE_REQUEST_HEADER_SIZE;
-        let mut bytes = vec![0; record_offset as usize + ENGINE_TEXT_MUTATION_RECORD_SIZE as usize];
-        let record = &mut bytes[record_offset as usize..];
-        record[ENGINE_TEXT_MUTATION_OPCODE] = TEXT_MUTATION_REPLACE_UTF16;
-        record[ENGINE_TEXT_MUTATION_ENCODING] = TEXT_ENCODING_UTF16_LE;
-        write_u32(record, ENGINE_TEXT_MUTATION_INSERT_OFFSET, record_offset);
-        write_u32(record, ENGINE_TEXT_MUTATION_INSERT_COUNT, 1);
-        assert!(parse_text_mutations(&bytes, record_offset, 1).is_err());
     }
 
     #[test]
@@ -2586,7 +2241,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_geometry_relationships_and_payload_aliasing() {
+    fn rejects_invalid_geometry_relationships_and_bounds() {
         let mut wrong_region = valid_geometry_bytes();
         write_u32(
             &mut wrong_region,
@@ -2602,49 +2257,6 @@ mod tests {
             f32::NAN,
         );
         assert!(parse_valid_geometry(&nonfinite).is_err());
-
-        let mut overlapping_polygon = valid_geometry_bytes();
-        overlapping_polygon[REGION_OFFSET + abi::ENGINE_REGION_SHAPE] = SHAPE_POLYGON;
-        write_u32(
-            &mut overlapping_polygon,
-            REGION_OFFSET + abi::ENGINE_REGION_VERTICES_OFFSET,
-            CONSTRAINT_OFFSET as u32,
-        );
-        write_u16(
-            &mut overlapping_polygon,
-            REGION_OFFSET + abi::ENGINE_REGION_VERTEX_COUNT,
-            3,
-        );
-        assert!(parse_valid_geometry(&overlapping_polygon).is_err());
-
-        let mut cross_section_alias = valid_geometry_bytes();
-        let mutation_offset = cross_section_alias.len();
-        cross_section_alias.resize(
-            mutation_offset + ENGINE_TEXT_MUTATION_RECORD_SIZE as usize,
-            0,
-        );
-        cross_section_alias[mutation_offset + ENGINE_TEXT_MUTATION_OPCODE] =
-            TEXT_MUTATION_REPLACE_UTF16;
-        cross_section_alias[mutation_offset + ENGINE_TEXT_MUTATION_ENCODING] =
-            TEXT_ENCODING_UTF16_LE;
-        write_u32(
-            &mut cross_section_alias,
-            mutation_offset + ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
-            1,
-        );
-        write_u32(
-            &mut cross_section_alias,
-            mutation_offset + ENGINE_TEXT_MUTATION_INSERT_OFFSET,
-            CONSTRAINT_OFFSET as u32,
-        );
-        write_u32(
-            &mut cross_section_alias,
-            mutation_offset + ENGINE_TEXT_MUTATION_INSERT_COUNT,
-            2,
-        );
-        let text = parse_text_mutations(&cross_section_alias, mutation_offset as u32, 1).unwrap();
-        let geometry = parse_valid_geometry(&cross_section_alias).unwrap();
-        assert!(text.validate_disjoint_geometry(geometry).is_err());
 
         assert!(
             parse_geometry(
