@@ -16,7 +16,7 @@ const VT323 = '/fonts/VT323.font.glb';
 const INTER = '/fonts/Inter.font.glb';
 const LOVERS_QUARREL = '/fonts/LoversQuarrel.font.glb';
 
-void useMsdf.preload(INTER);
+await useMsdf.preload(INTER);
 
 function Labels() {
   const inter = useMsdf(INTER);
@@ -84,8 +84,7 @@ import { ThreeConfig } from '@pmndrs/glyph/three';
 
 await glyph.init();
 const three = glyph.handle('main', ThreeConfig);
-const interFace = glyph.fontFace({ baked: '/fonts/Inter.font.glb' });
-await interFace.load();
+const interFace = await glyph.fontFace('/fonts/Inter.font.glb').load();
 
 const accent = span({ color: '#70d6ff' });
 const labels = three.createTextGroup({ compositing: 'independent' });
@@ -167,29 +166,40 @@ a constraint that is not finite and nonnegative throws from the call, naming the
 
 A FontStack created with `createFontStack` allows you to use additional fonts to lookup missing glyphs if your primary font doesn't contain that glyph. This can be helpful for rendering emoji or icons as well as using additional fonts for other languages or character sets.
 
-```ts
-import { createFontStack, loadFont } from '@pmndrs/glyph';
-import { slug } from '@pmndrs/glyph/three/slug';
+```tsx
+import { useMemo } from 'react';
+import { createFontStack } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/react';
+import { useSlug } from '@pmndrs/glyph/react/slug';
 
-const interSlug = await loadFont({ baked: '/fonts/Inter.font.glb' }, slug);
-const emoji = await loadFont({ baked: '/fonts/Emoji.font.glb' }, slug);
+function Status() {
+  const inter = useSlug('/fonts/Inter.font.glb');
+  const emoji = useSlug('/fonts/Emoji.font.glb');
+  const prose = useMemo(() => createFontStack(inter, emoji), [inter, emoji]);
 
-const prose = createFontStack(interSlug, emoji);
-scene.add(three.createText({ font: prose, text: 'Status 🌍' }));
+  return <Text font={prose}>Status 🌍</Text>;
+}
 ```
 
-One baked GLB may contain several raster techniques, or you may bake each technique into it's own GLB font asset. Load them together when the application needs each typed font:
+One baked GLB may contain several raster formats. Declare the exact formats the application uses, then load all declared
+formats in parallel through the FontFace or load one keyed selection on demand:
 
 ```ts
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { msdf } from '@pmndrs/glyph/three/msdf';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { glyph } from '@pmndrs/glyph';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { slug } from '@pmndrs/glyph/raster/slug';
 
-const [interBitmap, interMsdf, interSlug] = await loadFont({ baked: '/fonts/Inter.font.glb' }, [
-  { technique: bitmap, options: { strikes: [32] } },
-  msdf,
-  slug,
-]);
+const inter = glyph.fontFace('/fonts/Inter.font.glb', {
+  family: 'Inter',
+  format: [msdf, bitmap({ strikes: [32] }), slug],
+});
+
+await inter.load();
+// Or load only one selection: await inter.slug.load();
+
+scene.add(three.createText({ font: inter.msdf, text: 'Body' }));
+scene.add(three.createText({ font: inter.slug, text: 'Display' }));
 ```
 
 ## Capacity, materials, and ownership
@@ -254,18 +264,18 @@ pnpm exec glyph glyphs fa-solid-900.ttf --name globe --name earth-americas --uni
 
 Fonts without authored glyph names still report exact glyph IDs.
 
-## Core API
+## Integrate another renderer
 
-Every Three primitive above uses the same renderer-neutral lifecycle. The application loads immutable fonts from the root
-package. An integration creates one Glyph engine, creates a backend through that engine, installs its renderer policy,
-binds fonts, and creates a render planner with a target. None is a canvas or GPU device; the target connects one planner's
-transient render plans to renderer-owned resources and submission.
+`GlyphConfig` is the complete renderer-integration boundary. It composes renderer-neutral schema, FontFace formats,
+Codec encoding, resource resolution, renderer decoding, and root construction without exposing a second engine or
+backend API. The root package owns the one process-local `glyph` runtime; integrators import authoring helpers from the
+specific `/config/*` leaves that define them.
 
 The external example packages exercise that lifecycle against a real TypeGPU/WebGPU device. This is the same public
 sequence used by the hardware renderer lab:
 
 ```ts
-import { createFontStack, glyph, loadFont } from '@pmndrs/glyph';
+import { glyph } from '@pmndrs/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import { defineExampleConfig, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
 
@@ -276,56 +286,43 @@ const gpuDevice = await adapter.requestDevice();
 await glyph.init();
 const device = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
 const renderer = glyph.handle('typegpu', defineExampleConfig(device));
-const font = await loadFont(
-  { baked: '/fonts/Inter.font.glb' },
-  { technique: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
-);
-const stack = renderer.bindFontStack(createFontStack(font));
+const font = glyph.fontFace('/fonts/Inter.font.glb', {
+  format: glyphExample({ paletteSeed: 17, inset: 0.08 }),
+});
+await font.load();
 const title = renderer.createText({
-  font: stack,
+  font,
   text: 'Portable TypeGPU',
   fontSize: 64,
   width: 768,
   height: 192,
 });
 
-const initial = title.publish();
+glyph.shape();
+const initial = renderer.drawList;
 const initialPixels = await device.readPixels();
 if (initial.draws.length === 0 || initialPixels.every((byte) => byte === 0)) {
   throw new Error('the renderer produced no visible draw');
 }
 
 title.update({ text: 'Updated WebGPU', color: '#ff40a0' });
-title.publish();
+glyph.shape();
 
 title.dispose();
-stack.dispose();
 renderer.dispose();
 font.dispose();
 device.dispose();
 gpuDevice.destroy();
 ```
 
-`defineExampleConfig()` is intentionally an external integration rather than privileged Glyph code. The application sees
-the same ordinary root sequence as the built-in Three adapter: one `glyph`, one named handle, and handle-created retained
-text. Behind that config, the package uses only the public `/core` sequence: `glyphEngine.createBackend()`,
-`backend.installPolicy()`, font binding, `backend.createPlanner()`, `planner.createText()`, and `planner.publish()`. Its
-synchronous `PlanTarget` acquires portable payload leases, decodes the trusted plan into the typed ordered hierarchy,
-binds renderer resources, stages one device transaction, commits it, and releases retired resources. Raw ABI offsets and
-numeric plan identities remain package-private.
+`defineExampleConfig()` is intentionally an external package using the same public configuration leaves available to any
+integrator. Its renderer synchronously decodes a borrowed `CommandBufferView`, stages one device transaction, and returns
+`commit()`/`discard()` without retaining the view. `glyph.shape()` publishes every dirty root across every live handle in
+one engine crossing. Raw Wasm offsets and numeric plan identities remain package-private. See the
+[renderer integration guide](docs/guides/renderer-integration.md) and the
+[`glyph-example-renderer` source](packages/glyph-example-renderer/src/config.ts) for the complete configuration.
 
-`PlanTarget` is the normal zero-copy path because CPU-side GPU encoding is synchronous. Use `AsyncPlanTarget` only when
-the candidate crosses an asynchronous boundary such as a Worker; it receives one self-owned copy and must return that
-same transfer buffer. See the [renderer integration guide](docs/guides/renderer-integration.md) and the
-[`glyph-example-renderer` source](packages/glyph-example-renderer/src/engine.ts) for the complete target, resource,
-checkpoint, retirement, and device-replacement implementation.
-
-`publish()` emits no measurement or glyph-inspection sidecar unless requested. Three requests aggregate measurements
-when changed text is published so current bounds are available in the same frame; it does not request per-glyph layout
-inspection. Custom renderers should request `semanticViews: 'measurement'` only when they need the same cache behavior,
-and reserve `'layout-inspection'` or `'all'` for consumers that need positioned glyph columns.
-
-## Render policy and render plan
+## Codec and command buffer
 
 The public text API describes typography. A Codec describes how that semantic result becomes physical instance records
 and compatible draws. It is registered once as typed numeric data, not called as JavaScript during layout or packing.
@@ -344,15 +341,15 @@ you write again for every engine:
 ```mermaid
 flowchart TD
   baker["Baker<br/><i>RasterBakerModule</i>"] -->|"baked GLB: strikes, atlases, curves"| artifact["Font artifact"]
-  artifact --> technique
+  artifact --> raster
   subgraph portable["Written once — works in every engine"]
-    technique["Technique<br/><i>decode, dispose, schema</i>"]
+    raster["RasterFormat<br/><i>decode, dispose, schema</i>"]
     codec["Codec body<br/><i>portable operations</i>"]
     binding["Cold compiler<br/><i>binding bytes + resources</i>"]
   end
-  technique --> codec --> assemble["Engine Codec assembly<br/><i>system lanes + capabilities</i>"]
+  raster --> codec --> assemble["Engine Codec assembly<br/><i>system lanes + capabilities</i>"]
   assemble --> commands["Command buffer<br/><i>fixed-record data</i>"]
-  technique --> binding --> commands
+  raster --> binding --> commands
   subgraph engine["Written once per engine"]
     gpu["Bind buffers, textures, resources<br/><i>from the plan</i>"]
     material["Realize material and submit"]
@@ -364,19 +361,22 @@ flowchart TD
 The portable program and compiled font result contain no renderer types. The program owns the schema, Codec body, and
 cold binding/resource composition; each engine supplies its own system-lane numbers, capabilities, transform and
 allocation choices, and final `CodecProgram` assembly. Only buffer/texture/resource binding and material realization
-are engine objects. A technique is therefore authored once and consumed by any renderer that can execute the plan.
+are engine objects. A RasterFormat is therefore authored once and consumed by any renderer whose Codec and shader
+support it.
 
 The Codec declares:
 
-- supported raster techniques and paint/compositing capabilities;
+- supported raster formats and paint/compositing capabilities;
 - physical buffer schemas and the semantic fields they consume;
 - storage and draw compatibility keys, including resource, material, clipping, depth, and ordering identity;
-- allocation strategy and backend limits; and
+- allocation strategy and renderer limits; and
 - an upload cost model for coalescing dirty ranges or replacing a whole buffer update.
 
 Its small forward-only packing program is the only bytecode in this design. Rust validates it before use and executes it over the semantic records, including SIMD lanes where available. It cannot branch backward, allocate, call JavaScript, or change shaping and layout.
 
-The resulting render plan is fixed-record data: a transient revisioned display-list and resource transaction, not executable bytecode and not a GPU-specific command stream. It contains:
+The engine retains the resulting fixed-record command-buffer data internally. During `glyph.shape()`, it projects that
+trusted data into one borrowed `CommandBufferView`: a transient revisioned display list and resource transaction, not
+executable bytecode and not a GPU-specific submission stream. The view contains:
 
 - identity and revision requirements;
 - resource and physical-buffer lifetimes;
@@ -384,25 +384,32 @@ The resulting render plan is fixed-record data: a transient revisioned display-l
 - ordered glyph, decoration, inline-object, and clip primitives; and
 - draw packets with exact buffer, resource, program, material, and ordering identities.
 
-No GPU is required to shape, lay out, execute the policy, or produce this plan. The renderer begins GPU work only when it realizes the plan. Adjacent revisions carry minimal policy-costed patches; a consumer that misses the required base revision receives a complete checkpoint instead of applying an unsafe delta.
+No GPU is required to shape, lay out, execute the Codec, or produce this data. The configured renderer begins host work
+only when its synchronous `decode(view)` callback realizes the bound view. Adjacent revisions carry minimal Codec-costed
+patches; a consumer that misses the required base revision receives a complete checkpoint instead of applying an unsafe
+delta.
 
 ### Implement a renderer
 
-A renderer integration has five responsibilities:
+A `GlyphConfig` renderer integration has five responsibilities:
 
-1. Compose and install one backend policy and capability set before the first text update.
-2. Resolve each loaded font's portable plan and compile its binding/resources into the policy's cold table.
-3. Apply plan resource and buffer operations, then upload the declared patch ranges.
-4. Realize materials and submit draw packets without re-shaping, re-sorting, or reconstructing layout.
-5. Return transactional acceptance only after CPU consumption and renderer commit have completed.
+1. Define a schema that maps bound command payloads to renderer-owned types.
+2. Implement `encode` to supply the Codec and its capabilities.
+3. Implement `resolve` to create lease-counted renderer resources from portable payloads.
+4. Implement `renderer().decode(view)` to stage buffers, patches, materials, primitives, and ordered draws without
+   re-shaping or reconstructing layout.
+5. Implement the root recipe that constructs retained Text-like objects through the supplied root services.
 
-Three is the maintained reference executor. Bitmap, MSDF, and Slug register portable plans and compiled resources through the same `/core` contract as external techniques; Three retains only their shader/material and GPU realization. A custom Three technique registers its portable plan in `/core`, then selects one compatible `{ technique, variant }` through `registerThreeRasterPlanProgram`; Three assembles the host policy, and only the shader/material realization half uses `threePolicyAbi`.
+Three is the maintained reference renderer. Bitmap, MSDF, Slug, Three, and the external example renderer all compose the
+same public `/config/*` vocabulary; none reaches a privileged engine API. Three retains only its scene objects,
+shader/material realization, GPU resources, and transform synchronization.
 
-Each technique declares which authored text effects its portable policy and shader support. MSDF supports outline and
-shadow; Bitmap and Slug currently support neither. Unsupported effects throw when the style enters `Text`, `Paragraph`,
-or a `/core` render planner instead of being dropped from the plan.
+Each RasterFormat declares which authored text effects its Codec and shader support. MSDF supports outline and shadow;
+Bitmap and Slug currently support neither. Unsupported effects throw rather than disappearing from the display list.
 
-The renderer-neutral engine and backend contracts, frame wire, policy authoring toolkit, and plan view publish as `@pmndrs/glyph/core`, and the technique shaders as `@pmndrs/glyph/tsl` and `@pmndrs/glyph/typegpu` — the [Core API](#core-api) section shows the four moves. A new engine integration should start from the [renderer integration guide](docs/guides/renderer-integration.md), which walks all five responsibilities above with working code, then use the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as reference material.
+Start with the [renderer integration guide](docs/guides/renderer-integration.md), which walks these responsibilities with
+the external TypeGPU implementation. Internal engine, wire, projection, and planner modules are deliberately not package
+exports.
 
 ## Technique shaders on their own
 
@@ -412,8 +419,10 @@ TypeGPU host. The TypeGPU realization is pinned to the TSL one by compiling the 
 the real generated source, rather than translating the node graph by inspection.
 
 ```ts
-import { bitmapShader, msdfShader, slugShader } from '@pmndrs/glyph/tsl';
-import { bitmapFragment, bitmapVertexSnapped } from '@pmndrs/glyph/typegpu';
+import { bitmapShader } from '@pmndrs/glyph/tsl/bitmap';
+import { msdfShader } from '@pmndrs/glyph/tsl/msdf';
+import { slugShader } from '@pmndrs/glyph/tsl/slug';
+import { bitmapFragment, bitmapVertexSnapped } from '@pmndrs/glyph/typegpu/bitmap';
 ```
 
 ## Develop

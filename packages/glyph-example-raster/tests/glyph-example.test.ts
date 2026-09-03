@@ -102,10 +102,7 @@ describe('public external raster proof', () => {
       return file === undefined ? new Response(null, { status: 404 }) : new Response(await readFile(file));
     });
     vi.stubGlobal('fetch', fetch);
-    const font = glyph.fontFace(
-      { baked: 'https://glyph.invalid/inter.font.glb' },
-      { format: glyphExample({ paletteSeed: 7 }) },
-    );
+    const font = glyph.fontFace('https://glyph.invalid/inter.font.glb', { format: glyphExample({ paletteSeed: 7 }) });
     await font.glyphExample.load();
 
     try {
@@ -126,7 +123,9 @@ describe('public external raster proof', () => {
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
     const bytes = await readFile(core.file);
-    const font = glyph.fontFace({ baked: { bytes, ownership: 'copy' } }, { format: glyphExample({ paletteSeed: 7 }) });
+    const font = glyph.fontFace(new Blob([new Uint8Array(bytes)], { type: 'model/gltf-binary' }), {
+      format: glyphExample({ paletteSeed: 7 }),
+    });
     const pending = font.glyphExample.load();
     font.dispose();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
@@ -138,10 +137,9 @@ describe('public external raster proof', () => {
     const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
-    const font = glyph.fontFace(
-      { baked: dataUrl(await readFile(core.file)) },
-      { format: glyphExample({ paletteSeed: 7 }) },
-    );
+    const font = glyph.fontFace(new Blob([new Uint8Array(await readFile(core.file))], { type: 'model/gltf-binary' }), {
+      format: glyphExample({ paletteSeed: 7 }),
+    });
     await font.glyphExample.load();
     const material = defineTextMaterial((context) => {
       if (context.kind !== 'glyph' || context.format !== glyphExample.id) return context.createDefaultMaterial();
@@ -214,10 +212,9 @@ describe('public external raster proof', () => {
     const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
-    const font = glyph.fontFace(
-      { baked: dataUrl(await readFile(core.file)) },
-      { format: suppliedGlyphExample({ paletteSeed: 7 }) },
-    );
+    const font = glyph.fontFace(new Blob([new Uint8Array(await readFile(core.file))], { type: 'model/gltf-binary' }), {
+      format: suppliedGlyphExample({ paletteSeed: 7 }),
+    });
     await font.glyphExample.load();
     const text = three.createText({ font: font.glyphExample, text: 'STRIP QUAD', style: { fontSize: 48 } });
     const group = three.createTextGroup();
@@ -458,10 +455,6 @@ async function bakeFixture(packaging: {
     font: { fontFaceIndex: 0 },
     rasters: [rasterBake(glyphExampleBaker, { packaging, options: { paletteSeed: 7 } })],
   });
-}
-
-function dataUrl(bytes: Uint8Array): string {
-  return `data:model/gltf-binary;base64,${Buffer.from(bytes).toString('base64')}`;
 }
 
 function triangleStripGeometry(source: PortableGeometryPayload): PortableGeometryPayload {

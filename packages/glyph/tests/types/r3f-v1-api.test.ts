@@ -42,40 +42,39 @@ createElement(Text, { font: bitmapFont, handle: three }, 'no per-object handle')
 createElement(TextGroup, { handle: three }, label);
 
 function FontConsumer(): null {
-  const loaded: Font<typeof bitmap> = useFont(
-    { baked: '/fonts/Inter.font.glb' },
-    { format: { raster: bitmap, options: { strikes: [16] } } },
-  );
-  useBitmap({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Font<typeof bitmap>;
-  useMsdf({ baked: '/fonts/Inter.font.glb' }) satisfies Font<typeof msdf>;
-  useMsdf({ baked: '/fonts/Inter.font.glb' }, { emSize: 64, pixelRange: 8 }) satisfies Font<typeof msdf>;
-  useSlug({ baked: '/fonts/Inter.font.glb' }) satisfies Font<typeof slug>;
+  const loaded: Font<typeof bitmap> = useFont('/fonts/Inter.font.glb', {
+    format: { raster: bitmap, options: { strikes: [16] } },
+  });
+  useBitmap('/fonts/Inter.font.glb', { strikes: [16] }) satisfies Font<typeof bitmap>;
+  useMsdf('/fonts/Inter.font.glb') satisfies Font<typeof msdf>;
+  useMsdf('/fonts/Inter.font.glb', { emSize: 64, pixelRange: 8 }) satisfies Font<typeof msdf>;
+  useSlug('/fonts/Inter.font.glb') satisfies Font<typeof slug>;
   void loaded;
-  useFont({ baked: '/fonts/Inter.font.glb' }, { format: bitmap({ strikes: [16] }) }) satisfies Font<typeof bitmap>;
+  useFont('/fonts/Inter.font.glb', { format: bitmap({ strikes: [16] }) }) satisfies Font<typeof bitmap>;
   // @ts-expect-error Bitmap's exact request helper requires bake options.
   bitmap();
   // @ts-expect-error Slug has no request options.
   slug({});
+  // @ts-expect-error FontFace hooks use the canonical source directly, not the legacy loader request object.
+  useFont({ baked: '/fonts/Inter.font.glb' });
   return null;
 }
 
 const consumer = createElement(FontConsumer);
-const preloaded: Promise<void> = useFont.preload(
-  { baked: '/fonts/Inter.font.glb' },
-  { format: { raster: bitmap, options: { strikes: [16] } } },
-);
-useFont.clear({ baked: '/fonts/Inter.font.glb' }, { format: { raster: bitmap, options: { strikes: [16] } } });
-useFont.preload(
-  { baked: '/fonts/Inter.font.glb' },
-  { format: { raster: bitmap, options: { strikes: [16] } } },
-) satisfies Promise<void>;
-useFont.clear({ baked: '/fonts/Inter.font.glb' }, { format: { raster: bitmap, options: { strikes: [16] } } });
-useBitmap.preload({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Promise<void>;
-useBitmap.clear({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] });
-useMsdf.preload({ baked: '/fonts/Inter.font.glb' }) satisfies Promise<void>;
-useMsdf.clear({ baked: '/fonts/Inter.font.glb' });
-useSlug.preload({ baked: '/fonts/Inter.font.glb' }) satisfies Promise<void>;
-useSlug.clear({ baked: '/fonts/Inter.font.glb' });
+const preloaded: Promise<void> = useFont.preload('/fonts/Inter.font.glb', {
+  format: { raster: bitmap, options: { strikes: [16] } },
+});
+useFont.clear('/fonts/Inter.font.glb', { format: { raster: bitmap, options: { strikes: [16] } } });
+useFont.preload('/fonts/Inter.font.glb', {
+  format: { raster: bitmap, options: { strikes: [16] } },
+}) satisfies Promise<void>;
+useFont.clear('/fonts/Inter.font.glb', { format: { raster: bitmap, options: { strikes: [16] } } });
+useBitmap.preload('/fonts/Inter.font.glb', { strikes: [16] }) satisfies Promise<void>;
+useBitmap.clear('/fonts/Inter.font.glb', { strikes: [16] });
+useMsdf.preload('/fonts/Inter.font.glb') satisfies Promise<void>;
+useMsdf.clear('/fonts/Inter.font.glb');
+useSlug.preload('/fonts/Inter.font.glb') satisfies Promise<void>;
+useSlug.clear('/fonts/Inter.font.glb');
 
 // @ts-expect-error React uses R3F's shared loader cache; no hook factory is public.
 void ReactApi.createUseFont;

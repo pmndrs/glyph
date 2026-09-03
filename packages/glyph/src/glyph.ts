@@ -8,10 +8,10 @@ import {
 import {
   createFontFace,
   FontFaceHandleStore,
+  type AnyFontFace,
   type FontFace,
   type FontFaceConfig,
   type FontFaceDeclaredFormat,
-  type FontFaceFormatDeclaration,
   type FontFaceSource,
 } from './font-face.js';
 import { createFontLibrary, type FontLibrary } from './loader.js';
@@ -21,9 +21,11 @@ export interface Glyph {
   init(options?: GlyphEngineOptions): Promise<void>;
   shape(): void;
   handle<Config extends AnyGlyphConfig>(name: string, config: Config): GlyphConfigHandle<Config>;
-  fontFace<const Declaration extends FontFaceFormatDeclaration = never>(
+  fontFace(source: FontFaceSource): FontFace<never>;
+  fontFace(source: FontFaceSource, config: FontFaceConfig<never>): FontFace<never>;
+  fontFace<const Declaration>(
     source: FontFaceSource,
-    config?: FontFaceConfig<Declaration>,
+    config: FontFaceConfig<Declaration> & { readonly format: Declaration },
   ): FontFace<FontFaceDeclaredFormat<Declaration>>;
 }
 
@@ -97,10 +99,13 @@ class GlyphRuntime implements Glyph {
     shapeGlyphEngine(engine);
   }
 
-  fontFace<const Declaration extends FontFaceFormatDeclaration = never>(
+  fontFace(source: FontFaceSource): FontFace<never>;
+  fontFace(source: FontFaceSource, config: FontFaceConfig<never>): FontFace<never>;
+  fontFace<const Declaration>(
     source: FontFaceSource,
-    config: FontFaceConfig<Declaration> = {},
-  ): FontFace<FontFaceDeclaredFormat<Declaration>> {
+    config: FontFaceConfig<Declaration> & { readonly format: Declaration },
+  ): FontFace<FontFaceDeclaredFormat<Declaration>>;
+  fontFace(source: FontFaceSource, config: FontFaceConfig = {}): AnyFontFace {
     return createFontFace(this.fontLibrary, source, config);
   }
 }

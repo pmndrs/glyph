@@ -65,8 +65,12 @@ const rootlessThreeRoot = new ThreeRoot(undefined, undefined, () => undefined);
 void rootlessThreeRoot;
 const inter = glyph.fontFace('/fonts/Inter.font.glb', {
   family: 'Inter',
-  format: [slug, bitmap({ strikes: [8, 16] })] as const,
+  format: [slug, bitmap({ strikes: [8, 16] })],
 });
+// @ts-expect-error Bitmap requires its bake contract; use bitmap({ strikes: [...] }).
+glyph.fontFace('/fonts/bitmap-without-options.font.glb', { format: bitmap });
+// @ts-expect-error A FontFace format declaration must not be empty.
+glyph.fontFace('/fonts/no-formats.font.glb', { format: [] });
 inter.default satisfies typeof inter;
 void inter.bitmap;
 // @ts-expect-error Undeclared formats are not present on a typed FontFace.
@@ -77,8 +81,14 @@ inter.formats() satisfies Promise<readonly string[]>;
 // @ts-expect-error Format selections inspect through their owning FontFace declaration.
 inter.slug.formats();
 const discovered = glyph.fontFace('/fonts/discovered.font.glb');
+glyph.fontFace(new URL('/fonts/discovered.font.glb', 'https://example.com'));
+glyph.fontFace(new Blob(), { family: 'BlobFont' });
 // @ts-expect-error Omitted format declarations do not synthesize technique members.
 void discovered.slug;
+// @ts-expect-error FontFace accepts the canonical source directly, not the legacy loader request object.
+glyph.fontFace({ baked: '/fonts/legacy.font.glb' });
+// @ts-expect-error FontFace does not accept unowned byte views; wrap bytes in a Blob or SerializedFontFace.
+glyph.fontFace(new Uint8Array());
 declare const transferred: SerializedFontFace;
 glyph.fontFace(transferred) satisfies import('../../src/index.js').FontFace<never>;
 three.createText({ font: inter.slug, text: 'Loaded before construction' }) satisfies import('../../src/three.js').Text<

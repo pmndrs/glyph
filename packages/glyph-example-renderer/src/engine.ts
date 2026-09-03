@@ -63,7 +63,7 @@ export class ExampleText<Selection extends ExampleFontFaceSelection = ExampleFon
     }
     this.#fonts = fonts;
     this.#state = normalizeTextOptions(options);
-    this.#font = fonts.acquire<FontFaceRasterOf<Selection>>(this.#state.font);
+    this.#font = fonts.acquire(this.#state.font);
     try {
       this.#controller = services.createText(this.#coreState(this.#state, this.#font));
     } catch (error) {
@@ -82,8 +82,7 @@ export class ExampleText<Selection extends ExampleFontFaceSelection = ExampleFon
       throw new TypeError('example text updates must be objects');
     }
     const next = normalizeTextOptions({ ...this.#state, ...update });
-    const nextFont =
-      next.font === this.#state.font ? this.#font : this.#fonts.acquire<FontFaceRasterOf<Selection>>(next.font);
+    const nextFont = next.font === this.#state.font ? this.#font : this.#fonts.acquire(next.font);
     try {
       this.#controller.update(this.#coreState(next, nextFont));
       if (nextFont !== this.#font) this.#font.dispose();

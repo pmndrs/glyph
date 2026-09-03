@@ -20,10 +20,10 @@ const TECHNIQUES = ['bitmap', 'msdf', 'slug'] as const;
 const COLORS = { bitmap: '#f59e0b', msdf: '#fb7185', slug: '#ff4dc4' } as const;
 
 // Multiple techniques can be baked into a single glb, or alternatively you can bake each technique into its own glb.
-const latinFont = { baked: latinFontUrl } as const;
+const latinFont = latinFontUrl;
 
 // This icon font only bakes a few glyphs from the full Font Awesome set. You can bake any subset of glyphs into a glb.
-const iconFont = { baked: iconFontUrl } as const;
+const iconFont = iconFontUrl;
 const bitmapOptions = { strikes: [32] } as const;
 
 // You can preload font assets to reduce loading waterfalls.

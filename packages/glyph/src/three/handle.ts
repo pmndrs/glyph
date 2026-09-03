@@ -21,7 +21,6 @@ import type { Font } from '../font.js';
 import { bitmap } from '../raster/bitmap.js';
 import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug.js';
-import type { AnyRasterFormat } from '../config/raster-format.js';
 import { normalizeGlyphBufferCapacity } from '../text-properties.js';
 import { threeCodecDescriptor } from './codec.js';
 import type { ThreeAllocationMode, ThreeTransformMode } from './codec.js';
@@ -146,11 +145,14 @@ export function acquireThreeHandleFont<const Selection extends AnyFontFaceSelect
   handle: ThreeHandle,
   selection: Selection,
 ): Font<FontFaceRasterOf<Selection>> {
-  return threeHandleRoot(handle).acquireFont<FontFaceRasterOf<Selection>>(selection);
+  return threeHandleRoot(handle).acquireFont(selection);
 }
 
 /** @internal Borrow the handle store's immutable source for a render-phase snapshot. */
-export function threeHandleFontSource(handle: ThreeHandle, selection: AnyFontFaceSelection): Font<AnyRasterFormat> {
+export function threeHandleFontSource<const Selection extends AnyFontFaceSelection>(
+  handle: ThreeHandle,
+  selection: Selection,
+): Font<FontFaceRasterOf<Selection>> {
   return threeHandleRoot(handle).fontSource(selection);
 }
 
