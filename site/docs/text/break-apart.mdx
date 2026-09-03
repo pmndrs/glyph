@@ -172,6 +172,8 @@ for (let i = 0; i < glyphs.count; i += 1) {
 
 <glyph-proxy fit="cover" root="scenes" data-scene="arc" aria-label="A line of text bent into a turning ring" aspect="16 / 9" />
 
+<glyph-proxy fit="cover" root="scenes" data-scene="ribbon" aria-label="Words flowing along a ribbon through the scene, hidden where it passes behind itself" aspect="16 / 9" />
+
 {/*
 write
 - Question: how do I put text on a path without a curved layout?
@@ -184,6 +186,8 @@ write
 - Shape: two paragraphs.
 
 notes · internals
+- the ribbon scene places glyph copies on a three.js curve with `placeOnPath`, standing on world up, at the tube's radius —
+  `site/examples/src/scenes/ribbon/scene.tsx`, `site/examples/src/lib/paths.ts#curvePath`
 - the arc scene — `site/examples/src/scenes/arc/scene.tsx:36–66`; the `width` gap finding — `docs/planning/docs-site-outline.md:503`
 - `contentWidth` vs `width` — `layout.ts:68–75`
 - the path component — `site/examples/src/components/text/TextOnPath.tsx:52–64`, `site/examples/src/lib/paths.ts`

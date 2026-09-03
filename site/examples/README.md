@@ -18,7 +18,7 @@ examples/
     gallery/                     Gallery, Card — a masonry of proxies under pointer activation
     preview/                     Preview — one proxy filling the page, for a docs iframe
     text/                        shared text building blocks: Caption, Billboard, LabeledRow, TextOnPath
-  src/lib/                       paths (torus knot, circle, placeOnPath), typewriter, colour, planned-draws
+  src/lib/                       paths (torus knot, circle, any three curve, placeOnPath), typewriter, flap wheel, colour, planned-draws
   src/scenes/<slug>/
     scene.tsx                    the R3F scene that runs — a composition, a few dozen lines
     three.ts                     the three.js twin: the same thing imperatively, typechecked, never executed here
@@ -31,7 +31,7 @@ examples/
   load-explainers.ts             the docs bundle entry, built to docs/assets/explainer.{js,css}
 ```
 
-A scene is one feature and a few dozen lines. Art is generated — gradients, lit materials, simple geometry — never
+A scene is one feature and a few dozen lines; the showcase scenes (kinetic, split-flap, relief, slug-anatomy, ribbon) are the exception, each built from a few components and a material file. Art is generated — gradients, lit materials, simple geometry — never
 loaded, so the bundle stays small and every byte a reader downloads is text.
 
 ## The twin

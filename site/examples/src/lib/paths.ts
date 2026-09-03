@@ -1,4 +1,4 @@
-import { Matrix4, Quaternion, Vector3 } from 'three/webgpu';
+import { type Curve, Matrix4, Quaternion, Vector3 } from 'three/webgpu';
 
 /** A path sampled by arc length, with a moving frame at every point. */
 export interface Path {
@@ -59,6 +59,27 @@ export function torusKnot(p: number, q: number, major: number, minor: number, sa
       out.tangent.copy(ahead).sub(behind).normalize();
       out.binormal.copy(up).cross(out.tangent).normalize();
       out.normal.copy(out.tangent).cross(out.binormal).normalize();
+      return out;
+    },
+  };
+}
+
+/**
+ * Any three.js curve as a path: sampled by arc length through the curve's own
+ * `getPointAt`, with a frame whose normal is `up`, so type placed on a tube
+ * built from the same curve stands on the tube's top and stays upright.
+ */
+export function curvePath(curve: Curve<Vector3>, up = new Vector3(0, 1, 0)): Path {
+  const length = curve.getLength();
+  return {
+    length,
+    frameAt(s, out) {
+      const u = (((s % length) + length) % length) / length;
+      curve.getPointAt(u, out.position);
+      curve.getTangentAt(u, out.tangent);
+      // Type stands on world up wherever the curve goes, the way it does on a circle; the letters never turn over.
+      out.normal.copy(up);
+      out.binormal.copy(out.tangent).cross(up).normalize();
       return out;
     },
   };

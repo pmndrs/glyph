@@ -48,6 +48,8 @@ three.createText({ font: Inter, text: 'Custom', material });
 
 <glyph-proxy fit="cover" root="scenes" data-scene="materials" aria-label="Lit PBR material over MSDF coverage" aspect="16 / 9" />
 
+<glyph-proxy fit="cover" root="scenes" data-scene="relief" aria-label="A word rendered as a height field and lit as carved stone" aspect="16 / 9" />
+
 ## The context
 
 ```ts
@@ -95,6 +97,8 @@ write
 - Shape: two paragraphs, then the table.
 
 notes · internals
+- the relief scene writes MSDF `fillCoverage` into a mipmapped render target and displaces a lit plane by it, with `bumpMap` for the normal —
+  `site/examples/src/scenes/relief/materials.ts`
 - the union — `three/material.ts:19–63`; `format` literal per branch (`:30`, `:40`, `:49`); the augmentation hook (`:55–61`)
 - `position` doc: "Final renderer-local position including Codec-selected transform indirection" — `three/material.ts:32`
 - how the realizer builds each context — `three/internal/material-realizer.ts:108–114` (decoration), `:173–179` (bitmap), `:225–231` (msdf), `:295–301` (slug)

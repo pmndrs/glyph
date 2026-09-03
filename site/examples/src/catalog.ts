@@ -35,6 +35,30 @@ export const EXAMPLES = {
     stage: {},
     load: () => import('./scenes/kinetic/scene'),
   },
+  'split-flap': {
+    title: 'Split-flap board',
+    page: '/docs/text/text-and-groups',
+    stage: { lit: true },
+    load: () => import('./scenes/split-flap/scene'),
+  },
+  relief: {
+    title: 'Relief type',
+    page: '/docs/text/materials',
+    stage: { lit: true },
+    load: () => import('./scenes/relief/scene'),
+  },
+  'slug-anatomy': {
+    title: 'Slug anatomy',
+    page: '/docs/fonts/techniques',
+    stage: {},
+    load: () => import('./scenes/slug-anatomy/scene'),
+  },
+  ribbon: {
+    title: 'Ribbon',
+    page: '/docs/text/break-apart',
+    stage: {},
+    load: () => import('./scenes/ribbon/scene'),
+  },
   hello: {
     title: 'Hello world',
     page: '/docs/getting-started/introduction',
