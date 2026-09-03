@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:48a40299a6f545b62ccfb6b1e0994aff6281e22f004a041375e667bd2e6ad4fc'
+source_digest: 'sha256:deb7eed836d62a07927c7d13816ee6fa7babe0d40fb519baf5b5c3e9376ecce4'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -336,7 +336,7 @@ Worker transfer test proves every posted clone buffer detaches in the sender, th
 format with fetching disabled, and neither realm initializes the shaping engine.
 
 React's `useFont(source, config?)` declares through that same FontFace path, asks the selected Three handle which exact
-format the declaration denotes, conditionally calls React 19 `use()` only while that format is unloaded, and returns
+format the declaration denotes, enters the shared `suspend-react` resource only while that format is unloaded, and returns
 an independently mounted immutable Font lease. Single-technique
 consumers may import `useBitmap`, `useMsdf`, or `useSlug` from the matching `/react/*` subpath. Each wrapper only builds its
 typed format request and delegates to `useFont`; readiness, canonical source/format identity, and mounted disposal have

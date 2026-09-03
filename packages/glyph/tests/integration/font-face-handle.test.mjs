@@ -88,10 +88,19 @@ function defineFontAwareConfig() {
   });
 }
 
-test('FontFace rejects legacy loader request objects at its public boundary', () => {
+test('FontFace rejects legacy loader and unowned source/config forms at its public boundary', () => {
   assert.throws(
     () => glyph.fontFace({ baked: '/fonts/legacy.font.glb' }),
     /FontFace source must be a URL, Blob, or SerializedFontFace/,
+  );
+  assert.throws(
+    () => glyph.fontFace(new Request('https://glyph.invalid/legacy.font.glb')),
+    /FontFace source must be a URL, Blob, or SerializedFontFace/,
+  );
+  assert.throws(() => glyph.fontFace(new ArrayBuffer(0)), /FontFace source must be a URL, Blob, or SerializedFontFace/);
+  assert.throws(
+    () => glyph.fontFace('/fonts/config.font.glb', { src: '/fonts/other.font.glb' }),
+    /FontFace config only accepts family and format/,
   );
   assert.throws(
     () => glyph.fontFace('/fonts/no-formats.font.glb', { format: [] }),

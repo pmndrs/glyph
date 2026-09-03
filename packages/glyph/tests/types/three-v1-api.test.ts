@@ -68,6 +68,12 @@ const inter = glyph.fontFace('/fonts/Inter.font.glb', {
   family: 'Inter',
   format: [slug, bitmap({ strikes: [8, 16] })],
 });
+const namedByKey = glyph.fontFace('/fonts/Named.font.glb', {
+  family: 'Named',
+  format: ['slug', 'msdf'],
+});
+namedByKey.slug.load() satisfies Promise<typeof namedByKey.slug>;
+namedByKey.msdf.load() satisfies Promise<typeof namedByKey.msdf>;
 // @ts-expect-error Font loading belongs to FontFace, not the renderer handle.
 three.loadFont(inter);
 // @ts-expect-error Internal Font acquisition does not leak through named roots.
@@ -90,12 +96,19 @@ const loadedDiscovered = await glyph.fontFace('/fonts/loaded.font.glb').load();
 loadedDiscovered satisfies import('../../src/index.js').FontFace<never>;
 glyph.fontFace(new URL('/fonts/discovered.font.glb', 'https://example.com'));
 glyph.fontFace(new Blob(), { family: 'BlobFont' });
+glyph.fontFace(new File([], 'Inter.font.glb'));
 // @ts-expect-error Omitted format declarations do not synthesize technique members.
 void discovered.slug;
 // @ts-expect-error FontFace accepts the canonical source directly, not the legacy loader request object.
 glyph.fontFace({ baked: '/fonts/legacy.font.glb' });
 // @ts-expect-error FontFace does not accept unowned byte views; wrap bytes in a Blob or SerializedFontFace.
 glyph.fontFace(new Uint8Array());
+// @ts-expect-error Request transport state is not a reusable FontFace source identity.
+glyph.fontFace(new Request('/fonts/Inter.font.glb'));
+// @ts-expect-error Raw buffers have no ownership contract; wrap bytes in a Blob or SerializedFontFace.
+glyph.fontFace(new ArrayBuffer(0));
+// @ts-expect-error FontFace config accepts only family and format.
+glyph.fontFace('/fonts/Inter.font.glb', { src: '/fonts/Other.font.glb' });
 declare const transferred: SerializedFontFace;
 glyph.fontFace(transferred) satisfies import('../../src/index.js').FontFace<never>;
 three.createText({ font: inter.slug, text: 'Loaded before construction' }) satisfies import('../../src/three.js').Text<

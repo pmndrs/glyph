@@ -132,6 +132,8 @@
     "./three/frame-error": null,
     "./three/glyph-measurement": null,
     "./three/glyphs": null,
+    "./three/font-loader": null,
+    "./three/loader": null,
     "./three/renderer-resources": null,
     "./three/text": null,
     "./three/transform-synchronizer": null,
@@ -216,6 +218,7 @@
       "source": "./src/raster/*.ts",
       "import": "./dist/raster/*.js"
     },
+    "./config/font-library": null,
     "./config/*": {
       "types": {
         "source": "./src/config/*.ts",
@@ -272,6 +275,7 @@
       "source": "./src/runtime-bake.ts",
       "import": "./dist/runtime-bake.js"
     },
+    "./loader": null,
     "./internal/*": null,
     "./generated/*": null,
     "./font-baker/*": null,
