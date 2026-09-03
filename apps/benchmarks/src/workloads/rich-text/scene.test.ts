@@ -1,90 +1,33 @@
-import type { AnyRasterFormat, Font } from '@pmndrs/glyph';
 import { describe, expect, it } from 'vitest';
 
 import {
-  RICH_TEXT_ACCENT_COLOR,
-  RICH_TEXT_SMALL_CAPS_FEATURE,
-  RICH_TEXT_SPANS,
-  assertRichTextSpans,
   richTextComposition,
-  richTextLiteral,
   richTextParagraphCount,
   richTextSpanNames,
-  type RichTextCompanionFonts,
 } from './scene';
-
-/**
- * `span()` distinguishes a font selection from a style by structure alone, and composing a literal never touches a
- * font's raster data. Stubs therefore exercise the real composition path without a text engine, a shaper, or a fixture
- * load — which is what keeps this guard on the authored ranges cheap enough to run beside the rest of the unit suite.
- */
-const companionFonts = {
-  emphasis: { raster: 'emphasis' } as unknown as Font<AnyRasterFormat>,
-  foreign: { raster: 'foreign' } as unknown as Font<AnyRasterFormat>,
-} satisfies RichTextCompanionFonts;
 
 const BODY = 16;
 
+// Font-bearing span composition is exercised by the rich-text-spans conformance target with authentic loaded Fonts.
+// A structural cast cannot stand in for a package-owned immutable Font and would test behavior applications cannot use.
 describe('rich text composition', () => {
-  it('composes every authored span at the exact range the evidence reads back through', () => {
-    const composition = richTextComposition(BODY);
-    const literal = richTextLiteral(companionFonts, composition);
-
-    expect(literal.text).toMatchInlineSnapshot(
-      `"Early next century Tyrell advanced replicant design past the NEXUS phase: identical to a human, almost, filed as देवनागरी — a being virtually indistinguishable from its maker."`,
-    );
-    expect(() => assertRichTextSpans(literal, composition)).not.toThrow();
-    expect(literal.spans.map(({ start, end }) => [start, end])).toEqual(
-      RICH_TEXT_SPANS.map(({ start, end }) => [start, end]),
-    );
-    const styledSpans = literal.spans.map((entry) => entry.style ?? {});
-    expect(styledSpans.some((style) => style.decoration?.underline === true)).toBe(true);
-    expect(styledSpans.some((style) => style.decoration?.lineThrough === true)).toBe(true);
-    expect(RICH_TEXT_SPANS.map(({ name, start, end }) => [name, literal.text.slice(start, end)])).toEqual([
-      ['properNoun', 'Tyrell'],
-      ['tracked', 'NEXUS'],
-      ['emphasis', 'identical'],
-      ['face', 'almost'],
-      ['foreign', 'देवनागरी'],
-      ['accent', 'a being virtually indistinguishable'],
-      ['nested', 'virtually'],
-      ['tint', 'its'],
-    ]);
+  it('derives every size and spacing value from the body size', () => {
+    expect(richTextComposition(BODY)).toEqual({
+      accentFontSize: 20,
+      bodyFontSize: 16,
+      emphasisFontSize: 30.4,
+      letterSpacing: 5,
+      nested: true,
+      nestedFontSize: 12.48,
+      smallCaps: true,
+      tintColor: '#00c8ff',
+    });
   });
 
-  it('carries shaping data alongside presentation on spans that must reach the shaper', () => {
-    const literal = richTextLiteral(companionFonts, richTextComposition(BODY));
-    const [properNoun, tracked, emphasis, face, foreign, accent, nested, tint] = literal.spans;
-
-    expect(properNoun?.font).toBe(companionFonts.emphasis);
-    expect(properNoun?.style).toEqual({ features: [{ tag: RICH_TEXT_SMALL_CAPS_FEATURE }] });
-    expect(tracked?.style).toEqual({ letterSpacing: BODY * 0.3125 });
-    expect(emphasis?.style).toEqual({ decoration: { underline: true }, fontSize: BODY * 1.9 });
-    expect(face?.font).toBe(companionFonts.emphasis);
-    expect(foreign?.font).toBe(companionFonts.foreign);
-    expect(accent?.style).toEqual({
-      color: RICH_TEXT_ACCENT_COLOR,
-      decoration: { lineThrough: true },
-      fontSize: BODY * 1.25,
-    });
-    // The nested span states only a size, so it inherits the enclosing color rather than restating it.
-    expect(nested?.style).toEqual({ fontSize: BODY * 0.78 });
-    expect(nested?.font).toBeUndefined();
-    expect(tint?.style).toEqual({
-      color: richTextComposition(BODY).tintColor,
-      decoration: { lineThrough: true },
-    });
-    expect(tint?.font).toBeUndefined();
-  });
-
-  it('drops only the nesting for the control that isolates it, keeping the paragraph text identical', () => {
+  it('drops only the nested span name for the control that isolates it', () => {
     const composition = richTextComposition(BODY, { nested: false });
-    const literal = richTextLiteral(companionFonts, composition);
-
-    expect(literal.text).toBe(richTextLiteral(companionFonts, richTextComposition(BODY)).text);
     expect(richTextSpanNames(composition)).not.toContain('nested');
-    expect(() => assertRichTextSpans(literal, composition)).not.toThrow();
-    expect(literal.spans).toHaveLength(RICH_TEXT_SPANS.length - 1);
+    expect(richTextSpanNames(composition)).toHaveLength(7);
   });
 
   it('maps the span-density control onto a bounded paragraph stack', () => {
