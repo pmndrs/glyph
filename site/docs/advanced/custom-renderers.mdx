@@ -146,7 +146,7 @@ notes · internals
 | `resolve` | yes | during projection, for every `(resourceId, generation)` new to a root; again for every `breakApart` copy | `{ format, resourceKind, resourceName, payload, resources, previous, signal }` → `ResourceLease` from `resourceLease(value, release)` |
 | `renderer` | yes | once per root, when its plan target is built; once per copy | `{ drawRoot, signal, codec, defaultRenderer? }` → `{ decode, syncTransforms, dispose }` |
 | `root` | yes | the anonymous root eagerly in the handle constructor; each named root on its first `handle(name)` | `{ name, codec, config, fonts, services, create }` → must call `context.create(extension, options)` exactly once and return it |
-| `commands` | no | read once per root when its planner activates | `{ limits, requestBytes, resultBytes, textUnits }`; defaults 64 KiB request, 256 KiB result, 256 text units |
+| `commands` | no | read once per root when its encoder activates | `{ limits, requestBytes, resultBytes, textUnits }`; defaults 64 KiB request, 256 KiB result, 256 text units |
 
 {/*
 write
@@ -256,7 +256,7 @@ app.dispose();
 | `glyph.init()` | instantiates the shaper once; a second call returns the same promise | await it before any handle |
 | `glyph.handle(name, config)` | builds the font store, runs `encode`, registers the codec, runs `root.create` for the anonymous root | `encode`, `root.create`, `schema.drawRoot`, `renderer` |
 | `handle(name)` | runs the recipe once per name; later calls return the same root | the same, once |
-| `createText` through `services.createText` | binds the font stack, material, and transform; retains the text in the planner | your extension's `createText` |
+| `createText` through `services.createText` | binds the font stack, material, and transform; retains the text in the encoder | your extension's `createText` |
 | `glyph.shape()` | `prepare` each dirty root, stage the survivors, cross into Wasm once, then per root: project, `decode`, `commit`, settle | `shape.prepare`, `decode`, `commit`/`discard`, `shape.accepted`/`rejected` |
 | every frame after | nothing enters Wasm; `syncTransforms` receives the retained transform list | `syncTransforms` |
 | dispose | text → root (`services` before your `dispose`) → handle (roots, font store, then codec and engine state) | release what you leased |
@@ -319,7 +319,7 @@ notes · internals
 | --- | --- |
 | a handle fronts its anonymous root | `handle.name` is `undefined`, `handle.handle === handle`, every root member reflects through it |
 | `handle(name)` interns one root per name | roots are terminal; there is no nesting; a named root's `handle` is its owner |
-| each root owns one planner, one codec lease, one plan target with its own projector and renderer | resources resolved for one root are leased to that root |
+| each root owns one encoder, one codec lease, one plan target with its own projector and renderer | resources resolved for one root are leased to that root |
 | capacity `{ size, policy }` with `grow`, `chunk`, or `fixed` | three defaults to 4096 `chunk`; under `fixed` a frame whose text exceeds `size` is declined at `prepare` |
 | compositing `'ordered'` or `'independent'` | sent with every prepare; `setCompositing` invalidates the root |
 | one `Scene` per three root | a root whose texts span two scenes is an error; pick another root per scene |

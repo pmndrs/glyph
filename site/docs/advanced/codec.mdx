@@ -1,6 +1,6 @@
 ---
 title: Building a codec
-description: A codec is the contract between the planner and your shader — the per-instance buffers, the lanes they carry, and the program that fills each lane from the engine's semantics and the font's raster records.
+description: A codec is the contract between the encoder and your shader — the per-instance buffers, the lanes they carry, and the program that fills each lane from the engine's semantics and the font's raster records.
 nav: 55
 sourcecode: packages/glyph/src/config/codec-program.ts
 ---
@@ -49,7 +49,7 @@ notes · internals for the page
   example — `packages/glyph-example-raster/src/portable.ts`
 */}
 
-![Semantics and binding values enter a compiled program; the planner runs it per glyph to fill each buffer's lanes; the lanes arrive as patches into buffers you own and your shader reads by instance.](/examples/diagrams/codec-lanes.svg)
+![Semantics and binding values enter a compiled program; the encoder runs it per glyph to fill each buffer's lanes; the lanes arrive as patches into buffers you own and your shader reads by instance.](/examples/diagrams/codec-lanes.svg)
 
 ## Step 1 — declare the technique
 

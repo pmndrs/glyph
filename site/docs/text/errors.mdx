@@ -60,7 +60,7 @@ text.onError = (error) => {
 | `paragraph-root` | the paragraph's root style is missing, duplicated, or does not cover the text | supplying `style` |
 | `font-stack-missing` | a style names a font the engine does not hold | loading and binding the font first |
 | `font-metrics-missing` | a font in the laid-out text has no registered metrics | re-baking |
-| `capacity` | the frame did not fit the planner arenas after they grew; carries `requiredRequestBytes`, `requiredResultBytes` | filing it, with the two numbers |
+| `capacity` | the frame did not fit the encoder arenas after they grew; carries `requiredRequestBytes`, `requiredResultBytes` | filing it, with the two numbers |
 | `engine` | any status the engine does not classify; names nothing | filing it |
 
 {/*

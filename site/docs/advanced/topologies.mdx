@@ -215,7 +215,7 @@ notes · internals
 | `FontFace` → handle | many-to-many | one shared resource graph; each binding a counted lease |
 | handle → root | one anonymous + many named | roots cannot nest; a named root is terminal |
 | root → `Scene` | at most one | two scenes, two roots |
-| root → planner | one | the root is the publication boundary and the acceptance frontier |
+| root → encoder | one | the root is the publication boundary and the acceptance frontier |
 | engine → JavaScript realm | one | Wasm memory and borrowed views do not cross realms |
 | renderer → device | the host's | Glyph holds leases on payloads, never on GPU objects |
 
