@@ -1,20 +1,20 @@
 export const packageSizeBudgets = {
   'browser-core': {
-    // tsdown emits a shared, already-minified distribution graph, so raw and consumer-minified measurements now
-    // converge instead of preserving the old tsc-output gap. After the single-graph font-loader consolidation the
-    // measured root is 325,169 raw / 317,267 minified / 80,435 gzip / 66,955 Brotli. Keep the compressed ceilings
-    // close to that reviewed graph while reserving only ordinary cross-host compression variance.
-    rawBytes: 330_000,
-    minifiedBytes: 320_000,
-    gzipBytes: 82_400,
-    brotliBytes: 68_000,
+    // The public root owns Glyph, FontFace, Paragraph, and their shared loading graph. The unbundled distribution
+    // measures the consumer closure once: 362,479 raw / 354,093 minified / 88,281 gzip / 73,217 Brotli.
+    rawBytes: 368_000,
+    minifiedBytes: 360_000,
+    gzipBytes: 90_000,
+    brotliBytes: 75_000,
   },
-  // Config, Codec, schema, technique policy helpers, and the zero-copy command-buffer contract.
+  // GlyphConfig, Codec, schema, raster-format helpers, and the zero-copy command-buffer contract.
   'glyph-config-js': {
-    rawBytes: 437_000,
-    minifiedBytes: 286_000,
-    gzipBytes: 71_500,
-    brotliBytes: 60_000,
+    // Wildcard config leaves now isolate this renderer-neutral graph at 42,451 raw / 42,188 minified /
+    // 11,023 gzip / 9,742 Brotli. Keep that reduction protected rather than retaining the bundled-era ceiling.
+    rawBytes: 44_000,
+    minifiedBytes: 44_000,
+    gzipBytes: 11_500,
+    brotliBytes: 10_200,
   },
   'tsl-subpath-js': {
     rawBytes: 27_000,
@@ -135,24 +135,25 @@ export const packageSizeBudgets = {
     brotliBytes: 510_000,
   },
   // Shared Three technique graphs use one reviewed cross-host ceiling.
-  // Shader subpaths remain outside these runtime graphs.
+  // Shader subpaths and Three itself remain external. Each entry measures the public Glyph root, Three adapter, and
+  // exactly one raster format; the largest is 469,999 raw / 459,094 minified / 114,394 gzip / 94,747 Brotli.
   'bitmap-runtime-js': {
-    rawBytes: 430_000,
-    minifiedBytes: 274_000,
-    gzipBytes: 72_500,
-    brotliBytes: 62_000,
+    rawBytes: 477_000,
+    minifiedBytes: 466_000,
+    gzipBytes: 116_000,
+    brotliBytes: 97_000,
   },
   'mtsdf-runtime-js': {
-    rawBytes: 430_000,
-    minifiedBytes: 274_000,
-    gzipBytes: 72_500,
-    brotliBytes: 62_000,
+    rawBytes: 477_000,
+    minifiedBytes: 466_000,
+    gzipBytes: 116_000,
+    brotliBytes: 97_000,
   },
   'slug-runtime-js': {
-    rawBytes: 430_000,
-    minifiedBytes: 274_000,
-    gzipBytes: 72_500,
-    brotliBytes: 62_000,
+    rawBytes: 477_000,
+    minifiedBytes: 466_000,
+    gzipBytes: 116_000,
+    brotliBytes: 97_000,
   },
   'bitmap-baker-wasm': {
     rawBytes: 626_000,
