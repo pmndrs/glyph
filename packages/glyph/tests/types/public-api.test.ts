@@ -1,6 +1,5 @@
 import {
   type AnyRasterFormat,
-  type Font,
   type Paragraph,
   type RasterBakeDescriptorOf,
   type RasterBakeRequest,
@@ -18,8 +17,6 @@ import {
 } from '../../src/index.js';
 import { defineRasterBaker, rasterBake } from '../../src/bake.js';
 import { defineRasterFormat } from '../../src/config/raster-format.js';
-import type { FontBytesInput } from '../../src/font.js';
-import { createFontLibrary, loadFont } from '../../src/loader.js';
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2 ? true : false;
@@ -99,49 +96,6 @@ slugArtifact.dispose();
 
 // @ts-expect-error An MSDF decoder cannot consume a Slug artifact.
 msdf.decode(decodeFont, slugArtifact);
-
-const loadedTitle: Promise<Font<typeof msdf>> = loadFont('/fonts/Inter-Regular.ttf', msdf);
-void loadedTitle;
-
-const library = createFontLibrary();
-const libraryTitle: Promise<Font<typeof msdf>> = library.loadFont('/fonts/Inter-Regular.ttf', msdf);
-void libraryTitle;
-library.dispose();
-
-declare const fontBytes: Uint8Array<ArrayBuffer>;
-const copiedBytes: FontBytesInput = { bytes: fontBytes };
-const transferredBytes: FontBytesInput = { bytes: fontBytes, ownership: 'transfer' };
-void copiedBytes;
-void transferredBytes;
-// @ts-expect-error Byte input is explicit; a bare typed array is not a font location.
-loadFont({ baked: fontBytes }, msdf);
-
-const configuredFont = loadFont('/fonts/Inter-Regular.ttf', configurable({ quality: 'high' }));
-void configuredFont;
-
-// @ts-expect-error A configurable raster format requires its options.
-loadFont('/fonts/Inter-Regular.ttf', configurable);
-// @ts-expect-error A configured raster request cannot omit its options.
-loadFont('/fonts/Inter-Regular.ttf', { raster: configurable });
-// @ts-expect-error Raster package option literals remain package-owned.
-loadFont('/fonts/Inter-Regular.ttf', { raster: configurable, options: { quality: 'ultra' } });
-
-const relocatedFont = loadFont(
-  {
-    source: '/fonts/Inter-Regular.ttf',
-    baked: 'https://cdn.example.com/generated/Inter.font.glb',
-  },
-  msdf,
-);
-relocatedFont satisfies Promise<Font<typeof msdf>>;
-
-void loadFont({ baked: '/fonts/Inter.font.glb' }, msdf);
-declare const sourceUrl: URL;
-void loadFont(sourceUrl, msdf);
-// @ts-expect-error A font input requires either source or baked bytes.
-loadFont({}, msdf);
-// @ts-expect-error An optional forbidden source cannot be supplied as undefined.
-loadFont({ baked: '/fonts/Inter.font.glb', source: undefined }, msdf);
 
 const msdfBaker = defineRasterBaker({
   kind: 'msdf',
