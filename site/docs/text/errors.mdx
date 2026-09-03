@@ -165,7 +165,11 @@ notes · internals
 ## Fixed capacity is not an error
 
 ```ts
-three.setCapacity({ size: 4096, policy: 'fixed' }); // UTF-16 units across the root's texts; over budget keeps the last draw
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+// UTF-16 units across a root's texts; over budget keeps the last draw
+const hud = glyph.handle('hud', defineThreeConfig({ capacity: { size: 4096, policy: 'fixed' } }));
 ```
 
 {/*

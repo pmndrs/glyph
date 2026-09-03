@@ -212,7 +212,8 @@ import { defineThreeConfig } from '@pmndrs/glyph/three';
 const hud = glyph.handle('hud', defineThreeConfig({ capacity: { size: 64, policy: 'fixed' } }));
 const readout = hud.createText({ font: Inter, text: 'x'.repeat(65) });
 readout.commitState(); // { status: 'pending' } for as long as the root is over budget
-hud.setCapacity({ size: 128, policy: 'fixed' }); // or shorten the text; retried on the next traversal
+// Shorten the text, or give it a handle with room; capacity cannot change on a live handle:
+const roomy = glyph.handle('hud-roomy', defineThreeConfig({ capacity: { size: 128, policy: 'fixed' } }));
 ```
 
 {/*
@@ -220,12 +221,15 @@ write
 - Symptom: the text stops updating, `commitState()` reports `pending` forever, `measure()` still answers.
 - Cause: desired UTF-16 length across the root exceeds `size`; a `fixed` root declines the batch and keeps its last
   accepted draw, by design.
-- Fix: shorten, or `setCapacity`; the decision is retried on every traversal, with no latch to clear.
+- Fix: shorten, or move the text to a handle configured with room; the decision is retried on every traversal, with
+  no latch to clear. Capacity cannot change on a live handle (D-325).
 - Shape: one paragraph.
 
 notes · internals
 - `required = Σ text.length`, `prepareShape` returns `false` — `three/text.ts:1260–1270`; `capacityExceeded` (`:1111`)
-- `setCapacity` invalidates only while exceeded — `three/text.ts:1115–1119`; D-282 (no rejection latch), D-136
+- capacity is immutable config: `defineThreeConfig({ capacity })` normalizes it once (`three/handle.ts:180–181`) and
+  every root of the handle receives it (`:236`); `setCapacity` was removed in codex `b4012b703` — D-325; D-282 (no
+  rejection latch), D-136
 */}
 
 ## `caretAt` returns `undefined`

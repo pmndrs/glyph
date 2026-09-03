@@ -86,8 +86,8 @@ import { glyph } from '@pmndrs/glyph';
 import { defineThreeConfig } from '@pmndrs/glyph/three';
 
 const three = glyph.handle('main', defineThreeConfig({ capacity: { size: 8192, policy: 'chunk' }, compositing: 'independent' }));
-three.setCapacity({ size: 16384, policy: 'chunk' });
-three.setCompositing('ordered');
+// Both are immutable adapter policy: every anonymous or named root of `three` shares them,
+// and a workload that needs another policy makes another handle.
 ```
 
 ### Compositing
@@ -127,7 +127,8 @@ notes · internals
 - draw root named `@pmndrs/glyph:<name>` or `@pmndrs/glyph:anonymous` — `three/text.ts:197`
 - config options — `three/handle.ts#ThreeConfigOptions` (`:93–99`), root options — `three/text.ts#ThreeRootOptions` (`:78–82`);
   defaults `transformMode: 'indexed'`, `allocationMode: 'ordered'`, `defaultFontFormat: 'msdf'` — `three/handle.ts:175–177`
-- `setCapacity`, `setCompositing`, `material` per root — `three/text.ts:226–254`
+- `material` is the one mutable thing per root; capacity and compositing are immutable adapter policy shared by every
+  root of the handle — D-325 (codex `b4012b703`), `three/handle.ts:236–237`
 - compositing default `ordered` — `three/text.ts#normalizeThreeRootCompositing` (`:1579–1586`); `independent` lets
   Rust reorder — `:80–81`; D-312
 - capacity policies — `text-properties.ts#GlyphBufferCapacity` (`:7–16`); default `{ size: 4096, policy: 'chunk' }` —

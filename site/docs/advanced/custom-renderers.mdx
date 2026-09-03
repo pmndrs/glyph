@@ -321,7 +321,7 @@ notes · internals
 | `handle(name)` interns one root per name | roots are terminal; there is no nesting; a named root's `handle` is its owner |
 | each root owns one encoder, one codec lease, one plan target with its own projector and renderer | resources resolved for one root are leased to that root |
 | capacity `{ size, policy }` with `grow`, `chunk`, or `fixed` | three defaults to 4096 `chunk`; under `fixed` a frame whose text exceeds `size` is declined at `prepare` |
-| compositing `'ordered'` or `'independent'` | sent with every prepare; `setCompositing` invalidates the root |
+| compositing `'ordered'` or `'independent'` | sent with every prepare; fixed by the handle's config for its life |
 | one `Scene` per three root | a root whose texts span two scenes is an error; pick another root per scene |
 | `breakApart` asks the config for a fresh `renderer` and re-resolves resources | the handle's infrastructure outlives `handle.dispose()` until the copy is disposed |
 
@@ -345,8 +345,8 @@ notes · internals
   root's projector — `internal/create-engine.ts:126–137`
 - capacity — `three/text.ts:192` (`{ size: 4_096, policy: 'chunk' }`), policies — `text-properties.ts:26–27`;
   `fixed` overflow declines at `prepare` — `three/text.ts:1260–1269`
-- compositing — `three/text.ts:81`, `#setCompositing` (`:248–253`), sent as `GlyphShapeOptions.compositing`
-  (`:1269`, `config/glyph.ts:629–632`); D-232
+- compositing — `three/text.ts:81`, from `defineThreeConfig` (`three/handle.ts:182–185`, `:237`), sent as
+  `GlyphShapeOptions.compositing` (`config/glyph.ts:629–632`); D-232, D-325
 - one scene per root — D-307; `three/text.ts#nearestScene` (`:1594`) and the reconciliation at `:544`
 - `breakApart` → `services.copy(text, request, { boundary, renderer })` — `config/glyph.ts:642–646`, `:663–666`;
   `three/text.ts:784`; copy leases keep infrastructure alive — `configured-handle.ts:322–328`, `:332–343`
