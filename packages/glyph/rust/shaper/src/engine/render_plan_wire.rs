@@ -45,15 +45,17 @@ pub(crate) fn encode_plan(
     plan: RenderPlanView<'_>,
     output: &mut [u8],
 ) -> Result<EncodedPlanLayout, u32> {
-    encode_publication(plan, &[], output)
+    let layout = publication_layout(plan, &[])?;
+    encode_publication(plan, &[], layout, output)?;
+    Ok(layout)
 }
 
 pub(crate) fn encode_publication(
     plan: RenderPlanView<'_>,
     semantic_views: &[SemanticRecord],
+    layout: EncodedPlanLayout,
     output: &mut [u8],
-) -> Result<EncodedPlanLayout, u32> {
-    let layout = publication_layout(plan, semantic_views)?;
+) -> Result<(), u32> {
     let byte_length = usize::try_from(layout.byte_length).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
     let bytes = output
         .get_mut(..byte_length)
@@ -113,7 +115,7 @@ pub(crate) fn encode_publication(
         plan.diagnostics,
         write_diagnostic,
     );
-    Ok(layout)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -787,8 +789,8 @@ mod tests {
         };
         let expected = publication_layout(plan, &semantic).unwrap();
         let mut bytes = vec![0x7f; expected.byte_length as usize + 16];
-        let layout = encode_publication(plan, &semantic, &mut bytes).unwrap();
-        assert_eq!(layout, expected);
+        encode_publication(plan, &semantic, expected, &mut bytes).unwrap();
+        let layout = expected;
         assert_eq!(layout.payload_offset % PAYLOAD_ALIGNMENT, 0);
         assert_eq!(
             read_u32(

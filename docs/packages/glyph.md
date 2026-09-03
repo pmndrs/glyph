@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:587bde07b77c80e66e0b7b075a9a0ed722750d0afab056ed222a93ceb66e98f1'
+source_digest: 'sha256:4ab849711af77d7caf9f80afcca669f68ae10c657d17173bdc80e3cb05c9fbf3'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -710,6 +710,11 @@ and public exports. Current raster formats own identity, artifact decoding, reta
 Rust policy programs own instance packing and dirty-range publication. The package gate retains production render-plan,
 font-binding, Three execution, artifact-validation, and Unicode conformance coverage instead of test-only TypeScript
 packers.
+
+Publication layout is computed once at the Wasm boundary, checked against the caller's output limit, and passed unchanged
+to the encoder. The encoder writes that package-owned layout directly; it does not rescan the immutable plan to recreate
+or revalidate the same offsets before publication. Rust transport tests pin every emitted table offset, count, and payload
+range against the compiler-owned plan.
 
 A Mori 0.19.1 production-source scan (review profile, same-language threshold 0.85, minimum 40 tokens) corroborated the
 deleted parallel path and identified exact shared planner machinery. Ordered and stable planning now use one retained

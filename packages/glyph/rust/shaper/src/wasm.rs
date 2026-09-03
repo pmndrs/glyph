@@ -736,8 +736,8 @@ fn update(
             );
         }
     };
-    let required_output = match publication_layout(plan, semantic_views) {
-        Ok(layout) => layout.byte_length,
+    let layout = match publication_layout(plan, semantic_views) {
+        Ok(layout) => layout,
         Err(status) => {
             return publish_prepared_failure(
                 state,
@@ -750,6 +750,7 @@ fn update(
             );
         }
     };
+    let required_output = layout.byte_length;
     if required_output > request.limits.max_output_bytes {
         return publish_prepared_failure(
             state,
@@ -789,11 +790,11 @@ fn update(
             required_output,
         );
     }
-    let staged = match state
-        .frames
-        .get_mut(&root_id)
-        .and_then(|transport| transport.stage_publication(plan, semantic_views).ok())
-    {
+    let staged = match state.frames.get_mut(&root_id).and_then(|transport| {
+        transport
+            .stage_publication(plan, semantic_views, layout)
+            .ok()
+    }) {
         Some(staged) => staged,
         None => {
             return publish_prepared_failure(

@@ -261,16 +261,18 @@ impl FrameTransport {
 
     #[cfg(test)]
     pub fn stage_plan(&mut self, plan: RenderPlanView<'_>) -> Result<StagedPlan, u32> {
-        self.stage_publication(plan, &[])
+        let layout = super::render_plan_wire::publication_layout(plan, &[])?;
+        self.stage_publication(plan, &[], layout)
     }
 
     pub fn stage_publication(
         &mut self,
         plan: RenderPlanView<'_>,
         semantic_views: &[SemanticRecord],
+        layout: EncodedPlanLayout,
     ) -> Result<StagedPlan, u32> {
         let slot = self.inactive_slot();
-        let layout = encode_publication(plan, semantic_views, self.outputs[slot].bytes_mut())?;
+        encode_publication(plan, semantic_views, layout, self.outputs[slot].bytes_mut())?;
         Ok(StagedPlan {
             slot,
             codec_handle: plan.codec_handle,
@@ -289,7 +291,8 @@ impl FrameTransport {
         max_output_bytes: u32,
     ) -> Result<usize, u32> {
         let slot = self.inactive_slot();
-        let layout = encode_publication(plan, &[], self.outputs[slot].bytes_mut())?;
+        let layout = super::render_plan_wire::publication_layout(plan, &[])?;
+        encode_publication(plan, &[], layout, self.outputs[slot].bytes_mut())?;
         if layout.byte_length > max_output_bytes {
             return Err(STATUS_RESULT_TOO_LARGE);
         }
