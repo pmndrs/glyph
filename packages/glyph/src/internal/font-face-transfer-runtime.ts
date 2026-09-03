@@ -14,31 +14,23 @@ export interface SerializedFontFaceLoadOptions {
 
 /** Copy loaded variants into inert cross-realm data only when clone() explicitly asks for it. */
 export function snapshotSerializedFontFace(
-  expectedFont: RegisteredFont,
+  font: RegisteredFont,
   fonts: readonly Font<AnyRasterFormat>[],
 ): SerializedFontFace {
-  const registered = getRegisteredFontData(expectedFont);
+  const registered = getRegisteredFontData(font);
   const rasters: SerializedFontFaceRaster[] = [];
   const seen = new Set<string>();
   const resourceIdentities = new Set<string>();
   for (const font of fonts) {
     const fontResources = immutableFontResources(font);
-    if (fontResources.font !== expectedFont) {
-      throw new TypeError('FontFace snapshot received a font from another source');
-    }
     const rasterKey = fontResources.raster.rasterKey;
     if (seen.has(rasterKey)) continue;
     seen.add(rasterKey);
-    const source = registered.rasterSources.get(rasterKey);
-    if (source === undefined) throw new Error('loaded FontFace raster has no retained source data');
-    if (source.reference.source.type === 'external' && source.artifactBytes === undefined) {
-      throw new Error('loaded external FontFace raster has no retained artifact data');
-    }
+    const source = registered.rasterSources.get(rasterKey)!;
     for (const identity of source.resourceIdentities) resourceIdentities.add(identity);
     const resources = Object.freeze(
       [...source.resourceIdentities].map((identity) => {
-        const resource = registered.resources.get(identity);
-        if (resource === undefined) throw new Error('loaded FontFace raster has no retained resource data');
+        const resource = registered.resources.get(identity)!;
         return Object.freeze({
           artifactHash: resource.artifactHash,
           byteLength: resource.byteLength,
@@ -69,8 +61,7 @@ export function snapshotSerializedFontFace(
     rasters: Object.freeze(rasters),
     resources: Object.freeze(
       [...resourceIdentities].map((identity) => {
-        const resource = registered.resources.get(identity);
-        if (resource === undefined) throw new Error('loaded FontFace raster has no retained resource data');
+        const resource = registered.resources.get(identity)!;
         return Object.freeze({
           artifactHash: resource.artifactHash,
           byteLength: resource.byteLength,
@@ -94,8 +85,6 @@ export async function loadSerializedFontFaceSource(
     signal?.throwIfAborted();
     const registered = getRegisteredFontData(font);
     for (const raster of serialized.rasters) {
-      const source = registered.rasterSources.get(raster.rasterKey);
-      if (source === undefined) throw new Error('serialized FontFace raster is absent from its main font');
       if (raster.data !== undefined) {
         await registry._attachRaster(font, new Uint8Array(raster.data), {}, 'adopt');
       }
