@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:111d2e194358ee27563cb3c22edfb6f3403000effb99e6c980c212f8849d3cb6'
+source_digest: 'sha256:a8c4d893779ac3114350e3dbee5301ff9cf795cbb8731eb5a8976470cf9f7f5e'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -734,6 +734,10 @@ The retained planner likewise mints one nonzero paragraph identity per Text and 
 The public two-Text Three integration captures that actual Wasm request and pins both identity and order. Rust still
 checks the paragraph table's range, alignment, opcode, reserved bytes, and removal shape, but it does not search earlier
 records for duplicate package-owned identities or orders.
+
+That same public request proves one constraint per paragraph and a distinct nonzero flow-thread identity for each. The
+request reader therefore trusts those planner-owned identities instead of rescanning the constraint table; caller-authored
+axis, typography, wrapping, overflow, and work-limit values remain checked where they enter the Rust engine.
 
 A Mori 0.19.1 production-source scan (review profile, same-language threshold 0.85, minimum 40 tokens) corroborated the
 deleted parallel path and identified exact shared planner machinery. Ordered and stable planning now use one retained

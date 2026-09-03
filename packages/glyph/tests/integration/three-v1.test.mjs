@@ -1577,6 +1577,14 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
     [0, 1],
     'the retained planner must publish each paragraph once in scene order',
   );
+  const constraints = instrumented.latestConstraints();
+  assert.deepEqual(
+    constraints.map(({ paragraphId }) => paragraphId),
+    paragraphMutations.map(({ paragraphId }) => paragraphId),
+    'each planner-owned paragraph must produce exactly one matching constraint',
+  );
+  assert.equal(new Set(constraints.map(({ flowThreadId }) => flowThreadId)).size, 2);
+  assert.ok(constraints.every(({ flowThreadId }) => flowThreadId !== 0));
   const draws = rootDraws(scene);
   assert.equal(draws.length, 1, 'compatible paragraphs must batch in Rust before Three sees the plan');
   assert.equal(draws[0].geometry.instanceCount, 4);
@@ -1852,6 +1860,21 @@ function instrumentNextGlyphEngine() {
         return {
           paragraphId: view.getUint32(record + mutation.paragraphId, true),
           order: view.getUint32(record + mutation.order, true),
+        };
+      });
+    },
+    latestConstraints() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const constraint = abi.layouts.engineConstraint;
+      const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+      const offset = view.getUint32(request.constraintsOffset, true);
+      const count = view.getUint32(request.constraintCount, true);
+      return Array.from({ length: count }, (_recordValue, index) => {
+        const record = offset + index * constraint.size;
+        return {
+          paragraphId: view.getUint32(record + constraint.paragraphId, true),
+          flowThreadId: view.getUint32(record + constraint.flowThreadId, true),
         };
       });
     },
