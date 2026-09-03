@@ -28,6 +28,7 @@ export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.j
 export { Text, TextGroup, ThreeRoot } from './three/text.js';
 export {
   ThreeConfig,
+  ThreeFontFormats,
   defineThreeConfig,
   type ThreeBatchBinding,
   type ThreeBindings,

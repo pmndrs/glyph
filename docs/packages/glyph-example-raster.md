@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:8dda8e58b9d4167596a96f6f381ca4b8970569a70255c32351fc3b8d9cd60c78'
+source_digest: 'sha256:55933e36f7a0172d9210faf9817dbba8e52b9249f5c66d13de17d22521872ea6'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -58,8 +58,8 @@ Status: ✅ Milestone 10.4 external extension proof
 
 This private workspace package is a consumer proof, not a fourth recommended production raster. It imports only published
 `@pmndrs/glyph` entry points and optional shader-language subpaths. It owns the literal `glyphExample` kind, companion
-extension and descriptor, deterministic baker, standalone-valid GLB framing, embedded or authenticated external RGBA glyph
-records, decoder validation, runtime baker, declarative Rust packing expressions, matching TypeGPU and TSL shader realizations,
+extension and descriptor, deterministic baker, standalone-valid GLB framing, embedded or external RGBA glyph records,
+runtime baker, declarative Rust packing expressions, matching TypeGPU and TSL shader realizations,
 paragraph/local-run render-order
 inheritance, abort behavior, and disposal. Rust owns retained instance storage, dirty-range publication, and overflow handling.
 A source boundary test rejects imports from core internals or the Three first-party raster and baker subpaths.
@@ -93,9 +93,10 @@ three-component position and two-component UV vertex attributes, typed accessors
 geometry without importing Three or learning technique-private implementation details. The plan's primitive record span,
 not the geometry payload, supplies the draw's instance count.
 
-The hardware-browser target uses the public source-font fallback, package runtime baker, the target-v1 `FontLoader`, public
-`Text` and `TextGroup`, warm matrix-lifecycle publication, TSL compilation, draw, asynchronous render-target readback, and
-complete disposal. WebGPU and forced WebGL2 each produced two deterministic samples with visible glyph frames, one draw,
+The hardware-browser target uses a public `FontFace`, package runtime baker, and a spread-wrapped `ThreeConfig` whose font
+format map includes `glyphExample`. It then exercises public `Text` and `TextGroup`, warm matrix-lifecycle publication, TSL
+compilation, draw, asynchronous render-target readback, and complete disposal. WebGPU and forced WebGL2 each produced two
+deterministic samples with visible glyph frames, one draw,
 retained mesh and geometry identity, individual `Text.visible` behavior inside an indexed shared draw, caller-owned
 Group ordering, and the same RGBA SHA-256
 `0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`.
@@ -123,6 +124,7 @@ target checks both contracts separately.
 
 The remaining friction is documented rather than hidden. Static discovery maps an imported factory export name to
 `package.json#pmndrs.glyph[exportName]` and requires the default baker's kind to equal that export name. A standalone companion
-also needs ordinary valid glTF content in addition to its extension data because external/runtime attachment runs the pinned
-Khronos validator. This package owns a one-point witness mesh and its GLB encoder without a private import. A future generic
+also needs ordinary valid glTF content in addition to its extension data so it remains a portable GLB artifact. Runtime loading
+trusts the bake-time schema contract and reports parse or attachment failures where they occur instead of bundling the Khronos
+validator. This package owns a one-point witness mesh and its GLB encoder without a private import. A future generic
 companion-artifact helper could remove that boilerplate, but its absence does not force a fork or block the extension contract.
