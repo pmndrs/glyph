@@ -52,6 +52,9 @@ import { createDecorations, decorationDraws, type Decorations } from './decorati
 /** Package-private construction capability used by the Three handle and R3F adapter. */
 export const threeTextConstructionToken: unique symbol = Symbol('pmndrs.glyph.three.construct');
 
+/** Package-private typed capability carried through the callable handle/root proxies. */
+const threeRootHostReference: unique symbol = Symbol('pmndrs.glyph.three.root-host');
+
 /** One inline Three text run with optional font fallback and material override. */
 export type TextSpan<Technique extends AnyRasterFormat> = Omit<ParagraphSpan<Technique>, 'font'> &
   Readonly<{ font?: FontSelection<Technique>; material?: ThreeTextMaterial }>;
@@ -148,7 +151,10 @@ class ThreeRootDrawObject extends THREE.Object3D {
 
 /** Public terminal root selected from a Three handle. */
 export interface ThreeRoot extends GlyphRoot {
+  readonly [threeRootHostReference]: ThreeRootHost;
   readonly handle: import('./handle.js').ThreeHandle;
+  readonly scene: THREE.Scene | undefined;
+  readonly drawRoot: THREE.Object3D;
   readonly textCount: number;
   readonly gpuBytes: number;
   material: ThreeTextMaterial | undefined;
@@ -160,13 +166,9 @@ export interface ThreeRoot extends GlyphRoot {
   createTextGroup(options?: TextGroupOptions): TextGroup;
 }
 
-const threeRootHosts = new WeakMap<ThreeRoot, ThreeRootHost>();
-
 /** @internal Resolve the package-owned host behind a public root or its lifecycle proxy. */
 export function threeRootHost(root: ThreeRoot): ThreeRootHost {
-  const host = threeRootHosts.get(root);
-  if (host === undefined) throw new TypeError('root is not configured for Three');
-  return host;
+  return root[threeRootHostReference];
 }
 
 /** @internal Package-owned implementation behind one public Three root. */
@@ -193,6 +195,10 @@ export class ThreeRootHost implements ThreeRoot {
   get handle(): import('./handle.js').ThreeHandle {
     if (this.#publicRoot === undefined) throw new Error('Three root public identity has not been bound');
     return this.#publicRoot.handle;
+  }
+
+  get [threeRootHostReference](): ThreeRootHost {
+    return this;
   }
 
   /** Ordinary applications obtain roots by calling a Three handle. */
@@ -224,7 +230,6 @@ export class ThreeRootHost implements ThreeRoot {
       root: this,
       visibleObject: (object) => this.visible(object),
     });
-    threeRootHosts.set(this, this);
   }
 
   get disposed(): boolean {
@@ -343,7 +348,11 @@ export class ThreeRootHost implements ThreeRoot {
     const implementation = this;
     return Object.freeze({
       drawRoot: this.#drawRoot,
-      root: implementation,
+      get root(): ThreeRootContext {
+        const selected = implementation.#publicRoot;
+        if (selected === undefined) throw new Error('Three root public identity has not been bound');
+        return selected.name === undefined ? selected.handle : selected;
+      },
       material,
     });
   }
@@ -354,7 +363,6 @@ export class ThreeRootHost implements ThreeRoot {
       throw new Error('Three root public identity was already bound');
     }
     this.#publicRoot = root;
-    threeRootHosts.set(root, this);
   }
 
   /** @internal Register one retained leaf with this publication root. */

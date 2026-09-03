@@ -301,7 +301,7 @@ class CommandBindingEngine<Bindings extends AnyGlyphBindings, Root> implements G
       const frame = Object.freeze({
         delivery: 'borrowed-command-buffer' as const,
         engineRevision: source.engineRevision,
-        planRevision: source.planRevision,
+        revision: source.revision,
         publicationGeneration: source.publicationGeneration,
         checkpoint: source.checkpoint,
         updates: Object.freeze({

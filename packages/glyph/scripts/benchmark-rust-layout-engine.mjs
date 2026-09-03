@@ -22,7 +22,7 @@ import { copyIntoAllocation, engineFrameUpdateBytes } from '../tests/support/eng
 import { techniqueProof } from './support/render-technique-proof.mjs';
 
 const options = parseArguments(process.argv.slice(2));
-const plannerId = 1;
+const rootId = 1;
 const codecHandle = 1;
 const fontHandle = 1;
 const fontStackHandle = 1;
@@ -122,20 +122,20 @@ function measureCold() {
   const plans = [];
   let glyphs = 0;
   for (let index = 0; index < options.warmup + options.repetitions; index += 1) {
-    createPlanner(initial.byteLength);
+    createRoot(initial.byteLength);
     const result = execute(initial, true);
     glyphs = result.glyphCount;
     if (index >= options.warmup) {
       samples.push(result.durationMs);
       plans.push(result);
     }
-    requireStatus(fn.disposePlanner(plannerId), 'dispose cold planner');
+    requireStatus(fn.disposeRoot(rootId), 'dispose cold planner');
   }
   return summarize('cold', glyphs, samples, plans);
 }
 
 function measureWarm(name) {
-  createPlanner(initial.byteLength);
+  createRoot(initial.byteLength);
   let state = execute(initial, true);
   const liveGlyphCount = state.glyphCount;
   const localizedText = [...utf16];
@@ -148,7 +148,7 @@ function measureWarm(name) {
     const revision = index + 2;
     const common = {
       expectedEngineRevision: state.engineRevision,
-      consumedPlanRevision: state.planRevision,
+      consumedRevision: state.revision,
       acknowledgedPublicationGeneration: state.publicationGeneration,
     };
     let bytes;
@@ -224,14 +224,14 @@ function measureWarm(name) {
       plans.push(state);
     }
   }
-  requireStatus(fn.disposePlanner(plannerId), `dispose ${name} planner`);
+  requireStatus(fn.disposeRoot(rootId), `dispose ${name} planner`);
   return summarize(name, liveGlyphCount, samples, plans);
 }
 
-function createPlanner(requestCapacity) {
+function createRoot(requestCapacity) {
   const beforeBytes = memory.buffer.byteLength;
   requireStatus(
-    fn.createPlanner(plannerId, requestCapacity, outputCapacity, utf16.length + 1),
+    fn.createRoot(rootId, requestCapacity, outputCapacity, utf16.length + 1),
     'create benchmark planner',
   );
   if (plannerMemory === undefined) {
@@ -240,8 +240,8 @@ function createPlanner(requestCapacity) {
 }
 
 function execute(bytes, allowGrowth = false, operation = 'text_update', measureParagraphId) {
-  const requestPointer = fn.requestPointer(plannerId);
-  if (requestPointer === 0 || fn.requestCapacity(plannerId) < bytes.byteLength) {
+  const requestPointer = fn.requestPointer(rootId);
+  if (requestPointer === 0 || fn.requestCapacity(rootId) < bytes.byteLength) {
     throw new Error('benchmark request exceeds its pre-reserved arena');
   }
   const buffer = memory.buffer;
@@ -250,8 +250,8 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
   new Uint8Array(buffer, requestPointer, bytes.byteLength).set(bytes);
   const resultPointer =
     measureParagraphId === undefined
-      ? fn.textUpdate(plannerId, requestPointer, bytes.byteLength)
-      : fn.measureParagraph(plannerId, requestPointer, bytes.byteLength, measureParagraphId);
+      ? fn.textUpdate(rootId, requestPointer, bytes.byteLength)
+      : fn.measureParagraph(rootId, requestPointer, bytes.byteLength, measureParagraphId);
   const durationMs = performance.now() - started;
   if (memory.buffer !== buffer && !allowGrowth) {
     throw new Error(`measured text_update grew Wasm memory from ${bufferBytes} to ${memory.buffer.byteLength} bytes`);
@@ -292,7 +292,7 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
   return {
     durationMs,
     engineRevision: result.getUint32(layout.engineRevision, true),
-    planRevision: result.getUint32(layout.planRevision, true),
+    revision: result.getUint32(layout.revision, true),
     publicationGeneration: result.getUint32(layout.publicationGeneration, true),
     primitiveCount,
     glyphCount,
@@ -303,7 +303,7 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
 
 function updateBytes(fields) {
   return engineFrameUpdateBytes(abi, {
-    plannerId,
+    rootId,
     codecHandle,
     fontStackHandle,
     limits,

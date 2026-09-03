@@ -12,14 +12,14 @@ use crate::{
         ENGINE_UPDATE_CAPABILITY_SET, ENGINE_UPDATE_CODEC_HANDLE,
         ENGINE_UPDATE_CODEC_PARAMETERS_LENGTH, ENGINE_UPDATE_CODEC_PARAMETERS_OFFSET,
         ENGINE_UPDATE_CONSTRAINT_COUNT, ENGINE_UPDATE_CONSTRAINTS_OFFSET,
-        ENGINE_UPDATE_CONSUMED_PLAN_REVISION, ENGINE_UPDATE_EXCLUSION_COUNT,
+        ENGINE_UPDATE_CONSUMED_REVISION, ENGINE_UPDATE_EXCLUSION_COUNT,
         ENGINE_UPDATE_EXCLUSIONS_OFFSET, ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
         ENGINE_UPDATE_FLAGS, ENGINE_UPDATE_INLINE_OBJECT_COUNT,
         ENGINE_UPDATE_INLINE_OBJECTS_OFFSET, ENGINE_UPDATE_MAX_CLUSTERS,
         ENGINE_UPDATE_MAX_EXCLUSIONS, ENGINE_UPDATE_MAX_INLINE_OBJECTS, ENGINE_UPDATE_MAX_LINES,
         ENGINE_UPDATE_MAX_OUTPUT_BYTES, ENGINE_UPDATE_MAX_PARAGRAPHS, ENGINE_UPDATE_MAX_REGIONS,
         ENGINE_UPDATE_MAX_SLOTS_PER_BAND, ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT,
-        ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET, ENGINE_UPDATE_PLANNER_ID,
+        ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET, ENGINE_UPDATE_ROOT_ID,
         ENGINE_UPDATE_REGION_COUNT, ENGINE_UPDATE_REGIONS_OFFSET,
         ENGINE_UPDATE_REQUEST_HEADER_SIZE, ENGINE_UPDATE_SEMANTIC_VIEW_MASK,
         ENGINE_UPDATE_STYLE_MUTATION_COUNT, ENGINE_UPDATE_STYLE_MUTATIONS_OFFSET,
@@ -36,11 +36,11 @@ const MAX_DECLARED_OUTPUT_BYTES: u32 = 64 * 1024 * 1024;
 
 pub(crate) fn parse_update_request(
     bytes: &[u8],
-    planner_id: u32,
+    root_id: u32,
 ) -> Result<UpdateRequest<'_>, u32> {
     if bytes.len() < ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
         || read_u32(bytes, ENGINE_UPDATE_ABI_VERSION)? != ABI_VERSION
-        || read_u32(bytes, ENGINE_UPDATE_PLANNER_ID)? != planner_id
+        || read_u32(bytes, ENGINE_UPDATE_ROOT_ID)? != root_id
         || read_u32(bytes, ENGINE_UPDATE_BYTE_LENGTH)?
             != u32::try_from(bytes.len()).map_err(|_| STATUS_INVALID_REQUEST)?
     {
@@ -137,9 +137,9 @@ pub(crate) fn parse_update_request(
         return Err(STATUS_INVALID_REQUEST);
     }
     Ok(UpdateRequest {
-        planner_id,
+        root_id,
         expected_engine_revision: read_u32(bytes, ENGINE_UPDATE_EXPECTED_ENGINE_REVISION)?,
-        consumed_plan_revision: read_u32(bytes, ENGINE_UPDATE_CONSUMED_PLAN_REVISION)?,
+        consumed_revision: read_u32(bytes, ENGINE_UPDATE_CONSUMED_REVISION)?,
         acknowledged_publication_generation: read_u32(
             bytes,
             ENGINE_UPDATE_ACKNOWLEDGED_PUBLICATION_GENERATION,
@@ -175,7 +175,7 @@ mod tests {
     fn accepts_only_the_canonical_empty_stage_one_transaction() {
         let bytes = request();
         let parsed = parse_update_request(&bytes, 4).unwrap();
-        assert_eq!(parsed.planner_id, 4);
+        assert_eq!(parsed.root_id, 4);
         assert_eq!(parsed.codec_handle, 9);
 
         let mut independent = bytes.clone();
@@ -242,7 +242,7 @@ mod tests {
             ENGINE_UPDATE_BYTE_LENGTH,
             ENGINE_UPDATE_REQUEST_HEADER_SIZE,
         );
-        write_u32(&mut bytes, ENGINE_UPDATE_PLANNER_ID, 4);
+        write_u32(&mut bytes, ENGINE_UPDATE_ROOT_ID, 4);
         write_u32(&mut bytes, ENGINE_UPDATE_CODEC_HANDLE, 9);
         write_u32(&mut bytes, ENGINE_UPDATE_CAPABILITY_SET, 1);
         for offset in [

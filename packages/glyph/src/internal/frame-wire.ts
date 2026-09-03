@@ -191,12 +191,12 @@ export interface PlannerInlineObject {
 }
 
 export interface PlannerFrameUpdate {
-  readonly plannerId: PlannerHandle;
+  readonly rootId: PlannerHandle;
   readonly codecHandle: CodecHandle;
   /** Opaque multi-profile selection; omit it to use the codec's first profile. */
   readonly capabilitySet?: CodecCapabilitySetSelection;
   readonly expectedEngineRevision: number;
-  readonly consumedPlanRevision: number;
+  readonly consumedRevision: number;
   readonly acknowledgedPublicationGeneration: number;
   readonly semanticViewMask?: number;
   readonly compositingIndependent?: boolean;
@@ -679,9 +679,9 @@ function writeHeader(view: DataView, frame: PlannerFrameUpdate, byteLength: numb
   for (const [field, value] of [
     ['abiVersion', textShaperAbi.version],
     ['byteLength', byteLength],
-    ['plannerId', frame.plannerId],
+    ['rootId', frame.rootId],
     ['expectedEngineRevision', frame.expectedEngineRevision],
-    ['consumedPlanRevision', frame.consumedPlanRevision],
+    ['consumedRevision', frame.consumedRevision],
     ['acknowledgedPublicationGeneration', frame.acknowledgedPublicationGeneration],
     ['codecHandle', frame.codecHandle],
     [

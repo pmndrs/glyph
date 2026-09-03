@@ -339,7 +339,7 @@ export function acquireLoadedFontFaceSelection<const Selection extends AnyFontFa
   return cloneImmutableFont(requiredFontFaceFormat(selection, raster)) as Font<FontFaceRasterOf<Selection>>;
 }
 
-/** @internal Canonical identity shared by React declarations and the loader's raster request policy. */
+/** @internal Canonical identity shared by React declarations and the loader's raster request cache. */
 export function fontFaceResourceKey(source: FontFaceSource, format: FontFaceConfig['format']): string {
   return `${fontFaceSourceKey(source)}:${fontFaceFormatIdentity(format)}`;
 }

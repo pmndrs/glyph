@@ -373,7 +373,8 @@ export interface DisplayListChanges<Bindings extends AnyGlyphBindings> {
 export interface CommandBufferView<Bindings extends AnyGlyphBindings> {
   readonly delivery: 'borrowed-command-buffer';
   readonly engineRevision: number;
-  readonly planRevision: number;
+  /** Monotonic revision of this root's Codec-produced command state. */
+  readonly revision: number;
   readonly publicationGeneration: number;
   readonly checkpoint: boolean;
   readonly updates: DisplayListChanges<Bindings>;

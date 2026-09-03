@@ -60,7 +60,7 @@ export async function decodeMsdfData(font: RasterDecodeFont, raster: RasterDecod
       ...(coverage === undefined ? {} : { coverage: coverage.descriptor }),
     }))
   ) {
-    throw new TypeError('MSDF raster key does not match its generation policy');
+    throw new TypeError('MSDF raster key does not match its generation descriptor');
   }
   const records = raster.view(nonnegativeSafeInteger(extension.recordBufferView, 'MSDF recordBufferView'));
   if (records.byteLength !== font.glyphCount * RECORD_STRIDE) {

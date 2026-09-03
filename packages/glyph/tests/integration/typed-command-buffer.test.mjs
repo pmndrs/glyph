@@ -107,7 +107,7 @@ function candidate(plan, transformBinding = plan.transformBinding, instanceIds) 
     origin: Object.freeze({}),
     plan,
     engineRevision: 1,
-    planRevision: 1,
+    revision: 1,
     publicationGeneration: 1,
     checkpoint: true,
     transforms: Object.freeze([{ transformIndex: 19, binding: transformBinding, instanceIds }]),

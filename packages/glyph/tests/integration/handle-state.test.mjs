@@ -24,10 +24,10 @@ test('a glyph engine owns every configured-handle state it creates', async () =>
   const codecHandle = handleState.id('codec', 'test.glyphEngine-owner/codec');
   handleState.registerCodec(codecHandle, renderCodecBytes(textShaperAbi));
   const request = engineUpdateBytes(textShaperAbi, {
-    plannerId: plannerHandle,
+    rootId: plannerHandle,
     codecHandle,
     expectedEngineRevision: 0,
-    consumedPlanRevision: 0,
+    consumedRevision: 0,
   });
   const transport = handleState._createPlanTransport({
     handle: plannerHandle,

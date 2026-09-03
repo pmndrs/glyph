@@ -480,7 +480,7 @@ class GlyphEngineImpl implements GlyphEngine {
     for (let index = 0; index < count; index += 1) {
       const planner = staged[index]!;
       const offset = index * layout.size;
-      view.setUint32(offset + layout.plannerId, planner.plannerId, true);
+      view.setUint32(offset + layout.rootId, planner.rootId, true);
       view.setUint32(offset + layout.requestLength, planner.requestLength, true);
       view.setUint32(offset + layout.resultPointer, 0, true);
       view.setUint32(offset + layout.status, 0, true);

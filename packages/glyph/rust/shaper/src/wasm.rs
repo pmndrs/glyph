@@ -3,15 +3,15 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     STATUS_CODEC_CONFLICT, STATUS_CODEC_MISSING, STATUS_FONT_IN_USE, STATUS_FONT_STACK_MISSING,
-    STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_OK, STATUS_PLANNER_CONFLICT,
-    STATUS_PLANNER_MISSING, STATUS_REGISTRATION_IN_USE, STATUS_RESULT_TOO_LARGE,
+    STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_OK, STATUS_ROOT_CONFLICT,
+    STATUS_ROOT_MISSING, STATUS_REGISTRATION_IN_USE, STATUS_RESULT_TOO_LARGE,
     STATUS_REVISION_CONFLICT, ShaperRegistry,
     engine::{
         EngineError, FrameFault, TextEngine,
         codec::CapabilitySetId,
         codec_wire::parse_codec,
         font_binding_wire::parse_font_binding,
-        frame::PlannerRevision,
+        frame::RootRevision,
         frame_wire::parse_update_request,
         render_plan_compiler::RenderPlanCompilerError,
         render_plan_wire::{publication_layout, query_layout},
@@ -256,7 +256,7 @@ pub extern "C" fn pmndrs_glyph_engine_codec_count() -> u32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_engine_create_planner(
+pub extern "C" fn pmndrs_glyph_engine_create_root(
     handle: u32,
     request_capacity: u32,
     result_capacity: u32,
@@ -267,22 +267,22 @@ pub extern "C" fn pmndrs_glyph_engine_create_planner(
             return STATUS_INVALID_HANDLE;
         }
         if state.frames.contains_key(&handle) {
-            return STATUS_PLANNER_CONFLICT;
+            return STATUS_ROOT_CONFLICT;
         }
         let transport = match FrameTransport::new(request_capacity, result_capacity) {
             Ok(transport) => transport,
             Err(status) => return status,
         };
-        if let Err(error) = state.engine.create_planner(handle) {
+        if let Err(error) = state.engine.create_root(handle) {
             return engine_status(error);
         }
         let text_capacity = if text_capacity == 0 {
-            crate::engine::frame::DEFAULT_PLANNER_TEXT_CAPACITY
+            crate::engine::frame::DEFAULT_ROOT_TEXT_CAPACITY
         } else {
             text_capacity
         };
-        if let Err(error) = state.engine.reserve_planner_text(handle, text_capacity) {
-            let _ = state.engine.dispose_planner(handle);
+        if let Err(error) = state.engine.reserve_root_text(handle, text_capacity) {
+            let _ = state.engine.dispose_root(handle);
             return engine_status(error);
         }
         state.frames.insert(handle, transport);
@@ -291,7 +291,7 @@ pub extern "C" fn pmndrs_glyph_engine_create_planner(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_engine_reserve_planner(
+pub extern "C" fn pmndrs_glyph_engine_reserve_root(
     handle: u32,
     request_capacity: u32,
     result_capacity: u32,
@@ -299,13 +299,13 @@ pub extern "C" fn pmndrs_glyph_engine_reserve_planner(
 ) -> u32 {
     with_state(|state| {
         let Some(transport) = state.frames.get_mut(&handle) else {
-            return STATUS_PLANNER_MISSING;
+            return STATUS_ROOT_MISSING;
         };
         if let Err(status) = transport.reserve(request_capacity, result_capacity) {
             return status;
         }
         if text_capacity != 0
-            && let Err(error) = state.engine.reserve_planner_text(handle, text_capacity)
+            && let Err(error) = state.engine.reserve_root_text(handle, text_capacity)
         {
             return engine_status(error);
         }
@@ -314,12 +314,12 @@ pub extern "C" fn pmndrs_glyph_engine_reserve_planner(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_engine_dispose_planner(handle: u32) -> u32 {
+pub extern "C" fn pmndrs_glyph_engine_dispose_root(handle: u32) -> u32 {
     with_state(|state| {
         if !state.frames.contains_key(&handle) {
-            return STATUS_PLANNER_MISSING;
+            return STATUS_ROOT_MISSING;
         }
-        if let Err(error) = state.engine.dispose_planner(handle) {
+        if let Err(error) = state.engine.dispose_root(handle) {
             return engine_status(error);
         }
         state.frames.remove(&handle);
@@ -328,8 +328,8 @@ pub extern "C" fn pmndrs_glyph_engine_dispose_planner(handle: u32) -> u32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_engine_planner_count() -> u32 {
-    with_state(|state| state.engine.planner_count())
+pub extern "C" fn pmndrs_glyph_engine_root_count() -> u32 {
+    with_state(|state| state.engine.root_count())
 }
 
 #[unsafe(no_mangle)]
@@ -610,14 +610,14 @@ pub unsafe extern "C" fn pmndrs_glyph_kernel_lab_codec(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_engine_update(
-    planner_id: u32,
+    root_id: u32,
     request_offset: u32,
     request_len: u32,
 ) -> u32 {
     with_state(|state| {
         update(
             state,
-            planner_id,
+            root_id,
             Some(request_offset as usize),
             request_len,
             false,
@@ -634,14 +634,14 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update_batch(entries_pointer: u32, 
         let status = batch.process(
             entries_pointer as usize,
             count,
-            |planner_id, request_length| {
-                let result_pointer = update(state, planner_id, None, request_length, true);
+            |root_id, request_length| {
+                let result_pointer = update(state, root_id, None, request_length, true);
                 let status = if result_pointer == 0 {
-                    STATUS_PLANNER_MISSING
+                    STATUS_ROOT_MISSING
                 } else {
                     state
                         .frames
-                        .get(&planner_id)
+                        .get(&root_id)
                         .and_then(|transport| transport.result_status(result_pointer as usize))
                         .unwrap_or(STATUS_INVALID_REQUEST)
                 };
@@ -658,17 +658,17 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update_batch(entries_pointer: u32, 
 
 fn update(
     state: &mut WasmState,
-    planner_id: u32,
+    root_id: u32,
     request_pointer: Option<usize>,
     request_len: u32,
     grow_output: bool,
 ) -> u32 {
-    let revision = match state.engine.planner_revision(planner_id) {
+    let revision = match state.engine.root_revision(root_id) {
         Ok(revision) => revision,
         Err(_) => return 0,
     };
     let request = {
-        let Some(transport) = state.frames.get(&planner_id) else {
+        let Some(transport) = state.frames.get(&root_id) else {
             return 0;
         };
         let request_bytes = match request_pointer {
@@ -678,24 +678,24 @@ fn update(
         let bytes = match request_bytes {
             Ok(bytes) => bytes,
             Err(status) => {
-                return publish_failure(state, planner_id, revision, status, request_len, 0);
+                return publish_failure(state, root_id, revision, status, request_len, 0);
             }
         };
-        match parse_update_request(bytes, planner_id) {
+        match parse_update_request(bytes, root_id) {
             Ok(request) => request,
             Err(status) => {
-                return publish_failure(state, planner_id, revision, status, 0, 0);
+                return publish_failure(state, root_id, revision, status, 0, 0);
             }
         }
     };
     let publication_generation = match state
         .frames
-        .get(&planner_id)
+        .get(&root_id)
         .and_then(|transport| transport.next_publication_generation().ok())
     {
         Some(generation) => generation,
         None => {
-            return publish_failure(state, planner_id, revision, STATUS_RESULT_TOO_LARGE, 0, 0);
+            return publish_failure(state, root_id, revision, STATUS_RESULT_TOO_LARGE, 0, 0);
         }
     };
     let prepared = match state.engine.prepare_update_with_shaper(
@@ -705,7 +705,7 @@ fn update(
     ) {
         Ok(prepared) => prepared,
         Err(error) => {
-            return publish_engine_failure(state, planner_id, revision, error);
+            return publish_engine_failure(state, root_id, revision, error);
         }
     };
     let plan = match state.engine.prepared_plan(prepared) {
@@ -761,21 +761,21 @@ fn update(
             required_output,
         );
     }
-    if !state.frames.contains_key(&planner_id) {
+    if !state.frames.contains_key(&root_id) {
         let _ = state.engine.abort_update(prepared);
         return 0;
     }
     let capacity = if grow_output {
         state
             .frames
-            .get_mut(&planner_id)
-            .ok_or(STATUS_PLANNER_MISSING)
+            .get_mut(&root_id)
+            .ok_or(STATUS_ROOT_MISSING)
             .and_then(|transport| transport.reserve_publish_capacity(required_output))
     } else {
         state
             .frames
-            .get(&planner_id)
-            .ok_or(STATUS_PLANNER_MISSING)
+            .get(&root_id)
+            .ok_or(STATUS_ROOT_MISSING)
             .and_then(|transport| transport.ensure_publish_capacity(required_output))
     };
     if let Err(status) = capacity {
@@ -791,7 +791,7 @@ fn update(
     }
     let staged = match state
         .frames
-        .get_mut(&planner_id)
+        .get_mut(&root_id)
         .and_then(|transport| transport.stage_publication(plan, semantic_views).ok())
     {
         Some(staged) => staged,
@@ -821,7 +821,7 @@ fn update(
             );
         }
     };
-    let Some(transport) = state.frames.get_mut(&planner_id) else {
+    let Some(transport) = state.frames.get_mut(&root_id) else {
         return 0;
     };
     debug_assert_eq!(
@@ -832,10 +832,10 @@ fn update(
 }
 
 /// Publishes a complete checkpoint containing only the requested committed glyph records.
-/// The planner and renderer fence are not mutated.
+/// The root and renderer fence are not mutated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
-    planner_id: u32,
+    root_id: u32,
     paragraph_id: u32,
     codec_handle: u32,
     capability_set: u32,
@@ -844,32 +844,32 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
     stable_ids_count: u32,
 ) -> u32 {
     with_state(|state| {
-        let revision = match state.engine.planner_revision(planner_id) {
+        let revision = match state.engine.root_revision(root_id) {
             Ok(revision) => revision,
             Err(_) => return 0,
         };
         let byte_length = match stable_ids_count.checked_mul(4) {
             Some(length) => length,
             None => {
-                return publish_failure(state, planner_id, revision, STATUS_INVALID_REQUEST, 0, 0);
+                return publish_failure(state, root_id, revision, STATUS_INVALID_REQUEST, 0, 0);
             }
         };
         let Some(bytes) = owned_bytes(&state.allocations, stable_ids_pointer, byte_length) else {
-            return publish_failure(state, planner_id, revision, STATUS_INVALID_REQUEST, 0, 0);
+            return publish_failure(state, root_id, revision, STATUS_INVALID_REQUEST, 0, 0);
         };
         let stable_ids: Vec<u32> = bytes
             .chunks_exact(4)
             .map(|bytes| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
             .collect();
         let plan = match state.engine.copy_glyphs(
-            planner_id,
+            root_id,
             paragraph_id,
             codec_handle,
             capability_set,
             &stable_ids,
         ) {
             Ok(plan) => plan,
-            Err(error) => return publish_engine_failure(state, planner_id, revision, error),
+            Err(error) => return publish_engine_failure(state, root_id, revision, error),
         };
         let view = match plan.plan_view(
             codec_handle,
@@ -884,18 +884,18 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
             Err(error) => {
                 return publish_engine_failure(
                     state,
-                    planner_id,
+                    root_id,
                     revision,
                     detached_plan_error(error),
                 );
             }
         };
-        let Some(transport) = state.frames.get_mut(&planner_id) else {
+        let Some(transport) = state.frames.get_mut(&root_id) else {
             return 0;
         };
-        match transport.stage_detached_plan(planner_id, revision, view, max_output_bytes) {
+        match transport.stage_detached_plan(root_id, revision, view, max_output_bytes) {
             Ok(pointer) => u32::try_from(pointer).unwrap_or(0),
-            Err(status) => publish_failure(state, planner_id, revision, status, 0, 0),
+            Err(status) => publish_failure(state, root_id, revision, status, 0, 0),
         }
     })
 }
@@ -903,25 +903,25 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
 /// Publishes a complete checkpoint containing one paragraph's committed decorations.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_engine_copy_decorations(
-    planner_id: u32,
+    root_id: u32,
     codec_handle: u32,
     capability_set: u32,
     paragraph_id: u32,
     max_output_bytes: u32,
 ) -> u32 {
     with_state(|state| {
-        let revision = match state.engine.planner_revision(planner_id) {
+        let revision = match state.engine.root_revision(root_id) {
             Ok(revision) => revision,
             Err(_) => return 0,
         };
         let plan = match state.engine.copy_decorations(
-            planner_id,
+            root_id,
             codec_handle,
             capability_set,
             paragraph_id,
         ) {
             Ok(plan) => plan,
-            Err(error) => return publish_engine_failure(state, planner_id, revision, error),
+            Err(error) => return publish_engine_failure(state, root_id, revision, error),
         };
         let view = match plan.plan_view(
             codec_handle,
@@ -936,48 +936,48 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_decorations(
             Err(error) => {
                 return publish_engine_failure(
                     state,
-                    planner_id,
+                    root_id,
                     revision,
                     detached_plan_error(error),
                 );
             }
         };
-        let Some(transport) = state.frames.get_mut(&planner_id) else {
+        let Some(transport) = state.frames.get_mut(&root_id) else {
             return 0;
         };
-        match transport.stage_detached_plan(planner_id, revision, view, max_output_bytes) {
+        match transport.stage_detached_plan(root_id, revision, view, max_output_bytes) {
             Ok(pointer) => u32::try_from(pointer).unwrap_or(0),
-            Err(status) => publish_failure(state, planner_id, revision, status, 0, 0),
+            Err(status) => publish_failure(state, root_id, revision, status, 0, 0),
         }
     })
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
-    planner_id: u32,
+    root_id: u32,
     request_offset: u32,
     request_len: u32,
     paragraph_id: u32,
 ) -> u32 {
     with_state(|state| {
-        let revision = match state.engine.planner_revision(planner_id) {
+        let revision = match state.engine.root_revision(root_id) {
             Ok(revision) => revision,
             Err(_) => return 0,
         };
         let request = {
-            let Some(transport) = state.frames.get(&planner_id) else {
+            let Some(transport) = state.frames.get(&root_id) else {
                 return 0;
             };
             let bytes = match transport.request_at(request_offset as usize, request_len) {
                 Ok(bytes) => bytes,
                 Err(status) => {
-                    return publish_failure(state, planner_id, revision, status, request_len, 0);
+                    return publish_failure(state, root_id, revision, status, request_len, 0);
                 }
             };
-            match parse_update_request(bytes, planner_id) {
+            match parse_update_request(bytes, root_id) {
                 Ok(request) => request,
                 Err(status) => {
-                    return publish_failure(state, planner_id, revision, status, 0, 0);
+                    return publish_failure(state, root_id, revision, status, 0, 0);
                 }
             }
         };
@@ -988,7 +988,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
         ) {
             Ok(measured) => measured,
             Err(error) => {
-                return publish_engine_failure(state, planner_id, revision, error);
+                return publish_engine_failure(state, root_id, revision, error);
             }
         };
         let staged = match state.engine.measured_semantic_views(measured) {
@@ -1000,11 +1000,11 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
                 )),
                 Ok(layout) => state
                     .frames
-                    .get_mut(&planner_id)
-                    .ok_or(STATUS_PLANNER_MISSING)
+                    .get_mut(&root_id)
+                    .ok_or(STATUS_ROOT_MISSING)
                     .and_then(|transport| {
                         transport.ensure_publish_capacity(layout.byte_length)?;
-                        transport.stage_query(planner_id, revision, semantic_views)
+                        transport.stage_query(root_id, revision, semantic_views)
                     })
                     .map_err(|status| (status, FrameFault::default(), layout.byte_length)),
                 Err(status) => Err((status, FrameFault::default(), 0)),
@@ -1020,7 +1020,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
                 let _ = state.engine.abort_measure(measured);
                 publish_attributed_failure(
                     state,
-                    planner_id,
+                    root_id,
                     revision,
                     status,
                     fault,
@@ -1125,8 +1125,8 @@ fn engine_status(error: EngineError) -> u32 {
         EngineError::FontStackMissing | EngineError::StyleFontStackMissing(_) => {
             STATUS_FONT_STACK_MISSING
         }
-        EngineError::PlannerConflict => STATUS_PLANNER_CONFLICT,
-        EngineError::PlannerMissing => STATUS_PLANNER_MISSING,
+        EngineError::RootConflict => STATUS_ROOT_CONFLICT,
+        EngineError::RootMissing => STATUS_ROOT_MISSING,
         EngineError::RevisionConflict => STATUS_REVISION_CONFLICT,
         EngineError::RevisionExhausted => STATUS_RESULT_TOO_LARGE,
         EngineError::InvalidRequest => STATUS_INVALID_REQUEST,
@@ -1143,17 +1143,17 @@ fn engine_status(error: EngineError) -> u32 {
 fn publish_prepared_failure(
     state: &mut WasmState,
     prepared: crate::engine::frame::PreparedUpdate,
-    revision: PlannerRevision,
+    revision: RootRevision,
     status: u32,
     fault: FrameFault,
     required_request_capacity: u32,
     required_result_capacity: u32,
 ) -> u32 {
-    let planner_id = prepared.planner_id();
+    let root_id = prepared.root_id();
     let _ = state.engine.abort_update(prepared);
     publish_attributed_failure(
         state,
-        planner_id,
+        root_id,
         revision,
         status,
         fault,
@@ -1164,15 +1164,15 @@ fn publish_prepared_failure(
 
 fn publish_failure(
     state: &mut WasmState,
-    planner_id: u32,
-    revision: PlannerRevision,
+    root_id: u32,
+    revision: RootRevision,
     status: u32,
     required_request_capacity: u32,
     required_result_capacity: u32,
 ) -> u32 {
     publish_attributed_failure(
         state,
-        planner_id,
+        root_id,
         revision,
         status,
         FrameFault::default(),
@@ -1185,13 +1185,13 @@ fn publish_failure(
 /// cause out of the header instead of inferring it from a bare status number.
 fn publish_engine_failure(
     state: &mut WasmState,
-    planner_id: u32,
-    revision: PlannerRevision,
+    root_id: u32,
+    revision: RootRevision,
     error: EngineError,
 ) -> u32 {
     publish_attributed_failure(
         state,
-        planner_id,
+        root_id,
         revision,
         engine_status(error),
         error.fault(),
@@ -1210,8 +1210,8 @@ fn detached_plan_error(error: RenderPlanCompilerError) -> EngineError {
 
 fn publish_attributed_failure(
     state: &mut WasmState,
-    planner_id: u32,
-    revision: PlannerRevision,
+    root_id: u32,
+    revision: RootRevision,
     status: u32,
     fault: FrameFault,
     required_request_capacity: u32,
@@ -1219,10 +1219,10 @@ fn publish_attributed_failure(
 ) -> u32 {
     state
         .frames
-        .get_mut(&planner_id)
+        .get_mut(&root_id)
         .and_then(|transport| {
             u32::try_from(transport.publish_failure(
-                planner_id,
+                root_id,
                 revision,
                 status,
                 fault,

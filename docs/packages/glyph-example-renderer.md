@@ -5,7 +5,7 @@ description: Proves the root GlyphConfig integration surface through a real Type
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:bbd9bbc5c6c500dfbff10ae528231540dbd05b70f5eda47529d7033629cddbf0'
+source_digest: 'sha256:e67cc737d27a308802078e2afce4c07d69f87c53ec6b9b100b612494c7c8d9ee'
 tags: [package, glyph-config, codec, integration-proof, typegpu]
 sources:
   - id: manifest
