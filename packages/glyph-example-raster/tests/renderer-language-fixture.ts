@@ -5,7 +5,7 @@ import { glyphExampleTypeGpuVariant } from '@pmndrs/glyph-example-raster/typegpu
 function representativeVariant<const Language extends string>(language: Language): GlyphExampleShaderVariant<Language> {
   return Object.freeze({
     language,
-    techniqueId: glyphExampleShaderContract.techniqueId,
+    formatId: glyphExampleShaderContract.formatId,
     geometry: glyphExampleShaderContract.geometry,
     buffers: glyphExampleShaderContract.buffers,
     resources: glyphExampleShaderContract.resources,

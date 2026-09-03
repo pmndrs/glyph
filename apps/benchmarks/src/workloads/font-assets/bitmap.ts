@@ -1,4 +1,4 @@
-import { bitmap as bitmapTechnique } from '@pmndrs/glyph/raster/bitmap';
+import { bitmap as bitmapFormat } from '@pmndrs/glyph/raster/bitmap';
 
 import amiriBitmapFontUrl from '../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
 import amiriBitmapDensityFontUrl from '../../../fixtures/rendering/amiri-bitmap-16-32.font.glb?url';
@@ -73,7 +73,7 @@ export async function preloadBitmapFontAssets(
     fixtures.map((fixture) =>
       preloadBakedFont({
         artifact: urls[fixture],
-        raster: bitmapTechnique({ strikes }),
+        raster: bitmapFormat({ strikes }),
         ...(signal === undefined ? {} : { signal }),
       }),
     ),
@@ -90,7 +90,7 @@ export async function loadBitmapFontAsset(
   if (delivery === 'runtime') {
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: bitmapTechnique({ strikes }),
+      raster: bitmapFormat({ strikes }),
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
       ...(signal === undefined ? {} : { signal }),
     });
@@ -109,7 +109,7 @@ export async function loadBitmapFontAsset(
   if (artifactBytes === undefined) throw new RangeError(`Unknown bitmap font fixture: ${fixture}`);
   const loaded = await loadBakedFont({
     artifact: urls[fixture],
-    raster: bitmapTechnique({ strikes }),
+    raster: bitmapFormat({ strikes }),
     ...(signal === undefined ? {} : { signal }),
   });
   return {

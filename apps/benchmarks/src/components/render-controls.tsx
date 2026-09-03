@@ -15,7 +15,7 @@ import {
   type BenchmarkFontFixture,
   type SelectableFontFixture,
 } from '../benchmark/font-fixtures';
-import type { FontDelivery, GraphicsBackend, HarnessMode, RasterTechnique } from '../benchmark/url-state';
+import type { FontDelivery, GraphicsBackend, HarnessMode, RasterFormatName } from '../benchmark/url-state';
 import packageSizes from '../generated/package-sizes.json';
 import type { BitmapTextLiveStats } from '../techniques/bitmap/persistent-scene';
 import type { MtsdfTextLiveStats } from '../techniques/mtsdf/persistent-scene';
@@ -35,7 +35,7 @@ export interface ConformanceView {
   readonly panYPercent: number;
 }
 
-function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' {
+function formatLabel(technique: RasterFormatName): 'Bitmap' | 'MSDF' | 'Slug' {
   return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap';
 }
 
@@ -70,7 +70,7 @@ function workloadHasLayoutWidth(workload: string): boolean {
   }
 }
 
-function liveWorkloadControlDescription(workload: string, technique: RasterTechnique): string {
+function liveWorkloadControlDescription(workload: string, technique: RasterFormatName): string {
   switch (workload) {
     case 'advanced-shaping':
       return technique === 'bitmap'
@@ -83,7 +83,7 @@ function liveWorkloadControlDescription(workload: string, technique: RasterTechn
     case 'zoom-text':
       return 'Centered translations of “Shape” cycle while scaling from 8 pt to the largest size the viewport fits.';
     case 'icon-grid':
-      return 'Scale and pan a labeled Font Awesome icon grid rendered through the selected technique.';
+      return 'Scale and pan a labeled Font Awesome icon grid rendered through the selected raster format.';
     case 'off-axis-3d':
       return 'Increase perspective to inspect text at steeper viewing angles.';
     case 'dynamic-layout':
@@ -143,7 +143,7 @@ export interface ControlsProps {
   readonly selectedFontFixture: SelectableFontFixture;
   readonly workloadAmount: number;
   readonly mode: HarnessMode;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly workload: string;
   readonly samples: number;
   readonly showcaseFrame: AdvancedShapingFrame;
@@ -476,7 +476,7 @@ function LiveWorkloadControls({
   readonly paintShadowEnabled: boolean;
   readonly paintStrokePercent: number;
   readonly showLayoutBounds: boolean;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly workload: string;
   readonly workloadAmount: number;
   readonly onAnimationEnabled: (value: boolean) => void;
@@ -683,7 +683,7 @@ function PayloadInspector({
   readonly delivery: FontDelivery;
   readonly fontFixture: BenchmarkFontFixture;
   readonly liveStats: LiveTextStats | undefined;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly workload: string;
 }) {
   const runtime = measuredPackageSizeIfAvailable(`${technique}-runtime-js`);
@@ -834,7 +834,7 @@ function PayloadInspector({
           value={formatBytes(libraryTransferBytes)}
         >
           <PayloadRow
-            label={`${techniqueLabel(technique)} runtime`}
+            label={`${formatLabel(technique)} runtime`}
             status={runtime === undefined ? 'unloaded' : 'loaded'}
             value={formatBytes(runtime?.gzipBytes)}
           />
@@ -871,12 +871,12 @@ function PayloadInspector({
             value={formatBytes(coreBakerWasm.gzipBytes)}
           />
           <PayloadRow
-            label={`${techniqueLabel(technique)} baker host`}
+            label={`${formatLabel(technique)} baker host`}
             status={delivery === 'runtime' && bakerHost !== undefined ? 'loaded' : 'unloaded'}
             value={formatBytes(bakerHost?.gzipBytes)}
           />
           <PayloadRow
-            label={`${techniqueLabel(technique)} baker Wasm`}
+            label={`${formatLabel(technique)} baker Wasm`}
             status={delivery === 'runtime' && bakerWasm !== undefined ? 'loaded' : 'unloaded'}
             value={formatBytes(bakerWasm?.gzipBytes)}
           />

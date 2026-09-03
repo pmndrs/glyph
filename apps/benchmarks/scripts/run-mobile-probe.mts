@@ -61,10 +61,10 @@ try {
     throw new Error(`Mobile live surface mounted ${String(liveCanvasCount)} canvases instead of one`);
   }
   await page.screenshot({ path: '/tmp/pmndrs-glyph-benchmarks-mobile-scene.png' });
-  step = 'phone technique switcher';
-  const phoneTechniqueSwitcher = page.locator('[data-testid="technique-switcher"]:visible');
-  await phoneTechniqueSwitcher.waitFor();
-  await phoneTechniqueSwitcher.getByRole('button', { name: 'MSDF', exact: true }).click();
+  step = 'phone raster-format switcher';
+  const phoneRasterFormatSwitcher = page.locator('[data-testid="raster-format-switcher"]:visible');
+  await phoneRasterFormatSwitcher.waitFor();
+  await phoneRasterFormatSwitcher.getByRole('button', { name: 'MSDF', exact: true }).click();
   await page.locator('[data-testid="mtsdf-live-viewport"]:visible').waitFor();
   await assertResponsiveSurface(page, '390 px MSDF scene');
   step = 'phone workload menu';

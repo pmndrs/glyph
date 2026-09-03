@@ -4,14 +4,14 @@ import { isBenchmarkWorkloadId, type BenchmarkWorkloadId } from '../workloads/ca
 
 export type HarnessMode = 'benchmark' | 'conformance';
 export type HarnessLayout = 'main' | 'presentation';
-export type RasterTechnique = 'bitmap' | 'mtsdf' | 'slug';
+export type RasterFormatName = 'bitmap' | 'mtsdf' | 'slug';
 export type GraphicsBackend = 'webgpu' | 'webgl2';
 export type FontDelivery = 'baked' | 'runtime';
 
 export interface HarnessLocation {
   readonly mode: HarnessMode;
   readonly layout: HarnessLayout;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly backend: GraphicsBackend;
   readonly delivery: FontDelivery;
   readonly dpr: 1 | 2;

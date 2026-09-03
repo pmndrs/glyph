@@ -1,7 +1,7 @@
 import type { BenchmarkControls, BenchmarkExecutionContext, BenchmarkInput, TargetRunOutput } from '../../../contracts';
 
 export type RasterConformanceBackend = 'webgpu' | 'webgl2';
-export type RasterConformanceTechnique = 'mtsdf' | 'slug';
+export type RasterConformanceFormatName = 'mtsdf' | 'slug';
 
 /** The subset of a source-outline capture the conformance target publishes. */
 export interface RasterSourceOutlineCapture {
@@ -16,7 +16,7 @@ export interface RasterSourceOutlineCapture {
 }
 
 /**
- * Technique-private resources stay in the selected target module. The target owns
+ * Raster-format-private resources stay in the selected target module. The target owns
  * this session's warm load, capture, and disposal lifecycle without owning a renderer.
  */
 export interface RasterConformanceSession {
@@ -36,6 +36,6 @@ export interface RasterConformanceSession {
 }
 
 export interface RasterConformanceAdapter {
-  readonly technique: RasterConformanceTechnique;
+  readonly format: RasterConformanceFormatName;
   createSession(backend: RasterConformanceBackend): Promise<RasterConformanceSession>;
 }

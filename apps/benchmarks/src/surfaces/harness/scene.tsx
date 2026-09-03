@@ -11,7 +11,7 @@ import {
   useRuntimeViewControls,
   type RuntimeLiveStats,
 } from '../../benchmark/runtime-world';
-import type { HarnessLocation, RasterTechnique } from '../../benchmark/url-state';
+import type { HarnessLocation, RasterFormatName } from '../../benchmark/url-state';
 import { workloadById, type ConformanceWorkloadId, type WorkloadOption } from '../../benchmark/workloads';
 import type { PresentationPreset } from '../../benchmark/presentation-sequence';
 import type { ConformanceView } from '../../components/render-controls';
@@ -19,7 +19,7 @@ import { Chip } from '../../components/ui';
 import type { AdvancedShapingFrame } from '../../workloads/advanced-shaping/scene';
 import type { BenchmarkWorkloadId } from '../../workloads/catalog';
 import { BenchmarkSurface } from '../benchmark/benchmark-surface';
-import { techniqueLabel } from '../benchmark/labels';
+import { formatLabel } from '../benchmark/labels';
 import { ConformanceSurface } from '../conformance/conformance-surface';
 
 type ActivityWorkloads = {
@@ -31,14 +31,14 @@ function formatMs(value: number | undefined): string {
   return value === undefined ? '—' : `${value.toFixed(2)} ms`;
 }
 
-export function SceneSuspenseFallback({ technique }: { readonly technique: RasterTechnique }) {
+export function SceneSuspenseFallback({ technique }: { readonly technique: RasterFormatName }) {
   return (
     <div
       className="relative grid h-full min-h-0 place-items-center overflow-hidden bg-background"
       data-testid="scene-loading"
     >
       <div className="rounded-md border border-border bg-black/80 px-4 py-3 font-mono text-[10px] text-muted">
-        Loading {techniqueLabel(technique)} scene…
+        Loading {formatLabel(technique)} scene…
       </div>
     </div>
   );
@@ -90,9 +90,9 @@ export function Scene({
   const { stats: liveStats } = useRuntimeTelemetry();
   const workload = workloadById(location.mode, location.workload);
   const benchmarkWorkload = workloadById('benchmark', activityWorkloads.benchmark);
-  const benchmarkStatus = benchmarkWorkload.techniques[location.technique];
+  const benchmarkStatus = benchmarkWorkload.formats[location.technique];
   const conformanceWorkload = workloadById('conformance', activityWorkloads.conformance);
-  const conformanceStatus = conformanceWorkload.techniques[location.technique];
+  const conformanceStatus = conformanceWorkload.formats[location.technique];
   const benchmarkSurface =
     benchmarkStatus.kind === 'planned' ? (
       <PlannedWorkloadSurface
@@ -154,7 +154,7 @@ export function Scene({
           <p className="mt-1 max-w-3xl text-xs text-muted">{workload.description}</p>
         </div>
         <div className="flex flex-wrap gap-1.5 sm:justify-end sm:gap-2">
-          <Chip tone="accent">{techniqueLabel(location.technique)}</Chip>
+          <Chip tone="accent">{formatLabel(location.technique)}</Chip>
           <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL'}</Chip>
           <Chip>{location.delivery === 'runtime' ? 'Runtime bake' : 'Baked asset'}</Chip>
           <Chip>{dpr}× DPR</Chip>
@@ -210,7 +210,7 @@ export function PlannedWorkloadSurface({
   workload,
 }: {
   readonly milestone: 8 | 9;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly workload: WorkloadOption;
 }) {
   return (
@@ -218,7 +218,7 @@ export function PlannedWorkloadSurface({
       <div className="max-w-md">
         <p className="eyebrow">Milestone {milestone}</p>
         <h2 className="mt-2 text-lg font-semibold">
-          {techniqueLabel(technique)} · {workload.label}
+          {formatLabel(technique)} · {workload.label}
         </h2>
         <p className="mt-2 text-xs leading-relaxed text-muted">{workload.description}</p>
       </div>

@@ -22,7 +22,7 @@ function formatMs(value: number | undefined): string {
   return value === undefined ? '—' : `${value.toFixed(2)} ms`;
 }
 
-function techniqueLabel(technique: ConformanceSurfaceProps['technique']): 'Bitmap' | 'MSDF' | 'Slug' {
+function formatLabel(technique: ConformanceSurfaceProps['technique']): 'Bitmap' | 'MSDF' | 'Slug' {
   return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap';
 }
 
@@ -186,7 +186,7 @@ export function FiniteConformanceSurface({
               (isSourceOutline
                 ? 'Run conformance to validate the selected renderer against the pinned source font in browser Canvas2D.'
                 : technique !== 'bitmap'
-                  ? `Run conformance to validate ${techniqueLabel(technique)} GPU sampling against the independent CPU sampling reference.`
+                  ? `Run conformance to validate ${formatLabel(technique)} GPU sampling against the independent CPU sampling reference.`
                   : 'Run conformance to test full-frame and clipped output.')}
           </span>
         </div>
@@ -265,7 +265,7 @@ function FiniteConformancePanels({
           bytes={sourceOutlineCapture?.candidate}
           conformanceView={conformanceView}
           height={sourceOutlineCapture?.height}
-          label={`${techniqueLabel(technique)} candidate · ${sourceOutlineCapture?.physicalPpem ?? '—'} device px`}
+          label={`${formatLabel(technique)} candidate · ${sourceOutlineCapture?.physicalPpem ?? '—'} device px`}
           width={sourceOutlineCapture?.width}
           onPan={onPan}
           onZoom={onZoom}
@@ -299,7 +299,7 @@ function FiniteConformancePanels({
           bytes={analyticCapture?.candidate}
           conformanceView={conformanceView}
           height={analyticCapture?.height}
-          label={`${techniqueLabel(technique)} candidate`}
+          label={`${formatLabel(technique)} candidate`}
           width={analyticCapture?.width}
           onPan={onPan}
           onZoom={onZoom}

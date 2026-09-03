@@ -28,9 +28,9 @@ function createSession(overrides: Partial<RasterConformanceSession> = {}): Raste
 
 function createAdapter(
   create: RasterConformanceAdapter['createSession'],
-  technique: RasterConformanceAdapter['technique'] = 'mtsdf',
+  format: RasterConformanceAdapter['format'] = 'mtsdf',
 ): RasterConformanceAdapter {
-  return { technique, createSession: create };
+  return { format, createSession: create };
 }
 
 describe('raster conformance target session', () => {

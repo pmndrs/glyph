@@ -2,7 +2,7 @@ import { use, useEffect, useRef } from 'react';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import type { RuntimeLiveStats } from '../../benchmark/runtime-world';
-import type { FontDelivery, GraphicsBackend, RasterTechnique } from '../../benchmark/url-state';
+import type { FontDelivery, GraphicsBackend, RasterFormatName } from '../../benchmark/url-state';
 import type { PresentationPreset } from '../../benchmark/presentation-sequence';
 import { comparisonWorkloadId, type BenchmarkWorkloadId } from '../../workloads/catalog';
 import type { AdvancedShapingFrame } from '../../workloads/advanced-shaping/scene';
@@ -36,7 +36,7 @@ export interface BenchmarkSurfaceProps {
   readonly workloadAmount: number;
   readonly showcaseFrame: AdvancedShapingFrame;
   readonly stats: RuntimeLiveStats | undefined;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly workload: BenchmarkWorkloadId;
   readonly onStats: (stats: RuntimeLiveStats) => void;
 }

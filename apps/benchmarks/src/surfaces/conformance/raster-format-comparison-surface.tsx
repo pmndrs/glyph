@@ -2,11 +2,11 @@ import { useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { Metric } from '../../components/ui';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
-import type { RasterTechniqueComparisonPersistentScene } from './scenes/raster-technique-comparison';
+import type { RasterFormatComparisonPersistentScene } from './scenes/raster-format-comparison';
 import type { ConformanceSurfaceProps } from './types';
 
-function loadRasterTechniqueComparison() {
-  return import('./scenes/raster-technique-comparison');
+function loadRasterFormatComparison() {
+  return import('./scenes/raster-format-comparison');
 }
 
 async function reportInitializationFailure(
@@ -22,7 +22,7 @@ async function reportInitializationFailure(
   }
 }
 
-export function RasterTechniqueComparisonSurface({
+export function RasterFormatComparisonSurface({
   backend,
   comparisonText,
   conformanceView,
@@ -36,7 +36,7 @@ export function RasterTechniqueComparisonSurface({
   const { activateSurface } = usePersistentRenderHost();
   const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
-  const comparisonRef = useRef<RasterTechniqueComparisonPersistentScene>(undefined);
+  const comparisonRef = useRef<RasterFormatComparisonPersistentScene>(undefined);
   const [ready, setReady] = useState(false);
   const [committedText, setCommittedText] = useState('');
   const [error, setError] = useState<string>();
@@ -57,7 +57,7 @@ export function RasterTechniqueComparisonSurface({
     const container = containerRef.current;
     if (container === null) return;
     const controller = new AbortController();
-    let comparison: RasterTechniqueComparisonPersistentScene | undefined;
+    let comparison: RasterFormatComparisonPersistentScene | undefined;
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
     const releaseComparison = async (): Promise<void> => {
@@ -69,10 +69,10 @@ export function RasterTechniqueComparisonSurface({
     };
     const initialization = (async () => {
       if (cancelled) return;
-      const { createRasterTechniqueComparisonPersistentScene } = await loadRasterTechniqueComparison();
+      const { createRasterFormatComparisonPersistentScene } = await loadRasterFormatComparison();
       if (cancelled) return;
       const optionsText = initialText();
-      const created = createRasterTechniqueComparisonPersistentScene({
+      const created = createRasterFormatComparisonPersistentScene({
         backend,
         fontFixture,
         onError: publishError,
@@ -146,7 +146,7 @@ export function RasterTechniqueComparisonSurface({
       className="grid min-h-0 grid-rows-[auto_minmax(420px,1fr)_auto] gap-3"
       data-comparison-text={committedText}
       data-conformance-ready={String(ready)}
-      data-testid="raster-technique-comparison"
+      data-testid="raster-format-comparison"
     >
       <div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-surface">
         <Metric label="Pipeline" value="GPU only" />

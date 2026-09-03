@@ -1,7 +1,7 @@
 import type { BenchmarkSummary, RunnerEvent } from '../../benchmark/contracts';
 import type { SelectableFontFixture } from '../../benchmark/font-fixtures';
 import type { ConformanceWorkloadId } from '../../benchmark/workloads';
-import type { GraphicsBackend, RasterTechnique } from '../../benchmark/url-state';
+import type { GraphicsBackend, RasterFormatName } from '../../benchmark/url-state';
 import type { ConformanceView } from '../../components/render-controls';
 
 export interface ConformanceSurfaceProps {
@@ -12,7 +12,7 @@ export interface ConformanceSurfaceProps {
   readonly event: RunnerEvent | undefined;
   readonly fontFixture: SelectableFontFixture;
   readonly summary: BenchmarkSummary | undefined;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly workload: ConformanceWorkloadId;
   readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
   readonly onZoom: (zoom: number) => void;

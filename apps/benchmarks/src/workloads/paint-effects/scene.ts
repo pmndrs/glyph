@@ -1,4 +1,4 @@
-import type { RasterTechnique } from '../../benchmark/url-state';
+import type { RasterFormatName } from '../../benchmark/url-state';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import { formatStyledRanges } from '../shared/formatted-ranges';
@@ -56,7 +56,7 @@ export function createPaintEffectsEntries(
     readonly paintOpacity: number;
     readonly paintShadowEnabled: boolean;
     readonly paintStrokeWidth: number;
-    readonly technique: RasterTechnique;
+    readonly technique: RasterFormatName;
     readonly viewportWidth: number;
   },
 ): readonly ComparisonWorkloadEntry[] {
@@ -163,7 +163,7 @@ export function animatePaintEffectsEntries(
 
 export function applyPaintEffectsRetainedConfiguration(
   entries: readonly ComparisonWorkloadEntry[],
-  technique: RasterTechnique,
+  technique: RasterFormatName,
   configuration: Pick<
     ComparisonWorkloadConfiguration,
     'amount' | 'fontSize' | 'paintOpacity' | 'paintShadowEnabled' | 'paintStrokeWidth'

@@ -2,7 +2,7 @@ import {
   fontSizeControl,
   layoutWidthControl,
   noControls,
-  readyTechniques,
+  readyFormats,
   textVolumeAmountControl,
   workloadDefaults,
   type BenchmarkWorkloadDefinition,
@@ -24,5 +24,5 @@ export const paragraphStressDefinition = {
   label: 'Paragraph stress',
   preload: 'comparison-module',
   surface: 'comparison',
-  techniques: readyTechniques,
+  formats: readyFormats,
 } as const satisfies BenchmarkWorkloadDefinition<'paragraph-stress'>;

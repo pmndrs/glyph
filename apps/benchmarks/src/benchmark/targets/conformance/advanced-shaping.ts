@@ -17,12 +17,12 @@ import type { BenchmarkTarget } from '../../contracts';
 import { hashParagraphLayout, paragraphLayoutBytes } from '../../paragraph-layout-digest';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
-type BitmapTechnique = typeof bitmap;
+type BitmapFormat = typeof bitmap;
 
 const VIEWPORT_WIDTH = 800;
 const FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
-const bitmapRaster: RasterFormatInput<BitmapTechnique> = bitmap({ strikes: [16] });
+const bitmapRaster: RasterFormatInput<BitmapFormat> = bitmap({ strikes: [16] });
 const fontUrlByFixture: Readonly<Record<AdvancedShapingFontFixture, string>> = {
   inter: interBitmapFontUrl,
   amiri: amiriBitmapFontUrl,
@@ -34,7 +34,7 @@ type AdvancedShapingConformanceState =
   | { readonly kind: 'empty' }
   | {
       readonly kind: 'ready';
-      readonly fonts: ReadonlyMap<AdvancedShapingFontFixture, Font<BitmapTechnique>>;
+      readonly fonts: ReadonlyMap<AdvancedShapingFontFixture, Font<BitmapFormat>>;
     };
 
 export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
@@ -48,7 +48,7 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
     status: () => 'ready',
     load: async (_controls, context) => {
       if (state.kind === 'ready') return;
-      const fonts = new Map<AdvancedShapingFontFixture, Font<BitmapTechnique>>();
+      const fonts = new Map<AdvancedShapingFontFixture, Font<BitmapFormat>>();
       try {
         const fixtures = [...new Set(ADVANCED_SHAPING_CASES.map((definition) => definition.fontFixture))];
         const results = await Promise.allSettled(
@@ -95,7 +95,7 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
           const font = state.fonts.get(definition.fontFixture);
           if (font === undefined) throw new Error(`Missing ${definition.fontFixture} fixture`);
           const caseFrames = frames.filter((frame) => frame.caseDefinition.id === definition.id);
-          let text: Text<BitmapTechnique> | undefined;
+          let text: Text<BitmapFormat> | undefined;
           try {
             for (const frame of caseFrames) {
               const style: TextStyle = {

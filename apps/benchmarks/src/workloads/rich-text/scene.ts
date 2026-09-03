@@ -1,6 +1,6 @@
 import { span, txt, type Font, type RasterFormatMetadata, type TextLiteral } from '@pmndrs/glyph';
 
-import type { RasterTechnique } from '../../benchmark/url-state';
+import type { RasterFormatName } from '../../benchmark/url-state';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR_CSS, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
@@ -253,7 +253,7 @@ export function richTextCompanionFonts(companions: readonly WorkloadFont[]): Ric
  * the same technique gate the paint-effects lane already encodes.
  */
 function richTextParagraphPaint(
-  technique: RasterTechnique,
+  technique: RasterFormatName,
   fontSize: number,
   paintOpacity: number,
   paintShadowEnabled: boolean,
@@ -281,7 +281,7 @@ export function createRichTextEntries(
     readonly paintOpacity: number;
     readonly paintShadowEnabled: boolean;
     readonly paintStrokeWidth: number;
-    readonly technique: RasterTechnique;
+    readonly technique: RasterFormatName;
     readonly viewportWidth: number;
   },
 ): readonly ComparisonWorkloadEntry[] {
@@ -375,7 +375,7 @@ export function applyRichTextRetainedConfiguration(
     ComparisonWorkloadConfiguration,
     'fontSize' | 'paintOpacity' | 'paintShadowEnabled' | 'paintStrokeWidth'
   >,
-  technique: RasterTechnique,
+  technique: RasterFormatName,
 ): void {
   const paint = richTextParagraphPaint(
     technique,

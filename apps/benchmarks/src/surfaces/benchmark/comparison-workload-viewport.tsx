@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useRef, useState, type RefObject } from 'rea
 
 import { liveWorkloadFontFixtures, type BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import type { RuntimeLiveStats } from '../../benchmark/runtime-world';
-import type { FontDelivery, GraphicsBackend, RasterTechnique } from '../../benchmark/url-state';
+import type { FontDelivery, GraphicsBackend, RasterFormatName } from '../../benchmark/url-state';
 import type { PresentationPreset } from '../../benchmark/presentation-sequence';
 import { BENCHMARK_CONTENT_INSET, BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH } from '../../workloads/shared/text-style';
 
@@ -15,7 +15,7 @@ import type {
 } from './scenes/comparison-workload';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
 import { BakeProgressOverlay, useBakeProgress } from './bake-progress-overlay';
-import { techniqueLabel, workloadAmountLabel } from './labels';
+import { formatLabel, workloadAmountLabel } from './labels';
 import { preloadComparisonWorkload } from './scene-preload';
 
 export interface ComparisonWorkloadViewportProps {
@@ -38,7 +38,7 @@ export interface ComparisonWorkloadViewportProps {
   readonly suppressLoading: boolean;
   readonly stats: ComparisonWorkloadStats | undefined;
   readonly surfaceAnchorRef: RefObject<HTMLDivElement | null>;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly workload: ComparisonWorkloadId;
   readonly onStats: (stats: RuntimeLiveStats) => void;
 }
@@ -52,7 +52,7 @@ function comparisonViewportEvidence({
 }: {
   readonly layoutWidthRatio: number;
   readonly stats: ComparisonWorkloadStats | undefined;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly workload: ComparisonWorkloadId;
   readonly workloadFonts: ReturnType<typeof liveWorkloadFontFixtures>;
 }): Record<`data-${string}`, string | number | boolean | undefined> {
@@ -214,7 +214,7 @@ export function ComparisonWorkloadViewport({
     finish: finishBakeProgress,
     publish: publishBakeProgress,
     value: bakeProgressValue,
-  } = useBakeProgress(techniqueLabel(technique));
+  } = useBakeProgress(formatLabel(technique));
   const publishStats = useEffectEvent((next: ComparisonWorkloadStats) => {
     finishBakeProgress();
     onStats(next);
@@ -276,7 +276,7 @@ export function ComparisonWorkloadViewport({
         {
           anchor: surfaceAnchor,
           controller: previewRef,
-          label: `Live ${techniqueLabel(technique)} benchmark using ${backend}`,
+          label: `Live ${formatLabel(technique)} benchmark using ${backend}`,
           pan: interaction.pan,
           scene: created,
           zoom: interaction.zoom,
@@ -309,7 +309,7 @@ export function ComparisonWorkloadViewport({
     const interaction = benchmarkWorkloadDefinition(workload).interaction;
     configurePersistentSurface({
       controller: previewRef,
-      label: `Live ${techniqueLabel(technique)} benchmark using ${backend}`,
+      label: `Live ${formatLabel(technique)} benchmark using ${backend}`,
       pan: interaction.pan,
       zoom: interaction.zoom,
     });

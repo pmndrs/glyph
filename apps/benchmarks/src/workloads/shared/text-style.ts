@@ -1,4 +1,4 @@
-/** Technique-invariant visual inputs shared by benchmark workload examples and renderer adapters. */
+/** Raster-format-invariant visual inputs shared by benchmark workload examples and renderer adapters. */
 export const LIVE_TEXT_COLOR = 0xffffff;
 /**
  * The same colour target-v1 `paint` accepts. Numeric and CSS hex resolve through one transfer function, so a scene

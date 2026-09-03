@@ -3,10 +3,10 @@ import type {
   ICON_GRID_FONT_FIXTURE,
   SelectableFontFixture,
 } from '../../benchmark/font-fixtures';
-import type { HarnessLayout, RasterTechnique } from '../../benchmark/url-state';
+import type { HarnessLayout, RasterFormatName } from '../../benchmark/url-state';
 
 export type LiveWorkloadSurfaceKind = 'advanced-shaping' | 'comparison' | 'single-paragraph';
-export type LiveWorkloadPreloadKind = 'comparison-module' | 'technique-module';
+export type LiveWorkloadPreloadKind = 'comparison-module' | 'format-module';
 
 export interface WorkloadRange {
   readonly label: string;
@@ -18,8 +18,8 @@ export interface WorkloadRange {
 
 export interface WorkloadPaintControls {
   readonly opacity: WorkloadRange;
-  readonly shadowTechniques: readonly RasterTechnique[];
-  readonly strokeTechniques: readonly RasterTechnique[];
+  readonly shadowFormats: readonly RasterFormatName[];
+  readonly strokeFormats: readonly RasterFormatName[];
 }
 
 export interface WorkloadControls {
@@ -91,10 +91,10 @@ export interface BenchmarkWorkloadDefinition<Id extends string = string> {
   readonly label: string;
   readonly preload: LiveWorkloadPreloadKind;
   readonly surface: LiveWorkloadSurfaceKind;
-  readonly techniques: Readonly<Record<RasterTechnique, { readonly kind: 'ready' }>>;
+  readonly formats: Readonly<Record<RasterFormatName, { readonly kind: 'ready' }>>;
 }
 
-export const readyTechniques = {
+export const readyFormats = {
   bitmap: { kind: 'ready' },
   mtsdf: { kind: 'ready' },
   slug: { kind: 'ready' },
@@ -189,8 +189,8 @@ export const paintControls = {
     scale: 'linear',
     step: 1,
   },
-  shadowTechniques: ['mtsdf'],
-  strokeTechniques: ['mtsdf'],
+  shadowFormats: ['mtsdf'],
+  strokeFormats: ['mtsdf'],
 } as const satisfies WorkloadPaintControls;
 
 export const noControls = {

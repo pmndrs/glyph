@@ -5,7 +5,7 @@ import { selectBitmapStrikePpem } from '@pmndrs/glyph/raster/bitmap';
 
 import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../../../benchmark/font-fixtures';
 import type { RuntimeLiveStats } from '../../../benchmark/runtime-world';
-import type { FontDelivery, RasterTechnique } from '../../../benchmark/url-state';
+import type { FontDelivery, RasterFormatName } from '../../../benchmark/url-state';
 import { benchmarkWorkloadDefinition } from '../../../workloads/catalog';
 import { workloadCompanionFontFixtures } from '../../../workloads/shared/definition';
 import {
@@ -180,7 +180,7 @@ export interface ComparisonWorkloadPersistentSceneOptions {
   readonly showLayoutBounds: boolean;
   readonly textLadderExitEnabled: boolean;
   readonly slugBakedArtifact?: BakedSlugArtifactSource;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly textLadderSpecimen?: RasterConformanceSpecimen;
   readonly workload: ComparisonWorkloadId;
   readonly onError: (error: unknown) => void;
@@ -225,7 +225,7 @@ interface MutableLoadedFontMetrics {
   sourceFontBytes: number;
 }
 
-interface LoadedTechniqueFont {
+interface LoadedFormatFont {
   readonly artifactBytes: number;
   readonly atlasGpuBytes: number;
   readonly atlasPages: readonly BitmapAtlasPageStats[];
@@ -343,14 +343,14 @@ async function createComparisonWorkloadRuntime(
   };
   const canvasSurface = createCanvasSurface(renderer, width, height, configuration.showGrid);
   const rendererInitMs = persistentContext.rendererInitMs;
-  let font: LoadedTechniqueFont | undefined;
+  let font: LoadedFormatFont | undefined;
   /**
    * Companion fixtures stay resident once loaded, keyed by fixture rather than held in one slot: the routes that need a
    * companion do not all need the same one, and a Text that a previous workload published still holds a font lease, so
    * releasing a companion at a workload switch would invalidate a font the outgoing scene has not finished with.
    */
-  const companionFonts = new Map<BenchmarkFontFixture, LoadedTechniqueFont>();
-  let selectedFontController: RetainedFontFixtureController<LoadedTechniqueFont> | undefined;
+  const companionFonts = new Map<BenchmarkFontFixture, LoadedFormatFont>();
+  let selectedFontController: RetainedFontFixtureController<LoadedFormatFont> | undefined;
   let entries: readonly WorkloadEntry[] = [];
   // The workload's batch root. A shared `TextGroup` packs every Text of a multi-instance workload into one paragraph
   // batch; a plain Group leaves a single-paragraph workload on its own implicit batch of one.
@@ -414,7 +414,7 @@ async function createComparisonWorkloadRuntime(
   let persistentSnapshot: LiveFrameTelemetrySnapshot | undefined;
 
   try {
-    font = await loadTechniqueFont(
+    font = await loadFormatFont(
       technique,
       configuration.fontFixture,
       options.delivery,
@@ -424,15 +424,15 @@ async function createComparisonWorkloadRuntime(
     );
     const companionFixtures = (workload: ComparisonWorkloadId): readonly BenchmarkFontFixture[] =>
       workloadCompanionFontFixtures(benchmarkWorkloadDefinition(workload).fontPolicy);
-    const ensureCompanionFonts = async (workload: ComparisonWorkloadId): Promise<readonly LoadedTechniqueFont[]> => {
-      const loaded: LoadedTechniqueFont[] = [];
+    const ensureCompanionFonts = async (workload: ComparisonWorkloadId): Promise<readonly LoadedFormatFont[]> => {
+      const loaded: LoadedFormatFont[] = [];
       for (const fixture of companionFixtures(workload)) {
         const resident = companionFonts.get(fixture);
         if (resident !== undefined) {
           loaded.push(resident);
           continue;
         }
-        const companion = await loadTechniqueFont(
+        const companion = await loadFormatFont(
           technique,
           fixture,
           options.delivery,
@@ -445,7 +445,7 @@ async function createComparisonWorkloadRuntime(
       }
       return loaded;
     };
-    const residentCompanionFont = (workload: ComparisonWorkloadId): LoadedTechniqueFont | undefined => {
+    const residentCompanionFont = (workload: ComparisonWorkloadId): LoadedFormatFont | undefined => {
       const [fixture] = companionFixtures(workload);
       return fixture === undefined ? undefined : companionFonts.get(fixture);
     };
@@ -463,13 +463,13 @@ async function createComparisonWorkloadRuntime(
       },
     );
     const activeSelectedFont = selectedFontController;
-    const activeFont = (): LoadedTechniqueFont => activeSelectedFont.current.asset;
-    const loadedFontsScratch: LoadedTechniqueFont[] = [];
+    const activeFont = (): LoadedFormatFont => activeSelectedFont.current.asset;
+    const loadedFontsScratch: LoadedFormatFont[] = [];
     /**
      * The selected fixture and a companion fixture can resolve to the same registered font, so residency is deduplicated
      * by the loaded handle rather than by the asset wrapper — counting one font twice would double its reported bytes.
      */
-    const loadedFonts = (): readonly LoadedTechniqueFont[] => {
+    const loadedFonts = (): readonly LoadedFormatFont[] => {
       loadedFontsScratch.length = 0;
       loadedFontsScratch.push(activeFont());
       for (const companion of companionFonts.values()) {
@@ -477,9 +477,9 @@ async function createComparisonWorkloadRuntime(
       }
       return loadedFontsScratch;
     };
-    let cachedBitmapAtlasFonts: readonly LoadedTechniqueFont[] = [];
+    let cachedBitmapAtlasFonts: readonly LoadedFormatFont[] = [];
     let cachedBitmapAtlasPages: readonly BitmapAtlasPageStats[] = [];
-    const bitmapAtlasPages = (fonts: readonly LoadedTechniqueFont[]): readonly BitmapAtlasPageStats[] => {
+    const bitmapAtlasPages = (fonts: readonly LoadedFormatFont[]): readonly BitmapAtlasPageStats[] => {
       // A composed workload keeps more than two fonts resident, so the cache key is the whole residency rather than
       // its first two members: a companion added behind the primary would otherwise return a stale page report.
       const unchanged =
@@ -494,7 +494,7 @@ async function createComparisonWorkloadRuntime(
     // Icon Grid renders its cells from the companion fixture, so that fixture owns the reported density there. Every
     // other workload — including a composed one that only reaches its companion through a span — keeps the selected
     // font as its density source, so a retained companion never becomes the visible configuration after navigation.
-    const statsFont = (): LoadedTechniqueFont =>
+    const statsFont = (): LoadedFormatFont =>
       configuration.workload === 'icon-grid' ? (residentCompanionFont('icon-grid') ?? activeFont()) : activeFont();
     let fontFixtureSwitching = false;
     let fontFixtureCommitting = false;
@@ -554,7 +554,7 @@ async function createComparisonWorkloadRuntime(
         // Only the bytes are awaited. Once they are decoded the swap itself commits in this turn, so the scene never
         // renders a generation the caller has already replaced.
         await activeSelectedFont.load(nextFixture, (fixture) =>
-          loadTechniqueFont(
+          loadFormatFont(
             technique,
             fixture,
             options.delivery,
@@ -1204,7 +1204,7 @@ function disposeBatchRoot(root: THREE.Object3D): void {
 function createEntries(
   root: ThreeRoot,
   font: WorkloadFont,
-  technique: RasterTechnique,
+  technique: RasterFormatName,
   configuration: ComparisonWorkloadConfiguration,
   dpr: number,
   viewportWidth: number,
@@ -1270,7 +1270,7 @@ function animateEntries(
 
 function applyRetainedConfiguration(
   entries: readonly WorkloadEntry[],
-  technique: RasterTechnique,
+  technique: RasterFormatName,
   configuration: ComparisonWorkloadConfiguration,
 ): void {
   comparisonWorkloadDefinition(configuration.workload).applyRetainedConfiguration(entries, configuration, technique);
@@ -1435,7 +1435,7 @@ function iconGridStats(
   };
 }
 
-function combineBitmapAtlasPages(fonts: readonly LoadedTechniqueFont[]): readonly BitmapAtlasPageStats[] {
+function combineBitmapAtlasPages(fonts: readonly LoadedFormatFont[]): readonly BitmapAtlasPageStats[] {
   const pagesPerStrike = new Map<number, number>();
   return fonts.flatMap(({ atlasPages }) =>
     atlasPages.map((page) => {
@@ -1446,7 +1446,7 @@ function combineBitmapAtlasPages(fonts: readonly LoadedTechniqueFont[]): readonl
   );
 }
 
-function measureLoadedFonts(fonts: readonly LoadedTechniqueFont[], metrics: MutableLoadedFontMetrics): void {
+function measureLoadedFonts(fonts: readonly LoadedFormatFont[], metrics: MutableLoadedFontMetrics): void {
   metrics.artifactBytes = 0;
   metrics.atlasGpuBytes = 0;
   metrics.coreArtifactBytes = 0;
@@ -1485,14 +1485,14 @@ function measureLoadedFonts(fonts: readonly LoadedTechniqueFont[], metrics: Muta
   }
 }
 
-async function loadTechniqueFont(
-  technique: RasterTechnique,
+async function loadFormatFont(
+  technique: RasterFormatName,
   fontFixture: BenchmarkFontFixture,
   delivery: FontDelivery,
   signal?: AbortSignal,
   onBakeProgress?: import('@pmndrs/glyph').BakeProgressListener,
   slugBakedArtifact?: BakedSlugArtifactSource,
-): Promise<LoadedTechniqueFont> {
+): Promise<LoadedFormatFont> {
   const startedAt = performance.now();
   if (technique === 'bitmap') {
     const loaded = await loadBenchmarkFontAsset({

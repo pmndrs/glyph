@@ -1,7 +1,7 @@
 import {
   fontSizeControl,
   noControls,
-  readyTechniques,
+  readyFormats,
   workloadDefaults,
   type BenchmarkWorkloadDefinition,
 } from '../shared/definition';
@@ -14,7 +14,7 @@ export const advancedShapingDefinition = {
   id: 'advanced-shaping',
   interaction: { pan: true, zoom: false },
   label: 'Advanced shaping',
-  preload: 'technique-module',
+  preload: 'format-module',
   surface: 'advanced-shaping',
-  techniques: readyTechniques,
+  formats: readyFormats,
 } as const satisfies BenchmarkWorkloadDefinition<'advanced-shaping'>;

@@ -1,8 +1,8 @@
 export {};
 
-type Technique = 'bitmap' | 'mtsdf' | 'slug';
+type RasterFormatName = 'bitmap' | 'mtsdf' | 'slug';
 
-const labels: Readonly<Record<Technique, string>> = {
+const labels: Readonly<Record<RasterFormatName, string>> = {
   bitmap: 'Bitmap',
   mtsdf: 'MSDF',
   slug: 'Slug',
@@ -18,7 +18,7 @@ function waitFor<T>(read: () => T | undefined, timeoutMs = 60_000): Promise<T> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       observer.disconnect();
-      reject(new Error(`Timed out waiting for the technique switch: ${location.href}`));
+      reject(new Error(`Timed out waiting for the raster-format switch: ${location.href}`));
     }, timeoutMs);
     const observer = new MutationObserver(() => {
       const value = read();
@@ -31,19 +31,19 @@ function waitFor<T>(read: () => T | undefined, timeoutMs = 60_000): Promise<T> {
   });
 }
 
-async function switchTechnique(technique: Technique): Promise<Record<string, number | string>> {
+async function switchFormat(format: RasterFormatName): Promise<Record<string, number | string>> {
   const button = visible(
     [...document.querySelectorAll<HTMLButtonElement>('button')].filter(
-      (candidate) => candidate.textContent?.trim() === labels[technique],
+      (candidate) => candidate.textContent?.trim() === labels[format],
     ),
   );
-  if (button === undefined) throw new Error(`Missing ${labels[technique]} technique button`);
+  if (button === undefined) throw new Error(`Missing ${labels[format]} raster-format button`);
   const startedAt = performance.now();
   button.click();
   const viewport = await waitFor(() => {
     const candidate = visible(document.querySelectorAll<HTMLElement>('[data-testid="comparison-live-viewport"]'));
     if (
-      candidate?.getAttribute('data-technique') !== technique ||
+      candidate?.getAttribute('data-technique') !== format ||
       candidate.getAttribute('data-presentation-pending') !== 'false' ||
       Number(candidate.getAttribute('data-glyph-count')) <= 0 ||
       Number(candidate.getAttribute('data-draw-count')) <= 0
@@ -54,7 +54,7 @@ async function switchTechnique(technique: Technique): Promise<Record<string, num
   });
   const finishedAt = performance.now();
   return {
-    technique,
+    technique: format,
     elapsedMs: Number((finishedAt - startedAt).toFixed(2)),
     draws: Number(viewport.getAttribute('data-draw-count')),
     glyphs: Number(viewport.getAttribute('data-glyph-count')),
@@ -68,8 +68,8 @@ await waitFor(() => {
 
 performance.clearResourceTimings();
 const results = [];
-for (const technique of ['bitmap', 'mtsdf', 'slug', 'mtsdf', 'bitmap', 'mtsdf'] as const) {
-  results.push(await switchTechnique(technique));
+for (const format of ['bitmap', 'mtsdf', 'slug', 'mtsdf', 'bitmap', 'mtsdf'] as const) {
+  results.push(await switchFormat(format));
 }
 const fontRequests = (performance.getEntriesByType('resource') as PerformanceResourceTiming[]).filter(({ name }) =>
   /(?:\.font\.glb|\.font\.glb\.gz|\.(?:otf|ttf))$/u.test(new URL(name).pathname),

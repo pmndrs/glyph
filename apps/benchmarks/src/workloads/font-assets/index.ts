@@ -10,7 +10,7 @@ export type {
   FontDeliveryMetrics,
 } from './contracts';
 
-/** Loads one fixture through public @pmndrs/glyph loader and raster entrypoints for the selected technique only. */
+/** Loads one fixture through public @pmndrs/glyph loader and raster entrypoints for the selected format only. */
 export async function loadBenchmarkFontAsset(request: BenchmarkFontAssetRequest): Promise<BenchmarkFontAsset> {
   switch (request.technique) {
     case 'bitmap':

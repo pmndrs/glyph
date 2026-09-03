@@ -1,4 +1,4 @@
-import { slug as slugTechnique } from '@pmndrs/glyph/raster/slug';
+import { slug as slugFormat } from '@pmndrs/glyph/raster/slug';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-slug.font.glb.gz?url';
 import dancingScriptCompressedFontUrl from '../../../fixtures/rendering/dancing-script-slug.font.glb.gz?url';
@@ -62,7 +62,7 @@ export async function preloadSlugFontAssets(
     fixtures.map((fixture) =>
       preloadBakedFont({
         artifact: compressedFontUrls[fixture],
-        raster: slugTechnique(),
+        raster: slugFormat(),
         ...(signal === undefined ? {} : { signal }),
       }),
     ),
@@ -78,7 +78,7 @@ export async function loadSlugFontAsset(
   if (delivery === 'runtime') {
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: slugTechnique(),
+      raster: slugFormat(),
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
       ...(signal === undefined ? {} : { signal }),
     });
@@ -95,7 +95,7 @@ export async function loadSlugFontAsset(
   const source = request.bakedArtifact ?? fixtureManifestSource(fixture);
   const loaded = await loadBakedFont({
     artifact: source.url,
-    raster: slugTechnique(),
+    raster: slugFormat(),
     ...(signal === undefined ? {} : { signal }),
   });
   return {

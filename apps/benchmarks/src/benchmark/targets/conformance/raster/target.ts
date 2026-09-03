@@ -4,7 +4,7 @@ import type {
   RasterConformanceAdapter,
   RasterConformanceBackend,
   RasterConformanceSession,
-  RasterConformanceTechnique,
+  RasterConformanceFormatName,
 } from './contracts';
 
 const rasterCapabilities: ReadonlySet<Capability> = new Set([
@@ -19,8 +19,7 @@ const rasterCapabilities: ReadonlySet<Capability> = new Set([
 const backendColor = (backend: RasterConformanceBackend): 'cyan' | 'amber' => (backend === 'webgpu' ? 'cyan' : 'amber');
 const backendLabel = (backend: RasterConformanceBackend): 'WebGPU' | 'WebGL' =>
   backend === 'webgpu' ? 'WebGPU' : 'WebGL';
-const techniqueLabel = (technique: RasterConformanceTechnique): 'MTSDF' | 'Slug' =>
-  technique === 'mtsdf' ? 'MTSDF' : 'Slug';
+const formatLabel = (format: RasterConformanceFormatName): 'MTSDF' | 'Slug' => (format === 'mtsdf' ? 'MTSDF' : 'Slug');
 
 interface RasterTargetSession {
   get(context?: BenchmarkExecutionContext): Promise<RasterConformanceSession>;
@@ -85,12 +84,12 @@ export function createRasterSamplingConformanceTarget(
 ): BenchmarkTarget {
   const session = createRasterTargetSession(adapter, backend);
   let configuredInput: BenchmarkInput = {};
-  const technique = adapter.technique;
+  const format = adapter.format;
   return {
-    id: `${technique}-conformance-${backend}`,
-    label: `${techniqueLabel(technique)} sampling conformance · ${backendLabel(backend)}`,
+    id: `${format}-conformance-${backend}`,
+    label: `${formatLabel(format)} sampling conformance · ${backendLabel(backend)}`,
     detail: 'GPU TSL candidate · independent scalar CPU reconstruction · visual difference',
-    color: technique === 'slug' && backend === 'webgpu' ? 'green' : backendColor(backend),
+    color: format === 'slug' && backend === 'webgpu' ? 'green' : backendColor(backend),
     capabilities: rasterCapabilities,
     configure: (input) => {
       configuredInput = input;
@@ -104,7 +103,7 @@ export function createRasterSamplingConformanceTarget(
     run: async (input, sampleIndex, controls, context) => {
       context?.signal?.throwIfAborted();
       const current = session.loaded();
-      if (current === undefined) throw new Error(`${techniqueLabel(technique)} conformance target was not loaded`);
+      if (current === undefined) throw new Error(`${formatLabel(format)} conformance target was not loaded`);
       return current.captureSampling(input, sampleIndex, controls, context);
     },
     dispose: session.dispose,
@@ -117,10 +116,10 @@ export function createRasterSourceOutlineConformanceTarget(
 ): BenchmarkTarget {
   const session = createRasterTargetSession(adapter, backend);
   let configuredInput: BenchmarkInput = {};
-  const technique = adapter.technique;
+  const format = adapter.format;
   return {
-    id: `source-outline-${technique}-${backend}`,
-    label: `${techniqueLabel(technique)} source-outline fidelity · ${backendLabel(backend)}`,
+    id: `source-outline-${format}-${backend}`,
+    label: `${formatLabel(format)} source-outline fidelity · ${backendLabel(backend)}`,
     detail: 'GPU candidate · pinned source font · browser Canvas2D reference',
     color: backendColor(backend),
     capabilities: rasterCapabilities,
@@ -134,7 +133,7 @@ export function createRasterSourceOutlineConformanceTarget(
     run: async (input, _sampleIndex, controls, context) => {
       context?.signal?.throwIfAborted();
       const current = session.loaded();
-      if (current === undefined) throw new Error(`${techniqueLabel(technique)} source-outline target was not loaded`);
+      if (current === undefined) throw new Error(`${formatLabel(format)} source-outline target was not loaded`);
       const capture = await current.captureSourceOutline(
         input.fontFixture === undefined ? configuredInput : input,
         controls,
@@ -146,8 +145,8 @@ export function createRasterSourceOutlineConformanceTarget(
         hash: await sha256(capture.candidate),
         metrics: {
           techniqueBitmap: 0,
-          techniqueMtsdf: technique === 'mtsdf' ? 1 : 0,
-          techniqueSlug: technique === 'slug' ? 1 : 0,
+          techniqueMtsdf: format === 'mtsdf' ? 1 : 0,
+          techniqueSlug: format === 'slug' ? 1 : 0,
           fixtureIsDotGothic: (input.fontFixture ?? configuredInput.fontFixture ?? 'inter') === 'dot-gothic-16' ? 1 : 0,
           backendWebGpu: backend === 'webgpu' ? 1 : 0,
           backendWebGl2: backend === 'webgl2' ? 1 : 0,

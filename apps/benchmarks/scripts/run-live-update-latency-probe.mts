@@ -23,8 +23,8 @@ import { launchProjectChromium } from './support/project-chromium.mts';
 const root = fileURLToPath(new URL('..', import.meta.url));
 process.chdir(root);
 
-const techniques = ['bitmap', 'mtsdf', 'slug'] as const;
-type Technique = (typeof techniques)[number];
+const rasterFormats = ['bitmap', 'mtsdf', 'slug'] as const;
+type RasterFormatName = (typeof rasterFormats)[number];
 
 interface Scenario {
   readonly change: 'text' | 'typewriter' | 'font-size' | 'layout-width';
@@ -57,7 +57,7 @@ interface FrameObservation {
 }
 
 interface ScenarioResult extends Scenario {
-  readonly technique: Technique;
+  readonly technique: RasterFormatName;
   readonly observations: readonly FrameObservation[];
   readonly idle: FrameObservation;
   readonly framesPerSecond: number;
@@ -92,12 +92,12 @@ try {
     headless: true,
     args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],
   });
-  for (const technique of techniques) {
+  for (const format of rasterFormats) {
     for (const scenario of scenarios) {
       const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
       try {
-        await openWorkload(page, technique, scenario.workload);
-        results.push(await runScenario(page, technique, scenario));
+        await openWorkload(page, format, scenario.workload);
+        results.push(await runScenario(page, format, scenario));
       } finally {
         await page.close();
       }
@@ -110,7 +110,7 @@ try {
 
 report(results);
 
-async function openWorkload(page: Page, technique: Technique, workload: Scenario['workload']): Promise<void> {
+async function openWorkload(page: Page, technique: RasterFormatName, workload: Scenario['workload']): Promise<void> {
   const url =
     `http://127.0.0.1:${port}/?mode=benchmark&technique=${technique}` +
     `&backend=${backend}&delivery=baked&dpr=1&font=inter&workload=${workload}`;
@@ -142,7 +142,7 @@ async function openWorkload(page: Page, technique: Technique, workload: Scenario
   await page.waitForTimeout(600);
 }
 
-async function runScenario(page: Page, technique: Technique, scenario: Scenario): Promise<ScenarioResult> {
+async function runScenario(page: Page, technique: RasterFormatName, scenario: Scenario): Promise<ScenarioResult> {
   const idle = await page.evaluate((windowMs) => window.liveUpdateCanvasProbe.observe(windowMs), observationWindowMs);
   const observations =
     scenario.control === undefined

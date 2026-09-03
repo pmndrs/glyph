@@ -8,7 +8,7 @@ import { createRasterSamplingConformanceTarget, createRasterSourceOutlineConform
 import { createDeferredTarget, sha256 } from '../shared';
 
 type Backend = 'webgpu' | 'webgl2';
-type Technique = 'bitmap' | 'mtsdf' | 'slug';
+type RasterFormatName = 'bitmap' | 'mtsdf' | 'slug';
 
 const rasterCapabilities: ReadonlySet<Capability> = new Set([
   'deterministic',
@@ -20,8 +20,8 @@ const rasterCapabilities: ReadonlySet<Capability> = new Set([
 ]);
 const backendColor = (backend: Backend): 'cyan' | 'amber' => (backend === 'webgpu' ? 'cyan' : 'amber');
 const backendLabel = (backend: Backend): 'WebGPU' | 'WebGL' => (backend === 'webgpu' ? 'WebGPU' : 'WebGL');
-const techniqueLabel = (technique: Technique): 'Bitmap' | 'MSDF' | 'Slug' =>
-  technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap';
+const formatLabel = (format: RasterFormatName): 'Bitmap' | 'MSDF' | 'Slug' =>
+  format === 'mtsdf' ? 'MSDF' : format === 'slug' ? 'Slug' : 'Bitmap';
 
 function tslBaselineTarget(backend: Backend): BenchmarkTarget {
   return createDeferredTarget(
@@ -37,9 +37,9 @@ function tslBaselineTarget(backend: Backend): BenchmarkTarget {
   );
 }
 
-function samplingTarget(technique: Extract<Technique, 'mtsdf' | 'slug'>, backend: Backend): BenchmarkTarget {
+function samplingTarget(format: Extract<RasterFormatName, 'mtsdf' | 'slug'>, backend: Backend): BenchmarkTarget {
   return createRasterSamplingConformanceTarget(
-    technique === 'mtsdf' ? mtsdfRasterConformanceAdapter : slugRasterConformanceAdapter,
+    format === 'mtsdf' ? mtsdfRasterConformanceAdapter : slugRasterConformanceAdapter,
     backend,
   );
 }
@@ -70,17 +70,17 @@ const richTextSpansTarget = () =>
     async () => (await import('./rich-text-spans')).createRichTextSpansConformanceTarget(),
   );
 
-function sourceOutlineFidelityTarget(technique: Technique, backend: Backend): BenchmarkTarget {
-  if (technique === 'mtsdf' || technique === 'slug') {
+function sourceOutlineFidelityTarget(format: RasterFormatName, backend: Backend): BenchmarkTarget {
+  if (format === 'mtsdf' || format === 'slug') {
     return createRasterSourceOutlineConformanceTarget(
-      technique === 'mtsdf' ? mtsdfRasterConformanceAdapter : slugRasterConformanceAdapter,
+      format === 'mtsdf' ? mtsdfRasterConformanceAdapter : slugRasterConformanceAdapter,
       backend,
     );
   }
   let configuredInput: BenchmarkInput = {};
   return {
-    id: `source-outline-${technique}-${backend}`,
-    label: `${techniqueLabel(technique)} source-outline fidelity · ${backendLabel(backend)}`,
+    id: `source-outline-${format}-${backend}`,
+    label: `${formatLabel(format)} source-outline fidelity · ${backendLabel(backend)}`,
     detail: 'GPU candidate · pinned source font · browser Canvas2D reference',
     color: backendColor(backend),
     capabilities: rasterCapabilities,
@@ -104,7 +104,7 @@ function sourceOutlineFidelityTarget(technique: Technique, backend: Backend): Be
         bytes: capture.candidate.byteLength,
         hash: await sha256(capture.candidate),
         metrics: {
-          techniqueBitmap: technique === 'bitmap' ? 1 : 0,
+          techniqueBitmap: format === 'bitmap' ? 1 : 0,
           techniqueMtsdf: 0,
           techniqueSlug: 0,
           fixtureIsDotGothic: fontFixture === 'dot-gothic-16' ? 1 : 0,
@@ -124,11 +124,11 @@ function sourceOutlineFidelityTarget(technique: Technique, backend: Backend): Be
   };
 }
 
-function runtimeFallbackTarget(technique: Technique, backend: Backend): BenchmarkTarget {
+function runtimeFallbackTarget(format: RasterFormatName, backend: Backend): BenchmarkTarget {
   let configuredInput: BenchmarkInput = {};
   return {
-    id: `runtime-fallback-${technique}-${backend}`,
-    label: `${techniqueLabel(technique)} runtime fallback · ${backendLabel(backend)}`,
+    id: `runtime-fallback-${format}-${backend}`,
+    label: `${formatLabel(format)} runtime fallback · ${backendLabel(backend)}`,
     detail: 'checked-in baked frame · source-font Worker bake · exact comparison',
     color: backendColor(backend),
     capabilities: rasterCapabilities,
@@ -146,7 +146,7 @@ function runtimeFallbackTarget(technique: Technique, backend: Backend): Benchmar
         fontFixture,
         ...(context?.renderer === undefined ? {} : { renderer: context.renderer }),
         ...(context?.signal === undefined ? {} : { signal: context.signal }),
-        technique,
+        technique: format,
       });
       return {
         bytes: capture.runtime.byteLength,
@@ -175,11 +175,11 @@ export function createConformanceTargets(): readonly BenchmarkTarget[] {
     samplingTarget('mtsdf', 'webgpu'),
     samplingTarget('slug', 'webgl2'),
     samplingTarget('slug', 'webgpu'),
-    ...(['bitmap', 'mtsdf', 'slug'] as const).flatMap((technique) => [
-      sourceOutlineFidelityTarget(technique, 'webgl2'),
-      sourceOutlineFidelityTarget(technique, 'webgpu'),
-      runtimeFallbackTarget(technique, 'webgl2'),
-      runtimeFallbackTarget(technique, 'webgpu'),
+    ...(['bitmap', 'mtsdf', 'slug'] as const).flatMap((format) => [
+      sourceOutlineFidelityTarget(format, 'webgl2'),
+      sourceOutlineFidelityTarget(format, 'webgpu'),
+      runtimeFallbackTarget(format, 'webgl2'),
+      runtimeFallbackTarget(format, 'webgpu'),
     ]),
   ];
 }

@@ -26,7 +26,7 @@ import {
  * The dock intentionally consumes the same typed control state as the main panel.
  * shadcn/Base UI owns interaction semantics; this component only maps state to a compact presentation.
  */
-import type { GraphicsBackend, RasterTechnique } from '../benchmark/url-state';
+import type { GraphicsBackend, RasterFormatName } from '../benchmark/url-state';
 import { logarithmicRangePosition, logarithmicRangeValue } from './range-values';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
@@ -49,7 +49,7 @@ export interface PresentationControlDockProps {
   readonly showcaseFrame: AdvancedShapingFrame;
   readonly showcaseState: AdvancedShapingState;
   readonly showLayoutBounds: boolean;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly webgpu: boolean;
   readonly workload: string;
   readonly workloadAmount: number;

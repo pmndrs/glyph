@@ -1,7 +1,7 @@
-import type { RasterTechnique } from '../../benchmark/url-state';
+import type { RasterFormatName } from '../../benchmark/url-state';
 import { benchmarkWorkloadDefinition, type BenchmarkWorkloadId } from '../../workloads/catalog';
 
-export function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' {
+export function formatLabel(technique: RasterFormatName): 'Bitmap' | 'MSDF' | 'Slug' {
   return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap';
 }
 

@@ -33,7 +33,7 @@ function waitForHeading(text: string): Promise<void> {
 }
 
 function waitForReadyComparison(): Promise<HTMLElement> {
-  return waitForElement('[data-testid="raster-technique-comparison"]').then((surface) => {
+  return waitForElement('[data-testid="raster-format-comparison"]').then((surface) => {
     if (surface.dataset.conformanceReady === 'true') return surface;
     return new Promise((resolve, reject) => {
       const observer = new MutationObserver(() => {

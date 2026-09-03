@@ -31,7 +31,7 @@ export interface ExampleRendererShaderBuffer {
 
 type ShaderResourceName<Resources extends TechniqueResourceDeclarations> = Extract<keyof Resources, string>;
 
-/** Renderer-facing metadata shared by shader languages that realize one technique schema. */
+/** Renderer-facing metadata shared by shader languages that realize one raster format. */
 export interface ExampleRendererShaderVariant<
   Resources extends TechniqueResourceDeclarations = TechniqueResourceDeclarations,
   Geometry extends TechniqueGeometryDeclaration<ShaderResourceName<Resources>> = TechniqueGeometryDeclaration<
@@ -39,14 +39,14 @@ export interface ExampleRendererShaderVariant<
   >,
 > {
   readonly language: string;
-  readonly techniqueId: string;
+  readonly formatId: string;
   readonly geometry: Geometry;
   readonly buffers: Readonly<Record<string, ExampleRendererShaderBuffer>>;
   readonly resources: Resources;
   readonly outputs: Readonly<Record<string, string>>;
 }
 
-/** A renderer-selected shader realization for one portable technique variant. */
+/** A renderer-selected shader realization for one portable raster-format variant. */
 export interface ExampleRendererShader<Variant extends ExampleRendererShaderVariant = ExampleRendererShaderVariant> {
   readonly variant: Variant;
   readonly programNamespace: string;
@@ -500,12 +500,12 @@ function assertExampleRendererShader(shader: ExampleRendererShader): void {
   if (typeof shader.variant.language !== 'string' || shader.variant.language.length === 0) {
     throw new TypeError('example renderer shader language is required');
   }
-  if (typeof shader.variant.techniqueId !== 'string' || shader.variant.techniqueId.length === 0) {
-    throw new TypeError('example renderer shader technique id is required');
+  if (typeof shader.variant.formatId !== 'string' || shader.variant.formatId.length === 0) {
+    throw new TypeError('example renderer shader format id is required');
   }
   const portable = glyphExampleCodec;
-  if (shader.variant.techniqueId !== portable.raster.id) {
-    throw new TypeError(`example renderer shader must use the "${portable.raster.id}" raster Codec`);
+  if (shader.variant.formatId !== portable.raster.id) {
+    throw new TypeError(`example renderer shader must use the "${portable.raster.id}" raster format`);
   }
   if (
     shader.variant.geometry !== portable.schema.render.geometry ||

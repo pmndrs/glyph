@@ -1,5 +1,5 @@
 import { liveWorkloadFontFixtures, type BenchmarkFontFixture } from './font-fixtures';
-import type { FontDelivery, RasterTechnique } from './url-state';
+import type { FontDelivery, RasterFormatName } from './url-state';
 import { benchmarkWorkloadDefinition, isBenchmarkWorkloadId } from '../workloads/catalog';
 import { workloadCompanionFontFixtures } from '../workloads/shared/definition';
 
@@ -91,7 +91,7 @@ export interface CreatePayloadSummaryOptions {
   readonly fontFixture: BenchmarkFontFixture;
   readonly liveStats?: PayloadLiveStats;
   readonly packageSizes: PayloadPackageSizeReport;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly workload: string;
 }
 
@@ -139,7 +139,7 @@ export function createPayloadSummary(options: CreatePayloadSummaryOptions): Payl
 }
 
 function fixturePayloadValues(
-  technique: RasterTechnique,
+  technique: RasterFormatName,
   fixtureIds: readonly BenchmarkFontFixture[],
   manifests: PayloadFixtureManifests,
 ): { readonly transferBytes: number; readonly gpuBytes: number } {
@@ -179,7 +179,7 @@ function sumFixtureValues<Fixture extends { readonly fontFixture: string }>(
   return { transferBytes, gpuBytes };
 }
 
-function liveGpuBytes(technique: RasterTechnique, stats: PayloadLiveStats | undefined): number | undefined {
+function liveGpuBytes(technique: RasterFormatName, stats: PayloadLiveStats | undefined): number | undefined {
   if (stats === undefined) return undefined;
   if (technique === 'slug' && stats.technique === 'slug') return stats.slugGpuBytes;
   if (technique === 'mtsdf' && stats.technique === 'mtsdf') return stats.atlasGpuBytes;
@@ -187,7 +187,7 @@ function liveGpuBytes(technique: RasterTechnique, stats: PayloadLiveStats | unde
   return undefined;
 }
 
-function lazyBakeBytes(packageSizes: PayloadPackageSizeReport, technique: RasterTechnique): number | undefined {
+function lazyBakeBytes(packageSizes: PayloadPackageSizeReport, technique: RasterFormatName): number | undefined {
   const bakerHost = measuredPackageSizeIfAvailable(packageSizes, `${technique}-baker-js`);
   const bakerWasm = measuredPackageSizeIfAvailable(packageSizes, `${technique}-baker-wasm`);
   if (bakerHost === undefined || bakerWasm === undefined) return undefined;

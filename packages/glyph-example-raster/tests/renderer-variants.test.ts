@@ -27,7 +27,7 @@ test('renderer languages share one exact portable shader contract', () => {
     'glsl',
   ]);
   for (const variant of glyphExampleRendererLanguageFixtures) {
-    expect(variant.techniqueId).toBe(glyphExampleShaderContract.techniqueId);
+    expect(variant.formatId).toBe(glyphExampleShaderContract.formatId);
     expect(variant.geometry).toBe(glyphExampleShaderContract.geometry);
     expect(variant.buffers).toBe(glyphExampleShaderContract.buffers);
     expect(variant.resources).toBe(glyphExampleShaderContract.resources);
@@ -37,7 +37,7 @@ test('renderer languages share one exact portable shader contract', () => {
 
 test('a Three consumer manually registers the example TSL realization', () => {
   expect(glyphExampleTslVariant.language).toBe('tsl');
-  expect(glyphExampleTslVariant.techniqueId).toBe(glyphExampleCodec.raster.id);
+  expect(glyphExampleTslVariant.formatId).toBe(glyphExampleCodec.raster.id);
 
   const program = {
     codec: glyphExampleCodec,
@@ -100,7 +100,7 @@ test('a Three consumer manually registers the example TSL realization', () => {
     resourceName: 'glyphColors',
     instance: uint(0),
     material: undefined,
-    root: { name: undefined, scene: undefined, drawRoot: new THREE.Object3D() },
+    root: { name: undefined, scene: undefined, renderObject: new THREE.Object3D() },
     transformPosition: (position) => position,
   });
   expect(material).toBeInstanceOf(THREE.MeshBasicNodeMaterial);
@@ -109,12 +109,12 @@ test('a Three consumer manually registers the example TSL realization', () => {
 test('the TypeGPU realization matches the same contract and resolves to WGSL', () => {
   expect(glyphExampleTypeGpuVariant).toMatchObject({
     language: 'typegpu',
-    techniqueId: glyphExampleTslVariant.techniqueId,
+    formatId: glyphExampleTslVariant.formatId,
     geometry: glyphExampleTslVariant.geometry,
     buffers: glyphExampleTslVariant.buffers,
   });
   expect(glyphExampleShaderContract).toMatchObject({
-    techniqueId: glyphExampleCodec.raster.id,
+    formatId: glyphExampleCodec.raster.id,
     geometry: glyphExampleSchema.render?.geometry,
     buffers: {
       origin: { id: glyphExampleSchema.buffers.origin.id, vectorWidth: glyphExampleSchema.buffers.origin.lanes.length },

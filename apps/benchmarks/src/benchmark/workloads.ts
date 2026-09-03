@@ -1,4 +1,4 @@
-import type { HarnessMode, RasterTechnique } from './url-state';
+import type { HarnessMode, RasterFormatName } from './url-state';
 import { BENCHMARK_WORKLOAD_IDS, BENCHMARK_WORKLOADS, type BenchmarkWorkloadId } from '../workloads/catalog';
 
 export type ConformanceWorkloadId =
@@ -11,7 +11,7 @@ export interface WorkloadOption<Id extends string = string> {
   readonly id: Id;
   readonly label: string;
   readonly description: string;
-  readonly techniques: Readonly<Record<RasterTechnique, WorkloadTechniqueStatus>>;
+  readonly formats: Readonly<Record<RasterFormatName, WorkloadFormatStatus>>;
 }
 
 export interface WorkloadScrollEdges {
@@ -19,9 +19,9 @@ export interface WorkloadScrollEdges {
   readonly after: boolean;
 }
 
-type WorkloadTechniqueStatus = { readonly kind: 'ready' } | { readonly kind: 'planned'; readonly milestone: 8 | 9 };
+type WorkloadFormatStatus = { readonly kind: 'ready' } | { readonly kind: 'planned'; readonly milestone: 8 | 9 };
 
-const READY: WorkloadTechniqueStatus = { kind: 'ready' };
+const READY: WorkloadFormatStatus = { kind: 'ready' };
 
 const benchmarkWorkloads: readonly WorkloadOption<BenchmarkWorkloadId>[] = BENCHMARK_WORKLOAD_IDS.map(
   (id) => BENCHMARK_WORKLOADS[id],
@@ -32,25 +32,25 @@ const conformanceWorkloads: readonly WorkloadOption<ConformanceWorkloadId>[] = [
     id: 'mtsdf-slug-compare',
     label: 'MSDF / Slug compare',
     description: 'Renders MSDF and Slug side by side and compares their coverage in a live GPU heatmap.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
+    formats: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'runtime-fallback',
     label: 'Runtime fallback parity',
     description: 'Tests whether source-font runtime baking reproduces the checked-in baked render.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
+    formats: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'text-accuracy',
     label: 'Pipeline accuracy',
-    description: 'Technique-specific renderer output, sampling reference, difference, and error statistics.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
+    description: 'Raster-format-specific renderer output, sampling reference, difference, and error statistics.',
+    formats: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'cross-technique-fidelity',
     label: 'Cross-technique fidelity',
     description: 'Bitmap, MSDF, and Slug compared independently with the same outline-derived coverage reference.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
+    formats: { bitmap: READY, mtsdf: READY, slug: READY },
   },
 ];
 

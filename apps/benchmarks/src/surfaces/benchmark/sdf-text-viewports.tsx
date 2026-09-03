@@ -24,7 +24,7 @@ function loadSlugTextRenderer() {
 }
 
 /**
- * The live-update surface both SDF technique scenes expose. Unlike bitmap they present reflows from their own frame
+ * The live-update surface both SDF raster-format scenes expose. Unlike bitmap they present reflows from their own frame
  * clock, so a host-driven progress timeline has nothing to do here.
  */
 interface SdfLiveTextScene {

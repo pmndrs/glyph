@@ -2,7 +2,7 @@ import {
   fontSizeControl,
   layoutWidthControl,
   noControls,
-  readyTechniques,
+  readyFormats,
   textVolumeAmountControl,
   workloadDefaults,
   type BenchmarkWorkloadDefinition,
@@ -24,5 +24,5 @@ export const editorialDefinition = {
   label: 'Editorial',
   preload: 'comparison-module',
   surface: 'comparison',
-  techniques: readyTechniques,
+  formats: readyFormats,
 } as const satisfies BenchmarkWorkloadDefinition<'editorial'>;

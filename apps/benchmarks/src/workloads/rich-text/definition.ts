@@ -3,7 +3,7 @@ import {
   layoutWidthControl,
   noControls,
   paintControls,
-  readyTechniques,
+  readyFormats,
   spanDensityAmountControl,
   workloadDefaults,
   type BenchmarkWorkloadDefinition,
@@ -31,5 +31,5 @@ export const richTextDefinition = {
   label: 'Rich text spans',
   preload: 'comparison-module',
   surface: 'comparison',
-  techniques: readyTechniques,
+  formats: readyFormats,
 } as const satisfies BenchmarkWorkloadDefinition<'rich-text'>;

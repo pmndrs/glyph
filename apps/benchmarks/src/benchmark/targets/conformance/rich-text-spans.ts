@@ -22,7 +22,7 @@ import type { BenchmarkTarget } from '../../contracts';
 import { codecAttributeName, requiredCodecAttribute } from '../three-policy-buffer-evidence';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
 
-type BitmapTechnique = typeof bitmap;
+type BitmapFormat = typeof bitmap;
 
 /**
  * One measure and one body size for every case.
@@ -43,7 +43,7 @@ const DECORATION_PACKED_ATTRIBUTE = codecAttributeName(hashId.buffer('glyph-thre
 const DECORATION_UNDERLINE_FLAG = 0b0001;
 const DECORATION_LINE_THROUGH_FLAG = 0b0100;
 const DECORATION_SOLID_STYLE = 1;
-const bitmapRaster: RasterFormatInput<BitmapTechnique> = bitmap({ strikes: [16] });
+const bitmapRaster: RasterFormatInput<BitmapFormat> = bitmap({ strikes: [16] });
 
 /**
  * Each control removes exactly one span property from the composed paragraph, so the difference it makes is
@@ -90,7 +90,7 @@ type RichTextSpansState =
   | { readonly kind: 'empty' }
   | {
       readonly kind: 'ready';
-      readonly body: Font<BitmapTechnique>;
+      readonly body: Font<BitmapFormat>;
       readonly companions: RichTextCompanionFonts;
     };
 
@@ -105,7 +105,7 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
     status: () => 'ready',
     load: async (_controls, context) => {
       if (state.kind === 'ready') return;
-      const loaded: Font<BitmapTechnique>[] = [];
+      const loaded: Font<BitmapFormat>[] = [];
       try {
         const [body, foreign, emphasis] = await Promise.all(
           [interBitmapFontUrl, devanagariBitmapFontUrl, sourceSerifBitmapFontUrl].map(async (url) => {
@@ -298,7 +298,7 @@ function measureCase(
   root: ThreeRoot,
   scene: THREE.Scene,
   group: TextGroup,
-  body: Font<BitmapTechnique>,
+  body: Font<BitmapFormat>,
   companions: RichTextCompanionFonts,
   caseId: RichTextCaseId,
 ): CaseEvidence {

@@ -1,5 +1,5 @@
-import type { HarnessLocation, HarnessMode, RasterTechnique } from '../benchmark/url-state';
-import { TechniqueSwitcher } from './technique-switcher';
+import type { HarnessLocation, HarnessMode, RasterFormatName } from '../benchmark/url-state';
+import { RasterFormatSwitcher } from './raster-format-switcher';
 import { Button, Chip } from './ui';
 
 export interface TopBarProps {
@@ -7,7 +7,7 @@ export interface TopBarProps {
   readonly phone: boolean;
   readonly location: HarnessLocation;
   readonly mode: HarnessMode;
-  readonly liveTechniqueComparison: boolean;
+  readonly liveFormatComparison: boolean;
   readonly pending: boolean;
   readonly ready: boolean;
   readonly webgpu: boolean;
@@ -15,7 +15,7 @@ export interface TopBarProps {
   readonly onControls: () => void;
   readonly onMenu: () => void;
   readonly onMode: (mode: HarnessMode) => void;
-  readonly onTechnique: (technique: RasterTechnique) => void;
+  readonly onFormat: (technique: RasterFormatName) => void;
   readonly onPresentationMode: () => void;
   readonly workloadPanelOpen: boolean;
 }
@@ -25,7 +25,7 @@ export function TopBar({
   phone,
   location,
   mode,
-  liveTechniqueComparison,
+  liveFormatComparison,
   pending,
   ready,
   webgpu,
@@ -33,7 +33,7 @@ export function TopBar({
   onControls,
   onMenu,
   onMode,
-  onTechnique,
+  onFormat,
   onPresentationMode,
   workloadPanelOpen,
 }: TopBarProps) {
@@ -80,10 +80,10 @@ export function TopBar({
           ))}
         </div>
         {compact && (
-          <TechniqueSwitcher
+          <RasterFormatSwitcher
             className="w-[136px] shrink-0 sm:w-[180px]"
-            technique={location.technique}
-            onTechnique={onTechnique}
+            format={location.technique}
+            onFormat={onFormat}
           />
         )}
         <div className="flex-1" />
@@ -125,7 +125,7 @@ export function TopBar({
               ? location.view === 'report'
                 ? 'Return to live benchmark'
                 : 'Capture report'
-              : liveTechniqueComparison
+              : liveFormatComparison
                 ? 'Live GPU comparison'
                 : 'Run conformance'
           }
@@ -145,7 +145,7 @@ export function TopBar({
                 <span className="hidden sm:inline">Capture report</span>
               </>
             )
-          ) : liveTechniqueComparison ? (
+          ) : liveFormatComparison ? (
             'Live compare'
           ) : (
             <>

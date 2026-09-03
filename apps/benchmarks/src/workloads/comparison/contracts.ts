@@ -1,7 +1,7 @@
 import type * as THREE from 'three/webgpu';
 
 import type { RasterConformanceSpecimen, BenchmarkFontFixture } from '../../benchmark/font-fixtures';
-import type { RasterTechnique } from '../../benchmark/url-state';
+import type { RasterFormatName } from '../../benchmark/url-state';
 import type { ThreeRoot } from '@pmndrs/glyph/three';
 import type { ComparisonWorkloadEntry, WorkloadFont } from '../shared/scene-entry';
 
@@ -70,7 +70,7 @@ export interface ComparisonWorkloadCreateContext extends ComparisonWorkloadLayou
   readonly root: ThreeRoot;
   readonly iconScrollX: number;
   readonly iconScrollY: number;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly textLadderSpecimen?: RasterConformanceSpecimen;
 }
 
@@ -107,7 +107,7 @@ export interface ComparisonWorkloadDefinition {
   applyRetainedConfiguration(
     entries: readonly ComparisonWorkloadEntry[],
     configuration: ComparisonWorkloadConfiguration,
-    technique: RasterTechnique,
+    technique: RasterFormatName,
   ): void;
   updateKind(
     previous: ComparisonWorkloadConfiguration,

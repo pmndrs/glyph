@@ -1,11 +1,11 @@
 import type { BakeProgressListener, Font } from '@pmndrs/glyph';
-import type { bitmap as bitmapTechnique, BitmapData } from '@pmndrs/glyph/raster/bitmap';
-import type { msdf as mtsdfTechnique, MsdfData } from '@pmndrs/glyph/raster/msdf';
-import type { slug as slugTechnique } from '@pmndrs/glyph/raster/slug';
+import type { bitmap as bitmapFormat, BitmapData } from '@pmndrs/glyph/raster/bitmap';
+import type { msdf as mtsdfFormat, MsdfData } from '@pmndrs/glyph/raster/msdf';
+import type { slug as slugFormat } from '@pmndrs/glyph/raster/slug';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import type { SlugCpuReferenceData } from '../../benchmark/low-level/raster/slug-cpu-reference';
-import type { FontDelivery, RasterTechnique } from '../../benchmark/url-state';
+import type { FontDelivery, RasterFormatName } from '../../benchmark/url-state';
 
 export type BitmapFixtureDensity = 'conformance' | 'live';
 
@@ -72,22 +72,22 @@ interface CommonBenchmarkFontAsset {
 export type BenchmarkFontAsset =
   | (CommonBenchmarkFontAsset & {
       readonly technique: 'bitmap';
-      readonly loaded: Font<typeof bitmapTechnique>;
+      readonly loaded: Font<typeof bitmapFormat>;
       readonly data: BitmapData;
     })
   | (CommonBenchmarkFontAsset & {
       readonly technique: 'mtsdf';
-      readonly loaded: Font<typeof mtsdfTechnique>;
+      readonly loaded: Font<typeof mtsdfFormat>;
       readonly data: MsdfData;
     })
   | (CommonBenchmarkFontAsset & {
       readonly technique: 'slug';
-      readonly loaded: Font<typeof slugTechnique>;
+      readonly loaded: Font<typeof slugFormat>;
       readonly data: SlugCpuReferenceData;
     });
 
 export interface BenchmarkFontAssetPreloadRequest {
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly fixtures: readonly BenchmarkFontFixture[];
   readonly signal?: AbortSignal | undefined;
   readonly bitmapDensity?: BitmapFixtureDensity;

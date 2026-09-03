@@ -8,7 +8,7 @@ export interface GlyphExampleShaderBuffer<Id extends number = number, VectorWidt
 }
 
 export interface GlyphExampleShaderContract {
-  readonly techniqueId: typeof glyphExample.id;
+  readonly formatId: typeof glyphExample.id;
   readonly geometry: typeof glyphExampleSchema.render.geometry;
   readonly buffers: Readonly<{
     readonly origin: GlyphExampleShaderBuffer<
@@ -48,7 +48,7 @@ function shaderBuffer<Name extends keyof typeof glyphExampleSchema.buffers>(
 const geometry = geometryDeclaration();
 
 export const glyphExampleShaderContract: GlyphExampleShaderContract = Object.freeze({
-  techniqueId: glyphExample.id,
+  formatId: glyphExample.id,
   geometry,
   buffers: Object.freeze({
     origin: shaderBuffer('origin'),
@@ -69,7 +69,7 @@ function geometryDeclaration(): typeof glyphExampleSchema.render.geometry {
 
 export interface GlyphExampleShaderVariant<Language extends string = string> {
   readonly language: Language;
-  readonly techniqueId: GlyphExampleShaderContract['techniqueId'];
+  readonly formatId: GlyphExampleShaderContract['formatId'];
   readonly geometry: typeof glyphExampleShaderContract.geometry;
   readonly buffers: typeof glyphExampleShaderContract.buffers;
   readonly resources: typeof glyphExampleShaderContract.resources;

@@ -21,7 +21,7 @@ export interface GlyphExampleTslShaderOutput {
 
 export const glyphExampleTslVariant: GlyphExampleShaderVariant<'tsl'> = Object.freeze({
   language: 'tsl',
-  techniqueId: glyphExampleShaderContract.techniqueId,
+  formatId: glyphExampleShaderContract.formatId,
   geometry: glyphExampleShaderContract.geometry,
   buffers: glyphExampleShaderContract.buffers,
   resources: glyphExampleShaderContract.resources,

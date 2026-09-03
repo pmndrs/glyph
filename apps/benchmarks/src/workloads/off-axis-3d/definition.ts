@@ -3,7 +3,7 @@ import {
   noControls,
   offAxisLayoutWidthControl,
   perspectiveAmountControl,
-  readyTechniques,
+  readyFormats,
   workloadDefaults,
   type BenchmarkWorkloadDefinition,
 } from '../shared/definition';
@@ -24,5 +24,5 @@ export const offAxis3dDefinition = {
   label: 'Off-axis / 3D',
   preload: 'comparison-module',
   surface: 'comparison',
-  techniques: readyTechniques,
+  formats: readyFormats,
 } as const satisfies BenchmarkWorkloadDefinition<'off-axis-3d'>;

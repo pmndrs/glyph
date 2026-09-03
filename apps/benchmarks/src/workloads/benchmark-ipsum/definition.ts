@@ -2,7 +2,7 @@ import {
   fontSizeControl,
   layoutWidthControl,
   noControls,
-  readyTechniques,
+  readyFormats,
   workloadDefaults,
   type BenchmarkWorkloadDefinition,
 } from '../shared/definition';
@@ -15,7 +15,7 @@ export const benchmarkIpsumDefinition = {
   id: 'benchmark-ipsum',
   interaction: { pan: true, zoom: false },
   label: 'Benchmark ipsum',
-  preload: 'technique-module',
+  preload: 'format-module',
   surface: 'single-paragraph',
-  techniques: readyTechniques,
+  formats: readyFormats,
 } as const satisfies BenchmarkWorkloadDefinition<'benchmark-ipsum'>;

@@ -18,7 +18,7 @@ import {
   selectableFontFixture,
 } from '../benchmark/font-fixtures';
 import { workloadsFor } from '../benchmark/workloads';
-import type { HarnessLocation, HarnessMode, RasterTechnique } from '../benchmark/url-state';
+import type { HarnessLocation, HarnessMode, RasterFormatName } from '../benchmark/url-state';
 import bitmapFixtures from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json';
 import mtsdfFixtures from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
 import slugFixtures from '../../fixtures/rendering/showcase-slug-fixtures-v0.json';
@@ -28,7 +28,7 @@ import { ExportPanel } from './export-panel';
 import { PresentationLayout } from './presentation-layout';
 import { PresentationPayloadPills } from './presentation-payload-pills';
 import { Report } from './report';
-import { TechniqueSwitcher } from './technique-switcher';
+import { RasterFormatSwitcher } from './raster-format-switcher';
 import { TelemetryCharts } from './telemetry-charts';
 import { TopBar } from './top-bar';
 import { WorkloadRail } from './workload-rail';
@@ -43,7 +43,7 @@ export interface HarnessLayoutProps {
   readonly fontNoticesOpen: boolean;
   readonly isPending: boolean;
   readonly liveCapture: LiveBenchmarkCapture | undefined;
-  readonly liveTechniqueComparison: boolean;
+  readonly liveFormatComparison: boolean;
   readonly location: HarnessLocation;
   readonly phone: boolean;
   readonly presentationPlaying: boolean;
@@ -57,7 +57,7 @@ export interface HarnessLayoutProps {
   readonly onCloseFontNotices: () => void;
   readonly onLocation: (value: Partial<HarnessLocation>) => void;
   readonly onMode: (mode: HarnessMode) => void;
-  readonly onTechnique: (technique: RasterTechnique) => void;
+  readonly onFormat: (technique: RasterFormatName) => void;
   readonly onWorkloadPanelOpen: (open: boolean | ((current: boolean) => boolean)) => void;
 }
 
@@ -69,7 +69,7 @@ export function HarnessLayout({
   fontNoticesOpen,
   isPending,
   liveCapture,
-  liveTechniqueComparison,
+  liveFormatComparison,
   location,
   phone,
   presentationPlaying,
@@ -83,7 +83,7 @@ export function HarnessLayout({
   onCloseFontNotices,
   onLocation,
   onMode,
-  onTechnique,
+  onFormat,
   onWorkloadPanelOpen,
 }: HarnessLayoutProps) {
   const { stats: liveStats } = useRuntimeTelemetry();
@@ -111,16 +111,16 @@ export function HarnessLayout({
           playing={presentationPlaying}
           scene={scene}
           techniqueControl={
-            <TechniqueSwitcher
+            <RasterFormatSwitcher
               className="w-44"
+              format={location.technique}
+              onFormat={onFormat}
               presentation="presentation"
-              technique={location.technique}
-              onTechnique={onTechnique}
             />
           }
           telemetry={<TelemetryCharts presentation="presentation" stats={liveStats} />}
           workloadOptions={workloadsFor('benchmark').map((option) => ({
-            disabled: option.techniques[location.technique].kind !== 'ready',
+            disabled: option.formats[location.technique].kind !== 'ready',
             label: option.label,
             value: option.id,
           }))}
@@ -153,7 +153,7 @@ export function HarnessLayout({
         phone={phone}
         location={location}
         mode={location.mode}
-        liveTechniqueComparison={liveTechniqueComparison}
+        liveFormatComparison={liveFormatComparison}
         pending={isPending}
         ready={Boolean(actionReady)}
         webgpu={webgpu}
@@ -173,7 +173,7 @@ export function HarnessLayout({
           onWorkloadPanelOpen((open) => !open);
         }}
         onMode={onMode}
-        onTechnique={onTechnique}
+        onFormat={onFormat}
         onPresentationMode={() => onLocation({ layout: 'presentation', mode: 'benchmark', view: 'scene' })}
         workloadPanelOpen={workloadPanelOpen}
       />
@@ -204,7 +204,7 @@ export function HarnessLayout({
             onFontFixture={(value) => onLocation({ fontFixture: value })}
             onAdvancedFontFixture={onAdvancedFontFixture}
             onLocation={onLocation}
-            onTechnique={onTechnique}
+            onFormat={onFormat}
           />
         </div>
         <main
@@ -239,14 +239,14 @@ export function HarnessLayout({
               className="h-full w-full border-r-0"
               location={location}
               showcaseFrame={showcaseFrame}
-              showTechnique={false}
+              showFormat={false}
               onFontFixture={(value) => onLocation({ fontFixture: value })}
               onAdvancedFontFixture={onAdvancedFontFixture}
               onLocation={(value) => {
                 onLocation({ ...value, view: 'scene' });
                 onWorkloadPanelOpen(false);
               }}
-              onTechnique={onTechnique}
+              onFormat={onFormat}
             />
           </CompactWorkloadPanel>
         )}

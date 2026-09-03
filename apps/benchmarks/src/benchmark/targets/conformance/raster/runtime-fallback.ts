@@ -1,5 +1,5 @@
 import type { BenchmarkFontFixture } from '../../../font-fixtures';
-import type { RasterTechnique } from '../../../url-state';
+import type { RasterFormatName } from '../../../url-state';
 import type { PersistentRenderSceneRenderer } from '../../../../renderer/persistent-render-host';
 import type { RendererBackend } from '../../../../renderer/webgpu-renderer';
 import { captureBitmapTextConformance } from './bitmap-capture';
@@ -23,7 +23,7 @@ export async function captureRuntimeFallbackConformance(options: {
   readonly fontFixture: BenchmarkFontFixture;
   readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
 }): Promise<RuntimeFallbackCapture> {
   const capture =
     options.technique === 'bitmap' ? captureBitmap : options.technique === 'mtsdf' ? captureMtsdf : captureSlug;

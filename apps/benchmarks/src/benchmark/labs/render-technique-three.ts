@@ -69,8 +69,8 @@ export async function runRenderTechniqueThreeLab({
     );
     const bitmapFontLoadMs = performance.now() - bitmapStarted;
 
-    const generic = measureTechnique(genericFont, warmup, samples);
-    const bitmapResult = measureTechnique(bitmapFont, warmup, samples);
+    const generic = measureFormat(genericFont, warmup, samples);
+    const bitmapResult = measureFormat(bitmapFont, warmup, samples);
     if (generic.instances !== bitmapResult.instances) {
       throw new Error(
         `Three render-technique lab compared ${generic.instances} generic instances with ${bitmapResult.instances} Bitmap instances`,
@@ -91,7 +91,7 @@ export async function runRenderTechniqueThreeLab({
   }
 }
 
-function measureTechnique(
+function measureFormat(
   font: Font<RasterFormatMetadata>,
   warmup: number,
   samples: number,

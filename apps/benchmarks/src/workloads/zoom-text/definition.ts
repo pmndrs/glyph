@@ -1,4 +1,4 @@
-import { noControls, readyTechniques, workloadDefaults, type BenchmarkWorkloadDefinition } from '../shared/definition';
+import { noControls, readyFormats, workloadDefaults, type BenchmarkWorkloadDefinition } from '../shared/definition';
 
 export const zoomTextDefinition = {
   controls: { ...noControls, animation: true },
@@ -10,5 +10,5 @@ export const zoomTextDefinition = {
   label: 'Zoom text',
   preload: 'comparison-module',
   surface: 'comparison',
-  techniques: readyTechniques,
+  formats: readyFormats,
 } as const satisfies BenchmarkWorkloadDefinition<'zoom-text'>;

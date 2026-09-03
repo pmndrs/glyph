@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
-import { glyph, type AnyRasterFormat, type RasterKey, type Sha256Hex } from '@pmndrs/glyph';
+import { glyph, type RasterFormatMetadata, type RasterKey, type Sha256Hex } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { rasterBake } from '@pmndrs/glyph/baker';
 import { type PortableGeometryPayload } from '@pmndrs/glyph';
@@ -261,7 +261,7 @@ describe('public external raster proof', () => {
 
 let nextThreeHandle = 1;
 
-async function createThreeHandle(format: AnyRasterFormat) {
+async function createThreeHandle(format: RasterFormatMetadata) {
   await glyph.init();
   const config = defineGlyphConfig({
     ...ThreeConfig,

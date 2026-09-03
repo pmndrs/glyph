@@ -2,7 +2,7 @@ import type { SelectableFontFixture } from '../../benchmark/font-fixtures';
 import type { MtsdfTextConformanceCapture } from '../../benchmark/targets/conformance/raster/mtsdf-capture';
 import type { SlugTextConformanceCapture } from '../../benchmark/targets/conformance/raster/slug-capture';
 import type { ConformanceWorkloadId } from '../../benchmark/workloads';
-import type { GraphicsBackend, RasterTechnique } from '../../benchmark/url-state';
+import type { GraphicsBackend, RasterFormatName } from '../../benchmark/url-state';
 import type { BitmapTextConformanceCapture } from '../../benchmark/targets/conformance/raster/bitmap-capture';
 import type { PersistentRenderSceneRenderer } from '../../renderer/persistent-render-host';
 import type { SourceOutlineFidelityCapture } from '../../benchmark/low-level/raster/source-outline-reference';
@@ -21,7 +21,7 @@ interface FiniteConformanceCaptureOptions {
   readonly fontFixture: SelectableFontFixture;
   readonly renderer: PersistentRenderSceneRenderer;
   readonly signal: AbortSignal;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly workload: ConformanceWorkloadId;
 }
 

@@ -9,7 +9,7 @@ import {
   type BenchmarkFontFixture,
   type SelectableFontFixture,
 } from '../benchmark/font-fixtures';
-import type { HarnessLocation, RasterTechnique } from '../benchmark/url-state';
+import type { HarnessLocation, RasterFormatName } from '../benchmark/url-state';
 import {
   workloadScrollEdges,
   workloadsFor,
@@ -19,7 +19,7 @@ import {
 import mtsdfFixtures from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
 import slugFixtures from '../../fixtures/rendering/showcase-slug-fixtures-v0.json';
 import { FontFixtureButtons, type FontFixtureButtonOption } from './font-fixture-buttons';
-import { TechniqueSwitcher } from './technique-switcher';
+import { RasterFormatSwitcher } from './raster-format-switcher';
 
 let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined;
 
@@ -68,8 +68,8 @@ function formatBytes(value: number | undefined): string {
   return `${(value / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function workloadRailDescription(workload: WorkloadOption, technique: RasterTechnique): string {
-  const status = workload.techniques[technique];
+function workloadRailDescription(workload: WorkloadOption, technique: RasterFormatName): string {
+  const status = workload.formats[technique];
   return status.kind === 'ready' ? workload.description : `M${status.milestone} · ${workload.description}`;
 }
 
@@ -86,21 +86,21 @@ export function WorkloadRail({
   className = '',
   location,
   showcaseFrame,
-  showTechnique = true,
+  showFormat = true,
   onAdvancedFontFixture,
   onFontFixture,
   onLocation,
-  onTechnique,
+  onFormat,
 }: {
   readonly activeFontFixture: BenchmarkFontFixture;
   readonly className?: string;
   readonly location: HarnessLocation;
   readonly showcaseFrame: AdvancedShapingFrame;
-  readonly showTechnique?: boolean;
+  readonly showFormat?: boolean;
   readonly onAdvancedFontFixture: (fontFixture: BenchmarkFontFixture) => void;
   readonly onFontFixture: (fontFixture: SelectableFontFixture) => void;
   readonly onLocation: (value: Partial<HarnessLocation>) => void;
-  readonly onTechnique: (technique: RasterTechnique) => void;
+  readonly onFormat: (technique: RasterFormatName) => void;
 }) {
   const workloads = workloadsFor(location.mode);
   const displayedFontFixture =
@@ -173,14 +173,14 @@ export function WorkloadRail({
 
   return (
     <aside className={`flex min-h-0 flex-col overflow-hidden border-r border-border bg-chrome ${className}`}>
-      {showTechnique && (
+      {showFormat && (
         <div className="shrink-0 px-3 pt-3">
-          <p className="eyebrow">Technique</p>
-          <TechniqueSwitcher className="mt-2" technique={location.technique} onTechnique={onTechnique} />
+          <p className="eyebrow">Raster format</p>
+          <RasterFormatSwitcher className="mt-2" format={location.technique} onFormat={onFormat} />
         </div>
       )}
       <div className="flex min-h-0 flex-1 flex-col" data-testid="workload-fixture-region">
-        <p className={`eyebrow shrink-0 px-3 pb-2 ${showTechnique ? 'pt-5' : 'pt-3'}`}>
+        <p className={`eyebrow shrink-0 px-3 pb-2 ${showFormat ? 'pt-5' : 'pt-3'}`}>
           {location.mode === 'benchmark' ? 'Live workloads' : 'Conformance checks'}
         </p>
         <div className="relative min-h-0 flex-1">
@@ -201,7 +201,7 @@ export function WorkloadRail({
               {workloads.map((workload) => (
                 <button
                   className={`relative rounded-md px-4 py-3 text-left ${location.workload === workload.id ? 'bg-surface-active text-foreground' : 'text-foreground hover:bg-surface'} disabled:cursor-not-allowed disabled:opacity-40`}
-                  disabled={workload.techniques[location.technique].kind !== 'ready'}
+                  disabled={workload.formats[location.technique].kind !== 'ready'}
                   key={workload.id}
                   type="button"
                   onClick={() => onLocation({ workload: workload.id })}

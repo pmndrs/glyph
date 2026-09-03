@@ -1,11 +1,11 @@
 import { FiniteConformanceSurface } from './finite-conformance-surface';
-import { RasterTechniqueComparisonSurface } from './raster-technique-comparison-surface';
+import { RasterFormatComparisonSurface } from './raster-format-comparison-surface';
 import type { ConformanceSurfaceProps } from './types';
 
 /** Routes finite captures and the retained GPU comparison through the same host-owned renderer. */
 export function ConformanceSurface({ workload, ...properties }: ConformanceSurfaceProps) {
   return workload === 'mtsdf-slug-compare' ? (
-    <RasterTechniqueComparisonSurface
+    <RasterFormatComparisonSurface
       backend={properties.backend}
       comparisonText={properties.comparisonText}
       conformanceView={properties.conformanceView}

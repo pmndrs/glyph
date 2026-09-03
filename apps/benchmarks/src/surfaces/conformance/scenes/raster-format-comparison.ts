@@ -24,7 +24,7 @@ const BASE_PHYSICAL_PPEM = 64;
 const HEATMAP_GAIN = 8;
 const PANEL_COUNT = 3;
 
-export interface RasterTechniqueComparison {
+export interface RasterFormatComparison {
   panBy(deltaX: number, deltaY: number): void;
   resetView(): void;
   resize(width: number, height: number): void;
@@ -34,7 +34,7 @@ export interface RasterTechniqueComparison {
   dispose(): Promise<void>;
 }
 
-export interface RasterTechniqueComparisonPersistentScene extends PersistentRenderScene {
+export interface RasterFormatComparisonPersistentScene extends PersistentRenderScene {
   panBy(deltaX: number, deltaY: number): void;
   resetView(): void;
   setText(text: string): Promise<void>;
@@ -42,7 +42,7 @@ export interface RasterTechniqueComparisonPersistentScene extends PersistentRend
   zoomBy(factor: number): void;
 }
 
-export interface RasterTechniqueComparisonPersistentSceneOptions {
+export interface RasterFormatComparisonPersistentSceneOptions {
   readonly backend: RendererBackend;
   readonly fontFixture: SelectableFontFixture;
   readonly id?: string;
@@ -85,11 +85,11 @@ interface ComparisonShaping {
 }
 
 /**
- * Keeps candidate rendering and comparison on the GPU. The two technique scenes
+ * Keeps candidate rendering and comparison on the GPU. The two raster-format scenes
  * render into equal RGBA8 targets; a fullscreen TSL pass samples both targets
  * directly to display signed coverage error without readback or CPU composition.
  */
-export async function createRasterTechniqueComparison(options: {
+export async function createRasterFormatComparison(options: {
   readonly backend: RendererBackend;
   readonly canvas: HTMLCanvasElement;
   readonly dpr: number;
@@ -99,7 +99,7 @@ export async function createRasterTechniqueComparison(options: {
   readonly signal?: AbortSignal;
   readonly text: string;
   readonly width: number;
-}): Promise<RasterTechniqueComparison> {
+}): Promise<RasterFormatComparison> {
   const width = positiveSize(options.width, 'comparison width');
   const height = positiveSize(options.height, 'comparison height');
   const host = await createPersistentRenderHost({
@@ -110,7 +110,7 @@ export async function createRasterTechniqueComparison(options: {
     width,
     onError: options.onError ?? (() => undefined),
   });
-  const scene = createRasterTechniqueComparisonPersistentScene(options);
+  const scene = createRasterFormatComparisonPersistentScene(options);
   try {
     const lease = await host.replaceScene(scene, options.signal);
     let disposal: Promise<void> | undefined;
@@ -147,9 +147,9 @@ export async function createRasterTechniqueComparison(options: {
   }
 }
 
-export function createRasterTechniqueComparisonPersistentScene(
-  options: RasterTechniqueComparisonPersistentSceneOptions,
-): RasterTechniqueComparisonPersistentScene {
+export function createRasterFormatComparisonPersistentScene(
+  options: RasterFormatComparisonPersistentSceneOptions,
+): RasterFormatComparisonPersistentScene {
   let activation: ComparisonResources | undefined;
   let disposed = false;
   let zoom = 1;
@@ -222,7 +222,7 @@ export function createRasterTechniqueComparisonPersistentScene(
   };
 
   return {
-    id: options.id ?? `raster-technique-comparison-${options.backend}`,
+    id: options.id ?? `raster-format-comparison-${options.backend}`,
     async activate(context) {
       if (disposed) throw new DOMException('The raster comparison scene is disposed', 'InvalidStateError');
       if (activation !== undefined) {

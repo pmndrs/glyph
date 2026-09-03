@@ -1,11 +1,11 @@
 import { Component, type ReactNode } from 'react';
 
-import type { RasterTechnique } from '../../benchmark/url-state';
-import { techniqueLabel } from '../benchmark/labels';
+import type { RasterFormatName } from '../../benchmark/url-state';
+import { formatLabel } from '../benchmark/labels';
 
 /** Distinguishes a rejected scene load from the pending Suspense state. */
 export class SceneErrorBoundary extends Component<
-  Readonly<{ technique: RasterTechnique; onError: (error: unknown) => void; children: ReactNode }>,
+  Readonly<{ technique: RasterFormatName; onError: (error: unknown) => void; children: ReactNode }>,
   Readonly<{ error: unknown }>
 > {
   override state: Readonly<{ error: unknown }> = { error: undefined };
@@ -27,7 +27,7 @@ export class SceneErrorBoundary extends Component<
         data-testid="scene-error"
       >
         <div className="max-w-[min(42rem,90%)] rounded-md border border-red-500/40 bg-black/90 px-4 py-3 font-mono text-[10px] text-red-200">
-          <div className="mb-1 font-semibold">Failed to load {techniqueLabel(this.props.technique)} scene</div>
+          <div className="mb-1 font-semibold">Failed to load {formatLabel(this.props.technique)} scene</div>
           <div className="break-words text-red-300/80">{message}</div>
         </div>
       </div>

@@ -12,7 +12,7 @@ import { benchmarkFontArtifactByteLimit } from './limits';
 /**
  * Application-lifetime cache for benchmark fonts.
  *
- * Technique scenes are intentionally short-lived; transport and decoded font backings are not.
+ * Raster-format scenes are intentionally short-lived; transport and decoded font backings are not.
  * The custom fetch presents checked-in gzip fixtures as their decoded GLB response, which lets the
  * library use the artifact URL as its stable cache identity without retaining a second byte cache.
  */

@@ -8,7 +8,7 @@ import { launchProjectChromium } from './support/project-chromium.mts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 process.chdir(root);
-const technique = presentationTechnique(process.env.PRESENTATION_TECHNIQUE);
+const technique = presentationFormat(process.env.PRESENTATION_TECHNIQUE);
 const backend = presentationBackend(process.env.PRESENTATION_BACKEND);
 const screenshotDirectory = process.env.PRESENTATION_SCREENSHOT_DIR;
 if (screenshotDirectory !== undefined) await mkdir(screenshotDirectory, { recursive: true });
@@ -313,7 +313,7 @@ async function assertCanvasHandoff(page: Page, label: string, expectedBackend: P
   }
 }
 
-function presentationTechnique(value: string | undefined): 'bitmap' | 'mtsdf' | 'slug' {
+function presentationFormat(value: string | undefined): 'bitmap' | 'mtsdf' | 'slug' {
   if (value === undefined || value === 'mtsdf') return 'mtsdf';
   if (value === 'bitmap' || value === 'slug') return value;
   throw new RangeError(`PRESENTATION_TECHNIQUE must be bitmap, msdf, or slug; received ${value}`);

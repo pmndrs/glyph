@@ -1,4 +1,4 @@
-import { msdf as mtsdfTechnique } from '@pmndrs/glyph/raster/msdf';
+import { msdf as mtsdfFormat } from '@pmndrs/glyph/raster/msdf';
 import { MSDF_EM_SIZE, MSDF_PIXEL_RANGE } from '@pmndrs/glyph/raster/msdf';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-mtsdf.font.glb.gz?url';
@@ -47,7 +47,7 @@ export async function preloadMtsdfFontAssets(
     fixtures.map((fixture) =>
       preloadBakedFont({
         artifact: compressedFontUrls[fixture],
-        raster: mtsdfTechnique(),
+        raster: mtsdfFormat(),
         ...(signal === undefined ? {} : { signal }),
       }),
     ),
@@ -69,7 +69,7 @@ export async function loadMtsdfFontAsset(
     }
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: mtsdfTechnique(),
+      raster: mtsdfFormat(),
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
       ...(signal === undefined ? {} : { signal }),
     });
@@ -85,7 +85,7 @@ export async function loadMtsdfFontAsset(
   }
   const loaded = await loadBakedFont({
     artifact: compressedFontUrls[fixture],
-    raster: mtsdfTechnique(),
+    raster: mtsdfFormat(),
     ...(signal === undefined ? {} : { signal }),
   });
   return {

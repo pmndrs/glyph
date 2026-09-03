@@ -1,7 +1,7 @@
 import {
   iconSizeControl,
   noControls,
-  readyTechniques,
+  readyFormats,
   workloadDefaults,
   type BenchmarkWorkloadDefinition,
 } from '../shared/definition';
@@ -17,5 +17,5 @@ export const iconGridDefinition = {
   label: 'Icon grid',
   preload: 'comparison-module',
   surface: 'comparison',
-  techniques: readyTechniques,
+  formats: readyFormats,
 } as const satisfies BenchmarkWorkloadDefinition<'icon-grid'>;

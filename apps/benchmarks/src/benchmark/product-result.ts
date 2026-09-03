@@ -3,7 +3,7 @@ import type { MtsdfTextLiveStats } from '../techniques/mtsdf/persistent-scene';
 import type { SlugTextLiveStats } from '../techniques/slug/persistent-scene';
 import type { BenchmarkEnvironment } from './contracts';
 import type { BenchmarkFontFixture } from './font-fixtures';
-import type { GraphicsBackend, RasterTechnique } from './url-state';
+import type { GraphicsBackend, RasterFormatName } from './url-state';
 
 export type CapturedBitmapTextLiveStats = Omit<
   BitmapTextLiveStats,
@@ -77,7 +77,7 @@ export interface LiveBenchmarkCapture {
   readonly kind: 'live-benchmark';
   readonly schemaVersion: 0;
   readonly capturedAt: string;
-  readonly technique: RasterTechnique;
+  readonly technique: RasterFormatName;
   readonly backend: GraphicsBackend;
   readonly workload: string;
   readonly dpr: number;

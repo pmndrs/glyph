@@ -34,7 +34,7 @@ export type TypeGpuGlyphExampleFragmentInput = d.InferGPU<typeof TypeGpuGlyphExa
 
 export const glyphExampleTypeGpuVariant: GlyphExampleShaderVariant<'typegpu'> = Object.freeze({
   language: 'typegpu',
-  techniqueId: glyphExampleShaderContract.techniqueId,
+  formatId: glyphExampleShaderContract.formatId,
   geometry: glyphExampleShaderContract.geometry,
   buffers: glyphExampleShaderContract.buffers,
   resources: glyphExampleShaderContract.resources,

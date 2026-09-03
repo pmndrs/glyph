@@ -1,5 +1,5 @@
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
-import type { FontDelivery, HarnessLocation, RasterTechnique } from '../../benchmark/url-state';
+import type { FontDelivery, HarnessLocation, RasterFormatName } from '../../benchmark/url-state';
 import { benchmarkWorkloadDefinition, isBenchmarkWorkloadId } from '../../workloads/catalog';
 import { workloadCompanionFontFixtures } from '../../workloads/shared/definition';
 
@@ -28,7 +28,7 @@ export function scheduleComparisonWorkloadPreload(): () => void {
 }
 
 export function liveSceneAssetResource(
-  technique: RasterTechnique,
+  technique: RasterFormatName,
   delivery: FontDelivery,
   fontFixture: BenchmarkFontFixture,
   workload: HarnessLocation['workload'],

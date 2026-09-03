@@ -2,7 +2,7 @@ import {
   fontSizeControl,
   layoutWidthControl,
   noControls,
-  readyTechniques,
+  readyFormats,
   reflowAmountControl,
   workloadDefaults,
   type BenchmarkWorkloadDefinition,
@@ -25,5 +25,5 @@ export const dynamicLayoutDefinition = {
   label: 'Dynamic layout',
   preload: 'comparison-module',
   surface: 'comparison',
-  techniques: readyTechniques,
+  formats: readyFormats,
 } as const satisfies BenchmarkWorkloadDefinition<'dynamic-layout'>;

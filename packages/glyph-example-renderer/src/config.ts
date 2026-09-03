@@ -124,14 +124,14 @@ export type ExampleGlyphConfig = GlyphConfigFor<
 >;
 
 export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
-  const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
+  const formatId = device?.shader.variant.formatId ?? exampleRendererShader.variant.formatId;
   return defineGlyphConfig({
     schema: ExampleSchema,
     fonts: { default: glyphExample.kind, formats: ExampleFontFormats },
     encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
     resolve: ({ format, resourceName, payload }) => {
-      if (format !== techniqueId) {
-        throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${format}"`);
+      if (format !== formatId) {
+        throw new TypeError(`example renderer shader "${formatId}" cannot render "${format}"`);
       }
       return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () => undefined);
     },

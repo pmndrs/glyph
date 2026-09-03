@@ -149,9 +149,9 @@ export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData 
   return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, glyphs, pages };
 }
 
-function compiledView<Technique extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
-  font: Font<Technique>,
-  codec: RasterCodec<Technique, Schema>,
+function compiledView<Format extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
+  font: Font<Format>,
+  codec: RasterCodec<Format, Schema>,
 ): {
   readonly compiled: CompiledRasterFont;
   readonly view: CompiledRasterFontView<Schema>;
