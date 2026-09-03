@@ -2,6 +2,7 @@ import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/
 
 import type { CodecScalarType } from '../config/codec.js';
 import type { PortableResource, PortableTextureFormat } from '../config/resources.js';
+import { isRasterCodec, type RasterCodec } from '../config/raster.js';
 import type {
   AnyTechniqueSchema,
   CodecBufferDeclarations,
@@ -14,7 +15,6 @@ import type { AnyRasterFormat } from '../config/raster-format.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { threeSystemBuffers } from './codec.js';
 import { commitThreeRasterProgram, registeredThreeRasterProgram } from './internal/raster-program-registry.js';
-import { resolveRasterCodecInternal } from '../internal/raster-codec-registry.js';
 
 export interface ThreeRasterProgramBuffer {
   readonly scalarType: CodecScalarType;
@@ -95,8 +95,7 @@ export interface ThreeRasterVariant<Schema extends AnyTechniqueSchema = AnyTechn
 }
 
 export interface ThreeRasterProgram<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema> {
-  readonly raster: Technique;
-  readonly schema: Schema & { readonly technique: Technique['id'] };
+  readonly codec: RasterCodec<Technique, Schema>;
   readonly variant: NoInfer<ThreeRasterVariant<Schema>>;
 }
 
@@ -117,26 +116,9 @@ export function registerThreeRasterProgram<
     throw new TypeError('Three raster programs need a program object');
   }
   const source = program as ThreeRasterProgram<Technique, Schema> & Record<string, unknown>;
-  const raster = source.raster;
-  const techniqueId =
-    (typeof raster === 'object' || typeof raster === 'function') &&
-    raster !== null &&
-    typeof (raster as { readonly id?: unknown }).id === 'string'
-      ? (raster as { readonly id: string }).id
-      : undefined;
-  if (typeof techniqueId !== 'string' || techniqueId.length === 0) {
-    throw new TypeError('Three raster programs need a raster with a nonempty id');
-  }
-  const portable = resolveRasterCodecInternal(techniqueId);
-  if (portable === undefined) {
-    throw new TypeError(`no portable raster codec is registered for "${techniqueId}"`);
-  }
-  if (portable.raster !== raster) {
-    throw new TypeError(`Three raster program "${techniqueId}" needs its registered RasterFormat`);
-  }
-  if (source.schema !== portable.schema) {
-    throw new TypeError(`Three raster program "${techniqueId}" needs its registered portable schema`);
-  }
+  const portable = source.codec;
+  if (!isRasterCodec(portable)) throw new TypeError('Three raster programs need a registered RasterCodec');
+  const techniqueId = portable.raster.id;
   const variant = source.variant;
   if (typeof variant !== 'object' || variant === null || Array.isArray(variant)) {
     throw new TypeError(`Three raster program "${techniqueId}" needs a variant descriptor`);
@@ -155,9 +137,9 @@ export function registerThreeRasterProgram<
   }
   const registered = registeredThreeRasterProgram(program as object);
   if (registered !== undefined) {
-    if (registered.raster.id !== techniqueId || registered.variant.id !== variantId) {
+    if (registered.codec.raster.id !== techniqueId || registered.variant.id !== variantId) {
       throw new TypeError(
-        `Three raster program source changed identity from "${registered.raster.id}/${registered.variant.id}" to "${techniqueId}/${variantId}"`,
+        `Three raster program source changed identity from "${registered.codec.raster.id}/${registered.variant.id}" to "${techniqueId}/${variantId}"`,
       );
     }
     return;
@@ -171,8 +153,7 @@ export function registerThreeRasterProgram<
   const resources = normalizeResourceCapabilities(techniqueId, variantId, variant.resources, portable.schema);
   const outputs = normalizeOutputs(techniqueId, variantId, variant.outputs);
   const snapshot = Object.freeze({
-    raster: portable.raster,
-    schema: portable.schema,
+    codec: portable,
     variant: Object.freeze({
       id: variantId,
       language,

@@ -1,9 +1,4 @@
-import {
-  FontLoadError,
-  GlyphEngineStatusError,
-  GlyphError,
-  type GlyphErrorCode,
-} from '../../src/index.js';
+import { FontLoadError, GlyphEngineStatusError, GlyphError, type GlyphErrorCode } from '../../src/index.js';
 
 declare const loadError: FontLoadError;
 declare const engineError: GlyphEngineStatusError;

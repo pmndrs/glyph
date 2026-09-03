@@ -53,7 +53,7 @@ const suppliedGeometrySchema = defineTechniqueSchema({
   render: { resource: 'mesh', geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
 });
 
-registerRasterCodec({
+const suppliedGeometryCodec = registerRasterCodec({
   raster: suppliedGeometryTechnique,
   schema: suppliedGeometrySchema,
   codecBody(system) {
@@ -68,8 +68,7 @@ registerRasterCodec({
 });
 
 registerThreeRasterProgram({
-  raster: suppliedGeometryTechnique,
-  schema: suppliedGeometrySchema,
+  codec: suppliedGeometryCodec,
   variant: {
     id: 'test-tsl',
     language: 'tsl',

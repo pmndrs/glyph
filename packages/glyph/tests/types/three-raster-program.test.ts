@@ -1,5 +1,6 @@
 import type { PortableResource } from '../../src/index.js';
 import { id } from '../../src/config/codec.js';
+import { registerRasterCodec } from '../../src/config/raster.js';
 import { defineRasterFormat } from '../../src/config/raster-format.js';
 import { defineTechniqueSchema } from '../../src/config/schema.js';
 import {
@@ -66,7 +67,18 @@ const variant = {
   },
 } as const satisfies Variant;
 
-registerThreeRasterProgram({ raster: technique, schema, variant });
+const codec = registerRasterCodec({
+  raster: technique,
+  schema,
+  codecBody() {
+    throw new Error('type fixture');
+  },
+  compileFont() {
+    throw new Error('type fixture');
+  },
+});
+
+registerThreeRasterProgram({ codec, variant });
 
 const wrongScalar: Variant = {
   ...variant,
@@ -163,9 +175,8 @@ const otherSchema = defineTechniqueSchema({
   buffers: {},
 });
 const mismatched: ThreeRasterProgram<typeof technique, typeof otherSchema> = {
-  raster: technique,
-  // @ts-expect-error A renderer witness must name the same technique.
-  schema: otherSchema,
+  // @ts-expect-error The registered Codec preserves its exact schema association.
+  codec,
   variant: {
     id: 'other',
     language: 'tsl',
@@ -180,5 +191,5 @@ const mismatched: ThreeRasterProgram<typeof technique, typeof otherSchema> = {
 };
 void mismatched;
 
-// @ts-expect-error Dynamic registration still needs the registered schema witness.
-registerThreeRasterProgram({ raster: technique, variant });
+// @ts-expect-error Dynamic registration needs the registered Codec witness.
+registerThreeRasterProgram({ variant });

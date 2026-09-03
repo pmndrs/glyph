@@ -227,6 +227,11 @@ export function registerRasterCodec<const Technique extends AnyRasterFormat, con
   return registerRasterCodecInternal(codec, false);
 }
 
+/** Return whether `value` is the exact immutable RasterCodec produced by registration. */
+export function isRasterCodec(value: unknown): value is RasterCodec<AnyRasterFormat, AnyTechniqueSchema> {
+  return isRegisteredRasterCodec(value);
+}
+
 /** Compile an immutable font through the registered RasterCodec, if it has one. */
 export function compileRasterFont(
   font: Font<AnyRasterFormat>,

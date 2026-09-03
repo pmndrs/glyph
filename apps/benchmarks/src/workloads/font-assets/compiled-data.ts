@@ -10,11 +10,7 @@ import {
   type PortableTextureArrayPayload,
   type PortableTexturePayload,
 } from '@pmndrs/glyph';
-import {
-  compileRasterFont,
-  readCompiledRasterFont,
-  type RasterCodec,
-} from '@pmndrs/glyph/config/raster';
+import { compileRasterFont, readCompiledRasterFont, type RasterCodec } from '@pmndrs/glyph/config/raster';
 import type { AnyRasterFormat } from '@pmndrs/glyph/config/raster-format';
 import type { AnyTechniqueSchema } from '@pmndrs/glyph/config/schema';
 

@@ -40,8 +40,7 @@ test('a Three consumer manually registers the example TSL realization', () => {
   expect(glyphExampleTslVariant.techniqueId).toBe(glyphExampleCodec.raster.id);
 
   const program = {
-    raster: glyphExampleCodec.raster,
-    schema: glyphExampleCodec.schema,
+    codec: glyphExampleCodec,
     variant: {
       id: 'tsl',
       language: 'tsl',

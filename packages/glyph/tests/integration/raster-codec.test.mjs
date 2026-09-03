@@ -3,11 +3,7 @@ import test from 'node:test';
 
 import { id as glyphId } from '../../dist/config/codec.js';
 import { defineRasterFormat, defineRasterResourceId } from '../../dist/config/raster-format.js';
-import {
-  compileRasterFont,
-  readCompiledRasterFont,
-  registerRasterCodec,
-} from '../../dist/config/raster.js';
+import { compileRasterFont, readCompiledRasterFont, registerRasterCodec } from '../../dist/config/raster.js';
 import { defineTechniqueSchema } from '../../dist/config/schema.js';
 import { fontBindingResources } from '../../dist/internal/font-binding.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
