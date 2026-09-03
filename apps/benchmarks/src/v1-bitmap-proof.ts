@@ -1,8 +1,9 @@
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
-import { loadFont, type Font } from '@pmndrs/glyph';
+import { glyph, type FontFace } from '@pmndrs/glyph';
 import type { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { proveDetachedRasterParity } from './v1-detached-proof';
+import { countV1DecorationRecords, countV1RasterPixels, V1_DECORATION_COLOR, v1GlyphDraw } from './v1-decoration-proof';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from './three-root';
 
 declare global {
@@ -36,17 +37,17 @@ async function render(): Promise<TargetV1BitmapResult> {
   const root = createBenchmarkThreeRoot('v1-bitmap');
   target.texture.colorSpace = THREE.NoColorSpace;
   let text: Text<typeof bitmap> | undefined;
-  let font: Font<typeof bitmap> | undefined;
+  let fontFace: FontFace<ReturnType<typeof bitmap>> | undefined;
   try {
     renderer.setSize(256, 128, false);
     renderer.setPixelRatio(1);
     renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     renderer.toneMapping = THREE.NoToneMapping;
     await renderer.init();
-    font = await loadFont(
-      { baked: '/fixtures/rendering/inter-bitmap-16.font.glb' },
-      { raster: bitmap, options: { strikes: [16] } },
-    );
+    fontFace = glyph.fontFace('/fixtures/rendering/inter-bitmap-16.font.glb', {
+      format: bitmap({ strikes: [16] }),
+    });
+    await fontFace.load();
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-128, 128, 64, -64, 0.1, 10);
     camera.position.z = 1;
@@ -56,12 +57,12 @@ async function render(): Promise<TargetV1BitmapResult> {
     parent.scale.set(1.08, 0.92, 1);
     scene.add(parent);
     text = root.createText({
-      font,
+      font: fontFace,
       text: 'Target v1 Bitmap',
       style: {
         fontSize: 28,
         color: '#ffffff',
-        decoration: { underline: true, lineThrough: true, color: '#7dd3fc' },
+        decoration: { underline: true, lineThrough: true, color: V1_DECORATION_COLOR },
       },
     });
     text.position.set(-112, 24, 0);
@@ -69,7 +70,7 @@ async function render(): Promise<TargetV1BitmapResult> {
     renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 1);
     await renderer.renderAsync(scene, camera);
-    const firstDraw = rootDraws(scene)[0];
+    const firstDraw = v1GlyphDraw(rootDraws(scene));
     if (firstDraw === undefined) throw new Error('target-v1 Bitmap created no draw');
     const firstStorage = firstDraw.geometry.getAttribute('_pmndrsGlyphOrigins');
     const { detachedFirstFrameMatches, detachedSameFrameWriteMatches } = await proveDetachedRasterParity(
@@ -82,27 +83,13 @@ async function render(): Promise<TargetV1BitmapResult> {
 
     text.text = 'Target v1 Bitmop';
     await renderer.renderAsync(scene, camera);
-    const retainedDraw = rootDraws(scene)[0];
+    const retainedDraw = v1GlyphDraw(rootDraws(scene));
     const pixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, 256, 128);
-    let decorationPixels = 0;
-    let litPixels = 0;
-    for (let offset = 0; offset < pixels.length; offset += 4) {
-      if (pixels[offset]! > 8 || pixels[offset + 1]! > 8 || pixels[offset + 2]! > 8) litPixels += 1;
-      if (pixels[offset + 2]! > pixels[offset]! + 32 && pixels[offset + 1]! > pixels[offset]!) {
-        decorationPixels += 1;
-      }
-    }
+    const { decorationPixels, litPixels } = countV1RasterPixels(pixels);
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
       decorationPixels,
-      decorationRecords: rootDraws(scene)
-        .filter((draw) => draw.userData.pmndrsGlyphPrimitiveKind === 'decoration')
-        .reduce((count, draw) => {
-          if (!(draw.geometry instanceof THREE.InstancedBufferGeometry)) {
-            throw new TypeError('decoration proof draw must use instanced geometry');
-          }
-          return count + draw.geometry.instanceCount;
-        }, 0),
+      decorationRecords: countV1DecorationRecords(rootDraws(scene)),
       drawCount: rootDraws(scene).length,
       glyphCount: text.measure().glyphCount,
       litPixels,
@@ -115,7 +102,7 @@ async function render(): Promise<TargetV1BitmapResult> {
   } finally {
     text?.removeFromParent();
     text?.dispose();
-    font?.dispose();
+    fontFace?.dispose();
     disposeBenchmarkThreeRoot(root);
     target.dispose();
     renderer.dispose();
