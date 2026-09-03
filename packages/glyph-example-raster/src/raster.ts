@@ -32,7 +32,7 @@ export interface GlyphExampleData {
 
 /**
  * A third-party portable raster format. It owns identity, decoding, and resource lifetime and never mentions a
- * renderer; its shader subpaths consume the plan's named buffers and supplied geometry contract.
+ * renderer; its shader subpaths consume the Codec's named buffers and supplied geometry contract.
  */
 export const glyphExample: RasterFormat<
   RasterFormatId & 'studio.glyph-example',

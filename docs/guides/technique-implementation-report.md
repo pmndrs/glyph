@@ -387,11 +387,12 @@ retained host objects and returns `{ result, commit, discard }`. The borrowed vi
 synchronous method returns.
 
 The root recipe receives constrained `GlyphRootServices`, not a `GlyphEngine`, backend, planner, or target. The example
-root exposes `createText()` and `publish()` by delegating to `services.createText()` and `services.shape()`.
+root exposes `createText()` by delegating to `services.createText()`, while application code publishes all dirty roots
+through the process-local `glyph.shape()` boundary.
 
 ## 8. Load, create Text, and publish
 
-The application owns the immutable Font and configured handle:
+The application owns the FontFace declaration and configured handle:
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
@@ -401,17 +402,20 @@ import { defineExampleConfig, RecordingExampleRendererDevice } from '@pmndrs/gly
 await glyph.init();
 const device = new RecordingExampleRendererDevice();
 const handle = glyph.handle('example:main', defineExampleConfig(device));
-const font = await glyph.fontFace('/fonts/Inter.font.glb', { format: glyphExample({ paletteSeed: 7 }) }).load();
+const face = glyph.fontFace('/fonts/Inter.font.glb', { format: glyphExample({ paletteSeed: 7 }) });
+await face.load();
 
-const text = handle.createText({ font, text: 'Portable', fontSize: 64 });
-const first = text.publish();
+const text = handle.createText({ font: face, text: 'Portable', fontSize: 64 });
+glyph.shape();
+const first = handle.drawList;
 text.update({ text: 'Portable renderer' });
-const second = handle.publish();
+glyph.shape();
+const second = handle.drawList;
 
 text.dispose();
-handle.publish();
+glyph.shape();
 handle.dispose();
-font.dispose();
+face.dispose();
 ```
 
 Every handle fronts one anonymous root. `handle('hud')` returns an idempotent terminal named sibling when the host needs a
@@ -422,6 +426,7 @@ separate publication/display-list boundary. No Text is rootless.
 ```mermaid
 sequenceDiagram
   participant App
+  participant Glyph as process-local glyph runtime
   participant Root as handle root services
   participant Rust
   participant Project as internal projector + resolve
@@ -429,7 +434,8 @@ sequenceDiagram
   participant Host as caller-owned host renderer
 
   App->>Root: create/update Text
-  App->>Root: shape()
+  App->>Glyph: glyph.shape()
+  Glyph->>Root: prepare dirty root
   Root->>Rust: semantic state + selected Codec
   Rust-->>Project: trusted packed command data
   Project->>Project: resolve changed portable resources

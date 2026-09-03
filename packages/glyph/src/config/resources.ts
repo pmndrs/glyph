@@ -126,7 +126,7 @@ export interface PortableTextureArrayPayload {
 /**
  * GLB-like geometry: immutable bytes plus typed accessors and semantic
  * attributes over internal buffer views, optional indices, topology, draw
- * range — never a renderer geometry object. The plan's record span is the
+ * range — never a renderer geometry object. The command buffer's record span is the
  * sole instance-count authority; per-record data belongs in codec buffers.
  */
 export interface PortableGeometryPayload {
@@ -138,7 +138,7 @@ export interface PortableGeometryPayload {
   readonly attributes: readonly PortableVertexAttribute[];
   readonly indices?: PortableGeometryIndices;
   readonly drawRange?: PortableDrawRange;
-  /** The plan primitive's record span is the sole instance-count authority. */
+  /** The command-buffer primitive's record span is the sole instance-count authority. */
   readonly instances?: never;
 }
 
@@ -262,7 +262,7 @@ export function normalizePortableResource(
     const drawRange = source.drawRange;
     const topology = source.topology;
     if (Object.hasOwn(source, 'instances')) {
-      throw new TypeError(`portable geometry "${name}" instance count comes from plan records`);
+      throw new TypeError(`portable geometry "${name}" instance count comes from command-buffer records`);
     }
     if (!(bytes instanceof Uint8Array)) throw new TypeError(`portable geometry "${name}" needs Uint8Array bytes`);
     if (!Array.isArray(views)) throw new TypeError(`portable geometry "${name}" needs at least one buffer view`);
@@ -460,7 +460,7 @@ function assertPortableTexture(
 function assertPortableGeometry(name: string, payload: unknown): asserts payload is PortableGeometryPayload {
   assertPayload(payload, name, 'geometry');
   if (Object.hasOwn(payload, 'instances')) {
-    throw new TypeError(`portable geometry "${name}" instance count comes from plan records`);
+    throw new TypeError(`portable geometry "${name}" instance count comes from command-buffer records`);
   }
   if (!isTopology(payload.topology)) {
     throw new TypeError(`portable geometry "${name}" needs a triangle-list or triangle-strip topology`);
