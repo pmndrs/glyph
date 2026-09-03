@@ -2,6 +2,7 @@ import { isMainModule, runCargo, runNode, runPnpm } from './support/command.mts'
 import { runGlyphTest } from './test.mts';
 
 const rustCrates = [
+  'ast-facts',
   'bitmap-baker',
   'font-baker',
   'mtsdf-admission',
