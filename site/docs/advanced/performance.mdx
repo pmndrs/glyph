@@ -110,8 +110,8 @@ notes · internals
 import { glyph } from '@pmndrs/glyph';
 import { defineThreeConfig } from '@pmndrs/glyph/three';
 
-three.setCompositing('independent'); // this root, from its next shape()
-const hud = glyph.handle('hud', defineThreeConfig({ compositing: 'independent' })); // or per handle
+const hud = glyph.handle('hud', defineThreeConfig({ compositing: 'independent' })); // every root of this handle
+// The policy is immutable for the handle's life; another policy is another handle.
 ```
 
 <glyph-proxy fit="cover" root="scenes" data-scene="batching" aria-label="Interleaved versus contiguous materials in one TextGroup" aspect="16 / 9" />
@@ -141,8 +141,9 @@ notes · internals
 - `ordered` vs `independent` selects `compile_ordered_draws` / `compile_independent_draws` — `stable_plan.rs:1379–1383`,
   `ordered_plan.rs:1039–1043`; independent sort key = `depth_key << 32 | order_token` — `plan_draw.rs:16–21`
 - the option crosses as `compositing_independent` — `internal/render-planner.ts:1363–1369`, `rust/.../frame.rs:113`
-- `three.setCompositing()` invalidates the root — `three/text.ts:248–255`, `:1121–1125`; the config form —
-  `three/handle.ts#ThreeConfigOptions` (extends `ThreeRootOptions`, `three/text.ts:78–83`)
+- compositing is immutable per handle: `defineThreeConfig({ compositing })` — `three/handle.ts#ThreeConfigOptions`
+  (extends `ThreeRootOptions`, `three/text.ts:78–82`), normalized at `three/handle.ts:182–185` and handed to every
+  root (`:237`); the root setter was removed in codex `b4012b703` — D-325
 - three's realization key adds clip, depth key, transform generation, and geometry —
   `three/internal/draw-realizer.ts:141–151`; one `THREE.Mesh` per instance span (`:179`)
 - measured in this site's batching example: standalone texts one draw each; thirty interleaved labels in one group →
@@ -199,7 +200,8 @@ import { glyph } from '@pmndrs/glyph';
 import { defineThreeConfig } from '@pmndrs/glyph/three';
 
 const labels = glyph.handle('labels', defineThreeConfig({ capacity: { size: 512, policy: 'fixed' } }));
-labels.setCapacity({ size: 1024, policy: 'chunk' }); // later; only republishes if something was over budget
+// Capacity is fixed for the handle's life. A different budget is another handle:
+const wide = glyph.handle('labels-wide', defineThreeConfig({ capacity: { size: 1024, policy: 'chunk' } }));
 ```
 
 | Policy | Allocation | Over budget |
@@ -223,7 +225,7 @@ notes · internals
 - policies and the UTF-16 bound — `text-properties.ts#GlyphBufferCapacity` (`:7–16`), `#normalizeGlyphBufferCapacity` (`:19–31`)
 - root default `{ size: 4_096, policy: 'chunk' }` — `three/text.ts:191–194`
 - `fixed`: `required = Σ text.length`; over budget returns `false` from `prepareShape` and records `capacityExceeded` —
-  `three/text.ts:1260–1270`; `setCapacity` invalidates only when exceeded — `:1115–1119`; root setter `:240–247`
+  `three/text.ts:1260–1270`; capacity is config, not root state — `three/handle.ts:180–181`, `:236`; D-325
 - `commitState()` → `'pending'` while uncommitted — `three/text.ts:756–764`; D-282 (fixed keeps the last accepted
   draw and retries every traversal), D-131 (size + policy are the only public capacity dimensions)
 */}
