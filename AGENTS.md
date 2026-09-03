@@ -12,27 +12,9 @@ Use the vendored `typegpu` skill from TypeGPU's own maintainers before writing o
 
 Use the repository-local `agent-router` skill for every external-model review, delegated implementation, or research run. It routes through the pinned `ai-cli-mcp` server, preserves resumable sessions, and requires an isolated worktree for mutation-capable CLIs.
 
-The local `ai-cli` command can diagnose the pinned package, catalog, and provider CLIs, but it is not proof that the MCP transport is loaded. After changing MCP configuration, reload the client and confirm the server's tools are present before calling the router healthy.
-
-Until the MCP tools are visible, `mise exec -- pnpm exec ai-cli ...` is the approved temporary fallback because it uses the pinned workspace package and preserves the same PID/session lifecycle. Mark those runs `transport: cli-fallback`, capture their PID and session ID, and never substitute an unpinned provider CLI or treat a successful fallback as MCP validation.
-
-Use the bounded append-only reader at `.agents/tools/read-append-log.mjs` for agent traces and rolling logs. Do not load `docs/log.md` or a full JSONL trace into context; query `docs/planning/decision-register.md` for settled decisions and read only the relevant bounded log slice.
-
-The reader is the required context-management tool for append-only output:
-
-```bash
-node .agents/tools/read-append-log.mjs <trace.jsonl> --delta
-node .agents/tools/read-append-log.mjs <trace.jsonl> --lines 80 --bytes 12000
-```
-
-`--delta` advances a cursor and handles a rolled or truncated file. A trace sample is diagnostic only; retrieve authoritative agent results through the provider/MCP result operation. For decisions, query the decision register and the relevant package concept instead of searching the whole chronology.
-
-Keep machine traces and OKF-visible knowledge separate. Raw JSONL traces and cursor state may live in ignored `.cache/` directories and may be byte-rolled. If a run is surfaced in an OKF bundle or `docs/log.md`, write a human-readable summary that preserves the reserved OKF log shape: exactly one H1 title, newest-first `## YYYY-MM-DD` sections, and flat prose entries. Never byte-roll, cursor-edit, or append raw trace records into an OKF `log.md`; validate the bundle after changing it.
-
-Use the repository-local `gh-stack` skill for every dependent branch or pull-request workflow. Create, adopt, navigate,
-rebase, push, submit, sync, link, and merge stacks through non-interactive `gh stack` commands; ordinary `git push`,
-`gh pr create`, and `gh pr merge` are not substitutes for GitHub Stack state. Always use `gh stack submit --auto` and
-`gh stack view --json`, and provide every branch or checkout argument explicitly as required by the skill.
+Use the repository-local `gh-stack` skill for every dependent branch or pull-request workflow. Root stacks on the remote
+default branch and preserve their state through non-interactive `gh stack` commands; ordinary push and PR commands are
+not substitutes.
 
 Consult the repository-local `evidence-first` skill as the default style guidance for human-facing engineering communication, including chat updates and final answers, reports, reviews, handoffs, PR and issue prose, READMEs, and technical documentation. It offers situational cues rather than a fixed template. Domain skills still determine the work and valid evidence, `open-knowledge-format` governs bundle structure and provenance, and `diataxis-docs` governs the purpose and top-level structure of reader-facing documentation.
 
