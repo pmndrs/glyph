@@ -212,8 +212,9 @@ transform-only path. TextGroup remains adapter hierarchy and inheritance inside 
 
 ## Fonts
 
-Immutable `Font<Technique>` values remain the renderer-neutral ownership model. `loadFont()` returns an application-owned
-lease. `createFontStack()` creates an ordered immutable fallback selection.
+Immutable `Font<Technique>` values remain the renderer-neutral ownership model. `glyph.fontFace()` is the only
+application loading declaration; a configured Text internally acquires an independent immutable Font lease from its
+loaded selection. `createFontStack()` creates an ordered immutable fallback selection from loaded Fonts.
 
 When `GlyphConfig.fonts` is present, the handle selects and binds a loaded FontFace technique for Text. Loading remains
 owned by the declaration itself:
