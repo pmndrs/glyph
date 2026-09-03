@@ -47,6 +47,12 @@ export const EXAMPLES = {
     stage: { lit: true },
     load: () => import('./scenes/relief/scene'),
   },
+  ripple: {
+    title: 'Text on a wave',
+    page: '/docs/text/materials',
+    stage: {},
+    load: () => import('./scenes/ripple/scene'),
+  },
   'slug-anatomy': {
     title: 'Slug anatomy',
     page: '/docs/fonts/techniques',
