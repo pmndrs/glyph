@@ -9,7 +9,7 @@ import { techniqueProgram } from '@pmndrs/glyph/config/codec-program';
 import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
 import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
 import { defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 
 import {
   createImmutableFontLease,

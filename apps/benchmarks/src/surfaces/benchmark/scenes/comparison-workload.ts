@@ -1,7 +1,7 @@
-import { createFontLibrary, type FontLibrary, type ParagraphLayoutSummary } from '@pmndrs/glyph';
+import type { ParagraphLayoutSummary } from '@pmndrs/glyph';
 import { TextGroup, type ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
-import { selectBitmapStrikePpem } from '@pmndrs/glyph/three/bitmap';
+import { selectBitmapStrikePpem } from '@pmndrs/glyph/raster/bitmap';
 
 import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../../../benchmark/font-fixtures';
 import type { RuntimeLiveStats } from '../../../benchmark/runtime-world';
@@ -413,7 +413,6 @@ async function createComparisonWorkloadRuntime(
   let persistentSnapshot: LiveFrameTelemetrySnapshot | undefined;
 
   try {
-    const sharedLibrary = createFontLibrary({ maxArtifactBytes: 64 * 1024 * 1024 });
     font = await loadTechniqueFont(
       technique,
       configuration.fontFixture,
@@ -421,7 +420,6 @@ async function createComparisonWorkloadRuntime(
       signal,
       options.onBakeProgress,
       options.slugBakedArtifact,
-      sharedLibrary,
     );
     const companionFixtures = (workload: ComparisonWorkloadId): readonly BenchmarkFontFixture[] =>
       workloadCompanionFontFixtures(benchmarkWorkloadDefinition(workload).fontPolicy);
@@ -440,7 +438,6 @@ async function createComparisonWorkloadRuntime(
           signal,
           options.onBakeProgress,
           undefined,
-          sharedLibrary,
         );
         companionFonts.set(fixture, companion);
         loaded.push(companion);
@@ -453,7 +450,6 @@ async function createComparisonWorkloadRuntime(
     };
     await ensureCompanionFonts(configuration.workload);
     selectedFontController = createRetainedFontFixtureController(
-      sharedLibrary,
       { fixture: configuration.fontFixture, asset: font },
       {
         // The selected fixture and a companion fixture can deduplicate to one loaded font. In that case the companion
@@ -556,7 +552,7 @@ async function createComparisonWorkloadRuntime(
       try {
         // Only the bytes are awaited. Once they are decoded the swap itself commits in this turn, so the scene never
         // renders a generation the caller has already replaced.
-        await activeSelectedFont.load(nextFixture, (fixture, library) =>
+        await activeSelectedFont.load(nextFixture, (fixture) =>
           loadTechniqueFont(
             technique,
             fixture,
@@ -564,7 +560,6 @@ async function createComparisonWorkloadRuntime(
             signal,
             options.onBakeProgress,
             options.slugBakedArtifact,
-            library,
           ),
         );
         if (closing || disposed) {
@@ -1465,7 +1460,6 @@ async function loadTechniqueFont(
   signal?: AbortSignal,
   onBakeProgress?: import('@pmndrs/glyph').BakeProgressListener,
   slugBakedArtifact?: BakedSlugArtifactSource,
-  library?: FontLibrary,
 ): Promise<LoadedTechniqueFont> {
   const startedAt = performance.now();
   if (technique === 'bitmap') {
@@ -1474,7 +1468,6 @@ async function loadTechniqueFont(
       fixture: fontFixture,
       delivery,
       bitmapDensity: 'live',
-      ...(library === undefined ? {} : { library }),
       signal,
       onProgress: onBakeProgress,
     });
@@ -1496,7 +1489,6 @@ async function loadTechniqueFont(
       technique,
       fixture: fontFixture,
       delivery,
-      ...(library === undefined ? {} : { library }),
       signal,
       onProgress: onBakeProgress,
     });
@@ -1520,7 +1512,6 @@ async function loadTechniqueFont(
           technique,
           fixture: fontFixture,
           delivery,
-          ...(library === undefined ? {} : { library }),
           signal,
           onProgress: onBakeProgress,
         }
@@ -1529,7 +1520,6 @@ async function loadTechniqueFont(
           fixture: fontFixture,
           delivery,
           ...(slugBakedArtifact === undefined ? {} : { bakedArtifact: slugBakedArtifact }),
-          ...(library === undefined ? {} : { library }),
           signal,
           onProgress: onBakeProgress,
         },

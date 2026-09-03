@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { glyph } from '../../dist/index.js';
 import { ThreeConfig } from '../../dist/three.js';
-import { bitmap } from '../../dist/three/bitmap.js';
+import { bitmap } from '../../dist/raster/bitmap.js';
 import * as THREE from 'three/webgpu';
 
 export const paragraphBenchmarkSource = [

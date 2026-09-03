@@ -6,31 +6,23 @@ interface BenchmarkThreeRootOptions {
   readonly compositing?: 'ordered' | 'independent';
 }
 
-const owners = new WeakMap<ThreeRoot, ReturnType<typeof createHandle>>();
-let nextHandle = 1;
-
 await glyph.init();
+const benchmarkHandle = glyph.handle('benchmarks', ThreeConfig);
 
 /** Create one semantically named benchmark root after all target-specific raster registration has run. */
 export function createBenchmarkThreeRoot(name: string, options: BenchmarkThreeRootOptions = {}): ThreeRoot {
-  const handle = createHandle(name);
-  const root = handle(name);
+  const root = benchmarkHandle(name);
   if (options.capacity !== undefined) root.setCapacity(options.capacity);
   if (options.compositing !== undefined) root.setCompositing(options.compositing);
-  owners.set(root, handle);
   return root;
 }
 
-/** Dispose the root and the private handle that owns its renderer/font caches. */
+/** Dispose one named publication root while preserving the benchmark application's shared handle. */
 export function disposeBenchmarkThreeRoot(root: ThreeRoot): void {
-  const handle = owners.get(root);
-  if (handle === undefined) throw new TypeError('benchmark Three root was not created by createBenchmarkThreeRoot');
-  owners.delete(root);
-  handle.dispose();
+  if (root.handle !== benchmarkHandle || root.name === undefined) {
+    throw new TypeError('benchmark Three root was not created by createBenchmarkThreeRoot');
+  }
+  root.dispose();
 }
 
-function createHandle(label: string) {
-  const handle = glyph.handle(`benchmarks:${label}:${String(nextHandle)}`, ThreeConfig);
-  nextHandle += 1;
-  return handle;
-}
+if (import.meta.hot !== undefined) import.meta.hot.dispose(() => benchmarkHandle.dispose());

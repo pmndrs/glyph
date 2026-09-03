@@ -1,14 +1,12 @@
 import {
-  createFontLibrary,
   type Constraints,
   type FontFeature,
   type Font,
-  type FontLibrary,
   type ParagraphLayout,
   type ParagraphLayoutSummary,
   type TextStyle,
 } from '@pmndrs/glyph';
-import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/glyph/three/bitmap';
+import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/glyph/raster/bitmap';
 import type { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -376,7 +374,6 @@ async function activateBitmapTextPersistentScene(
   const renderer = context.renderer as THREE.WebGPURenderer;
   const canvasSurface = createCanvasSurface(renderer, width, viewportHeight, gridVisible);
   const textUpdateTelemetry = createTextUpdateTelemetry();
-  const library = createFontLibrary();
   let loadedFont: Font<typeof bitmap> | undefined;
   let fontFixtureController: RetainedFontFixtureController<BitmapPersistentFontFixture> | undefined;
   let line: Text<typeof bitmap> | undefined;
@@ -388,7 +385,6 @@ async function activateBitmapTextPersistentScene(
       fixture: fontFixture,
       delivery,
       bitmapDensity: 'live',
-      library,
       signal: context.signal,
       ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
     });
@@ -432,7 +428,6 @@ async function activateBitmapTextPersistentScene(
     const textReadyMs = performance.now() - textStarted;
     const atlas = bitmapAtlasConfiguration(loadedAsset.data);
     fontFixtureController = createRetainedFontFixtureController(
-      library,
       {
         fixture: fontFixture,
         asset: { atlas, font: loadedAsset.loaded, fontLoadMs, loaded: loadedAsset, loadedFont },
@@ -530,17 +525,13 @@ async function activateBitmapTextPersistentScene(
       }
       return presentationSnapshot();
     };
-    const loadFixtureAsset = async (
-      fixture: BenchmarkFontFixture,
-      fixtureLibrary: FontLibrary,
-    ): Promise<BitmapPersistentFontFixture> => {
+    const loadFixtureAsset = async (fixture: BenchmarkFontFixture): Promise<BitmapPersistentFontFixture> => {
       const fontStartedAt = performance.now();
       const loaded = await loadBitmapFontAsset({
         technique: 'bitmap',
         fixture,
         delivery,
         bitmapDensity: 'live',
-        library: fixtureLibrary,
         signal: context.signal,
         ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
       });

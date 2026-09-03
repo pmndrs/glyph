@@ -1,4 +1,4 @@
-import type { BakeProgressListener, FontLibrary, Font } from '@pmndrs/glyph';
+import type { BakeProgressListener, Font } from '@pmndrs/glyph';
 import type { bitmap as bitmapTechnique, BitmapData } from '@pmndrs/glyph/raster/bitmap';
 import type { msdf as mtsdfTechnique, MsdfData } from '@pmndrs/glyph/raster/msdf';
 import type { slug as slugTechnique } from '@pmndrs/glyph/raster/slug';
@@ -34,7 +34,6 @@ export interface FontDeliveryMetrics {
 
 interface CommonBenchmarkFontAssetRequest {
   readonly fixture: BenchmarkFontFixture;
-  readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
   readonly onProgress?: BakeProgressListener | undefined;
 }

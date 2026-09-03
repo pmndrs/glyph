@@ -7,11 +7,7 @@ import {
   type ExampleText,
 } from '@pmndrs/glyph-example-renderer';
 
-import {
-  createFontDeliveryMetrics,
-  measuredRuntimeFontBake,
-  sourceUrlForFixture,
-} from '../../workloads/font-assets/runtime';
+import { sourceUrlForFixture } from '../../workloads/font-assets/runtime';
 
 const SUBMISSION_WARMUP = 20;
 const SUBMISSION_SAMPLES = 101;
@@ -45,13 +41,9 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
   let text: ExampleText | undefined;
   let textDisposed = false;
   try {
-    fontFace = glyph.fontFace(
-      {
-        source: sourceUrlForFixture('inter'),
-        runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
-      },
-      { format: glyphExample({ paletteSeed: 17, inset: 0.08 }) },
-    );
+    fontFace = glyph.fontFace(sourceUrlForFixture('inter'), {
+      format: glyphExample({ paletteSeed: 17, inset: 0.08 }),
+    });
     await fontFace.glyphExample.load();
     text = handle.createText({
       font: fontFace.glyphExample,

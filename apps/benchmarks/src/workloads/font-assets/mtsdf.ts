@@ -1,4 +1,4 @@
-import { msdf as mtsdfTechnique } from '@pmndrs/glyph/three/msdf';
+import { msdf as mtsdfTechnique } from '@pmndrs/glyph/raster/msdf';
 import { MSDF_EM_SIZE, MSDF_PIXEL_RANGE } from '@pmndrs/glyph/raster/msdf';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-mtsdf.font.glb.gz?url';
@@ -11,8 +11,7 @@ import notoCjkShowcaseCompressedFontUrl from '../../../fixtures/rendering/noto-s
 import sourceSerifCompressedFontUrl from '../../../fixtures/rendering/source-serif-4-mtsdf.font.glb.gz?url';
 import showcaseManifest from '../../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
-import { fetchAuthenticatedGzipAsset, preloadFontAssetUrls } from './authenticated-gzip';
-import type { AuthenticatedArtifactSize, BenchmarkFontAsset, BenchmarkFontAssetRequest } from './contracts';
+import type { BenchmarkFontAsset, BenchmarkFontAssetRequest } from './contracts';
 import { compiledMsdfData } from './compiled-data';
 import {
   createFontDeliveryMetrics,
@@ -26,14 +25,6 @@ export type { FontDeliveryMetrics } from './contracts';
 
 export type MtsdfFontAsset = Extract<BenchmarkFontAsset, { readonly technique: 'mtsdf' }>;
 
-interface MtsdfFixtureManifest {
-  readonly fontFixture: BenchmarkFontFixture;
-  readonly configuration: { readonly emSize: number; readonly pixelRange: number };
-  readonly compressed: AuthenticatedArtifactSize;
-  readonly uncompressed: AuthenticatedArtifactSize;
-  readonly raster: { readonly runtimeTextureArray: { readonly basePaddedGpuBytes: number } };
-}
-
 const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: interCompressedFontUrl,
   amiri: amiriCompressedFontUrl,
@@ -45,32 +36,28 @@ const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'dancing-script': dancingScriptCompressedFontUrl,
 };
 
-const fixtureManifests = new Map(
-  (showcaseManifest as { readonly artifacts: readonly MtsdfFixtureManifest[] }).artifacts.map((artifact) => [
-    artifact.fontFixture,
-    artifact,
-  ]),
-) as ReadonlyMap<BenchmarkFontFixture, MtsdfFixtureManifest>;
-
-export const MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT = Math.max(
-  ...Array.from(fixtureManifests.values(), ({ uncompressed }) => uncompressed.bytes),
-);
+const fixtureManifests = new Map(showcaseManifest.artifacts.map((artifact) => [artifact.fontFixture, artifact]));
 
 export async function preloadMtsdfFontAssets(
   fixtures: readonly BenchmarkFontFixture[],
   signal?: AbortSignal,
 ): Promise<void> {
-  await preloadFontAssetUrls(
-    fixtures.map((fixture) => compressedFontUrls[fixture]),
-    'MTSDF font fixture',
-    signal,
+  await Promise.all(
+    fixtures.map(async (fixture) => {
+      const font = await loadBakedFont({
+        artifact: compressedFontUrls[fixture],
+        raster: { raster: mtsdfTechnique },
+        ...(signal === undefined ? {} : { signal }),
+      });
+      font.dispose();
+    }),
   );
 }
 
 export async function loadMtsdfFontAsset(
   request: Extract<BenchmarkFontAssetRequest, { readonly technique: 'mtsdf' }>,
 ): Promise<MtsdfFontAsset> {
-  const { delivery, fixture, library, onProgress, signal } = request;
+  const { delivery, fixture, onProgress, signal } = request;
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
   const manifest = fixtureManifests.get(fixture);
@@ -84,7 +71,6 @@ export async function loadMtsdfFontAsset(
       source: sourceUrlForFixture(fixture),
       raster: { raster: mtsdfTechnique },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
-      library,
       ...(signal === undefined ? {} : { signal }),
     });
     return {
@@ -97,21 +83,14 @@ export async function loadMtsdfFontAsset(
       metrics,
     };
   }
-  const artifact = await fetchAuthenticatedGzipAsset(
-    compressedFontUrls[fixture],
-    manifest,
-    'MTSDF font fixture',
-    signal,
-  );
   const loaded = await loadBakedFont({
-    artifact,
+    artifact: compressedFontUrls[fixture],
     raster: { raster: mtsdfTechnique },
-    library,
     ...(signal === undefined ? {} : { signal }),
   });
   return {
     technique: 'mtsdf',
-    artifactBytes: artifact.byteLength,
+    artifactBytes: manifest.uncompressed.bytes,
     atlasGpuBytes: manifest.raster.runtimeTextureArray.basePaddedGpuBytes,
     compressedBytes: manifest.compressed.bytes,
     loaded,

@@ -1,9 +1,7 @@
 import {
   type AnyRasterFormat,
   type BakeProgressListener,
-  type FontLibrary,
   type Font,
-  loadFont,
   type RuntimeFontBake,
   type RuntimeFontBakeRequest,
   type RasterFormatInput,
@@ -12,6 +10,7 @@ import {
 import type { FontDelivery } from '../../benchmark/url-state';
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import type { FontDeliveryMetrics } from './contracts';
+import { benchmarkFontLibrary } from './library';
 
 import amiriSourceUrl from '../../../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf?url';
 import dancingScriptSourceUrl from '../../../fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf?url';
@@ -75,15 +74,13 @@ export function measuredRuntimeFontBake(
 export async function loadBakedFont<Format extends AnyRasterFormat>({
   artifact,
   raster,
-  library,
   signal,
 }: {
-  readonly artifact: Uint8Array<ArrayBuffer>;
+  readonly artifact: string;
   readonly raster: RasterFormatInput<Format>;
-  readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
 }): Promise<Font<Format>> {
-  return loadThroughLibrary(library, { baked: { bytes: artifact, ownership: 'copy' } }, raster, signal);
+  return loadThroughBenchmarkLibrary({ baked: artifact }, raster, signal);
 }
 
 /** Loads one font from its source URL, baking the core artifact and the selected raster through the measured bakers. */
@@ -91,24 +88,21 @@ export function loadSourceFont<Format extends AnyRasterFormat>({
   source,
   raster,
   runtimeBake,
-  library,
   signal,
 }: {
   readonly source: string;
   readonly raster: RasterFormatInput<Format>;
   readonly runtimeBake: RuntimeFontBake;
-  readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
 }): Promise<Font<Format>> {
-  return loadThroughLibrary(library, { source, runtimeBake }, raster, signal);
+  return loadThroughBenchmarkLibrary({ source, runtimeBake }, raster, signal);
 }
 
-function loadThroughLibrary<Format extends AnyRasterFormat>(
-  library: FontLibrary | undefined,
-  input: Parameters<typeof loadFont>[0],
+function loadThroughBenchmarkLibrary<Format extends AnyRasterFormat>(
+  input: Parameters<typeof benchmarkFontLibrary.loadFont>[0],
   raster: RasterFormatInput<Format>,
   signal: AbortSignal | undefined,
 ): Promise<Font<Format>> {
   const options = signal === undefined ? {} : { signal };
-  return library === undefined ? loadFont(input, raster, options) : library.loadFont(input, raster, options);
+  return benchmarkFontLibrary.loadFont(input, raster, options);
 }

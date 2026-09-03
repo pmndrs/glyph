@@ -1,5 +1,5 @@
 import type { Font } from '@pmndrs/glyph';
-import type { slug } from '@pmndrs/glyph/three/slug';
+import type { slug } from '@pmndrs/glyph/raster/slug';
 import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 

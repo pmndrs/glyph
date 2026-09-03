@@ -1,4 +1,4 @@
-import type { AnyRasterFormat, Font, FontLibrary } from '@pmndrs/glyph';
+import type { AnyRasterFormat, Font } from '@pmndrs/glyph';
 
 import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
 
@@ -17,11 +17,9 @@ export interface RetainedFontFixtureState<Asset extends RetainedFontFixtureAsset
 
 export type RetainedFontFixtureLoader<Asset extends RetainedFontFixtureAsset> = (
   fixture: BenchmarkFontFixture,
-  library: FontLibrary,
 ) => Promise<Asset>;
 
 export interface RetainedFontFixtureController<Asset extends RetainedFontFixtureAsset> {
-  readonly library: FontLibrary;
   readonly current: RetainedFontFixtureState<Asset>;
   /** Whether `commit` can build a generation on `fixture` in the caller's own turn, with nothing left to fetch. */
   has(fixture: BenchmarkFontFixture): boolean;
@@ -39,9 +37,8 @@ export interface RetainedFontFixtureController<Asset extends RetainedFontFixture
   dispose(): void;
 }
 
-/** Keeps one immutable library and one live font owner while Text transactionally commits replacement generations. */
+/** Keeps one live font owner while Text transactionally commits replacement generations. */
 export function createRetainedFontFixtureController<Asset extends RetainedFontFixtureAsset>(
-  library: FontLibrary,
   initial: RetainedFontFixtureState<Asset>,
   ownership: { readonly dispose?: (asset: Asset) => void } = {},
 ): RetainedFontFixtureController<Asset> {
@@ -62,7 +59,7 @@ export function createRetainedFontFixtureController<Asset extends RetainedFontFi
     loadAsset: RetainedFontFixtureLoader<Asset>,
     token: number,
   ): Promise<void> => {
-    const asset = await loadAsset(fixture, library);
+    const asset = await loadAsset(fixture);
     // A fixture requested and then abandoned mid-flight still allocated GPU resources; release them here rather than
     // stranding them behind the fixture the caller actually settled on.
     if (disposed || token !== loadToken) {
@@ -75,7 +72,6 @@ export function createRetainedFontFixtureController<Asset extends RetainedFontFi
   };
 
   return {
-    library,
     get current() {
       return current;
     },
@@ -121,7 +117,6 @@ export function createRetainedFontFixtureController<Asset extends RetainedFontFi
       staged = undefined;
       release(previouslyStaged);
       disposeAsset(current.asset);
-      library.dispose();
     },
   };
 }

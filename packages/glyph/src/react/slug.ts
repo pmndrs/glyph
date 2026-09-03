@@ -1,7 +1,7 @@
 import type { Font } from '../font.js';
 import type { FontFaceSource } from '../font-face.js';
 import { useFont } from '../react.js';
-import { slug } from '../three/slug.js';
+import { slug } from '../raster/slug.js';
 
 /** Slug convenience hook over the shared R3F `useFont` cache. */
 export interface UseSlug {

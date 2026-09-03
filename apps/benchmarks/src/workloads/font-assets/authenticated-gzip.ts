@@ -17,21 +17,6 @@ export async function fetchAuthenticatedGzipAsset(
   return artifact;
 }
 
-export async function preloadFontAssetUrls(
-  urls: readonly string[],
-  label: string,
-  signal?: AbortSignal,
-): Promise<void> {
-  await Promise.all(
-    urls.map(async (url) => {
-      const response = await fetch(url, signal === undefined ? undefined : { signal });
-      if (!response.ok) throw new Error(`Unable to preload ${label} (${response.status})`);
-      await response.arrayBuffer();
-      signal?.throwIfAborted();
-    }),
-  );
-}
-
 async function decompressFixture(
   compressed: Uint8Array<ArrayBuffer>,
   manifest: { readonly compressed: AuthenticatedArtifactSize },

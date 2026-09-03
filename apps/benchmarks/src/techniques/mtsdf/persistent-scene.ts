@@ -1,5 +1,4 @@
 import {
-  createFontLibrary,
   type Constraints,
   type FontFeature,
   type Font,
@@ -7,7 +6,7 @@ import {
   type ParagraphLayoutSummary,
   type TextStyle,
 } from '@pmndrs/glyph';
-import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
+import type { msdf as mtsdf } from '@pmndrs/glyph/raster/msdf';
 import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -37,7 +36,7 @@ import {
   type PersistentRenderViewport,
 } from '../../renderer/persistent-render-host';
 import { createPersistentSceneActivation } from '../../renderer/persistent-scene-activation';
-import { loadMtsdfFontAsset, MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT } from '../../workloads/font-assets/mtsdf';
+import { loadMtsdfFontAsset } from '../../workloads/font-assets/mtsdf';
 import {
   captureGlyphOriginsForPresentation,
   createFrameDrivenGlyphTransition,
@@ -322,7 +321,6 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         context.viewport.height,
         gridVisible,
       );
-      const library = createFontLibrary({ maxArtifactBytes: MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT });
       let loadedFont: Font<typeof mtsdf> | undefined;
       let fontFixtureController: RetainedFontFixtureController<MtsdfPersistentFontFixture> | undefined;
       let line: Text<typeof mtsdf> | undefined;
@@ -333,7 +331,6 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
           technique: 'mtsdf',
           fixture: options.fontFixture ?? 'inter',
           delivery: options.delivery ?? 'baked',
-          library,
           signal: context.signal,
           ...(options.onBakeProgress === undefined ? {} : { onProgress: options.onBakeProgress }),
         });
@@ -342,7 +339,6 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         context.signal.throwIfAborted();
         const rasterConfiguration = mtsdfDataConfiguration(loaded.data);
         fontFixtureController = createRetainedFontFixtureController(
-          library,
           {
             fixture: options.fontFixture ?? 'inter',
             asset: { font: loaded.loaded, fontLoadMs, loaded, loadedFont, rasterConfiguration },
@@ -494,13 +490,12 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
     },
     async loadFontFixture(fixture) {
       const resources = await activationGate.wait();
-      await resources.fontFixture.load(fixture, async (requested, library) => {
+      await resources.fontFixture.load(fixture, async (requested) => {
         const fontStartedAt = performance.now();
         const loaded = await loadMtsdfFontAsset({
           technique: 'mtsdf',
           fixture: requested,
           delivery: options.delivery ?? 'baked',
-          library,
           signal: resources.signal,
           ...(options.onBakeProgress === undefined ? {} : { onProgress: options.onBakeProgress }),
         });

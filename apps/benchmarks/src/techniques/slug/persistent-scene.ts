@@ -1,5 +1,4 @@
 import {
-  createFontLibrary,
   type BakeProgressListener,
   type Constraints,
   type FontFeature,
@@ -8,7 +7,7 @@ import {
   type ParagraphLayoutSummary,
   type TextStyle,
 } from '@pmndrs/glyph';
-import type { slug } from '@pmndrs/glyph/three/slug';
+import type { slug } from '@pmndrs/glyph/raster/slug';
 import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -225,7 +224,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
   let startupMs = 0;
   let firstDrawMs = 0;
   let firstDrawRecorded = false;
-  const library = createFontLibrary();
   let fontFixture: RetainedFontFixtureController<SlugPersistentFontFixture> | undefined;
   let activationSignal: AbortSignal | undefined;
   let canvasSurface: ReturnType<typeof createCanvasSurface> | undefined;
@@ -409,7 +407,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
           technique: 'slug',
           fixture: initialFontFixture,
           delivery,
-          library,
           signal: context.signal,
           ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
         });
@@ -418,7 +415,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         context.signal.throwIfAborted();
         const rasterConfiguration = slugDataConfiguration(loaded.data);
         fontFixture = createRetainedFontFixtureController(
-          library,
           {
             fixture: initialFontFixture,
             asset: { font: loaded.loaded, fontLoadMs, loaded, loadedFont, rasterConfiguration },
@@ -554,13 +550,12 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       if (activeFontFixture === undefined || signal === undefined) {
         throw new DOMException('The Slug scene is not active', 'InvalidStateError');
       }
-      await activeFontFixture.load(fixture, async (requested, fixtureLibrary) => {
+      await activeFontFixture.load(fixture, async (requested) => {
         const fontStartedAt = performance.now();
         const loaded = await loadSlugFontAsset({
           technique: 'slug',
           fixture: requested,
           delivery,
-          library: fixtureLibrary,
           signal,
           ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
         });

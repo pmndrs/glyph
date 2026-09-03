@@ -1,5 +1,5 @@
 import type { Font, GlyphLayout } from '@pmndrs/glyph';
-import type { msdf as mtsdf, MsdfData } from '@pmndrs/glyph/three/msdf';
+import type { msdf as mtsdf, MsdfData } from '@pmndrs/glyph/raster/msdf';
 import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 

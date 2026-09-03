@@ -1,4 +1,4 @@
-import { bitmap as bitmapTechnique } from '@pmndrs/glyph/three/bitmap';
+import { bitmap as bitmapTechnique } from '@pmndrs/glyph/raster/bitmap';
 
 import amiriBitmapFontUrl from '../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
 import amiriBitmapDensityFontUrl from '../../../fixtures/rendering/amiri-bitmap-16-32.font.glb?url';
@@ -16,8 +16,9 @@ import notoCjkShowcaseBitmapFontUrl from '../../../fixtures/rendering/noto-sans-
 import notoCjkShowcaseBitmapDensityFontUrl from '../../../fixtures/rendering/noto-sans-cjk-showcase-bitmap-16-32.font.glb?url';
 import sourceSerifBitmapFontUrl from '../../../fixtures/rendering/source-serif-4-bitmap-16.font.glb?url';
 import sourceSerifBitmapDensityFontUrl from '../../../fixtures/rendering/source-serif-4-bitmap-16-32.font.glb?url';
+import densityManifest from '../../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json' with { type: 'json' };
+import conformanceManifest from '../../../fixtures/rendering/showcase-raster-fixtures-v0.json' with { type: 'json' };
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
-import { preloadFontAssetUrls } from './authenticated-gzip';
 import type { BenchmarkFontAsset, BenchmarkFontAssetRequest, BitmapFixtureDensity } from './contracts';
 import { compiledBitmapData } from './compiled-data';
 import {
@@ -57,23 +58,32 @@ const bitmapDensityFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'dancing-script': dancingScriptBitmapDensityFontUrl,
 };
 
+const conformanceArtifactBytes = artifactByteMap(conformanceManifest);
+const densityArtifactBytes = artifactByteMap(densityManifest);
+
 export async function preloadBitmapFontAssets(
   fixtures: readonly BenchmarkFontFixture[],
   density: BitmapFixtureDensity = 'live',
   signal?: AbortSignal,
 ): Promise<void> {
   const urls = density === 'live' ? bitmapDensityFontUrls : bitmapFontUrls;
-  await preloadFontAssetUrls(
-    fixtures.map((fixture) => urls[fixture]),
-    'bitmap font fixture',
-    signal,
+  const strikes = density === 'live' ? liveStrikes : conformanceStrikes;
+  await Promise.all(
+    fixtures.map(async (fixture) => {
+      const font = await loadBakedFont({
+        artifact: urls[fixture],
+        raster: { raster: bitmapTechnique, options: { strikes } },
+        ...(signal === undefined ? {} : { signal }),
+      });
+      font.dispose();
+    }),
   );
 }
 
 export async function loadBitmapFontAsset(
   request: Extract<BenchmarkFontAssetRequest, { readonly technique: 'bitmap' }>,
 ): Promise<BitmapFontAsset> {
-  const { bitmapDensity, delivery, fixture, library, onProgress, signal } = request;
+  const { bitmapDensity, delivery, fixture, onProgress, signal } = request;
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
   const strikes = bitmapDensity === 'live' ? liveStrikes : conformanceStrikes;
@@ -82,7 +92,6 @@ export async function loadBitmapFontAsset(
       source: sourceUrlForFixture(fixture),
       raster: { raster: bitmapTechnique, options: { strikes } },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
-      library,
       ...(signal === undefined ? {} : { signal }),
     });
     return {
@@ -96,23 +105,26 @@ export async function loadBitmapFontAsset(
     };
   }
   const urls = bitmapDensity === 'live' ? bitmapDensityFontUrls : bitmapFontUrls;
-  const response = await fetch(urls[fixture], signal === undefined ? undefined : { signal });
-  if (!response.ok) throw new Error(`Unable to load bitmap font fixture (${response.status})`);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  signal?.throwIfAborted();
+  const artifactBytes = (bitmapDensity === 'live' ? densityArtifactBytes : conformanceArtifactBytes).get(fixture);
+  if (artifactBytes === undefined) throw new RangeError(`Unknown bitmap font fixture: ${fixture}`);
   const loaded = await loadBakedFont({
-    artifact: bytes,
+    artifact: urls[fixture],
     raster: { raster: bitmapTechnique, options: { strikes } },
-    library,
     ...(signal === undefined ? {} : { signal }),
   });
   return {
     technique: 'bitmap',
-    artifactBytes: bytes.byteLength,
+    artifactBytes,
     atlasGpuBytes: 0,
-    compressedBytes: bytes.byteLength,
+    compressedBytes: artifactBytes,
     loaded,
     data: compiledBitmapData(loaded),
     metrics,
   };
+}
+
+function artifactByteMap(manifest: {
+  readonly artifacts: readonly { readonly fontFixture: string; readonly bytes: number }[];
+}): ReadonlyMap<string, number> {
+  return new Map(manifest.artifacts.map((artifact) => [artifact.fontFixture, artifact.bytes]));
 }

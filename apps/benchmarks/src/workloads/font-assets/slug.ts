@@ -1,4 +1,4 @@
-import { slug as slugTechnique } from '@pmndrs/glyph/three/slug';
+import { slug as slugTechnique } from '@pmndrs/glyph/raster/slug';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-slug.font.glb.gz?url';
 import dancingScriptCompressedFontUrl from '../../../fixtures/rendering/dancing-script-slug.font.glb.gz?url';
@@ -10,7 +10,6 @@ import notoCjkShowcaseCompressedFontUrl from '../../../fixtures/rendering/noto-s
 import sourceSerifCompressedFontUrl from '../../../fixtures/rendering/source-serif-4-slug.font.glb.gz?url';
 import showcaseManifest from '../../../fixtures/rendering/showcase-slug-fixtures-v0.json' with { type: 'json' };
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
-import { fetchAuthenticatedGzipAsset, preloadFontAssetUrls } from './authenticated-gzip';
 import type {
   AuthenticatedArtifactSize,
   BakedSlugArtifactSource,
@@ -58,17 +57,22 @@ export async function preloadSlugFontAssets(
   fixtures: readonly BenchmarkFontFixture[],
   signal?: AbortSignal,
 ): Promise<void> {
-  await preloadFontAssetUrls(
-    fixtures.map((fixture) => compressedFontUrls[fixture]),
-    'Slug font fixture',
-    signal,
+  await Promise.all(
+    fixtures.map(async (fixture) => {
+      const font = await loadBakedFont({
+        artifact: compressedFontUrls[fixture],
+        raster: { raster: slugTechnique },
+        ...(signal === undefined ? {} : { signal }),
+      });
+      font.dispose();
+    }),
   );
 }
 
 export async function loadSlugFontAsset(
   request: Extract<BenchmarkFontAssetRequest, { readonly technique: 'slug' }>,
 ): Promise<SlugFontAsset> {
-  const { delivery, fixture, library, onProgress, signal } = request;
+  const { delivery, fixture, onProgress, signal } = request;
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
   if (delivery === 'runtime') {
@@ -76,7 +80,6 @@ export async function loadSlugFontAsset(
       source: sourceUrlForFixture(fixture),
       raster: { raster: slugTechnique },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
-      library,
       ...(signal === undefined ? {} : { signal }),
     });
     return {
@@ -90,16 +93,14 @@ export async function loadSlugFontAsset(
     };
   }
   const source = request.bakedArtifact ?? fixtureManifestSource(fixture);
-  const artifact = await fetchAuthenticatedGzipAsset(source.url, source, 'Slug font fixture', signal);
   const loaded = await loadBakedFont({
-    artifact,
+    artifact: source.url,
     raster: { raster: slugTechnique },
-    library,
     ...(signal === undefined ? {} : { signal }),
   });
   return {
     technique: 'slug',
-    artifactBytes: artifact.byteLength,
+    artifactBytes: source.uncompressed.bytes,
     atlasGpuBytes: 0,
     compressedBytes: source.compressed.bytes,
     loaded,

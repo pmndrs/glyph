@@ -8,7 +8,7 @@ import {
   type GlyphLayoutInspection,
   type TextStyle,
 } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import type { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 

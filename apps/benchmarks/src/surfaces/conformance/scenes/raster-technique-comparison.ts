@@ -1,6 +1,6 @@
 import type { Constraints, Font, ParagraphLayout, TextStyle } from '@pmndrs/glyph';
-import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
-import type { slug } from '@pmndrs/glyph/three/slug';
+import type { msdf as mtsdf } from '@pmndrs/glyph/raster/msdf';
+import type { slug } from '@pmndrs/glyph/raster/slug';
 import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import type { Node } from 'three/webgpu';
 import * as THREE from 'three/webgpu';
