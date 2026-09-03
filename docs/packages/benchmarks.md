@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:8efb8bf9dec337b5530704ce9c8eae4629c3df39e3ca5043be00e9eb5caca500'
+source_digest: 'sha256:66f1b46a24f8cba10f9fef3c206441c122e1f34f765e88281ac5c5eb5f6c7954'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -535,6 +535,8 @@ Roadmap item 10.3 leaves browser core, every baker host, and every Wasm artifact
 The portable grouped-resource follow-up measures the Three adapter at 581,779 raw / 363,980 minified / 94,281 gzip /
 78,517 Brotli bytes and its largest technique runtime graph at 559,969 / 350,423 / 91,290 / 76,152. The corresponding
 renderer-neutral core graph shrank to 330,709 / 209,530 / 55,042 / 46,099; TypeGPU remains an external peer.
+
+A successful baked Presentation preload retains one application-lifetime `Font` owner per artifact and exact raster request. Short-lived scenes still acquire and dispose independent ref-counted leases, so switching away cannot evict a warm decode; HMR deterministically releases the retained preload owners. Rejected preloads are evicted immediately so a later request can retry.
 
 ## Package scripts
 

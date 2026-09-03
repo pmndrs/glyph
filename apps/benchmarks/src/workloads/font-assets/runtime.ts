@@ -1,4 +1,10 @@
-import { type AnyRasterFormat, type BakeProgressListener, type Font, type RasterFormatInput } from '@pmndrs/glyph';
+import {
+  type AnyRasterFormat,
+  type BakeProgressListener,
+  type Font,
+  type RasterFormatInput,
+  type RasterFormatRequest,
+} from '@pmndrs/glyph';
 import type { RuntimeFontBake, RuntimeFontBakeRequest } from '@pmndrs/glyph/config/font-library';
 
 import type { FontDelivery } from '../../benchmark/url-state';
@@ -25,6 +31,14 @@ const sourceUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'source-serif-4': sourceSerifSourceUrl,
   'dancing-script': dancingScriptSourceUrl,
 };
+
+const retainedBakedPreloads = new Map<string, Promise<Font<AnyRasterFormat>>>();
+
+if (import.meta.hot !== undefined) {
+  import.meta.hot.dispose(() => {
+    void disposeBakedFontPreloads();
+  });
+}
 
 export function sourceUrlForFixture(fixture: BenchmarkFontFixture): string {
   return sourceUrls[fixture];
@@ -75,6 +89,47 @@ export async function loadBakedFont<Format extends AnyRasterFormat>({
   readonly signal?: AbortSignal | undefined;
 }): Promise<Font<Format>> {
   return loadThroughBenchmarkLibrary({ baked: artifact }, raster, signal);
+}
+
+/**
+ * Keeps one application-lifetime owner for a baked fixture. Short-lived scenes still acquire and dispose their own
+ * Font leases, while the retained owner keeps the decoded source and raster variant warm across technique switches.
+ */
+export async function preloadBakedFont<Format extends AnyRasterFormat>({
+  artifact,
+  raster,
+  signal,
+}: {
+  readonly artifact: string;
+  readonly raster: RasterFormatRequest<Format>;
+  readonly signal?: AbortSignal | undefined;
+}): Promise<void> {
+  const key = retainedBakedPreloadKey(artifact, raster);
+  let retained = retainedBakedPreloads.get(key);
+  if (retained === undefined) {
+    const pending = loadBakedFont({ artifact, raster, signal });
+    retained = pending;
+    retainedBakedPreloads.set(key, pending);
+    void pending.catch(() => {
+      if (retainedBakedPreloads.get(key) === pending) retainedBakedPreloads.delete(key);
+    });
+  }
+  await retained;
+}
+
+/** Releases the benchmark application's retained preload owners. Scene-owned Font leases remain independently valid. */
+export async function disposeBakedFontPreloads(): Promise<void> {
+  const retained = [...retainedBakedPreloads.values()];
+  retainedBakedPreloads.clear();
+  const results = await Promise.allSettled(retained);
+  for (const result of results) if (result.status === 'fulfilled') result.value.dispose();
+}
+
+function retainedBakedPreloadKey<Format extends AnyRasterFormat>(
+  artifact: string,
+  input: RasterFormatRequest<Format>,
+): string {
+  return `${artifact}\u0000${input.raster.id}\u0000${JSON.stringify(input.options ?? null)}`;
 }
 
 /** Loads one font from its source URL, baking the core artifact and the selected raster through the measured bakers. */

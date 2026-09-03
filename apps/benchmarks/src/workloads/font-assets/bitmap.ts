@@ -26,6 +26,7 @@ import {
   loadBakedFont,
   loadSourceFont,
   measuredRuntimeFontBake,
+  preloadBakedFont,
   sourceUrlForFixture,
 } from './runtime';
 
@@ -69,14 +70,13 @@ export async function preloadBitmapFontAssets(
   const urls = density === 'live' ? bitmapDensityFontUrls : bitmapFontUrls;
   const strikes = density === 'live' ? liveStrikes : conformanceStrikes;
   await Promise.all(
-    fixtures.map(async (fixture) => {
-      const font = await loadBakedFont({
+    fixtures.map((fixture) =>
+      preloadBakedFont({
         artifact: urls[fixture],
         raster: { raster: bitmapTechnique, options: { strikes } },
         ...(signal === undefined ? {} : { signal }),
-      });
-      font.dispose();
-    }),
+      }),
+    ),
   );
 }
 

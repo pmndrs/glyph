@@ -22,6 +22,7 @@ import {
   loadBakedFont,
   loadSourceFont,
   measuredRuntimeFontBake,
+  preloadBakedFont,
   sourceUrlForFixture,
 } from './runtime';
 
@@ -58,14 +59,13 @@ export async function preloadSlugFontAssets(
   signal?: AbortSignal,
 ): Promise<void> {
   await Promise.all(
-    fixtures.map(async (fixture) => {
-      const font = await loadBakedFont({
+    fixtures.map((fixture) =>
+      preloadBakedFont({
         artifact: compressedFontUrls[fixture],
         raster: { raster: slugTechnique },
         ...(signal === undefined ? {} : { signal }),
-      });
-      font.dispose();
-    }),
+      }),
+    ),
   );
 }
 
