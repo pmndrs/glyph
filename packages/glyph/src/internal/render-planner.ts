@@ -496,7 +496,7 @@ class RenderPlannerImpl {
     this.#assertMutable();
     const ordinal = this.#nextTextOrdinal;
     const nextOrdinal = checkedNextOrdinal(ordinal);
-    const desired = resolveTextOptions(this.#handleState, options, ordinal);
+    const desired = resolveTextOptions(this.#handleState, options);
     const state: RetainedTextState = {
       paragraphId: this.#handleState.id('paragraph', `${this.#handleState.integration}/text/${ordinal}`),
       ordinal,
@@ -536,7 +536,7 @@ class RenderPlannerImpl {
     if (state.disposed) throw new Error('text engine text has been disposed');
     if (!isNonArrayObject(update)) throw new TypeError('text engine text update must be an object');
     const source = Object.freeze({ ...state.desired.source, ...update }) as RetainedTextOptions;
-    const desired = resolveTextOptions(this.#handleState, source, state.ordinal);
+    const desired = resolveTextOptions(this.#handleState, source);
     const candidate = { ...state, desired, metrics: retainedTextMetrics(desired, state.ordinal), dirty: true };
     try {
       this.#validateAggregateLimits(candidate, state);
@@ -1331,14 +1331,11 @@ function normalizePublishOptions(value: RenderPlannerPublishOptions | undefined)
   };
 }
 
-function resolveTextOptions(
-  handleState: GlyphHandleState,
-  value: RetainedTextOptions,
-  ordinal: number,
-): ResolvedTextOptions {
+function resolveTextOptions(handleState: GlyphHandleState, value: RetainedTextOptions): ResolvedTextOptions {
   if (!isNonArrayObject(value)) throw new TypeError('text engine text options must be an object');
   validateTextScalarOptions(value);
   const formattedText = normalizeTextInput(value.text);
+  validateInlineObjects(value.inlineObjects, formattedText.text.length);
   const style = value.style ?? {};
   const layout = value.layout ?? {};
   const constraints = value.constraints ?? {};
@@ -1424,6 +1421,25 @@ function resolveTextOptions(
   } catch (error) {
     for (const lease of leases.reverse()) lease.dispose();
     throw error;
+  }
+}
+
+function validateInlineObjects(
+  objects: readonly RetainedTextInlineObjectInput[] | undefined,
+  textLength: number,
+): void {
+  let previousOffset = -1;
+  for (const [index, object] of (objects ?? []).entries()) {
+    if (!Number.isSafeInteger(object.textOffset)) {
+      throw new TypeError(`text inline object ${index} offset must be a safe integer`);
+    }
+    if (object.textOffset < 0 || object.textOffset > textLength) {
+      throw new RangeError(`text inline object ${index} offset is outside the text`);
+    }
+    if (object.textOffset <= previousOffset) {
+      throw new RangeError('text inline object offsets must be strictly increasing');
+    }
+    previousOffset = object.textOffset;
   }
 }
 

@@ -346,7 +346,7 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
     marginBlockEnd: 0,
     baselineAlignment: 'alphabetic',
   });
-  const text = planner.createText({
+  const options = {
     font: fontBinding,
     text: 'A\uFFFcB\uFFFcC',
     constraints: {
@@ -363,7 +363,23 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
       inlineObject(1, inlineMaterials[0], inlineResources[0]),
       inlineObject(3, inlineMaterials[1], inlineResources[1]),
     ],
-  });
+  };
+  assert.throws(
+    () => planner.createText({ ...options, inlineObjects: [inlineObject(6, inlineMaterials[0], inlineResources[0])] }),
+    { name: 'RangeError', message: 'text inline object 0 offset is outside the text' },
+  );
+  assert.throws(
+    () =>
+      planner.createText({
+        ...options,
+        inlineObjects: [
+          inlineObject(3, inlineMaterials[0], inlineResources[0]),
+          inlineObject(1, inlineMaterials[1], inlineResources[1]),
+        ],
+      }),
+    { name: 'RangeError', message: 'text inline object offsets must be strictly increasing' },
+  );
+  const text = planner.createText(options);
 
   try {
     assert.equal(text.measure().lineCount > 0, true);
@@ -383,11 +399,12 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
       request.paragraphMutationCount,
       textShaperAbi.layouts.engineParagraphMutation,
     )[0].getUint32(textShaperAbi.layouts.engineParagraphMutation.paragraphId, true);
-    const regions = readRecords(
-      request.regionsOffset,
-      request.regionCount,
-      textShaperAbi.layouts.engineRegion,
+    const constraints = readRecords(
+      request.constraintsOffset,
+      request.constraintCount,
+      textShaperAbi.layouts.engineConstraint,
     );
+    const regions = readRecords(request.regionsOffset, request.regionCount, textShaperAbi.layouts.engineRegion);
     const exclusions = readRecords(
       request.exclusionsOffset,
       request.exclusionCount,
@@ -405,12 +422,27 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
     );
 
     assert.equal(paragraph > 0, true);
+    assert.equal(constraints.length, 1);
+    assert.equal(regions.length, 2);
+    assert.deepEqual(
+      constraints.map((value) => value.getUint32(textShaperAbi.layouts.engineConstraint.resumeCluster, true)),
+      [0],
+    );
     assert.equal(new Set(regionIds).size, 2);
     assert.equal(new Set(exclusionIds).size, 2);
     assert.equal(new Set(inlineObjectIds).size, 2);
-    assert.equal(regionIds.every((value) => value > 0), true);
-    assert.equal(exclusionIds.every((value) => value > 0), true);
-    assert.equal(inlineObjectIds.every((value) => value > 0), true);
+    assert.equal(
+      regionIds.every((value) => value > 0),
+      true,
+    );
+    assert.equal(
+      exclusionIds.every((value) => value > 0),
+      true,
+    );
+    assert.equal(
+      inlineObjectIds.every((value) => value > 0),
+      true,
+    );
     assert.deepEqual(
       regions.map((value) => ({
         start: value.getUint16(textShaperAbi.layouts.engineRegion.exclusionStart, true),
@@ -428,6 +460,10 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
     assert.deepEqual(
       inlineObjects.map((value) => value.getUint32(textShaperAbi.layouts.engineInlineObject.paragraphId, true)),
       [paragraph, paragraph],
+    );
+    assert.deepEqual(
+      inlineObjects.map((value) => value.getUint32(textShaperAbi.layouts.engineInlineObject.textOffset, true)),
+      [1, 3],
     );
   } finally {
     text.dispose();

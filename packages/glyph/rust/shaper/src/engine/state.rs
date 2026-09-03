@@ -3198,14 +3198,6 @@ impl ParagraphState {
         if geometry.is_empty() {
             return Ok(());
         }
-        let text_length = if self.text.is_prepared() {
-            self.text.pending().units.len()
-        } else {
-            self.text.committed().units.len()
-        };
-        geometry
-            .validate_text_length(text_length)
-            .map_err(|_| EngineError::InvalidRequest)?;
         self.geometry.pending_mut().build(geometry)?;
         self.pending_geometry_fingerprint = geometry.fingerprint();
         if geometry.inline_object_count() == 0
