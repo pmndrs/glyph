@@ -227,7 +227,7 @@ write
 - Say: no. three's `WebGPURenderer` carries a WebGL2 backend and swaps to it when a WebGPU adapter cannot be had,
   which is what happens on any plain-http origin; every format is one TSL shader that compiles for both backends.
   What you give up on WebGL2 is nothing text-specific.
-- Shape: one paragraph, three sentences. Do not write "on its own" until the first [verify] below is closed.
+- Shape: one paragraph, three sentences. "On its own" is confirmed in the notes below.
 
 notes · internals
 - `WebGPURenderer` constructs a `WebGPUBackend` and hands the base renderer a `getFallback` that builds a
@@ -258,7 +258,7 @@ write
   emits a draw only where a boundary forces one. Point at Performance for what those boundaries are and how to
   count them.
 - Anchor: "you write paragraphs; the GPU sees instance buffers".
-- Shape: two sentences plus the link. Do not list the boundary keys until the [verify] below is closed.
+- Shape: two sentences plus the link. The boundary keys are derived in the notes below; list them.
 
 notes · internals
 - one planner per root: every `Text` on the root is one publication stream and one reconcile —
@@ -288,7 +288,7 @@ write
   pinned to the same Unicode version, so a span never splits a cluster the engine sees whole. Layout is horizontal
   today.
 - Point at the shaping example.
-- Shape: one paragraph. Give the Unicode version number only after the [verify] below.
+- Shape: one paragraph. The Unicode version is 17.0.0, pinned as the notes below show.
 
 notes · internals
 - HarfRust 0.12.0 shapes in Rust — `packages/glyph/rust/shaper/Cargo.toml:25`; the baker's `oracle` feature pins

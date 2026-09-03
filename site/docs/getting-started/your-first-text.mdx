@@ -78,8 +78,7 @@ notes · internals
 - it reads `isLoaded()` first and calls `use(load())` only when the format is not ready — `react.ts:658–665`; D-300
 - what it returns is a mounted, immutable `Font` lease released on unmount — `react.ts:723–746`
 - a string is a URL — `font.ts:71` (`FontInput`)
-- [in flight] the hook's parameter is still typed `LoadFontInput` (`react/msdf.ts:8`, `loader.ts:86–92`), which
-  also admits the immutable-Font path's object forms; document the string only
+- the hook's parameter is `FontFaceSource` — `react/msdf.ts:16`; the table's set is the tree's set
 */}
 
 ## 3. Render it

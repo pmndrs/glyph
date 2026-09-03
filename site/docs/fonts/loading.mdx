@@ -178,8 +178,8 @@ notes · internals
   `font-face.ts#fontFaceResourceKey` (`:303–305`)
 - `isLoaded` then conditional `use()` — `react.ts#useHandleFontFace` (`:658–665`); the mounted lease —
   `#createMountedFontStore` (`:663`); D-300, D-302
-- [in flight] the hooks are typed over `LoadFontInput` and are thin wrappers over a generic `useFont` at HEAD —
-  `react/msdf.ts:3–4`, `react.ts:138–154`; the generic hook is being removed with the immutable-Font path
+- the hooks take `FontFaceSource` (`react/msdf.ts:16`) and are thin wrappers over a generic `useFont`
+  (`react.ts:632`) — [in flight] whether `useFont` stays public
 */}
 
 ### Preload
@@ -268,9 +268,8 @@ notes · internals
 - `Blob` classification by name or MIME — `font-face.ts#fontFaceLoadInput` (`:747–761`)
 - serialized clone — `font-face.ts:172`, `:622`
 - source types — `font-face.ts#FontFaceSource` (`:27`); D-297 (one source per face), D-298 (content identity)
-- [in flight] `FontFaceSource` still admits the immutable-Font `FontInput` objects (`font.ts:57–71`) and the
-  `{ source, runtimeBake, unicodeRanges }` form (`loader.ts:86–92`); D-297 lists URL, Request, Blob, and bytes only.
-  Document the object forms nowhere until the retirement lands.
+- `FontFaceSource` is exactly `string | URL | Blob | SerializedFontFace` — `font-face.ts:27`; the `FontInput`
+  object forms are no longer public — D-326 (codex `98c86c8a6`)
 - no `Request` source at codex `1dc580a87`: grep of `loader.ts`, `font.ts`, and `font-face.ts` finds no `Request`
   handling; `FontFaceSource` is `string | URL | Blob | SerializedFontFace` (`font-face.ts:27`). Do not list `Request`
 */}
@@ -351,10 +350,9 @@ write
   a FontFace. If it stays, it is one sentence naming what remains and linking Custom renderers.
 
 notes · internals
-- [in flight] `loadFont` and `createFontLibrary` left the root in codex `2d48a6688` for the integrator leaf
-  `@pmndrs/glyph/config/font-library` (D-299 as revised: "controlled fetch/runtime-bake infrastructure", delegating
-  into the same graph); `createFontStack` is still a root export — `index.ts:238`. The FontFace path enters the same
-  shared library — `glyph.ts:109–116`, `font-face.ts:104`
+- the loader is package-private: `loadFont`, `createFontLibrary`, `FontLibrary`, `defineFont`, and tokens are not
+  public and the `/config/font-library` leaf is gone — D-326 (codex `98c86c8a6`); `createFontStack` remains a root export
+  (`index.ts:225`) — [in flight]
 - no Three `FontLoader` at codex `1dc580a87`: `src/three/font-loader.ts` is absent and no `class FontLoader` exists
   under `src/three`; D-299 (revised) records its removal
 */}

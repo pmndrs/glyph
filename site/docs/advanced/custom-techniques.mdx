@@ -349,8 +349,8 @@ notes · internals
 - `face.formats()` — `font-face.ts#FontFaceBase.formats` (`:90`), D-310
 - descriptor canonicalisation in the example — `contract.ts:22–32`; the artifact records `rasterKey` and the
   descriptor — `artifact.ts:47–57`
-- [in flight] `glyph.fontFace` sources: the tree's example tests still pass `{ baked: dataUrl }`; the canonical form
-  is a URL string and `{ baked }` is being retired — keep the snippet on the URL form (D-310)
+- `glyph.fontFace` sources are the canonical set only: `string | URL | Blob | SerializedFontFace`
+  (`font-face.ts:27`); the `{ baked }` form is gone from the tests — D-326 (codex `98c86c8a6`)
 */}
 
 ## The artifact
@@ -577,8 +577,7 @@ notes · internals
 - the example renderer declares only this format — `packages/glyph-example-renderer/src/config.ts:80–84`, `:119`
 - `createText({ font })` accepts a face, a member, or a string — `three/text.ts:256–283`
 - the hook — `react.ts#useFont` (`:138–150`, `HookFontConfig` `:129`), `.preload()` and `.clear()` (`:632`, `:646`)
-- [in flight] the tree's tests declare the face from a `{ baked: dataUrl }` source; the canonical form is the URL
-  string above (D-310)
+- the tests declare the face from a URL now; `{ baked }` is not a source — D-326 (codex `98c86c8a6`)
 - [verify] whether `useFont` resolves through the default R3F handle or a `GlyphProvider` handle when the format is
   custom: `react.ts:799` throws for nested declarations not loaded with `useFont`; read the provider path before
   promising the hook works without a provider that lists the format

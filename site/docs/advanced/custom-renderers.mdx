@@ -391,10 +391,9 @@ notes · internals
   (`:435–449`); shared GPU objects — `three/renderer-resources.ts#acquireRenderResource` (`:76–100`), owned by the
   codec `encode` returns (`:32–58`)
 - unloaded selection throws `FONT_FACE_FORMAT_NOT_LOADED` — `font-face.ts:643–648`; D-310
-- [in flight] `GlyphHandleFonts.acquire` still returns the immutable `Font` lease (`config/glyph.ts:754`) and the
-  planner binds fonts as stacks (`configured-handle.ts:635–646`, `loaded-font.ts#createFontStack`); the other agent is
-  retiring the immutable-Font loaders — keep this page on `glyph.fontFace` and re-check the acquire/stack seam after
-  the merge (D-310)
+- `GlyphHandleFonts.acquire(selection)` takes a face selection and returns the integrator's immutable `Font` lease
+  — `config/glyph.ts:754`; that lease is what a configured root holds internally after the selection is loaded —
+  D-326 (codex `98c86c8a6`)
 */}
 
 ## Minimal versus three
@@ -476,7 +475,6 @@ notes · internals
   face `:70–74`, injected failure `:85–88`, first publication `:91–112`, unchanged frame `:114–119`, update `:121–126`,
   dispose `:128–135`
 - the boundary test — `packages/glyph-example-renderer/tests/package-boundary.test.ts:24–58`
-- [in flight] the test declares the face as `glyph.fontFace({ baked: dataUrl }, { format: glyphExample({ paletteSeed: 7 }) })`
-  (`:70–74`); `{ baked }` sources are being retired — describe it as "declares the baked GLB through `glyph.fontFace`"
-  and re-check the source form after the merge (D-310)
+- no test passes `{ baked }` any more: a source is a URL string, `URL`, `Blob`, or `SerializedFontFace`
+  (`font-face.ts:27`) — D-326 (codex `98c86c8a6`)
 */}

@@ -364,5 +364,5 @@ notes · internals
   `engine/transport.rs:347–367`
 - measure-query 1.815 ms median / 1.930 ms p95 vs full update 2.996 / 4.483 ms — `docs/packages/glyph.md:781–787`
 - renderer-free `Paragraph.measure(constraints?)` caches per constraint key — `paragraph.ts:166–180`;
-  [in flight] at HEAD `createParagraph` takes an immutable `Font`, not a FontFace member (`paragraph.ts:71`, `:549`)
+  `createParagraph({ font })` takes a face selection — `paragraph.ts:77`; D-326 (codex `98c86c8a6`)
 */}

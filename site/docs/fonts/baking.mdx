@@ -196,10 +196,7 @@ glyph bake --project-root . --asset-root public --output-root public/generated
 {/*
 write
 - Question: can the bake find my fonts instead of my listing them?
-- Hold this section until the [in flight] item resolves: at HEAD discovery scans for `defineFont()` tokens, which
-  is the immutable-Font path being removed; the FontFace declaration has no static token yet. Write only the
-  mechanics that survive: a scan of the project's TypeScript and JavaScript, one GLB per source written beside
-  the asset or mirrored under `--output-root`, direct and discovery options never mixed.
+- Discovery reads `glyph.fontFace(source, { format })` calls directly; write the section against that
 - Shape: one paragraph and the table; no code until the token question is settled.
 
 notes · internals
@@ -214,9 +211,9 @@ notes · internals
 - one bake per source with every discovered raster; the second raster of one extension becomes an external
   companion — `node/bake.ts#groupDefinitions` (`:266–292`), `#loadProjectPlans` (`:311–327`)
 - default asset root is `<project>/public` when it exists — `discovery.ts#resolveAssetRoots` (`:581–589`)
-- [in flight] `defineFont` is the static token of the immutable-Font path (D-286 names it as the discovery
-  contract); D-296 says no `defineFont()` token is required by the FontFace declaration, and no decision names what
-  discovery scans for after the retirement. Ask before writing this section.
+- static bake discovery reads `glyph.fontFace(source, { format })` directly — `discovery.ts:147` (a dynamic source
+  fails as `dynamic-font-source`), `:186`; `defineFont` and tokens are retired — D-326 (codex `98c86c8a6`), superseding D-286's
+  token clauses
 */}
 
 ## Node API
@@ -265,8 +262,8 @@ write
   warnings, the `PMNDRS_font` JSON schema, then the semantic checks. The runtime trusts an artifact that passed.
 - A `> [!WARNING]` callout under the table: an outline the rasteriser cannot read is marked absent, silently; a
   face that bakes complete shaping data and an empty raster lays out at full width and draws holes. Check `glyph
-  glyphs` names your glyphs and look at the report's raster sizes before trusting a new face. (Name CFF only after
-  the [verify] below is settled.)
+  glyphs` names your glyphs and look at the report's raster sizes before trusting a new face. (Do not name CFF: the
+  notes below show the bakers read CFF outlines like any other.)
 - Shape: two paragraphs, the table, the callout.
 
 notes · internals
