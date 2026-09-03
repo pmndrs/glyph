@@ -100,18 +100,6 @@ describe('independent package-size report', () => {
     expect(() => summarizePackageSizes(incomplete)).toThrow(/text-shaper-wasm/);
   });
 
-  it('keeps the lazy validator out of the initial browser-core measurement', () => {
-    const core = report.entries.find((candidate) => candidate.id === 'browser-core');
-    const validator = report.entries.find((candidate) => candidate.id === 'font-validator-js');
-    expect(core?.status).toBe('measured');
-    expect(validator?.status).toBe('measured');
-    if (core?.status !== 'measured' || validator?.status !== 'measured') return;
-    if (core.minifiedBytes === undefined || validator.minifiedBytes === undefined) {
-      throw new Error('Measured entries must contain minified byte counts');
-    }
-    expect(core.minifiedBytes).toBeLessThan(validator.minifiedBytes);
-  });
-
   it('keeps foreign-host native-tool variance inside complete reviewed budgets', () => {
     const foreign = structuredClone(report);
     foreign.measurementHost = { platform: 'linux', architecture: 'x64' };

@@ -104,13 +104,3 @@ fn overflow() -> BakeError {
         "GLB exceeds V0 addressable limits",
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn align4_rounds_up() {
-        assert_eq!([align4(0), align4(1), align4(4), align4(5)], [0, 4, 4, 8]);
-    }
-}

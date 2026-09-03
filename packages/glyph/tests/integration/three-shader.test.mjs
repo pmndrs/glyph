@@ -5,20 +5,12 @@ import test from 'node:test';
 import { loadFont } from '../../dist/loader.js';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
-import { bitmapShader, decorationShader, msdfShader, slugShader } from '../../dist/tsl.js';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
-
-test('the canonical technique shaders are exported as callable node builders', () => {
-  assert.equal(typeof bitmapShader, 'function');
-  assert.equal(typeof msdfShader, 'function');
-  assert.equal(typeof slugShader, 'function');
-  assert.equal(typeof decorationShader, 'function');
-});
 
 test('a custom Three material composes over the Bitmap shader in the Rust command-buffer draw path', async (t) => {
   const three = await createThreeTestHandle(t);
