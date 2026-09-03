@@ -1,12 +1,13 @@
 export const packageSizeBudgets = {
   'browser-core': {
-    // Root Paragraph now ships its real private measurement engine instead of a detached constructor sketch.
-    // Final planner vocabulary and typed font requests add raw names while compressed sizes remain below budget.
-    // Planner-assisted detached copies add the synchronous copy boundary to the root graph.
-    rawBytes: 456_000,
-    minifiedBytes: 295_000,
+    // tsdown emits a shared, already-minified distribution graph, so raw and consumer-minified measurements now
+    // converge instead of preserving the old tsc-output gap. After the single-graph font-loader consolidation the
+    // measured root is 325,169 raw / 317,267 minified / 80,435 gzip / 66,955 Brotli. Keep the compressed ceilings
+    // close to that reviewed graph while reserving only ordinary cross-host compression variance.
+    rawBytes: 330_000,
+    minifiedBytes: 320_000,
     gzipBytes: 82_400,
-    brotliBytes: 63_500,
+    brotliBytes: 68_000,
   },
   // Config, Codec, schema, technique policy helpers, and the zero-copy command-buffer contract.
   'glyph-config-js': {
@@ -80,16 +81,14 @@ export const packageSizeBudgets = {
     gzipBytes: 468_000,
     brotliBytes: 368_000,
   },
-  // Three realization, engine-owned backend/plan mapping, first-frame measurement and bounds,
-  // exact-generation resource transactions, final planner names, bounded candidate leases,
-  // and detached Glyphs/Decorations objects with independent materials and full matrices. The
-  // final detached cleanup and live draw-order closure measure 742,195 raw bytes; the raw ceiling
-  // is rounded to the next 1 KB while compressed ceilings remain unchanged.
+  // Three realization plus the root graph measures 520,663 raw / 509,451 minified / 127,281 gzip / 104,932 Brotli
+  // after tsdown shared-chunk bundling and the single-graph font-loader consolidation. The old raw ceiling described
+  // unbundled tsc output and no longer measured the published graph; these ceilings track the actual consumer graph.
   'three-runtime-js': {
-    rawBytes: 743_000,
-    minifiedBytes: 478_000,
-    gzipBytes: 121_000,
-    brotliBytes: 100_000,
+    rawBytes: 525_000,
+    minifiedBytes: 512_000,
+    gzipBytes: 128_000,
+    brotliBytes: 106_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
