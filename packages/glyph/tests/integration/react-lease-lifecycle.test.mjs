@@ -296,9 +296,9 @@ test('an R3F portal selects a distinct terminal root for its target Scene', asyn
     hudScene.updateMatrixWorld(true);
     assert.equal(world.textCount, 1);
     assert.equal(hud.textCount, 1);
-    assert.equal(world.drawRoot.parent, worldScene);
-    assert.equal(hud.drawRoot.parent, hudScene);
-    assert.notEqual(world.drawRoot.parent, hud.drawRoot.parent);
+    assert.ok(worldScene.getObjectByName('@pmndrs/glyph:portal-world'));
+    assert.ok(hudScene.getObjectByName('@pmndrs/glyph:portal-hud'));
+    assert.notEqual(worldScene, hudScene);
   } finally {
     await renderer.unmount();
     fixture.dispose();

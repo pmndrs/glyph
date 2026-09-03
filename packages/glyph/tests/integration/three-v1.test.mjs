@@ -128,6 +128,11 @@ test('one initialized Glyph runtime creates independent named Three handles over
   assert.equal('createText' in first, true, 'the callable handle reflects its anonymous-root surface');
   assert.equal('handle' in first, true);
   assert.equal('createText' in first('hud'), true, 'named roots reflect the same adapter extension surface');
+  assert.equal('drawRoot' in first, false, 'renderer draw objects stay behind the Three config schema');
+  assert.equal('scene' in secondSceneRoot, false, 'Scene discovery stays behind the Three root host');
+  assert.equal('services' in secondSceneRoot, false, 'core root services do not leak through public roots');
+  assert.equal('renderer' in secondSceneRoot, false, 'the configured renderer does not leak through public roots');
+  assert.equal('acquireFont' in secondSceneRoot, false, 'internal Font acquisition does not leak through public roots');
   const secondSceneLabel = secondSceneRoot.createText({
     font,
     text: 'Same handle, other scene',
@@ -159,17 +164,14 @@ test('one initialized Glyph runtime creates independent named Three handles over
     assert.ok(wrappedTransformSyncCalls > semanticCounts.transforms, 'transform-only shape synchronizes the renderer');
     const firstDrawRoot = scene.getObjectByName('@pmndrs/glyph:anonymous');
     assert.ok(firstDrawRoot, 'the handle fronts one anonymous root that late-binds to the Text Scene');
-    assert.equal(
-      secondSceneRoot.drawRoot.parent,
-      secondScene,
-      'a named root gives the same handle an independent publication stream in another Scene',
-    );
+    const secondDrawRoot = secondScene.getObjectByName('@pmndrs/glyph:secondary-scene');
+    assert.ok(secondDrawRoot, 'a named root gives the same handle an independent publication stream in another Scene');
     assert.ok(
       firstDrawRoot.children.some((child) => child.isMesh),
       'root batches realize as renderer-owned meshes',
     );
     assert.ok(
-      secondSceneRoot.drawRoot.children.some((child) => child.isMesh),
+      secondDrawRoot.children.some((child) => child.isMesh),
       'the second root owns its own renderer meshes',
     );
     assert.throws(() => group.add(label), /different Glyph roots/);
@@ -298,11 +300,11 @@ test('one Three root binds one Scene and exposes its semantic name to material f
     );
     firstScene.add(second);
     firstScene.updateMatrixWorld(true);
-    assert.equal(root.drawRoot.parent, firstScene);
+    assert.ok(firstScene.getObjectByName('@pmndrs/glyph:semantic-hud'));
     assert.equal(materialRoots.length > 0, true);
-    assert.equal(materialRoots[0], root, 'material factories receive the selected root object');
     assert.equal(materialRoots[0].name, 'semantic-hud', 'the semantic root name is not derived from Scene.uuid');
     assert.equal(materialRoots[0].scene, firstScene);
+    assert.equal(materialRoots[0].drawRoot.name, '@pmndrs/glyph:semantic-hud');
   } finally {
     first.dispose();
     second.dispose();
@@ -322,18 +324,22 @@ test('a root releases its renderer publication when its final Text is disposed',
   const first = root.createText({ font, text: 'first' });
   scene.add(first);
   scene.updateMatrixWorld(true);
-  assert.equal(root.drawRoot.parent, scene);
+  assert.ok(scene.getObjectByName('@pmndrs/glyph:transient'));
   assert.ok(root.gpuBytes > 0);
 
   first.dispose();
   assert.equal(root.textCount, 0);
-  assert.equal(root.drawRoot.parent, null, 'the empty root no longer retains its Scene');
+  assert.equal(
+    scene.getObjectByName('@pmndrs/glyph:transient'),
+    undefined,
+    'the empty root no longer retains its Scene',
+  );
   assert.equal(root.gpuBytes, 0, 'the empty root releases its planner and renderer resources');
 
   const second = root.createText({ font, text: 'second' });
   scene.add(second);
   scene.updateMatrixWorld(true);
-  assert.equal(root.drawRoot.parent, scene, 'the same idempotent root can publish again');
+  assert.ok(scene.getObjectByName('@pmndrs/glyph:transient'), 'the same idempotent root can publish again');
   second.dispose();
   font.dispose();
 });
@@ -348,14 +354,17 @@ test('a root restores its draw object when the host clears and reattaches the au
   const text = three.createText({ font, text: 'reattached' });
   scene.add(text);
   scene.updateMatrixWorld(true);
-  assert.equal(three.drawRoot.parent, scene);
+  assert.ok(scene.getObjectByName('@pmndrs/glyph:anonymous'));
   assert.ok(rootDraws(scene).length > 0);
 
   scene.clear();
-  assert.equal(three.drawRoot.parent, null);
+  assert.equal(scene.getObjectByName('@pmndrs/glyph:anonymous'), undefined);
   scene.add(text);
   scene.updateMatrixWorld(true);
-  assert.equal(three.drawRoot.parent, scene, 'the stable scene identity must not hide a detached draw object');
+  assert.ok(
+    scene.getObjectByName('@pmndrs/glyph:anonymous'),
+    'the stable scene identity must not hide a detached draw object',
+  );
   assert.ok(rootDraws(scene).length > 0);
 
   text.dispose();

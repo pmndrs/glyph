@@ -51,6 +51,12 @@ const extendedThreeConfig = defineGlyphConfig({
 glyph.handle('three:extended-type-fixture', extendedThreeConfig) satisfies ThreeHandle;
 const hud = three('hud');
 hud.createText({ font: bitmapFont, text: 'Named root' });
+// @ts-expect-error Renderer draw objects stay behind the Three config schema.
+void three.drawRoot;
+// @ts-expect-error Scene discovery is internal to the Three root host.
+void hud.scene;
+// @ts-expect-error Renderer services are not part of the application-facing root.
+void hud.services;
 // @ts-expect-error Calling a handle only creates or selects named roots.
 three();
 // @ts-expect-error A named root is terminal; roots cannot create nested roots.
