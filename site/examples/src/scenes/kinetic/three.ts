@@ -1,11 +1,14 @@
 import { glyph, loadFont, txt } from '@pmndrs/glyph';
 import { ThreeConfig, span } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
 import {
   Group,
+  LinearMipmapLinearFilter,
   Matrix4,
   Mesh,
   OrthographicCamera,
+  PlaneGeometry,
   RenderTarget,
   Scene,
   TorusKnotGeometry,
@@ -14,114 +17,103 @@ import {
 
 import { INTER } from '../../fonts';
 import { circle, placeOnPath } from './knot';
-import { pathInk, surfaceMaterial, surfaceScroll } from './materials';
+import { groundMaterial, pathInk, surfaceMaterial, surfaceScroll } from './materials';
 import {
   RADIUS,
   REPEAT,
-  RINGS,
+  RING,
   RING_TEXT,
-  SURFACE,
+  TILE,
   TUBE,
+  lastWord,
   passageAt,
   passageFrame,
   splitCurrentWord,
-  wordIndexAt,
 } from './scene';
 
 /**
- * The imperative twin: a second Scene on a named root renders to a
- * RenderTarget before the main scene each frame; the tube wears its texture;
- * the rings are shaped once, broken apart, and placed by matrix; the strip is
- * `set({ text })` on every tick with the current word as a `span`.
+ * The imperative twin: a second Scene on a named root renders one word to a
+ * RenderTarget before the main scene each frame; the knot wears its texture;
+ * the ring is shaped once, broken apart, and placed by matrix; the tile and
+ * the passage line are `set({ text })` on every tick.
  */
 export async function mount(scene: Scene, renderer: Renderer): Promise<() => void> {
   await glyph.init();
   const handle = glyph.handle('examples:kinetic', ThreeConfig);
-  const inter = await loadFont({ baked: INTER }, slug);
+  const [interSlug, interMsdf] = await Promise.all([
+    loadFont({ baked: INTER }, slug),
+    loadFont({ baked: INTER }, msdf),
+  ]);
   const accent = span({ color: '#ffd166' });
+  const dim = span({ color: '#97a1b4' });
 
-  // The surface scene, on its own root: a root spans at most one Scene.
-  const surface = new Scene();
-  const camera = new OrthographicCamera(
-    -SURFACE.width / 2,
-    SURFACE.width / 2,
-    SURFACE.height / 2,
-    -SURFACE.height / 2,
-    -10,
-    10,
-  );
+  // The tile scene, on its own root: a root spans at most one Scene.
+  const tile = new Scene();
+  const camera = new OrthographicCamera(-TILE.width / 2, TILE.width / 2, TILE.height / 2, -TILE.height / 2, -10, 10);
   camera.position.z = 5;
-  const target = new RenderTarget(SURFACE.width * SURFACE.pixelsPerUnit, SURFACE.height * SURFACE.pixelsPerUnit);
-  const strip = handle('surface').createText({
-    font: inter,
+  const target = new RenderTarget(TILE.width * TILE.pixelsPerUnit, TILE.height * TILE.pixelsPerUnit);
+  target.texture.generateMipmaps = true;
+  target.texture.minFilter = LinearMipmapLinearFilter;
+  const word = handle('tile').createText({
+    font: interSlug,
     text: '',
-    style: { fontSize: 2.6, color: '#ffffff', letterSpacing: 0.02 },
-    layout: { wrap: 'none', align: 'end' },
-    constraints: { width: { mode: 'exact', size: SURFACE.width - 2 } },
+    style: { fontSize: 0.92, color: '#ffffff', letterSpacing: 0.02 },
+    layout: { wrap: 'none', align: 'center' },
+    constraints: { width: { mode: 'exact', size: TILE.width } },
   });
-  strip.position.set(-SURFACE.width / 2 + 1, 1.3, 0);
-  surface.add(strip);
+  word.position.set(-TILE.width / 2, 0.44, 0);
+  tile.add(word);
 
+  const ground = new Mesh(new PlaneGeometry(60, 34), groundMaterial());
+  ground.position.z = -9;
   const knot = new Group();
-  knot.position.set(1.6, 0.2, -1.2);
-  const tube = new Mesh(new TorusKnotGeometry(RADIUS, TUBE, 320, 32, 2, 3), surfaceMaterial(target.texture, REPEAT));
+  knot.position.set(0.3, 0.25, -1.4);
+  const tube = new Mesh(new TorusKnotGeometry(RADIUS, TUBE, 400, 40, 2, 3), surfaceMaterial(target.texture, REPEAT));
   knot.add(tube);
 
-  const rings = RINGS.map((spec) => {
-    const holder = new Group();
-    holder.position.set(1.6, 0.2, -1.2);
-    holder.rotation.set(spec.tilt[0], spec.tilt[1], spec.tilt[2]);
-    const band = handle.createText({
-      font: inter,
-      material: pathInk,
-      text: RING_TEXT,
-      style: { fontSize: spec.size, color: '#c9d3e8', letterSpacing: 0.06 },
-      layout: { wrap: 'none' },
-      constraints: { width: { mode: 'exact', size: 40 } },
-    });
-    holder.add(band);
-    return { holder, band, path: circle(spec.radius), speed: spec.speed };
+  const orbit = new Group();
+  orbit.position.set(0.3, 0.25, -1.4);
+  orbit.rotation.set(RING.tilt[0], RING.tilt[1], RING.tilt[2]);
+  const band = handle.createText({
+    font: interSlug,
+    material: pathInk,
+    text: RING_TEXT,
+    style: { fontSize: RING.size, color: '#b6c0d6', letterSpacing: 0.08 },
+    layout: { wrap: 'none' },
+    constraints: { width: { mode: 'exact', size: 40 } },
   });
+  orbit.add(band);
 
-  const spotlight = new Group();
-  spotlight.position.set(-3.1, 2.05, 0.6);
-  const spot = handle.createText({
-    font: inter,
+  const line = handle.createText({
+    font: interMsdf,
     text: '',
-    style: { fontSize: 0.9, color: '#ffd166', letterSpacing: -0.02 },
-    layout: { align: 'center', wrap: 'none' },
-    constraints: { width: { mode: 'exact', size: 6 } },
+    style: { fontSize: 0.26, color: '#97a1b4', lineHeight: 1.3 },
+    layout: { wrap: 'word', align: 'start' },
+    constraints: { width: { mode: 'exact', size: 7.5 } },
   });
-  spot.position.set(-3, 0.45, 0);
-  spotlight.add(spot);
+  line.position.set(-5.2, -2.25, 0.5);
 
-  scene.add(knot, ...rings.map((ring) => ring.holder), spotlight);
-  glyph.shape(); // the bands commit here, so they can be copied
-  const copies = rings.map((ring) => {
-    const [glyphs] = ring.band.breakApart();
-    ring.holder.add(glyphs);
-    ring.band.visible = false;
-    return { ...ring, glyphs, width: ring.band.measure().contentWidth };
-  });
+  scene.add(ground, knot, orbit, line);
+  glyph.shape(); // the band commits here, so it can be copied
+  const [glyphs] = band.breakApart();
+  orbit.add(glyphs);
+  band.visible = false;
+  const bandWidth = band.measure().contentWidth;
+  const path = circle(RING.radius);
 
   const m = new Matrix4();
   let frame = 0;
   let elapsed = 0;
   let shown = -1;
-  let lastWord = -1;
-  let wordStarted = 0;
   const tick = (): void => {
     elapsed += 1 / 60;
-    surfaceScroll.value = elapsed * 0.04;
-    knot.rotation.set(0.9, elapsed * 0.12, 0.15);
-    for (const ring of copies) {
-      const offset = elapsed * ring.speed;
-      for (let i = 0; i < ring.glyphs.count; i += 1) {
-        const rest = ring.glyphs.measurements[i];
-        if (rest === undefined) continue;
-        const s = (rest.originalMatrix.elements[12] ?? 0) * (ring.path.length / ring.width) + offset;
-        ring.glyphs.setMatrixAt(i, placeOnPath(ring.path, s, 0, 0, rest.originalMatrix, m));
-      }
+    surfaceScroll.value = elapsed * 0.06;
+    knot.rotation.set(0.85 + Math.sin(elapsed * 0.17) * 0.2, elapsed * 0.11, 0.2);
+    for (let i = 0; i < glyphs.count; i += 1) {
+      const rest = glyphs.measurements[i];
+      if (rest === undefined) continue;
+      const s = (rest.originalMatrix.elements[12] ?? 0) * (path.length / bandWidth) + elapsed * RING.speed;
+      glyphs.setMatrixAt(i, placeOnPath(path, s, 0, 0, rest.originalMatrix, m));
     }
 
     const next = passageFrame(elapsed);
@@ -129,20 +121,15 @@ export async function mount(scene: Scene, renderer: Renderer): Promise<() => voi
     if (next.shown !== shown) {
       shown = next.shown;
       const typed = source.slice(0, shown);
-      const { before, current } = splitCurrentWord(typed.slice(-46));
-      strip.set({ text: txt`${before}${accent`${current}`}` });
-      spot.set({ text: splitCurrentWord(typed).current });
+      const { before, current } = splitCurrentWord(typed);
+      const caret = shown < source.length ? '|' : '';
+      word.set({ text: (current || lastWord(before)).replace(/[^A-Za-z]/g, '').toUpperCase() });
+      line.set({ text: txt`${before}${accent`${current}`}${dim`${caret}`}` });
     }
-    const word = wordIndexAt(source, next.shown);
-    if (word !== lastWord) {
-      lastWord = word;
-      wordStarted = elapsed;
-    }
-    spotlight.scale.setScalar(1 + 0.35 * Math.exp(-7 * (elapsed - wordStarted)));
 
     glyph.shape(); // every dirty root, both scenes, one call
     renderer.setRenderTarget(target);
-    renderer.render(surface, camera);
+    renderer.render(tile, camera);
     renderer.setRenderTarget(null);
     frame = requestAnimationFrame(tick);
   };
@@ -150,16 +137,15 @@ export async function mount(scene: Scene, renderer: Renderer): Promise<() => voi
 
   return () => {
     cancelAnimationFrame(frame);
-    for (const ring of copies) {
-      ring.glyphs.dispose();
-      ring.band.dispose();
+    glyphs.dispose();
+    for (const text of [band, word, line]) text.dispose();
+    for (const mesh of [tube, ground]) {
+      mesh.geometry.dispose();
+      mesh.material.dispose();
     }
-    strip.dispose();
-    spot.dispose();
-    tube.geometry.dispose();
-    tube.material.dispose();
     target.dispose();
-    inter.dispose();
+    interSlug.dispose();
+    interMsdf.dispose();
     handle.dispose();
   };
 }

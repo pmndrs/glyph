@@ -24,7 +24,7 @@ export const EXAMPLES = {
   kinetic: {
     title: 'Kinetic typography',
     page: '/docs/getting-started/examples',
-    stage: { lit: true },
+    stage: {},
     load: () => import('./scenes/kinetic/scene'),
   },
   hello: {
