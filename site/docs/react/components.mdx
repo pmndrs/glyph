@@ -190,7 +190,7 @@ const hud = glyph.handle('hud', ThreeConfig);
 
 | Prop | Meaning |
 | --- | --- |
-| `handle` | a `ThreeHandle` (its anonymous root) or a named `ThreeRoot` from `handle(name)` |
+| `handle` | a `ThreeHandle` (its anonymous root), a named `ThreeRoot` from `handle(name)`, a string (that named root on the built-in default handle), or nothing (the Canvas-local default root) |
 | `fontFaces` | `{ Name: url \| face \| { src, format } }` — names for `font="Name"` in this subtree |
 | `fallback` | Suspense fallback while mapped faces load |
 | `errorFallback` | node or `(error: FontLoadError) => node`; catches only font load errors, rethrows the rest |
@@ -200,7 +200,8 @@ const hud = glyph.handle('hud', ThreeConfig);
 {/*
 write
 - Question: when do I need a provider, and what does it own?
-- Say: when you made the handle yourself, or want a named root for a subtree, or want to write `font="Inter"`.
+- Say: when you made the handle yourself, or want a named root for a subtree (a string names one on the default
+  handle), or want to write `font="Inter"`.
   It captures its `handle` and `fontFaces` on first render and throws if either changes; remount it with a `key`
   to select another. It disposes only the faces it declared from shorthand entries, never a handle or a face you
   passed in. `fontFaces` names fonts; it does not decide when they load. `fontFaces` or `fallback` adds a local
@@ -212,7 +213,9 @@ notes · internals
 - props — `react.ts:193–200` (`GlyphProviderProps`); `fontFaces` entries — `:188–191` (`GlyphProviderFontFace`)
 - `handle` and `fontFaces` are captured on first render; a change throws — `react.ts:216–219`
 - a callable handle selects its anonymous root; a terminal root selects itself — `react.ts:417–420`
-  (`selectReactRoot`), `three/handle.ts:132–142`
+  (`selectReactRoot`), `three/handle.ts:132–142`; a string is the idempotent named root on the built-in default
+  handle, and omission keeps the Canvas-local default root — D-324 (codex `9fef26f8a`); [verify] the line in
+  `react.ts` that resolves the string once the diff settles
 - shorthand entries (`url`, `{ src, format }`) become `glyph.fontFace(...)` owned by the provider and disposed on
   unmount; a face you pass is never disposed — `react.ts:312–343` (`createProviderFontFaces`), `:235–240`
 - `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` adds a boundary that rethrows anything

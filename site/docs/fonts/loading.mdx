@@ -352,9 +352,10 @@ write
   a FontFace. If it stays, it is one sentence naming what remains and linking Custom renderers.
 
 notes · internals
-- [in flight] `loadFont`, `createFontLibrary`, `createFontStack` are still root exports at HEAD — `index.ts:245–248`;
-  they are the immutable-Font path being removed. The FontFace path enters the same shared library —
-  `glyph.ts:109–116`, `font-face.ts:104`
+- [in flight] `loadFont` and `createFontLibrary` left the root in codex `2d48a6688` for the integrator leaf
+  `@pmndrs/glyph/config/font-library` (D-299 as revised: "controlled fetch/runtime-bake infrastructure", delegating
+  into the same graph); `createFontStack` is still a root export — `index.ts:238`. The FontFace path enters the same
+  shared library — `glyph.ts:109–116`, `font-face.ts:104`
 - [verify] whether a Three `FontLoader` exists at HEAD: `src/three/font-loader.ts` is absent at 09d7ae569
 */}
 
