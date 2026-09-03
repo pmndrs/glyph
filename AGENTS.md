@@ -4,6 +4,13 @@
 
 Before writing or reviewing Rust, TypeScript, React, Wasm boundaries, or tests, read the canonical [engineering standard](docs/engineering/code-style.md). Use the repository-local `maintainability-review` skill for a deliberate cleanup, pre-release review, or milestone-wide audit; the skill owns the procedure, while the engineering standard owns the rules.
 
+Classify validation by who can author the value, not by module, package, Worker, language, or Wasm crossings. Validate
+public caller input, third-party callback results, and genuinely external data once; retain raw memory-safety and work
+bounds. Trust package-owned TypeScript/Rust/baker/serializer/Worker output and prove it at the producer with unit, ABI,
+property, fuzz, and product tests. Never justify a runtime guard with a test that forges an internal value no production
+caller can supply. During validation cleanup, remove one internal check, strengthen its producer proof, run the focused
+test, and then continue.
+
 Use the repository-local `tsl` skill before implementing or reviewing Three.js Shading Language materials, compute work, post-processing, or GLSL-to-TSL migrations. Verify examples against the repository's installed Three.js version rather than relying on remembered APIs.
 
 Use the repository-local `engine-call-contract` skill before adding, moving, or removing anything on a published entry point, before giving an engine call an error path or a result type, and when deciding whether a failure belongs to the caller or to this package. It carries the two rules the API is built on: a call answers or throws where it was written, and application-encountered values and types live at the root while integrator construction helpers live on their exact `/config/*` leaves.

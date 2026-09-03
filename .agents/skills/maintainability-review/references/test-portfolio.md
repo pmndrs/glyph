@@ -17,7 +17,8 @@ the next maintainer distinguish a regression from incidental implementation shap
 
 Keep a focused test when it owns evidence the higher-order test cannot provide cheaply or precisely:
 
-- validation at a caller-controlled, network, Worker, artifact, or Wasm trust boundary;
+- validation at a caller-controlled public API, third-party callback, or genuinely external network, storage, or message
+  boundary; a Worker or Wasm crossing is not a trust boundary when this package owns both sides;
 - rollback, cancellation, stale completion, repeated release, or another injected failure path;
 - a compile-time public type relationship or negative type contract;
 - a zero-copy, allocation, exact-byte, conformance, fuzz, or measured hot-path invariant;
@@ -31,6 +32,12 @@ that both assert only the final draw count do not become independent evidence be
 Package exports define the public surface. A source file under `src/core` or an emitted file under `dist/core` remains a
 private implementation detail unless `package.json` exports that subpath. Tests may import such files to own a focused
 internal contract, but must not present that evidence as a public integration contract.
+
+Before keeping a negative validation test, trace a real production caller to the rejected value. If only the test can
+construct it by importing an internal module, mutating package-owned state, or forging wire bytes, it does not justify a
+runtime guard. Remove the guard and prove the producer instead: assert its complete bytes/tree/identity relationships,
+cross-language ABI agreement, or observable product result. Raw arbitrary-byte fuzzing may still prove memory safety and
+recovery, but it must not require every noncanonical package-internal representation to receive a bespoke rejection.
 
 Public type evidence needs both boundaries a consumer encounters. A source fixture can exercise fast inference while the
 package is being authored; an isolated consumer must also resolve every public package specifier against emitted or packed
@@ -102,6 +109,8 @@ invariant, not the regex match, and do not add an unpinned `deslop` command to r
    package suite, the live lane, and the repository check as appropriate. If the final run exposes an ordering, setup, or
    shared-fixture dependency, restore only the necessary hunk and record why. Production changes still verify narrowly as
    they are made. A green result after deletion is necessary but does not prove retained coverage.
+8. For production validation cleanup, work one invariant at a time: remove the internal check, strengthen the producer
+   proof, run its focused test, then move to the next invariant.
 
 For compile-time public API coverage, use public package specifiers and inference assertions. Prove associated
 relationships from one runtime witness through schema callbacks, config extensions, `resolve`, renderer construction and

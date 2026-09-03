@@ -41,6 +41,10 @@ Do not accept “more abstraction,” “more types,” “split the file,” or
 
 ## 3. Reconcile before editing
 
+Classify every validation finding with the engineering standard's value-authority matrix before accepting it. A module,
+Worker, language, or Wasm crossing is not itself a trust boundary. Confirm that a production caller can actually author
+the rejected value; a test-only import of an internal function does not make that state reachable.
+
 Classify each finding as:
 
 - **accept** — a correctness, safety, determinism, performance, or material clarity problem;
@@ -54,6 +58,10 @@ Prefer the smallest change that restores a clear invariant. Keep domain vocabula
 When the user requests implementation agents, assign accepted findings in non-overlapping slices and match agent capability to difficulty. Require no commits from subagents; the integrating agent owns review and commits.
 
 Apply the engineering standard to every accepted finding. Begin with a deterministic regression that distinguishes the failure from the intended invariant when behavior changes. Preserve public signatures unless the reconciled evidence justifies a change.
+
+For validation-to-test cleanup, use a narrow loop: remove one redundant package-owned runtime check, add or strengthen the
+producer-side unit/property/ABI/product proof, run that focused test, then continue. Do not replace the deleted guard with
+another check at a later internal layer. Reject negative tests that forge values no production path can supply.
 
 ## 5. Review every delegated diff
 

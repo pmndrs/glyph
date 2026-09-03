@@ -19,9 +19,10 @@ nothing is left for a caller to get wrong, **so there is no failure to hand back
   well-typed and means nothing; there is no width it could stand for, so there is nothing to return, clamp, or
   guess. Throw from the call, name the axis or the span or the offset, and let the stack point at the caller.
   Silently accepting it turns a wiring bug into wrong text on screen, which is worse than an exception.
-- **Never return a failure the caller cannot cause.** A result union for an engine defect makes every caller write
+- **Never return or proactively scan for a failure the caller cannot cause.** A result union for an engine defect makes every caller write
   `if (result.ok)` forever -- inside a flexbox measure callback, many times per layout -- to guard a branch that
-  only means this package is broken. That is ceremony for an impossible case. Let the defect throw.
+  only means this package is broken. A deep runtime validator adds the same ceremony inside Glyph. Prove package-owned
+  invariants at their producer; if corruption is encountered naturally, let the operation throw.
 - **Never enter a broken state that outlives the call.** A rejected frame must not leave the engine refusing work,
   recompiling an invalid frame at frame rate, or holding a latch a caller has to clear. Report once, stop, and keep
   the rest of the scene live: transforms, visibility, and render order belong to the last accepted publication and
@@ -82,6 +83,8 @@ Ask, in order:
 
 1. Can the type stop this being expressible? Do that instead.
 2. Can only a caller cause it? Throw from the call, naming the thing.
-3. Can only this package cause it? It is a defect: throw, report once, and do not build a recovery protocol.
+3. Can only this package cause it? It is a producer defect: add or strengthen the producer/ABI/property test. Do not add a
+   runtime scan merely to detect it. If ordinary consumption encounters it naturally, throw and do not build a recovery
+   protocol.
 4. Is it a policy the caller asked for, like a fixed glyph budget? Then it is not a failure at all. Define the
    behaviour, warn in development, expose it for reporting, and let it self-heal.

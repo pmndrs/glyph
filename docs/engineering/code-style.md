@@ -83,9 +83,31 @@ This standard is the canonical code-quality policy for `pmndrs/glyph`. It suppor
 - For an unknown object, first prove it is a non-null, non-array object, then prove every property the returned type promises or the caller consumes. Use `"key" in value` when presence matters and `Object.hasOwn(value, "key")` when inherited properties must not satisfy the contract; neither proves the value type.
 - Name structural predicates honestly. `isNonArrayObject` is appropriate for the one fact it proves. Use `isPlainObject` only when prototypes are restricted. Do not introduce a generic `isRecord` that implies domain properties exist.
 - If a consumer needs only part of a wire value, define a narrower wire type. Do not make a predicate promise a richer public or domain type than it validates.
-- Validate and normalize parsed JSON, Worker messages, Wasm metadata, fetched artifacts, persisted data, public JavaScript inputs, and plugin returns once at their trust boundary. Treat third-party callbacks as boundaries even when their declared TypeScript types look trusted.
+- Classify trust by who can author a value, not by whether it crosses a module, package, Worker, language, or Wasm boundary.
+  A message or byte slice produced exclusively by this package remains package-owned across those transports. Validate and
+  normalize caller-authored JavaScript, third-party callback returns, and genuinely external network, storage, or
+  cross-realm input once where they enter. Keep pointer, range, capacity, and allocation checks required for memory safety.
 - State whether JSON-facing APIs accept only materialized JSON or intentionally apply `JSON.stringify` coercions. Bound depth and size, reject cycles and invalid values where programmatic input can exceed parsed-JSON guarantees, and fuse validation with unavoidable canonicalization when possible.
-- Trust normalized internal values. Do not put generic schema walks or repeated defensive validation in shaping, layout, rendering, or other hot loops.
+- Trust package-owned values after their producer establishes the invariant. Do not add schema walks, canonicality scans,
+  duplicate-ID searches, relationship validation, deep equality, or type-recovery branches to shaping, layout, rendering,
+  serialization, projection, or other internal paths. Prove those invariants with producer unit/property tests, ABI tests,
+  fuzzing, and product tests. A natural failure may still throw if owned state is corrupted; do not add repeated work merely
+  to detect an impossible package defect earlier or produce a friendlier error.
+
+Use this decision matrix before adding, retaining, or testing a runtime check:
+
+| Value authority | Runtime treatment | Authoritative proof |
+| --------------- | ----------------- | ------------------- |
+| Public JavaScript input whose invalid state is expressible | Validate cheaply at the exported call; prefer types that make it unrepresentable | Call the reachable public API with a realistic invalid value |
+| Third-party config, plugin, Codec, resolver, or renderer callback result | Validate or normalize once when the callback returns | Exercise the callback through its exported integration helper |
+| Fetched, persisted, or externally posted bytes/messages | Check the envelope and the ranges needed for safe consumption; avoid whole-document validation when a package baker/schema already owns correctness | Parser/decoder tests, authenticated artifacts, fuzzing, and corruption cases at that external entry |
+| Package-owned TypeScript, Rust, baker, serializer, projection, or Worker output | Trust it; consume directly without a second semantic validation pass | Test the producer's complete output, cross-language ABI agreement, and real caller path |
+| Raw pointer, length, capacity, allocation request, or caller-selectable work limit | Retain checked arithmetic and memory-safety/work bounds | Boundary/fuzz tests for overflow, forged ranges, exhaustion, and recovery |
+| Live handle, lease, generation, disposal, or publication state | Retain constant-time lifecycle/ownership guards where misuse is reachable | Public lifecycle tests and state-transition tests |
+
+Before writing a negative test, prove a production caller can reach the tested state. If only a test can forge the value,
+delete the proposed runtime guard and test the package-owned producer instead. An internal source file is not a caller
+boundary merely because a test can import it.
 - Treat a renderer-side reconciliation state machine as an architecture review trigger. It must be either a measured host-resource cache or evidence that the command buffer/display list is missing canonical hierarchy, ordering, or lifetime data. Changes at that boundary require focused correctness tests and before/after performance evidence.
 - Renderer integrations implement the public `GlyphConfig` contract; do not give a built-in renderer a second core API. Package-owned companion entries such as React may use one explicit private construction or identity bridge into that renderer when they must create the same host objects. Keep the bridge package-private, and do not expose internal state or add forwarding modules merely to satisfy directory-layer linting.
 - Begin cleanup scope before the first resource acquisition. Track each successful allocation, listener, Worker, handle, or publication independently and release it after any later failure. Either make initialization transactional or make cleanup safe for partial initialization.
@@ -106,6 +128,8 @@ This standard is the canonical code-quality policy for `pmndrs/glyph`. It suppor
 - End-to-end tests exercise a shipped product surface with real, licensed assets when behavior is observable there.
 - Use deterministic fuzzing for parsers, wire formats, and boundary state machines. Keep the root Rust version stable and the cargo-fuzz nightly isolated and exactly pinned.
 - Prefer official conformance suites, independent implementations, exact artifact authentication, and externally derived invariants over implementation-shaped assertions.
+- For a package-owned invariant, exercise the producer and assert its full contract. Do not preserve runtime validation by
+  writing a test that fabricates an internal value no exported or production caller can supply.
 - Retain a test only when a reader can name a realistic production behavior change that makes it fail. Delete tests whose
   only failure requires changing their own mock, expectation, or copied implementation; uncertainty is not evidence of
   value.
