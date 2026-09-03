@@ -10,7 +10,7 @@ import {
   type TextStyle,
 } from '@pmndrs/glyph';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { ThreeConfig } from '@pmndrs/glyph/three';
 
 await glyph.init();

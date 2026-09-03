@@ -1,4 +1,4 @@
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { loadFont, type Font } from '@pmndrs/glyph';
 import type { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';

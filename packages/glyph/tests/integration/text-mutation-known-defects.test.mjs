@@ -42,7 +42,7 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 
 import { span, txt } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 
 import { createFontCache, edit, lanes, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { findLineBreaks } from '../support/unicode-line-breaks.mjs';

@@ -1,5 +1,5 @@
 import { loadFont as loadGlyphFont, type Font, type GlyphLayout } from '@pmndrs/glyph';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 

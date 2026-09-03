@@ -27,15 +27,9 @@ test('the published contract is ESM-only', async () => {
     './src/raster/bitmap.ts',
     './src/raster/msdf.ts',
     './src/raster/slug.ts',
-    './src/three/bitmap.ts',
-    './src/three/msdf.ts',
-    './src/three/slug.ts',
     './dist/raster/bitmap.js',
     './dist/raster/msdf.js',
     './dist/raster/slug.js',
-    './dist/three/bitmap.js',
-    './dist/three/msdf.js',
-    './dist/three/slug.js',
   ]);
   assert.equal(manifest.exports['./internal/*'], null);
   assert.deepEqual(manifest.pmndrs, {

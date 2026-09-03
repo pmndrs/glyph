@@ -1,7 +1,7 @@
 import type { Font } from '../font.js';
 import type { FontFaceSource } from '../font-face.js';
 import { useFont } from '../react.js';
-import { msdf, type MsdfOptions } from '../three/msdf.js';
+import { msdf, type MsdfOptions } from '../raster/msdf.js';
 
 /** MSDF convenience hook over the shared R3F `useFont` cache. */
 export interface UseMsdf {

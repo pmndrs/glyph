@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { loadFont } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { bitmapShader, decorationShader, msdfShader, slugShader } from '../../dist/tsl.js';
 import * as TSL from 'three/tsl';

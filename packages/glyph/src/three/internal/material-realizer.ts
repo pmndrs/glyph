@@ -8,14 +8,16 @@ import { msdfSchema } from '../../raster/msdf.js';
 import { msdf } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug.js';
 import { slug } from '../../raster/slug.js';
+import { bitmapShader } from '../../tsl/bitmap-shader.js';
 import { decorationShader } from '../../tsl/decoration-shader.js';
+import { msdfShader } from '../../tsl/msdf-shader.js';
+import { slugShader } from '../../tsl/slug-shader.js';
 import type { ThreeRendererResources } from '../renderer-resources.js';
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
 import type { ThreePlanProgramBuffer } from '../plan-program-registry.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
 import type { ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../handle.js';
 import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
-import { threeBitmapShader, threeMsdfShader, threeSlugShader } from './builtin-shaders.js';
 import {
   dataTexture,
   f32BufferMember,
@@ -157,7 +159,7 @@ export class ThreeMaterialRealizer {
     if (cached !== undefined) return cached.material;
     const texture = this.#textureArray(resource.binding, atlas, 'bitmap');
     const instance = physicalInstance(runInstance(), addressing);
-    const shader = threeBitmapShader()(
+    const shader = bitmapShader(
       {
         origin: storageVec2(part.origin, instance),
         size: storageVec2(part.size, instance),
@@ -201,7 +203,7 @@ export class ThreeMaterialRealizer {
     const rect = field(part.rect);
     const uvRect = field(part.uvRect);
     const page = field(part.page);
-    const shader = threeMsdfShader()(
+    const shader = msdfShader(
       {
         origin: rect.xy,
         size: rect.zw,
@@ -272,7 +274,7 @@ export class ThreeMaterialRealizer {
     const viewport = TSL.uniform(new THREE.Vector2(1, 1)).onRenderUpdate(({ renderer }, self) =>
       renderer?.getDrawingBufferSize(self.value),
     );
-    const shader = threeSlugShader()(
+    const shader = slugShader(
       {
         origin: rect.xy,
         size: rect.zw,

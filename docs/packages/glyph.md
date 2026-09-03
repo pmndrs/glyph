@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:9d2ae43967b421dfb8311ce12860e8de803a91a76bf287a8308fe772ef81d367'
+source_digest: 'sha256:32591591ec2f003c8e44694837fcded64c89574dcbde433da4b09fe3938591a8'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -163,9 +163,6 @@ their device-relative leases.
 | `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing immutable font/raster contracts, loading, fallback stacks, formatting helpers, and paragraphs. |
 | `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, and portable-resource construction helpers for integration authors.             |
 | `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, material factories, and Codec registration.                                      |
-| `@pmndrs/glyph/three/bitmap` | Compatibility alias re-exporting the renderer-neutral Bitmap raster module.                                                                 |
-| `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                                   |
-| `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                                   |
 | `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                        |
 | `@pmndrs/glyph/react/bitmap` | Typed `useBitmap(input, options)` convenience over `useFont`.                                                                               |
 | `@pmndrs/glyph/react/msdf`   | Typed `useMsdf(input, options?)` convenience over `useFont`.                                                                                |
@@ -177,8 +174,11 @@ their device-relative leases.
 | `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.                     |
 | `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                            |
 
-The three renderer-neutral raster leaves and their `three/*` compatibility barrels retain registration side effects under
-tree shaking. Shader implementations remain explicit `/tsl` or `/typegpu` imports and are not pulled in by registration.
+The three renderer-neutral raster leaves retain portable plan-registration side effects under tree shaking. Built-in
+Three material realization imports its TSL shader implementations directly rather than routing through package
+self-imports or a module-global shader registry; `/tsl/*` remains the direct public shader surface for application
+composition. The unshipped `/three/bitmap`, `/three/msdf`, and `/three/slug` forwarding aliases were removed: applications
+import portable formats from `/raster/*` and shader builders from `/tsl/*` without paying for wrapper modules.
 Every TypeScript subpath also publishes a custom `source` condition. Workspace Vite applications opt into that condition
 for direct TS/TSX hot reload, while ordinary Node and package consumers continue to resolve built declarations and ESM.
 Wasm and `package.json` exports remain distribution artifacts because they have no TypeScript source equivalent.

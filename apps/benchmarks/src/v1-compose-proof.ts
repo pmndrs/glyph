@@ -1,5 +1,5 @@
 import { loadFont, type Font } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { defineTextMaterial, type Text } from '@pmndrs/glyph/three';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';

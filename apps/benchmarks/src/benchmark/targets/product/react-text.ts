@@ -3,7 +3,7 @@ import React, { createRef, StrictMode } from 'react';
 import * as THREE from 'three/webgpu';
 
 import { type Constraints, type GlyphLayout } from '@pmndrs/glyph';
-import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
+import { bitmap, bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 import { Text, useFont } from '@pmndrs/glyph/react';
 import type { Text as CoreText } from '@pmndrs/glyph/three';
 
@@ -33,7 +33,7 @@ const BITMAP_COLOR_ATTRIBUTE = codecAttributeName(bitmapSchema.buffers.color.id)
  * width instead of restoring natural measurement. The unconstrained axis has to be stated.
  */
 const NATURAL_CONSTRAINTS: Constraints = { width: { mode: 'unconstrained' } };
-const fontInput = { baked: bitmapFontUrl } as const;
+const fontInput = bitmapFontUrl;
 const fontOptions = { strikes: [16] } as const;
 
 /**

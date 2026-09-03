@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 
 import { glyphFlags, loadFont as loadGlyphFont } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';

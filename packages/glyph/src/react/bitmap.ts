@@ -1,6 +1,6 @@
 import type { Font } from '../font.js';
 import type { FontFaceSource } from '../font-face.js';
-import { bitmap, type BitmapFormatOptions } from '../three/bitmap.js';
+import { bitmap, type BitmapFormatOptions } from '../raster/bitmap.js';
 import { useFont } from '../react.js';
 
 /** Bitmap convenience hook over the shared R3F `useFont` cache. */

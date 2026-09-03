@@ -25,15 +25,9 @@
     "./src/raster/bitmap.ts",
     "./src/raster/msdf.ts",
     "./src/raster/slug.ts",
-    "./src/three/bitmap.ts",
-    "./src/three/msdf.ts",
-    "./src/three/slug.ts",
     "./dist/raster/bitmap.js",
     "./dist/raster/msdf.js",
-    "./dist/raster/slug.js",
-    "./dist/three/bitmap.js",
-    "./dist/three/msdf.js",
-    "./dist/three/slug.js"
+    "./dist/raster/slug.js"
   ],
   "exports": {
     ".": {
@@ -126,30 +120,6 @@
       },
       "source": "./src/three.ts",
       "import": "./dist/three.js"
-    },
-    "./three/bitmap": {
-      "types": {
-        "source": "./src/three/bitmap.ts",
-        "default": "./dist/three/bitmap.d.ts"
-      },
-      "source": "./src/three/bitmap.ts",
-      "import": "./dist/three/bitmap.js"
-    },
-    "./three/msdf": {
-      "types": {
-        "source": "./src/three/msdf.ts",
-        "default": "./dist/three/msdf.d.ts"
-      },
-      "source": "./src/three/msdf.ts",
-      "import": "./dist/three/msdf.js"
-    },
-    "./three/slug": {
-      "types": {
-        "source": "./src/three/slug.ts",
-        "default": "./dist/three/slug.d.ts"
-      },
-      "source": "./src/three/slug.ts",
-      "import": "./dist/three/slug.js"
     },
     "./three/internal/*": null,
     "./three/codec": null,

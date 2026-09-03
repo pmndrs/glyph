@@ -4,7 +4,7 @@ import test, { after } from 'node:test';
 import '../support/browser-globals.mjs';
 import * as THREE from 'three/webgpu';
 import { span, txt } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { createThreeTestHandle } from '../support/three-handle.mjs';

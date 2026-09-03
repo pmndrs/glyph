@@ -9,9 +9,9 @@ import { defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/gly
 import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
 import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
 import { bitmap as portableBitmap, bitmapPlanProgram } from '@pmndrs/glyph/raster/bitmap';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { msdf } from '@pmndrs/glyph/three/msdf';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { slug } from '@pmndrs/glyph/raster/slug';
 import { defineThreeConfig, ThreeConfig } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
 

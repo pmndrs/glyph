@@ -19,8 +19,8 @@ import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 import { Fragment, StrictMode, Suspense, createElement, useLayoutEffect } from 'react';
 
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { glyph } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
