@@ -1,4 +1,5 @@
-import { glyph, loadFont, txt } from '@pmndrs/glyph';
+import { glyph, txt } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { ThreeConfig, defineTextMaterial, span } from '@pmndrs/glyph/three';
 import { slug } from '@pmndrs/glyph/raster/slug';
 import { color as tslColor } from 'three/tsl';
@@ -24,6 +25,7 @@ const tint = defineTextMaterial((context) => {
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:rich-text', ThreeConfig);
+  // A span takes an immutable Font, which the face path does not hand out; the integrator loader does.
   const [inter, script] = await Promise.all([loadFont(INTER, slug), loadFont(PLAYWRITE, slug)]);
 
   const accent = span({ color: '#ffd166' });

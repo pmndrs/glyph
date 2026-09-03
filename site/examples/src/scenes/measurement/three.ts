@@ -1,4 +1,5 @@
-import { createParagraph, glyph, loadFont } from '@pmndrs/glyph';
+import { createParagraph, glyph } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { ThreeConfig } from '@pmndrs/glyph/three';
 import { slug } from '@pmndrs/glyph/raster/slug';
 import type { Scene } from 'three/webgpu';
@@ -34,7 +35,8 @@ export async function mount(scene: Scene): Promise<() => void> {
   void ink;
   void baseline;
 
-  // Renderer-free: the same numbers from a Paragraph that owns no scene object.
+  // Renderer-free: the same numbers from a Paragraph that owns no scene object. A Paragraph takes an
+  // immutable Font, which the face path does not hand out; the integrator loader does.
   const font = await loadFont(PLAYWRITE, slug);
   const paragraph = await createParagraph({ font, text: 'glyph', style: { fontSize: 1.2 } });
   const metrics = paragraph.measure({ width: { mode: 'unconstrained' } });

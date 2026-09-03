@@ -1,4 +1,4 @@
-import { glyph, loadFont, txt } from '@pmndrs/glyph';
+import { glyph, txt } from '@pmndrs/glyph';
 import { ThreeConfig, span } from '@pmndrs/glyph/three';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { slug } from '@pmndrs/glyph/raster/slug';
@@ -30,7 +30,8 @@ import { RADIUS, REPEAT, RING, RING_TEXT, TILE, TUBE } from './config';
 export async function mount(scene: Scene, renderer: Renderer): Promise<() => void> {
   await glyph.init();
   const handle = glyph.handle('examples:kinetic', ThreeConfig);
-  const [interSlug, interMsdf] = await Promise.all([loadFont(INTER, slug), loadFont(INTER, msdf)]);
+  const inter = glyph.fontFace(INTER, { format: [slug, msdf] });
+  await inter.load();
   const accent = span({ color: '#ffd166' });
   const dim = span({ color: '#97a1b4' });
 
@@ -42,7 +43,7 @@ export async function mount(scene: Scene, renderer: Renderer): Promise<() => voi
   target.texture.generateMipmaps = true;
   target.texture.minFilter = LinearMipmapLinearFilter;
   const word = handle('tile').createText({
-    font: interSlug,
+    font: inter.slug,
     text: '',
     style: { fontSize: 0.92, color: '#ffffff', letterSpacing: 0.02 },
     layout: { wrap: 'none', align: 'center' },
@@ -62,7 +63,7 @@ export async function mount(scene: Scene, renderer: Renderer): Promise<() => voi
   orbit.position.set(0.3, 0.25, -1.4);
   orbit.rotation.set(RING.tilt[0], RING.tilt[1], RING.tilt[2]);
   const band = handle.createText({
-    font: interSlug,
+    font: inter.slug,
     material: pathInk,
     text: RING_TEXT,
     style: { fontSize: RING.size, color: '#b6c0d6', letterSpacing: 0.08 },
@@ -72,7 +73,7 @@ export async function mount(scene: Scene, renderer: Renderer): Promise<() => voi
   orbit.add(band);
 
   const line = handle.createText({
-    font: interMsdf,
+    font: inter.msdf,
     text: '',
     style: { fontSize: 0.26, color: '#97a1b4', lineHeight: 1.3 },
     layout: { wrap: 'word', align: 'start' },
@@ -131,8 +132,7 @@ export async function mount(scene: Scene, renderer: Renderer): Promise<() => voi
       mesh.material.dispose();
     }
     target.dispose();
-    interSlug.dispose();
-    interMsdf.dispose();
+    inter.dispose();
     handle.dispose();
   };
 }

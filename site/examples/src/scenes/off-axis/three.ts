@@ -1,4 +1,4 @@
-import { glyph, loadFont, txt } from '@pmndrs/glyph';
+import { glyph, txt } from '@pmndrs/glyph';
 import { ThreeConfig, span } from '@pmndrs/glyph/three';
 import { slug } from '@pmndrs/glyph/raster/slug';
 import { Group, type Scene } from 'three/webgpu';
@@ -12,7 +12,8 @@ import { INTER } from '../../fonts';
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:off-axis', ThreeConfig);
-  const inter = await loadFont(INTER, slug);
+  const inter = glyph.fontFace(INTER, { format: slug });
+  await inter.load();
 
   const violet = span({ color: '#a855f7' });
   const cyan = span({ color: '#22d3ee' });
