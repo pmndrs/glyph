@@ -159,13 +159,16 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   assert.equal(data.coverage[45 >> 3] & (1 << (45 & 7)), 0);
   bitmap.dispose(data);
 
-  const mismatchedPolicy = {
+  const mismatchedDescriptor = {
     ...runtimeRaster,
     extensionData: structuredClone(runtimeRaster.extensionData),
   };
-  mismatchedPolicy.extensionData.strikes[0].ppemX = 17;
-  mismatchedPolicy.extensionData.strikes[0].ppemY = 17;
-  await assert.rejects(bitmap.decode(font, mismatchedPolicy), /raster key does not match its generation policy/);
+  mismatchedDescriptor.extensionData.strikes[0].ppemX = 17;
+  mismatchedDescriptor.extensionData.strikes[0].ppemY = 17;
+  await assert.rejects(
+    bitmap.decode(font, mismatchedDescriptor),
+    /raster key does not match its generation descriptor/,
+  );
 });
 
 test('rejects mismatched shaping context and honors pre-bake cancellation', async () => {
