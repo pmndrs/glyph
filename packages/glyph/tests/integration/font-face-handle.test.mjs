@@ -89,10 +89,10 @@ function defineFontAwareConfig() {
 }
 
 test('FontFace rejects legacy loader and unowned source/config forms at its public boundary', () => {
-  assert.throws(
-    () => glyph.fontFace({ baked: '/fonts/legacy.font.glb' }),
-    /FontFace source must be a URL, Blob, or SerializedFontFace/,
-  );
+  assert.throws(() => glyph.fontFace({ baked: '/fonts/legacy.font.glb' }), {
+    name: 'TypeError',
+    message: /FontFace source must be a URL, Blob, or SerializedFontFace/,
+  });
   assert.throws(
     () => glyph.fontFace(new Request('https://glyph.invalid/legacy.font.glb')),
     /FontFace source must be a URL, Blob, or SerializedFontFace/,
@@ -225,7 +225,7 @@ test('a loaded FontFace constructs an imperative Three Text and owns its hidden 
     assert.equal(face.bitmap.isLoaded(), false);
     assert.throws(
       () => handle.createText({ font: face, text: 'too early' }),
-      (error) => error instanceof FontLoadError && error.code === 'FONT_FACE_FORMAT_NOT_LOADED',
+      (error) => error instanceof FontLoadError && error.reason === 'FONT_FACE_FORMAT_NOT_LOADED',
     );
 
     const load = face.load();
@@ -358,7 +358,7 @@ test('a declared format member loads narrowly before the aggregate FontFace', as
     assert.equal(face.isLoaded(), false, 'the aggregate is not loaded until every declaration is ready');
     assert.throws(
       () => msdfHandle.createText({ font: face, text: 'default is still unloaded' }),
-      (error) => error instanceof FontLoadError && error.code === 'FONT_FACE_FORMAT_NOT_LOADED',
+      (error) => error instanceof FontLoadError && error.reason === 'FONT_FACE_FORMAT_NOT_LOADED',
     );
     slugText = slugHandle.createText({ font: face.slug, text: 'exact Slug selection' });
     assert.equal(slugText.font.raster, slug);
@@ -428,7 +428,7 @@ test('a declared format rejects when the authoritative font does not implement i
       face.slug.load(),
       (error) =>
         error instanceof FontLoadError &&
-        error.code === 'FONT_FACE_FORMAT_UNAVAILABLE' &&
+        error.reason === 'FONT_FACE_FORMAT_UNAVAILABLE' &&
         /does not implement the declared/.test(error.message),
     );
     assert.equal(face.slug.isLoaded(), false);

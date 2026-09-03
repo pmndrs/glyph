@@ -4,6 +4,7 @@ import Ajv, { type ErrorObject, type ValidateFunction } from 'ajv';
 import draft04Schema from 'ajv/lib/refs/json-schema-draft-04.json' with { type: 'json' };
 import { validateBytes } from 'gltf-validator';
 
+import { GlyphError } from '../glyph-error.js';
 import { GlbReadError, readGlb, type ParsedGlb } from '../internal/glb-reader.js';
 import { FONT_BAKER_VERSION } from './contract.js';
 
@@ -52,11 +53,12 @@ export interface ValidatedFontArtifact {
   readonly khronos: KhronosValidationReport;
 }
 
-export class FontArtifactValidationError extends Error {
+export class FontArtifactValidationError extends GlyphError<'artifact-invalid'> {
   readonly issues: readonly FontArtifactValidationIssue[];
 
   constructor(issues: readonly FontArtifactValidationIssue[]) {
     super(
+      'artifact-invalid',
       issues
         .map((issue) => `${issue.code}${issue.path === undefined ? '' : ` ${issue.path}`}: ${issue.message}`)
         .join('\n'),

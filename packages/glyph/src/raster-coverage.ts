@@ -1,3 +1,5 @@
+import { GlyphError } from './glyph-error.js';
+
 export const MAX_RASTER_COVERAGE_RANGES = 1_024 as const;
 export const MAX_RASTER_COVERAGE_SCALARS = 65_536 as const;
 export const MAX_RASTER_COVERAGE_TEXT_CODE_POINTS = 65_536 as const;
@@ -21,12 +23,15 @@ export type RasterCoverage = {
 };
 
 /** A shaped measure references font-local glyphs omitted from its bounded raster artifact. */
-export class RasterCoverageError extends Error {
+export class RasterCoverageError extends GlyphError<'format-unavailable'> {
   readonly rasterKind: string;
   readonly missingGlyphIds: readonly number[];
 
   constructor(rasterKind: string, missingGlyphIds: readonly number[]) {
-    super(`${rasterKind} raster coverage is missing font-local glyph IDs: ${missingGlyphIds.join(', ')}`);
+    super(
+      'format-unavailable',
+      `${rasterKind} raster coverage is missing font-local glyph IDs: ${missingGlyphIds.join(', ')}`,
+    );
     this.name = 'RasterCoverageError';
     this.rasterKind = rasterKind;
     this.missingGlyphIds = Object.freeze([...missingGlyphIds]);

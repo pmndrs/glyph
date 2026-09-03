@@ -1,5 +1,6 @@
 import { alignSpansToClusters } from '../formatted-text.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import { GlyphError } from '../glyph-error.js';
 import { copyGlyphLayoutInspection, type GlyphLayoutInspection, type ParagraphLayoutSummary } from '../layout.js';
 import {
   assertConstraints,
@@ -274,9 +275,9 @@ export interface MeasurementPlannerOptions {
 }
 
 /** Thrown when a render planner is used after disposal. */
-export class RenderPlannerDisposedError extends Error {
+export class RenderPlannerDisposedError extends GlyphError<'engine-failed'> {
   constructor() {
-    super('render planner has been disposed');
+    super('engine-failed', 'render planner has been disposed');
     this.name = 'RenderPlannerDisposedError';
   }
 }

@@ -1,4 +1,5 @@
 import { mtsdfBakerAbi, type MtsdfBakerAbi } from '../generated/mtsdf-baker-abi.js';
+import { GlyphError } from '../glyph-error.js';
 
 export const mtsdfGeneratorAbi: MtsdfBakerAbi = mtsdfBakerAbi;
 
@@ -50,11 +51,12 @@ export type MtsdfGeneratorAbi = MtsdfBakerAbi;
 
 export type MtsdfGenerationErrorCode = 'INVALID_REQUEST' | 'INVALID_OUTLINE' | 'GENERATION_FAILED';
 
-export class MtsdfGenerationError extends Error {
-  readonly code: MtsdfGenerationErrorCode;
+export class MtsdfGenerationError extends GlyphError<'bake-failed'> {
+  readonly reason: MtsdfGenerationErrorCode;
 
   constructor(code: MtsdfGenerationErrorCode) {
     super(
+      'bake-failed',
       code === 'INVALID_REQUEST'
         ? 'MTSDF generator rejected its wire request'
         : code === 'INVALID_OUTLINE'
@@ -62,7 +64,7 @@ export class MtsdfGenerationError extends Error {
           : 'MTSDF generation failed',
     );
     this.name = 'MtsdfGenerationError';
-    this.code = code;
+    this.reason = code;
   }
 }
 

@@ -22,6 +22,7 @@ import {
   type MsdfOptions,
   type MsdfDescriptor,
 } from '../internal/msdf-contract.js';
+import { GlyphError } from '../glyph-error.js';
 
 export { mtsdfBakerAbi as msdfBakerAbi } from '../generated/mtsdf-baker-abi.js';
 
@@ -53,14 +54,14 @@ export type MsdfBakerWasmSource = BufferSource | WebAssembly.Module;
 
 export type { MsdfBakerAbi };
 
-export class MsdfBakeError extends Error {
-  readonly code: string;
+export class MsdfBakeError extends GlyphError<'bake-failed'> {
+  readonly reason: string;
   readonly path: string | undefined;
 
   constructor(error: SerializedBakeError) {
-    super(error.message);
+    super('bake-failed', error.message);
     this.name = 'MsdfBakeError';
-    this.code = error.code;
+    this.reason = error.code;
     this.path = error.path;
   }
 }

@@ -1,5 +1,6 @@
 import type { PmndrsFontExtension } from '../generated/font-artifact-schema.js';
 import { FONT_BAKER_VERSION } from '../font-baker/contract.js';
+import { GlyphError } from '../glyph-error.js';
 import type { Sha256Hex } from '../identity.js';
 import type { RegisteredBufferView } from './registered-font.js';
 import { readGlb, type ParsedGlb } from './glb-reader.js';
@@ -16,11 +17,11 @@ export interface RuntimeFontArtifact {
   readonly shapingHash: Sha256Hex;
 }
 
-export class RuntimeFontArtifactError extends Error {
+export class RuntimeFontArtifactError extends GlyphError<'artifact-invalid'> {
   readonly issues: readonly { readonly code: string; readonly message: string }[];
 
   constructor(code: string, message: string) {
-    super(`${code}: ${message}`);
+    super('artifact-invalid', `${code}: ${message}`);
     this.name = 'RuntimeFontArtifactError';
     this.issues = [{ code, message }];
   }

@@ -590,7 +590,7 @@ function createLoadedFaceRecord(
         if (owner.records.get(format) === record) owner.records.delete(format);
         if (
           error instanceof FontLoadError &&
-          (error.code === 'RASTER_NOT_FOUND' || error.code === 'RASTER_SOURCE_UNAVAILABLE')
+          (error.reason === 'RASTER_NOT_FOUND' || error.reason === 'RASTER_SOURCE_UNAVAILABLE')
         ) {
           throw new FontLoadError(
             'FONT_FACE_FORMAT_UNAVAILABLE',

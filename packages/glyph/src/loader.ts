@@ -4,6 +4,7 @@ import {
 } from './font-baker/contract.js';
 
 import type { Font, FontBytesInput, FontInput, FontMetrics, RegisteredFont } from './font.js';
+import { GlyphError } from './glyph-error.js';
 import {
   createImmutableFontBacking,
   createImmutableFontLease,
@@ -194,14 +195,14 @@ interface SharedFontLoad {
   settled: boolean;
 }
 
-export class FontLoadError extends Error {
-  readonly code: string;
+export class FontLoadError extends GlyphError<'resource-unavailable'> {
+  readonly reason: string;
   readonly url: string | undefined;
 
-  constructor(code: string, message: string, options: { url?: string; cause?: unknown } = {}) {
-    super(message, options.cause === undefined ? undefined : { cause: options.cause });
+  constructor(reason: string, message: string, options: { url?: string; cause?: unknown } = {}) {
+    super('resource-unavailable', message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = 'FontLoadError';
-    this.code = code;
+    this.reason = reason;
     this.url = options.url;
   }
 }
@@ -671,7 +672,7 @@ export class FontLoader {
     } catch (cause) {
       signal.throwIfAborted();
       const incompatible = hasValidationIssue(cause, 'FONT_VERSION_INCOMPATIBLE');
-      const resourceLimited = cause instanceof FontLoadError && cause.code === 'FONT_RESOURCE_LIMIT';
+      const resourceLimited = cause instanceof FontLoadError && cause.reason === 'FONT_RESOURCE_LIMIT';
       return {
         status: 'invalid',
         error: new FontLoadError(
@@ -733,7 +734,7 @@ export class FontLoader {
 
   #emitDiagnostic(error: FontLoadError): void {
     this.#onDiagnostic?.({
-      code: error.code,
+      code: error.reason,
       message: error.message,
       ...(error.url === undefined ? {} : { url: error.url }),
       ...(error.cause === undefined ? {} : { cause: error.cause }),
@@ -1638,7 +1639,7 @@ function assertMatchingArtifact(format: AnyRasterFormat, rasterKey: string, arti
 }
 
 function isRasterMiss(error: unknown): boolean {
-  return error instanceof FontLoadError && error.code === 'RASTER_NOT_FOUND';
+  return error instanceof FontLoadError && error.reason === 'RASTER_NOT_FOUND';
 }
 
 function fontRegistry(font: RegisteredFont): FontRegistry {
@@ -1797,7 +1798,7 @@ class RegisteredFontImpl implements RegisteredFont {
         );
       } catch (error) {
         options.signal?.throwIfAborted();
-        if (error instanceof FontLoadError && error.code === 'RASTER_RESOURCE_LIMIT') throw error;
+        if (error instanceof FontLoadError && error.reason === 'RASTER_RESOURCE_LIMIT') throw error;
         failures.push(error);
       }
     }
@@ -1989,7 +1990,7 @@ class RegisteredRasterImpl implements RegisteredRaster {
           }
         } catch (error) {
           signal?.throwIfAborted();
-          if (error instanceof FontLoadError && error.code === 'RASTER_RESOURCE_LIMIT') throw error;
+          if (error instanceof FontLoadError && error.reason === 'RASTER_RESOURCE_LIMIT') throw error;
           failures.push(error);
         }
       }
@@ -2028,7 +2029,7 @@ class RegisteredRasterImpl implements RegisteredRaster {
         return authenticateRasterResource(bytes, source, url);
       } catch (error) {
         signal?.throwIfAborted();
-        if (error instanceof FontLoadError && error.code === 'RASTER_RESOURCE_LIMIT') throw error;
+        if (error instanceof FontLoadError && error.reason === 'RASTER_RESOURCE_LIMIT') throw error;
         failures.push(error);
       }
     }

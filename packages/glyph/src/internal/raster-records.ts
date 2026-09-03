@@ -14,14 +14,14 @@ export type DenseGlyphRecordErrorCode =
   | 'RECORD_PLANE_BOUNDS'
   | 'RECORD_ATLAS_BOUNDS';
 
-export class DenseGlyphRecordError extends Error {
-  readonly code: DenseGlyphRecordErrorCode;
+export class DenseGlyphRecordError extends GlyphError<'artifact-invalid'> {
+  readonly reason: DenseGlyphRecordErrorCode;
   readonly glyphId: number | undefined;
 
   constructor(code: DenseGlyphRecordErrorCode, message: string, glyphId?: number) {
-    super(message);
+    super('artifact-invalid', message);
     this.name = 'DenseGlyphRecordError';
-    this.code = code;
+    this.reason = code;
     this.glyphId = glyphId;
   }
 }
@@ -92,3 +92,4 @@ export function validateDenseGlyphRecordTable(
     }
   }
 }
+import { GlyphError } from '../glyph-error.js';

@@ -1,3 +1,5 @@
+import { GlyphError } from '../glyph-error.js';
+
 const GLB_MAGIC = 0x4654_6c67;
 const JSON_CHUNK = 0x4e4f_534a;
 const BIN_CHUNK = 0x004e_4942;
@@ -9,11 +11,11 @@ export interface GlbReadIssue {
   readonly path?: string;
 }
 
-export class GlbReadError extends Error {
+export class GlbReadError extends GlyphError<'artifact-invalid'> {
   readonly issues: readonly GlbReadIssue[];
 
   constructor(issue: GlbReadIssue) {
-    super(`${issue.code}${issue.path === undefined ? '' : ` ${issue.path}`}: ${issue.message}`);
+    super('artifact-invalid', `${issue.code}${issue.path === undefined ? '' : ` ${issue.path}`}: ${issue.message}`);
     this.name = 'GlbReadError';
     this.issues = [issue];
   }

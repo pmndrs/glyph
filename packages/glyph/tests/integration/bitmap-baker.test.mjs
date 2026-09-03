@@ -185,7 +185,7 @@ test('rejects mismatched shaping context and honors pre-bake cancellation', asyn
       packaging: { artifact: 'external', pages: 'embedded' },
       descriptor,
     }),
-    (error) => error.code === 'INVALID_GLYPH_COUNT',
+    (error) => error.reason === 'INVALID_GLYPH_COUNT',
   );
 
   const controller = new AbortController();

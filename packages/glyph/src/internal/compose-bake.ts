@@ -1,6 +1,7 @@
 import type { FontBakeResult } from '../font-baker/index.js';
 
 import type { BakeArtifact, BakeWarning, FontPayloadReport, RasterBakeArtifact, RasterPackaging } from '../bake.js';
+import { GlyphError } from '../glyph-error.js';
 import type { Sha256Hex } from '../identity.js';
 import { readGlb } from './glb-reader.js';
 
@@ -15,14 +16,14 @@ export interface ComposedFontBakeResult {
   readonly warnings: readonly BakeWarning[];
 }
 
-export class BakeCompositionError extends Error {
-  readonly code: string;
+export class BakeCompositionError extends GlyphError<'bake-failed'> {
+  readonly reason: string;
   readonly path: string | undefined;
 
   constructor(code: string, message: string, path?: string) {
-    super(message);
+    super('bake-failed', message);
     this.name = 'BakeCompositionError';
-    this.code = code;
+    this.reason = code;
     this.path = path;
   }
 }

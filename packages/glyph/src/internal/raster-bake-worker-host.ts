@@ -1,4 +1,5 @@
 import type { RasterBakeArtifact } from '../bake.js';
+import { GlyphError } from '../glyph-error.js';
 import type { RasterKey } from '../identity.js';
 import type { RuntimeRasterBakeRequest, RuntimeRasterBakerModule } from '../raster.js';
 import { copyToOwnedArrayBuffer } from './owned-array-buffer.js';
@@ -10,14 +11,14 @@ import {
 import { SerialWorkerHost } from './serial-worker-host.js';
 import { isBakeProgressMessage, type BakeProgressMessage } from './bake-progress-protocol.js';
 
-class RuntimeRasterBakeError extends Error {
-  readonly code: string;
+class RuntimeRasterBakeError extends GlyphError<'bake-failed'> {
+  readonly reason: string;
   readonly path: string | undefined;
 
   constructor(error: { readonly code: string; readonly message: string; readonly path?: string }) {
-    super(error.message);
+    super('bake-failed', error.message);
     this.name = 'RuntimeRasterBakeError';
-    this.code = error.code;
+    this.reason = error.code;
     this.path = error.path;
   }
 }

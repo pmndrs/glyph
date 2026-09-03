@@ -6,6 +6,7 @@ import {
   type KhronosValidationReport,
   type ParsedGlb,
 } from '../font-baker/validator.js';
+import { GlyphError } from '../glyph-error.js';
 import {
   VK_FORMAT_ASTC_4x4_UNORM_BLOCK,
   VK_FORMAT_BC4_UNORM_BLOCK,
@@ -133,11 +134,12 @@ export interface ValidatedBitmapArtifact {
   readonly khronos: KhronosValidationReport;
 }
 
-export class BitmapArtifactValidationError extends Error {
+export class BitmapArtifactValidationError extends GlyphError<'artifact-invalid'> {
   readonly issues: readonly BitmapArtifactValidationIssue[];
 
   constructor(issues: readonly BitmapArtifactValidationIssue[]) {
     super(
+      'artifact-invalid',
       issues
         .map((issue) => `${issue.code}${issue.path === undefined ? '' : ` ${issue.path}`}: ${issue.message}`)
         .join('\n'),

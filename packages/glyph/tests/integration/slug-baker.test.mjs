@@ -131,7 +131,7 @@ test('surfaces structured identity failures before rasterizing', async () => {
           descriptor: slugDescriptor(),
         },
       }),
-    (error) => error instanceof SlugBakeError && error.code === 'INVALID_IDENTITY',
+    (error) => error instanceof SlugBakeError && error.reason === 'INVALID_IDENTITY',
   );
 });
 

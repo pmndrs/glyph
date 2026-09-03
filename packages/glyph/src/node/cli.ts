@@ -487,7 +487,7 @@ async function packageVersion(): Promise<string> {
 
 function writeFailure(io: CliIo, error: unknown): void {
   if (error instanceof NodeBakeError) {
-    io.stderr.write(`${error.code}: ${error.message}${error.path === undefined ? '' : ` (${error.path})`}\n`);
+    io.stderr.write(`${error.reason}: ${error.message}${error.path === undefined ? '' : ` (${error.path})`}\n`);
   } else {
     io.stderr.write(`${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`);
   }

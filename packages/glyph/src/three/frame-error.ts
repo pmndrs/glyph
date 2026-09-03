@@ -4,6 +4,7 @@ import {
   type GlyphEngineFault,
   type GlyphEngineStatusCode,
 } from '../engine-error.js';
+import { GlyphError } from '../glyph-error.js';
 import type { AnyRasterFormat } from '../config/raster-format.js';
 import type { Text, TextSpan } from './text.js';
 
@@ -49,12 +50,12 @@ export type TextFrameRejection<Technique extends AnyRasterFormat = AnyRasterForm
  * Branch on `rejection.cause`; `status` is the raw engine status the rejection was decoded from and
  * exists for reporting, not for classification.
  */
-export class TextFrameError extends Error {
+export class TextFrameError extends GlyphError<'frame-rejected'> {
   readonly rejection: TextFrameRejection;
   readonly status: number;
 
   constructor(rejection: TextFrameRejection, status: number, message: string, options?: ErrorOptions) {
-    super(message, options);
+    super('frame-rejected', message, options);
     this.name = 'TextFrameError';
     this.rejection = rejection;
     this.status = status;
@@ -83,7 +84,7 @@ const CAUSE_BY_CODE: ReadonlyMap<GlyphEngineStatusCode, TextFrameRejection['caus
 export function textFrameError(error: unknown, resolve: TextFrameSubjectResolver): unknown {
   if (!(error instanceof GlyphEngineStatusError)) return error;
   const details = glyphEngineStatusErrorDetails(error);
-  const cause = CAUSE_BY_CODE.get(error.code) ?? 'engine';
+  const cause = CAUSE_BY_CODE.get(error.statusCode) ?? 'engine';
   const rejection: TextFrameRejection =
     cause === 'capacity'
       ? {

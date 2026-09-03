@@ -6,6 +6,7 @@ import {
   type KhronosValidationReport,
   type ParsedGlb,
 } from '../font-baker/validator.js';
+import { GlyphError } from '../glyph-error.js';
 import {
   KHR_DF_CHANNEL_RGBSDA_ALPHA,
   KHR_DF_CHANNEL_RGBSDA_BLUE,
@@ -116,11 +117,12 @@ export interface ValidatedSlugArtifact {
   readonly khronos: KhronosValidationReport;
 }
 
-export class SlugArtifactValidationError extends Error {
+export class SlugArtifactValidationError extends GlyphError<'artifact-invalid'> {
   readonly issues: readonly SlugArtifactValidationIssue[];
 
   constructor(issues: readonly SlugArtifactValidationIssue[]) {
     super(
+      'artifact-invalid',
       issues
         .map((issue) => `${issue.code}${issue.path === undefined ? '' : ` ${issue.path}`}: ${issue.message}`)
         .join('\n'),
