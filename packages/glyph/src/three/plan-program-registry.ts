@@ -1,8 +1,7 @@
 import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/webgpu';
 
-import { createRasterCodecProgram, resolveRasterPlanProgram } from '../config/raster.js';
-import type { CodecIdFactory, CodecScalarType } from '../config/codec.js';
-import type { CodecProgram } from '../config/codec.js';
+import { resolveRasterPlanProgram } from '../config/raster.js';
+import type { CodecScalarType } from '../config/codec.js';
 import type { PortableResource, PortableTextureFormat } from '../config/resources.js';
 import type {
   AnyTechniqueSchema,
@@ -14,7 +13,8 @@ import type {
 } from '../config/schema.js';
 import { isRasterFormat, type AnyRasterFormat } from '../config/raster-format.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
-import { threeCodecCapabilitySet, threeSystemBuffers } from './codec.js';
+import { threeSystemBuffers } from './codec.js';
+import { commitThreeRasterPlanProgram, registeredThreeRasterPlanProgram } from './internal/plan-program-registry.js';
 
 export interface ThreePlanProgramBuffer {
   readonly scalarType: CodecScalarType;
@@ -100,23 +100,6 @@ export interface ThreeRasterPlanProgram<Technique extends AnyRasterFormat, Schem
   readonly variant: NoInfer<ThreeRasterPlanVariant<Schema>>;
 }
 
-export interface CompiledThreeRasterPlanProgram {
-  readonly raster: AnyRasterFormat;
-  readonly schema: AnyTechniqueSchema;
-  readonly variant: ThreeRasterPlanVariant;
-  readonly techniqueId: number;
-  readonly programId: number;
-  readonly codec: CodecProgram;
-  createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
-}
-
-const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>>();
-const registeredSources = new WeakMap<object, ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>>();
-const snapshotsByRegistry = new WeakMap<CodecIdFactory, WeakRef<CodecIdFactory>[]>();
-const snapshotReferences = new Set<WeakRef<CodecIdFactory>>();
-const snapshotFinalizer = new FinalizationRegistry<WeakRef<CodecIdFactory>>((reference) => {
-  snapshotReferences.delete(reference);
-});
 const THREE_RESERVED_ATTRIBUTE_WIDTHS: Readonly<Record<string, readonly number[]>> = Object.freeze({
   position: [3],
   normal: [3],
@@ -162,7 +145,7 @@ export function registerThreeRasterPlanProgram<
   if (typeof createMaterial !== 'function') {
     throw new TypeError(`Three raster plan variant "${variantId}" needs createMaterial`);
   }
-  const registered = registeredSources.get(program as object);
+  const registered = registeredThreeRasterPlanProgram(program as object);
   if (registered !== undefined) {
     if (registered.raster.id !== techniqueId || registered.variant.id !== variantId) {
       throw new TypeError(
@@ -192,85 +175,7 @@ export function registerThreeRasterPlanProgram<
       createMaterial,
     }),
   }) as ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>;
-  const existing = programs.get(techniqueId);
-  if (existing !== undefined) {
-    throw new TypeError(
-      `Three already selected raster variant "${existing.variant.id}" for technique "${techniqueId}"`,
-    );
-  }
-  const engineCount = liveSnapshotCount();
-  if (engineCount !== 0) {
-    throw new Error(
-      `Three raster variant "${techniqueId}/${variantId}" was registered after ${engineCount} glyph engine(s) ` +
-        'already read the registry; register every technique before its first Text or TextGroup realization',
-    );
-  }
-  programs.set(techniqueId, snapshot);
-  registeredSources.set(program as object, snapshot);
-}
-
-/** @internal Compile the cold registry snapshot into Codec, binding, and material factories. */
-export function compiledThreeRasterPlanPrograms(
-  identities: CodecIdFactory,
-  transformMode: 'indexed' | 'direct' = 'indexed',
-): readonly CompiledThreeRasterPlanProgram[] {
-  const selected = [...programs.values()].sort((left, right) => left.raster.id.localeCompare(right.raster.id));
-  const compiled = selected.map((program) => compileProgram(program, identities, transformMode));
-  const reference = new WeakRef(identities);
-  const references = snapshotsByRegistry.get(identities) ?? [];
-  references.push(reference);
-  snapshotsByRegistry.set(identities, references);
-  snapshotReferences.add(reference);
-  snapshotFinalizer.register(identities, reference, reference);
-  return compiled;
-}
-
-/** @internal Validate the retained payload whose attributes Three will claim. */
-export function assertThreeGeometryPayload(
-  program: CompiledThreeRasterPlanProgram,
-  resources: ReadonlyMap<string, PortableResource>,
-): void {
-  const geometry = program.variant.geometry;
-  if (geometry.kind === 'synthetic-quad' || geometry.resource === undefined) return;
-  const payload = resources.get(geometry.resource);
-  if (payload?.kind !== 'geometry') {
-    throw new TypeError(
-      `Three raster variant "${program.raster.id}/${program.variant.id}" needs geometry resource "${geometry.resource}"`,
-    );
-  }
-  for (const attribute of payload.attributes) {
-    const accessor = payload.accessors[attribute.accessor];
-    if (accessor === undefined) {
-      throw new TypeError(`portable geometry attribute "${attribute.semantic}" has no accessor`);
-    }
-    assertThreeAttributeWidth(
-      program.raster.id,
-      program.variant.id,
-      attribute.semantic,
-      accessor.components,
-      'payload',
-    );
-  }
-}
-
-/** @internal Forget a disposed Three coordinator's renderer snapshot. */
-export function releaseThreeRasterPlanProgramSnapshot(identities: CodecIdFactory): void {
-  const references = snapshotsByRegistry.get(identities);
-  if (references === undefined) return;
-  const reference = references.pop();
-  if (reference === undefined) return;
-  snapshotFinalizer.unregister(reference);
-  snapshotReferences.delete(reference);
-  if (references.length === 0) snapshotsByRegistry.delete(identities);
-}
-
-function liveSnapshotCount(): number {
-  let count = 0;
-  for (const reference of snapshotReferences) {
-    if (reference.deref() === undefined) snapshotReferences.delete(reference);
-    else count += 1;
-  }
-  return count;
+  commitThreeRasterPlanProgram(program as object, snapshot);
 }
 
 /** Three-owned semantic values used by renderer-specific shader adapters. */
@@ -284,34 +189,6 @@ export const threeCodecAbi: ThreeCodecAbi = Object.freeze({
   scalarTypes: Object.freeze({ f32: 'f32', u32: 'u32', u16: 'u16' }),
   transformBufferId: threeSystemBuffers.transformIndex.id,
 });
-
-function compileProgram(
-  program: ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>,
-  identities: CodecIdFactory,
-  transformMode: 'indexed' | 'direct',
-): CompiledThreeRasterPlanProgram {
-  const portable = resolveRasterPlanProgram(program.raster.id);
-  if (portable === undefined)
-    throw new Error(`no portable raster plan program is registered for "${program.raster.id}"`);
-  const system = transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
-  const codec = createRasterCodecProgram(portable, {
-    namespace: 'three',
-    system,
-    capabilitySet: threeCodecCapabilitySet(),
-    transformMode,
-    allocationMode: 'ordered',
-    ids: identities,
-  });
-  return {
-    raster: program.raster,
-    schema: portable.schema,
-    variant: program.variant,
-    techniqueId: codec.techniqueId,
-    programId: codec.programId,
-    codec,
-    createMaterial: (context) => program.variant.createMaterial(context),
-  };
-}
 
 function sameGeometry(left: TechniqueGeometryDeclaration, right: unknown): right is TechniqueGeometryDeclaration {
   if (typeof right !== 'object' || right === null || Array.isArray(right)) return false;
