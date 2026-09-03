@@ -10,7 +10,7 @@ export function Preview({ slug, entry }: { readonly slug: ExampleSlug; readonly 
   return (
     <>
       <glyph-explainer-root id="preview" data-explainer-page="examples" max-slots="1" max-dpr="1.5" opaque />
-      <glyph-proxy className="preview" root="preview" data-scene={slug} aria-label={entry.title} />
+      <glyph-proxy fit="cover" className="preview" root="preview" data-scene={slug} aria-label={entry.title} />
       <a className="example-source" href={entry.page} target="_top">
         {entry.title} — read the page
       </a>

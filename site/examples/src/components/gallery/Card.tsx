@@ -6,7 +6,7 @@ export function Card({ slug, entry }: { readonly slug: ExampleSlug; readonly ent
     <article className="card" style={{ aspectRatio: entry.aspect ?? '16 / 9' }}>
       {/* A custom element cannot be a <button>; the proxy handles Enter, Space, focus, and touch itself. */}
       {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role */}
-      <glyph-proxy root="gallery" data-scene={slug} role="button" tabIndex={0} aria-label={entry.title} />
+      <glyph-proxy fit="cover" root="gallery" data-scene={slug} role="button" tabIndex={0} aria-label={entry.title} />
       <footer>
         <h2>{entry.title}</h2>
         <a href={entry.page} target="_top">
