@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:9cc78c7b621c613257b5fac024b1a20be0ee7aad82e5f2f2f4c73834bdee711c'
+source_digest: 'sha256:037afb14fccc58e3062d30675551e20e095104c1096d0a6e335a958800343efb'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -592,6 +592,10 @@ visible pixels, transforms, effects, and technique-specific resources.
 The React reconciliation target inspects renderer-owned batches from the R3F `Scene`, not from its retained `Text`
 placeholder. This preserves the public ownership contract: React retains desired state and hierarchy on `Text`, while
 the selected handle root owns the sibling `drawRoot` and its physical meshes.
+
+Advanced Shaping advances each authored frame through one complete `Scene` traversal. Updating a retained `Text`
+directly is only the cheap host-transform path; the root `drawRoot` traversal owns the single global `glyph.shape()`
+publication and renderer synchronization boundary.
 
 The [benchmark plan](../planning/benchmark-plan.md) owns target admission, correctness-before-timing, and product-E2E requirements.[^benchmark-plan]
 
