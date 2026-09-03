@@ -549,7 +549,8 @@ impl CodecGatherWorkspace {
     /// Appends resource-free decoration records around glyph gather. Rows carry the
     /// decoration program's technique, a dedicated identity namespace (top bit set), and
     /// a fixed lane convention mirroring the first-party u32 prefix: f32 lanes 0-3 hold
-    /// the decoration rectangle; u32 lanes hold transform index, stable identity, color,
+    /// the decoration rectangle; u32 lanes hold the record's physical transform index,
+    /// stable identity, color,
     /// then flags with the line style in bits 8-15. `pass` selects CSS paint order:
     /// underline and overline records append before the paragraph's glyphs and
     /// line-through records after, so draw order tokens place them under and over the
@@ -602,7 +603,7 @@ impl CodecGatherWorkspace {
             }
             for (index, field) in self.u32_fields.iter_mut().enumerate() {
                 let value = match index {
-                    0 => transform_id,
+                    0 => record.transform_index,
                     1 => stable_id,
                     2 => record.color,
                     3 => record.flags | (u32::from(record.style) << 8),
@@ -2193,7 +2194,7 @@ mod tests {
         assert_eq!(view.f32_fields[1][0], 9.0);
         assert_eq!(view.f32_fields[2][0], 12.0);
         assert_eq!(view.f32_fields[3][0], 0.5);
-        assert_eq!(view.u32_fields[0][0], 3);
+        assert_eq!(view.u32_fields[0][0], 9);
         assert_eq!(view.u32_fields[1][0], DECORATION_STABLE_ID_BASE);
         assert_eq!(view.u32_fields[2][0], 0xff00_00ff);
         assert_eq!(view.u32_fields[3][0], 1 | (3 << 8));
