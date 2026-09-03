@@ -51,7 +51,7 @@
   <text class="sub" x="620" y="134">lines, columns</text>
   <rect class="box rs" x="734" y="90" width="118" height="56"/>
   <text class="label" x="750" y="114">Encode</text>
-  <text class="sub" x="750" y="134">codec · draws, batches</text>
+  <text class="sub" x="750" y="134">codec → batches</text>
   <rect class="box out" x="312" y="170" width="540" height="56"/>
   <text class="label" x="328" y="194">Publication</text>
   <text class="sub" x="328" y="214">one borrowed byte buffer: header, tables, patches</text>
@@ -60,7 +60,7 @@
   <!-- renderer -->
   <rect class="box out" x="908" y="90" width="212" height="56"/>
   <text class="label" x="924" y="114">Decode</text>
-  <text class="sub" x="924" y="134">renderer.decode(): tables → buffers</text>
+  <text class="sub" x="924" y="134">tables → GPU buffers</text>
   <rect class="box gpu" x="908" y="170" width="212" height="56"/>
   <text class="label" x="924" y="194">Draw objects</text>
   <text class="sub" x="924" y="214">instanced, one per batch</text>
