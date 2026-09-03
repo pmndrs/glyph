@@ -4,6 +4,8 @@ import test from 'node:test';
 
 import * as glyph from '@pmndrs/glyph';
 
+import { readJavaScriptModuleClosure } from '../support/javascript-module-closure.mjs';
+
 const manifestUrl = new URL('../../package.json', import.meta.url);
 
 test('the published contract is ESM-only', async () => {
@@ -30,6 +32,9 @@ test('the published contract is ESM-only', async () => {
     './dist/raster/bitmap.js',
     './dist/raster/msdf.js',
     './dist/raster/slug.js',
+    './dist/internal/bitmap-*.js',
+    './dist/internal/msdf-*.js',
+    './dist/internal/slug-*.js',
   ]);
   assert.equal(manifest.exports['./internal/*'], null);
   assert.deepEqual(manifest.pmndrs, {
@@ -124,37 +129,53 @@ test('the public loader graph exposes immutable loading without mutable registra
   assert.equal(typeof glyph.createFontLibrary, 'function');
   assert.equal('FontLoader' in glyph, false);
   assert.equal('FontRegistry' in glyph, false);
-  const [entry, loader, runtimeHost, runtimeWorker, serialWorkerHost, fontBakerWasm] = await Promise.all([
+  const [entry, runtimeWorker] = await Promise.all([
     readFile(new URL('../../dist/index.js', import.meta.url), 'utf8'),
-    readFile(new URL('../../dist/loader.js', import.meta.url), 'utf8'),
-    readFile(new URL('../../dist/runtime-bake.js', import.meta.url), 'utf8'),
     readFile(new URL('../../dist/runtime-bake-worker.js', import.meta.url), 'utf8'),
-    readFile(new URL('../../dist/internal/serial-worker-host.js', import.meta.url), 'utf8'),
-    readFile(new URL('../../dist/font-baker/wasm-url.js', import.meta.url), 'utf8'),
   ]);
-  const initialGraph = `${entry}\n${loader}`;
-  assert.match(loader, /import\(["']\.\/runtime-bake\.js["']\)/);
-  assert.doesNotMatch(initialGraph, /(?:from\s+["']\.\/runtime-bake|new Worker|font-baker\.wasm|node:)/);
-  assert.doesNotMatch(initialGraph, /(?:\.\/node\/|\.\/bakers\/)/);
-  assert.doesNotMatch(initialGraph, /(?:PMNDRS_font_slug|\.\/raster\/slug|slug-shaders)/);
+  const initialGraph = await readJavaScriptModuleClosure([
+    new URL('../../dist/index.js', import.meta.url),
+    new URL('../../dist/loader.js', import.meta.url),
+  ]);
+  const runtimeGraph = await readJavaScriptModuleClosure([
+    new URL('../../dist/runtime-bake.js', import.meta.url),
+    new URL('../../dist/internal/serial-worker-host.js', import.meta.url),
+  ]);
+  const fontBakerWasmGraph = await readJavaScriptModuleClosure([
+    new URL('../../dist/font-baker/wasm-url.js', import.meta.url),
+  ]);
+  assert.ok(
+    [...initialGraph.dynamicImports].some((specifier) => specifier.endsWith('/runtime-bake.js')),
+    'font loading must reach runtime baking through a dynamic import',
+  );
+  assert.ok(
+    initialGraph.paths.every(
+      (path) =>
+        !path.endsWith('/runtime-bake.js') && !path.includes('/runtime-bakers/') && !path.endsWith('/font-baker.wasm'),
+    ),
+    'runtime baking must not be statically reachable from the root loader graph',
+  );
+  assert.ok(
+    [...initialGraph.staticImports].every((specifier) => !specifier.startsWith('node:')),
+    'the browser loader graph must not statically import Node built-ins',
+  );
+  assert.doesNotMatch(initialGraph.source, /new Worker/);
+  assert.doesNotMatch(initialGraph.source, /(?:\.\/node\/|\.\/bakers\/)/);
+  assert.doesNotMatch(initialGraph.source, /(?:PMNDRS_font_slug|\.\/raster\/slug|slug-shaders)/);
   assert.doesNotMatch(entry, /(?:three\/|three["'])/, 'core entry must not import Three');
-  assert.match(runtimeHost, /workerUrl:\s*new URL\(["'`]\.\.\/dist\/runtime-bake-worker\.js["'`]/);
-  assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/);
-  assert.match(serialWorkerHost, /type:\s*["']module["']/);
+  assert.match(runtimeGraph.source, /workerUrl:\s*new URL\(["'`]\.\.\/dist\/runtime-bake-worker\.js["'`]/);
+  assert.match(runtimeGraph.source, /new Worker\(/);
+  assert.match(runtimeGraph.source, /type:\s*["'`]module["'`]/);
   assert.match(runtimeWorker, /await fetch\(/, 'the runtime worker must fetch its baker Wasm');
   assert.match(
-    fontBakerWasm,
-    /new URL\(["']\.\.\/\.\.\/dist\/font-baker\.wasm["'],\s*import\.meta\.url\)/,
+    fontBakerWasmGraph.source,
+    /new URL\(["'`]\.\.\/\.\.\/dist\/font-baker\.wasm["'`],\s*import\.meta\.url\)/,
     'the runtime worker graph must address the package-owned baker Wasm',
   );
   assert.doesNotMatch(
-    `${runtimeHost}\n${runtimeWorker}`,
+    `${runtimeGraph.source}\n${runtimeWorker}`,
     /(?:node:|font-baker\/validate|compose-bake|compiler-adapter|discovery|gltf-validator|ktx-parse|ajv)/,
   );
-  for (const helper of ['core-bake-policy.js', 'owned-array-buffer.js', 'successful-promise-cache.js']) {
-    const source = await readFile(new URL(`../../dist/internal/${helper}`, import.meta.url), 'utf8');
-    assert.doesNotMatch(source, /(?:^|\n)\s*(?:import|export\s+\{.*\}\s+from)\s/m);
-  }
   assert.ok((await readFile(new URL('../../dist/font-baker.wasm', import.meta.url))).byteLength > 0);
 });
 

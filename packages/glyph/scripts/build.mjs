@@ -51,7 +51,10 @@ const tsc = fileURLToPath(
   new URL(process.platform === 'win32' ? '../node_modules/.bin/tsc.CMD' : '../node_modules/.bin/tsc', import.meta.url),
 );
 const tsdown = fileURLToPath(
-  new URL(process.platform === 'win32' ? '../node_modules/.bin/tsdown.CMD' : '../node_modules/.bin/tsdown', import.meta.url),
+  new URL(
+    process.platform === 'win32' ? '../node_modules/.bin/tsdown.CMD' : '../node_modules/.bin/tsdown',
+    import.meta.url,
+  ),
 );
 const rustEnvironment = reproducibleRustEnvironment(workspaceRoot);
 const shaperSimdSetting = process.env.PMNDRS_GLYPH_SHAPER_SIMD;

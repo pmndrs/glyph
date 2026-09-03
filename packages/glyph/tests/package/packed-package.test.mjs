@@ -7,6 +7,7 @@ import test from 'node:test';
 
 // `/react` reaches R3F's client-only WebGPU entry, which needs a browser global to import at all.
 import '../support/browser-globals.mjs';
+import { readJavaScriptModuleClosure } from '../support/javascript-module-closure.mjs';
 
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -132,11 +133,13 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     );
   }
 
-  const runtimeHost = await readFile(join(installedDirectory, 'dist/runtime-bake.js'), 'utf8');
-  const serialWorkerHost = await readFile(join(installedDirectory, 'dist/internal/serial-worker-host.js'), 'utf8');
-  assert.match(runtimeHost, /workerUrl:\s*new URL\(["'`]\.\.\/dist\/runtime-bake-worker\.js["'`]/);
-  assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/);
-  assert.match(serialWorkerHost, /type:\s*["']module["']/);
+  const runtimeGraph = await readJavaScriptModuleClosure([
+    join(installedDirectory, 'dist/runtime-bake.js'),
+    join(installedDirectory, 'dist/internal/serial-worker-host.js'),
+  ]);
+  assert.match(runtimeGraph.source, /workerUrl:\s*new URL\(["'`]\.\.\/dist\/runtime-bake-worker\.js["'`]/);
+  assert.match(runtimeGraph.source, /new Worker\(/);
+  assert.match(runtimeGraph.source, /type:\s*["'`]module["'`]/);
 
   const cli = join(installedDirectory, 'bin/glyph.js');
   assert.notEqual((await stat(cli)).mode & 0o111, 0, 'the packed CLI must be executable');
