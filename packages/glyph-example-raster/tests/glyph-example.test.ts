@@ -3,19 +3,20 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
-import { createFontLibrary, glyph, loadFont, type RasterKey, type Sha256Hex } from '@pmndrs/glyph';
+import { glyph, type AnyRasterFormat, type RasterKey, type Sha256Hex } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { rasterBake } from '@pmndrs/glyph/baker';
 import { type PortableGeometryPayload } from '@pmndrs/glyph';
 import { f32, techniqueProgram } from '@pmndrs/glyph/config/codec-program';
+import { defineGlyphConfig } from '@pmndrs/glyph/config/glyph';
 import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
 import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
 import { defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
 import {
   registerThreeRasterPlanProgram,
   defineTextMaterial,
-  FontLoader,
   ThreeConfig,
+  ThreeFontFormats,
   threeCodecAbi,
   type ThreePlanProgramBuffer,
   type ThreePlanProgramMaterialContext,
@@ -60,6 +61,7 @@ const genericMaterialContexts: GlyphExampleMaterialContext[] = [];
 const suppliedMaterialContexts: ThreePlanProgramMaterialContext[] = [];
 
 afterEach(async () => {
+  vi.unstubAllGlobals();
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
   for (const material of materials.splice(0)) material.dispose();
   genericMaterialContexts.splice(0);
@@ -99,15 +101,16 @@ describe('public external raster proof', () => {
       const file = files.get(basename(new URL(url).pathname));
       return file === undefined ? new Response(null, { status: 404 }) : new Response(await readFile(file));
     });
-    const library = createFontLibrary({ fetch });
-    const font = await library.loadFont(
+    vi.stubGlobal('fetch', fetch);
+    const font = glyph.fontFace(
       { baked: 'https://glyph.invalid/inter.font.glb' },
-      { raster: glyphExample, options: { paletteSeed: 7 } },
+      { format: glyphExample({ paletteSeed: 7 }) },
     );
+    await font.glyphExample.load();
 
     try {
-      expect(font.raster).toBe(glyphExample);
-      expect(font.glyphCount).toBeGreaterThan(0);
+      expect(font.glyphExample.isLoaded()).toBe(true);
+      expect(await font.formats()).toContain(glyphExample.kind);
       expect(
         fetch.mock.calls.map(([input]) =>
           basename(new URL(input instanceof Request ? input.url : String(input)).pathname),
@@ -115,38 +118,31 @@ describe('public external raster proof', () => {
       ).toEqual(expect.arrayContaining([basename(core.file), basename(companion.file), basename(records.file)]));
     } finally {
       font.dispose();
-      library.dispose();
     }
   });
 
-  test('honors cancellation before decoding and leaves no decoded data', async () => {
+  test('disposing a pending FontFace cancels loading and publishes no readiness', async () => {
     const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
-    const controller = new AbortController();
-    controller.abort(new DOMException('cancel glyph-example decode', 'AbortError'));
     const bytes = await readFile(core.file);
-
-    expect(() =>
-      loadFont(
-        { baked: { bytes, ownership: 'copy' } },
-        { raster: glyphExample, options: { paletteSeed: 7 } },
-        { signal: controller.signal },
-      ),
-    ).toThrowError(expect.objectContaining({ name: 'AbortError' }));
+    const font = glyph.fontFace({ baked: { bytes, ownership: 'copy' } }, { format: glyphExample({ paletteSeed: 7 }) });
+    const pending = font.glyphExample.load();
+    font.dispose();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(font.disposed).toBe(true);
   });
 
   test('manually registers the TSL realization and preserves Three draw reuse', async () => {
-    registerThreeRasterPlanProgram(threeProgram);
-    const three = await createThreeHandle();
+    const three = await createThreeHandle(glyphExample);
     const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
-    const loader = new FontLoader();
-    const font = await loader.loadAsync({
-      input: { baked: dataUrl(await readFile(core.file)) },
-      raster: { raster: glyphExample, options: { paletteSeed: 7 } },
-    });
+    const font = glyph.fontFace(
+      { baked: dataUrl(await readFile(core.file)) },
+      { format: glyphExample({ paletteSeed: 7 }) },
+    );
+    await font.glyphExample.load();
     const material = defineTextMaterial((context) => {
       if (context.kind !== 'glyph' || context.format !== glyphExample.id) return context.createDefaultMaterial();
       genericMaterialContexts.push(context);
@@ -154,7 +150,12 @@ describe('public external raster proof', () => {
       realized.depthTest = true;
       return realized;
     });
-    const text = three.createText({ font, text: 'PUBLIC RASTER', style: { fontSize: 48 }, material });
+    const text = three.createText({
+      font: font.glyphExample,
+      text: 'PUBLIC RASTER',
+      style: { fontSize: 48 },
+      material,
+    });
     const group = three.createTextGroup({ renderOrder: 200 });
     group.add(text);
     const scene = new THREE.Scene();
@@ -204,23 +205,21 @@ describe('public external raster proof', () => {
       group.dispose();
       text.dispose();
       font.dispose();
-      loader.dispose();
       three.dispose();
     }
   });
 
   test('realizes and reuses supplied indexed triangle-strip geometry through Three', async () => {
-    registerThreeRasterPlanProgram(suppliedThreeProgram);
-    const three = await createThreeHandle();
+    const three = await createThreeHandle(suppliedGlyphExample);
     const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
-    const loader = new FontLoader();
-    const font = await loader.loadAsync({
-      input: { baked: dataUrl(await readFile(core.file)) },
-      raster: { raster: suppliedGlyphExample, options: { paletteSeed: 7 } },
-    });
-    const text = three.createText({ font, text: 'STRIP QUAD', style: { fontSize: 48 } });
+    const font = glyph.fontFace(
+      { baked: dataUrl(await readFile(core.file)) },
+      { format: suppliedGlyphExample({ paletteSeed: 7 }) },
+    );
+    await font.glyphExample.load();
+    const text = three.createText({ font: font.glyphExample, text: 'STRIP QUAD', style: { fontSize: 48 } });
     const group = three.createTextGroup();
     group.add(text);
     const scene = new THREE.Scene();
@@ -257,7 +256,6 @@ describe('public external raster proof', () => {
       group.dispose();
       text.dispose();
       font.dispose();
-      loader.dispose();
       three.dispose();
     }
     expect(materialDisposals).toBe(1);
@@ -266,9 +264,16 @@ describe('public external raster proof', () => {
 
 let nextThreeHandle = 1;
 
-async function createThreeHandle() {
+async function createThreeHandle(format: AnyRasterFormat) {
   await glyph.init();
-  const handle = glyph.handle(`three:glyph-example:${String(nextThreeHandle)}`, ThreeConfig);
+  const config = defineGlyphConfig({
+    ...ThreeConfig,
+    fonts: {
+      default: 'custom',
+      formats: { ...ThreeFontFormats, custom: format },
+    },
+  });
+  const handle = glyph.handle(`three:glyph-example:${String(nextThreeHandle)}`, config);
   nextThreeHandle += 1;
   return handle;
 }
@@ -385,6 +390,9 @@ const threeProgram = {
     },
   },
 };
+
+registerThreeRasterPlanProgram(threeProgram);
+registerThreeRasterPlanProgram(suppliedThreeProgram);
 
 function createThreeMaterial(context: ThreePlanProgramMaterialContext): THREE.NodeMaterial {
   const origin = floatBuffer(context.namedBuffers, 'origin', 2);

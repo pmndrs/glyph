@@ -704,13 +704,12 @@ export interface GlyphRootCreateOptions<Bindings extends AnyGlyphBindings, Rende
 export type SelectedGlyphConfig<
   Bindings extends AnyGlyphBindings,
   RendererResult,
-  FontTechniques extends object,
   Boundary,
   CodecValue extends Codec,
   ConfigExtension extends object,
 > = Readonly<ConfigExtension> & {
   readonly schema: GlyphSchema<Bindings, Boundary>;
-  readonly fonts?: GlyphFontConfig<FontTechniques>;
+  readonly fonts?: AnyGlyphFontConfig;
   readonly commands?: Partial<GlyphCommandCapacity>;
   encode(context: EncodeContext): CodecValue;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
@@ -798,7 +797,7 @@ interface GlyphConfigContract<
     RendererResult,
     Boundary,
     CodecValue,
-    SelectedGlyphConfig<Bindings, RendererResult, FontTechniques, Boundary, CodecValue, ConfigExtension>
+    SelectedGlyphConfig<Bindings, RendererResult, Boundary, CodecValue, ConfigExtension>
   >;
   encode(context: EncodeContext): CodecValue;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;

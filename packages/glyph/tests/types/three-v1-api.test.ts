@@ -12,6 +12,7 @@ import {
 import { bitmap } from '../../src/raster/bitmap.js';
 import { msdf } from '../../src/raster/msdf.js';
 import { slug } from '../../src/raster/slug.js';
+import { defineGlyphConfig } from '../../src/config/glyph.js';
 import {
   Decorations,
   FontLoader,
@@ -20,6 +21,7 @@ import {
   TextGroup,
   ThreeRoot,
   ThreeConfig,
+  ThreeFontFormats,
   defineTextMaterial,
   span as threeSpan,
   type ThreeHandle,
@@ -39,6 +41,14 @@ const constraints = Constraints.create({
   naturalHeight: { height: { mode: 'unconstrained' } },
 });
 const three: ThreeHandle = glyph.handle('three:type-fixture', ThreeConfig);
+const extendedThreeConfig = defineGlyphConfig({
+  ...ThreeConfig,
+  fonts: {
+    default: 'experimental',
+    formats: { ...ThreeFontFormats, experimental: bitmap },
+  },
+});
+glyph.handle('three:extended-type-fixture', extendedThreeConfig) satisfies ThreeHandle;
 const hud = three('hud');
 hud.createText({ font: bitmapFont, text: 'Named root' });
 // @ts-expect-error Calling a handle only creates or selects named roots.
