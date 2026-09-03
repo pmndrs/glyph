@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:cbc9876d6184663709afa5ac4979efe40c672a2ed5afac2e1a2a73a689f414c7'
+source_digest: 'sha256:fab29fc98b8d763c7062947d8d9b5eb90de59c3276c6a24429b0b9ae241ede53'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -151,10 +151,11 @@ runtime Worker's initial bundle.
 `defineGlyphConfig()` preserves the schema, font vocabulary, renderer result, boundary, root, and Codec as one inferred
 relationship. `GlyphConfigFor<typeof Schema, Root, Result>` gives isolated declaration boundaries a nameable contract
 without repeating the schema's binding tuple or boundary type. Internal handle machinery owns Codec installation, planning, projection, resource
-settlement, and disposal; third-party integrations receive only constrained root services. When a config declares fonts,
-Glyph also creates and disposes the handle-local FontFace store over the process-wide immutable FontLibrary cache. Portable
-compiled resources remain immutable payload data, while each renderer owns physical textures, buffers, geometry, and
-their device-relative leases.
+settlement, and disposal; third-party integrations receive only constrained root services. Every FontFace and handle reaches
+the same process-local, lease-counted font resource graph. Transitional low-level `loadFont()` and `FontLibrary.loadFont()`
+calls delegate into that graph rather than owning a second completed-value cache; their returned immutable Font values keep
+the source lease live until the last returned value is disposed. Portable compiled resources remain immutable payload data,
+while each renderer owns physical textures, buffers, geometry, and their device-relative leases.
 
 ## Public package surfaces
 

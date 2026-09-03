@@ -11,7 +11,6 @@ import { benchmarkFontArtifactByteLimit } from './limits';
  */
 export const benchmarkFontLibrary = createFontLibrary({
   fetch: fetchBenchmarkFont,
-  maximumEntries: 16,
   maxArtifactBytes: benchmarkFontArtifactByteLimit,
 });
 

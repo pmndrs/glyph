@@ -5,7 +5,7 @@ import test from 'node:test';
 import { bitmap } from '../../dist/raster/bitmap.js';
 import { defineFont } from '../../dist/font.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
-import { createFontStack, immutableFontResources } from '../../dist/loaded-font.js';
+import { immutableFontResources } from '../../dist/loaded-font.js';
 import { createFontLibrary, loadFont } from '../../dist/loader.js';
 
 const fixtureUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -76,7 +76,7 @@ test('loadFont accepts the static defineFont discovery token directly', async ()
   font.dispose();
 });
 
-test('top-level loading coalesces only in flight and returns independent user leases', async () => {
+test('low-level loads share the FontFace graph while returned user leases remain live', async () => {
   const bytes = await readFile(fixtureUrl);
   const calls = [];
   const fetch = async (input) => {
@@ -98,17 +98,15 @@ test('top-level loading coalesces only in flight and returns independent user le
 
   const third = await library.loadFont(request.input, request.raster);
   assert.equal(calls.length, 1);
-  library.clear(request.input, request.raster);
   assert.equal(third.glyphCount, 2937);
-  const fourth = await library.loadFont(request.input, request.raster);
-  assert.equal(calls.length, 2);
-
-  library.dispose();
-  assert.equal(second.glyphCount, 2937);
-  assert.equal(fourth.glyphCount, 2937);
-  assert.throws(() => library.loadFont(request.input, request.raster), /disposed/);
   second.dispose();
   third.dispose();
+
+  const fourth = await library.loadFont(request.input, request.raster);
+  assert.equal(calls.length, 2);
+  library.dispose();
+  assert.equal(fourth.glyphCount, 2937);
+  assert.throws(() => library.loadFont(request.input, request.raster), /disposed/);
   fourth.dispose();
 
   let topLevelCalls = 0;
@@ -146,40 +144,6 @@ test('top-level loading coalesces only in flight and returns independent user le
   }
 });
 
-test('clearing a pending library load cannot resurrect its cache entry', async () => {
-  const bytes = await readFile(fixtureUrl);
-  const responses = [];
-  const fetchStarted = Promise.withResolvers();
-  const replacementFetchStarted = Promise.withResolvers();
-  let calls = 0;
-  const library = createFontLibrary({
-    fetch() {
-      calls += 1;
-      const response = Promise.withResolvers();
-      responses.push(response);
-      fetchStarted.resolve();
-      if (calls === 2) replacementFetchStarted.resolve();
-      return response.promise;
-    },
-  });
-  const request = { input: { baked: 'https://fonts.test/pending.glb' }, raster };
-  const pending = library.loadFont(request.input, request.raster);
-  await fetchStarted.promise;
-  assert.equal(calls, 1);
-  library.clear(request.input, request.raster);
-  await assert.rejects(pending, /cleared/);
-  responses[0].resolve(new Response(Uint8Array.from(bytes)));
-  await Promise.resolve();
-
-  const replacement = library.loadFont(request.input, request.raster);
-  await replacementFetchStarted.promise;
-  assert.equal(calls, 2);
-  responses[1].resolve(new Response(Uint8Array.from(bytes)));
-  const font = await replacement;
-  font.dispose();
-  library.dispose();
-});
-
 test('font library and load options reject malformed values at their calls', async () => {
   assert.throws(() => createFontLibrary(null), /options must be an object/);
   const library = createFontLibrary();
@@ -189,36 +153,5 @@ test('font library and load options reject malformed values at their calls', asy
   assert.throws(() => loadFont(request.input, []), /at least one raster format/);
   assert.throws(() => loadFont(request.input, request.raster, { retry: true }), /only accept signal/);
   assert.throws(() => loadFont(defineFont(request.input, request.raster), request.raster), /only accept signal/);
-  assert.throws(() => library.clear(request.input), /requires a raster format/);
-  library.dispose();
-});
-
-test('a bounded library evicts deterministically without invalidating returned fonts', async () => {
-  const bytes = await readFile(fixtureUrl);
-  let calls = 0;
-  const library = createFontLibrary({
-    maximumEntries: 1,
-    async fetch() {
-      calls += 1;
-      return new Response(Uint8Array.from(bytes));
-    },
-  });
-  const firstRequest = { input: { baked: 'https://fonts.test/first.glb' }, raster };
-  const secondRequest = { input: { baked: 'https://fonts.test/second.glb' }, raster };
-  const first = await library.loadFont(firstRequest.input, firstRequest.raster);
-  const second = await library.loadFont(secondRequest.input, secondRequest.raster);
-  const firstAgain = await library.loadFont(firstRequest.input, firstRequest.raster);
-
-  assert.equal(calls, 3);
-  assert.equal(first.glyphCount, 2937);
-  assert.equal(second.glyphCount, 2937);
-  const stack = createFontStack(first, second);
-  assert.deepEqual(stack.fonts, [first, second]);
-  assert.throws(() => createFontStack(first, first), /more than once/);
-
-  first.dispose();
-  assert.throws(() => createFontStack(first, second), /disposed/);
-  second.dispose();
-  firstAgain.dispose();
   library.dispose();
 });

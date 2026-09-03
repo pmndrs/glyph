@@ -100,10 +100,9 @@ type _TitleRaster = Expect<Equal<FontRasterFormatOf<typeof titleFont>, typeof ms
 const loadedTitle: Promise<Font<typeof msdf>> = loadFont(titleFont);
 void loadedTitle;
 
-const library = createFontLibrary({ maximumEntries: 8 });
-const cachedTitle: Promise<Font<typeof msdf>> = library.loadFont(titleFont);
-void cachedTitle;
-library.clear(titleFont);
+const library = createFontLibrary();
+const libraryTitle: Promise<Font<typeof msdf>> = library.loadFont(titleFont);
+void libraryTitle;
 library.dispose();
 
 declare const fontBytes: Uint8Array<ArrayBuffer>;

@@ -14,7 +14,7 @@ import {
   type FontFaceDeclaredFormat,
   type FontFaceSource,
 } from './font-face.js';
-import { createFontLibrary, type FontLibrary } from './loader.js';
+import { glyphFontLibrary as processFontLibrary, type FontLibrary } from './loader.js';
 
 export interface Glyph {
   readonly initialized: boolean;
@@ -111,7 +111,7 @@ class GlyphRuntime implements Glyph {
 }
 
 /** The process-local Glyph runtime. Successful initialization occurs at most once. */
-const sharedFontLibrary = createFontLibrary();
+const sharedFontLibrary = processFontLibrary();
 const glyphRuntime = new GlyphRuntime(sharedFontLibrary);
 export const glyph: Glyph = glyphRuntime;
 
