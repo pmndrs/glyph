@@ -19,6 +19,7 @@ import {
   largestGlyphSurface,
   proxyPointToVirtualFrame,
   type GlyphPoint,
+  type GlyphProxySize,
   type GlyphSurfaceSize,
 } from './shared-surface';
 import { rankViewportTargets } from './viewport-ranking';
@@ -61,6 +62,8 @@ type GlyphProxyHandle = HTMLElement & {
   bind(root: GlyphOffscreenRootElement): void;
   copy(surface: OffscreenCanvas | HTMLCanvasElement, frame: GlyphSurfaceSize, opaque: boolean): void;
   releaseFrame(): void;
+  /** The box the frame is drawn into: the element, or in fullscreen the largest box of its requested aspect. */
+  frameBox(): GlyphProxySize;
   rootId: string | undefined;
   scene: string;
 };
@@ -181,6 +184,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.#resizeObserver.observe(this);
     window.addEventListener('resize', this.#onWindowResize);
     window.addEventListener('scroll', this.#onWindowScroll, { passive: true });
+    document.addEventListener('fullscreenchange', this.#onWindowResize);
     this.#discover();
     this.#started = true;
     this.#syncVisibility();
@@ -202,6 +206,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     this.removeAttribute('data-glyph-resizing');
     window.removeEventListener('resize', this.#onWindowResize);
     window.removeEventListener('scroll', this.#onWindowScroll);
+    document.removeEventListener('fullscreenchange', this.#onWindowResize);
     this.#statsPanel?.remove();
     this.#statsPanel = undefined;
     window.removeEventListener('keydown', this.#toggleStats);
@@ -251,8 +256,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
 
   /** Map a proxy-local point into the centered page-level virtual frame. */
   mapProxyPoint(proxy: GlyphProxyHandle, point: GlyphPoint): GlyphPoint {
-    const rect = proxy.getBoundingClientRect();
-    return proxyPointToVirtualFrame(this.#frameSize, rect, point);
+    return proxyPointToVirtualFrame(this.#frameSize, proxy.frameBox(), point);
   }
 
   /** Publish a custom message to this root or one of its proxies on the same page. */
@@ -626,11 +630,11 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     const dpr = Math.min(window.devicePixelRatio || 1, this.#maxDpr());
     return largestGlyphSurface(
       [...this.#proxies].map((proxy) => {
-        const rect = proxy.getBoundingClientRect();
+        const box = proxy.frameBox();
         return {
           dpr,
-          height: Math.max(1, Math.round(rect.height)),
-          width: Math.max(1, Math.round(rect.width)),
+          height: Math.max(1, Math.round(box.height)),
+          width: Math.max(1, Math.round(box.width)),
         };
       }),
     );
@@ -895,7 +899,7 @@ export type GlyphProxyState = 'empty' | 'cached' | 'live';
  * and `sentinel`.
  */
 export class GlyphProxyElement extends HTMLElement {
-  static observedAttributes = ['root', 'data-scene', 'aria-label', 'aspect', 'width', 'height', 'poster'];
+  static observedAttributes = ['root', 'data-scene', 'aria-label', 'aspect', 'width', 'height', 'poster', 'fit'];
 
   #canvas: HTMLCanvasElement | undefined;
   #poster: HTMLImageElement | undefined;
@@ -905,8 +909,10 @@ export class GlyphProxyElement extends HTMLElement {
   #state: GlyphProxyState = 'empty';
   #releasing = false;
   #releaseToken = 0;
+  #presented = 0;
   #posterUrl: string | undefined;
   #onRootReady = () => this.#bind();
+  #onFullscreenChange = () => this.#syncFullscreen();
 
   get rootId() {
     return this.getAttribute('root') ?? this.closest('[data-glyph-root]')?.id;
@@ -918,6 +924,31 @@ export class GlyphProxyElement extends HTMLElement {
 
   get state(): GlyphProxyState {
     return this.#state;
+  }
+
+  /** The requested aspect as a number, or undefined when none was declared. */
+  get aspectRatio(): number | undefined {
+    const raw = this.getAttribute('aspect');
+    if (raw === null) return undefined;
+    const match = /^\s*([\d.]+)\s*(?:\/\s*([\d.]+))?\s*$/.exec(raw);
+    if (match === null) return undefined;
+    const ratio = Number(match[1]) / Number(match[2] ?? 1);
+    return Number.isFinite(ratio) && ratio > 0 ? ratio : undefined;
+  }
+
+  /** Enter or leave fullscreen; in fullscreen the frame keeps the requested aspect, letterboxed. */
+  toggleFullscreen(): void {
+    if (document.fullscreenElement === this) void document.exitFullscreen();
+    else void this.requestFullscreen({ navigationUI: 'hide' });
+  }
+
+  frameBox(): GlyphProxySize {
+    const rect = this.getBoundingClientRect();
+    const aspect = this.aspectRatio;
+    if (document.fullscreenElement !== this || aspect === undefined) return rect;
+    // The largest box of the requested aspect that fits the screen.
+    const width = Math.min(rect.width, rect.height * aspect);
+    return { width, height: width / aspect };
   }
 
   connectedCallback() {
@@ -934,6 +965,7 @@ export class GlyphProxyElement extends HTMLElement {
     this.addEventListener('pointerleave', this.#sendPointerLeave);
     this.addEventListener('focus', this.#onFocus);
     this.addEventListener('keydown', this.#sendKeyDown);
+    document.addEventListener('fullscreenchange', this.#onFullscreenChange);
     if (
       !this.hasAttribute('tabindex') &&
       (this.getAttribute('role') === 'textbox' || this.getAttribute('role') === 'button')
@@ -954,6 +986,7 @@ export class GlyphProxyElement extends HTMLElement {
     this.removeEventListener('pointerleave', this.#sendPointerLeave);
     this.removeEventListener('focus', this.#onFocus);
     this.removeEventListener('keydown', this.#sendKeyDown);
+    document.removeEventListener('fullscreenchange', this.#onFullscreenChange);
     window.removeEventListener('glyph-root-ready', this.#onRootReady);
   }
 
@@ -979,11 +1012,13 @@ export class GlyphProxyElement extends HTMLElement {
     const resolved = presentSurface(canvas, this.#presenter, surface, frame, opaque);
     if (!resolved) return;
     this.#presenter = resolved;
-    if (this.#state !== 'live' || this.#releasing) {
-      this.#releaseToken += 1; // a photograph still in flight is of a frame that is no longer last
-      this.#releasing = false;
-      this.#setState('live');
-    }
+    if (this.#state === 'live' && !this.#releasing) return;
+    // A scene's first frames may precede its text; the still covers them.
+    this.#presented += 1;
+    if (this.#presented < STILL_FRAMES) return;
+    this.#releaseToken += 1; // a photograph still in flight is of a frame that is no longer last
+    this.#releasing = false;
+    this.#setState('live');
   }
 
   /**
@@ -998,6 +1033,7 @@ export class GlyphProxyElement extends HTMLElement {
     const poster = this.#poster;
     if (!canvas || !poster) return;
     this.#releasing = true;
+    this.#presented = 0;
     const token = ++this.#releaseToken;
     poster.removeAttribute('data-still');
     this.removeAttribute('data-glyph-still');
@@ -1044,7 +1080,18 @@ export class GlyphProxyElement extends HTMLElement {
       poster.draggable = false;
       const sentinel = document.createElement('div');
       sentinel.setAttribute('part', 'sentinel');
-      shadow.append(style, canvas, poster, sentinel);
+      const fullscreen = document.createElement('button');
+      fullscreen.setAttribute('part', 'fullscreen');
+      fullscreen.type = 'button';
+      fullscreen.title = 'Fullscreen';
+      fullscreen.setAttribute('aria-label', 'Fullscreen');
+      fullscreen.innerHTML = FULLSCREEN_ICON;
+      fullscreen.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.toggleFullscreen();
+      });
+      fullscreen.addEventListener('pointerdown', (event) => event.stopPropagation());
+      shadow.append(style, canvas, poster, sentinel, fullscreen);
     }
     this.#canvas = shadow.querySelector('canvas') ?? undefined;
     this.#poster = shadow.querySelector('img') ?? undefined;
@@ -1085,6 +1132,13 @@ export class GlyphProxyElement extends HTMLElement {
 
   #label() {
     return this.getAttribute('aria-label') ?? this.scene;
+  }
+
+  /** Fullscreen is a lease as much as a hover is, and the frame needs re-measuring either way. */
+  #syncFullscreen() {
+    const active = document.fullscreenElement === this;
+    this.toggleAttribute('data-glyph-fullscreen', active);
+    if (active) this.#root?.engage(this);
   }
 
   #setState(state: GlyphProxyState) {
@@ -1218,6 +1272,12 @@ export class GlyphProxyElement extends HTMLElement {
  * size, centred, so the hand-off between them is invisible; the sentinel
  * fills the window until the first frame.
  */
+/** Frames a scene must present before its still gives way; the first can precede the text. */
+const STILL_FRAMES = 3;
+
+const FULLSCREEN_ICON =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+
 const PROXY_SHADOW_STYLE = `
 :host {
   position: relative;
@@ -1250,6 +1310,53 @@ img[data-still] {
   height: 100%;
   object-fit: cover;
   transform: none;
+}
+/* fit="cover": the whole frame scaled into the window instead of a one-to-one centred crop. */
+:host([fit='cover']) canvas,
+:host([fit='cover']) img {
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  transform: none !important;
+  object-fit: cover;
+}
+/* Fullscreen keeps the requested aspect: the frame is letterboxed on the ground colour. */
+:host([data-glyph-fullscreen]) canvas,
+:host([data-glyph-fullscreen]) img {
+  object-fit: contain;
+}
+:host([data-glyph-fullscreen]) {
+  background: #07080b;
+}
+button {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgb(231 236 246 / 20%);
+  border-radius: 0.4rem;
+  background: rgb(7 8 11 / 70%);
+  color: #e7ecf6;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+:host(:hover) button,
+:host(:focus-within) button,
+:host([data-glyph-fullscreen]) button {
+  opacity: 1;
+}
+button:hover {
+  background: rgb(7 8 11 / 90%);
+}
+button svg {
+  width: 1rem;
+  height: 1rem;
 }
 div {
   position: absolute;

@@ -24,7 +24,10 @@ declare module 'react' {
           stats?: boolean;
         }
       >;
-      'glyph-proxy': Attributes<GlyphProxyElement, { root: string; 'data-scene': string; aspect?: string }>;
+      'glyph-proxy': Attributes<
+        GlyphProxyElement,
+        { root: string; 'data-scene': string; aspect?: string; fit?: 'cover'; poster?: string }
+      >;
       'glyph-scene-control': Attributes<
         GlyphSceneControlElement,
         { root: string; proxy?: string; 'data-scene'?: string; 'data-action'?: string }

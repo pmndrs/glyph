@@ -114,7 +114,7 @@ three.setCompositing('independent'); // this root, from its next shape()
 const hud = glyph.handle('hud', defineThreeConfig({ compositing: 'independent' })); // or per handle
 ```
 
-<glyph-proxy root="scenes" data-scene="batching" aria-label="Interleaved versus contiguous materials in one TextGroup" aspect="16 / 9" />
+<glyph-proxy fit="cover" root="scenes" data-scene="batching" aria-label="Interleaved versus contiguous materials in one TextGroup" aspect="16 / 9" />
 
 {/*
 write
@@ -296,7 +296,7 @@ notes · internals
 
 ## Format cost at scale
 
-<glyph-proxy root="scenes" data-scene="zoom" aria-label="Continuous zoom across formats" aspect="16 / 9" />
+<glyph-proxy fit="cover" root="scenes" data-scene="zoom" aria-label="Continuous zoom across formats" aspect="16 / 9" />
 
 | Lane, 22,000-glyph corpus, medians | Bitmap | MSDF | Slug |
 | --- | ---: | ---: | ---: |

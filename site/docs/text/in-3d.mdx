@@ -51,7 +51,7 @@ three.createText({ font: Inter, text: 'occluded', material: inScene });
 three.createText({ font: Inter, text: 'overlaid' }); // the default draws over everything
 ```
 
-<glyph-proxy root="scenes" data-scene="depth" aria-label="A sphere passing in front of and behind two words" aspect="16 / 9" />
+<glyph-proxy fit="cover" root="scenes" data-scene="depth" aria-label="A sphere passing in front of and behind two words" aspect="16 / 9" />
 
 | Setting | Default | Change it when |
 | --- | --- | --- |
@@ -142,7 +142,7 @@ function Billboard({ children }: { readonly children: ReactNode }) {
 </mesh>;
 ```
 
-<glyph-proxy root="scenes" data-scene="labels" aria-label="Moons with depth-tested labels in fog" aspect="16 / 9" />
+<glyph-proxy fit="cover" root="scenes" data-scene="labels" aria-label="Moons with depth-tested labels in fog" aspect="16 / 9" />
 
 {/*
 write
@@ -164,7 +164,7 @@ notes · internals
 
 ## Steep angles
 
-<glyph-proxy root="scenes" data-scene="off-axis" aria-label="A paragraph turning away from the camera" aspect="16 / 9" />
+<glyph-proxy fit="cover" root="scenes" data-scene="off-axis" aria-label="A paragraph turning away from the camera" aspect="16 / 9" />
 
 | Format | Off-axis | Why |
 | --- | --- | --- |
@@ -214,7 +214,7 @@ const carousel = defineTextMaterial((context) => {
 three.createText({ font: Inter, text: 'around and around', material: carousel });
 ```
 
-<glyph-proxy root="scenes" data-scene="kinetic" aria-label="A band on a turning carousel, a passage on a waving flag, the current word spotlit" aspect="16 / 9" />
+<glyph-proxy fit="cover" root="scenes" data-scene="kinetic" aria-label="A band on a turning carousel, a passage on a waving flag, the current word spotlit" aspect="16 / 9" />
 
 {/*
 write
@@ -336,7 +336,7 @@ function frame(): void {
 }
 ```
 
-<glyph-proxy root="scenes" data-scene="bloom" aria-label="One bright word through bloom" aspect="16 / 9" />
+<glyph-proxy fit="cover" root="scenes" data-scene="bloom" aria-label="One bright word through bloom" aspect="16 / 9" />
 
 {/*
 write
