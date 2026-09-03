@@ -53,6 +53,31 @@ three.createText({ font: Inter, text: 'overlaid' }); // the default draws over e
 
 <glyph-proxy fit="cover" root="scenes" data-scene="depth" aria-label="A sphere sliding across two words: hidden by one, under the other" aspect="16 / 9" />
 
+<glyph-proxy fit="cover" root="scenes" data-scene="orbit" aria-label="Rings of live type orbit a sphere and cast their letters onto it" aspect="16 / 9" />
+
+{/*
+notes · internals
+- the orbit scene — `site/examples/src/scenes/orbit/scene.tsx`: the ring is bent on the CPU, not in the shader. Each
+  ring is one Slug paragraph, shaped once, copied out with `breakApart()` and placed by matrix on a circle with
+  `placeOnPath` (`lib/paths.ts`). Slug is the point: `maskShadowNode = shader.coverage.greaterThan(0.5)` masks three's
+  shadow pass with the glyph's analytic coverage (`Renderer.js#_getShadowNodes`, three 0.185), so the shadow is the
+  letter and its edge stays sharp at any size. This is why the ring is not bent in the vertex shader: Slug's
+  `position` and `coverage` are two halves of one `Fn` — the vertex half writes the `renderCoordinate` varying the
+  fragment half integrates — so replacing `positionNode` leaves the coverage reading a coordinate nothing wrote and
+  the glyphs come out blank (outline finding). MSDF tolerates the warp but its shadow edge is a threshold, not a
+  contour
+- fitting the text to the arc — `config.ts#ringFit`: a glyph's arc position is its shaped advance, 1:1, so the
+  shaper's kerning survives the transfer; rescaling advances to make the text meet was what distorted it. Instead the
+  line is justified: `ringFit` picks the repeat count whose leftover is smallest, and that leftover is divided among
+  the word spaces only (`ringSpacing` prefix-counts spaces per glyph), never letter spacing. The pitch is measured
+  **once** into a ref — `maxContentWidth` trims trailing spaces like a line end, so re-measuring per commit shifts it
+  with the repeat count and the fit oscillates between two counts forever
+- the lighting is load-bearing — `config.ts#LIGHTS`: glyph quads face outward from the ring, so an overhead key grazes
+  them edge-on and casts nothing. One low, lateral, shadow-casting light is what puts letters on the sphere; a second
+  caster relights what the first darkened. The sphere's pattern is albedo-only (`materials.ts#markings`) for the same
+  reason — a perturbed `normalNode` broke the shadows up into noise
+*/}
+
 | Setting | Default | Change it when |
 | --- | --- | --- |
 | `depthTest` | `false` | the text is a surface in the world — signage, a label on a body, a paragraph on a wall |
