@@ -54,7 +54,7 @@ nonempty draws, and observes changed pixels. Neither package imports a public `/
 flowchart LR
   Source[TTF / OTF] --> Baker[RasterBakerModule]
   Baker --> Artifact[Validated GLB artifact]
-  Artifact --> Load[loadFont]
+  Artifact --> Load[FontFace.load]
   Load --> Raster[RasterFormat.decode]
   Raster --> Font[Immutable Font + typed raster data]
   Schema[Technique schema + portable program] --> Codec[Renderer Codec / encode]

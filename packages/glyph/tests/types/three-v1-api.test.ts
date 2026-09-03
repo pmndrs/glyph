@@ -82,6 +82,8 @@ inter.formats() satisfies Promise<readonly string[]>;
 // @ts-expect-error Format selections inspect through their owning FontFace declaration.
 inter.slug.formats();
 const discovered = glyph.fontFace('/fonts/discovered.font.glb');
+const loadedDiscovered = await glyph.fontFace('/fonts/loaded.font.glb').load();
+loadedDiscovered satisfies import('../../src/index.js').FontFace<never>;
 glyph.fontFace(new URL('/fonts/discovered.font.glb', 'https://example.com'));
 glyph.fontFace(new Blob(), { family: 'BlobFont' });
 // @ts-expect-error Omitted format declarations do not synthesize technique members.
