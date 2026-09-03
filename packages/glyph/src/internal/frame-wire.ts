@@ -246,11 +246,9 @@ export function compilePlannerFrameUpdate(frame: PlannerFrameUpdate): Uint8Array
       ? encoder.encode(mutation.value.language)
       : new Uint8Array(),
   );
-  // The engine proves style payloads neither overlap nor alias the record table in one
-  // forward pass, so every record's payloads must begin at or after the previous
-  // record's payload end. Allocating language and features together per record keeps
-  // that order; allocating all languages before all features would place the second
-  // record's language behind the first record's features.
+  // Keep every record's variable payloads together in the compiler's one monotonic
+  // allocation stream. The producer test pins disjoint table and payload ranges; the
+  // runtime parser only needs to establish the individual borrowed-slice bounds.
   const languageOffsets: number[] = [];
   const featureOffsets: number[] = [];
   for (const [index, mutation] of styleMutations.entries()) {
