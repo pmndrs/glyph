@@ -9,6 +9,7 @@
     "build:docs-components": "vite build --config docs/components/vite.config.ts",
     "build:examples": "vite build --config vite.examples.config.ts",
     "build:landing": "vite build",
+    "capture:thumbnails": "node ./scripts/capture-thumbnails.mts",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm check:docs && pnpm build:landing",
     "check:docs": "npm_config_cache=.npx-cache npx -y @pmndrs/docs@4.1.2 build docs dist/.mdx-check",
     "check:examples": "tsc --noEmit -p tsconfig.examples.json && pnpm check:snippets && pnpm build:examples && pnpm build:docs-components",
@@ -42,6 +43,7 @@
     "leva": "^0.10.1",
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",
+    "playwright": "1.61.1",
     "typescript": "7.0.2",
     "vite": "8.1.5",
     "vitest": "4.1.0"
