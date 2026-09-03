@@ -64,6 +64,7 @@ import { isBenchmarkWorkloadId, type BenchmarkWorkloadId } from '../workloads/ca
 import { liveSceneAssetResource, loadBenchmarkFontAssets } from '../surfaces/benchmark/scene-preload';
 import { PersistentHarnessLayout } from '../surfaces/harness/persistent-layout';
 import { Scene, SceneSuspenseFallback } from '../surfaces/harness/scene';
+import { SceneErrorBoundary } from '../surfaces/harness/scene-error-boundary';
 import { useLocation } from 'wouter';
 
 type RunExclusiveJob = <T>(job: PersistentRenderJob<T>, signal?: AbortSignal) => Promise<Awaited<T>>;
@@ -664,39 +665,48 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   const liveTechniqueComparison = location.mode === 'conformance' && location.workload === 'mtsdf-slug-compare';
   const actionEligible = available && backendAvailable && !isPending && !liveTechniqueComparison;
 
-  const scene = (
-    <Suspense fallback={<SceneSuspenseFallback technique={location.technique} />}>
-      <Scene
-        activeFontFixture={activeFontFixture}
-        fontFixture={fontFixture}
-        dpr={dpr}
-        conformanceView={conformanceView}
-        comparisonText={comparisonText}
-        error={error}
-        event={event}
-        liveCapture={liveCapture}
-        location={location}
-        demoMode={presentationPlaying}
-        presentation={presentationMode ? 'presentation' : 'main'}
-        presentationPreset={presentationPreset}
-        activityWorkloads={activityWorkloads}
-        summary={summary}
-        showcaseFrame={showcaseFrame}
-        onConformancePan={(deltaXPercent, deltaYPercent) =>
-          setConformanceView((view) => ({
-            ...view,
-            panXPercent: view.panXPercent + deltaXPercent,
-            panYPercent: view.panYPercent + deltaYPercent,
-          }))
-        }
-        onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
-        onLiveStats={publishLiveStats}
-      />
-    </Suspense>
-  );
   const reportRendererError = (caught: unknown): void => {
     setError(caught instanceof Error ? caught.message : String(caught));
   };
+  const sceneIdentity = [
+    location.backend,
+    location.delivery,
+    location.technique,
+    activeFontFixture,
+    location.workload,
+  ].join(':');
+  const scene = (
+    <SceneErrorBoundary key={sceneIdentity} technique={location.technique} onError={reportRendererError}>
+      <Suspense fallback={<SceneSuspenseFallback technique={location.technique} />}>
+        <Scene
+          activeFontFixture={activeFontFixture}
+          fontFixture={fontFixture}
+          dpr={dpr}
+          conformanceView={conformanceView}
+          comparisonText={comparisonText}
+          error={error}
+          event={event}
+          liveCapture={liveCapture}
+          location={location}
+          demoMode={presentationPlaying}
+          presentation={presentationMode ? 'presentation' : 'main'}
+          presentationPreset={presentationPreset}
+          activityWorkloads={activityWorkloads}
+          summary={summary}
+          showcaseFrame={showcaseFrame}
+          onConformancePan={(deltaXPercent, deltaYPercent) =>
+            setConformanceView((view) => ({
+              ...view,
+              panXPercent: view.panXPercent + deltaXPercent,
+              panYPercent: view.panYPercent + deltaYPercent,
+            }))
+          }
+          onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
+          onLiveStats={publishLiveStats}
+        />
+      </Suspense>
+    </SceneErrorBoundary>
+  );
 
   return (
     <PersistentHarnessLayout

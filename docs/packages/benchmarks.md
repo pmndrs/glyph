@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:e3204bd1f52bb1d7153a0ac7114f41296d5c657df4e820a1fb87247cba3cc2ba'
+source_digest: 'sha256:b15145dbf46da320406bcf6610dcf48f873fd16397eb4a437238cafe5cde17c2'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -490,6 +490,11 @@ True product, conformance, and measurement targets remain under `benchmark/targe
 `app.tsx` is a 37-line route entry with no controller or viewport implementation. `routes/harness-route` supplies the one shared component identity, `controllers/harness-controller` owns the route-independent state machine, and `surfaces/harness` owns renderer-aware layout and scene composition. `surfaces/benchmark/benchmark-surface` dispatches an authored workload to the selected technique, while `comparison-workload-viewport` owns the retained comparison activation, progress, errors, and causal probe attributes. Main and Presentation intentionally render the same `HarnessRoute` component type; separate Main and Presentation wrappers would remount the provider and violate canvas, renderer, and telemetry retention.
 
 The deterministic TSL renderer baseline is an executable conformance target under `benchmark/targets/conformance`, not renderer infrastructure. The latest-value async queue is local to `surfaces/benchmark`, where the three React viewport controllers use it to serialize scene commits and collapse obsolete pending inputs.
+
+The route controller wraps each cold scene in both Suspense and a route-keyed error boundary. Pending assets retain the
+loading view; rejected engine, font, or scene work displays the actual failure and reports it through the harness status
+instead of remaining indistinguishable from pending work. Changing backend, delivery, technique, font, or workload
+remounts that boundary and creates the explicit recovery attempt.
 
 ### Benchmark ipsum corpus
 
