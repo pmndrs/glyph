@@ -308,6 +308,31 @@ notes · internals
 - assigning `material` stages an update; a group material invalidates the root — `three/text.ts:708–710`, `:1008–1012`, `:404–407`
 */}
 
+## Moving the vertices
+
+<glyph-proxy fit="cover" root="scenes" data-scene="ripple" aria-label="A passage typing itself out while a wave travels along its lines" aspect="16 / 9" />
+
+{/*
+write
+- Question: can I deform text that is still being edited?
+- Two sentences: yes, and the two never meet — shaping decides where a glyph sits on its line, a `positionNode`
+  decides where that glyph's vertices end up, and the second is a function of position and time on the GPU that
+  never asks what the text says. So the wave costs the same whether the passage is still or being retyped a
+  character at a time, and letters that arrive mid-crest appear already riding it.
+- Shape: two sentences.
+
+notes · internals
+- the ripple scene — `site/examples/src/scenes/ripple/materials.ts`: two positions and they are not interchangeable.
+  `context.position` is the vertex already carried through the glyph and paragraph transforms and is what the
+  displacement is added to; `context.shader.position` is the raw vertex before them, with x running along the line,
+  and is what the phase is read from so the wave travels the reading direction rather than the world. Building the
+  displacement on `shader.position` instead still compiles and silently drops the paragraph's placement, stacking
+  every line at the draw root
+- MSDF only, and the guard is real — Slug's `position` and `coverage` are two halves of one `Fn`, so a replaced
+  `positionNode` leaves the coverage reading a coordinate nothing wrote and the glyphs come out blank
+  (outline finding); the orbit scene bends its type on the CPU for the same reason
+*/}
+
 ## Where a material applies
 
 ```ts
