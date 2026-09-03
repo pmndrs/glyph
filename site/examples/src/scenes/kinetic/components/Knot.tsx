@@ -13,7 +13,7 @@ export function Knot({ skin }: { readonly skin: Texture }) {
 
   useFrame(({ elapsed }) => {
     surfaceScroll.value = elapsed * 0.06;
-    group.current?.rotation.set(0.85 + Math.sin(elapsed * 0.17) * 0.2, elapsed * 0.11, 0.2);
+    group.current?.rotation.set(0.95 + Math.sin(elapsed * 0.15) * 0.18, elapsed * 0.1, 0.25);
   });
 
   return (

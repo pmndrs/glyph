@@ -128,7 +128,7 @@ materials — never loaded, to keep the bundle small.
 
 | Slug | Page | Shows |
 | --- | --- | --- |
-| kinetic | getting-started/examples, text/in-3d | showcase after Codrops' kinetic typography: a live Slug strip (the passage typing in) rendered to a RenderTarget on its own named root and wrapped around a lit torus knot by `fract(uv * repeat - scroll)`; two rings of Slug glyphs on circle paths by `breakApart()` matrices, depth-tested; the current word spotlit |
+| kinetic | getting-started/examples, text/in-3d | showcase after Codrops' kinetic typography: a live Slug strip (the passage typing in) rendered to a RenderTarget on its own named root and wrapped around a torus knot in three bands by `uv * repeat - scroll` with the sampler wrapping (a `fract` flashes the smallest mip as a stitch line at the seam); the tube shaded by facing and depth; the current word in the accent on the surface and on the passage line below |
 | first-text | getting-started/your-first-text | the tutorial's finished state |
 | techniques | fonts/techniques | the same word in Bitmap, MSDF, Slug at three sizes |
 | text-ladder | fonts/techniques | 8 → 1024 px, one technique per row |

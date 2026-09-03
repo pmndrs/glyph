@@ -1,21 +1,24 @@
 import { torusKnot } from '../../lib/paths';
 
 /** Same parametrisation as three's `TorusKnotGeometry(RADIUS, TUBE, …, 2, 3)`, so the tube and the path agree. */
-export const RADIUS = 2.5;
-export const TUBE = 0.74;
+export const RADIUS = 1.85;
+export const TUBE = 0.6;
 export const KNOT = torusKnot(2, 3, RADIUS, RADIUS / 2);
-export const KNOT_POSITION = [0.3, 0.25, -1.4] as const;
+export const KNOT_POSITION = [0, 0.2, -1.2] as const;
 
 /**
- * The knot's skin is a grid of tiles: `ROWS` around the tube, and along it as
- * many as fit at `TILE_ALONG` world units each. A tile on the tube is
- * TILE_ALONG wide and a third of the circumference tall, and the render
- * target has that exact aspect, so a word lands on the surface undistorted.
+ * The knot's skin is a strip of live text: `ROWS` bands around the tube and
+ * `ALONG` copies along it. A strip on the tube is `KNOT.length / ALONG` long
+ * and a `ROWS`th of the circumference tall, and the render target has that
+ * exact aspect, so the passage lands on the surface undistorted.
  */
 export const ROWS = 3;
-export const TILE_ALONG = 3.4;
-export const REPEAT = { x: Math.round(KNOT.length / TILE_ALONG), y: ROWS } as const;
-export const TILE = { width: 4, height: (4 * ((Math.PI * 2 * TUBE) / ROWS)) / TILE_ALONG, pixelsPerUnit: 256 } as const;
-
-export const RING = { radius: 4.3, tilt: [1.15, 0.1, 0.35] as const, speed: 0.3, size: 0.32 } as const;
-export const RING_TEXT = 'LIVE SHAPED TYPE  ·  KINETIC  ·  ENDLESS  ·  ';
+export const ALONG = 2;
+export const REPEAT = { x: ALONG, y: ROWS } as const;
+export const STRIP = {
+  width: KNOT.length / ALONG,
+  height: (Math.PI * 2 * TUBE) / ROWS,
+  pixelsPerUnit: 96,
+} as const;
+/** The passage's type on the strip, in strip units; the line sits vertically centred in the band. */
+export const STRIP_FONT = STRIP.height * 0.64;
