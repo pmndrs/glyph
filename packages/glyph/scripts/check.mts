@@ -20,8 +20,11 @@ export async function runGlyphCheck(): Promise<void> {
   await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.json', '--noEmit']);
   await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.slug-tsl.json', '--noEmit']);
   // Emitted public declarations must survive strict consumers: stripInternal can orphan a
-  // symbol that source-level checks never see.
+  // symbol that source-level checks never see. Peer-bound React and TypeGPU leaves are
+  // exercised separately against dist with dependency declaration checking disabled: the
+  // pinned peers currently contain TypeScript 7 declaration errors outside this package.
   await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.dist-declarations.json']);
+  await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.dist-peer-declarations.json']);
   await runPnpm(['exec', 'oxlint', '--deny-warnings', '.']);
   await runPnpm(['exec', 'oxfmt', '--check', '.']);
   // The Rust crates carried 42 rustfmt diffs and 18 Clippy findings before this gate

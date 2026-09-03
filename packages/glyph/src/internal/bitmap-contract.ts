@@ -1,5 +1,5 @@
 import type { RasterKey } from '../identity.js';
-import type { JsonValue, StaticNumberTuple } from '../raster.js';
+import type { StaticNumberTuple } from '../raster.js';
 import { normalizeRasterCoverage, type RasterCoverage } from '../raster-coverage.js';
 import { deriveRasterKey } from './raster-identity.js';
 
@@ -14,12 +14,11 @@ export interface BitmapOptions<Strikes extends readonly [number, ...number[]]> {
   readonly coverage?: RasterCoverage;
 }
 
-export interface BitmapDescriptor {
-  readonly [key: string]: JsonValue;
+export type BitmapDescriptor = Readonly<{
   readonly generatorVersion: typeof BITMAP_GENERATOR_VERSION;
   readonly strikes: readonly number[];
   readonly coverage?: RasterCoverage;
-}
+}>;
 
 export interface NormalizedBitmapOptions {
   readonly strikes: readonly [number, ...number[]];

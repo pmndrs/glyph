@@ -1,16 +1,16 @@
 import { createElement, type ReactElement } from 'react';
 
-import { glyph, type Font, type FontStack } from '../../src/index.js';
-import * as ReactApi from '../../src/react.js';
-import { GlyphProvider, Text, TextGroup, useFont } from '../../src/react.js';
-import { useBitmap } from '../../src/react/bitmap.js';
-import { useMsdf } from '../../src/react/msdf.js';
-import { useSlug } from '../../src/react/slug.js';
-import type { R3fTextChild, R3fTextProps } from '../../src/react.js';
-import { ThreeConfig, type ThreeHandle, type ThreeTextMaterial } from '../../src/three.js';
-import { bitmap } from '../../src/raster/bitmap.js';
-import { msdf } from '../../src/raster/msdf.js';
-import { slug } from '../../src/raster/slug.js';
+import { glyph, type Font, type FontStack } from '@pmndrs/glyph';
+import * as ReactApi from '@pmndrs/glyph/react';
+import { GlyphProvider, Text, TextGroup, useFont } from '@pmndrs/glyph/react';
+import type { R3fTextChild, R3fTextProps } from '@pmndrs/glyph/react';
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { slug } from '@pmndrs/glyph/raster/slug';
+import { ThreeConfig, type ThreeHandle, type ThreeTextMaterial } from '@pmndrs/glyph/three';
 
 declare const bitmapFont: Font<typeof bitmap>;
 declare const mtsdfFont: Font<typeof msdf>;

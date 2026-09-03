@@ -1,5 +1,4 @@
 import type { RasterKey } from '../identity.js';
-import type { JsonValue } from '../raster.js';
 import { normalizeRasterCoverage, type RasterCoverage } from '../raster-coverage.js';
 import { deriveRasterKey } from './raster-identity.js';
 
@@ -31,19 +30,17 @@ export interface MsdfConfiguration {
   readonly planeUnitsPerEm: number;
 }
 
-export interface DefaultMsdfDescriptor {
-  readonly [key: string]: JsonValue;
+export type DefaultMsdfDescriptor = Readonly<{
   readonly generatorVersion: typeof MSDF_GENERATOR_VERSION;
   readonly coverage?: RasterCoverage;
-}
+}>;
 
-export interface ConfiguredMsdfDescriptor {
-  readonly [key: string]: JsonValue;
+export type ConfiguredMsdfDescriptor = Readonly<{
   readonly emSize: number;
   readonly generatorVersion: typeof MSDF_GENERATOR_VERSION;
   readonly pixelRange: number;
   readonly coverage?: RasterCoverage;
-}
+}>;
 
 export type MsdfDescriptor = DefaultMsdfDescriptor | ConfiguredMsdfDescriptor;
 
