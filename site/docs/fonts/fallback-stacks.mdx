@@ -9,71 +9,187 @@ sourcecode: packages/glyph/src/loaded-font.ts
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  A stack is an ordered list of loaded fonts. The engine resolves each grapheme cluster against the first font that
+{/*
+reader
+- Has a Latin face and text that also contains icons, CJK, or emoji, and has seen `.notdef` boxes. Knows what a
+  code point is; may not know what a grapheme cluster is. Arrives asking "how do I get one paragraph to use several
+  fonts without choosing per character?", should leave knowing how resolution works, how to bake an icon subset
+  and place it, what CJK and emoji need, and why mixed faces can open a line.
+
+write · intro
+- Question: what is a stack, and who chooses the font for each character?
+- Say: a stack is an ordered list of fonts; the engine resolves each grapheme cluster against the first font that
   covers it, so one paragraph can mix a Latin face, an icon font, and a CJK face without the caller choosing per
-  character.
-</Intro>
+  character. Do not write the declaration sentence yet — the FontFace-level stack API is [in flight] (see the
+  notes); write resolution, icons, CJK, emoji, and leading, which do not depend on it.
+- Anchor: "CSS `font-family: A, B, C`, resolved per cluster instead of per character".
+- Shape: two sentences.
 
-```ts
-import { createFontStack, loadFont } from '@pmndrs/glyph';
-import { slug } from '@pmndrs/glyph/three/slug';
+write · keypoints
+- Resolution is per grapheme cluster: the first font in order that covers the whole cluster wins.
+- A cluster no font covers renders the primary's `.notdef` and counts in `measure().missingGlyphCount`.
+- Formats may differ per font in one stack; the render plan partitions the draws.
+- A stack's effects are checked against every member, so a Bitmap member forbids `outline` and `shadow`.
 
-const interSlug = await loadFont({ baked: '/fonts/Inter.font.glb' }, slug);
-const emoji = await loadFont({ baked: '/fonts/Emoji.font.glb' }, slug);
-
-const prose = createFontStack(interSlug, emoji);
-scene.add(three.createText({ font: prose, text: 'Status 🌍' }));
-```
-
-```tsx
-const prose = createFontStack(useMsdf(INTER), useMsdf(ICONS), useMsdf(CJK));
-<Text font={prose}>Status 🌍 你好</Text>
-```
+notes · internals for the page
+- [in flight] at HEAD a stack is `createFontStack(primary, ...fallback)` over loaded immutable `Font` values —
+  `loaded-font.ts:46–69` (`FontStack`, `:11–13`); `Text.font` takes `FontSelection = Font | FontStack` —
+  `loaded-font.ts:8`, `three/text.ts:59–60`. That is the immutable-Font path being removed. D-297 rules out
+  source/fallback arrays inside one FontFace ("One FontFace has one source … instead of introducing child
+  source/fallback arrays"), and no decision through D-314 names a FontFace-level stack. Ask before writing any
+  stack declaration; this page shows none.
+- engine-side stacks — `rust/shaper/src/engine/state.rs#register_font_stack` (`:393–434`), fallback spans `:274–277`
+- missing count — `layout.ts:120–121`
+- effects across members — `three/text.ts:1457–1464`, `engine-encoding.ts#assertTextEffectsSupported` (`:199–212`)
+- draw partitioning — `docs/planning/three-api.md:348–350` (codex tree); `internal/render-planner.ts` [verify the partition keys]
+*/}
 
 <glyph-proxy root="scenes" data-scene="fallback-stack" aria-label="Latin, icons, and CJK from one stack" aspect="16 / 9" />
 
+{/*
+notes · internals
+- [verify] there is no `fallback-stack` scene in `site/examples/src/catalog.ts` (`EXAMPLES`); add one or retarget
+  this proxy before publishing
+*/}
+
 ## Resolution
 
-{/* prose: per extended grapheme cluster, the first font in order that covers every code point of the cluster; a
-cluster no font covers renders the primary's notdef and counts in `measure().missingGlyphCount`. Formats may differ
-per font in one stack — the render plan partitions draws by format and resource. A stack takes loaded `Font` values:
-the ones hooks return, or `loadFont` results. */}
+{/*
+write
+- Question: which font draws which character?
+- Paragraph 1: per extended grapheme cluster, in stack order, the first font whose shaping of the run leaves no
+  glyph 0 for that cluster; adjacent clusters that resolve to the same font merge into one run, so a stack costs a
+  run boundary only where the font actually changes.
+- Paragraph 2: a cluster no member covers renders the primary's `.notdef` and is counted in
+  `measure().missingGlyphCount` — read that number in development. Formats may differ per member; the render plan
+  partitions draws by format and resource, so a Slug icon inside MSDF prose is two draws, not a compromise.
+- Avoid: describing the API shape; wait for the [in flight] item at the top.
+- Shape: two paragraphs.
+
+notes · internals
+- per-run try-in-order, "missing" = any `glyph_id == 0`, last member accepted regardless —
+  `rust/shaper/src/engine/state.rs:3985–4001` (the ellipsis candidate path shows the rule in twenty lines)
+- adjacent spans with one font merge — `rust/shaper/src/engine/state.rs#push_fallback_span` (`:4075–4093`)
+- cluster boundaries are UAX #29 in Rust and TypeScript, pinned to one Unicode version —
+  `rust/shaper/src/unicode.rs:118–129`, `internal/graphemes.ts:3–15`
+- `.notdef` count — `layout.ts:116–124`
+- partition by format and resource — `docs/planning/three-api.md:348–350` (codex tree); see Render plan
+- [verify] the general text path (not only the ellipsis candidate) resolves per cluster: read the builder of
+  `fallback_spans` in `rust/shaper/src/engine/state.rs` around `pending_fallback_spans` (`:274–277`) before stating
+  "per grapheme cluster" rather than "per run"
+*/}
 
 ## Icon fonts
 
 ```tsx
-<Text font={prose}>
-  Hello world <Text font={icons}>{''}</Text>
-</Text>
+import { glyph } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/react';
+import { slug } from '@pmndrs/glyph/three/slug';
+
+const Icons = glyph.fontFace('/fonts/icons.font.glb', { format: slug });
+
+<Text font={Inter}>
+  Hello world <Text font={Icons.slug}>{''}</Text>
+</Text>;
 ```
 
-{/* prose: bake only the glyphs you use (`glyph glyphs --unicode-set`); a nested `<Text font={…}>` overrides the
-face for a run without a stack; a stack is for when you do not know where the icons fall. */}
+```ts no-check
+import { glyph, txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+import { slug } from '@pmndrs/glyph/three/slug';
+
+const Icons = glyph.fontFace('/fonts/icons.font.glb', { format: slug });
+await Icons.load();
+three.createText({ font: Inter, text: txt`Hello world ${span(Icons.slug)``}` });
+```
+
+{/*
+write
+- Question: I know where the icon goes; do I need a stack at all?
+- Paragraph 1: no. Bake only the glyphs you use (`glyph glyphs --name … --unicode-set`, link Baking fonts), then
+  give the run its own face: a nested `<Text font>` in React, a `span(font)` fragment imperatively. The face changes
+  for that run and nothing else.
+- Paragraph 2: a stack is for when you do not know where the icons fall — user text, localized strings.
+- Shape: two short paragraphs; the code carries the rest.
+
+notes · internals
+- subset the icon face — `node/cli.ts:526–529` (`glyph glyphs … --unicode-set`)
+- nested `<Text font>` is the inline-run syntax — `react.ts#flattenText` (`:758–790`), `#R3fTextChild` (`:65–71`);
+  `span(font)` — `formatted-text.ts:121–126`, `three/span.ts:17–23`
+- [in flight] at HEAD a nested `<Text>` with a FontFace selection throws `nested R3F Text font declarations must be
+  loaded with useFont before use` — `react.ts:793–801`; pass a hook result until the merge. `span(font)` takes an
+  immutable `FontSelection` — `three/span.ts:20`; the second block is the canonical form and opted out of the check
+  (D-310 binds faces into Text; spans are not mentioned). Re-check both after the merge.
+*/}
 
 ## CJK
 
-{/* prose: use TrueType faces (M PLUS 1p, Nanum Gothic, ZCOOL XiaoWei on the landing); CFF-only Noto Sans CJK
-produces no outlines through the current baker — tracked upstream. Line breaking follows UAX 14 with CJK
-Script_Extensions resolved from context. Vertical layout is not yet supported. */}
+{/*
+write
+- Question: what does a CJK face need from me?
+- Paragraph 1: bake a TrueType face and subset to the code points you draw; a whole CJK font at MSDF defaults is
+  the largest asset on this site (link Raster formats → What each one costs). Name the CFF caveat only after the
+  [verify] below is settled.
+- Paragraph 2: line breaking follows UAX #14 with script extensions resolved from context, so kana after kanji
+  breaks where a reader expects; vertical layout is not supported yet — the vertical tables travel in the shaping
+  payload, but there is no vertical flow in `ParagraphLayout`.
+- Shape: two paragraphs.
+
+notes · internals
+- UAX #14 port — `rust/shaper/src/line_break.rs:1–2`; Script_Extensions from context —
+  `rust/shaper/src/unicode.rs:131–205`, `#script_extensions` (`:246`)
+- `vhea`, `vmtx`, `VORG` are retained — `rust/font-baker/src/sfnt.rs:33–42`; `ParagraphLayout` has no writing-mode
+  member — `text-properties.ts:48–80`
+- [verify] the CFF caveat ("CFF-only Noto Sans CJK produces no outlines through the current baker") from this
+  repository's outline findings: read `rust/mtsdf-baker/src/artifact.rs#font_outline_source` and the bitmap baker's
+  `outlines.get` path before stating it
+- [verify] which CJK faces the landing page ships (M PLUS 1p, Nanum Gothic, ZCOOL XiaoWei): read this repo's
+  `site/examples/public/fonts` before naming them
+*/}
 
 ## Emoji
 
-{/* prose: Slug renders outline emoji faces; color emoji (COLR/CBDT) are not supported. */}
+{/*
+write
+- Question: can I show emoji?
+- Two sentences: an outline emoji face bakes like any other and Slug keeps its curves exact at any size; colour
+  emoji formats are not supported (name COLR/CBDT only after the [verify] below).
+
+notes · internals
+- Slug bakes every glyph from outlines with no options — `raster/slug.ts:53`, `bakers/slug.ts:25`
+- [verify] no colour-table reader: `rg -l "COLR|CBDT" rust/slug-fontations/src rust/slug-core/src rust/mtsdf-fontations/src`
+  finds nothing at 09d7ae569; confirm the raster bakers reject or ignore colour tables rather than crash before stating it
+*/}
 
 ## Leading across faces
 
-> [!WARNING]
-> `lineHeight` is resolved per cluster and clamps leading at zero, so a face with tall ascent/descent (Myanmar,
-> Arabic Noto statics) opens the line it lands on. Prefer faces with similar vertical metrics in one stack, or
-> set an explicit `lineHeight` large enough for the tallest.
+{/*
+write
+- Question: why did one CJK word make its line taller?
+- A `> [!WARNING]` callout, three sentences: line height is resolved per style segment from that segment's font
+  metrics; when `lineHeight` is set the leading is `fontSize × lineHeight` minus ascent and descent, clamped at
+  zero, so a face with tall ascent or descent (Myanmar, Arabic Noto statics) opens the line it lands on. Prefer
+  faces with similar vertical metrics in one stack, or set `lineHeight` large enough for the tallest.
+- Shape: the callout only.
+
+notes · internals
+- extents per style segment: `requested = fontSize × lineHeight` if set, else the font's natural
+  ascender − descender + lineGap; `leading = max(requested − ascent − descent, 0)`, split half above and half below —
+  `rust/shaper/src/engine/flow_composition.rs:884–903`
+- [verify] how per-segment extents merge into a line (`#positive_extents`, `:906`) before writing "the tallest wins"
+*/}
 
 ## Typing
 
-```ts
-import type { FontStack } from '@pmndrs/glyph';
+{/*
+write
+- Question: what type does `font` have when it is a stack?
+- Hold until the stack API lands. When it does: the stack's format type is the union of its members', and `<Text>`
+  and `createText` infer it from `font`.
 
-let font: FontStack<typeof msdf | typeof slug>;
-```
-
-{/* prose: the stack's format type is the union of its members'; `<Text>` infers its format from `font`. */}
+notes · internals
+- [in flight] at HEAD `FontStack<Technique>` is `{ fonts: [Font, ...Font[]] }` — `loaded-font.ts:11–13`; `<Text>` infers
+  the technique from a `Font` or `FontStack` — `react.ts:75–80`; `createText` infers a face member's raster through
+  `FontFaceRasterOf` — `three/text.ts:257–259`, `font-face.ts:54–55`. The union rule for a FontFace-level stack is
+  undecided.
+*/}

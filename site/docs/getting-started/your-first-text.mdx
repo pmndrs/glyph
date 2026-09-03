@@ -8,17 +8,29 @@ nav: 2
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  This tutorial takes one font from a TTF on disk to a styled, wrapped, measured paragraph on screen. Each step ends
-  with what you now see.
-</Intro>
+{/*
+reader
+- Has installed the package and an R3F `<Canvas>`. Follows the steps in order. Arrives asking "how do I get one line
+  on screen, then make it mine?"; should leave with a styled, wrapped, centred paragraph and the same thing in plain
+  three.js. Tutorial voice: "Let's" is allowed here.
 
-<Keypoints title="What you'll build">
-  <KeypointsItem>A baked `.font.glb` with an MSDF raster</KeypointsItem>
-  <KeypointsItem>A `<Text>` that loads it through a hook</KeypointsItem>
-  <KeypointsItem>Style, layout, and constraints as three separate props</KeypointsItem>
-  <KeypointsItem>A measurement you use to center the result</KeypointsItem>
-</Keypoints>
+write · intro
+- Question: what will I have built by the end?
+- Say: one font from a TTF on disk to a styled, wrapped, measured paragraph on screen; every step ends with what you
+  now see.
+- Shape: two sentences, then the keypoints.
+
+write · keypoints (pmndrs `<Keypoints title="What you'll build">`, four items)
+- A baked `.font.glb` carrying shaping data and an MSDF raster.
+- A `<Text>` that loads it through a hook.
+- Style, layout, and constraints as three separate props.
+- A measurement you use to centre the result.
+
+notes · internals for the page
+- the finished state runs as the `first-text` example — `site/examples/src/scenes/first-text/scene.tsx`
+- the GLB carries shaping data plus the selected rasters — `node/cli.ts:543`
+- `useMsdf` — `react/msdf.ts:16`; the three props — `react.ts:85–90`; `measure()` — `three/text.ts:736`
+*/}
 
 ## 1. Bake the font
 
@@ -26,8 +38,21 @@ nav: 2
 npx glyph bake --input Inter-Regular.ttf --output public/fonts/inter.font.glb --msdf
 ```
 
-{/* prose: the GLB carries the shaping data plus the MSDF atlas; nothing platform-specific; do this once at build
-time. Link Baking fonts. */}
+{/*
+write
+- Question: what does baking produce, and when do I run it?
+- Say: the GLB carries the font's shaping data and an MSDF atlas at the defaults, 64 texels per em with an 8-pixel
+  range; nothing in it is platform-specific; run it once at build time and commit the output. Point at Baking fonts
+  for the other formats and for subsets.
+- Shape: two sentences.
+
+notes · internals
+- the CLI usage text — `packages/glyph/src/node/cli.ts:532–573`; `--input` accepts TTF, OTF, TTC, OTC (`:542`);
+  `--output` is a GLB with shaping data plus the selected rasters (`:543`)
+- bare `--msdf` means the defaults — `cli.ts:295–300`; the defaults are `emSize` 64, `pixelRange` 8 —
+  `internal/msdf-contract.ts:10–11`
+- the packaged executable — `package.json` bin, `packages/glyph/bin/glyph.js`
+*/}
 
 ## 2. Load it
 
@@ -37,8 +62,25 @@ import { useMsdf } from '@pmndrs/glyph/react/msdf';
 const inter = useMsdf('/fonts/inter.font.glb');
 ```
 
-{/* prose: the hook declares a FontFace, suspends until it is loaded, and returns an immutable `Font`. A string is a
-baked URL; `{ baked }` and `{ source, runtimeBake }` are the explicit forms. */}
+{/*
+write
+- Question: what did that one line do?
+- Say: the hook declared a face for that URL on the handle your canvas uses, started the load, suspended the
+  component until the MSDF raster was ready, and returned a loaded font that stays alive while the component is
+  mounted. Call it again anywhere with the same URL and you get the same face.
+- Shape: two sentences; the string is the baked URL, nothing more to explain here.
+
+notes · internals
+- `useMsdf(url, options?)` builds the MSDF request and delegates — `react/msdf.ts:7–13`, `:16–17`
+- the hook declares a `FontFace` through `glyph.fontFace` on the selected handle, cached per handle by source and
+  format — `react.ts#useFont` (`:628–631`), `:667–683` (`reactFontFaceResource`), `font-face.ts:303–305`
+  (`fontFaceResourceKey`)
+- it reads `isLoaded()` first and calls `use(load())` only when the format is not ready — `react.ts:658–665`; D-300
+- what it returns is a mounted, immutable `Font` lease released on unmount — `react.ts:723–746`
+- a string is a URL — `font.ts:71` (`FontInput`)
+- [in flight] the hook's parameter is still typed `LoadFontInput` (`react/msdf.ts:8`, `loader.ts:86–92`), which
+  also admits the immutable-Font path's object forms; document the string only
+*/}
 
 ## 3. Render it
 
@@ -48,25 +90,57 @@ import { Text } from '@pmndrs/glyph/react';
 
 <Canvas>
   <Text font={inter}>Hello world</Text>
-</Canvas>
+</Canvas>;
 ```
 
-{/* prose: what appeared — one line, default size 1 world unit per em, white. `Text` is an `Object3D`; position it
-like a mesh. */}
+{/*
+write
+- Question: what appeared?
+- Say: one white line at the default size, at the origin. `Text` is an `Object3D`: position it like a mesh. No
+  provider was needed; the first text initialised the runtime and made a default handle for this canvas.
+- Shape: three sentences. State the on-screen size only after the [verify] below.
+
+notes · internals
+- an outer `Text` requires `font` — `react.ts:453`; it is an `Object3D` and takes `position`, `rotation`, `scale`,
+  `name` — `react.ts:58`, `:82–96`
+- no provider needed: the first text initializes `glyph` and installs one `ThreeConfig` handle —
+  `react.ts:376–407`, `:165` (`'@pmndrs/glyph/react:default'`)
+- defaults when `style` is absent: `fontSize` 16, `color` white — `internal/render-planner.ts:1626`
+  (`fontSize ?? 16`), `engine-encoding.ts:254` (`color ?? '#ffffff'`)
+- [verify] what 16 means in world units under the example stage's camera — `site/docs/components/pages/examples/stage.tsx`;
+  the earlier stub said "1 world unit per em", which the planner default contradicts
+*/}
 
 ## 4. Style it
 
 ```tsx
+import { Text } from '@pmndrs/glyph/react';
+
 <Text font={inter} style={{ fontSize: 0.6, color: '#ffd166', letterSpacing: 0.02 }}>
   Hello world
-</Text>
+</Text>;
 ```
 
-{/* prose: `style` is inherited text presentation; lengths are paragraph-local — the units `fontSize` is in. */}
+{/*
+write
+- Question: what is `style`, and what unit is `fontSize` in?
+- Say: `style` is inherited presentation — size, colour, spacing, features, decoration, outline, shadow — and every
+  length in it is in the unit `fontSize` is in, which is whatever unit your scene uses; here 0.6 world units per em.
+- Shape: two sentences.
+
+notes · internals
+- `TextStyle`: `fontSize`, `lineHeight`, `letterSpacing`, `wordSpacing`, `language`, `direction`, `features`,
+  `decoration`, `color`, `opacity`, `outline`, `shadow` — `text-properties.ts:86–103`
+- lengths are paragraph-local, the units `fontSize` is in — `:90` (`wordSpacing`), `:99–102` (`outline`, `shadow`)
+- `style` is inherited by nested spans — `react.ts:85–86`, `:804–818`
+- `TextStyle.create({ … })` names reusable styles — `text-properties.ts:146–147`, `:140–144`
+*/}
 
 ## 5. Wrap it
 
 ```tsx
+import { Text } from '@pmndrs/glyph/react';
+
 <Text
   font={inter}
   style={{ fontSize: 0.6, color: '#ffd166' }}
@@ -74,30 +148,69 @@ like a mesh. */}
   constraints={{ width: { mode: 'at-most', size: 6 } }}
 >
   The quick brown fox jumps over the lazy dog
-</Text>
+</Text>;
 ```
 
-{/* prose: three orthogonal inputs — `style` (inherited), `layout` (flow policy), `constraints` (the box the parent
-imposes). `at-most` lets a short line shrink to its content; `exact` keeps the box. */}
+{/*
+write
+- Question: why three props and not one?
+- Say: they are orthogonal. `style` is inherited by the runs inside the paragraph; `layout` is the flow policy of
+  the paragraph itself; `constraints` is the box a parent imposes, and would change if the parent did. `at-most`
+  lets a short line shrink to its content; `exact` keeps the box, which is what you centre inside.
+- Shape: two sentences; the enumerations live in the notes and on Paragraph layout.
+
+notes · internals
+- `ParagraphLayout`: `maxLines`, `wrap` (`none | word | character`), `align` (`start | center | end | justify`),
+  `overflow`, `firstLineIndent`, `spaceBefore`, `spaceAfter`, `justify`, `lastLine`, `columns` —
+  `text-properties.ts:48–80`
+- `Constraints`: `width` and `height`, each `unconstrained`, `at-most`, or `exact` — `text-properties.ts:36–45`
+- `layout` and `constraints` belong to the outer Text only — `react.ts:87–90`
+- every prop is a `PropertyList`: a value, `false`, `null`, or a nested array, merged in order —
+  `text-properties.ts:33`; `ParagraphLayout.create`, `Constraints.create` — `:149–156`
+*/}
 
 ## 6. Measure it
 
 ```tsx
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber/webgpu';
+import { Text } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import type { msdf } from '@pmndrs/glyph/three/msdf';
 
-const ref = useRef<ThreeText<typeof msdf>>(null);
-
-useFrame(() => {
-  const ink = ref.current?.measure().inkBounds;
-  if (ink) ref.current!.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0);
-});
+function Centered() {
+  const ref = useRef<ThreeText<typeof msdf>>(null);
+  useFrame(() => {
+    const ink = ref.current?.measure().inkBounds;
+    if (ink) ref.current!.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0);
+  });
+  return (
+    <Text ref={ref} font={inter} layout={{ wrap: 'word', align: 'center' }} constraints={{ width: { mode: 'at-most', size: 6 } }}>
+      The quick brown fox jumps over the lazy dog
+    </Text>
+  );
+}
 ```
 
-{/* prose: `measure()` answers for desired state, synchronously, before the first frame commits. `inkBounds` is what
-was drawn; `contentWidth`/`contentHeight` are the advance extents. Center on ink. Link Measurement. */}
+{/*
+write
+- Question: how do I centre it?
+- Say: `measure()` answers synchronously for the state you set, before the first frame commits. `inkBounds` is what
+  was drawn and `contentWidth`/`contentHeight` are what layout reserved; centre on ink, because a script face with
+  swashes overhangs its advance. The `useFrame` is there because the ref is assigned after the object is committed;
+  a layout effect in the same component runs too early.
+- Shape: three sentences; link Measurement.
+
+notes · internals
+- `measure()` answers for desired state, synchronously, before the first frame commits — `three/text.ts:732–742`
+- `inkBounds` is the union of glyph ink; `contentWidth`/`contentHeight` are advance extents; `undefined` means
+  "not measured", never "empty" — `layout.ts:56–61`, `:73–75`, `:80–89`
+- the `ref` is the three.js `Text` — `react.ts:95`, assigned after the object is published — `:451–452`
+- the same centering, in the running example — `site/examples/src/scenes/first-text/scene.tsx:19–26`
+- [verify] the sign of `ink.y` (paragraph space is y-down, three is y-up): confirm against `layout.ts#LayoutBox`
+  before explaining the formula
+- `computeBoundingBox()` is the `Box3` alternative — `three/text.ts:766–769`
+*/}
 
 ## 7. The same in plain three.js
 
@@ -106,12 +219,12 @@ import { glyph } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
 
 await glyph.init();
-const three = glyph.handle('main', ThreeConfig);
-const inter = glyph.fontFace({ baked: '/fonts/inter.font.glb' });
-await inter.load();
+const handle = glyph.handle('app', ThreeConfig);
+const Inter = glyph.fontFace('/fonts/inter.font.glb');
+await Inter.load();
 
-const label = three.createText({
-  font: inter,
+const label = handle.createText({
+  font: Inter,
   text: 'The quick brown fox jumps over the lazy dog',
   style: { fontSize: 0.6, color: '#ffd166' },
   layout: { wrap: 'word', align: 'center' },
@@ -126,11 +239,29 @@ glyph.shape();
 renderer.render(scene, camera);
 ```
 
-{/* prose: R3F does `glyph.init()`, the default handle, and `shape()` before each render for you; vanilla names them.
-Everything else is identical. */}
+{/*
+write
+- Question: what did R3F do for me?
+- Say: it called `glyph.init()`, made the default handle, and ran `glyph.shape()` inside every render; vanilla names
+  those three and is otherwise identical — the same face, the same `createText` properties, the same `measure()`.
+- Shape: two sentences.
+
+notes · internals
+- what R3F did for you: `glyph.init()` and the default handle — `react.ts:376–407`; a root per R3F store —
+  `:268–278`; `shape()` from the draw root's `updateMatrixWorld` inside `renderer.render` — `three/text.ts:139–142`,
+  `:478–486`
+- `glyph.fontFace(url)` with no `format` resolves to the handle's default, MSDF — `three/handle.ts:177`; D-297
+- `createText` binds the face's loaded MSDF `Font` into the Text — `three/text.ts:266–277`
+- the maintained imperative proof — `apps/r3f-hello-world/src/three-example.ts:17–57`
+- the example's own twin — `site/examples/src/scenes/first-text/three.ts`
+*/}
 
 ## The result
 
 <glyph-proxy root="scenes" data-scene="first-text" aria-label="Your first text" aspect="16 / 9" />
 
-{/* prose: where to go next — Raster formats for Bitmap and Slug; Text, roots, and TextGroup for batching. */}
+{/*
+write
+- Question: where next?
+- One line each: Raster formats for Bitmap and Slug; Text, roots, and TextGroup for batching.
+*/}

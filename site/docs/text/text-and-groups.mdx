@@ -9,19 +9,36 @@ sourcecode: packages/glyph/src/three/text.ts
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  `Text` is a three.js `Object3D` that holds desired state — font, text, style, layout, constraints. Every `Text`
-  belongs to a root: the handle's anonymous root, or a named sibling from `handle(name)`. A root owns the planner,
-  the capacity, the compositing policy, and the draw object; `glyph.shape()` publishes every dirty root at once.
-  `TextGroup` is a scene-hierarchy parent — transforms, visibility, material, render order — not a batch boundary.
-</Intro>
+{/*
+reader
+- Has three.js or R3F running and a loaded face, and wants text in the scene without learning a renderer. Knows
+  `Object3D`, `scene.add`, and the render loop. Arrives asking "what object do I make, and when does it draw?",
+  should leave able to create a handle, put texts on it, know when to reach for a second root versus a group,
+  call `glyph.shape()` at the right moment, and dispose in order.
 
-<Keypoints title="What you'll learn">
-  <KeypointsItem>`glyph.init()` once, `glyph.handle(name, ThreeConfig)` per adapter, `handle(name)` per independent root</KeypointsItem>
-  <KeypointsItem>What a root owns and when you need a second one</KeypointsItem>
-  <KeypointsItem>`glyph.shape()` — the one publication call — and the transform-only path</KeypointsItem>
-  <KeypointsItem>Dispose order</KeypointsItem>
-</Keypoints>
+write · intro
+- Question: what is a `Text`, and what is it attached to?
+- Say: `Text` is a three.js `Object3D` that holds desired state — font, text, style, layout, constraints. Every
+  `Text` belongs to a root: the handle's anonymous root, or a named sibling from `handle(name)`. A root owns the
+  planner, the capacity, the compositing policy, and the draw object; `glyph.shape()` publishes every dirty root at
+  once. `TextGroup` is a scene-hierarchy parent — transforms, visibility, material, render order — not a batch boundary.
+- Anchor: "a Text is a request; a root is the thing that fulfils it; a group is just a parent".
+- Shape: four sentences.
+
+write · keypoints
+- `glyph.init()` once, `glyph.handle(name, ThreeConfig)` per adapter, `handle(name)` per independent root.
+- What a root owns, and when you need a second one (two Scenes, or isolation).
+- `glyph.shape()` is the one publication call; a transform-only change never enters Wasm.
+- Dispose texts, then faces; a handle disposes its roots and frees its name.
+
+notes · internals for the page
+- `Text extends THREE.Object3D` — `three/text.ts:594`; desired state — `#DesiredTextState` (`:99–108`)
+- the handle is its own anonymous root, callable for named roots — `config/glyph.ts#GlyphHandle` (`:580–589`),
+  `three/handle.ts#threeHandleRoot` (`:131–137`); D-307
+- a root owns planner, capacity, compositing, material fallback, draw root, one Scene — `three/text.ts#ThreeRoot` (`:150–204`)
+- `glyph.shape()` — `glyph.ts:94–98`; D-312
+- `TextGroup` is a presentation parent — `three/text.ts#TextGroup` (`:942–1061`); D-307
+*/}
 
 ## The runtime and a handle
 
@@ -33,16 +50,30 @@ await glyph.init();
 const three = glyph.handle('main', ThreeConfig);
 ```
 
-{/* prose: `init()` returns one settled promise forever; a handle name is unique while live and reusable after
-disposal; creating a handle needs no renderer, scene, camera, canvas, or device. R3F creates one default handle for
-you. */}
+{/*
+write
+- Question: what do I set up before the first text?
+- Paragraph 1: `init()` loads the engine once and returns the same settled promise forever; a handle is one adapter
+  with a name that is unique while it lives and reusable after it is disposed. Creating a handle needs no renderer,
+  scene, camera, canvas, or device.
+- Paragraph 2: R3F does this for you: the first `<Text>` initializes the runtime and creates one default handle
+  and one default root per canvas; a `GlyphProvider` is how you pick a different one.
+- Shape: two short paragraphs.
+
+notes · internals
+- `init()` returns one promise, before and after success — `glyph.ts:44–57`; D-305
+- handle name must be a nonempty string, unique among live handles — `glyph.ts:62–68`; released on dispose `:76–79`
+- no renderer needed to construct — D-294; `ThreeConfig` is `defineThreeConfig()` with defaults — `three/handle.ts:265`
+- R3F default handle `@pmndrs/glyph/react:default` — `react.ts:376–387`; default root per R3F store —
+  `#defaultGlyphContext` (`:268–310`); D-295
+*/}
 
 ## Roots
 
 ```ts
-const hud = three('hud');           // idempotent: the same name returns the same live root
-hud === three('hud');               // true
-hud.createText({ font, text: 'HP 100' });
+const hud = handle('hud'); // idempotent: the same name returns the same live root
+hud === handle('hud'); // true
+hud.createText({ font: Inter, text: 'HP 100' });
 ```
 
 | Root | Owns |
@@ -50,15 +81,13 @@ hud.createText({ font, text: 'HP 100' });
 | the handle itself (anonymous) | one planner, capacity, compositing, material fallback, one draw object, at most one `Scene` |
 | `handle(name)` | the same, independently |
 
-{/* prose: roots are terminal — a root cannot make another root. A root discovers its `Scene` from its attached
-texts; a root that would span two scenes is an error, so two scenes use two named roots. Root names are stable
-customization metadata, never derived from `Scene.uuid`. */}
-
 ```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
 const three = glyph.handle('main', defineThreeConfig({ capacity: { size: 8192, policy: 'chunk' }, compositing: 'independent' }));
 three.setCapacity({ size: 16384, policy: 'chunk' });
 three.setCompositing('ordered');
-three.material = fallbackMaterial;
 ```
 
 ### Compositing
@@ -76,8 +105,34 @@ three.material = fallbackMaterial;
 | `chunk` (default, 4096) | grow in multiples of `size` |
 | `fixed` | keep the last accepted draw while desired text exceeds `size`; `measure()` still answers |
 
-{/* prose: `fixed` bounds by UTF-16 length before shaping; exceeding it is a policy, not an error, rechecked every
-shape. */}
+{/*
+write
+- Question: when do I need a second root, and what does one control?
+- Paragraph 1 (under the first code): roots are terminal — a root cannot make another root — and every `Text` is
+  created from one. A root discovers its `Scene` from its attached texts; a root that would span two scenes is an
+  error, so two scenes use two named roots. Names are stable customization labels you choose, never derived from
+  `Scene.uuid`.
+- Paragraph 2 (under the second code): capacity and compositing are per root, set at the config for every root the
+  handle makes and adjustable per root afterwards; the config also carries `defaultFontFormat`, `transformMode`,
+  `allocationMode`, and a renderer-wide fallback `material`.
+- Under Compositing: one sentence — `independent` is for many small labels whose blending order does not matter.
+- Under Capacity: one sentence — `fixed` bounds by UTF-16 length before shaping; exceeding it is a policy, not an
+  error, rechecked every shape, and the previous draw stays visible.
+- Avoid: "standalone" versus "group" capacity defaults; at HEAD every Text is on a root and the default is one number.
+
+notes · internals
+- named root selection is idempotent and requires a nonempty name — `internal/configured-handle.ts:161–200`, `:268`;
+  a named root is terminal (not callable) — `config/glyph.ts#GlyphNamedRoot` (`:574–578`); D-307
+- one Scene per root, discovered from members — `three/text.ts#ThreeRoot.#bindScene` (`:543–562`), the throw at `:549–551`
+- draw root named `@pmndrs/glyph:<name>` or `@pmndrs/glyph:anonymous` — `three/text.ts:197`
+- config options — `three/handle.ts#ThreeConfigOptions` (`:93–99`), root options — `three/text.ts#ThreeRootOptions` (`:78–82`);
+  defaults `transformMode: 'indexed'`, `allocationMode: 'ordered'`, `defaultFontFormat: 'msdf'` — `three/handle.ts:175–177`
+- `setCapacity`, `setCompositing`, `material` per root — `three/text.ts:226–254`
+- compositing default `ordered` — `three/text.ts#normalizeThreeRootCompositing` (`:1579–1586`); `independent` lets
+  Rust reorder — `:80–81`; D-312
+- capacity policies — `text-properties.ts#GlyphBufferCapacity` (`:7–16`); default `{ size: 4096, policy: 'chunk' }` —
+  `three/text.ts:191–194`; `fixed` bound is the sum of UTF-16 lengths, rechecked in `prepareShape` — `:1260–1270`; D-282
+*/}
 
 ## Create text
 
@@ -92,19 +147,16 @@ const label = three.createText({
 scene.add(label);
 ```
 
-{/* prose: construction validates and records desired state; it does not shape or allocate. `font` accepts a loaded
-`Font`, a `FontStack`, a loaded FontFace selection, or a family string. */}
-
 <details>
 <summary>Text members</summary>
 
 | Member | Kind | Meaning |
 | --- | --- | --- |
 | `font`, `text`, `style`, `layout`, `constraints`, `rasterPixelRatio`, `material` | get/set | desired state; assignment marks the paragraph dirty |
-| `spans` | get | resolved span records (author through `text`) |
 | `set(update)` | method | several desired values in one call; validated before commit |
 | `measure()` | method | desired layout summary, synchronous |
-| `glyphs()` | method | positioned glyph columns, copied |
+| `glyphs()` | method | positioned glyph and line columns, copied |
+| `measureGlyphs()` | method | each displayed glyph in Text-local space |
 | `commitState()` | method | `unbound` · `pending` · `committed { revision }` · `failed { error }` |
 | `boundingBox`, `computeBoundingBox()` | get / method | local box from the last measurement |
 | `breakApart()` | method | committed glyphs and decorations as independent objects |
@@ -115,34 +167,97 @@ scene.add(label);
 
 </details>
 
+{/*
+write
+- Question: what does construction do, and what does it not do?
+- Paragraph 1: construction validates and records desired state; it does not shape or allocate. Every property is
+  merged and checked at the boundary (link Styling and Paragraph layout for the rules), and a bad value throws
+  here, with the property named, not later in a frame.
+- Paragraph 2: `font` accepts a loaded face, a member, or a family string; `pixelSnapping` is fixed at
+  construction because it selects a different vertex path.
+- Shape: two paragraphs; the table is the reference.
+
+notes · internals
+- constructor validates and registers, no shaping — `three/text.ts:624–644`, `#normalizeDesired` (`:1428–1487`);
+  registration reconciles root membership — `#ThreeRoot.register` (`:362–380`)
+- `font` overloads — `three/text.ts:256–259`; `FONT_FACE_NOT_FOUND` for an unknown string `:578–587`
+- `pixelSnapping` only at construction — `three/text.ts:70–71`, `:641`; `rasterPixelRatio` positive finite `:1473–1476`
+- members — `font`…`material` get/set `:667–710`; `set()` `:712–730`; `measure()` `:736–742`; `glyphs()` `:748–754`;
+  `commitState()` `:756–764`; `computeBoundingBox()` `:766–769`; `measureGlyphs()` `:777–781`; `breakApart()` `:784–839`;
+  `caretAt` / `selectionRects` `:861–867`; `error` `:658–660`, `onError` `:621`; inspection getters `:646–663`; `dispose()` `:875–881`
+- [in flight] the `font` setter and `set({ font })` are typed over the immutable `FontSelection` at HEAD —
+  `three/text.ts:74–75`, `:670–672`; D-310 makes update throw `FONT_FACE_FORMAT_NOT_LOADED` on an unloaded face
+*/}
+
 ## TextGroup
 
 ```ts
-const panel = three.createTextGroup({ renderOrder: 2, pixelSnapping: true, material });
-panel.add(title, body, caption);
+const title = three.createText({ font: Inter, text: 'Title' });
+const body = three.createText({ font: Inter, text: 'Body' });
+const panel = three.createTextGroup({ renderOrder: 2, pixelSnapping: true });
+panel.add(title, body);
 scene.add(panel);
 ```
 
-{/* prose: a nestable parent that Text inherits transform, visibility, material, pixel snapping, and render order
-from. It creates no planner and no publication stream — batching is the root's job, and every Text on a root already
-shares it. Use groups to organize; use roots to isolate. */}
+{/*
+write
+- Question: what is a group for, if not batching?
+- Paragraph 1: a nestable parent that a `Text` inherits transform, visibility, material, pixel snapping, and render
+  order from — the nearest group's value wins. It creates no planner and no publication stream; batching is the
+  root's job, and every `Text` on a root already shares it.
+- Paragraph 2: a group cannot hold texts from two roots, cannot be cloned or copied, and disposing it does not
+  dispose its children. Use groups to organize; use roots to isolate.
+- Shape: two paragraphs.
+
+notes · internals
+- options — `three/text.ts#TextGroupOptions` (`:84–90`); inheritance walk, nearest group wins —
+  `#resolveTextPresentation` (`:1629–1657`)
+- `add` validates one root — `three/text.ts:1014–1022`, `:1054–1060`; no clone/copy `:1024–1030`; dispose leaves
+  children `:1032–1038`; `textCount` `:986–988`
+- errors are attributed to the group ancestors of the failing texts — `three/text.ts:494–503`
+- no planner per group — D-307
+*/}
 
 <glyph-proxy root="scenes" data-scene="groups" aria-label="One root, many labels, one draw per boundary" aspect="16 / 9" />
 
 ## Shape
 
 ```ts
-label.text = 'Updated';
-label.style = { ...label.style, color: '#ffd166' };
-glyph.shape();                  // every dirty root, every live handle, one Wasm batch
+import { glyph } from '@pmndrs/glyph';
+
+text.text = 'Updated';
+text.style = { ...text.style, color: '#ffd166' };
+glyph.shape(); // every dirty root, every live handle, one Wasm batch
 renderer.render(scene, camera); // three draws the meshes shape() attached
 ```
 
 ![Two paths through a frame: a semantic change goes through one Wasm batch and a decode-and-commit; a transform-only change syncs matrices without entering Wasm.](/examples/diagrams/frame-paths.svg)
 
-{/* prose: unchanged roots do not enter the batch; one root may fail without another root's state being touched;
-matrix and visibility changes take the cheap renderer-local path. R3F calls shape for you before the host renders;
-imperative code calls it once per frame or after a batch of edits. `Text` and `TextGroup` have no publish method. */}
+{/*
+write
+- Question: when does a change become pixels?
+- Paragraph 1: `glyph.shape()` stages every dirty root across every live handle and crosses into Wasm once;
+  unchanged roots do not enter the batch, and one root may fail without another root's state being touched. Matrix
+  and visibility changes take the cheap renderer-local path and never shape.
+- Paragraph 2: R3F calls it for you before the host renders; imperative code calls it once per frame or after a
+  batch of edits. The root's draw object also calls it during three's matrix traversal, so a forgotten call is a
+  late frame, not a blank one. `Text` and `TextGroup` have no publish method.
+- Paragraph 3: a rejected shape keeps the last accepted draw and reports on `text.error`, `text.onError`, and
+  `commitState()` as `failed` (link Errors).
+- Point at the figure: the two paths.
+- Shape: three short paragraphs.
+
+notes · internals
+- `glyph.shape()` — `glyph.ts:94–98`; one `pmndrs_glyph_engine_update_batch` crossing, per-entry status — D-312
+- root hooks: `prepareShape` (reconcile members, capacity check) — `three/text.ts:436–448`; `acceptShape` `:451–459`;
+  `rejectShape` keeps the last draw and attributes the error `:462–465`
+- transform-only path — `three/text.ts#ThreeRoot.#syncTransforms` (`:467–476`); the draw object's matrix traversal
+  commits and calls `glyph.shape()` — `#ThreeRootDrawObject` (`:131–148`), `#commitTraversal` (`:478–492`)
+- no publish method on `Text`/`TextGroup` — D-312
+- error retention — `three/text.ts:918–922`; `commitState()` `:756–764`
+- [verify] what R3F calls before render (`useFrame` priority or the draw-root traversal only): read the R3F
+  adapter in `react.ts` around the `invalidate` calls before writing "before the host renders"
+*/}
 
 ## Ownership and disposal
 
@@ -154,4 +269,16 @@ imperative code calls it once per frame or after a batch of edits. `Text` and `T
 | `handle.dispose()` | disposes its roots; the name becomes reusable |
 | `face.dispose()` | releases after every text lease is gone |
 
-{/* prose: dispose texts before faces; a disposed group's live children can be re-parented. */}
+{/*
+write
+- Question: what order do I tear things down in?
+- One paragraph: texts, then faces, then roots or the handle; a disposed group's live children can be re-parented;
+  the last text leaving a root also ends that root's publication.
+- Shape: the table and one paragraph.
+
+notes · internals
+- `Text.dispose()` — `three/text.ts:875–881`; `TextGroup.dispose()` — `:1032–1038`; `ThreeRoot.dispose()` — `:290–304`
+- the last member leaving a root disposes its publication — `three/text.ts#ThreeRoot.unregister` (`:383–394`)
+- handle disposal cascades to roots — `internal/configured-handle.ts:120–150`; name released — `glyph.ts:76–79`
+- `FontFace.dispose()` — `font-face.ts:266–280`, `:679–692`
+*/}

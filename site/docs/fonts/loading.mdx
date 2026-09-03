@@ -9,51 +9,87 @@ sourcecode: packages/glyph/src/font-face.ts
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  A FontFace is a declaration: one source, an optional family name, the raster formats you intend to use. `load()` is
-  the one load boundary. The declaration is itself its default selection, each declared format is a distinct member,
-  and every handle binds the loaded face without loading it again.
-</Intro>
+{/*
+reader
+- Has a baked GLB (or a TTF) and a scene, imperative or React. Knows what a Promise is; does not know what a
+  "selection" or a "lease" is and should not need to. Arrives asking "how do I get from a URL to `font:`?", should
+  leave able to declare a face once, load only the formats they draw, use it from a hook or a string, and dispose
+  in the right order.
 
-<Keypoints title="What you'll learn">
-  <KeypointsItem>`glyph.fontFace(source, config?)` and what `face`, `face.default`, and `face.slug` each mean</KeypointsItem>
-  <KeypointsItem>`load()`, `isLoaded()`, `formats()`, and why imperative text throws on an unloaded face</KeypointsItem>
-  <KeypointsItem>The React hooks and how they declare through the same call</KeypointsItem>
-  <KeypointsItem>Where `loadFont`, `FontLibrary`, and the Three `FontLoader` still fit</KeypointsItem>
-</Keypoints>
+write · intro
+- Question: what is a FontFace, and what does `load()` promise?
+- Say: a FontFace is a declaration — one source, an optional family name, the formats you intend to use — and
+  `load()` is the one load boundary. The declaration is itself its default selection, each declared format is a
+  distinct member, and every handle binds the loaded face without loading it again.
+- Anchor: "declare once, load what you draw, bind anywhere".
+- Shape: three sentences.
+
+write · keypoints
+- `glyph.fontFace(source, { family?, format? })`, and what `Inter`, `Inter.default`, and `Inter.slug` each mean.
+- `load()`, `isLoaded()`, `formats()`, and why imperative text throws on an unloaded face.
+- The React hooks declare through the same call and suspend only when the face is not yet loaded.
+- One content-addressed graph backs every face and handle; family names are aliases, never cache keys.
+
+notes · internals for the page
+- the declaration — `glyph.ts#Glyph.fontFace` (`:24–27`), `font-face.ts#createFontFace` (`:160–254`); config accepts
+  only `family` and `format` — `#assertFontFaceConfig` (`:726–737`)
+- the face is its default selection — `font-face.ts:202–204` (`get default` returns the face); members are distinct
+  frozen selections — `:226–247`; D-297, D-310
+- readiness before fulfilment — `font-face.ts:541–547` (`record.font` is set before the promise resolves); D-300, D-305
+- hooks — `react/msdf.ts#useMsdf`, `react/bitmap.ts#useBitmap`, `react/slug.ts#useSlug`; the shared body —
+  `react.ts#useHandleFontFace` (`:658–665`)
+- one graph — `glyph.ts:109–116` (one shared `FontLibrary`), `loader.ts:958` (`#fontFaceContent`); D-298
+*/}
 
 ## Declare and load
 
 ```ts
 import { glyph } from '@pmndrs/glyph';
 
-const Inter = glyph.fontFace({ baked: '/fonts/inter.font.glb' }, { family: 'Inter' });
+const Inter = glyph.fontFace('/fonts/inter.font.glb', { family: 'Inter' });
 await Inter.load();
 
 const label = three.createText({ font: Inter, text: 'Hello' });
 ```
 
-{/* prose: one argument is enough — `glyph.fontFace(source)` names the family `Font{n}` and denotes the handle's default
-format (MSDF for `ThreeConfig`). `load()` is idempotent and resolves to the same face, so `font: await Inter.load()` is
-equivalent. */}
+{/*
+write
+- Question: what is the least I have to write?
+- Paragraph 1: one argument is enough; `glyph.fontFace(source)` names the family `Font1`, `Font2`, … and denotes the
+  handle's default format, which is MSDF for `ThreeConfig`. A family name you give must be unique among live faces.
+- Paragraph 2: `load()` is idempotent and resolves to the same face, so `font: await Inter.load()` is the same as
+  the two lines above; a rejected load is forgotten so the next call retries.
+- Shape: two short paragraphs under the code.
+
+notes · internals
+- generated family `Font{n}` — `font-face.ts#nextFamily` (`:798–804`), used at `:167`; a live duplicate throws
+  `FontFace family "…" already exists` — `:168–171`; names are trimmed — `#normalizedFamily` (`:791–796`)
+- undeclared format → the handle's default — `font-face.ts#FontFaceHandleStore.#resolveFormat` (`:368–369`);
+  `ThreeConfig` defaults to `'msdf'` — `three/handle.ts:177`, `#ThreeConfigOptions.defaultFontFormat` (`:96`)
+- `load()` keeps one promise and resolves to the face — `font-face.ts#loadFontFace` (`:389–413`); rejection evicts
+  it `:404–409`; D-305
+- `createText({ font })` accepts a face, a member, or a family string — `three/text.ts:256–259`; it acquires an
+  immutable lease from the handle store `:270` and releases it on failure `:278–281`
+*/}
 
 ## Formats are members
 
 ```ts
+import { glyph } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
 
-const Inter = glyph.fontFace(
-  { baked: '/fonts/inter.font.glb' },
-  { family: 'Inter', format: [msdf, slug, { raster: bitmap, options: { strikes: [16, 32] } }] },
-);
+const Inter = glyph.fontFace('/fonts/inter.font.glb', {
+  family: 'Inter',
+  format: [msdf, slug, bitmap({ strikes: [16, 32] })],
+});
 
-Inter.default === Inter;   // the first declared format is the face's default
-Inter.slug !== Inter;      // every other declared format is its own selection
-await Inter.slug.load();   // loads only Slug
-await Inter.load();        // loads every declared format
-await Inter.formats();     // ['bitmap', 'msdf', 'slug'] — what the GLB actually carries, without loading sidecars
+// Inter.default === Inter   the first declared format is the face's default
+// Inter.slug !== Inter      every other declared format is its own selection
+await Inter.slug.load(); // loads only Slug
+await Inter.load(); // loads every declared format
+await Inter.formats(); // ['bitmap', 'msdf', 'slug'] — what the GLB carries, without loading sidecars
 ```
 
 | Selection | Loads | Use when |
@@ -62,62 +98,150 @@ await Inter.formats();     // ['bitmap', 'msdf', 'slug'] — what the GLB actual
 | `Inter.msdf`, `Inter.slug`, `Inter.bitmap` | that format only | a title in Slug, UI in Bitmap |
 | `Inter.load()` | every declared format | you will use several |
 
-{/* prose: a declared member the GLB does not advertise rejects with `FONT_FACE_FORMAT_UNAVAILABLE`; a baked miss never
-triggers runtime baking. Options are part of the format: `{ raster: msdf, options: { emSize: 32 } }` matches only a
-bake made with those values. */}
+{/*
+write
+- Question: what are `Inter.slug` and `Inter.bitmap`, and when do I load which?
+- Paragraph 1: a declaration lists the formats it will use; the first is the default, so `font: Inter` and
+  `font: Inter.default` are the same selection, and each other format is a member you pass where you want it.
+  Loading a member loads that format only; loading the face loads every declared format plus any format the file
+  advertises for which a decoder is imported.
+- Paragraph 2: `formats()` answers "what does this file carry?" from the file's own directory without loading a
+  raster. A declared member the file does not advertise rejects with `FONT_FACE_FORMAT_UNAVAILABLE`, and a baked
+  miss never triggers runtime baking. Options are part of the format: `msdf({ emSize: 32 })` matches only a bake made
+  with that value (link Raster formats → Options are identity).
+- Shape: two paragraphs, then the table.
+
+notes · internals
+- declared members are defined per format key; a repeated key throws — `font-face.ts:226–247`; a string key
+  resolves through the imported formats — `#tryResolveDeclaredFormat` (`:663–666`), `config/raster-format.ts#rasterFormatForKey` (`:158–168`)
+- `face.slug.load()` — `font-face.ts#loadDeclaredFontFaceSelection` (`:481–487`) → `#loadFontFaceFormat` (`:496–527`)
+- `face.load()` = every declared format + `loadAdvertised` — `font-face.ts#loadAllFontFaceFormats` (`:438–479`);
+  nothing advertised and nothing declared → `FONT_FACE_FORMAT_REQUIRED` `:457–462`
+- `face.formats()` reads the source lease's `formats` without loading — `font-face.ts#fontFaceFormats` (`:568–583`),
+  `loader.ts#FontFaceSourceLease.formats` (`:921–924`)
+- `FONT_FACE_FORMAT_UNAVAILABLE` wraps `RASTER_NOT_FOUND` / `RASTER_SOURCE_UNAVAILABLE` — `font-face.ts:549–560`; D-310
+- options in the identity — `font-face.ts#singleFormatIdentity` (`:782–789`); `bitmap({ strikes })` is a callable
+  request — `config/raster-format.ts:128–131`
+*/}
 
 ## Load before use
-
-> [!IMPORTANT]
-> Imperative `createText` and `text.font =` throw synchronously on an unloaded selection. Await the selection first.
-> React suspends instead — see below.
 
 ```ts
 const title = three.createText({ font: await Inter.slug.load(), text: 'Title' });
 Inter.slug.isLoaded(); // true, synchronously, after the promise settles
 ```
 
+{/*
+write
+- Question: what happens if I build text before the font arrives?
+- An `> [!IMPORTANT]` callout, two sentences: imperative `createText` throws `FONT_FACE_FORMAT_NOT_LOADED`
+  synchronously on an unloaded selection; await the selection first. React suspends instead (next section).
+- One sentence after the code: `isLoaded()` is true the moment the promise settles, never earlier and never
+  later, so a render that runs after an `await` sees a ready face without touching a Promise.
+- Shape: the callout, the code, one sentence.
+
+notes · internals
+- `FONT_FACE_FORMAT_NOT_LOADED` — `font-face.ts#requiredFontFaceFormat` (`:636–650`), thrown from
+  `FontFaceHandleStore.acquire` (`:349–354`) inside `createText` (`three/text.ts:270`)
+- `isLoaded()` on a member — `font-face.ts#isDeclaredFontFaceSelectionLoaded` (`:489–494`); on the face —
+  `#isFontFaceLoaded` (`:626–630`, true after the aggregate load only)
+- readiness is published before fulfilment — `font-face.ts:541–547`; D-300
+- [in flight] `text.font = …` and `text.set({ font })` take an immutable `FontSelection` at HEAD, not a face member —
+  `three/text.ts:74–75`, `:670–672`; D-310 says imperative construction and update both throw
+  `FONT_FACE_FORMAT_NOT_LOADED`; re-check the setter's type after the merge before documenting `text.font = Inter.slug`
+*/}
+
 ## React hooks
 
 ```tsx
-import { useFont } from '@pmndrs/glyph/react';
-import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import { useSlug } from '@pmndrs/glyph/react/slug';
 
-const body = useMsdf({ baked: '/fonts/inter.font.glb' });
-const ui = useBitmap({ baked: '/fonts/inter.font.glb' }, { strikes: [16, 32] });
-const title = useSlug({ baked: '/fonts/playwrite.font.glb' });
-const custom = useFont({ baked: '/fonts/x.font.glb' }, { format: { raster: myFormat, options } });
+const body = useMsdf('/fonts/inter.font.glb');
+const ui = useBitmap('/fonts/inter.font.glb', { strikes: [16, 32] });
+const title = useSlug('/fonts/playwrite.font.glb');
 ```
 
-{/* prose: each hook declares a FontFace through `glyph.fontFace` on the selected handle, checks `isLoaded()` first,
-and only then conditionally `use()`s the same stable load promise — a ready font renders without a Promise or a
-microtask. The mounted component owns an independent `Font` lease. */}
+{/*
+write
+- Question: what does a hook do that `glyph.fontFace` does not?
+- Paragraph 1: each hook declares a FontFace through `glyph.fontFace` on the selected handle, checks `isLoaded()`
+  first, and only then `use()`s the same stable load promise; a ready font renders without a Promise or a microtask.
+  The mounted component owns an independent lease that ends when it unmounts.
+- Paragraph 2: the hooks are per format and take that format's options; there is no generic hook in the public API.
+- Shape: two short paragraphs.
+
+notes · internals
+- hooks — `react/msdf.ts:16–21`, `react/bitmap.ts:16–19`, `react/slug.ts:16–18`
+- declaration cache per handle keyed by source + format identity — `react.ts#reactFontFaceResource` (`:667–683`),
+  `font-face.ts#fontFaceResourceKey` (`:303–305`)
+- `isLoaded` then conditional `use()` — `react.ts#useHandleFontFace` (`:658–665`); the mounted lease —
+  `#createMountedFontStore` (`:663`); D-300, D-302
+- [in flight] the hooks are typed over `LoadFontInput` and are thin wrappers over a generic `useFont` at HEAD —
+  `react/msdf.ts:3–4`, `react.ts:138–154`; the generic hook is being removed with the immutable-Font path
+*/}
 
 ### Preload
 
 ```ts
-useMsdf.preload({ baked: '/fonts/inter.font.glb' }); // Promise<void>, at module scope
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+
+void useMsdf.preload('/fonts/inter.font.glb'); // Promise<void>, at module scope
 ```
 
-{/* prose: starts the default handle's load before render; the hook later finds it loaded. `.clear()` drops the
-hook's declaration cache and disposes the face it declared; a mounted lease is unaffected. */}
+{/*
+write
+- Question: can the font start loading before the component that needs it mounts?
+- Two sentences: `preload` starts the default handle's load and returns the actual promise; the hook later finds
+  it loaded. `clear` drops the hook's declaration and disposes the face it declared; a mounted lease is unaffected.
+
+notes · internals
+- `preload` — `react.ts:632–645` (one promise per key; a rejection evicts it); `clear` — `:646–656`
+- module-scope preload is the same operation as the hook's load — D-302
+*/}
 
 <glyph-proxy root="scenes" data-scene="hooks" aria-label="Preload, Suspense, StrictMode" aspect="16 / 9" />
+
+{/*
+notes · internals
+- [verify] there is no `hooks` scene in `site/examples/src/catalog.ts` (`EXAMPLES`); add one or retarget this proxy
+  before publishing
+*/}
 
 ## Strings and the provider
 
 ```tsx
-<GlyphProvider fontFaces={{ Inter: '/fonts/inter.font.glb', Title: { src: titleUrl, format: slug } }}>
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
+import { slug } from '@pmndrs/glyph/three/slug';
+
+<GlyphProvider fontFaces={{ Inter: '/fonts/inter.font.glb', Title: { src: '/fonts/playwrite.font.glb', format: slug } }}>
   <Text font="Inter">Hello</Text>
   <Text font="Title">Hello</Text>
-</GlyphProvider>
+</GlyphProvider>;
 ```
 
-{/* prose: a string resolves through the nearest provider's `fontFaces` table, then the root catalog by family; an
-unknown name throws `FONT_FACE_NOT_FOUND`. The table declares names; it does not gate loading — a resolved selection
-still follows the same isLoaded/use path. Supplying `fontFaces` adds a local Suspense boundary. */}
+{/*
+write
+- Question: can I name a font with a string?
+- Paragraph 1: a string resolves through the nearest provider's `fontFaces` table, then the root catalog by family;
+  an unknown name throws `FONT_FACE_NOT_FOUND`. The table declares names, it does not gate loading: a resolved
+  selection follows the same `isLoaded`/`use` path as a direct one.
+- Paragraph 2: a provider with `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` catches
+  font load errors only and rethrows everything else; `handle` selects a handle or a named root and is immutable —
+  remount to change it.
+- Shape: two paragraphs.
+
+notes · internals
+- resolution order: provider table, then root catalog — `react.ts#resolveReactTextFont` (`:487–497`),
+  `font-face.ts#resolveFontFace` (`:257–263`); `FONT_FACE_NOT_FOUND` `react.ts:494`, `three/text.ts:584`
+- table entries: a source, a face, or `{ src, format }` — `react.ts#GlyphProviderFontFace` (`:188–191`); faces the
+  table declares are owned and disposed with the provider — `#createProviderFontFaces` (`:312–343`)
+- Suspense when `fontFaces` or `fallback` is given — `react.ts:244–246`; `errorFallback` catches `FontLoadError`
+  only — `#GlyphFontErrorBoundary` (`:361–374`)
+- `handle` accepts a handle or a root — `react.ts:193–200`, `#selectReactRoot` (`:417–420`); immutable props
+  `:216–219`; D-301, D-307
+*/}
 
 ## Sources
 
@@ -125,15 +249,32 @@ still follows the same isLoaded/use path. Supplying `fontFaces` adds a local Sus
 | --- | --- |
 | `'/fonts/inter.font.glb'` or a `URL` ending in `.glb` | baked only; a miss is `BAKED_FONT_MISSING` |
 | `'/fonts/Inter.ttf'` or any other URL | the source font, and a probe for the sibling `Inter.font.glb`; a missing sibling warns in development and bakes at runtime |
-| `{ baked: url \| Request \| bytes }` | baked only |
-| `{ source: url \| bytes, baked: null }` | the source with no sibling probe |
-| `{ source, runtimeBake, unicodeRanges? }` | baked on the client, optionally subset first — see [Runtime baking](/docs/fonts/runtime-baking) |
-| `Blob` | an in-memory font |
+| `File` or `Blob` | a `.ttf`/`.otf` name or font MIME type is a source font; anything else is a baked GLB |
 | `SerializedFontFace` | a face cloned from another realm — see below |
 
-One content-addressed graph backs every face and handle: two declarations over the same URL share one fetched
-artifact and acquire only the raster artifacts their selected formats request. Family names are aliases, never
-cache keys.
+{/*
+write
+- Question: what can I pass as the first argument?
+- One sentence above the table: a source is one thing — a URL, a file, or a clone — and the file's own directory
+  decides which formats exist; there is no list of candidates.
+- One paragraph under: one content-addressed graph backs every face and handle: two declarations over the same URL
+  share one fetched artifact and acquire only the raster artifacts their selected formats request. Family names are
+  aliases, never cache keys.
+- Avoid: the `{ baked }` / `{ source, baked }` object forms; they belong to the immutable-Font loaders being removed.
+
+notes · internals
+- `.glb` URL → baked only; other URL → source plus sibling `.font.glb` probe — `loader.ts#resolveFontRequest`
+  (`:2675–2700`, the sibling at `:2693–2699`)
+- baked probe first, then runtime bake when a source exists — `loader.ts:596–643`; development warning
+  `#warnMissing` (`:733–743`); `BAKED_FONT_MISSING` when there is no source `:604–609`
+- `Blob` classification by name or MIME — `font-face.ts#fontFaceLoadInput` (`:747–761`)
+- serialized clone — `font-face.ts:172`, `:622`
+- source types — `font-face.ts#FontFaceSource` (`:27`); D-297 (one source per face), D-298 (content identity)
+- [in flight] `FontFaceSource` still admits the immutable-Font `FontInput` objects (`font.ts:57–71`) and the
+  `{ source, runtimeBake, unicodeRanges }` form (`loader.ts:86–92`); D-297 lists URL, Request, Blob, and bytes only.
+  Document the object forms nowhere until the retirement lands.
+- [verify] `Request` as a source and its transport identity (D-298): find where a `Request` is accepted in `loader.ts`
+*/}
 
 ## Errors
 
@@ -146,34 +287,76 @@ cache keys.
 | `FONT_FACE_FORMAT_UNAVAILABLE` | the declared format and options name a raster key the file does not carry |
 | `FONT_FACE_FORMAT_REQUIRED` | `load()` found no declared or decodable format |
 | `FONT_FACE_FORMAT_NOT_LOADED` | imperative `createText` on a selection that has not loaded |
+| `FONT_FACE_NOT_FOUND` | a family string no provider table or catalog entry answers |
 | `RUNTIME_BAKER_UNAVAILABLE` | a source font needed baking and the runtime baker could not be imported |
 
-`face.load()` loads every declared format and every format the file advertises for which a decoder module has been
-imported; `face.slug.load()` loads one. Decoding rechecks each raster's identity, validates the record table and
-its KTX2 pages, and enforces a 256 MiB texture budget. GPU upload happens on first draw.
+{/*
+write
+- Question: what can go wrong, and which code tells me which?
+- One paragraph under the table: `face.load()` loads every declared format and every format the file advertises
+  for which a decoder has been imported; `face.slug.load()` loads one. Decoding rechecks each raster's identity,
+  validates its record table and pages, and refuses an atlas over 256 MiB. GPU upload happens on first draw.
+- Shape: the table and one paragraph; every code is a `FontLoadError` with `.code` and `.url`.
+
+notes · internals
+- `FontLoadError` — `loader.ts:208–216`; `BAKED_FONT_MISSING` `:604–609`; `BAKED_FONT_FETCH` `:653`, `:660`;
+  `BAKED_FONT_INVALID` / `INCOMPATIBLE` / `RESOURCE_LIMIT` `:684–700`; limits `:61–63`
+- `FONT_FACE_FORMAT_UNAVAILABLE` `font-face.ts:555`, `:655`; `FONT_FACE_FORMAT_REQUIRED` `:458–461`;
+  `FONT_FACE_FORMAT_NOT_LOADED` `:644–647`; `FONT_FACE_NOT_FOUND` `three/text.ts:584`, `react.ts:494`
+- `RUNTIME_BAKER_UNAVAILABLE` — `loader.ts#loadDefaultRuntimeBake` (`:1957–1969`)
+- 256 MiB decoded-texture cap — `raster/bitmap.ts:34`, `:275–277`; `raster/internal/msdf-decoder.ts:32`, `:94`;
+  `raster/internal/slug-decoder.ts:26`
+- KTX2 page validation — `internal/raster-ktx.ts#validateNativeKtx2` (`:38`)
+- [verify] "GPU upload happens on first draw": find the upload in `three/renderer-resources.ts` before stating it
+*/}
 
 ## Across realms
 
 ```ts
+declare const worker: Worker;
+
 const [serialized, transfer] = await Inter.slug.clone();
 worker.postMessage(serialized, transfer);
-// worker:
-const Inter = glyph.fontFace(serialized);
 ```
 
-{/* prose: an explicit data clone of the loaded main GLB and the selected format's dependencies into fresh buffers;
-nothing ordinary ever copies font bytes. */}
+```ts
+import { glyph, type SerializedFontFace } from '@pmndrs/glyph';
+
+self.onmessage = ({ data }: MessageEvent<SerializedFontFace>) => {
+  const Inter = glyph.fontFace(data);
+  void Inter.load();
+};
+```
+
+{/*
+write
+- Question: how does a Worker get the font without fetching it again?
+- Two sentences: `clone()` loads the selection if needed, then copies the main GLB and that format's dependencies
+  into fresh buffers and returns them with their transfer list; nothing ordinary ever copies font bytes. On the other
+  side, `glyph.fontFace(serialized)` claims the envelope and imports it as a seed into that realm's graph, so a later
+  clone of another format enriches the same face rather than reloading it.
+- Shape: two sentences, the two blocks.
+
+notes · internals
+- `clone()` loads first, snapshots into fresh buffers — `font-face.ts#cloneFontFace` (`:415–436`); returns
+  `[SerializedFontFace, Transferable[]]` — `font-face-transfer.ts:40`; shape `:28–37`
+- receiving: `claimSerializedFontFace` at declaration — `font-face.ts:172`; opened through the transfer loader
+  `:622`; D-313 (idempotent, progressive, may run before `glyph.init()`)
+*/}
 
 ## Lower-level loaders
 
-```ts
-import { loadFont, createFontStack, createFontLibrary } from '@pmndrs/glyph';
-import { FontLoader } from '@pmndrs/glyph/three';
-```
+{/*
+write
+- Hold this section; delete it after the merge unless a renderer-free `Paragraph` still needs a loader that is not
+  a FontFace. If it stays, it is one sentence naming what remains and linking Custom renderers.
 
-{/* prose: `loadFont(input, format, options?)` and the tuple form return immutable `Font` values without a FontFace —
-for renderer-free `Paragraph` measurement, custom integrations, and stacks; `createFontLibrary` is an explicit cache
-with leases; the Three `FontLoader` adapts to `LoadingManager`. All of them enter the same resource graph. */}
+notes · internals
+- [in flight] `loadFont`, `createFontLibrary`, `createFontStack` are still root exports at HEAD — `index.ts:245–248`;
+  they are the immutable-Font path being removed. The FontFace path enters the same shared library —
+  `glyph.ts:109–116`, `font-face.ts:104`
+- [verify] whether a Three `FontLoader` exists at HEAD: `src/three/font-loader.ts` is absent at 09d7ae569
+*/}
 
 ## Ownership
 
@@ -183,5 +366,21 @@ with leases; the Three `FontLoader` adapts to `LoadingManager`. All of them ente
 | `FontFace` | no text or hook uses it | pending loads abort; its graph leases release |
 | handle | the adapter is finished | after existing leases end |
 
-{/* prose: a face disposed before its text keeps the text alive until the text disposes — leases are counted.
-Disposal is the correctness mechanism; finalizers are only a safety net for abandoned React roots. */}
+{/*
+write
+- Question: who disposes what, in which order?
+- One paragraph: dispose texts before faces; a face disposed early keeps its texts alive because leases are counted,
+  and the text's own lease releases when it disposes. `dispose()` is called on the declaration, not on a member.
+  Disposal is the correctness mechanism; the finalizer is only a safety net for abandoned React roots.
+- Shape: the table and one paragraph.
+
+notes · internals
+- `Text.dispose()` releases the fonts it acquired — `three/text.ts:875–881`; the acquired lease is a clone of the
+  face's Font — `font-face.ts:349–354` (`cloneImmutableFont`); backings are lease-counted — `loaded-font.ts:17–31`
+- `FontFace.dispose()` aborts the source load, disposes its records, releases the source lease —
+  `font-face.ts#disposeFontFaceResourceOwner` (`:679–692`); must be the declaration, not a member `:272–274`
+- handle disposal releases its name for reuse — `glyph.ts:76–79`
+- finalizer for an unreachable face — `font-face.ts:153–157`; D-286 (explicit disposal decides correctness)
+- [verify] "a face disposed before its text keeps the text alive": the face disposes its own record fonts (`:684–687`)
+  while the text holds a separate lease; confirm the backing survives until the text's lease ends in `loaded-font.ts`
+*/}

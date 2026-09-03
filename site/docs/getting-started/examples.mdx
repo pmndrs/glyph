@@ -8,23 +8,59 @@ nav: 3
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  Every example is one feature, one screen, and a few dozen lines. They share a harness that owns the canvas, camera,
-  and lighting, so each source file is only the text it demonstrates. Art is generated, not loaded.
-</Intro>
+{/*
+reader
+- Wants to see it move before reading. Scans cards, opens one, follows the link back to the page that explains it.
+  Arrives asking "does it do X?"; should leave with a scene open and its docs page one click away.
 
-Every scene below runs inline, on one renderer shared by the whole page: two run at a time, the nearest to the
-middle of the window, and the others keep their last frame. The [gallery](/examples/) has all of them on one page,
-started by hand — rest on a card and it runs.
+write · intro
+- Question: what am I looking at, and how do these run?
+- Say: every example is one feature, one screen, a few dozen lines; a shared stage owns canvas, camera, and lights,
+  so each file is only the text it demonstrates; art is generated, never loaded. Then how they run: every scene on
+  this page runs inline on one renderer, two at a time — the ones nearest the middle of the window — and the others
+  keep their last frame; the gallery at `/examples/` runs by pointer: rest on a card and it runs.
+- Shape: one paragraph, then the running rule as a second short paragraph; no list.
+
+write · keypoints (fold into the intro, no component)
+- One feature per scene, a few dozen lines.
+- One renderer for the page, two live scenes at a time.
+- Every scene has a typechecked three.js twin.
+- Every card links to the page that explains it.
+
+notes · internals for the page
+- the catalog: slug → title, docs page, stage, aspect, loader — `site/examples/src/catalog.ts:31–189`
+- the stage — `site/docs/components/pages/examples/stage.tsx`; `StageOptions` — `catalog.ts:14–19`
+- each scene has a `three.ts` twin, typechecked and never executed — `catalog.ts:8–11`,
+  `site/examples/README.md` ("The twin")
+- "art is generated" — `site/examples/README.md` (the paragraph before "The twin")
+- two live scenes: `max-slots` default 2 — `site/docs/components/explainer/root.tsx:364–368`; ranking by distance
+  to the viewport centre, visible ratio breaks ties — `viewport-ranking.ts:26–30`; the last frame stays as a poster
+  when a lease ends — `root.tsx:889–890`
+- pointer activation in the gallery — `root.tsx` `activation` attribute; `site/examples/src/components/gallery/`
+*/}
 
 ## Showcase
 
 <glyph-proxy root="scenes" data-scene="kinetic" aria-label="Kinetic typography with live shaping" aspect="16 / 9" />
 
-The Codrops piece with the engine where the bitmap font used to be: a line of Slug type — the passage, typing
-itself in — is rendered to a render target every frame and wrapped around a lit torus knot with the same
-`fract(uv * repeat - time)`; two rings of Slug glyphs orbit it on paths, copied out with `breakApart()` and placed
-by matrix, depth-tested so the knot hides them; the word being typed is spotlit above.
+{/*
+write
+- Question: what is the piece at the top?
+- Say, in the Codrops-tribute register: a line of Slug type — the passage, typing itself in — is rendered to a
+  render target every frame and wrapped around a lit torus knot with the same `fract(uv * repeat - time)`; two
+  rings of Slug glyphs orbit it on paths, copied out with `breakApart()` and placed by matrix, depth-tested so the
+  knot hides them; the word being typed is spotlit above.
+- Avoid: writing this from the outline row; read the scene first (the [verify] below).
+- Shape: one paragraph.
+
+notes · internals
+- the scene and its parts — `site/examples/src/scenes/kinetic/scene.tsx`, `components/PassageLine.tsx`,
+  `components/Knot.tsx`, `components/WordTile.tsx`, `components/Ground.tsx`, `materials.ts`, `config.ts`
+- the plan for it — `docs/planning/docs-site-outline.md` Examples table, row `kinetic`
+- `breakApart()` returns caller-owned `Glyphs` (and `Decorations`) from a committed layout — `three/text.ts:784–800`
+- [verify] each claim above against the scene source before describing it; the outline row is the intent, the
+  scene is the fact
+*/}
 
 ## Getting started
 
@@ -36,6 +72,14 @@ by matrix, depth-tested so the knot hides them; the word being typed is spotlit 
     <p>[**first text**](/examples/?example=first-text) -- <span>style</span>, <span>layout</span>, <span>measure</span></p>
   </li>
 </Grid>
+
+{/*
+write
+- Nothing beyond the cards.
+
+notes · internals
+- `hello` → introduction; `first-text` → your-first-text — `site/examples/src/catalog.ts:38–49`
+*/}
 
 ## Fonts
 
@@ -54,6 +98,17 @@ by matrix, depth-tested so the knot hides them; the word being typed is spotlit 
   </li>
 </Grid>
 
+{/*
+write
+- Nothing beyond the cards.
+
+notes · internals
+- `techniques`, `text-ladder` (orthographic stage) — `catalog.ts:50–63`; `zoom` is also a techniques scene but is
+  filed under Advanced below — `catalog.ts:64–70`
+- [verify] `fallback-stack` and `runtime-bake` are planned (`docs/planning/docs-site-outline.md` Examples table)
+  but not in `catalog.ts`; the links are dead until the scenes land
+*/}
+
 ## Text
 
 <Grid cols={2}>
@@ -62,6 +117,9 @@ by matrix, depth-tested so the knot hides them; the word being typed is spotlit 
   </li>
   <li>
     <p>[**styling**](/examples/?example=styling) -- <span>every TextStyle property</span></p>
+  </li>
+  <li>
+    <p>[**decorations**](/examples/?example=decorations) -- <span>underline</span>, <span>overline</span>, <span>line-through</span></p>
   </li>
   <li>
     <p>[**paragraph layout**](/examples/?example=paragraph-layout) -- <span>wrap</span>, <span>align</span>, <span>columns</span></p>
@@ -88,12 +146,39 @@ by matrix, depth-tested so the knot hides them; the word being typed is spotlit 
     <p>[**effects**](/examples/?example=effects) -- <span>outline</span>, <span>shadow</span></p>
   </li>
   <li>
+    <p>[**depth**](/examples/?example=depth) -- <span>occlusion</span>, <span>depth test</span></p>
+  </li>
+  <li>
+    <p>[**labels**](/examples/?example=labels) -- <span>billboards</span>, <span>fog</span></p>
+  </li>
+  <li>
+    <p>[**bloom**](/examples/?example=bloom) -- <span>useRenderPipeline</span></p>
+  </li>
+  <li>
     <p>[**break apart**](/examples/?example=break-apart) -- <span>Glyphs</span>, <span>matrices</span></p>
+  </li>
+  <li>
+    <p>[**arc**](/examples/?example=arc) -- <span>text on a circle</span></p>
   </li>
   <li>
     <p>[**errors**](/examples/?example=errors) -- <span>TextFrameError</span></p>
   </li>
 </Grid>
+
+{/*
+write
+- Nothing beyond the cards.
+
+notes · internals
+- in the catalog: `groups` (1 / 1), `styling`, `decorations`, `paragraph-layout`, `justify`, `rich-text`,
+  `measurement`, `materials` (lit), `effects`, `depth` (lit), `labels` (lit), `off-axis`, `bloom`, `break-apart`,
+  `arc` — `catalog.ts:71–175`; `decorations`, `depth`, `labels`, `bloom`, `arc` were missing from the earlier stub
+  and are added here from the catalog
+- `off-axis` belongs to `text/in-3d` in the catalog (`:148–154`) but sits under Advanced below; move it or leave it
+- [verify] `editing`, `caret`, `errors` are planned (`docs/planning/docs-site-outline.md` Examples table) but not in
+  `catalog.ts`; dead links until the scenes land
+- `caretAt`, `selectionRects` — `three/text.ts:861–873`; `TextFrameError` and its causes — `three/frame-error.ts:28–60`
+*/}
 
 ## React
 
@@ -106,11 +191,23 @@ by matrix, depth-tested so the knot hides them; the word being typed is spotlit 
   </li>
 </Grid>
 
+{/*
+write
+- Nothing beyond the cards.
+
+notes · internals
+- [verify] neither `provider` nor `hooks` is in `catalog.ts`; both are planned (outline Examples table) and both are
+  referenced by `<glyph-proxy>` on react/components and react/hooks
+*/}
+
 ## Advanced
 
 <Grid cols={2}>
   <li>
     <p>[**batching**](/examples/?example=batching) -- <span>compositing</span>, <span>draw count</span></p>
+  </li>
+  <li>
+    <p>[**raster ratio**](/examples/?example=raster-ratio) -- <span>DPR</span>, <span>rasterPixelRatio</span></p>
   </li>
   <li>
     <p>[**off-axis**](/examples/?example=off-axis) -- <span>steep angles</span>, <span>DPR</span></p>
@@ -122,3 +219,14 @@ by matrix, depth-tested so the knot hides them; the word being typed is spotlit 
     <p>[**shaping**](/examples/?example=shaping) -- <span>Arabic</span>, <span>Indic</span>, <span>bidi</span>, <span>CJK</span></p>
   </li>
 </Grid>
+
+{/*
+write
+- Nothing beyond the cards; each card's page carries the explanation.
+
+notes · internals
+- `batching` → advanced/performance, `zoom` → fonts/techniques, `shaping` → advanced/how-it-works,
+  `off-axis` → text/in-3d — `catalog.ts:64–70`, `:148–154`, `:176–188`
+- [verify] `raster-ratio` is planned (outline Examples table) but not in `catalog.ts`
+- `rasterPixelRatio` is a Text property, default 1 — `react.ts:91`, `internal/render-planner.ts:1627`
+*/}

@@ -8,11 +8,35 @@ nav: 0
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  `@pmndrs/glyph` retains authored text, shapes and lays it out in Rust/Wasm, then publishes a transient render plan
-  for the active renderer. The maintained three.js integration supports Bitmap, MSDF, and Slug through WebGPU and
-  three's WebGL fallback.
-</Intro>
+{/*
+reader
+- Someone deciding, in one screen, whether this solves their problem. Knows three.js or R3F; has drawn text with a
+  sprite sheet, troika, or a canvas texture; has never shaped text outside the DOM. Arrives asking "does this do real
+  text, and what does it cost me to try?"; should leave able to install it and pick the React door or the three.js
+  door.
+
+write · intro
+- Question: what is this, in one breath?
+- Say: it keeps the text you author, shapes and lays it out in Rust compiled to Wasm, and hands the renderer a plan
+  of instanced draws; the maintained three.js integration draws that plan in Bitmap, MSDF, or Slug on WebGPU, and on
+  WebGL2 through three's own fallback. Then the install line.
+- Anchor: "a text engine that thinks in paragraphs and speaks in draw calls".
+- Shape: two or three sentences, then the `bash` block; no list.
+
+write · keypoints (pmndrs `<Keypoints title="Where to next">`, four items, placed before Ecosystem)
+- [Your first text](./your-first-text): bake a font, render it, style it, measure it.
+- [Raster formats](../fonts/techniques): when to use Bitmap, MSDF, or Slug.
+- [Text, roots, and TextGroup](../text/text-and-groups): what a text owns and what a root batches.
+- [Examples](./examples): one small example per feature.
+
+notes · internals for the page
+- the README opens with the same sentence — `packages/glyph/README.md:3–5`
+- the runtime surface is five members: `initialized`, `init()`, `shape()`, `handle()`, `fontFace()` —
+  `packages/glyph/src/glyph.ts#Glyph` (`:19–28`)
+- three registered `RasterFormat`s — `raster/bitmap.ts:72`, `raster/msdf.ts:61`, `raster/slug.ts:53`
+- every peer is optional: `three >=0.185.1`, `@react-three/fiber >=10.0.0-alpha.3 <11`, `react >=19.2 <19.3`,
+  `typegpu >=0.12.3 <0.13` — `packages/glyph/package.json` peerDependencies, peerDependenciesMeta
+*/}
 
 ```bash
 npm install three @react-three/fiber @pmndrs/glyph
@@ -73,9 +97,35 @@ function Labels() {
 }
 ```
 
-{/* prose (from the README): an outer Text is a retained paragraph and a Three Object3D; a nested Text is an inline
-run that inherits font, style, and material and creates no scene object; TextGroup is a scene-hierarchy parent. Three
-fonts, three raster formats, one component. */}
+{/*
+write
+- Question: what does the React side look like?
+- One paragraph, in this order: three fonts in three formats through three hooks, one `<Text>` component. A nested
+  `<Text>` is a styled run inside the paragraph, not a child object, which is why `Ipsum` is red without a
+  transform of its own. `<TextGroup>` is an ordinary parent for transform, visibility, material, and render order;
+  it does not decide batching.
+- Point at `useMsdf.preload(INTER)`: a hook declares a face on the handle and suspends until it is loaded, so a
+  preload at module scope means the first render finds it ready.
+- Avoid: the provider and the default handle; link Components.
+- Shape: one paragraph, four sentences.
+
+notes · internals
+- an outer `<Text>` is one retained paragraph and a three.js `Object3D` — `three/text.ts:594`
+  (`class Text extends THREE.Object3D`), `react.ts:441–467` (`Text`), `:506–550` (`TextObject`)
+- a nested `<Text>` is an inline run: it inherits font, style, and material, creates no scene object, and accepts only
+  `children`, `font`, `style`, `material`; anything else throws at mount naming the prop — `react.ts:758–791`
+  (`flattenText`), `:804–818` (`inlineProperties`), `:820–826` (`INLINE_TEXT_PROPERTIES`, `assertInlineTextProperties`)
+- `<TextGroup>` is a scene-hierarchy parent for transform, visibility, material, pixel snapping, render order, not a
+  batching boundary — `three/text.ts:84–90` (`TextGroupOptions`), D-307
+- the hooks are the React loading surface: each declares through `glyph.fontFace` on the selected handle and owns the
+  mounted `Font` lease — `react.ts#useFont` (`:628–631`), `:667–683` (`reactFontFaceResource` →
+  `glyph.fontFace(input, config)`), `react/msdf.ts:16–17`, `react/slug.ts:16`, `react/bitmap.ts:16–17`; D-302
+- `useMsdf.preload(url)` starts the default handle's load before any component asks and returns the real Promise —
+  `react.ts:632–645`
+- `font` takes a loaded `Font` from a hook, a `FontFace` or one of its members, or a family string —
+  `react.ts:73` (`R3fFontSelection`)
+- the running scene — `site/examples/src/scenes/hello/scene.tsx`
+*/}
 
 <glyph-proxy root="scenes" data-scene="hello" aria-label="Hello world" aspect="16 / 9" />
 
@@ -86,13 +136,13 @@ import { glyph, span, txt } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
 
 await glyph.init();
-const three = glyph.handle('main', ThreeConfig);
-const interFace = glyph.fontFace({ baked: '/fonts/Inter.font.glb' });
-await interFace.load();
+const handle = glyph.handle('app', ThreeConfig);
+const Inter = glyph.fontFace('/fonts/Inter.font.glb');
+await Inter.load();
 
 const accent = span({ color: '#70d6ff' });
-const label = three.createText({
-  font: interFace,
+const label = handle.createText({
+  font: Inter,
   text: txt`Hello ${accent`world`}`,
   style: { fontSize: 32, lineHeight: 1.2, color: '#f4f7ff' },
   layout: { wrap: 'word' },
@@ -104,62 +154,225 @@ glyph.shape();                  // publish every dirty root; Mesh children now s
 renderer.render(scene, camera); // three performs the actual draw
 ```
 
-{/* prose (from the README): the root `glyph` is the runtime — `init()` once, a named handle per adapter, a FontFace
-declared once and loaded once; `createText` returns an ordinary Object3D, not a canvas or renderer; `shape()` attaches
-planned meshes; `renderer.render` draws them. Three uses `txt`/`span` where React uses nested Text. */}
+{/*
+write
+- Question: what is the same thing without React, and who does what?
+- Say, in the order of the code: `glyph` is the runtime and `init()` loads the shaper once. A handle is one adapter
+  configured once, and the handle is itself the root your text lives on. A face is declared once with `fontFace`
+  and loaded once with `load()`; it never takes a handle. `createText` returns an ordinary `Object3D`, not a canvas
+  or a renderer: add it to the scene and position it like a mesh. `glyph.shape()` publishes every root that changed
+  and the meshes appear under the label; `renderer.render` draws them.
+- Then one sentence: three.js authors rich text with the `txt` and `span` tags where React nests `<Text>`.
+- Avoid: `handle(name)` and named roots; that is Text, roots, and TextGroup.
+- Shape: one paragraph of five sentences, then the `txt`/`span` sentence.
+
+notes · internals
+- `glyph.init()` once; it keeps one settled Promise forever, so a second call costs nothing — `glyph.ts:44–57`, D-305
+- `glyph.handle(name, config)` throws before `init()` and on a duplicate name — `glyph.ts:59–68`
+- the handle is its own anonymous root; `handle(name)` returns an idempotent named sibling root —
+  `config/glyph.ts:581–589` (`GlyphHandle`), `three/handle.ts:132–137` (`threeHandleRoot`), D-307
+- `ThreeConfig` is `defineThreeConfig()` with `transformMode: 'indexed'`, `allocationMode: 'ordered'`,
+  `defaultFontFormat: 'msdf'` — `three/handle.ts:171–177`, `:265`; the options are `capacity`, `compositing`,
+  `transformMode`, `allocationMode`, `defaultFontFormat`, `material` — `#ThreeConfigOptions` (`:93–99`),
+  `three/text.ts:78–82` (`ThreeRootOptions`)
+- `glyph.fontFace(source, { family?, format? })` never takes a handle; the one-argument form gets a generated family
+  `Font{n}` and resolves to the handle's default format — `glyph.ts:100–105`, `font-face.ts:167`, `:798–804`; D-297, D-310
+- `await Inter.load()` loads every format the GLB advertises plus every declared one, once — `font-face.ts:87–88`,
+  `:389–413` (one aggregate Promise), `:438–479`
+- `createText({ font })` takes a face, a member, or a family string and acquires the handle's `Font` lease; an
+  unloaded face throws `FONT_FACE_FORMAT_NOT_LOADED` — `three/text.ts:256–282`, `font-face.ts:636–650`
+- `Text` is only ever constructed by a root — `three/text.ts:623–644`
+- `glyph.shape()` stages every dirty root of every handle and crosses into Wasm once — `glyph.ts:94–98`, D-312;
+  three's own `updateMatrixWorld` on the root's draw object also calls it, so `renderer.render` alone would publish —
+  `three/text.ts:139–142`, `:478–486`
+- the proof of this exact sequence — `apps/r3f-hello-world/src/three-example.ts:17–57`
+- `txt` and `span` — `formatted-text.ts:113–119`, `:121–132`; the `/three` `span` also takes a material —
+  `three/span.ts:17–23`
+*/}
 
 ## Measure before you render
 
 ```ts
-scene.add(label);
-const measured = label.measure();
-label.position.x = -measured.contentWidth / 2;
+import { glyph } from '@pmndrs/glyph';
+
+scene.add(text);
+const measured = text.measure();
+text.position.x = -measured.contentWidth / 2;
 glyph.shape();
 renderer.render(scene, camera);
 ```
 
-{/* prose: measurement needs no world matrix, renderer resource, or committed frame; `Paragraph` measures with no
-scene object at all. Link Measurement. */}
+{/*
+write
+- Question: can I ask how big it is before anything draws?
+- Say: yes, synchronously, on the object you just made, with no scene attachment, no world matrix, and no frame.
+  `contentWidth`/`contentHeight` are the advance box layout claims; `inkBounds` is what the glyphs actually cover;
+  they are different numbers on purpose. Centre on ink when the eye judges it; size a flex box on the advance.
+- Shape: two sentences; link Measurement.
+
+notes · internals
+- `measure()` answers for desired state, synchronously, with no scene attachment or matrix traversal —
+  `three/text.ts:732–742`
+- `contentWidth`/`contentHeight` are advance extents (what layout claims); `inkBounds` is the union of glyph outlines
+  (what was drawn); they are deliberately not interchangeable — `layout.ts:56–61`, `:73–75`, `:80–89`
+- `Paragraph.measure()` needs no renderer, scene, or matrix at all — `paragraph.ts:162–166`, `createParagraph`
+  (`:276`)
+*/}
 
 ## Does it need WebGPU?
 
-{/* prose: no — `WebGPURenderer` carries a WebGL2 backend and falls back on its own when `navigator.gpu` is absent
-(which it is on any plain-http origin). Every format renders on both. */}
+{/*
+write
+- Question: will this run where I deploy?
+- Say: no. three's `WebGPURenderer` carries a WebGL2 backend and swaps to it when a WebGPU adapter cannot be had,
+  which is what happens on any plain-http origin; every format is one TSL shader that compiles for both backends.
+  What you give up on WebGL2 is nothing text-specific.
+- Shape: one paragraph, three sentences. Do not write "on its own" until the first [verify] below is closed.
+
+notes · internals
+- `WebGPURenderer` constructs a `WebGPUBackend` and hands the base renderer a `getFallback` that builds a
+  `WebGLBackend`; `forceWebGL` skips WebGPU outright —
+  `packages/glyph/node_modules/three/src/renderers/webgpu/WebGPURenderer.js:57–71` (three 0.185.1, the peer floor)
+- the swap runs when backend init fails and `_getFallback` is set — `…/three/src/renderers/common/Renderer.js:785`;
+  the WebGPU backend's init asks `navigator.gpu` for an adapter — `…/renderers/webgpu/WebGPUBackend.js:217`
+- [verify] that an absent `navigator.gpu` reaches that fallback branch (rejection, not a throw at `:217`); read
+  `WebGPUBackend.init` around that line before stating "on its own"
+- `navigator.gpu` exists only in a secure context, so `http://<lan-ip>` gets WebGL2 — `site/vite.config.ts:12–15`
+  (the comment); [verify] against the WebGPU spec's `[SecureContext]` on `Navigator.gpu`
+- one TSL shader per format serves both backends — `three/bitmap.ts:1`, `:25`; `three/msdf.ts:1`, `:29`;
+  `three/slug.ts:1`
+- the examples explainer forces WebGL with `?renderer=webgl` — `site/docs/components/explainer/root.tsx`
+  (`forceWebGL`; find the line)
+*/}
 
 ## Is it slower than sprites or a canvas texture?
 
-{/* prose: no — text is instanced, batched, and retained. Every Text on a root shares one planner; the plan emits only
-the draw boundaries a format, resource, material, clip, or compositing policy requires. Point at Performance. */}
+{/*
+write
+- Question: I already batch sprites; will this cost me draw calls?
+- Say: no. Text is retained and instanced: every `Text` on a root shares one planner and one reconcile, and the plan
+  emits a draw only where a boundary forces one. Point at Performance for what those boundaries are and how to
+  count them.
+- Anchor: "you write paragraphs; the GPU sees instance buffers".
+- Shape: two sentences plus the link. Do not list the boundary keys until the [verify] below is closed.
+
+notes · internals
+- one planner per root: every `Text` on the root is one publication stream and one reconcile —
+  `three/text.ts:150` (`ThreeRoot`), `:436–448` (`prepareShape` reconciles all members); D-307
+- draws are instanced batches in the display list — `config/glyph.ts:428` (`DisplayListBatch`),
+  `three/internal/draw-realizer.ts:87–113` (batch children → instance spans)
+- `compositing: 'independent'` lets Rust reorder compatible draws when order does not matter —
+  `three/text.ts:78–82`, `three/handle.ts:180–183`
+- capacity defaults to 4 096 glyphs, chunked growth — `three/text.ts:191–194`
+- [verify] the exact batch-boundary keys (format, resource, material, clip, compositing): derive them from
+  `internal/render-planner.ts` and `rust/shaper/src/engine/plan_draw.rs` before listing them
+- the batching example counts draws — `site/examples/src/scenes/batching/scene.tsx`
+*/}
 
 ## Which scripts and languages?
 
-{/* prose: HarfRust shaping with pinned HarfBuzz as the oracle; Latin, Arabic joining, Indic reordering, mixed bidi,
-CJK line breaking; Unicode 17 segmentation and line breaking in JS. Horizontal layout; vertical is a later milestone.
-Link the shaping example. */}
+{/*
+write
+- Question: will my language shape correctly?
+- Say: shaping is HarfRust, in Rust, with HarfBuzz as the oracle in the baker's tests, so Latin, Arabic joining,
+  Indic reordering, mixed-direction bidi, and CJK line breaking come from the tables HarfBuzz users already trust.
+  Bidi, UAX #29 clusters, and UAX #14 line breaks all run in Rust; JavaScript keeps only grapheme boundaries,
+  pinned to the same Unicode version, so a span never splits a cluster the engine sees whole. Layout is horizontal
+  today.
+- Point at the shaping example.
+- Shape: one paragraph. Give the Unicode version number only after the [verify] below.
+
+notes · internals
+- HarfRust 0.12.0 shapes in Rust — `packages/glyph/rust/shaper/Cargo.toml:25`; the baker's `oracle` feature pins
+  HarfBuzz as the reference — `rust/font-baker/Cargo.toml:39`, `:45`
+- bidi through `unicode-bidi` 0.3.18 and UAX #29 through `unicode-segmentation` 1.13.3, both in Rust —
+  `rust/shaper/Cargo.toml:28–29`
+- line breaking (UAX #14) in Rust, ported from `@cto.af/linebreak` 4.0.3 — `rust/shaper/src/line_break.rs:1–2`,
+  `rust/shaper/src/unicode.rs`
+- JavaScript holds grapheme boundaries only, for span alignment, from `unicode-segmenter` 0.15.0 pinned to the
+  same Unicode version as Rust rather than `Intl.Segmenter` — `internal/graphemes.ts:3–16`,
+  `packages/glyph/package.json` dependencies
+- [verify] the Unicode version number before writing it: the two pins above and the baked
+  `provenance.unicodeVersion` — `loader.ts:338`, `generated/font-artifact-schema.ts:35`
+- [verify] horizontal only, vertical later — the roadmap in the tree, `docs/roadmap/roadmap.md`
+- the shaping example and its fonts — `site/examples/src/scenes/shaping/scene.tsx`,
+  `site/docs/assets/chorus-*.font.glb`
+*/}
 
 ## Can I use my own shader?
 
-{/* prose: yes — `defineTextMaterial` hands you the format's TSL coverage/color nodes and takes back any NodeMaterial,
-lit PBR included. Link Materials. */}
+{/*
+write
+- Question: is the look mine to change?
+- Say: yes. `defineTextMaterial` gives your factory the format's TSL nodes — coverage, colour, the final position —
+  and takes back any `NodeMaterial`, lit PBR included; the context says which format is asking, so one factory can
+  answer for all three. A material can sit on a span, a Text, a TextGroup, a root, or the config; the nearest wins.
+- Shape: two sentences; link Materials.
+
+notes · internals
+- `defineTextMaterial(create)` wraps one factory; `create(context)` returns any `NodeMaterial` —
+  `three/material.ts:69–73`, `:65–67`
+- the context is discriminated on `kind` (`'glyph'` or `'decoration'`) then `format` (`'pmndrs.bitmap'`,
+  `'pmndrs.msdf'`, `'pmndrs.slug'`), and carries `shader`, `position`, `createDefaultMaterial()` —
+  `three/material.ts:19–63`; D-306, D-308
+- selection order: span, `Text`, `TextGroup`, root, then the config's renderer-wide fallback —
+  `three/span.ts:17–23`, `three/text.ts:1008–1012`, `three/handle.ts:97–98`, `:121–122`
+- the lit example — `site/examples/src/scenes/materials/scene.tsx`
+*/}
 
 ## Where does layout happen?
 
-{/* prose: Rust, in integer F26.6 units under one rounding contract; JavaScript owns Unicode analysis and the render
-loop. Link How it works. */}
+{/*
+write
+- Question: which side of the Wasm boundary does the work?
+- Say: Rust. Shaping, line fitting, justification, and glyph positioning run in the engine in F16.16 integer layout
+  units under one rounding contract, so native and Wasm builds agree bit for bit; JavaScript owns cluster
+  alignment, the scene graph, and the render loop, and crosses into Wasm once per `glyph.shape()`.
+- Shape: two sentences; link How it works.
 
-<Keypoints title="Where to next">
-  <KeypointsItem>[Your first text](./your-first-text) — bake a font, render it, style it, measure it.</KeypointsItem>
-  <KeypointsItem>[Raster formats](../fonts/techniques) — when to use Bitmap, MSDF, or Slug.</KeypointsItem>
-  <KeypointsItem>[Text, roots, and TextGroup](../text/text-and-groups) — what a text owns and what a root batches.</KeypointsItem>
-  <KeypointsItem>[Examples](./examples) — one small example per feature.</KeypointsItem>
-</Keypoints>
+notes · internals
+- shaping, line fitting, justification, and positioning are Rust modules —
+  `rust/shaper/src/engine/line_composition.rs`, `positioning.rs`, `cluster_state.rs`
+- layout units are F16.16 integers (1/65 536 of a caller unit) under one round-half-up contract, identical in
+  native and Wasm builds — `rust/shaper/src/engine/layout_units.rs:1–30` (`LAYOUT_UNIT_BITS = 16`). The earlier
+  stub said F26.6; that is wrong at this HEAD.
+- one Wasm crossing per `glyph.shape()` — D-312
+- JavaScript owns grapheme alignment and the render loop — `internal/graphemes.ts`, `react.ts`
+*/}
 
 ## Ecosystem
 
-- `@react-three/fiber` — the WebGPU entry is the maintained renderer target
-- `@react-three/drei` — environment maps and lights pair well with lit text materials
-- `three/tsl` display nodes — bloom, lens flare, chromatic aberration through `useRenderPipeline`
+| Package | Where it meets glyph |
+| --- | --- |
+| `@react-three/fiber` (`/webgpu` entry) | `<Canvas>`; the React layer imports from it |
+| `@react-three/drei` | lights and environments for lit text materials |
+| `three/tsl` display nodes | bloom, lens flare, chromatic aberration through `useRenderPipeline` |
+
+{/*
+write
+- Question: what else do I pair it with?
+- One sentence above the table, then one clause per row in the table: R3F's WebGPU entry is the maintained target;
+  drei's lights and environments are what lit text materials are for; three's TSL display nodes run through
+  `useRenderPipeline`.
+- Shape: the table carries it.
+
+notes · internals
+- the React layer imports `@react-three/fiber/webgpu` — `react.ts:1`; the peer range — `package.json`
+- with drei present, dedupe `react`, `react-dom`, `three`, `@react-three/fiber` — `site/vite.config.ts:17–20`
+- `useRenderPipeline` in use — `site/examples/src/scenes/bloom/components/Glow.tsx:1`, `:11`;
+  `site/landing/src/effects.tsx:1`
+*/}
 
 ## How to contribute
 
-{/* prose: repository, Discord, and the benchmark harness as the way to prove a change. */}
+{/*
+write
+- Question: where do I go with a bug or a change?
+- Say: the repository; the Discord; and that a change is proven with the benchmark harness, not asserted.
+- Shape: three sentences.
+
+notes · internals
+- repository — `github.com/pmndrs/glyph`, `packages/glyph/package.json` repository
+- the benchmark harness is the way to prove a change — `apps/benchmarks` in the tree
+- [verify] the Discord invite; not in the tree
+*/}

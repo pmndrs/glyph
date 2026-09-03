@@ -2,59 +2,234 @@
 title: Deployment topologies
 description: Handles, roots, scenes, workers, and OffscreenCanvas — which objects to share and which to keep separate.
 nav: 53
+sourcecode: packages/glyph/src/config/glyph.ts
 ---
 
-<Intro>
-  A handle is an adapter configuration; a root is a publication stream bound to at most one scene; a FontFace is
-  shared by every handle. The rules below say which boundary each object owns, so two canvases, a worker, or a
-  second renderer stop being guesswork.
-</Intro>
+{/*
+reader
+- Is past one canvas: a second scene, a HUD, a worker, a second renderer, or a device that can be lost. Knows
+  three's scene graph and what a Worker realm is; may not know that a root binds to one scene or that Wasm memory
+  never crosses a realm. Arrives asking "which of these do I make two of?"; should leave with the rule for each
+  object: font (share), handle (per configuration), root (per scene or per update rate), engine (per realm).
+
+write · intro
+- Question it answers: which objects are shared and which are separate?
+- Say: a handle is an adapter configuration; a root is a publication stream bound to at most one scene; a FontFace is
+  shared by every handle and realm; the engine is one per JavaScript realm. Each boundary below is owned by one of
+  those objects.
+- Anchor: "fonts are files, handles are settings, roots are streams, engines are rooms".
+- Shape: three sentences.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- Two scenes are two roots on one handle; `handle(name)` is idempotent and terminal.
+- Two handles when the adapter configuration or the teardown boundary differs; they share fonts without reloading.
+- A worker is another engine; a font crosses by explicit `clone()`, never implicitly.
+- Device loss belongs to the host's renderer; the root only needs a checkpoint afterwards.
+
+notes · internals for the page
+- handle and roots — `glyph.ts#GlyphRuntime.handle` (`:60–92`), `config/glyph.ts#GlyphHandle` (`:581–589`); D-307
+- one scene per root — `three/text.ts#ThreeRoot.#bindScene` (`:543–562`)
+- shared fonts — `glyph.ts:107–116`; clone — `font-face.ts#FontFaceSelection.clone` (`:81`), D-313
+- one engine per realm — `docs/planning/font-runtime-ownership.md:1193–1205`; D-318
+*/}
 
 ## One application, one canvas
 
 ![One handle and one scene.](/examples/diagrams/topologies.svg)
 
-## Two scenes
-
-
 ```ts
-const three = glyph.handle('main', ThreeConfig);
-scene.add(three.createText({ font: Inter, text: 'world' }));
-hudScene.add(three('hud').createText({ font: Inter, text: 'HP 100' }));
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+
+await glyph.init();
+const app = glyph.handle('app', ThreeConfig);
+const Inter = glyph.fontFace('/fonts/Inter.glb', { format: msdf });
+await Inter.load();
+scene.add(app.createText({ font: Inter, text: 'hello' }));
 ```
 
-{/* prose: a root discovers its scene from its attached texts and refuses to span two; a second scene is a second
-named root. Roots are terminal; names are yours, never a `Scene.uuid`. R3F: a portal into another scene gets a
-`GlyphProvider handle={three('portal')}`. */}
+{/*
+write
+- Question: what is the default shape?
+- Two sentences: one engine, one handle, its anonymous root, one scene; the handle *is* its anonymous root, so
+  `app.createText` and `app.gpuBytes` are the root's. Everything else on this page is a departure from this picture.
+- Shape: one short paragraph under the figure.
+
+notes · internals
+- the handle fronts its anonymous root: `handle.handle === handle`, `name: undefined` — `config/glyph.ts:581–589`;
+  `three/handle.ts#threeHandleRoot` (`:132–138`)
+- `init()` once, idempotent promise — `glyph.ts:44–58`; D-305
+*/}
+
+## Two scenes
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+import { Scene } from 'three/webgpu';
+
+const app = glyph.handle('app', ThreeConfig);
+const hudScene = new Scene();
+scene.add(app.createText({ font: Inter, text: 'world' }));
+hudScene.add(app('hud').createText({ font: Inter, text: 'HP 100' })); // same handle, second root
+```
+
+```tsx
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
+
+export function Hud() {
+  return (
+    <GlyphProvider handle={handle('hud')}>
+      <Text font={inter}>HP 100</Text>
+    </GlyphProvider>
+  );
+}
+```
+
+{/*
+write
+- Question: I have a HUD scene; do I need another handle?
+- Paragraph 1: no. A root discovers its scene from its attached texts and refuses to span two; a second scene is a
+  second named root on the same handle. Roots are terminal — `app('hud')('deeper')` is a type error — and names are
+  yours, never a `Scene.uuid`.
+- Paragraph 2: in R3F a portal into another scene gets a `GlyphProvider` with the named root, so texts under it bind
+  there; the provider is immutable, remount it to change the selection.
+- Shape: two paragraphs.
+
+notes · internals
+- scene discovery and the two-scene error — `three/text.ts:543–562`; D-307
+- named roots idempotent and terminal — `config/glyph.ts:575–589`; type proof `tests/types/three-v1-api.test.ts:53–60`
+- `GlyphProvider handle: ThreeHandle | ThreeRoot`, immutable — `react.ts:193–199`, `:220–223`, `#selectReactRoot` (`:417–420`)
+*/}
 
 ## Two handles
 
 ```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig, defineThreeConfig } from '@pmndrs/glyph/three';
+
 const labels = glyph.handle('labels', ThreeConfig);
 const hud = glyph.handle('hud', defineThreeConfig({ transformMode: 'direct', compositing: 'independent' }));
+labels.createText({ font: Inter, text: 'shared face' }); // both bind Inter without loading it twice
+hud.createText({ font: Inter, text: 'HP 100' });
+hud.dispose(); // its roots and texts; Inter and the labels handle are untouched
 ```
 
-{/* prose: a handle per adapter configuration or teardown boundary; both bind the same FontFace without loading it
-twice. */}
+{/*
+write
+- Question: when is a second handle right?
+- Paragraph 1: a handle per adapter configuration — transform mode, allocation mode, default format, root material —
+  or per teardown boundary you want to dispose as one. Both bind the same FontFace; the font library is process-wide
+  and a handle only keeps a per-handle store of which selections it has bound.
+- Paragraph 2: `defineThreeConfig` returns a pure descriptor; two handles from one config share no mutable state.
+  Names are unique while live and reusable after `dispose()`.
+- Shape: two paragraphs.
+
+notes · internals
+- options — `three/handle.ts#ThreeConfigOptions` (`:93–99`); defaults `'indexed'`, `'ordered'`, `'msdf'` (`:175–177`);
+  "every handle still owns independent mutable state" (`:170`); spreading preserves hooks (`:264`)
+- the per-handle FontFace store over the shared library — `glyph.ts:71–72`, `:107–116`; `font-face.ts#FontFaceHandleStore` (`:314`)
+- unique live names, reusable after disposal — `glyph.ts:68`, `:76–79`; `docs/packages/glyph.md:127–128`
+- `CodecTransformMode = 'direct' | 'indexed'`, `CodecAllocationMode = 'ordered' | 'stable'` — `config/codec.ts:548–549`
+*/}
 
 ## Workers and OffscreenCanvas
 
+```ts
+// main thread: copy the loaded face's bytes and hand them over
+const worker = new Worker(new URL('./text.worker.ts', import.meta.url), { type: 'module' });
+const [serialized, transfer] = await Inter.clone(); // fresh buffers; Inter stays valid here
+worker.postMessage(serialized, transfer);
+```
 
-{/* prose: the whole stack in the worker is the ordinary path; a worker has its own engine (its own Wasm copy);
-move a font with `await face.clone()` and `glyph.fontFace(serialized)` on the other side — an explicit data copy,
-never implicit. Engine registrations and handles never cross realms. */}
+```ts
+// text.worker.ts: its own engine, its own handle, the same font without a fetch
+import { glyph, type SerializedFontFace } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+
+self.onmessage = async ({ data }: MessageEvent<SerializedFontFace>) => {
+  await glyph.init();
+  const app = glyph.handle('worker', ThreeConfig);
+  const Inter = glyph.fontFace(data, { format: msdf });
+  await Inter.load();
+  app.createText({ font: Inter, text: 'shaped over here' });
+};
+```
+
+{/*
+write
+- Question: can shaping live in a worker, and how does the font get there?
+- Paragraph 1: the ordinary path is the whole stack in the worker: engine, handle, renderer, and a transferred
+  `OffscreenCanvas`. A worker has its own engine and its own Wasm copy; engine registrations, handles, and borrowed
+  views never cross realms. Messages carry authored text state, not plan bytes.
+- Paragraph 2: the font crosses by an explicit data clone. `await Inter.clone()` loads what is needed, copies the
+  main GLB and every carried format into fresh buffers, and returns `[serialized, transfer]`; posting that pair may
+  detach the copies without touching the source. `glyph.fontFace(serialized)` on the other side recognises the
+  envelope and seeds its own cache, so the load there fetches nothing. Nothing does this for you.
+- Paragraph 3: say what is gone. The earlier "shape in a worker, render on the main thread by transferring plan
+  bytes" topology was removed with the async plan target; a cross-realm renderer would need a new, proven contract.
+- Shape: three paragraphs.
+
+notes · internals
+- `clone()` on a face or a member — `font-face.ts:81`, `:217–219`, `:240–242`; the copy — `#cloneFontFace` (`:415–436`);
+  `FontFaceTransfer = readonly [SerializedFontFace, Transferable[]]` — `font-face-transfer.ts:40`; D-313
+- `glyph.fontFace(serialized)` — `FontFaceSource` includes `SerializedFontFace` (`font-face.ts:27`); proof with a Node
+  Worker — `tests/integration/font-face-preinit.test.mjs:29–45`, `tests/support/font-face-transfer-worker.mjs:13–24`
+- one engine per realm; registrations do not cross — `docs/planning/font-runtime-ownership.md:1151–1155`, `:1203`
+- owned/transferred publication path removed — D-318, D-319 (`PlanTransport` "exposes no owned-publication copy")
+- [verify] the worker example's `OffscreenCanvas` handoff to `WebGPURenderer` is three's, not Glyph's; link three's
+  docs rather than restating it
+*/}
 
 ## Device loss
 
-{/* prose: dispose the lost-device handle and create a new named handle over the same FontFace; nothing is replayed
-as new content. three's renderer owns the device. */}
+{/*
+write
+- Question: what do I do when the GPU device is lost?
+- Paragraph 1: three's renderer owns the device; Glyph's plan target does not, and rebuilds nothing on its own. The
+  root's retained plan, revisions, and fonts survive; physical buffers, textures, and materials do not. A host that
+  recovers its renderer then needs the root to republish a checkpoint rather than patches, from the last accepted
+  revision.
+- Paragraph 2: at HEAD there is no public "device lost" call on a Three root; the practical recovery is to dispose the
+  affected handle and create a new named handle over the same FontFace — nothing is fetched or shaped anew as
+  content, only re-bound. Write this as the recipe and flag the missing hook.
+- Shape: two paragraphs.
+
+notes · internals
+- "Three's plan target does not own the GPU device; a device-owning renderer explicitly requests the same checkpoint
+  only after rebuilding its lost-device resource pool" — D-285
+- the checkpoint request lives on the planner control — `internal/render-planner.ts#PlanTargetControl.requestCheckpoint`
+  (`:146–148`, impl `:1839`); the design for fan-out — `docs/planning/font-runtime-ownership.md:1185–1191`
+- [verify] no caller of `requestCheckpoint` in `src/three/*` at HEAD (grep found none); confirm and write the
+  dispose-and-recreate recipe until a hook exists
+- disposal cascade: `handle.dispose()` prevents new construction and releases its adapter domain —
+  `docs/planning/three-api.md:424–433`; `ThreeRoot.disposeHost` (`three/text.ts:290–300`)
+*/}
 
 ## Cardinality
 
 | Relationship | Cardinality | Rule |
 | --- | --- | --- |
 | `FontFace` → handle | many-to-many | one shared resource graph; each binding a counted lease |
-| handle → root | one anonymous + many named | roots cannot nest |
+| handle → root | one anonymous + many named | roots cannot nest; a named root is terminal |
 | root → `Scene` | at most one | two scenes, two roots |
-| root → planner | one | the root is the publication boundary |
+| root → planner | one | the root is the publication boundary and the acceptance frontier |
 | engine → JavaScript realm | one | Wasm memory and borrowed views do not cross realms |
+| renderer → device | the host's | Glyph holds leases on payloads, never on GPU objects |
+
+{/*
+write
+- Question: the rules in one place.
+- One sentence: the table is the contract; when in doubt, make another root for another update schedule or scene,
+  another handle for another configuration or teardown, another engine only for another realm.
+- Shape: one sentence above the table.
+
+notes · internals
+- the table's source — `docs/planning/font-runtime-ownership.md:1193–1209` (codex tree), adapted to the handle/root
+  vocabulary of D-307 (that doc still says "backend" and "render planner")
+- named root type is `Root & { name; handle }`, not callable — `config/glyph.ts:575–578`
+- the root owns "one planner/publication stream, capacity, compositing mode, material fallback, renderer draw root,
+  and at most one discovered Scene" — D-307
+*/}
