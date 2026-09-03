@@ -74,20 +74,20 @@ An outer `Text` is a retained paragraph and a Three `Object3D`. A nested `Text` 
 
 `TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text semantics and lazily owns an implicit batch of one.
 
-`compositing="ordered"` preserves authored draw order and is the default. Use `independent` only when overlapping text does not depend on blending order as it lets the planner reorder compatible work into fewer draws.
+`defineThreeConfig({ compositing: 'ordered' })` preserves authored draw order and is the default. Use `independent` only when overlapping text does not depend on blending order as it lets the planner reorder compatible work into fewer draws.
 
 ## Render text with Three.js
 
 ```ts
 import { glyph, span, txt } from '@pmndrs/glyph';
-import { ThreeConfig } from '@pmndrs/glyph/three';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
 
 await glyph.init();
-const three = glyph.handle('main', ThreeConfig);
+const three = glyph.handle('main', defineThreeConfig({ compositing: 'independent' }));
 const interFace = await glyph.fontFace('/fonts/Inter.font.glb').load();
 
 const accent = span({ color: '#70d6ff' });
-const labels = three.createTextGroup({ compositing: 'independent' });
+const labels = three.createTextGroup();
 const label = three.createText({
   font: interFace,
   text: txt`Hello ${accent`world`}`,
@@ -204,12 +204,15 @@ scene.add(three.createText({ font: inter.slug, text: 'Display' }));
 
 ## Capacity, materials, and ownership
 
-Capacity is optional. A `TextGroup` defaults to 4,096-glyph chunks; a standalone `Text` defaults to a 256-glyph growing buffer. Set an explicit policy for known bounds or memory behavior:
+Capacity is optional immutable handle policy. `ThreeConfig` defaults every root to 4,096-glyph chunks. Create a specialized config for known bounds or memory behavior:
 
 ```ts
-const denseLabels = three.createTextGroup({
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+const dense = glyph.handle('dense-labels', defineThreeConfig({
   capacity: { size: 20_000, policy: 'chunk' },
-});
+}));
+const denseLabels = dense.createTextGroup();
 ```
 
 - `chunk` retains bounded chunks as demand grows.

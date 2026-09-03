@@ -10,6 +10,7 @@ import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { slug } from '@pmndrs/glyph/raster/slug';
 import {
+  defineThreeConfig,
   defineTextMaterial,
   localToWorldMatrix,
   span as textSpan,
@@ -1317,8 +1318,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
 });
 
 test('a rejected fixed-capacity candidate releases its provisional font-stack lease', async (t) => {
-  const three = await createThreeTestHandle(t);
-  three.setCapacity({ size: 1, policy: 'fixed' });
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'fixed' } }));
   const registerFontStack = GlyphHandleState.prototype.registerFontStack;
   const disposeFontStack = GlyphHandleState.prototype.disposeFontStack;
   let registrations = 0;
@@ -1400,8 +1400,7 @@ test('TextGroup drops disposed descendants and reuses their committed transform 
 });
 
 test('Three retires materials bound to a replaced buffer generation', async (t) => {
-  const three = await createThreeTestHandle(t);
-  three.setCapacity({ size: 2, policy: 'grow' });
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 2, policy: 'grow' } }));
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },
@@ -2049,8 +2048,7 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async (t) 
 });
 
 test('one Three root atomically replaces child paragraphs without multiplying retained text capacity', async (t) => {
-  const three = await createThreeTestHandle(t);
-  three.setCapacity({ size: 4_096, policy: 'grow' });
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 4_096, policy: 'grow' } }));
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },
@@ -2086,8 +2084,7 @@ test('one Three root atomically replaces child paragraphs without multiplying re
 });
 
 test('one Three root grows aggregate glyph storage without reserving one aggregate-sized paragraph', async (t) => {
-  const three = await createThreeTestHandle(t);
-  three.setCapacity({ size: 4_096, policy: 'chunk' });
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 4_096, policy: 'chunk' } }));
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(fontUrl)) },

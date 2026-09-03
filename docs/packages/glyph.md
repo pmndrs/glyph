@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:9841aee47af9654954367877c4fa9cf5a3671672f8300aa482571b312257c9d2'
+source_digest: 'sha256:cdbdc89e007ddaae47696f07f273a809cb076e397040791ad5b8c94b5d4ea672'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -352,7 +352,11 @@ render planner and one renderer draw root. It may bind to at most one Three `Sce
 members by object identity; a root name is stable semantic/customization metadata, not a `Scene.uuid`. A second Scene
 therefore uses another named root. Returned roots are terminal and cannot create deeper roots. `TextGroup` remains freely
 nestable for scene hierarchy, transform/visibility inheritance, material selection, pixel snapping, and render order, but
-does not create another planner or publication stream. A traversal sends only changed paragraph sections:
+does not create another planner or publication stream. Capacity and compositing are immutable `ThreeConfig` policy shared
+by the anonymous and named roots of one handle; selecting different policy means creating another handle from
+`defineThreeConfig(...)`, not mutating a live root. Per-root, group, Text, and span material selection remains retained
+scene state because it describes authored presentation rather than renderer policy. A traversal sends only changed
+paragraph sections:
 
 - text replacement sends text plus any dependent style/geometry state;
 - font, spans, shaping style, paint, raster ratio, or material send style state;
