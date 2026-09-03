@@ -1,0 +1,52 @@
+[data-glyph-root] {
+  display: contents;
+}
+
+glyph-proxy {
+  position: relative;
+  box-sizing: border-box;
+  display: block;
+  width: calc(100% - 2rem);
+  min-height: 12rem;
+  margin-inline: 1rem;
+  overflow: hidden;
+  contain: layout paint;
+  contain-intrinsic-size: auto 12rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 0.75rem;
+  background: #0a0c12;
+}
+
+glyph-proxy[height] {
+  height: attr(height type(<length-percentage>), 12rem);
+  margin-block: 2rem;
+}
+
+glyph-proxy[width] {
+  width: attr(width type(<length-percentage>), 100%);
+}
+
+glyph-proxy canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  max-width: none;
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
+}
+
+glyph-scene-control {
+  display: inline-block;
+  margin: 0 0.5rem 1rem 0;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+}
+
+glyph-scene-control:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
