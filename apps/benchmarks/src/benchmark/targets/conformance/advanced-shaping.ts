@@ -127,9 +127,9 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
                 text.set(properties);
                 warmLifecyclePublicationCount += 1;
               }
-              // Target v1 publishes shaping, layout, and draws during the world-matrix update instead of through an
-              // awaited readiness promise, so failures surface on the object rather than as a rejected wait.
-              text.updateMatrixWorld(true);
+              // The host Scene traversal reaches the root draw object after retained Text transforms. That one root
+              // boundary publishes every dirty paragraph and synchronizes its renderer-owned batches.
+              scene.updateMatrixWorld(true);
               // Headless runs read this across a page boundary that cannot transfer a cause, so the frame that failed
               // and the underlying reason both belong in the message.
               if (text.error !== undefined) {
