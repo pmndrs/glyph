@@ -12,6 +12,11 @@ Use the vendored `typegpu` skill from TypeGPU's own maintainers before writing o
 
 Use the repository-local `agent-router` skill for every external-model review, delegated implementation, or research run. It routes through the pinned `ai-cli-mcp` server, preserves resumable sessions, and requires an isolated worktree for mutation-capable CLIs.
 
+Read rolling JSONL traces only with `.agents/tools/read-append-log.mjs`; never load an entire trace or `docs/log.md` into
+context. `--delta` advances a cursor, while `--lines <n> --bytes <n>` gives a bounded diagnostic tail. Trace samples are
+not authoritative results: retrieve the completed response through `wait` or `get_result`. Keep raw traces in ignored
+`.cache/` storage and publish only a human-readable summary when the result belongs in repository knowledge.
+
 Use the repository-local `gh-stack` skill for every dependent branch or pull-request workflow. Root stacks on the remote
 default branch and preserve their state through non-interactive `gh stack` commands; ordinary push and PR commands are
 not substitutes.
