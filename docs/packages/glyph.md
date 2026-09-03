@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:08215d593aa2ef81b563ce49bbb128f9fce56f1985f1e693aed0b675d55ba6b5'
+source_digest: 'sha256:6d891eb7a0169f0757d2f2434f0da1830b67a243dea8300441358a1896b67c64'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -230,6 +230,9 @@ The unbundled source graph follows the same boundary. `/three/plan-program-regis
 registration DSL but keeps compiled snapshots and renderer lifecycle state under the denied `/three/internal/*` tree.
 Mixed implementation modules for Text, detached Glyphs/Decorations, frame translation, and measurement are exact-denied
 as direct package paths; the curated `/three` entry re-exports only their supported classes, functions, and result types.
+Likewise, `defineGlyphConfig()` returns inert structural data with no hidden callable factory; the config leaf exports the
+declaration DSL, while only `glyph.handle(name, config)` enters package-private construction. Spreading or wrapping a
+config preserves its inferred handle/root type and may override fields without depending on exact object identity.
 
 Successful initialization retains one settled `Promise<void>` forever: concurrent and later `glyph.init()` calls receive
 the same object. React still checks synchronous initialized and loaded state first, so ready renders do not call `use()`

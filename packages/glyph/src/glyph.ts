@@ -1,10 +1,6 @@
 import { createGlyphEngine, shapeGlyphEngine, type GlyphEngine, type GlyphEngineOptions } from './glyph-engine.js';
-import {
-  invokeGlyphConfigHandleFactory,
-  type AnyGlyphConfig,
-  type GlyphConfigHandle,
-  type GlyphHandle,
-} from './config/glyph.js';
+import type { AnyGlyphConfig, GlyphConfigHandle, GlyphHandle } from './config/glyph.js';
+import { createConfiguredGlyphHandleForConfig } from './internal/configured-handle.js';
 import {
   createFontFace,
   FontFaceHandleStore,
@@ -83,7 +79,7 @@ class GlyphRuntime implements Glyph {
 
     const handle = (() => {
       try {
-        return invokeGlyphConfigHandleFactory(config, context);
+        return createConfiguredGlyphHandleForConfig(context, config);
       } catch (error) {
         fonts?.dispose();
         throw error;

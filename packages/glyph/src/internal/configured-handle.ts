@@ -16,9 +16,11 @@ import {
 import { createGlyphPlanTarget, type GlyphPlanTarget } from './glyph-plan-target.js';
 import type {
   AnyGlyphBindings,
+  AnyGlyphConfig,
   Codec,
   GlyphCommandLimits,
   GlyphConfig,
+  GlyphConfigHandle,
   GlyphCopy,
   GlyphCopyDestination,
   GlyphCopyRequest,
@@ -62,6 +64,15 @@ interface HandleInput {
   readonly engine: GlyphEngine;
   readonly fonts: GlyphHandleFonts | undefined;
   readonly released: (handle: GlyphHandle) => void;
+}
+
+/** Construct a handle from one branded structural config, including a spread/wrapped config value. */
+export function createConfiguredGlyphHandleForConfig<Config extends AnyGlyphConfig>(
+  input: HandleInput,
+  config: Config,
+): GlyphConfigHandle<Config> {
+  type RuntimeConfig = GlyphConfig<GlyphRoot, AnyGlyphBindings, unknown, object, unknown, Codec, object>;
+  return createConfiguredGlyphHandle(input, config as unknown as RuntimeConfig) as GlyphConfigHandle<Config>;
 }
 
 /** @internal Core-owned constructor installed by defineGlyphConfig. */

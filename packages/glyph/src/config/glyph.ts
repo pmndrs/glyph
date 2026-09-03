@@ -1,11 +1,9 @@
 import type { Font } from '../font.js';
-import type { GlyphEngine } from '../glyph-engine.js';
 import type { AnyFontFaceSelection, FontFaceRasterOf } from '../font-face.js';
 import type { GlyphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
 import type { FontSelection } from '../loaded-font.js';
 import type { AnyRasterFormat } from './raster-format.js';
 import type { Constraints, ParagraphLayout, TextStyle } from '../text-properties.js';
-import { createConfiguredGlyphHandle } from '../internal/configured-handle.js';
 import type { PortableResource } from './resources.js';
 import type { CodecBuffer, CodecDescriptor, CodecIdFactory, CodecProgram } from './codec.js';
 import type { PlanAcceptance, PlanCandidate } from '../internal/render-planner.js';
@@ -13,7 +11,6 @@ import type { PlanAcceptance, PlanCandidate } from '../internal/render-planner.j
 declare const typedCommandBufferBrand: unique symbol;
 declare const typedCommandIdentityBrand: unique symbol;
 const glyphConfigBrand: unique symbol = Symbol('pmndrs.glyph.config');
-const glyphConfigHandleFactory: unique symbol = Symbol('pmndrs.glyph.config.handle-factory');
 declare const glyphConfigRootType: unique symbol;
 
 /** One lazily projected borrowed sequence. Values expire with their command buffer. */
@@ -756,13 +753,6 @@ export interface GlyphHandleFonts {
   peek<const Selection extends AnyFontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>>;
 }
 
-interface GlyphHandleFactoryInput {
-  readonly name: string;
-  readonly engine: GlyphEngine;
-  readonly fonts: GlyphHandleFonts | undefined;
-  readonly released: (handle: GlyphHandle) => void;
-}
-
 /** Handle-relative format keys used to resolve FontFace format declarations. */
 type GlyphFontFormatKey<Formats extends object> = [keyof Formats] extends [never]
   ? string
@@ -813,35 +803,12 @@ export type GlyphConfig<
   CodecValue extends Codec = Codec,
   ConfigExtension extends object = object,
 > = GlyphConfigContract<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue, ConfigExtension> &
-  Readonly<ConfigExtension> &
-  GlyphConfigHandleFactory;
-
-interface GlyphConfigHandleFactory {
-  [glyphConfigHandleFactory]<Config extends this>(
-    config: Config,
-    input: GlyphHandleFactoryInput,
-  ): GlyphConfigHandle<Config>;
-}
+  Readonly<ConfigExtension>;
 
 /** Minimal covariant surface the root runtime needs to construct an inferred handle. */
 export interface AnyGlyphConfig {
   readonly [glyphConfigBrand]: true;
   readonly fonts?: AnyGlyphFontConfig;
-  [glyphConfigHandleFactory]<Config extends this>(
-    config: Config,
-    input: GlyphHandleFactoryInput,
-  ): GlyphConfigHandle<Config>;
-}
-
-/** @internal Invokes the core-owned configured-handle constructor packaged by defineGlyphConfig. */
-export function invokeGlyphConfigHandleFactory<Config extends AnyGlyphConfig>(
-  config: Config,
-  input: GlyphHandleFactoryInput,
-): GlyphConfigHandle<Config> {
-  if (typeof config[glyphConfigHandleFactory] !== 'function') {
-    throw new TypeError('Glyph handle config must be created by defineGlyphConfig()');
-  }
-  return config[glyphConfigHandleFactory](config, input);
 }
 
 export type GlyphConfigHandle<Config> = Config extends {
@@ -922,14 +889,9 @@ export function defineGlyphConfig<
     }
   }
   type DefinedConfig = GlyphConfig<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue>;
-  let defined: DefinedConfig;
-  const createHandle = <Config extends DefinedConfig>(selected: Config, input: GlyphHandleFactoryInput) =>
-    createConfiguredGlyphHandle(input, selected);
-  // This constructor is the sole witness that joins the inferred contract to its runtime handle factory.
-  defined = Object.freeze({
+  const defined = Object.freeze({
     ...config,
     [glyphConfigBrand]: true as const,
-    [glyphConfigHandleFactory]: createHandle,
   }) as unknown as DefinedConfig;
   return defined;
 }
