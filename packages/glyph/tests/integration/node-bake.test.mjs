@@ -214,10 +214,10 @@ test('bakeProject rejects distinct sources that resolve to one output before bak
   await writeFile(
     join(root, 'src', 'main.ts'),
     `
-      import { defineFont } from '@pmndrs/glyph'
+      import { glyph } from '@pmndrs/glyph'
       import { bitmap } from '@fixture/raster'
-      export const ttf = defineFont('/fonts/Inter-Regular.ttf', bitmap({ strikes: [16] }))
-      export const otf = defineFont('/fonts/Inter-Regular.otf', bitmap({ strikes: [16] }))
+      export const ttf = glyph.fontFace('/fonts/Inter-Regular.ttf', { format: bitmap({ strikes: [16] }) })
+      export const otf = glyph.fontFace('/fonts/Inter-Regular.otf', { format: bitmap({ strikes: [16] }) })
     `,
   );
 
@@ -517,11 +517,11 @@ async function projectFixture(secondStrike = 16, options = {}) {
     writeFile(
       join(root, 'src', 'main.ts'),
       `
-        import { defineFont } from '@pmndrs/glyph'
+        import { glyph } from '@pmndrs/glyph'
         import { bitmap } from '@fixture/raster'
         const strikes = [16] as const
-        export const first = defineFont('/fonts/Inter-Regular.ttf', bitmap({ strikes }))
-        export const duplicate = defineFont('/fonts/Inter-Regular.ttf', bitmap({ strikes: [${secondStrike}] }))
+        export const first = glyph.fontFace('/fonts/Inter-Regular.ttf', { format: bitmap({ strikes }) })
+        export const duplicate = glyph.fontFace('/fonts/Inter-Regular.ttf', { format: bitmap({ strikes: [${secondStrike}] }) })
       `,
     ),
   ]);

@@ -5,12 +5,11 @@ import {
   type RasterFormatInput,
   type RasterFormatRequest,
 } from '@pmndrs/glyph';
-import type { RuntimeFontBake, RuntimeFontBakeRequest } from '@pmndrs/glyph/config/font-library';
 
 import type { FontDelivery } from '../../benchmark/url-state';
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import type { FontDeliveryMetrics } from './contracts';
-import { benchmarkFontLibrary } from './library';
+import { benchmarkFontLibrary, type RuntimeFontBake, type RuntimeFontBakeRequest } from './library';
 
 import amiriSourceUrl from '../../../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf?url';
 import dancingScriptSourceUrl from '../../../fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf?url';

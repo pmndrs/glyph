@@ -8,9 +8,9 @@ import {
   type ParagraphLayout,
   type TextStyle,
 } from '@pmndrs/glyph';
-import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { loadFont } from '../../../../packages/glyph/src/loader.js';
 import { defineThreeConfig } from '@pmndrs/glyph/three';
 
 await glyph.init();

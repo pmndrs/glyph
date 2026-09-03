@@ -4,8 +4,8 @@ import test from 'node:test';
 
 import * as THREE from 'three/webgpu';
 
-import { createParagraph, txt } from '@pmndrs/glyph';
-import { loadFont } from '@pmndrs/glyph/config/font-library';
+import { createParagraph, FontLoadError, glyph, txt } from '@pmndrs/glyph';
+import { loadFont } from '../../dist/loader.js';
 import { techniqueProgram } from '@pmndrs/glyph/config/codec-program';
 import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
 import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
@@ -129,6 +129,44 @@ test('glyphs() positioned columns agree byte-for-byte with the Three.js Text ins
     paragraph.dispose();
   } finally {
     text.dispose();
+  }
+});
+
+test('a loaded FontFace selection gives Paragraph its own immutable Font lease', async () => {
+  const face = glyph.fontFace(new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' }), {
+    family: 'ParagraphFontFace',
+    format: bitmap({ strikes: [16] }),
+  });
+  try {
+    await assert.rejects(
+      createParagraph({ font: face.bitmap, text: TEXT, style: { fontSize: 16 } }),
+      (error) => error instanceof FontLoadError && error.code === 'FONT_FACE_FORMAT_NOT_LOADED',
+    );
+    assert.equal(await face.bitmap.load(), face.bitmap);
+    const paragraph = await createParagraph({ font: face.bitmap, text: TEXT, style: { fontSize: 16 } });
+    face.dispose();
+    try {
+      assert.ok(paragraph.measure().glyphCount > 0, 'Paragraph keeps its lease after the FontFace owner is disposed');
+    } finally {
+      paragraph.dispose();
+    }
+  } finally {
+    face.dispose();
+  }
+});
+
+test('renderer-free Paragraph rejects an undeclared handle-relative FontFace default', async () => {
+  const face = glyph.fontFace(new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' }), {
+    family: 'ParagraphHandleRelativeFontFace',
+  });
+  try {
+    await face.load();
+    await assert.rejects(
+      createParagraph({ font: face, text: TEXT }),
+      (error) => error instanceof FontLoadError && error.code === 'FONT_FACE_FORMAT_REQUIRED',
+    );
+  } finally {
+    face.dispose();
   }
 });
 

@@ -1,5 +1,5 @@
 import type { RasterLoadOptions, RasterReference, RasterSelection, RegisteredRaster } from './raster.js';
-import { isRasterFormat, type AnyRasterFormat, type RasterFormatInput } from './config/raster-format.js';
+import type { AnyRasterFormat } from './config/raster-format.js';
 import type { FontHandle, FontKey, RasterKey, Sha256Hex } from './identity.js';
 
 /** Renderer-independent metrics expressed in font units. */
@@ -69,38 +69,3 @@ export interface BakedFontSource {
 
 /** Accepted source, baked artifact, or byte-backed font location. */
 export type FontInput = string | URL | FontSourceOverride | BakedFontSource;
-
-/** Static bake-discovery token pairing one font input with one raster request. */
-export interface FontToken<Format extends AnyRasterFormat, Input extends FontInput = FontInput> {
-  readonly input: Input;
-  readonly raster: Format;
-  readonly options?: import('./config/raster-format.js').RasterOptionsOf<Format>;
-}
-
-/** Format-erased font token used by build-time discovery. */
-export interface AnyFontToken {
-  readonly input: FontInput;
-  readonly raster: AnyRasterFormat;
-  readonly options?: unknown;
-}
-
-/** Extracts the input type carried by a font token. */
-export type FontInputOf<Token extends AnyFontToken> = Token['input'];
-
-/** Extracts the raster-format type carried by a font token. */
-export type FontRasterFormatOf<Token extends AnyFontToken> = Token['raster'];
-
-/** Defines a statically discoverable font bake request without loading the font. */
-export function defineFont<const Input extends FontInput, const Technique extends AnyRasterFormat>(
-  input: Input,
-  raster: RasterFormatInput<Technique>,
-): FontToken<Technique, Input>;
-
-export function defineFont(input: FontInput, raster: RasterFormatInput<AnyRasterFormat>): AnyFontToken {
-  const request = isRasterFormat(raster) ? { raster, options: undefined } : raster;
-  return {
-    input,
-    raster: request.raster,
-    ...(request.options === undefined ? {} : { options: request.options }),
-  };
-}

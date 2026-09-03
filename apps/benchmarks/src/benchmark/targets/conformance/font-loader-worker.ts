@@ -1,5 +1,6 @@
-import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+
+import { loadBenchmarkFont as loadFont } from '../../../workloads/font-assets/library';
 
 import canonicalFontUrl from '../../../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url';
 import canonicalFontManifest from '../../../../fixtures/fonts/inter-v4.1/manifest.json' with { type: 'json' };

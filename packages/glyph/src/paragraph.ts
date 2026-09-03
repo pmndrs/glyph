@@ -1,5 +1,11 @@
 import { alignSpansToClusters, type FormattedText, type ParagraphSpan } from './formatted-text.js';
 import type { Font } from './font.js';
+import {
+  acquireLoadedFontFaceSelection,
+  isFontFaceSelection,
+  type AnyFontFaceSelection,
+  type FontFaceRasterOf,
+} from './font-face.js';
 import { createFontStack, immutableFontSelectionFonts, type FontSelection, type FontStack } from './loaded-font.js';
 import { copyGlyphLayoutInspection, type GlyphLayoutInspection, type ParagraphMetrics } from './layout.js';
 import type { AnyRasterFormat } from './config/raster-format.js';
@@ -68,7 +74,7 @@ const measurementCapabilities: CodecCapabilitySet = Object.freeze({
 });
 
 interface ParagraphBaseOptions<Technique extends AnyRasterFormat> {
-  readonly font: FontSelection<Technique>;
+  readonly font: FontSelection<Technique> | AnyFontFaceSelection;
   /** Text shaping and presentation properties inherited by inline spans. */
   readonly style?: PropertyList<TextStyle>;
   readonly rasterPixelRatio?: number;
@@ -109,6 +115,8 @@ interface MeasurementService {
 /** A renderer-free retained paragraph whose queries are synchronous after async construction. */
 export class Paragraph<Technique extends AnyRasterFormat = AnyRasterFormat> {
   #desired: ResolvedParagraphState<Technique>;
+  #authoredFont: FontSelection<Technique> | AnyFontFaceSelection;
+  #ownedFont: Font<AnyRasterFormat> | undefined;
   #engine: ParagraphEngine;
   readonly #serviceLease: MeasurementServiceLease;
   readonly #measurements = new Map<string, ParagraphMetrics>();
@@ -121,10 +129,14 @@ export class Paragraph<Technique extends AnyRasterFormat = AnyRasterFormat> {
 
   private constructor(
     desired: ResolvedParagraphState<Technique>,
+    authoredFont: FontSelection<Technique> | AnyFontFaceSelection,
+    ownedFont: Font<AnyRasterFormat> | undefined,
     serviceLease: MeasurementServiceLease,
     engine: ParagraphEngine,
   ) {
     this.#desired = desired;
+    this.#authoredFont = authoredFont;
+    this.#ownedFont = ownedFont;
     this.#serviceLease = serviceLease;
     this.#engine = engine;
   }
@@ -132,14 +144,16 @@ export class Paragraph<Technique extends AnyRasterFormat = AnyRasterFormat> {
   /** @internal The root factory owns asynchronous engine acquisition. */
   static _create<Technique extends AnyRasterFormat>(
     desired: ResolvedParagraphState<Technique>,
+    authoredFont: FontSelection<Technique> | AnyFontFaceSelection,
+    ownedFont: Font<AnyRasterFormat> | undefined,
     serviceLease: MeasurementServiceLease,
     engine: ParagraphEngine,
   ): Paragraph<Technique> {
-    return new Paragraph(desired, serviceLease, engine);
+    return new Paragraph(desired, authoredFont, ownedFont, serviceLease, engine);
   }
 
-  get font(): FontSelection<Technique> {
-    return this.#desired.font;
+  get font(): FontSelection<Technique> | AnyFontFaceSelection {
+    return this.#authoredFont;
   }
   get text(): string {
     return this.#desired.text;
@@ -203,19 +217,35 @@ export class Paragraph<Technique extends AnyRasterFormat = AnyRasterFormat> {
     assertNoRawSpans(update, 'paragraph update');
     const normalizedUpdate = replacedContent(update);
     if (!hasParagraphChange(normalizedUpdate)) return;
-    const next = normalizeParagraphState(
-      { ...this.#desired, ...normalizedUpdate } as ParagraphOptions<Technique>,
-      this.#desired,
-    );
-    if (sameTechniqueSet(this.#desired, next)) {
-      this.#engine.update(next, this.#engineConstraints);
-    } else {
-      const replacement = new ParagraphEngine(this.#serviceLease.handleState, next, this.#engineConstraints);
-      const previous = this.#engine;
-      this.#engine = replacement;
-      previous.dispose();
+    const authoredFont = Object.hasOwn(normalizedUpdate, 'font')
+      ? (normalizedUpdate.font as FontSelection<Technique> | AnyFontFaceSelection)
+      : this.#authoredFont;
+    const resolved =
+      authoredFont === this.#authoredFont
+        ? { font: this.#desired.font, owned: this.#ownedFont }
+        : resolveParagraphFont(authoredFont);
+    try {
+      const next = normalizeParagraphState(
+        { ...this.#desired, ...normalizedUpdate, font: resolved.font } as ResolvedParagraphOptions<Technique>,
+        this.#desired,
+      );
+      if (sameTechniqueSet(this.#desired, next)) {
+        this.#engine.update(next, this.#engineConstraints);
+      } else {
+        const replacement = new ParagraphEngine(this.#serviceLease.handleState, next, this.#engineConstraints);
+        const previous = this.#engine;
+        this.#engine = replacement;
+        previous.dispose();
+      }
+      const previousOwned = this.#ownedFont;
+      this.#desired = next;
+      this.#authoredFont = authoredFont;
+      this.#ownedFont = resolved.owned;
+      if (previousOwned !== resolved.owned) previousOwned?.dispose();
+    } catch (error) {
+      if (resolved.owned !== this.#ownedFont) resolved.owned?.dispose();
+      throw error;
     }
-    this.#desired = next;
     this.#measurements.clear();
     this.#layouts.clear();
   }
@@ -231,6 +261,12 @@ export class Paragraph<Technique extends AnyRasterFormat = AnyRasterFormat> {
     }
     try {
       this.#serviceLease.release();
+    } catch (error) {
+      failure ??= error;
+    }
+    try {
+      this.#ownedFont?.dispose();
+      this.#ownedFont = undefined;
     } catch (error) {
       failure ??= error;
     }
@@ -273,22 +309,51 @@ function writeParagraphQueryCache<Value>(cache: Map<string, Value>, key: string,
 }
 
 /** Initialize renderer-free measurement, then return a synchronously queryable Paragraph. */
+export function createParagraph<const Selection extends AnyFontFaceSelection>(
+  options: Omit<ParagraphOptions<FontFaceRasterOf<Selection>>, 'font'> & { readonly font: Selection },
+): Promise<Paragraph<FontFaceRasterOf<Selection>>>;
+export function createParagraph<Technique extends AnyRasterFormat>(
+  options: ParagraphOptions<Technique>,
+): Promise<Paragraph<Technique>>;
 export async function createParagraph<Technique extends AnyRasterFormat>(
   options: ParagraphOptions<Technique>,
 ): Promise<Paragraph<Technique>> {
   if (options === undefined) throw new TypeError('paragraph options are required');
   assertNoRawSpans(options, 'paragraph options');
-  const desired = normalizeParagraphState(options);
+  const resolved = resolveParagraphFont(options.font);
+  let desired: ResolvedParagraphState<Technique>;
+  try {
+    desired = normalizeParagraphState({ ...options, font: resolved.font });
+  } catch (error) {
+    resolved.owned?.dispose();
+    throw error;
+  }
   const constraints = resolveConstraints(undefined);
   normalizedColumns(desired.layout, constraints);
   const serviceLease = await acquireMeasurementService();
   try {
     const engine = new ParagraphEngine(serviceLease.handleState, desired, constraints);
-    return Paragraph._create(desired, serviceLease, engine);
+    return Paragraph._create(desired, options.font, resolved.owned, serviceLease, engine);
   } catch (error) {
+    resolved.owned?.dispose();
     serviceLease.release();
     throw error;
   }
+}
+
+type ResolvedParagraphOptions<Technique extends AnyRasterFormat> = Omit<ParagraphOptions<Technique>, 'font'> & {
+  readonly font: FontSelection<Technique>;
+};
+
+function resolveParagraphFont<Technique extends AnyRasterFormat>(
+  selection: FontSelection<Technique> | AnyFontFaceSelection,
+): { readonly font: FontSelection<Technique>; readonly owned: Font<AnyRasterFormat> | undefined } {
+  if (isFontFaceSelection(selection)) {
+    const font = acquireLoadedFontFaceSelection(selection) as Font<Technique>;
+    return { font, owned: font };
+  }
+  immutableFontSelectionFonts(selection);
+  return { font: selection, owned: undefined };
 }
 
 class ParagraphEngine {
@@ -533,7 +598,7 @@ function frozenDeep<Value>(value: Value): Value {
 }
 
 function normalizeParagraphState<Technique extends AnyRasterFormat>(
-  properties: ParagraphOptions<Technique>,
+  properties: ResolvedParagraphOptions<Technique>,
   previous?: ResolvedParagraphState<Technique>,
 ): ResolvedParagraphState<Technique> {
   if (properties === null || typeof properties !== 'object') throw new TypeError('paragraph options must be an object');

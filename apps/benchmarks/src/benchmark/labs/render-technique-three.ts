@@ -1,5 +1,4 @@
 import { type AnyRasterFormat, type Font } from '@pmndrs/glyph';
-import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import type { Text, TextGroup } from '@pmndrs/glyph/three';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
@@ -11,6 +10,7 @@ import {
   measuredRuntimeFontBake,
   sourceUrlForFixture,
 } from '../../workloads/font-assets/runtime';
+import { loadBenchmarkFont as loadFont } from '../../workloads/font-assets/library';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../three-root';
 
 registerExternalGlyphExampleThree();

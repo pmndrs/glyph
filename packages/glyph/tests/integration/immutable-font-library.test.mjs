@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { bitmap } from '../../dist/raster/bitmap.js';
-import { defineFont } from '../../dist/font.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
 import { immutableFontResources } from '../../dist/loaded-font.js';
 import { createFontLibrary, loadFont } from '../../dist/loader.js';
@@ -64,15 +63,6 @@ test('transfer input validates ownership before detaching and adopts a full Arra
     assert.throws(() => loadFont({ baked: { bytes: shared, ownership: 'transfer' } }, raster), /SharedArrayBuffer/);
     assert.equal(shared.byteLength, fixture.byteLength);
   }
-  font.dispose();
-});
-
-test('loadFont accepts the static defineFont discovery token directly', async () => {
-  const bytes = await readFile(fixtureUrl);
-  const font = await loadFont(defineFont({ baked: { bytes } }, raster));
-
-  assert.equal(font.raster, bitmap);
-  assert.equal(font.glyphCount, 2937);
   font.dispose();
 });
 
@@ -152,6 +142,5 @@ test('font library and load options reject malformed values at their calls', asy
   assert.throws(() => loadFont(request.input), /requires a raster format/);
   assert.throws(() => loadFont(request.input, []), /at least one raster format/);
   assert.throws(() => loadFont(request.input, request.raster, { retry: true }), /only accept signal/);
-  assert.throws(() => loadFont(defineFont(request.input, request.raster), request.raster), /only accept signal/);
   library.dispose();
 });

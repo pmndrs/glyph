@@ -1,7 +1,8 @@
 import { type Font } from '@pmndrs/glyph';
-import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { defineTextMaterial, type Text } from '@pmndrs/glyph/three';
+
+import { loadBenchmarkFont as loadFont } from './workloads/font-assets/library';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from './three-root';

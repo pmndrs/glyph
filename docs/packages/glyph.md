@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:5a1cbe6bd00668a226b904dd604d1b992cb4ce6a5b67a5903f88d97ef8333516'
+source_digest: 'sha256:641ceebcfe6d1283e1a408825b1e2192f0937d8261837a1c3a762a15d320c69f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -152,28 +152,28 @@ runtime Worker's initial bundle.
 relationship. `GlyphConfigFor<typeof Schema, Root, Result>` gives isolated declaration boundaries a nameable contract
 without repeating the schema's binding tuple or boundary type. Internal handle machinery owns Codec installation, planning, projection, resource
 settlement, and disposal; third-party integrations receive only constrained root services. Every FontFace and handle reaches
-the same process-local, lease-counted font resource graph. Transitional low-level `loadFont()` and `FontLibrary.loadFont()`
-calls delegate into that graph rather than owning a second completed-value cache; their returned immutable Font values keep
-the source lease live until the last returned value is disposed. Portable compiled resources remain immutable payload data,
+the same process-local, lease-counted font resource graph. Low-level loading and acquisition are internal services rather
+than a second application or integrator API. A consumer loads a FontFace selection; Text or Paragraph then owns the
+independent immutable Font lease needed by its engine binding. Portable compiled resources remain immutable payload data,
 while each renderer owns physical textures, buffers, geometry, and their device-relative leases.
 
 ## Public package surfaces
 
-| Subpath                      | Purpose                                                                                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing FontFace/font/raster contracts, fallback stacks, formatting helpers, and paragraphs.            |
-| `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, portable-resource, and low-level font-loading helpers for integration authors.   |
-| `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, material factories, and Codec registration.                                      |
-| `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                        |
-| `@pmndrs/glyph/react/bitmap` | Typed `useBitmap(input, options)` convenience over `useFont`.                                                                               |
-| `@pmndrs/glyph/react/msdf`   | Typed `useMsdf(input, options?)` convenience over `useFont`.                                                                                |
-| `@pmndrs/glyph/react/slug`   | Typed `useSlug(input)` convenience over `useFont`.                                                                                          |
-| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                                |
-| `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                                   |
-| `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                            |
-| `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                            |
-| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.                     |
-| `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                            |
+| Subpath                      | Purpose                                                                                                                           |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing FontFace/font/raster contracts, fallback stacks, formatting helpers, and paragraphs. |
+| `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, and portable-resource helpers for integration authors.                |
+| `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, material factories, and Codec registration.                            |
+| `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                              |
+| `@pmndrs/glyph/react/bitmap` | Typed `useBitmap(input, options)` convenience over `useFont`.                                                                     |
+| `@pmndrs/glyph/react/msdf`   | Typed `useMsdf(input, options?)` convenience over `useFont`.                                                                      |
+| `@pmndrs/glyph/react/slug`   | Typed `useSlug(input)` convenience over `useFont`.                                                                                |
+| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                      |
+| `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                         |
+| `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                  |
+| `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                  |
+| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.           |
+| `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                  |
 
 The three renderer-neutral raster leaves retain portable plan-registration side effects under tree shaking. Built-in
 Three material realization imports its TSL shader implementations directly rather than routing through package
@@ -264,8 +264,8 @@ keep its identity registry alive or permanently poison later registration after 
 
 One baked GLB may expose several raster formats without repeating its input identity. The ordinary declaration and loading
 surface is `glyph.fontFace(source, { family?, format? })`; root does not export `loadFont`, `createFontLibrary`, or
-`FontLibrary`. The low-level `/config/font-library` leaf remains available to integration infrastructure that needs a
-custom fetch or runtime-bake callback, and it returns immutable `Font` values through the same resource graph. The face is
+`FontLibrary`, and there is no public font-library leaf. Package-owned loading services preserve custom transport and
+runtime-bake support behind the FontFace declaration. The face is
 its aggregate/default selection, `.default` aliases
 it, and declared keys such as `.bitmap`, `.msdf`, or `.slug` are distinct inferred format selections. The declaration
 owns loading: `face.load()` loads every authoritative imported format advertised by the main font plus every declared
@@ -273,6 +273,8 @@ exact format, while `face.slug.load()` loads only that exact declared format. `f
 main GLB without fetching sidecars and returns its frozen, ordered format keys. Successful calls preserve Promise and
 result identity; rejected calls are evicted for retry. The consuming handle supplies its configured default key when an
 undeclared face is passed to Text; imperative Three rejects an unloaded selected format before creating retained state.
+Renderer-free `createParagraph()` accepts a loaded explicit FontFace selection and retains its own immutable Font lease;
+because it has no renderer config, it rejects an undeclared handle-relative default instead of guessing a raster format.
 
 The FontFace source cache coalesces canonical-equivalent locators before I/O and converges different locators onto one
 parsed main-font node after their complete GLB bytes have the same SHA-256 content identity. Every acquisition base is

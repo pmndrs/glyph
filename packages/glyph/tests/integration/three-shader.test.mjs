@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { loadFont } from '@pmndrs/glyph/config/font-library';
+import { loadFont } from '../../dist/loader.js';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { bitmapShader, decorationShader, msdfShader, slugShader } from '../../dist/tsl.js';

@@ -7,9 +7,10 @@ import {
   type GlyphLayoutInspection,
   type TextStyle,
 } from '@pmndrs/glyph';
-import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import type { Text } from '@pmndrs/glyph/three';
+
+import { loadBenchmarkFont as loadFont } from '../../../workloads/font-assets/library';
 import * as THREE from 'three/webgpu';
 
 import amiriFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';

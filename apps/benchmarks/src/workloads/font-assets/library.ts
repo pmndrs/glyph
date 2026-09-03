@@ -1,4 +1,11 @@
-import { createFontLibrary } from '@pmndrs/glyph/config/font-library';
+import type { AnyRasterFormat, Font, RasterFormatInput } from '@pmndrs/glyph';
+import {
+  createFontLibrary,
+  type FontLoadOptions,
+  type LoadFontInput,
+  type RuntimeFontBake,
+  type RuntimeFontBakeRequest,
+} from '../../../../../packages/glyph/src/loader.js';
 
 import { benchmarkFontArtifactByteLimit } from './limits';
 
@@ -13,6 +20,17 @@ export const benchmarkFontLibrary = createFontLibrary({
   fetch: fetchBenchmarkFont,
   maxArtifactBytes: benchmarkFontArtifactByteLimit,
 });
+
+export type { RuntimeFontBake, RuntimeFontBakeRequest };
+
+/** Benchmark-only access to the package-private loader with harness transport and limits applied. */
+export function loadBenchmarkFont<Format extends AnyRasterFormat>(
+  input: LoadFontInput,
+  raster: RasterFormatInput<Format>,
+  options?: FontLoadOptions,
+): Promise<Font<Format>> {
+  return benchmarkFontLibrary.loadFont(input, raster, options);
+}
 
 if (import.meta.hot !== undefined) {
   import.meta.hot.dispose(() => benchmarkFontLibrary.dispose());
