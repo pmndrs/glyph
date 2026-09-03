@@ -9,5 +9,25 @@
     "lib": ["es2025", "dom", "dom.iterable", "dom.asynciterable", "esnext.disposable"],
     "types": []
   },
-  "files": ["dist/index.d.ts", "dist/tsl.d.ts"]
+  "include": [
+    "dist/index.d.ts",
+    "dist/bake.d.ts",
+    "dist/bakers/*.d.ts",
+    "dist/config/*.d.ts",
+    "dist/node/bake.d.ts",
+    "dist/raster/*.d.ts",
+    "dist/runtime-bake.d.ts",
+    "dist/three.d.ts",
+    "dist/three/*.d.ts",
+    "dist/tsl.d.ts",
+    "dist/tsl/**/*.d.ts"
+  ],
+  "exclude": [
+    "dist/bakers/*-validator.d.ts",
+    "dist/three/codec.d.ts",
+    "dist/three/detached-object.d.ts",
+    "dist/three/engine-plan-target.d.ts",
+    "dist/three/transform-synchronizer.d.ts",
+    "dist/tsl/slug-shaders/tsl-compat.d.ts"
+  ]
 }

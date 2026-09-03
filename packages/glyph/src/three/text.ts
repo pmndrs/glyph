@@ -147,7 +147,7 @@ class ThreeRootDrawObject extends THREE.Object3D {
 }
 
 /** One handle-owned publication root. A name is customization metadata, not a Three Scene identity. */
-export class ThreeRoot implements GlyphRoot, ThreeRootContext {
+export class ThreeRoot implements GlyphRoot {
   readonly name: string | undefined;
   readonly #fonts: import('../config/glyph.js').GlyphHandleFonts;
   readonly #services: GlyphRootServices<ThreeBindings, void, ThreeRootBinding>;

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "customConditions": [],
+    "noEmit": true,
+    "rootDir": ".",
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "files": [
+    "tests/types/r3f-v1-api.test.ts",
+    "tests/types/subpath-exports.test.ts",
+    "tests/types/tsl-api.test.ts",
+    "tests/types/typegpu-api.test.ts"
+  ]
+}
