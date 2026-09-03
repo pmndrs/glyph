@@ -769,7 +769,6 @@ export class GlyphHandleState {
         requestCapacity,
         resultCapacity,
         textCapacity,
-        (request) => this.#assertFrameOwnership(handle, request),
         () => this.#assertEngineAvailable?.(),
         () => {
           this.#transports.delete(transport);
@@ -857,21 +856,6 @@ export class GlyphHandleState {
       }
     }
     if (failure !== undefined) throw failure;
-  }
-
-  #assertFrameOwnership(plannerHandle: PlannerHandle, request: Uint8Array): void {
-    const references = frameRegistrationReferences(request);
-    if (references.plannerHandle !== plannerHandle) {
-      throw new TypeError(`text update belongs to planner ${references.plannerHandle}, not ${plannerHandle}`);
-    }
-    if (this.#owners.codecs.get(references.codecHandle) !== this) {
-      throw new TypeError(`render codec ${references.codecHandle} is not owned by this Glyph handle state`);
-    }
-    for (const handle of references.fontStackHandles) {
-      if (this.#owners.fontStacks.get(handle) !== this) {
-        throw new TypeError(`font stack ${handle} is not owned by this Glyph handle state`);
-      }
-    }
   }
 
   #disposeRetainedFontBinding(state: RetainedHandleFontBinding): void {
@@ -1201,7 +1185,6 @@ export class PlanTransport {
   readonly #exports;
   readonly #handle: PlannerHandle;
   readonly #onDispose: () => void;
-  readonly #assertRequestOwnership: (request: Uint8Array) => void;
   readonly #assertEngineAvailable: () => void;
   #requestCapacity: number;
   #resultCapacity: number;
@@ -1221,7 +1204,6 @@ export class PlanTransport {
     requestCapacity: number,
     resultCapacity: number,
     textCapacity: number,
-    assertRequestOwnership: (request: Uint8Array) => void,
     assertEngineAvailable: () => void,
     onDispose: () => void,
   ) {
@@ -1230,7 +1212,6 @@ export class PlanTransport {
     this.#requestCapacity = requestCapacity;
     this.#resultCapacity = resultCapacity;
     this.#textCapacity = textCapacity;
-    this.#assertRequestOwnership = assertRequestOwnership;
     this.#assertEngineAvailable = assertEngineAvailable;
     this.#onDispose = onDispose;
   }
@@ -1282,7 +1263,6 @@ export class PlanTransport {
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {
       throw new TypeError('text update request must be a nonempty Uint8Array');
     }
-    this.#assertRequestOwnership(request);
     this.#invalidate();
     const requestLength = uint32(request.byteLength, 'text update byte length');
     const initialMemoryBuffer = this.#exports.memory.buffer;
@@ -1347,7 +1327,6 @@ export class PlanTransport {
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {
       throw new TypeError('paragraph measure request must be a nonempty Uint8Array');
     }
-    this.#assertRequestOwnership(request);
     assertGlyphId(paragraphId, 'paragraph', 'paragraph id');
     this.#invalidate();
     const requestLength = uint32(request.byteLength, 'paragraph measure byte length');
@@ -1529,56 +1508,6 @@ export class PlanTransport {
     if (this.#disposed) throw new Error('plan transport is disposed');
     this.#assertEngineAvailable();
   }
-}
-
-interface FrameRegistrationReferences {
-  readonly plannerHandle: number;
-  readonly codecHandle: number;
-  readonly fontStackHandles: ReadonlySet<number>;
-}
-
-function frameRegistrationReferences(bytes: Uint8Array): FrameRegistrationReferences {
-  const request = textShaperAbi.layouts.engineUpdateRequest;
-  if (bytes.byteLength < request.size) throw new RangeError('text update request is smaller than its header');
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (view.getUint32(request.abiVersion, true) !== textShaperAbi.version) {
-    throw new TypeError('text update request ABI version is unsupported');
-  }
-  if (view.getUint32(request.byteLength, true) !== bytes.byteLength) {
-    throw new RangeError('text update request byte length contradicts its buffer');
-  }
-  const style = textShaperAbi.layouts.engineStyleMutation;
-  const count = view.getUint32(request.styleMutationCount, true);
-  const offset = view.getUint32(request.styleMutationsOffset, true);
-  const end = checkedTableEnd(offset, count, style.size, bytes.byteLength, 'style mutation table');
-  if (count !== 0 && (offset < request.size || offset % style.alignment !== 0 || end <= offset)) {
-    throw new RangeError('text update style mutation table is invalid');
-  }
-  const fontStackHandles = new Set<number>();
-  for (let index = 0; index < count; index += 1) {
-    const record = offset + index * style.size;
-    if (view.getUint8(record + style.opcode) !== textShaperAbi.engine.styleMutationOpcodes.upsert) continue;
-    const fields = view.getUint32(record + style.fieldMask, true);
-    if (fields & textShaperAbi.engine.styleFields.fontStack) {
-      fontStackHandles.add(uint32Handle(view.getUint32(record + style.fontStackHandle, true), 'style font stack'));
-    }
-  }
-  return {
-    plannerHandle: uint32Handle(view.getUint32(request.rootId, true), 'frame root handle'),
-    codecHandle: uint32Handle(view.getUint32(request.codecHandle, true), 'frame codec handle'),
-    fontStackHandles,
-  };
-}
-
-function checkedTableEnd(offset: number, count: number, stride: number, capacity: number, label: string): number {
-  if (count === 0) {
-    if (offset !== 0) throw new RangeError(`${label} offset must be zero when empty`);
-    return 0;
-  }
-  const byteLength = checkedProduct(count, stride, `${label} bytes`);
-  const end = offset + byteLength;
-  if (!Number.isSafeInteger(end) || end > capacity) throw new RangeError(`${label} exceeds the request`);
-  return end;
 }
 
 function requireStatus(status: number, operation: string): void {
