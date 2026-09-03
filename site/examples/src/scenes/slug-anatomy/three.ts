@@ -22,7 +22,7 @@ export async function mount(scene: Scene): Promise<() => void> {
     layout: { align: 'center', wrap: 'none' },
     constraints: { width: { mode: 'exact', size: 8 } },
   });
-  letter.position.set(-4, 3.1, 0);
+  letter.position.set(-4, 2.55, 0);
   scene.add(letter);
   glyph.shape();
 
