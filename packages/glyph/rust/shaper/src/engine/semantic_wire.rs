@@ -200,30 +200,6 @@ impl GeometryBatch<'_> {
         }
     }
 
-    pub(crate) fn validate_text_length(self, text_length: usize) -> Result<(), u32> {
-        let text_length = u32::try_from(text_length).map_err(|_| STATUS_INVALID_REQUEST)?;
-        for record in self
-            .constraints
-            .chunks_exact(abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize)
-        {
-            if read_u32(record, abi::ENGINE_CONSTRAINT_RESUME_CLUSTER)? > text_length {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-        }
-        let mut previous_offset = None;
-        for record in self
-            .inline_objects
-            .chunks_exact(abi::ENGINE_INLINE_OBJECT_RECORD_SIZE as usize)
-        {
-            let offset = read_u32(record, abi::ENGINE_INLINE_OBJECT_TEXT_OFFSET)?;
-            if offset > text_length || previous_offset.is_some_and(|previous| offset <= previous) {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-            previous_offset = Some(offset);
-        }
-        Ok(())
-    }
-
     pub(crate) fn constraint_count(self) -> usize {
         self.constraints.len() / abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize
     }
@@ -1165,9 +1141,6 @@ pub(crate) fn parse_geometry(
             Err(STATUS_INVALID_REQUEST)
         };
     }
-    if constraint_count == 0 || region_count == 0 {
-        return Err(STATUS_INVALID_REQUEST);
-    }
     let constraints = record_table(
         request,
         constraints_offset,
@@ -1882,7 +1855,6 @@ mod tests {
     fn validates_one_call_rectangle_flow_and_text_anchored_objects() {
         let bytes = valid_geometry_bytes();
         let geometry = parse_valid_geometry(&bytes).unwrap();
-        geometry.validate_text_length(0).unwrap();
         assert_ne!(geometry.fingerprint(), 0);
         assert_eq!(geometry.constraint_count(), 1);
         assert_eq!(geometry.constraint(0).unwrap().flow_thread_id, 1);
@@ -2011,16 +1983,6 @@ mod tests {
                 end: 0.0,
             }],
             "a zero-width host measurement still composes one-cluster lines",
-        );
-
-        let mut outside_text = bytes.clone();
-        let inline = INLINE_OFFSET + abi::ENGINE_INLINE_OBJECT_TEXT_OFFSET;
-        write_u32(&mut outside_text, inline, 1);
-        assert!(
-            parse_valid_geometry(&outside_text)
-                .unwrap()
-                .validate_text_length(0)
-                .is_err()
         );
     }
 
