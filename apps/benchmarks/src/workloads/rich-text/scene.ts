@@ -1,4 +1,4 @@
-import { span, txt, type AnyRasterFormat, type Font, type TextLiteral } from '@pmndrs/glyph';
+import { span, txt, type Font, type RasterFormatMetadata, type TextLiteral } from '@pmndrs/glyph';
 
 import type { RasterTechnique } from '../../benchmark/url-state';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
@@ -46,8 +46,8 @@ export const RICH_TEXT_SMALL_CAPS_FEATURE = 'smcp';
  * fallback: no Latin fixture can shape Devanagari at all.
  */
 export interface RichTextCompanionFonts {
-  readonly emphasis: Font<AnyRasterFormat>;
-  readonly foreign: Font<AnyRasterFormat>;
+  readonly emphasis: Font<RasterFormatMetadata>;
+  readonly foreign: Font<RasterFormatMetadata>;
 }
 
 export interface RichTextComposition {
@@ -113,7 +113,7 @@ export function richTextComposition(
 export function richTextLiteral(
   fonts: RichTextCompanionFonts,
   composition: RichTextComposition,
-): TextLiteral<AnyRasterFormat> {
+): TextLiteral<RasterFormatMetadata> {
   const properNoun = composition.smallCaps
     ? span(fonts.emphasis, { features: [{ tag: RICH_TEXT_SMALL_CAPS_FEATURE }] })
     : span(fonts.emphasis);
@@ -139,7 +139,10 @@ export function richTextSpanNames(composition: RichTextComposition): readonly Ri
 }
 
 /** The authored ranges are load-bearing evidence, so prose drift must fail loudly rather than silently re-attribute. */
-export function assertRichTextSpans(literal: TextLiteral<AnyRasterFormat>, composition: RichTextComposition): void {
+export function assertRichTextSpans(
+  literal: TextLiteral<RasterFormatMetadata>,
+  composition: RichTextComposition,
+): void {
   const expected = richTextSpanNames(composition).map((name) => ({ name, ...richTextSpanRange(name) }));
   if (literal.spans.length !== expected.length) {
     throw new Error(`rich text composed ${String(literal.spans.length)} spans instead of ${String(expected.length)}`);

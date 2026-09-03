@@ -17,7 +17,7 @@ async function loadFont() {
   if (loaded !== undefined) return loaded;
   loaded = await loadGlyphFont(
     { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
-    { raster: bitmap, options: { strikes: [16, 32] } },
+    bitmap({ strikes: [16, 32] }),
   );
   return loaded;
 }

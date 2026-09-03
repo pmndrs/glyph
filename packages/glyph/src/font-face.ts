@@ -14,23 +14,35 @@ import {
   isSerializedFontFace,
   serializedFontFaceBuffers,
 } from './internal/font-face-transfer.js';
-import type { AnyRasterFormat, RasterFormatInput, RasterFormatRequest } from './config/raster-format.js';
-import { isRasterFormat, isRasterFormatRequest, rasterFormatForKey } from './internal/raster-format-registry.js';
+import type {
+  RasterFormatInput,
+  RasterFormatMetadata,
+  RasterFormatRequest,
+  RasterFormatRequestMetadata,
+} from './config/raster-format.js';
+import {
+  isRasterFormat,
+  isRasterFormatRequest,
+  rasterFormatDescriptor,
+  rasterFormatForKey,
+} from './internal/raster-format-registry.js';
 import { canonicalJson } from './internal/raster-identity.js';
 
 /** Canonical source accepted by a reusable FontFace declaration. */
 export type FontFaceSource = string | URL | Blob | SerializedFontFace;
 
 /** One format assertion accepted by a FontFace declaration. */
-export type FontFaceFormat<Format extends AnyRasterFormat = AnyRasterFormat> = string | RasterFormatInput<Format>;
+export type FontFaceFormat<Format extends RasterFormatMetadata = RasterFormatMetadata> =
+  | string
+  | (RasterFormatMetadata extends Format ? Format | RasterFormatRequestMetadata : RasterFormatInput<Format>);
 
 export type FontFaceFormatDeclaration = FontFaceFormat | readonly [FontFaceFormat, ...FontFaceFormat[]];
 
-type ValidFontFaceFormat<Format> = Format extends AnyRasterFormat
+type ValidFontFaceFormat<Format> = Format extends RasterFormatMetadata
   ? Format extends RasterFormatInput<Format>
     ? Format
     : never
-  : Format extends string | RasterFormatRequest<AnyRasterFormat>
+  : Format extends string | RasterFormatRequestMetadata
     ? Format
     : never;
 
@@ -55,23 +67,27 @@ export type FontFaceConfig<Declaration = FontFaceFormatDeclaration> = {
   readonly format?: FontFaceFormatInput<Declaration>;
 };
 
-type RasterOfFormat<Format> = Format extends AnyRasterFormat
+type RasterOfFormat<Format> = Format extends RasterFormatMetadata
   ? Format
   : Format extends RasterFormatRequest<infer Raster>
     ? Raster
-    : AnyRasterFormat;
+    : Format extends RasterFormatRequestMetadata
+      ? Format['raster']
+      : RasterFormatMetadata;
 
 /** Concrete raster carried by a typed FontFace selection; string/default selections remain handle-relative. */
 export type FontFaceRasterOf<Selection> =
-  Selection extends FontFaceSelection<infer Format> ? RasterOfFormat<Exclude<Format, undefined>> : AnyRasterFormat;
+  Selection extends FontFaceSelection<infer Format> ? RasterOfFormat<Exclude<Format, undefined>> : RasterFormatMetadata;
 
 type FormatKey<Format> = Format extends string
   ? Format
-  : Format extends AnyRasterFormat
+  : Format extends RasterFormatMetadata
     ? Format['kind']
     : Format extends RasterFormatRequest<infer Raster>
       ? Raster['kind']
-      : never;
+      : Format extends RasterFormatRequestMetadata
+        ? Format['raster']['kind']
+        : never;
 
 type FormatForKey<Format, Key extends PropertyKey> = Format extends unknown
   ? FormatKey<Format> extends Key
@@ -79,52 +95,44 @@ type FormatForKey<Format, Key extends PropertyKey> = Format extends unknown
     : never
   : never;
 
-/** Format-erased FontFace selection used at handle boundaries. */
-export interface AnyFontFaceSelection {
+/** One default or named format selection belonging to a FontFace. */
+export interface FontFaceSelection<Format extends FontFaceFormat | undefined = FontFaceFormat | undefined> {
   readonly family: string;
-  readonly format: FontFaceFormat | undefined;
-  readonly face: AnyFontFace;
+  readonly format: Format;
+  readonly face: FontFace;
   /** Load this exact declared format selection. */
-  load(): Promise<AnyFontFaceSelection>;
+  load(): Promise<FontFaceSelection<Format>>;
   /** Read this selection's readiness without observing its Promise. */
   isLoaded(): boolean;
   /** Explicitly copy this loaded selection into fresh structured-clone transfer buffers. */
   clone(): Promise<FontFaceTransfer>;
 }
 
-/** Format-erased FontFace declaration used at catalog and integration boundaries. */
-export interface AnyFontFace extends AnyFontFaceSelection {
-  readonly default: AnyFontFace;
+type FontFaceMembers<Formats extends FontFaceFormat> =
+  string extends FormatKey<Formats>
+    ? object
+    : {
+        readonly [Key in FormatKey<Formats>]: FontFaceSelection<FormatForKey<Formats, Key>>;
+      };
+
+/** Reusable FontFace declaration whose keyed selections are inferred from its asserted formats. */
+export type FontFace<Formats extends FontFaceFormat = FontFaceFormat> = Omit<
+  FontFaceSelection<Formats | undefined>,
+  'face' | 'load'
+> & {
+  readonly face: FontFace<Formats>;
+  readonly default: FontFace<Formats>;
   readonly disposed: boolean;
-  /** Load every declared format, or every imported format advertised by an undeclared main font. */
-  load(): Promise<AnyFontFace>;
+  load(): Promise<FontFace<Formats>>;
   /** Inspect the ordered format keys advertised by the authoritative main font. */
   formats(): Promise<readonly string[]>;
   dispose(): void;
-}
-
-/** One default or named format selection belonging to a FontFace. */
-export type FontFaceSelection<Format extends FontFaceFormat | undefined = FontFaceFormat | undefined> = Omit<
-  AnyFontFaceSelection,
-  'format' | 'load'
-> & {
-  readonly format: Format;
-  load(): Promise<FontFaceSelection<Format>>;
-};
-
-/** Reusable FontFace declaration whose keyed selections are inferred from its asserted formats. */
-export type FontFace<Formats extends FontFaceFormat = never> = Omit<AnyFontFace, 'default' | 'format' | 'load'> & {
-  readonly default: FontFace<Formats>;
-  readonly format: Formats | undefined;
-  load(): Promise<FontFace<Formats>>;
-} & {
-  readonly [Key in FormatKey<Formats>]: FontFaceSelection<FormatForKey<Formats, Key>>;
-};
+} & FontFaceMembers<Formats>;
 
 export type FontFormatMap = Readonly<object>;
 
 interface FontFaceResourceOwner {
-  readonly records: Map<AnyRasterFormat, LoadedFaceRecord>;
+  readonly records: Map<RasterFormatMetadata, LoadedFaceRecord>;
   sourcePromise: Promise<FontFaceSourceLease> | undefined;
   sourceLease: FontFaceSourceLease | undefined;
   sourceController: AbortController | undefined;
@@ -137,9 +145,9 @@ interface FontFaceState {
   readonly family: string;
   readonly formats: readonly FontFaceFormat[];
   readonly owner: FontFaceResourceOwner;
-  readonly selections: ReadonlyMap<string, AnyFontFaceSelection>;
+  readonly selections: ReadonlyMap<string, FontFaceSelection>;
   formatsPromise: Promise<readonly string[]> | undefined;
-  aggregatePromise: Promise<AnyFontFace> | undefined;
+  aggregatePromise: Promise<FontFace> | undefined;
   aggregateLoaded: boolean;
 }
 
@@ -147,12 +155,12 @@ interface FontFaceSelectionState {
   readonly face: FontFaceState;
   readonly format: FontFaceFormat | undefined;
   readonly aggregate: boolean;
-  readonly promises: Map<AnyRasterFormat, Promise<AnyFontFaceSelection>>;
+  readonly promises: Map<RasterFormatMetadata, Promise<FontFaceSelection>>;
 }
 
 interface CatalogEntry {
   readonly generation: number;
-  readonly face: WeakRef<AnyFontFace>;
+  readonly face: WeakRef<FontFace>;
 }
 
 interface FinalizerRecord {
@@ -179,8 +187,10 @@ const faceFinalizer = new FinalizationRegistry<FinalizerRecord>((record) => {
 export function createFontFace<const Declaration extends FontFaceFormatDeclaration = never>(
   library: FontLibrary,
   source: FontFaceSource,
-  config: FontFaceConfig<Declaration> = {},
-): FontFace<FontFaceDeclaredFormat<Declaration>> {
+  config?: FontFaceConfig<Declaration>,
+): FontFace<FontFaceDeclaredFormat<Declaration>>;
+
+export function createFontFace(library: FontLibrary, source: FontFaceSource, config: FontFaceConfig = {}): FontFace {
   assertFontFaceSource(source);
   assertFontFaceConfig(config);
   const family = config.family === undefined ? nextFamily() : normalizedFamily(config.family);
@@ -191,7 +201,7 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
   const ownedSource = isSerializedFontFace(source) ? claimSerializedFontFace(source) : source;
 
   const formats = formatList(config.format);
-  const selections = new Map<string, AnyFontFaceSelection>();
+  const selections = new Map<string, FontFaceSelection>();
   const owner: FontFaceResourceOwner = {
     records: new Map(),
     sourcePromise: undefined,
@@ -210,21 +220,21 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
     aggregatePromise: undefined,
     aggregateLoaded: false,
   };
-  let face!: AnyFontFace;
+  let face!: FontFace;
   const defaultFormat = formats[0];
-  const base: AnyFontFace = {
+  const base: FontFace = {
     family,
     format: defaultFormat,
-    get face(): AnyFontFace {
+    get face(): FontFace {
       return face;
     },
-    get default(): AnyFontFace {
+    get default(): FontFace {
       return face;
     },
     get disposed(): boolean {
       return owner.disposed;
     },
-    load(): Promise<AnyFontFace> {
+    load(): Promise<FontFace> {
       return loadFontFace(face);
     },
     formats(): Promise<readonly string[]> {
@@ -245,12 +255,12 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
   for (const format of formats) {
     const key = formatName(format);
     if (selections.has(key)) throw new TypeError(`FontFace format ${JSON.stringify(key)} is declared more than once`);
-    let selection!: AnyFontFaceSelection;
+    let selection!: FontFaceSelection;
     selection = Object.freeze({
       family,
       format,
       face,
-      load(): Promise<AnyFontFaceSelection> {
+      load(): Promise<FontFaceSelection> {
         return loadDeclaredFontFaceSelection(selection);
       },
       isLoaded(): boolean {
@@ -269,11 +279,11 @@ export function createFontFace<const Declaration extends FontFaceFormatDeclarati
   const generation = nextCatalogGeneration++;
   catalog.set(family, { generation, face: new WeakRef(face) });
   faceFinalizer.register(face, { family, generation, owner }, face);
-  return face as FontFace<FontFaceDeclaredFormat<Declaration>>;
+  return face;
 }
 
 /** Resolve one live family from Glyph's weak root catalog. */
-export function resolveFontFace(family: string): AnyFontFace | undefined {
+export function resolveFontFace(family: string): FontFace | undefined {
   const normalized = normalizedFamily(family);
   const entry = catalog.get(normalized);
   const face = entry?.face.deref();
@@ -282,7 +292,7 @@ export function resolveFontFace(family: string): AnyFontFace | undefined {
 }
 
 /** Dispose one authentic FontFace declaration or selection's shared owner. */
-export function disposeFontFace(face: AnyFontFace): void {
+export function disposeFontFace(face: FontFace): void {
   if ((typeof face !== 'object' && typeof face !== 'function') || face === null) {
     throw new TypeError('FontFace.dispose() requires an authentic FontFace declaration');
   }
@@ -312,22 +322,24 @@ export function fontFaceSelectionState(selection: unknown): FontFaceSelectionSta
 }
 
 /** @internal Test whether a value is an authentic live FontFace declaration or selection. */
-export function isFontFaceSelection(selection: unknown): selection is AnyFontFaceSelection {
+export function isFontFaceSelection(selection: unknown): selection is FontFaceSelection {
   if ((typeof selection !== 'object' && typeof selection !== 'function') || selection === null) return false;
   const state = faceStates.get(selection);
   return state !== undefined && !state.face.owner.disposed;
 }
 
 /**
- * @internal Acquire an independent immutable Font lease for a renderer-free consumer.
+ * @internal Acquire an independent immutable Font lease without a configured handle.
  *
  * A configured renderer may resolve an omitted or string format through its own format table.
- * Renderer-free APIs have no such config, so they accept only a selection whose declared format
+ * A caller outside a handle has no such config, so it must provide a selection whose declared format
  * resolves to an imported raster format. The caller owns and must dispose the returned lease.
  */
-export function acquireLoadedFontFaceSelection<const Selection extends AnyFontFaceSelection>(
+export function acquireLoadedFontFaceSelection<const Selection extends FontFaceSelection>(
   selection: Selection,
-): Font<FontFaceRasterOf<Selection>> {
+): Font<FontFaceRasterOf<Selection>>;
+
+export function acquireLoadedFontFaceSelection(selection: FontFaceSelection): Font<RasterFormatMetadata> {
   const selected = fontFaceSelectionState(selection);
   if (selected.format === undefined) {
     throw new FontLoadError(
@@ -336,7 +348,7 @@ export function acquireLoadedFontFaceSelection<const Selection extends AnyFontFa
     );
   }
   const raster = resolveDeclaredFormat(selected.format);
-  return cloneImmutableFont(requiredFontFaceFormat(selection, raster)) as Font<FontFaceRasterOf<Selection>>;
+  return cloneImmutableFont(requiredFontFaceFormat(selection, raster));
 }
 
 /** @internal Canonical identity shared by React declarations and the loader's raster request cache. */
@@ -345,14 +357,13 @@ export function fontFaceResourceKey(source: FontFaceSource, format: FontFaceConf
 }
 
 interface LoadedFaceRecord {
-  readonly raster: AnyRasterFormat;
-  promise: Promise<Font<AnyRasterFormat>>;
-  font: Font<AnyRasterFormat> | undefined;
+  promise: Promise<Font<RasterFormatMetadata>>;
+  font: Font<RasterFormatMetadata> | undefined;
 }
 
 /** Handle-local format selection over FontFace-owned immutable loads. */
 export class FontFaceHandleStore {
-  readonly #formats: Readonly<Record<string, AnyRasterFormat>>;
+  readonly #formats: Readonly<Record<string, RasterFormatMetadata>>;
   readonly #defaultFormat: string;
   #disposed = false;
 
@@ -360,10 +371,11 @@ export class FontFaceHandleStore {
     if (typeof defaultFormat !== 'string' || defaultFormat.length === 0) {
       throw new TypeError('font default format must be a nonempty string');
     }
-    const entries = Object.entries(formats as Readonly<Record<string, unknown>>);
-    if (entries.length === 0) throw new TypeError('font format map must not be empty');
-    const normalized: Record<string, AnyRasterFormat> = {};
-    for (const [key, raster] of entries) {
+    const keys = Object.keys(formats);
+    if (keys.length === 0) throw new TypeError('font format map must not be empty');
+    const normalized: Record<string, RasterFormatMetadata> = {};
+    for (const key of keys) {
+      const raster: unknown = Reflect.get(formats, key);
       if (key.length === 0 || !isRasterFormat(raster)) {
         throw new TypeError('font format map must contain authentic raster formats under nonempty keys');
       }
@@ -376,28 +388,32 @@ export class FontFaceHandleStore {
     this.#defaultFormat = defaultFormat;
   }
 
-  isLoaded(selection: AnyFontFaceSelection): boolean {
+  isLoaded(selection: FontFaceSelection): boolean {
     this.#assertActive();
     return isFontFaceFormatLoaded(selection, this.#resolveFormat(fontFaceSelectionState(selection).format));
   }
 
-  load(selection: AnyFontFaceSelection): Promise<AnyFontFaceSelection> {
+  load<const Selection extends FontFaceSelection>(selection: Selection): Promise<Selection> {
     this.#assertActive();
     return loadFontFaceFormat(selection, this.#resolveFormat(fontFaceSelectionState(selection).format));
   }
 
-  acquire<const Selection extends AnyFontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>> {
+  acquire<const Selection extends FontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>>;
+
+  acquire(selection: FontFaceSelection): Font<RasterFormatMetadata> {
     this.#assertActive();
     const raster = this.#resolveFormat(fontFaceSelectionState(selection).format);
     const font = requiredFontFaceFormat(selection, raster);
-    return cloneImmutableFont(font) as Font<FontFaceRasterOf<Selection>>;
+    return cloneImmutableFont(font);
   }
 
   /** Borrow the store-owned immutable source. Callers must not dispose this value. */
-  peek<const Selection extends AnyFontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>> {
+  peek<const Selection extends FontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>>;
+
+  peek(selection: FontFaceSelection): Font<RasterFormatMetadata> {
     this.#assertActive();
     const raster = this.#resolveFormat(fontFaceSelectionState(selection).format);
-    return requiredFontFaceFormat(selection, raster) as Font<FontFaceRasterOf<Selection>>;
+    return requiredFontFaceFormat(selection, raster);
   }
 
   dispose(): void {
@@ -405,7 +421,7 @@ export class FontFaceHandleStore {
     this.#disposed = true;
   }
 
-  #resolveFormat(format: FontFaceFormat | undefined): RasterFormatInput<AnyRasterFormat> {
+  #resolveFormat(format: FontFaceFormat | undefined): RasterFormatInput<RasterFormatMetadata> {
     if (format === undefined) return this.#formats[this.#defaultFormat]!;
     if (typeof format === 'string') {
       const raster = this.#formats[format];
@@ -426,36 +442,39 @@ export class FontFaceHandleStore {
   }
 }
 
-function loadFontFace(face: AnyFontFace): Promise<AnyFontFace> {
+function loadFontFace<Formats extends FontFaceFormat>(face: FontFace<Formats>): Promise<FontFace<Formats>>;
+
+function loadFontFace(face: FontFace): Promise<FontFace> {
   const selection = fontFaceSelectionState(face);
   const state = selection.face;
   if (!selection.aggregate) throw new TypeError('FontFace aggregate loading requires the declaration object');
   if (state.aggregatePromise !== undefined) return state.aggregatePromise;
-  const operation = Promise.resolve().then(() => loadAllFontFaceFormats(state));
-  let promise!: Promise<AnyFontFace>;
-  promise = operation.then(
-    () => {
-      if (state.owner.disposed || state.aggregatePromise !== promise) {
-        throw new DOMException('FontFace load owner was disposed', 'AbortError');
-      }
-      state.aggregateLoaded = true;
-      return face;
-    },
-    (error: unknown) => {
-      if (state.aggregatePromise === promise) {
-        state.aggregatePromise = undefined;
-      }
-      throw error;
-    },
-  );
+  let promise!: Promise<FontFace>;
+  promise = Promise.resolve()
+    .then(() => loadAllFontFaceFormats(state))
+    .then(
+      () => {
+        if (state.owner.disposed || state.aggregatePromise !== promise) {
+          throw new DOMException('FontFace load owner was disposed', 'AbortError');
+        }
+        state.aggregateLoaded = true;
+        return face;
+      },
+      (error: unknown) => {
+        if (state.aggregatePromise === promise) {
+          state.aggregatePromise = undefined;
+        }
+        throw error;
+      },
+    );
   state.aggregatePromise = promise;
   return promise;
 }
 
-async function cloneFontFace(selection: AnyFontFaceSelection): Promise<FontFaceTransfer> {
+async function cloneFontFace(selection: FontFaceSelection): Promise<FontFaceTransfer> {
   const selected = fontFaceSelectionState(selection);
   if (selected.aggregate) {
-    await loadFontFace(selection as AnyFontFace);
+    await loadFontFace(selection.face);
   } else {
     await loadDeclaredFontFaceSelection(selection);
   }
@@ -479,11 +498,11 @@ async function loadAllFontFaceFormats(state: FontFaceState): Promise<void> {
   const owner = state.owner;
   const declared = state.formats.map(resolveDeclaredFormat);
   const source = await ensureFontFaceSource(owner, state.library, state.source, declared);
-  const operations: Promise<readonly Font<AnyRasterFormat>[]>[] = [
+  const operations: Promise<readonly Font<RasterFormatMetadata>[]>[] = [
     ...declared.map((raster) => source.load(raster).then((font) => [font])),
     source.loadAdvertised(declared.map(rasterOf)),
   ];
-  let groups: readonly (readonly Font<AnyRasterFormat>[])[];
+  let groups: readonly (readonly Font<RasterFormatMetadata>[])[];
   try {
     groups = await Promise.all(operations);
   } catch (error) {
@@ -511,14 +530,15 @@ async function loadAllFontFaceFormats(state: FontFaceState): Promise<void> {
       continue;
     }
     owner.records.set(font.raster, {
-      raster: font.raster,
       promise: Promise.resolve(font),
       font,
     });
   }
 }
 
-function loadDeclaredFontFaceSelection(selection: AnyFontFaceSelection): Promise<AnyFontFaceSelection> {
+function loadDeclaredFontFaceSelection<const Selection extends FontFaceSelection>(
+  selection: Selection,
+): Promise<Selection> {
   const selected = fontFaceSelectionState(selection);
   if (selected.aggregate || selected.format === undefined) {
     throw new TypeError('FontFace format loading requires a declared format member');
@@ -526,17 +546,22 @@ function loadDeclaredFontFaceSelection(selection: AnyFontFaceSelection): Promise
   return loadFontFaceFormat(selection, resolveDeclaredFormat(selected.format));
 }
 
-function isDeclaredFontFaceSelectionLoaded(selection: AnyFontFaceSelection): boolean {
+function isDeclaredFontFaceSelectionLoaded(selection: FontFaceSelection): boolean {
   const selected = fontFaceSelectionState(selection);
   if (selected.aggregate || selected.format === undefined) return false;
   const raster = tryResolveDeclaredFormat(selected.format);
   return raster !== undefined && isFontFaceFormatLoaded(selection, raster);
 }
 
+function loadFontFaceFormat<const Selection extends FontFaceSelection>(
+  selection: Selection,
+  raster: RasterFormatInput<RasterFormatMetadata>,
+): Promise<Selection>;
+
 function loadFontFaceFormat(
-  selection: AnyFontFaceSelection,
-  raster: RasterFormatInput<AnyRasterFormat>,
-): Promise<AnyFontFaceSelection> {
+  selection: FontFaceSelection,
+  raster: RasterFormatInput<RasterFormatMetadata>,
+): Promise<FontFaceSelection> {
   const selected = fontFaceSelectionState(selection);
   const format = rasterOf(raster);
   const existingPromise = selected.promises.get(format);
@@ -554,7 +579,7 @@ function loadFontFaceFormat(
     selected.face.owner.records.set(format, record);
   }
   const exact = record;
-  let promise!: Promise<AnyFontFaceSelection>;
+  let promise!: Promise<FontFaceSelection>;
   promise = exact.promise.then(
     () => selection,
     (error: unknown) => {
@@ -571,8 +596,8 @@ function createLoadedFaceRecord(
   family: string,
   library: FontLibrary,
   fontSource: FontFaceSource,
-  raster: RasterFormatInput<AnyRasterFormat>,
-  format: AnyRasterFormat,
+  raster: RasterFormatInput<RasterFormatMetadata>,
+  format: RasterFormatMetadata,
 ): LoadedFaceRecord {
   let record!: LoadedFaceRecord;
   const promise = ensureFontFaceSource(owner, library, fontSource, [raster])
@@ -601,11 +626,11 @@ function createLoadedFaceRecord(
         throw error;
       },
     );
-  record = { raster: format, promise, font: undefined };
+  record = { promise, font: undefined };
   return record;
 }
 
-function fontFaceFormats(face: AnyFontFace): Promise<readonly string[]> {
+function fontFaceFormats(face: FontFace): Promise<readonly string[]> {
   const selected = fontFaceSelectionState(face);
   if (!selected.aggregate) throw new TypeError('FontFace format inspection requires the declaration object');
   const state = selected.face;
@@ -626,7 +651,7 @@ function ensureFontFaceSource(
   owner: FontFaceResourceOwner,
   library: FontLibrary,
   fontSource: FontFaceSource,
-  initialRasters: readonly RasterFormatInput<AnyRasterFormat>[],
+  initialRasters: readonly RasterFormatInput<RasterFormatMetadata>[],
 ): Promise<FontFaceSourceLease> {
   if (owner.sourcePromise !== undefined) return owner.sourcePromise;
   const controller = new AbortController();
@@ -656,27 +681,30 @@ function ensureFontFaceSource(
 function openDeclaredFontFaceSource(
   library: FontLibrary,
   source: FontFaceSource,
-  initialRasters: readonly RasterFormatInput<AnyRasterFormat>[],
+  initialRasters: readonly RasterFormatInput<RasterFormatMetadata>[],
   signal: AbortSignal,
 ): Promise<FontFaceSourceLease> {
   if (isSerializedFontFace(source)) return openSerializedFontFaceSource(library, source, { signal });
   return fontFaceLoadInput(source).then((input) => openFontFaceSource(library, input, initialRasters, { signal }));
 }
 
-function isFontFaceLoaded(face: AnyFontFace): boolean {
+function isFontFaceLoaded(face: FontFace): boolean {
   const selected = fontFaceSelectionState(face);
   if (!selected.aggregate) return false;
   return selected.face.aggregateLoaded;
 }
 
-function isFontFaceFormatLoaded(selection: AnyFontFaceSelection, raster: RasterFormatInput<AnyRasterFormat>): boolean {
+function isFontFaceFormatLoaded(
+  selection: FontFaceSelection,
+  raster: RasterFormatInput<RasterFormatMetadata>,
+): boolean {
   return fontFaceSelectionState(selection).face.owner.records.get(rasterOf(raster))?.font !== undefined;
 }
 
 function requiredFontFaceFormat(
-  selection: AnyFontFaceSelection,
-  raster: RasterFormatInput<AnyRasterFormat>,
-): Font<AnyRasterFormat> {
+  selection: FontFaceSelection,
+  raster: RasterFormatInput<RasterFormatMetadata>,
+): Font<RasterFormatMetadata> {
   const selected = fontFaceSelectionState(selection);
   const format = rasterOf(raster);
   const font = selected.face.owner.records.get(format)?.font;
@@ -689,7 +717,7 @@ function requiredFontFaceFormat(
   return font;
 }
 
-function resolveDeclaredFormat(format: FontFaceFormat): RasterFormatInput<AnyRasterFormat> {
+function resolveDeclaredFormat(format: FontFaceFormat): RasterFormatInput<RasterFormatMetadata> {
   const resolved = tryResolveDeclaredFormat(format);
   if (resolved === undefined) {
     throw new FontLoadError(
@@ -700,12 +728,12 @@ function resolveDeclaredFormat(format: FontFaceFormat): RasterFormatInput<AnyRas
   return resolved;
 }
 
-function tryResolveDeclaredFormat(format: FontFaceFormat): RasterFormatInput<AnyRasterFormat> | undefined {
+function tryResolveDeclaredFormat(format: FontFaceFormat): RasterFormatInput<RasterFormatMetadata> | undefined {
   if (typeof format === 'string') return rasterFormatForKey(format);
   return format;
 }
 
-function rasterOf(raster: RasterFormatInput<AnyRasterFormat>): AnyRasterFormat {
+function rasterOf(raster: RasterFormatInput<RasterFormatMetadata>): RasterFormatMetadata {
   return isRasterFormat(raster) ? raster : raster.raster;
 }
 
@@ -731,13 +759,18 @@ function disposeFontFaceResourceOwner(owner: FontFaceResourceOwner): void {
   owner.sourcePromise = undefined;
 }
 
-function formatList(format: FontFaceConfig['format']): readonly FontFaceFormat[] {
+function formatList(format: unknown): readonly FontFaceFormat[] {
   if (format === undefined) return [];
-  const values: readonly FontFaceFormat[] = Array.isArray(format)
-    ? (format as readonly FontFaceFormat[])
-    : [format as FontFaceFormat];
-  if (values.length === 0) throw new TypeError('FontFace format array must not be empty');
-  for (const value of values) assertFormat(value);
+  if (!Array.isArray(format)) {
+    assertFormat(format);
+    return [format];
+  }
+  if (format.length === 0) throw new TypeError('FontFace format array must not be empty');
+  const values: FontFaceFormat[] = [];
+  for (const value of format) {
+    assertFormat(value);
+    values.push(value);
+  }
   return values;
 }
 
@@ -760,13 +793,13 @@ function assertFontFaceConfig(config: unknown): asserts config is FontFaceConfig
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw new TypeError('FontFace config must be an object');
   }
-  const value = config as { readonly family?: unknown; readonly format?: unknown };
-  const keys = Object.keys(value);
+  const keys = Object.keys(config);
   if (keys.some((key) => key !== 'family' && key !== 'format')) {
     throw new TypeError('FontFace config only accepts family and format');
   }
-  if (value.family !== undefined) normalizedFamily(value.family);
-  formatList(value.format as FontFaceConfig['format']);
+  const family = Reflect.get(config, 'family');
+  if (family !== undefined) normalizedFamily(family);
+  formatList(Reflect.get(config, 'format'));
 }
 
 function assertFontFaceSource(source: unknown): asserts source is FontFaceSource {
@@ -805,19 +838,13 @@ function fontFaceSourceKey(source: FontFaceSource): string {
 
 function fontFaceFormatIdentity(format: FontFaceConfig['format']): string {
   if (format === undefined) return 'default';
-  const values: readonly FontFaceFormat[] = Array.isArray(format)
-    ? (format as readonly FontFaceFormat[])
-    : [format as FontFaceFormat];
-  return values.map(singleFormatIdentity).join('|');
+  return formatList(format).map(singleFormatIdentity).join('|');
 }
 
 function singleFormatIdentity(format: FontFaceFormat): string {
   if (typeof format === 'string') return `key:${format}`;
-  const request = isRasterFormat(format) ? { raster: format, options: undefined } : format;
-  const operation = request.raster as AnyRasterFormat & {
-    descriptor(options: unknown): Parameters<typeof canonicalJson>[0];
-  };
-  return `raster:${request.raster.id}:${canonicalJson(operation.descriptor(request.options))}`;
+  const raster = isRasterFormat(format) ? format : format.raster;
+  return `raster:${raster.id}:${canonicalJson(rasterFormatDescriptor(format))}`;
 }
 
 function normalizedFamily(family: unknown): string {

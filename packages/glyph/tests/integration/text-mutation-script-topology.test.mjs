@@ -69,11 +69,11 @@ import { findGraphemeBoundaries } from '../../dist/internal/graphemes.js';
 
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
-const bitmap16 = { raster: bitmap, options: { strikes: [16] } };
+const bitmap16 = bitmap({ strikes: [16] });
 
 const FIXTURES = {
   'amiri-bitmap': { file: 'amiri-bitmap-16.font.glb', raster: bitmap16 },
-  'amiri-slug': { file: 'amiri-slug.font.glb.gz', raster: { raster: slug } },
+  'amiri-slug': { file: 'amiri-slug.font.glb.gz', raster: slug },
   devanagari: { file: 'noto-sans-devanagari-bitmap-16.font.glb', raster: bitmap16 },
   cjk: { file: 'noto-sans-cjk-showcase-bitmap-16.font.glb', raster: bitmap16 },
   'dot-gothic': { file: 'dot-gothic-16-bitmap-16.font.glb', raster: bitmap16 },

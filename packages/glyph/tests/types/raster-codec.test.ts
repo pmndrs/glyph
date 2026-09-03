@@ -4,8 +4,8 @@ import { registerRasterCodec } from '../../dist/config/raster.js';
 import { defineTechniqueSchema } from '../../dist/config/schema.js';
 
 declare const technique: RasterFormat<
-  RasterFormatId & 'vendor.plan-contract',
-  'plan-contract',
+  RasterFormatId & 'vendor.codec-contract',
+  'codec-contract',
   never,
   {},
   { readonly opacity: number }
@@ -60,7 +60,7 @@ declare const otherBody: CompiledCodecProgramBody<typeof otherSchema>;
 
 registerRasterCodec({
   raster: otherTechnique,
-  // @ts-expect-error Raster plans publish glyph resources, so their schema cannot be resource-free.
+  // @ts-expect-error Raster Codecs publish glyph resources, so their schema cannot be resource-free.
   schema: otherSchema,
   codecBody: () => otherBody,
   compileFont() {
@@ -95,7 +95,7 @@ void program.schema.resources.mesh;
 
 registerRasterCodec({
   raster: technique,
-  // @ts-expect-error A plan schema must carry the same technique identity as its technique.
+  // @ts-expect-error A Codec schema must carry the same technique identity as its raster format.
   schema: otherSchema,
   codecBody: () => otherBody,
   compileFont() {

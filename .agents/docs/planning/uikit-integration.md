@@ -33,7 +33,9 @@ generated:
 
 # uikit integration
 
-This document is for maintainers integrating `pmndrs/glyph` into pmndrs/uikit. It explains the seam in uikit's current implementation, the minimum framework-neutral API the Glyph package must provide, and an incremental migration that does not require uikit to replace layout, rendering, and editing at once.
+This document is for maintainers integrating `pmndrs/glyph` into pmndrs/uikit. It explains the seam in uikit's current
+Three-based implementation, the Glyph `Text` queries it uses, and an incremental migration that does not require uikit to
+replace layout, rendering, and editing at once.
 
 The authoritative public types remain in the [API contract](api-shapes.md). This page owns uikit-specific reasoning; uikit terminology and dependencies do not belong in the core package.
 
@@ -84,44 +86,54 @@ uikit should continue to own:
 - the effective per-glyph em size required to render mixed-size spans;
 - raster-module resources and conversion of a paragraph layout into draw batches.
 
-The integration becomes a small uikit-owned adapter around a framework-neutral paragraph:
+The integration becomes a small uikit-owned adapter around an ordinary detached Three `Text`:
 
 ```mermaid
 flowchart LR
   Props["uikit text properties"] --> Adapter["uikit adapter signals"]
-  Ready["prepared font + shaper"] --> Paragraph["pmndrs/glyph Paragraph"]
-  Adapter --> Paragraph
-  Paragraph --> Measure["measure constraints<br/>metrics only"]
+  Ready["loaded FontFace + Glyph handle"] --> Text["detached Three Text"]
+  Adapter --> Text
+  Text --> Measure["Text.measure()<br/>one explicit query"]
   Measure --> Custom["uikit CustomLayouting"] --> Yoga
   Yoga --> ContentBox["resolved content-box signals"]
-  ContentBox --> Glyphs["Paragraph.glyphs"]
-  Paragraph --> Glyphs
-  Glyphs --> Batches["renderer policy and render plan"]
+  ContentBox --> Glyphs["Text.glyphs()"]
+  Text --> Glyphs
+  Glyphs --> Batches["Codec command publication"]
   Batches --> uikitRoot["uikit render groups"]
 ```
 
 There is no `YogaAdapter` in `@pmndrs/glyph`, no Preact signal type in its API, and no uikit matrix or clipping type in a raster module. uikit translates its values at the boundary.
 
-## Minimum core API
+## Measurement API
 
-The paragraph surface ships from the root because applications and layout hosts encounter it:
+uikit already renders through Three, so it uses the same handle-owned `Text` as every other Three consumer:
 
 ```ts
-import { createParagraph } from '@pmndrs/glyph';
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
 
-const paragraph = await createParagraph({ font, text, style?, layout? });
+await glyph.init();
+const three = glyph.handle('uikit', ThreeConfig);
+const text = three.createText({ font, text: value, style, layout });
 
-paragraph.measure(constraints?): ParagraphMetrics;
-paragraph.glyphs(constraints?): GlyphLayoutInspection;
-paragraph.update(input: ParagraphUpdate): void;
-paragraph.dispose(): void;
+text.constraints = constraints;
+const metrics = text.measure();
+
+text.constraints = resolvedContentBox;
+const positioned = text.glyphs();
 ```
 
-`createParagraph()` asynchronously acquires the private measurement service. Its returned Paragraph then answers `measure()` and `glyphs()` synchronously, needs no scene, renderer, or committed frame, and leaves authored state untouched, so it is safe to call from inside a Yoga layout pass.
+`Text.measure()` and `Text.glyphs()` answer synchronously from desired state before scene attachment or a committed frame.
+Each call is an explicit one-Text query and may pay one Wasm crossing; neither traverses matrices, publishes a command
+buffer, nor realizes renderer resources. Normal rendering still batches every dirty root through one `glyph.shape()`
+crossing. This is safe inside Yoga's measure callback and avoids a second hidden measurement runtime (D-339).
 
-Per-call constraints are split from stable paragraph layout. `Constraints` carries only the axes (`width`, `height`) that a host varies while probing one node; wrap, alignment, `maxLines`, overflow, justification bounds, columns, and indents live in the paragraph's `layout` and change only through `update()`. A host probe never re-states the whole flow configuration.
+`Constraints` carries only the axes (`width`, `height`) that a host varies while probing one node; wrap, alignment,
+`maxLines`, overflow, justification bounds, columns, and indents remain in `text.layout`.
 
-`measure()` returns `ParagraphMetrics`, adding intrinsic `minContentWidth`/`maxContentWidth` to box size, content extents, baselines, and overflow in the same measurement pass without per-glyph arrays. Invalid constraints and engine failures throw from the query that supplied them. `glyphs()` materializes caller-owned positioned arrays. `layoutRevision` is a monotonic paragraph-scoped counter that advances when positioned output changes, so a host gates readback with `paragraph.layoutRevision !== lastSeenRevision` instead of copying arrays to compare them.
+`measure()` returns `ParagraphLayoutSummary`, including intrinsic `minContentWidth`/`maxContentWidth`, box size, content
+extents, baselines, and overflow without per-glyph arrays. Invalid constraints and engine failures throw from the query.
+`glyphs()` materializes caller-owned positioned arrays only after Yoga resolves the final content box.
 
 This separation matters for Yoga and other retained layout engines: they may measure a leaf repeatedly before resolving its final dimensions. Measurement must not allocate or copy the complete render output each time.
 
@@ -134,7 +146,8 @@ Measurements return f32-rounded extents. At knife-edge widths, re-laying-out at 
 The stable pattern for a Yoga measure callback:
 
 ```ts
-const measured = paragraph.measure(constraints);
+text.constraints = constraints;
+const measured = text.measure();
 return {
   width: Math.ceil(measured.width * pointScale) / pointScale,
   height: Math.ceil(measured.height * pointScale) / pointScale,
@@ -168,18 +181,19 @@ The first adapter can preserve uikit's existing signal shape:
 
 ```ts
 const customLayouting = computed(() => {
-  const paragraph = paragraphSignal.value;
-  if (paragraph == null) return undefined;
+  const text = textSignal.value;
+  if (text == null) return undefined;
 
-  const natural = paragraph.measure();
+  const natural = text.measure();
   return {
     minWidth: natural.minContentWidth,
     minHeight: natural.height,
     measure(width, widthMode, height, heightMode) {
-      const result = paragraph.measure({
+      text.constraints = {
         width: mapAxis(width, widthMode),
         height: mapAxis(height, heightMode),
-      });
+      };
+      const result = text.measure();
       return { width: result.width, height: result.height };
     },
   };
@@ -188,7 +202,7 @@ const customLayouting = computed(() => {
 
 One measurement now answers everything: intrinsic `minContentWidth` rides the natural pass (the engine scans the cluster arena with the breaker's own wrap decisions), so uikit's old second full measure at zero width is gone. The exact normalization belongs to the uikit adapter because its current minimum-size behavior and point-scale rounding are uikit policies, not font-system invariants.
 
-After Yoga updates uikit's existing size, padding, and border signals, a computed signal calls `paragraph.glyphs()` with the final content width and height and gates readback on `layoutRevision`. This is the reactive equivalent of a final positioned query; uikit does not need a new imperative lifecycle.
+After Yoga updates uikit's existing size, padding, and border signals, a computed signal sets the final content-box constraints and calls `text.glyphs()`. This is the reactive equivalent of a final positioned query; uikit does not need a second retained runtime or a new imperative lifecycle.
 
 The adapter must preserve these existing behaviors:
 
@@ -206,15 +220,19 @@ Core supports both axes even though current uikit text measurement primarily bra
 
 ### 1. Add a shadow adapter
 
-Create a prepared paragraph beside the existing glyph layout. Feed it the same text and effective properties, compare its metrics against current uikit fixtures, and keep the existing renderer authoritative. This proves readiness, invalidation, and unit conversion without changing visuals.
+Create a detached Glyph `Text` beside the existing glyph layout. Feed it the same text and effective properties, compare
+its metrics against current uikit fixtures, and keep the existing renderer authoritative. This proves readiness,
+invalidation, and unit conversion without changing visuals.
 
 ### 2. Replace measurement
 
-Use `Paragraph.measure` to populate the existing `CustomLayouting` object. Keep `FlexNode`, Yoga, point-scale rounding, size signals, and the old renderer unchanged. Differences become explicit compatibility decisions rather than hidden renderer changes.
+Set `Text.constraints`, then use `Text.measure()` to populate the existing `CustomLayouting` object. Keep `FlexNode`,
+Yoga, point-scale rounding, size signals, and the old renderer unchanged.
 
 ### 3. Replace positioned layout and rendering
 
-Compute `Paragraph.glyphs` from the resolved content-box signals and send it to the selected raster module. Adapt raster batches into uikit's root grouping, ordering, clipping, and transform infrastructure. uikit should consume the low-level paragraph and raster APIs directly rather than embedding the standalone Three.js `Text` object.
+Set the resolved content-box constraints and call `Text.glyphs()`. The same Text remains available for normal Codec
+publication into uikit's Three hierarchy; there is no parallel renderer-free object to reconcile.
 
 ### 4. Replace interaction queries
 
@@ -224,11 +242,13 @@ Current selection code indexes one layout entry per JavaScript character. Replac
 
 Delete the BMFont-specific `Font`, wrappers, positioned character entries, and MSDF-only instancing only after text, textarea, selection, clipping, and lifecycle fixtures pass through the new path.
 
-## Paragraph-boundary fixture status
+## Text-measurement fixture status
 
-The repository carries a current-uikit-shaped fixture at the paragraph boundary, and it runs on the real framework-neutral root `createParagraph()`/`Paragraph` API -- no scene graph and no renderer adapter. It deliberately implements only the reviewed `CustomLayouting → FlexNode/Yoga modes → resolved size/padding/border signals → positioned layout` contract; it does not pretend to be the production uikit adapter.
+The repository's uikit-shaped fixture runs the real detached Three `Text` query path. It deliberately implements only the
+reviewed `CustomLayouting → FlexNode/Yoga modes → resolved size/padding/border signals → positioned layout` contract; it
+does not pretend to be the production uikit adapter.
 
-| Paragraph-boundary proof                        | Status | Evidence                                                                                                                                                      |
+| Text-query proof                                | Status | Evidence                                                                                                                                                      |
 | ----------------------------------------------- | :----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Intrinsic measurement and first baseline        |   ✅   | Exact `minWidth` (published intrinsic width), `minHeight`, and first-baseline values come from one natural measurement of a prepared Inter paragraph.         |
 | Yoga mode translation                           |   ✅   | `Undefined`, `AtMost`, and `Exactly` cover ignored `NaN`, finite nonnegative constraints, and the definite-two-axis no-measure path.                          |
@@ -237,7 +257,9 @@ The repository carries a current-uikit-shaped fixture at the paragraph boundary,
 | Point-scale rounding and invalidation ownership |   ✅   | Upward rounding remains in the host fixture; text/shaping changes dirty measurement while paint/raster changes do not.                                        |
 | Real-product execution                          |   ✅   | Vitest, Chromium 149, and the WebGPU-active Vitexec lane validate the same generated contract and portable hash.                                              |
 
-The fixture previously satisfied this contract through a hand-written adapter that mutated Three `Text` constraints and forced a scene-graph commit per probe; while it did, it proved the adapter rather than the contract. Regenerating the retained bidi contract through the real `Paragraph` produced byte-identical values everywhere except `customLayouting.minWidth`, which intentionally changed semantics: it is now the published single-pass intrinsic width instead of a degenerate zero-width flow extent.
+The fixture sets Three `Text` constraints for each Yoga probe but never forces scene traversal or command publication.
+Its retained bidi contract continues to pin the single-pass intrinsic width instead of a degenerate zero-width flow
+extent.
 
 Renderer batching, clipping integration, React reconciliation, and cluster-aware interaction remain later integration gates. Closing this paragraph boundary does not claim those production-uikit migration stages are complete.
 

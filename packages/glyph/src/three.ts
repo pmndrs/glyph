@@ -39,7 +39,6 @@ export {
   type ThreeProgramBinding,
   type ThreeResolvedMaterialBinding,
   type ThreeResolvedResourceBinding,
-  type ThreeRootBinding,
 } from './three/handle.js';
 export type {
   StandaloneTextProperties,

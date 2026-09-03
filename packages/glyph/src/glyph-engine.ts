@@ -7,7 +7,7 @@ import {
   immutableFontVariantIdentity,
   type ImmutableFontResourceLease,
 } from './loaded-font.js';
-import type { AnyRasterFormat, RasterDataOf } from './config/raster-format.js';
+import type { RasterDataOf, RasterFormatMetadata } from './config/raster-format.js';
 import type { RasterKindOf, RegisteredRaster } from './raster.js';
 import { createRuntimeShaper, runtimeShaperEngineExports, type RuntimeShaper } from './shaper.js';
 import { GlyphEngineStatusError } from './engine-error.js';
@@ -43,20 +43,13 @@ export interface GlyphShapeRegistration {
 
 interface EngineFontRegistration {
   readonly font: RegisteredFont;
-  readonly variants: Map<object, EngineFontVariantRegistration>;
+  readonly resources: Set<{ dispose(): void }>;
   leases: number;
   disposed: boolean;
 }
 
-interface EngineFontVariantRegistration<Format extends AnyRasterFormat = AnyRasterFormat> {
-  readonly identity: object;
-  readonly raster: Format;
-  readonly resources: ImmutableFontResourceLease<Format>;
-  leases: number;
-}
-
 /** @internal An independent claim on one engine-local shaping registration. */
-export interface EngineFontBindingLease<Format extends AnyRasterFormat = AnyRasterFormat> {
+export interface EngineFontBindingLease<Format extends RasterFormatMetadata> {
   readonly disposed: boolean;
   readonly raster: Format;
   readonly handle: FontHandle;
@@ -65,7 +58,7 @@ export interface EngineFontBindingLease<Format extends AnyRasterFormat = AnyRast
 }
 
 /** @internal The retained portable resources associated with one engine binding lease. */
-export interface EngineFontBindingResources<Technique extends AnyRasterFormat = AnyRasterFormat> {
+export interface EngineFontBindingResources<Technique extends RasterFormatMetadata> {
   readonly font: RegisteredFont;
   readonly raster: RegisteredRaster<RasterKindOf<Technique>>;
   readonly data: RasterDataOf<Technique>;
@@ -156,7 +149,7 @@ export function shapeGlyphEngine(glyphEngine: GlyphEngine): void {
 }
 
 /** @internal Acquire one counted engine-local Wasm shaping registration. */
-export function acquireEngineFontBinding<Technique extends AnyRasterFormat>(
+export function acquireEngineFontBinding<Technique extends RasterFormatMetadata>(
   glyphEngine: GlyphEngine,
   font: Font<Technique>,
 ): EngineFontBindingLease<Technique> {
@@ -165,7 +158,9 @@ export function acquireEngineFontBinding<Technique extends AnyRasterFormat>(
 }
 
 /** @internal Read the hidden shaping handle while the binding lease is live. */
-export function engineFontBindingHandle(binding: EngineFontBindingLease<AnyRasterFormat>): FontHandle {
+export function engineFontBindingHandle<Format extends RasterFormatMetadata>(
+  binding: EngineFontBindingLease<Format>,
+): FontHandle {
   if (!(binding instanceof EngineFontBindingLeaseImpl)) {
     throw new TypeError('engine font binding was not created by this package');
   }
@@ -173,7 +168,7 @@ export function engineFontBindingHandle(binding: EngineFontBindingLease<AnyRaste
 }
 
 /** @internal Read retained portable resources while the engine binding lease is live. */
-export function engineFontBindingResources<Technique extends AnyRasterFormat>(
+export function engineFontBindingResources<Technique extends RasterFormatMetadata>(
   binding: EngineFontBindingLease<Technique>,
 ): EngineFontBindingResources<Technique> {
   if (!(binding instanceof EngineFontBindingLeaseImpl)) {
@@ -283,23 +278,16 @@ class GlyphEngineImpl implements GlyphEngine {
   }
 
   /** @internal */
-  _acquireFont<Technique extends AnyRasterFormat>(font: Font<Technique>): EngineFontBindingLease<Technique> {
+  _acquireFont<Technique extends RasterFormatMetadata>(font: Font<Technique>): EngineFontBindingLease<Technique> {
     this.#assertActive();
     const registered = immutableFontResources(font).font;
     const variantIdentity = immutableFontVariantIdentity(font);
     let registration = this.#fontRegistrations.get(registered);
-    let variant = registration?.variants.get(variantIdentity) as EngineFontVariantRegistration<Technique> | undefined;
+    const resources = acquireImmutableFontResources(font);
     if (registration === undefined || registration.disposed) {
-      const resources = acquireImmutableFontResources(font);
-      const createdVariant: EngineFontVariantRegistration<Technique> = {
-        identity: variantIdentity,
-        raster: font.raster,
-        resources,
-        leases: 0,
-      };
       const created: EngineFontRegistration = {
         font: registered,
-        variants: new Map([[variantIdentity, createdVariant]]),
+        resources: new Set(),
         leases: 0,
         disposed: false,
       };
@@ -317,37 +305,24 @@ class GlyphEngineImpl implements GlyphEngine {
         throw error;
       }
       registration = created;
-      variant = createdVariant;
       this.#fontRegistrations.set(registered, created);
       this.#liveFontRegistrations.add(created);
-    } else if (variant === undefined) {
-      variant = {
-        identity: variantIdentity,
-        raster: font.raster,
-        resources: acquireImmutableFontResources(font),
-        leases: 0,
-      };
-      registration.variants.set(variantIdentity, variant);
     }
     registration.leases += 1;
-    variant.leases += 1;
-    return new EngineFontBindingLeaseImpl(this, registration, variant);
+    registration.resources.add(resources);
+    return new EngineFontBindingLeaseImpl(this, registration, variantIdentity, font.raster, resources);
   }
 
-  _releaseFont(registration: EngineFontRegistration, variant: EngineFontVariantRegistration): void {
+  _releaseFont<Format extends RasterFormatMetadata>(
+    registration: EngineFontRegistration,
+    resources: ImmutableFontResourceLease<Format>,
+  ): void {
+    registration.resources.delete(resources);
+    resources.dispose();
     if (registration.disposed) return;
     if (registration.leases <= 0) throw new Error('engine font binding lease underflow');
-    if (variant.leases <= 0) throw new Error('engine font variant lease underflow');
     registration.leases -= 1;
-    variant.leases -= 1;
-    if (registration.leases === 0) {
-      this.#disposeFontRegistration(registration);
-      return;
-    }
-    if (variant.leases === 0) {
-      registration.variants.delete(variant.identity);
-      variant.resources.dispose();
-    }
+    if (registration.leases === 0) this.#disposeFontRegistration(registration);
   }
 
   /** @internal */
@@ -564,11 +539,9 @@ class GlyphEngineImpl implements GlyphEngine {
     try {
       this.#fontRegistry.delete(registration.font);
     } finally {
-      for (const variant of registration.variants.values()) {
-        variant.leases = 0;
-        variant.resources.dispose();
-      }
-      registration.variants.clear();
+      for (const resources of registration.resources) resources.dispose();
+      registration.resources.clear();
+      registration.leases = 0;
     }
   }
 
@@ -663,20 +636,26 @@ function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-class EngineFontBindingLeaseImpl<Technique extends AnyRasterFormat> implements EngineFontBindingLease<Technique> {
+class EngineFontBindingLeaseImpl<Technique extends RasterFormatMetadata> implements EngineFontBindingLease<Technique> {
   readonly #glyphEngine: GlyphEngineImpl;
   readonly #registration: EngineFontRegistration;
-  readonly #variant: EngineFontVariantRegistration<Technique>;
+  readonly #identity: object;
+  readonly #raster: Technique;
+  readonly #resources: ImmutableFontResourceLease<Technique>;
   #disposed = false;
 
   constructor(
     glyphEngine: GlyphEngineImpl,
     registration: EngineFontRegistration,
-    variant: EngineFontVariantRegistration<Technique>,
+    identity: object,
+    raster: Technique,
+    resources: ImmutableFontResourceLease<Technique>,
   ) {
     this.#glyphEngine = glyphEngine;
     this.#registration = registration;
-    this.#variant = variant;
+    this.#identity = identity;
+    this.#raster = raster;
+    this.#resources = resources;
   }
 
   get disposed(): boolean {
@@ -684,7 +663,7 @@ class EngineFontBindingLeaseImpl<Technique extends AnyRasterFormat> implements E
   }
 
   get raster(): Technique {
-    return this.#variant.raster;
+    return this.#raster;
   }
 
   get handle(): FontHandle {
@@ -694,13 +673,13 @@ class EngineFontBindingLeaseImpl<Technique extends AnyRasterFormat> implements E
 
   get identity(): object {
     if (this.disposed) throw new Error('engine font binding has been disposed');
-    return this.#variant.identity;
+    return this.#identity;
   }
 
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#glyphEngine._releaseFont(this.#registration, this.#variant);
+    this.#glyphEngine._releaseFont(this.#registration, this.#resources);
   }
 
   /** @internal */
@@ -712,9 +691,9 @@ class EngineFontBindingLeaseImpl<Technique extends AnyRasterFormat> implements E
   _resources(): EngineFontBindingResources<Technique> {
     if (this.disposed) throw new Error('engine font binding has been disposed');
     return {
-      font: this.#variant.resources.font,
-      raster: this.#variant.resources.raster,
-      data: this.#variant.resources.data,
+      font: this.#resources.font,
+      raster: this.#resources.raster,
+      data: this.#resources.data,
     };
   }
 }

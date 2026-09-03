@@ -153,30 +153,31 @@ label.position.x = -measuredLabel.contentWidth / 2;
 renderer.render(scene, camera);
 ```
 
-Use `Paragraph` when no Three object should exist. It measures synchronously with no scene, renderer, world matrix, or
-committed frame—which is also what a flexbox engine needs from inside its measure callback.
+The same explicit one-Text query path works inside a flexbox measure callback. Set the probe constraints, then call
+`measure()`; this deliberately pays one synchronous Wasm crossing for that Text without traversing a scene, publishing a
+draw, or realizing renderer resources. Call `glyphs()` only after the host resolves the final content box.
 
 ```ts
-import { createParagraph, txt } from '@pmndrs/glyph';
-
-const paragraph = await createParagraph({ font: inter, text: txt`Hello world`, layout: { wrap: 'word' } });
-const measured = paragraph.measure({ width: { mode: 'at-most', size: 360 } });
+label.constraints = { width: { mode: 'at-most', size: 360 } };
+const measured = label.measure();
 
 measured.contentWidth; // advance extent
 measured.firstBaseline; // from the box top edge
 measured.ascent; // per paragraph; per line on measured.lines
 measured.minContentWidth; // longest unbreakable run, from the same pass
+
+label.constraints = { width: { mode: 'exact', size: measured.width } };
+const positioned = label.glyphs();
 ```
 
 Every value is paragraph-local: the origin is the box's top-left corner, positive X is right, positive Y is down.
 Scale and placement are yours to apply afterwards.
 
-`measure()` returns sizes, baselines, counts, and intrinsic widths without per-glyph array copies. A cache miss may
-synchronously incur font and layout lookup work. When you need positioned output (`x`, `y`, `glyphIds`, ink boxes),
-call `glyphs()`; its cache miss may synchronously incur glyph lookup and positioning, and every call returns
-caller-owned column copies. Both canonical caches are three-entry LRUs covering the normal unconstrained, at-most, and
-exact negotiation cycle. A caller that probes sizes alone never pays for arrays it never touches. A query answers or throws:
-a constraint that is not finite and nonnegative throws from the call, naming the axis.
+`measure()` returns sizes, baselines, counts, and intrinsic widths without per-glyph array copies. When you need
+positioned output (`x`, `y`, `glyphIds`, ink boxes), call `glyphs()`; every call returns caller-owned column copies.
+Unchanged queries reuse retained engine preparation, and the next normal publication adopts that prepared work rather
+than shaping it again. A caller that probes sizes alone never pays for arrays it never touches. A query answers or
+throws: a constraint that is not finite and nonnegative throws from the call, naming the axis.
 
 ## Font Stacks - fallback fonts for missing glyphs
 

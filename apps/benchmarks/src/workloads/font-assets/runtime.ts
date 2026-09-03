@@ -1,8 +1,8 @@
 import {
-  type AnyRasterFormat,
   type BakeProgressListener,
   type Font,
   type RasterFormatInput,
+  type RasterFormatMetadata,
   type RasterFormatRequest,
 } from '@pmndrs/glyph';
 
@@ -31,7 +31,7 @@ const sourceUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'dancing-script': dancingScriptSourceUrl,
 };
 
-const retainedBakedPreloads = new Map<string, Promise<Font<AnyRasterFormat>>>();
+const retainedBakedPreloads = new Map<string, Promise<Font<RasterFormatMetadata>>>();
 
 if (import.meta.hot !== undefined) {
   import.meta.hot.dispose(() => {
@@ -78,7 +78,7 @@ export function measuredRuntimeFontBake(
 }
 
 /** Loads one font from artifact bytes the caller already fetched and authenticated. */
-export async function loadBakedFont<Format extends AnyRasterFormat>({
+export async function loadBakedFont<Format extends RasterFormatMetadata>({
   artifact,
   raster,
   signal,
@@ -94,7 +94,7 @@ export async function loadBakedFont<Format extends AnyRasterFormat>({
  * Keeps one application-lifetime owner for a baked fixture. Short-lived scenes still acquire and dispose their own
  * Font leases, while the retained owner keeps the decoded source and raster variant warm across technique switches.
  */
-export async function preloadBakedFont<Format extends AnyRasterFormat>({
+export async function preloadBakedFont<Format extends RasterFormatMetadata>({
   artifact,
   raster,
   signal,
@@ -124,7 +124,7 @@ export async function disposeBakedFontPreloads(): Promise<void> {
   for (const result of results) if (result.status === 'fulfilled') result.value.dispose();
 }
 
-function retainedBakedPreloadKey<Format extends AnyRasterFormat>(
+function retainedBakedPreloadKey<Format extends RasterFormatMetadata>(
   artifact: string,
   input: RasterFormatRequest<Format>,
 ): string {
@@ -132,7 +132,7 @@ function retainedBakedPreloadKey<Format extends AnyRasterFormat>(
 }
 
 /** Loads one font from its source URL, baking the core artifact and the selected raster through the measured bakers. */
-export function loadSourceFont<Format extends AnyRasterFormat>({
+export function loadSourceFont<Format extends RasterFormatMetadata>({
   source,
   raster,
   runtimeBake,
@@ -146,7 +146,7 @@ export function loadSourceFont<Format extends AnyRasterFormat>({
   return loadThroughBenchmarkLibrary({ source, runtimeBake }, raster, signal);
 }
 
-function loadThroughBenchmarkLibrary<Format extends AnyRasterFormat>(
+function loadThroughBenchmarkLibrary<Format extends RasterFormatMetadata>(
   input: Parameters<typeof benchmarkFontLibrary.loadFont>[0],
   raster: RasterFormatInput<Format>,
   signal: AbortSignal | undefined,

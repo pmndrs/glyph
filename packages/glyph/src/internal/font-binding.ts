@@ -1,6 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { Font } from '../font.js';
-import type { AnyRasterFormat, RasterResourceId } from '../config/raster-format.js';
+import type { RasterFormatMetadata, RasterResourceId } from '../config/raster-format.js';
 import { type CodecIdFactory, type CodecResourceId, type CodecTechniqueId } from '../config/codec.js';
 import { assertCodecIdFactory, CodecIdScope } from './render-id.js';
 import { compileRasterFont } from '../config/raster.js';
@@ -54,7 +54,7 @@ export interface FontBindingDescriptor {
 
 /** Compile one immutable font's binding bytes; portable resources are dropped from this byte-only projection. */
 export function fontBindingBytes(
-  font: Font<AnyRasterFormat>,
+  font: Font<RasterFormatMetadata>,
   identities: CodecIdFactory = new CodecIdScope(),
 ): Uint8Array {
   const compiled = compileRasterFont(font, identities);

@@ -1,9 +1,10 @@
 import type { CompiledCodecProgramBody, CodecProgramSystemBuffers } from '../config/codec-program.js';
-import type { AnyTechniqueSchema, CodecBufferDeclaration, CodecBufferDeclarations } from '../config/schema.js';
+import type { CodecBufferDeclaration, CodecBufferDeclarations, TechniqueSchemaMetadata } from '../config/schema.js';
 import type { CodecBufferId } from '../config/codec.js';
+import { assertGlyphId } from './glyph-id.js';
 
 interface CompiledCodecMetadata {
-  readonly schema: AnyTechniqueSchema;
+  readonly schema: TechniqueSchemaMetadata;
   readonly stableGlyphId: CodecBufferId | undefined;
   readonly transformIndex: CodecBufferId | undefined;
 }
@@ -35,11 +36,11 @@ export function normalizeCodecProgramSystemBuffers(
   return Object.freeze({ stableGlyphId, ...(transformIndex === undefined ? {} : { transformIndex }) });
 }
 
-export function assertTechniqueCodecBody(
+export function assertTechniqueCodecBody<Schema extends TechniqueSchemaMetadata>(
   body: unknown,
-  schema: AnyTechniqueSchema,
+  schema: Schema,
   system?: CodecProgramSystemBuffers,
-): asserts body is CompiledCodecProgramBody<AnyTechniqueSchema> {
+): asserts body is CompiledCodecProgramBody<Schema> {
   const compiled = typeof body === 'object' && body !== null ? metadata.get(body) : undefined;
   if (compiled?.schema !== schema) {
     throw new TypeError(`technique "${schema.technique}" codec body does not belong to its registered schema`);
@@ -58,10 +59,12 @@ function snapshotSystemBuffer<const Name extends 'stableGlyphId' | 'transformInd
 ): CodecBufferDeclaration<'u32', readonly [Name]> {
   if (!isRecord(value)) throw new TypeError(`${name} system buffer needs one u32 "${name}" lane`);
   const lanes = value.lanes;
+  const id = value.id;
   if (
-    !Number.isSafeInteger(value.id) ||
-    (value.id as number) <= 0 ||
-    (value.id as number) > 0xffff ||
+    typeof id !== 'number' ||
+    !Number.isSafeInteger(id) ||
+    id <= 0 ||
+    id > 0xffff ||
     value.scalar !== 'u32' ||
     !Array.isArray(lanes) ||
     lanes.length !== 1 ||
@@ -69,10 +72,12 @@ function snapshotSystemBuffer<const Name extends 'stableGlyphId' | 'transformInd
   ) {
     throw new TypeError(`${name} system buffer needs one u32 "${name}" lane`);
   }
-  return Object.freeze({ id: value.id, scalar: 'u32', lanes: Object.freeze([name]) }) as CodecBufferDeclaration<
-    'u32',
-    readonly [Name]
-  >;
+  const namedLanes: readonly [Name] = [name];
+  return Object.freeze({
+    id: assertGlyphId(id, 'buffer', `${name} system buffer id`),
+    scalar: 'u32',
+    lanes: namedLanes,
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

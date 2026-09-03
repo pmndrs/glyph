@@ -1,12 +1,4 @@
-import type {
-  AnyRasterFormat,
-  AxisConstraint,
-  Constraints,
-  GlyphLayoutInspection,
-  Paragraph,
-  ParagraphLayout,
-  ParagraphUpdate,
-} from '@pmndrs/glyph';
+import type { AxisConstraint, Constraints, GlyphLayoutInspection, ParagraphLayoutSummary } from '@pmndrs/glyph';
 
 export const YogaMeasureMode = Object.freeze({ Undefined: 0, Exactly: 1, AtMost: 2 });
 
@@ -14,27 +6,20 @@ type YogaMeasureModeValue = (typeof YogaMeasureMode)[keyof typeof YogaMeasureMod
 type Inset = readonly [top: number, right: number, bottom: number, left: number];
 type Size = readonly [width: number, height: number];
 
-/**
- * The current-uikit-shaped fixture over the real framework-neutral `Paragraph`.
- *
- * The host varies only axis constraints per probe -- stable paragraph layout lives in the
- * paragraph and changes through `update()` -- exactly the split a retained layout engine
- * needs. Measurement never materializes positioned arrays; the final resolved content box
- * is the only call that does.
- */
-export function createUikitLayoutFixture<Format extends AnyRasterFormat>(
-  paragraph: Paragraph<Format>,
-  layout: ParagraphLayout = {},
-) {
-  let currentLayout: ParagraphLayout = { ...layout };
-  let dirtyCount = 1;
-  let paintRevision = 0;
-  let rasterRevision = 0;
+interface MeasurableText {
+  constraints: Constraints;
+  measure(): ParagraphLayoutSummary;
+  glyphs(): GlyphLayoutInspection;
+}
+
+/** Exercise Yoga's measure negotiation through an ordinary detached Text. */
+export function createUikitLayoutFixture(text: MeasurableText) {
   const calls = { measure: 0, layout: 0 };
 
   function customLayouting() {
     calls.measure += 1;
-    const natural = paragraph.measure();
+    text.constraints = {};
+    const natural = text.measure();
     return {
       // Intrinsic widths ride the natural measurement itself: no second query at zero width.
       minWidth: natural.minContentWidth,
@@ -42,10 +27,11 @@ export function createUikitLayoutFixture<Format extends AnyRasterFormat>(
       firstBaseline: natural.firstBaseline,
       measure(width: number, widthMode: YogaMeasureModeValue, height: number, heightMode: YogaMeasureModeValue) {
         calls.measure += 1;
-        const metrics = paragraph.measure({
+        text.constraints = {
           width: mapYogaAxis(width, widthMode, 'width'),
           height: mapYogaAxis(height, heightMode, 'height'),
-        });
+        };
+        const metrics = text.measure();
         return {
           width: roundUpToPointScale(metrics.width),
           height: roundUpToPointScale(metrics.height),
@@ -56,21 +42,6 @@ export function createUikitLayoutFixture<Format extends AnyRasterFormat>(
 
   return {
     calls,
-    get dirtyCount() {
-      return dirtyCount;
-    },
-    get paintRevision() {
-      return paintRevision;
-    },
-    get rasterRevision() {
-      return rasterRevision;
-    },
-    get layout(): ParagraphLayout {
-      return currentLayout;
-    },
-    get paragraph(): Paragraph<Format> {
-      return paragraph;
-    },
     customLayouting,
     resolveYogaLeaf(width: number, widthMode: YogaMeasureModeValue, height: number, heightMode: YogaMeasureModeValue) {
       if (widthMode === YogaMeasureMode.Exactly && heightMode === YogaMeasureMode.Exactly) {
@@ -104,11 +75,11 @@ export function createUikitLayoutFixture<Format extends AnyRasterFormat>(
         'height',
       );
       calls.layout += 1;
-      const constraints: Constraints = {
+      text.constraints = {
         width: { mode: 'exact', size: contentWidth },
         height: { mode: 'exact', size: contentHeight },
       };
-      const inspection = paragraph.glyphs(constraints);
+      const inspection = text.glyphs();
       const contentLeft = -outerWidth / 2 + borderLeft + paddingLeft;
       const contentTop = outerHeight / 2 - borderTop - paddingTop;
       return {
@@ -117,21 +88,6 @@ export function createUikitLayoutFixture<Format extends AnyRasterFormat>(
         centeredX: Float32Array.from(inspection.x, (value) => value + contentLeft),
         centeredY: Float32Array.from(inspection.y, (value) => contentTop - value),
       };
-    },
-    updateParagraph(input: ParagraphUpdate<Format>) {
-      paragraph.update(input);
-      dirtyCount += 1;
-    },
-    updateParagraphLayout(layoutUpdate: ParagraphLayout) {
-      currentLayout = { ...currentLayout, ...layoutUpdate };
-      paragraph.update({ layout: currentLayout });
-      dirtyCount += 1;
-    },
-    updatePaint() {
-      paintRevision += 1;
-    },
-    updateRaster() {
-      rasterRevision += 1;
     },
   };
 }

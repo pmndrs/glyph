@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
-import { createParagraph, type TextStyle } from '@pmndrs/glyph';
+import type { TextStyle } from '@pmndrs/glyph';
 
 import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts';
 import { createUikitLayoutFixture, YogaMeasureMode } from '../src/benchmark/uikit-layout-fixture.ts';
@@ -102,14 +102,10 @@ try {
   } as const satisfies { readonly text: string; readonly style: TextStyle };
   const uikitPolicy = { wrap: 'word', overflow: 'clip' } as const satisfies LegacyConstraints;
   const uikitLayout = layoutOnly(uikitPolicy);
-  const uikitParagraph = await createParagraph({
-    font: inter.font,
-    text: uikitInput.text,
-    style: uikitInput.style,
-    layout: uikitLayout,
-  });
+  const uikitText = createContractText(inter.font, uikitInput.text, uikitInput.style);
+  uikitText.text.layout = uikitLayout;
   try {
-    const uikitFixture = createUikitLayoutFixture(uikitParagraph, uikitLayout);
+    const uikitFixture = createUikitLayoutFixture(uikitText.text);
     const customLayouting = uikitFixture.customLayouting();
     const natural = customLayouting.measure(
       Number.NaN,
@@ -168,7 +164,7 @@ try {
     };
     await publish(preserveEquivalentLegacyNumbers(document, retained));
   } finally {
-    uikitParagraph.dispose();
+    uikitText.dispose();
   }
 } finally {
   amiri.dispose();

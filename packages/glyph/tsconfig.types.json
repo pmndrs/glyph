@@ -2,10 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "customConditions": ["source"],
+    "jsx": "react-jsx",
     "noEmit": true,
     "resolveJsonModule": true,
     "rootDir": ".",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "tests/types/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/types/**/*.ts", "tests/types/**/*.tsx"]
 }

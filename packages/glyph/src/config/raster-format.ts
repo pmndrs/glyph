@@ -1,6 +1,20 @@
 import type { RasterDecodeFont } from '../font.js';
 import type { JsonValue, RasterDecodeArtifact, RasterOptionsArgument, RuntimeRasterBakerLoader } from '../raster.js';
-import { registerRasterFormat, registerRasterFormatRequest } from '../internal/raster-format-registry.js';
+import {
+  rasterFormatDescriptor,
+  rasterFormatOperation,
+  registerRasterFormat,
+  registerRasterFormatRequest,
+  type RasterFormatOperation,
+  type RasterFormatOperationVisitor,
+} from '../internal/raster-format-registry.js';
+import {
+  bindRasterFormatCompiler,
+  installRasterFormatCompiler,
+  type RasterFontCompileInput,
+  type RasterFormatCompiler,
+  type RasterFormatCompilerWitness,
+} from '../internal/raster-format-compiler.js';
 
 declare const rasterFormatIdBrand: unique symbol;
 declare const rasterResourceIdBrand: unique symbol;
@@ -26,14 +40,13 @@ interface RasterFormatTypeMap<Options, Descriptor, Data> {
   readonly data: Data;
 }
 
-/** Common identity retained when concrete raster-format types are intentionally erased. */
-export interface AnyRasterFormat {
+/** Renderer-neutral identity and capabilities shared by every concrete raster format. */
+export interface RasterFormatMetadata {
   readonly id: RasterFormatId;
   readonly kind: string;
   readonly extension: string;
   readonly version: number;
   readonly textEffects: readonly RasterTextEffect[];
-  readonly [rasterFormatTypes]?: RasterFormatTypeMap<unknown, JsonValue, unknown>;
 }
 
 /** Renderer-neutral raster identity, decoding, and ownership contract. */
@@ -43,7 +56,7 @@ export interface RasterFormat<
   Options,
   Descriptor extends JsonValue,
   Data,
-> extends AnyRasterFormat {
+> extends RasterFormatMetadata {
   (
     ...options: [Options] extends [never] ? [] : undefined extends Options ? [options?: Options] : [options: Options]
   ): RasterFormatRequest<RasterFormat<Id, Kind, Options, Descriptor, Data>>;
@@ -56,40 +69,50 @@ export interface RasterFormat<
   readonly version: number;
   readonly runtimeBaker?: RuntimeRasterBakerLoader<Kind, Options>;
 
+  /** Package-private: concrete data stays paired with its compiler through this private witness. */
+  readonly [installRasterFormatCompiler]: RasterFormatCompilerWitness<Data>[typeof installRasterFormatCompiler];
+  /** Package-private: produces an ids-only compiler closed over concrete decoded data. */
+  readonly [bindRasterFormatCompiler]: RasterFormatCompilerWitness<Data>[typeof bindRasterFormatCompiler];
+
   descriptor(options: RasterOptionsArgument<Options>): Descriptor;
   decode(font: RasterDecodeFont, raster: RasterDecodeArtifact<Kind>, signal?: AbortSignal): Promise<Data>;
   dispose(data: Data): void;
 }
 
-export type RasterFormatTypesOf<Format extends AnyRasterFormat> =
+export type RasterFormatTypesOf<Format extends RasterFormatMetadata> =
   Format extends RasterFormat<infer _Id, infer _Kind, infer Options, infer Descriptor, infer Data>
     ? RasterFormatTypeMap<Options, Descriptor, Data>
-    : RasterFormatTypeMap<unknown, JsonValue, unknown>;
+    : never;
 
-export type RasterOptionsOf<Format extends AnyRasterFormat> = RasterFormatTypesOf<Format>['options'];
+export type RasterOptionsOf<Format extends RasterFormatMetadata> = RasterFormatTypesOf<Format>['options'];
 
-export type RasterFormatRequest<Format extends AnyRasterFormat> = {
+/** Identity-only view of an options-bound raster request. */
+export interface RasterFormatRequestMetadata {
   readonly [rasterFormatRequestBrand]: true;
+  readonly raster: RasterFormatMetadata;
+}
+
+export type RasterFormatRequest<Format extends RasterFormatMetadata> = RasterFormatRequestMetadata & {
   readonly raster: Format;
 } & ([RasterOptionsOf<Format>] extends [never]
-  ? { readonly options?: never }
-  : undefined extends RasterOptionsOf<Format>
-    ? { readonly options?: RasterOptionsOf<Format> }
-    : { readonly options: RasterOptionsOf<Format> });
+    ? { readonly options?: never }
+    : undefined extends RasterOptionsOf<Format>
+      ? { readonly options?: RasterOptionsOf<Format> }
+      : { readonly options: RasterOptionsOf<Format> });
 
-export type RasterFormatInput<Format extends AnyRasterFormat> = [RasterOptionsOf<Format>] extends [never]
+export type RasterFormatInput<Format extends RasterFormatMetadata> = [RasterOptionsOf<Format>] extends [never]
   ? Format | RasterFormatRequest<Format>
   : undefined extends RasterOptionsOf<Format>
     ? Format | RasterFormatRequest<Format>
     : RasterFormatRequest<Format>;
 
-export type RasterFormatDescriptorOf<Format extends AnyRasterFormat> = RasterFormatTypesOf<Format>['descriptor'];
+export type RasterFormatDescriptorOf<Format extends RasterFormatMetadata> = RasterFormatTypesOf<Format>['descriptor'];
 
-export type RasterDataOf<Format extends AnyRasterFormat> = RasterFormatTypesOf<Format>['data'];
+export type RasterDataOf<Format extends RasterFormatMetadata> = RasterFormatTypesOf<Format>['data'];
 
 type RasterFormatDefinition<Id extends string, Kind extends string, Options, Descriptor extends JsonValue, Data> = Omit<
   RasterFormat<RasterFormatId & Id, Kind, Options, Descriptor, Data>,
-  'id'
+  'id' | typeof installRasterFormatCompiler | typeof bindRasterFormatCompiler
 > & {
   readonly id: Id;
 };
@@ -129,18 +152,27 @@ export function defineRasterFormat<
     throw new TypeError('raster format textEffects must not contain duplicates');
   }
   type Defined = RasterFormat<RasterFormatId & Id, Kind, Options, Descriptor, Data>;
+  let compiler: RasterFormatCompiler<Data> | undefined;
   let defined!: Defined;
   const select = (...options: readonly [Options?]): RasterFormatRequest<Defined> => {
-    const request =
+    const request = (
       options.length === 0 || options[0] === undefined
         ? Object.freeze({ raster: defined })
-        : Object.freeze({ raster: defined, options: options[0] });
-    registerRasterFormatRequest(request);
-    return request as RasterFormatRequest<Defined>;
+        : Object.freeze({ raster: defined, options: options[0] })
+    ) as RasterFormatRequest<Defined>;
+    const operation: RasterFormatOperation = {
+      format: defined,
+      visit<Result>(visitor: RasterFormatOperationVisitor<Result>): Result {
+        return visitor.visit(defined, request);
+      },
+    };
+    registerRasterFormatRequest(request, () => format.descriptor(options[0]!), operation);
+    return request;
   };
+  const id = format.id as RasterFormatId & Id;
   defined = Object.freeze(
     Object.assign(select, {
-      id: format.id,
+      id,
       kind: format.kind,
       extension: format.extension,
       version: format.version,
@@ -149,9 +181,19 @@ export function defineRasterFormat<
       descriptor: format.descriptor,
       decode: format.decode,
       dispose: format.dispose,
+      [installRasterFormatCompiler](next: RasterFormatCompiler<Data>): void {
+        if (compiler !== undefined && compiler !== next) {
+          throw new TypeError(`a different raster codec is already registered for "${format.id}"`);
+        }
+        compiler = next;
+      },
+      [bindRasterFormatCompiler](data: Data) {
+        return (input: RasterFontCompileInput) => compiler?.(input, data);
+      },
     }),
-  ) as unknown as Defined;
-  registerRasterFormat(defined);
+  );
+  const defaultRequest = select();
+  registerRasterFormat(defined, () => rasterFormatDescriptor(defaultRequest), rasterFormatOperation(defaultRequest));
   return defined;
 }
 

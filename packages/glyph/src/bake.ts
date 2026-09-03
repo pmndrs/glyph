@@ -106,13 +106,11 @@ export interface RasterBakerModule<Kind extends string, Options, Descriptor exte
   bake(request: RasterBakeRequest<Descriptor>): Promise<RasterBakeArtifact<Kind>>;
 }
 
-export type AnyRasterBakerModule = RasterBakerModule<string, any, JsonValue>;
+export type RasterBakeOptionsOf<Module> =
+  Module extends RasterBakerModule<string, infer Options, JsonValue> ? Options : never;
 
-export type RasterBakeOptionsOf<Module extends AnyRasterBakerModule> =
-  Module extends RasterBakerModule<any, infer Options, JsonValue> ? Options : never;
-
-export type RasterBakeDescriptorOf<Module extends AnyRasterBakerModule> =
-  Module extends RasterBakerModule<any, any, infer Descriptor extends JsonValue> ? Descriptor : never;
+export type RasterBakeDescriptorOf<Module> =
+  Module extends RasterBakerModule<string, infer _Options, infer Descriptor extends JsonValue> ? Descriptor : never;
 
 export function defineRasterBaker<const Kind extends string, Options, Descriptor extends JsonValue>(
   module: RasterBakerModule<Kind, Options, Descriptor>,
@@ -120,15 +118,23 @@ export function defineRasterBaker<const Kind extends string, Options, Descriptor
   return module;
 }
 
-export interface RasterBakePlan<Module extends AnyRasterBakerModule> {
-  readonly baker: Module;
-  readonly packaging: RasterPackaging;
-  readonly options: RasterBakeOptionsOf<Module>;
-}
+export type RasterBakePlan<Module> =
+  Module extends RasterBakerModule<string, infer Options, JsonValue>
+    ? {
+        readonly baker: Module;
+        readonly packaging: RasterPackaging;
+        readonly options: Options;
+      }
+    : never;
 
-export function rasterBake<Module extends AnyRasterBakerModule>(
+export function rasterBake<Module>(
   baker: Module,
   options: Omit<RasterBakePlan<Module>, 'baker'>,
-): RasterBakePlan<Module> {
+): RasterBakePlan<Module>;
+
+export function rasterBake<Kind extends string, Options, Descriptor extends JsonValue>(
+  baker: RasterBakerModule<Kind, Options, Descriptor>,
+  options: { readonly packaging: RasterPackaging; readonly options: Options },
+) {
   return { baker, ...options };
 }

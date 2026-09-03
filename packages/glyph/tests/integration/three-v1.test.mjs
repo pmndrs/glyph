@@ -75,10 +75,7 @@ test('one initialized Glyph runtime creates independent named Three handles over
   }
   assert.equal(glyph.init(), firstInit, 'successful initialization keeps one settled promise forever');
 
-  const font = await loadFont(
-    { baked: { bytes: await readFile(fontUrl) } },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const first = glyph.handle('three:integration:first', ThreeConfig);
   assert.equal(first.handle, first, 'the handle is its anonymous root owner');
   assert.equal(
@@ -128,7 +125,7 @@ test('one initialized Glyph runtime creates independent named Three handles over
   assert.equal('createText' in first, true, 'the callable handle reflects its anonymous-root surface');
   assert.equal('handle' in first, true);
   assert.equal('createText' in first('hud'), true, 'named roots reflect the same adapter extension surface');
-  assert.equal('drawRoot' in first, false, 'renderer draw objects stay behind the Three config schema');
+  assert.equal('renderObject' in first, false, 'renderer publication objects stay behind the Three config schema');
   assert.equal('scene' in secondSceneRoot, false, 'Scene discovery stays behind the Three root host');
   assert.equal('services' in secondSceneRoot, false, 'core root services do not leak through public roots');
   assert.equal('renderer' in secondSceneRoot, false, 'the configured renderer does not leak through public roots');
@@ -201,10 +198,7 @@ test('glyph.shape preserves root, codec, and font ownership while batching handl
   const first = await createThreeTestHandle(t);
   const second = await createThreeTestHandle(t);
   const named = first('batch-scene');
-  const font = await loadFont(
-    { baked: { bytes: await readFile(fontUrl) } },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const firstScene = new THREE.Scene();
   const secondScene = new THREE.Scene();
   const thirdScene = new THREE.Scene();
@@ -264,10 +258,7 @@ test('a configured renderer receives a command-buffer view only for its synchron
       };
     },
   });
-  const font = await loadFont(
-    { baked: { bytes: await readFile(fontUrl) } },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const label = three.createText({ font, text: 'Borrowed command buffer' });
   scene.add(label);
@@ -290,10 +281,7 @@ test('a configured renderer receives a command-buffer view only for its synchron
 
 test('one Three root binds one Scene and exposes its semantic name to material factories', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: { bytes: await readFile(fontUrl) } },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const root = three('semantic-hud');
   const first = root.createText({ font, text: 'first scene' });
   const second = root.createText({ font, text: 'second scene' });
@@ -315,11 +303,20 @@ test('one Three root binds one Scene and exposes its semantic name to material f
     );
     firstScene.add(second);
     firstScene.updateMatrixWorld(true);
-    assert.ok(firstScene.getObjectByName('@pmndrs/glyph:semantic-hud'));
+    const renderObject = firstScene.getObjectByName('@pmndrs/glyph:semantic-hud');
+    assert.ok(renderObject);
+    assert.equal(renderObject.parent, firstScene, 'the publication object is attached directly to the Scene');
+    assert.equal(first.parent, firstScene, 'Text stays a sibling of its publication object');
+    assert.equal(second.parent, firstScene, 'every Text stays a sibling of the shared publication object');
+    assert.equal(
+      renderObject.children.some((child) => child.isMesh),
+      true,
+      'generated meshes remain children of the publication object',
+    );
     assert.equal(materialRoots.length > 0, true);
     assert.equal(materialRoots[0].name, 'semantic-hud', 'the semantic root name is not derived from Scene.uuid');
     assert.equal(materialRoots[0].scene, firstScene);
-    assert.equal(materialRoots[0].drawRoot.name, '@pmndrs/glyph:semantic-hud');
+    assert.equal(materialRoots[0].renderObject, renderObject);
   } finally {
     first.dispose();
     second.dispose();
@@ -330,10 +327,7 @@ test('one Three root binds one Scene and exposes its semantic name to material f
 
 test('a root releases its renderer publication when its final Text is disposed', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: { bytes: await readFile(fontUrl) } },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const root = three('transient');
   const scene = new THREE.Scene();
   const first = root.createText({ font, text: 'first' });
@@ -361,10 +355,7 @@ test('a root releases its renderer publication when its final Text is disposed',
 
 test('a root restores its draw object when the host clears and reattaches the authored tree', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: { bytes: await readFile(fontUrl) } },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const text = three.createText({ font, text: 'reattached' });
   scene.add(text);
@@ -388,10 +379,7 @@ test('a root restores its draw object when the host clears and reattaches the au
 
 test('TextGroup ancestry cannot smuggle a Text across Glyph roots', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: { bytes: await readFile(fontUrl) } },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const world = three('world');
   const hud = three('hud');
   const worldGroup = world.createTextGroup();
@@ -447,10 +435,7 @@ test('detached matrix helpers round-trip aliased and independent targets with a 
 
 test('Text.breakApart imports a planner-assisted copy with exact world alignment and full matrices', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const sourceParent = new THREE.Group();
   sourceParent.position.set(-4, 2, 3);
@@ -647,10 +632,7 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
 
 test('detached glyphs retain their engine domain after the source and font owners are disposed', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const label = three.createText({ font, text: 'outlives source', style: { fontSize: 16 } });
   scene.add(label);
@@ -670,10 +652,7 @@ test('detached glyphs retain their engine domain after the source and font owner
 
 test('Text.breakApart returns a paragraph-scoped independent decoration plan when one exists', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const label = three.createText({
     font,
@@ -755,10 +734,7 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
 
 test('Text.breakApart preserves TextGroup paint order across detached roots', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const layer = new THREE.Group();
   layer.renderOrder = 3;
@@ -830,10 +806,7 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
 
 test('Text.breakApart preserves per-span material routing with independently owned instances', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const namedMaterial = (name) =>
     defineTextMaterial((context) => {
       const material = context.createDefaultMaterial();
@@ -879,9 +852,9 @@ test('Text.breakApart preserves per-span material routing with independently own
 
 test('one portable request returns typed resources for every declared technique', async () => {
   const [bitmapFont, msdfFont, slugFont] = await loadFont({ baked: { bytes: await readFile(multiTechniqueFontUrl) } }, [
-    { raster: bitmap, options: { strikes: [32] } },
-    { raster: msdf },
-    { raster: slug },
+    bitmap({ strikes: [32] }),
+    msdf,
+    slug,
   ]);
   assert.equal(bitmapFont.font, msdfFont.font);
   assert.equal(msdfFont.font, slugFont.font);
@@ -897,9 +870,9 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
   const three = await createThreeTestHandle(t);
   const bytes = await readFile(multiTechniqueFontUrl);
   const [bitmapFont, msdfFont, slugFont] = await loadFont({ baked: dataUrl(bytes) }, [
-    { raster: bitmap, options: { strikes: [32] } },
-    { raster: msdf },
-    { raster: slug },
+    bitmap({ strikes: [32] }),
+    msdf,
+    slug,
   ]);
   const effectStyle = {
     fontSize: 32,
@@ -962,7 +935,7 @@ test('Three handle ownership follows immutable variants across user-font disposa
   const three = await createThreeTestHandle(t);
   const library = createFontLibrary();
   const input = { baked: { bytes: await readFile(fontUrl) } };
-  const raster = { raster: bitmap, options: { strikes: [16] } };
+  const raster = bitmap({ strikes: [16] });
   const [first, second] = await Promise.all([library.loadFont(input, raster), library.loadFont(input, raster)]);
   assert.notEqual(first, second, 'each caller owns an independent Font lease');
 
@@ -995,14 +968,8 @@ test('Three balances resolved font-stack ownership across measurement, updates, 
     GlyphHandleState.prototype.disposeFontStack = disposeFontStack;
   });
 
-  const first = await loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
-  const second = await loadFont(
-    { baked: dataUrl(await readFile(amiriFontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const first = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const second = await loadFont({ baked: dataUrl(await readFile(amiriFontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const label = three.createText({ font: first, text: 'first' });
   try {
@@ -1042,10 +1009,7 @@ test('Three balances resolved font-stack ownership across measurement, updates, 
 
 test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose through the scene graph', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const emptyScene = new THREE.Scene();
   const initiallyEmpty = three.createText({ font, text: '' });
   emptyScene.add(initiallyEmpty);
@@ -1293,10 +1257,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
 
 test('nested TextGroup nodes inherit presentation without creating nested publication boundaries', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const inheritedMaterial = defineTextMaterial((context) => {
     const material = context.createDefaultMaterial();
     material.name = 'outer-inherited';
@@ -1344,10 +1305,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   const three = await createThreeTestHandle(t);
   const instrumented = instrumentedGlyph;
   instrumented.reset();
-  const font = await loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   let failMaterial = true;
   let label;
   const material = defineTextMaterial((context) => {
@@ -1439,10 +1397,7 @@ test('a rejected fixed-capacity candidate releases its provisional font-stack le
   });
 
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const label = three.createText({ font, text: 'over budget' });
   try {
@@ -1461,10 +1416,7 @@ test('a rejected fixed-capacity candidate releases its provisional font-stack le
 test('TextGroup drops disposed descendants and reuses their committed transform identities', async (t) => {
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const group = three.createTextGroup();
   const survivor = three.createText({ font, text: 'A' });
@@ -1504,10 +1456,7 @@ test('TextGroup drops disposed descendants and reuses their committed transform 
 test('Three retires materials bound to a replaced buffer generation', async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 2, policy: 'grow' } }));
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const materials = [];
   const disposed = new Set();
   const material = defineTextMaterial((context) => {
@@ -1540,8 +1489,8 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
   const [latin, icon] = await Promise.all([
-    fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, { raster: bitmap, options: { strikes: [16] } }),
-    fontDomain.loadFont({ baked: dataUrl(gunzipSync(await readFile(iconSlugFontUrl))) }, { raster: slug, options: {} }),
+    fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] })),
+    fontDomain.loadFont({ baked: dataUrl(gunzipSync(await readFile(iconSlugFontUrl))) }, slug),
   ]);
   const realizedTechniques = [];
   const material = defineTextMaterial((context) => {
@@ -1622,10 +1571,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   const three = await createThreeTestHandle(t);
   const instrumented = instrumentedGlyph;
   instrumented.reset();
-  const font = await loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const group = three.createTextGroup({ renderOrder: 3 });
   const left = three.createText({ font, text: 'AB' });
@@ -2012,10 +1958,7 @@ function instrumentNextGlyphEngine() {
 test('Text.measure answers attached first-frame state without traversing matrices or realizing draws', async (t) => {
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const group = three.createTextGroup();
   const first = three.createText({
@@ -2079,10 +2022,7 @@ test('Text.measure answers attached first-frame state without traversing matrice
 test('root-owned Text.measure creates only its implicit measurement batch before traversal', async (t) => {
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const label = three.createText({ font, text: 'standalone first-frame measurement' });
   label.position.set(19, 23, 0);
@@ -2124,7 +2064,7 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(densityFontUrl)) },
-    { raster: bitmap, options: { strikes: [16, 32] } },
+    bitmap({ strikes: [16, 32] }),
   );
   const scene = new THREE.Scene();
   const group = three.createTextGroup();
@@ -2176,7 +2116,7 @@ test('multi-page Bitmap strikes remain one ordered texture-array draw', async (t
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont(
     { baked: dataUrl(await readFile(densityFontUrl)) },
-    { raster: bitmap, options: { strikes: [16, 32] } },
+    bitmap({ strikes: [16, 32] }),
   );
   const scene = new THREE.Scene();
   const group = three.createTextGroup();
@@ -2208,10 +2148,7 @@ test('multi-page Bitmap strikes remain one ordered texture-array draw', async (t
 test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async (t) => {
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont(
-    { baked: dataUrl(await readFile(amiriFontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(amiriFontUrl)) }, bitmap({ strikes: [16] }));
   const text = 'مرحبا بالعالم';
 
   const scene = new THREE.Scene();
@@ -2244,10 +2181,7 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async (t) 
 test('one Three root atomically replaces child paragraphs without multiplying retained text capacity', async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 4_096, policy: 'grow' } }));
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const group = three.createTextGroup();
   const first = [three.createText({ font, text: 'A' }), three.createText({ font, text: 'B' })];
@@ -2293,10 +2227,7 @@ test('one Three root atomically replaces child paragraphs without multiplying re
 test('one Three root grows aggregate glyph storage without reserving one aggregate-sized paragraph', async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 4_096, policy: 'chunk' } }));
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const group = three.createTextGroup();
   const labels = Array.from({ length: 684 }, (_, index) => three.createText({ font, text: `icon-${String(index)}` }));
@@ -2333,10 +2264,7 @@ test('repeated layout under changing constraints stays on the paragraph query pa
   const abi = textShaperAbi;
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont(
-    { baked: dataUrl(await readFile(fontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const label = three.createText({
     font,
@@ -2392,10 +2320,7 @@ test('a standard ligature that absorbs a grapheme publishes and keeps typing', a
   // does not, which is why every existing Latin fixture missed this.
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont(
-    { baked: dataUrl(await readFile(amiriFontUrl)) },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(amiriFontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const group = three.createTextGroup();
   scene.add(group);
@@ -2454,6 +2379,6 @@ function dataUrl(bytes) {
 }
 
 function rootDraws(scene, name = undefined) {
-  const drawRoot = scene.getObjectByName(name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${name}`);
-  return drawRoot?.children.filter((child) => child.isMesh) ?? [];
+  const renderObject = scene.getObjectByName(name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${name}`);
+  return renderObject?.children.filter((child) => child.isMesh) ?? [];
 }

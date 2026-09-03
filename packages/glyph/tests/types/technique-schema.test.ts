@@ -6,7 +6,9 @@ import {
   defineTechniqueGeometryKind,
   defineTechniqueSchema,
   schemaCodecBuffers,
+  type TechniqueSchemaMetadata,
 } from '../../dist/config/schema.js';
+import * as SchemaApi from '../../dist/config/schema.js';
 import { schemaFieldTable, type FontBindingFieldTable } from '../../dist/internal/font-binding.js';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 
@@ -21,6 +23,17 @@ const schema = defineTechniqueSchema({
     page: { id: id.buffer('type-schema/page'), scalar: 'u32', lanes: ['page'] },
   } as const,
 });
+
+// @ts-expect-error Generic paths preserve their exact schema instead of accepting an Any schema alias.
+type _RemovedAnyTechniqueSchema = SchemaApi.AnyTechniqueSchema;
+
+function preserveTechniqueSchema<const Schema extends TechniqueSchemaMetadata>(value: Schema): Schema {
+  return value;
+}
+
+const preservedSchema = preserveTechniqueSchema(schema);
+const preservedRectLane: 'width' = preservedSchema.buffers.rect.lanes[2];
+void preservedRectLane;
 
 defineTechniqueSchema({
   ...schema,

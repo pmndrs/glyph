@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:5e1ea0c763849ec48fd2497e455d735fd57ed29300c032359aeb3e67fb2e5eca'
+source_digest: 'sha256:fe55c1b820b029f192facb613ec4f5b22860660fffadbc6a5e797d2c1d11bdb2'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -161,7 +161,7 @@ relationship. `GlyphConfigFor<typeof Schema, Root, Result>` gives isolated decla
 without repeating the schema's binding tuple or boundary type. Internal handle machinery owns Codec installation, planning, projection, resource
 settlement, and disposal; third-party integrations receive only constrained root services. Every FontFace and handle reaches
 the same process-local, lease-counted font resource graph. Low-level loading and acquisition are internal services rather
-than a second application or integrator API. A consumer loads a FontFace selection; Text or Paragraph then owns the
+than a second application or integrator API. A consumer loads a FontFace selection; Text then owns the
 independent immutable Font lease needed by its engine binding. Portable compiled resources remain immutable payload data,
 while each renderer owns physical textures, buffers, geometry, and their device-relative leases.
 
@@ -275,7 +275,7 @@ therefore pre-render a hidden text or whole text group, while R3F retains visibi
 
 Structural `txt`/`span` values and nested React `<Text>` are the only public rich-text authoring paths. They compile one
 immutable string and internal span records, then resolve their derived joins onto the extended grapheme-cluster grid
-before a frame is built (D-265). Public `Text`, `Text.set()`, and `Paragraph` inputs reject a parallel raw `spans` field;
+before a frame is built (D-265). Public `Text` and `Text.set()` inputs reject a parallel raw `spans` field;
 callers therefore cannot forge offsets, split a cluster, or keep a mutable range table synchronized with text. Internal
 alignment remains a compiler backstop because concatenation can fuse the tail of one fragment with the head of the next.
 
@@ -286,7 +286,7 @@ nothing. Each carries the offending paragraph and style in two u32s of the resul
 header size and every prior field offset are unchanged. `/three` re-raises them as `TextFrameError`, whose `rejection` is
 a discriminated union over the cause and affected `Text`; span bookkeeping remains private to the structural compiler.
 
-Publicly constructible frame inputs are validated where they enter `Text`, `TextGroup`, `Paragraph`, Codec assembly, or
+Publicly constructible frame inputs are validated where they enter `Text`, `TextGroup`, Codec assembly, or
 font registration; malformed data never waits for scene traversal to fail. A residual engine rejection therefore names an
 internal invariant defect through `TextFrameError` while the last committed draw state remains live. Renderer preparation is
 separate: if an engine-accepted publication cannot realize its resources or material, Three discards the candidate, keeps
@@ -311,8 +311,11 @@ exact format, while `face.slug.load()` loads only that exact declared format. `f
 main GLB without fetching sidecars and returns its frozen, ordered format keys. Successful calls preserve Promise and
 result identity; rejected calls are evicted for retry. The consuming handle supplies its configured default key when an
 undeclared face is passed to Text; imperative Three rejects an unloaded selected format before creating retained state.
-Renderer-free `createParagraph()` accepts a loaded explicit FontFace selection and retains its own immutable Font lease;
-because it has no renderer config, it rejects an undeclared handle-relative default instead of guessing a raster format.
+Explicit `Text.measure()` and `Text.glyphs()` calls synchronously query one Text through its selected handle. They may pay
+one additional Wasm crossing, but do not traverse a scene, publish commands, or realize renderer resources. Normal
+rendering still publishes every dirty root through one `glyph.shape()` crossing. The former renderer-free
+`createParagraph()` path was removed because its private engine, handle, Codec, planner, font bindings, and caches
+duplicated the GlyphConfig pipeline (D-339).
 
 The FontFace source cache coalesces canonical-equivalent locators before I/O and converges different locators onto one
 parsed main-font node after their complete GLB bytes have the same SHA-256 content identity. Every acquisition base is
@@ -505,7 +508,7 @@ fallback stack, and observes two Rust-planned draws with exact Bitmap `vec2` and
 selected font binding—not a `Text` format selector—carries the renderer program and resource.
 
 Raster formats explicitly declare the text effects their portable Codec and shader implement. MSDF supports outline and
-shadow; Bitmap and Slug currently support neither. Three, `Paragraph`, and root-configured integrations validate
+shadow; Bitmap and Slug currently support neither. Three and root-configured integrations validate
 the selected font formats at the call that accepts a style, so an unsupported effect cannot become a malformed or
 silently degraded render plan. The semantic ABI carries effect color, width, offset, and inherited opacity only for
 technique programs that opt in.
@@ -905,14 +908,14 @@ break-sensitive path, so the 42.4% RSD describes remaining workload classes rath
 optimized SIMD shaper is 1,147,266 raw bytes. Five patches write roughly 1.2 KiB per update, and the retained high-water
 mark remains 80.38 MiB. Median is now below 4 ms, but p95 and memory-growth gates remain open.
 
-Policy gather now retains complete prior input lanes by committed render-planner/policy/capability revision. Zero-change glyphs
-reuse them without binding or policy work; changed glyphs update only reachable lanes. A resource or draw-storage key
+Codec gather now retains complete prior input lanes by committed planner/Codec/capability revision. Zero-change glyphs
+reuse them without binding or Codec work; changed glyphs update only reachable lanes. A resource or draw-storage key
 change retains the verified prefix and fully rebuilds the suffix, preserving correct replacement-buffer inputs without
 double-scanning the prefix. The same production lane now measures 1.314 ms median / 5.863 ms p95 with 76.2% RSD, five
 patches, and roughly 1.2 KiB written. The 1,153,122-byte optimized shaper is 5,856 bytes larger than the prior checkpoint,
 and retained high-water memory is 80.19 MiB. The fast class approaches 1 ms; the break-sensitive p95 remains open.
 
-The ordered-direct compiler additionally retains committed glyph-to-batch and glyph-to-slot topology while policy,
+The ordered-direct compiler additionally retains committed glyph-to-batch and glyph-to-slot topology while Codec,
 capability, glyph count, and every physical storage key remain compatible. It still validates every glyph and stable
 identity; the first storage mismatch falls back to complete batch discovery. Three consecutive optimized runs measured
 1.164/5.761, 1.153/5.740, and 1.155/5.738 ms median/p95, versus the preceding 1.314/5.863 ms checkpoint. The optimized

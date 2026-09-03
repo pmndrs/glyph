@@ -3,7 +3,7 @@ import * as THREE from 'three/webgpu';
 import { visibleBelowRoot } from './internal/scene-tree.js';
 
 export interface ThreeTransformState {
-  readonly drawRoot: THREE.Object3D;
+  readonly renderObject: THREE.Object3D;
   readonly draws: readonly THREE.Mesh[];
   readonly activeTransformIndices: ReadonlySet<number>;
   readonly directDrawsByTransform: ReadonlyMap<number, readonly THREE.Mesh[]>;
@@ -30,16 +30,16 @@ export class ThreeTransformSynchronizer {
       const directDraws = state.directDrawsByTransform.get(transformId);
       if (!indexed && directDraws === undefined) continue;
       if (!rootPrepared) {
-        if (!worldMatricesCurrent) state.drawRoot.updateWorldMatrix(true, false, true);
-        this.#rootInverse.copy(state.drawRoot.matrixWorld).invert();
+        if (!worldMatricesCurrent) state.renderObject.updateWorldMatrix(true, false, true);
+        this.#rootInverse.copy(state.renderObject.matrixWorld).invert();
         rootPrepared = true;
       }
       const object = state.transforms.get(transformId);
       if (object === undefined) throw new Error(`Three plan target has no retained transform ${transformId}`);
       if (!worldMatricesCurrent) object.updateWorldMatrix(true, false, true);
-      if (object === state.drawRoot) this.#relativeTransform.identity();
+      if (object === state.renderObject) this.#relativeTransform.identity();
       else this.#relativeTransform.multiplyMatrices(this.#rootInverse, object.matrixWorld);
-      const visible = state.visibleObject?.(object) ?? visibleBelowRoot(object, state.drawRoot);
+      const visible = state.visibleObject?.(object) ?? visibleBelowRoot(object, state.renderObject);
       let transformChanged = false;
       if (indexed) {
         const offset = transformId * 16;

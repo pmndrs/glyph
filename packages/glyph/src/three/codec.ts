@@ -19,8 +19,8 @@ import {
   defineCodecBuffers,
   defineTechniqueSchema,
   schemaCodecBuffers,
-  type AnyTechniqueSchema,
   type TechniqueSchema,
+  type TechniqueSchemaMetadata,
 } from '../config/schema.js';
 import { bitmapCodec } from '../raster/bitmap.js';
 import { msdfCodec } from '../raster/msdf.js';
@@ -212,7 +212,7 @@ function codecSystemBuffers(transformMode: ThreeTransformMode) {
 }
 
 /** Every Three program publishes its schema's buffers, then the Codec's own system buffers. */
-function programBuffers(schema: AnyTechniqueSchema, transformMode: ThreeTransformMode): CodecBuffer[] {
+function programBuffers(schema: TechniqueSchemaMetadata, transformMode: ThreeTransformMode): CodecBuffer[] {
   return [
     ...schemaCodecBuffers(schema),
     stableGlyphIdBuffer(),

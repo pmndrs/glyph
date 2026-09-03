@@ -23,11 +23,12 @@ import {
   fontFaceResourceKey,
   isFontFaceSelection,
   resolveFontFace,
-  type AnyFontFace,
-  type AnyFontFaceSelection,
+  type FontFace,
+  type FontFaceSelection,
   type FontFaceConfig,
   type FontFaceFormat,
   type FontFaceFormatInput,
+  type FontFaceRasterOf,
   type FontFaceSource,
 } from './font-face.js';
 import { resolveRangesToClusters, type FormattedText, type TextInput } from './formatted-text.js';
@@ -37,7 +38,7 @@ import { FontLoadError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
 import { type Constraints, type ParagraphLayout, type PropertyList, type TextStyle } from './text-properties.js';
-import type { AnyRasterFormat } from './config/raster-format.js';
+import type { RasterFormatMetadata } from './config/raster-format.js';
 import {
   acquireThreeHandleFont,
   isThreeHandleFontLoaded,
@@ -70,7 +71,7 @@ type Object3DProps = Omit<ThreeElements['object3D'], 'children' | 'ref'>;
 type TextElementProps = Omit<ThreeElement<typeof ThreeText>, 'children' | 'ref'>;
 type TextGroupElementProps = Omit<ThreeElement<typeof ThreeTextGroup>, 'children' | 'ref'>;
 
-export type R3fTextChild<Technique extends AnyRasterFormat> =
+export type R3fTextChild<Technique extends RasterFormatMetadata> =
   | string
   | number
   | null
@@ -78,16 +79,26 @@ export type R3fTextChild<Technique extends AnyRasterFormat> =
   | ReactElement<R3fTextProps<Technique>>
   | readonly R3fTextChild<Technique>[];
 
-type R3fFontSelection<Technique extends AnyRasterFormat> = FontSelection<Technique> | AnyFontFaceSelection | string;
+type R3fFontSelection<Technique extends RasterFormatMetadata> =
+  | FontSelection<Technique>
+  | FontFaceSelection<FontFaceFormat<Technique> | undefined>
+  | (RasterFormatMetadata extends Technique ? string : never);
 
-type FontSelectionTechnique<Selection> =
-  Selection extends Font<infer Technique>
+type FontSelectionTechnique<Selection> = Selection extends string
+  ? RasterFormatMetadata
+  : Selection extends Font<infer Technique>
     ? Technique
     : Selection extends FontStack<infer Technique>
       ? Technique
-      : never;
+      : Selection extends FontFaceSelection
+        ? FontFaceRasterOf<Selection>
+        : never;
 
-export type R3fTextProps<Technique extends AnyRasterFormat> = Object3DProps & {
+type InferredTextTechnique<Selection> = [Selection] extends [undefined]
+  ? RasterFormatMetadata
+  : FontSelectionTechnique<Selection>;
+
+export type R3fTextProps<Technique extends RasterFormatMetadata> = Object3DProps & {
   readonly font?: R3fFontSelection<Technique>;
   readonly children?: R3fTextChild<Technique>;
   /** Text shaping and presentation properties inherited by nested Text spans. */
@@ -110,23 +121,23 @@ export type R3fTextGroupProps = Object3DProps &
     readonly ref?: Ref<ThreeTextGroup>;
   };
 
-interface FlattenedText<Technique extends AnyRasterFormat> {
+interface FlattenedText<Technique extends RasterFormatMetadata> {
   readonly text: string;
   readonly spans: readonly ThreeTextSpanRecord<Technique>[];
 }
 
-interface InlineProperties<Technique extends AnyRasterFormat> {
+interface InlineProperties<Technique extends RasterFormatMetadata> {
   readonly font?: R3fFontSelection<Technique>;
   readonly style?: TextStyle;
   readonly material?: ThreeTextMaterial;
 }
 
-type DesiredR3fTextProperties<Technique extends AnyRasterFormat> = Partial<StandaloneTextProperties<Technique>> & {
+type DesiredR3fTextProperties<Technique extends RasterFormatMetadata> = Partial<StandaloneTextProperties<Technique>> & {
   readonly font: FontSelection<Technique>;
   readonly text: TextInput<Technique>;
 };
 
-type DesiredR3fTextInput<Technique extends AnyRasterFormat> = Omit<
+type DesiredR3fTextInput<Technique extends RasterFormatMetadata> = Omit<
   Partial<StandaloneTextProperties<Technique>>,
   'font'
 > & {
@@ -134,26 +145,26 @@ type DesiredR3fTextInput<Technique extends AnyRasterFormat> = Omit<
   readonly text: TextInput<Technique>;
 };
 
-type HookFontConfig<Format> = Readonly<{ format: FontFaceFormatInput<Format> }>;
-type AnyHookFontConfig = Readonly<{ format?: FontFaceFormat }>;
+type SelectedHookFontConfig<Format> = Readonly<{ format: FontFaceFormatInput<Format> }>;
+type DefaultHookFontConfig = Readonly<{ format?: FontFaceFormat }>;
 
-type TechniqueOfHookFormat<Format> = Format extends AnyRasterFormat
+type TechniqueOfHookFormat<Format> = Format extends RasterFormatMetadata
   ? Format
-  : Format extends { readonly raster: infer Technique extends AnyRasterFormat }
+  : Format extends { readonly raster: infer Technique extends RasterFormatMetadata }
     ? Technique
-    : AnyRasterFormat;
+    : RasterFormatMetadata;
 
 /** Generic R3F font hook over the selected Three handle's FontFace cache. */
 export interface UseFont {
   /** Load one source's default or explicitly requested format and retain its mounted lease through React. */
-  (input: FontFaceSource): Font<AnyRasterFormat>;
-  <const Format>(input: FontFaceSource, config: HookFontConfig<Format>): Font<TechniqueOfHookFormat<Format>>;
+  (input: FontFaceSource): Font<RasterFormatMetadata>;
+  <const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): Font<TechniqueOfHookFormat<Format>>;
   /** Start the same default-handle load before a component requests it. */
   preload(input: FontFaceSource): Promise<void>;
-  preload<const Format>(input: FontFaceSource, config: HookFontConfig<Format>): Promise<void>;
+  preload<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): Promise<void>;
   /** Release the default-handle cache entry without invalidating mounted Font leases. */
   clear(input: FontFaceSource): void;
-  clear<const Format>(input: FontFaceSource, config: HookFontConfig<Format>): void;
+  clear<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): void;
 }
 
 const ThreeTextElement = extend(ThreeText);
@@ -161,7 +172,7 @@ const ThreeTextGroupElement = extend(ThreeTextGroup);
 interface GlyphReactContext {
   readonly handle: ThreeHandle;
   readonly root: ThreeRoot;
-  readonly fontFaces: ReadonlyMap<string, AnyFontFace>;
+  readonly fontFaces: ReadonlyMap<string, FontFace>;
 }
 
 const GlyphHandleContext = createContext<GlyphReactContext | undefined>(undefined);
@@ -182,7 +193,7 @@ const defaultRootFinalizer = new FinalizationRegistry<ThreeRoot>((root) => {
     // A finalizer is only an abandoned-render safety net; explicit React cleanup owns correctness.
   }
 });
-const emptyFontFaces: ReadonlyMap<string, AnyFontFace> = new Map();
+const emptyFontFaces: ReadonlyMap<string, FontFace> = new Map();
 let nextHandleId = 1;
 let nextDefaultRootId = 1;
 let defaultThreeHandleValue: ThreeHandle | undefined;
@@ -190,7 +201,7 @@ let defaultThreeHandlePromise: Promise<ThreeHandle> | undefined;
 
 export type GlyphProviderFontFace =
   | FontFaceSource
-  | AnyFontFace
+  | FontFace
   | Readonly<{ src: FontFaceSource; format?: FontFaceConfig['format'] }>;
 
 export interface GlyphProviderProps {
@@ -203,7 +214,7 @@ export interface GlyphProviderProps {
 }
 
 interface ProviderFontFaces {
-  readonly byName: ReadonlyMap<string, AnyFontFace>;
+  readonly byName: ReadonlyMap<string, FontFace>;
   dispose(): void;
 }
 
@@ -316,12 +327,12 @@ function defaultGlyphContext(store: R3fRootStore, handle: ThreeHandle): DefaultG
 }
 
 function createProviderFontFaces(table: GlyphProviderProps['fontFaces']): ProviderFontFaces {
-  const byName = new Map<string, AnyFontFace>();
-  const owned: AnyFontFace[] = [];
+  const byName = new Map<string, FontFace>();
+  const owned: FontFace[] = [];
   try {
     for (const [name, declaration] of Object.entries(table ?? {})) {
       if (name.trim().length === 0) throw new TypeError('GlyphProvider fontFaces keys must be nonempty strings');
-      let face: AnyFontFace;
+      let face: FontFace;
       if (isFontFaceSelection(declaration)) {
         face = declaration.face;
       } else if (isProviderFontFaceConfig(declaration)) {
@@ -343,7 +354,7 @@ function createProviderFontFaces(table: GlyphProviderProps['fontFaces']): Provid
   }
   let disposed = false;
   return Object.freeze({
-    byName: byName as ReadonlyMap<string, AnyFontFace>,
+    byName,
     dispose(): void {
       if (disposed) return;
       disposed = true;
@@ -435,26 +446,26 @@ function rootId(root: ThreeRoot): number {
 }
 
 interface TextComponent {
-  <const Selection, Technique extends AnyRasterFormat = FontSelectionTechnique<Selection>>(
-    input: Omit<R3fTextProps<Technique>, 'font'> & {
-      readonly font: Selection & ([FontSelectionTechnique<Selection>] extends [never] ? never : unknown);
+  <const Selection = undefined>(
+    input: Omit<R3fTextProps<InferredTextTechnique<Selection>>, 'font'> & {
+      readonly font?: Selection & ([InferredTextTechnique<Selection>] extends [never] ? never : unknown);
     },
   ): ReactElement | null;
-  <Technique extends AnyRasterFormat>(input: R3fTextProps<Technique>): ReactElement | null;
+  <Technique extends RasterFormatMetadata>(input: R3fTextProps<Technique>): ReactElement | null;
 }
 
 /** R3F paragraph component backed by one retained Three text instance. */
-export const Text = forwardRef(function Text<Technique extends AnyRasterFormat>(
-  properties: Omit<R3fTextProps<Technique>, 'ref'>,
-  forwardedRef: Ref<ThreeText<Technique>>,
+export const Text = forwardRef(function Text(
+  properties: Omit<R3fTextProps<RasterFormatMetadata>, 'ref'>,
+  forwardedRef: Ref<ThreeText<RasterFormatMetadata>>,
 ): ReactElement | null {
   assertNoHandleProp(properties, 'Text');
   const context = useSelectedGlyphContext();
   const handle = context.handle;
   const root = context.root;
-  const flattened = useMemo(() => flattenText<Technique>(properties.children), [properties.children]);
+  const flattened = useMemo(() => flattenText(properties.children), [properties.children]);
   const desired = textProperties(properties, flattened);
-  const [object, publishObject] = useState<ThreeText<Technique> | null>(null);
+  const [object, publishObject] = useState<ThreeText<RasterFormatMetadata> | null>(null);
   useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
   if (desired.font === undefined) throw new TypeError('an outer R3F Text requires a font');
   const selected = resolveReactTextFont(desired.font, context);
@@ -462,10 +473,10 @@ export const Text = forwardRef(function Text<Technique extends AnyRasterFormat>(
     key: `${rootId(root)}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
     handle,
     root,
-    desired: desired as DesiredR3fTextInput<AnyRasterFormat>,
+    desired,
     object: objectProperties(properties),
     onError: properties.onError,
-    publishObject: publishObject as (value: ThreeText<AnyRasterFormat> | null) => void,
+    publishObject,
   };
   return isFontFaceSelection(selected)
     ? createElement(TextFontFaceObject, { ...child, selection: selected })
@@ -477,13 +488,13 @@ function TextFontFaceObject({
   desired,
   ...properties
 }: {
-  readonly selection: AnyFontFaceSelection;
-  readonly desired: DesiredR3fTextInput<AnyRasterFormat>;
+  readonly selection: FontFaceSelection;
+  readonly desired: DesiredR3fTextInput<RasterFormatMetadata>;
   readonly handle: ThreeHandle;
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
   readonly onError: ((error: unknown) => void) | undefined;
-  readonly publishObject: (value: ThreeText<AnyRasterFormat> | null) => void;
+  readonly publishObject: (value: ThreeText<RasterFormatMetadata> | null) => void;
 }): ReactElement {
   const font = useHandleFontFace(properties.handle, selection);
   const { handle: _handle, ...renderedProperties } = properties;
@@ -491,9 +502,9 @@ function TextFontFaceObject({
 }
 
 function resolveReactTextFont(
-  selection: R3fFontSelection<AnyRasterFormat>,
+  selection: R3fFontSelection<RasterFormatMetadata>,
   context: GlyphReactContext,
-): FontSelection<AnyRasterFormat> | AnyFontFaceSelection {
+): FontSelection<RasterFormatMetadata> | FontFaceSelection {
   if (typeof selection !== 'string') return selection;
   const face = context.fontFaces.get(selection) ?? resolveFontFace(selection);
   if (face === undefined) {
@@ -503,9 +514,9 @@ function resolveReactTextFont(
 }
 
 function bindDesiredFont(
-  desired: DesiredR3fTextInput<AnyRasterFormat>,
-  font: FontSelection<AnyRasterFormat>,
-): DesiredR3fTextProperties<AnyRasterFormat> {
+  desired: DesiredR3fTextInput<RasterFormatMetadata>,
+  font: FontSelection<RasterFormatMetadata>,
+): DesiredR3fTextProperties<RasterFormatMetadata> {
   return Object.freeze({ ...desired, font });
 }
 
@@ -516,21 +527,21 @@ function TextObject({
   onError,
   publishObject: publishCommittedObject,
 }: {
-  readonly desired: DesiredR3fTextProperties<AnyRasterFormat>;
+  readonly desired: DesiredR3fTextProperties<RasterFormatMetadata>;
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
   readonly onError: ((error: unknown) => void) | undefined;
-  readonly publishObject: (value: ThreeText<AnyRasterFormat> | null) => void;
+  readonly publishObject: (value: ThreeText<RasterFormatMetadata> | null) => void;
 }): ReactElement {
   const [constructorArguments] = useState<
-    [typeof threeTextConstructionToken, StandaloneTextProperties<AnyRasterFormat>, readonly [], ThreeRootHost]
-  >(() => [threeTextConstructionToken, desired as StandaloneTextProperties<AnyRasterFormat>, [], threeRootHost(root)]);
+    [typeof threeTextConstructionToken, StandaloneTextProperties<RasterFormatMetadata>, readonly [], ThreeRootHost]
+  >(() => [threeTextConstructionToken, desired, [], threeRootHost(root)]);
   const appliedRef = useRef(desired);
-  const [store] = useState(() => createObjectStore<ThreeText<AnyRasterFormat>>());
+  const [store] = useState(() => createObjectStore<ThreeText<RasterFormatMetadata>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
   const publishObject = useMemo(
-    () => (value: ThreeText<AnyRasterFormat> | null) => {
+    () => (value: ThreeText<RasterFormatMetadata> | null) => {
       store.publish(value ?? undefined);
       publishCommittedObject(value);
     },
@@ -614,21 +625,29 @@ function TextGroupObject({
 }
 
 interface ReactFontFaceResource {
-  readonly face: AnyFontFace;
+  readonly face: FontFace;
 }
 
 const reactFontFaces = new WeakMap<ThreeHandle, Map<string, ReactFontFaceResource>>();
 const defaultFontPreloads = new Map<string, Promise<void>>();
 const fontSuspenseNamespace = '@pmndrs/glyph/react:font';
-type FontSuspenseKey = [typeof fontSuspenseNamespace, ThreeHandle, AnyFontFaceSelection];
+type FontSuspenseKey = [typeof fontSuspenseNamespace, ThreeHandle, FontFaceSelection];
 const fontSuspenseKeys = new WeakMap<ThreeHandle, WeakMap<object, FontSuspenseKey>>();
 
 /** Load through the selected handle; React owns only the mounted immutable Font lease. */
-export const useFont = ((input: FontFaceSource, config: AnyHookFontConfig = {}): Font<AnyRasterFormat> => {
+function useFontHook(input: FontFaceSource): Font<RasterFormatMetadata>;
+function useFontHook<const Format>(
+  input: FontFaceSource,
+  config: SelectedHookFontConfig<Format>,
+): Font<TechniqueOfHookFormat<Format>>;
+function useFontHook(input: FontFaceSource, config: DefaultHookFontConfig = {}): Font<RasterFormatMetadata> {
   const handle = useSelectedHandle();
   return useHandleFontFace(handle, reactFontFaceResource(handle, input, config).face);
-}) as UseFont;
-useFont.preload = (input: FontFaceSource, config: AnyHookFontConfig = {}): Promise<void> => {
+}
+
+function preloadFont(input: FontFaceSource): Promise<void>;
+function preloadFont<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): Promise<void>;
+function preloadFont(input: FontFaceSource, config: DefaultHookFontConfig = {}): Promise<void> {
   const key = fontFaceResourceKey(input, config.format);
   const existing = defaultFontPreloads.get(key);
   if (existing !== undefined) return existing;
@@ -646,8 +665,11 @@ useFont.preload = (input: FontFaceSource, config: AnyHookFontConfig = {}): Promi
     });
   defaultFontPreloads.set(key, pending);
   return pending;
-};
-useFont.clear = (input: FontFaceSource, config: AnyHookFontConfig = {}): void => {
+}
+
+function clearFont(input: FontFaceSource): void;
+function clearFont<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): void;
+function clearFont(input: FontFaceSource, config: DefaultHookFontConfig = {}): void {
   const key = fontFaceResourceKey(input, config.format);
   defaultFontPreloads.delete(key);
   const handle = getInitializedDefaultThreeHandle();
@@ -658,26 +680,28 @@ useFont.clear = (input: FontFaceSource, config: AnyHookFontConfig = {}): void =>
   cache?.delete(key);
   clearSuspense(fontSuspenseKey(handle, resource.face));
   resource.face.dispose();
-};
+}
 
-function useHandleFontFace<Technique extends AnyRasterFormat>(
+export const useFont: UseFont = Object.assign(useFontHook, { preload: preloadFont, clear: clearFont });
+
+function useHandleFontFace<const Selection extends FontFaceSelection>(
   handle: ThreeHandle,
-  selection: AnyFontFaceSelection,
-): Font<Technique> {
+  selection: Selection,
+): Font<FontFaceRasterOf<Selection>> {
   if (!isThreeHandleFontLoaded(handle, selection)) suspend(loadSuspenseFont, fontSuspenseKey(handle, selection));
   const store = useMemo(() => createMountedFontStore(handle, selection), [handle, selection]);
-  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot) as Font<Technique>;
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }
 
 function loadSuspenseFont(
   _namespace: typeof fontSuspenseNamespace,
   handle: ThreeHandle,
-  selection: AnyFontFaceSelection,
-): Promise<AnyFontFaceSelection> {
+  selection: FontFaceSelection,
+): Promise<FontFaceSelection> {
   return loadThreeHandleFont(handle, selection);
 }
 
-function fontSuspenseKey(handle: ThreeHandle, selection: AnyFontFaceSelection): FontSuspenseKey {
+function fontSuspenseKey(handle: ThreeHandle, selection: FontFaceSelection): FontSuspenseKey {
   let selections = fontSuspenseKeys.get(handle);
   if (selections === undefined) {
     selections = new WeakMap();
@@ -693,7 +717,7 @@ function fontSuspenseKey(handle: ThreeHandle, selection: AnyFontFaceSelection): 
 function reactFontFaceResource(
   handle: ThreeHandle,
   input: FontFaceSource,
-  config: AnyHookFontConfig,
+  config: DefaultHookFontConfig,
 ): ReactFontFaceResource {
   let cache = reactFontFaces.get(handle);
   if (cache === undefined) {
@@ -741,15 +765,18 @@ function assignRef<Value>(ref: Ref<Value> | undefined, value: Value | undefined)
   };
 }
 
-interface MountedFontStore {
+interface MountedFontStore<Selection extends FontFaceSelection> {
   readonly subscribe: (listener: () => void) => () => void;
-  readonly getSnapshot: () => Font<AnyRasterFormat>;
+  readonly getSnapshot: () => Font<FontFaceRasterOf<Selection>>;
 }
 
-function createMountedFontStore(handle: ThreeHandle, selection: AnyFontFaceSelection): MountedFontStore {
+function createMountedFontStore<const Selection extends FontFaceSelection>(
+  handle: ThreeHandle,
+  selection: Selection,
+): MountedFontStore<Selection> {
   const source = threeHandleFontSource(handle, selection);
   let current = source;
-  let mounted: Font<AnyRasterFormat> | undefined;
+  let mounted: Font<FontFaceRasterOf<Selection>> | undefined;
   const listeners = new Set<() => void>();
   return {
     subscribe(listener) {
@@ -781,7 +808,7 @@ function createMountedFontStore(handle: ThreeHandle, selection: AnyFontFaceSelec
  * settles those joins against the finished text under the one rule `compose` uses on the
  * `txt`/`span` tree: the fused cluster takes the style of its base, which is the earlier child's.
  */
-function flattenText<Technique extends AnyRasterFormat>(
+function flattenText<Technique extends RasterFormatMetadata>(
   children: R3fTextChild<Technique> | undefined,
 ): FlattenedText<Technique> {
   const chunks: string[] = [];
@@ -816,7 +843,7 @@ function flattenText<Technique extends AnyRasterFormat>(
   return Object.freeze({ text, spans: Object.freeze(resolveRangesToClusters(text, spans)) });
 }
 
-function loadedInlineProperties<Technique extends AnyRasterFormat>(
+function loadedInlineProperties<Technique extends RasterFormatMetadata>(
   properties: InlineProperties<Technique>,
 ): Readonly<{ font?: FontSelection<Technique>; style?: TextStyle; material?: ThreeTextMaterial }> {
   const { font, ...rest } = properties;
@@ -827,7 +854,7 @@ function loadedInlineProperties<Technique extends AnyRasterFormat>(
   return { ...rest, font };
 }
 
-function inlineProperties<Technique extends AnyRasterFormat>(
+function inlineProperties<Technique extends RasterFormatMetadata>(
   properties: R3fTextProps<Technique>,
   inherited: InlineProperties<Technique>,
 ): InlineProperties<Technique> {
@@ -845,13 +872,13 @@ function inlineProperties<Technique extends AnyRasterFormat>(
 
 const INLINE_TEXT_PROPERTIES = new Set(['children', 'font', 'material', 'style']);
 
-function assertInlineTextProperties<Technique extends AnyRasterFormat>(properties: R3fTextProps<Technique>): void {
+function assertInlineTextProperties<Technique extends RasterFormatMetadata>(properties: R3fTextProps<Technique>): void {
   for (const key of Object.keys(properties)) {
     if (!INLINE_TEXT_PROPERTIES.has(key)) throw new TypeError(`nested R3F Text cannot use the box property ${key}`);
   }
 }
 
-function textProperties<Technique extends AnyRasterFormat>(
+function textProperties<Technique extends RasterFormatMetadata>(
   properties: R3fTextProps<Technique>,
   flattened: FlattenedText<Technique>,
 ): DesiredR3fTextInput<Technique> {
@@ -870,7 +897,9 @@ function textProperties<Technique extends AnyRasterFormat>(
   });
 }
 
-function objectProperties<Technique extends AnyRasterFormat>(properties: R3fTextProps<Technique>): TextElementProps {
+function objectProperties<Technique extends RasterFormatMetadata>(
+  properties: R3fTextProps<Technique>,
+): TextElementProps {
   const object = { ...properties } as Record<string, unknown>;
   for (const key of [
     'font',
@@ -900,7 +929,7 @@ function assertNoHandleProp(properties: object, owner: 'Text' | 'TextGroup'): vo
   }
 }
 
-function sameDesiredText<Technique extends AnyRasterFormat>(
+function sameDesiredText<Technique extends RasterFormatMetadata>(
   left: (Partial<StandaloneTextProperties<Technique>> & { readonly text: TextInput<Technique> }) | undefined,
   right: Partial<StandaloneTextProperties<Technique>> & { readonly text: TextInput<Technique> },
 ): boolean {

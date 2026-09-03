@@ -26,13 +26,21 @@ import {
   type ThreeCodec,
   type ThreeHandle,
 } from '../../src/three.js';
+import type * as ThreeApi from '../../src/three.js';
 
 declare const bitmapFont: Font<typeof bitmap>;
 declare const mtsdfFont: Font<typeof msdf>;
 
 const emphasis = span(bitmapFont, { color: '#ff00ff' });
 const green = span({ color: '#00ff00' });
-const warningMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+const warningMaterial = defineTextMaterial((context) => {
+  context.root.renderObject satisfies import('three/webgpu').Object3D;
+  return context.createDefaultMaterial();
+});
+// @ts-expect-error Publication boundaries are package-private implementation state.
+type _NoThreeRootBinding = ThreeApi.ThreeRootBinding;
+// @ts-expect-error The renamed publication boundary also remains package-private.
+type _NoThreePublicationBoundary = ThreeApi.ThreePublicationBoundary;
 const warning = threeSpan(warningMaterial, { color: '#ffcc00' });
 const styles = TextStyle.create({ base: { fontSize: 16 }, accent: { color: '#00ff00' } });
 const layouts = ParagraphLayout.create({ centered: { align: 'center' }, wrapped: { wrap: 'word' } });
@@ -59,8 +67,8 @@ const hud = three('hud');
 hud.createText({ font: bitmapFont, text: 'Named root' });
 // @ts-expect-error Material mutation has one property surface, not a duplicate setter method.
 hud.setMaterial(undefined);
-// @ts-expect-error Renderer draw objects stay behind the Three config schema.
-void three.drawRoot;
+// @ts-expect-error Renderer publication objects stay behind the Three config schema.
+void three.renderObject;
 // @ts-expect-error Scene discovery is internal to the Three root host.
 void hud.scene;
 // @ts-expect-error Renderer services are not part of the application-facing root.

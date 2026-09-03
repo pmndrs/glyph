@@ -10,7 +10,7 @@ import { defineThreeConfig } from '@pmndrs/glyph/three';
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { createThreeTestHandle } from '../support/three-handle.mjs';
 
-const bitmap16 = { raster: bitmap, options: { strikes: [16] } };
+const bitmap16 = bitmap({ strikes: [16] });
 const fonts = createFontCache({ inter: { file: 'inter-bitmap-16.font.glb', raster: bitmap16 } });
 after(() => fonts.dispose());
 

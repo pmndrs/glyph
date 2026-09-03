@@ -16,7 +16,7 @@ import bitmapBaker from '../../dist/bakers/bitmap.js';
 import msdfBaker from '../../dist/bakers/msdf.js';
 import slugBaker from '../../dist/bakers/slug.js';
 import { resolveRasterBakePlan } from '../../dist/internal/raster-bake-plan.js';
-import { immutableFontResources } from '../../dist/loaded-font.js';
+import { cloneImmutableFont, immutableFontResources, immutableFontVariantIdentity } from '../../dist/loaded-font.js';
 import { FontLoader } from '../../dist/loader.js';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
@@ -255,19 +255,18 @@ test('the Worker prepares once and matches the Node canonical GLB for every buil
   const output = join(outputRoot, 'Inter-ascii.font.glb');
   t.after(() => rm(outputRoot, { recursive: true, force: true }));
   const unicodeRanges = [{ start: 0x20, end: 0x7e }];
-  const plans = await Promise.all(
-    [
-      { baker: bitmapBaker, packaging: embeddedPackaging(), options: { strikes: [16] } },
-      { baker: msdfBaker, packaging: embeddedPackaging(), options: undefined },
-      { baker: slugBaker, packaging: embeddedPackaging(), options: undefined },
-    ].map(resolveRasterBakePlan),
-  );
+  const rasterPlans = [
+    { baker: bitmapBaker, packaging: embeddedPackaging(), options: { strikes: [16] } },
+    { baker: msdfBaker, packaging: embeddedPackaging(), options: undefined },
+    { baker: slugBaker, packaging: embeddedPackaging(), options: undefined },
+  ];
+  const plans = await Promise.all(rasterPlans.map(resolveRasterBakePlan));
   await bakeFont({
     input: new URL('Inter-Regular.ttf', fixtureDirectory),
     output,
     font: { fontFaceIndex: 0 },
     unicodeRanges,
-    rasters: plans,
+    rasters: rasterPlans,
   });
   const expected = await readFile(output);
 
@@ -334,7 +333,7 @@ test('one portable source load sends its normalized ranges and complete raster t
         { start: 0x20, end: 0x7e },
       ],
     },
-    [{ raster: bitmap, options: { strikes: [32] } }, { raster: msdf }, { raster: slug }],
+    [bitmap({ strikes: [32] }), msdf, slug],
   );
   t.after(() => {
     slugFont.dispose();
@@ -350,6 +349,18 @@ test('one portable source load sends its normalized ranges and complete raster t
   );
   assert.equal(immutableFontResources(bitmapFont).font, immutableFontResources(msdfFont).font);
   assert.equal(immutableFontResources(msdfFont).font, immutableFontResources(slugFont).font);
+  const bitmapClone = cloneImmutableFont(bitmapFont);
+  assert.equal(
+    immutableFontVariantIdentity(bitmapClone),
+    immutableFontVariantIdentity(bitmapFont),
+    'independent leases over one immutable variant share its binding identity',
+  );
+  assert.notEqual(
+    immutableFontVariantIdentity(bitmapFont),
+    immutableFontVariantIdentity(msdfFont),
+    'different raster variants over one shaping backing retain distinct binding identities',
+  );
+  bitmapClone.dispose();
 });
 
 test('external techniques bake through their own declared baker, never the Worker plan', async (t) => {
@@ -412,7 +423,7 @@ test('external techniques bake through their own declared baker, never the Worke
         source: `data:font/ttf;base64,${Buffer.from(source).toString('base64')}`,
         runtimeBake,
       },
-      [{ raster: bitmap, options: { strikes: [32] } }, { raster: external }],
+      [bitmap({ strikes: [32] }), external],
     ),
     /external-route-sentinel/,
     'the external technique must reach its own declared baker',

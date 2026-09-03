@@ -14,10 +14,7 @@ import { bitmap } from '../../dist/raster/bitmap.js';
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 
 test('immutable-font disposal remains total when one observer fails', async () => {
-  const font = await loadFont(
-    { baked: { bytes: await readFile(fontUrl) } },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const registered = immutableFontResources(font).font;
   let failingObserverCalls = 0;
   let successfulObserverCalls = 0;

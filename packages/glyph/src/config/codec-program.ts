@@ -1,7 +1,7 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { RasterTextEffect } from './raster-format.js';
 import type { CodecBufferId, CodecInput, CodecInputScope, CodecOperation } from './codec.js';
-import type { CodecBufferDeclaration, AnyTechniqueSchema } from './schema.js';
+import type { CodecBufferDeclaration, TechniqueSchemaMetadata } from './schema.js';
 import { isTechniqueSchema } from './schema.js';
 import { normalizeCodecProgramSystemBuffers, recordTechniqueCodecBody } from '../internal/codec-program-contract.js';
 
@@ -207,9 +207,9 @@ export interface CodecProgramOptions<
   readonly textEffects?: readonly RasterTextEffect[];
 }
 
-declare const compiledCodecSchemaBrand: unique symbol;
+const compiledCodecSchemaBrand: unique symbol = Symbol('glyph.compiled-codec-schema');
 
-export interface CompiledCodecProgramBody<Schema extends AnyTechniqueSchema | undefined = undefined> {
+export interface CompiledCodecProgramBody<Schema extends TechniqueSchemaMetadata | undefined = undefined> {
   readonly [compiledCodecSchemaBrand]: Schema;
   readonly inputs: CodecInput[];
   readonly operations: CodecOperation[];
@@ -217,7 +217,11 @@ export interface CompiledCodecProgramBody<Schema extends AnyTechniqueSchema | un
   readonly u32InputCount: number;
 }
 
-export interface CodecProgramBuilder<F32 extends readonly string[], U32 extends readonly string[]> {
+export interface CodecProgramBuilder<
+  F32 extends readonly string[],
+  U32 extends readonly string[],
+  Schema extends TechniqueSchemaMetadata | undefined = undefined,
+> {
   readonly semantics: CodecProgramSemantics;
   readonly binding: Readonly<Record<F32[number], CodecF32Value> & Record<U32[number], CodecU32Value>>;
   /** Store into a declared buffer; value kinds and lane count come from the declaration. */
@@ -227,7 +231,7 @@ export interface CodecProgramBuilder<F32 extends readonly string[], U32 extends 
   ): void;
   storeF32(buffer: CodecBufferId, lanes: readonly CodecF32Value[]): void;
   storeU32(buffer: CodecBufferId, lanes: readonly CodecU32Value[]): void;
-  compile(): CompiledCodecProgramBody;
+  compile(): CompiledCodecProgramBody<Schema>;
 }
 
 export interface CodecProgramSystemBuffers {
@@ -249,7 +253,7 @@ export type TechniqueCodecStores<Buffers extends import('./schema.js').CodecBuff
 };
 
 export interface TechniqueCodecProgramBuilder<
-  Schema extends AnyTechniqueSchema,
+  Schema extends TechniqueSchemaMetadata,
   Buffers extends import('./schema.js').CodecBufferDeclarations,
   F32 extends readonly string[],
   U32 extends readonly string[],
@@ -270,7 +274,7 @@ interface StoreRecord {
 }
 
 /** Build a program against one technique's authoritative schema. */
-export function techniqueProgram<const Schema extends AnyTechniqueSchema>(
+export function techniqueProgram<const Schema extends TechniqueSchemaMetadata>(
   schema: Schema,
   options: {
     readonly inverseFontSize?: boolean;
@@ -290,13 +294,16 @@ export function techniqueProgram<const Schema extends AnyTechniqueSchema>(
   }
   const system =
     options.system === undefined ? undefined : normalizeCodecProgramSystemBuffers(schema.buffers, options.system);
-  const program = codecProgram({
-    scope: schema.scope,
-    bindingF32: (schema.binding.f32 ?? []) as BindingNames<Schema['binding']['f32']>,
-    bindingU32: (schema.binding.u32 ?? []) as BindingNames<Schema['binding']['u32']>,
-    ...(options.inverseFontSize === undefined ? {} : { inverseFontSize: options.inverseFontSize }),
-    ...(options.textEffects === undefined ? {} : { textEffects: options.textEffects }),
-  });
+  const program = createCodecProgramBuilder(
+    {
+      scope: schema.scope,
+      bindingF32: schema.binding.f32 ?? [],
+      bindingU32: schema.binding.u32 ?? [],
+      ...(options.inverseFontSize === undefined ? {} : { inverseFontSize: options.inverseFontSize }),
+      ...(options.textEffects === undefined ? {} : { textEffects: options.textEffects }),
+    },
+    schema,
+  );
   let compiled = false;
   return Object.freeze({
     semantics: program.semantics,
@@ -338,7 +345,7 @@ export function techniqueProgram<const Schema extends AnyTechniqueSchema>(
         stableGlyphId: system?.stableGlyphId.id,
         transformIndex: system?.transformIndex?.id,
       });
-      return body as unknown as CompiledCodecProgramBody<Schema>;
+      return body;
     },
   });
 }
@@ -347,6 +354,14 @@ export function codecProgram<
   const F32 extends readonly string[] = readonly [],
   const U32 extends readonly string[] = readonly [],
 >(options: CodecProgramOptions<F32, U32>): CodecProgramBuilder<F32, U32> {
+  return createCodecProgramBuilder(options, undefined);
+}
+
+function createCodecProgramBuilder<
+  const F32 extends readonly string[],
+  const U32 extends readonly string[],
+  Schema extends TechniqueSchemaMetadata | undefined,
+>(options: CodecProgramOptions<F32, U32>, schema: Schema): CodecProgramBuilder<F32, U32, Schema> {
   if (!isNonArrayObject(options)) throw new TypeError('codec program options need an object');
   if (!(typeof options.scope === 'string' && Object.hasOwn(textShaperAbi.codec.inputScopes, options.scope))) {
     throw new TypeError('codec program scope is not a codec input scope');
@@ -456,7 +471,8 @@ export function codecProgram<
 
   return {
     semantics,
-    binding: binding as CodecProgramBuilder<F32, U32>['binding'],
+    // The two validated name lists above are the only keys written into this owned record.
+    binding: binding as CodecProgramBuilder<F32, U32, Schema>['binding'],
     store(buffer, lanes) {
       if (lanes.length !== buffer.lanes.length) {
         throw new RangeError(
@@ -576,7 +592,7 @@ export function codecProgram<
         operations.push({ opcode: store.opcode, operand0: register, operand1: store.lane, immediate0: store.buffer });
         release(store.node);
       }
-      return { inputs, operations, f32InputCount, u32InputCount } as unknown as CompiledCodecProgramBody;
+      return { [compiledCodecSchemaBrand]: schema, inputs, operations, f32InputCount, u32InputCount };
     },
   };
 }

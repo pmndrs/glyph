@@ -4,7 +4,7 @@ title: Public API surface audit and cleanup plan
 description: Findings from auditing every published entry point against Skia, Flutter, React Native, troika, Unity TextMeshPro, and Unreal Slate, with the cleanup and the animation API the findings require.
 documentation_type: explanation
 tags: [api, audit, cleanup, animation, ergonomics]
-status: draft
+status: deprecated
 sources:
   - id: three-api
     resource: three-api.md
@@ -21,6 +21,10 @@ generated:
 ---
 
 # Public API surface audit and cleanup plan
+
+> **Historical record — superseded.** D-339 removed the renderer-free `Paragraph`/`createParagraph()` runtime. Current
+> integrations use their handle-owned `Text`; explicit `Text.measure()` and `Text.glyphs()` queries synchronously inspect
+> one Text before rendering, while normal publication remains one `glyph.shape()` crossing for every dirty root.
 
 ## Why this exists
 

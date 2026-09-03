@@ -5,8 +5,8 @@ import {
   type GlyphEngine,
   type GlyphShapeRegistration,
 } from '../glyph-engine.js';
-import { createFontStack, immutableFontSelectionFonts, type FontSelection, type FontStack } from '../loaded-font.js';
-import type { AnyRasterFormat } from '../config/raster-format.js';
+import { createFontStack, immutableFontSelectionFonts, type FontSelection } from '../loaded-font.js';
+import type { RasterFormatMetadata } from '../config/raster-format.js';
 import {
   GlyphHandleState,
   type HandleMaterialBinding,
@@ -16,11 +16,9 @@ import {
 import { createGlyphPlanTarget, type GlyphPlanTarget } from './glyph-plan-target.js';
 import type {
   GlyphBindingSet,
-  GlyphConfigValue,
   Codec,
   GlyphCommandLimits,
   GlyphConfig,
-  GlyphConfigHandle,
   GlyphCopy,
   GlyphCopyDestination,
   GlyphCopyRequest,
@@ -59,23 +57,14 @@ const DEFAULT_LIMITS: GlyphCommandLimits = Object.freeze({
   maxOutputBytes: 64 * 1024 * 1024,
 });
 
-interface HandleInput {
+export interface ConfiguredGlyphHandleInput {
   readonly name: string;
   readonly engine: GlyphEngine;
   readonly fonts: GlyphHandleFonts | undefined;
   readonly released: (handle: GlyphHandle) => void;
 }
 
-/** Construct a handle from one branded structural config, including a spread/wrapped config value. */
-export function createConfiguredGlyphHandleForConfig<Config extends GlyphConfigValue>(
-  input: HandleInput,
-  config: Config,
-): GlyphConfigHandle<Config> {
-  type RuntimeConfig = GlyphConfig<GlyphRoot, GlyphBindingSet, unknown, object, unknown, Codec, object>;
-  return createConfiguredGlyphHandle(input, config as unknown as RuntimeConfig) as GlyphConfigHandle<Config>;
-}
-
-/** @internal Core-owned constructor installed by defineGlyphConfig. */
+/** Package-private constructor installed by defineGlyphConfig. */
 export function createConfiguredGlyphHandle<
   Root extends GlyphRoot,
   Bindings extends GlyphBindingSet,
@@ -85,7 +74,7 @@ export function createConfiguredGlyphHandle<
   CodecValue extends Codec,
   ConfigExtension extends object,
 >(
-  input: HandleInput,
+  input: ConfiguredGlyphHandleInput,
   config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>,
 ): GlyphHandle<Root> {
   return new ConfiguredHandleDomain<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>(
@@ -104,7 +93,7 @@ class ConfiguredHandleDomain<
   ConfigExtension extends object,
 > {
   readonly handle: GlyphHandle<Root>;
-  readonly #input: HandleInput;
+  readonly #input: ConfiguredGlyphHandleInput;
   readonly #config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>;
   readonly #handleState: GlyphHandleState;
   readonly #codecRegistration;
@@ -115,7 +104,7 @@ class ConfiguredHandleDomain<
   #disposed = false;
 
   constructor(
-    input: HandleInput,
+    input: ConfiguredGlyphHandleInput,
     config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>,
   ) {
     this.#input = input;
@@ -396,7 +385,7 @@ class ConfiguredRootServices<
   readonly #codec: CodecValue;
   readonly #config: RootRuntimeConfig<Bindings, RendererResult, Boundary, CodecValue>;
   readonly #retainCopy: () => () => void;
-  readonly #singleFontStacks = new WeakMap<Font<AnyRasterFormat>, FontStack<AnyRasterFormat, Font<AnyRasterFormat>>>();
+  readonly #singleFontStackBindings = new WeakMap<Font<RasterFormatMetadata>, () => HandleFontStackBinding>();
   readonly #materials = new WeakMap<HandleMaterialBinding, Bindings['materialInput']>();
   readonly #materialBindings = new Map<
     Bindings['materialInput'],
@@ -489,7 +478,7 @@ class ConfiguredRootServices<
     }
   }
 
-  createText<Technique extends AnyRasterFormat>(
+  createText<Technique extends RasterFormatMetadata>(
     state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']> {
     const planner = this.#requiredPlanner();
@@ -507,8 +496,8 @@ class ConfiguredRootServices<
     this.#target!.syncTransforms();
   }
 
-  copy(
-    text: GlyphTextController<AnyRasterFormat, Bindings['materialInput'], Bindings['transformInput']>,
+  copy<Technique extends RasterFormatMetadata>(
+    text: GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']>,
     request: GlyphCopyRequest,
     destination: GlyphCopyDestination<Bindings, RendererResult, Boundary>,
   ): GlyphCopy<RendererResult> {
@@ -566,7 +555,7 @@ class ConfiguredRootServices<
     });
   }
 
-  bind<Technique extends AnyRasterFormat>(
+  bind<Technique extends RasterFormatMetadata>(
     state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
   ): BoundTextState {
     const leases: Array<{ dispose(): void }> = [];
@@ -617,7 +606,7 @@ class ConfiguredRootServices<
     this.#transformBindings.clear();
   }
 
-  #bindFormattedText<Technique extends AnyRasterFormat>(
+  #bindFormattedText<Technique extends RasterFormatMetadata>(
     input: GlyphFormattedText<Technique, Bindings['materialInput']>,
     leases: Array<{ dispose(): void }>,
   ): RetainedFormattedText {
@@ -640,17 +629,18 @@ class ConfiguredRootServices<
     });
   }
 
-  #bindFontSelection(selection: FontSelection<AnyRasterFormat>): HandleFontStackBinding {
-    const fonts = immutableFontSelectionFonts(selection);
-    let stack: FontStack<AnyRasterFormat, Font<AnyRasterFormat>>;
-    if ('fonts' in selection) {
-      stack = selection;
-    } else {
-      const font = fonts[0]!;
-      stack = this.#singleFontStacks.get(font) ?? createFontStack(font);
-      this.#singleFontStacks.set(font, stack);
+  #bindFontSelection<Technique extends RasterFormatMetadata>(
+    selection: FontSelection<Technique>,
+  ): HandleFontStackBinding {
+    if ('fonts' in selection) return this.#handleState.bindFontStack(selection);
+    const font = immutableFontSelectionFonts(selection)[0]!;
+    let bind = this.#singleFontStackBindings.get(font);
+    if (bind === undefined) {
+      const stack = createFontStack(font);
+      bind = () => this.#handleState.bindFontStack(stack);
+      this.#singleFontStackBindings.set(font, bind);
     }
-    return this.#handleState.bindFontStack(stack);
+    return bind();
   }
 
   #bindMaterial(input: Bindings['materialInput'], leases: Array<{ dispose(): void }>): HandleMaterialBinding {
@@ -763,7 +753,7 @@ interface BoundTextState {
 }
 
 class ConfiguredTextController<
-  Technique extends AnyRasterFormat,
+  Technique extends RasterFormatMetadata,
   Bindings extends GlyphBindingSet,
   RendererResult,
   Boundary,

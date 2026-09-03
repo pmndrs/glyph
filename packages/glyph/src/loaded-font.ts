@@ -2,17 +2,24 @@ import { DEV } from './internal/dev.js';
 
 import type { Font, FontMetrics, RegisteredFont } from './font.js';
 import type { RegisteredRaster, RasterKindOf } from './raster.js';
-import type { AnyRasterFormat, RasterDataOf } from './config/raster-format.js';
+import type { RasterDataOf, RasterFormatMetadata } from './config/raster-format.js';
+import type { CompiledRasterFont } from './config/raster.js';
+import {
+  bindRasterFormatCompiler,
+  type BoundRasterFontCompiler,
+  type RasterFontCompileInput,
+  type RasterFormatCompilerWitness,
+} from './internal/raster-format-compiler.js';
 
 /** Portable application selection accepted by renderer-neutral text APIs. */
-export type FontSelection<Technique extends AnyRasterFormat> = Font<Technique> | FontStack<Technique, Font<Technique>>;
+export type FontSelection<Technique extends RasterFormatMetadata> =
+  | Font<Technique>
+  | FontStack<Technique, Font<Technique>>;
 
 /** Ordered immutable fonts used for shaping fallback within one text instance. */
-export interface FontStack<Technique extends AnyRasterFormat, Member extends Font<Technique> = Font<Technique>> {
+export interface FontStack<Technique extends RasterFormatMetadata, Member extends Font<Technique> = Font<Technique>> {
   readonly fonts: readonly [Member, ...Member[]];
 }
-
-type TechniqueOfFont<Value> = Value extends Font<infer Technique> ? Technique : never;
 
 interface ImmutableFontBacking {
   readonly font: RegisteredFont;
@@ -20,58 +27,63 @@ interface ImmutableFontBacking {
   released: boolean;
 }
 
-export interface ImmutableFontVariant<Format extends AnyRasterFormat> {
+export interface ImmutableFontVariant<Format extends RasterFormatMetadata> {
   readonly backing: ImmutableFontBacking;
   readonly format: Format;
   readonly raster: RegisteredRaster<RasterKindOf<Format>>;
   readonly data: RasterDataOf<Format>;
+  readonly compileRaster: BoundRasterFontCompiler;
+  readonly releaseData: () => void;
   readonly releaseListeners: Set<() => void>;
   leases: number;
   released: boolean;
 }
 
 interface ImmutableFontState {
-  readonly variant: ImmutableFontVariant<AnyRasterFormat>;
+  readonly release: () => void;
   readonly disposeListeners: Set<() => void>;
   disposed: boolean;
 }
 
-const immutableFontState = new WeakMap<Font<AnyRasterFormat>, ImmutableFontState>();
 const immutableFontStacks = new WeakSet<object>();
 const immutableFontFinalizer = new FinalizationRegistry<ImmutableFontState>((state) => {
   disposeImmutableFontState(state);
 });
 
 /** Creates and authenticates an ordered, duplicate-free immutable font stack. */
+export function createFontStack<Primary extends Font<RasterFormatMetadata>>(
+  primary: Primary,
+): FontStack<Primary['raster'], Primary>;
+
 export function createFontStack<
-  const Primary extends Font<AnyRasterFormat>,
-  const Fallback extends readonly Font<AnyRasterFormat>[],
+  Primary extends Font<RasterFormatMetadata>,
+  const Fallback extends readonly Font<RasterFormatMetadata>[],
 >(
   primary: Primary,
   ...fallback: Fallback
-): FontStack<TechniqueOfFont<Primary | Fallback[number]>, Font<TechniqueOfFont<Primary | Fallback[number]>>>;
+): FontStack<Primary['raster'] | Fallback[number]['raster'], Font<Primary['raster'] | Fallback[number]['raster']>>;
 
 export function createFontStack(
-  primary: Font<AnyRasterFormat>,
-  ...fallback: readonly Font<AnyRasterFormat>[]
-): FontStack<AnyRasterFormat, Font<AnyRasterFormat>> {
-  const fonts = [primary, ...fallback];
+  primary: Font<RasterFormatMetadata>,
+  ...fallback: readonly Font<RasterFormatMetadata>[]
+): FontStack<RasterFormatMetadata, Font<RasterFormatMetadata>> {
+  const fonts: [Font<RasterFormatMetadata>, ...Font<RasterFormatMetadata>[]] = [primary, ...fallback];
   assertImmutableFont(primary);
-  const unique = new Set<Font<AnyRasterFormat>>([primary]);
+  const unique = new Set<Font<RasterFormatMetadata>>([primary]);
   for (const font of fallback) {
     assertImmutableFont(font);
     if (unique.has(font)) throw new TypeError('font stack cannot contain the same font more than once');
     unique.add(font);
   }
-  const stack = Object.freeze({ fonts: Object.freeze(fonts) }) as FontStack<AnyRasterFormat>;
+  const stack: FontStack<RasterFormatMetadata> = Object.freeze({ fonts: Object.freeze(fonts) });
   immutableFontStacks.add(stack);
   return stack;
 }
 
 /** @internal Authenticate one immutable stack and prove every member is live at this call. */
-export function immutableFontStackFonts(
-  stack: FontStack<AnyRasterFormat, Font<AnyRasterFormat>>,
-): readonly [Font<AnyRasterFormat>, ...Font<AnyRasterFormat>[]] {
+export function immutableFontStackFonts<Technique extends RasterFormatMetadata>(
+  stack: FontStack<Technique, Font<Technique>>,
+): readonly [Font<Technique>, ...Font<Technique>[]] {
   if (typeof stack !== 'object' || stack === null || !immutableFontStacks.has(stack)) {
     throw new TypeError('font stack was not created by this package');
   }
@@ -80,51 +92,64 @@ export function immutableFontStackFonts(
 }
 
 /** @internal Authenticate a portable font selection and preserve its fallback order. */
-export function immutableFontSelectionFonts<Technique extends AnyRasterFormat>(
+export function immutableFontSelectionFonts<Technique extends RasterFormatMetadata>(
   selection: FontSelection<Technique>,
 ): readonly [Font<Technique>, ...Font<Technique>[]] {
   if (typeof selection !== 'object' || selection === null) throw new TypeError('font selection must be an object');
-  if ('fonts' in selection) {
-    return immutableFontStackFonts(selection as FontStack<AnyRasterFormat, Font<AnyRasterFormat>>) as readonly [
-      Font<Technique>,
-      ...Font<Technique>[],
-    ];
-  }
+  if (isImmutableFontStack(selection)) return immutableFontStackFonts(selection);
   assertImmutableFont(selection);
   return [selection];
 }
 
 /** @internal Narrow a live package-owned Font or FontStack without accepting structural lookalikes. */
-export function isImmutableFontSelection(value: unknown): value is FontSelection<AnyRasterFormat> {
+export function isImmutableFontSelection(value: unknown): value is FontSelection<RasterFormatMetadata> {
   if (typeof value !== 'object' || value === null) return false;
   if (immutableFontStacks.has(value)) return true;
-  const state = immutableFontState.get(value as Font<AnyRasterFormat>);
-  return state !== undefined && !state.disposed;
+  return value instanceof FontImpl && !value.disposed;
 }
 
-class FontImpl<Format extends AnyRasterFormat> implements Font<Format> {
+class FontImpl<Format extends RasterFormatMetadata> implements Font<Format> {
+  readonly #variant: ImmutableFontVariant<Format>;
+  readonly #state: ImmutableFontState;
   readonly metrics: FontMetrics;
   readonly glyphCount: number;
   readonly raster: Format;
 
   constructor(variant: ImmutableFontVariant<Format>) {
     retainImmutableFontVariant(variant);
+    this.#variant = variant;
     this.metrics = variant.backing.font.metrics;
     this.glyphCount = variant.backing.font.glyphCount;
     this.raster = variant.format;
-    const state: ImmutableFontState = { variant, disposeListeners: new Set(), disposed: false };
-    immutableFontState.set(this, state);
-    immutableFontFinalizer.register(this, state, this);
+    this.#state = {
+      release: () => releaseImmutableFontVariant(variant),
+      disposeListeners: new Set(),
+      disposed: false,
+    };
+    immutableFontFinalizer.register(this, this.#state, this);
   }
 
   get disposed(): boolean {
-    return immutableStateOf(this).disposed;
+    return this.#state.disposed;
   }
 
   dispose(): void {
-    const state = immutableStateOf(this);
     immutableFontFinalizer.unregister(this);
-    disposeImmutableFontState(state);
+    disposeImmutableFontState(this.#state);
+  }
+
+  variant(): ImmutableFontVariant<Format> {
+    if (this.#state.disposed) throw new TypeError('font has been disposed');
+    return this.#variant;
+  }
+
+  observeDispose(listener: () => void): () => void {
+    if (this.#state.disposed) {
+      listener();
+      return () => undefined;
+    }
+    this.#state.disposeListeners.add(listener);
+    return () => this.#state.disposeListeners.delete(listener);
   }
 }
 
@@ -139,18 +164,15 @@ function disposeImmutableFontState(state: ImmutableFontState): void {
     }
   }
   state.disposeListeners.clear();
-  releaseImmutableFontVariant(state.variant);
+  state.release();
 }
 
 /** @internal Observe explicit application disposal without wrapping the Font identity. */
-export function observeImmutableFontDispose(font: Font<AnyRasterFormat>, listener: () => void): () => void {
-  const state = immutableStateOf(font);
-  if (state.disposed) {
-    listener();
-    return () => undefined;
-  }
-  state.disposeListeners.add(listener);
-  return () => state.disposeListeners.delete(listener);
+export function observeImmutableFontDispose<Format extends RasterFormatMetadata>(
+  font: Font<Format>,
+  listener: () => void,
+): () => void {
+  return immutableFontImplementation(font).observeDispose(listener);
 }
 
 /** @internal Create the one backing state retained by all technique variants and leases. */
@@ -159,38 +181,51 @@ export function createImmutableFontBacking(font: RegisteredFont): ImmutableFontB
 }
 
 /** @internal Create one technique-specific immutable value over a shared backing. */
-export function createImmutableFontVariant<Format extends AnyRasterFormat>(init: {
+export function createImmutableFontVariant<Format extends RasterFormatMetadata>(init: {
   readonly backing: ImmutableFontBacking;
-  readonly format: Format;
+  readonly format: Format &
+    Pick<RasterFormatCompilerWitness<RasterDataOf<Format>>, typeof bindRasterFormatCompiler> & {
+      dispose(data: RasterDataOf<Format>): void;
+    };
   readonly raster: RegisteredRaster<RasterKindOf<Format>>;
   readonly data: RasterDataOf<Format>;
 }): ImmutableFontVariant<Format> {
   if (init.backing.released) throw new TypeError('font backing has been released');
   init.backing.leases += 1;
-  return { ...init, releaseListeners: new Set(), leases: 0, released: false };
+  return {
+    ...init,
+    compileRaster: init.format[bindRasterFormatCompiler](init.data),
+    releaseData: () => init.format.dispose(init.data),
+    releaseListeners: new Set(),
+    leases: 0,
+    released: false,
+  };
 }
 
 /** @internal Return an independent application lease. */
-export function createImmutableFontLease<Format extends AnyRasterFormat>(
+export function createImmutableFontLease<Format extends RasterFormatMetadata>(
   variant: ImmutableFontVariant<Format>,
 ): Font<Format> {
   return new FontImpl(variant);
 }
 
 /** @internal Return an independent application lease over the same immutable variant. */
-export function cloneImmutableFont<Technique extends AnyRasterFormat>(font: Font<Technique>): Font<Technique> {
-  assertImmutableFont(font);
-  return createImmutableFontLease(immutableStateOf(font).variant as ImmutableFontVariant<Technique>);
+export function cloneImmutableFont<Technique extends RasterFormatMetadata>(font: Font<Technique>): Font<Technique> {
+  return createImmutableFontLease(immutableFontImplementation(font).variant());
 }
 
 /** @internal Retain a library, pending-load, engine, or renderer lease. */
-export function retainImmutableFontVariant(variant: ImmutableFontVariant<AnyRasterFormat>): void {
+export function retainImmutableFontVariant<Format extends RasterFormatMetadata>(
+  variant: ImmutableFontVariant<Format>,
+): void {
   if (variant.released) throw new TypeError('font variant has been released');
   variant.leases += 1;
 }
 
 /** @internal Release a library, pending-load, engine, or renderer lease. */
-export function releaseImmutableFontVariant(variant: ImmutableFontVariant<AnyRasterFormat>): void {
+export function releaseImmutableFontVariant<Format extends RasterFormatMetadata>(
+  variant: ImmutableFontVariant<Format>,
+): void {
   if (variant.leases <= 0) throw new Error('immutable font lease underflow');
   variant.leases -= 1;
   if (variant.leases !== 0 || variant.released) return;
@@ -204,7 +239,7 @@ export function releaseImmutableFontVariant(variant: ImmutableFontVariant<AnyRas
   }
   variant.releaseListeners.clear();
   try {
-    (variant.format as unknown as { dispose(data: unknown): void }).dispose(variant.data);
+    variant.releaseData();
   } catch (error) {
     reportDisposalFailure('releasing immutable technique data', error);
   }
@@ -217,28 +252,29 @@ export function releaseImmutableFontVariant(variant: ImmutableFontVariant<AnyRas
 }
 
 /** @internal Observe the final lease release of the immutable variant behind a live Font. */
-export function observeImmutableFontVariantRelease(font: Font<AnyRasterFormat>, listener: () => void): () => void {
-  assertImmutableFont(font);
-  const variant = immutableStateOf(font).variant;
+export function observeImmutableFontVariantRelease<Format extends RasterFormatMetadata>(
+  font: Font<Format>,
+  listener: () => void,
+): () => void {
+  const variant = immutableFontImplementation(font).variant();
   variant.releaseListeners.add(listener);
   return () => variant.releaseListeners.delete(listener);
 }
 
 /** @internal Read package-private resources while proving the user lease is live. */
-export function immutableFontResources<Technique extends AnyRasterFormat>(
+export function immutableFontResources<Technique extends RasterFormatMetadata>(
   font: Font<Technique>,
 ): {
   readonly font: RegisteredFont;
   readonly raster: RegisteredRaster<RasterKindOf<Technique>>;
   readonly data: RasterDataOf<Technique>;
 } {
-  assertImmutableFont(font);
-  const variant = immutableStateOf(font).variant as ImmutableFontVariant<Technique>;
+  const variant = immutableFontImplementation(font).variant();
   return { font: variant.backing.font, raster: variant.raster, data: variant.data };
 }
 
 /** @internal A retained package-private view used while an engine binding is live. */
-export interface ImmutableFontResourceLease<Technique extends AnyRasterFormat> {
+export interface ImmutableFontResourceLease<Technique extends RasterFormatMetadata> {
   readonly font: RegisteredFont;
   readonly raster: RegisteredRaster<RasterKindOf<Technique>>;
   readonly data: RasterDataOf<Technique>;
@@ -247,21 +283,27 @@ export interface ImmutableFontResourceLease<Technique extends AnyRasterFormat> {
 }
 
 /** @internal Return the stable identity of a live immutable technique variant. */
-export function immutableFontVariantIdentity(font: Font<AnyRasterFormat>): object {
-  assertImmutableFont(font);
-  return immutableStateOf(font).variant;
+export function immutableFontVariantIdentity<Format extends RasterFormatMetadata>(font: Font<Format>): object {
+  return immutableFontImplementation(font).variant();
+}
+
+/** @internal Compile a live immutable Font through the operation closed over its exact decoded raster data. */
+export function compileImmutableFontRaster(
+  font: Font<RasterFormatMetadata>,
+  input: RasterFontCompileInput,
+): CompiledRasterFont | undefined {
+  return immutableFontImplementation(font).variant().compileRaster(input);
 }
 
 /** @internal Retain one immutable technique variant independently of its user Font wrapper. */
-export function acquireImmutableFontResources<Technique extends AnyRasterFormat>(
+export function acquireImmutableFontResources<Technique extends RasterFormatMetadata>(
   font: Font<Technique>,
 ): ImmutableFontResourceLease<Technique> {
-  assertImmutableFont(font);
-  return new ImmutableFontResourceLeaseImpl(immutableStateOf(font).variant as ImmutableFontVariant<Technique>);
+  return new ImmutableFontResourceLeaseImpl(immutableFontImplementation(font).variant());
 }
 
 class ImmutableFontResourceLeaseImpl<
-  Technique extends AnyRasterFormat,
+  Technique extends RasterFormatMetadata,
 > implements ImmutableFontResourceLease<Technique> {
   readonly #variant: ImmutableFontVariant<Technique>;
   #disposed = false;
@@ -313,16 +355,22 @@ function releaseImmutableFontBacking(backing: ImmutableFontBacking): void {
   }
 }
 
-function assertImmutableFont(font: Font<AnyRasterFormat>): void {
-  const state = immutableFontState.get(font);
-  if (state === undefined) throw new TypeError('font was not created by this package');
-  if (state.disposed) throw new TypeError('font has been disposed');
+function isImmutableFontStack<Technique extends RasterFormatMetadata>(
+  selection: FontSelection<Technique>,
+): selection is FontStack<Technique, Font<Technique>> {
+  return immutableFontStacks.has(selection);
 }
 
-function immutableStateOf(font: Font<AnyRasterFormat>): ImmutableFontState {
-  const state = immutableFontState.get(font);
-  if (state === undefined) throw new TypeError('invalid immutable font');
-  return state;
+function assertImmutableFont<Format extends RasterFormatMetadata>(
+  font: Font<Format>,
+): asserts font is FontImpl<Format> {
+  if (!(font instanceof FontImpl)) throw new TypeError('font was not created by this package');
+  if (font.disposed) throw new TypeError('font has been disposed');
+}
+
+function immutableFontImplementation<Format extends RasterFormatMetadata>(font: Font<Format>): FontImpl<Format> {
+  assertImmutableFont(font);
+  return font;
 }
 
 function reportDisposalFailure(stage: string, error: unknown): void {

@@ -1,6 +1,6 @@
 export const packageSizeBudgets = {
   'browser-core': {
-    // The public root owns Glyph, FontFace, Paragraph, and their shared loading graph. The unbundled distribution
+    // The public root owns Glyph, FontFace, text authoring/measurement values, and their shared loading graph. The unbundled distribution
     // measures the consumer closure once: 362,479 raw / 354,093 minified / 88,281 gzip / 73,217 Brotli.
     rawBytes: 368_000,
     minifiedBytes: 360_000,

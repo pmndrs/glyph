@@ -15,6 +15,10 @@ import {
 } from '../../dist/loader.js';
 import { immutableFontResources } from '../../dist/loaded-font.js';
 import { claimSerializedFontFace } from '../../dist/internal/font-face-transfer.js';
+import { id as glyphId } from '../../dist/config/codec.js';
+import { defineRasterFormat } from '../../dist/config/raster-format.js';
+import { compileRasterFont, registerRasterCodec } from '../../dist/config/raster.js';
+import { defineTechniqueSchema } from '../../dist/config/schema.js';
 import { bitmap } from '../../dist/raster/bitmap.js';
 import { msdf } from '../../dist/raster/msdf.js';
 import { slug } from '../../dist/raster/slug.js';
@@ -782,6 +786,51 @@ test('the final detached caller aborts underlying work and a later request start
   assert.equal(recovered.glyphCount, 2937);
   assert.equal(calls, 2);
   assert.notEqual(signals[0], signals[1]);
+});
+
+test('a loaded format late-binds its exact Codec after loading', async () => {
+  const firstFormat = defineRasterFormat({
+    id: 'test.loader-concrete-witness',
+    kind: bitmap.kind,
+    extension: bitmap.extension,
+    version: bitmap.version,
+    textEffects: bitmap.textEffects,
+    descriptor: (options) => bitmap.descriptor(options),
+    decode: (font, raster, signal) => bitmap.decode(font, raster, signal),
+    dispose: (data) => bitmap.dispose(data),
+  });
+  const library = createFontLibrary();
+  const source = await openFontFaceSource(library, { baked: { bytes: embeddedBytes, ownership: 'copy' } }, []);
+  const firstFont = await source.load(firstFormat({ strikes: [16] }));
+
+  assert.equal(firstFont.raster, firstFormat);
+  assert.equal(compileRasterFont(firstFont, glyphId), undefined);
+
+  const schema = defineTechniqueSchema({
+    technique: firstFormat.id,
+    scope: 'glyph',
+    binding: {},
+    buffers: {},
+    resources: { atlas: { kind: 'buffer' } },
+    render: { resource: 'atlas', geometry: { kind: 'synthetic-quad' } },
+  });
+  const lateCompiler = new Error('late loader compiler invoked');
+  registerRasterCodec({
+    raster: firstFormat,
+    schema,
+    codecBody: () => ({ inputs: [], operations: [], f32InputCount: 0, u32InputCount: 0 }),
+    compileFont() {
+      throw lateCompiler;
+    },
+  });
+
+  assert.throws(
+    () => compileRasterFont(firstFont, glyphId),
+    (error) => error === lateCompiler,
+  );
+  firstFont.dispose();
+  source.dispose();
+  library.dispose();
 });
 
 function fixtureFetch(routes, calls) {

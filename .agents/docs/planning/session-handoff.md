@@ -28,7 +28,7 @@ Codified in `.agents/skills/engine-call-contract/SKILL.md`. Two rules:
 
 **A call answers, or it throws where it was written.** No result union for a failure the caller cannot cause, no persistent broken state that outlives the call. A throw is the caller's arithmetic; a persistent failure is our defect; neither is a return value. This was reached by getting it wrong twice — a latch that made a rejected frame recompile forever, and a `{ ok }` union on measurement that made every caller guard a branch meaning "glyph is broken."
 
-**A type an application can encounter lives at the root; a thing only an integrator constructs lives in `/core`.** `ParagraphMeasurement` at the root, `Paragraph` in `/core`. The two surfaces share zero names and `entry-point-boundaries.test.mjs` enforces it.
+**A type an application can encounter lives at the root; a thing only an integrator constructs lives on its exact `/config/*` leaf.** `ParagraphMeasurement` is a root result type; renderer schema and Codec builders live on focused config leaves. There is no second public core runtime, and `entry-point-boundaries.test.mjs` enforces that split.
 
 ## Why measurement is two calls, and what they should be named
 
@@ -38,16 +38,16 @@ Merging them was tried in this session and regressed the fast path from **0 engi
 
 **The naming is settled and shipped.** Ours:
 
-| ours | does | Skia's equivalent |
-| --- | --- | --- |
-| `measure(constraints)` | shaping and line breaking, returns metrics | `layout(width)` |
-| `glyphs()` | queries the finished result, emits and copies columns | `getRectsForRange()` |
+| ours                   | does                                                  | Skia's equivalent    |
+| ---------------------- | ----------------------------------------------------- | -------------------- |
+| `measure(constraints)` | shaping and line breaking, returns metrics            | `layout(width)`      |
+| `glyphs()`             | queries the finished result, emits and copies columns | `getRectsForRange()` |
 
-`ParagraphLayout` is authored paragraph flow configuration; `measure(constraints)` is the action that answers aggregate metrics. Positioned columns remain an explicit `glyphs(constraints)` query. Both renderer-free Paragraph and retained renderer text carry the same verbs.
+`ParagraphLayout` is authored paragraph flow configuration; `measure()` is the action that answers aggregate metrics for a retained `Text`. Positioned columns remain an explicit `glyphs()` query. These are deliberate one-Text queries on the ordinary handle-owned object, not a second renderer-free runtime.
 
 ## What measurement guarantees
 
-`Paragraph` needs no scene, renderer, world matrix, or committed frame — verified, and pinned by "measurement is complete and available before anything is rendered". Every value is paragraph-local: origin at the box top-left, +X right, +Y down. Scale and placement belong to the host.
+A `Text` query needs no scene ancestry, renderer, world matrix, or committed frame — verified, and pinned by "measurement is complete and available before anything is rendered". Every value is paragraph-local: origin at the box top-left, +X right, +Y down. Scale and placement belong to the host.
 
 Compute-or-cached is inherent and not a wart. The first query pays shaping; it is retained as a speculative transaction (`state.rs:188`) so a second query at a different constraint re-runs only geometry, flow, and positioning, and the next ordinary frame committing the same inputs adopts that work rather than redoing it.
 
@@ -55,7 +55,7 @@ The fast `measure()` path may return `inkBounds: undefined` because it does not 
 
 ## Corrections this session paid for
 
-- `/core` and `/tsl` stay published. The "no consumers" finding that demoted them was false: `@pmndrs/glyph/three` imports `/core` directly. `/core` is **additive to the root**, not standalone, so "you cannot do X from `/core` alone" is not a finding unless X is engine driving.
+- Renderer-neutral integration helpers remain available on focused `/config/*` leaves, while TSL shaders remain available on `/tsl/*`. The retired `/core` surface is not a second engine-driving API.
 - `capacity.policy: 'fixed'` is not a failure. A caller declaring a hard glyph budget asked for rejection over growth; the update does not apply, the last complete revision stays visible, development warns once, `capacityExceeded` carries it for reporting, and it self-heals.
 - Every caller-reachable path to a frame rejection is closed at `set()` — span ranges, nesting, feature ranges, unpaired surrogates. What remains is our own invariant violations.
 - `FontLoader` names **two different classes** at the root and in `/three`. Four call sites use the first, nine the second. Rename `/three`'s to `ThreeFontLoader`. **Not done.**
@@ -73,5 +73,5 @@ Found while writing `.agents/docs/guides/renderer-integration.md`; each is a pla
 
 1. **Benchmarks as a gate**, per [benchmark-trust.md](benchmark-trust.md). Four decisions need a human: CI compares base and head in one job with no stored baseline; `blocks: 16` rather than the default 8; the anti-laundering rule forbids re-running to flip a verdict; and four existing "benchmarks" get deleted, most pointedly a test comparing two checked-in JSON files that measures nothing and passes forever. The premise was half wrong — the problem is not only noisy numbers, it is that **nothing was ever gated on them**.
 2. **A golden-path audit** for the Rust engine: that changes stay data-oriented and on the SIMD compute path rather than inventing a new way to do the same thing. Not designed yet.
-3. **Implementor documentation for writing a policy and consuming a plan.** There is none, and a renderer integrator needs it more than anything else in the docs.
+3. **Keep the implementer guide executable against `GlyphConfig`.** It must teach Codec encoding, resource resolution, borrowed `CommandBufferView` decoding, and renderer commits without reviving backend, Policy, or public plan vocabulary.
 4. The `ThreeFontLoader` rename, the material selector, and the `layout`/`glyphs` naming above.

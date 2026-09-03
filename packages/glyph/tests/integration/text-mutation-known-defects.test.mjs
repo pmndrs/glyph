@@ -48,7 +48,7 @@ import { createFontCache, edit, lanes, mount, timeout, unmount } from '../suppor
 import { findLineBreaks } from '../support/unicode-line-breaks.mjs';
 import { findGraphemeBoundaries } from '../../dist/internal/graphemes.js';
 
-const bitmap16 = { raster: bitmap, options: { strikes: [16] } };
+const bitmap16 = bitmap({ strikes: [16] });
 const fonts = createFontCache({
   amiri: { file: 'amiri-bitmap-16.font.glb', raster: bitmap16 },
   inter: { file: 'inter-bitmap-16.font.glb', raster: bitmap16 },

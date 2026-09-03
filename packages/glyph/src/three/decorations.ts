@@ -1,30 +1,32 @@
 import * as THREE from 'three/webgpu';
 
 import type { GlyphCopy } from '../config/glyph.js';
-import type { AnyRasterFormat } from '../config/raster-format.js';
 import { ThreeTextRenderPlanExecutor, type ThreeTextEnginePlanOwner } from './engine-plan-target.js';
-import type { ThreeRootBinding } from './handle.js';
+import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
-import type { Text } from './text.js';
 import { copyCurrentLocalTransform } from './detached-object.js';
 
+interface DetachedTextSource extends THREE.Object3D {
+  readonly pixelSnapping: boolean;
+}
+
 /** @internal Constructed only by `Text.breakApart()`. */
-interface DecorationsOptions<Technique extends AnyRasterFormat> {
-  readonly source: Text<Technique>;
-  readonly copy: (renderer: ThreeTextRenderPlanExecutor, boundary: ThreeRootBinding) => GlyphCopy<void>;
+interface DecorationsOptions {
+  readonly source: DetachedTextSource;
+  readonly copy: (renderer: ThreeTextRenderPlanExecutor, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
   readonly resources: ThreeRendererResources;
   readonly renderOrderBase: number;
 }
 
 const decorationsConstructorToken: unique symbol = Symbol('pmndrs.glyph.Decorations');
-let constructDecorations: ((options: DecorationsOptions<AnyRasterFormat>) => Decorations) | undefined;
+let constructDecorations: ((options: DecorationsOptions) => Decorations) | undefined;
 let decorationsHaveDraws: ((decorations: Decorations) => boolean) | undefined;
 let inspectDecorationDraws:
   | ((decorations: Decorations) => Readonly<{ under: readonly THREE.Mesh[]; over: readonly THREE.Mesh[] }>)
   | undefined;
 
 /** @internal Constructs the detached branch while keeping the public class receive-only. */
-export function createDecorations(options: DecorationsOptions<AnyRasterFormat>): Decorations | undefined {
+export function createDecorations(options: DecorationsOptions): Decorations | undefined {
   if (constructDecorations === undefined || decorationsHaveDraws === undefined) {
     throw new Error('Decorations constructor is unavailable');
   }
@@ -64,7 +66,7 @@ export class Decorations extends THREE.Object3D {
     };
   }
 
-  private constructor(token: typeof decorationsConstructorToken, options: DecorationsOptions<AnyRasterFormat>) {
+  private constructor(token: typeof decorationsConstructorToken, options: DecorationsOptions) {
     super();
     if (token !== decorationsConstructorToken) {
       throw new TypeError('Decorations objects are created by Text.breakApart()');
@@ -75,7 +77,7 @@ export class Decorations extends THREE.Object3D {
       copyCurrentLocalTransform(options.source, this);
 
       const owner: ThreeTextEnginePlanOwner = {
-        drawRoot: this,
+        renderObject: this,
         pixelSnapping: options.source.pixelSnapping,
         renderOrderBase: options.renderOrderBase,
         objectForTransform: () => this,
@@ -83,8 +85,8 @@ export class Decorations extends THREE.Object3D {
       target = new ThreeTextRenderPlanExecutor(options.resources, owner);
       this.#target = target;
       copy = options.copy(target, {
-        drawRoot: this,
-        root: Object.freeze({ name: undefined, scene: undefined, drawRoot: this }),
+        renderObject: this,
+        root: Object.freeze({ name: undefined, scene: undefined, renderObject: this }),
         material: options.resources.material,
         objectForTransform: () => this,
       });

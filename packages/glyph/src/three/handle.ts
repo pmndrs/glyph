@@ -24,6 +24,7 @@ import { normalizeGlyphBufferCapacity } from '../text-properties.js';
 import { threeCodecDescriptor } from './codec.js';
 import type { ThreeAllocationMode, ThreeTransformMode } from './codec.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
+import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import { createThreeCodec, threeCodecResources } from './internal/renderer-resources.js';
 import {
   ThreeRootHost,
@@ -125,15 +126,7 @@ export interface ThreeCodec extends Codec {}
 
 export const ThreeFontFormats: ThreeFontFormats = Object.freeze({ bitmap, msdf, slug });
 
-/** Config-facing binding for one Three publication root. */
-export interface ThreeRootBinding {
-  readonly drawRoot: THREE.Object3D;
-  readonly root: ThreeRootContext;
-  readonly material: ThreeTextMaterial | undefined;
-  objectForTransform?(recordIndex: number, source: THREE.Object3D): THREE.Object3D;
-}
-
-export const ThreeSchema: GlyphSchema<ThreeBindings, ThreeRootBinding> = defineGlyphSchema({
+export const ThreeSchema: GlyphSchema<ThreeBindings, ThreePublicationBoundary> = defineGlyphSchema({
   program: (_root, program) => Object.freeze({ kind: 'three-program', program }),
   buffer: (_root, input) => Object.freeze({ kind: 'three-buffer', input }),
   material: (root, binding) =>
@@ -185,7 +178,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
         }),
         () => undefined,
       ),
-    renderer: (context: RendererContext<ThreeBindings, void, ThreeCodec, ThreeRootBinding>) => {
+    renderer: (context: RendererContext<ThreeBindings, void, ThreeCodec, ThreePublicationBoundary>) => {
       if (context.defaultRenderer === undefined) {
         throw new TypeError('ThreeConfig.renderer() must be constructed by a Three publication boundary');
       }

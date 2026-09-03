@@ -47,11 +47,11 @@ import type {
 export { markStorageAttributeUpdated } from './internal/host-buffer.js';
 
 export interface ThreeTextEnginePlanOwner {
-  readonly drawRoot: THREE.Object3D;
+  readonly renderObject: THREE.Object3D;
   readonly root?: ThreeRootContext;
   readonly pixelSnapping?: boolean;
   readonly renderOrderBase?: number;
-  /** Resolves retained visibility when transforms are not descendants of the private draw root. */
+  /** Resolves retained visibility when transforms are not descendants of the private publication object. */
   visibleObject?(object: THREE.Object3D): boolean;
   /** Optional transform remapping used when a copied plan is imported beneath a detached root. */
   objectForTransform?(transformId: number, source: THREE.Object3D): THREE.Object3D;
@@ -103,7 +103,7 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
     this.#owner = owner;
     const target = this;
     this.#transformState = {
-      drawRoot: owner.drawRoot,
+      renderObject: owner.renderObject,
       get draws() {
         return target.#draws;
       },
@@ -318,7 +318,7 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
       preparedDraws =
         frame.displayList.kind === 'replace'
           ? prepareDrawReplacement({
-              root: this.#owner.drawRoot,
+              root: this.#owner.renderObject,
               children: frame.displayList.value.children,
               context,
               coordinator: this.#resourcesContext,
@@ -330,7 +330,7 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
             })
           : {
               changed: false,
-              root: this.#owner.drawRoot,
+              root: this.#owner.renderObject,
               draws: this.#draws,
               keys: this.#drawKeys,
               originSegments: this.#originSegments,

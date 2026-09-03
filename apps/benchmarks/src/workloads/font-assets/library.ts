@@ -1,4 +1,4 @@
-import type { AnyRasterFormat, Font, RasterFormatInput } from '@pmndrs/glyph';
+import type { Font, RasterFormatInput, RasterFormatMetadata } from '@pmndrs/glyph';
 import {
   createFontLibrary,
   type FontLoadOptions,
@@ -24,7 +24,7 @@ export const benchmarkFontLibrary = createFontLibrary({
 export type { RuntimeFontBake, RuntimeFontBakeRequest };
 
 /** Benchmark-only access to the package-private loader with harness transport and limits applied. */
-export function loadBenchmarkFont<Format extends AnyRasterFormat>(
+export function loadBenchmarkFont<Format extends RasterFormatMetadata>(
   input: LoadFontInput,
   raster: RasterFormatInput<Format>,
   options?: FontLoadOptions,

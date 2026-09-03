@@ -1,5 +1,5 @@
 import type { CodecIdFactory, CodecProgramId, CodecResourceId, CodecTechniqueId } from '../config/codec.js';
-import type { AnyRasterFormat, RasterResourceId } from '../config/raster-format.js';
+import type { RasterFormatMetadata, RasterResourceId } from '../config/raster-format.js';
 
 const encoder = new TextEncoder();
 const renderIdFactories = new WeakSet<object>();
@@ -31,11 +31,11 @@ export class CodecIdScope implements CodecIdFactory {
     return wireId;
   }
 
-  technique(raster: AnyRasterFormat | string): CodecTechniqueId {
+  technique(raster: RasterFormatMetadata | string): CodecTechniqueId {
     return this.idFor(rasterIdentity(raster)) as CodecTechniqueId;
   }
 
-  program(raster: AnyRasterFormat | string, namespace: string, variant = 'default'): CodecProgramId {
+  program(raster: RasterFormatMetadata | string, namespace: string, variant = 'default'): CodecProgramId {
     return this.idFor(programWireKey(raster, namespace, variant)) as CodecProgramId;
   }
 
@@ -55,7 +55,7 @@ export function assertCodecIdFactory(value: unknown, label: string): CodecIdFact
   return value as CodecIdFactory;
 }
 
-function programWireKey(raster: AnyRasterFormat | string, namespace: string, variant: string): string {
+function programWireKey(raster: RasterFormatMetadata | string, namespace: string, variant: string): string {
   if (typeof namespace !== 'string' || namespace.length === 0) {
     throw new TypeError('render program namespace must be a nonempty string');
   }
@@ -65,7 +65,7 @@ function programWireKey(raster: AnyRasterFormat | string, namespace: string, var
   return JSON.stringify(['glyph-program-v1', rasterIdentity(raster), namespace, variant]);
 }
 
-function rasterIdentity(raster: AnyRasterFormat | string): string {
+function rasterIdentity(raster: RasterFormatMetadata | string): string {
   const identity = typeof raster === 'string' ? raster : raster?.id;
   if (typeof identity !== 'string' || identity.length === 0) {
     throw new TypeError('render raster identity must be a nonempty string');

@@ -12,6 +12,7 @@ test('typed command buffers project the trusted group hierarchy lazily', () => {
   const firstPlan = planFixture();
   const first = mapper.source(candidate(firstPlan.plan), new AbortController().signal);
 
+  assert.equal(Object.isFrozen(first), true, 'package-created borrowed command buffers are immutable');
   assert.equal(firstPlan.recordReads(), 0, 'source construction must not visit a command record');
   assert.equal(first.group.kind, 'replace');
   assert.equal(first.group.value.children.length, 2);
@@ -22,6 +23,7 @@ test('typed command buffers project the trusted group hierarchy lazily', () => {
   assert.equal(batch.kind, 'batch');
   const firstBatchIdentity = batch.identity;
   assert.equal(mapper.batchDescriptor(first, firstBatchIdentity).offset, firstPlan.drawOffset(0));
+  assert.equal(mapper.drawBindingDescriptor(first, firstBatchIdentity).buffers.length, 0);
   assert.equal(batch.instances.length, 2);
   assert.equal(firstPlan.recordReads(), 1, 'opening a batch range must not visit its instance records');
 
@@ -44,6 +46,7 @@ test('typed command buffers project the trusted group hierarchy lazily', () => {
   assert.equal(root.kind, 'instance');
   const firstRootIdentity = root.identity;
   assert.equal(mapper.instanceDescriptor(first, firstRootIdentity).offset, firstPlan.drawOffset(1));
+  assert.equal(mapper.drawBindingDescriptor(first, firstRootIdentity).resources.length, 0);
   assert.equal(mapper.transformBinding(root.transform), firstPlan.transformBinding);
 
   mapper.settle(first, true);

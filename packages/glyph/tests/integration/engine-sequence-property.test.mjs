@@ -102,7 +102,7 @@ async function loadFonts() {
       name,
       await loadFont(
         { baked: { bytes: await readFile(new URL(file, fixtures)), ownership: 'copy' } },
-        { raster: bitmap, options: { strikes: [16] } },
+        bitmap({ strikes: [16] }),
       ),
     ]),
   );

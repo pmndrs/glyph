@@ -1,5 +1,5 @@
 import type { RasterLoadOptions, RasterReference, RasterSelection, RegisteredRaster } from './raster.js';
-import type { AnyRasterFormat } from './config/raster-format.js';
+import type { RasterFormatMetadata } from './config/raster-format.js';
 import type { FontHandle, FontKey, RasterKey, Sha256Hex } from './identity.js';
 
 /** Renderer-independent metrics expressed in font units. */
@@ -46,7 +46,7 @@ export type FontBytesInput =
   | { readonly bytes: ArrayBufferView; readonly ownership: 'transfer' };
 
 /** Immutable application font lease for one raster format. */
-export interface Font<Format extends AnyRasterFormat> {
+export interface Font<Format extends RasterFormatMetadata> {
   readonly metrics: FontMetrics;
   readonly glyphCount: number;
   readonly raster: Format;

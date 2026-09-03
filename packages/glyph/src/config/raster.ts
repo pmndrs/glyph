@@ -1,12 +1,13 @@
 import type { Font } from '../font.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import { immutableFontResources, immutableFontVariantIdentity } from '../loaded-font.js';
-import type { AnyRasterFormat, RasterResourceId } from './raster-format.js';
+import { compileImmutableFontRaster, immutableFontResources, immutableFontVariantIdentity } from '../loaded-font.js';
+import type { RasterDataOf, RasterFormatMetadata, RasterResourceId } from './raster-format.js';
 import { isRasterFormat } from '../internal/raster-format-registry.js';
+import type { RasterFontCompileInput, RasterFormatCompilerWitness } from '../internal/raster-format-compiler.js';
 import {
+  installRasterCodecFontCompiler,
   isRegisteredRasterCodec,
   registerRasterCodecInternal,
-  resolveRasterCodecInternal,
 } from '../internal/raster-codec-registry.js';
 import {
   compileFontBinding,
@@ -27,9 +28,9 @@ import type { CompiledCodecProgramBody, CodecProgramSystemBuffers } from './code
 import { assertTechniqueCodecBody, normalizeCodecProgramSystemBuffers } from '../internal/codec-program-contract.js';
 import {
   schemaCodecBuffers,
-  type AnyTechniqueSchema,
   type TechniqueBindingDeclaration,
   type TechniqueResourceDeclaration,
+  type TechniqueSchemaMetadata,
 } from './schema.js';
 import {
   createCodecProgram,
@@ -46,7 +47,7 @@ import { assertCodecIdFactory, CodecIdScope } from '../internal/render-id.js';
 export type RasterCodecSystem = CodecProgramSystemBuffers;
 
 /** Renderer-neutral codec body, before an engine assigns program and capability identities. */
-export type RasterCodecBodyFactory<Schema extends AnyTechniqueSchema = AnyTechniqueSchema> = (
+export type RasterCodecBodyFactory<Schema extends TechniqueSchemaMetadata = TechniqueSchemaMetadata> = (
   system: RasterCodecSystem,
   capabilities: CodecCapabilitySet,
 ) => CompiledCodecProgramBody<Schema>;
@@ -74,7 +75,7 @@ export interface CompiledRasterFontResource {
 type BindingFieldName<Names> = Names extends readonly string[] ? Names[number] : never;
 
 /** Read-only semantic view over one authenticated compiled-font binding. */
-export interface CompiledRasterFontView<Schema extends AnyTechniqueSchema = AnyTechniqueSchema> {
+export interface CompiledRasterFontView<Schema extends TechniqueSchemaMetadata = TechniqueSchemaMetadata> {
   /** Schema scope that determines the row count of named fields. */
   readonly scope: Schema['scope'];
   /** Number of glyph rows represented by the binding. */
@@ -101,9 +102,9 @@ type ResourcePayload<Declaration extends TechniqueResourceDeclaration> = Declara
         ? PortableGeometryPayload
         : PortableResourceGroupPayload;
 
-type SchemaResources<Schema extends AnyTechniqueSchema> = NonNullable<Schema['resources']>;
-type SchemaResourceName<Schema extends AnyTechniqueSchema> = keyof SchemaResources<Schema> & string;
-type RasterCodecSchema<Schema extends AnyTechniqueSchema> = Schema & {
+type SchemaResources<Schema extends TechniqueSchemaMetadata> = NonNullable<Schema['resources']>;
+type SchemaResourceName<Schema extends TechniqueSchemaMetadata> = keyof SchemaResources<Schema> & string;
+type RasterCodecSchema<Schema extends TechniqueSchemaMetadata> = Schema & {
   readonly render: { readonly resource: keyof Schema['resources'] & string };
 };
 type BindingReaders<Names> = Names extends readonly string[]
@@ -121,7 +122,10 @@ export type RasterFontBinding<Binding extends TechniqueBindingDeclaration> = {
     ? { readonly u32: BindingReaders<Binding['u32']> }
     : { readonly u32?: never });
 
-export interface RasterCodecFontCompiler<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema> {
+export interface RasterCodecFontCompiler<
+  Technique extends RasterFormatMetadata,
+  Schema extends TechniqueSchemaMetadata,
+> {
   readonly font: RasterCodecFont<Technique>;
   readonly compile: (binding: RasterFontBinding<Schema['binding']>) => CompiledRasterFont;
   /**
@@ -138,14 +142,14 @@ export interface RasterCodecFontCompiler<Technique extends AnyRasterFormat, Sche
 }
 
 /** Technique data exposed only while its registered portable font compiler is active. */
-export interface RasterCodecFont<Technique extends AnyRasterFormat> {
+export interface RasterCodecFont<Technique extends RasterFormatMetadata> {
   readonly raster: Technique;
   readonly glyphCount: number;
   readonly data: import('./raster-format.js').RasterDataOf<Technique>;
 }
 
 /** Portable raster Codec definition shared by every renderer integration. */
-export interface RasterCodec<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema> {
+export interface RasterCodec<Technique extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata> {
   readonly raster: Technique;
   readonly schema: RasterCodecSchema<Schema> & { readonly technique: Technique['id'] };
   readonly programVariant?: number;
@@ -165,10 +169,10 @@ export interface RasterCodecProgramOptions {
 }
 
 /** Assemble one engine CodecProgram from a registered renderer-neutral raster Codec. */
-export function createRasterCodecProgram<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema>(
-  codec: RasterCodec<Technique, Schema>,
-  options: RasterCodecProgramOptions,
-): CodecProgram {
+export function createRasterCodecProgram<
+  Technique extends RasterFormatMetadata,
+  Schema extends TechniqueSchemaMetadata,
+>(codec: RasterCodec<Technique, Schema>, options: RasterCodecProgramOptions): CodecProgram {
   if (!isRegisteredRasterCodec(codec)) {
     throw new TypeError('raster codec assembly needs a registered RasterCodec');
   }
@@ -218,41 +222,43 @@ export function createRasterCodecProgram<Technique extends AnyRasterFormat, Sche
 const compiledRasterFonts = new WeakSet<object>();
 const compiledFonts = new WeakMap<object, CompiledRasterFont>();
 const MISSING_RESOURCE = 0xffff_ffff;
-type AnyRasterCodec = RasterCodec<AnyRasterFormat, AnyTechniqueSchema>;
-
+installRasterCodecFontCompiler(compileRegisteredRasterFont);
 /** Register one portable raster Codec by its RasterFormat id. */
-export function registerRasterCodec<const Technique extends AnyRasterFormat, const Schema extends AnyTechniqueSchema>(
-  codec: RasterCodec<Technique, Schema>,
+export function registerRasterCodec<
+  const Technique extends RasterFormatMetadata,
+  const Schema extends TechniqueSchemaMetadata,
+>(
+  codec: RasterCodec<Technique, Schema> & {
+    readonly raster: Technique & RasterFormatCompilerWitness<RasterDataOf<Technique>>;
+  },
 ): RasterCodec<Technique, Schema> {
   return registerRasterCodecInternal(codec, false);
 }
 
 /** Return whether `value` is the exact immutable RasterCodec produced by registration. */
-export function isRasterCodec(value: unknown): value is RasterCodec<AnyRasterFormat, AnyTechniqueSchema> {
+export function isRasterCodec(value: unknown): boolean {
   return isRegisteredRasterCodec(value);
 }
 
 /** Compile an immutable font through the registered RasterCodec, if it has one. */
-export function compileRasterFont(
-  font: Font<AnyRasterFormat>,
+export function compileRasterFont<Technique extends RasterFormatMetadata>(
+  font: Font<Technique>,
   ids: CodecIdFactory = new CodecIdScope(),
 ): CompiledRasterFont | undefined {
   assertCodecIdFactory(ids, 'raster font compiler ids');
-  const fontResources = immutableFontResources(font);
-  return compileRasterFontSource(
-    immutableFontVariantIdentity(font),
-    font.raster,
-    fontResources.font.glyphCount,
-    fontResources.data,
-    ids,
-  );
+  const resources = immutableFontResources(font);
+  return compileImmutableFontRaster(font, {
+    cacheKey: immutableFontVariantIdentity(font),
+    glyphCount: resources.font.glyphCount,
+    identities: ids,
+  });
 }
 
 /**
  * Read named binding fields and portable resources without exposing technique-owned decoded data.
  * The view borrows `compiled`; mutating its public byte or payload arrays invalidates later reads.
  */
-export function readCompiledRasterFont<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema>(
+export function readCompiledRasterFont<Technique extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
   compiled: CompiledRasterFont,
   codec: RasterCodec<Technique, Schema> & { readonly raster: Technique; readonly schema: Schema },
   ids: CodecIdFactory = new CodecIdScope(),
@@ -409,18 +415,13 @@ function checkedBindingIndex(value: number, count: number, label: string): numbe
   return value;
 }
 
-function compileRasterFontSource(
-  cacheKey: object,
-  technique: AnyRasterFormat,
-  glyphCount: number,
-  data: unknown,
-  identities: CodecIdFactory,
-): CompiledRasterFont | undefined {
-  const codec = resolveRasterCodecInternal(technique.id);
-  if (codec === undefined) return undefined;
-  if (technique !== codec.raster) {
-    throw new TypeError(`font raster does not match the registered codec for "${technique.id}"`);
-  }
+function compileRegisteredRasterFont<Technique extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
+  codec: RasterCodec<Technique, Schema>,
+  input: RasterFontCompileInput,
+  data: RasterDataOf<Technique>,
+): CompiledRasterFont {
+  const { cacheKey, glyphCount, identities } = input;
+  const technique = codec.raster;
   const cached = compiledFonts.get(cacheKey);
   if (cached !== undefined) {
     identities.technique(codec.raster);
@@ -438,7 +439,7 @@ function compileRasterFontSource(
     if (!active) throw new Error('raster codec font compiler is no longer active');
     if (failed) throw new Error('raster codec font compiler already rejected an input', { cause: failure });
   };
-  const compiler = Object.freeze({
+  const compiler: RasterCodecFontCompiler<Technique, Schema> = Object.freeze({
     get font() {
       assertActive();
       return Object.freeze({
@@ -456,7 +457,7 @@ function compileRasterFontSource(
         },
       });
     },
-    compile(input: RasterFontBinding<TechniqueBindingDeclaration>) {
+    compile(input: RasterFontBinding<Schema['binding']>) {
       assertActive();
       try {
         if (compileStarted) throw new Error('raster codec font compiler already attempted a binding');
@@ -471,7 +472,11 @@ function compileRasterFontSource(
         throw error;
       }
     },
-    retain(name: string, key: RasterResourceId, resource: unknown) {
+    retain<Name extends SchemaResourceName<Schema>>(
+      name: Name,
+      key: RasterResourceId,
+      resource: ResourcePayload<SchemaResources<Schema>[Name]>,
+    ) {
       assertActive();
       try {
         if (compileStarted) throw new Error('raster codec font retained a resource after compile started');
@@ -493,7 +498,7 @@ function compileRasterFontSource(
         const normalized = normalizeDeclaredResource(declared, name, resource);
         retainedKeys.push(key);
         declaredResources.set(name, retainedKeys);
-        resources.set(key, normalized as PortableResource);
+        resources.set(key, normalized);
       } catch (error) {
         failed = true;
         failure = error;
@@ -516,13 +521,13 @@ function compileRasterFontSource(
   return compiled;
 }
 
-function compileFont(
-  codec: AnyRasterCodec,
+function compileFont<Technique extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
+  codec: RasterCodec<Technique, Schema>,
   glyphCount: number,
   identities: CodecIdFactory,
   retained: Map<RasterResourceId, PortableResource>,
   declaredResources: Map<string, RasterResourceId[]>,
-  input: RasterFontBinding<TechniqueBindingDeclaration>,
+  input: RasterFontBinding<Schema['binding']>,
 ): CompiledRasterFont {
   if (!isRecord(input)) throw new TypeError('raster codec font binding needs an object');
   const allowed = new Set([
@@ -629,13 +634,16 @@ function readers(value: unknown, names: readonly string[], scalar: 'f32' | 'u32'
 function copyStrikes(value: unknown): readonly [number, ...number[]] {
   if (!Array.isArray(value) || value.length === 0)
     throw new TypeError('raster codec font binding needs at least one strike');
-  const strikes = value.map((strike, index) => {
-    if (!Number.isSafeInteger(strike) || strike < 0 || strike > 0xffff_ffff) {
+  const copyStrike = (strike: unknown, index: number): number => {
+    if (typeof strike !== 'number' || !Number.isSafeInteger(strike) || strike < 0 || strike > 0xffff_ffff) {
       throw new RangeError(`raster codec font binding strike ${index} needs a u32 ppem`);
     }
     return strike;
-  });
-  return Object.freeze(strikes) as unknown as readonly [number, ...number[]];
+  };
+  const first = copyStrike(value[0], 0);
+  const rest = value.slice(1).map(copyStrike);
+  const strikes: [number, ...number[]] = [first, ...rest];
+  return Object.freeze(strikes);
 }
 
 function checkedProduct(left: number, right: number, label: string): number {

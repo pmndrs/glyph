@@ -2,12 +2,12 @@ import { type ClusterAlignableRange, resolveRangesToClusters } from './internal/
 import { statedProperties } from './internal/span-cascade.js';
 import { isImmutableFontSelection, type FontSelection } from './loaded-font.js';
 import { assertTextStyle, type TextStyle } from './text-properties.js';
-import type { AnyRasterFormat } from './config/raster-format.js';
+import type { RasterFormatMetadata } from './config/raster-format.js';
 
 declare const textLiteralTechnique: unique symbol;
 declare const textSpanFragmentTechnique: unique symbol;
 
-export interface ParagraphSpan<Technique extends AnyRasterFormat> {
+export interface ParagraphSpan<Technique extends RasterFormatMetadata> {
   readonly start: number;
   readonly end: number;
   readonly font?: FontSelection<Technique>;
@@ -15,14 +15,14 @@ export interface ParagraphSpan<Technique extends AnyRasterFormat> {
   readonly style?: TextStyle;
 }
 
-export interface TextLiteral<Technique extends AnyRasterFormat = never> {
+export interface TextLiteral<Technique extends RasterFormatMetadata = never> {
   readonly [textLiteralTechnique]: (technique: Technique) => Technique;
   readonly text: string;
   readonly spans: readonly ParagraphSpan<Technique>[];
 }
 
 export interface TextSpanFragment<
-  Technique extends AnyRasterFormat = never,
+  Technique extends RasterFormatMetadata = never,
   Properties extends object = Omit<ParagraphSpan<Technique>, 'start' | 'end'>,
 > {
   readonly [textSpanFragmentTechnique]: (technique: Technique) => Technique;
@@ -68,12 +68,12 @@ export function alignSpansToClusters<Span extends ClusterAlignableRange>(
   return resolveRangesToClusters(text, spans);
 }
 
-export type FormattedText<Technique extends AnyRasterFormat> = TextLiteral<Technique> | TextLiteral<never>;
-export type TextInput<Technique extends AnyRasterFormat> = string | FormattedText<Technique>;
+export type FormattedText<Technique extends RasterFormatMetadata> = TextLiteral<Technique> | TextLiteral<never>;
+export type TextInput<Technique extends RasterFormatMetadata> = string | FormattedText<Technique>;
 export type SpanStyle = Readonly<TextStyle>;
-export type SpanFormat<Technique extends AnyRasterFormat> = FontSelection<Technique> | SpanStyle;
+export type SpanFormat<Technique extends RasterFormatMetadata> = FontSelection<Technique> | SpanStyle;
 
-type TextTemplateValue<Technique extends AnyRasterFormat> =
+type TextTemplateValue<Technique extends RasterFormatMetadata> =
   | string
   | number
   | TextLiteral<Technique>
@@ -81,19 +81,19 @@ type TextTemplateValue<Technique extends AnyRasterFormat> =
   | TextSpanFragment<Technique>
   | TextSpanFragment<never>;
 
-export interface SpanTag<Technique extends AnyRasterFormat> {
+export interface SpanTag<Technique extends RasterFormatMetadata> {
   (strings: TemplateStringsArray, ...values: readonly TextTemplateValue<Technique>[]): TextSpanFragment<Technique>;
 }
 
 export interface UnboundSpanTag {
-  <Technique extends AnyRasterFormat = never>(
+  <Technique extends RasterFormatMetadata = never>(
     strings: TemplateStringsArray,
     ...values: readonly TextTemplateValue<Technique>[]
   ): TextSpanFragment<Technique>;
 }
 
 /** Integrator utility for adding renderer-owned properties to a structural span fragment. */
-export function createSpanTag<Technique extends AnyRasterFormat, Properties extends object>(
+export function createSpanTag<Technique extends RasterFormatMetadata, Properties extends object>(
   properties: Readonly<Properties>,
 ): SpanTag<Technique> {
   if (typeof properties !== 'object' || properties === null || Array.isArray(properties)) {
@@ -110,7 +110,7 @@ export function createSpanTag<Technique extends AnyRasterFormat, Properties exte
   }) as SpanTag<Technique>;
 }
 
-export function txt<Technique extends AnyRasterFormat = never>(
+export function txt<Technique extends RasterFormatMetadata = never>(
   strings: TemplateStringsArray,
   ...values: readonly TextTemplateValue<Technique>[]
 ): TextLiteral<Technique> {
@@ -119,11 +119,11 @@ export function txt<Technique extends AnyRasterFormat = never>(
 }
 
 export function span(...styles: readonly [SpanStyle, ...SpanStyle[]]): UnboundSpanTag;
-export function span<Technique extends AnyRasterFormat>(
+export function span<Technique extends RasterFormatMetadata>(
   font: FontSelection<Technique>,
   ...formats: readonly SpanFormat<NoInfer<Technique>>[]
 ): SpanTag<Technique>;
-export function span<Technique extends AnyRasterFormat>(
+export function span<Technique extends RasterFormatMetadata>(
   first: FontSelection<Technique> | SpanStyle,
   ...rest: readonly SpanFormat<Technique>[]
 ): SpanTag<Technique> | UnboundSpanTag {
@@ -141,7 +141,7 @@ export function span<Technique extends AnyRasterFormat>(
  * settles those joins against the finished text under the one rule `flattenText` uses on the React
  * tree: the fused cluster takes the style of its base, which is the earlier fragment's.
  */
-function compose<Technique extends AnyRasterFormat>(
+function compose<Technique extends RasterFormatMetadata>(
   strings: TemplateStringsArray,
   values: readonly TextTemplateValue<Technique>[],
 ): { readonly text: string; readonly spans: readonly ParagraphSpan<Technique>[] } {
@@ -151,14 +151,13 @@ function compose<Technique extends AnyRasterFormat>(
     const value = values[index]!;
     const start = text.length;
     if (isFragment(value)) {
-      const fragment = value as TextLiteral<Technique> | TextSpanFragment<Technique, object>;
-      text += fragment.text;
+      text += value.text;
       // Every resolver applies the last covering span, so an enclosing span must
       // precede the spans it contains for inner formatting to compose over it.
-      if ('properties' in fragment && fragment.text.length !== 0) {
-        spans.push(Object.freeze({ start, end: text.length, ...fragment.properties }));
+      if ('properties' in value && value.text.length !== 0) {
+        spans.push(Object.freeze({ start, end: text.length, ...value.properties }));
       }
-      for (const nested of fragment.spans) spans.push(offsetSpan(nested, start));
+      for (const nested of value.spans) spans.push(offsetSpan(nested, start));
     } else {
       text += String(value);
     }
@@ -167,7 +166,9 @@ function compose<Technique extends AnyRasterFormat>(
   return { text, spans: resolveRangesToClusters(text, spans) };
 }
 
-function isFragment(value: unknown): value is TextLiteral<AnyRasterFormat> | TextSpanFragment<AnyRasterFormat> {
+function isFragment<Technique extends RasterFormatMetadata>(
+  value: TextTemplateValue<Technique>,
+): value is TextLiteral<Technique> | TextSpanFragment<Technique, object> {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -176,14 +177,14 @@ function isFragment(value: unknown): value is TextLiteral<AnyRasterFormat> | Tex
   );
 }
 
-function offsetSpan<Technique extends AnyRasterFormat>(
+function offsetSpan<Technique extends RasterFormatMetadata>(
   value: ParagraphSpan<Technique>,
   offset: number,
 ): ParagraphSpan<Technique> {
   return Object.freeze({ ...value, start: value.start + offset, end: value.end + offset });
 }
 
-function normalizeFormats<Technique extends AnyRasterFormat>(
+function normalizeFormats<Technique extends RasterFormatMetadata>(
   formats: readonly (FontSelection<Technique> | SpanStyle)[],
 ): Omit<ParagraphSpan<Technique>, 'start' | 'end'> {
   let font: FontSelection<Technique> | undefined;
@@ -205,6 +206,8 @@ function normalizeFormats<Technique extends AnyRasterFormat>(
   });
 }
 
-function isFontSelection(value: unknown): value is FontSelection<AnyRasterFormat> {
+function isFontSelection<Technique extends RasterFormatMetadata>(
+  value: FontSelection<Technique> | SpanStyle,
+): value is FontSelection<Technique> {
   return isImmutableFontSelection(value);
 }

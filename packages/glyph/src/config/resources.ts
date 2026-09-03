@@ -164,7 +164,7 @@ export function definePortableVertexSemantic<const Semantic extends string>(
   semantic: Semantic extends 'position' | 'uv' | 'normal' | 'tangent' | 'color' ? never : Semantic,
 ): PortableCustomVertexSemantic & Semantic {
   assertPortableVertexSemantic(semantic, 'portable vertex semantic');
-  return semantic as unknown as PortableCustomVertexSemantic & Semantic;
+  return semantic as PortableCustomVertexSemantic & Semantic;
 }
 
 /**

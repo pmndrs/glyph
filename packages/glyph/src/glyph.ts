@@ -1,10 +1,10 @@
 import { createGlyphEngine, shapeGlyphEngine, type GlyphEngine, type GlyphEngineOptions } from './glyph-engine.js';
-import type { GlyphConfigValue, GlyphConfigHandle, GlyphHandle } from './config/glyph.js';
-import { createConfiguredGlyphHandleForConfig } from './internal/configured-handle.js';
+import type { GlyphConfigValue, GlyphHandle, GlyphRoot } from './config/glyph.js';
+import { createConfiguredGlyphHandle } from './internal/configured-handle.js';
+import { glyphConfigHandleFactory } from './internal/glyph-config-factory.js';
 import {
   createFontFace,
   FontFaceHandleStore,
-  type AnyFontFace,
   type FontFace,
   type FontFaceConfig,
   type FontFaceDeclaredFormat,
@@ -16,7 +16,10 @@ export interface Glyph {
   readonly initialized: boolean;
   init(options?: GlyphEngineOptions): Promise<void>;
   shape(): void;
-  handle<Config extends GlyphConfigValue>(name: string, config: Config): GlyphConfigHandle<Config>;
+  handle<Root extends GlyphRoot, FontFormats extends object = object>(
+    name: string,
+    config: GlyphConfigValue<Root, FontFormats>,
+  ): GlyphHandle<Root>;
   fontFace(source: FontFaceSource): FontFace<never>;
   fontFace(source: FontFaceSource, config: FontFaceConfig<never>): FontFace<never>;
   fontFace<const Declaration>(
@@ -48,7 +51,10 @@ class GlyphRuntime implements Glyph {
     return initializing;
   }
 
-  handle<Config extends GlyphConfigValue>(name: string, config: Config): GlyphConfigHandle<Config> {
+  handle<Root extends GlyphRoot, FontFormats extends object = object>(
+    name: string,
+    config: GlyphConfigValue<Root, FontFormats>,
+  ): GlyphHandle<Root> {
     const engine = this.#engine;
     if (engine === undefined) throw new Error('await glyph.init() before creating a Glyph handle');
     if (typeof name !== 'string' || name.trim().length === 0) {
@@ -73,7 +79,7 @@ class GlyphRuntime implements Glyph {
 
     const handle = (() => {
       try {
-        return createConfiguredGlyphHandleForConfig(context, config);
+        return config[glyphConfigHandleFactory](context, createConfiguredGlyphHandle);
       } catch (error) {
         fonts?.dispose();
         throw error;
@@ -95,7 +101,7 @@ class GlyphRuntime implements Glyph {
     source: FontFaceSource,
     config: FontFaceConfig<Declaration> & { readonly format: Declaration },
   ): FontFace<FontFaceDeclaredFormat<Declaration>>;
-  fontFace(source: FontFaceSource, config: FontFaceConfig = {}): AnyFontFace {
+  fontFace(source: FontFaceSource, config: FontFaceConfig = {}): FontFace {
     return createFontFace(this.fontLibrary, source, config);
   }
 }

@@ -15,7 +15,7 @@ globalThis.requestAnimationFrame ??= () => 0;
 globalThis.cancelAnimationFrame ??= () => undefined;
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-const bitmap16 = { raster: bitmap, options: { strikes: [16] } };
+const bitmap16 = bitmap({ strikes: [16] });
 const fonts = createFontCache({ inter: { file: 'inter-bitmap-16.font.glb', raster: bitmap16 } });
 await glyph.init();
 after(() => fonts.dispose());

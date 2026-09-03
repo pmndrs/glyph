@@ -32,7 +32,8 @@ export {
 export { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
 export * from '../font-baker/validator.js';
 
-import type { AnyRasterBakerModule, BakeArtifact, BakeWarning, FontPayloadReport, RasterBakePlan } from '../bake.js';
+import type { BakeArtifact, BakeWarning, FontPayloadReport, RasterBakePlan, RasterBakerModule } from '../bake.js';
+import type { JsonValue } from '../raster.js';
 import type {
   DiscoveryDiagnostic,
   DiscoveredFontDefinition,
@@ -44,9 +45,7 @@ import { bakeFontPipeline } from '../internal/font-bake-pipeline.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
 
-export interface NodeBakeOptions<
-  Rasters extends readonly RasterBakePlan<AnyRasterBakerModule>[] = readonly RasterBakePlan<AnyRasterBakerModule>[],
-> {
+export interface NodeBakeOptions<Rasters extends readonly object[] = readonly []> {
   readonly input: string | URL;
   readonly output: string | URL;
   readonly font: Omit<FontBakeDescriptor, 'formatVersion'>;
@@ -55,9 +54,9 @@ export interface NodeBakeOptions<
   readonly signal?: AbortSignal;
 }
 
-type CheckedRasterPlans<Plans extends readonly RasterBakePlan<AnyRasterBakerModule>[]> = {
+type CheckedRasterPlans<Plans extends readonly object[]> = {
   readonly [Index in keyof Plans]: Plans[Index] extends {
-    readonly baker: infer Module extends AnyRasterBakerModule;
+    readonly baker: infer Module;
   }
     ? RasterBakePlan<Module>
     : never;
@@ -135,8 +134,8 @@ export class NodeBakeError extends GlyphError<'bake-failed'> {
 
 const defaultFontBaker = cacheSuccessfulPromise(async () => createFontBaker(await readFile(new URL(fontBakerWasmUrl))));
 
-export async function bakeFont<const Rasters extends readonly RasterBakePlan<AnyRasterBakerModule>[]>(
-  options: NodeBakeOptions<Rasters> & { readonly rasters?: CheckedRasterPlans<Rasters> },
+export async function bakeFont<const Rasters extends readonly object[]>(
+  options: NodeBakeOptions<Rasters> & { readonly rasters?: Rasters & CheckedRasterPlans<Rasters> },
 ): Promise<NodeFontBakeReport> {
   return bakeFontWithResolvedPlans(options);
 }
@@ -150,8 +149,8 @@ export async function inspectFont(options: NodeFontInspectOptions): Promise<Font
   });
 }
 
-async function bakeFontWithResolvedPlans(
-  options: NodeBakeOptions,
+async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]>(
+  options: NodeBakeOptions<Rasters> & { readonly rasters?: Rasters & CheckedRasterPlans<Rasters> },
   preparedRasters?: readonly ResolvedRasterBakePlan[],
 ): Promise<NodeFontBakeReport> {
   const started = performance.now();
@@ -292,26 +291,25 @@ function groupDefinitions(fonts: readonly DiscoveredFontDefinition[], outputRoot
     }));
 }
 
-async function loadRasterPlan(raster: ResolvedRasterBaker): Promise<RasterBakePlan<AnyRasterBakerModule>> {
+async function loadRasterPlan(raster: ResolvedRasterBaker): Promise<ResolvedRasterBakePlan> {
   const namespace = await import(pathToFileURL(raster.resolvedFile).href);
   const baker = namespace.default;
-  if (!isRasterBaker(baker) || baker.kind !== raster.kind) {
+  if (!isRasterBaker<typeof raster.options>(baker) || baker.kind !== raster.kind) {
     throw new NodeBakeError(
       'INVALID_RASTER_BAKER',
       `${raster.specifier} default export is not the declared ${raster.kind} ESM baker`,
       raster.resolvedFile,
     );
   }
-  return {
+  return resolveRasterBakePlan({
     baker,
     packaging: { artifact: 'embedded', pages: 'embedded' },
     options: raster.options,
-  };
+  });
 }
 
 async function loadProjectPlans(rasters: readonly ResolvedRasterBaker[]): Promise<ResolvedRasterBakePlan[]> {
-  const loaded = await Promise.all(rasters.map(loadRasterPlan));
-  const resolved = await Promise.all(loaded.map(resolveRasterBakePlan));
+  const resolved = await Promise.all(rasters.map(loadRasterPlan));
   resolved.sort(
     (left, right) =>
       left.baker.extension.localeCompare(right.baker.extension) || left.rasterKey.localeCompare(right.rasterKey),
@@ -327,7 +325,7 @@ async function loadProjectPlans(rasters: readonly ResolvedRasterBaker[]): Promis
   });
 }
 
-function isRasterBaker(value: unknown): value is AnyRasterBakerModule {
+function isRasterBaker<Options>(value: unknown): value is RasterBakerModule<string, Options, JsonValue> {
   if (typeof value !== 'object' || value === null) return false;
   return (
     'kind' in value &&

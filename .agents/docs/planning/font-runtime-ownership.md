@@ -17,9 +17,6 @@ sources:
   - id: current-handle-state
     resource: ../../../packages/glyph/src/internal/handle-state.ts
     title: Current internal handle state and Wasm command transport
-  - id: current-paragraph
-    resource: ../../../packages/glyph/src/paragraph.ts
-    title: Current renderer-free measurement path
   - id: current-font-contract
     resource: ../../../packages/glyph/src/font.ts
     title: Current declarative font and bake-discovery contract

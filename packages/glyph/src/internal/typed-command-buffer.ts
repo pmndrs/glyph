@@ -16,6 +16,7 @@ import type {
   TypedProgram,
   TypedResource,
 } from '../config/glyph.js';
+import { createTypedCommandIdentity } from './typed-command-identity.js';
 
 declare const typedCommandBufferBrand: unique symbol;
 
@@ -124,8 +125,7 @@ interface TypedSourceState {
   readonly batchOverlay: Map<number, BatchIdentity>;
   readonly instanceOverlay: Map<number, InstanceIdentity>;
   readonly instanceSpanOverlay: Map<number, InstanceSpanIdentity>;
-  readonly batchDescriptors: WeakMap<BatchIdentity, InternalBatchDescriptor>;
-  readonly instanceDescriptors: WeakMap<InstanceIdentity, InternalInstanceDescriptor>;
+  readonly drawDescriptors: WeakMap<BatchIdentity | InstanceIdentity, InternalPlanDescriptor>;
   readonly instanceSpanDescriptors: WeakMap<InstanceSpanIdentity, InternalInstanceSpanDescriptor>;
   transformBindings:
     | ReadonlyMap<number, Readonly<{ binding: HandleTransformBinding; recordIndex: number }>>
@@ -184,6 +184,22 @@ export interface InternalBufferIdentity {
   readonly bindingId: number | 'order';
 }
 
+class BorrowedTypedCommandBufferView implements BorrowedTypedCommandBuffer {
+  declare readonly [typedCommandBufferBrand]: true;
+  readonly delivery = 'borrowed' as const;
+
+  constructor(
+    readonly engineRevision: number,
+    readonly revision: number,
+    readonly publicationGeneration: number,
+    readonly checkpoint: boolean,
+    readonly updates: TypedUpdatePhases,
+    readonly group: TypedGroupPhase,
+  ) {
+    Object.freeze(this);
+  }
+}
+
 const resourceLayout = textShaperAbi.layouts.engineResource;
 const bufferLayout = textShaperAbi.layouts.engineBuffer;
 const patchLayout = textShaperAbi.layouts.enginePatch;
@@ -227,8 +243,7 @@ export class TypedCommandBufferMapper {
       batchOverlay: new Map(),
       instanceOverlay: new Map(),
       instanceSpanOverlay: new Map(),
-      batchDescriptors: new WeakMap(),
-      instanceDescriptors: new WeakMap(),
+      drawDescriptors: new WeakMap(),
       instanceSpanDescriptors: new WeakMap(),
       transformBindings: undefined,
     };
@@ -258,31 +273,26 @@ export class TypedCommandBufferMapper {
         ? new BatchView(this, state, plan, offset, primitives)
         : new RootInstanceView(this, state, plan, offset);
     });
-    const source = Object.freeze({
-      delivery: 'borrowed' as const,
-      engineRevision: candidate.engineRevision,
-      revision: candidate.revision,
-      publicationGeneration: candidate.publicationGeneration,
-      checkpoint: candidate.checkpoint,
-      updates: Object.freeze({
+    const source = new BorrowedTypedCommandBufferView(
+      candidate.engineRevision,
+      candidate.revision,
+      candidate.publicationGeneration,
+      candidate.checkpoint,
+      Object.freeze({
         resources: resourceCommands,
         buffers: bufferCommands,
-        patches: new LazyCommandSequence(
-          patches.count,
-          (index) => new PatchCommandView(this, state, plan, patches, index) as TypedPatchCommand,
-        ),
-        retirements: new LazyCommandSequence(
-          retirements.count,
-          (index) => new RetirementCommandView(this, state, plan, retirements, index) as TypedRetirementCommand,
+        patches: new LazyCommandSequence(patches.count, (index) => patchCommandView(this, state, plan, patches, index)),
+        retirements: new LazyCommandSequence(retirements.count, (index) =>
+          retirementCommandView(this, state, plan, retirements, index),
         ),
       }),
-      group: replacesGroup
+      replacesGroup
         ? Object.freeze({
             kind: 'replace' as const,
             value: Object.freeze({ children: groupChildren }),
           })
         : Object.freeze({ kind: 'unchanged' as const }),
-    }) as unknown as BorrowedTypedCommandBuffer;
+    );
     this.#sources.set(source, state);
     return source;
   }
@@ -337,11 +347,11 @@ export class TypedCommandBufferMapper {
   }
 
   batchDescriptor(source: BorrowedTypedCommandBuffer, token: BatchIdentity): InternalBatchDescriptor {
-    return this.#descriptor(this.#state(source).batchDescriptors, token, 'batch');
+    return this.#descriptor(this.#state(source).drawDescriptors, token, 'batch');
   }
 
   instanceDescriptor(source: BorrowedTypedCommandBuffer, token: InstanceIdentity): InternalInstanceDescriptor {
-    return this.#descriptor(this.#state(source).instanceDescriptors, token, 'instance');
+    return this.#descriptor(this.#state(source).drawDescriptors, token, 'instance');
   }
 
   instanceSpanDescriptor(
@@ -356,8 +366,7 @@ export class TypedCommandBufferMapper {
     token: BatchIdentity | InstanceIdentity,
   ): InternalDrawBindingDescriptor {
     const state = this.#state(source);
-    const descriptor =
-      state.batchDescriptors.get(token as BatchIdentity) ?? state.instanceDescriptors.get(token as InstanceIdentity);
+    const descriptor = state.drawDescriptors.get(token);
     if (descriptor === undefined) throw new TypeError('draw identity does not belong to this command buffer');
     const { view, offset } = descriptor;
     const bufferTable = view.table('buffers');
@@ -380,7 +389,7 @@ export class TypedCommandBufferMapper {
         this.#resourceFromRecord(view, view.record(resourceTable, resourceStart + index)),
       ),
       flags: view.u16(offset + drawLayout.flags),
-      clip: clipId === 0 ? undefined : intern(this.#clips, clipId),
+      clip: clipId === 0 ? undefined : intern(this.#clips, clipId, () => createTypedCommandIdentity('clip')),
       depthKey: view.u32(offset + drawLayout.depthKey),
       order: view.u32(offset + drawLayout.orderToken),
       indirect:
@@ -417,8 +426,11 @@ export class TypedCommandBufferMapper {
               0,
             ),
       buffer: bufferId === 0 ? undefined : this.currentBuffer(state, bufferId),
-      clip: clipId === 0 ? undefined : intern(this.#clips, clipId),
-      semantic: semanticId === 0 ? undefined : intern(this.#semantics, semanticId),
+      clip: clipId === 0 ? undefined : intern(this.#clips, clipId, () => createTypedCommandIdentity('clip')),
+      semantic:
+        semanticId === 0
+          ? undefined
+          : intern(this.#semantics, semanticId, () => createTypedCommandIdentity('semantic')),
       inlineStart: view.f32(offset + primitiveLayout.inlineStart),
       blockStart: view.f32(offset + primitiveLayout.blockStart),
       inlineExtent: view.f32(offset + primitiveLayout.inlineExtent),
@@ -457,7 +469,7 @@ export class TypedCommandBufferMapper {
     const key = `${id}:${generation}`;
     let resource = this.#resources.get(key);
     if (resource === undefined) {
-      resource = opaqueIdentity<TypedResource>();
+      resource = createTypedCommandIdentity('resource');
       this.#resources.set(key, resource);
       this.#resourceIdentities.set(resource, { id, generation, techniqueId, resourceKind, referenceId });
     }
@@ -480,7 +492,7 @@ export class TypedCommandBufferMapper {
     const key = `${id}:${generation}`;
     let buffer = this.#buffers.get(key);
     if (buffer === undefined) {
-      buffer = opaqueIdentity<TypedBuffer>();
+      buffer = createTypedCommandIdentity('buffer');
       this.#buffers.set(key, buffer);
       this.#bufferIdentities.set(buffer, { id, generation, programId, bindingId });
     }
@@ -500,7 +512,7 @@ export class TypedCommandBufferMapper {
   program(id: number): TypedProgram {
     let program = this.#programs.get(id);
     if (program === undefined) {
-      program = opaqueIdentity<TypedProgram>();
+      program = createTypedCommandIdentity('program');
       this.#programs.set(id, program);
       this.#programIdentities.set(program, id);
     }
@@ -508,23 +520,24 @@ export class TypedCommandBufferMapper {
   }
 
   batch(state: TypedSourceState, id: number, descriptor: InternalBatchDescriptor): BatchIdentity {
-    const value = this.#candidateIdentity(this.#batches, state.batchOverlay, id, opaqueIdentity<BatchIdentity>);
-    state.batchDescriptors.set(value, descriptor);
+    const value = this.#candidateIdentity(this.#batches, state.batchOverlay, id, () =>
+      createTypedCommandIdentity('batch'),
+    );
+    state.drawDescriptors.set(value, descriptor);
     return value;
   }
 
   instance(state: TypedSourceState, id: number, descriptor: InternalInstanceDescriptor): InstanceIdentity {
-    const value = this.#candidateIdentity(this.#instances, state.instanceOverlay, id, opaqueIdentity<InstanceIdentity>);
-    state.instanceDescriptors.set(value, descriptor);
+    const value = this.#candidateIdentity(this.#instances, state.instanceOverlay, id, () =>
+      createTypedCommandIdentity('instance'),
+    );
+    state.drawDescriptors.set(value, descriptor);
     return value;
   }
 
   instanceSpan(state: TypedSourceState, id: number, descriptor: InternalInstanceSpanDescriptor): InstanceSpanIdentity {
-    const value = this.#candidateIdentity(
-      this.#instanceSpans,
-      state.instanceSpanOverlay,
-      id,
-      opaqueIdentity<InstanceSpanIdentity>,
+    const value = this.#candidateIdentity(this.#instanceSpans, state.instanceSpanOverlay, id, () =>
+      createTypedCommandIdentity('instance-span'),
     );
     state.instanceSpanDescriptors.set(value, descriptor);
     return value;
@@ -533,10 +546,10 @@ export class TypedCommandBufferMapper {
   material(state: TypedSourceState, id: number): TypedMaterial {
     let material = state.materials.get(id);
     if (material !== undefined) return material;
-    const binding = state.candidate.resolveMaterial(id as Parameters<PlanCandidate['resolveMaterial']>[0]);
+    const binding = state.candidate.resolveMaterial(id);
     material = this.#materials.get(binding);
     if (material === undefined) {
-      material = opaqueIdentity<TypedMaterial>();
+      material = createTypedCommandIdentity('material');
       this.#materials.set(binding, material);
       this.#materialBindings.set(material, binding);
     }
@@ -557,7 +570,7 @@ export class TypedCommandBufferMapper {
     const { binding, recordIndex } = record;
     let transform = this.#transforms.get(binding);
     if (transform === undefined) {
-      transform = opaqueIdentity<TransformIdentity>();
+      transform = createTypedCommandIdentity('transform');
       this.#transforms.set(binding, transform);
       this.#transformBindings.set(transform, binding);
     }
@@ -733,7 +746,8 @@ class BufferCommandView implements TypedBufferCommand {
   }
 }
 
-class PatchCommandView {
+class PatchCommandView<Kind extends TypedPatchCommand['kind']> {
+  readonly kind: Kind;
   readonly #mapper: TypedCommandBufferMapper;
   readonly #state: TypedSourceState;
   readonly #view: RenderPlanReader;
@@ -743,23 +757,14 @@ class PatchCommandView {
     mapper: TypedCommandBufferMapper,
     state: TypedSourceState,
     view: RenderPlanReader,
-    table: RenderPlanTable,
-    index: number,
+    offset: number,
+    kind: Kind,
   ) {
+    this.kind = kind;
     this.#mapper = mapper;
     this.#state = state;
     this.#view = view;
-    this.#offset = view.record(table, index);
-  }
-
-  get kind(): TypedPatchCommand['kind'] {
-    const wire = this.#view.u16(this.#offset + patchLayout.opcode);
-    const opcodes = textShaperAbi.engine.patchOpcodes;
-    if (wire === opcodes.allocateOrResize) return 'allocate-or-resize';
-    if (wire === opcodes.write) return 'write';
-    if (wire === opcodes.fill) return 'fill';
-    if (wire === opcodes.copy) return 'copy';
-    return 'retire';
+    this.#offset = offset;
   }
 
   get buffer(): TypedBuffer {
@@ -771,6 +776,10 @@ class PatchCommandView {
 
   get source(): TypedBuffer {
     return this.#mapper.currentBuffer(this.#state, this.#view.u32(this.#offset + patchLayout.sourceBufferId));
+  }
+
+  get destination(): TypedBuffer {
+    return this.buffer;
   }
 
   get sourceOffset(): number {
@@ -910,7 +919,8 @@ class RootInstanceView implements TypedRootInstance {
   }
 }
 
-class RetirementCommandView {
+class RetirementCommandView<Kind extends TypedRetirementCommand['kind']> {
+  readonly kind: Kind;
   readonly #mapper: TypedCommandBufferMapper;
   readonly #state: TypedSourceState;
   readonly #view: RenderPlanReader;
@@ -920,22 +930,14 @@ class RetirementCommandView {
     mapper: TypedCommandBufferMapper,
     state: TypedSourceState,
     view: RenderPlanReader,
-    table: RenderPlanTable,
-    index: number,
+    offset: number,
+    kind: Kind,
   ) {
+    this.kind = kind;
     this.#mapper = mapper;
     this.#state = state;
     this.#view = view;
-    this.#offset = view.record(table, index);
-  }
-
-  get kind(): TypedRetirementCommand['kind'] {
-    const wire = this.#view.u16(this.#offset + retirementLayout.kind);
-    const kinds = textShaperAbi.engine.retirementKinds;
-    if (wire === kinds.resource) return 'resource';
-    if (wire === kinds.buffer) return 'buffer';
-    if (wire === kinds.slotRange) return 'slot-range';
-    return 'output-bytes';
+    this.#offset = offset;
   }
 
   get resource(): TypedResource {
@@ -965,14 +967,45 @@ class RetirementCommandView {
   }
 }
 
-function opaqueIdentity<Value extends object>(): Value {
-  return Object.freeze({}) as Value;
+function patchCommandView(
+  mapper: TypedCommandBufferMapper,
+  state: TypedSourceState,
+  view: RenderPlanReader,
+  table: RenderPlanTable,
+  index: number,
+): TypedPatchCommand {
+  const offset = view.record(table, index);
+  const wire = view.u16(offset + patchLayout.opcode);
+  const opcodes = textShaperAbi.engine.patchOpcodes;
+  if (wire === opcodes.allocateOrResize) {
+    return new PatchCommandView(mapper, state, view, offset, 'allocate-or-resize');
+  }
+  if (wire === opcodes.write) return new PatchCommandView(mapper, state, view, offset, 'write');
+  if (wire === opcodes.fill) return new PatchCommandView(mapper, state, view, offset, 'fill');
+  if (wire === opcodes.copy) return new PatchCommandView(mapper, state, view, offset, 'copy');
+  return new PatchCommandView(mapper, state, view, offset, 'retire');
 }
 
-function intern<Value extends object>(values: Map<number, Value>, id: number): Value {
+function retirementCommandView(
+  mapper: TypedCommandBufferMapper,
+  state: TypedSourceState,
+  view: RenderPlanReader,
+  table: RenderPlanTable,
+  index: number,
+): TypedRetirementCommand {
+  const offset = view.record(table, index);
+  const wire = view.u16(offset + retirementLayout.kind);
+  const kinds = textShaperAbi.engine.retirementKinds;
+  if (wire === kinds.resource) return new RetirementCommandView(mapper, state, view, offset, 'resource');
+  if (wire === kinds.buffer) return new RetirementCommandView(mapper, state, view, offset, 'buffer');
+  if (wire === kinds.slotRange) return new RetirementCommandView(mapper, state, view, offset, 'slot-range');
+  return new RetirementCommandView(mapper, state, view, offset, 'output-bytes');
+}
+
+function intern<Value extends object>(values: Map<number, Value>, id: number, create: () => Value): Value {
   let value = values.get(id);
   if (value === undefined) {
-    value = opaqueIdentity<Value>();
+    value = create();
     values.set(id, value);
   }
   return value;

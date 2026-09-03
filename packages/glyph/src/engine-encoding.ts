@@ -1,5 +1,5 @@
 import type { ParagraphSpan } from './formatted-text.js';
-import type { AnyRasterFormat } from './config/raster-format.js';
+import type { RasterFormatMetadata } from './config/raster-format.js';
 import type { AxisConstraint, Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
 import type {
   PlannerConstraint,
@@ -11,11 +11,10 @@ import type {
 import type { HandleIdFactory, ParagraphId, StyleId } from './internal/glyph-id.js';
 
 /**
- * The single implementation of the paragraph-to-engine encodings shared by every host:
- * the Three.js batch binding and the framework-neutral `Paragraph` both compile
- * constraints, regions, styles, and limits through these functions, and both derive
- * incremental text edits through the mutation helpers, so one host cannot drift from
- * another in what the engine is asked to flow.
+ * The single implementation of the Text-to-engine encodings shared by every host.
+ * Every GlyphConfig integration compiles constraints, regions, styles, limits, and
+ * incremental text edits through these functions so hosts cannot drift in what they
+ * ask the engine to flow.
  */
 
 export function normalizedColumns(
@@ -198,7 +197,7 @@ export function engineStyleValue(
 /** @internal Reject effects at the public call that accepted a style. */
 export function assertTextEffectsSupported(
   style: TextStyle,
-  techniques: readonly AnyRasterFormat[],
+  techniques: readonly RasterFormatMetadata[],
   label: string,
 ): void {
   for (const technique of techniques) {
@@ -237,7 +236,7 @@ function engineDecoration(decoration: NonNullable<TextStyle['decoration']>, styl
  * costing the paragraph. Style ids stay contiguous from the emitted order because the removal pass
  * that trims a shrunken style list counts on it.
  */
-export function styledSpans<Span extends ParagraphSpan<AnyRasterFormat>>(
+export function styledSpans<Span extends ParagraphSpan<RasterFormatMetadata>>(
   spans: readonly Span[] | undefined,
 ): readonly Span[] {
   // Only a collapsed span is dropped. An INVERTED span is a caller arithmetic error whose owner

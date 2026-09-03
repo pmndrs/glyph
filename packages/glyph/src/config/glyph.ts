@@ -1,13 +1,41 @@
 import type { Font } from '../font.js';
-import type { AnyFontFaceSelection, FontFaceRasterOf } from '../font-face.js';
+import type { FontFaceRasterOf, FontFaceSelection } from '../font-face.js';
 import type { GlyphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
 import type { FontSelection } from '../loaded-font.js';
-import type { AnyRasterFormat } from './raster-format.js';
+import type { RasterFormatMetadata } from './raster-format.js';
 import type { Constraints, ParagraphLayout, TextStyle } from '../text-properties.js';
 import type { PortableResource } from './resources.js';
 import type { CodecBuffer, CodecDescriptor, CodecIdFactory, CodecProgram } from './codec.js';
+import type { ConfiguredGlyphHandleInput } from '../internal/configured-handle.js';
+import { glyphConfigHandleFactory } from '../internal/glyph-config-factory.js';
+import type {
+  BatchIdentity,
+  ClipIdentity,
+  InstanceIdentity,
+  InstanceSpanIdentity,
+  SemanticIdentity,
+  TransformIdentity,
+  TypedBuffer,
+  TypedMaterial,
+  TypedProgram,
+  TypedResource,
+} from '../internal/typed-command-identity.js';
 
-declare const typedCommandIdentityBrand: unique symbol;
+export type {
+  BatchIdentity,
+  ClipIdentity,
+  InstanceIdentity,
+  InstanceSpanIdentity,
+  SemanticIdentity,
+  TransformIdentity,
+  TypedBuffer,
+  TypedMaterial,
+  TypedProgram,
+  TypedResource,
+} from '../internal/typed-command-identity.js';
+
+type ConfiguredGlyphHandleConstructor = typeof import('../internal/configured-handle.js').createConfiguredGlyphHandle;
+
 const glyphConfigBrand: unique symbol = Symbol('pmndrs.glyph.config');
 declare const glyphConfigRootType: unique symbol;
 
@@ -15,38 +43,6 @@ declare const glyphConfigRootType: unique symbol;
 export interface BorrowedCommandSequence<Value> extends Iterable<Value> {
   readonly length: number;
   at(index: number): Value | undefined;
-}
-
-/** Opaque retained identities. Numeric Rust IDs never cross the decoder boundary. */
-export interface TypedResource {
-  readonly [typedCommandIdentityBrand]: 'resource';
-}
-export interface TypedBuffer {
-  readonly [typedCommandIdentityBrand]: 'buffer';
-}
-export interface TypedProgram {
-  readonly [typedCommandIdentityBrand]: 'program';
-}
-export interface TypedMaterial {
-  readonly [typedCommandIdentityBrand]: 'material';
-}
-export interface TransformIdentity {
-  readonly [typedCommandIdentityBrand]: 'transform';
-}
-export interface BatchIdentity {
-  readonly [typedCommandIdentityBrand]: 'batch';
-}
-export interface InstanceIdentity {
-  readonly [typedCommandIdentityBrand]: 'instance';
-}
-export interface InstanceSpanIdentity {
-  readonly [typedCommandIdentityBrand]: 'instance-span';
-}
-export interface ClipIdentity {
-  readonly [typedCommandIdentityBrand]: 'clip';
-}
-export interface SemanticIdentity {
-  readonly [typedCommandIdentityBrand]: 'semantic';
 }
 
 /** Ordered display-list record kinds emitted by the built-in Codec projection. */
@@ -435,7 +431,7 @@ export type GlyphHandle<Root extends GlyphRoot = GlyphRoot> = ((name: string) =>
   };
 
 /** One adapter-authored formatted span before core interns its renderer identities. */
-export interface GlyphTextSpan<Technique extends AnyRasterFormat, MaterialInput> {
+export interface GlyphTextSpan<Technique extends RasterFormatMetadata, MaterialInput> {
   readonly start: number;
   readonly end: number;
   readonly font?: FontSelection<Technique>;
@@ -444,13 +440,13 @@ export interface GlyphTextSpan<Technique extends AnyRasterFormat, MaterialInput>
 }
 
 /** Adapter-authored formatted content accepted by a root Text controller. */
-export interface GlyphFormattedText<Technique extends AnyRasterFormat, MaterialInput> {
+export interface GlyphFormattedText<Technique extends RasterFormatMetadata, MaterialInput> {
   readonly text: string;
   readonly spans: readonly GlyphTextSpan<Technique, MaterialInput>[];
 }
 
 /** Complete desired Text state; adapters own partial-update and inheritance semantics above it. */
-export interface GlyphTextState<Technique extends AnyRasterFormat, MaterialInput, TransformInput> {
+export interface GlyphTextState<Technique extends RasterFormatMetadata, MaterialInput, TransformInput> {
   readonly font: FontSelection<Technique>;
   readonly text: string | GlyphFormattedText<Technique, MaterialInput>;
   readonly transform: TransformInput;
@@ -463,7 +459,7 @@ export interface GlyphTextState<Technique extends AnyRasterFormat, MaterialInput
 }
 
 /** Narrow integration controller held privately by an adapter's Text object. */
-export interface GlyphTextController<Technique extends AnyRasterFormat, MaterialInput, TransformInput> {
+export interface GlyphTextController<Technique extends RasterFormatMetadata, MaterialInput, TransformInput> {
   readonly disposed: boolean;
   update(state: GlyphTextState<Technique, MaterialInput, TransformInput>): void;
   measure(): ParagraphLayoutSummary;
@@ -479,14 +475,14 @@ export interface GlyphShapeOptions {
 
 /** Core-owned shaping/publication services scoped to exactly one anonymous or named root. */
 export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererResult, Boundary = unknown> {
-  createText<Technique extends AnyRasterFormat>(
+  createText<Technique extends RasterFormatMetadata>(
     state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']>;
   /** Schedules root-owned semantic or presentation state for the next top-level `glyph.shape()`. */
   invalidate(): void;
   syncTransforms(): void;
-  copy(
-    text: GlyphTextController<AnyRasterFormat, Bindings['materialInput'], Bindings['transformInput']>,
+  copy<Technique extends RasterFormatMetadata>(
+    text: GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']>,
     request: GlyphCopyRequest,
     destination: GlyphCopyDestination<Bindings, RendererResult, Boundary>,
   ): GlyphCopy<RendererResult>;
@@ -552,10 +548,11 @@ export type SelectedGlyphConfig<
   RendererResult,
   Boundary,
   CodecValue extends Codec,
-  ConfigExtension extends object,
+  FontFormats extends object = object,
+  ConfigExtension extends object = object,
 > = Readonly<ConfigExtension> & {
   readonly schema: GlyphSchema<Bindings, Boundary>;
-  readonly fonts?: GlyphFontConfigValue;
+  readonly fonts?: GlyphFontConfigValue<FontFormats>;
   readonly commands?: Partial<GlyphCommandCapacity>;
   encode(context: EncodeContext): CodecValue;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
@@ -597,12 +594,16 @@ export interface GlyphRootRecipe<
 
 /** Runtime-owned FontFace state made available to one configured renderer handle. */
 export interface GlyphHandleFonts {
-  isLoaded(selection: AnyFontFaceSelection): boolean;
-  load(selection: AnyFontFaceSelection): Promise<AnyFontFaceSelection>;
-  acquire<const Selection extends AnyFontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>>;
+  isLoaded<const Selection extends FontFaceSelection>(selection: Selection): boolean;
+  load<const Selection extends FontFaceSelection>(selection: Selection): Promise<Selection>;
+  acquire<const Selection extends FontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>>;
   /** Borrow the store-owned immutable source. Callers must not dispose this value. */
-  peek<const Selection extends AnyFontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>>;
+  peek<const Selection extends FontFaceSelection>(selection: Selection): Font<FontFaceRasterOf<Selection>>;
 }
+
+type GlyphFontFormats<Formats extends object> = Readonly<{
+  [Key in keyof Formats]: Formats[Key] extends RasterFormatMetadata ? Formats[Key] : never;
+}>;
 
 /** Handle-relative format keys used to resolve FontFace format declarations. */
 type GlyphFontFormatKey<Formats extends object> = [keyof Formats] extends [never]
@@ -610,12 +611,12 @@ type GlyphFontFormatKey<Formats extends object> = [keyof Formats] extends [never
   : Extract<keyof Formats, string>;
 export interface GlyphFontConfig<Formats extends object> {
   readonly default: GlyphFontFormatKey<Formats>;
-  readonly formats: Formats & { readonly [Key in keyof Formats]: AnyRasterFormat };
+  readonly formats: GlyphFontFormats<Formats>;
 }
 
-interface GlyphFontConfigValue {
+interface GlyphFontConfigValue<Formats extends object> {
   readonly default: string;
-  readonly formats: Readonly<object>;
+  readonly formats: GlyphFontFormats<Formats>;
 }
 
 interface GlyphConfigContract<
@@ -629,6 +630,10 @@ interface GlyphConfigContract<
 > {
   readonly [glyphConfigBrand]: true;
   readonly [glyphConfigRootType]?: () => Root;
+  [glyphConfigHandleFactory](
+    input: ConfiguredGlyphHandleInput,
+    create: ConfiguredGlyphHandleConstructor,
+  ): GlyphHandle<Root>;
   readonly schema: GlyphSchema<Bindings, Boundary>;
   readonly fonts?: GlyphFontConfig<FontFormats>;
   readonly commands?: Partial<GlyphCommandCapacity>;
@@ -638,7 +643,7 @@ interface GlyphConfigContract<
     RendererResult,
     Boundary,
     CodecValue,
-    SelectedGlyphConfig<Bindings, RendererResult, Boundary, CodecValue, ConfigExtension>
+    SelectedGlyphConfig<Bindings, RendererResult, Boundary, CodecValue, NoInfer<FontFormats>, ConfigExtension>
   >;
   encode(context: EncodeContext): CodecValue;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
@@ -659,18 +664,17 @@ export type GlyphConfig<
   Readonly<ConfigExtension>;
 
 /** Minimal covariant surface the root runtime needs to construct an inferred handle. */
-export interface GlyphConfigValue {
+export interface GlyphConfigValue<Root extends GlyphRoot = GlyphRoot, FontFormats extends object = object> {
   readonly [glyphConfigBrand]: true;
-  readonly fonts?: GlyphFontConfigValue;
+  [glyphConfigHandleFactory](
+    input: ConfiguredGlyphHandleInput,
+    create: ConfiguredGlyphHandleConstructor,
+  ): GlyphHandle<Root>;
+  readonly fonts?: GlyphFontConfigValue<FontFormats>;
 }
 
-export type GlyphConfigHandle<Config> = Config extends {
-  readonly [glyphConfigRootType]?: () => infer Root;
-}
-  ? Root extends GlyphRoot
-    ? GlyphHandle<Root>
-    : never
-  : never;
+export type GlyphConfigHandle<Config> =
+  Config extends GlyphConfigValue<infer Root, infer _FontFormats> ? GlyphHandle<Root> : never;
 
 /** Complete renderer binding vocabulary projected from one inferred GlyphConfig declaration. */
 export type GlyphConfigBindings<Config> = Config extends {
@@ -701,7 +705,7 @@ export function defineGlyphConfig<
 >(
   config: Omit<
     GlyphConfigContract<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>,
-    typeof glyphConfigBrand
+    typeof glyphConfigBrand | typeof glyphConfigHandleFactory
   >,
 ): GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue> {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
@@ -733,10 +737,16 @@ export function defineGlyphConfig<
     }
   }
   type DefinedConfig = GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>;
-  const defined = Object.freeze({
+  const defined: DefinedConfig = Object.freeze({
     ...config,
     [glyphConfigBrand]: true as const,
-  }) as unknown as DefinedConfig;
+    [glyphConfigHandleFactory](
+      input: ConfiguredGlyphHandleInput,
+      create: ConfiguredGlyphHandleConstructor,
+    ): GlyphHandle<Root> {
+      return create(input, this);
+    },
+  });
   return defined;
 }
 

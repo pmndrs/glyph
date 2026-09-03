@@ -2,7 +2,7 @@ import type { Font, RegisteredFont } from '../font.js';
 import type { SerializedFontFace, SerializedFontFaceRaster } from '../font-face-transfer.js';
 import { FontRegistry } from '../loader.js';
 import { immutableFontResources } from '../loaded-font.js';
-import type { AnyRasterFormat } from '../config/raster-format.js';
+import type { RasterFormatMetadata } from '../config/raster-format.js';
 import { freezeSerializedFontFace } from './font-face-transfer.js';
 import { getRegisteredFontData } from './registered-font.js';
 
@@ -15,7 +15,7 @@ export interface SerializedFontFaceLoadOptions {
 /** Copy loaded variants into inert cross-realm data only when clone() explicitly asks for it. */
 export function snapshotSerializedFontFace(
   font: RegisteredFont,
-  fonts: readonly Font<AnyRasterFormat>[],
+  fonts: readonly Font<RasterFormatMetadata>[],
 ): SerializedFontFace {
   const registered = getRegisteredFontData(font);
   const rasters: SerializedFontFaceRaster[] = [];

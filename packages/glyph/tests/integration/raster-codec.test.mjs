@@ -131,7 +131,7 @@ test('registration rejects a resource-free schema before it can become an unusab
   );
 });
 
-test('the same string ID cannot substitute a different technique data witness', () => {
+test('one registered Codec owns a raster ID even when another format declares the same string', () => {
   const first = technique('test.plan-witness');
   const second = technique('test.plan-witness');
   registerRasterCodec({
@@ -140,7 +140,16 @@ test('the same string ID cannot substitute a different technique data witness', 
     codecBody: body,
     compileFont: validCompile,
   });
-  assert.throws(() => compileRasterFont(loaded(second), glyphId), /does not match the registered codec/);
+  assert.throws(
+    () =>
+      registerRasterCodec({
+        raster: second,
+        schema: schemaFor(second),
+        codecBody: body,
+        compileFont: validCompile,
+      }),
+    /different raster codec/,
+  );
 });
 
 test('font compilation accepts only live package fonts and exposes a constrained reader', () => {
@@ -165,6 +174,26 @@ test('font compilation accepts only live package fonts and exposes a constrained
   assert.throws(() => reader.data, /no longer active/);
   font.dispose();
   assert.throws(() => compileRasterFont(font, glyphId), /disposed/);
+});
+
+test('a font created before Codec registration observes the later concrete compiler', () => {
+  const value = technique('test.codec-late-registration');
+  const expectedData = Object.freeze({ marker: 'late-registration' });
+  const font = immutableTestFont(value, expectedData, 3);
+  assert.equal(compileRasterFont(font, glyphId), undefined);
+
+  registerRasterCodec({
+    raster: value,
+    schema: schemaFor(value),
+    codecBody: body,
+    compileFont(compiler) {
+      assert.equal(compiler.font.data, expectedData);
+      return validCompile(compiler);
+    },
+  });
+
+  assert.ok(compileRasterFont(font, glyphId));
+  font.dispose();
 });
 
 test('font compilation owns binding metadata and normalizes retained payloads', () => {

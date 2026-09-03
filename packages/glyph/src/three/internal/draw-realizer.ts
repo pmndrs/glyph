@@ -22,7 +22,7 @@ import type {
 } from './render-state.js';
 
 interface DrawOwner {
-  readonly drawRoot: THREE.Object3D;
+  readonly renderObject: THREE.Object3D;
   readonly pixelSnapping?: boolean;
   readonly renderOrderBase?: number;
   prepareGlyphStorage?(storageKey: string, capacityRecords: number): void;

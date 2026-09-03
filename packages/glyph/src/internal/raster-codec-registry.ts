@@ -1,49 +1,59 @@
+import type { RasterDataOf, RasterFormatMetadata } from '../config/raster-format.js';
+import type { CompiledRasterFont, RasterCodec } from '../config/raster.js';
+import { isTechniqueSchema, type TechniqueSchemaMetadata } from '../config/schema.js';
 import { isRasterFormat } from './raster-format-registry.js';
-import type { AnyRasterFormat } from '../config/raster-format.js';
-import type { RasterCodec } from '../config/raster.js';
-import { isTechniqueSchema, type AnyTechniqueSchema } from '../config/schema.js';
+import {
+  installRasterFormatCompiler,
+  type RasterFontCompileInput,
+  type RasterFormatCompilerWitness,
+} from './raster-format-compiler.js';
 
-type ErasedCodec = RasterCodec<AnyRasterFormat, AnyTechniqueSchema>;
+/** The uniform metadata operations needed after a concrete codec has been registered. */
+export interface RegisteredRasterCodec {
+  readonly raster: RasterFormatMetadata;
+  readonly schema: TechniqueSchemaMetadata;
+  readonly programVariant: number;
+}
 
-const codecs = new Map<string, ErasedCodec>();
-const registeredSources = new WeakMap<object, ErasedCodec>();
+const codecs = new Map<string, RegisteredRasterCodec>();
+const registeredSources = new WeakSet<object>();
+type RasterCodecFontCompiler = <Technique extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
+  codec: RasterCodec<Technique, Schema>,
+  input: RasterFontCompileInput,
+  data: RasterDataOf<Technique>,
+) => CompiledRasterFont;
+let compileRasterCodecFont: RasterCodecFontCompiler | undefined;
+
+/** @internal Installs the generic compiler implementation without exposing it from the public config leaf. */
+export function installRasterCodecFontCompiler(compile: RasterCodecFontCompiler): void {
+  if (compileRasterCodecFont !== undefined && compileRasterCodecFont !== compile) {
+    throw new Error('raster Codec font compiler is already installed');
+  }
+  compileRasterCodecFont = compile;
+}
 
 export function registerRasterCodecInternal<
-  const Technique extends AnyRasterFormat,
-  const Schema extends AnyTechniqueSchema,
->(codec: RasterCodec<Technique, Schema>, glyphOwned: boolean): RasterCodec<Technique, Schema> {
+  const Technique extends RasterFormatMetadata,
+  const Schema extends TechniqueSchemaMetadata,
+>(
+  codec: RasterCodec<Technique, Schema> & {
+    readonly raster: Technique & RasterFormatCompilerWitness<RasterDataOf<Technique>>;
+  },
+  glyphOwned: boolean,
+): RasterCodec<Technique, Schema> {
   if (typeof codec !== 'object' || codec === null) {
     throw new TypeError('raster codecs need a technique with id, kind, extension, and nonnegative version');
   }
-  const source = codec as unknown as Record<string, unknown>;
-  const technique = source.raster;
-  const techniqueId = isRasterFormat(technique) ? technique.id : undefined;
-  const techniqueRecord = technique as {
-    id?: unknown;
-    kind?: unknown;
-    extension?: unknown;
-    version?: unknown;
-  };
-  if (
-    typeof techniqueId !== 'string' ||
-    techniqueId.length === 0 ||
-    typeof techniqueRecord.kind !== 'string' ||
-    techniqueRecord.kind.length === 0 ||
-    typeof techniqueRecord.extension !== 'string' ||
-    techniqueRecord.extension.length === 0 ||
-    typeof techniqueRecord.version !== 'number' ||
-    !Number.isSafeInteger(techniqueRecord.version) ||
-    techniqueRecord.version < 0
-  ) {
+  const technique = codec.raster;
+  if (!isRasterFormat(technique)) {
     throw new TypeError('raster codecs need a technique with id, kind, extension, and nonnegative version');
   }
+  const techniqueId = technique.id;
   if (!glyphOwned && techniqueId.startsWith('pmndrs.')) {
     throw new TypeError(`raster codec id "${techniqueId}" is reserved for Glyph-owned formats`);
   }
-  const schema = source.schema;
-  const programVariant = source.programVariant ?? 0;
-  const codecBody = source.codecBody;
-  const compileFontCallback = source.compileFont;
+  const schema = codec.schema;
+  const programVariant = codec.programVariant ?? 0;
   if (!isTechniqueSchema(schema)) {
     throw new TypeError(`raster codec "${techniqueId}" needs a schema from defineTechniqueSchema`);
   }
@@ -56,49 +66,50 @@ export function registerRasterCodecInternal<
   if (schema.render.resource === undefined) {
     throw new TypeError(`raster codec "${techniqueId}" needs a declared render resource`);
   }
-  if (!Number.isSafeInteger(programVariant) || (programVariant as number) < 0 || (programVariant as number) > 0xffff) {
+  if (!Number.isSafeInteger(programVariant) || programVariant < 0 || programVariant > 0xffff) {
     throw new RangeError(`raster codec "${techniqueId}" needs a u16 program variant`);
   }
-  if (typeof codecBody !== 'function' || typeof compileFontCallback !== 'function') {
+  if (typeof codec.codecBody !== 'function' || typeof codec.compileFont !== 'function') {
     throw new TypeError(`raster codec "${techniqueId}" needs codecBody and compileFont callbacks`);
   }
-  const registered = registeredSources.get(codec as unknown as object);
-  if (registered !== undefined) {
-    if (registered.raster.id !== techniqueId) {
-      throw new TypeError(`raster codec source changed raster id from "${registered.raster.id}" to "${techniqueId}"`);
-    }
-    return registered as unknown as RasterCodec<Technique, Schema>;
-  }
-  const existing = codecs.get(techniqueId);
-  if (existing !== undefined) {
+  if (registeredSources.has(codec)) return codec;
+  if (codecs.has(techniqueId)) {
     throw new TypeError(`a different raster codec is already registered for "${techniqueId}"`);
   }
-  const snapshot = Object.freeze({
-    raster: technique,
-    schema,
-    programVariant,
-    codecBody,
-    compileFont: compileFontCallback,
-  }) as unknown as ErasedCodec;
-  codecs.set(techniqueId, snapshot);
-  registeredSources.set(source, snapshot);
-  registeredSources.set(snapshot, snapshot);
-  return snapshot as unknown as RasterCodec<Technique, Schema>;
+
+  const registered = Object.freeze(codec);
+  technique[installRasterFormatCompiler]((input, data) => {
+    const compile = compileRasterCodecFont;
+    if (compile === undefined) throw new Error('raster Codec font compiler is not installed');
+    return compile(registered, input, data);
+  });
+  codecs.set(
+    techniqueId,
+    Object.freeze({
+      raster: technique,
+      schema,
+      programVariant,
+    }),
+  );
+  registeredSources.add(codec);
+  return registered;
 }
 
 export function registerGlyphRasterCodec<
-  const Technique extends AnyRasterFormat,
-  const Schema extends AnyTechniqueSchema,
->(codec: RasterCodec<Technique, Schema>): RasterCodec<Technique, Schema> {
+  const Technique extends RasterFormatMetadata,
+  const Schema extends TechniqueSchemaMetadata,
+>(
+  codec: RasterCodec<Technique, Schema> & {
+    readonly raster: Technique & RasterFormatCompilerWitness<RasterDataOf<Technique>>;
+  },
+): RasterCodec<Technique, Schema> {
   return registerRasterCodecInternal(codec, true);
 }
 
-export function resolveRasterCodecInternal(id: string): ErasedCodec | undefined {
+export function resolveRasterCodecInternal(id: string): RegisteredRasterCodec | undefined {
   return codecs.get(id);
 }
 
-export function isRegisteredRasterCodec(codec: unknown): codec is ErasedCodec {
-  if (typeof codec !== 'object' || codec === null) return false;
-  const raster = (codec as { readonly raster?: unknown }).raster;
-  return isRasterFormat(raster) && codecs.get(raster.id) === codec;
+export function isRegisteredRasterCodec(codec: unknown): boolean {
+  return typeof codec === 'object' && codec !== null && registeredSources.has(codec);
 }

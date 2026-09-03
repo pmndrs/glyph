@@ -1,64 +1,78 @@
-import { createRasterCodecProgram } from '../../config/raster.js';
+import { createRasterCodecProgram, type RasterCodec } from '../../config/raster.js';
 import type { CodecIdFactory, CodecProgram } from '../../config/codec.js';
-import type { AnyTechniqueSchema } from '../../config/schema.js';
-import type { AnyRasterFormat } from '../../config/raster-format.js';
+import type { TechniqueSchemaMetadata } from '../../config/schema.js';
+import type { RasterFormatMetadata } from '../../config/raster-format.js';
 import { threeCodecCapabilitySet, threeSystemBuffers } from '../codec.js';
-import type { ThreeRasterProgram, ThreeRasterVariant } from '../raster-program.js';
+import type { ThreeRasterMaterialContext } from '../raster-program.js';
+import type { NodeMaterial } from 'three/webgpu';
+
+export interface RuntimeThreeRasterVariant {
+  readonly id: string;
+  readonly language: string;
+  readonly outputs: Readonly<Record<string, string>>;
+  createMaterial(context: ThreeRasterMaterialContext): NodeMaterial;
+}
 
 export interface CompiledThreeRasterProgram {
-  readonly raster: AnyRasterFormat;
-  readonly schema: AnyTechniqueSchema;
-  readonly variant: ThreeRasterVariant;
+  readonly raster: RasterFormatMetadata;
+  readonly schema: TechniqueSchemaMetadata;
+  readonly variant: RuntimeThreeRasterVariant;
   readonly techniqueId: number;
   readonly programId: number;
   readonly codec: CodecProgram;
-  createMaterial: ThreeRasterVariant['createMaterial'];
+  createMaterial: RuntimeThreeRasterVariant['createMaterial'];
 }
 
-const programs = new Map<string, ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema>>();
-const registeredSources = new WeakMap<object, ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema>>();
+export interface RegisteredThreeRasterProgram {
+  readonly techniqueId: string;
+  readonly variantId: string;
+  compile(identities: CodecIdFactory, transformMode: 'indexed' | 'direct'): CompiledThreeRasterProgram;
+}
+
+const programs = new Map<string, RegisteredThreeRasterProgram>();
+const registeredSources = new WeakMap<object, RegisteredThreeRasterProgram>();
 const snapshotsByRegistry = new WeakMap<CodecIdFactory, WeakRef<CodecIdFactory>[]>();
 const snapshotReferences = new Set<WeakRef<CodecIdFactory>>();
 const snapshotFinalizer = new FinalizationRegistry<WeakRef<CodecIdFactory>>((reference) => {
   snapshotReferences.delete(reference);
 });
 
-export function registeredThreeRasterProgram(
-  source: object,
-): ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema> | undefined {
+export function registeredThreeRasterProgram(source: object): RegisteredThreeRasterProgram | undefined {
   return registeredSources.get(source);
 }
 
-export function commitThreeRasterProgram(
-  source: object,
-  program: ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema>,
-): void {
-  const techniqueId = program.codec.raster.id;
+export function commitThreeRasterProgram<
+  Technique extends RasterFormatMetadata,
+  Schema extends TechniqueSchemaMetadata,
+>(source: object, codec: RasterCodec<Technique, Schema>, variant: RuntimeThreeRasterVariant): void {
+  const techniqueId = codec.raster.id;
   const existing = programs.get(techniqueId);
   if (existing !== undefined) {
-    throw new TypeError(
-      `Three already selected raster variant "${existing.variant.id}" for technique "${techniqueId}"`,
-    );
+    throw new TypeError(`Three already selected raster variant "${existing.variantId}" for technique "${techniqueId}"`);
   }
   const engineCount = liveSnapshotCount();
   if (engineCount !== 0) {
     throw new Error(
-      `Three raster variant "${techniqueId}/${program.variant.id}" was registered after ${engineCount} glyph engine(s) ` +
+      `Three raster variant "${techniqueId}/${variant.id}" was registered after ${engineCount} glyph engine(s) ` +
         'already read the registry; register every technique before its first Text or TextGroup realization',
     );
   }
-  programs.set(techniqueId, program);
-  registeredSources.set(source, program);
+  const registered: RegisteredThreeRasterProgram = Object.freeze({
+    techniqueId,
+    variantId: variant.id,
+    compile: (identities: CodecIdFactory, transformMode: 'indexed' | 'direct') =>
+      compileProgram(codec, variant, identities, transformMode),
+  });
+  programs.set(techniqueId, registered);
+  registeredSources.set(source, registered);
 }
 
 export function compiledThreeRasterPrograms(
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct' = 'indexed',
 ): readonly CompiledThreeRasterProgram[] {
-  const selected = [...programs.values()].sort((left, right) =>
-    left.codec.raster.id.localeCompare(right.codec.raster.id),
-  );
-  const compiled = selected.map((program) => compileProgram(program, identities, transformMode));
+  const selected = [...programs.values()].sort((left, right) => left.techniqueId.localeCompare(right.techniqueId));
+  const compiled = selected.map((program) => program.compile(identities, transformMode));
   const reference = new WeakRef(identities);
   const references = snapshotsByRegistry.get(identities) ?? [];
   references.push(reference);
@@ -87,12 +101,12 @@ function liveSnapshotCount(): number {
   return count;
 }
 
-function compileProgram(
-  program: ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema>,
+function compileProgram<Technique extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
+  portable: RasterCodec<Technique, Schema>,
+  variant: RuntimeThreeRasterVariant,
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterProgram {
-  const portable = program.codec;
   const system = transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
   const codec = createRasterCodecProgram(portable, {
     namespace: 'three',
@@ -105,10 +119,10 @@ function compileProgram(
   return {
     raster: portable.raster,
     schema: portable.schema,
-    variant: program.variant,
+    variant,
     techniqueId: codec.techniqueId,
     programId: codec.programId,
     codec,
-    createMaterial: (context) => program.variant.createMaterial(context),
+    createMaterial: (context) => variant.createMaterial(context),
   };
 }

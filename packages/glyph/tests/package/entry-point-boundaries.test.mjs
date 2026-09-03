@@ -55,8 +55,8 @@ test('application types stay at root while integration construction lives on con
   for (const name of ['GlyphConfig', 'Codec', 'TechniqueSchema', 'RasterFormat']) {
     assert.equal(root.has(name), true, `applications must be able to name ${name} from the root`);
   }
-  for (const legacyFontName of ['loadFont', 'createFontLibrary', 'FontLibrary']) {
-    assert.equal(root.has(legacyFontName), false, `root must not publish legacy font API ${legacyFontName}`);
+  for (const retiredRootName of ['loadFont', 'createFontLibrary', 'FontLibrary', 'createParagraph', 'Paragraph']) {
+    assert.equal(root.has(retiredRootName), false, `root must not publish retired API ${retiredRootName}`);
   }
 
   const leaves = {

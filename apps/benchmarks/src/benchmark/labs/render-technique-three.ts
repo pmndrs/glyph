@@ -1,4 +1,4 @@
-import { type AnyRasterFormat, type Font } from '@pmndrs/glyph';
+import { type Font, type RasterFormatMetadata } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import type { Text, TextGroup } from '@pmndrs/glyph/three';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
@@ -91,7 +91,11 @@ export async function runRenderTechniqueThreeLab({
   }
 }
 
-function measureTechnique(font: Font<AnyRasterFormat>, warmup: number, samples: number): RenderTechniqueThreeLabResult {
+function measureTechnique(
+  font: Font<RasterFormatMetadata>,
+  warmup: number,
+  samples: number,
+): RenderTechniqueThreeLabResult {
   const firstStarted = performance.now();
   const rootName = `technique-lab-${font.raster.id}`;
   const root = createBenchmarkThreeRoot(rootName);
@@ -137,7 +141,7 @@ function measureTechnique(font: Font<AnyRasterFormat>, warmup: number, samples: 
 
 function update(
   index: number,
-  text: Text<AnyRasterFormat>,
+  text: Text<RasterFormatMetadata>,
   scene: THREE.Scene,
   group: TextGroup,
   rootName: string,

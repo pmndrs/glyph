@@ -59,18 +59,18 @@ Bitmap, MSDF, and Slug formats and realizes their Three materials.
 creates an immutable variant. Several named Three handles may coexist over the same loaded FontFace data while owning
 independent roots and renderer state.
 
-## Resolver, draw root, and actual rendering
+## Resolver, publication object, and actual rendering
 
 Creating a Three handle needs no `WebGPURenderer`, scene, camera, canvas, rendering context, or `GPUDevice`.
 `ThreeConfig.resolve()` converts authenticated portable payloads into retained Three JavaScript resource descriptions.
 It does not call `device.create*`, configure a canvas, or submit work. Three's renderer-local managers perform those backend
 operations later when an application's renderer encounters the committed objects.
 
-The draw root is not a Glyph wrapper class. It is the existing `Text` or `TextGroup` `Object3D` that owns one private
-publication boundary. During renderer commit, Glyph creates/reuses ordinary `THREE.Mesh` values and calls
-`drawRoot.add(mesh)`. A standalone text therefore owns its meshes as children; grouped text shares meshes beneath the
-group. Adding the text/group root to a scene inserts that entire subtree. Glyph prepares and attaches the subtree, but it
-does not draw it:
+Each Three root owns a private publication `Object3D`. During renderer commit, Glyph creates or reuses ordinary
+`THREE.Mesh` values beneath that object. When a retained `Text` enters a scene, the publication object enters the same
+scene as its sibling; several Text objects selected by one named root share that publication object. Material factories
+receive it as `ThreeRootContext.renderObject`. Glyph prepares and attaches the renderer-owned object, but it does not draw
+it:
 
 ```ts
 const label = three.createText({ font, text: 'Hello' });
@@ -286,7 +286,8 @@ const glyphs = label.glyphs();
 `measure()` synchronously requests an allocation-light `ParagraphLayoutSummary` for current desired state. A detached
 `Text` uses its implicit standalone planner; a `Text` beneath a `TextGroup` uses that group's planner. The call does not
 traverse matrices, realize materials or GPU resources, publish draws, or change `commitState()` from `pending` to
-`committed`. Use the renderer-neutral `Paragraph` API when no Three object should exist.
+`committed`. An explicit call intentionally pays one synchronous one-Text engine query, which is suitable for Yoga/uikit
+measurement without introducing a second renderer-free retained runtime.
 
 Sequential `measure()` calls in one group extend a full desired-lifecycle speculative transaction. Each query applies
 semantic mutations only for its paragraph; the first render traversal publishes the complete batch once and adopts the

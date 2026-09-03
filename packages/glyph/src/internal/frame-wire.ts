@@ -4,11 +4,9 @@ import type {
   FlowThreadId,
   FontStackHandle,
   InlineObjectId,
-  MaterialHandle,
   ParagraphId,
   CodecHandle,
   RegionId,
-  ResourceHandle,
   StyleId,
   PlannerHandle,
 } from './glyph-id.js';
@@ -60,7 +58,7 @@ export interface PlannerDecoration {
 
 export interface PlannerStyleValue {
   readonly fontStackHandle?: FontStackHandle;
-  readonly materialId?: MaterialHandle;
+  readonly materialId?: number;
   readonly language?: string;
   readonly features?: readonly PlannerFeature[];
   readonly fontSize?: number;
@@ -177,8 +175,8 @@ export interface PlannerInlineObject {
   readonly id: InlineObjectId;
   readonly contentRevision: number;
   readonly textOffset: number;
-  readonly materialId: MaterialHandle;
-  readonly resourceId: ResourceHandle;
+  readonly materialId: number;
+  readonly resourceId: number;
   readonly resourceGeneration: number;
   readonly inlineExtent: number;
   readonly blockExtent: number;
@@ -303,7 +301,6 @@ interface HeaderOffsets {
 function writeHeader(view: DataView, frame: PlannerFrameUpdate, byteLength: number, offsets: HeaderOffsets): void {
   const layout = textShaperAbi.layouts.engineUpdateRequest;
   const limits = frame.limits;
-  optionalBoolean(frame.compositingIndependent, 'frame compositingIndependent');
   view.setUint32(
     layout.flags,
     frame.compositingIndependent === true ? textShaperAbi.engine.frameFlags.compositingIndependent : 0,
@@ -403,13 +400,12 @@ function writeStyleMutations(
   const layout = textShaperAbi.layouts.engineStyleMutation;
   for (const [index, mutation] of mutations.entries()) {
     const offset = tableOffset + index * layout.size;
-    view.setUint32(offset + layout.paragraphId, u32(mutation.paragraphId, 'paragraph ID'), true);
-    view.setUint32(offset + layout.styleId, u32(mutation.styleId, 'style ID'), true);
+    view.setUint32(offset + layout.paragraphId, mutation.paragraphId, true);
+    view.setUint32(offset + layout.styleId, mutation.styleId, true);
     if (mutation.opcode === 'remove') {
       view.setUint8(offset + layout.opcode, textShaperAbi.engine.styleMutationOpcodes.remove);
       continue;
     }
-    if (mutation.opcode !== 'upsert') throw new TypeError('style mutation opcode is invalid');
     const value = mutation.value;
     const fields = textShaperAbi.engine.styleFields;
     const fieldMask =
@@ -431,15 +427,13 @@ function writeStyleMutations(
       present(value.decoration, fields.decoration);
     view.setUint8(offset + layout.opcode, textShaperAbi.engine.styleMutationOpcodes.upsert);
     view.setUint8(offset + layout.direction, direction(value.direction));
-    optionalBoolean(mutation.root, 'style root');
     view.setUint8(offset + layout.flags, mutation.root === true ? textShaperAbi.engine.styleFlags.root : 0);
-    view.setUint32(offset + layout.cascadeOrder, u32(mutation.cascadeOrder, 'style cascade order'), true);
+    view.setUint32(offset + layout.cascadeOrder, mutation.cascadeOrder, true);
     view.setUint32(offset + layout.fieldMask, fieldMask, true);
-    view.setUint32(offset + layout.textStart, u32(mutation.start, 'style start'), true);
-    view.setUint32(offset + layout.textEnd, u32(mutation.end, 'style end'), true);
-    if (mutation.end < mutation.start) throw new RangeError('style end must not precede style start');
-    optionalU32(view, offset + layout.fontStackHandle, value.fontStackHandle, 'font stack handle');
-    optionalU32(view, offset + layout.materialId, value.materialId, 'material ID');
+    view.setUint32(offset + layout.textStart, mutation.start, true);
+    view.setUint32(offset + layout.textEnd, mutation.end, true);
+    writeOptionalU32(view, offset + layout.fontStackHandle, value.fontStackHandle);
+    writeOptionalU32(view, offset + layout.materialId, value.materialId);
     const language = languages[index]!;
     view.setUint32(offset + layout.languageOffset, languageOffsets[index]!, true);
     view.setUint16(offset + layout.languageLength, u16(language.length, 'language byte length'), true);
@@ -449,19 +443,19 @@ function writeStyleMutations(
     view.setUint16(offset + layout.featureCount, u16(features.length, 'feature count'), true);
     view.setUint32(offset + layout.featuresOffset, featureOffset, true);
     writeFeatures(view, featureOffset, features);
-    optionalF32(view, offset + layout.fontSize, value.fontSize, 'font size');
-    optionalF32(view, offset + layout.lineHeight, value.lineHeight, 'line height');
-    optionalF32(view, offset + layout.letterSpacing, value.letterSpacing, 'letter spacing');
-    optionalF32(view, offset + layout.wordSpacing, value.wordSpacing, 'word spacing');
-    optionalF32(view, offset + layout.baselineShift, value.baselineShift, 'baseline shift');
-    optionalF32(view, offset + layout.rasterPixelRatio, value.rasterPixelRatio, 'raster pixel ratio');
-    optionalU32(view, offset + layout.foregroundRgba, value.foregroundRgba, 'foreground RGBA');
-    optionalF32(view, offset + layout.opacity, value.opacity, 'opacity');
-    optionalU32(view, offset + layout.outlineRgba, value.outline?.rgba, 'outline RGBA');
-    optionalF32(view, offset + layout.outlineWidth, value.outline?.width, 'outline width');
-    optionalU32(view, offset + layout.shadowRgba, value.shadow?.rgba, 'shadow RGBA');
-    optionalF32(view, offset + layout.shadowOffsetX, value.shadow?.offsetX, 'shadow offset x');
-    optionalF32(view, offset + layout.shadowOffsetY, value.shadow?.offsetY, 'shadow offset y');
+    writeOptionalF32(view, offset + layout.fontSize, value.fontSize);
+    writeOptionalF32(view, offset + layout.lineHeight, value.lineHeight);
+    writeOptionalF32(view, offset + layout.letterSpacing, value.letterSpacing);
+    writeOptionalF32(view, offset + layout.wordSpacing, value.wordSpacing);
+    writeOptionalF32(view, offset + layout.baselineShift, value.baselineShift);
+    writeOptionalF32(view, offset + layout.rasterPixelRatio, value.rasterPixelRatio);
+    writeOptionalU32(view, offset + layout.foregroundRgba, value.foregroundRgba);
+    writeOptionalF32(view, offset + layout.opacity, value.opacity);
+    writeOptionalU32(view, offset + layout.outlineRgba, value.outline?.rgba);
+    writeOptionalF32(view, offset + layout.outlineWidth, value.outline?.width);
+    writeOptionalU32(view, offset + layout.shadowRgba, value.shadow?.rgba);
+    writeOptionalF32(view, offset + layout.shadowOffsetX, value.shadow?.offsetX);
+    writeOptionalF32(view, offset + layout.shadowOffsetY, value.shadow?.offsetY);
     writeDecoration(view, offset, value.decoration);
   }
 }
@@ -470,11 +464,10 @@ function writeFeatures(view: DataView, tableOffset: number, features: readonly P
   const layout = textShaperAbi.layouts.feature;
   for (const [index, feature] of features.entries()) {
     const offset = tableOffset + index * layout.size;
-    view.setUint32(offset + layout.tag, tag(feature.tag), true);
-    view.setUint32(offset + layout.value, u32(feature.value, 'feature value'), true);
-    view.setUint32(offset + layout.start, u32(feature.start, 'feature start'), true);
-    view.setUint32(offset + layout.end, u32(feature.end, 'feature end'), true);
-    if (feature.end < feature.start) throw new RangeError('feature end must not precede feature start');
+    view.setUint32(offset + layout.tag, packTag(feature.tag), true);
+    view.setUint32(offset + layout.value, feature.value, true);
+    view.setUint32(offset + layout.start, feature.start, true);
+    view.setUint32(offset + layout.end, feature.end, true);
   }
 }
 
@@ -483,8 +476,8 @@ function writeDecoration(view: DataView, offset: number, decoration: PlannerDeco
   const layout = textShaperAbi.layouts.engineStyleMutation;
   const styles = textShaperAbi.engine.decorationStyles;
   const flags = textShaperAbi.engine.decorationFlags;
-  view.setUint8(offset + layout.decorationStyle, enumValue(styles, decoration.style, 'decoration style'));
-  view.setUint32(offset + layout.decorationRgba, u32(decoration.rgba, 'decoration RGBA'), true);
+  view.setUint8(offset + layout.decorationStyle, styles[decoration.style]);
+  view.setUint32(offset + layout.decorationRgba, decoration.rgba, true);
   view.setUint32(
     offset + layout.decorationFlags,
     (decoration.underline === true ? flags.underline : 0) |
@@ -493,12 +486,8 @@ function writeDecoration(view: DataView, offset: number, decoration: PlannerDeco
       (decoration.skipInk === true ? flags.skipInk : 0),
     true,
   );
-  optionalBoolean(decoration.underline, 'decoration underline');
-  optionalBoolean(decoration.overline, 'decoration overline');
-  optionalBoolean(decoration.lineThrough, 'decoration lineThrough');
-  optionalBoolean(decoration.skipInk, 'decoration skipInk');
-  view.setFloat32(offset + layout.decorationThickness, finite(decoration.thickness, 'decoration thickness'), true);
-  view.setFloat32(offset + layout.decorationOffset, finite(decoration.offset, 'decoration offset'), true);
+  view.setFloat32(offset + layout.decorationThickness, decoration.thickness, true);
+  view.setFloat32(offset + layout.decorationOffset, decoration.offset, true);
 }
 
 function writeConstraints(view: DataView, tableOffset: number, constraints: readonly PlannerConstraint[]): void {
@@ -663,19 +652,16 @@ function present(value: unknown, bit: number): number {
   return value === undefined ? 0 : bit;
 }
 
-function optionalU32(view: DataView, offset: number, value: number | undefined, label: string): void {
-  if (value !== undefined) view.setUint32(offset, u32(value, label), true);
+function writeOptionalU32(view: DataView, offset: number, value: number | undefined): void {
+  if (value !== undefined) view.setUint32(offset, value, true);
 }
 
-function optionalF32(view: DataView, offset: number, value: number | undefined, label: string): void {
-  if (value !== undefined) view.setFloat32(offset, finite(value, label), true);
+function writeOptionalF32(view: DataView, offset: number, value: number | undefined): void {
+  if (value !== undefined) view.setFloat32(offset, value, true);
 }
 
 function direction(value: PlannerStyleValue['direction']): number {
-  if (value === undefined || value === 'auto') return 0;
-  if (value === 'ltr') return 1;
-  if (value === 'rtl') return 2;
-  throw new TypeError('style direction is invalid');
+  return value === undefined ? 0 : { auto: 0, ltr: 1, rtl: 2 }[value];
 }
 
 function axisMode(value: PlannerConstraint['widthMode']): number {
@@ -716,17 +702,10 @@ function enumValue(values: Readonly<Record<string, number>>, value: string, labe
   return encoded;
 }
 
-function optionalBoolean(value: boolean | undefined, label: string): void {
-  if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`${label} must be a boolean`);
-}
-
-function tag(value: string): number {
-  if (value.length !== 4) throw new RangeError('feature tag must contain exactly four bytes');
+function packTag(value: string): number {
   let packed = 0;
   for (let index = 0; index < 4; index += 1) {
-    const byte = value.charCodeAt(index);
-    if (byte < 0x20 || byte > 0x7e) throw new RangeError('feature tag must contain printable ASCII bytes');
-    packed = (packed << 8) | byte;
+    packed = (packed << 8) | value.charCodeAt(index);
   }
   return packed >>> 0;
 }

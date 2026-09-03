@@ -2,7 +2,6 @@ export type {
   BakeProgress,
   BakeProgressListener,
   BakeProgressPhase,
-  AnyRasterBakerModule,
   BakeArtifact,
   RasterBakeArtifact,
   RasterBakeDescriptorOf,
@@ -108,7 +107,6 @@ export type {
   CodecTechniqueId,
 } from './config/codec.js';
 export type {
-  AnyTechniqueSchema,
   CodecBufferDeclaration,
   CodecBufferDeclarations,
   CodecScalarKind,
@@ -178,8 +176,6 @@ export type {
   RasterCodecSystem,
 } from './config/raster.js';
 export type {
-  AnyFontFace,
-  AnyFontFaceSelection,
   FontFace,
   FontFaceConfig,
   FontFaceDeclaredFormat,
@@ -212,11 +208,7 @@ export type {
   ParagraphLayoutSummary,
   ParagraphLineMetrics,
   ParagraphMeasurement,
-  ParagraphMetrics,
 } from './layout.js';
-
-export type { ParagraphOptions, ParagraphUpdate } from './paragraph.js';
-export { createParagraph, Paragraph } from './paragraph.js';
 
 export type { GlyphCaret, GlyphKey } from './glyph-placement.js';
 
@@ -270,7 +262,6 @@ export type {
 } from './raster.js';
 
 export type {
-  AnyRasterFormat,
   RasterDataOf,
   RasterResourceId,
   RasterFormat,
@@ -278,7 +269,9 @@ export type {
   RasterFormatId,
   RasterOptionsOf,
   RasterFormatInput,
+  RasterFormatMetadata,
   RasterFormatRequest,
+  RasterFormatRequestMetadata,
   RasterFormatTypesOf,
   RasterTextEffect,
 } from './config/raster-format.js';

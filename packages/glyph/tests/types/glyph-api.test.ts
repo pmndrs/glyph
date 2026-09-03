@@ -147,12 +147,15 @@ type InferredRecordingBindings = GlyphConfigBindings<typeof recordingConfig>;
 type RecordingHandle = GlyphConfigHandle<typeof recordingConfig>;
 type RecordingRenderer = ReturnType<typeof recordingConfig.renderer>;
 type RecordingView = Parameters<RecordingRenderer['decode']>[0];
+const wrappedRecordingConfig = defineGlyphConfig({ ...recordingConfig });
+type WrappedRecordingHandle = GlyphConfigHandle<typeof wrappedRecordingConfig>;
 
 const configIsNotAny: IsAny<typeof recordingConfig> = false;
 const bindingsAreNotAny: IsAny<InferredRecordingBindings> = false;
 const handleIsNotAny: IsAny<RecordingHandle> = false;
 const viewIsNotAny: IsAny<RecordingView> = false;
-void [configIsNotAny, bindingsAreNotAny, handleIsNotAny, viewIsNotAny];
+const wrappedHandleIsNotAny: IsAny<WrappedRecordingHandle> = false;
+void [configIsNotAny, bindingsAreNotAny, handleIsNotAny, viewIsNotAny, wrappedHandleIsNotAny];
 
 declare const view: RecordingView;
 view.displayList.kind satisfies 'unchanged' | 'replace';
@@ -174,6 +177,7 @@ async function configureGlyph(): Promise<void> {
   await glyph.init();
   const first: RecordingHandle = glyph.handle('recording:first', recordingConfig);
   const second: RecordingHandle = glyph.handle('recording:second', recordingConfig);
+  const wrapped: RecordingHandle = glyph.handle('recording:wrapped', wrappedRecordingConfig);
   first.name satisfies undefined;
   first.disposed satisfies boolean;
   first.kind satisfies 'recording-root';
@@ -186,6 +190,7 @@ async function configureGlyph(): Promise<void> {
   // @ts-expect-error The handle fronts its anonymous root; invocation only selects named roots.
   first();
   second.dispose();
+  wrapped.dispose();
 
   // @ts-expect-error The config's exact root result is preserved.
   const wrong: { readonly kind: 'other' } = first;

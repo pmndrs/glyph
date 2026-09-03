@@ -44,7 +44,7 @@ import type {
 import { RenderPlanView, type RenderPlanTable } from './plan-view.js';
 import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
 import type { PortableResource } from '../config/resources.js';
-import type { MaterialHandle, ParagraphId, ResourceHandle } from './glyph-id.js';
+import type { ParagraphId, ResourceHandle } from './glyph-id.js';
 import { codecCapabilitySetSelectionId, selectCodecCapabilitySet } from './codec-capability-selection.js';
 
 const MAX_U32 = 0xffff_ffff;
@@ -56,9 +56,12 @@ export interface PlanOrigin {
   readonly [planOriginBrand]: true;
 }
 
-declare const renderPlanTransformBrand: unique symbol;
 /** Engine-owned host transform identity used only while mapping a trusted publication. */
-type RenderPlanTransformId = number & { readonly [renderPlanTransformBrand]: true };
+type RenderPlanTransformId = number;
+
+class PlanOriginImpl implements PlanOrigin {
+  declare readonly [planOriginBrand]: true;
+}
 
 /** A table carried by every renderer-neutral plan publication. */
 export type RenderPlanTableName =
@@ -122,7 +125,7 @@ export interface PlanCandidate {
   readonly checkpoint: boolean;
   readonly transforms: readonly ResolvedPlanTransform[];
   acquirePayload(referenceId: ResourceHandle): PortablePayloadLease;
-  resolveMaterial(materialId: MaterialHandle): HandleMaterialBinding;
+  resolveMaterial(materialId: number): HandleMaterialBinding;
   resolveResource(resourceId: ResourceHandle): HandleResourceBinding;
 }
 
@@ -265,7 +268,7 @@ export interface MeasurementPlanner {
   dispose(): void;
 }
 
-/** @internal Renderer-free planner construction used by the root Paragraph service. */
+/** @internal Planner construction shared by retained roots and explicit single-Text queries. */
 export interface MeasurementPlannerOptions {
   readonly codec: CodecRegistration;
   readonly limits: RenderPlannerLimits;
@@ -286,7 +289,7 @@ interface ResolvedSpan {
   readonly start: number;
   readonly end: number;
   readonly font: ReturnType<GlyphHandleState['_retainFontStackBinding']> | undefined;
-  readonly material: HandleBindingLease | undefined;
+  readonly material: HandleBindingLease<HandleMaterialBinding> | undefined;
   readonly style: TextStyle | undefined;
 }
 
@@ -295,11 +298,11 @@ interface ResolvedTextOptions {
   readonly text: string;
   readonly spans: readonly ResolvedSpan[];
   readonly font: ReturnType<GlyphHandleState['_retainFontStackBinding']>;
-  readonly material: HandleBindingLease | undefined;
-  readonly transform: HandleBindingLease;
-  readonly flowTransforms: readonly HandleBindingLease[];
-  readonly inlineMaterials: readonly HandleBindingLease[];
-  readonly inlineResources: readonly HandleBindingLease[];
+  readonly material: HandleBindingLease<HandleMaterialBinding> | undefined;
+  readonly transform: HandleBindingLease<HandleTransformBinding>;
+  readonly flowTransforms: readonly HandleBindingLease<HandleTransformBinding>[];
+  readonly inlineMaterials: readonly HandleBindingLease<HandleMaterialBinding>[];
+  readonly inlineResources: readonly HandleBindingLease<HandleResourceBinding>[];
 }
 
 interface RetainedTextState {
@@ -387,7 +390,7 @@ class RenderPlannerImpl {
   readonly #target: PlanTarget | undefined;
   readonly #control: TargetControlState | undefined;
   readonly #targetController = new AbortController();
-  readonly #origin = Object.freeze({}) as PlanOrigin;
+  readonly #origin: PlanOrigin = Object.freeze(new PlanOriginImpl());
   readonly #limits: RenderPlannerLimits;
   readonly #texts = new Set<RetainedTextState>();
   readonly #removed = new Set<RetainedTextState>();
@@ -535,7 +538,7 @@ class RenderPlannerImpl {
     this.#assertMutable();
     if (state.disposed) throw new Error('text engine text has been disposed');
     if (!isNonArrayObject(update)) throw new TypeError('text engine text update must be an object');
-    const source = Object.freeze({ ...state.desired.source, ...update }) as RetainedTextOptions;
+    const source: RetainedTextOptions = Object.freeze({ ...state.desired.source, ...update });
     const desired = resolveTextOptions(this.#handleState, source);
     const candidate = { ...state, desired, metrics: retainedTextMetrics(desired, state.ordinal), dirty: true };
     try {
@@ -1008,13 +1011,13 @@ class RenderPlannerImpl {
         lease.assertActive();
         return this.#portablePayload(referenceId);
       },
-      resolveMaterial: (materialId: MaterialHandle) => {
+      resolveMaterial: (materialId: number) => {
         lease.assertActive();
-        return this.#handleState._resolveOpaqueBinding('material', materialId) as HandleMaterialBinding;
+        return this.#handleState._resolveOpaqueBinding('material', materialId);
       },
       resolveResource: (resourceId: ResourceHandle) => {
         lease.assertActive();
-        return this.#handleState._resolveOpaqueBinding('resource', resourceId) as HandleResourceBinding;
+        return this.#handleState._resolveOpaqueBinding('resource', resourceId);
       },
     });
   }
@@ -1095,14 +1098,14 @@ class RenderPlannerImpl {
     };
     for (const state of this.#texts) {
       if (state.removed) continue;
-      const rootIndex = state.desired.transform.handle as RenderPlanTransformId;
+      const rootIndex = state.desired.transform.handle;
       retain(
         rootIndex,
         this.#handleState._resolveOpaqueBinding('transform', state.desired.transform.handle),
         state.paragraphId,
       );
       for (const transform of state.desired.flowTransforms) {
-        const transformIndex = transform.handle as RenderPlanTransformId;
+        const transformIndex = transform.handle;
         retain(transformIndex, this.#handleState._resolveOpaqueBinding('transform', transform.handle));
       }
     }
@@ -1381,14 +1384,14 @@ function resolveTextOptions(handleState: GlyphHandleState, value: RetainedTextOp
         style: span.style,
       });
     });
-    const flowTransforms: HandleBindingLease[] = [];
+    const flowTransforms: HandleBindingLease<HandleTransformBinding>[] = [];
     for (const flowRegion of value.flow?.regions ?? []) {
       const retained = handleState._retainOpaqueBinding(flowRegion.region.transform, 'transform');
       leases.push(retained);
       flowTransforms.push(retained);
     }
-    const inlineMaterials: HandleBindingLease[] = [];
-    const inlineResources: HandleBindingLease[] = [];
+    const inlineMaterials: HandleBindingLease<HandleMaterialBinding>[] = [];
+    const inlineResources: HandleBindingLease<HandleResourceBinding>[] = [];
     for (const object of value.inlineObjects ?? []) {
       const retainedMaterial = handleState._retainOpaqueBinding(object.material, 'material');
       leases.push(retainedMaterial);
@@ -1478,12 +1481,12 @@ function snapshotTextOptions(
   value: RetainedTextOptions,
   input: RetainedFormattedText,
   font: ReturnType<GlyphHandleState['_retainFontStackBinding']>,
-  material: HandleBindingLease | undefined,
-  transform: HandleBindingLease,
+  material: HandleBindingLease<HandleMaterialBinding> | undefined,
+  transform: HandleBindingLease<HandleTransformBinding>,
   spans: readonly ResolvedSpan[],
-  flowTransforms: readonly HandleBindingLease[],
-  inlineMaterials: readonly HandleBindingLease[],
-  inlineResources: readonly HandleBindingLease[],
+  flowTransforms: readonly HandleBindingLease<HandleTransformBinding>[],
+  inlineMaterials: readonly HandleBindingLease<HandleMaterialBinding>[],
+  inlineResources: readonly HandleBindingLease<HandleResourceBinding>[],
 ): RetainedTextOptions {
   const {
     font: _font,
@@ -1503,7 +1506,7 @@ function snapshotTextOptions(
           start: span.start,
           end: span.end,
           ...(span.font === undefined ? {} : { font: span.font.binding }),
-          ...(span.material === undefined ? {} : { material: span.material.binding as HandleMaterialBinding }),
+          ...(span.material === undefined ? {} : { material: span.material.binding }),
           ...(span.style === undefined ? {} : { style: span.style }),
         }),
       ),
@@ -1513,8 +1516,8 @@ function snapshotTextOptions(
     ...snapshot,
     font: font.binding,
     text,
-    ...(material === undefined ? {} : { material: material.binding as HandleMaterialBinding }),
-    transform: transform.binding as HandleTransformBinding,
+    ...(material === undefined ? {} : { material: material.binding }),
+    transform: transform.binding,
     ...(value.flow === undefined
       ? {}
       : {
@@ -1525,7 +1528,7 @@ function snapshotTextOptions(
                 return Object.freeze({
                   region: Object.freeze({
                     ...snapshotAuthoredData(region, `text flow region ${index}`),
-                    transform: flowTransforms[index]!.binding as HandleTransformBinding,
+                    transform: flowTransforms[index]!.binding,
                   }),
                   ...(flowRegion.exclusions === undefined
                     ? {}
@@ -1547,8 +1550,8 @@ function snapshotTextOptions(
               const { material: _inlineMaterial, resource: _inlineResource, ...data } = object;
               return Object.freeze({
                 ...snapshotAuthoredData(data, `text inline object ${index}`),
-                material: inlineMaterials[index]!.binding as HandleMaterialBinding,
-                resource: inlineResources[index]!.binding as HandleResourceBinding,
+                material: inlineMaterials[index]!.binding,
+                resource: inlineResources[index]!.binding,
               });
             }),
           ),
@@ -1578,10 +1581,10 @@ function compileStyles(handleState: GlyphHandleState, state: RetainedTextState):
     end: desired.text.length,
     root: true,
     value: engineStyleValue(source.style ?? {}, 0, desired.text.length, {
-      fontStackHandle: desired.font.handle as never,
+      fontStackHandle: desired.font.handle,
       fontSize: source.style?.fontSize ?? 16,
       rasterPixelRatio: source.rasterPixelRatio ?? 1,
-      ...(desired.material === undefined ? {} : { materialId: desired.material.handle as MaterialHandle }),
+      ...(desired.material === undefined ? {} : { materialId: desired.material.handle }),
     }),
   };
   return [
@@ -1596,8 +1599,8 @@ function compileStyles(handleState: GlyphHandleState, state: RetainedTextState):
         start: span.start,
         end: span.end,
         value: engineStyleValue(span.style ?? {}, span.start, span.end, {
-          ...(span.font === undefined ? {} : { fontStackHandle: span.font.handle as never }),
-          ...(span.material === undefined ? {} : { materialId: span.material.handle as MaterialHandle }),
+          ...(span.font === undefined ? {} : { fontStackHandle: span.font.handle }),
+          ...(span.material === undefined ? {} : { materialId: span.material.handle }),
         }),
       })),
   ];
@@ -1683,8 +1686,8 @@ function compileInlineObjects(handleState: GlyphHandleState, state: RetainedText
     paragraphId: state.paragraphId,
     id: handleState.id('inline-object', `paragraph/${state.paragraphId}/inline/${index}`),
     contentRevision: state.geometryRevision + 1,
-    materialId: state.desired.inlineMaterials[index]!.handle as MaterialHandle,
-    resourceId: state.desired.inlineResources[index]!.handle as ResourceHandle,
+    materialId: state.desired.inlineMaterials[index]!.handle,
+    resourceId: state.desired.inlineResources[index]!.handle,
     resourceGeneration: 1,
   }));
 }

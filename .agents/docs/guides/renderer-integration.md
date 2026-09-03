@@ -71,9 +71,11 @@ flowchart LR
   R3F[R3F integration] -. immutable selected root .-> Three
 ```
 
-The root package exposes the complete integration vocabulary. A portable technique contributes its schema and Codec
-program. Its explicit `/typegpu` subpath contributes shaders. Your integration owns host objects and physical GPU
-resources. Rust/Wasm readers, numeric identities, planning, and publication plumbing remain private to Glyph.
+The root package exposes every application-visible integration type. The exact `/config/*` leaves expose construction
+helpers such as `defineGlyphConfig`, `defineGlyphSchema`, and Codec assembly. A portable raster package contributes its
+schema and Codec program, while its explicit `/typegpu` subpath contributes shaders. Your integration owns host objects
+and physical GPU resources. Rust/Wasm readers, numeric identities, command projection, and publication plumbing remain
+private to Glyph.
 
 ## Run the complete example first
 
@@ -177,7 +179,7 @@ never handles numeric engine IDs:
 ```ts
 import {
   type GlyphBatchBindingInput,
-  type GlyphBindings,
+  type GlyphBindingSet,
   type GlyphBufferBindingInput,
   type GlyphInstanceSpanBindingInput,
   type GlyphRootInstanceBindingInput,
@@ -192,7 +194,7 @@ export interface ExampleResolvedResource {
 }
 export interface ExampleBufferBinding {
   readonly kind: 'example-buffer';
-  readonly input: GlyphBufferBindingInput<ExampleBindings>;
+  readonly input: GlyphBufferBindingInput<ExampleProgramBinding>;
 }
 export interface ExampleProgramBinding {
   readonly kind: 'example-program';
@@ -200,15 +202,28 @@ export interface ExampleProgramBinding {
 }
 export interface ExampleInstanceSpanBinding {
   readonly kind: 'example-instance-span';
-  readonly input: GlyphInstanceSpanBindingInput<ExampleBindings>;
+  readonly input: GlyphInstanceSpanBindingInput<ExampleResolvedResource, ExampleBufferBinding, ExampleProgramBinding>;
 }
 export interface ExampleBatchBinding {
   readonly kind: 'example-batch';
-  readonly input: GlyphBatchBindingInput<ExampleBindings>;
+  readonly input: GlyphBatchBindingInput<
+    ExampleResolvedResource,
+    ExampleBufferBinding,
+    ExampleProgramBinding,
+    ExampleMaterial,
+    ExampleInstanceSpanBinding
+  >;
 }
 export interface ExampleInstanceBinding {
   readonly kind: 'example-instance';
-  readonly input: GlyphRootInstanceBindingInput<ExampleBindings>;
+  readonly input: GlyphRootInstanceBindingInput<
+    ExampleResolvedResource,
+    ExampleBufferBinding,
+    ExampleProgramBinding,
+    ExampleMaterial,
+    ExampleTransform,
+    ExampleInstanceSpanBinding
+  >;
 }
 export interface ExampleMaterial {
   readonly kind: 'example-material';
@@ -217,29 +232,23 @@ export interface ExampleTransform {
   readonly kind: 'example-transform';
 }
 
-export type ExampleBindings = GlyphBindings<
-  ExampleResolvedResource,
-  ExampleBufferBinding,
-  ExampleProgramBinding,
-  ExampleMaterial,
-  ExampleTransform,
-  ExampleBatchBinding,
-  ExampleInstanceBinding,
-  ExampleInstanceSpanBinding,
-  undefined,
-  ExampleMaterial,
-  ExampleTransform
->;
+export interface ExampleBindings extends GlyphBindingSet {
+  readonly resource: ExampleResolvedResource;
+  readonly buffer: ExampleBufferBinding;
+  readonly program: ExampleProgramBinding;
+  readonly material: ExampleMaterial;
+  readonly transform: ExampleTransform;
+  readonly batch: ExampleBatchBinding;
+  readonly instance: ExampleInstanceBinding;
+  readonly instanceSpan: ExampleInstanceSpanBinding;
+  readonly materialInput: ExampleMaterial;
+  readonly transformInput: ExampleTransform;
+}
 ```
 
-The ninth binding is `drawRoot`. It is `undefined` because this offscreen proof has no scene-like host object. A scene
-graph could return a node; a render graph could return a layer or pass bucket. The schema owns that type—`drawRoot` is not
-a Glyph class and is not intrinsically a Three object.
-
-`defineGlyphSchema(schema)` is direct and infers from its argument. The current example still needs the explicit variable
-annotation `GlyphSchema<ExampleBindings, ExampleRootContext>` to witness the complete binding relationship. That
-annotation is the remaining inference ergonomics gap; it is not a reason to add casts or explicit Glyph generics at
-application call sites.
+`GlyphBindingSet` names only values created or consumed by the adapter. A scene, render layer, pass bucket, or other host
+publication boundary is not another binding slot. The root recipe supplies that boundary once, and every schema callback
+receives it as its first argument.
 
 ## Bind trusted meanings with `schema`
 
@@ -251,7 +260,6 @@ export interface ExampleRootContext {
 }
 
 export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = defineGlyphSchema({
-  drawRoot: () => undefined,
   program: (_root: ExampleRootContext, program) => Object.freeze({ kind: 'example-program', program }),
   buffer: (_root, input) => Object.freeze({ kind: 'example-buffer', input }),
   material: (_root, material) => material,
@@ -264,7 +272,6 @@ export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = d
 
 | Schema callback | Renderer-owned result                                                    |
 | --------------- | ------------------------------------------------------------------------ |
-| `drawRoot`      | One host publication root for this anonymous or named root.              |
 | `program`       | A pipeline/program selector for one Codec program.                       |
 | `buffer`        | A stable host buffer binding for Codec or order storage.                 |
 | `material`      | The material/paint value accepted by Text and used by draws.             |
@@ -464,7 +471,7 @@ finalizer. It creates the adapter's host object, chooses its boundary, then retu
 
 ```ts
 interface ExampleRootExtension {
-  createText<const Selection extends AnyFontFaceSelection>(
+  createText<const Selection extends ExampleFontFaceSelection>(
     options: ExampleTextOptions<Selection>,
   ): ExampleText<Selection>;
   readonly drawList: ExampleDrawList;
@@ -476,7 +483,7 @@ class ExampleRootImplementation implements ExampleRootExtension {
     readonly services: GlyphRootServices<ExampleBindings, ExampleDrawList, ExampleRootContext>,
   ) {}
 
-  createText<const Selection extends AnyFontFaceSelection>(options: ExampleTextOptions<Selection>) {
+  createText<const Selection extends ExampleFontFaceSelection>(options: ExampleTextOptions<Selection>) {
     return new ExampleText(exampleTextConstructionToken, this.fonts, this.services, options);
   }
 
@@ -564,15 +571,15 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
 
 `GlyphConfig` is a small declarative DSL:
 
-| Field      | Required | Owns                                                                                         |
-| ---------- | -------- | -------------------------------------------------------------------------------------------- |
-| `schema`   | yes      | Inferred host binding vocabulary and `drawRoot`.                                             |
-| `fonts`    | no       | Handle-relative technique names, default technique, and technique loading.                   |
-| `encode`   | yes      | Codec descriptor for packed command-buffer data.                                             |
-| `resolve`  | yes      | Portable-resource realization and leases.                                                    |
-| `renderer` | yes      | Root-scoped `decode`, transform sync, and retained host-state disposal.                      |
-| `root`     | yes      | Anonymous/named root host object and boundary construction.                                  |
-| `commands` | no       | Initial command-buffer and retained-text capacities; omit until measurements justify tuning. |
+| Field      | Required | Owns                                                                                          |
+| ---------- | -------- | --------------------------------------------------------------------------------------------- |
+| `schema`   | yes      | Host values created from trusted command meanings; every callback receives the root boundary. |
+| `fonts`    | no       | Handle-relative technique names, default technique, and technique loading.                    |
+| `encode`   | yes      | Codec descriptor for packed command-buffer data.                                              |
+| `resolve`  | yes      | Portable-resource realization and leases.                                                     |
+| `renderer` | yes      | Root-scoped `decode`, transform sync, and retained host-state disposal.                       |
+| `root`     | yes      | Anonymous/named root host object and boundary construction.                                   |
+| `commands` | no       | Initial command-buffer and retained-text capacities; omit until measurements justify tuning.  |
 
 For example, a capacity override is data, not another lifecycle object:
 
@@ -590,7 +597,7 @@ An adapter Text owns user-facing desired state and privately holds the controlle
 `context.services.createText()`:
 
 ```ts
-export class ExampleText<Selection extends AnyFontFaceSelection> {
+export class ExampleText<Selection extends ExampleFontFaceSelection> {
   readonly #controller: GlyphTextController<FontFaceRasterOf<Selection>, ExampleMaterial, ExampleTransform>;
   readonly #font: Font<FontFaceRasterOf<Selection>>;
   readonly #transform: ExampleTransform = Object.freeze({ kind: 'example-transform' });
@@ -652,7 +659,7 @@ and returns an independent immutable `Font` lease. `peek` borrows the store-owne
 wrapper can enforce the synchronous Text contract:
 
 ```ts
-function acquireLoadedFont(selection: AnyFontFaceSelection) {
+function acquireLoadedFont(selection: ExampleFontFaceSelection) {
   const fonts = context.fonts;
   if (fonts === undefined) throw new Error('this integration has no configured font techniques');
   if (!fonts.isLoaded(selection)) {
@@ -794,7 +801,7 @@ a long-lived integration.
 | `GPUDevice`                 | Before physical buffers, textures, samplers, bind groups, or pipelines. Not needed for shaping. |
 | Canvas                      | Only for onscreen presentation. Never required for shaping, projection, or an offscreen target. |
 | `GPUCanvasContext`          | When configuring a canvas and acquiring its current presentation texture.                       |
-| Scene-like/root-like object | Only if your host needs one; represent it through the schema boundary and `drawRoot`.           |
+| Scene-like/root-like object | Only if your host needs one; capture it as the boundary supplied by the root recipe.            |
 | Render-pass encoder         | During actual host draw recording, after retained state has committed.                          |
 | Camera/frame uniforms       | During host drawing or transform sync unless they intentionally affect semantic layout.         |
 
@@ -869,11 +876,9 @@ abandoned FontFace declarations, never the correctness mechanism.
 
 ## Current gaps
 
-- `defineGlyphSchema(schema)` is direct, but the example still needs an explicit
-  `GlyphSchema<ExampleBindings, ExampleRootContext>` variable annotation to witness its complete binding relationship.
-  Config and handle inference are clean afterward.
-- TypeScript `--isolatedDeclarations` requires the exported config factory to name `ExampleGlyphConfig`; the DSL's
-  callbacks, handle, roots, bindings, and FontFace format selection still infer from that one boundary without casts.
+- The exported example schema and config factory name their public declaration types for `--isolatedDeclarations`.
+  Application calls to `glyph.handle()`, `createText()`, and FontFace selections infer from those declarations without
+  explicit Glyph generics or recovery casts.
 - Its `syncTransforms()` is a no-op. Three supplies the current transform-only synchronization proof.
 - `TypeGpuExampleRendererDevice` submits a device-owned offscreen pass during commit. A caller-owned
   canvas/context/pass or render-graph method is not public yet.

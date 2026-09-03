@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { AnyRasterFormat, RasterResourceId } from './raster-format.js';
+import type { RasterFormatMetadata, RasterResourceId } from './raster-format.js';
 import { assertGlyphId, permanentGlyphId, type CodecBufferId } from '../internal/glyph-id.js';
 import { CodecIdScope, registerCodecIdFactory } from '../internal/render-id.js';
 
@@ -120,9 +120,9 @@ export type CodecResourceId = number & { readonly [resourceWireIdBrand]: true };
 /** Collision-checked render identities used while assembling codec programs and font bindings. */
 export interface CodecIdFactory {
   /** Derive the stable wire identity of one Codec program family. */
-  technique(technique: AnyRasterFormat | string): CodecTechniqueId;
+  technique(technique: RasterFormatMetadata | string): CodecTechniqueId;
   /** Derive one renderer program identity, optionally naming a variant. */
-  program(technique: AnyRasterFormat | string, namespace: string, variant?: string): CodecProgramId;
+  program(technique: RasterFormatMetadata | string, namespace: string, variant?: string): CodecProgramId;
   /** Derive the wire identity of one authored baked-resource key. */
   resource(resource: RasterResourceId): CodecResourceId;
 }
@@ -136,8 +136,8 @@ export interface IdFactory extends CodecIdFactory {
 const permanentCodecIds = new CodecIdScope();
 const authoredId: IdFactory = Object.freeze({
   buffer: (name: string) => permanentGlyphId('buffer', name),
-  technique: (raster: AnyRasterFormat | string) => permanentCodecIds.technique(raster),
-  program: (raster: AnyRasterFormat | string, namespace: string, variant = 'default') =>
+  technique: (raster: RasterFormatMetadata | string) => permanentCodecIds.technique(raster),
+  program: (raster: RasterFormatMetadata | string, namespace: string, variant = 'default') =>
     permanentCodecIds.program(raster, namespace, variant),
   resource: (resource: RasterResourceId) => permanentCodecIds.resource(resource),
 });
@@ -282,16 +282,17 @@ export function createCodecProgram(
   );
   const bufferSnapshots = Object.freeze(
     buffers.map((buffer, index) => {
-      if (!isNonArrayObject(buffer)) throw new TypeError(`codec program buffer ${index} needs an object`);
-      const source = buffer as unknown as CodecBuffer;
+      if (typeof buffer !== 'object' || buffer === null || Array.isArray(buffer)) {
+        throw new TypeError(`codec program buffer ${index} needs an object`);
+      }
       return Object.freeze({
-        id: source.id,
-        scalar: source.scalar,
-        vectorWidth: source.vectorWidth,
-        ...(source.alignment === undefined ? {} : { alignment: source.alignment }),
-        ...(source.stride === undefined ? {} : { stride: source.stride }),
-        ...(source.usage === undefined ? {} : { usage: source.usage }),
-        ...(source.capacityClass === undefined ? {} : { capacityClass: source.capacityClass }),
+        id: buffer.id,
+        scalar: buffer.scalar,
+        vectorWidth: buffer.vectorWidth,
+        ...(buffer.alignment === undefined ? {} : { alignment: buffer.alignment }),
+        ...(buffer.stride === undefined ? {} : { stride: buffer.stride }),
+        ...(buffer.usage === undefined ? {} : { usage: buffer.usage }),
+        ...(buffer.capacityClass === undefined ? {} : { capacityClass: buffer.capacityClass }),
       });
     }),
   );

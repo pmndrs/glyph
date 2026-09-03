@@ -11,7 +11,8 @@ import type {
 export interface ThreeRootContext {
   readonly name: string | undefined;
   readonly scene: Scene | undefined;
-  readonly drawRoot: Object3D;
+  /** Three object containing the renderer-owned meshes for this publication. */
+  readonly renderObject: Object3D;
 }
 
 type ThreeMaterialRootContext = Readonly<{ root: ThreeRootContext }>;

@@ -43,7 +43,6 @@ await glyph.init();
 
 function defineFontAwareConfig() {
   const schema = defineGlyphSchema({
-    drawRoot: () => undefined,
     program: () => ({}),
     buffer: () => ({}),
     material: () => ({}),
@@ -107,7 +106,10 @@ test('FontFace rejects legacy loader and unowned source/config forms at its publ
     /FontFace format array must not be empty/,
   );
   assert.throws(
-    () => glyph.fontFace('/fonts/forged-format.font.glb', { format: { raster: bitmap, options: { strikes: [16] } } }),
+    () =>
+      glyph.fontFace('/fonts/forged-format.font.glb', {
+        format: { raster: bitmap, options: { strikes: [16] } },
+      }),
     /package-created raster-format request/,
   );
 });

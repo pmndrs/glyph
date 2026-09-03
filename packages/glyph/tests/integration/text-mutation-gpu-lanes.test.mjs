@@ -51,9 +51,9 @@ const style = { fontSize: 6, lineHeight: 1 };
 const paint = { color: '#ffffff' };
 
 const TECHNIQUES = {
-  bitmap: { file: 'inter-bitmap-16.font.glb', raster: { raster: bitmap, options: { strikes: [16] } } },
-  msdf: { file: 'inter-mtsdf.font.glb.gz', raster: { raster: msdf } },
-  slug: { file: 'inter-slug.font.glb.gz', raster: { raster: slug } },
+  bitmap: { file: 'inter-bitmap-16.font.glb', raster: bitmap({ strikes: [16] }) },
+  msdf: { file: 'inter-mtsdf.font.glb.gz', raster: msdf },
+  slug: { file: 'inter-slug.font.glb.gz', raster: slug },
 };
 
 const fonts = createFontCache(TECHNIQUES);

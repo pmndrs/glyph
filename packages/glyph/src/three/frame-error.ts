@@ -5,7 +5,7 @@ import {
   type GlyphEngineStatusCode,
 } from '../engine-error.js';
 import { GlyphError } from '../glyph-error.js';
-import type { AnyRasterFormat } from '../config/raster-format.js';
+import type { RasterFormatMetadata } from '../config/raster-format.js';
 import type { Text, TextSpan } from './text.js';
 
 /**
@@ -15,7 +15,7 @@ import type { Text, TextSpan } from './text.js';
  * meaningful to a consumer. They are resolved here into the objects the consumer actually wrote:
  * the `Text` and, when one span owns the cause, that span together with its index in `Text.spans`.
  */
-export type TextFrameSubject<Technique extends AnyRasterFormat = AnyRasterFormat> =
+export type TextFrameSubject<Technique extends RasterFormatMetadata = RasterFormatMetadata> =
   | Readonly<{ kind: 'span'; text: Text<Technique>; index: number; span: TextSpan<Technique> }>
   | Readonly<{ kind: 'paragraph'; text: Text<Technique> }>
   | Readonly<{ kind: 'unattributed' }>;
@@ -26,7 +26,7 @@ export type TextFrameSubject<Technique extends AnyRasterFormat = AnyRasterFormat
  * `engine` is the residual: a status the engine does not classify further, including every internal
  * invariant violation. Treat it as a defect report rather than something to correct in the input.
  */
-export type TextFrameRejection<Technique extends AnyRasterFormat = AnyRasterFormat> =
+export type TextFrameRejection<Technique extends RasterFormatMetadata = RasterFormatMetadata> =
   /** A span's `[start, end)` is inverted, reaches past the text, or splits a UTF-16 surrogate pair. */
   | Readonly<{ cause: 'span-range'; subject: TextFrameSubject<Technique> }>
   /** A style boundary falls inside an extended grapheme cluster. */
@@ -41,7 +41,7 @@ export type TextFrameRejection<Technique extends AnyRasterFormat = AnyRasterForm
   | Readonly<{ cause: 'font-metrics-missing'; subject: TextFrameSubject<Technique> }>
   /** The frame did not fit the planner arenas even after the handle grew them. */
   | Readonly<{ cause: 'capacity'; requiredRequestBytes: number; requiredResultBytes: number }>
-  /** Any status the engine does not classify as caller-actionable. */
+  /** A status the engine does not classify as caller-actionable. */
   | Readonly<{ cause: 'engine' }>;
 
 /**

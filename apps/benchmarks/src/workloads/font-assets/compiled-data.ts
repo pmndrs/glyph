@@ -11,8 +11,8 @@ import {
   type PortableTexturePayload,
 } from '@pmndrs/glyph';
 import { compileRasterFont, readCompiledRasterFont, type RasterCodec } from '@pmndrs/glyph/config/raster';
-import type { AnyRasterFormat } from '@pmndrs/glyph/config/raster-format';
-import type { AnyTechniqueSchema } from '@pmndrs/glyph/config/schema';
+import type { RasterFormatMetadata } from '@pmndrs/glyph/config/raster-format';
+import type { TechniqueSchemaMetadata } from '@pmndrs/glyph/config/schema';
 
 import type { SlugCpuReferenceData } from '../../benchmark/low-level/raster/slug-cpu-reference';
 
@@ -149,7 +149,7 @@ export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData 
   return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, glyphs, pages };
 }
 
-function compiledView<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema>(
+function compiledView<Technique extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
   font: Font<Technique>,
   codec: RasterCodec<Technique, Schema>,
 ): {

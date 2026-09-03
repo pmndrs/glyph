@@ -4,14 +4,14 @@ import type { CodecScalarType } from '../config/codec.js';
 import type { PortableResource, PortableTextureFormat } from '../config/resources.js';
 import { isRasterCodec, type RasterCodec } from '../config/raster.js';
 import type {
-  AnyTechniqueSchema,
+  TechniqueSchemaMetadata,
   CodecBufferDeclarations,
   CodecScalarKind,
   TechniqueGeometryDeclaration,
   TechniqueResourceDeclaration,
   TechniqueResourceDeclarations,
 } from '../config/schema.js';
-import type { AnyRasterFormat } from '../config/raster-format.js';
+import type { RasterFormatMetadata } from '../config/raster-format.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { threeSystemBuffers } from './codec.js';
 import { commitThreeRasterProgram, registeredThreeRasterProgram } from './internal/raster-program-registry.js';
@@ -26,9 +26,9 @@ export interface ThreeRasterMaterialContext {
   /** Publication root selected by the configured Three handle. */
   readonly root: ThreeRootContext;
   /** Portable raster selected for this draw. */
-  readonly raster: AnyRasterFormat;
+  readonly raster: RasterFormatMetadata;
   /** The portable schema selected for this draw. */
-  readonly schema: AnyTechniqueSchema;
+  readonly schema: TechniqueSchemaMetadata;
   /** The selected renderer variant's stable identity. */
   readonly variantId: string;
   /** Shader-language label for diagnostics and implementation selection. */
@@ -78,7 +78,7 @@ export type ThreeRasterResourceCapabilities<Resources extends TechniqueResourceD
 };
 
 /** Renderer-selected shader realization, derived from the exact portable schema witness. */
-export interface ThreeRasterVariant<Schema extends AnyTechniqueSchema = AnyTechniqueSchema> {
+export interface ThreeRasterVariant<Schema extends TechniqueSchemaMetadata = TechniqueSchemaMetadata> {
   /** Stable renderer-local id; packages may publish alternatives, but Three registers one per technique. */
   readonly id: string;
   /** Shader implementation language, for example `tsl`, `wgsl`, or `glsl`. */
@@ -94,7 +94,7 @@ export interface ThreeRasterVariant<Schema extends AnyTechniqueSchema = AnyTechn
   createMaterial(context: ThreeRasterMaterialContext): NodeMaterial;
 }
 
-export interface ThreeRasterProgram<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema> {
+export interface ThreeRasterProgram<Technique extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata> {
   readonly codec: RasterCodec<Technique, Schema>;
   readonly variant: NoInfer<ThreeRasterVariant<Schema>>;
 }
@@ -109,13 +109,13 @@ const THREE_RESERVED_ATTRIBUTE_WIDTHS: Readonly<Record<string, readonly number[]
 
 /** Register only the Three resource and material half of a portable RasterCodec. */
 export function registerThreeRasterProgram<
-  const Technique extends AnyRasterFormat,
-  const Schema extends AnyTechniqueSchema,
+  const Technique extends RasterFormatMetadata,
+  const Schema extends TechniqueSchemaMetadata,
 >(program: ThreeRasterProgram<Technique, Schema>): void {
   if (typeof program !== 'object' || program === null || Array.isArray(program)) {
     throw new TypeError('Three raster programs need a program object');
   }
-  const source = program as ThreeRasterProgram<Technique, Schema> & Record<string, unknown>;
+  const source = program;
   const portable = source.codec;
   if (!isRasterCodec(portable)) throw new TypeError('Three raster programs need a registered RasterCodec');
   const techniqueId = portable.raster.id;
@@ -135,11 +135,11 @@ export function registerThreeRasterProgram<
   if (typeof createMaterial !== 'function') {
     throw new TypeError(`Three raster variant "${variantId}" needs createMaterial`);
   }
-  const registered = registeredThreeRasterProgram(program as object);
+  const registered = registeredThreeRasterProgram(program);
   if (registered !== undefined) {
-    if (registered.codec.raster.id !== techniqueId || registered.variant.id !== variantId) {
+    if (registered.techniqueId !== techniqueId || registered.variantId !== variantId) {
       throw new TypeError(
-        `Three raster program source changed identity from "${registered.codec.raster.id}/${registered.variant.id}" to "${techniqueId}/${variantId}"`,
+        `Three raster program source changed identity from "${registered.techniqueId}/${registered.variantId}" to "${techniqueId}/${variantId}"`,
       );
     }
     return;
@@ -149,22 +149,11 @@ export function registerThreeRasterProgram<
     throw new TypeError(`Three raster variant "${variantId}" declares incompatible geometry`);
   }
   assertThreeGeometrySemantics(techniqueId, variantId, expectedGeometry, portable.schema);
-  const buffers = normalizeBufferCapabilities(techniqueId, variantId, variant.buffers, portable.schema);
-  const resources = normalizeResourceCapabilities(techniqueId, variantId, variant.resources, portable.schema);
+  normalizeBufferCapabilities(techniqueId, variantId, variant.buffers, portable.schema);
+  normalizeResourceCapabilities(techniqueId, variantId, variant.resources, portable.schema);
   const outputs = normalizeOutputs(techniqueId, variantId, variant.outputs);
-  const snapshot = Object.freeze({
-    codec: portable,
-    variant: Object.freeze({
-      id: variantId,
-      language,
-      buffers,
-      resources,
-      outputs,
-      geometry: expectedGeometry,
-      createMaterial,
-    }),
-  }) as ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema>;
-  commitThreeRasterProgram(program as object, snapshot);
+  const runtimeVariant = Object.freeze({ id: variantId, language, outputs, createMaterial });
+  commitThreeRasterProgram(program, portable, runtimeVariant);
 }
 
 /** Three-owned semantic values used by renderer-specific shader adapters. */
@@ -206,7 +195,7 @@ function assertThreeGeometrySemantics(
   techniqueId: string,
   variantId: string,
   geometry: TechniqueGeometryDeclaration,
-  schema: AnyTechniqueSchema,
+  schema: TechniqueSchemaMetadata,
 ): void {
   if (geometry.kind === 'synthetic-quad' || geometry.resource === undefined) return;
   const resource = schema.resources?.[geometry.resource];
@@ -247,7 +236,7 @@ function normalizeBufferCapabilities(
   techniqueId: string,
   variantId: string,
   value: unknown,
-  schema: AnyTechniqueSchema,
+  schema: TechniqueSchemaMetadata,
 ): Readonly<Record<string, ThreeRasterBufferCapability>> {
   if (!isNonArrayObject(value)) {
     throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs named buffer capabilities`);
@@ -276,7 +265,7 @@ function normalizeResourceCapabilities(
   techniqueId: string,
   variantId: string,
   value: unknown,
-  schema: AnyTechniqueSchema,
+  schema: TechniqueSchemaMetadata,
 ): Readonly<Record<string, TechniqueResourceDeclaration>> {
   if (!isNonArrayObject(value)) {
     throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs named resource capabilities`);

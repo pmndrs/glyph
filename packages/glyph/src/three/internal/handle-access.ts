@@ -1,5 +1,5 @@
 import type { Font } from '../../font.js';
-import type { AnyFontFaceSelection, FontFaceRasterOf } from '../../font-face.js';
+import type { FontFaceSelection, FontFaceRasterOf } from '../../font-face.js';
 import type { ThreeHandle } from '../handle.js';
 import { threeRootHost, type ThreeRoot } from '../text.js';
 
@@ -17,7 +17,7 @@ export function threeRootHandle(root: ThreeRoot): ThreeHandle {
 }
 
 /** Acquire an independent mounted Font lease from one loaded handle selection. */
-export function acquireThreeHandleFont<const Selection extends AnyFontFaceSelection>(
+export function acquireThreeHandleFont<const Selection extends FontFaceSelection>(
   handle: ThreeHandle,
   selection: Selection,
 ): Font<FontFaceRasterOf<Selection>> {
@@ -25,7 +25,7 @@ export function acquireThreeHandleFont<const Selection extends AnyFontFaceSelect
 }
 
 /** Borrow the handle store's immutable source for a render-phase snapshot. */
-export function threeHandleFontSource<const Selection extends AnyFontFaceSelection>(
+export function threeHandleFontSource<const Selection extends FontFaceSelection>(
   handle: ThreeHandle,
   selection: Selection,
 ): Font<FontFaceRasterOf<Selection>> {
@@ -33,14 +33,14 @@ export function threeHandleFontSource<const Selection extends AnyFontFaceSelecti
 }
 
 /** Read whether the selected handle can synchronously acquire this FontFace format. */
-export function isThreeHandleFontLoaded(handle: ThreeHandle, selection: AnyFontFaceSelection): boolean {
+export function isThreeHandleFontLoaded(handle: ThreeHandle, selection: FontFaceSelection): boolean {
   return threeRootHost(threeHandleRoot(handle)).isFontLoaded(selection);
 }
 
 /** Load the exact FontFace format selected by this handle. */
-export function loadThreeHandleFont(
+export function loadThreeHandleFont<const Selection extends FontFaceSelection>(
   handle: ThreeHandle,
-  selection: AnyFontFaceSelection,
-): Promise<AnyFontFaceSelection> {
+  selection: Selection,
+): Promise<Selection> {
   return threeRootHost(threeHandleRoot(handle)).loadFont(selection);
 }

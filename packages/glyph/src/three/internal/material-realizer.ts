@@ -1,7 +1,7 @@
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
-import type { AnyTechniqueSchema, CodecBufferDeclaration, CodecBufferDeclarations } from '../../config/schema.js';
+import type { CodecBufferDeclaration, CodecBufferDeclarations, TechniqueSchemaMetadata } from '../../config/schema.js';
 import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../config/resources.js';
 import { bitmapSchema, bitmap } from '../../raster/bitmap.js';
 import { msdfSchema } from '../../raster/msdf.js';
@@ -41,7 +41,7 @@ import type {
 type MaterialSelection = ThreeResolvedMaterialBinding | undefined;
 
 interface ThreeMaterialOwner {
-  readonly drawRoot: THREE.Object3D;
+  readonly renderObject: THREE.Object3D;
   readonly pixelSnapping?: boolean;
   readonly root?: ThreeRootContext;
   glyphStorage?(storageKey: string):
@@ -482,7 +482,7 @@ export class ThreeMaterialRealizer {
     return (
       selection?.root ??
       this.#owner.root ??
-      Object.freeze({ name: undefined, scene: undefined, drawRoot: this.#owner.drawRoot })
+      Object.freeze({ name: undefined, scene: undefined, renderObject: this.#owner.renderObject })
     );
   }
 
@@ -512,7 +512,7 @@ export class ThreeMaterialRealizer {
   }
 }
 
-const techniqueSchemas: ReadonlyMap<string, AnyTechniqueSchema> = new Map<string, AnyTechniqueSchema>([
+const techniqueSchemas: ReadonlyMap<string, TechniqueSchemaMetadata> = new Map<string, TechniqueSchemaMetadata>([
   [bitmap.id, bitmapSchema],
   [msdf.id, msdfSchema],
   [slug.id, slugSchema],

@@ -14,10 +14,7 @@ const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bi
 
 test('a custom Three material composes over the Bitmap shader in the Rust command-buffer draw path', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: { bytes: await readFile(fontUrl) } },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const built = [];
   const material = defineTextMaterial((context) => {
     const composed = context.createDefaultMaterial();
@@ -61,10 +58,7 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
 
 test('the same custom material factory may override a separate decoration realization', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: { bytes: await readFile(fontUrl) } },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const realizations = [];
   const material = defineTextMaterial((context) => {
     realizations.push(context.kind === 'glyph' ? context.format : context.kind);
@@ -94,10 +88,7 @@ test('the same custom material factory may override a separate decoration realiz
 
 test('Bitmap pixel snapping is an explicit opt-in graph specialization', async (t) => {
   const three = await createThreeTestHandle(t);
-  const font = await loadFont(
-    { baked: { bytes: await readFile(fontUrl) } },
-    { raster: bitmap, options: { strikes: [16] } },
-  );
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const clipPositions = [];
   const material = defineTextMaterial((context) => {
     clipPositions.push(context.shader.clipPosition);

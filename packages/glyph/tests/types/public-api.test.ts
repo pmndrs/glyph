@@ -1,6 +1,4 @@
 import {
-  type AnyRasterFormat,
-  type Paragraph,
   type RasterBakeDescriptorOf,
   type RasterBakeRequest,
   type RasterCoverage,
@@ -9,11 +7,10 @@ import {
   type RasterDecodeFont,
   type RasterKindOf,
   type RasterOptionsOf,
+  type RasterFormatMetadata,
   type RasterResourceSource,
   type RasterSource,
   type Sha256Hex,
-  createParagraph,
-  glyph,
 } from '../../src/index.js';
 import { defineRasterBaker, rasterBake } from '../../src/bake.js';
 import { defineRasterFormat } from '../../src/config/raster-format.js';
@@ -74,15 +71,8 @@ const configurable = defineRasterFormat({
 });
 type _ConfigurableOptions = Expect<Equal<RasterOptionsOf<typeof configurable>, { readonly quality: 'low' | 'high' }>>;
 
-const acceptsExternal: AnyRasterFormat = configurable;
-void acceptsExternal;
-
-const paragraphFace = glyph.fontFace('/fonts/Inter.font.glb', { format: msdf });
-const paragraphFromFace: Promise<Paragraph<typeof msdf>> = createParagraph({
-  font: paragraphFace.msdf,
-  text: 'renderer-free',
-});
-void paragraphFromFace;
+const metadata: RasterFormatMetadata = configurable;
+void metadata;
 
 declare const decodeFont: RasterDecodeFont;
 declare const slugArtifact: RasterDecodeArtifact<'slug'>;

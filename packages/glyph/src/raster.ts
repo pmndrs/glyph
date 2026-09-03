@@ -6,7 +6,7 @@ export type RasterKind = string;
 
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
-export type RasterOptionsArgument<Options> = [Options] extends [never] ? undefined : Options;
+export type RasterOptionsArgument<Options> = Options | ([Options] extends [never] ? undefined : never);
 
 export type StaticNumberTuple<Values extends readonly [number, ...number[]]> = number extends Values[number]
   ? never
@@ -100,7 +100,11 @@ interface RuntimeRasterBakeRequestBase {
 }
 
 export type RuntimeRasterBakeRequest<Options> = RuntimeRasterBakeRequestBase &
-  ([Options] extends [never] ? { readonly options?: never } : { readonly options: Options });
+  ([Options] extends [never]
+    ? { readonly options?: never }
+    : undefined extends Options
+      ? { readonly options?: Options }
+      : { readonly options: Options });
 
 export interface RuntimeRasterBakerModule<Kind extends string, Options> {
   readonly kind: Kind;

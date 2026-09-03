@@ -1,14 +1,14 @@
-import type { AnyRasterFormat, Font, ParagraphLayoutSummary } from '@pmndrs/glyph';
+import type { Font, ParagraphLayoutSummary, RasterFormatMetadata } from '@pmndrs/glyph';
 import { TextGroup, type Text, type ThreeRoot } from '@pmndrs/glyph/three';
 import type * as THREE from 'three/webgpu';
 
 /**
  * Comparison workloads are technique-generic by construction: the host resolves one concrete technique per lane and
- * hands every scene the same erased identity, so a single `ComparisonWorkloadDefinition` can serve Bitmap, MTSDF, and
- * Slug without threading a type parameter through the registry.
+ * hands every scene the same renderer-neutral metadata view, so a single `ComparisonWorkloadDefinition` can serve
+ * Bitmap, MTSDF, and Slug without recovering format-specific decoded data.
  */
-export type WorkloadFont = Font<AnyRasterFormat>;
-export type WorkloadText = Text<AnyRasterFormat>;
+export type WorkloadFont = Font<RasterFormatMetadata>;
+export type WorkloadText = Text<RasterFormatMetadata>;
 export type WorkloadTextGroup = TextGroup;
 
 export interface MutableSpanPaint {

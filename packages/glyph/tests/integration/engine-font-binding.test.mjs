@@ -26,7 +26,7 @@ import {
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const raster = { raster: bitmap, options: { strikes: [16] } };
+const raster = bitmap({ strikes: [16] });
 const COLLIDING_RESOURCE_A = defineRasterResourceId('pmndrs.msdf/4wzx/16');
 const COLLIDING_RESOURCE_B = defineRasterResourceId('pmndrs.msdf/b6cd/16');
 const COLLISION_ORIGIN_BUFFER_ID = id.buffer('test.handle-state-font-binding/collision-origin');
@@ -221,8 +221,8 @@ test('a glyph-engine-owned handle state installs a complete codec and deduplicat
 test('one handle state rejects colliding resource identities when the second font binds', async () => {
   const bytes = await readFile(fontUrl);
   const [firstFont, secondFont] = await Promise.all([
-    loadFont({ baked: { bytes } }, { raster: firstCollisionTechnique, options: { strikes: [16] } }),
-    loadFont({ baked: { bytes } }, { raster: secondCollisionTechnique, options: { strikes: [16] } }),
+    loadFont({ baked: { bytes } }, firstCollisionTechnique({ strikes: [16] })),
+    loadFont({ baked: { bytes } }, secondCollisionTechnique({ strikes: [16] })),
   ]);
   const glyphEngine = await fixtureEngine();
   const shaper = glyphEngineShaperForTests(glyphEngine);
@@ -349,6 +349,19 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
   const options = {
     font: fontBinding,
     text: 'A\uFFFcB\uFFFcC',
+    style: {
+      fontSize: 18,
+      lineHeight: 1.25,
+      direction: 'rtl',
+      features: [{ tag: 'kern', value: 1, start: 0, end: 5 }],
+      decoration: {
+        underline: true,
+        lineThrough: true,
+        color: '#11223344',
+        thickness: 1,
+        offset: 2,
+      },
+    },
     constraints: {
       width: { mode: 'exact', size: 160 },
       height: { mode: 'exact', size: 80 },
@@ -379,11 +392,16 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
       }),
     { name: 'RangeError', message: 'text inline object offsets must be strictly increasing' },
   );
+  assert.throws(
+    () => planner.createText({ ...options, style: { features: [{ tag: 'bad' }] } }),
+    /feature 0 tag must contain exactly four printable ASCII bytes/u,
+  );
   const text = planner.createText(options);
 
   try {
     assert.equal(text.measure().lineCount > 0, true);
     const bytes = capture.bytes();
+    assert.equal(text.glyphs().glyphCount > 0, true, 'explicit glyph inspection remains available after measurement');
     const request = textShaperAbi.layouts.engineUpdateRequest;
     const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const readRecords = (offsetField, countField, record) => {
@@ -404,6 +422,11 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
       request.constraintCount,
       textShaperAbi.layouts.engineConstraint,
     );
+    const styles = readRecords(
+      request.styleMutationsOffset,
+      request.styleMutationCount,
+      textShaperAbi.layouts.engineStyleMutation,
+    );
     const regions = readRecords(request.regionsOffset, request.regionCount, textShaperAbi.layouts.engineRegion);
     const exclusions = readRecords(
       request.exclusionsOffset,
@@ -423,6 +446,7 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
 
     assert.equal(paragraph > 0, true);
     assert.equal(constraints.length, 1);
+    assert.equal(styles.length, 1);
     assert.equal(regions.length, 2);
     assert.deepEqual(
       constraints.map((value) => value.getUint32(textShaperAbi.layouts.engineConstraint.resumeCluster, true)),
@@ -465,6 +489,25 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
       inlineObjects.map((value) => value.getUint32(textShaperAbi.layouts.engineInlineObject.textOffset, true)),
       [1, 3],
     );
+    const style = textShaperAbi.layouts.engineStyleMutation;
+    assert.equal(styles[0].getUint8(style.opcode), textShaperAbi.engine.styleMutationOpcodes.upsert);
+    assert.equal(styles[0].getUint8(style.direction), 2);
+    assert.equal(styles[0].getUint32(style.textStart, true), 0);
+    assert.equal(styles[0].getUint32(style.textEnd, true), options.text.length);
+    assert.equal(styles[0].getUint32(style.decorationFlags, true), 5);
+    assert.equal(styles[0].getFloat32(style.decorationThickness, true), 1);
+    assert.equal(styles[0].getFloat32(style.decorationOffset, true), 2);
+    assert.equal(styles[0].getUint16(style.featureCount, true), 1);
+    const feature = textShaperAbi.layouts.feature;
+    const featureView = new DataView(
+      bytes.buffer,
+      bytes.byteOffset + styles[0].getUint32(style.featuresOffset, true),
+      feature.size,
+    );
+    assert.equal(featureView.getUint32(feature.tag, true), 0x6b65_726e);
+    assert.equal(featureView.getUint32(feature.value, true), 1);
+    assert.equal(featureView.getUint32(feature.start, true), 0);
+    assert.equal(featureView.getUint32(feature.end, true), options.text.length);
   } finally {
     text.dispose();
     planner.dispose();

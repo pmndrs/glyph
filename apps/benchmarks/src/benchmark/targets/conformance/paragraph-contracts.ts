@@ -1,8 +1,6 @@
 import {
-  createParagraph,
   type Constraints,
   type Font,
-  type Paragraph,
   type ParagraphLayout,
   type GlyphLayoutInspection,
   type TextStyle,
@@ -207,7 +205,7 @@ async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, s
     }
   }
 
-  let uikitParagraph: Paragraph<typeof bitmap> | undefined;
+  let uikitText: Text<typeof bitmap> | undefined;
   try {
     signal?.throwIfAborted();
     scene.updateMatrixWorld(true);
@@ -221,16 +219,15 @@ async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, s
       return layout;
     });
 
-    // The uikit seam is exercised through the real framework-neutral Paragraph: no scene
-    // graph, no adapter. Identical retained goldens prove the Paragraph route agrees with
-    // the Text route the contract was generated through.
-    uikitParagraph = await createParagraph({
+    // Yoga exercises the same explicit one-Text query path available to every Three Text.
+    // The Text remains detached: no scene traversal, draw publication, or renderer resource exists.
+    uikitText = root.createText({
       font: state.inter,
       text: bidiContract.uikit.input.text,
       style: bidiContract.uikit.input.style,
       layout: layoutOnly(bidiContract.uikit.policy),
     });
-    const uikit = createUikitLayoutFixture(uikitParagraph, layoutOnly(bidiContract.uikit.policy));
+    const uikit = createUikitLayoutFixture(uikitText);
     const custom = uikit.customLayouting();
     assertObject(
       'uikit.customLayouting',
@@ -282,7 +279,7 @@ async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, s
       },
     };
   } finally {
-    uikitParagraph?.dispose();
+    uikitText?.dispose();
     for (const text of texts) text.dispose();
     group.dispose();
     disposeBenchmarkThreeRoot(root);

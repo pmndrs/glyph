@@ -3,7 +3,7 @@
  * once, colocated with the technique — the buffer ids, scalar kinds, and lane
  * meanings that its codec programs produce and its shader realizations consume,
  * plus the portable render contract: named resources and declared geometry.
- * Codec stores, binding compilers, plan executors, and shader interfaces all
+ * Codec stores, binding compilers, command-buffer projectors, and shader interfaces all
  * derive from the declaration; none of them restate it.
  */
 
@@ -236,7 +236,7 @@ export interface TechniqueSchemaDeclaration<
    * The lanes are deliberately NOT required to be in any particular space. All
    * three shipping techniques differ: MSDF and Slug pack the ink box's top-left
    * corner, and Bitmap stores the origin plus the baked strike's raster bearing.
-   * An augmenting renderer works in displacement from the rest value the plan
+   * An augmenting renderer works in displacement from the rest value the Codec
    * wrote, which is space-independent, so no technique has to describe its
    * packing to be animatable.
    */
@@ -260,19 +260,20 @@ export interface TechniqueSchema<
   readonly [techniqueSchemaBrand]: true;
 }
 
-/** Runtime-erased schema shape used only where exact authoring types are unavailable. */
-export interface AnyTechniqueSchema {
+/** Renderer-neutral schema metadata retained while a generic carries the concrete declaration types. */
+export interface TechniqueSchemaMetadata {
   readonly technique: string;
   readonly scope: 'glyph' | 'strike' | 'resource';
   readonly binding: TechniqueBindingDeclaration;
   readonly buffers: CodecBufferDeclarations;
   readonly resources: TechniqueResourceDeclarations;
-  readonly render: TechniqueRenderDeclaration;
+  readonly render: TechniqueRenderDeclaration<string, string>;
   readonly glyphOrigin?: { readonly buffer: string };
   readonly [techniqueSchemaBrand]: true;
 }
 
-export function isTechniqueSchema(value: unknown): value is AnyTechniqueSchema {
+/** Return whether `value` is an immutable schema produced by `defineTechniqueSchema`. */
+export function isTechniqueSchema(value: unknown): value is TechniqueSchemaMetadata {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -316,6 +317,8 @@ export function defineTechniqueSchema<
           > & { readonly resource: keyof DefinedTechniqueResources<Resources> & string; readonly geometry: Geometry };
         }),
 ): TechniqueSchema<Buffers, Binding, DefinedTechniqueResources<Resources>, TechniqueId, Geometry> {
+  type DefinedResources = DefinedTechniqueResources<Resources>;
+  type DefinedSchema = TechniqueSchema<Buffers, Binding, DefinedResources, TechniqueId, Geometry>;
   // Read every input property exactly once into owned structures, validate the
   // owned data, then freeze and return the copy. Caller input is never mutated
   // or frozen — a rejected declaration leaves it exactly as passed — and only
@@ -339,9 +342,9 @@ export function defineTechniqueSchema<
     throw new TypeError(`technique "${technique}" repeats a binding field name`);
   }
   const buffers = defineCodecBuffers(declaration.buffers);
-  let resources: Readonly<Record<string, TechniqueResourceDeclaration>> = Object.freeze(
+  let resources = Object.freeze(
     Object.create(null) as Record<string, TechniqueResourceDeclaration>,
-  );
+  ) as DefinedResources;
   const resourceDeclarations = declaration.resources;
   if (resourceDeclarations !== undefined) {
     if (!isNonArrayObject(resourceDeclarations)) {
@@ -352,9 +355,9 @@ export function defineTechniqueSchema<
       if (name.length === 0) throw new TypeError(`technique "${technique}" resource names must not be empty`);
       owned[name] = defineResourceDeclaration(resource, name, technique);
     }
-    resources = Object.freeze(owned);
+    resources = Object.freeze(owned) as DefinedResources;
   }
-  let render: TechniqueRenderDeclaration = Object.freeze({ geometry: Object.freeze({ kind: 'synthetic-quad' }) });
+  let render = Object.freeze({ geometry: Object.freeze({ kind: 'synthetic-quad' }) }) as DefinedSchema['render'];
   const renderDeclaration = declaration.render;
   if (Object.keys(resources).length !== 0 && renderDeclaration === undefined) {
     throw new TypeError(`technique "${technique}" with resources needs a declared render resource`);
@@ -385,9 +388,9 @@ export function defineTechniqueSchema<
     render = Object.freeze({
       ...(selectedResource === undefined ? {} : { resource: selectedResource }),
       geometry: defineGeometryDeclaration(renderDeclaration.geometry, technique, resources),
-    });
+    }) as DefinedSchema['render'];
   }
-  let glyphOrigin: { readonly buffer: string } | undefined;
+  let glyphOrigin: DefinedSchema['glyphOrigin'];
   const glyphOriginDeclaration = declaration.glyphOrigin;
   if (glyphOriginDeclaration !== undefined) {
     const bufferName = isNonArrayObject(glyphOriginDeclaration) ? glyphOriginDeclaration.buffer : undefined;
@@ -403,14 +406,15 @@ export function defineTechniqueSchema<
     if (origin.scalar !== 'f32' || origin.lanes.length < 2) {
       throw new TypeError(`technique "${technique}" needs an f32 glyphOrigin buffer with two origin lanes`);
     }
-    glyphOrigin = Object.freeze({ buffer: bufferName });
+    glyphOrigin = Object.freeze({ buffer: bufferName }) as DefinedSchema['glyphOrigin'];
   }
   const binding = Object.freeze({
     ...(bindingF32 === undefined ? {} : { f32: bindingF32 }),
     ...(bindingU32 === undefined ? {} : { u32: bindingU32 }),
     // The copies carry exactly the declared binding names read above.
   }) as Binding;
-  const schema = {
+  const schema: DefinedSchema = {
+    [techniqueSchemaBrand]: true as const,
     technique,
     scope,
     binding,
@@ -418,7 +422,7 @@ export function defineTechniqueSchema<
     resources,
     render,
     ...(glyphOrigin === undefined ? {} : { glyphOrigin }),
-  } as unknown as TechniqueSchema<Buffers, Binding, DefinedTechniqueResources<Resources>, TechniqueId, Geometry>;
+  };
   const frozen = Object.freeze(schema);
   techniqueSchemaInstances.add(frozen);
   return frozen;
@@ -601,7 +605,8 @@ export function defineTechniqueGeometryKind<const Kind extends string>(
   if (kind === 'synthetic-quad' || kind === 'quad' || kind === 'hull' || kind === 'custom') {
     throw new TypeError(`built-in geometry kind "${kind}" does not need branding`);
   }
-  return kind as unknown as TechniqueCustomGeometryKind & Kind;
+  const customKind: string = kind;
+  return customKind as TechniqueCustomGeometryKind & Kind;
 }
 
 function isPortableTextureFormat(value: unknown): value is PortableTextureFormat {
@@ -628,7 +633,7 @@ function isNonArrayObject(value: unknown): value is Record<string, unknown> {
  * Derive the wire buffer list a technique's programs publish, in declaration
  * order — the schema is the only witness to ids, scalar kinds, and widths.
  */
-export function schemaCodecBuffers(schema: AnyTechniqueSchema): CodecBuffer[] {
+export function schemaCodecBuffers<const Schema extends TechniqueSchemaMetadata>(schema: Schema): CodecBuffer[] {
   return Object.values(schema.buffers).map((buffer) => ({
     id: buffer.id,
     scalar: buffer.scalar,

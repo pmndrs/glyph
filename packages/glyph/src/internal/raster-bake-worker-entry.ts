@@ -12,12 +12,13 @@ import {
 import { bakeProgressMessage } from './bake-progress-protocol.js';
 
 type OptionsNormalizer<Options> = (value: unknown) => Options;
+type RasterBakeWorkerScope = Pick<DedicatedWorkerGlobalScope, 'addEventListener' | 'postMessage'>;
 
 export function startRasterBakeWorker<Kind extends string, Options, Descriptor extends JsonValue>(
   baker: RasterBakerModule<Kind, Options, Descriptor>,
   normalizeOptions: OptionsNormalizer<Options>,
 ): void {
-  const scope = globalThis as unknown as DedicatedWorkerGlobalScope;
+  const scope: RasterBakeWorkerScope = globalThis;
   let pending = Promise.resolve();
   scope.addEventListener('message', (event: MessageEvent<unknown>) => {
     const value = event.data;
@@ -27,7 +28,7 @@ export function startRasterBakeWorker<Kind extends string, Options, Descriptor e
 }
 
 async function handleMessage<Kind extends string, Options, Descriptor extends JsonValue>(
-  scope: DedicatedWorkerGlobalScope,
+  scope: RasterBakeWorkerScope,
   baker: RasterBakerModule<Kind, Options, Descriptor>,
   normalizeOptions: OptionsNormalizer<Options>,
   request: RasterBakeWorkerRequest,
