@@ -14,6 +14,8 @@ declare global {
 interface TargetV1BitmapResult {
   readonly backend: 'webgpu' | 'webgl2';
   readonly drawCount: number;
+  readonly decorationPixels: number;
+  readonly decorationRecords: number;
   readonly glyphCount: number;
   readonly litPixels: number;
   readonly retainedDraw: boolean;
@@ -82,12 +84,25 @@ async function render(): Promise<TargetV1BitmapResult> {
     await renderer.renderAsync(scene, camera);
     const retainedDraw = rootDraws(scene)[0];
     const pixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, 256, 128);
+    let decorationPixels = 0;
     let litPixels = 0;
     for (let offset = 0; offset < pixels.length; offset += 4) {
       if (pixels[offset]! > 8 || pixels[offset + 1]! > 8 || pixels[offset + 2]! > 8) litPixels += 1;
+      if (pixels[offset + 2]! > pixels[offset]! + 32 && pixels[offset + 1]! > pixels[offset]!) {
+        decorationPixels += 1;
+      }
     }
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
+      decorationPixels,
+      decorationRecords: rootDraws(scene)
+        .filter((draw) => draw.userData.pmndrsGlyphPrimitiveKind === 'decoration')
+        .reduce((count, draw) => {
+          if (!(draw.geometry instanceof THREE.InstancedBufferGeometry)) {
+            throw new TypeError('decoration proof draw must use instanced geometry');
+          }
+          return count + draw.geometry.instanceCount;
+        }, 0),
       drawCount: rootDraws(scene).length,
       glyphCount: text.measure().glyphCount,
       litPixels,
