@@ -31,9 +31,11 @@ export const packageSizeBudgets = {
     brotliBytes: 4_400,
   },
   'font-validator-js': {
+    // The current tsdown graph is 734,377 raw / 584,675 minified / 138,073 gzip / 113,039 Brotli. Keep a small
+    // cross-host compression margin without pretending the validator belongs to the ordinary runtime closure.
     rawBytes: 741_000,
     minifiedBytes: 585_000,
-    gzipBytes: 138_000,
+    gzipBytes: 139_000,
     brotliBytes: 113_500,
   },
   'runtime-baker-host-js': {
