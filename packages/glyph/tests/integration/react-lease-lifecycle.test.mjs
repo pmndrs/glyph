@@ -22,7 +22,7 @@ import { Fragment, StrictMode, Suspense, createElement, useLayoutEffect } from '
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { glyph } from '@pmndrs/glyph';
-import { ThreeConfig } from '@pmndrs/glyph/three';
+import { ThreeConfig, defineTextMaterial } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
 
 import { GlyphProvider, Text, TextGroup, useFont } from '@pmndrs/glyph/react';
@@ -112,6 +112,29 @@ test('Text and TextGroup share the built-in Three handle without a provider', as
     assert.equal(mountedText.at(-1)?.disposed, true);
     assert.equal(mountedGroup.at(-1)?.disposed, true);
   } finally {
+    fixture.dispose();
+  }
+});
+
+test('R3F TextGroup material props update the retained Three material property', async () => {
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const fixture = await loadFixture();
+  const first = defineTextMaterial((context) => context.createDefaultMaterial());
+  const second = defineTextMaterial((context) => context.createDefaultMaterial());
+  let group;
+  const tree = (material) =>
+    createElement(
+      TextGroup,
+      { material, ref: (value) => void (group = value ?? group) },
+      createElement(Text, { font: fixture.font }, 'material'),
+    );
+  const renderer = await create(tree(first));
+  try {
+    assert.equal(group?.material, first);
+    await renderer.update(tree(second));
+    assert.equal(group?.material, second);
+  } finally {
+    await renderer.unmount();
     fixture.dispose();
   }
 });
