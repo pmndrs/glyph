@@ -59,6 +59,12 @@ const SRGB8_TO_LINEAR_BITS: [u32; 256] = [
 
 pub const DEFAULT_GATHER_RECORD_CAPACITY: usize = 32_768;
 
+/// Canonical paint layers emitted into the renderer-neutral display list. Independent
+/// compositing may batch within one layer, but must preserve this under/text/over ordering.
+pub const PAINT_LAYER_UNDER_DECORATION: u32 = 0;
+pub const PAINT_LAYER_GLYPH: u32 = 1;
+pub const PAINT_LAYER_OVER_DECORATION: u32 = 2;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LayoutGlyph {
     pub stable_id: u32,
@@ -618,8 +624,8 @@ impl CodecGatherWorkspace {
                 material_id: record.material_id,
                 clip_id: record.clip_id,
                 depth_key: match pass {
-                    DecorationPass::Under => 0,
-                    DecorationPass::Over => 2,
+                    DecorationPass::Under => PAINT_LAYER_UNDER_DECORATION,
+                    DecorationPass::Over => PAINT_LAYER_OVER_DECORATION,
                 },
                 inline_start: record.inline_start,
                 block_start: record.block_start,
@@ -2257,10 +2263,14 @@ mod tests {
                 capability_set: CAPABILITY,
                 resource_kind_mask: 1 << 1,
                 semantic_view_mask: 0,
-                storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
+                storage_key_mask: BATCH_TECHNIQUE
+                    | BATCH_PROGRAM
+                    | BATCH_RESOURCE
+                    | crate::engine::codec::BATCH_DEPTH,
                 draw_key_mask: BATCH_TECHNIQUE
                     | BATCH_PROGRAM
                     | BATCH_RESOURCE
+                    | crate::engine::codec::BATCH_DEPTH
                     | BATCH_ORDER
                     | crate::engine::codec::BATCH_TRANSFORM,
                 allocation_strategy: ALLOCATION_ORDERED_DIRECT,

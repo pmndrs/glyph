@@ -350,7 +350,9 @@ impl RenderPlanCompiler {
             self.stable.abort();
             return Err(error.into());
         }
-        if let Err(error) = self.merge_prepared(capability_set, codec.fingerprint()) {
+        if let Err(error) =
+            self.merge_prepared(capability_set, codec.fingerprint(), input.order_independent)
+        {
             self.ordered.abort();
             self.stable.abort();
             return Err(error);
@@ -363,6 +365,7 @@ impl RenderPlanCompiler {
         &mut self,
         capability_set: CapabilitySetId,
         codec_fingerprint: u64,
+        order_independent: bool,
     ) -> Result<(), RenderPlanCompilerError> {
         let publish_bindings =
             self.ordered.publishes_bindings() || self.stable.publishes_bindings();
@@ -403,6 +406,7 @@ impl RenderPlanCompiler {
             ordered,
             stable,
             stable_buffer_base,
+            order_independent,
         )?;
         Ok(())
     }
@@ -532,6 +536,7 @@ fn merge_draws(
     ordered: RenderPlanView<'_>,
     stable: RenderPlanView<'_>,
     stable_buffer_base: usize,
+    order_independent: bool,
 ) -> Result<(), RenderPlanCompilerError> {
     reserve(
         primitives,
@@ -545,10 +550,15 @@ fn merge_draws(
             ordered.draws.get(ordered_index),
             stable.draws.get(stable_index),
         ) {
-            (Some(left), Some(right)) if left.order_token == right.order_token => {
+            (Some(left), Some(right))
+                if draw_merge_key(left, order_independent)
+                    == draw_merge_key(right, order_independent) =>
+            {
                 return Err(RenderPlanCompilerError::InvalidPlan);
             }
-            (Some(left), Some(right)) => left.order_token < right.order_token,
+            (Some(left), Some(right)) => {
+                draw_merge_key(left, order_independent) < draw_merge_key(right, order_independent)
+            }
             (Some(_), None) => true,
             (None, Some(_)) => false,
             (None, None) => break,
@@ -569,6 +579,15 @@ fn merge_draws(
         }
     }
     Ok(())
+}
+
+#[inline]
+fn draw_merge_key(draw: &DrawRecord, order_independent: bool) -> u64 {
+    if order_independent {
+        super::plan_draw::independent_draw_sort_key(draw)
+    } else {
+        u64::from(draw.order_token)
+    }
 }
 
 fn append_draw(
@@ -739,6 +758,50 @@ mod tests {
                 .all(|buffer| buffer.id > ORDERED_BUFFER_ID_LIMIT)
         );
         assert_eq!(plan.resources.len(), 2);
+        assert!(plan_layout(plan).is_ok());
+    }
+
+    #[test]
+    fn mixed_independent_frames_merge_by_paint_layer_then_encounter_order() {
+        let codec = codec();
+        let mut over = glyph(1, ORDERED, 0);
+        over.depth_key = 2;
+        let mut under_stable = glyph(2, STABLE, 0);
+        under_stable.depth_key = 0;
+        let mut content = glyph(3, ORDERED, 0);
+        content.depth_key = 1;
+        let mut under_ordered = glyph(4, ORDERED, 0);
+        under_ordered.depth_key = 0;
+        let glyphs = [over, under_stable, content, under_ordered];
+        let mut compiler = RenderPlanCompiler::default();
+        compiler
+            .prepare(
+                &codec,
+                CAPABILITY,
+                PlanInput {
+                    glyphs: &glyphs,
+                    semantic_change_masks: &[],
+                    f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                true,
+                1,
+                0,
+            )
+            .unwrap();
+        let plan = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+
+        assert_eq!(compiler.prepared_strategy, PreparedStrategy::Mixed);
+        assert_eq!(
+            plan.draws
+                .iter()
+                .map(|draw| (draw.depth_key, draw.order_token))
+                .collect::<Vec<_>>(),
+            vec![(0, 1), (0, 3), (1, 2), (2, 0)]
+        );
         assert!(plan_layout(plan).is_ok());
     }
 
@@ -936,10 +999,14 @@ mod tests {
             capability_set: CapabilitySetId(0),
             resource_kind_mask: 1,
             semantic_view_mask: 0,
-            storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
+            storage_key_mask: BATCH_TECHNIQUE
+                | BATCH_PROGRAM
+                | BATCH_RESOURCE
+                | crate::engine::codec::BATCH_DEPTH,
             draw_key_mask: BATCH_TECHNIQUE
                 | BATCH_PROGRAM
                 | BATCH_RESOURCE
+                | crate::engine::codec::BATCH_DEPTH
                 | BATCH_ORDER
                 | crate::engine::codec::BATCH_TRANSFORM,
             allocation_strategy,

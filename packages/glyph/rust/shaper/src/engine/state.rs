@@ -695,7 +695,7 @@ impl TextEngine {
             let mut glyph = *source;
             // Detached decoration plans use 0/2 for CSS under/over passes. Keep copied glyphs in
             // the middle so renderers can restore the original paint order across both objects.
-            glyph.depth_key = 1;
+            glyph.depth_key = super::codec_gather::PAINT_LAYER_GLYPH;
             let semantic_index = usize::try_from(source.semantic_glyph_index)
                 .map_err(|_| EngineError::InvalidRequest)?;
             let semantic = source_semantic
@@ -5658,10 +5658,14 @@ mod tests {
                 capability_set: CapabilitySetId(0),
                 resource_kind_mask: 1,
                 semantic_view_mask: 0,
-                storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
+                storage_key_mask: BATCH_TECHNIQUE
+                    | BATCH_PROGRAM
+                    | BATCH_RESOURCE
+                    | crate::engine::codec::BATCH_DEPTH,
                 draw_key_mask: BATCH_TECHNIQUE
                     | BATCH_PROGRAM
                     | BATCH_RESOURCE
+                    | crate::engine::codec::BATCH_DEPTH
                     | BATCH_ORDER
                     | crate::engine::codec::BATCH_TRANSFORM,
                 allocation_strategy: ALLOCATION_ORDERED_DIRECT,

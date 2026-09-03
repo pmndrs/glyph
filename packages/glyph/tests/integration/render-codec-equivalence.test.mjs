@@ -47,6 +47,7 @@ test('the Three render codec is semantically identical to the hand-numbered fixt
             ...expected.metadata,
             programId: expectedProgramId,
             capabilitySetId: expected.metadata.techniqueId === id.technique('pmndrs.decoration') ? 0 : 1,
+            storageKeyMask: expected.metadata.storageKeyMask | textShaperAbi.codec.batchFields.depth,
           },
           `${key}: program ${index} metadata`,
         );

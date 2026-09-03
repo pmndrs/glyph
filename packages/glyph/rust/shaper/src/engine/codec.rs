@@ -45,7 +45,7 @@ const BATCH_FIELDS: u32 = BATCH_TECHNIQUE
     | BATCH_ORDER
     | BATCH_TRANSFORM;
 const STORAGE_KEY_FIELDS: u32 = BATCH_FIELDS & !(BATCH_ORDER | BATCH_TRANSFORM);
-const REQUIRED_STORAGE_KEYS: u32 = BATCH_TECHNIQUE | BATCH_RESOURCE | BATCH_PROGRAM;
+const REQUIRED_STORAGE_KEYS: u32 = BATCH_TECHNIQUE | BATCH_RESOURCE | BATCH_PROGRAM | BATCH_DEPTH;
 const REQUIRED_DRAW_KEYS: u32 = REQUIRED_STORAGE_KEYS | BATCH_ORDER;
 
 pub const BUFFER_USAGE_VERTEX: u32 = 1 << 0;
@@ -1908,10 +1908,11 @@ mod tests {
             capability_set: CapabilitySetId(0),
             resource_kind_mask: 1,
             semantic_view_mask: 0,
-            storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
+            storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE | BATCH_DEPTH,
             draw_key_mask: BATCH_TECHNIQUE
                 | BATCH_PROGRAM
                 | BATCH_RESOURCE
+                | BATCH_DEPTH
                 | BATCH_ORDER
                 | BATCH_TRANSFORM,
             allocation_strategy: ALLOCATION_ORDERED_DIRECT,
@@ -2284,10 +2285,11 @@ mod tests {
             capability_set: CapabilitySetId(0),
             resource_kind_mask: 1,
             semantic_view_mask: 0,
-            storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
+            storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE | BATCH_DEPTH,
             draw_key_mask: BATCH_TECHNIQUE
                 | BATCH_PROGRAM
                 | BATCH_RESOURCE
+                | BATCH_DEPTH
                 | BATCH_ORDER
                 | BATCH_TRANSFORM,
             allocation_strategy: ALLOCATION_ORDERED_DIRECT,

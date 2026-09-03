@@ -594,7 +594,8 @@ mod tests {
             CODEC_PROGRAM_STORAGE_KEY_MASK,
             crate::engine::codec::BATCH_TECHNIQUE
                 | crate::engine::codec::BATCH_PROGRAM
-                | crate::engine::codec::BATCH_RESOURCE,
+                | crate::engine::codec::BATCH_RESOURCE
+                | crate::engine::codec::BATCH_DEPTH,
         );
         put_u32(
             program,
@@ -602,6 +603,7 @@ mod tests {
             crate::engine::codec::BATCH_TECHNIQUE
                 | crate::engine::codec::BATCH_PROGRAM
                 | crate::engine::codec::BATCH_RESOURCE
+                | crate::engine::codec::BATCH_DEPTH
                 | crate::engine::codec::BATCH_ORDER
                 | crate::engine::codec::BATCH_TRANSFORM,
         );

@@ -707,7 +707,9 @@ export function createCodecProgram(
       allocationMode === 'stable'
         ? textShaperAbi.codec.allocationStrategies.stableIndirect
         : textShaperAbi.codec.allocationStrategies.orderedDirect,
-    storageKeyMask: batch.technique | batch.program | batch.resource,
+    // Paint layers require distinct physical pools so independent compositing can
+    // flatten under-decoration, content, and over-decoration draws without copies.
+    storageKeyMask: batch.technique | batch.program | batch.resource | batch.depth,
     drawKeyMask:
       batch.technique |
       batch.program |
@@ -1136,7 +1138,7 @@ function preflightProgramSemantics(
     batchFields.order |
     batchFields.transform;
   const storageKeyFields = allBatchFields & ~(batchFields.order | batchFields.transform);
-  const requiredStorageKeys = batchFields.technique | batchFields.resource | batchFields.program;
+  const requiredStorageKeys = batchFields.technique | batchFields.resource | batchFields.program | batchFields.depth;
   const requiredDrawKeys = requiredStorageKeys | batchFields.order;
   const storageKeyMask = program.storageKeyMask ?? 0;
   const drawKeyMask = program.drawKeyMask ?? 0;

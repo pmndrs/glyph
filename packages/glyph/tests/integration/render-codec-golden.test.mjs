@@ -12,10 +12,10 @@ import { threeCodecBytes } from '../../dist/three/codec.js';
  * digest drift means the compiled wire records changed and must be re-justified.
  */
 const GOLDEN = new Map([
-  ['direct/ordered', '8152d186b66a43d09d256b8d558e647873eaeec87e4e2129c7a8ce6dd0cb381b'],
-  ['direct/stable', 'd2cba1afda4d1abd4e63042540d960932b9a1c8931e32457024a234654f15e1c'],
-  ['indexed/ordered', '3ab81a80506ed315c7527aaeaeef054b2c45b0c7ddbbf55e8719e428508bca1b'],
-  ['indexed/stable', '60d56678500883ce24cb70df7ca4c3b76e6b40e28f7f6bffee08f32c04e1a0cd'],
+  ['direct/ordered', 'a68f6e33b5f42a69c4121a2c5b04f52882cdd4e3e495ca85379749778685e56d'],
+  ['direct/stable', '362ee48041766289d7e821eee6500b50ab15b547679ba38080e499a4c55af36d'],
+  ['indexed/ordered', '423a2b19ce4bfbe77a7c4df6718563e8745d402c225b78c61074a607b2729799'],
+  ['indexed/stable', 'b730bad00552d6e309591f0e2f937f7b9eb164d54f4fb355162b1bbafe7f893e'],
 ]);
 
 test('the Three render codec compiles to its golden bytes for every variant', () => {

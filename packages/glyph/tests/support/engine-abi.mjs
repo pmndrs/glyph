@@ -446,7 +446,10 @@ export function renderCodecBytesFromPrograms(abi, programs) {
     view.setUint32(
       offset + programLayout.storageKeyMask,
       descriptor.storageKeyMask ??
-        abi.codec.batchFields.technique | abi.codec.batchFields.program | abi.codec.batchFields.resource,
+        abi.codec.batchFields.technique |
+          abi.codec.batchFields.program |
+          abi.codec.batchFields.resource |
+          abi.codec.batchFields.depth,
       true,
     );
     view.setUint32(
@@ -455,6 +458,7 @@ export function renderCodecBytesFromPrograms(abi, programs) {
         abi.codec.batchFields.technique |
           abi.codec.batchFields.program |
           abi.codec.batchFields.resource |
+          abi.codec.batchFields.depth |
           abi.codec.batchFields.order |
           abi.codec.batchFields.transform,
       true,
