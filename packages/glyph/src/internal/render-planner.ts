@@ -1692,24 +1692,17 @@ function compileInlineObjects(handleState: GlyphHandleState, state: RetainedText
 const resolvedTextReferences = new WeakMap<ResolvedTextOptions, { references: number }>();
 
 function ownResolvedText(value: ResolvedTextOptions): ResolvedTextOptions {
-  if (resolvedTextReferences.has(value)) throw new Error('resolved text options are already owned');
   resolvedTextReferences.set(value, { references: 1 });
   return value;
 }
 
 function retainResolvedText(value: ResolvedTextOptions): void {
-  const retained = resolvedTextReferences.get(value);
-  if (retained === undefined || retained.references <= 0) {
-    throw new Error('resolved text options are no longer retained');
-  }
+  const retained = resolvedTextReferences.get(value)!;
   retained.references += 1;
 }
 
 function releaseResolvedText(value: ResolvedTextOptions): void {
-  const retained = resolvedTextReferences.get(value);
-  if (retained === undefined || retained.references <= 0) {
-    throw new Error('resolved text options are no longer retained');
-  }
+  const retained = resolvedTextReferences.get(value)!;
   retained.references -= 1;
   if (retained.references !== 0) return;
   resolvedTextReferences.delete(value);

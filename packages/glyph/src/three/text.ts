@@ -519,7 +519,6 @@ export class ThreeRootHost {
       if (this.#binding === undefined) return false;
       this.#binding.reconcile([]);
     } else {
-      validateTextDomains(texts);
       this.#rootBinding().reconcile(texts);
     }
     return this.#binding?.prepareShape() ?? false;
@@ -1095,7 +1094,7 @@ export class TextGroup extends THREE.Object3D {
     this.#assertActive();
     const existing = collectTextDescendants(this, []);
     const incoming: Text<AnyRasterFormat>[] = [];
-    for (const child of children) collectTextTree(child, incoming);
+    for (const child of children) collectTextTree(child, incoming, true);
     this.#assertRoot(incoming);
     validateTextDomains([...existing, ...incoming]);
     return super.add(...children);
@@ -1670,13 +1669,15 @@ function eraseTextTechnique<Technique extends AnyRasterFormat>(text: Text<Techni
 
 function collectTextDescendants(group: TextGroup, result: Text<AnyRasterFormat>[]): Text<AnyRasterFormat>[] {
   result.length = 0;
-  for (const child of group.children) collectTextTree(child, result);
+  for (const child of group.children) collectTextTree(child, result, false);
   return result;
 }
 
-function collectTextTree(object: THREE.Object3D, result: Text<AnyRasterFormat>[]): void {
-  if (object instanceof Text && !object.disposed) result.push(object as Text<AnyRasterFormat>);
-  for (const child of object.children) collectTextTree(child, result);
+function collectTextTree(object: THREE.Object3D, result: Text<AnyRasterFormat>[], includeDisposed: boolean): void {
+  if (object instanceof Text && (includeDisposed || !object.disposed)) {
+    result.push(object as Text<AnyRasterFormat>);
+  }
+  for (const child of object.children) collectTextTree(child, result, includeDisposed);
 }
 
 function orderedTexts(

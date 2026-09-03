@@ -36,7 +36,6 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct ParagraphMutationBatch<'a> {
-    request: &'a [u8],
     records: &'a [u8],
 }
 
@@ -439,10 +438,7 @@ impl GeometryBatch<'_> {
 
 impl<'a> ParagraphMutationBatch<'a> {
     pub(crate) const fn empty() -> Self {
-        Self {
-            request: &[],
-            records: &[],
-        }
+        Self { records: &[] }
     }
 
     pub(crate) fn len(self) -> usize {
@@ -1046,21 +1042,7 @@ pub(crate) fn parse_paragraph_mutations(
         abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE,
         abi::ENGINE_PARAGRAPH_MUTATION_RECORD_ALIGNMENT,
     )?;
-    for record in records.chunks_exact(abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize) {
-        let opcode = byte(record, abi::ENGINE_PARAGRAPH_MUTATION_OPCODE)?;
-        let order = read_u32(record, abi::ENGINE_PARAGRAPH_MUTATION_ORDER)?;
-        if byte(record, abi::ENGINE_PARAGRAPH_MUTATION_FLAGS)? != 0
-            || read_u16(record, abi::ENGINE_PARAGRAPH_MUTATION_RESERVED0)? != 0
-            || !matches!(
-                opcode,
-                PARAGRAPH_MUTATION_UPSERT | PARAGRAPH_MUTATION_REMOVE
-            )
-            || (opcode == PARAGRAPH_MUTATION_REMOVE && order != 0)
-        {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-    }
-    Ok(ParagraphMutationBatch { request, records })
+    Ok(ParagraphMutationBatch { records })
 }
 
 pub(crate) fn parse_text_mutations(
@@ -1564,7 +1546,7 @@ mod tests {
     use alloc::vec;
 
     #[test]
-    fn validates_explicit_paragraph_order_and_removal_records() {
+    fn decodes_explicit_paragraph_order_and_removal_records() {
         let offset = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
         let stride = abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize;
         let mut bytes = vec![0; offset + 2 * stride];
@@ -1594,10 +1576,6 @@ mod tests {
             batch.get(1),
             Some(ParagraphMutation::Remove { paragraph_id: 8 })
         );
-
-        write_u32(&mut bytes, second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER, 1);
-        assert!(parse_paragraph_mutations(&bytes, offset as u32, 2).is_err());
-        write_u32(&mut bytes, second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER, 0);
     }
 
     #[test]
