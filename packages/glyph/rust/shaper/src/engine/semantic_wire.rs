@@ -1070,48 +1070,21 @@ pub(crate) fn parse_paragraph_mutations(
         abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE,
         abi::ENGINE_PARAGRAPH_MUTATION_RECORD_ALIGNMENT,
     )?;
-    for (index, record) in records
-        .chunks_exact(abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize)
-        .enumerate()
-    {
+    for record in records.chunks_exact(abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize) {
         let opcode = byte(record, abi::ENGINE_PARAGRAPH_MUTATION_OPCODE)?;
-        let paragraph_id = read_u32(record, abi::ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID)?;
         let order = read_u32(record, abi::ENGINE_PARAGRAPH_MUTATION_ORDER)?;
-        if paragraph_id == 0
-            || byte(record, abi::ENGINE_PARAGRAPH_MUTATION_FLAGS)? != 0
+        if byte(record, abi::ENGINE_PARAGRAPH_MUTATION_FLAGS)? != 0
             || read_u16(record, abi::ENGINE_PARAGRAPH_MUTATION_RESERVED0)? != 0
             || !matches!(
                 opcode,
                 PARAGRAPH_MUTATION_UPSERT | PARAGRAPH_MUTATION_REMOVE
             )
             || (opcode == PARAGRAPH_MUTATION_REMOVE && order != 0)
-            || prior_u32_duplicate(
-                records,
-                abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE,
-                abi::ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID,
-                index,
-                paragraph_id,
-            )?
-            || (opcode == PARAGRAPH_MUTATION_UPSERT
-                && prior_upsert_order_duplicate(records, index, order)?)
         {
             return Err(STATUS_INVALID_REQUEST);
         }
     }
     Ok(ParagraphMutationBatch { request, records })
-}
-
-fn prior_upsert_order_duplicate(records: &[u8], index: usize, order: u32) -> Result<bool, u32> {
-    for record in records[..index * abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize]
-        .chunks_exact(abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize)
-    {
-        if byte(record, abi::ENGINE_PARAGRAPH_MUTATION_OPCODE)? == PARAGRAPH_MUTATION_UPSERT
-            && read_u32(record, abi::ENGINE_PARAGRAPH_MUTATION_ORDER)? == order
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
 
 pub(crate) fn parse_text_mutations(
@@ -1774,9 +1747,6 @@ mod tests {
         write_u32(&mut bytes, second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER, 1);
         assert!(parse_paragraph_mutations(&bytes, offset as u32, 2).is_err());
         write_u32(&mut bytes, second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER, 0);
-        bytes[second + abi::ENGINE_PARAGRAPH_MUTATION_OPCODE] = PARAGRAPH_MUTATION_UPSERT;
-        write_u32(&mut bytes, second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER, 3);
-        assert!(parse_paragraph_mutations(&bytes, offset as u32, 2).is_err());
     }
 
     #[test]
