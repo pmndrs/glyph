@@ -158,6 +158,12 @@ export const EXAMPLES = {
     stage: {},
     load: () => import('./scenes/provider/scene'),
   },
+  hooks: {
+    title: 'Suspense and preload',
+    page: '/docs/react/hooks',
+    stage: {},
+    load: () => import('./scenes/hooks/scene'),
+  },
   measurement: {
     title: 'Measurement',
     page: '/docs/text/measurement',
