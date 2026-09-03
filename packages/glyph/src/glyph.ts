@@ -1,7 +1,6 @@
 import { createGlyphEngine, shapeGlyphEngine, type GlyphEngine, type GlyphEngineOptions } from './glyph-engine.js';
-import type { GlyphConfigValue, GlyphHandle, GlyphRoot } from './config/glyph.js';
+import type { Codec, GlyphBindingSet, GlyphConfig, GlyphHandle, GlyphRoot } from './config/glyph.js';
 import { createConfiguredGlyphHandle } from './internal/configured-handle.js';
-import { glyphConfigHandleFactory } from './internal/glyph-config-factory.js';
 import {
   createFontFace,
   FontFaceHandleStore,
@@ -16,9 +15,16 @@ export interface Glyph {
   readonly initialized: boolean;
   init(options?: GlyphEngineOptions): Promise<void>;
   shape(): void;
-  handle<Root extends GlyphRoot, FontFormats extends object = object>(
+  handle<
+    Root extends GlyphRoot,
+    Bindings extends GlyphBindingSet,
+    RendererResult,
+    FontFormats extends object,
+    Boundary,
+    CodecValue extends Codec,
+  >(
     name: string,
-    config: GlyphConfigValue<Root, FontFormats>,
+    config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>,
   ): GlyphHandle<Root>;
   fontFace(source: FontFaceSource): FontFace<never>;
   fontFace(source: FontFaceSource, config: FontFaceConfig<never>): FontFace<never>;
@@ -51,9 +57,16 @@ class GlyphRuntime implements Glyph {
     return initializing;
   }
 
-  handle<Root extends GlyphRoot, FontFormats extends object = object>(
+  handle<
+    Root extends GlyphRoot,
+    Bindings extends GlyphBindingSet,
+    RendererResult,
+    FontFormats extends object,
+    Boundary,
+    CodecValue extends Codec,
+  >(
     name: string,
-    config: GlyphConfigValue<Root, FontFormats>,
+    config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>,
   ): GlyphHandle<Root> {
     const engine = this.#engine;
     if (engine === undefined) throw new Error('await glyph.init() before creating a Glyph handle');
@@ -62,6 +75,29 @@ class GlyphRuntime implements Glyph {
     }
     if (typeof config !== 'object' || config === null || Array.isArray(config)) {
       throw new TypeError('Glyph handle config must be a GlyphConfig object');
+    }
+    for (const key of ['encode', 'resolve', 'renderer'] as const) {
+      if (typeof config[key] !== 'function') throw new TypeError(`GlyphConfig.${key} must be a function`);
+    }
+    if (typeof config.root !== 'object' || config.root === null || typeof config.root.create !== 'function') {
+      throw new TypeError('GlyphConfig.root must define create');
+    }
+    if (typeof config.schema !== 'object' || config.schema === null) {
+      throw new TypeError('GlyphConfig.schema must be an object');
+    }
+    for (const key of ['program', 'buffer', 'material', 'transform', 'batch', 'instance', 'instanceSpan'] as const) {
+      if (typeof config.schema[key] !== 'function') throw new TypeError(`GlyphConfig.schema must define ${key}`);
+    }
+    if (config.fonts !== undefined) {
+      if (
+        typeof config.fonts !== 'object' ||
+        config.fonts === null ||
+        typeof config.fonts.default !== 'string' ||
+        typeof config.fonts.formats !== 'object' ||
+        config.fonts.formats === null
+      ) {
+        throw new TypeError('GlyphConfig.fonts needs a default key and format map');
+      }
     }
     if (this.#handles.has(name)) throw new Error(`Glyph handle ${JSON.stringify(name)} already exists`);
 
@@ -79,7 +115,7 @@ class GlyphRuntime implements Glyph {
 
     const handle = (() => {
       try {
-        return config[glyphConfigHandleFactory](context, createConfiguredGlyphHandle);
+        return createConfiguredGlyphHandle(context, config);
       } catch (error) {
         fonts?.dispose();
         throw error;

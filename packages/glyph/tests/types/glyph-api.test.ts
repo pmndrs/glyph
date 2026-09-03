@@ -13,7 +13,7 @@ import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph/config/glyph';
 import * as GlyphConfigApi from '@pmndrs/glyph/config/glyph';
 
 // @ts-expect-error Handle construction is package-owned, not part of the public GlyphConfig DSL.
-void GlyphConfigApi.invokeGlyphConfigHandleFactory;
+void GlyphConfigApi.createConfiguredGlyphHandle;
 // @ts-expect-error The pre-binding typed wire view is package-owned; renderers receive CommandBufferView.
 type _BorrowedWireIsPrivate = GlyphConfigApi.BorrowedTypedCommandBuffer;
 // @ts-expect-error Publication transaction machinery is package-owned.

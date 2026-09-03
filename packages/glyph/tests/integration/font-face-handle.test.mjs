@@ -193,7 +193,7 @@ test('Glyph owns FontFace loading for a non-Three configured handle', async () =
   }
 });
 
-test('a packaged config factory honors spread overrides and releases a handle created before failure', () => {
+test('a structural GlyphConfig honors spread overrides and releases a handle created before failure', () => {
   const base = defineFontAwareConfig();
   let releases = 0;
   const failing = {
@@ -201,12 +201,12 @@ test('a packaged config factory honors spread overrides and releases a handle cr
     root: {
       create(context) {
         context.create({}, { boundary: undefined, dispose: () => (releases += 1) });
-        throw new Error('intentional config factory failure');
+        throw new Error('intentional config construction failure');
       },
     },
   };
 
-  assert.throws(() => glyph.handle('font-face:factory-failure', failing), /intentional config factory failure/);
+  assert.throws(() => glyph.handle('font-face:factory-failure', failing), /intentional config construction failure/);
   assert.equal(releases, 1, 'the root operation releases partially constructed handle state exactly once');
 
   const reused = glyph.handle('font-face:factory-failure', base);

@@ -64,7 +64,7 @@ export interface ConfiguredGlyphHandleInput {
   readonly released: (handle: GlyphHandle) => void;
 }
 
-/** Package-private constructor installed by defineGlyphConfig. */
+/** Package-private constructor used by the root Glyph runtime. */
 export function createConfiguredGlyphHandle<
   Root extends GlyphRoot,
   Bindings extends GlyphBindingSet,
@@ -72,15 +72,12 @@ export function createConfiguredGlyphHandle<
   FontFormats extends object,
   Boundary,
   CodecValue extends Codec,
-  ConfigExtension extends object,
 >(
   input: ConfiguredGlyphHandleInput,
-  config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>,
+  config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>,
 ): GlyphHandle<Root> {
-  return new ConfiguredHandleDomain<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>(
-    input,
-    config,
-  ).handle;
+  return new ConfiguredHandleDomain<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>(input, config)
+    .handle;
 }
 
 class ConfiguredHandleDomain<
@@ -90,11 +87,10 @@ class ConfiguredHandleDomain<
   FontFormats extends object,
   Boundary,
   CodecValue extends Codec,
-  ConfigExtension extends object,
 > {
   readonly handle: GlyphHandle<Root>;
   readonly #input: ConfiguredGlyphHandleInput;
-  readonly #config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>;
+  readonly #config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>;
   readonly #handleState: GlyphHandleState;
   readonly #codecRegistration;
   readonly #codec: CodecValue;
@@ -105,7 +101,7 @@ class ConfiguredHandleDomain<
 
   constructor(
     input: ConfiguredGlyphHandleInput,
-    config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>,
+    config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>,
   ) {
     this.#input = input;
     this.#config = config;

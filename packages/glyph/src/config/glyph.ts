@@ -6,8 +6,6 @@ import type { RasterFormatMetadata } from './raster-format.js';
 import type { Constraints, ParagraphLayout, TextStyle } from '../text-properties.js';
 import type { PortableResource } from './resources.js';
 import type { CodecBuffer, CodecDescriptor, CodecIdFactory, CodecProgram } from './codec.js';
-import type { ConfiguredGlyphHandleInput } from '../internal/configured-handle.js';
-import { glyphConfigHandleFactory } from '../internal/glyph-config-factory.js';
 import type {
   BatchIdentity,
   ClipIdentity,
@@ -33,11 +31,6 @@ export type {
   TypedProgram,
   TypedResource,
 } from '../internal/typed-command-identity.js';
-
-type ConfiguredGlyphHandleConstructor = typeof import('../internal/configured-handle.js').createConfiguredGlyphHandle;
-
-const glyphConfigBrand: unique symbol = Symbol('pmndrs.glyph.config');
-declare const glyphConfigRootType: unique symbol;
 
 /** One lazily projected borrowed sequence. Values expire with their command buffer. */
 export interface BorrowedCommandSequence<Value> extends Iterable<Value> {
@@ -549,8 +542,7 @@ export type SelectedGlyphConfig<
   Boundary,
   CodecValue extends Codec,
   FontFormats extends object = object,
-  ConfigExtension extends object = object,
-> = Readonly<ConfigExtension> & {
+> = {
   readonly schema: GlyphSchema<Bindings, Boundary>;
   readonly fonts?: GlyphFontConfigValue<FontFormats>;
   readonly commands?: Partial<GlyphCommandCapacity>;
@@ -567,11 +559,10 @@ export interface GlyphRootRecipeContext<
   RendererResult,
   Boundary,
   CodecValue extends Codec = Codec,
-  Config extends object = object,
 > {
   readonly name: string | undefined;
   readonly codec: CodecValue;
-  readonly config: Config;
+  readonly config: SelectedGlyphConfig<Bindings, RendererResult, Boundary, CodecValue>;
   readonly fonts: GlyphHandleFonts | undefined;
   readonly services: GlyphRootServices<Bindings, RendererResult, Boundary>;
   create<Extension extends object>(
@@ -587,9 +578,8 @@ export interface GlyphRootRecipe<
   RendererResult,
   Boundary,
   CodecValue extends Codec = Codec,
-  Config extends object = object,
 > {
-  create(context: GlyphRootRecipeContext<Bindings, RendererResult, Boundary, CodecValue, Config>): Root;
+  create(context: GlyphRootRecipeContext<Bindings, RendererResult, Boundary, CodecValue>): Root;
 }
 
 /** Runtime-owned FontFace state made available to one configured renderer handle. */
@@ -626,14 +616,7 @@ interface GlyphConfigContract<
   FontFormats extends object = object,
   Boundary = unknown,
   CodecValue extends Codec = Codec,
-  ConfigExtension extends object = object,
 > {
-  readonly [glyphConfigBrand]: true;
-  readonly [glyphConfigRootType]?: () => Root;
-  [glyphConfigHandleFactory](
-    input: ConfiguredGlyphHandleInput,
-    create: ConfiguredGlyphHandleConstructor,
-  ): GlyphHandle<Root>;
   readonly schema: GlyphSchema<Bindings, Boundary>;
   readonly fonts?: GlyphFontConfig<FontFormats>;
   readonly commands?: Partial<GlyphCommandCapacity>;
@@ -642,8 +625,7 @@ interface GlyphConfigContract<
     Bindings,
     RendererResult,
     Boundary,
-    CodecValue,
-    SelectedGlyphConfig<Bindings, RendererResult, Boundary, CodecValue, NoInfer<FontFormats>, ConfigExtension>
+    CodecValue
   >;
   encode(context: EncodeContext): CodecValue;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
@@ -659,22 +641,12 @@ export type GlyphConfig<
   FontFormats extends object = object,
   Boundary = unknown,
   CodecValue extends Codec = Codec,
-  ConfigExtension extends object = object,
-> = GlyphConfigContract<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension> &
-  Readonly<ConfigExtension>;
-
-/** Minimal covariant surface the root runtime needs to construct an inferred handle. */
-export interface GlyphConfigValue<Root extends GlyphRoot = GlyphRoot, FontFormats extends object = object> {
-  readonly [glyphConfigBrand]: true;
-  [glyphConfigHandleFactory](
-    input: ConfiguredGlyphHandleInput,
-    create: ConfiguredGlyphHandleConstructor,
-  ): GlyphHandle<Root>;
-  readonly fonts?: GlyphFontConfigValue<FontFormats>;
-}
+> = GlyphConfigContract<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>;
 
 export type GlyphConfigHandle<Config> =
-  Config extends GlyphConfigValue<infer Root, infer _FontFormats> ? GlyphHandle<Root> : never;
+  Config extends { readonly root: { create(...args: never[]): infer Root extends GlyphRoot } }
+    ? GlyphHandle<Root>
+    : never;
 
 /** Complete renderer binding vocabulary projected from one inferred GlyphConfig declaration. */
 export type GlyphConfigBindings<Config> = Config extends {
@@ -703,51 +675,9 @@ export function defineGlyphConfig<
   Boundary,
   CodecValue extends Codec,
 >(
-  config: Omit<
-    GlyphConfigContract<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>,
-    typeof glyphConfigBrand | typeof glyphConfigHandleFactory
-  >,
+  config: GlyphConfigContract<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>,
 ): GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue> {
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    throw new TypeError('GlyphConfig must be an object');
-  }
-  for (const key of ['encode', 'resolve', 'renderer'] as const) {
-    if (typeof config[key] !== 'function') throw new TypeError(`GlyphConfig.${key} must be a function`);
-  }
-  if (typeof config.schema !== 'object' || config.schema === null) {
-    throw new TypeError('GlyphConfig.schema must be an object');
-  }
-  if (typeof config.root !== 'object' || config.root === null || typeof config.root.create !== 'function') {
-    throw new TypeError('GlyphConfig.root must define create');
-  }
-  for (const key of ['program', 'buffer', 'material', 'transform', 'batch', 'instance', 'instanceSpan'] as const) {
-    if (typeof config.schema[key] !== 'function') throw new TypeError(`GlyphConfig.schema must define ${key}`);
-  }
-  if (config.fonts !== undefined) {
-    if (typeof config.fonts !== 'object' || config.fonts === null || Array.isArray(config.fonts)) {
-      throw new TypeError('GlyphConfig.fonts must be an object');
-    }
-    if (
-      typeof config.fonts.default !== 'string' ||
-      typeof config.fonts.formats !== 'object' ||
-      config.fonts.formats === null ||
-      Array.isArray(config.fonts.formats)
-    ) {
-      throw new TypeError('GlyphConfig.fonts needs a default key and format map');
-    }
-  }
-  type DefinedConfig = GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>;
-  const defined: DefinedConfig = Object.freeze({
-    ...config,
-    [glyphConfigBrand]: true as const,
-    [glyphConfigHandleFactory](
-      input: ConfiguredGlyphHandleInput,
-      create: ConfiguredGlyphHandleConstructor,
-    ): GlyphHandle<Root> {
-      return create(input, this);
-    },
-  });
-  return defined;
+  return config;
 }
 
 /** Creates an idempotent, exactly-once resource lease. */
