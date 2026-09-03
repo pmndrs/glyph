@@ -1,6 +1,7 @@
-import type { AnyRasterFormat } from '../config/raster-format.js';
+import type { AnyRasterFormat, RasterFormatRequest } from '../config/raster-format.js';
 
 const instances = new WeakSet<object>();
+const requests = new WeakSet<object>();
 const formats = new Set<AnyRasterFormat>();
 
 export function registerRasterFormat(format: AnyRasterFormat): void {
@@ -10,6 +11,14 @@ export function registerRasterFormat(format: AnyRasterFormat): void {
 
 export function isRasterFormat(value: unknown): value is AnyRasterFormat {
   return (typeof value === 'object' || typeof value === 'function') && value !== null && instances.has(value);
+}
+
+export function registerRasterFormatRequest(request: object): void {
+  requests.add(request);
+}
+
+export function isRasterFormatRequest(value: unknown): value is RasterFormatRequest<AnyRasterFormat> {
+  return typeof value === 'object' && value !== null && requests.has(value);
 }
 
 export function rasterFormatForKey(key: string): AnyRasterFormat | undefined {

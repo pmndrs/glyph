@@ -43,10 +43,7 @@ const DECORATION_PACKED_ATTRIBUTE = codecAttributeName(hashId.buffer('glyph-thre
 const DECORATION_UNDERLINE_FLAG = 0b0001;
 const DECORATION_LINE_THROUGH_FLAG = 0b0100;
 const DECORATION_SOLID_STYLE = 1;
-const bitmapRaster: RasterFormatInput<BitmapTechnique> = {
-  raster: bitmap,
-  options: { strikes: [16] },
-};
+const bitmapRaster: RasterFormatInput<BitmapTechnique> = bitmap({ strikes: [16] });
 
 /**
  * Each control removes exactly one span property from the composed paragraph, so the difference it makes is

@@ -116,10 +116,7 @@ void transferredBytes;
 // @ts-expect-error Byte input is explicit; a bare typed array is not a font location.
 loadFont({ baked: fontBytes }, msdf);
 
-const configuredFont = loadFont('/fonts/Inter-Regular.ttf', {
-  raster: configurable,
-  options: { quality: 'high' },
-});
+const configuredFont = loadFont('/fonts/Inter-Regular.ttf', configurable({ quality: 'high' }));
 void configuredFont;
 
 // @ts-expect-error A configurable raster format requires its options.

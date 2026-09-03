@@ -731,7 +731,7 @@ async function loadExternalSlugFont(
   try {
     let font: Font<typeof slug>;
     try {
-      font = await loadGlyphFont({ baked: artifactUrl }, { raster: slug }, signal === undefined ? {} : { signal });
+      font = await loadGlyphFont({ baked: artifactUrl }, slug, signal === undefined ? {} : { signal });
     } catch (error) {
       throw new Error(`External Slug load failed: ${errorMessages(error).join(' <- ')}`, { cause: error });
     }

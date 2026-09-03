@@ -122,10 +122,7 @@ export function createParagraphContractsConformanceTarget(): BenchmarkTarget {
         const load = (url: string, coverage?: string) =>
           loadFont(
             { baked: url },
-            {
-              raster: bitmap,
-              options: { strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) },
-            },
+            bitmap({ strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) }),
             context?.signal === undefined ? {} : { signal: context.signal },
           );
         const loaded = await Promise.all([

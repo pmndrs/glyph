@@ -55,7 +55,7 @@ export async function runRenderTechniqueThreeLab({
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       },
-      { raster: glyphExample, options: { paletteSeed: 17, inset: 0.1 } },
+      glyphExample({ paletteSeed: 17, inset: 0.1 }),
     );
     const genericFontLoadMs = performance.now() - genericStarted;
 
@@ -65,7 +65,7 @@ export async function runRenderTechniqueThreeLab({
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       },
-      { raster: bitmap, options: { strikes: [16] } },
+      bitmap({ strikes: [16] }),
     );
     const bitmapFontLoadMs = performance.now() - bitmapStarted;
 

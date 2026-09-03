@@ -80,7 +80,7 @@ export function createReactTextTarget(): BenchmarkTarget {
       // font so teardown remains deterministic; the later host disposal is intentionally idempotent.
       resources.reference.current?.dispose();
       flushSync(() => resources.root.unmount());
-      useFont.clear(fontInput, { format: { raster: bitmap, options: fontOptions } });
+      useFont.clear(fontInput, { format: bitmap(fontOptions) });
       await disposeConfiguredRenderer(resources.renderer);
     },
   };
@@ -114,13 +114,13 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
       renderer,
       size: { height: FRAME_HEIGHT, left: 0, top: 0, width: FRAME_WIDTH },
     });
-    useFont.preload(fontInput, { format: { raster: bitmap, options: fontOptions } });
+    useFont.preload(fontInput, { format: bitmap(fontOptions) });
     const reference = createRef<BitmapTextObject>();
     const initial = await renderCommittedText(root, reference, failures);
     return { canvas, failures, reference, renderer, root, store: initial.store };
   } catch (error) {
     flushSync(() => root.unmount());
-    useFont.clear(fontInput, { format: { raster: bitmap, options: fontOptions } });
+    useFont.clear(fontInput, { format: bitmap(fontOptions) });
     await disposeConfiguredRenderer(renderer);
     throw error;
   }
@@ -238,7 +238,7 @@ function CommittedText({
   readonly textRef: React.RefCallback<BitmapTextObject>;
   readonly width?: number;
 }): React.ReactElement {
-  const font = useFont(fontInput, { format: { raster: bitmap, options: fontOptions } });
+  const font = useFont(fontInput, { format: bitmap(fontOptions) });
   return React.createElement(
     BitmapText,
     {

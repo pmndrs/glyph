@@ -34,10 +34,7 @@ export function createFontLoaderWorkerConformanceTarget(): BenchmarkTarget {
       let font;
       try {
         const { bakeFontInWorker } = await import('@pmndrs/glyph/runtime-bake');
-        font = await loadFont(
-          { source: canonicalFontUrl, runtimeBake: bakeFontInWorker },
-          { raster: bitmap, options: { strikes: [16] } },
-        );
+        font = await loadFont({ source: canonicalFontUrl, runtimeBake: bakeFontInWorker }, bitmap({ strikes: [16] }));
       } catch (error) {
         const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : '';
         throw new Error(

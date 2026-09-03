@@ -62,7 +62,7 @@ export async function preloadSlugFontAssets(
     fixtures.map((fixture) =>
       preloadBakedFont({
         artifact: compressedFontUrls[fixture],
-        raster: { raster: slugTechnique },
+        raster: slugTechnique(),
         ...(signal === undefined ? {} : { signal }),
       }),
     ),
@@ -78,7 +78,7 @@ export async function loadSlugFontAsset(
   if (delivery === 'runtime') {
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { raster: slugTechnique },
+      raster: slugTechnique(),
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
       ...(signal === undefined ? {} : { signal }),
     });
@@ -95,7 +95,7 @@ export async function loadSlugFontAsset(
   const source = request.bakedArtifact ?? fixtureManifestSource(fixture);
   const loaded = await loadBakedFont({
     artifact: source.url,
-    raster: { raster: slugTechnique },
+    raster: slugTechnique(),
     ...(signal === undefined ? {} : { signal }),
   });
   return {

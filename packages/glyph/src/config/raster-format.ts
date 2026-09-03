@@ -1,10 +1,11 @@
 import type { RasterDecodeFont } from '../font.js';
 import type { JsonValue, RasterDecodeArtifact, RasterOptionsArgument, RuntimeRasterBakerLoader } from '../raster.js';
-import { registerRasterFormat } from '../internal/raster-format-registry.js';
+import { registerRasterFormat, registerRasterFormatRequest } from '../internal/raster-format-registry.js';
 
 declare const rasterFormatIdBrand: unique symbol;
 declare const rasterResourceIdBrand: unique symbol;
 declare const rasterFormatTypes: unique symbol;
+declare const rasterFormatRequestBrand: unique symbol;
 
 /** Stable public identity for one portable raster format. */
 export type RasterFormatId = string & { readonly [rasterFormatIdBrand]: true };
@@ -64,6 +65,7 @@ export type RasterFormatTypesOf<Format extends AnyRasterFormat> =
 export type RasterOptionsOf<Format extends AnyRasterFormat> = RasterFormatTypesOf<Format>['options'];
 
 export type RasterFormatRequest<Format extends AnyRasterFormat> = {
+  readonly [rasterFormatRequestBrand]: true;
   readonly raster: Format;
 } & ([RasterOptionsOf<Format>] extends [never]
   ? { readonly options?: never }
@@ -124,10 +126,14 @@ export function defineRasterFormat<
   }
   type Defined = RasterFormat<RasterFormatId & Id, Kind, Options, Descriptor, Data>;
   let defined!: Defined;
-  const select = (...options: readonly [Options?]): RasterFormatRequest<Defined> =>
-    (options.length === 0 || options[0] === undefined
-      ? { raster: defined }
-      : { raster: defined, options: options[0] }) as unknown as RasterFormatRequest<Defined>;
+  const select = (...options: readonly [Options?]): RasterFormatRequest<Defined> => {
+    const request =
+      options.length === 0 || options[0] === undefined
+        ? Object.freeze({ raster: defined })
+        : Object.freeze({ raster: defined, options: options[0] });
+    registerRasterFormatRequest(request);
+    return request as RasterFormatRequest<Defined>;
+  };
   defined = Object.freeze(
     Object.assign(select, {
       id: format.id,

@@ -64,7 +64,7 @@ async function render(): Promise<TargetV1ComposeResult> {
 
     canonicalFont = await loadFont(
       { baked: '/fixtures/rendering/inter-bitmap-16.font.glb' },
-      { raster: bitmap, options: { strikes: [16] } },
+      bitmap({ strikes: [16] }),
     );
     canonicalText = root.createText({
       font: canonicalFont,

@@ -47,7 +47,7 @@ export async function preloadMtsdfFontAssets(
     fixtures.map((fixture) =>
       preloadBakedFont({
         artifact: compressedFontUrls[fixture],
-        raster: { raster: mtsdfTechnique },
+        raster: mtsdfTechnique(),
         ...(signal === undefined ? {} : { signal }),
       }),
     ),
@@ -69,7 +69,7 @@ export async function loadMtsdfFontAsset(
     }
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { raster: mtsdfTechnique },
+      raster: mtsdfTechnique(),
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
       ...(signal === undefined ? {} : { signal }),
     });
@@ -85,7 +85,7 @@ export async function loadMtsdfFontAsset(
   }
   const loaded = await loadBakedFont({
     artifact: compressedFontUrls[fixture],
-    raster: { raster: mtsdfTechnique },
+    raster: mtsdfTechnique(),
     ...(signal === undefined ? {} : { signal }),
   });
   return {

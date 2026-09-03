@@ -106,6 +106,10 @@ test('FontFace rejects legacy loader and unowned source/config forms at its publ
     () => glyph.fontFace('/fonts/no-formats.font.glb', { format: [] }),
     /FontFace format array must not be empty/,
   );
+  assert.throws(
+    () => glyph.fontFace('/fonts/forged-format.font.glb', { format: { raster: bitmap, options: { strikes: [16] } } }),
+    /package-created raster-format request/,
+  );
 });
 
 test('disposing a pending FontFace aborts its load and immediately releases its family alias', async () => {

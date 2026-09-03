@@ -40,7 +40,7 @@ type _Options = Expect<Equal<RasterOptionsOf<typeof technique>, { readonly quali
 type _Descriptor = Expect<Equal<RasterFormatDescriptorOf<typeof technique>, { readonly quality: 'small' | 'large' }>>;
 type _Data = Expect<Equal<RasterDataOf<typeof technique>, TestData>>;
 
-const request: RasterFormatRequest<typeof technique> = { raster: technique, options: { quality: 'small' } };
+const request: RasterFormatRequest<typeof technique> = technique({ quality: 'small' });
 void request;
 // @ts-expect-error Required technique options cannot be omitted.
 const missingOptions: RasterFormatRequest<typeof technique> = { raster: technique };

@@ -45,7 +45,7 @@ createElement(TextGroup, { handle: three }, label);
 
 function FontConsumer(): null {
   const loaded: Font<typeof bitmap> = useFont('/fonts/Inter.font.glb', {
-    format: { raster: bitmap, options: { strikes: [16] } },
+    format: bitmap({ strikes: [16] }),
   });
   useBitmap('/fonts/Inter.font.glb', { strikes: [16] }) satisfies Font<typeof bitmap>;
   useMsdf('/fonts/Inter.font.glb') satisfies Font<typeof msdf>;
@@ -64,19 +64,22 @@ function FontConsumer(): null {
 
 const consumer = createElement(FontConsumer);
 const preloaded: Promise<void> = useFont.preload('/fonts/Inter.font.glb', {
-  format: { raster: bitmap, options: { strikes: [16] } },
+  format: bitmap({ strikes: [16] }),
 });
-useFont.clear('/fonts/Inter.font.glb', { format: { raster: bitmap, options: { strikes: [16] } } });
+useFont.clear('/fonts/Inter.font.glb', { format: bitmap({ strikes: [16] }) });
 useFont.preload('/fonts/Inter.font.glb', {
-  format: { raster: bitmap, options: { strikes: [16] } },
+  format: bitmap({ strikes: [16] }),
 }) satisfies Promise<void>;
-useFont.clear('/fonts/Inter.font.glb', { format: { raster: bitmap, options: { strikes: [16] } } });
+useFont.clear('/fonts/Inter.font.glb', { format: bitmap({ strikes: [16] }) });
 useBitmap.preload('/fonts/Inter.font.glb', { strikes: [16] }) satisfies Promise<void>;
 useBitmap.clear('/fonts/Inter.font.glb', { strikes: [16] });
 useMsdf.preload('/fonts/Inter.font.glb') satisfies Promise<void>;
 useMsdf.clear('/fonts/Inter.font.glb');
 useSlug.preload('/fonts/Inter.font.glb') satisfies Promise<void>;
 useSlug.clear('/fonts/Inter.font.glb');
+
+// @ts-expect-error Raster-format requests come from the format helper, not a structural object.
+glyph.fontFace('/fonts/Inter.font.glb', { format: { raster: bitmap, options: { strikes: [16] } } });
 
 // @ts-expect-error React uses R3F's shared loader cache; no hook factory is public.
 void ReactApi.createUseFont;

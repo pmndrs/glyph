@@ -15,7 +15,7 @@ import {
   serializedFontFaceBuffers,
 } from './internal/font-face-transfer.js';
 import type { AnyRasterFormat, RasterFormatInput, RasterFormatRequest } from './config/raster-format.js';
-import { isRasterFormat, rasterFormatForKey } from './internal/raster-format-registry.js';
+import { isRasterFormat, isRasterFormatRequest, rasterFormatForKey } from './internal/raster-format-registry.js';
 import { canonicalJson } from './internal/raster-identity.js';
 
 /** Canonical source accepted by a reusable FontFace declaration. */
@@ -747,15 +747,8 @@ function assertFormat(value: unknown): asserts value is FontFaceFormat {
     return;
   }
   if (isRasterFormat(value)) return;
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    Array.isArray(value) ||
-    !Object.hasOwn(value, 'raster') ||
-    !isRasterFormat((value as { readonly raster?: unknown }).raster)
-  ) {
-    throw new TypeError('FontFace format must be a key, raster format, or raster-format request');
-  }
+  if (isRasterFormatRequest(value)) return;
+  throw new TypeError('FontFace format must be a key, raster format, or package-created raster-format request');
 }
 
 function formatName(format: FontFaceFormat): string {
