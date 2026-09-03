@@ -1348,23 +1348,10 @@ fn validate_constraints(
 
 fn validate_regions(request: &[u8], regions: &[u8], exclusions: &[u8]) -> Result<(), u32> {
     let exclusion_total = exclusions.len() / abi::ENGINE_EXCLUSION_RECORD_SIZE as usize;
-    for (index, record) in regions
-        .chunks_exact(abi::ENGINE_REGION_RECORD_SIZE as usize)
-        .enumerate()
-    {
+    for record in regions.chunks_exact(abi::ENGINE_REGION_RECORD_SIZE as usize) {
         let id = read_u32(record, abi::ENGINE_REGION_ID)?;
-        let transform_index = read_u32(record, abi::ENGINE_REGION_TRANSFORM_INDEX)?;
         let shape = byte(record, abi::ENGINE_REGION_SHAPE)?;
-        if id == 0
-            || transform_index == 0
-            || prior_u32_duplicate(
-                regions,
-                abi::ENGINE_REGION_RECORD_SIZE,
-                abi::ENGINE_REGION_ID,
-                index,
-                id,
-            )?
-            || read_u16(record, abi::ENGINE_REGION_FLAGS)? != 0
+        if read_u16(record, abi::ENGINE_REGION_FLAGS)? != 0
             || byte(record, abi::ENGINE_REGION_RESERVED0)? != 0
             || !matches!(
                 byte(record, abi::ENGINE_REGION_WRITING_MODE)?,

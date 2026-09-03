@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:a8c4d893779ac3114350e3dbee5301ff9cf795cbb8731eb5a8976470cf9f7f5e'
+source_digest: 'sha256:8857d1df86e5c91992d3cdb223262914eac840d77dfb1eb96679a3b9223fd061'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -738,6 +738,11 @@ records for duplicate package-owned identities or orders.
 That same public request proves one constraint per paragraph and a distinct nonzero flow-thread identity for each. The
 request reader therefore trusts those planner-owned identities instead of rescanning the constraint table; caller-authored
 axis, typography, wrapping, overflow, and work-limit values remain checked where they enter the Rust engine.
+
+Every ordinary constraint also produces a distinct nonzero region identity bound to a live nonzero transform identity.
+The same captured request proves that producer contract. Rust consumes those identities directly instead of searching the
+region table for duplicates or rechecking package-minted zero sentinels; it retains caller-authored geometry and raw-memory
+checks.
 
 A Mori 0.19.1 production-source scan (review profile, same-language threshold 0.85, minimum 40 tokens) corroborated the
 deleted parallel path and identified exact shared planner machinery. Ordered and stable planning now use one retained

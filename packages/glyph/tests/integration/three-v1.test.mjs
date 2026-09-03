@@ -1585,6 +1585,10 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   );
   assert.equal(new Set(constraints.map(({ flowThreadId }) => flowThreadId)).size, 2);
   assert.ok(constraints.every(({ flowThreadId }) => flowThreadId !== 0));
+  const regions = instrumented.latestRegions();
+  assert.equal(regions.length, 2);
+  assert.equal(new Set(regions.map(({ id }) => id)).size, 2);
+  assert.ok(regions.every(({ id, transformIndex }) => id !== 0 && transformIndex !== 0));
   const draws = rootDraws(scene);
   assert.equal(draws.length, 1, 'compatible paragraphs must batch in Rust before Three sees the plan');
   assert.equal(draws[0].geometry.instanceCount, 4);
@@ -1875,6 +1879,21 @@ function instrumentNextGlyphEngine() {
         return {
           paragraphId: view.getUint32(record + constraint.paragraphId, true),
           flowThreadId: view.getUint32(record + constraint.flowThreadId, true),
+        };
+      });
+    },
+    latestRegions() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const region = abi.layouts.engineRegion;
+      const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+      const offset = view.getUint32(request.regionsOffset, true);
+      const count = view.getUint32(request.regionCount, true);
+      return Array.from({ length: count }, (_recordValue, index) => {
+        const record = offset + index * region.size;
+        return {
+          id: view.getUint32(record + region.id, true),
+          transformIndex: view.getUint32(record + region.transformIndex, true),
         };
       });
     },
