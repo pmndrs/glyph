@@ -69,6 +69,17 @@ test('application types stay at root while integration construction lives on con
   for (const retired of ['compileRenderPolicy', 'createRasterPolicyProgram', 'definePolicyBuffers', 'policyProgram']) {
     assert.equal(root.has(retired), false, `the public integration surface must not publish retired ${retired}`);
   }
+
+  const codecLeaf = published(await declaration('config/codec.d.ts'));
+  for (const packageOwned of [
+    'GlyphIdScope',
+    'CodecIdScope',
+    'assertGlyphId',
+    'assertCodecIdFactory',
+    'selectCodecCapabilitySet',
+  ]) {
+    assert.equal(codecLeaf.has(packageOwned), false, `config/codec.d.ts must not publish ${packageOwned}`);
+  }
 });
 
 test('integrations re-export root names only when their own signatures use them', async () => {

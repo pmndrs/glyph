@@ -31,10 +31,8 @@ import {
   type TechniqueResourceDeclaration,
 } from './schema.js';
 import {
-  assertCodecIdFactory,
   createCodecProgram,
   normalizeCodecCapabilitySet,
-  CodecIdScope,
   type CodecAllocationMode,
   type CodecBuffer,
   type CodecCapabilitySet,
@@ -42,6 +40,7 @@ import {
   type CodecTransformMode,
   type CodecIdFactory,
 } from './codec.js';
+import { assertCodecIdFactory, CodecIdScope } from '../internal/render-id.js';
 /** System buffers are owned by the engine and are deliberately absent from a technique schema. */
 export type RasterCodecSystem = CodecProgramSystemBuffers;
 

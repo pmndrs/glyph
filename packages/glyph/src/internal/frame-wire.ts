@@ -7,13 +7,12 @@ import type {
   MaterialHandle,
   ParagraphId,
   CodecHandle,
-  CodecCapabilitySetSelection,
   RegionId,
   ResourceHandle,
   StyleId,
   PlannerHandle,
-} from '../config/codec.js';
-import { codecCapabilitySetSelectionId } from '../config/codec.js';
+} from './glyph-id.js';
+import { codecCapabilitySetSelectionId, type CodecCapabilitySetSelection } from './codec-capability-selection.js';
 
 const MAX_U32 = 0xffff_ffff;
 export const MAX_TEXT_ENGINE_OUTPUT_BYTES: number = 64 * 1024 * 1024;

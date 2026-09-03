@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:07ad6560231253b524bb524b5a927be685d20fccee9115505555a45fd1e508f9'
+source_digest: 'sha256:86e08e8f9f0c0e39fe42d6be7c5c545c0922d208792a192bbeb5e79fd6db6811'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -597,6 +597,12 @@ that trusted wire data through the integration's schema and resource resolver, t
 display-list children and exposes the closed semantic `GlyphInstanceKind` union, while numeric wire identities,
 projection state, and publication settlement remain private. An integration therefore implements one host-realization
 step rather than selecting or invoking a second decoder.
+
+Codec authoring similarly exposes only the identity vocabulary an integration can legitimately declare:
+`id.buffer`, `id.technique`, `id.program`, and `id.resource`. Numeric identities for installed Codecs, font bindings,
+root publications, paragraphs, styles, materials, regions, exclusions, inline objects, and live resources are minted and
+validated by package-owned handle state. Their scopes and the capability-set wire selection are unavailable from
+`/config/codec`, so a custom renderer cannot accidentally become a second engine-state owner.
 
 Three and `packages/glyph-example-renderer` consume the same public root types and `/config/*` helpers available to third-party integrations. The
 example is the standing second-engine proof: its Codec describes storage, the trusted internal projection supplies one

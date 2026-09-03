@@ -2,22 +2,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { compilePlannerFrameUpdate, validatePlannerFrameRecords } from '../../dist/internal/frame-wire.js';
-import { id } from '../../dist/config/codec.js';
+import { permanentGlyphId } from '../../dist/internal/glyph-id.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
-const PLANNER_ID = id.planner('engine-frame-wire/planner');
-const CODEC_ID = id.codec('engine-frame-wire/codec');
-const FONT_STACK_ID = id.fontStack('engine-frame-wire/font-stack');
-const PARAGRAPH_ID = id.paragraph('engine-frame-wire/paragraph');
-const OTHER_PARAGRAPH_ID = id.paragraph('engine-frame-wire/other-paragraph');
-const STYLE_ID = id.style('engine-frame-wire/style');
-const FLOW_THREAD_ID = id.flowThread('engine-frame-wire/flow-thread');
-const REGION_ID = id.region('engine-frame-wire/region');
-const EXCLUSION_ID = id.exclusion('engine-frame-wire/exclusion');
-const INLINE_OBJECT_ID = id.inlineObject('engine-frame-wire/inline-object');
-const MATERIAL_ID = id.material('engine-frame-wire/material');
-const RESOURCE_ID = id.resourceHandle('engine-frame-wire/resource');
+const PLANNER_ID = permanentGlyphId('planner', 'engine-frame-wire/planner');
+const CODEC_ID = permanentGlyphId('codec', 'engine-frame-wire/codec');
+const FONT_STACK_ID = permanentGlyphId('font-stack', 'engine-frame-wire/font-stack');
+const PARAGRAPH_ID = permanentGlyphId('paragraph', 'engine-frame-wire/paragraph');
+const OTHER_PARAGRAPH_ID = permanentGlyphId('paragraph', 'engine-frame-wire/other-paragraph');
+const STYLE_ID = permanentGlyphId('style', 'engine-frame-wire/style');
+const FLOW_THREAD_ID = permanentGlyphId('flow-thread', 'engine-frame-wire/flow-thread');
+const REGION_ID = permanentGlyphId('region', 'engine-frame-wire/region');
+const EXCLUSION_ID = permanentGlyphId('exclusion', 'engine-frame-wire/exclusion');
+const INLINE_OBJECT_ID = permanentGlyphId('inline-object', 'engine-frame-wire/inline-object');
+const MATERIAL_ID = permanentGlyphId('material', 'engine-frame-wire/material');
+const RESOURCE_ID = permanentGlyphId('resource', 'engine-frame-wire/resource');
 
 test('record validation rejects malformed user-derived values without serializing a frame', () => {
   const style = {
@@ -320,7 +320,7 @@ test('style payloads stay in per-record order when several paragraphs carry lang
   const styleMutation = (paragraphId) => ({
     opcode: 'upsert',
     paragraphId,
-    styleId: id.style(`engine-frame-wire/style/${paragraphId}`),
+    styleId: permanentGlyphId('style', `engine-frame-wire/style/${paragraphId}`),
     cascadeOrder: 0,
     start: 0,
     end: 5,
@@ -337,7 +337,9 @@ test('style payloads stay in per-record order when several paragraphs carry lang
       rasterPixelRatio: 1,
     },
   });
-  const paragraphIds = Array.from({ length: 4 }, (_, index) => id.paragraph(`engine-frame-wire/paragraph/${index}`));
+  const paragraphIds = Array.from({ length: 4 }, (_, index) =>
+    permanentGlyphId('paragraph', `engine-frame-wire/paragraph/${index}`),
+  );
   const bytes = compilePlannerFrameUpdate({
     plannerId: PLANNER_ID,
     codecHandle: CODEC_ID,

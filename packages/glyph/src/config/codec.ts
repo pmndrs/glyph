@@ -1,5 +1,9 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { AnyRasterFormat, RasterResourceId } from './raster-format.js';
+import { assertGlyphId, permanentGlyphId, type CodecBufferId } from '../internal/glyph-id.js';
+import { CodecIdScope, registerCodecIdFactory } from '../internal/render-id.js';
+
+export type { CodecBufferId } from '../internal/glyph-id.js';
 
 const MAX_U32 = 0xffff_ffff;
 
@@ -16,237 +20,6 @@ const MAX_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS = 10_000;
 const REGISTER_UNINITIALIZED = 0;
 const REGISTER_F32 = 1;
 const REGISTER_U32 = 2;
-
-const encoder = new TextEncoder();
-interface NamedGlyphId {
-  readonly canonical: string;
-  permanent: boolean;
-  scopeCount: number;
-}
-
-const namedIds = new Map<string, NamedGlyphId>();
-
-const glyphIdKinds = new Set([
-  'generic',
-  'buffer',
-  'codec',
-  'font-binding',
-  'font-stack',
-  'planner',
-  'material',
-  'paragraph',
-  'style',
-  'flow-thread',
-  'region',
-  'exclusion',
-  'inline-object',
-  'resource',
-] as const);
-
-export type GlyphIdKind =
-  | 'generic'
-  | 'buffer'
-  | 'codec'
-  | 'font-binding'
-  | 'font-stack'
-  | 'planner'
-  | 'material'
-  | 'paragraph'
-  | 'style'
-  | 'flow-thread'
-  | 'region'
-  | 'exclusion'
-  | 'inline-object'
-  | 'resource';
-declare const glyphIdBrand: unique symbol;
-
-/** A deterministic, domain-branded wire identity. Buffer IDs occupy the non-reserved u16 range; others are u32. */
-export type GlyphId<Kind extends GlyphIdKind = GlyphIdKind> = number & { readonly [glyphIdBrand]: Kind };
-/** A deterministic domainless identity. Prefer a domain method on `id` when a protocol field has one. */
-export type Id = GlyphId<'generic'>;
-export type CodecBufferId = GlyphId<'buffer'>;
-export type CodecHandle = GlyphId<'codec'>;
-export type FontBindingHandle = GlyphId<'font-binding'>;
-export type FontStackHandle = GlyphId<'font-stack'>;
-export type PlannerHandle = GlyphId<'planner'>;
-/** Host-local material identity carried by a render plan. */
-export type MaterialHandle = GlyphId<'material'>;
-export type ParagraphId = GlyphId<'paragraph'>;
-export type StyleId = GlyphId<'style'>;
-export type FlowThreadId = GlyphId<'flow-thread'>;
-export type RegionId = GlyphId<'region'>;
-export type ExclusionId = GlyphId<'exclusion'>;
-export type InlineObjectId = GlyphId<'inline-object'>;
-/** Host-local resource identity carried by inline objects and renderer callbacks. */
-export type ResourceHandle = GlyphId<'resource'>;
-/** @internal Handle-scoped identity minting with explicit wire domains. */
-export interface HandleIdFactory {
-  <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind>;
-  buffer(name: string): CodecBufferId;
-  codec(name: string): CodecHandle;
-  fontBinding(name: string): FontBindingHandle;
-  fontStack(name: string): FontStackHandle;
-  planner(name: string): PlannerHandle;
-  material(name: string): MaterialHandle;
-  paragraph(name: string): ParagraphId;
-  style(name: string): StyleId;
-  flowThread(name: string): FlowThreadId;
-  region(name: string): RegionId;
-  exclusion(name: string): ExclusionId;
-  inlineObject(name: string): InlineObjectId;
-  resourceHandle(name: string): ResourceHandle;
-}
-
-/** @internal Runtime-owned ID provenance released with its host. */
-export class GlyphIdScope {
-  readonly #keys = new Set<string>();
-  #disposed = false;
-
-  id<const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> {
-    if (this.#disposed) throw new Error('glyph ID scope has been disposed');
-    const derived = deriveGlyphId(kind, name);
-    const registered = registerGlyphId(derived, false);
-    if (!this.#keys.has(derived.key)) {
-      this.#keys.add(derived.key);
-      registered.scopeCount += 1;
-    }
-    return derived.value;
-  }
-
-  /** Retain provenance for a registration even when another scope minted its handle. */
-  retain<const Kind extends GlyphIdKind>(value: unknown, kind: Kind, label: string): boolean {
-    if (this.#disposed) throw new Error('glyph ID scope has been disposed');
-    const handle = assertGlyphId(value, kind, label);
-    const key = `${kind}:${handle}`;
-    if (this.#keys.has(key)) return false;
-    const registered = namedIds.get(key);
-    if (registered === undefined) throw new Error('glyph ID provenance disappeared during retention');
-    this.#keys.add(key);
-    registered.scopeCount += 1;
-    return true;
-  }
-
-  release<const Kind extends GlyphIdKind>(value: GlyphId<Kind>, kind: Kind): void {
-    const key = `${kind}:${value}`;
-    if (!this.#keys.delete(key)) return;
-    const registered = namedIds.get(key);
-    if (registered === undefined || registered.scopeCount === 0) {
-      throw new Error('glyph ID scope lost an owned registration');
-    }
-    registered.scopeCount -= 1;
-    if (!registered.permanent && registered.scopeCount === 0) namedIds.delete(key);
-  }
-
-  dispose(): void {
-    if (this.#disposed) return;
-    this.#disposed = true;
-    let failure: unknown;
-    for (const key of this.#keys) {
-      const registered = namedIds.get(key);
-      if (registered === undefined || registered.scopeCount === 0) {
-        failure ??= new Error('glyph ID scope lost an owned registration');
-        continue;
-      }
-      registered.scopeCount -= 1;
-      if (!registered.permanent && registered.scopeCount === 0) namedIds.delete(key);
-    }
-    this.#keys.clear();
-    if (failure !== undefined) throw failure;
-  }
-}
-
-/** @internal Bind the method-based ID vocabulary to one handle-owned provenance scope. */
-export function createHandleIdFactory(scope: GlyphIdScope, assertActive: () => void): HandleIdFactory {
-  const mint = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
-    assertActive();
-    return scope.id(kind, name);
-  };
-  return Object.freeze(
-    Object.assign(mint, {
-      buffer: (name: string) => mint('buffer', name),
-      codec: (name: string) => mint('codec', name),
-      fontBinding: (name: string) => mint('font-binding', name),
-      fontStack: (name: string) => mint('font-stack', name),
-      planner: (name: string) => mint('planner', name),
-      material: (name: string) => mint('material', name),
-      paragraph: (name: string) => mint('paragraph', name),
-      style: (name: string) => mint('style', name),
-      flowThread: (name: string) => mint('flow-thread', name),
-      region: (name: string) => mint('region', name),
-      exclusion: (name: string) => mint('exclusion', name),
-      inlineObject: (name: string) => mint('inline-object', name),
-      resourceHandle: (name: string) => mint('resource', name),
-    }),
-  );
-}
-
-/** @internal Reject values that did not come from this module instance's ID utility. */
-export function assertGlyphId<const Kind extends GlyphIdKind>(
-  value: unknown,
-  kind: Kind,
-  label: string,
-): GlyphId<Kind> {
-  if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > MAX_U32) {
-    throw new TypeError(`${label} must come from ${glyphIdFactoryLabel(kind)} or a handle-managed ID`);
-  }
-  if (!namedIds.has(`${kind}:${value as number}`)) {
-    throw new TypeError(`${label} must come from ${glyphIdFactoryLabel(kind)} or a handle-managed ID`);
-  }
-  return value as GlyphId<Kind>;
-}
-
-function glyphIdFactoryLabel(kind: GlyphIdKind): string {
-  if (kind === 'generic') return 'id(name)';
-  const method = glyphIdMethods[kind];
-  return `id.${method}(name)`;
-}
-
-const glyphIdMethods = {
-  buffer: 'buffer',
-  codec: 'codec',
-  'font-binding': 'fontBinding',
-  'font-stack': 'fontStack',
-  planner: 'planner',
-  material: 'material',
-  paragraph: 'paragraph',
-  style: 'style',
-  'flow-thread': 'flowThread',
-  region: 'region',
-  exclusion: 'exclusion',
-  'inline-object': 'inlineObject',
-  resource: 'resourceHandle',
-} as const satisfies Partial<Record<GlyphIdKind, string>>;
-
-interface DerivedGlyphId<Kind extends GlyphIdKind> {
-  readonly canonical: string;
-  readonly key: string;
-  readonly value: GlyphId<Kind>;
-}
-
-function deriveGlyphId<const Kind extends GlyphIdKind>(kind: Kind, name: string): DerivedGlyphId<Kind> {
-  if (typeof kind !== 'string' || !glyphIdKinds.has(kind)) {
-    throw new TypeError('glyph ID kind is not supported');
-  }
-  if (typeof name !== 'string' || name.length === 0) throw new TypeError('glyph ID name must be a nonempty string');
-  const canonical = JSON.stringify(['glyph-id-v1', kind, name]);
-  const hash = renderWireId(canonical);
-  const value = (kind === 'buffer' ? (hash % 0xfffe) + 1 : hash) as GlyphId<Kind>;
-  return { canonical, key: `${kind}:${value}`, value };
-}
-
-function registerGlyphId(derived: DerivedGlyphId<GlyphIdKind>, permanent: boolean): NamedGlyphId {
-  const registered = namedIds.get(derived.key);
-  if (registered !== undefined) {
-    if (registered.canonical !== derived.canonical) {
-      throw new TypeError(`glyph ID collision between ${registered.canonical} and ${derived.canonical}`);
-    }
-    if (permanent) registered.permanent = true;
-    return registered;
-  }
-  const created = { canonical: derived.canonical, permanent, scopeCount: 0 };
-  namedIds.set(derived.key, created);
-  return created;
-}
 
 // Reused bit-level scratch for finite-constant checks; module scope avoids per-op allocation.
 const f32Scratch = new DataView(new ArrayBuffer(4));
@@ -336,59 +109,6 @@ export interface CodecDescriptor {
   readonly programs: readonly CodecProgram[];
 }
 
-declare const codecCapabilitySetSelectionBrand: unique symbol;
-
-/** Opaque selection of one capability profile from a specific codec descriptor. */
-export interface CodecCapabilitySetSelection {
-  readonly [codecCapabilitySetSelectionBrand]: true;
-}
-
-interface CapabilitySetSelectionRecord {
-  readonly id: number;
-  readonly codecHandle: CodecHandle;
-}
-
-const capabilitySetSelections = new WeakMap<object, CapabilitySetSelectionRecord>();
-
-/** Select a declared capability profile without exposing its order-dependent wire ordinal. */
-export function selectCodecCapabilitySet(
-  codecHandle: CodecHandle,
-  descriptor: CodecDescriptor,
-  selected: CodecCapabilitySet,
-): CodecCapabilitySetSelection {
-  assertGlyphId(codecHandle, 'codec', 'capability-set codec handle');
-  assertCodecDescriptorShape(descriptor);
-  if (descriptor.capabilitySets.length === 0 || descriptor.capabilitySets.length > MAX_CODEC_CAPABILITY_SETS) {
-    throw new RangeError(`codec needs one to ${MAX_CODEC_CAPABILITY_SETS} capability sets`);
-  }
-  const selectedKey = capabilitySetKey(normalizeCodecCapabilitySet(selected, 'selected codec capability set'));
-  let selectedId: number | undefined;
-  const seen = new Set<string>();
-  for (const [index, capabilitySet] of descriptor.capabilitySets.entries()) {
-    const key = capabilitySetKey(normalizeCodecCapabilitySet(capabilitySet, `codec capability set ${index}`));
-    if (seen.has(key)) throw new TypeError('codec repeats an equivalent capability set');
-    seen.add(key);
-    if (key === selectedKey) selectedId = index + 1;
-  }
-  if (selectedId === undefined) throw new TypeError('selected capability set is not declared by the codec');
-  const selection = Object.freeze({}) as CodecCapabilitySetSelection;
-  capabilitySetSelections.set(selection, Object.freeze({ id: selectedId, codecHandle }));
-  return selection;
-}
-
-/** @internal Resolve only selections created by `selectCodecCapabilitySet`. */
-export function codecCapabilitySetSelectionId(selection: unknown, codecHandle: CodecHandle): number {
-  if (typeof selection !== 'object' || selection === null) {
-    throw new TypeError('frame capabilitySet must come from selectCodecCapabilitySet()');
-  }
-  const selected = capabilitySetSelections.get(selection);
-  if (selected === undefined) throw new TypeError('frame capabilitySet must come from selectCodecCapabilitySet()');
-  if (selected.codecHandle !== codecHandle) {
-    throw new TypeError('frame capabilitySet belongs to a different codec handle');
-  }
-  return selected.id;
-}
-
 declare const techniqueWireIdBrand: unique symbol;
 declare const programWireIdBrand: unique symbol;
 declare const resourceWireIdBrand: unique symbol;
@@ -396,17 +116,6 @@ declare const resourceWireIdBrand: unique symbol;
 export type CodecTechniqueId = number & { readonly [techniqueWireIdBrand]: true };
 export type CodecProgramId = number & { readonly [programWireIdBrand]: true };
 export type CodecResourceId = number & { readonly [resourceWireIdBrand]: true };
-
-/** Deterministic UTF-8 FNV-1a mapping used by both codec and font-binding compilers. */
-function renderWireId(identity: string): number {
-  if (typeof identity !== 'string' || identity.length === 0) {
-    throw new TypeError('render identity must be a nonempty string');
-  }
-  let hash = 0x811c_9dc5;
-  for (const byte of encoder.encode(identity)) hash = Math.imul(hash ^ byte, 0x0100_0193) >>> 0;
-  if (hash === 0) throw new RangeError('render program family ID hashes to the reserved zero wire identity');
-  return hash;
-}
 
 /** Collision-checked render identities used while assembling codec programs and font bindings. */
 export interface CodecIdFactory {
@@ -418,132 +127,24 @@ export interface CodecIdFactory {
   resource(resource: RasterResourceId): CodecResourceId;
 }
 
-const renderIdFactories = new WeakSet<object>();
-
-/** @internal Runtime-scoped collision proof for identities lowered into the shared u32 render namespace. */
-export class CodecIdScope implements CodecIdFactory {
-  readonly #strings = new Map<number, string>();
-
-  constructor() {
-    renderIdFactories.add(this);
-  }
-
-  idFor(identity: string): number {
-    const wireId = renderWireId(identity);
-    const collision = this.#strings.get(wireId);
-    if (collision !== undefined && collision !== identity) {
-      throw new TypeError(`render wire identity collision between "${collision}" and "${identity}"`);
-    }
-    this.#strings.set(wireId, identity);
-    return wireId;
-  }
-
-  technique(technique: AnyRasterFormat | string): CodecTechniqueId {
-    return this.idFor(rasterTechniqueIdentity(technique)) as CodecTechniqueId;
-  }
-
-  program(technique: AnyRasterFormat | string, namespace: string, variant = 'default'): CodecProgramId {
-    return this.idFor(programWireKey(technique, namespace, variant)) as CodecProgramId;
-  }
-
-  resource(resource: RasterResourceId): CodecResourceId {
-    return this.idFor(resource) as CodecResourceId;
-  }
-}
-
-/** @internal Reject render-ID providers not created or supplied by this module instance. */
-export function assertCodecIdFactory(value: unknown, label: string): CodecIdFactory {
-  if ((typeof value !== 'object' && typeof value !== 'function') || value === null || !renderIdFactories.has(value)) {
-    throw new TypeError(`${label} must be the id utility or a handle-supplied CodecIdFactory`);
-  }
-  return value as CodecIdFactory;
-}
-
-/** Callable authored-ID utility with a distinct method for every protocol domain. */
+/** Authored identities needed by the public Codec and technique-schema DSL. */
 export interface IdFactory extends CodecIdFactory {
-  /** Derive a domainless identity when no protocol-specific brand applies. */
-  (name: string): Id;
   /** Derive an authored codec-buffer identity. */
   buffer(name: string): CodecBufferId;
-  /** Derive an authored render-codec identity. */
-  codec(name: string): CodecHandle;
-  /** Derive an authored font-binding identity. */
-  fontBinding(name: string): FontBindingHandle;
-  /** Derive an authored font-stack identity. */
-  fontStack(name: string): FontStackHandle;
-  /** Derive an authored render-planner identity. */
-  planner(name: string): PlannerHandle;
-  /** Derive an authored renderer-material identity. */
-  material(name: string): MaterialHandle;
-  /** Derive an authored paragraph identity. */
-  paragraph(name: string): ParagraphId;
-  /** Derive an authored paragraph-style identity. */
-  style(name: string): StyleId;
-  /** Derive an authored flow-thread identity. */
-  flowThread(name: string): FlowThreadId;
-  /** Derive an authored layout-region identity. */
-  region(name: string): RegionId;
-  /** Derive an authored exclusion identity. */
-  exclusion(name: string): ExclusionId;
-  /** Derive an authored inline-object identity. */
-  inlineObject(name: string): InlineObjectId;
-  /** Derive a live handle resource identity; baked resource keys use `id.resource`. */
-  resourceHandle(name: string): ResourceHandle;
 }
 
 const permanentCodecIds = new CodecIdScope();
-const permanentGlyphId = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
-  const derived = deriveGlyphId(kind, name);
-  registerGlyphId(derived, true);
-  return derived.value;
-};
-const authoredId = Object.assign(
-  function domainlessId(name: string): Id {
-    if (arguments.length !== 1) throw new TypeError('id(name) accepts exactly one stable name');
-    return permanentGlyphId('generic', name);
-  },
-  {
-    buffer: (name: string) => permanentGlyphId('buffer', name),
-    codec: (name: string) => permanentGlyphId('codec', name),
-    fontBinding: (name: string) => permanentGlyphId('font-binding', name),
-    fontStack: (name: string) => permanentGlyphId('font-stack', name),
-    planner: (name: string) => permanentGlyphId('planner', name),
-    material: (name: string) => permanentGlyphId('material', name),
-    paragraph: (name: string) => permanentGlyphId('paragraph', name),
-    style: (name: string) => permanentGlyphId('style', name),
-    flowThread: (name: string) => permanentGlyphId('flow-thread', name),
-    region: (name: string) => permanentGlyphId('region', name),
-    exclusion: (name: string) => permanentGlyphId('exclusion', name),
-    inlineObject: (name: string) => permanentGlyphId('inline-object', name),
-    resourceHandle: (name: string) => permanentGlyphId('resource', name),
-    technique: (technique: AnyRasterFormat | string) => permanentCodecIds.technique(technique),
-    program: (technique: AnyRasterFormat | string, namespace: string, variant = 'default') =>
-      permanentCodecIds.program(technique, namespace, variant),
-    resource: (resource: RasterResourceId) => permanentCodecIds.resource(resource),
-  },
-) as IdFactory;
-renderIdFactories.add(authoredId);
+const authoredId: IdFactory = Object.freeze({
+  buffer: (name: string) => permanentGlyphId('buffer', name),
+  technique: (raster: AnyRasterFormat | string) => permanentCodecIds.technique(raster),
+  program: (raster: AnyRasterFormat | string, namespace: string, variant = 'default') =>
+    permanentCodecIds.program(raster, namespace, variant),
+  resource: (resource: RasterResourceId) => permanentCodecIds.resource(resource),
+});
+registerCodecIdFactory(authoredId);
 
 /** Derive a collision-checked, branded numeric ID from a stable authored name. */
 export const id: IdFactory = Object.freeze(authoredId);
-
-function programWireKey(technique: AnyRasterFormat | string, namespace: string, variant: string): string {
-  if (typeof namespace !== 'string' || namespace.length === 0) {
-    throw new TypeError('render program namespace must be a nonempty string');
-  }
-  if (typeof variant !== 'string' || variant.length === 0) {
-    throw new TypeError('render program variant must be a nonempty string');
-  }
-  return JSON.stringify(['glyph-program-v1', rasterTechniqueIdentity(technique), namespace, variant]);
-}
-
-function rasterTechniqueIdentity(technique: AnyRasterFormat | string): string {
-  const identity = typeof technique === 'string' ? technique : technique?.id;
-  if (typeof identity !== 'string' || identity.length === 0) {
-    throw new TypeError('render technique identity must be a nonempty string');
-  }
-  return identity;
-}
 
 export type CodecTransformMode = 'direct' | 'indexed';
 export type CodecAllocationMode = 'ordered' | 'stable';

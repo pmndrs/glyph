@@ -6,14 +6,15 @@ import { FontRegistry } from '../../dist/loader.js';
 import { createGlyphEngine, createGlyphHandleState } from '../../dist/glyph-engine.js';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { GlyphHandleState } from '../../dist/internal/handle-state.js';
-import { assertGlyphId, id } from '../../dist/config/codec.js';
+import { id } from '../../dist/config/codec.js';
+import { assertGlyphId, permanentGlyphId } from '../../dist/internal/glyph-id.js';
 import { threeCodecBytes } from '../../dist/three/codec.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { engineUpdateBytes, fontBindingBytes, renderCodecBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const THREE_CODEC_HANDLE = id.codec('test.text-engine-handle-state/three');
+const THREE_CODEC_HANDLE = permanentGlyphId('codec', 'test.text-engine-handle-state/three');
 
 test('a glyph engine owns every configured-handle state it creates', async () => {
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(wasmUrl) });
@@ -46,7 +47,7 @@ test('handle-scoped ID provenance expires with its owning handle state', async (
   const handle = handleState.id('planner', 'test.text-engine-handle-state/scoped-transport');
   assert.equal(assertGlyphId(handle, 'planner', 'transport handle'), handle);
   handleState.dispose();
-  assert.throws(() => assertGlyphId(handle, 'planner', 'transport handle'), /must come from id/);
+  assert.throws(() => assertGlyphId(handle, 'planner', 'transport handle'), /package-owned Glyph identity/);
   assert.throws(() => handleState.id('planner', 'test.text-engine-handle-state/after-dispose'), /disposed/);
   shaper.dispose();
 });
@@ -87,7 +88,7 @@ test('font bindings cannot be disposed while an owned stack still references the
     assert.equal(shaper.memoryReport().fontCount, 1, 'a refused disposal must keep the shaper registration owned');
     handleState.disposeFontStack(stackHandle);
     handleState.disposeFontBinding(bindingHandle);
-    assert.throws(() => handleState.disposeFontBinding(bindingHandle), /must come from id/u);
+    assert.throws(() => handleState.disposeFontBinding(bindingHandle), /package-owned Glyph identity/u);
     shaper.disposeFont(font);
     assert.equal(shaper.memoryReport().fontCount, 0);
   } finally {

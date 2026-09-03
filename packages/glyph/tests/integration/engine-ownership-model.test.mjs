@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { GlyphHandleState } from '../../dist/internal/handle-state.js';
-import { assertGlyphId, id } from '../../dist/config/codec.js';
+import { assertGlyphId, permanentGlyphId } from '../../dist/internal/glyph-id.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 import { renderCodecBytes } from '../support/engine-abi.mjs';
@@ -14,7 +14,7 @@ test('one Wasm engine rejects double ownership across handle states', async () =
   const shaper = await createRuntimeShaper({ wasm: await readFile(wasmUrl) });
   const first = new GlyphHandleState(shaper);
   const second = new GlyphHandleState(shaper);
-  const sharedCodec = id.codec('engine-ownership/shared-codec');
+  const sharedCodec = permanentGlyphId('codec', 'engine-ownership/shared-codec');
   try {
     first.registerCodec(sharedCodec, renderCodecBytes(textShaperAbi));
     assert.throws(
@@ -43,7 +43,7 @@ test('registration retains a scoped ID independently of the scope that minted it
     minter.dispose();
     shaper.dispose();
   }
-  assert.throws(() => assertGlyphId(codecHandle, 'codec', 'codec handle'), /must come from id/u);
+  assert.throws(() => assertGlyphId(codecHandle, 'codec', 'codec handle'), /package-owned Glyph identity/u);
 });
 
 test('successful individual disposal releases registration ID provenance', async () => {
@@ -53,7 +53,7 @@ test('successful individual disposal releases registration ID provenance', async
   try {
     handleState.registerCodec(codecHandle, renderCodecBytes(textShaperAbi));
     handleState.disposeCodec(codecHandle);
-    assert.throws(() => assertGlyphId(codecHandle, 'codec', 'codec handle'), /must come from id/u);
+    assert.throws(() => assertGlyphId(codecHandle, 'codec', 'codec handle'), /package-owned Glyph identity/u);
   } finally {
     handleState.dispose();
     shaper.dispose();
