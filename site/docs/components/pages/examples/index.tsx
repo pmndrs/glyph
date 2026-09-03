@@ -9,6 +9,7 @@ import {
   type ExampleSlug,
 } from '../../../../examples/src/catalog';
 import { defineExplainerPage, type GlyphSceneProps } from '../../explainer/page';
+import { Planned } from './planned';
 import { ExampleStage, FOV } from './stage';
 
 /**
@@ -34,7 +35,7 @@ const scenes = Object.fromEntries(EXAMPLE_SLUGS.map((slug) => [slug, staged(slug
   ComponentType<GlyphSceneProps>
 >;
 
-export default defineExplainerPage(scenes, scenes.hello, {
+export default defineExplainerPage(scenes, Planned, {
   camera: { fov: FOV, near: 0.1, far: 100, position: [0, 0, 12] },
   prepare(scene, renderer) {
     // Film-like tone mapping only where PBR materials ask for it; text stays untouched.
