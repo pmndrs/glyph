@@ -6,9 +6,10 @@ import { useFrame } from '@react-three/fiber/webgpu';
 import { use, useState } from 'react';
 import { color as tslColor } from 'three/tsl';
 
+import { Caption } from '../../components/text';
 import { INTER } from '../../fonts';
 import { plannedDraws } from '../../lib/planned-draws';
-import { PAPER, PAPER_DIM } from '../../stage';
+import { PAPER } from '../../theme';
 
 /**
  * The same thirty labels twice, in a `TextGroup` each. Left, the two
@@ -57,8 +58,8 @@ export default function Batching() {
           <Field order={SORTED} />
         </GlyphProvider>
       </group>
-      <Caption x={-5.1} text={`interleaved materials: ${draws.interleaved} draws`} />
-      <Caption x={0.6} text={`one run per material: ${draws.sorted} draws`} />
+      <Caption x={-5.1} y={-1.6} width={4.5}>{`interleaved materials: ${draws.interleaved} draws`}</Caption>
+      <Caption x={0.6} y={-1.6} width={4.5}>{`one run per material: ${draws.sorted} draws`}</Caption>
     </>
   );
 }
@@ -82,20 +83,5 @@ function Field({ order }: { readonly order: readonly number[] }) {
         </Text>
       ))}
     </TextGroup>
-  );
-}
-
-function Caption({ x, text }: { readonly x: number; readonly text: string }) {
-  const inter = useMsdf(INTER);
-  return (
-    <Text
-      font={inter}
-      style={{ fontSize: 0.24, color: PAPER_DIM, letterSpacing: 0.02 }}
-      layout={{ align: 'center', wrap: 'none' }}
-      constraints={{ width: { mode: 'exact', size: 4.5 } }}
-      position={[x, -1.6, 0]}
-    >
-      {text}
-    </Text>
   );
 }

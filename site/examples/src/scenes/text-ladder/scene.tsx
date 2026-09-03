@@ -5,7 +5,7 @@ import { useSlug } from '@pmndrs/glyph/react/slug';
 import { useThree } from '@react-three/fiber/webgpu';
 
 import { INTER, INTER_STRIKES } from '../../fonts';
-import { PAPER, PAPER_DIM } from '../../stage';
+import { PAPER, PAPER_DIM } from '../../theme';
 
 /**
  * 8 px upward on a pixel-unit stage, one format per column. The stage is

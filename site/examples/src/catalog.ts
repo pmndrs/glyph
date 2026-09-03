@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 
-import type { StageOptions } from './stage';
+import type { StageOptions } from './components/stage';
 
 /**
  * Every hosted example. Each entry names the docs page it belongs to, the

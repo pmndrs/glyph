@@ -5,7 +5,7 @@ import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { color as tslColor } from 'three/tsl';
 
 import { INTER, PLAYWRITE } from '../../fonts';
-import { ACCENT, PAPER } from '../../stage';
+import { ACCENT, PAPER } from '../../theme';
 
 /**
  * Runs inside one paragraph. Each nested Text overrides one thing — a color,

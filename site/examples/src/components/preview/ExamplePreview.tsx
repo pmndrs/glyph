@@ -1,8 +1,9 @@
-import { useFrame } from '@react-three/fiber/webgpu';
 import { Suspense, lazy, useEffect, useEffectEvent, useRef, useState } from 'react';
 
-import type { ExampleEntry } from './catalog';
-import { Stage } from './stage';
+import type { ExampleEntry } from '../../catalog';
+import { Stage } from '../stage';
+import { FirstFrame } from './FirstFrame';
+import { Poster } from './Poster';
 
 /**
  * An example is alive only while it is in view. Off screen, the last frame
@@ -10,8 +11,7 @@ import { Stage } from './stage';
  * fonts, engine handle — is torn down. Coming back into view mounts it again
  * behind that picture, and the picture fades once the first live frame has
  * rendered, so the eye never sees a black canvas. Before any frame exists
- * the picture is a sentinel: the gallery thumbnail when there is one, a card
- * with the example's name when there is not.
+ * the picture is a sentinel.
  */
 const LINGER_MS = 400;
 
@@ -73,48 +73,4 @@ export function ExamplePreview({ slug, entry }: { readonly slug: string; readonl
       <Poster slug={slug} title={entry.title} snapshot={snapshot} hidden={live} />
     </div>
   );
-}
-
-/** What covers the canvas until it has drawn: the last frame it presented, or a sentinel. */
-function Poster({
-  slug,
-  title,
-  snapshot,
-  hidden,
-}: {
-  readonly slug: string;
-  readonly title: string;
-  readonly snapshot: string | undefined;
-  readonly hidden: boolean;
-}) {
-  const [thumbnail, setThumbnail] = useState<'unknown' | 'present' | 'absent'>('unknown');
-  const source = snapshot ?? (thumbnail === 'absent' ? undefined : `/examples/thumbnails/${slug}.webp`);
-  return (
-    <div className="poster" data-hidden={hidden}>
-      {source !== undefined && (
-        <img
-          alt=""
-          src={source}
-          onLoad={() => setThumbnail('present')}
-          onError={() => (snapshot === undefined ? setThumbnail('absent') : undefined)}
-        />
-      )}
-      {source === undefined && (
-        <div className="sentinel">
-          <span>{title}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Reports the first rendered frame of a mounted scene, once. */
-function FirstFrame({ onFrame }: { readonly onFrame: () => void }) {
-  const reported = useRef(false);
-  useFrame(() => {
-    if (reported.current) return;
-    reported.current = true;
-    onFrame();
-  });
-  return null;
 }

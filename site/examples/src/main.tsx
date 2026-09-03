@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { EXAMPLES, type ExampleSlug, isExampleSlug } from './catalog';
-import { ExamplePreview } from './preview';
+import { ExamplePreview } from './components/preview';
 import './styles.css';
 
 /**

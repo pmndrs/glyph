@@ -5,7 +5,7 @@ import { useRef } from 'react';
 import type { Group } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
-import { PAPER } from '../../stage';
+import { PAPER } from '../../theme';
 
 /**
  * A paragraph read from an angle. Text is geometry in the scene, so the

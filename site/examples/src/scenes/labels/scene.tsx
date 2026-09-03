@@ -2,11 +2,13 @@ import { Text } from '@pmndrs/glyph/react';
 import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
-import { useRef, type ReactNode } from 'react';
+import { useRef } from 'react';
 import { Fog, type Group } from 'three/webgpu';
 
+import { Billboard } from '../../components/text';
+
 import { INTER } from '../../fonts';
-import { ACCENT, GROUND, PAPER, PAPER_DIM } from '../../stage';
+import { ACCENT, GROUND, PAPER, PAPER_DIM } from '../../theme';
 
 /**
  * Annotations on things that move. Each label is a child of the body it names,
@@ -96,18 +98,5 @@ export default function Labels() {
         ))}
       </group>
     </>
-  );
-}
-
-/** A group that always faces the camera, lifted `offset` above its parent's origin. */
-function Billboard({ offset, children }: { readonly offset: number; readonly children: ReactNode }) {
-  const group = useRef<Group>(null);
-  useFrame(({ camera }) => {
-    group.current?.quaternion.copy(camera.quaternion);
-  });
-  return (
-    <group ref={group} position={[0, offset, 0]}>
-      {children}
-    </group>
   );
 }

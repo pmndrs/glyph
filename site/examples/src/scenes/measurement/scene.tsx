@@ -6,7 +6,7 @@ import { useFrame } from '@react-three/fiber/webgpu';
 import { useRef, useState } from 'react';
 
 import { PLAYWRITE } from '../../fonts';
-import { ACCENT, PAPER } from '../../stage';
+import { ACCENT, PAPER } from '../../theme';
 
 /**
  * The advance box versus the ink box, live. A script face overhangs what

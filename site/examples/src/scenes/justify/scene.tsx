@@ -7,7 +7,7 @@ import { useRef, useState } from 'react';
 import type { Group } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
-import { PAPER, PAPER_DIM } from '../../stage';
+import { PAPER, PAPER_DIM } from '../../theme';
 
 /**
  * An editorial page: a justified lede on one measure, then the body flowing

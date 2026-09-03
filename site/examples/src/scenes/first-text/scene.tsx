@@ -6,7 +6,7 @@ import { useFrame } from '@react-three/fiber/webgpu';
 import { useRef } from 'react';
 
 import { INTER } from '../../fonts';
-import { ACCENT } from '../../stage';
+import { ACCENT } from '../../theme';
 
 /**
  * The tutorial's finished state: styled, wrapped to a box, and centred on

@@ -5,7 +5,7 @@ import { useSlug } from '@pmndrs/glyph/react/slug';
 import type { Font } from '@pmndrs/glyph';
 
 import { INTER, INTER_STRIKES } from '../../fonts';
-import { PAPER, PAPER_DIM } from '../../stage';
+import { PAPER, PAPER_DIM } from '../../theme';
 
 /**
  * The same word in the three raster formats, at three sizes, from one GLB.
