@@ -25,6 +25,8 @@ const labels = createElement(TextGroup, { material, pixelSnapping: true }, label
 const selected = createElement(Text, { font: selectedStack }, 'Selected at runtime');
 const provided = createElement(GlyphProvider, { handle: three }, labels);
 const namedRootProvided = createElement(GlyphProvider, { handle: three('hud') }, labels);
+const defaultNamedRootProvided = createElement(GlyphProvider, { handle: 'surface' }, labels);
+void defaultNamedRootProvided;
 const declared = createElement(
   GlyphProvider,
   {
