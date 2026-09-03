@@ -116,7 +116,8 @@ notes · internals
 - snapping: vertex path rounds the physical position — `tsl/bitmap-shader.ts:78` (`pixelSnappedClipPosition`), `:104` (`TSL.round`)
 - `rasterPixelRatio` is a Text property, not a canvas setting — `paragraph.ts:74`, `react.ts:91`
 - effects: `raster/bitmap.ts` `textEffects: []` → `engine-encoding.ts:206`
-- [verify] page size 1024 px and 1-texel padding: find the constant in `rust/bitmap-baker` before stating it
+- page limit 1024 texels and 1-texel padding — `rust/bitmap-baker/src/rasterize.rs:17` (`ATLAS_LIMIT`), `:18`
+  (`GLYPH_PADDING`); placement `:186–196`
 */}
 
 ## MSDF
@@ -165,7 +166,11 @@ notes · internals
 - screen-space range per axis from `dFdx`/`dFdy`, floored — `tsl/msdf-shader.ts:133–135`
 - effects declared — `raster/msdf.ts:72`; page cap — `rust/mtsdf-baker/src/artifact.rs#MAX_ATLAS_PAGES`
 - KTX2 pages validated on load — `internal/raster-ktx.ts#validateNativeKtx2`
-- [verify] "two fetches" and "no mipmaps": read the sampler setup in `tsl/msdf-shader.ts` and `raster/msdf.ts` before stating
+- "two fetches": the base sample and the shadow sample are both unconditional in the node graph —
+  `tsl/msdf-shader.ts:80–83` (`baseSample`), `:93–96` (`shadowSample`), each clamped to the glyph's UV bounds and
+  read from the page layer; "no mipmaps": realized atlases are linear-filtered with `generateMipmaps = false` —
+  `three/internal/material-realizer.ts:420–422`; portable copies use nearest filtering, no mipmaps —
+  `three/internal/portable-resource.ts:90–92`
 */}
 
 ## Slug
@@ -209,7 +214,10 @@ notes · internals
   `tsl/slug-shaders/slug-texture.ts`
 - vertex dilation from the exact projection — `tsl/slug-shader.ts:52–53`, `:114–121` (`dilated`), `:141`
 - texel formats — `config/resources.ts#PortableTextureFormat` (`rgba16float`, `r32uint`)
-- [verify] the 512-curves-per-band cap and the 4096-wide pages: find them in `rust/slug-core` before stating
+- pages are 4096 texels wide by default — `rust/slug-core/src/packer.rs:8` (`DEFAULT_CURVE_WIDTH`); there is no
+  512-curves-per-band cap in the tree (the 512s at `packer.rs:910–913` are test widths); bands default to 16 —
+  `rust/slug-core/src/lib.rs:25`, with adaptive counts 16, 32, 64 — `rust/slug-baker/src/artifact.rs:41–42`. Do not
+  write the 512
 */}
 
 <glyph-proxy fit="cover" root="scenes" data-scene="zoom" aria-label="One 32 px raster per format under continuous magnification" aspect="16 / 9" />
@@ -289,7 +297,9 @@ notes · internals
 - defaults canonicalise to the same descriptor as the bare format: `msdf` ≡ `msdf({ emSize: 64, pixelRange: 8 })` —
   `config/raster-format.ts:128` (`select` returns the format itself for no options); Bitmap strikes sort —
   `internal/bitmap-contract.ts#canonicalizeBitmapDescriptor`
-- [verify] that `msdf({ emSize: 64, pixelRange: 8 })` canonicalises to the default key: check `internal/msdf-contract.ts` descriptor canonicalisation (`:81–90`)
+- `msdf({ emSize: 64, pixelRange: 8 })` canonicalises to the default key: `msdfDescriptor` returns the canonical
+  default descriptor whenever both values equal the defaults — `internal/msdf-contract.ts:52–68` (the test at
+  `:58`); and a configured descriptor that carries the default pair is refused — `:96–97`
 */}
 
 ## A typical pairing

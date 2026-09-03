@@ -282,7 +282,8 @@ notes · internals
   handle's factory reaches `encode` as `context.ids` — `config/glyph.ts#EncodeContext` (`:351–356`)
 - `CodecBuffer` optional fields `alignment`, `stride`, `usage`, `capacityClass` — `config/codec.ts:265–274`;
   wire defaults alignment = scalar bytes, stride = scalar × width, usage `storage | copyDst`, capacityClass 1
-  (`:977–988`); `copyDst` is required — [verify] find the check in `preflightProgramSemantics` (`config/codec.ts`)
+  (`:977–988`); `copyDst` is required — the preflight rejects a usage without it or with unknown bits
+  (`config/codec.ts:1233–1235`), and a zero `capacityClass` (`:1237`)
 - `primitiveKind` (`'glyph' | 'decoration'`, default glyph) and `resourceKindMask` (default 1) —
   `config/codec.ts#CodecProgram` (`:287–307`), wire defaults (`:944`, `:962`)
 - three assembles the three shipped programs this way with `namespace: 'three'` — `three/codec.ts:127–152`; the
@@ -378,9 +379,9 @@ notes · internals
 - three's set and descriptor — `three/codec.ts#threeCodecCapabilitySet` (`:163–176`), `#threeCodecDescriptor`
   (`:106–161`); the example renderer's — `packages/glyph-example-renderer/src/codec.ts:53–64`, `:35–50`
 - 64 MiB `maxOutputBytes` is a separate frame safety limit, not a codec limit — `internal/configured-handle.ts:57`, D-229
-- [verify] `MAX_OPERATIONS_PER_CODEC_PROGRAM` (128) is declared at `config/codec.ts:10` but I did not find the throw
-  site in the TS preflight (`:807` only range-checks the u16 count); the Rust validator enforces it — cite
-  `codec.rs:11` and check `validate_codec` before claiming the TS side throws
+- `MAX_OPERATIONS_PER_CODEC_PROGRAM` (128) — `config/codec.ts:10`; the TS preflight throws past it —
+  `:1241–1242` ("declares more than 128 operations"); the Rust side pins the same bound —
+  `rust/shaper/src/engine/codec.rs:11` (`MAX_OPERATIONS_PER_PROGRAM`), checked in `validate_codec` (`:1518`)
 */}
 
 ## The decoration program
@@ -448,9 +449,9 @@ notes · internals
 - the decoration program is looked up per capability set — `rust/shaper/src/engine/codec.rs:300–309`
 - only `solid` is implemented at construction time — outline findings table ("Only `solid` decoration style");
   [verify] the throw site in `three/text.ts` or `engine-encoding.ts` before repeating the message
-- [verify] the codec-page snippet assembles buffers by hand; three appends its system buffers through
-  `programBuffers` (`three/codec.ts:215–221`) — confirm the raw `createCodecProgram` path accepts a `CodecBuffer` for
-  the system lane without `capacityClass` (defaults at `config/codec.ts:981–988`)
+- the codec-page snippet assembles buffers by hand; three appends its system buffers through `programBuffers`
+  (`three/codec.ts:215–221`); the raw `createCodecProgram` path accepts a buffer without `capacityClass` or
+  `usage`: they default to class 1 and `storage | copyDst` on the wire — `config/codec.ts:985`, `:988`, `:1233`
 */}
 
 ## How the lanes reach your shader
