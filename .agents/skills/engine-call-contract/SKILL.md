@@ -36,41 +36,45 @@ Prefer a shape that cannot express the mistake over a check that catches it.
 
 - Structural authoring beats offsets. `txt` and `span` derive ranges from what was written, so an inverted range, a
   past-end range, and a partial overlap are unrepresentable rather than validated.
-- A brand beats a convention. `session.copyPublication()` returns an owned publication, so a same-realm API that stores
-  plan data across frames demands the owned type and a borrowed one is a compile error. Worker messages revalidate copied
-  bytes with `TextEngineRenderPlanView.bindBytes()` at that realm boundary; the package-private runtime provenance itself
-  is not transferable.
+- A brand beats a convention. `GlyphRenderer.decode()` receives one borrowed `CommandBufferView` whose projected
+  sequences expire with that synchronous call; the public API has no owned render-publication escape hatch. Cross-realm
+  font movement is instead explicit through `FontFace.clone()`, whose serialized data and transfer list have their own
+  versioned contract.
 - Where the language cannot express the domain -- there is no finite-nonnegative number type -- the throw is the
   honest floor. Record it as a known limit rather than defending it as ideal.
 
 ## Where a name lives
 
-**A type an application can encounter lives at the root. A thing only an integrator constructs -- and its
-arguments and results -- lives in `/core`.**
+**A value or type an application can encounter lives at the root. A renderer-neutral helper only an integrator
+calls lives on the exact `/config/*` leaf that owns it.**
 
-`ParagraphMeasurement` is at the root because an app reads one off `Text`. `Paragraph` is in `/core` because only
-someone implementing a renderer constructs the thing that produces one. The two surfaces share zero names and a
-test enforces it.
+`ParagraphMeasurement` and `GlyphConfig` are at the root because applications encounter them through `Text` and
+`glyph.handle()`. `defineGlyphConfig` lives at `/config/glyph` because only an integration author calls it. Codec,
+schema, portable-resource, and raster-format construction helpers follow the same exact-leaf rule. Internal engine,
+planner, wire, projection, and binding machinery has no public subpath. Boundary and packed-package tests enforce all
+three facts.
 
-| entry | holds | audience |
-| --- | --- | --- |
-| `.` | the vocabulary of text: fonts, authoring, layout and measurement types, technique definition | everyone |
-| `./core` | the policy contract, the render plan, the frame wire and its handoff | integrators |
-| `./three`, `./react` | one integration's own surface | applications |
-| `./tsl`, `./typegpu` | technique shaders, no engine, no scene | any host |
+| entry                    | holds                                                                                                | audience     |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- | ------------ |
+| `.`                      | `glyph`, fonts, authoring, layout and measurement values, plus application-encountered config types  | everyone     |
+| `./config/*`             | exact renderer-neutral construction helpers for config, Codec, schema, resources, and raster formats | integrators  |
+| `./three`, `./react`     | one integration's application surface                                                                | applications |
+| `./three/*`, `./react/*` | independently importable integration features and raster formats                                     | applications |
+| `./tsl/*`, `./typegpu/*` | independently importable technique shaders, with no engine or scene                                  | any host     |
 
-`/core` is **additive to the root, not parallel to it**: an integrator imports both. It is not meant to stand alone,
-so "you cannot do X from `/core` alone" is not a finding unless X is engine driving.
+Config leaves are **additive to the root, not parallel to it**: an integrator imports application-encountered types
+from the root and construction helpers from their one owning leaf. Do not add a config barrel or re-export those
+helpers from the root merely to shorten imports; that charges ordinary applications for the integration DSL and gives
+each helper multiple public homes.
 
 An integration may re-export a root name **only when its own signatures use it** -- a caller should be able to name
 what `measureLayout()` returns without a second import, and nothing beyond that. Re-exporting more gives the
 vocabulary a second home and makes the import site a guess. `entry-point-boundaries.test.mjs` enforces both halves.
 
-A renderer type must not enter the shared vocabulary to make an integration convenient. When an integration needs
-per-run renderer state, the span names an abstract selector and the integration resolves it through its own
-registry, the way `registerThreeRasterPlanProgram` already maps techniques to programs. Pushing a `THREE.Material`
-into a span is the mistake this rule exists to prevent, and it is the reason the raw-offset span array cannot yet
-be withdrawn.
+A renderer type must not enter shared text vocabulary to make an integration convenient. `GlyphConfig.schema`,
+`resolve`, and `renderer` preserve renderer-specific associated types behind that integration's inferred config;
+ordinary text state carries renderer-neutral paint, font, hierarchy, and format selection. Pushing a
+`THREE.Material` or GPU handle into renderer-neutral spans is the mistake this rule exists to prevent.
 
 ## When you are about to add an error path
 
