@@ -10,7 +10,6 @@ import {
   type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
 } from '@pmndrs/glyph';
-import { resolveRasterCodec } from '@pmndrs/glyph/config/raster';
 import { assertPortableResource } from '@pmndrs/glyph/config/resources';
 import { glyphExampleCodec } from '@pmndrs/glyph-example-raster';
 import {
@@ -504,9 +503,10 @@ function assertExampleRendererShader(shader: ExampleRendererShader): void {
   if (typeof shader.variant.techniqueId !== 'string' || shader.variant.techniqueId.length === 0) {
     throw new TypeError('example renderer shader technique id is required');
   }
-  const portable = resolveRasterCodec(shader.variant.techniqueId);
-  if (portable === undefined)
-    throw new TypeError(`example renderer has no portable raster codec for "${shader.variant.techniqueId}"`);
+  const portable = glyphExampleCodec;
+  if (shader.variant.techniqueId !== portable.raster.id) {
+    throw new TypeError(`example renderer shader must use the "${portable.raster.id}" raster Codec`);
+  }
   if (
     shader.variant.geometry !== portable.schema.render.geometry ||
     shader.variant.resources !== portable.schema.resources
@@ -531,10 +531,10 @@ function assertExampleRendererShader(shader: ExampleRendererShader): void {
   if (actual.length !== expected.length || expected.some((name) => !Object.hasOwn(shader.variant.buffers, name))) {
     throw new TypeError('example renderer shader buffers do not match its portable schema');
   }
-  for (const [name, buffer] of Object.entries(shader.variant.buffers)) {
-    const declaration = portable.schema.buffers[name];
+  for (const [name, declaration] of Object.entries(portable.schema.buffers)) {
+    const buffer = shader.variant.buffers[name];
     if (
-      declaration === undefined ||
+      buffer === undefined ||
       buffer.id !== declaration.id ||
       buffer.scalar !== declaration.scalar ||
       buffer.vectorWidth !== declaration.lanes.length

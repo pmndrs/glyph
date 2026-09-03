@@ -1,6 +1,5 @@
 import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/webgpu';
 
-import { resolveRasterCodec } from '../config/raster.js';
 import type { CodecScalarType } from '../config/codec.js';
 import type { PortableResource, PortableTextureFormat } from '../config/resources.js';
 import type {
@@ -15,6 +14,7 @@ import type { AnyRasterFormat } from '../config/raster-format.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { threeSystemBuffers } from './codec.js';
 import { commitThreeRasterProgram, registeredThreeRasterProgram } from './internal/raster-program-registry.js';
+import { resolveRasterCodecInternal } from '../internal/raster-codec-registry.js';
 
 export interface ThreeRasterProgramBuffer {
   readonly scalarType: CodecScalarType;
@@ -127,7 +127,7 @@ export function registerThreeRasterProgram<
   if (typeof techniqueId !== 'string' || techniqueId.length === 0) {
     throw new TypeError('Three raster programs need a raster with a nonempty id');
   }
-  const portable = resolveRasterCodec(techniqueId);
+  const portable = resolveRasterCodecInternal(techniqueId);
   if (portable === undefined) {
     throw new TypeError(`no portable raster codec is registered for "${techniqueId}"`);
   }

@@ -5,11 +5,12 @@ import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { AnyRasterFormat } from '../config/raster-format.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
-import { compileRasterFont, resolveRasterCodec, type CompiledRasterFont } from '../config/raster.js';
+import { compileRasterFont, type CompiledRasterFont } from '../config/raster.js';
 import type { PortableResource } from '../config/resources.js';
 import { createRenderPlanner, type RenderPlanner, type RenderPlannerOptions } from './render-planner.js';
 import { compileCodec, type CodecDescriptor, type CodecIdFactory } from '../config/codec.js';
 import { CodecIdScope } from './render-id.js';
+import { resolveRasterCodecInternal } from './raster-codec-registry.js';
 import {
   assertGlyphId,
   createHandleIdFactory,
@@ -927,7 +928,7 @@ export class GlyphHandleState {
     compiled: CompiledRasterFont,
     payloads: ReadonlyMap<number, RetainedPortablePayload>,
   ): void {
-    const codec = resolveRasterCodec(raster.id);
+    const codec = resolveRasterCodecInternal(raster.id);
     if (codec === undefined) throw new Error(`portable raster codec "${raster.id}" is no longer registered`);
     const selectedName = codec.schema.render.resource;
     if (selectedName === undefined) throw new Error(`portable raster codec "${raster.id}" has no render resource`);
