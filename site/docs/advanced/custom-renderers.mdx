@@ -111,7 +111,7 @@ write
 - One sentence above the code: this is the example renderer's config, trimmed of nothing that matters; read it
   once top to bottom, then come back for each field below.
 - One paragraph under the code: what comes out the other end — a retained draw list, a plain object with
-  `engineRevision`, `planRevision`, `publicationGeneration`, `checkpoint`, `changed`, and one entry per span —
+  `engineRevision`, `revision`, `publicationGeneration`, `checkpoint`, `changed`, and one entry per span —
   which its tests read directly and which a TypeGPU device turns into an offscreen texture; nothing in it touches
   a DOM, a canvas, or a console.
 - Point at: `resolve` refusing any format the shader cannot draw (one `if`), and `renderer` handing the whole
@@ -410,7 +410,7 @@ export const TracedThreeConfig = defineGlyphConfig({
     return {
       ...inner,
       decode: (view) => {
-        console.debug('publication', view.planRevision, view.checkpoint ? 'checkpoint' : 'incremental');
+        console.debug('publication', view.revision, view.checkpoint ? 'checkpoint' : 'incremental');
         return inner.decode(view);
       },
     };
