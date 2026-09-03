@@ -16,6 +16,7 @@ import {
   type ReactNode,
   type Ref,
 } from 'react';
+import { clear as clearSuspense, preload as preloadSuspense, suspend } from 'suspend-react';
 
 import {
   createFontFace,
@@ -407,12 +408,8 @@ function defaultThreeHandle(): Promise<ThreeHandle> {
     if (initialized === undefined) throw new Error('Glyph initialization completed without an engine');
     return initialized;
   });
-  const retryable = initialization.catch((error: unknown) => {
-    if (defaultThreeHandlePromise === retryable) defaultThreeHandlePromise = undefined;
-    throw error;
-  });
-  defaultThreeHandlePromise = retryable;
-  return retryable;
+  defaultThreeHandlePromise = initialization;
+  return initialization;
 }
 
 function assertUsableHandle(handle: ThreeHandle): void {
@@ -632,6 +629,9 @@ interface ReactFontFaceResource {
 
 const reactFontFaces = new WeakMap<ThreeHandle, Map<string, ReactFontFaceResource>>();
 const defaultFontPreloads = new Map<string, Promise<void>>();
+const fontSuspenseNamespace = '@pmndrs/glyph/react:font';
+type FontSuspenseKey = [typeof fontSuspenseNamespace, ThreeHandle, AnyFontFaceSelection];
+const fontSuspenseKeys = new WeakMap<ThreeHandle, WeakMap<object, FontSuspenseKey>>();
 
 /** Load through the selected handle; React owns only the mounted immutable Font lease. */
 export const useFont = ((input: FontFaceSource, config: AnyHookFontConfig = {}): Font<AnyRasterFormat> => {
@@ -643,7 +643,12 @@ useFont.preload = (input: FontFaceSource, config: AnyHookFontConfig = {}): Promi
   const existing = defaultFontPreloads.get(key);
   if (existing !== undefined) return existing;
   const pending = defaultThreeHandle()
-    .then((handle) => loadThreeHandleFont(handle, reactFontFaceResource(handle, input, config).face))
+    .then((handle) => {
+      const face = reactFontFaceResource(handle, input, config).face;
+      const suspenseKey = fontSuspenseKey(handle, face);
+      preloadSuspense(loadSuspenseFont, suspenseKey);
+      return loadThreeHandleFont(handle, face);
+    })
     .then(() => undefined)
     .catch((error: unknown) => {
       if (defaultFontPreloads.get(key) === pending) defaultFontPreloads.delete(key);
@@ -655,22 +660,44 @@ useFont.preload = (input: FontFaceSource, config: AnyHookFontConfig = {}): Promi
 useFont.clear = (input: FontFaceSource, config: AnyHookFontConfig = {}): void => {
   const key = fontFaceResourceKey(input, config.format);
   defaultFontPreloads.delete(key);
-  void defaultThreeHandle().then((handle) => {
-    const cache = reactFontFaces.get(handle);
-    const resource = cache?.get(key);
-    if (resource === undefined) return;
-    cache?.delete(key);
-    resource.face.dispose();
-  });
+  const handle = getInitializedDefaultThreeHandle();
+  if (handle === undefined) return;
+  const cache = reactFontFaces.get(handle);
+  const resource = cache?.get(key);
+  if (resource === undefined) return;
+  cache?.delete(key);
+  clearSuspense(fontSuspenseKey(handle, resource.face));
+  resource.face.dispose();
 };
 
 function useHandleFontFace<Technique extends AnyRasterFormat>(
   handle: ThreeHandle,
   selection: AnyFontFaceSelection,
 ): Font<Technique> {
-  if (!isThreeHandleFontLoaded(handle, selection)) use(loadThreeHandleFont(handle, selection));
+  if (!isThreeHandleFontLoaded(handle, selection)) suspend(loadSuspenseFont, fontSuspenseKey(handle, selection));
   const store = useMemo(() => createMountedFontStore(handle, selection), [handle, selection]);
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot) as Font<Technique>;
+}
+
+function loadSuspenseFont(
+  _namespace: typeof fontSuspenseNamespace,
+  handle: ThreeHandle,
+  selection: AnyFontFaceSelection,
+): Promise<AnyFontFaceSelection> {
+  return loadThreeHandleFont(handle, selection);
+}
+
+function fontSuspenseKey(handle: ThreeHandle, selection: AnyFontFaceSelection): FontSuspenseKey {
+  let selections = fontSuspenseKeys.get(handle);
+  if (selections === undefined) {
+    selections = new WeakMap();
+    fontSuspenseKeys.set(handle, selections);
+  }
+  const existing = selections.get(selection);
+  if (existing !== undefined) return existing;
+  const key: FontSuspenseKey = [fontSuspenseNamespace, handle, selection];
+  selections.set(selection, key);
+  return key;
 }
 
 function reactFontFaceResource(
