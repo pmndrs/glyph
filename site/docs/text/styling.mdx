@@ -211,8 +211,8 @@ notes · internals
 - one line per decorating box, under before glyphs and line-through after — D-248; draw order in `breakApart` —
   `three/text.ts:819–828`, `three/decorations.ts#decorationDraws` (`:38–43`)
 - wire reserves `none solid double dotted dashed wavy` — `internal/frame-wire.ts:52`
-- [verify] this repository's outline records decoration draws collapsing at 4ed218c1d (a flag bit in the
-  transform-index lane); check the `decorations` scene against 09d7ae569 before publishing the proxy
+- the decoration collapse this repository's outline recorded at 4ed218c1d no longer reproduces: the decorations
+  scene draws every row at the current build (still captured 2026-09-03)
 */}
 
 ## OpenType features

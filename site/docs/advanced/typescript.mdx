@@ -220,8 +220,8 @@ notes · internals
 - `Brand<Value, Name>` and the five brands — `identity.ts:1–11`; root exports only `FontSlot`, `LocalGlyphId`,
   `RasterKey`, `Sha256Hex` — `index.ts` (`export type { FontSlot, LocalGlyphId, RasterKey, Sha256Hex } from './identity.js'`)
 - `GlyphKey` — `glyph-placement.ts:33`; `GlyphCaret` — `:103–114`; both exported from `/three` — `three.ts:66`
-- [verify] where `GlyphKey` appears on the public `ThreeGlyphMeasurement` (`three/glyph-measurement.ts`) before
-  naming the property in the table
+- `GlyphKey` is the first field of the public `ThreeGlyphMeasurement`: `readonly key: GlyphKey` —
+  `three/glyph-measurement.ts:36–37`
 */}
 
 ## `exactOptionalPropertyTypes`

@@ -185,9 +185,10 @@ notes · internals
 - boundary reaches schema callbacks as `root` — `glyph-plan-target.ts:77`, `create-engine.ts` (`this.#root` at `:155`, `:217`, `:231`)
 - brand and freeze — `config/glyph.ts:929–933`; re-wrapping three's config —
   `packages/glyph-example-raster/tests/glyph-example.test.ts:267–278` (`defineGlyphConfig({ ...ThreeConfig, fonts })`)
-- [verify] whether a bare `{ ...ThreeConfig, renderer }` without re-calling `defineGlyphConfig` keeps the brand:
-  `invokeGlyphConfigHandleFactory` checks only the symbol-keyed factory (`config/glyph.ts:837–845`) and object spread
-  copies own enumerable symbols, but nothing in the tree relies on it — test before documenting
+- a bare `{ ...ThreeConfig, renderer }` keeps the brand only if the factory is an own enumerable property: object
+  spread copies own enumerable symbol keys, and `invokeGlyphConfigHandleFactory` checks nothing but that
+  `config[glyphConfigHandleFactory]` is a function (`config/glyph.ts:838–842`). [verify] how `defineGlyphConfig`
+  stores it before recommending the spread; `defineThreeConfig({ renderer })` is the safe form
 */}
 
 ## The schema

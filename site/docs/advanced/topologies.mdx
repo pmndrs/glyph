@@ -202,8 +202,9 @@ notes · internals
   only after rebuilding its lost-device resource pool" — D-285
 - the checkpoint request lives on the planner control — `internal/render-planner.ts#PlanTargetControl.requestCheckpoint`
   (`:146–148`, impl `:1839`); the design for fan-out — `docs/planning/font-runtime-ownership.md:1185–1191`
-- [verify] no caller of `requestCheckpoint` in `src/three/*` at HEAD (grep found none); confirm and write the
-  dispose-and-recreate recipe until a hook exists
+- `requestCheckpoint` has no caller outside the planner at codex `98c86c8a6`: only the interface and the implementation exist
+  (`internal/render-planner.ts:147`, `:1839`); nothing under `src/three` requests one, so a checkpoint is the
+  planner's own decision today
 - disposal cascade: `handle.dispose()` prevents new construction and releases its adapter domain —
   `docs/planning/three-api.md:424–433`; `ThreeRoot.disposeHost` (`three/text.ts:290–300`)
 */}

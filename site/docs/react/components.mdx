@@ -213,8 +213,8 @@ notes · internals
 - `handle` and `fontFaces` are captured on first render; a change throws — `react.ts:216–219`
 - a callable handle selects its anonymous root; a terminal root selects itself — `react.ts:417–420`
   (`selectReactRoot`), `three/handle.ts:132–142`; a string is the idempotent named root on the built-in default
-  handle, and omission keeps the Canvas-local default root — D-324 (codex `9fef26f8a`); [verify] the line in
-  `react.ts` that resolves the string once the diff settles
+  handle, and omission keeps the Canvas-local default root — D-324 (codex `9fef26f8a`); the string branch —
+  `react.ts:223`
 - shorthand entries (`url`, `{ src, format }`) become `glyph.fontFace(...)` owned by the provider and disposed on
   unmount; a face you pass is never disposed — `react.ts:312–343` (`createProviderFontFaces`), `:235–240`
 - `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` adds a boundary that rethrows anything

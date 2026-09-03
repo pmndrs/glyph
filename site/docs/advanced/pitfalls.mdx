@@ -339,10 +339,12 @@ notes · internals
 - "no every-glyph-rasterised-empty guard": bitmap and MTSDF bakers mark unreadable outlines absent silently —
   this repo, `docs/planning/docs-site-outline.md` (Findings for core)
 - the Slug path converts CFF cubics — `rust/slug-fontations/src/lib.rs:239–247` — so the limitation is per baker
-- both bakers read outlines through skrifa: `font.outline_glyphs()` — `rust/bitmap-baker/src/rasterize.rs:141`
-  (`:8` import); `rust/mtsdf-baker/src/artifact.rs:12` (`FontRef`, `MetadataProvider`), `:481`
-  (`skrifa::outline::DrawError`). skrifa's `OutlineGlyphCollection` serves `glyf`, `CFF`, and `CFF2` alike, so
-  "CFF-only faces produce none" has no support; do not write it
+- the CFF symptom is observed, not explained: when the landing chorus was baked, Noto Sans CJK (CFF-only) came out as shaping data and
+  an empty raster with no error or warning, so words laid out at full width and drew as holes —
+  `site/scripts/bake-chorus.mts:55–59`; the outline readers are skrifa's `font.outline_glyphs()`
+  (`rust/bitmap-baker/src/rasterize.rs:141`; `rust/mtsdf-baker/src/artifact.rs:12`, `:481`), which serves `glyf`,
+  `CFF`, and `CFF2` alike, so the cause is open. [verify] by baking one CFF face through the current baker before
+  writing a cause; name the symptom, not a reason
 */}
 
 ## Each letter lit separately

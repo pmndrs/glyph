@@ -105,8 +105,7 @@ notes · internals
 
 {/*
 notes · internals
-- [verify] there is no `runtime-bake` scene in `site/examples/src/catalog.ts` (`EXAMPLES`); add one or retarget
-  this proxy before publishing
+- no scene here by design (canon rule, 2026-09-03): a bake is a wait, not something to see
 */}
 
 ## What the Worker does
@@ -133,7 +132,10 @@ notes · internals
 - the baker Wasm is fetched inside the Worker — `runtime-bake-worker.ts:23–29`
 - the GLB's `asset.generator` is written by the Rust bakers — `rust/font-baker/src/glb.rs:35` (the `asset`
   object), `rust/mtsdf-baker/src/glb.rs:131` (`MSDF_GENERATOR`); composition (`internal/compose-bake.ts`) writes
-  none. [verify] the two string constants before quoting "regardless of producer" (`docs/packages/glyph.md:332–335`)
+  none. The main GLB's `asset.generator` is the literal `"@pmndrs/glyph"` (`rust/font-baker/src/glb.rs:35`);
+  companion rasters carry their own labels, `MSDF_GENERATOR_LABEL` (`rust/mtsdf-baker/src/model.rs:14`, used at
+  `glb.rs:131`) and `BITMAP_GENERATOR_LABEL` (`rust/bitmap-baker/src/glb.rs:121`) — so "regardless of producer"
+  holds for the main artifact only
 */}
 
 ## Caching

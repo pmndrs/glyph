@@ -262,8 +262,8 @@ write
   warnings, the `PMNDRS_font` JSON schema, then the semantic checks. The runtime trusts an artifact that passed.
 - A `> [!WARNING]` callout under the table: an outline the rasteriser cannot read is marked absent, silently; a
   face that bakes complete shaping data and an empty raster lays out at full width and draws holes. Check `glyph
-  glyphs` names your glyphs and look at the report's raster sizes before trusting a new face. (Do not name CFF: the
-  notes below show the bakers read CFF outlines like any other.)
+  glyphs` names your glyphs and look at the report's raster sizes before trusting a new face. (Name CFF as an observed
+  symptom with the cause open, per the notes below.)
 - Shape: two paragraphs, the table, the callout.
 
 notes · internals
@@ -286,11 +286,12 @@ notes · internals
   `INVALID_TABLE` for zero glyphs or `unitsPerEm` outside 16..=16384 `:108–120`; `INVALID_GLYPH_EXTENTS` `:317`
 - absent outlines are silent — `rust/bitmap-baker/src/rasterize.rs:154–157` (no outline), `:170–176` (empty or
   zero-size); `rust/mtsdf-baker/src/artifact.rs:243–246`, `:252–258` (`EmptyOutline | InvalidBounds` → absent)
-- [verify] the CFF claim from this repo's outline ("a CFF face bakes shaping data and an empty raster"): there is no
-  `font_outline_source` in `rust/mtsdf-baker/src/artifact.rs` at codex `2c0fbcc4a`; the only CFF-aware code found
-  is glyph naming, `GlyphNameSource::Cff` (`rust/font-baker/src/source_font.rs:65`, `:136`). Outlines are read
-  through skrifa's `font.outline_glyphs()` (`rust/bitmap-baker/src/rasterize.rs:141`; `rust/mtsdf-baker/src/artifact.rs:12`,
-  `:481`), which serves `glyf`, `CFF`, and `CFF2` alike, so the claim has no support; drop it
+- the CFF claim is observed, not explained: when the landing chorus was baked, Noto Sans CJK (CFF-only) came out as shaping data and
+  an empty raster with no error or warning, so words laid out at full width and drew as holes —
+  `site/scripts/bake-chorus.mts:55–59`; the outline readers are skrifa's `font.outline_glyphs()`
+  (`rust/bitmap-baker/src/rasterize.rs:141`; `rust/mtsdf-baker/src/artifact.rs:12`, `:481`), which serves `glyf`,
+  `CFF`, and `CFF2` alike, so the cause is open. [verify] by baking one CFF face through the current baker before
+  writing a cause; name the symptom, not a reason
 */}
 
 ## What is in the file
