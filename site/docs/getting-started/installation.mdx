@@ -116,9 +116,11 @@ notes · internals
 - `WebGPURenderer` supplies a `getFallback` that builds `WebGLBackend`; `forceWebGL` skips WebGPU —
   `packages/glyph/node_modules/three/src/renderers/webgpu/WebGPURenderer.js:57–71` (three 0.185.1); the base renderer
   swaps when backend init fails — `…/renderers/common/Renderer.js:785`
-- [verify] that a missing `navigator.gpu` takes that path cleanly — `…/webgpu/WebGPUBackend.js:217`
+- a missing `navigator.gpu` takes that path: `WebGPUBackend.init` is `async`, so the `TypeError` its
+  `navigator.gpu.requestAdapter()` raises (`WebGPUBackend.js:217`) is a rejection, and `Renderer.init` catches it and
+  constructs `getFallback(error)` — `Renderer.js:775–790`, `WebGPURenderer.js:57–69` (three 0.185.1)
 - `navigator.gpu` is gated on a secure context, which is a property of the origin — `site/vite.config.ts:12–15`;
-  [verify] against the WebGPU spec
+  the `NavigatorGPU` mixin is `[SecureContext]` — WebGPU, "navigator.gpu", https://www.w3.org/TR/webgpu/#navigator-gpu
 - the hello-world app's `<Canvas fallback>` names both backends — `apps/r3f-hello-world/src/r3f-example.tsx:12–17`
 */}
 
@@ -143,8 +145,8 @@ notes · internals
 - every load hashes bytes with `crypto.subtle.digest('SHA-256', …)`: the main GLB — `loader.ts:3125`; raster
   artifacts — `internal/raster-artifact-validation.ts:380`; the raster key — `internal/raster-identity.ts:102`;
   transfers — `internal/font-face-transfer-runtime.ts:167`; runtime-bake cache — `internal/runtime-font-cache.ts:125`
-- [verify] that `crypto.subtle` is undefined on an insecure origin (WebCrypto `[SecureContext]`); the tree only shows
-  the calls, not the gate
+- `crypto.subtle` is undefined on an insecure origin: `Crypto.subtle` is `[SecureContext]` in the Web Cryptography
+  API — https://www.w3.org/TR/WebCryptoAPI/#crypto-interface; the tree only shows the calls
 - `content-length` is read and compared — `loader.ts:2813`; `cache-control` decides how long a runtime bake is kept —
   `loader.ts:2734`
 - baked `.font.glb` files are static assets; the docs serve them from `site/docs/assets/*.font.glb`
@@ -172,7 +174,12 @@ notes · internals
 - dedupe `react`, `react-dom`, `three`, `@react-three/fiber` when drei is present, or hooks read a second copy —
   `site/vite.config.ts:17–20`
 - no COOP/COEP needed: neither Wasm declares shared memory — `site/vite.config.ts:4–11`; the hello-world app still
-  sets them — `apps/r3f-hello-world/vite.config.ts:6–9`, `:39–40` ([verify] why before recommending either)
+  sets them — `apps/r3f-hello-world/vite.config.ts:6–9`, `:39–40`; carried over from #47 on the assumption the
+  Wasm needed them. It does not: isolation buys only `SharedArrayBuffer`, neither the shaper nor the baker module
+  declares a shared memory, and `COEP: require-corp` rejects every cross-origin subresource without CORP — this
+  site dropped the headers and renders identically (site commit `62db3270`); the benchmarks app only records
+  `crossOriginIsolated` as environment evidence (`apps/benchmarks/src/benchmark/environment.ts:10`). Recommend
+  neither
 - workspace apps opt into the `source` condition — `apps/r3f-hello-world/vite.config.ts:22`
 - the Wasm URL is resolved with `import.meta.url`, which Vite rewrites as an asset — `shaper.ts:236`
 */}
@@ -188,6 +195,9 @@ write
 notes · internals
 - [verify] nothing in the tree covers Next; find the pmndrs paris-site workaround for three's ESM subpaths
   (`transpilePackages`) and check `import.meta.url` Wasm resolution under the Next bundler before writing
+- one data point: this site is Next (pmndrs/docs) and sidesteps both questions by building the explainer with Vite
+  (`site/docs/components/vite.config.ts`) and loading it as a static bundle from `/docs/assets/explainer.js`, so
+  the Next bundler never sees `@pmndrs/glyph`, three's subpaths, or the Wasm URL
 */}
 
 ## TypeScript
