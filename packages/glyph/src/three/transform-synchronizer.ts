@@ -57,20 +57,22 @@ export class ThreeTransformSynchronizer {
           indexedChanged += 1;
         }
       }
-      for (const draw of directDraws ?? []) {
-        let drawChanged = false;
-        if (draw.visible !== visible) {
-          draw.visible = visible;
-          drawChanged = true;
-        }
-        if (!draw.matrix.equals(this.#relativeTransform)) {
-          draw.matrix.copy(this.#relativeTransform);
-          draw.matrixWorldNeedsUpdate = true;
-          drawChanged = true;
-        }
-        if (drawChanged) {
-          draw.updateMatrixWorld(false);
-          transformChanged = true;
+      if (directDraws !== undefined) {
+        for (const draw of directDraws) {
+          let drawChanged = false;
+          if (draw.visible !== visible) {
+            draw.visible = visible;
+            drawChanged = true;
+          }
+          if (!draw.matrix.equals(this.#relativeTransform)) {
+            draw.matrix.copy(this.#relativeTransform);
+            draw.matrixWorldNeedsUpdate = true;
+            drawChanged = true;
+          }
+          if (drawChanged) {
+            draw.updateMatrixWorld(false);
+            transformChanged = true;
+          }
         }
       }
       if (transformChanged) changedTransforms += 1;

@@ -160,6 +160,7 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   #scene: THREE.Scene | undefined;
   #binding: ThreeRootPublication | undefined;
   #needsInitialTransformSync = false;
+  readonly #renderMemberScratch: Text<AnyRasterFormat>[] = [];
   #capacity: GlyphBufferCapacity;
   #compositing: 'ordered' | 'independent';
   #material: ThreeTextMaterial | undefined;
@@ -449,10 +450,11 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   /** @internal Apply adapter bookkeeping after this root's renderer accepts its command buffer. */
   acceptShape(): void {
     this.#binding?.acceptShape();
-    this.#clearErrors(this.#renderMembers());
+    const texts = this.#renderMembers();
+    this.#clearErrors(texts);
     if (this.#needsInitialTransformSync) {
       this.#needsInitialTransformSync = false;
-      this.#syncTransforms(false);
+      this.#syncTransforms(false, texts);
     }
   }
 
@@ -462,8 +464,10 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
     this.#reportError(error, this.#renderMembers());
   }
 
-  #syncTransforms(worldMatricesCurrent: boolean): void {
-    const texts = this.#renderMembers();
+  #syncTransforms(
+    worldMatricesCurrent: boolean,
+    texts: readonly Text<AnyRasterFormat>[] = this.#renderMembers(),
+  ): void {
     if (!worldMatricesCurrent) {
       for (const text of texts) text.updateWorldMatrix(true, false);
     }
@@ -481,9 +485,9 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
       // Every participating root received its attributed error before the global call threw.
     }
     try {
-      this.#syncTransforms(worldMatricesCurrent);
+      this.#syncTransforms(worldMatricesCurrent, texts);
     } catch (error) {
-      this.#reportError(error, this.#renderMembers());
+      this.#reportError(error, texts);
     }
   }
 
@@ -558,7 +562,12 @@ export class ThreeRoot implements GlyphRoot, ThreeRootContext {
   }
 
   #renderMembers(): readonly Text<AnyRasterFormat>[] {
-    return [...this.#texts].filter((text) => !text.disposed && nearestScene(text) !== undefined);
+    const members = this.#renderMemberScratch;
+    members.length = 0;
+    for (const text of this.#texts) {
+      if (!text.disposed && nearestScene(text) !== undefined) members.push(text);
+    }
+    return members;
   }
 
   #assertMember(text: Text<AnyRasterFormat>): void {

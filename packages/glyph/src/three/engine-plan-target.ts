@@ -10,7 +10,7 @@ import type { ThreeGlyphGeometrySource } from './glyph-measurement.js';
 import type { ThreeBindings, ThreeBufferBinding, ThreeResolvedResourceBinding } from './handle.js';
 import type { ThreeRendererResources } from './renderer-resources.js';
 import type { ThreeRootContext } from './material.js';
-import { ThreeTransformSynchronizer } from './transform-synchronizer.js';
+import { ThreeTransformSynchronizer, type ThreeTransformState } from './transform-synchronizer.js';
 import {
   commitBufferMutations,
   commitTransforms,
@@ -80,8 +80,11 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
   readonly #activeTransformIndices = new Set<number>();
   readonly #directDrawsByTransform = new Map<number, THREE.Mesh[]>();
   #transforms = new Map<number, THREE.Object3D>();
+  #transformIdsByObject = new WeakMap<THREE.Object3D, readonly number[]>();
+  readonly #requestedTransformIds: number[] = [];
   readonly #originRecords = new Map<number, OriginRecord>();
   readonly #transformSynchronizer = new ThreeTransformSynchronizer();
+  readonly #transformState: ThreeTransformState;
   #transformAttribute = transformAttribute(0);
   #transformGeneration = 1;
   #draws: THREE.Mesh[] = [];
@@ -90,14 +93,30 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
   readonly #bindingIds = new WeakMap<object, number>();
   #nextBindingId = 1;
   #preparation: PreparationContext | undefined;
-  #pendingTransformSync:
-    | Readonly<{ ids: readonly number[]; worldMatricesCurrent: boolean; changed: number }>
-    | undefined;
+  #synchronizingTransforms = false;
+  #syncWorldMatricesCurrent = false;
+  #synchronizedTransformCount = 0;
   #disposed = false;
 
   constructor(resources: ThreeRendererResources, owner: ThreeTextEnginePlanOwner) {
     this.#resourcesContext = resources;
     this.#owner = owner;
+    const target = this;
+    this.#transformState = {
+      drawRoot: owner.drawRoot,
+      get draws() {
+        return target.#draws;
+      },
+      activeTransformIndices: this.#activeTransformIndices,
+      directDrawsByTransform: this.#directDrawsByTransform,
+      get transforms() {
+        return target.#transforms;
+      },
+      get transformAttribute() {
+        return target.#transformAttribute;
+      },
+      ...(owner.visibleObject === undefined ? {} : { visibleObject: owner.visibleObject }),
+    };
   }
 
   get draws(): readonly THREE.Mesh[] {
@@ -199,41 +218,32 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
 
   /** Upload changed scene transforms without crossing into Wasm or invalidating text measure. */
   synchronizeTransforms(worldMatricesCurrent: boolean, sync: () => void): number {
-    const ids = [...this.#transforms.keys()];
-    this.#pendingTransformSync = { ids, worldMatricesCurrent, changed: 0 };
+    if (this.#synchronizingTransforms) throw new Error('Three transform synchronization cannot be reentered');
+    this.#synchronizingTransforms = true;
+    this.#syncWorldMatricesCurrent = worldMatricesCurrent;
+    this.#synchronizedTransformCount = 0;
     try {
       sync();
-      return this.#pendingTransformSync.changed;
+      return this.#synchronizedTransformCount;
     } finally {
-      this.#pendingTransformSync = undefined;
+      this.#synchronizingTransforms = false;
     }
   }
 
   syncTransforms(updates: readonly TransformUpdate<THREE.Object3D>[]): void {
-    const pending = this.#pendingTransformSync;
-    const requested = new Set(updates.map(({ transform }) => transform));
-    const ids = (pending?.ids ?? [...this.#transforms.keys()]).filter((id) => {
-      const transform = this.#transforms.get(id);
-      return transform !== undefined && requested.has(transform);
-    });
-    const changed = this.#syncTransformsCore(ids, pending?.worldMatricesCurrent ?? false);
-    if (pending !== undefined) this.#pendingTransformSync = { ...pending, changed };
+    const ids = this.#requestedTransformIds;
+    ids.length = 0;
+    for (const { transform } of updates) {
+      const retained = this.#transformIdsByObject.get(transform);
+      if (retained === undefined) continue;
+      for (const id of retained) ids.push(id);
+    }
+    const changed = this.#syncTransformsCore(ids, this.#synchronizingTransforms && this.#syncWorldMatricesCurrent);
+    if (this.#synchronizingTransforms) this.#synchronizedTransformCount = changed;
   }
 
   #syncTransformsCore(transformIds: Iterable<number>, worldMatricesCurrent: boolean): number {
-    return this.#transformSynchronizer.sync(
-      {
-        drawRoot: this.#owner.drawRoot,
-        draws: this.#draws,
-        activeTransformIndices: this.#activeTransformIndices,
-        directDrawsByTransform: this.#directDrawsByTransform,
-        transforms: this.#transforms,
-        transformAttribute: this.#transformAttribute,
-        ...(this.#owner.visibleObject === undefined ? {} : { visibleObject: this.#owner.visibleObject }),
-      },
-      transformIds,
-      worldMatricesCurrent,
-    );
+    return this.#transformSynchronizer.sync(this.#transformState, transformIds, worldMatricesCurrent);
   }
 
   dispose(): void {
@@ -251,6 +261,8 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
     this.#buffers.clear();
     this.#resources.clear();
     this.#transforms.clear();
+    this.#requestedTransformIds.length = 0;
+    this.#transformIdsByObject = new WeakMap();
     this.#activeTransformIndices.clear();
     this.#directDrawsByTransform.clear();
     this.#originRecords.clear();
@@ -388,6 +400,7 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
     this.#slugPages = prepared.context.slugPages;
     this.#materials = prepared.context.materials;
     this.#transforms = new Map(prepared.context.transforms);
+    this.#indexTransforms();
     this.#transformAttribute = prepared.context.transformAttribute;
     this.#transformGeneration = prepared.context.transformGeneration;
     if (prepared.draws.changed) {
@@ -407,6 +420,16 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
     for (const draw of this.#draws) attempt(() => draw.updateMatrixWorld(false));
     this.#originRecords.clear();
     return failure;
+  }
+
+  #indexTransforms(): void {
+    const idsByObject = new WeakMap<THREE.Object3D, number[]>();
+    for (const [id, object] of this.#transforms) {
+      const ids = idsByObject.get(object);
+      if (ids === undefined) idsByObject.set(object, [id]);
+      else ids.push(id);
+    }
+    this.#transformIdsByObject = idsByObject;
   }
 
   #readBoundResources(frame: CommandBufferView<ThreeBindings>, context: PreparationContext): void {
