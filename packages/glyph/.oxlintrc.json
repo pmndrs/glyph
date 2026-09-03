@@ -56,9 +56,7 @@
               "../internal/**",
               "../../internal/**",
               "**/generated/**",
-              "**/core/**",
-              "../tsl/**",
-              "../../tsl/**"
+              "**/core/**"
             ]
           }
         ]
