@@ -15,15 +15,17 @@ import {
 } from 'three/webgpu';
 
 import { ACCENT } from '../../../theme';
-import { STRIP, STRIP_FONT } from '../config';
+import { BIG_FONT, SMALL_FONT, SMALL_LANE_Y, SMALL_LETTER_SPACING, SMALL_REPEATS, SMALL_TEXT, STRIP } from '../config';
 
 /**
  * The passage as it is typed, rendered to a wide strip every frame. The
  * strip is its own scene on its own root — a root spans at most one Scene —
  * drawn to a render target before the main scene; whatever samples `texture`
- * sees the words the moment they are written. The line is end-aligned in a
- * box the strip's width, so the newest word always sits at the strip's right
- * edge and the older text scrolls off its left.
+ * sees the words the moment they are written. The passage is end-aligned in
+ * a box the strip's width, so the newest word always sits at the strip's
+ * right edge and the older text scrolls off its left; it rides the middle
+ * half of the strip, and two lanes of small type ride the quarters either
+ * side.
  */
 export function useStripTile(): {
   readonly texture: Texture;
@@ -87,15 +89,27 @@ export function StripTile({
     <GlyphProvider handle={root}>
       <Text
         font={font}
-        style={{ fontSize: STRIP_FONT, color: '#ffffff', letterSpacing: 0.04, lineHeight: 1 }}
+        style={{ fontSize: BIG_FONT, color: '#ffffff', letterSpacing: 0.04, lineHeight: 1 }}
         layout={{ wrap: 'none', align: 'end' }}
         constraints={{ width: { mode: 'exact', size: STRIP.width } }}
-        position={[-STRIP.width / 2, STRIP_FONT / 2, 0]}
+        position={[-STRIP.width / 2, BIG_FONT / 2, 0]}
       >
         {before.toUpperCase()}
         <Text style={{ color: ACCENT }}>{current.toUpperCase()}</Text>
         {'   '}
       </Text>
+      {[SMALL_LANE_Y, -SMALL_LANE_Y].map((y, lane) => (
+        <Text
+          key={lane}
+          font={font}
+          style={{ fontSize: SMALL_FONT, color: '#9aa6be', letterSpacing: SMALL_LETTER_SPACING, lineHeight: 1 }}
+          layout={{ wrap: 'none' }}
+          constraints={{ width: { mode: 'exact', size: STRIP.width * 2 } }}
+          position={[-STRIP.width / 2 - (lane === 0 ? 0 : STRIP.width * 0.37), y + SMALL_FONT / 2, 0]}
+        >
+          {SMALL_TEXT.repeat(SMALL_REPEATS)}
+        </Text>
+      ))}
     </GlyphProvider>,
     tile.scene,
   );
