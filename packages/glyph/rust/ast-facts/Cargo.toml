@@ -1,0 +1,20 @@
+[package]
+name = "pmndrs-glyph-ast-facts"
+description = "Structural facts about the glyph Rust tree, for review and audit tooling"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/glyph"
+publish = false
+
+[[bin]]
+name = "ast-facts"
+path = "src/main.rs"
+
+[dependencies]
+proc-macro2 = { version = "1.0.104", features = ["span-locations"] }
+quote = "1.0.42"
+serde_json = "1.0.145"
+syn = { version = "2.0.114", features = ["full", "visit", "extra-traits"] }
+walkdir = "2.5.0"
