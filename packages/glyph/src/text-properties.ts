@@ -96,9 +96,9 @@ export interface TextStyle {
   readonly color?: ColorInput;
   /** Alpha multiplier inherited independently from color. */
   readonly opacity?: number;
-  /** Technique-supported outline color and width in paragraph-local units. */
+  /** Format-supported outline color and width in paragraph-local units. */
   readonly outline?: { readonly color: ColorInput; readonly width: number };
-  /** Technique-supported hard-shadow color and displacement in paragraph-local units. */
+  /** Format-supported hard-shadow color and displacement in paragraph-local units. */
   readonly shadow?: { readonly color: ColorInput; readonly offset: readonly [number, number] };
 }
 
@@ -118,8 +118,8 @@ export interface TextDecorationStyle {
   readonly offset?: number;
 }
 
-export interface ParagraphBaseProperties<Technique extends RasterFormatMetadata> {
-  readonly font: FontSelection<Technique>;
+export interface ParagraphBaseProperties<Format extends RasterFormatMetadata> {
+  readonly font: FontSelection<Format>;
   /** Text shaping and presentation properties inherited by inline spans. */
   readonly style?: PropertyList<TextStyle>;
   /** Paragraph flow properties such as wrapping, alignment, and line limits. */
@@ -130,12 +130,12 @@ export interface ParagraphBaseProperties<Technique extends RasterFormatMetadata>
   readonly order?: number;
 }
 
-export type ParagraphContentProperties<Technique extends RasterFormatMetadata> = Readonly<{
-  text: TextInput<Technique>;
+export type ParagraphContentProperties<Format extends RasterFormatMetadata> = Readonly<{
+  text: TextInput<Format>;
 }>;
 
-export type ParagraphProperties<Technique extends RasterFormatMetadata> = ParagraphBaseProperties<Technique> &
-  ParagraphContentProperties<Technique>;
+export type ParagraphProperties<Format extends RasterFormatMetadata> = ParagraphBaseProperties<Format> &
+  ParagraphContentProperties<Format>;
 
 interface PropertyRegistry<Value extends object> {
   create<const Rules extends Readonly<Record<string, PropertyList<Value>>>>(

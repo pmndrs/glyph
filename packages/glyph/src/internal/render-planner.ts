@@ -1350,7 +1350,7 @@ function resolveTextOptions(handleState: GlyphHandleState, value: RetainedTextOp
   const font = handleState._retainFontStackBinding(value.font);
   const leases: Array<{ dispose(): void }> = [font];
   try {
-    assertTextEffectsSupported(style, font.techniques, 'text engine text style');
+    assertTextEffectsSupported(style, font.formats, 'text engine text style');
     const material =
       value.material === undefined ? undefined : handleState._retainOpaqueBinding(value.material, 'material');
     if (material !== undefined) leases.push(material);
@@ -1369,7 +1369,7 @@ function resolveTextOptions(handleState: GlyphHandleState, value: RetainedTextOp
       if (span.style !== undefined) {
         assertTextEffectsSupported(
           span.style,
-          spanFont?.techniques ?? font.techniques,
+          spanFont?.formats ?? font.formats,
           `text engine span [${span.start}, ${span.end}) style`,
         );
       }

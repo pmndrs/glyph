@@ -197,15 +197,15 @@ export function engineStyleValue(
 /** @internal Reject effects at the public call that accepted a style. */
 export function assertTextEffectsSupported(
   style: TextStyle,
-  techniques: readonly RasterFormatMetadata[],
+  formats: readonly RasterFormatMetadata[],
   label: string,
 ): void {
-  for (const technique of techniques) {
-    if (style.outline !== undefined && !technique.textEffects.includes('outline')) {
-      throw new TypeError(`raster format ${technique.id} does not support outline in ${label}`);
+  for (const format of formats) {
+    if (style.outline !== undefined && !format.textEffects.includes('outline')) {
+      throw new TypeError(`raster format ${format.id} does not support outline in ${label}`);
     }
-    if (style.shadow !== undefined && !technique.textEffects.includes('shadow')) {
-      throw new TypeError(`raster format ${technique.id} does not support shadow in ${label}`);
+    if (style.shadow !== undefined && !format.textEffects.includes('shadow')) {
+      throw new TypeError(`raster format ${format.id} does not support shadow in ${label}`);
     }
   }
 }

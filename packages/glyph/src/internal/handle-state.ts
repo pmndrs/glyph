@@ -102,9 +102,9 @@ export interface HandleEngineFontBinding<Format extends RasterFormatMetadata = R
 }
 
 /** @internal Engine callback installed when it constructs handle state. */
-export type HandleEngineFontBinder = <Technique extends RasterFormatMetadata>(
-  font: Font<Technique>,
-) => HandleEngineFontBinding<Technique>;
+export type HandleEngineFontBinder = <Format extends RasterFormatMetadata>(
+  font: Font<Format>,
+) => HandleEngineFontBinding<Format>;
 
 /**
  * One borrowed A/B render-plan publication. Its bytes point into Wasm memory and expire when
@@ -348,11 +348,11 @@ export class GlyphHandleState {
   }
 
   /** Binds one immutable font's shaping and portable raster resources to this handle. */
-  bindFont<Technique extends RasterFormatMetadata>(font: Font<Technique>): HandleFontBinding<Technique> {
+  bindFont<Format extends RasterFormatMetadata>(font: Font<Format>): HandleFontBinding<Format> {
     return this.#bindFont(font);
   }
 
-  #bindFont<Technique extends RasterFormatMetadata>(font: Font<Technique>): HandleFontBindingImpl<Technique> {
+  #bindFont<Format extends RasterFormatMetadata>(font: Font<Format>): HandleFontBindingImpl<Format> {
     this.#assertActive();
     if (this.#bindEngineFont === undefined) {
       throw new Error('Glyph handle state was not created by a glyph engine');
@@ -402,9 +402,7 @@ export class GlyphHandleState {
   }
 
   /** Binds an ordered immutable font stack to this handle. */
-  bindFontStack<Technique extends RasterFormatMetadata>(
-    stack: FontStack<Technique, Font<Technique>>,
-  ): HandleFontStackBinding {
+  bindFontStack<Format extends RasterFormatMetadata>(stack: FontStack<Format, Font<Format>>): HandleFontStackBinding {
     this.#assertActive();
     const fonts = immutableFontStackFonts(stack);
     for (const font of fonts) {
@@ -484,7 +482,7 @@ export class GlyphHandleState {
   _retainFontStackBinding(binding: HandleFontStackBinding): Readonly<{
     handle: FontStackHandle;
     binding: HandleFontStackBinding;
-    techniques: readonly RasterFormatMetadata[];
+    formats: readonly RasterFormatMetadata[];
     dispose(): void;
   }> {
     this.#assertActive();
@@ -498,7 +496,7 @@ export class GlyphHandleState {
     return Object.freeze({
       handle: entry.state.handle,
       binding: retained,
-      techniques: Object.freeze(entry.state.bindings.map((fontBinding) => fontBinding.raster)),
+      formats: Object.freeze(entry.state.bindings.map((fontBinding) => fontBinding.raster)),
       dispose: () => retained.dispose(),
     });
   }

@@ -1,8 +1,8 @@
 /**
- * The technique shader library: TSL node graphs for the Bitmap, MSDF, Slug, and
- * decoration techniques, importable without the Three scene integration. The graphs
+ * The shader library: TSL node graphs for the Bitmap, MSDF, and Slug raster formats plus
+ * the decoration program, importable without the Three scene integration. The graphs
  * build on `three/tsl` nodes; an integration that renders through a TSL-consuming
- * renderer reuses one canonical shading implementation per technique instead of
+ * renderer reuses one canonical shading implementation per program instead of
  * reimplementing coverage math.
  */
 export {

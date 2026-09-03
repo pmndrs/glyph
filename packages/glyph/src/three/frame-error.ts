@@ -15,9 +15,9 @@ import type { Text, TextSpan } from './text.js';
  * meaningful to a consumer. They are resolved here into the objects the consumer actually wrote:
  * the `Text` and, when one span owns the cause, that span together with its index in `Text.spans`.
  */
-export type TextFrameSubject<Technique extends RasterFormatMetadata = RasterFormatMetadata> =
-  | Readonly<{ kind: 'span'; text: Text<Technique>; index: number; span: TextSpan<Technique> }>
-  | Readonly<{ kind: 'paragraph'; text: Text<Technique> }>
+export type TextFrameSubject<Format extends RasterFormatMetadata = RasterFormatMetadata> =
+  | Readonly<{ kind: 'span'; text: Text<Format>; index: number; span: TextSpan<Format> }>
+  | Readonly<{ kind: 'paragraph'; text: Text<Format> }>
   | Readonly<{ kind: 'unattributed' }>;
 
 /**
@@ -26,19 +26,19 @@ export type TextFrameSubject<Technique extends RasterFormatMetadata = RasterForm
  * `engine` is the residual: a status the engine does not classify further, including every internal
  * invariant violation. Treat it as a defect report rather than something to correct in the input.
  */
-export type TextFrameRejection<Technique extends RasterFormatMetadata = RasterFormatMetadata> =
+export type TextFrameRejection<Format extends RasterFormatMetadata = RasterFormatMetadata> =
   /** A span's `[start, end)` is inverted, reaches past the text, or splits a UTF-16 surrogate pair. */
-  | Readonly<{ cause: 'span-range'; subject: TextFrameSubject<Technique> }>
+  | Readonly<{ cause: 'span-range'; subject: TextFrameSubject<Format> }>
   /** A style boundary falls inside an extended grapheme cluster. */
-  | Readonly<{ cause: 'cluster-boundary'; subject: TextFrameSubject<Technique> }>
+  | Readonly<{ cause: 'cluster-boundary'; subject: TextFrameSubject<Format> }>
   /** Two spans partially overlap; spans must be disjoint or fully nested. */
-  | Readonly<{ cause: 'span-overlap'; subject: TextFrameSubject<Technique> }>
+  | Readonly<{ cause: 'span-overlap'; subject: TextFrameSubject<Format> }>
   /** The paragraph's own root style is missing, duplicated, or does not cover the whole text. */
-  | Readonly<{ cause: 'paragraph-root'; subject: TextFrameSubject<Technique> }>
+  | Readonly<{ cause: 'paragraph-root'; subject: TextFrameSubject<Format> }>
   /** A style names a font stack the engine does not hold. */
-  | Readonly<{ cause: 'font-stack-missing'; subject: TextFrameSubject<Technique> }>
+  | Readonly<{ cause: 'font-stack-missing'; subject: TextFrameSubject<Format> }>
   /** A font in the laid-out text has no registered metrics. */
-  | Readonly<{ cause: 'font-metrics-missing'; subject: TextFrameSubject<Technique> }>
+  | Readonly<{ cause: 'font-metrics-missing'; subject: TextFrameSubject<Format> }>
   /** The frame did not fit the planner arenas even after the handle grew them. */
   | Readonly<{ cause: 'capacity'; requiredRequestBytes: number; requiredResultBytes: number }>
   /** A status the engine does not classify as caller-actionable. */

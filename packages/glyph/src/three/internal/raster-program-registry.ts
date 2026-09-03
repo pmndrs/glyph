@@ -41,29 +41,30 @@ export function registeredThreeRasterProgram(source: object): RegisteredThreeRas
   return registeredSources.get(source);
 }
 
-export function commitThreeRasterProgram<
-  Technique extends RasterFormatMetadata,
-  Schema extends TechniqueSchemaMetadata,
->(source: object, codec: RasterCodec<Technique, Schema>, variant: RuntimeThreeRasterVariant): void {
-  const techniqueId = codec.raster.id;
-  const existing = programs.get(techniqueId);
+export function commitThreeRasterProgram<Format extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
+  source: object,
+  codec: RasterCodec<Format, Schema>,
+  variant: RuntimeThreeRasterVariant,
+): void {
+  const formatId = codec.raster.id;
+  const existing = programs.get(formatId);
   if (existing !== undefined) {
-    throw new TypeError(`Three already selected raster variant "${existing.variantId}" for technique "${techniqueId}"`);
+    throw new TypeError(`Three already selected raster variant "${existing.variantId}" for format "${formatId}"`);
   }
   const engineCount = liveSnapshotCount();
   if (engineCount !== 0) {
     throw new Error(
-      `Three raster variant "${techniqueId}/${variant.id}" was registered after ${engineCount} glyph engine(s) ` +
-        'already read the registry; register every technique before its first Text or TextGroup realization',
+      `Three raster variant "${formatId}/${variant.id}" was registered after ${engineCount} glyph engine(s) ` +
+        'already read the registry; register every format before its first Text or TextGroup realization',
     );
   }
   const registered: RegisteredThreeRasterProgram = Object.freeze({
-    techniqueId,
+    techniqueId: formatId,
     variantId: variant.id,
     compile: (identities: CodecIdFactory, transformMode: 'indexed' | 'direct') =>
       compileProgram(codec, variant, identities, transformMode),
   });
-  programs.set(techniqueId, registered);
+  programs.set(formatId, registered);
   registeredSources.set(source, registered);
 }
 
@@ -101,8 +102,8 @@ function liveSnapshotCount(): number {
   return count;
 }
 
-function compileProgram<Technique extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
-  portable: RasterCodec<Technique, Schema>,
+function compileProgram<Format extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
+  portable: RasterCodec<Format, Schema>,
   variant: RuntimeThreeRasterVariant,
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct',

@@ -53,26 +53,26 @@ const threeRootIdentity: unique symbol = Symbol('pmndrs.glyph.three.root');
 const threeRootHosts = new WeakMap<object, ThreeRootHost>();
 
 /** One inline Three text run with optional font fallback and material override. */
-export type TextSpan<Technique extends RasterFormatMetadata> = Omit<ParagraphSpan<Technique>, 'font'> &
-  Readonly<{ font?: FontSelection<Technique>; material?: ThreeTextMaterial }>;
+export type TextSpan<Format extends RasterFormatMetadata> = Omit<ParagraphSpan<Format>, 'font'> &
+  Readonly<{ font?: FontSelection<Format>; material?: ThreeTextMaterial }>;
 
-type TextBaseProperties<Technique extends RasterFormatMetadata> = Omit<ParagraphBaseProperties<Technique>, 'font'> &
-  Readonly<{ font: FontSelection<Technique> }>;
+type TextBaseProperties<Format extends RasterFormatMetadata> = Omit<ParagraphBaseProperties<Format>, 'font'> &
+  Readonly<{ font: FontSelection<Format> }>;
 
-type TextContentProperties<Technique extends RasterFormatMetadata> = Readonly<{ text: TextInput<Technique> }>;
+type TextContentProperties<Format extends RasterFormatMetadata> = Readonly<{ text: TextInput<Format> }>;
 
 /** Complete desired state for one Three text paragraph. */
-export type TextProperties<Technique extends RasterFormatMetadata> = TextBaseProperties<Technique> &
-  TextContentProperties<Technique> &
+export type TextProperties<Format extends RasterFormatMetadata> = TextBaseProperties<Format> &
+  TextContentProperties<Format> &
   Readonly<{ material?: ThreeTextMaterial }>;
 
 /** Standalone Three text state plus an optional pixel-snap control. */
-export type StandaloneTextProperties<Technique extends RasterFormatMetadata> = TextProperties<Technique> &
+export type StandaloneTextProperties<Format extends RasterFormatMetadata> = TextProperties<Format> &
   Readonly<{ pixelSnapping?: boolean }>;
 
 /** Partial desired-state replacement accepted by {@link Text.set}. */
-export type TextUpdate<Technique extends RasterFormatMetadata> = Partial<TextBaseProperties<Technique>> &
-  Readonly<{ text?: TextInput<Technique>; material?: ThreeTextMaterial }>;
+export type TextUpdate<Format extends RasterFormatMetadata> = Partial<TextBaseProperties<Format>> &
+  Readonly<{ text?: TextInput<Format>; material?: ThreeTextMaterial }>;
 
 /** Publication controls owned by every anonymous or named Three root. */
 export interface ThreeRootOptions {
@@ -96,10 +96,10 @@ export type TextCommitState =
   | Readonly<{ status: 'committed'; revision: number }>
   | Readonly<{ status: 'failed'; error: unknown }>;
 
-interface DesiredTextState<Technique extends RasterFormatMetadata> {
-  readonly font: FontSelection<Technique>;
+interface DesiredTextState<Format extends RasterFormatMetadata> {
+  readonly font: FontSelection<Format>;
   readonly text: string;
-  readonly spans: readonly TextSpan<Technique>[];
+  readonly spans: readonly TextSpan<Format>[];
   readonly style: TextStyle;
   readonly layout: ParagraphLayout;
   readonly constraints: Constraints;
@@ -108,7 +108,7 @@ interface DesiredTextState<Technique extends RasterFormatMetadata> {
 }
 
 interface TextReconciler {
-  desired<Technique extends RasterFormatMetadata>(text: Text<Technique>): DesiredTextState<Technique>;
+  desired<Format extends RasterFormatMetadata>(text: Text<Format>): DesiredTextState<Format>;
   desiredRevision(text: Text<RasterFormatMetadata>): number;
   root(text: Text<RasterFormatMetadata>): ThreeRootHost;
   markCommitted(text: Text<RasterFormatMetadata>): void;
@@ -152,7 +152,7 @@ export interface ThreeRoot extends GlyphRoot {
   readonly textCount: number;
   readonly gpuBytes: number;
   material: ThreeTextMaterial | undefined;
-  createText<Technique extends RasterFormatMetadata>(properties: StandaloneTextProperties<Technique>): Text<Technique>;
+  createText<Format extends RasterFormatMetadata>(properties: StandaloneTextProperties<Format>): Text<Format>;
   createText<const Selection extends FontFaceSelection | string>(
     properties: Omit<StandaloneTextProperties<FontFaceRasterOf<Selection>>, 'font'> & { readonly font: Selection },
   ): Text<FontFaceRasterOf<Selection>>;
@@ -213,15 +213,15 @@ class ThreePublicRoot implements ThreeRoot {
     this.#host.material = value;
   }
 
-  createText<Technique extends RasterFormatMetadata>(properties: StandaloneTextProperties<Technique>): Text<Technique>;
+  createText<Format extends RasterFormatMetadata>(properties: StandaloneTextProperties<Format>): Text<Format>;
   createText<const Selection extends FontFaceSelection | string>(
     properties: Omit<StandaloneTextProperties<FontFaceRasterOf<Selection>>, 'font'> & { readonly font: Selection },
   ): Text<FontFaceRasterOf<Selection>>;
-  createText<Technique extends RasterFormatMetadata>(
+  createText<Format extends RasterFormatMetadata>(
     properties:
-      | StandaloneTextProperties<Technique>
-      | (Omit<StandaloneTextProperties<Technique>, 'font'> & { readonly font: FontFaceSelection | string }),
-  ): Text<Technique> {
+      | StandaloneTextProperties<Format>
+      | (Omit<StandaloneTextProperties<Format>, 'font'> & { readonly font: FontFaceSelection | string }),
+  ): Text<Format> {
     return this.#host.createText(properties);
   }
 
@@ -325,21 +325,21 @@ export class ThreeRootHost {
     this.#binding?.invalidateMaterial();
   }
 
-  createText<Technique extends RasterFormatMetadata>(
+  createText<Format extends RasterFormatMetadata>(
     properties:
-      | StandaloneTextProperties<Technique>
-      | (Omit<StandaloneTextProperties<Technique>, 'font'> & { readonly font: FontFaceSelection | string }),
-  ): Text<Technique> {
+      | StandaloneTextProperties<Format>
+      | (Omit<StandaloneTextProperties<Format>, 'font'> & { readonly font: FontFaceSelection | string }),
+  ): Text<Format> {
     this.#assertActive();
     const selection = this.#resolveFontSelection(properties.font);
     if (!isFontFaceSelection(selection)) {
-      return new Text(threeTextConstructionToken, properties as StandaloneTextProperties<Technique>, [], this);
+      return new Text(threeTextConstructionToken, properties as StandaloneTextProperties<Format>, [], this);
     }
     const font = this.#fonts.acquire(selection);
     try {
       return new Text(
         threeTextConstructionToken,
-        { ...properties, font } as StandaloneTextProperties<Technique>,
+        { ...properties, font } as StandaloneTextProperties<Format>,
         [font],
         this,
       );
@@ -671,7 +671,7 @@ export class ThreeRootHost {
   }
 }
 
-export class Text<Technique extends RasterFormatMetadata> extends THREE.Object3D {
+export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   static {
     reconciler = {
       desired: (text) => text.#desired,
@@ -688,7 +688,7 @@ export class Text<Technique extends RasterFormatMetadata> extends THREE.Object3D
 
   readonly #ownedFonts: readonly Font<RasterFormatMetadata>[];
   readonly #boundingBox = new THREE.Box3();
-  #desired: DesiredTextState<Technique>;
+  #desired: DesiredTextState<Format>;
   readonly #pixelSnapping: boolean;
   readonly #root: ThreeRootHost;
   #binding: ThreeRootPublication | undefined;
@@ -703,7 +703,7 @@ export class Text<Technique extends RasterFormatMetadata> extends THREE.Object3D
   /** Ordinary applications construct Text through `handle.createText()`. */
   constructor(
     token: typeof threeTextConstructionToken,
-    properties: StandaloneTextProperties<Technique>,
+    properties: StandaloneTextProperties<Format>,
     ownedFonts: readonly Font<RasterFormatMetadata>[],
     root: object,
   ) {
@@ -745,17 +745,17 @@ export class Text<Technique extends RasterFormatMetadata> extends THREE.Object3D
   get boundingBox(): THREE.Box3 {
     return this.computeBoundingBox();
   }
-  get font(): FontSelection<Technique> {
+  get font(): FontSelection<Format> {
     return this.#desired.font;
   }
-  set font(value: FontSelection<Technique>) {
+  set font(value: FontSelection<Format>) {
     this.set({ font: value });
   }
   get text(): string {
     return this.#desired.text;
   }
-  set text(value: TextInput<Technique>) {
-    this.set({ text: value } as TextUpdate<Technique>);
+  set text(value: TextInput<Format>) {
+    this.set({ text: value } as TextUpdate<Format>);
   }
   /** Text shaping and presentation properties inherited by inline spans. */
   get style(): TextStyle {
@@ -787,10 +787,10 @@ export class Text<Technique extends RasterFormatMetadata> extends THREE.Object3D
     return this.#desired.material;
   }
   set material(value: ThreeTextMaterial | undefined) {
-    this.set({ material: value } as TextUpdate<Technique>);
+    this.set({ material: value } as TextUpdate<Format>);
   }
 
-  set(update: TextUpdate<Technique>): void {
+  set(update: TextUpdate<Format>): void {
     this.#assertActive();
     if (typeof update !== 'object' || update === null || Array.isArray(update)) {
       throw new TypeError('Text update must be an object');
@@ -798,10 +798,7 @@ export class Text<Technique extends RasterFormatMetadata> extends THREE.Object3D
     assertNoRawSpans(update, 'Text update');
     const normalizedUpdate = replacedContent(update);
     if (Reflect.ownKeys(normalizedUpdate).length === 0) return;
-    const next = normalizeDesired(
-      { ...this.#desired, ...normalizedUpdate } as TextProperties<Technique>,
-      this.#desired,
-    );
+    const next = normalizeDesired({ ...this.#desired, ...normalizedUpdate } as TextProperties<Format>, this.#desired);
     const nextRevision = checkedNextRevision(this.#desiredRevision);
     this.#binding?.stageUpdate(this.#root.member(this), next, nextRevision);
     this.#desired = next;
@@ -1495,10 +1492,10 @@ class ThreeMaterialBindingCache {
   }
 }
 
-function normalizeDesired<Technique extends RasterFormatMetadata>(
-  properties: TextProperties<Technique>,
-  previous?: DesiredTextState<Technique>,
-): DesiredTextState<Technique> {
+function normalizeDesired<Format extends RasterFormatMetadata>(
+  properties: TextProperties<Format>,
+  previous?: DesiredTextState<Format>,
+): DesiredTextState<Format> {
   if (typeof properties !== 'object' || properties === null || Array.isArray(properties)) {
     throw new TypeError('Text properties are required');
   }
@@ -1515,8 +1512,8 @@ function normalizeDesired<Technique extends RasterFormatMetadata>(
   if (typeof text !== 'string') throw new TypeError('Text content must be a string or formatted text');
   assertTextStyleFeatureRanges(style, 0, text.length, 'Text style');
   const stated =
-    (formatted?.spans as readonly TextSpan<Technique>[] | undefined) ??
-    (properties as DesiredTextState<Technique>).spans ??
+    (formatted?.spans as readonly TextSpan<Format>[] | undefined) ??
+    (properties as DesiredTextState<Format>).spans ??
     [];
   const resolved =
     previous !== undefined && previous.text === text && previous.spans === stated
@@ -1572,10 +1569,10 @@ function isFormattedText(value: unknown): value is FormattedText<RasterFormatMet
   );
 }
 
-function assertSpanRanges<Technique extends RasterFormatMetadata>(
+function assertSpanRanges<Format extends RasterFormatMetadata>(
   text: string,
-  spans: readonly TextSpan<Technique>[],
-): readonly TextSpan<Technique>[] {
+  spans: readonly TextSpan<Format>[],
+): readonly TextSpan<Format>[] {
   assertPairedSurrogates(text);
   for (const [index, span] of spans.entries()) {
     if (typeof span !== 'object' || span === null || Array.isArray(span)) {
@@ -1601,7 +1598,7 @@ function assertRange(subject: string, start: number, end: number, length: number
   }
 }
 
-function assertSpansNest<Technique extends RasterFormatMetadata>(spans: readonly TextSpan<Technique>[]): void {
+function assertSpansNest<Format extends RasterFormatMetadata>(spans: readonly TextSpan<Format>[]): void {
   const order = spans
     .map((span, index) => ({ span, index }))
     .filter((entry) => entry.span.start !== entry.span.end)

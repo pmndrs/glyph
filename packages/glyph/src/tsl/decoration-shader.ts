@@ -19,8 +19,8 @@ export interface TslDecorationShaderOutput {
 /**
  * Builds the canonical decoration node graph: a solid quad covering the record's
  * rectangle, colored by the packed decoration paint. The graph reads `positionLocal`
- * from the technique's unit quad spanning `[0, 1]` with the origin at the upper-left
- * corner, matching the glyph techniques. Only solid lines reach this graph: the public
+ * from the decoration program's unit quad spanning `[0, 1]` with the origin at the upper-left
+ * corner, matching the glyph raster programs. Only solid lines reach this graph: the public
  * boundary rejects other line styles, and `packed.y` retains the style bits for the
  * later patterned-paint implementation.
  *

@@ -3,7 +3,7 @@
  *
  * A payload is immutable data — bytes plus the typed measure a renderer needs to
  * realize it — never a GPU object, shader-language node, or renderer callback.
- * The union is deliberately small: it describes only what the shipped techniques
+ * The union is deliberately small: it describes only what the shipped raster formats
  * actually retain, not a universal GPU object model. A mismatched texture size,
  * index, accessor, or draw range is rejected before any device is touched.
  */
@@ -113,7 +113,7 @@ export interface PortableTexturePayload {
   readonly bytes: Uint8Array;
 }
 
-/** Immutable layered sample payload for array-texture techniques. */
+/** Immutable layered sample payload for array-texture raster formats. */
 export interface PortableTextureArrayPayload {
   readonly kind: 'texture-array';
   readonly format: PortableTextureFormat;

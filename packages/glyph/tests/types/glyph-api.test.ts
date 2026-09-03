@@ -178,6 +178,7 @@ async function configureGlyph(): Promise<void> {
   const first: RecordingHandle = glyph.handle('recording:first', recordingConfig);
   const second: RecordingHandle = glyph.handle('recording:second', recordingConfig);
   const wrapped: RecordingHandle = glyph.handle('recording:wrapped', wrappedRecordingConfig);
+  const structural: RecordingHandle = glyph.handle('recording:structural', { ...recordingConfig });
   first.name satisfies undefined;
   first.disposed satisfies boolean;
   first.kind satisfies 'recording-root';
@@ -191,6 +192,7 @@ async function configureGlyph(): Promise<void> {
   first();
   second.dispose();
   wrapped.dispose();
+  structural.dispose();
 
   // @ts-expect-error The config's exact root result is preserved.
   const wrong: { readonly kind: 'other' } = first;

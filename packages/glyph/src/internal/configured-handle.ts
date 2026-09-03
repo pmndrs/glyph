@@ -474,9 +474,9 @@ class ConfiguredRootServices<
     }
   }
 
-  createText<Technique extends RasterFormatMetadata>(
-    state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
-  ): GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']> {
+  createText<Format extends RasterFormatMetadata>(
+    state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
+  ): GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']> {
     const planner = this.#requiredPlanner();
     return new ConfiguredTextController(planner, this, state);
   }
@@ -492,8 +492,8 @@ class ConfiguredRootServices<
     this.#target!.syncTransforms();
   }
 
-  copy<Technique extends RasterFormatMetadata>(
-    text: GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']>,
+  copy<Format extends RasterFormatMetadata>(
+    text: GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']>,
     request: GlyphCopyRequest,
     destination: GlyphCopyDestination<Bindings, RendererResult, Boundary>,
   ): GlyphCopy<RendererResult> {
@@ -551,8 +551,8 @@ class ConfiguredRootServices<
     });
   }
 
-  bind<Technique extends RasterFormatMetadata>(
-    state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
+  bind<Format extends RasterFormatMetadata>(
+    state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ): BoundTextState {
     const leases: Array<{ dispose(): void }> = [];
     try {
@@ -602,8 +602,8 @@ class ConfiguredRootServices<
     this.#transformBindings.clear();
   }
 
-  #bindFormattedText<Technique extends RasterFormatMetadata>(
-    input: GlyphFormattedText<Technique, Bindings['materialInput']>,
+  #bindFormattedText<Format extends RasterFormatMetadata>(
+    input: GlyphFormattedText<Format, Bindings['materialInput']>,
     leases: Array<{ dispose(): void }>,
   ): RetainedFormattedText {
     return Object.freeze({
@@ -625,9 +625,7 @@ class ConfiguredRootServices<
     });
   }
 
-  #bindFontSelection<Technique extends RasterFormatMetadata>(
-    selection: FontSelection<Technique>,
-  ): HandleFontStackBinding {
+  #bindFontSelection<Format extends RasterFormatMetadata>(selection: FontSelection<Format>): HandleFontStackBinding {
     if ('fonts' in selection) return this.#handleState.bindFontStack(selection);
     const font = immutableFontSelectionFonts(selection)[0]!;
     let bind = this.#singleFontStackBindings.get(font);
@@ -749,12 +747,12 @@ interface BoundTextState {
 }
 
 class ConfiguredTextController<
-  Technique extends RasterFormatMetadata,
+  Format extends RasterFormatMetadata,
   Bindings extends GlyphBindingSet,
   RendererResult,
   Boundary,
   CodecValue extends Codec,
-> implements GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']> {
+> implements GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']> {
   readonly #services: ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>;
   readonly #text: RetainedText;
   #bound: BoundTextState;
@@ -763,7 +761,7 @@ class ConfiguredTextController<
   constructor(
     planner: RenderPlanner,
     services: ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>,
-    state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
+    state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ) {
     this.#services = services;
     this.#bound = services.bind(state);
@@ -779,7 +777,7 @@ class ConfiguredTextController<
     return this.#disposed;
   }
 
-  update(state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>): void {
+  update(state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>): void {
     this.#assertActive();
     this.#services.assertTextCall();
     const next = this.#services.bind(state);

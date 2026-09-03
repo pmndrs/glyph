@@ -58,10 +58,10 @@ export interface EngineFontBindingLease<Format extends RasterFormatMetadata> {
 }
 
 /** @internal The retained portable resources associated with one engine binding lease. */
-export interface EngineFontBindingResources<Technique extends RasterFormatMetadata> {
+export interface EngineFontBindingResources<Format extends RasterFormatMetadata> {
   readonly font: RegisteredFont;
-  readonly raster: RegisteredRaster<RasterKindOf<Technique>>;
-  readonly data: RasterDataOf<Technique>;
+  readonly raster: RegisteredRaster<RasterKindOf<Format>>;
+  readonly data: RasterDataOf<Format>;
 }
 
 interface EngineFontRegistryLike {
@@ -149,10 +149,10 @@ export function shapeGlyphEngine(glyphEngine: GlyphEngine): void {
 }
 
 /** @internal Acquire one counted engine-local Wasm shaping registration. */
-export function acquireEngineFontBinding<Technique extends RasterFormatMetadata>(
+export function acquireEngineFontBinding<Format extends RasterFormatMetadata>(
   glyphEngine: GlyphEngine,
-  font: Font<Technique>,
-): EngineFontBindingLease<Technique> {
+  font: Font<Format>,
+): EngineFontBindingLease<Format> {
   if (!(glyphEngine instanceof GlyphEngineImpl)) throw new TypeError('glyph engine was not created by this package');
   return glyphEngine._acquireFont(font);
 }
@@ -168,9 +168,9 @@ export function engineFontBindingHandle<Format extends RasterFormatMetadata>(
 }
 
 /** @internal Read retained portable resources while the engine binding lease is live. */
-export function engineFontBindingResources<Technique extends RasterFormatMetadata>(
-  binding: EngineFontBindingLease<Technique>,
-): EngineFontBindingResources<Technique> {
+export function engineFontBindingResources<Format extends RasterFormatMetadata>(
+  binding: EngineFontBindingLease<Format>,
+): EngineFontBindingResources<Format> {
   if (!(binding instanceof EngineFontBindingLeaseImpl)) {
     throw new TypeError('engine font binding was not created by this package');
   }
@@ -278,7 +278,7 @@ class GlyphEngineImpl implements GlyphEngine {
   }
 
   /** @internal */
-  _acquireFont<Technique extends RasterFormatMetadata>(font: Font<Technique>): EngineFontBindingLease<Technique> {
+  _acquireFont<Format extends RasterFormatMetadata>(font: Font<Format>): EngineFontBindingLease<Format> {
     this.#assertActive();
     const registered = immutableFontResources(font).font;
     const variantIdentity = immutableFontVariantIdentity(font);
@@ -636,20 +636,20 @@ function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-class EngineFontBindingLeaseImpl<Technique extends RasterFormatMetadata> implements EngineFontBindingLease<Technique> {
+class EngineFontBindingLeaseImpl<Format extends RasterFormatMetadata> implements EngineFontBindingLease<Format> {
   readonly #glyphEngine: GlyphEngineImpl;
   readonly #registration: EngineFontRegistration;
   readonly #identity: object;
-  readonly #raster: Technique;
-  readonly #resources: ImmutableFontResourceLease<Technique>;
+  readonly #raster: Format;
+  readonly #resources: ImmutableFontResourceLease<Format>;
   #disposed = false;
 
   constructor(
     glyphEngine: GlyphEngineImpl,
     registration: EngineFontRegistration,
     identity: object,
-    raster: Technique,
-    resources: ImmutableFontResourceLease<Technique>,
+    raster: Format,
+    resources: ImmutableFontResourceLease<Format>,
   ) {
     this.#glyphEngine = glyphEngine;
     this.#registration = registration;
@@ -662,7 +662,7 @@ class EngineFontBindingLeaseImpl<Technique extends RasterFormatMetadata> impleme
     return this.#disposed || this.#registration.disposed;
   }
 
-  get raster(): Technique {
+  get raster(): Format {
     return this.#raster;
   }
 
@@ -688,7 +688,7 @@ class EngineFontBindingLeaseImpl<Technique extends RasterFormatMetadata> impleme
   }
 
   /** @internal */
-  _resources(): EngineFontBindingResources<Technique> {
+  _resources(): EngineFontBindingResources<Format> {
     if (this.disposed) throw new Error('engine font binding has been disposed');
     return {
       font: this.#resources.font,

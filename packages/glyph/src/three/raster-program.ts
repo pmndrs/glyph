@@ -94,8 +94,8 @@ export interface ThreeRasterVariant<Schema extends TechniqueSchemaMetadata = Tec
   createMaterial(context: ThreeRasterMaterialContext): NodeMaterial;
 }
 
-export interface ThreeRasterProgram<Technique extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata> {
-  readonly codec: RasterCodec<Technique, Schema>;
+export interface ThreeRasterProgram<Format extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata> {
+  readonly codec: RasterCodec<Format, Schema>;
   readonly variant: NoInfer<ThreeRasterVariant<Schema>>;
 }
 
@@ -109,9 +109,9 @@ const THREE_RESERVED_ATTRIBUTE_WIDTHS: Readonly<Record<string, readonly number[]
 
 /** Register only the Three resource and material half of a portable RasterCodec. */
 export function registerThreeRasterProgram<
-  const Technique extends RasterFormatMetadata,
+  const Format extends RasterFormatMetadata,
   const Schema extends TechniqueSchemaMetadata,
->(program: ThreeRasterProgram<Technique, Schema>): void {
+>(program: ThreeRasterProgram<Format, Schema>): void {
   if (typeof program !== 'object' || program === null || Array.isArray(program)) {
     throw new TypeError('Three raster programs need a program object');
   }

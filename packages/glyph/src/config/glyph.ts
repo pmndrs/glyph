@@ -424,24 +424,24 @@ export type GlyphHandle<Root extends GlyphRoot = GlyphRoot> = ((name: string) =>
   };
 
 /** One adapter-authored formatted span before core interns its renderer identities. */
-export interface GlyphTextSpan<Technique extends RasterFormatMetadata, MaterialInput> {
+export interface GlyphTextSpan<Format extends RasterFormatMetadata, MaterialInput> {
   readonly start: number;
   readonly end: number;
-  readonly font?: FontSelection<Technique>;
+  readonly font?: FontSelection<Format>;
   readonly material?: MaterialInput;
   readonly style?: TextStyle;
 }
 
 /** Adapter-authored formatted content accepted by a root Text controller. */
-export interface GlyphFormattedText<Technique extends RasterFormatMetadata, MaterialInput> {
+export interface GlyphFormattedText<Format extends RasterFormatMetadata, MaterialInput> {
   readonly text: string;
-  readonly spans: readonly GlyphTextSpan<Technique, MaterialInput>[];
+  readonly spans: readonly GlyphTextSpan<Format, MaterialInput>[];
 }
 
 /** Complete desired Text state; adapters own partial-update and inheritance semantics above it. */
-export interface GlyphTextState<Technique extends RasterFormatMetadata, MaterialInput, TransformInput> {
-  readonly font: FontSelection<Technique>;
-  readonly text: string | GlyphFormattedText<Technique, MaterialInput>;
+export interface GlyphTextState<Format extends RasterFormatMetadata, MaterialInput, TransformInput> {
+  readonly font: FontSelection<Format>;
+  readonly text: string | GlyphFormattedText<Format, MaterialInput>;
   readonly transform: TransformInput;
   readonly material?: MaterialInput;
   readonly order?: number;
@@ -452,9 +452,9 @@ export interface GlyphTextState<Technique extends RasterFormatMetadata, Material
 }
 
 /** Narrow integration controller held privately by an adapter's Text object. */
-export interface GlyphTextController<Technique extends RasterFormatMetadata, MaterialInput, TransformInput> {
+export interface GlyphTextController<Format extends RasterFormatMetadata, MaterialInput, TransformInput> {
   readonly disposed: boolean;
-  update(state: GlyphTextState<Technique, MaterialInput, TransformInput>): void;
+  update(state: GlyphTextState<Format, MaterialInput, TransformInput>): void;
   measure(): ParagraphLayoutSummary;
   inspect(): GlyphLayoutInspection;
   dispose(): void;
@@ -468,14 +468,14 @@ export interface GlyphShapeOptions {
 
 /** Core-owned shaping/publication services scoped to exactly one anonymous or named root. */
 export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererResult, Boundary = unknown> {
-  createText<Technique extends RasterFormatMetadata>(
-    state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
-  ): GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']>;
+  createText<Format extends RasterFormatMetadata>(
+    state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
+  ): GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']>;
   /** Schedules root-owned semantic or presentation state for the next top-level `glyph.shape()`. */
   invalidate(): void;
   syncTransforms(): void;
-  copy<Technique extends RasterFormatMetadata>(
-    text: GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']>,
+  copy<Format extends RasterFormatMetadata>(
+    text: GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']>,
     request: GlyphCopyRequest,
     destination: GlyphCopyDestination<Bindings, RendererResult, Boundary>,
   ): GlyphCopy<RendererResult>;
@@ -620,13 +620,7 @@ interface GlyphConfigContract<
   readonly schema: GlyphSchema<Bindings, Boundary>;
   readonly fonts?: GlyphFontConfig<FontFormats>;
   readonly commands?: Partial<GlyphCommandCapacity>;
-  readonly root: GlyphRootRecipe<
-    Root,
-    Bindings,
-    RendererResult,
-    Boundary,
-    CodecValue
-  >;
+  readonly root: GlyphRootRecipe<Root, Bindings, RendererResult, Boundary, CodecValue>;
   encode(context: EncodeContext): CodecValue;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
   renderer(
@@ -643,10 +637,11 @@ export type GlyphConfig<
   CodecValue extends Codec = Codec,
 > = GlyphConfigContract<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>;
 
-export type GlyphConfigHandle<Config> =
-  Config extends { readonly root: { create(...args: never[]): infer Root extends GlyphRoot } }
-    ? GlyphHandle<Root>
-    : never;
+export type GlyphConfigHandle<Config> = Config extends {
+  readonly root: { create(...args: never[]): infer Root extends GlyphRoot };
+}
+  ? GlyphHandle<Root>
+  : never;
 
 /** Complete renderer binding vocabulary projected from one inferred GlyphConfig declaration. */
 export type GlyphConfigBindings<Config> = Config extends {

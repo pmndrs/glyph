@@ -1,5 +1,5 @@
 /**
- * Renderer-free TypeGPU shader functions. Bitmap is the currently published built-in realization; other techniques may
+ * Renderer-free TypeGPU shader functions. Bitmap is the currently published built-in realization; other raster formats may
  * publish TypeGPU, TSL, WGSL, GLSL, or engine-authored variants without changing their portable raster contracts.
  *
  * This subpath owns shader code only—no engine driving or renderer objects. A TypeGPU host composes the exported schemas
