@@ -10,7 +10,7 @@
  *   `.`        also carries the types applications can encounter through GlyphConfig and handles.
  *   `./config/*` carries renderer-neutral construction helpers for integration authors without
  *              charging every application for the complete integration DSL.
- *   `./three`  the Three.js integration -- `Text`, `TextGroup`, `FontLoader`, materials.
+ *   `./three`  the Three.js integration -- `ThreeConfig`, `Text`, `TextGroup`, materials.
  *
  * An integration may re-export a root name ONLY when that name appears in one of its own
  * signatures, because a caller should be able to name what `layout()` returns without
@@ -84,7 +84,6 @@ test('integrations re-export root names only when their own signatures use them'
             'three/glyphs.d.ts',
             'three/decorations.d.ts',
             'three/glyph-measurement.d.ts',
-            'three/font-loader.d.ts',
             'three/material.d.ts',
             'three/frame-error.d.ts',
           ].map(declaration),

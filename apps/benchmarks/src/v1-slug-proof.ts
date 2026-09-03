@@ -1,6 +1,6 @@
-import type { Font } from '@pmndrs/glyph';
+import { loadFont, type Font } from '@pmndrs/glyph';
 import { slug } from '@pmndrs/glyph/three/slug';
-import { FontLoader, type Text } from '@pmndrs/glyph/three';
+import type { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import interCompressedFontUrl from '../fixtures/rendering/inter-slug.font.glb.gz?url';
 import showcaseManifest from '../fixtures/rendering/showcase-slug-fixtures-v0.json' with { type: 'json' };
@@ -33,7 +33,6 @@ async function render(): Promise<TargetV1SlugResult> {
   if (canvas === null) throw new Error('target-v1 Slug proof canvas is missing');
   const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl2';
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, forceWebGL });
-  const loader = new FontLoader();
   const target = new THREE.RenderTarget(256, 128, { format: THREE.RGBAFormat, type: THREE.UnsignedByteType });
   const root = createBenchmarkThreeRoot('v1-slug');
   target.texture.colorSpace = THREE.NoColorSpace;
@@ -50,10 +49,7 @@ async function render(): Promise<TargetV1SlugResult> {
     if (manifest === undefined) throw new Error('Slug Inter fixture manifest is missing');
     const artifact = await fetchAuthenticatedGzipAsset(interCompressedFontUrl, manifest, 'Slug font fixture');
     fontUrl = URL.createObjectURL(new Blob([artifact], { type: 'model/gltf-binary' }));
-    font = await loader.loadAsync({
-      input: { baked: fontUrl },
-      raster: { raster: slug },
-    });
+    font = await loadFont({ baked: fontUrl }, { raster: slug });
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-128, 128, 64, -64, 0.1, 10);
     camera.position.z = 1;
@@ -100,7 +96,6 @@ async function render(): Promise<TargetV1SlugResult> {
     text?.removeFromParent();
     text?.dispose();
     font?.dispose();
-    loader.dispose();
     disposeBenchmarkThreeRoot(root);
     target.dispose();
     renderer.dispose();

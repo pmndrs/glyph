@@ -1,5 +1,6 @@
 import {
   createParagraph,
+  loadFont,
   type Constraints,
   type Font,
   type Paragraph,
@@ -8,7 +9,7 @@ import {
   type TextStyle,
 } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, type Text } from '@pmndrs/glyph/three';
+import type { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import amiriFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
@@ -96,7 +97,6 @@ type State =
   | { readonly kind: 'empty' }
   | {
       readonly kind: 'ready';
-      readonly loader: FontLoader;
       readonly inter: BitmapFont;
       readonly amiri: BitmapFont;
       readonly cjk: BitmapFont;
@@ -116,18 +116,17 @@ export function createParagraphContractsConformanceTarget(): BenchmarkTarget {
     status: () => 'ready',
     load: async (_controls, context) => {
       if (state.kind === 'ready') return;
-      const loader = new FontLoader(new THREE.LoadingManager());
       const fonts: BitmapFont[] = [];
       try {
         const load = (url: string, coverage?: string) =>
-          loader.loadAsync({
-            input: { baked: url },
-            raster: {
+          loadFont(
+            { baked: url },
+            {
               raster: bitmap,
               options: { strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) },
             },
-            ...(context?.signal === undefined ? {} : { signal: context.signal }),
-          });
+            context?.signal === undefined ? {} : { signal: context.signal },
+          );
         const loaded = await Promise.all([
           load(interFontUrl),
           load(amiriFontUrl),
@@ -138,10 +137,9 @@ export function createParagraphContractsConformanceTarget(): BenchmarkTarget {
         if (inter === undefined || amiri === undefined || cjk === undefined) {
           throw new Error('paragraph contract fonts did not load');
         }
-        state = { kind: 'ready', loader, inter, amiri, cjk };
+        state = { kind: 'ready', inter, amiri, cjk };
       } catch (error) {
         for (const font of fonts) font.dispose();
-        loader.dispose();
         throw error;
       }
     },
@@ -157,7 +155,6 @@ export function createParagraphContractsConformanceTarget(): BenchmarkTarget {
       ready.inter.dispose();
       ready.amiri.dispose();
       ready.cjk.dispose();
-      ready.loader.dispose();
     },
   };
 }

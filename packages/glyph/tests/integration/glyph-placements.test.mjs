@@ -2,31 +2,27 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 
-import { glyphFlags } from '@pmndrs/glyph';
+import { glyphFlags, loadFont as loadGlyphFont } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url);
 
-let loader;
 let loaded;
 
 async function loadFont() {
   if (loaded !== undefined) return loaded;
-  loader = new FontLoader();
-  loaded = await loader.loadAsync({
-    input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
-    raster: { raster: bitmap, options: { strikes: [16, 32] } },
-  });
+  loaded = await loadGlyphFont(
+    { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
+    { raster: bitmap, options: { strikes: [16, 32] } },
+  );
   return loaded;
 }
 
 after(() => {
   loaded?.dispose();
-  loader?.dispose();
 });
 
 async function mount(testContext, font, text, properties = {}) {

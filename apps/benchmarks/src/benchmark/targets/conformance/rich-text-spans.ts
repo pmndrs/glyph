@@ -1,7 +1,7 @@
-import type { Font, GlyphLayout, RasterFormatInput } from '@pmndrs/glyph';
+import { loadFont, type Font, type GlyphLayout, type RasterFormatInput } from '@pmndrs/glyph';
 import { id as hashId } from '@pmndrs/glyph/config/codec';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, type Text, type TextGroup, type ThreeRoot } from '@pmndrs/glyph/three';
+import type { TextGroup, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import interBitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
@@ -92,7 +92,6 @@ type RichTextSpansState =
   | { readonly kind: 'empty' }
   | {
       readonly kind: 'ready';
-      readonly loader: FontLoader;
       readonly body: Font<BitmapTechnique>;
       readonly companions: RichTextCompanionFonts;
     };
@@ -108,18 +107,15 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
     status: () => 'ready',
     load: async (_controls, context) => {
       if (state.kind === 'ready') return;
-      // A loading manager this target owns keeps its text engine, and the fonts registered in it, isolated from the
-      // shared manager every other benchmark surface loads through.
-      const loader = new FontLoader(new THREE.LoadingManager());
       const loaded: Font<BitmapTechnique>[] = [];
       try {
         const [body, foreign, emphasis] = await Promise.all(
           [interBitmapFontUrl, devanagariBitmapFontUrl, sourceSerifBitmapFontUrl].map(async (url) => {
-            const font = await loader.loadAsync({
-              input: { baked: url },
-              raster: bitmapRaster,
-              ...(context?.signal === undefined ? {} : { signal: context.signal }),
-            });
+            const font = await loadFont(
+              { baked: url },
+              bitmapRaster,
+              context?.signal === undefined ? {} : { signal: context.signal },
+            );
             loaded.push(font);
             return font;
           }),
@@ -140,10 +136,9 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
             );
           }
         }
-        state = { kind: 'ready', loader, body, companions: { emphasis, foreign } };
+        state = { kind: 'ready', body, companions: { emphasis, foreign } };
       } catch (error) {
         for (const font of loaded) font.dispose();
-        loader.dispose();
         throw error;
       }
     },
@@ -292,12 +287,11 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
     },
     dispose: async () => {
       if (state.kind !== 'ready') return;
-      const { body, companions, loader } = state;
+      const { body, companions } = state;
       state = { kind: 'empty' };
       body.dispose();
       companions.emphasis.dispose();
       companions.foreign.dispose();
-      loader.dispose();
     },
   };
 }

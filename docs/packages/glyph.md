@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:978c4572a2a97ed04809f144b5af5c3e166b434bb21187864ae3a35fbd0186b2'
+source_digest: 'sha256:957a3d6c157f903e08b702b888a0b46d26469cb6e1bb4f379c5c55bd9517c4ea'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -162,7 +162,7 @@ their device-relative leases.
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing immutable font/raster contracts, loading, fallback stacks, formatting helpers, and paragraphs. |
 | `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, and portable-resource construction helpers for integration authors.             |
-| `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, compatibility `FontLoader`, material factories, and Codec registration.          |
+| `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, material factories, and Codec registration.                                     |
 | `@pmndrs/glyph/three/bitmap` | Compatibility alias re-exporting the renderer-neutral Bitmap raster module.                                                                 |
 | `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                                   |
 | `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                                   |
@@ -599,11 +599,11 @@ against the same borrowed Rust command plan.
 
 The foundation currently has:
 
-- 154 passing Rust engine tests, including exact retained-cluster, revision-range, immediate line-convergence, and
+- 237 passing Rust engine tests, including exact retained-cluster, revision-range, immediate line-convergence, and
   later cursor-convergence regressions;
 - the package JavaScript/integration gate passing through the single-path public exports;
 - exact retained Amiri bidi, policy, ellipsis, clipping, UIKit-layout, and CJK contracts exercised by the browser
-  `paragraph-contracts` target through public `FontLoader`, `Text`, `TextGroup`, `measure()`, and `glyphs()`;
+  `paragraph-contracts` target through the shared Glyph font graph, public `Text`, `TextGroup`, `measure()`, and `glyphs()`;
 - 32/32 pixel-exact public Bitmap WebGL2 frames against the independent CPU oracle, including resize and clipping, with
   zero differing channel bytes and pinned SHA-256 `a47930d3…15e893`;
 - source-font SHA-256, registered shaping hashes, and HarfRust/HarfBuzz oracle identities authenticated independently of

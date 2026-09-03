@@ -15,7 +15,6 @@ import { slug } from '../../src/raster/slug.js';
 import { defineGlyphConfig } from '../../src/config/glyph.js';
 import {
   Decorations,
-  FontLoader,
   Glyphs,
   Text,
   TextGroup,
@@ -138,11 +137,5 @@ Constraints.create({
   invalid: { align: 'center' },
 });
 
-const loader = new FontLoader();
-const loaded = loader.loadAsync({
-  input: { baked: '/fonts/Inter.font.glb' },
-  raster: { raster: bitmap, options: { strikes: [16] } },
-});
-void loaded;
 void labels;
 void compositing;

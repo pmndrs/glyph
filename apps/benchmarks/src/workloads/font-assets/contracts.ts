@@ -67,7 +67,7 @@ interface CommonBenchmarkFontAsset {
 }
 
 /**
- * One fixture loaded once through `FontLoader`. `loaded` is the canonical Font lease; `data` is a CPU-oracle view
+ * One fixture loaded once through the shared Glyph font graph. `loaded` is the canonical Font lease; `data` is a CPU-oracle view
  * reconstructed from the same compiled binding and portable payloads consumed by renderer integrations.
  */
 export type BenchmarkFontAsset =

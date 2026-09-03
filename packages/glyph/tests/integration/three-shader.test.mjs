@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { loadFont } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { defineTextMaterial, FontLoader } from '@pmndrs/glyph/three';
+import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { bitmapShader, decorationShader, msdfShader, slugShader } from '../../dist/tsl.js';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
@@ -21,11 +22,10 @@ test('the canonical technique shaders are exported as callable node builders', (
 
 test('a custom Three material composes over the Bitmap shader in the Rust command-buffer draw path', async (t) => {
   const three = await createThreeTestHandle(t);
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: { bytes: await readFile(fontUrl) } },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
   const built = [];
   const material = defineTextMaterial((context) => {
     const composed = context.createDefaultMaterial();
@@ -65,16 +65,14 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
   label.removeFromParent();
   label.dispose();
   font.dispose();
-  loader.dispose();
 });
 
 test('the same custom material factory may override a separate decoration realization', async (t) => {
   const three = await createThreeTestHandle(t);
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: { bytes: await readFile(fontUrl) } },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
   const realizations = [];
   const material = defineTextMaterial((context) => {
     realizations.push(context.kind === 'glyph' ? context.format : context.kind);
@@ -100,16 +98,14 @@ test('the same custom material factory may override a separate decoration realiz
 
   label.dispose();
   font.dispose();
-  loader.dispose();
 });
 
 test('Bitmap pixel snapping is an explicit opt-in graph specialization', async (t) => {
   const three = await createThreeTestHandle(t);
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: { bytes: await readFile(fontUrl) } },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
   const clipPositions = [];
   const material = defineTextMaterial((context) => {
     clipPositions.push(context.shader.clipPosition);
@@ -127,7 +123,6 @@ test('Bitmap pixel snapping is an explicit opt-in graph specialization', async (
   unsnapped.dispose();
   snapped.dispose();
   font.dispose();
-  loader.dispose();
 });
 
 function rootDraws(scene) {

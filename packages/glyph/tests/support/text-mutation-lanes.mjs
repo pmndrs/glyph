@@ -19,8 +19,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 
-import { glyph, span, txt } from '@pmndrs/glyph';
-import { FontLoader, ThreeConfig } from '@pmndrs/glyph/three';
+import { glyph, loadFont, span, txt } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 // The identity lane is named by the codec contract that packs it, not by a literal here.
@@ -46,7 +46,6 @@ await glyph.init();
  */
 export function createFontCache(specs) {
   const loaded = new Map();
-  const loader = new FontLoader();
   return {
     async load(name) {
       const cached = loaded.get(name);
@@ -54,19 +53,18 @@ export function createFontCache(specs) {
       const spec = specs[name];
       if (spec === undefined) throw new Error(`no fixture named ${name}`);
       const bytes = await readFile(new URL(spec.file, fixtures));
-      const font = await loader.loadAsync({
-        input: {
+      const font = await loadFont(
+        {
           baked: { bytes: spec.file.endsWith('.gz') ? gunzipSync(bytes) : bytes, ownership: 'copy' },
         },
-        raster: spec.raster,
-      });
+        spec.raster,
+      );
       loaded.set(name, font);
       return font;
     },
     dispose() {
       for (const font of loaded.values()) font.dispose();
       loaded.clear();
-      loader.dispose();
     },
   };
 }

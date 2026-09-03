@@ -5,7 +5,6 @@ import './three/slug.js';
 export type { FontSelection } from './loaded-font.js';
 export type { GlyphBufferCapacity, PropertyList } from './text-properties.js';
 export { Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
-export { FontLoader } from './three/font-loader.js';
 export { defineTextMaterial } from './three/material.js';
 export { span } from './three/span.js';
 export type {
@@ -22,7 +21,6 @@ export type {
   ThreeRasterPlanProgram,
   ThreeRasterPlanVariant,
 } from './three/plan-program-registry.js';
-export type { ThreeFontLoaderOptions, ThreeFontLoadRequest } from './three/font-loader.js';
 export { TextFrameError } from './three/frame-error.js';
 export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.js';
 export { Text, TextGroup, ThreeRoot } from './three/text.js';

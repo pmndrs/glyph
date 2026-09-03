@@ -3,12 +3,11 @@ import {
   type BakeProgressListener,
   type FontLibrary,
   type Font,
+  loadFont,
   type RuntimeFontBake,
   type RuntimeFontBakeRequest,
   type RasterFormatInput,
 } from '@pmndrs/glyph';
-import { FontLoader } from '@pmndrs/glyph/three';
-import * as THREE from 'three/webgpu';
 
 import type { FontDelivery } from '../../benchmark/url-state';
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
@@ -72,18 +71,7 @@ export function measuredRuntimeFontBake(
   };
 }
 
-/**
- * The Three font loader keys one text engine per loading manager, and every `Text` in a paragraph batch must share one
- * engine. A caller-supplied immutable library gives an isolated benchmark surface one manager and loader domain.
- */
-const sharedLoadingManager = new THREE.LoadingManager();
-const isolatedLoadingManagers = new WeakMap<FontLibrary, THREE.LoadingManager>();
-const fontLoaders = new WeakMap<THREE.LoadingManager, FontLoader>();
-
-/**
- * Loads one font from artifact bytes the caller already fetched and authenticated. `LoadedFontInput` accepts URLs
- * rather than bytes, so the authenticated artifact is published as a blob URL that is revoked once the load settles.
- */
+/** Loads one font from artifact bytes the caller already fetched and authenticated. */
 export async function loadBakedFont<Format extends AnyRasterFormat>({
   artifact,
   raster,
@@ -95,16 +83,7 @@ export async function loadBakedFont<Format extends AnyRasterFormat>({
   readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
 }): Promise<Font<Format>> {
-  const url = URL.createObjectURL(new Blob([artifact], { type: 'model/gltf-binary' }));
-  try {
-    return await fontLoader(library).loadAsync({
-      input: { baked: url },
-      raster,
-      ...(signal === undefined ? {} : { signal }),
-    });
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  return loadThroughLibrary(library, { baked: { bytes: artifact, ownership: 'copy' } }, raster, signal);
 }
 
 /** Loads one font from its source URL, baking the core artifact and the selected raster through the measured bakers. */
@@ -121,29 +100,15 @@ export function loadSourceFont<Format extends AnyRasterFormat>({
   readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
 }): Promise<Font<Format>> {
-  return fontLoader(library).loadAsync({
-    input: { source, runtimeBake },
-    raster,
-    ...(signal === undefined ? {} : { signal }),
-  });
+  return loadThroughLibrary(library, { source, runtimeBake }, raster, signal);
 }
 
-function fontLoader(library: FontLibrary | undefined): FontLoader {
-  const manager = loadingManager(library);
-  let loader = fontLoaders.get(manager);
-  if (loader === undefined) {
-    loader = new FontLoader(manager, library === undefined ? {} : { library });
-    fontLoaders.set(manager, loader);
-  }
-  return loader;
-}
-
-function loadingManager(library: FontLibrary | undefined): THREE.LoadingManager {
-  if (library === undefined) return sharedLoadingManager;
-  let manager = isolatedLoadingManagers.get(library);
-  if (manager === undefined) {
-    manager = new THREE.LoadingManager();
-    isolatedLoadingManagers.set(library, manager);
-  }
-  return manager;
+function loadThroughLibrary<Format extends AnyRasterFormat>(
+  library: FontLibrary | undefined,
+  input: Parameters<typeof loadFont>[0],
+  raster: RasterFormatInput<Format>,
+  signal: AbortSignal | undefined,
+): Promise<Font<Format>> {
+  const options = signal === undefined ? {} : { signal };
+  return library === undefined ? loadFont(input, raster, options) : library.loadFont(input, raster, options);
 }

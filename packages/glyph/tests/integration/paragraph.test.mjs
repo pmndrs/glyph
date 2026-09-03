@@ -4,13 +4,12 @@ import test from 'node:test';
 
 import * as THREE from 'three/webgpu';
 
-import { createParagraph, txt } from '@pmndrs/glyph';
+import { createParagraph, loadFont, txt } from '@pmndrs/glyph';
 import { techniqueProgram } from '@pmndrs/glyph/config/codec-program';
 import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
 import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
 import { defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader } from '@pmndrs/glyph/three';
 
 import {
   createImmutableFontLease,
@@ -64,17 +63,14 @@ registerRasterPlanProgram({
 });
 
 async function bootstrap() {
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: { bytes: await readFile(fontUrl) } },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
   return {
-    loader,
     font,
     async [Symbol.asyncDispose]() {
       font.dispose();
-      loader.dispose();
     },
   };
 }

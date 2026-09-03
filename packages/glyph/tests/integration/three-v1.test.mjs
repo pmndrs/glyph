@@ -19,7 +19,6 @@ import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
 import {
   defineTextMaterial,
-  FontLoader,
   localToWorldMatrix,
   span as textSpan,
   ThreeConfig,
@@ -417,11 +416,10 @@ test('detached matrix helpers round-trip aliased and independent targets with a 
 
 test('Text.breakApart imports a planner-assisted copy with exact world alignment and full matrices', async (t) => {
   const three = await createThreeTestHandle(t);
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const sourceParent = new THREE.Group();
   sourceParent.position.set(-4, 2, 3);
@@ -613,17 +611,15 @@ test('Text.breakApart imports a planner-assisted copy with exact world alignment
     detached?.dispose();
     label.dispose();
     font.dispose();
-    loader.dispose();
   }
 });
 
 test('detached glyphs retain their engine domain after the source and font owners are disposed', async (t) => {
   const three = await createThreeTestHandle(t);
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const label = three.createText({ font, text: 'outlives source', style: { fontSize: 16 } });
   scene.add(label);
@@ -632,7 +628,6 @@ test('detached glyphs retain their engine domain after the source and font owner
   scene.add(detached);
   label.dispose();
   font.dispose();
-  loader.dispose();
   three.dispose();
   try {
     assert.ok(detached.materials.length > 0);
@@ -644,11 +639,10 @@ test('detached glyphs retain their engine domain after the source and font owner
 
 test('Text.breakApart returns a paragraph-scoped independent decoration plan when one exists', async (t) => {
   const three = await createThreeTestHandle(t);
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const label = three.createText({
     font,
@@ -725,17 +719,15 @@ test('Text.breakApart returns a paragraph-scoped independent decoration plan whe
     detached?.dispose();
     label.dispose();
     font.dispose();
-    loader.dispose();
   }
 });
 
 test('Text.breakApart preserves TextGroup paint order across detached roots', async (t) => {
   const three = await createThreeTestHandle(t);
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const layer = new THREE.Group();
   layer.renderOrder = 3;
@@ -802,17 +794,15 @@ test('Text.breakApart preserves TextGroup paint order across detached roots', as
     label.dispose();
     group.dispose();
     font.dispose();
-    loader.dispose();
   }
 });
 
 test('Text.breakApart preserves per-span material routing with independently owned instances', async (t) => {
   const three = await createThreeTestHandle(t);
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
   const namedMaterial = (name) =>
     defineTextMaterial((context) => {
       const material = context.createDefaultMaterial();
@@ -853,7 +843,6 @@ test('Text.breakApart preserves per-span material routing with independently own
     detached?.dispose();
     label.dispose();
     font.dispose();
-    loader.dispose();
   }
 });
 
@@ -876,8 +865,7 @@ test('one portable request returns typed resources for every declared technique'
 test('Three carries supported text effects into MSDF lanes and rejects them for unsupported techniques', async (t) => {
   const three = await createThreeTestHandle(t);
   const bytes = await readFile(multiTechniqueFontUrl);
-  const loader = new FontLoader();
-  const [bitmapFont, msdfFont, slugFont] = await loader.loadFontsAsync({ baked: dataUrl(bytes) }, [
+  const [bitmapFont, msdfFont, slugFont] = await loadFont({ baked: dataUrl(bytes) }, [
     { raster: bitmap, options: { strikes: [32] } },
     { raster: msdf },
     { raster: slug },
@@ -936,48 +924,21 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
     bitmapFont.dispose();
     msdfFont.dispose();
     slugFont.dispose();
-    loader.dispose();
   }
 });
 
-test('Three font loading rejects malformed arguments before starting LoadingManager work', async () => {
-  const manager = new THREE.LoadingManager();
-  let starts = 0;
-  manager.onStart = () => {
-    starts += 1;
-  };
-  const loader = new FontLoader(manager);
-  const input = { baked: 'data:model/gltf-binary;base64,' };
-
-  assert.throws(
-    () => loader.load({ input, raster: { raster: msdf }, retry: true }, () => {}),
-    /only accepts input, raster, and signal/,
-  );
-  await assert.rejects(loader.loadAsync({ input, raster: { raster: bitmap } }), /options/);
-  await assert.rejects(loader.loadFontsAsync(input, []), /at least one raster format/);
-  await assert.rejects(loader.loadFontsAsync(input, [{ raster: msdf }], { retry: true }), /only accept signal/);
-  assert.equal(starts, 0);
-  loader.dispose();
-});
-
-test('Three handle ownership follows immutable variants across loaders and user-font disposal', async (t) => {
+test('Three handle ownership follows immutable variants across user-font disposal', async (t) => {
   const three = await createThreeTestHandle(t);
   const library = createFontLibrary();
-  const firstLoader = new FontLoader(undefined, { library });
-  const secondLoader = new FontLoader(undefined, { library });
-  const request = {
-    input: { baked: { bytes: await readFile(fontUrl) } },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  };
-  const [first, second] = await Promise.all([firstLoader.loadAsync(request), secondLoader.loadAsync(request)]);
+  const input = { baked: { bytes: await readFile(fontUrl) } };
+  const raster = { raster: bitmap, options: { strikes: [16] } };
+  const [first, second] = await Promise.all([library.loadFont(input, raster), library.loadFont(input, raster)]);
   assert.notEqual(first, second, 'each caller owns an independent Font lease');
 
   const label = three.createText({ font: second, text: 'retained' });
   first.dispose();
-  firstLoader.dispose();
-  secondLoader.dispose();
   second.dispose();
-  assert.ok(label.measure().glyphCount > 0, 'a live Text retains everything needed after loader and Font disposal');
+  assert.ok(label.measure().glyphCount > 0, 'a live Text retains everything needed after Font disposal');
 
   label.dispose();
   library.dispose();
@@ -986,11 +947,10 @@ test('Three handle ownership follows immutable variants across loaders and user-
 
 test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose through the scene graph', async (t) => {
   const three = await createThreeTestHandle(t);
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
   const emptyScene = new THREE.Scene();
   const initiallyEmpty = three.createText({ font, text: '' });
   emptyScene.add(initiallyEmpty);
@@ -1234,16 +1194,14 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   label.removeFromParent();
   label.dispose();
   font.dispose();
-  loader.dispose();
 });
 
 test('nested TextGroup nodes inherit presentation without creating nested publication boundaries', async (t) => {
   const three = await createThreeTestHandle(t);
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
   const inheritedMaterial = defineTextMaterial((context) => {
     const material = context.createDefaultMaterial();
     material.name = 'outer-inherited';
@@ -1284,7 +1242,6 @@ test('nested TextGroup nodes inherit presentation without creating nested public
     inner.dispose();
     outer.dispose();
     font.dispose();
-    loader.dispose();
   }
 });
 
@@ -2282,19 +2239,16 @@ test('a standard ligature that absorbs a grapheme publishes and keeps typing', a
 });
 
 function createThreeFontDomain(firstLoad, onDispose = () => {}) {
-  const loader = new FontLoader();
   let initial = true;
   return {
     loadFont(input, raster) {
-      const load = () =>
-        Array.isArray(raster) ? loader.loadFontsAsync(input, raster) : loader.loadAsync({ input, raster });
+      const load = () => loadFont(input, raster);
       if (!initial || firstLoad === undefined) return load();
       initial = false;
       return firstLoad(load);
     },
     dispose() {
       onDispose();
-      loader.dispose();
     },
   };
 }

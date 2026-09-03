@@ -203,9 +203,13 @@ then-proposed design. The implementation outcome above is authoritative for the 
 
 ### Initialization and fonts
 
-1. Constructing `FontLoader` does not initialize the engine. The first load or `initFont()` lazily calls `acquireThreeLoaderDomain()` ([font-loader.ts:115-123](../../packages/glyph/src/three/font-loader.ts#L115-L123), [155-158](../../packages/glyph/src/three/font-loader.ts#L155-L158)).
+1. In the audited baseline, constructing the now-removed `FontLoader` did not initialize the engine. Its first load or
+   `initFont()` lazily acquired the historical Three loader domain; the implementation was deleted when loading moved to
+   Glyph's renderer-neutral font graph.
 2. The historical domain started `createGlyphEngine()`, then created one coordinator over that engine. Loader, associated-font, and text leases kept the domain alive. That source was removed when D-306 internalized handle/root ownership.
-3. A completed load returned a root `Font` and associated its immutable technique-variant identity with the historical domain ([font-loader.ts:132-152](../../packages/glyph/src/three/font-loader.ts#L132-L152)). The removed association was renderer bookkeeping; it did not make the `Font` mutable or renderer-owned.
+3. A completed baseline load returned a root `Font` and associated its immutable raster-variant identity with that
+   historical domain. The removed association was renderer bookkeeping; it did not make the `Font` mutable or
+   renderer-owned.
 
 ### Text construction and desired state
 

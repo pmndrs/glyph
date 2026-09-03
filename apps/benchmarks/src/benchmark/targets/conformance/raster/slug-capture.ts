@@ -1,6 +1,6 @@
-import type { Font, GlyphLayout } from '@pmndrs/glyph';
+import { loadFont as loadGlyphFont, type Font, type GlyphLayout } from '@pmndrs/glyph';
 import { slug } from '@pmndrs/glyph/three/slug';
-import { FontLoader, type Text, type ThreeRoot } from '@pmndrs/glyph/three';
+import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { TargetRunOutput } from '../../../contracts';
@@ -701,7 +701,7 @@ async function loadConformanceSlugFont(
 }
 
 /**
- * Target-v1 `FontLoader` publishes no fetch hook, so the only way to observe which URLs one external artifact touches
+ * The public loader publishes no fetch hook, so the only way to observe which URLs one external artifact touches
  * is to own `globalThis.fetch` for the duration of that load. The swap is scoped to this call and restored
  * unconditionally; the embedded fixture of a parity run has already finished loading before it is installed.
  */
@@ -711,7 +711,6 @@ async function loadExternalSlugFont(
   signal?: AbortSignal,
 ): Promise<LoadedSlugConformanceFont> {
   signal?.throwIfAborted();
-  const loader = new FontLoader();
   let sourceTypes: SlugRasterSourceTypes | undefined;
   let sourceInspectionError: unknown;
   const installedFetch = globalThis.fetch;
@@ -730,11 +729,7 @@ async function loadExternalSlugFont(
   try {
     let font: Font<typeof slug>;
     try {
-      font = await loader.loadAsync({
-        input: { baked: artifactUrl },
-        raster: { raster: slug },
-        ...(signal === undefined ? {} : { signal }),
-      });
+      font = await loadGlyphFont({ baked: artifactUrl }, { raster: slug }, signal === undefined ? {} : { signal });
     } catch (error) {
       throw new Error(`External Slug load failed: ${errorMessages(error).join(' <- ')}`, { cause: error });
     }
@@ -749,7 +744,6 @@ async function loadExternalSlugFont(
     };
   } finally {
     globalThis.fetch = installedFetch;
-    loader.dispose();
   }
 }
 

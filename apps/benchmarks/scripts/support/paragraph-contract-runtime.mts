@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import {
   glyph,
+  loadFont,
   type Constraints,
   type Font,
   type GlyphLayoutInspection,
@@ -10,7 +11,7 @@ import {
 } from '@pmndrs/glyph';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, ThreeConfig } from '@pmndrs/glyph/three';
+import { ThreeConfig } from '@pmndrs/glyph/three';
 
 await glyph.init();
 let nextContractHandle = 1;
@@ -38,27 +39,19 @@ export interface LegacyConstraints {
   readonly overflow?: 'visible' | 'clip' | 'ellipsis';
 }
 
-export async function createParagraphContractRuntime() {
-  const loader = new FontLoader();
-  return {
-    async loadFont(url: URL, coverage?: string) {
-      const bytes = await readFile(url);
-      const [font, artifact] = await Promise.all([
-        loader.loadAsync({
-          input: { baked: { bytes, ownership: 'copy' } },
-          raster: {
-            raster: bitmap,
-            options: { strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) },
-          },
-        }),
-        validateFontArtifact(bytes),
-      ]);
-      return { font, shapingHash: artifact.shapingHash, dispose: () => font.dispose() } satisfies ContractFontFixture;
-    },
-    dispose() {
-      loader.dispose();
-    },
-  };
+export async function loadContractFont(url: URL, coverage?: string): Promise<ContractFontFixture> {
+  const bytes = await readFile(url);
+  const [font, artifact] = await Promise.all([
+    loadFont(
+      { baked: { bytes, ownership: 'copy' } },
+      {
+        raster: bitmap,
+        options: { strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) },
+      },
+    ),
+    validateFontArtifact(bytes),
+  ]);
+  return { font, shapingHash: artifact.shapingHash, dispose: () => font.dispose() };
 }
 
 export function createContractText(font: ContractFont, text: string, style: TextStyle) {

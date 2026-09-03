@@ -22,7 +22,7 @@ import { Fragment, StrictMode, Suspense, createElement, useLayoutEffect } from '
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { glyph } from '@pmndrs/glyph';
-import { FontLoader, ThreeConfig } from '@pmndrs/glyph/three';
+import { ThreeConfig } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
 
 import { GlyphProvider, Text, TextGroup, useFont } from '@pmndrs/glyph/react';
@@ -45,16 +45,15 @@ globalThis.requestAnimationFrame ??= () => 0;
 globalThis.cancelAnimationFrame ??= () => undefined;
 
 async function loadFixture() {
-  const loader = new FontLoader();
-  const font = await loader.loadAsync({
-    input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
-    raster: { raster: bitmap, options: { strikes: [16] } },
-  });
+  const face = glyph.fontFace(
+    { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
+    { format: bitmap({ strikes: [16] }) },
+  );
+  await face.bitmap.load();
   return {
-    font,
+    font: face.bitmap,
     dispose() {
-      font.dispose();
-      loader.dispose();
+      face.dispose();
     },
   };
 }
@@ -177,7 +176,7 @@ test('GlyphProvider resolves a scoped string through its lazy fontFaces table', 
   );
   const renderer = await create(tree);
   try {
-    await face.load(r3fHandle);
+    await face.load();
     await renderer.update(tree);
     await waitFor(() => mounted);
     assert.equal(mounted, true);
@@ -329,7 +328,7 @@ test('StrictMode remount cycles balance their paragraph leases', async () => {
   }
 });
 
-test('user font and loader handles may dispose before React releases its Text lease', async () => {
+test('a FontFace may dispose before React releases its mounted Text lease', async () => {
   const { create } = (await import('@react-three/test-renderer/webgpu')).default;
   const fixture = await loadFixture();
   const { font } = fixture;
@@ -351,7 +350,7 @@ test('user font and loader handles may dispose before React releases its Text le
   );
 
   fixture.dispose();
-  assert.equal(font.disposed, true);
+  assert.equal(font.face.disposed, true);
   assert.equal(r3fHandle.textCount, 1, 'the mounted Text remains retained by the selected handle root');
   await renderer.unmount();
   fixture.dispose();

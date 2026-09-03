@@ -1,4 +1,4 @@
-import { glyph, loadFont } from '@pmndrs/glyph';
+import { glyph } from '@pmndrs/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import {
   defineExampleConfig,
@@ -41,19 +41,20 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
   const devices = [gpuDevice];
   const renderers = [renderer];
   let handle: ExampleHandle = glyph.handle('benchmark:typegpu:primary', defineExampleConfig(renderer));
-  let font;
+  let fontFace;
   let text: ExampleText | undefined;
   let textDisposed = false;
   try {
-    font = await loadFont(
+    fontFace = glyph.fontFace(
       {
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       },
-      { raster: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
+      { format: glyphExample({ paletteSeed: 17, inset: 0.08 }) },
     );
+    await fontFace.glyphExample.load();
     text = handle.createText({
-      font,
+      font: fontFace.glyphExample,
       text: 'Portable TypeGPU',
       fontSize: 64,
       width: 768,
@@ -76,7 +77,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       renderers.push(renderer);
       handle = glyph.handle('benchmark:typegpu:recovered', defineExampleConfig(renderer));
       text = handle.createText({
-        font,
+        font: fontFace.glyphExample,
         text: 'Updated WebGPU',
         color: '#ff40a0',
         fontSize: 64,
@@ -147,7 +148,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
     }
   } finally {
     handle.dispose();
-    font?.dispose();
+    fontFace?.dispose();
     for (const ownedRenderer of renderers.reverse()) ownedRenderer.dispose();
     for (const ownedDevice of devices.reverse()) ownedDevice.destroy();
   }

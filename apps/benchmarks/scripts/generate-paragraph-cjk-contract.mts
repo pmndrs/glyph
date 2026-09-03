@@ -7,7 +7,7 @@ import { createFontBaker } from '@pmndrs/glyph/bake';
 import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts';
 import {
   createContractText,
-  createParagraphContractRuntime,
+  loadContractFont,
   preserveEquivalentLegacyNumbers,
   type LegacyConstraints,
 } from './support/paragraph-contract-runtime.mts';
@@ -32,8 +32,7 @@ const [source, bakerWasm] = await Promise.all([
 const baker = await createFontBaker(bakerWasm);
 const artifact = baker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } }).artifacts[0];
 if (artifact === undefined) throw new Error('font baker returned no CJK artifact');
-const runtime = await createParagraphContractRuntime();
-const font = await runtime.loadFont(
+const font = await loadContractFont(
   new URL('../fixtures/rendering/noto-sans-cjk-contract-bitmap-16.font.glb', import.meta.url),
   coverage,
 );
@@ -105,7 +104,6 @@ try {
   }
 } finally {
   font.dispose();
-  runtime.dispose();
 }
 
 function firstDifference(left: string, right: string): number {

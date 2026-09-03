@@ -1,6 +1,6 @@
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import type { Font } from '@pmndrs/glyph';
-import { FontLoader, type Text } from '@pmndrs/glyph/three';
+import { loadFont, type Font } from '@pmndrs/glyph';
+import type { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { proveDetachedRasterParity } from './v1-detached-proof';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from './three-root';
@@ -30,7 +30,6 @@ async function render(): Promise<TargetV1BitmapResult> {
   if (canvas === null) throw new Error('target-v1 proof canvas is missing');
   const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl2';
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, forceWebGL });
-  const loader = new FontLoader();
   const target = new THREE.RenderTarget(256, 128, { format: THREE.RGBAFormat, type: THREE.UnsignedByteType });
   const root = createBenchmarkThreeRoot('v1-bitmap');
   target.texture.colorSpace = THREE.NoColorSpace;
@@ -42,10 +41,10 @@ async function render(): Promise<TargetV1BitmapResult> {
     renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     renderer.toneMapping = THREE.NoToneMapping;
     await renderer.init();
-    font = await loader.loadAsync({
-      input: { baked: '/fixtures/rendering/inter-bitmap-16.font.glb' },
-      raster: { raster: bitmap, options: { strikes: [16] } },
-    });
+    font = await loadFont(
+      { baked: '/fixtures/rendering/inter-bitmap-16.font.glb' },
+      { raster: bitmap, options: { strikes: [16] } },
+    );
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-128, 128, 64, -64, 0.1, 10);
     camera.position.z = 1;
@@ -102,7 +101,6 @@ async function render(): Promise<TargetV1BitmapResult> {
     text?.removeFromParent();
     text?.dispose();
     font?.dispose();
-    loader.dispose();
     disposeBenchmarkThreeRoot(root);
     target.dispose();
     renderer.dispose();

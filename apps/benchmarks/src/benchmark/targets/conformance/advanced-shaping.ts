@@ -1,6 +1,6 @@
-import type { Font, RasterFormatInput } from '@pmndrs/glyph';
+import { loadFont, type Font, type RasterFormatInput } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, type Text, type TextStyle } from '@pmndrs/glyph/three';
+import type { Text, TextStyle } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import amiriBitmapFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
@@ -36,7 +36,6 @@ type AdvancedShapingConformanceState =
   | { readonly kind: 'empty' }
   | {
       readonly kind: 'ready';
-      readonly loader: FontLoader;
       readonly fonts: ReadonlyMap<AdvancedShapingFontFixture, Font<BitmapTechnique>>;
     };
 
@@ -51,19 +50,16 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
     status: () => 'ready',
     load: async (_controls, context) => {
       if (state.kind === 'ready') return;
-      // A loading manager this target owns keeps its text engine, and the fonts registered in it, isolated from the
-      // shared manager every other benchmark surface loads through.
-      const loader = new FontLoader(new THREE.LoadingManager());
       const fonts = new Map<AdvancedShapingFontFixture, Font<BitmapTechnique>>();
       try {
         const fixtures = [...new Set(ADVANCED_SHAPING_CASES.map((definition) => definition.fontFixture))];
         const results = await Promise.allSettled(
           fixtures.map(async (fixture) => {
-            const font = await loader.loadAsync({
-              input: { baked: fontUrlByFixture[fixture] },
-              raster: bitmapRaster,
-              ...(context?.signal === undefined ? {} : { signal: context.signal }),
-            });
+            const font = await loadFont(
+              { baked: fontUrlByFixture[fixture] },
+              bitmapRaster,
+              context?.signal === undefined ? {} : { signal: context.signal },
+            );
             return [fixture, font] as const;
           }),
         );
@@ -72,10 +68,9 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
         }
         const failure = results.find((result) => result.status === 'rejected');
         if (failure !== undefined) throw failure.reason;
-        state = { kind: 'ready', loader, fonts };
+        state = { kind: 'ready', fonts };
       } catch (error) {
         for (const font of fonts.values()) font.dispose();
-        loader.dispose();
         throw error;
       }
     },
@@ -198,10 +193,9 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
     },
     dispose: async () => {
       if (state.kind !== 'ready') return;
-      const { fonts, loader } = state;
+      const { fonts } = state;
       state = { kind: 'empty' };
       for (const font of fonts.values()) font.dispose();
-      loader.dispose();
     },
   };
 }
