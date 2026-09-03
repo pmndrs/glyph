@@ -92,15 +92,19 @@ export function StripTile({
         style={{ fontSize: BIG_FONT, color: '#ffffff', letterSpacing: 0.04, lineHeight: 1 }}
         layout={{ wrap: 'none', align: 'end' }}
         constraints={{ width: { mode: 'exact', size: STRIP.width } }}
+        // One line, end-aligned in a box exactly the strip. `wrap: 'none'` means the passage is
+        // never broken, so it grows leftward out of the box as it is typed and the camera's
+        // frustum clips it at the strip's edge: the newest word is always at the right, and
+        // everything older has already left. Nothing measures or truncates the string — the box
+        // and the frustum do it, so the cost is the same whatever the passage has grown to.
         position={[-STRIP.width / 2, BIG_FONT / 2, 0]}
       >
         {before.toUpperCase()}
         <Text style={{ color: ACCENT }}>{current.toUpperCase()}</Text>
-        {'   '}
       </Text>
       {[SMALL_LANE_Y, -SMALL_LANE_Y].map((y, lane) => (
         <Text
-          key={lane}
+          key={y}
           font={font}
           style={{ fontSize: SMALL_FONT, color: '#9aa6be', letterSpacing: SMALL_LETTER_SPACING, lineHeight: 1 }}
           layout={{ wrap: 'none' }}

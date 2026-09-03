@@ -1,5 +1,4 @@
 import { torusKnot } from '../../lib/paths';
-import { PASSAGES } from '../../lib/typewriter';
 
 /** Same parametrisation as three's `TorusKnotGeometry(RADIUS, TUBE, …, 2, 3)`, so the tube and the path agree. */
 export const RADIUS = 1.6;
@@ -22,9 +21,16 @@ export const STRIP = {
   height: Math.PI * 2 * TUBE,
   pixelsPerUnit: 96,
 } as const;
-/** The big lane is the middle half of the strip; the two small lanes are the outer quarters. */
-export const BIG_FONT = STRIP.height * 0.5 * 0.8;
-export const SMALL_FONT = STRIP.height * 0.25 * 0.62;
+/**
+ * The big lane is the middle half of the strip; the two small lanes are the outer quarters.
+ *
+ * Sized by how much of the passage should be legible at once rather than by the lane it sits in:
+ * the strip is about `STRIP.width` long and repeats twice around the knot, so a font of half the
+ * lane's height put barely a dozen letters on the whole thing and the words read as loose
+ * abstract shapes. These fit roughly forty characters across the strip, which is a clause.
+ */
+export const BIG_FONT = STRIP.height * 0.17;
+export const SMALL_FONT = STRIP.height * 0.1;
 /** Centres of the small lanes, in strip units from the strip's middle. */
 export const SMALL_LANE_Y = STRIP.height * 0.375;
 /**
@@ -42,30 +48,3 @@ export const SMALL_REPEATS = Math.max(
   2,
   Math.ceil(STRIP.width / (SMALL_TEXT.length * (SMALL_FONT * 0.6 + SMALL_LETTER_SPACING))),
 );
-
-/**
- * Two rings of small type orbiting the knot, each tumbling slowly like a
- * gyroscope, each carrying one of the passages as a long line. The knot
- * reaches `RADIUS * 1.5 + TUBE` from its centre in its widest direction, and
- * a tumbling ring passes through every direction, so the inner ring sits
- * past that reach by a clear gap and the outer ring past the inner.
- */
-export const KNOT_REACH = RADIUS * 1.5 + TUBE;
-export const RINGS = [
-  { radius: KNOT_REACH + 0.55, size: 0.34, speed: 0.4, spin: [0.11, 0.07] as const, phase: 0, text: PASSAGES[0] },
-  { radius: KNOT_REACH + 1.2, size: 0.34, speed: -0.32, spin: [-0.08, 0.1] as const, phase: 2.1, text: PASSAGES[1] },
-] as const;
-/** Tight: a ring reads as a line only when its letters sit as close as a line's do. */
-export const RING_LETTER_SPACING = -0.005;
-/**
- * The glyphs are placed by advance mapped onto the circle's length, so a line
- * shorter than the circle is stretched to fit and its spacing opens up.
- * Repeat the text until it is about as long as the circle; Inter's average
- * advance is about six tenths of an em in caps.
- */
-export function ringText(ring: (typeof RINGS)[number]): string {
-  const circumference = Math.PI * 2 * ring.radius;
-  const line = `${ring.text.toUpperCase()}   `;
-  const length = line.length * (ring.size * 0.6 + RING_LETTER_SPACING);
-  return line.repeat(Math.max(1, Math.round(circumference / length)));
-}
