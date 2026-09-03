@@ -2,6 +2,11 @@
 
 ## 2026-09-03
 
+- **Trusted region and transform identities** — Removed the Rust request reader's quadratic duplicate-region scan and
+  redundant nonzero checks over package-minted region and transform identities. The public two-Text Three integration
+  captures both regions from the real planner request and proves their identities are distinct and their transforms are
+  live; caller-authored geometry and memory-safety checks remain.
+
 - **Trusted constraint ownership identities** — The Rust request reader no longer rechecks planner-owned paragraph IDs or
   performs a quadratic duplicate search over flow-thread IDs. The public two-Text Three producer proof now binds each
   real constraint to its paragraph mutation and pins distinct nonzero flow-thread identities; caller-authored layout,
