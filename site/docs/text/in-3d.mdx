@@ -104,8 +104,9 @@ notes · internals
 - the order rides the material binding into the plan — `three/text.ts#ThreeMaterialBindingCache` (`:1408–1426`)
 - draws: `mesh.renderOrder = renderOrderBase + drawIndex`, base from the binding — `three/internal/draw-realizer.ts:108`, `:186`
 - paint order under → glyphs → over by `depthKey` 0 / 2 — `three/decorations.ts:54–64`; the detached layout keeps it — `three/text.ts:812–826`
-- [verify] three's transparent sort (render order, then depth): `node_modules/three/src/renderers/common/RenderList.js`
-  in this site; cite the comparator before stating "distance second"
+- three's transparent sort: `reversePainterSortStable` orders by `groupOrder`, then `renderOrder`, then `z`
+  far to near (`b.z - a.z`), then `id` — `node_modules/three/src/renderers/common/RenderList.js:49–61` (three
+  0.185.1); opaque uses `painterSortStable`, near to far — `:18–30`. "Distance second" is right, after render order
 */}
 
 ## Labels that follow and face
@@ -158,8 +159,8 @@ notes · internals
 - the labels scene: `Billboard` copies `camera.quaternion`, labels are children of orbiting groups, `inScene` is
   depth-tested, `<fog>` on the scene — `site/examples/src/scenes/labels/scene.tsx:19–23`, `:39–44`, `:64–75`, `:83–96`,
   `site/examples/src/components/text/Billboard.tsx`
-- [verify] fog on a node material defaults on: `node_modules/three/src/materials/nodes/NodeMaterial.js:77`
-  (`this.fog = true`) in this site's three; nothing in the package sets it
+- fog on a node material defaults on — `node_modules/three/src/materials/nodes/NodeMaterial.js:77` (`this.fog =
+  true`, three 0.185.1); nothing in the package sets it (grep `fog` in `packages/glyph/src` finds no assignment)
 */}
 
 ## Steep angles
@@ -352,8 +353,8 @@ notes · internals
   animated in `useFrame` — `site/examples/src/scenes/bloom/components/Glow.tsx`
 - `shape()` once per frame before the host renders — `glyph.ts#GlyphRuntime.shape` (`:94–98`)
 - the landing pipeline composes bloom, lens flare, and chromatic aberration — `site/landing/src/effects.tsx:23–49`
-- [verify] `BloomNode.strength` is typed as a uniform node in this site's `@types/three`; the Glow component reads
-  it through `UniformNode<'float', number>`
+- `BloomNode.strength` is `UniformNode<"float", number>` — `node_modules/@types/three/examples/jsm/tsl/display/BloomNode.d.ts:5`
+  (the constructor also accepts a plain number, `:21`); the Glow component reads it through that type
 */}
 
 ## Lighting

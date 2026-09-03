@@ -89,8 +89,9 @@ notes · internals
   `diagnostics` — `plan-view.ts:11`, `:41–45`, `:179–183`
 - the header fields the transport copies out — `handle-state.ts:1576–1591`
 - `requiredResultCapacity` is how a too-small arena reports the watermark without advancing revisions — D-229
-- [verify] "`requiredBaseRevision` is 0 on a checkpoint": the field is read at `handle-state.ts:1582` but I did not
-  find the Rust write; check `render_plan_compiler.rs#plan_view` before stating the zero
+- "`requiredBaseRevision` is 0 on a checkpoint", confirmed at the Rust write: `if checkpoint { 0 } else {
+  planner.revision.plan }` — `rust/shaper/src/engine/state.rs:1396`, forwarded into the frame header at `:1518`;
+  the tests at `:4539` and `:4557` assert both cases; read on the TS side at `handle-state.ts:1582`
 */}
 
 ## The tables
@@ -177,10 +178,14 @@ notes · internals
   compositing modes — D-232
 - ordered-direct and stable-indirect batches may share one frame; the compiler merges their draws preserving
   global order — `render_plan_compiler.rs#prepare` (`:161–246`), `#merge_draws` (`:532`), `#draw_merge_key` (`:585`)
-- [verify] where material/clip/depth are masked out of `BatchKey` when the storage mask omits them: find the key
-  construction in `ordered_plan.rs` (`prepare_complete_topology` `:387` or `layout_pending_instances` `:589`)
-- [verify] the "sorted afterwards" claim for independent compositing: `independent_draw_sort_key` exists but confirm
-  the sort site (`render_plan_compiler.rs#draw_merge_key` or the end of `compile_independent_draws`)
+- material is masked out of `BatchKey` by the storage mask: `#batch_key` sets `material_id` only when
+  `program.storage_key_mask & BATCH_MATERIAL != 0` — `rust/shaper/src/engine/ordered_plan.rs:1433–1443`, and the
+  compatibility test ignores it under the same condition — `:1468`; the draw-split flags come from
+  `draw_key_mask` — `:1073–1074`, `:1160–1161`. [verify] the clip and depth fields in the same function
+  (`:1433–1460`) before saying they are masked the same way
+- "sorted afterwards", confirmed: `compile_independent_draws` pushes `(independent_draw_sort_key(draw), index)`
+  for every draw, sorts the pairs, and applies the order to the draw list — `rust/shaper/src/engine/stable_plan.rs:1570–1577`;
+  the key itself — `plan_draw.rs:19`
 - the outline's finding that `independent` did not fold interleaved materials in the batching example (thirty labels
   alternating two materials planned 30 draws under both modes) — `docs/planning/docs-site-outline.md` "Findings for
   core"; re-test before promising coalescing across materials
@@ -234,8 +239,10 @@ notes · internals
 - the engine refuses to be reentered or disposed while a borrow is open — `glyph-engine.ts:582–584`, `:242–243`
 - retained payloads come from the compiled font — `render-planner.ts#portablePayload` (`:1088`), `config/raster.ts#CompiledRasterFont` (`:59–64`)
 - interned identities and generation-matched retirements — `internal/create-engine.ts:117–137`, `:151–158`, `:176–191`
-- stable-slot quarantine behind the fence — `rust/shaper/src/engine/stable_pool.rs:174` (comment), D-209; [verify]
-  the release site before describing the quarantine in prose
+- stable-slot quarantine behind the fence — `rust/shaper/src/engine/stable_pool.rs:174` (comment), D-209; the
+  release site is `StableSlotPool::acknowledge(through_generation)`: a quarantined slot returns to `free_slots`
+  once `after_publication_generation <= through_generation`, and acknowledgment is refused while a prepare is
+  open — `:63–87`
 */}
 
 ## Consuming one

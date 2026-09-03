@@ -385,8 +385,10 @@ notes · internals
   `config/raster-format.ts#rasterFormatForReference` (`:171–193`)
 - runtime loading reads the GLB envelope and only the buffer-view ranges it needs; full JSON Schema validation is a
   bake/CI boundary — D-315
-- [verify] "composition rebases buffer views into the single binary chunk": find `compose-bake.ts` (`internal/`) and
-  cite the rebase and the reciprocal check before stating it
+- "composition rebases buffer views into the single binary chunk": each companion view's `byteOffset` is shifted
+  by the binary base — `internal/compose-bake.ts:145–148`; every `bufferView` reference inside the extension is
+  rebased and range-checked (`RASTER_BUFFER_VIEW_RANGE`) — `#rebaseBufferViewReferences` (`:210–225`); the
+  reciprocal check that the composed parts sum to the declared length — `BINARY_LENGTH` (`:316`)
 */}
 
 ## The baker
@@ -445,12 +447,13 @@ notes · internals
   first-party — `tests/runtime-bake-routing.test.ts:27`
 - the integration test's bake — `packages/glyph-example-renderer/tests/example-render.test.ts:55–64`
 - glyph count bounds `1..65535` — `artifact.ts:131–134`
-- [verify] "from the prepared, already subset source font": `RasterBakeFontContext` (`bake.ts:36–41`) carries
-  `source`, `fontFaceIndex`, `glyphCount`, `shapingHash`; confirm in `internal/font-bake-pipeline.ts` that the source
-  handed to raster bakers is the subset SFNT
-- [verify] "mark absent rather than omit" for third-party bakers: this is the rule the built-ins follow (outline
-  findings on empty rasters); the example always writes `glyphCount` rows (`artifact.ts:135`) — state it as the
-  contract only if `font-binding` rejects short tables
+- "from the prepared, already subset source font", confirmed: the pipeline hands raster bakers
+  `preparation?.bytes ?? options.source` and the prepared face index — `internal/font-bake-pipeline.ts:52–56`,
+  `:75–76`; `RasterBakeFontContext` (`bake.ts:36–41`) carries `source`, `fontFaceIndex`, `glyphCount`, `shapingHash`
+- "mark absent rather than omit": the binding declares every table with its expected row count (`glyphCount`,
+  positive and at most u16 — `internal/font-binding.ts:134–138`; strike rows are the checked product `:143`;
+  the table list `:144–`); the example always writes `glyphCount` rows (`artifact.ts:135`). [verify] the length
+  check that consumes that table list before calling short tables a rejection
 - [in flight] the `bakeFont` snippet's import path (`@pmndrs/glyph/bake`) is the Node entry (`package.json:280–287`);
   the test imports it through the workspace — confirm the public name before publishing
 */}

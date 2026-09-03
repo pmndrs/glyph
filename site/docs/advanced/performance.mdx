@@ -268,8 +268,10 @@ notes · internals
 - strike choice `targetPpem = cssFontSize × rasterPixelRatio` — `internal/bitmap-strike.ts:11`
 - the landing's clamp and the 732 MB measurement — this repo, `site/landing/src/main.tsx:46–52`
 - [verify] "clamping to 1.5 cut it to 243 MB": the number is in no source; re-measure before stating
-- [verify] whether MSDF or Slug read `rasterPixelRatio` anywhere: grep the Rust gather (`plan_input.rs`) before
-  claiming "scales nothing"
+- `rasterPixelRatio` reaches every format the same way: the gather passes it into `binding.select(glyph_id,
+  font_size, raster_pixel_ratio)` — `rust/shaper/src/engine/codec_gather.rs:341`, `:498` — and the binding
+  multiplies it into the target size it picks a strike by — `font_binding.rs:216–226`; a binding with one
+  resource (MSDF, Slug) has nothing to pick, so "scales nothing" holds for them
 */}
 
 ## Pixel snapping
@@ -293,7 +295,9 @@ notes · internals
   `three/internal/material-realizer.ts:154`, `:170`
 - Bitmap's vertex path rounds the physical position — `tsl/bitmap-shader.ts:78`, `:104`; Slug publishes no
   `clipPosition` and "must keep the default projection" — `tsl/slug-shader.ts:83–84`
-- [verify] that MSDF ignores the flag at the shader level (read `tsl/msdf-shader.ts` for a `clipPosition` output)
+- MSDF ignores the flag at the shader level: its output publishes no `clipPosition` — `tsl/msdf-shader.ts:45–46`
+  (the comment); Bitmap's `clipPosition` is chosen by `pixelSnapping` — `tsl/bitmap-shader.ts:78`,
+  `#pixelSnappedClipPosition` (`:91`)
 */}
 
 ## Format cost at scale

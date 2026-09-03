@@ -182,7 +182,7 @@ write
 
 notes · internals
 - the desired state carries `spans` — `three/text.ts#DesiredTextState` (`:99–108`)
-- [verify] there is no public `spans` getter on `Text` at HEAD: the accessors are `font`, `text`, `style`, `layout`,
+- there is no public `spans` getter on `Text` at codex `1dc580a87` (grep `get spans` finds none): the accessors are `font`, `text`, `style`, `layout`,
   `constraints`, `rasterPixelRatio`, `material` (`three/text.ts:667–710`); D-265, `three/frame-error.ts:15`, and
   `docs/planning/three-api.md:209–221` all speak of `Text.spans`. Ask whether the getter is coming back; the block
   above is opted out of the check until then
@@ -225,8 +225,9 @@ notes · internals
   throws `spans must nest or be disjoint` — `#assertSpansNest` (`:1534–1558`)
 - the segmenter is the package's own UAX #29 tables, never `Intl.Segmenter` — `internal/graphemes.ts#findGraphemeBoundaries` (`:17`); D-265, D-320
 - the worked example and its expected offsets — `docs/planning/three-api.md:230–234`
-- [verify] `alignSpansToClusters` is not exported from the root entry at HEAD (`index.ts:263–274` exports `span`, `txt`
-  and types only); D-265 calls it "the exported function a caller checks its own offsets with". Do not tell the reader to call it until it is
+- `alignSpansToClusters` is not exported from the root or `/three` at codex `1dc580a87` (grep of `index.ts` and
+  `three.ts` finds none); D-265 calls it "the exported function a caller checks its own offsets with". Do not tell the
+  reader to call it until it is
 */}
 
 ## Editing
@@ -263,8 +264,9 @@ notes · internals
   `engine-encoding.ts#replacedContent` (`:297–303`), called at `three/text.ts:721`
 - unchanged spans identity is preserved across an update — `three/text.ts:1451–1456`
 - a measurement query re-sends the whole text rather than a diff — `internal/render-planner.ts:812–819`
-- [verify] the removed helpers `insertText`/`deleteText`/`replaceText`/`setSpan`/`removeSpan`: none exist in
-  `three/text.ts` at HEAD (grep); find the decision that removed them before naming them in prose
+- the removed helpers `insertText`/`deleteText`/`replaceText`/`setSpan`/`removeSpan`: none exist in `three/text.ts`
+  and no decision in `docs/planning/decision-register.md` names them (grep at codex `1dc580a87`); name them in prose
+  only as "there is no offset helper", not as something that was removed
 - the scene — `site/examples/src/scenes/editing/scene.tsx`: a typist restates the line as nested runs every
   keystroke (`config.ts#runsOf`), so the document is always the tree; the counter reads `commitState()` back. The twin
   `three.ts` assigns `text.text = value` for a keystroke and a `txt` document for the styled line

@@ -306,8 +306,8 @@ notes · internals
   `dispose` (`:217–233`); handle: roots, release, infrastructure only when no copy is alive (`:305–330`, `:345–365`)
 - error codes — `packages/glyph/src/engine-error.ts:20–51` (`result-too-large` `:20`, `font-stack-missing` `:26`,
   `style-range-invalid` `:28`), class `:60`; three surfaces — `three/text.ts:756–759` (`commitState`), `:921`, `:1043` (`onError`)
-- [verify] `TextFrameError` is exported from `/three` (`packages/glyph/src/three.ts:24`) but the outline's findings say
-  `textFrameError()` has no caller; confirm in `three/frame-error.ts` before promising it, and keep the "handle the raw
+- `TextFrameError` is exported from `/three` (`packages/glyph/src/three.ts:24`) and `textFrameError()` still has no
+  caller at codex `1dc580a87` (grep finds only its definition in `three/frame-error.ts`), so keep the "handle the raw
   engine error" advice until it is wired
 - [verify] "an unchanged frame is not retried": find where three clears or keeps the failed state on the next
   traversal (`three/text.ts` around `:842–844`) before stating it as a rule
@@ -350,9 +350,11 @@ notes · internals
 - one scene per root — D-307; `three/text.ts#nearestScene` (`:1594`) and the reconciliation at `:544`
 - `breakApart` → `services.copy(text, request, { boundary, renderer })` — `config/glyph.ts:642–646`, `:663–666`;
   `three/text.ts:784`; copy leases keep infrastructure alive — `configured-handle.ts:322–328`, `:332–343`
-- [verify] the exact error text for a root spanning two scenes: read `three/text.ts:540–560`
-- [verify] "the text stays `pending`" under a declined `fixed` frame: `commitState()` returns `pending` at
-  `three/text.ts:761`; confirm the capacity-exceeded branch maps there
+- the error for a root spanning two scenes: `Three root "<name>" spans more than one Scene; select a different
+  handle root for each Scene` — `three/text.ts:526`
+- "the text stays `pending`" under a declined `fixed` frame, confirmed: `prepareShape` returns `false` and records
+  `capacityExceeded` (`three/text.ts:1260–1270`), so `acceptShape` (`:1272–1281`) never marks the texts committed and
+  `commitState()` keeps answering `pending` (`:756–764`)
 */}
 
 ## Fonts through the config
