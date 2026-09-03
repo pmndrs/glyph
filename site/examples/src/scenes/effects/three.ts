@@ -13,7 +13,7 @@ import { hueHex } from '../../lib/color';
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:effects', ThreeConfig);
-  const inter = glyph.fontFace({ baked: INTER });
+  const inter = glyph.fontFace(INTER);
   await inter.load();
 
   const outlined = three.createText({

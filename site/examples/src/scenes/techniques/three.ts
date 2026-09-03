@@ -17,7 +17,7 @@ const SIZES = [0.18, 0.5, 1.4] as const;
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:techniques', ThreeConfig);
-  const Inter = glyph.fontFace({ baked: INTER }, { format: [msdf, slug, { raster: bitmap, options: INTER_STRIKES }] });
+  const Inter = glyph.fontFace(INTER, { format: [msdf, slug, bitmap(INTER_STRIKES)] });
   await Inter.load();
 
   const rows = [

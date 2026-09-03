@@ -12,7 +12,7 @@ import { INTER } from '../../fonts';
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:off-axis', ThreeConfig);
-  const inter = await loadFont({ baked: INTER }, slug);
+  const inter = await loadFont(INTER, slug);
 
   const violet = span({ color: '#a855f7' });
   const cyan = span({ color: '#22d3ee' });

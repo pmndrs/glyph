@@ -16,7 +16,7 @@ const LINE_HEIGHT = 1.3;
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:justify', ThreeConfig);
-  const inter = glyph.fontFace({ baked: INTER });
+  const inter = glyph.fontFace(INTER);
   await inter.load();
 
   const page = new Group();

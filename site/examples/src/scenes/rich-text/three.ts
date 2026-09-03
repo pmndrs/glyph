@@ -24,7 +24,7 @@ const tint = defineTextMaterial((context) => {
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:rich-text', ThreeConfig);
-  const [inter, script] = await Promise.all([loadFont({ baked: INTER }, slug), loadFont({ baked: PLAYWRITE }, slug)]);
+  const [inter, script] = await Promise.all([loadFont(INTER, slug), loadFont(PLAYWRITE, slug)]);
 
   const accent = span({ color: '#ffd166' });
   const caps = span({ letterSpacing: 0.08, features: [{ tag: 'smcp' }] });

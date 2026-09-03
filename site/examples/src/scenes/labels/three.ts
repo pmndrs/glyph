@@ -26,7 +26,7 @@ const TILT = 0.5;
 export async function mount(scene: Scene, camera: Camera): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:labels', ThreeConfig);
-  const inter = glyph.fontFace({ baked: INTER });
+  const inter = glyph.fontFace(INTER);
   await inter.load();
 
   scene.fog = new Fog('#07080b', 10, 20);

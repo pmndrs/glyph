@@ -18,7 +18,7 @@ const inScene = defineTextMaterial((context) => {
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:depth', ThreeConfig);
-  const inter = glyph.fontFace({ baked: INTER });
+  const inter = glyph.fontFace(INTER);
   await inter.load();
 
   const ball = new Mesh(

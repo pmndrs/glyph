@@ -21,7 +21,7 @@ const rules = ParagraphLayout.create({
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:paragraph-layout', ThreeConfig);
-  const inter = glyph.fontFace({ baked: INTER });
+  const inter = glyph.fontFace(INTER);
   await inter.load();
 
   const paragraphs = [rules.ragged, rules.justified, rules.capped].map((layout, index) => {

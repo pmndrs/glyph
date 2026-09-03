@@ -25,7 +25,7 @@ const tinted = (index: number): boolean => index % 2 === 1;
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const handle = glyph.handle('examples:batching', ThreeConfig);
-  const inter = glyph.fontFace({ baked: INTER });
+  const inter = glyph.fontFace(INTER);
   await inter.load();
 
   const field = (root: ReturnType<typeof handle>, order: readonly number[], x: number) => {
