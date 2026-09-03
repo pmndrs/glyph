@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  richTextComposition,
-  richTextParagraphCount,
-  richTextSpanNames,
-} from './scene';
+import { richTextComposition, richTextParagraphCount, richTextSpanNames } from './scene';
 
 const BODY = 16;
 
