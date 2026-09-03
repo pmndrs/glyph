@@ -57,9 +57,14 @@ export function FitWidth() {
   return null;
 }
 
-/** A pixel-unit orthographic camera: `fontSize` is then a frame pixel at DPR 1. */
+/**
+ * A pixel-unit orthographic camera: `fontSize` is then a frame pixel at DPR 1.
+ * The root outlives the scene — a pooled root hosts one scene after another —
+ * so the camera it replaced is put back when this scene unmounts.
+ */
 function PixelCamera() {
   const set = useThree((state) => state.set);
+  const get = useThree((state) => state.get);
   const size = useThree((state) => state.size);
   const [camera] = useState(() => {
     const created = new OrthographicCamera(-1, 1, 1, -1, -1_000, 1_000);
@@ -67,13 +72,17 @@ function PixelCamera() {
     return created;
   });
   useLayoutEffect(() => {
+    const previous = get().camera;
+    set({ camera });
+    return () => set({ camera: previous });
+  }, [camera, get, set]);
+  useLayoutEffect(() => {
     camera.left = -size.width / 2;
     camera.right = size.width / 2;
     camera.top = size.height / 2;
     camera.bottom = -size.height / 2;
     camera.updateProjectionMatrix();
-    set({ camera });
-  }, [camera, set, size]);
+  }, [camera, size]);
   return null;
 }
 
