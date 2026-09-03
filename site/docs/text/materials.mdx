@@ -9,19 +9,41 @@ sourcecode: packages/glyph/src/three/material.ts
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  A text material is a factory. Rust carries only a numeric id; three.js calls your factory when it needs a material
-  for a concrete Bitmap, MSDF, Slug, or decoration pipeline, hands you that pipeline's shader nodes and the root it
-  belongs to, and takes back any `NodeMaterial`. The default is one call away; a lit, reflective, glowing word is a
-  few lines past it.
-</Intro>
+{/*
+reader
+- Has written a TSL node material before, or at least read one, and wants text that is lit, glows, warps, or
+  fades. Does not know that a text material is a factory or that Rust never sees it. Arrives asking "can I use my
+  own shader?", should leave able to write a factory that keeps the contract, branch on format and kind, animate it
+  with uniforms, and put it on a span, a text, a group, or a root.
+
+write · intro
+- Question: what is a text material, and who calls it?
+- Say: a text material is a factory, not an instance. Rust carries a numeric id through style resolution and draw
+  planning; three.js calls your factory when it needs a material for a concrete Bitmap, MSDF, Slug, or decoration
+  pipeline, hands you that pipeline's shader nodes, the final position node, and the root it belongs to, and takes
+  back any `NodeMaterial`. The default is one call away; a lit, reflective word is a few lines past it.
+- Anchor: "you get the coverage; you decide the surface".
+- Shape: three sentences.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- A factory runs when a pipeline needs a material, not per frame; animate uniforms.
+- Branch on `kind` and `format`; each branch hands you typed shader nodes.
+- Keep the base contract: `positionNode = context.position`, transparent, no depth write, double-sided.
+- Precedence is span → text → group → root → config; equal factories share identity.
+
+notes · internals for the page
+- the factory and its context union — `three/material.ts#defineTextMaterial` (`:70–73`), `#ThreeTextMaterialContext` (`:63`), `#ThreeTextMaterialContextMap` (`:56–61`)
+- Rust carries a numeric `materialId` — `three/material.ts:69`; `docs/planning/three-api.md:290–330`
+- the realizer calls `create` and owns the result — `three/internal/material-realizer.ts#ThreeMaterialRealizer.#createMaterial` (`:475–477`)
+- the materials scene — `site/examples/src/scenes/materials/scene.tsx`
+*/}
 
 ```ts
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 
 const material = defineTextMaterial((context) => context.createDefaultMaterial());
 
-const label = three.createText({ font: Inter, text: 'Custom', material });
+three.createText({ font: Inter, text: 'Custom', material });
 ```
 
 <glyph-proxy root="scenes" data-scene="materials" aria-label="Lit PBR material over MSDF coverage" aspect="16 / 9" />
@@ -29,15 +51,24 @@ const label = three.createText({ font: Inter, text: 'Custom', material });
 ## The context
 
 ```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
 defineTextMaterial((context) => {
-  if (context.kind === 'decoration') return context.createDefaultMaterial(); // underline, overline, line-through
+  const material = context.createDefaultMaterial();
+  if (context.kind === 'decoration') return material; // underline, overline, line-through
   switch (context.format) {
-    case 'pmndrs.bitmap': context.shader; // position, clipPosition, atlasUv, coverage, color
-    case 'pmndrs.msdf':   context.shader; // position, atlasUv, fillCoverage, outlineCoverage, shadowCoverage, color, opacity
-    case 'pmndrs.slug':   context.shader; // position, renderCoordinate, coverage, color, opacity
+    case 'pmndrs.bitmap': // position, clipPosition, atlasUv, coverage, color, opacity
+      material.colorNode = context.shader.color;
+      break;
+    case 'pmndrs.msdf': // position, atlasUv, fillCoverage, outlineCoverage, shadowCoverage, color, opacity
+      material.opacityNode = context.shader.opacity.mul(context.shader.fillCoverage);
+      break;
+    case 'pmndrs.slug': // position, renderCoordinate, coverage, color, opacity
+      material.colorNode = context.shader.color;
+      break;
   }
   context.root; // { name, scene, drawRoot } — which root this material is being built for
-  return context.createDefaultMaterial();
+  return material;
 });
 ```
 
@@ -46,76 +77,210 @@ defineTextMaterial((context) => {
 | `kind` | `'glyph'` or `'decoration'` |
 | `format` | glyph branches only: `'pmndrs.bitmap' \| 'pmndrs.msdf' \| 'pmndrs.slug'`, or a custom format's literal key |
 | `shader` | that pipeline's TSL output nodes |
-| `position` | final renderer-local position including Codec transform indirection — always `positionNode` |
+| `position` | final renderer-local position including the Codec transform indirection — always your `positionNode` |
 | `root` | `ThreeRootContext`: the root's `name`, its `scene`, its `drawRoot` |
-| `createDefaultMaterial()` | the built-in realization for this branch |
+| `createDefaultMaterial()` | the built-in realisation for this branch |
 
-{/* prose: the union is closed over `ThreeTextMaterialContextMap`; a custom Three raster augments the map at its
-literal format key, so `switch (context.format)` stays exhaustive without casts. Decoration is a `kind`, not a
-format — it is not pretending to be a raster. */}
+{/*
+write
+- Question: what am I handed, and how do I tell the branches apart?
+- Paragraph 1: the context is a closed discriminated union on `kind`, and a glyph branch also carries the concrete
+  `format`; `switch (context.format)` stays exhaustive without casts, and a custom Three raster augments the map at
+  its literal key. Decoration is a `kind`, not a format: it is not pretending to be a raster.
+- Paragraph 2: every branch has `shader`, `position`, `root`, and `createDefaultMaterial()`. `position` already
+  includes the transform indirection the codec selected, which is why it, and not `positionLocal`, is your
+  `positionNode`; `root` tells you which scene and draw root you are being built for, so one factory can serve two
+  roots differently.
+- Avoid: listing the nodes here; the next table does.
+- Shape: two paragraphs, then the table.
+
+notes · internals
+- the union — `three/material.ts:19–63`; `format` literal per branch (`:30`, `:40`, `:49`); the augmentation hook (`:55–61`)
+- `position` doc: "Final renderer-local position including Codec-selected transform indirection" — `three/material.ts:32`
+- how the realizer builds each context — `three/internal/material-realizer.ts:108–114` (decoration), `:173–179` (bitmap), `:225–231` (msdf), `:295–301` (slug)
+- `ThreeRootContext` — `three/material.ts:10–15`; a detached branch reports `{ name: undefined, scene: undefined, drawRoot: this }` — `three/glyphs.ts:196`
+- `docs/planning/three-api.md:308–311`
+*/}
 
 ## Node table
 
 | Node | Type | Meaning |
 | --- | --- | --- |
-| `coverage` / `fillCoverage` | `float` | antialiased fill |
+| `coverage` / `fillCoverage` | `float` | antialiased fill before paint alpha |
 | `outlineCoverage`, `shadowCoverage` | `float` | MSDF rings, fill already subtracted so they never double-count |
-| `color` | `vec3` | unpremultiplied composite of fill, outline, shadow |
-| `opacity` | `float` | style opacity × coverage |
+| `color` | `vec3` | the composite of fill, outline, and shadow, un-premultiplied |
+| `opacity` | `float` | paint alpha × coverage (MSDF: fill + outline alpha, shadow where they leave room) |
 | `atlasUv`, `renderCoordinate`, `clipPosition` | — | format-specific inputs; Bitmap alone publishes `clipPosition` because it snaps to the pixel grid |
+
+{/*
+write
+- Question: which nodes are safe to compose over?
+- Paragraph 1: `color` and `opacity` are the finished answer, already composited; a material that wants the default
+  look with a tint multiplies `color`. The coverages are the ingredients: fill, and for MSDF the outline ring and the
+  shadow, each already exclusive of the others so summing them never double-counts.
+- Paragraph 2: the inputs are format-specific and are mostly for a material that re-derives coverage; `clipPosition`
+  exists only on Bitmap because pixel snapping happens in clip space, and the default Bitmap material feeds it to
+  `vertexNode`. Slug's `position` and `coverage` are two halves of one graph: use `coverage` and you must drive
+  `positionNode` from `position`.
+- Avoid: repeating the MSDF decode; link Raster formats.
+- Shape: two paragraphs.
+
+notes · internals
+- outputs — `tsl/bitmap-shader.ts#TslBitmapShaderOutput` (`:38–52`), `tsl/msdf-shader.ts#TslMsdfShaderOutput` (`:49–60`),
+  `tsl/slug-shader.ts#TslSlugShaderOutput` (`:85–94`), `tsl/decoration-shader.ts#TslDecorationShaderOutput` (`:13–17`)
+- MSDF ring exclusive of fill: `outlineOnly = max(outlineCoverage − fillCoverage, 0)` — `tsl/msdf-shader.ts:89`, `:117`;
+  shadow only where glyph alpha leaves room — `:101`; the un-premultiplied composite — `:103–107` (`.div(max(outputAlpha, 1e-6))`)
+- opacity = paint alpha × coverage — `tsl/bitmap-shader.ts:82`, `tsl/slug-shader.ts:166`; MSDF `outputAlpha` — `tsl/msdf-shader.ts:102`, `:120`
+- Bitmap alone publishes `clipPosition`; the default feeds it to `vertexNode` — `tsl/bitmap-shader.ts:40–45`,
+  `three/internal/material-realizer.ts#bitmapMaterial` (`:616–623`); Slug publishes none — `tsl/slug-shader.ts:82–84`
+- Slug `position` and `coverage` are one graph — `tsl/slug-shader.ts:100–101`
+*/}
 
 ## The base contract
 
-> [!IMPORTANT]
-> A custom material must keep what the default sets: `positionNode = context.position`, `DoubleSide`, `transparent`,
-> `depthWrite: false`, `NormalBlending`. Miss `positionNode` and the glyphs collapse to the origin; turn on
-> `depthWrite` and every quad writes a rectangle into the depth buffer. `depthTest` is yours to choose — off by
-> default so labels draw over what they annotate, on when the text is a surface in the scene (see [Text in
-> 3D](/docs/text/in-3d)).
-
 ```ts
-const material = new MeshPhysicalNodeMaterial({
-  blending: NormalBlending,
-  depthTest: false,
-  depthWrite: false,
-  side: DoubleSide,
-  transparent: true,
-});
-material.positionNode = context.position;
-```
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { DoubleSide, MeshPhysicalNodeMaterial, NormalBlending } from 'three/webgpu';
 
-## Lit text
-
-```ts
-defineTextMaterial((context) => {
-  if (context.kind !== 'glyph' || context.format !== 'pmndrs.msdf') return context.createDefaultMaterial();
-  const material = new MeshPhysicalNodeMaterial({ /* base contract */ });
+const physical = defineTextMaterial((context) => {
+  const material = new MeshPhysicalNodeMaterial({
+    blending: NormalBlending,
+    depthTest: false,
+    depthWrite: false,
+    side: DoubleSide,
+    transparent: true,
+  });
   material.positionNode = context.position;
   material.colorNode = context.shader.color;
   material.opacityNode = context.shader.opacity;
-  material.metalnessNode = float(0.6);
-  material.roughnessNode = float(0.4);
-  material.normalNode = normalize(vec3(lean.x, lean.y, 1)); // a fake curvature from paragraph-local position
   return material;
 });
 ```
 
-{/* prose: lights and an environment map do the rest. Derive the normal from `positionLocal` normalized over the
-paragraph's measured ink — per-glyph em space (`renderCoordinate`) lights every letter as its own object. The landing
-wordmark is this material plus bloom and a lens flare from `useRenderPipeline`. */}
+{/*
+write
+- Question: what must a material of my own keep?
+- Open with an `> [!IMPORTANT]` callout, three sentences: keep what the default sets — `positionNode =
+  context.position`, `transparent`, `depthWrite: false`, `DoubleSide`, `NormalBlending`; miss `positionNode` and
+  the glyphs collapse to the origin; turn on `depthWrite` and every quad writes its rectangle into the depth buffer.
+- One sentence after the code: `depthTest` is yours — off by default so labels draw over what they annotate, on
+  when the text is a surface in the scene (link Text in 3D).
+- One sentence for Bitmap: the default also routes `clipPosition` into `vertexNode`; a Bitmap material that keeps
+  only `positionNode` loses `pixelSnapping`.
+- Shape: callout, code, two sentences.
+
+notes · internals
+- the default — `three/internal/material-realizer.ts#baseTextMaterial` (`:639–647`): `MeshBasicNodeMaterial({ blending: NormalBlending, depthTest: false, depthWrite: false, side: DoubleSide, transparent: true })`
+- `coverageMaterial` sets `positionNode`, `colorNode`, `opacityNode` — `three/internal/material-realizer.ts:628–637`; `bitmapMaterial` also sets `vertexNode = clipPosition` — `:616–623`
+- the physical variant that ships in the materials scene keeps these five properties —
+  `site/examples/src/scenes/materials/scene.tsx:26–33`
+- [verify] that a Bitmap material without `vertexNode = context.shader.clipPosition` renders unsnapped rather than
+  wrong: derived from `bitmapMaterial`; try it with `pixelSnapping: true` before stating the consequence
+*/}
+
+## Lit text
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { float, normalize, uniform, vec2, vec3 } from 'three/tsl';
+import { DoubleSide, MeshPhysicalNodeMaterial, NormalBlending } from 'three/webgpu';
+
+const inkCentre = uniform(vec2(0, 0)); // from measure().inkBounds, in Text-local units
+const inkSpan = uniform(vec2(1, 1));
+
+const lit = defineTextMaterial((context) => {
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.msdf') return context.createDefaultMaterial();
+  const material = new MeshPhysicalNodeMaterial({
+    blending: NormalBlending,
+    depthTest: false,
+    depthWrite: false,
+    side: DoubleSide,
+    transparent: true,
+  });
+  const lean = context.position.xy.sub(inkCentre).div(inkSpan).mul(0.9); // a fake curvature across the whole word
+  material.positionNode = context.position;
+  material.normalNode = normalize(vec3(lean.x, lean.y, 1));
+  material.colorNode = context.shader.color;
+  material.opacityNode = context.shader.opacity;
+  material.metalnessNode = float(0.62);
+  material.roughnessNode = float(0.38);
+  return material;
+});
+
+three.createText({ font: Inter, text: 'Metal', material: lit });
+```
+
+{/*
+write
+- Question: can text be lit like a mesh?
+- Paragraph 1: yes, because a text material is a node material: swap the basic material for a physical one, feed
+  `colorNode` and `opacityNode` from the shader, and lights, an environment map, metalness, and roughness do the rest.
+  The one thing a flat quad lacks is a normal; fake one that leans with position across the paragraph's measured
+  ink so the whole word lights as one surface. Derive it from `context.position`, not from the quad's own
+  `positionLocal`, which spans each glyph's unit quad and would light every letter as its own object.
+- Paragraph 2: feed `inkCentre` and `inkSpan` from `measure().inkBounds` once the text has a size; the landing
+  wordmark is this material plus bloom and a lens flare from `useRenderPipeline`.
+- Shape: two paragraphs; point at the proxy above.
+
+notes · internals
+- the scene's material: `MeshPhysicalNodeMaterial` with `normalNode = normalize(vec3(lean.x, lean.y, 1))`,
+  `metalnessNode 0.62`, `roughnessNode 0.38`, a `RoomEnvironment` map — `site/examples/src/scenes/materials/scene.tsx:19–41`, `:70–83`
+- the technique quads span `[0, 1]` with the origin at the upper-left, so `positionLocal` is per-glyph quad space —
+  `tsl/bitmap-shader.ts:59–60`, `tsl/msdf-shader.ts:66–67`, `tsl/slug-shader.ts:103–104`; `context.position` is
+  paragraph-local — `three/material.ts:32`
+- the landing pipeline: bloom → lens flare → chromatic aberration — `site/landing/src/effects.tsx:23–49`
+- [verify] the materials scene derives `lean` from `positionLocal` (`site/examples/src/scenes/materials/scene.tsx:32`) while its comment says
+  "paragraph-local position — measured ink"; the snippet above uses `context.position.xy` instead. Render both and
+  keep the one that lights the word as one surface; fix the scene if it is the other
+*/}
 
 ## Decorations
 
 ```ts
-defineTextMaterial((context) => {
-  const value = context.createDefaultMaterial();
-  if (context.kind === 'decoration') value.colorNode = context.shader.color.mul(0.75);
-  return value;
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { color, mix, positionLocal, uniform } from 'three/tsl';
+
+const phase = uniform(0);
+
+const gradientLine = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  if (context.kind === 'decoration') {
+    const t = positionLocal.x.mul(0.25).add(phase).fract();
+    material.colorNode = mix(color('#ff4dc4'), color('#70d6ff'), t).mul(context.shader.opacity);
+  }
+  return material;
+});
+
+three.createText({
+  font: Inter,
+  text: 'Sphinx of black quartz',
+  style: { decoration: { underline: true, thickness: 0.06 } },
+  material: gradientLine,
 });
 ```
 
-{/* prose: underline, overline, and line-through are planned as their own ordered batches with their own material
-instances; one factory selects for both without splicing decoration geometry into a glyph draw. */}
+{/*
+write
+- Question: can an underline have its own look?
+- Paragraph 1: underline, overline, and line-through are planned as their own ordered draws with their own material
+  instances, so one factory selects for both kinds without splicing decoration geometry into a glyph draw; the
+  decoration branch hands you `position`, `color`, and `opacity` for a solid quad over the record's rectangle,
+  coloured by the style's decoration paint.
+- Paragraph 2: only `solid` is implemented; `double`, `dotted`, `dashed`, and `wavy` are typed and throw at
+  construction rather than drawing as solid. `thickness` and `offset` override the font's baked underline metrics
+  when non-zero.
+- Shape: two paragraphs; point at the proxy.
+
+notes · internals
+- decoration context — `three/material.ts:19–25`; the shader: a solid quad over `rect`, sRGB-decoded packed colour — `tsl/decoration-shader.ts:19–42`
+- planned as separate draws with separate material instances — `docs/planning/three-api.md:323–326`; under/over
+  passes by `depthKey` 0 and 2 — `three/decorations.ts:54–64`
+- `TextDecorationStyle` — `text-properties.ts:105–119`; non-solid throws `… is not implemented; only 'solid' is supported` — `:315–316`
+- the decorations scene: every line, colour, thickness, offset, and the gradient branch — `site/examples/src/scenes/decorations/scene.tsx`
+- [verify] the finding "decoration draws collapse to nothing" (transform-index lane carries a flag bit,
+  `indexedTransformNodes` reads a zero matrix) — `docs/planning/docs-site-outline.md:496`; check the decorations
+  scene renders before publishing this section
+*/}
 
 <glyph-proxy root="scenes" data-scene="decorations" aria-label="A gradient underline from the decoration branch" aspect="16 / 9" />
 
@@ -123,25 +288,62 @@ instances; one factory selects for both without splicing decoration geometry int
 
 <glyph-proxy root="scenes" data-scene="effects" aria-label="Outline, shadow, animated color" aspect="16 / 9" />
 
-{/* prose: animate uniforms, not materials — a factory runs when a pipeline needs it, not per frame. */}
+{/*
+write
+- Question: do I need a material for an outline, a shadow, or an animated colour?
+- Two sentences: no; outline and shadow are MSDF style properties and come from the same distance field as the
+  fill, and colour is a style property too, so the scene above animates through `style` with the default material
+  untouched. When you do write a material, animate its uniforms: a factory runs when a pipeline needs a material and
+  its result is cached by pipeline, not per frame; assigning a new material invalidates and re-plans.
+- Shape: two sentences.
+
+notes · internals
+- outline and shadow are declared MSDF effects — `raster/msdf.ts:72`; nodes — `tsl/msdf-shader.ts:88`, `:97`
+- the effects scene animates colour through `style` — `site/examples/src/scenes/effects/scene.tsx:21–24`
+- materials are cached by a key of selection, buffers, transform, and addressing — `three/internal/material-realizer.ts:96–101`
+- assigning `material` stages an update; a group material invalidates the root — `three/text.ts:708–710`, `:1008–1012`, `:404–407`
+*/}
 
 ## Where a material applies
 
 ```ts
-import { span } from '@pmndrs/glyph/three';
-import { txt } from '@pmndrs/glyph';
+import { glyph, txt } from '@pmndrs/glyph';
+import { defineTextMaterial, defineThreeConfig, span } from '@pmndrs/glyph/three';
 
-const glow = defineTextMaterial(...);
-three.createText({ font: Inter, text: txt`Status ${span(glow, { color: '#4ade80' })`online`}` });
-three.createTextGroup({ material: glow });
-three.material = glow; // the root's fallback
+const glow = defineTextMaterial((context) => context.createDefaultMaterial());
+
+three.createText({ font: Inter, text: txt`Status ${span(glow, { color: '#4ade80' })`online`}` }); // one run
+three.createText({ font: Inter, text: 'Whole text', material: glow });                         // one text
+three.createTextGroup({ material: glow });                                                      // every descendant
+three.material = glow;                                                                          // every text on this root
+glyph.handle('app', defineThreeConfig({ material: glow }));                                     // every root of a handle
 ```
 
 | Rule | Why |
 | --- | --- |
-| span → text → group → root precedence | the nearest material wins |
-| equal factories share identity | the plan segments draws by material identity |
+| span → text → group → root → config precedence | the nearest material wins |
+| equal factories share identity | the plan segments draws by material identity; one object, one binding |
 | return synchronously; never query or update text inside | it runs while three holds borrowed plan attributes |
 
-{/* prose: `span` from `/three` accepts one material beside styles and a font; the root-level `material` is the
-fallback for every text without one. */}
+{/*
+write
+- Question: where do I put it, and what happens when two places disagree?
+- Paragraph 1: five places, nearest wins, from a span outward to the handle's config; the code shows all five.
+  `undefined` at every level means the built-in default.
+- Paragraph 2: identity is the object, not its contents: the same factory on two texts shares a binding and lets
+  the plan run them as one draw, two structurally equal factories do not. Make one and reuse it.
+- Paragraph 3: the factory runs inside plan realisation; return synchronously and do not measure, set, or shape
+  from inside it.
+- Shape: three short paragraphs; the table is the summary.
+
+notes · internals
+- resolution: `desired.material ?? presentation.material ?? root.material` — `three/text.ts#coreTextState` (`:1377–1381`);
+  presentation walks `TextGroup` ancestors, nearest first — `#resolveTextPresentation` (`:1629–1663`); the
+  config fallback — `three/handle.ts#ThreeSchema.material` (`:121–122`), `#ThreeConfigOptions.material` (`:97–98`), `:246`
+- the `/three` `span` accepts one material — `three/span.ts:17–38`; the root setter — `three/text.ts:226–238`; the group option — `:85–91`
+- bindings are cached per material object and per `(pixelSnapping, renderOrder)` — `three/text.ts#ThreeMaterialBindingCache` (`:1408–1426`)
+- reentrancy: `glyph.shape()` cannot be reentered — `glyph-engine.ts:389`; creation runs under the borrowed plan —
+  `:504`, `#enterBorrowedPlan` (`:587`); `docs/planning/three-api.md:305–306`
+- [verify] "the coordinator rejects such reentrancy": find the guard that a measure or update inside a factory hits
+  (`glyph-engine.ts#enterBorrowedPlan`) and name the error before promising it
+*/}

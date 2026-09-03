@@ -2,27 +2,42 @@
 title: Raster formats
 description: Bitmap, MSDF, or Slug — what each one bakes, what it costs per pixel, where it looks best, and how a format's options become part of the font's identity.
 nav: 11
-sourcecode: packages/glyph/src/raster-format.ts
+sourcecode: packages/glyph/src/config/raster-format.ts
 ---
 
 <link rel="stylesheet" href="/docs/assets/explainer.css" />
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  Shaping and layout are the same for every format; a format only decides how an outline becomes pixels. Bitmap
-  bakes pixels at the sizes you choose. MSDF bakes a distance field once and decodes an edge wherever it lands.
-  Slug keeps the outline's curves and solves them under every pixel. One baked font can carry all three, and the
-  choice is made per font, not per project: pick for the text's size range, motion, and what it has to look like
-  at the edge.
-</Intro>
+{/*
+reader
+- Has a font and a scene, is about to write `format:` for the first time, and wants to choose once. Knows what a
+  texture atlas is; may never have met a distance field or an analytic outline. Arrives asking "which one?", should
+  leave knowing "which one for this text, and why the options I bake must match the ones I declare".
 
-<Keypoints title="The short version">
-  <KeypointsItem>Default to MSDF. It is right for body copy and labels at any subpixel position, and it is the only format with outline and shadow.</KeypointsItem>
-  <KeypointsItem>Use Bitmap for UI at sizes you know. One texel per pixel, snapped to the device grid, and the smallest atlas — but blurry between strikes and no effects.</KeypointsItem>
-  <KeypointsItem>Use Slug where the text is the hero: titles, zoom, surfaces in 3D, steep angles. Exact at any size; costs the most per pixel; no effects.</KeypointsItem>
-  <KeypointsItem>A format's options are part of its identity. The bake and the declaration must name the same descriptor, or the face rejects.</KeypointsItem>
-</Keypoints>
+write · intro
+- Question it answers: what does a format decide, and what does it leave alone?
+- Say: shaping and layout are the same for all three; a format only turns an outline into pixels; one baked font can
+  carry all three, and the choice is per font, not per project.
+- Anchor: "the same paragraph, three ways to fill it in".
+- Shape: two or three sentences, no list.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- MSDF is the default: right at any subpixel position, the only format with outline and shadow.
+- Bitmap is for UI at sizes you know: one texel per pixel, snapped to the device grid, smallest atlas, no effects.
+- Slug is for text that is the hero: exact at any size, most expensive per pixel, no effects.
+- Options are identity: the bake and the declaration must name the same descriptor, or the face rejects.
+
+notes · internals for the page
+- three formats registered as `RasterFormat`s — `raster/bitmap.ts#bitmap`, `raster/msdf.ts#msdf`, `raster/slug.ts#slug`
+- a face declares any subset; the first is its default — `font-face.ts#FontFaceFormatDeclaration`, D-310
+- MSDF's effects — `raster/msdf.ts:72` `textEffects: ['outline', 'shadow']`; the handle's default —
+  `three/handle.ts#ThreeConfigOptions.defaultFontFormat`
+- Bitmap's strike choice and snapping — `internal/bitmap-strike.ts#nearestBitmapStrikeIndex`,
+  `tsl/bitmap-shader.ts#pixelSnappedClipPosition`; no effects — `raster/bitmap.ts` `textEffects: []`
+- Slug has no options — `raster/slug.ts:53`; no effects — `:59`; analytic half-pixel dilation — `tsl/slug-shader.ts:52`
+- identity — `internal/raster-identity.ts#deriveRasterKey`; the rejection — `font-face.ts:556` `FONT_FACE_FORMAT_UNAVAILABLE`
+*/}
 
 ![Bitmap bakes pixels at chosen sizes and samples one texel per pixel; MSDF bakes a distance field and decodes an edge per pixel with outline and shadow; Slug stores curves in bands and solves them per pixel at any size.](/examples/diagrams/format-cards.svg)
 
@@ -38,49 +53,80 @@ sourcecode: packages/glyph/src/raster-format.ts
 | is tiny and must be crisp | **Bitmap** at that strike, else **MSDF** | Bitmap is exact at its ppem; MSDF floors its antialiasing range at one pixel |
 | is a whole CJK font | **Bitmap** or **MSDF** with `coverage` | Slug always bakes every glyph; the other two can be seeded with the code points you use |
 
+{/*
+write
+- Question: "I have this text; which format?" The table is the answer; your job is the "Because" column and one
+  sentence above the table.
+- Above the table: tell the reader to find their text in the left column and not to read the rest of the page
+  first. Keep the rows; rewrite each "Because" as one clause in your voice.
+- Two rows deserve a nudge in the cell: effects (the other two throw rather than draw something wrong) and CJK
+  (Slug always bakes every glyph).
+- Avoid: explaining how each format works here; that is the three sections below.
+
+notes · internals
+- effects rejection is a boundary throw, per technique in the selection — `engine-encoding.ts:206–209`
+  `raster format ${technique.id} does not support outline in ${label}`
+- MSDF antialiasing range is derived per axis from `dFdx`/`dFdy` of the atlas coordinate and floored —
+  `tsl/msdf-shader.ts:133–135`
+- Slug footprint per axis from the derivative of the render coordinate — `tsl/slug-shader.ts` (`renderCoordinate`, `:141`)
+- `coverage` seeds a Bitmap or MSDF subset — `raster-coverage.ts#RasterCoverage`; Slug has no options — `raster/slug.ts:53`
+*/}
+
 <glyph-proxy root="scenes" data-scene="techniques" aria-label="The same word in Bitmap, MSDF, and Slug" aspect="16 / 9" />
 
 ## Bitmap
 
-Bitmap rasterises each glyph at one or more **strikes** — exact pixel sizes — into an `r8unorm` atlas per strike.
-There is no interpolation between strikes: at draw time the engine computes a target size, `fontSize ×
-rasterPixelRatio`, and takes the strike with the nearest ppem. Draw at a strike and every pixel is the one the
-rasteriser produced; draw between strikes and the sampler blurs.
-
 ```ts
+import { glyph } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 
-const ui = glyph.fontFace({ baked: '/fonts/inter.font.glb' }, {
-  format: { raster: bitmap, options: { strikes: [16, 32] } }, // the strikes the GLB was baked with
-});
+const ui = glyph.fontFace('/fonts/inter.font.glb', { format: bitmap({ strikes: [16, 32] }) }); // the strikes the GLB was baked with
+await ui.load();
 three.createText({ font: ui, text: 'HP 100', style: { fontSize: 16 }, pixelSnapping: true });
 ```
 
 | Fact | Value |
 | --- | --- |
 | options | `strikes: number[]` — required, unique integers from 1 to 1022, stored ascending; `coverage?` seeds a subset |
-| atlas | one `r8unorm` texture array per strike; pages up to 1024 px, at most 60 per strike, 1 texel padding |
+| atlas | one `r8unorm` texture array per strike; at most 60 pages per strike |
 | per pixel | one `texture(page, atlasUv).r` fetch |
 | strike choice | nearest ppem to `fontSize × rasterPixelRatio`; ties go to the first strike; camera distance is not considered |
 | `pixelSnapping` | rounds the quad to whole device pixels; Bitmap is the only format that honours it |
 | effects | none — `outline` and `shadow` throw when the style is accepted |
 
-Bake the sizes you draw at, times the pixel ratios you ship: a 16 px label on a 2× display wants a 32 strike, and
-`rasterPixelRatio` is how a `Text` says so without changing its layout.
+{/*
+write
+- Question: what is a strike, and what does drawing away from one cost me?
+- Paragraph 1: a strike is the glyph rasterised at one exact pixel size into an `r8` atlas; there is nothing between
+  strikes, so at a strike every pixel is the one the rasteriser made, and between strikes the sampler blurs.
+- Paragraph 2: how the engine picks a strike (`fontSize × rasterPixelRatio`, nearest wins), and the practical
+  rule that follows: bake the sizes you draw at times the pixel ratios you ship; a 16 px label on a 2× display
+  wants a 32 strike, and `rasterPixelRatio` is how a `Text` says so without changing its layout.
+- Mention once: `pixelSnapping` is honoured only here, and outline/shadow throw.
+- Shape: two paragraphs under the table, three sentences each; no new list.
+
+notes · internals
+- strikes: non-empty, positive integers ≤ 1022, unique; canonical descriptor sorts them —
+  `internal/bitmap-contract.ts#MAX_BITMAP_PPEM`, `:30–37` (throw messages), `#canonicalizeBitmapDescriptor`
+- `bitmap({ strikes })` is a `RasterFormatRequest`; `bitmap` alone is the format with default options —
+  `config/raster-format.ts:128` (`select`), `#RasterFormatRequest`
+- strike choice: `targetPpem = cssFontSize × rasterPixelRatio`, nearest by `|ppem − target|`, first wins ties —
+  `internal/bitmap-strike.ts#nearestBitmapStrikeIndex`
+- page cap — `rust/bitmap-baker/src/rasterize.rs#MAX_ATLAS_PAGES` (60); texel format — `config/resources.ts#PortableTextureFormat`
+- snapping: vertex path rounds the physical position — `tsl/bitmap-shader.ts:78` (`pixelSnappedClipPosition`), `:104` (`TSL.round`)
+- `rasterPixelRatio` is a Text property, not a canvas setting — `paragraph.ts:74`, `react.ts:91`
+- effects: `raster/bitmap.ts` `textEffects: []` → `engine-encoding.ts:206`
+- [verify] page size 1024 px and 1-texel padding: find the constant in `rust/bitmap-baker` before stating it
+*/}
 
 ## MSDF
 
-MSDF bakes a **multi-channel signed distance field**: for every glyph, a small `rgba8` cell where the RGB channels
-each hold a distance to a differently coloured set of edges and the alpha holds the true distance. At draw time the
-shader takes the median of the three channels to recover an edge with sharp corners, and reads the alpha for
-effects. Two options size it. `emSize` is how many atlas texels one em occupies, so it bounds how faithfully the
-outline is stored; `pixelRange` is how many texels the field reaches on either side of the edge, so it bounds how
-far an outline or shadow can extend.
-
 ```ts
+import { glyph } from '@pmndrs/glyph';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 
-const body = glyph.fontFace({ baked: '/fonts/inter.font.glb' }, { format: msdf }); // emSize 64, pixelRange 8
+const body = glyph.fontFace('/fonts/inter.font.glb', { format: msdf }); // emSize 64, pixelRange 8
+await body.load();
 three.createText({
   font: body,
   text: 'Body copy',
@@ -91,48 +137,84 @@ three.createText({
 | Fact | Value |
 | --- | --- |
 | options | `emSize` (default 64, 1 to 1022) and `pixelRange` (default 8, 1 to 1020); `coverage?` seeds a subset |
-| atlas | one `rgba8unorm` texture array; pages up to 1024 px, at most 60; one lossless KTX2 page per level |
+| atlas | one `rgba8unorm` texture array; at most 60 pages; one lossless KTX2 page per level |
 | per pixel | two fetches (fill, and shadow at an offset), `median(rgb) − 0.5` for the edge, `a − 0.5` for the true distance |
 | antialiasing | the screen-space range comes from the derivatives of the atlas coordinate and is floored at one pixel |
 | effects | `outline` as a ring around the true distance; `shadow` only where the fill leaves alpha; both bounded by `pixelRange` |
 | filtering | linear, no mipmaps — minified far below one texel per pixel it will alias |
 
-The field is exact along the edge and only as true as `emSize` texels per em away from it, so a heading set at
-four times its `emSize` still has sharp corners but its curves flatten. That is the signal to move up to Slug, or to
-bake a second face with a larger `emSize` for the sizes that need it.
+{/*
+write
+- Question: what is stored, and what do the two options actually bound?
+- Paragraph 1: for every glyph, a small `rgba8` cell; the three colour channels each hold a distance to a
+  differently coloured set of edges, the alpha holds the true distance; at draw time the median of the three
+  recovers an edge with sharp corners, the alpha feeds the effects.
+- Paragraph 2: `emSize` is how many atlas texels one em occupies, so it bounds how faithfully the outline is stored;
+  `pixelRange` is how far the field reaches either side of the edge, so it bounds how far an outline or shadow can go.
+- Closing: the field is exact at the edge and only as true as `emSize` texels away from it; a heading set at four
+  times its `emSize` still has sharp corners but its curves flatten; that is the signal to move up to Slug or to
+  bake a second face with a larger `emSize` (link Baking fonts).
+- Anchor: "a photograph of the outline's neighbourhood, not the outline".
+- Shape: three short paragraphs; the table already holds the numbers, do not repeat them.
+
+notes · internals
+- defaults and limits — `internal/msdf-contract.ts#MSDF_EM_SIZE` (64), `#MSDF_PIXEL_RANGE` (8), `#MSDF_MAX_EM_SIZE` (1022),
+  `#MSDF_MAX_PIXEL_RANGE` (1020), `#MSDF_MAX_OUTLINE_ATLAS_PIXELS` (= pixelRange / 2)
+- decode: `fillDistance = median3(rgb) − 0.5` — `tsl/msdf-shader.ts:84`, `#median3` (`:124`)
+- outline ring: `max(outlineCoverage − fillCoverage, 0)` — `tsl/msdf-shader.ts:89`; premultiplied compositing `:107`
+- screen-space range per axis from `dFdx`/`dFdy`, floored — `tsl/msdf-shader.ts:133–135`
+- effects declared — `raster/msdf.ts:72`; page cap — `rust/mtsdf-baker/src/artifact.rs#MAX_ATLAS_PAGES`
+- KTX2 pages validated on load — `internal/raster-ktx.ts#validateNativeKtx2`
+- [verify] "two fetches" and "no mipmaps": read the sampler setup in `tsl/msdf-shader.ts` and `three/msdf.ts` before stating
+*/}
 
 ## Slug
 
-Slug stores the glyph's **outline** — its quadratic curves, quantised to half floats — sorted into sixteen
-horizontal and sixteen vertical bands, in three textures per page: the curves as `rgba16float`, band headers and
-curve references as `r32uint`. At draw time the vertex stage dilates the quad by half a pixel using the exact
-projection, and the fragment stage walks the one horizontal and one vertical band under the pixel, solves each
-curve it meets, and sums coverage. There is nothing to run out of: the same data draws a 12 px caption and a wall.
-
 ```ts
+import { glyph } from '@pmndrs/glyph';
 import { slug } from '@pmndrs/glyph/three/slug';
 
-const hero = glyph.fontFace({ baked: '/fonts/playwrite.font.glb' }, { format: slug }); // no options exist
+const hero = glyph.fontFace('/fonts/playwrite.font.glb', { format: slug }); // no options exist
+await hero.load();
 three.createText({ font: hero, text: 'glÿph', style: { fontSize: 320 } });
 ```
 
 | Fact | Value |
 | --- | --- |
 | options | none; Slug has no descriptor to configure and always bakes every glyph |
-| data | 40-byte glyph records; curves in 4096-wide `rgba16float` pages; `r32uint` headers and references |
-| per pixel | one header load per axis, then per curve one reference and two curve texels and a quadratic solve; at most 512 curves per band, with an early exit once curves fall behind the pixel |
+| data | 40-byte glyph records; curves in `rgba16float` pages; `r32uint` headers and references |
+| per pixel | one header load per axis, then per curve one reference and two curve texels and a quadratic solve, with an early exit once curves fall behind the pixel |
 | footprint | measured per axis from the derivative of the render coordinate, so anisotropy does not soften it |
 | effects | none — `outline` and `shadow` throw when the style is accepted |
 | filtering | none; there is no texture to filter |
 
-Cost scales with covered area times curves per band, so a full-screen paragraph in Slug is the wrong tool and a
-full-screen word is the right one.
+{/*
+write
+- Question: how can one file be right at 12 px and on a wall?
+- Paragraph 1: what is stored: the outline's quadratic curves, quantised to half floats, sorted into sixteen
+  horizontal and sixteen vertical bands, in three textures per page (curves, band headers, curve references).
+- Paragraph 2: what a frame does: the vertex stage dilates the quad by half a pixel using the exact projection;
+  the fragment stage walks the one horizontal and one vertical band under the pixel, solves each curve it meets,
+  sums coverage, and stops early once the remaining curves are behind the pixel. There is nothing to run out of.
+- Closing: cost scales with covered area times curves per band, so a full-screen paragraph in Slug is the wrong
+  tool and a full-screen word is the right one.
+- Anchor: "the outline itself, evaluated under every pixel".
+- Shape: two paragraphs plus the closing sentence.
+
+notes · internals
+- no options: the format's options type is `undefined` — `raster/slug.ts:53`; `textEffects: []` — `:59`
+- constants — `internal/slug-contract.ts#SLUG_DEFAULT_BAND_COUNT` (16), `#SLUG_GLYPH_RECORD_STRIDE` (40),
+  `#SLUG_PLANE_UNITS_PER_EM` (2048)
+- band walk and per-curve loop — `tsl/slug-shaders/slug-band.ts` (`bandCount`, `:173`); texture layout —
+  `tsl/slug-shaders/slug-texture.ts`
+- vertex dilation from the exact projection — `tsl/slug-shader.ts:52–53`, `:114–121` (`dilated`), `:141`
+- texel formats — `config/resources.ts#PortableTextureFormat` (`rgba16float`, `r32uint`)
+- [verify] the 512-curves-per-band cap and the 4096-wide pages: find them in `rust/slug-core` before stating
+*/}
 
 <glyph-proxy root="scenes" data-scene="zoom" aria-label="One 32 px raster per format under continuous magnification" aspect="16 / 9" />
 
 ## What each one costs
-
-Measured on the package-size report for the full Inter face, every glyph, default options:
 
 | | Bitmap 16 + 32 | MSDF 64 / 8 | Slug |
 | --- | ---: | ---: | ---: |
@@ -141,79 +223,163 @@ Measured on the package-size report for the full Inter face, every glyph, defaul
 | baker Wasm, raw | 623 kB | 557 kB | 461 kB |
 | runtime with three.js `Text` and one format, gzip | 58 kB | 58 kB | 58 kB |
 
-The MSDF number is the price of `emSize: 64` across a whole Latin, Greek, and Cyrillic face; a subset baked at the
-size you draw is a fraction of it — see [Baking fonts](/docs/fonts/baking). The three runtimes weigh the same
-because the format is a few kilobytes of shader; the engine is the bulk.
-
 | GPU | Bitmap | MSDF | Slug |
 | --- | --- | --- | --- |
 | textures | one `r8` array per strike | one `rgba8` array | three per page: curves, headers, references |
 | instance buffers | origin, size, uvOrigin, uvSize, color, page | rect, uvRect, uvBounds, color, effectColor, page | rect, planeRect, bandTransform, color, inverseFontSize, tableStarts, bandCounts |
-| texture memory cap | 256 MiB | 256 MiB | pages of 4096 × ≤2048 half-float texels |
+| texture memory cap | 256 MiB | 256 MiB | 256 MiB |
+
+{/*
+write
+- Question: what do I pay, on the wire and on the GPU?
+- One sentence above the first table saying what was measured (the full Inter face, every glyph, default options,
+  the date), so the numbers have a provenance.
+- One sentence under the first table: the MSDF number is the price of `emSize: 64` across a whole Latin, Greek,
+  and Cyrillic face; a subset baked at the size you draw is a fraction of it (link Baking fonts). Then: the three
+  runtimes weigh the same because a format is a few kilobytes of shader and the engine is the bulk.
+- One sentence under the GPU table: what a reader should notice (three textures per Slug page; one array per
+  Bitmap strike).
+- Avoid: adjectives; let the numbers carry it.
+
+notes · internals
+- the byte figures are the full Inter face, every glyph, default options, from the package-size report quoted in
+  `docs/planning/payload-budget.md` (codex tree) — re-run the report and re-date the table before publishing
+- instance buffer layouts — `raster/bitmap.ts#bitmapSchema` (`:117`), `raster/msdf.ts#msdfSchema` (`:103`),
+  `raster/slug.ts#slugSchema` (`:91`)
+- texture memory cap, 256 MiB per format, checked at decode — `raster/bitmap.ts:34`, `raster/internal/msdf-decoder.ts:32`,
+  `raster/internal/slug-decoder.ts:26` (`256 * 1024 * 1024`)
+*/}
 
 ## Options are identity
-
-> [!IMPORTANT]
-> The raster key is a SHA-256 of the format's canonical descriptor: kind, version, and options. `msdf` at
-> `{ emSize: 32 }` is a different raster from `msdf` at the default 64, and a face whose declared descriptor the GLB
-> does not advertise rejects with `FONT_FACE_FORMAT_UNAVAILABLE`. A baked miss never triggers runtime baking. Write
-> the options once and pass them to both the bake and the declaration.
 
 ```bash
 glyph bake --input Inter-Regular.ttf --output inter-small.font.glb --msdf em-size=32,pixel-range=6
 ```
 
 ```ts
-const InterSmall = glyph.fontFace({ baked: '/fonts/inter-small.font.glb' }, {
-  format: { raster: msdf, options: { emSize: 32, pixelRange: 6 } },
-});
+import { glyph } from '@pmndrs/glyph';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+
+const InterSmall = glyph.fontFace('/fonts/inter-small.font.glb', { format: msdf({ emSize: 32, pixelRange: 6 }) });
 await InterSmall.formats(); // what the GLB actually carries, without loading anything
+await InterSmall.load();
 ```
 
-Two rules keep the key stable. A bare format value (`msdf`) means its defaults, and the defaults canonicalise to a
-descriptor with no fields, so `{ emSize: 64, pixelRange: 8 }` and `msdf` are the same raster. Bitmap strikes are
-stored sorted, so `[32, 16]` and `[16, 32]` are the same raster too.
+{/*
+write
+- Question: why did my face reject when the file is right there?
+- Open with an `> [!IMPORTANT]` callout, three sentences: the raster key is a hash of kind, version, and options;
+  `msdf` at `emSize: 32` is a different raster from `msdf` at the default 64, and a declaration the GLB does not
+  advertise rejects rather than baking; write the options once and pass them to both the bake and the declaration.
+- After the code: two rules that keep the key stable, one sentence each: a bare format means its defaults and
+  canonicalises to the same key; Bitmap strikes are stored sorted, so `[32, 16]` and `[16, 32]` are the same raster.
+- Point at `Inter.formats()` as the way to ask the GLB what it carries before loading anything.
+- Shape: callout, code, two sentences.
+
+notes · internals
+- raster key = SHA-256 of the canonical JSON of the descriptor — `internal/raster-identity.ts#deriveRasterKey` (`:90–102`),
+  `#canonicalJson`
+- a declared format the main GLB does not advertise rejects with `FONT_FACE_FORMAT_UNAVAILABLE` —
+  `font-face.ts:550–560` (`FontFace "…" does not implement the declared "…" format`); a baked miss never runtime-bakes — D-310
+- `face.formats()` reads the authoritative main GLB's ordered format keys without loading sidecars — `font-face.ts#FontFaceBase.formats`, D-310
+- defaults canonicalise to the same descriptor as the bare format: `msdf` ≡ `msdf({ emSize: 64, pixelRange: 8 })` —
+  `config/raster-format.ts:128` (`select` returns the format itself for no options); Bitmap strikes sort —
+  `internal/bitmap-contract.ts#canonicalizeBitmapDescriptor`
+- [verify] that `msdf({ emSize: 64, pixelRange: 8 })` canonicalises to the default key: check `internal/msdf-contract.ts` descriptor canonicalisation (`:81–90`)
+*/}
 
 ## A typical pairing
 
-One GLB, three formats, one shaping table shared. The first declared format is the face's default, and a
-`ThreeConfig` defaults an undeclared face to MSDF.
-
 ```ts
-const Inter = glyph.fontFace({ baked: '/fonts/inter.font.glb' }, {
-  format: [msdf, slug, { raster: bitmap, options: { strikes: [16, 32] } }],
-});
+import { glyph } from '@pmndrs/glyph';
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+import { slug } from '@pmndrs/glyph/three/slug';
 
-three.createText({ font: Inter, text: 'Body copy' });      // MSDF, the default
-three.createText({ font: Inter.slug, text: 'Hero' });       // Slug
-three.createText({ font: Inter.bitmap, text: 'HP 100' });   // Bitmap at 16 or 32
+const Inter = glyph.fontFace('/fonts/inter.font.glb', { format: [msdf, slug, bitmap({ strikes: [16, 32] })] });
+await Inter.load(); // every declared format, one shaping table shared
+
+three.createText({ font: Inter, text: 'Body copy' }); // the first declared format: MSDF
+three.createText({ font: Inter.slug, text: 'Hero' });
+three.createText({ font: Inter.bitmap, text: 'HP 100' }); // 16 or 32, whichever is nearer
 ```
 
 ```tsx
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
+
 const body = useMsdf(url);
 const title = useSlug(url);
 const ui = useBitmap(url, { strikes: [16, 32] });
 ```
 
+{/*
+write
+- Question: do I have to choose one format per project?
+- Two sentences before the code: no; one GLB carries three formats and one shaping table, and a face declares the
+  ones it will use; the first declared format is the default, so `font: Inter` is MSDF here and `Inter.slug` is the
+  same face in Slug.
+- One sentence after the React block: the hooks are the same declaration with a lease React manages, and
+  `preload` starts the load before a component asks.
+- Shape: short; this section is a relief after three dense ones.
+
+notes · internals
+- the face is its own default selection; declared members are distinct selections (`face.slug !== face`) —
+  `font-face.ts#FontFace`, `#FontFaceSelection`; D-310
+- `face.load()` loads every declared format; `face.slug.load()` loads only Slug — `font-face.ts#FontFaceBase.load`, D-310
+- an undeclared face resolves to the handle's default format; `ThreeConfig` defaults it to MSDF —
+  `three/handle.ts#ThreeConfigOptions.defaultFontFormat`, `#defineThreeConfig`
+- hooks declare through `glyph.fontFace` and own the mounted lease; `.preload()` and `.clear()` —
+  `react.ts#useFont` (`:138–160`), `react/msdf.ts#useMsdf`
+- `createText({ font })` accepts a face, a member, or a family string — `three/text.ts:256–283`
+*/}
+
 ## Mixing formats
 
-A format is bound to a **font**, not to a paragraph. Every font inside one `txt` literal unifies to one technique,
-so a span cannot switch format mid-paragraph; a fallback stack may mix them — Latin in MSDF, an icon face in Slug —
-and the plan partitions draws by format and resource. Effects are validated against every technique in the
-selection, so a stack with a Bitmap member cannot take an outline. Renderer-free code loads typed `Font`s with the
-tuple form:
+```ts no-check
+import { glyph, txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+import { slug } from '@pmndrs/glyph/three/slug';
 
-```ts
-const [interBitmap, interMsdf, interSlug] = await loadFont({ baked: '/fonts/inter.font.glb' }, [
-  { raster: bitmap, options: { strikes: [32] } },
-  msdf,
-  slug,
-]);
+const Icons = glyph.fontFace('/fonts/icons.font.glb', { format: slug });
+await Icons.load();
+three.createText({ font: Inter, text: txt`Latin in MSDF, an icon in Slug ${span(Icons.slug)``}` });
 ```
+
+{/*
+write
+- Question: can one paragraph mix formats?
+- Three sentences: a format is bound to a font, not to a paragraph; a span switches format only by switching font,
+  as the icon span does above; effects are checked against every font in the paragraph, so a paragraph with a
+  Bitmap member cannot take an outline.
+- Close by pointing at Render plan for how mixed draws are partitioned, without explaining it here.
+- Wait on fallback stacks: do not write that paragraph until the [in flight] and [verify] items below resolve.
+
+notes · internals
+- a format belongs to a font; every font in one paragraph unifies to one technique, so a span changes technique only by
+  changing font — `formatted-text.ts#ParagraphSpan`, `#span` (`:121–126`)
+- effects are validated against every technique in the selection — `engine-encoding.ts:206–209`
+- draws partition by format and resource — `internal/render-planner.ts` (partition keys); see Render plan
+- [in flight] at HEAD `span(font)` takes a loaded immutable `FontSelection`, not a face member — `three/span.ts:20`,
+  `formatted-text.ts:121–126`; the snippet above is the canonical form and is opted out of the check until the
+  FontFace path reaches spans (D-310 binds faces into Text; spans are not mentioned). Re-check after the merge.
+- [verify] whether `createFontStack` (`loaded-font.ts`) survives the FontFace path; the other agent is retiring the
+  immutable-Font loaders. Do not document stacks here until that lands.
+*/}
 
 ## See them side by side
 
 <glyph-proxy root="scenes" data-scene="text-ladder" aria-label="8 to 1024 px, one format per column" aspect="16 / 9" />
 
-Bitmap is sharp at its strikes and soft between them. MSDF holds its edge at every size and flattens its curves past
-its `emSize`. Slug is the same outline at every row.
+{/*
+write
+- Question: what am I looking at?
+- One line per column, read top to bottom: Bitmap sharp at its strikes and soft between them; MSDF holding its edge
+  at every size and flattening its curves past its `emSize`; Slug the same outline at every row.
+- Tell the reader the ladder is in frame pixels, so a row's number is a real size on their display.
+
+notes · internals
+- the ladder scene: `site/examples/src/scenes/text-ladder/scene.tsx` (pixel-unit orthographic stage; rows stop where
+  the word no longer fits its column)
+*/}

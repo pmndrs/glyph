@@ -9,73 +9,160 @@ sourcecode: packages/glyph/src/three/glyphs.ts
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  `breakApart()` takes the glyphs the renderer last committed and copies them into a `Glyphs` object with one
-  matrix per glyph, plus a `Decorations` object for underlines when there are any. The source keeps shaping; the
-  copies are yours — attach them, animate them, hand them to physics, dispose them.
-</Intro>
+{/*
+reader
+- Wants letters that move on their own: an explode, a tumble, a ring, a physics scene. Knows `InstancedMesh` and
+  `setMatrixAt`. Arrives asking "how do I animate one letter?", should leave able to break a committed paragraph
+  into matrices, write them in local or world space, bend a line onto a path, and dispose the copy.
+
+write · intro
+- Question: what does `breakApart()` give me, and what happens to the text?
+- Say: it takes the glyphs the renderer last committed and copies them into a `Glyphs` object with one matrix per
+  glyph, plus a `Decorations` object for underlines when there are any. The source keeps shaping; the copies are
+  yours — attach them, animate them, hand them to physics, dispose them.
+- Anchor: "a copy, not a claim".
+- Shape: two sentences.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- Committed only, synchronous, atomic: a frozen `[Glyphs, Decorations | undefined]`.
+- The `InstancedMesh` surface: `count`, `getMatrixAt`/`setMatrixAt`, world variants, `materials`.
+- `measurements` remembers where each glyph was and how big it is, in Text-local space.
+- The source stays live and may be disposed first; you own attachment, motion, reset, disposal.
+
+notes · internals for the page
+- `Text.breakApart()` — `three/text.ts:783–839`; D-292; `docs/planning/detached-glyph-slice.md`
+- `Glyphs` — `three/glyphs.ts#Glyphs` (`:112`); `Decorations` — `three/decorations.ts#Decorations` (`:46`)
+- the scenes: explode and reset, a ring — `site/examples/src/scenes/break-apart/scene.tsx`, `site/examples/src/scenes/arc/scene.tsx`
+*/}
 
 ```ts
-const [glyphs, decorations] = label.breakApart();
-label.parent!.add(glyphs);                       // sibling attachment overlays the source exactly
-if (decorations !== undefined) label.parent!.add(decorations);
-label.visible = false;
+import { Matrix4 } from 'three/webgpu';
 
-const m = new THREE.Matrix4();
+const [glyphs, decorations] = text.breakApart();
+text.parent!.add(glyphs);                        // sibling attachment overlays the source exactly
+if (decorations !== undefined) text.parent!.add(decorations);
+text.visible = false;
+
+const m = new Matrix4();
 glyphs.getMatrixAt(3, m);
 m.setPosition(0, 0.4, 0);
 glyphs.setMatrixAt(3, m);
 
-glyphs.materials[0].opacity = 0.65;
+glyphs.materials[0]!.opacity = 0.65;             // a clone; the source is untouched
 
 glyphs.dispose();
 decorations?.dispose();
-label.visible = true;
+text.visible = true;
 ```
 
 <glyph-proxy root="scenes" data-scene="break-apart" aria-label="Explode, tumble, reset" aspect="16 / 9" />
 
 ## Preconditions
 
-{/* prose: committed only — `commitState().status === 'committed'`; the call is synchronous and atomic: if the
-decoration copy fails, the glyph branch already created is disposed before the error escapes. */}
+```ts
+if (text.commitState().status === 'committed') {
+  const [glyphs] = text.breakApart(); // throws before a committed layout, after a failed one, or with no drawable glyph
+  text.parent!.add(glyphs);
+}
+```
+
+{/*
+write
+- Question: when may I call it?
+- Two sentences: only after the renderer has committed the paragraph — `commitState().status === 'committed'` —
+  because the copy is built from committed stable glyph ids and drawn origins; before that, after a failed
+  realisation, or on a paragraph with nothing drawable (all spaces) it throws with a message that says which.
+- One sentence: the call is synchronous and atomic; if the decoration copy fails, the glyph branch already created
+  is disposed before the error escapes.
+- Shape: three sentences; the scenes wait one frame in `useFrame` for the commit — say so.
+
+notes · internals
+- the gate — `three/text.ts#Text.#assertDetachedCopyAvailable` (`:841–847`); no placements, unbound, no drawable glyphs — `:788`, `:790`, `:799`
+- atomic: decorations failure disposes the glyphs — `three/text.ts:831–838`; D-292
+- the scenes poll `commitState()` in `useFrame` — `site/examples/src/scenes/break-apart/scene.tsx:36–46`
+*/}
 
 ## Glyphs
 
 | Member | Meaning |
 | --- | --- |
-| `count` | drawable detached glyphs |
-| `glyphAt(index)` | `DetachedGlyph`: `sourceIndex`, `key`, `cluster`, `line`, `word`, `fontSize`, `advance` |
+| `count` | drawable detached glyphs; spaces and other record-less glyphs are left out |
+| `glyphAt(index)` | `DetachedGlyph`: `index`, `sourceIndex`, `key`, `cluster`, `line`, `word`, `fontSize`, `advance` |
 | `getMatrixAt` / `setMatrixAt` | full affine matrix in `Glyphs`-local space |
-| `getWorldMatrixAt` / `setWorldMatrixAt` | the same through the root's world transform |
+| `getWorldMatrixAt` / `setWorldMatrixAt` | the same through the root's world transform; updates and inverts the ancestor chain every call |
 | `measurements` | `ThreeGlyphMeasurement[]`, original transforms and bounds |
-| `materials` | cloned materials owned by this branch |
-| `dispose()` | releases plan, storage, materials, leases; removes from parent |
+| `materials` | cloned material instances owned by this branch |
+| `dispose()` | releases plan, storage, materials, leases; removes it from its parent |
 
-{/* prose: the surface follows `InstancedMesh`; the root starts with the source's local transform, and each record
-starts at its committed drawn origin. */}
+{/*
+write
+- Question: what does the object look like?
+- Paragraph 1: it follows `InstancedMesh`: a dense index from 0 to `count`, a full affine matrix per index, read
+  and written in the object's local space, with world-space variants for one-off writes. The root starts with the
+  source's local transform, and each record starts at its committed drawn origin, so adding it beside the source
+  overlays it exactly.
+- Paragraph 2: `glyphAt` gives identity and grouping — cluster, line, word — so a stagger by word or by line needs no
+  segmentation of your own. `key` survives a reflow that moves glyphs and not one that reshapes them.
+- Shape: two paragraphs; the table is the reference.
+
+notes · internals
+- surface — `three/glyphs.ts:239–314`; `DetachedGlyph` — `:79–91`; the `InstancedMesh` convention — `docs/planning/detached-glyph-slice.md:87–96`
+- record-less glyphs (`incomplete`) are filtered out — `three/glyphs.ts:139–140`; what `incomplete` means — `glyph-placement.ts:137–150`
+- root transform copied from the source without touching ancestors — `three/detached-object.ts#copyCurrentLocalTransform`; each
+  record starts at its drawn origin — `three/glyphs.ts#Glyphs.#initializeTransforms` (`:316–333`)
+- `GlyphKey` durability — `glyph-placement.ts:15–33`; D-276
+- `setWorldMatrixAt` updates the ancestor chain and inverts per call — `three/glyphs.ts:267–280`
+- a write marks the storage attribute for upload — `three/glyphs.ts:259–265`, `three/engine-plan-target.ts#markStorageAttributeUpdated`
+*/}
 
 ## Measurements
 
 ```ts
-const m = glyphs.measurements[i];
-m.originalMatrix;        // where it was
-m.localInkBounds;        // Box3
-m.localAdvanceBounds;    // Box3
+const [glyphs] = text.breakApart();
+const m = glyphs.measurements[0]!;
+m.originalMatrix;                                // where it was, in the source Text's local space
+m.localInkBounds;                                // Box3
+m.localAdvanceBounds;                            // Box3
 m.anchorPoint({ x: 'center', y: 'min' }, 'ink'); // Vector3
-m.geometry;              // metric quad or supplied geometry, with bounds
+m.geometry;                                      // metric quad or the technique's supplied mesh, with bounds
 ```
 
-{/* prose: measurements never traverse or cache ancestors — they are local facts; physics adapters choose their own
-body shape from them. */}
+{/*
+write
+- Question: how big is a glyph, and where was it?
+- Paragraph 1: each measurement is a local fact in the source Text's space: the original matrix (a translation to
+  the drawn origin), the shaped and drawn origins, an ink box and an advance box as `Box3`, an anchor lookup on
+  either box, and the geometry the renderer used — a metric quad, or a technique-supplied mesh in its declared
+  coordinates. Nothing here traverses or caches scene ancestors; a physics adapter chooses its own body from these.
+- Paragraph 2: `anchorPoint` is how you pick a pivot: `{ x: 'center', y: 'min' }` on `'ink'` is the bottom-centre of
+  what you see, on `'advance'` the bottom-centre of what layout reserved.
+- Shape: two paragraphs.
+
+notes · internals
+- `ThreeGlyphMeasurement` — `three/glyph-measurement.ts:36–52`; built per placement — `#measureGlyph` (`:110–158`)
+- `originalMatrix` is a translation to the drawn origin, y flipped into scene space — `three/glyph-measurement.ts:117–119`
+- `anchorPoint(anchor, 'ink' | 'advance')` — `three/glyph-measurement.ts:137–144`; `GlyphAnchor` — `:7–13`
+- geometry sources: metric quad in glyph-local coordinates, or supplied — `three/glyph-measurement.ts:15–34`, `:123–136`
+- "rendering facts, not prescribed collision bodies" — `docs/planning/three-api.md:389–393`
+*/}
 
 ## Text on a circle
 
 ```ts
-const radius = line.measure().contentWidth / (Math.PI * 2); // advance extent, not the resolved box width
-const [glyphs] = line.breakApart();
+import { Matrix4, Quaternion, Vector3 } from 'three/webgpu';
+
+const radius = text.measure().contentWidth / (Math.PI * 2); // advance extent, not the resolved box width
+const [glyphs] = text.breakApart();
+const m = new Matrix4();
+const home = new Vector3();
+const q = new Quaternion();
+const s = new Vector3();
+const turn = new Quaternion();
+const up = new Vector3(0, 1, 0);
 for (let i = 0; i < glyphs.count; i += 1) {
-  glyphs.measurements[i].originalMatrix.decompose(home, q, s);
+  const rest = glyphs.measurements[i];
+  if (rest === undefined) continue;
+  rest.originalMatrix.decompose(home, q, s);
   const angle = home.x / radius;                     // advance along the line → angle
   turn.setFromAxisAngle(up, angle);
   m.compose(new Vector3(Math.sin(angle) * radius, home.y, Math.cos(angle) * radius), turn.multiply(q), s);
@@ -85,35 +172,105 @@ for (let i = 0; i < glyphs.count; i += 1) {
 
 <glyph-proxy root="scenes" data-scene="arc" aria-label="A line of text bent into a turning ring" aspect="16 / 9" />
 
-{/* prose: layout stays straight; the bend is a matrix per glyph, written once. Any path works the same way —
-sample it by arc length at each glyph's `originalMatrix` x. */}
+{/*
+write
+- Question: how do I put text on a path without a curved layout?
+- Paragraph 1: layout stays straight; the bend is a matrix per glyph, written once. The x of each glyph's
+  `originalMatrix` is its distance along the line, so it is an arc length: divide by the radius for an angle,
+  place on the circle, and turn the glyph to face outward. The radius comes from `contentWidth`, the advance
+  extent, so the ring closes on itself whatever the text; `width` is the resolved box and would leave a gap.
+- Paragraph 2: any path works the same way — sample it by arc length at each glyph's x; the kinetic scene's
+  `TextOnPath` does this on a circle every frame, with a scroll offset.
+- Shape: two paragraphs.
+
+notes · internals
+- the arc scene — `site/examples/src/scenes/arc/scene.tsx:36–66`; the `width` gap finding — `docs/planning/docs-site-outline.md:503`
+- `contentWidth` vs `width` — `layout.ts:68–75`
+- the path component — `site/examples/src/components/text/TextOnPath.tsx:52–64`, `site/examples/src/lib/paths.ts`
+*/}
 
 ## World-space writes in bulk
 
 ```ts
 import { worldToLocalMatrix } from '@pmndrs/glyph/three';
+import { Matrix4 } from 'three/webgpu';
+
+const [glyphs] = text.breakApart();
+const bodies: Matrix4[] = []; // one world matrix per glyph, from your physics step
+const scratch = new Matrix4();
 
 glyphs.updateMatrixWorld();
 const inverse = glyphs.matrixWorld.clone().invert();
 for (let i = 0; i < glyphs.count; i += 1) {
-  worldToLocalMatrix(inverse, bodyWorldMatrix(i), scratch);
+  worldToLocalMatrix(inverse, bodies[i]!, scratch);
   glyphs.setMatrixAt(i, scratch);
 }
 ```
 
-{/* prose: invert the root once; `setWorldMatrixAt` is correct for one-offs but updates and inverts the ancestor
-chain every call. First-frame and same-render writes upload before draw on both backends. */}
+{/*
+write
+- Question: physics gives me world matrices; what is the cheap way in?
+- Paragraph 1: update the root once, invert its `matrixWorld` once, convert each body's world matrix through
+  `worldToLocalMatrix`, and write with `setMatrixAt`. `setWorldMatrixAt` is correct for a one-off but updates and
+  inverts the ancestor chain on every call.
+- Paragraph 2: first-frame and same-render writes upload before the draw on both backends, so a matrix written in
+  the `useFrame` right after attachment is what that frame shows.
+- Shape: two paragraphs.
+
+notes · internals
+- `worldToLocalMatrix(inverse, world, target)`, target may alias — `three/glyphs.ts:18–33`; `localToWorldMatrix` — `:35–49`
+- the bulk recommendation — `three/glyphs.ts:267–273` (docstring), `docs/planning/three-api.md:390–393`
+- writes mark storage and the WebGL2 PBO mirror; uploaded before draw on WebGPU and WebGL2 — `docs/planning/detached-glyph-slice.md:101`; D-292
+- `matrixWorldNeedsUpdate` is re-dirtied after realisation so the first traversal composes with the real parent — `three/glyphs.ts:161–163`, `:224–226`
+*/}
 
 ## Decorations
 
-{/* prose: independent topology and lifetime; returned as tuple slot two, `undefined` when the paragraph has no
-decoration draws; keeps under-decoration → glyph → line-through paint order. */}
+```ts
+const [glyphs, decorations] = text.breakApart();
+if (decorations !== undefined) {
+  text.parent!.add(decorations);
+  decorations.materials[0]!.opacity = 0.5;
+}
+glyphs.dispose();
+decorations?.dispose();
+```
+
+{/*
+write
+- Question: what happens to the underline?
+- Two sentences: decorations have their own topology and lifetime; they are copied by a separate planner request
+  and come back in tuple slot two, `undefined` when the paragraph has no decoration draws, with `materials` and
+  `dispose()` and nothing per record. Their draws keep the under-decoration → glyph → line-through paint order
+  around the glyph branch's render orders.
+- Shape: two sentences.
+
+notes · internals
+- `Decorations` — `three/decorations.ts:45–122`; no draws → `undefined` — `#createDecorations` (`:27–35`)
+- separate planner request — `internal/render-planner.ts#_copyDecorations` (`:606–615`); D-292
+- paint order around the glyph draws — `three/text.ts:812–826`; under/over by `depthKey` — `three/decorations.ts:54–64`
+*/}
 
 ## Ownership
 
 | Fact | Consequence |
 | --- | --- |
 | the source stays live | later source publications never touch the copy |
-| copies lease atlas/page resources | no re-upload; source `Text`, `Font`, and loader may be disposed first |
+| copies lease atlas and page resources | no re-upload; the source `Text` and its `FontFace` may be disposed first |
 | the caller owns attachment, visibility, physics, reset, disposal | nothing happens automatically |
 | materials are cloned | changing one cannot affect the source or a sibling branch |
+
+{/*
+write
+- Question: who owns what, and in which order do I tear it down?
+- One sentence per row, in plain words; end with the rule: dispose the copies when you are done with them, restore
+  the source's visibility yourself, and expect no callback.
+- Shape: four sentences.
+
+notes · internals
+- the ownership contract — D-292; `docs/planning/three-api.md:395–400`; `docs/planning/detached-glyph-slice.md:33–35`, `:95–96`
+- immutable atlas/page resources are leased from the engine domain, mutable materials and transform storage never
+  shared — `docs/planning/detached-glyph-slice.md:95–96`; the copy retains its own engine-domain lease — `three/glyphs.ts:104–110`
+- cloned materials owned by the branch — `three/glyphs.ts#Glyphs.materials` (`:247–251`), `three/engine-plan-target.ts:201–204`
+- `dispose()` releases the copy, storage, and removes from parent; the first failure is rethrown after cleanup — `three/glyphs.ts:294–314`
+*/}

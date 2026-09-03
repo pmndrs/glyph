@@ -2,86 +2,410 @@
 title: Pitfalls
 description: The mistakes the API lets you make, each as symptom, cause, and fix.
 nav: 51
+sourcecode: packages/glyph/src/three/text.ts
 ---
 
-<Intro>
-  Every entry here was hit for real. Each is one paragraph: what you see, why, what to do.
-</Intro>
+{/*
+reader
+- Has something on screen that is wrong, or nothing on screen at all, and an error message or a silence to go on.
+  Skims headings for the symptom. Should leave with the one line that fixes it and the one sentence that explains
+  why the API let it happen.
+
+write · intro
+- Question it answers: is this a bug in my code or in the library, and what do I change?
+- Say: every entry was hit for real; each is one paragraph — what you see, why, what to do — in that order, so the
+  first sentence is the symptom and the last is the fix.
+- Shape: two sentences.
+
+write · keypoints (none; the headings are the list)
+
+notes · internals for the page
+- errors are retained on `text.error` and forwarded to `onError`; traversal never throws — `three/text.ts:494–503`,
+  `:658–660`, `:478–486`
+- `commitState()` names the four states a paragraph can be in — `three/text.ts:93–98`, `:756–764`; D-272
+*/}
 
 ## The declared format is not in the GLB
 
-{/* symptom: `FONT_FACE_FORMAT_UNAVAILABLE`. cause: raster options are part of the raster key — `msdf` default (64/8)
-≠ `{ raster: msdf, options: { emSize: 32 } }`; a baked GLB never re-bakes. fix: one shared constant for the bake and
-the declaration; `await face.formats()` to see what the GLB carries. */}
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+
+const Inter = glyph.fontFace('/fonts/Inter.glb', { format: msdf({ emSize: 32 }) }); // baked at the default 64
+await Inter.formats(); // ['pmndrs.msdf', …] — the keys, not the options; the mismatch is in the descriptor
+await Inter.load(); // FontLoadError FONT_FACE_FORMAT_UNAVAILABLE
+```
+
+{/*
+write
+- Symptom: `load()` rejects with `FONT_FACE_FORMAT_UNAVAILABLE` and the message "does not implement the declared
+  msdf format", although the GLB plainly has MSDF in it.
+- Cause: raster options are part of the raster's identity; `msdf` at `emSize: 32` is a different raster from `msdf`
+  at the default 64, and a baked GLB never bakes another one at runtime.
+- Fix: keep one constant for the options and pass it to both the bake and the declaration; `await Inter.formats()`
+  tells you which formats the GLB advertises before you load anything.
+- Shape: one paragraph.
+
+notes · internals
+- the rejection — `font-face.ts:550–560` (wraps `RASTER_NOT_FOUND` / `RASTER_SOURCE_UNAVAILABLE`); a name that is no
+  format at all — `:652–660`
+- identity = SHA-256 of the canonical descriptor — `internal/raster-identity.ts#deriveRasterKey` (`:90–102`)
+- `formats()` reads the main GLB without loading sidecars — `font-face.ts:211`; a baked miss never runtime-bakes — D-310
+*/}
 
 ## Text throws "not loaded"
 
-{/* symptom: `createText` or `text.font =` throws synchronously. cause: imperative text cannot suspend; the selection
-was not awaited. fix: `await Inter.load()` (or `await Inter.slug.load()`) first. React suspends instead. */}
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { slug } from '@pmndrs/glyph/three/slug';
+
+const Hero = glyph.fontFace('/fonts/Playwrite.glb', { format: slug });
+await Hero.slug.load(); // or Hero.load(); without one of these, createText throws synchronously
+three.createText({ font: Hero.slug, text: 'glÿph' });
+```
+
+{/*
+write
+- Symptom: `createText` or `text.font =` throws `FontLoadError` `FONT_FACE_FORMAT_NOT_LOADED` — "format slug is not
+  loaded".
+- Cause: imperative construction cannot wait; the handle binds a loaded immutable font at construction time, so the
+  selection you pass must already be loaded. `Inter.load()` loads every declared format; `Inter.slug.load()` only
+  that one.
+- Fix: await the load first. React does not have this pitfall: `<Text>` checks `isLoaded()` and suspends on the
+  same load promise.
+- Shape: one paragraph.
+
+notes · internals
+- the throw — `font-face.ts#requiredFontFaceFormat` (`:636–650`), reached from `FontFaceHandleStore.acquire` (`:349–354`)
+  and `ThreeRoot.createText` (`three/text.ts:270`)
+- `load()` loads every declared format; a member loads only itself — `font-face.ts#FontFaceBase.load` (`:86–89`); D-310
+- React: `isThreeHandleFontLoaded` else `use(loadThreeHandleFont(...))` — `react.ts#useHandleFontFace` (`:655–660`); D-301, D-302
+*/}
 
 ## An outer `<Text>` without a font
 
-{/* symptom: mount error naming `font`. cause: only nested Text inherits. fix: pass `font` on the paragraph. */}
+```tsx
+import { Text } from '@pmndrs/glyph/react';
 
-## Nothing draws in plain three.js
+export function Label() {
+  return (
+    <Text font={inter}>
+      Hello <Text style={{ color: '#ffd166' }}>world</Text>
+    </Text>
+  );
+}
+```
 
-{/* symptom: a Text is in the scene, `renderer.render` shows nothing. cause: no `glyph.shape()` call — R3F does it for
-you, imperative code does not. fix: call `glyph.shape()` after edits and before `renderer.render`. */}
+{/*
+write
+- Symptom: a mount-time `TypeError`: "an outer R3F Text requires a font".
+- Cause: only a nested `<Text>` inherits; it compiles into a span of its parent and never becomes an object. The
+  outer one is the paragraph, and a paragraph must name a font.
+- Fix: put `font` on the outer element; inner ones may override it or leave it.
+- Shape: one paragraph.
+
+notes · internals
+- the throw — `react.ts:453`; nested children flatten into spans — `react.ts#R3fTextChild` (`:65–71`), `flattenText`
+  (`:759–790`); D-277 (an inline run carries only the five span properties)
+*/}
+
+## Nothing draws in plain three.js, and nothing threw
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+text.set({ text: 'changed' });
+glyph.shape(); // throws here, where you can catch it — traversal swallows the same error into text.error
+renderer.render(scene, camera);
+```
+
+{/*
+write
+- Symptom: a `Text` is in the scene, `renderer.render` runs, the screen is empty, the console is quiet.
+- Cause: scene traversal shapes for you — the root's draw object calls `glyph.shape()` inside three's own
+  `updateMatrixWorld` — but it catches whatever that throws and parks it on `text.error` and `onError` so a render
+  loop never dies. If the paragraph was rejected (a bad span, a missing font stack, a capacity overrun) you see
+  nothing and hear nothing.
+- Fix: call `glyph.shape()` yourself after your edits and before rendering; it rethrows the root's error. Or read
+  `text.commitState()` — `failed` carries the error, `pending` means nothing has been accepted yet. Set `onError` in
+  any case.
+- Correct the earlier draft's claim: an explicit call is not required for drawing; it is required to *see* a failure.
+- Shape: one paragraph.
+
+notes · internals
+- traversal shape and the swallowed throw — `three/text.ts#ThreeRoot.#commitTraversal` (`:478–493`); the draw root's
+  override — `:139–142`; first attachment binds the scene and runs one traversal — `#observeHostTree` (`:421–429`)
+- `glyph.shape()` rethrows one error or an `AggregateError` — `glyph-engine.ts:552–555`; D-312
+- errors retained and forwarded — `three/text.ts:494–503`, `:918–922`; `commitState()` — `:756–764`
+- the proof example runs `scene.add(text) → glyph.shape() → renderer.render` — D-304
+*/}
 
 ## A span boundary moved
 
-{/* symptom: `text.spans` differs from what was authored. cause: the boundary split a grapheme cluster and was
-resolved forward to the cluster end — a base keeps its style. fix: author on cluster boundaries. */}
+```ts
+import { span, txt } from '@pmndrs/glyph';
+
+const accent = span({ color: '#ff0000' });
+const literal = txt`${accent`a`}́bc`; // the combining acute lands in the cluster of the styled "a"
+literal.spans; // resolved at the join: [{ start: 0, end: 2, … }] — the mark took its base's style
+three.createText({ font: Inter, text: literal });
+```
+
+{/*
+write
+- Symptom: a combining mark is drawn in its base letter's colour although you styled only the letter — or the
+  other way round, a styled mark's style vanished into a plain base.
+- Cause: the engine styles whole grapheme clusters, and a boundary inside one is resolved forward to the end of the
+  cluster — a cluster takes the style of its base. Nothing throws; `txt`/`span` and nested `<Text>` resolve the
+  boundary where two fragments join, so the paragraph the engine sees is already on the cluster grid.
+- Fix: author on cluster boundaries; when you need to know whether a boundary moved, compare the literal's `spans`
+  with what you meant. There is no `spans` getter on a Text and no public alignment helper at HEAD.
+- Shape: one paragraph.
+
+notes · internals
+- the rule and both entry points — D-265; `formatted-text.ts#alignSpansToClusters` (`:41–69`), applied in
+  `three/text.ts:1453–1454`; the join rule for `txt`/`span` and nested `<Text>` — `formatted-text.ts:33–40`
+- the worked examples — `docs/planning/three-api.md:204–265` (codex tree)
+- raw `spans` are rejected at the boundary: "cannot declare raw spans; compose formatted text with txt and span" —
+  `three/text.ts:718`, proven at `tests/integration/text-frame-rejection.test.mjs:26–36`
+- `Text` has no public `spans` getter (`three/text.ts:646–710`; `spans` is desired state at `:102`), and
+  `alignSpansToClusters` is exported from neither `index.ts` nor `three.ts`; `docs/planning/three-api.md:206–265`
+  shows both and lags the code
+- [verify] the resolved range in the comment (`[0, 2)` for a styled base plus a plain mark): run the literal
+  through `txt` before publishing the number
+*/}
 
 ## Two scenes, one root
 
-{/* symptom: an error naming two scenes. cause: a root binds at most one `Scene`. fix: `handle('other')` for the
-second scene; in R3F, a `GlyphProvider handle={three('other')}` around the portal. */}
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+import { Scene } from 'three/webgpu';
+
+const app = glyph.handle('app', ThreeConfig);
+const overlay = new Scene();
+scene.add(app.createText({ font: Inter, text: 'world' }));
+overlay.add(app('overlay').createText({ font: Inter, text: 'HP 100' })); // a second scene is a second root
+```
+
+{/*
+write
+- Symptom: an error naming the root and "spans more than one Scene; select a different handle root for each Scene".
+- Cause: a root discovers its scene from its attached texts and binds to exactly one; the draw meshes live under
+  that scene.
+- Fix: `handle('name')` for the second scene. In R3F, wrap the portal's subtree in
+  `<GlyphProvider handle={app('overlay')}>`.
+- Shape: one paragraph.
+
+notes · internals
+- the throw — `three/text.ts#ThreeRoot.#bindScene` (`:543–551`); membership by nearest scene — `#renderMembers` (`:564–571`)
+- one scene per root, two scenes two roots — D-307
+- `GlyphProvider handle` accepts a handle or a named root — `react.ts:193–199`, `#selectReactRoot` (`:417–420`)
+*/}
 
 ## Nothing changes with `fixed` capacity
 
-{/* symptom: text stops updating; `commitState()` stays `pending`. cause: desired UTF-16 length exceeds the root's
-`size`; the last draw is kept by design. fix: shorten, or `root.setCapacity`. */}
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+const hud = glyph.handle('hud', defineThreeConfig({ capacity: { size: 64, policy: 'fixed' } }));
+const readout = hud.createText({ font: Inter, text: 'x'.repeat(65) });
+readout.commitState(); // { status: 'pending' } for as long as the root is over budget
+hud.setCapacity({ size: 128, policy: 'fixed' }); // or shorten the text; retried on the next traversal
+```
+
+{/*
+write
+- Symptom: the text stops updating, `commitState()` reports `pending` forever, `measure()` still answers.
+- Cause: desired UTF-16 length across the root exceeds `size`; a `fixed` root declines the batch and keeps its last
+  accepted draw, by design.
+- Fix: shorten, or `setCapacity`; the decision is retried on every traversal, with no latch to clear.
+- Shape: one paragraph.
+
+notes · internals
+- `required = Σ text.length`, `prepareShape` returns `false` — `three/text.ts:1260–1270`; `capacityExceeded` (`:1111`)
+- `setCapacity` invalidates only while exceeded — `three/text.ts:1115–1119`; D-282 (no rejection latch), D-136
+*/}
 
 ## `caretAt` returns `undefined`
 
-{/* symptom: measurement works, interaction does not. cause: measurement is desired-state, `caretAt` is
-accepted-state — nothing has been shaped yet. fix: shape once (R3F: wait a frame), or use `measure()`/`glyphs()`
-for desired positions. */}
+```ts
+const caret = text.caretAt(12, -4); // undefined until the root has accepted a publication for this revision
+const box = text.measure(); // desired state; always answers
+```
+
+{/*
+write
+- Symptom: measurement works, `caretAt`, `selectionRects`, and `measureGlyphs` return `undefined`.
+- Cause: measurement reads desired state; placements read committed state, and only when the committed revision
+  equals the desired one and the last renderer update was accepted. Before the first `shape()`, or right after an
+  edit, there is no committed layout to hit-test.
+- Fix: shape once (in R3F, wait a frame) before interaction; or use `glyphs()` for desired positions.
+- Shape: one paragraph.
+
+notes · internals
+- `caretAt` → `#glyphPlacements` → `binding.glyphPlacements` → `#canonicalInspection`, which returns `undefined` when
+  unbound, rejected, or `committedRevision !== desiredRevision` — `three/text.ts:861–867`, `:771–774`, `:1213–1225`,
+  `:1343–1357`
+- `measure()` is desired-state — `three/text.ts:736–742`; D-282, D-292 (committed-only placements)
+*/}
 
 ## Disposing in the wrong order
 
-{/* symptom: a text renders nothing after its face was disposed. cause: leases are counted; a disposed face keeps the
-text alive until the text disposes, but nothing new can bind. fix: text → group → root/handle → face. */}
+```ts
+text.dispose(); // releases its font leases
+group.dispose(); // does not dispose descendant texts
+handle.dispose(); // then the root: no new construction after this
+Inter.dispose(); // the declaration last; a disposed face rejects every new selection
+```
+
+{/*
+write
+- Symptom: a `TypeError` "FontFace … has been disposed" on the next `createText`, or a text that keeps drawing after
+  you thought its font was gone.
+- Cause: leases are counted. A text holds its own immutable font lease and releases it in `dispose()`; a disposed
+  face does not invalidate fonts already retained, it only refuses new selections. Disposing the face first therefore
+  leaves live texts alive and breaks the next construction.
+- Fix: text → group → handle → face. `TextGroup.dispose()` does not dispose its children, so dispose them yourself or
+  move them.
+- Shape: one paragraph.
+
+notes · internals
+- `Text.dispose()` unbinds, unregisters, disposes owned fonts — `three/text.ts:875–881`; `TextGroup.dispose()` — `:1032`
+- `FontFace.dispose()` must be called on the declaration; a disposed face throws on selection —
+  `font-face.ts#disposeFontFace` (`:266–281`), `#fontFaceSelectionState` (`:284–295`)
+- the recommended order — `docs/planning/three-api.md:424–433` (codex tree); disposal without finalizers —
+  `docs/planning/font-runtime-ownership.md:1211–1229`
+*/}
 
 ## `hsl()` in a style
 
-{/* symptom: `Text style color must be #rrggbb, #rrggbbaa, or linear RGBA`. cause: style colours are hex or a linear
-tuple, not arbitrary CSS. fix: convert — a hue to hex, or an sRGB triple to linear RGBA. */}
+```ts
+text.style = { color: '#ffd166' }; // #rrggbb or #rrggbbaa
+text.style = { color: [1, 0.82, 0.4, 1] }; // or a linear RGBA tuple
+```
+
+{/*
+write
+- Symptom: `TypeError` "Text style color must be #rrggbb, #rrggbbaa, or linear RGBA".
+- Cause: style colours are hex or a linear tuple, validated where they enter; there is no CSS parser.
+- Fix: convert — a hue to hex, or an sRGB triple to linear RGBA — and note which space the tuple is.
+- Shape: one paragraph.
+
+notes · internals
+- the throw — `text-properties.ts:323` (style), `engine-encoding.ts:270` (encoding); `ColorInput = string | LinearRgbaInput` — `text-properties.ts:82–83`
+*/}
 
 ## No WebGPU on the LAN
 
-{/* symptom: WebGL2 on `http://10.0.0.x`, WebGPU on localhost. cause: `navigator.gpu` needs a secure context.
-fix: HTTPS or a tunnel; the page still renders on WebGL2. */}
+{/*
+write
+- Symptom: WebGPU on `localhost`, WebGL2 on `http://10.0.0.x`; or on the identity branch, fonts that will not load
+  at all there.
+- Cause: `navigator.gpu` exists only in a secure context, and so does `crypto.subtle`, which the loader uses to hash
+  every font artifact.
+- Fix: HTTPS or a tunnel. The page still renders on WebGL2 through three's own fallback; the font-identity fix
+  removes the `crypto.subtle` dependency.
+- Shape: one paragraph; cross-link Installation.
+
+notes · internals
+- WebGPU detection is `'gpu' in navigator` — `apps/benchmarks/src/benchmark/environment.ts:9`; the secure-context
+  gate is the platform's, not the library's
+- every font load hashes with `crypto.subtle.digest` — `loader.ts:3125`; also `internal/raster-identity.ts:102`,
+  `internal/compose-bake.ts:397`, `internal/runtime-font-cache.ts:125`
+- this site already warns — `site/docs/getting-started/installation.mdx:52–59`
+- [verify] the `fix/font-identity-no-secure-context` branch in this repo removes the hashing; confirm it merged before
+  writing "fixed"
+*/}
 
 ## CJK renders nothing
 
-{/* symptom: a Noto Sans CJK bake has empty outlines. cause: the current baker reads TrueType outlines; CFF-only
-faces produce none. fix: a TrueType CJK face (M PLUS 1p, Nanum Gothic, ZCOOL XiaoWei). Tracked upstream. */}
+{/*
+write
+- Symptom: a Noto Sans CJK bake has shaping data and an atlas full of nothing; every glyph is blank.
+- Cause: the raster bakers mark an unreadable outline as absent and carry on, and a CFF-only face has no outlines
+  the Bitmap and MTSDF paths read.
+- Fix: a TrueType CJK face (M PLUS 1p, Nanum Gothic, ZCOOL XiaoWei), until the bakers read CFF.
+- Shape: one paragraph.
+
+notes · internals
+- "no every-glyph-rasterised-empty guard": bitmap and MTSDF bakers mark unreadable outlines absent silently —
+  this repo, `docs/planning/docs-site-outline.md` (Findings for core)
+- the Slug path converts CFF cubics — `rust/slug-fontations/src/lib.rs:239–247` — so the limitation is per baker
+- [verify] which outline reader `rust/bitmap-baker/src/rasterize.rs` and `rust/mtsdf-baker/src/artifact.rs` use and
+  whether it reads `CFF `; name the exact call before writing "CFF-only faces produce none"
+*/}
 
 ## Each letter lit separately
 
-{/* symptom: a custom lit material shades glyphs as individual objects. cause: the normal was derived from
-per-glyph em space (`renderCoordinate`). fix: derive it from `positionLocal` normalized by the paragraph's ink. */}
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { normalize, positionLocal, vec3 } from 'three/tsl';
+
+const lit = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  material.normalNode = normalize(vec3(positionLocal.x, positionLocal.y, 1)); // paragraph space, not glyph space
+  return material;
+});
+```
+
+{/*
+write
+- Symptom: a custom lit material shades each glyph as its own little object.
+- Cause: the normal was derived from a per-glyph coordinate (`renderCoordinate` is em space for Slug, the unit quad
+  for the others), so every glyph sees the same gradient.
+- Fix: derive it from `positionLocal` normalised by the paragraph's ink box, as the materials example does.
+- Shape: one paragraph.
+
+notes · internals
+- `context.position` is the final renderer-local position; `context.shader` outputs are per format —
+  `three/material.ts:19–54`; Slug's `renderCoordinate` is "interpolated em-space" — `tsl/slug-shader.ts:86–89`
+- the example — this repo, `site/examples/src/scenes/materials/scene.tsx:15–34` (`normalNode` from `positionLocal`
+  over the ink span)
+*/}
 
 ## Leading opens up with a fallback face
 
-{/* symptom: one line is much taller. cause: `lineHeight` is resolved per cluster and clamps leading at zero; a
-face with tall ascent/descent wins. fix: faces with similar vertical metrics, or a `lineHeight` that fits the
-tallest. */}
+{/*
+write
+- Symptom: one line is much taller than its neighbours.
+- Cause: line extents are resolved per cluster from the font that actually drew it; leading is
+  `requested − ascent − descent`, clamped at zero, so a fallback face with tall ascent or descent wins the line.
+- Fix: choose fallback faces with similar vertical metrics, or state a `lineHeight` that fits the tallest.
+- Shape: one paragraph.
+
+notes · internals
+- per-cluster extents from the cluster's resolved font — `rust/shaper/src/engine/flow_composition.rs#extents_for_cluster`
+  (`:858–905`); `requested = font_size × line_height` when set, else the font's natural height (`:893–896`);
+  `leading = (requested − ascent − descent).max(0.0)` (`:897`)
+*/}
 
 ## A font load rejects again and again
 
-{/* symptom: repeated fetches after a failed load. cause: a rejected load is evicted so a retry is a new operation —
-by design — and something keeps retrying. fix: an error boundary (`GlyphProvider errorFallback` for font errors) so
-the failure is shown once rather than re-rendered. */}
+```tsx
+import { GlyphProvider } from '@pmndrs/glyph/react';
+
+export function App() {
+  return (
+    <GlyphProvider errorFallback={(error) => <mesh />}>
+      {/* … */}
+    </GlyphProvider>
+  );
+}
+```
+
+{/*
+write
+- Symptom: the network tab shows the same font fetched over and over after one failed load.
+- Cause: a rejected load is evicted so a later call is a new operation — by design, so a transient failure can be
+  retried — and something in your tree keeps retrying: a component that re-renders and calls the hook again.
+- Fix: an error boundary that shows the failure once. `GlyphProvider errorFallback` catches `FontLoadError` and
+  rethrows anything else.
+- Shape: one paragraph.
+
+notes · internals
+- rejection deletes the record — `font-face.ts:549`; D-305, D-310; the cache helper `internal/successful-promise-cache.ts#cacheSuccessfulPromise` (`:1–14`)
+- the boundary catches only `FontLoadError` — `react.ts#GlyphFontErrorBoundary` (`:360–373`); prop — `:198`
+- the React retry loop seen on the decorations example — this repo, `docs/planning/docs-site-outline.md` (Findings for core)
+*/}

@@ -9,48 +9,128 @@ sourcecode: packages/glyph/src/formatted-text.ts
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  A paragraph is one shaped unit; a span is a range inside it that overrides font, style, or material. You author
-  runs as `txt`/`span` fragments in three.js or as nested `<Text>` in React — both compile to the same document with
-  no offsets in it, and both resolve their boundaries onto grapheme clusters before a frame is built.
-</Intro>
+{/*
+reader
+- Has a paragraph and wants one run of it in another colour, font, or material; may be typing into it. Knows what a
+  string offset is and has been burned by one; has probably never heard the words "grapheme cluster". Arrives asking
+  "how do I bold one word?", should leave able to author a styled document in either API, read the resolved
+  runs back, and edit a live paragraph one keystroke at a time without thinking about offsets.
 
-<Keypoints title="What you'll learn">
-  <KeypointsItem>Two ways to author the same document, and what a span may override</KeypointsItem>
-  <KeypointsItem>The cluster rule: a boundary moves forward, a base keeps its style</KeypointsItem>
-  <KeypointsItem>Editing: one assignment per keystroke</KeypointsItem>
-</Keypoints>
+write · intro
+- Question: what is a span, and where do its edges come from?
+- Say: a paragraph is one shaped unit; a span is a range inside it that overrides font, style, or material and
+  inherits the rest. You never write an offset: `txt`/`span` in three.js and nested `<Text>` in React are two
+  compilers of one document tree, each derives a boundary where two fragments meet, and each settles that boundary
+  onto a grapheme cluster before a frame is built.
+- Anchor: "the tree is the document; the offsets are derived, not authored".
+- Shape: three sentences, no list.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- Two ways to author the same document: `txt`/`span` fragments, or nested `<Text>`.
+- A span overrides font, style, or material and inherits everything it does not name.
+- The cluster rule: a boundary moves forward, a base keeps its style, nothing throws.
+- Editing is assignment: one narrow edit per keystroke, runs restated with the text.
+
+notes · internals for the page
+- the two compilers and the one rule they share — `formatted-text.ts#compose` (`:134–168`),
+  `react.ts#flattenText` (`:758–791`), `internal/graphemes.ts#resolveRangesToClusters` (`:120–126`); D-265
+- raw `spans` on a Text or update throw: `cannot declare raw spans; compose formatted text with txt and span` —
+  `three/text.ts#assertNoRawSpans` (`:1489–1493`), called at `:637` and `:717`; `paragraph.ts:203`
+- the result is frozen — `formatted-text.ts#txt` (`:117–118`), `#createSpanTag` (`:105–109`)
+*/}
 
 ## Template tags
 
 ```ts
-import { glyph, loadFont, txt } from '@pmndrs/glyph';
+import { txt } from '@pmndrs/glyph';
+import { defineTextMaterial, span } from '@pmndrs/glyph/three';
+
+const glowMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
+const ok = span({ color: '#4ade80' });                 // a style
+const glow = span(glowMaterial, { color: '#ffd166' }); // the /three span also takes one material
+
+three.createText({ font: Inter, text: txt`Status: ${ok`online`} ${glow`●`}` });
+```
+
+```ts no-check
+import { glyph, txt } from '@pmndrs/glyph';
 import { span } from '@pmndrs/glyph/three';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 
-const mono = await loadFont({ baked: '/fonts/mono.font.glb' }, msdf); // a span's font is a loaded Font or stack
-const ok = span({ color: '#4ade80' });
-const code = span(mono, { letterSpacing: 0.01 });
-const glow = span(glowMaterial);
+const Mono = glyph.fontFace('/fonts/mono.font.glb', { format: msdf });
+await Mono.load();
+const code = span(Mono.msdf, { letterSpacing: 0.01 }); // a different font for the run, same format as the paragraph
 
-three.createText({ font: Inter, text: txt`Status: ${ok`online`} in ${code`us-east-1`} ${glow`●`}` });
+three.createText({ font: Inter, text: txt`in ${code`us-east-1`}` });
 ```
 
-{/* prose: `txt` composes fragments and derives every boundary at a concatenation join; `span(font?, ...styles)`
-returns a tag whose font is a loaded `Font`/`FontStack` (the paragraph's own `font` may be a FontFace); the `/three`
-`span` also accepts one material. Nesting is allowed. The result is a frozen document. */}
+{/*
+write
+- Question: how do I mark a run without counting characters?
+- Paragraph 1: `txt` is a template tag that concatenates strings and fragments; `span(...)` builds a tag that wraps
+  its own template in one set of overrides. A span states only what it changes: pass a style object, a font, a
+  material, or several; what you leave out is inherited from the paragraph. Nesting is allowed; a fragment inside a
+  fragment composes over it.
+- Paragraph 2: the boundaries are derived at each join as text is appended, then settled onto the cluster grid of
+  the finished text (link to The cluster rule). The result is a frozen `{ text, spans }` you hand to `text`.
+- Point at: the second block is the font case; say plainly it is the canonical form and that the tree is catching
+  up (do not explain the loader path).
+- Avoid: showing the resolved `spans` array here; that is Reading the result.
+- Shape: two short paragraphs; the code carries the syntax.
+
+notes · internals
+- `txt(strings, ...values)` → frozen `TextLiteral { text, spans }` — `formatted-text.ts#txt` (`:113–119`)
+- `span(...styles)` → `UnboundSpanTag`; `span(font, ...formats)` → `SpanTag<Technique>` — `formatted-text.ts:121–132`;
+  the `/three` overload accepts one `ThreeTextMaterial` beside styles and a font, two throw
+  (`one structural span cannot declare more than one Three material`) — `three/span.ts:17–38`
+- a span states only what it changes: an empty style object is dropped rather than resetting the run —
+  `formatted-text.ts#normalizeFormats` (`:186–206`, comment at `:191–193`)
+- boundaries derived at the join (`start` = length before append, `end` = after), enclosing span pushed before its
+  children so the last covering span wins — `formatted-text.ts#compose` (`:150–167`)
+- nested fragments are re-offset into the parent — `formatted-text.ts#offsetSpan` (`:179–184`)
+- [in flight] `span(font)` takes a loaded immutable `FontSelection` at HEAD, not a face member — `three/span.ts:20–23`,
+  `formatted-text.ts:122–125`, `#isFontSelection` (`:208–210` → `loaded-font.ts#isImmutableFontSelection`); the
+  second block is the canonical form and is opted out of the check until the FontFace path reaches spans (D-310
+  binds faces into Text; spans are not mentioned)
+*/}
 
 ## Nested Text
 
 ```tsx
-<Text font={inter}>
+import { Text } from '@pmndrs/glyph/react';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+
+const mono = useMsdf('/fonts/mono.font.glb'); // a nested font must be a loaded Font
+
+<Text font={Inter}>
   Status: <Text style={{ color: '#4ade80' }}>online</Text> in <Text font={mono}>us-east-1</Text>
-</Text>
+</Text>;
 ```
 
-{/* prose: a nested `<Text>` is an inline run — it inherits the paragraph's font, style, and material, creates no
-Object3D, carries no transform, and accepts only `children`, `font`, `style`, and `material`; a box prop on it is
-named and rejected at mount. */}
+{/*
+write
+- Question: what is a `<Text>` inside a `<Text>`?
+- Paragraph 1: an inline run, not an object. It creates no `Object3D`, has no transform, and accepts only
+  `children`, `font`, `style`, and `material`; every other prop is a box property and is rejected by name when the
+  tree is flattened. It inherits the paragraph's font, style, and material and overrides what it states.
+- Paragraph 2: the outer `<Text>` needs a font; a nested one may carry a loaded font from a hook. The tree
+  flattens to the same `{ text, spans }` the template tags produce, with the same join rule.
+- Avoid: explaining Suspense here; link React components.
+- Shape: two short paragraphs.
+
+notes · internals
+- flatten: strings and numbers append, arrays recurse, a nested `Text` element opens a span over its children —
+  `react.ts#flattenText` (`:758–791`); non-Text children throw (`:777–778`)
+- inline props are the closed set `children`, `font`, `material`, `style`; anything else throws
+  `nested R3F Text cannot use the box property …` — `react.ts#INLINE_TEXT_PROPERTIES` (`:820`), `#assertInlineTextProperties` (`:822–826`)
+- inheritance: a nested style merges over the inherited one; font and material fall back to the parent's —
+  `react.ts#inlineProperties` (`:804–818`)
+- a nested `font` must be a loaded `Font`; a face or family string throws, and the message says to load it through a
+  hook first — `react.ts#loadedInlineProperties` (`:793–802`, throw at `:797–800`)
+- the outer Text requires a font — `react.ts:453`; it accepts a face, a member, or a family string — `#R3fFontSelection` (`:73`)
+- the same join rule as `compose` — `react.ts:748–757` (docstring), `:790`
+- rich-text scene: nested colour, font, style, and material runs in one paragraph — `site/examples/src/scenes/rich-text/scene.tsx`
+*/}
 
 <glyph-proxy root="scenes" data-scene="rich-text" aria-label="txt/span and nested Text, per-span font and material" aspect="16 / 9" />
 
@@ -58,48 +138,134 @@ named and rejected at mount. */}
 
 | Field | Effect |
 | --- | --- |
-| `font` | a different loaded `Font` or stack for the run, in the paragraph's raster format |
+| `font` | a different loaded font for the run; its format is validated with the paragraph's when effects are checked |
 | `style` | any `TextStyle` member; the rest inherits |
-| `material` | a `defineTextMaterial` factory; span → text → group → root precedence |
+| `material` | a `defineTextMaterial` factory; span → text → group → root → config precedence |
 
-> [!NOTE]
-> A `txt` document is typed by one raster format, so a span's font shares the paragraph's format — Slug in Slug,
-> MSDF in MSDF. To mix formats, put the faces in a stack on the paragraph; the run then selects a face, not a format.
+{/*
+write
+- Question: what can a run change, and what wins when two things say so?
+- One sentence per row, in plain words. Font: a run can select another loaded font; today that is a font in the
+  paragraph's own format, and a span that carries an outline or shadow is checked against that font's format, not
+  the paragraph's. Style: any member of `TextStyle`, merged over the inherited style. Material: the nearest
+  material wins, from the span outward to the handle's config.
+- Close with one sentence pointing at Materials for the material precedence and Raster formats for mixing formats.
+- Avoid: the word "stack"; fallback stacks are not documented until the loader path settles.
+- Shape: three sentences and a pointer.
+
+notes · internals
+- the span record — `three/text.ts#TextSpan` (`:56–57`): `ParagraphSpan` minus `font` plus `font?: FontSelection`, `material?: ThreeTextMaterial`
+- effects validated per span against the span's own font, else the paragraph's —
+  `three/text.ts#normalizeDesired` (`:1457–1472`, `assertTextEffectsSupported`)
+- material precedence: `desired.material ?? presentation.material ?? root.material` — `three/text.ts#coreTextState`
+  (`:1377–1381`); the config-level fallback after that — `three/handle.ts#ThreeSchema.material` (`:121–122`),
+  `#ThreeConfigOptions.material` (`:97–98`)
+- a span material becomes its own material binding — `three/text.ts:1382–1395`
+- [verify] whether a span font may be a different format from the paragraph's at HEAD: `normalizeDesired` only unions
+  the techniques for effect checks (`three/text.ts:1457–1464`); the fact sheet's "in the paragraph's raster format" claim needs a
+  test with an MSDF paragraph and a Slug span before it is stated
+*/}
 
 ## Reading the result
 
-```ts
-label.spans; // the resolved records: [{ start, end, style?, font?, material? }]
+```ts no-check
+text.spans; // the resolved records: [{ start, end, style?, font?, material? }]
 ```
 
-{/* prose: `spans` is read-only — you author through `text`; the resolved offsets it reports are on cluster
-boundaries. */}
+{/*
+write
+- Question: what did the engine actually see?
+- Two sentences: the resolved offsets are read-only and sit on cluster boundaries, so you can line them up entry
+  for entry with what you authored; you author through `text`, never through `spans`.
+- Shape: two sentences. Hold this section until the [verify] below is answered; if there is no public getter,
+  fold it into The cluster rule and delete the heading.
+
+notes · internals
+- the desired state carries `spans` — `three/text.ts#DesiredTextState` (`:99–108`)
+- [verify] there is no public `spans` getter on `Text` at HEAD: the accessors are `font`, `text`, `style`, `layout`,
+  `constraints`, `rasterPixelRatio`, `material` (`three/text.ts:667–710`); D-265, `three/frame-error.ts:15`, and
+  `docs/planning/three-api.md:209–221` all speak of `Text.spans`. Ask whether the getter is coming back; the block
+  above is opted out of the check until then
+- `docs/planning/three-api.md:217–221` still passes raw `spans:` to `createText`; `assertNoRawSpans` rejects that at HEAD (`three/text.ts:1489`)
+*/}
 
 ## The cluster rule
 
-> [!IMPORTANT]
-> A cluster takes the style of its base. Every span boundary moves forward to the end of the cluster containing it,
-> so a mark that attaches to a base follows the base. Nothing throws; `text.spans` reports the resolved offsets.
-
 ```ts
+import { span, txt } from '@pmndrs/glyph';
+
 txt`a${span({ color: '#ff0000' })`́b`}`;
 // text  'áb' — the base and the combining acute fused into one cluster spanning [0, 2)
 // spans [{ start: 2, end: 3, … }] — the fused cluster keeps the style of its base, which is plain
 ```
 
-{/* prose: why forward — backward would take style away from a base you styled and hand the cluster to its mark. An
-emptied span stays as `[n, n)` so entries line up with what you authored. Out-of-range or inverted ranges are a
-different error and throw from construction/`set()`. */}
+{/*
+write
+- Question: what happens when a style boundary lands inside a character?
+- Open with an `> [!IMPORTANT]` callout, three sentences: a cluster takes the style of its base; every span boundary
+  moves forward to the end of the cluster containing it, so a mark that attaches to a base follows the base; nothing
+  throws.
+- Paragraph after the code: why forward and not backward — backward would take a style away from a base you styled
+  and hand the cluster to a mark that merely attached to it; both edges move the same way so two adjacent spans
+  stay adjacent instead of overlapping. A span left with no cluster of its own collapses to an empty `[n, n)` and is
+  kept, so entries still line up with what you authored; an empty span states nothing.
+- Closing sentence: an inverted or out-of-range span is a different fault and throws from construction or `set()`;
+  the cluster rule never hides it by clamping.
+- Anchor: "the mark goes where its letter goes".
+- Shape: callout, code, one paragraph, one sentence.
+
+notes · internals
+- the rule and its reasons — `internal/graphemes.ts#alignRangesToClusters` (`:42–91`; forward policy `:50–56`, empty
+  ranges kept `:57–61`, out-of-range left alone `:63–65`); D-265
+- one implementation for both compilers and the backstop — `internal/graphemes.ts#resolveRangesToClusters` (`:93–126`);
+  `formatted-text.ts#alignSpansToClusters` (`:64–69`) is the backstop for the untyped array
+- ill-formed UTF-16 is returned untouched for the engine to reject — `internal/graphemes.ts:124–125`; unpaired
+  surrogates throw at `Text` — `three/text.ts#assertPairedSurrogates` (`:1560–1572`)
+- inverted or out-of-range spans throw `RangeError` — `three/text.ts#assertRange` (`:1524–1532`); partial overlap
+  throws `spans must nest or be disjoint` — `#assertSpansNest` (`:1534–1558`)
+- the segmenter is the package's own UAX #29 tables, never `Intl.Segmenter` — `internal/graphemes.ts#findGraphemeBoundaries` (`:17`); D-265, D-320
+- the worked example and its expected offsets — `docs/planning/three-api.md:230–234`
+- [verify] `alignSpansToClusters` is not exported from the root entry at HEAD (`index.ts:263–274` exports `span`, `txt`
+  and types only); D-265 calls it "the exported function a caller checks its own offsets with". Do not tell the reader to call it until it is
+*/}
 
 ## Editing
 
 ```ts
-label.text = document.value;                          // derives the smallest common-prefix/suffix UTF-16 edit
-label.text = txt`${document.before}${ok`${document.selected}`}${document.after}`; // restate runs with the text
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const ok = span({ color: '#4ade80' });
+let value = 'Status: online';
+
+value += '!';
+text.text = value; // the planner derives the smallest scalar-aligned replace from the two strings
+
+text.text = txt`${value.slice(0, 8)}${ok`${value.slice(8)}`}`; // a styled document is restated as a document
 ```
 
-{/* prose: assignment is the edit protocol — one narrow edit per keystroke; a styled document is restated as a
-document, never as offsets. The removed helpers (`insertText`, `deleteText`, `replaceText`, `setSpan`, `removeSpan`)
-let a caller hand the engine an offset the tree cannot express. */}
+{/*
+write
+- Question: what do I do on a keystroke?
+- Paragraph 1: assign. The planner diffs the previous text against the new one by common prefix and suffix, aligned
+  to Unicode scalars, and sends the engine that one replace; a keystroke is an insert of one character, not a
+  re-shape of the paragraph. `set({ text })` is the same call.
+- Paragraph 2: a styled document is restated as a document, never as offsets; assigning a plain string clears the
+  runs, assigning a `txt` document replaces them. There is no `insertText`, `setSpan`, or offset helper: any such
+  call would let a caller hand the engine an offset the tree cannot express.
+- Close by pointing at Interaction for the caret and selection side of the loop.
+- Shape: two paragraphs, one pointer.
+
+notes · internals
+- the minimal edit: common prefix and suffix by code point, `{ start, deleteCount, insert }` —
+  `engine-encoding.ts#minimalTextMutation` (`:312–335`), applied per dirty paragraph at `internal/render-planner.ts:855–859`
+- assignment is `set({ text })` — `three/text.ts:676–678`; a plain-string update resets spans to `[]` —
+  `engine-encoding.ts#replacedContent` (`:297–303`), called at `three/text.ts:721`
+- unchanged spans identity is preserved across an update — `three/text.ts:1451–1456`
+- a measurement query re-sends the whole text rather than a diff — `internal/render-planner.ts:812–819`
+- [verify] the removed helpers `insertText`/`deleteText`/`replaceText`/`setSpan`/`removeSpan`: none exist in
+  `three/text.ts` at HEAD (grep); find the decision that removed them before naming them in prose
+- [verify] the `editing` scene is not in `site/examples/src/scenes` at this commit; the proxy below stays for when it lands
+*/}
 
 <glyph-proxy root="scenes" data-scene="editing" aria-label="Keystroke editing with retained runs" aspect="16 / 9" />

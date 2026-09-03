@@ -9,11 +9,31 @@ sourcecode: packages/glyph/src/react.ts
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  `<Text>` and `<TextGroup>` are the same three.js objects the imperative API creates, reconciled by React Three
-  Fiber. Ordinary use needs no provider: the first text initializes the runtime and a default handle. A
-  `GlyphProvider` selects a handle or root you made yourself and can name fonts for its subtree.
-</Intro>
+{/*
+reader
+- Writes R3F. Arrives asking "what are the props, what does nesting mean, do I need a provider, and when does my
+  change reach the scene?"; should leave able to place text without a provider, nest runs, and know when to reach
+  for `GlyphProvider`. Reference voice: signature, table, one snippet per behaviour, no narration.
+
+write · intro
+- Question: what are these components, really?
+- Say: the same three.js objects the imperative API creates, reconciled by R3F. Ordinary use needs no provider: the
+  first text initialises the runtime and a default handle. A `GlyphProvider` selects a handle or root you made
+  yourself and can name fonts for its subtree.
+- Shape: three sentences, then the opening code.
+
+write · keypoints (four claims)
+- An outer `<Text>` needs `font`; a nested one inherits it.
+- `<TextGroup>` is hierarchy and presentation, not a batching boundary.
+- `GlyphProvider` is immutable; remount to change it.
+- Objects are constructed at R3F host commit, so `Activity` can pre-render hidden text.
+
+notes · internals for the page
+- the components extend the `/three` classes — `react.ts:156–157` (`extend(ThreeText)`, `extend(ThreeTextGroup)`)
+- the default handle — `react.ts:376–407`; the provider — `:208–251`; D-301, D-307
+- the four claims — `react.ts:453`, `:804–818`; D-307; `react.ts:216–219`; `react.ts:544–549`,
+  `docs/packages/glyph.md:232–234`
+*/}
 
 ```tsx
 import { Text, TextGroup } from '@pmndrs/glyph/react';
@@ -22,7 +42,7 @@ import { Text, TextGroup } from '@pmndrs/glyph/react';
   <Text font={inter} style={{ fontSize: 0.5 }} layout={{ wrap: 'word' }} constraints={{ width: { mode: 'at-most', size: 6 } }}>
     Hello <Text style={{ color: '#ffd166' }}>world</Text>
   </Text>
-</TextGroup>
+</TextGroup>;
 ```
 
 ## `<Text>`
@@ -32,30 +52,96 @@ import { Text, TextGroup } from '@pmndrs/glyph/react';
 
 | Prop | Type | Notes |
 | --- | --- | --- |
-| `font` | `Font \| FontStack \| FontFaceSelection \| string` | required on an outer Text; a string resolves through the provider's `fontFaces`, then the root catalog by family |
+| `font` | `Font \| FontFace \| FontFaceSelection \| string` | required on an outer Text; a string resolves through the provider's `fontFaces`, then the root catalog by family |
 | `children` | string, number, nested `<Text>`, arrays | the paragraph's content |
 | `style` | `PropertyList<TextStyle>` | inherited by nested spans |
 | `layout` | `PropertyList<ParagraphLayout>` | outer Text only |
 | `constraints` | `PropertyList<Constraints>` | outer Text only |
-| `rasterPixelRatio` | `number` | raster density override |
+| `rasterPixelRatio` | `number` | raster density override, default 1 |
 | `material` | `ThreeTextMaterial` | see Materials |
-| `pixelSnapping` | `boolean` | Bitmap vertex snapping |
-| `onError` | `(error) => void` | retained publication errors |
+| `pixelSnapping` | `boolean` | Bitmap vertex snapping; changing it remounts the object |
+| `onError` | `(error: unknown) => void` | retained publication errors |
 | `ref` | `Ref<Text>` | the three.js object — `measure()`, `breakApart()`, … |
 | …`Object3DProps` | | `position`, `rotation`, `scale`, `name`, events |
 
 </details>
 
+{/*
+write
+- Question: what can I pass, and what do I get back through `ref`?
+- Nothing above the table. One line under it: the object behind `ref` is the three.js `Text`; what it can do is on
+  Text, roots, and TextGroup.
+- Avoid: repeating the table in prose.
+
+notes · internals
+- `R3fTextProps` — `react.ts:82–96`; `Object3DProps` is R3F's `object3D` element props minus `children`/`ref` — `:58`
+- `font` type — `react.ts:73` (`R3fFontSelection = FontSelection | AnyFontFaceSelection | string`); the loaded
+  `Font` comes from a hook — `react/msdf.ts:16`
+- [in flight] `FontSelection` at HEAD is `Font | FontStack` (`loaded-font.ts`); stacks are the immutable-Font path
+  being removed, so the table says `Font`
+- `children` — `react.ts:65–71` (`R3fTextChild`)
+- `layout`, `constraints` outer only — `react.ts:87–90`; `rasterPixelRatio` default 1 — `internal/render-planner.ts:1627`
+- `pixelSnapping` is part of the element key, so a change remounts — `react.ts:456`
+- `ref` receives the three.js `Text` after it is published — `react.ts:95`, `:451–452`
+- the `Text` call signature infers the raster union from `font` — `react.ts:431–438`
+- the object behind `ref` — `three/text.ts:594`; its methods `set`, `measure`, `glyphs`, `commitState`,
+  `computeBoundingBox`, `measureGlyphs`, `breakApart`, `caretAt`, `selectionRects`, `dispose` — `:712`, `:736`,
+  `:748`, `:756`, `:766`, `:777`, `:784`, `:861`, `:865`, `:875`
+*/}
+
 ### Nested Text
 
-{/* prose: a nested `<Text>` is an inline run: inherits font, style, and material; accepts only `children`, `font`,
-`style`, `material`; no transform, no Object3D; a box prop is named and rejected at mount rather than dropped. */}
+| Prop on a nested `<Text>` | Accepted | Effect |
+| --- | --- | --- |
+| `children` | yes | the run's text, nested further if needed |
+| `font` | yes, a loaded `Font` only | changes font for the run |
+| `style` | yes | merged over the enclosing style |
+| `material` | yes | material for the run |
+| `layout`, `constraints`, `position`, anything else | no | throws at mount, naming the prop |
+
+{/*
+write
+- Question: what is a `<Text>` inside a `<Text>`?
+- Say: an inline run, not an object; it inherits the paragraph's font, style, and material and overrides what it
+  states; it has no transform because it is not in the scene. A box prop on it is rejected at mount with its name,
+  not silently dropped, because JSX cannot reject it statically.
+- Shape: three sentences.
+
+notes · internals
+- the allowed set — `react.ts:820` (`INLINE_TEXT_PROPERTIES`); the throw —
+  `:822–826` (`nested R3F Text cannot use the box property …`)
+- inheritance and merge — `react.ts:804–818` (`inlineProperties`); a nested `font` must already be a loaded `Font`;
+  a face or string throws — `:793–802` (`loadedInlineProperties`)
+- a nested Text creates no scene object; the tree flattens to one string plus span records aligned to grapheme
+  clusters — `react.ts:748–791` (`flattenText`), `formatted-text.ts#resolveRangesToClusters`
+- rationale — `docs/packages/glyph.md:226–231`
+*/}
 
 ### Fonts
 
-{/* prose: a loaded `Font` from a hook renders immediately; a FontFace selection or a string is checked with
-`isLoaded()` and suspends on its stable load promise only when not ready. An unknown string throws
-`FONT_FACE_NOT_FOUND`. */}
+| `font` value | What happens |
+| --- | --- |
+| a `Font` from `useMsdf`/`useSlug`/`useBitmap` | renders now |
+| a `FontFace` or a member (`Inter`, `Inter.slug`) | `isLoaded()` → renders now; otherwise suspends on the face's one load Promise |
+| a string | provider `fontFaces` first, then the root catalog by family; unknown throws `FONT_FACE_NOT_FOUND` |
+
+{/*
+write
+- Question: do I have to use a hook?
+- Say: no. A loaded font from a hook renders at once; a face, or one of its members, is checked with `isLoaded()`
+  and suspends on its one stable load Promise only when it must; a string is a name, looked up in the nearest
+  provider's table and then in the root catalog, and an unknown name throws rather than rendering nothing.
+- Shape: two sentences; link Hooks and Loading fonts.
+
+notes · internals
+- the branch — `react.ts:464–466` (`isFontFaceSelection` → `TextFontFaceObject`); the readiness check and
+  conditional `use()` — `:658–665` (`useHandleFontFace`); D-300, D-301
+- string resolution — `react.ts:487–497` (`resolveReactTextFont`); the root catalog — `font-face.ts:257–263`
+  (`resolveFontFace`)
+- one Promise per selection until the face releases it; rejection evicts so a retry gets a new operation —
+  `font-face.ts:496–527`; D-305
+- the hooks themselves declare through `glyph.fontFace` — `react.ts#useFont` (`:628–631`), `:667–683`
+*/}
 
 ## `<TextGroup>`
 
@@ -66,16 +152,33 @@ import { Text, TextGroup } from '@pmndrs/glyph/react';
 | `pixelSnapping` | `boolean` |
 | `onError`, `ref`, …`Object3DProps` | |
 
-{/* prose: a scene-hierarchy parent — transform, visibility, material, pixel snapping, render order. It is not a
-batching boundary: every Text on a root already shares that root's planner. Capacity and compositing live on the
-root. */}
+{/*
+write
+- Question: what is a group for, if not batching?
+- Say: it is a parent in the scene graph: one transform, one visibility, one material, one pixel-snapping choice,
+  one render order for everything under it. It is not a batching boundary; every Text on a root already shares that
+  root's planner, and capacity and compositing are set on the root, not here.
+- Shape: two sentences.
+
+notes · internals
+- `R3fTextGroupProps = Object3DProps & TextGroupOptions & { children, onError, ref }` — `react.ts:98–103`;
+  `TextGroupOptions` — `three/text.ts:84–90`
+- a scene-hierarchy parent for transform, visibility, material, pixel snapping, render order; not a batching
+  boundary — D-307; every Text on a root already shares that root's planner — `three/text.ts:436–448`
+- capacity and compositing live on the root — `three/text.ts:78–82`, `:240–254`; the config sets them —
+  `three/handle.ts:178–183`
+- `setMaterial` invalidates the root's material bindings — `three/text.ts:1008–1012`; `add()` checks that every
+  Text belongs to this root — `:1014–1022`; `clone`/`copy` throw — `:1024–1030`
+- `material` changes apply through `setMaterial` in a layout effect — `react.ts:602–606`; `pixelSnapping` is in
+  the key, so it remounts — `:563`
+*/}
 
 ## `<GlyphProvider>`
 
 ```tsx
 import { glyph } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
-import { GlyphProvider } from '@pmndrs/glyph/react';
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
 
 await glyph.init();
 const hud = glyph.handle('hud', ThreeConfig);
@@ -88,28 +191,110 @@ const hud = glyph.handle('hud', ThreeConfig);
 | Prop | Meaning |
 | --- | --- |
 | `handle` | a `ThreeHandle` (its anonymous root) or a named `ThreeRoot` from `handle(name)` |
-| `fontFaces` | `{ Name: source \| face \| { src, format } }` — names for `font="Name"` in this subtree |
+| `fontFaces` | `{ Name: url \| face \| { src, format } }` — names for `font="Name"` in this subtree |
 | `fallback` | Suspense fallback while mapped faces load |
 | `errorFallback` | node or `(error: FontLoadError) => node`; catches only font load errors, rethrows the rest |
 
 <glyph-proxy root="scenes" data-scene="provider" aria-label="Two roots, two providers, one font" aspect="16 / 9" />
 
-{/* prose: the provider captures its initial `handle` and `fontFaces` and throws if either prop changes — remount
-with a `key` to select another. It disposes only faces it declared from shorthand entries, never an externally
-created handle or face. `fontFaces` and `fallback` add a local Suspense boundary. `Text`/`TextGroup` expose no
-handle prop. */}
+{/*
+write
+- Question: when do I need a provider, and what does it own?
+- Say: when you made the handle yourself, or want a named root for a subtree, or want to write `font="Inter"`.
+  It captures its `handle` and `fontFaces` on first render and throws if either changes; remount it with a `key`
+  to select another. It disposes only the faces it declared from shorthand entries, never a handle or a face you
+  passed in. `fontFaces` names fonts; it does not decide when they load. `fontFaces` or `fallback` adds a local
+  Suspense boundary; `errorFallback` catches font load errors and rethrows everything else. `Text` and `TextGroup`
+  have no `handle` prop; the provider is the only way to select one.
+- Shape: one paragraph, five or six sentences, after the table.
+
+notes · internals
+- props — `react.ts:193–200` (`GlyphProviderProps`); `fontFaces` entries — `:188–191` (`GlyphProviderFontFace`)
+- `handle` and `fontFaces` are captured on first render; a change throws — `react.ts:216–219`
+- a callable handle selects its anonymous root; a terminal root selects itself — `react.ts:417–420`
+  (`selectReactRoot`), `three/handle.ts:132–142`
+- shorthand entries (`url`, `{ src, format }`) become `glyph.fontFace(...)` owned by the provider and disposed on
+  unmount; a face you pass is never disposed — `react.ts:312–343` (`createProviderFontFaces`), `:235–240`
+- `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` adds a boundary that rethrows anything
+  but `FontLoadError` — `react.ts:243–249`, `:361–374`
+- `Text`/`TextGroup` reject a `handle` prop — `react.ts:871–875`
+- [verify] the `provider` scene is not in `site/examples/src/catalog.ts`; the proxy above is dead until it lands
+*/}
 
 ## The default handle
 
-{/* prose: without a provider, the first mounted text initializes `glyph` and creates one module-owned `ThreeConfig`
-handle with a root per R3F store; the initialized path is synchronous, so ready renders never call `use()`. */}
+| Without a provider | Value |
+| --- | --- |
+| handle | `glyph.handle('@pmndrs/glyph/react:default', ThreeConfig)`, created on first use after `glyph.init()` |
+| root | one named root per R3F store, `@pmndrs/glyph/react:root:N` |
+| lifetime | retained while any Text, TextGroup, or provider uses it; disposed a microtask after the last one leaves |
+| readiness | if `glyph` is already initialized the path is synchronous; otherwise the first text suspends on `glyph.init()` |
+
+{/*
+write
+- Question: what happens when I write `<Text>` with no provider at all?
+- Say: the first mounted text initialises `glyph` and creates one module-owned `ThreeConfig` handle, with one root
+  per R3F canvas; once initialised the path is synchronous, so a ready render never touches a Promise.
+- Shape: two sentences; the table carries the names.
+
+notes · internals
+- the name and config — `react.ts:165`, `:384`; the process-lived Promise — `:389–407` (`defaultThreeHandle`);
+  D-305
+- root per store — `react.ts:268–278` (`defaultGlyphContext`, `handle(rootName)`); refcount and microtask disposal —
+  `:284–299`; a `FinalizationRegistry` as the abandoned-render safety net — `:175–181`
+- the synchronous path — `react.ts:260` (`getInitializedDefaultThreeHandle() ?? use(defaultThreeHandle())`)
+*/}
 
 ## Two scenes
 
-{/* prose: a root binds at most one `Scene`. A portal into another Scene needs its own root — wrap that subtree in a
-`GlyphProvider handle={three('portal')}`. */}
+```tsx
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
+
+<GlyphProvider handle={handle('portal')}>
+  <Text font={inter}>in the other Scene</Text>
+</GlyphProvider>;
+```
+
+{/*
+write
+- Question: I portal into a second `Scene`; why did it throw?
+- Say: a root binds at most one `Scene`, and it says so by name when a second one appears. Portals stay R3F
+  portals; the subtree that lives in the other Scene gets its own named root through a provider, and two roots on
+  one handle are siblings that cost nothing to make.
+- Shape: two sentences.
+
+notes · internals
+- a root binds at most one `Scene`; a second one throws naming the root — `three/text.ts:543–553` (`#bindScene`)
+- named roots are siblings on one handle, `handle(name)` is idempotent — `config/glyph.ts:574–589`; D-307
+- the draw root is added to the discovered Scene — `three/text.ts:556–560`
+*/}
 
 ## Commit timing
 
-{/* prose: components construct their objects during R3F host commit, so React `Activity` can pre-render hidden text;
-property changes call `set()` and `invalidate()`; R3F's frame runs `glyph.shape()` before the host renders. */}
+| Event | What runs |
+| --- | --- |
+| mount | R3F constructs the three.js `Text` at host commit with `args` from the first render |
+| prop change | `set(update)` then `invalidate()` in a layout effect, only when the desired state differs |
+| `pixelSnapping` change | remount |
+| each frame | `renderer.render` → `scene.updateMatrixWorld` → the root's draw object → `glyph.shape()` |
+| unmount | the object is disposed by R3F; the hook's mounted `Font` lease is released |
+
+{/*
+write
+- Question: when does my change reach the scene?
+- Say, one sentence per row: the object is built when R3F commits the host tree, which is why `Activity` can
+  pre-render hidden text; a prop change becomes one `set()` and an `invalidate()`, skipped when nothing differs;
+  `pixelSnapping` is immutable on the object, so changing it remounts; publication happens inside three's own
+  `updateMatrixWorld`, so `renderer.render` is the frame hook and you need none of your own; on unmount R3F disposes
+  the object and the hook releases its lease.
+- Shape: five sentences, ending on "no frame hook is required".
+
+notes · internals
+- construction at commit — `react.ts:519–521` (constructor args once), `:544–549` (`args`, `ref`)
+- `set` + `invalidate` — `react.ts:534–542`; the structural comparison — `:877–893` (`sameDesiredText`)
+- key includes `pixelSnapping` — `react.ts:456`
+- the frame path: `ThreeRootDrawObject.updateMatrixWorld` → `#commitTraversal` → `glyph.shape()` —
+  `three/text.ts:139–142`, `:478–486`; D-312
+- `Activity` pre-render — `docs/packages/glyph.md:232–234`; in use — `apps/r3f-hello-world/src/app.tsx:60`
+- lease release on last unsubscribe — `react.ts:736–742`
+*/}

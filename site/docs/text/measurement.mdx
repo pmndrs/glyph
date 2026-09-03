@@ -9,16 +9,38 @@ sourcecode: packages/glyph/src/layout.ts
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  Measurement answers for desired state, synchronously, before anything commits. `measure()` is allocation-light and
-  returns the paragraph's box, baselines, ink, and lines; `glyphs()` pays for positioned per-glyph columns. Neither
-  publishes a draw. When no scene object should exist at all, `Paragraph` measures on its own.
-</Intro>
+{/*
+reader
+- Is placing text next to something else: centring a word on a point, sizing a panel around a paragraph, or
+  building a layout system that needs intrinsic widths before anything is drawn. Knows CSS box measure; may not know
+  that an italic overhangs its advance. Arrives asking "how wide is it?", should leave knowing there are two widths,
+  which one to use for what, and which call to pay for.
+
+write · intro
+- Question: what can I ask a paragraph, and when?
+- Say: measurement answers for desired state, synchronously, before anything commits; `measure()` returns the box,
+  the baselines, the ink, and the lines without a per-glyph array; `glyphs()` pays for positioned per-glyph columns;
+  neither publishes a draw. When no scene object should exist at all, `Paragraph` measures on its own.
+- Anchor: "ask before you draw".
+- Shape: three sentences.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- Two extents, not one: advance for stacking, ink for centring.
+- `measure()` is cheap and cached; `glyphs()` copies every column and is not.
+- Both answer for desired state before the first frame and commit nothing.
+- `Paragraph` is the same engine with no renderer, for layout systems.
+
+notes · internals for the page
+- `Text.measure()` and `Text.glyphs()` — `three/text.ts:732–754`; D-291 (`measure()` is an action, `layout` is a property)
+- the two extents are deliberately named apart — `layout.ts:52–61`
+- `Paragraph` — `paragraph.ts#Paragraph` (`:110`), `#createParagraph` (`:275–292`); D-288 (three-entry LRU)
+- the measurement scene draws both boxes live — `site/examples/src/scenes/measurement/scene.tsx`
+*/}
 
 ```ts
-const summary = label.measure();
+const summary = text.measure();
 const ink = summary.inkBounds;
-if (ink) label.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0);
+if (ink !== undefined) text.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0); // paragraph space is y-down
 ```
 
 <glyph-proxy root="scenes" data-scene="measurement" aria-label="Advance box versus ink bounds, live" aspect="16 / 9" />
@@ -34,8 +56,27 @@ if (ink) label.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0)
           └────────────────────────────────────────────────────────────┘
 ```
 
-{/* prose: advance extents (`contentWidth`/`contentHeight`) are what layout reserves; `inkBounds` is what was drawn —
-a script face with long swashes overhangs its advance. Center on ink; stack boxes on advance. */}
+{/*
+write
+- Question: which width is "the" width?
+- Paragraph 1: `contentWidth`/`contentHeight` are advance extents, the space the text claims; that is what a flex
+  or grid host wants because CSS box measure is advance-based. `inkBounds` is what was drawn, the union of the
+  outlines; italics, accents, and swashes overhang their advances, so it is what you centre on. `width`/`height`
+  are the resolved box under the constraints and can be wider than the content when the constraint is `exact`.
+- Paragraph 2: paragraph space is the top-left corner of the box, x right, y down; the scene is y-up, so every y
+  flips sign when it becomes a position (point at the snippet above and the proxy).
+- Closing: "centre on ink; stack on advance"; using one where the other belongs is a silent visual error.
+- Avoid: repeating the field table.
+- Shape: two paragraphs and the rule.
+
+notes · internals
+- advance vs ink, and why both ship under unconfusable names — `layout.ts:52–61`
+- `width`/`height` are the resolved box; `contentWidth`/`contentHeight` are extents before box clamping — `layout.ts:68–75`
+- paragraph space: origin top-left, positive y down — `layout.ts:4–7`, `:147–149`; the scene flip —
+  `three/text.ts#Text.#setBoundingBox` (`:887–897`: `min.y = -(y + height)`)
+- flexible widths resolve to content width; `exact` keeps the stated box — D-291
+- the arc scene's ring closes with `contentWidth` and gaps with `width` — `docs/planning/docs-site-outline.md:503` (findings table), `site/examples/src/scenes/arc/scene.tsx`
+*/}
 
 ## ParagraphLayoutSummary
 
@@ -44,55 +85,139 @@ a script face with long swashes overhangs its advance. Center on ink; stack boxe
 
 | Field | Meaning |
 | --- | --- |
-| `ascent`, `descent`, `lineHeight` | resolved baseline metrics of the paragraph |
-| `width`, `height` | the measured box under the given constraints |
-| `contentWidth`, `contentHeight` | advance extents of the laid-out lines |
-| `firstBaseline`, `lastBaseline` | y of the first and last line baselines |
-| `inkBounds` | union of glyph ink boxes, or `undefined` when nothing drew |
+| `ascent`, `descent`, `lineHeight` | box metrics around the first baseline; `ascent + descent === lineHeight`, half-leading already distributed |
+| `width`, `height` | the resolved box under the given constraints |
+| `contentWidth`, `contentHeight` | advance extents of the laid-out lines before box clamping |
+| `firstBaseline`, `lastBaseline` | distance from the box top to the first and last baselines |
+| `inkBounds` | union of glyph ink boxes; `undefined` only when the query did not position glyphs — zero glyphs report a zero-extent box |
 | `overflowed` | content exceeded the box under the layout's overflow policy |
-| `minContentWidth`, `maxContentWidth` | intrinsic widths: longest unbreakable / no wrapping |
-| `glyphCount`, `lineCount`, `missingGlyphCount` | totals; missing counts clusters no font covered |
-| `lines[]` | `ParagraphLineMetrics`: `index`, `textStart/End`, `glyphStart/Count`, `baseline`, `advance`, `inkBounds`, per-line ascent/descent |
+| `minContentWidth`, `maxContentWidth` | intrinsic widths: widest run with soft breaks taken / widest run between forced breaks |
+| `glyphCount`, `lineCount`, `missingGlyphCount` | positioned glyphs including spaces; lines; `.notdef` glyphs |
+| `lines[]` | `ParagraphLineMetrics`: `index`, `textStart/End`, `glyphStart/Count`, `baseline`, `advance`, `inkBounds`, `ascent`, `descent`, `lineHeight` |
 
 </details>
+
+{/*
+write
+- Question: what is in the summary, precisely?
+- The table is the answer. Above it, one sentence: the summary is allocation-light on purpose and carries no
+  per-glyph array; when you find yourself indexing glyphs you want `glyphs()`.
+- Under it, two facts worth a sentence each: `ascent + descent === lineHeight` exactly, with half-leading already
+  folded in, so a caller aligning to a baseline or an x-height reads box metrics, not raw font metrics; and
+  `minContentWidth`/`maxContentWidth` ride the same pass as everything else, so a layout system does not need a
+  second query at zero width.
+- Avoid: restating the `inkBounds` rule; the table cell carries it.
+- Shape: one sentence, table, two sentences.
+
+notes · internals
+- the interface — `layout.ts#ParagraphLayoutSummary` (`:116–124`) over `#ParagraphMeasurement` (`:63–91`) and
+  `#ParagraphIntrinsicWidths` (`:139–142`)
+- baseline metrics are box metrics — `layout.ts#BaselineMetrics` (`:37–50`); whole-paragraph metrics reference `firstBaseline` (`:64`)
+- `inkBounds` absent means "did not position", never "empty" — `layout.ts:80–89`
+- intrinsic widths: `maxContentWidth` between forced breaks, `minContentWidth` with soft breaks taken per wrap
+  policy; columns, caps, and clipping do not participate — `layout.ts:126–138`
+- per-line metrics — `layout.ts#ParagraphLineMetrics` (`:93–109`)
+- [verify] whether `measure()` on a `Text` carries `inkBounds` or only `glyphs()` does: the root asks for
+  `semanticViews: 'measurement'` (`three/text.ts:1269`) and the measurement scene reads `inkBounds` from
+  `measure()` and draws a box, so it does there; confirm the semantic view before stating it as a rule
+*/}
 
 ## glyphs()
 
 ```ts
-const inspection = label.glyphs();
-inspection.x[i]; inspection.y[i]; inspection.glyphIds[i]; inspection.clusters[i]; inspection.glyphStableIds[i];
+const inspection = text.glyphs();
+inspection.x[0]; inspection.y[0]; inspection.glyphIds[0]; inspection.clusters[0]; inspection.glyphStableIds[0];
 ```
 
-{/* prose: `GlyphLayoutInspection` extends the summary with typed-array columns — positions, advances, ink boxes,
-font slots, bidi levels, flags, per-line starts and counts — copied on every call so the caller owns them. Use it
-for custom hit testing or decoration; ordinary rendering never materializes it. */}
+{/*
+write
+- Question: when do I need the columns?
+- Paragraph 1: `glyphs()` is the summary plus every per-glyph and per-line column as typed arrays: positions,
+  advances, ink boxes, font slots, bidi levels, shaper flags, line starts and counts. `glyphCount` is the one
+  authority for their length; never re-derive a length from a column.
+- Paragraph 2: every call copies the columns, so the caller owns them and nothing it does can corrupt the retained
+  layout; that copy is the cost. Use it for custom hit testing or decoration; ordinary rendering never materialises
+  it, and caret placement has its own API (link Interaction).
+- Shape: two paragraphs.
+
+notes · internals
+- the columns — `layout.ts#GlyphLayout` (`:158–187`); `glyphCount` is the single authority (`:151–156`)
+- `GlyphLayoutInspection` adds `glyphStableIds` — `layout.ts:198–200`; stable ids identify a record within one
+  committed layout and do not survive a reflow — `glyph-placement.ts:28–31`
+- copied per call — `three/text.ts:748–754` (docstring), `internal/render-planner.ts#_inspectText` (`:585–590`),
+  `layout.ts#copyGlyphLayoutInspection` (`:203–228`)
+- shaper flags decode with `glyphFlags` — `layout.ts:27–34`
+- `Text.glyphs()` also refreshes `boundingBox` — `three/text.ts:748–754`, `:766–769`
+*/}
 
 ## Paragraph without a renderer
 
-```ts
+```ts no-check
 import { createParagraph } from '@pmndrs/glyph';
 
-const paragraph = await createParagraph({ font, text: 'Measure before rendering', style: { fontSize: 32 } });
+const paragraph = await createParagraph({ font: Inter.msdf, text: 'Measure before rendering', style: { fontSize: 32 } });
 const metrics = paragraph.measure({ width: { mode: 'at-most', size: 480 } });
 const positioned = paragraph.glyphs({ width: { mode: 'exact', size: metrics.contentWidth } });
 paragraph.dispose();
 ```
 
-{/* prose: acquires a private measurement engine once; `measure`, `glyphs`, `update` are then synchronous; a
-three-entry LRU keeps arbitrary constraint probes from retaining unbounded arrays. This is the tool for layout
-systems (uikit) that need intrinsic sizes before any scene object exists. */}
+{/*
+write
+- Question: can I measure without a scene, a handle, or a renderer?
+- Paragraph 1: yes. `createParagraph` acquires a private measurement engine once (asynchronously), and after that
+  `measure(constraints)`, `glyphs(constraints)`, and `update()` are synchronous. Constraints are per query, so a
+  layout system can probe unconstrained, at-most, and exact widths in one negotiation.
+- Paragraph 2: a three-entry LRU per query kind keeps arbitrary probes from retaining unbounded positioned arrays;
+  `update()` clears both caches. Dispose it when the layout system is done; it also supports `using`.
+- Point at: uikit-style integrations as the audience.
+- Shape: two paragraphs.
+
+notes · internals
+- construction acquires the shared measurement service — `paragraph.ts#createParagraph` (`:275–292`), `#acquireMeasurementService` (`:611–638`)
+- options — `paragraph.ts#ParagraphOptions` (`:79–80`): `font`, `text`, `style`, `layout`, `rasterPixelRatio`; width and height are per-query (`:75`)
+- `measure(constraints?)` and `glyphs(constraints?)` — `paragraph.ts:166–199`; constraints validated at the call — `#resolveConstraints` (`:506–514`)
+- three-entry LRU — `paragraph.ts#MAX_CACHED_PARAGRAPH_CONSTRAINTS` (`:40`), `#writeParagraphQueryCache` (`:267–273`); D-288
+- `update()` rejects malformed input before state changes and clears the caches — `paragraph.ts:201–220`
+- `dispose()` and `[Symbol.dispose]` — `paragraph.ts:223–244`
+- [in flight] `ParagraphOptions.font` is a loaded immutable `FontSelection` at HEAD (`paragraph.ts:71`); the
+  renderer-neutral path has no handle to bind a face through, so `font: Inter.msdf` is the canonical form and is
+  opted out of the check — D-310 binds faces only into Text; raise as an API question
+*/}
 
 ## When you can measure
 
 | Situation | `measure()` | Notes |
 | --- | --- | --- |
-| Detached `Text` | works | uses its implicit standalone planner |
-| `Text` under a `TextGroup` | works | uses the group's planner; sequential queries extend one speculative transaction the next traversal adopts |
+| Detached `Text` | works | routed through the root-owned planner; see the [verify] below |
+| `Text` under a `TextGroup` | works | same planner; sequential queries extend one speculative transaction the next traversal adopts |
 | Before the first frame | works | does not commit; `commitState()` stays `pending` |
 | Unchanged since last call | free | returns the retained result without a Wasm crossing |
 
-{/* prose: `boundingBox` and `computeBoundingBox()` derive a local `Box3` from the last measurement; `caretAt` and
-`selectionRects` are different — they read accepted placement and return `undefined` while pending. */}
+{/*
+write
+- Question: is it safe to measure now?
+- Paragraph 1: measurement is desired-state: it reads what you have set, not what the renderer accepted, so it works
+  before the first frame and immediately after `set()`. It does not traverse matrices, realise materials, publish
+  a draw, or move `commitState()`.
+- Paragraph 2: `boundingBox` and `computeBoundingBox()` are a local `Box3` derived from the last measurement and
+  refreshed by `measure()` or `glyphs()`; caret and selection are the opposite kind of query — they read accepted
+  placement and answer `undefined` while pending (link Interaction). Do not mix the two in one frame's logic.
+- Shape: two paragraphs.
+
+notes · internals
+- `Text.measure()` → `ThreeRoot.measurement` → `ThreeRootPublication.measurement` → `handle.measure()` —
+  `three/text.ts:736–742`, `:409–412`, `:1193–1201`; the publication reconciles `root.members()` first (`:431–433`)
+- commit is marked only by `acceptShape` — `three/text.ts:1272–1281`; `commitState()` — `:756–764`
+- retained result on a hit, cleared on update — `internal/render-planner.ts#_layoutText` (`:577–582`), `:568–569`
+- a query re-sends the whole text and applies mutations for the queried paragraph only —
+  `internal/render-planner.ts#queryText` (`:786–842`; the whole text at `:812–819`); the transaction the next traversal adopts — D-253, D-282
+- `boundingBox` → `computeBoundingBox()` → `glyphs()` when stale — `three/text.ts:664–666`, `:766–769`; set by
+  `measure()` too (`:741`)
+- [verify] D-282 says a detached `Text.layout()` throws and detached measurement belongs to `Paragraph`;
+  `docs/planning/three-api.md:275` says a detached Text uses "its implicit standalone planner"; at HEAD `measure()`
+  reaches the root-owned planner regardless of scene attachment (`three/text.ts:409–412`, `:1193–1201`). Call it on
+  a Text that is not in a scene and record which happens before the table's first row is final
+*/}
 
 ## Cost
 
@@ -100,4 +225,20 @@ systems (uikit) that need intrinsic sizes before any scene object exists. */}
 | --- | --- |
 | `measure()` | one Wasm measurement on a miss; nothing on a hit |
 | `glyphs()` | positioning plus copying every column |
-| traversal | at most one mutating transaction per group per frame |
+| traversal | at most one mutating batch per `glyph.shape()`, every dirty root in one call |
+
+{/*
+write
+- Question: what am I paying for?
+- One sentence per row, in plain words; the third row is the reassurance that measuring in a frame loop does not
+  add a second shaping pass. Point at the measurement scene, which calls `measure()` every frame.
+- Close with one line pointing at Performance for numbers.
+- Shape: three sentences and a pointer.
+
+notes · internals
+- measurement crossing — `internal/render-planner.ts#_layoutText` (`:577–582`) → `#queryText` → `transport.measureParagraph` (`:829`)
+- copy per call — `internal/render-planner.ts#_inspectText` (`:585–590`)
+- one batch per `glyph.shape()`, dirty roots only, cannot re-enter — `glyph-engine.ts#_shape` (`:387–433`), `textUpdateBatch` (`:488`)
+- measured cost at the 22,000-glyph corpus: 1.815 ms median per measure query, zero publication bytes — D-253
+- the measurement scene measures every frame — `site/examples/src/scenes/measurement/scene.tsx:31–33`
+*/}

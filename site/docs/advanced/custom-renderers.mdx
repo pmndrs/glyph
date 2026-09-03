@@ -2,37 +2,68 @@
 title: Integrating a renderer
 description: defineGlyphConfig is the whole integrator contract — a schema that names your objects, the codec, a resolver for resources, a renderer that decodes publications, and a root recipe — walked through the example renderer that proves it.
 nav: 54
-sourcecode: packages/glyph/src/glyph-config.ts
+sourcecode: packages/glyph/src/config/glyph.ts
 ---
 
-<Intro>
-  three.js is one adapter. Everything it does with the engine goes through `defineGlyphConfig`, and the same call is
-  open to you: name the objects your renderer owns, hand the engine a codec, lease it resources, decode what it
-  publishes, and give it a root to hang text on. The repository keeps a second implementation,
-  `@pmndrs/glyph-example-renderer`, whose only job is to prove that contract with no three.js in sight. This page
-  reads the contract through that example.
-</Intro>
+{/*
+reader
+- Owns a renderer that is not three.js — TypeGPU, raw WebGPU, a 2D canvas, a headless test oracle — and wants text
+  from the same engine. Knows instanced draws, storage buffers, and what a retained scene object is; has never seen
+  the engine's publication or the `/config/*` leaves. Arrives asking "what do I have to implement?", should leave
+  able to name the seven fields of a config, say when each one is called, and write a `decode` that stages and
+  commits without ever touching a numeric id.
 
-<Keypoints title="What to know">
-  <KeypointsItem>Seven fields: `schema`, `fonts`, `encode`, `resolve`, `renderer`, `root`, `commands`. Five are required; every one is called at a known moment.</KeypointsItem>
-  <KeypointsItem>The engine never hands you a numeric id. Your schema returns the objects the display list will be made of.</KeypointsItem>
-  <KeypointsItem>`decode` is synchronous and stages; `commit` is the only place the host changes; `discard` cleans up.</KeypointsItem>
-  <KeypointsItem>A handle fronts its anonymous root; `handle(name)` returns one idempotent named root; roots are terminal.</KeypointsItem>
-</Keypoints>
+write · intro
+- Question: is three.js special, or is it one client of a contract I can implement too?
+- Say: three.js is one adapter over `defineGlyphConfig`; the same call is open to any renderer; the repository
+  keeps a second implementation with no three.js in it, whose only job is to prove the contract is complete; this
+  page reads the contract through that example.
+- Anchor: "the engine in the middle, seven callbacks around it, each rung at a known moment" — the figure below.
+- Shape: three sentences, then the figure.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- Seven fields — `schema`, `encode`, `resolve`, `renderer`, `root` required; `fonts` and `commands` optional — each
+  called at a moment you can name.
+- The engine never hands you a numeric id; your schema returns the objects the display list will be made of.
+- `decode` is synchronous and stages; `commit` is the only place the host changes; `discard` cleans up.
+- A handle fronts its anonymous root; `handle(name)` returns one idempotent named root; roots are terminal.
+
+notes · internals for the page
+- three's config is one `defineGlyphConfig({...})` — `packages/glyph/src/three/handle.ts#defineThreeConfig` (`:171–262`)
+- the example renderer's config is the same call — `packages/glyph-example-renderer/src/config.ts#defineExampleConfig` (`:115–146`)
+- `GlyphConfig` is the sole renderer-integrator contract; raw plan tables are not a second path — D-314, D-317;
+  the integration helpers live on `/config/*` leaves, not the root entry — D-321 (`packages/glyph/package.json:240`)
+- required fields are checked at definition: `encode`, `resolve`, `renderer` functions (`config/glyph.ts:890–892`),
+  `schema` object (`:893–895`), `root.create` function (`:896–898`), the eight schema callbacks (`:899–910`),
+  `fonts` shape when present (`:911–923`)
+- opaque identities never cross the boundary — `config/glyph.ts:25–55`, D-314
+- transaction — `config/glyph.ts#applyGlyphPublication` (`:528–562`); `GlyphRenderer` (`:506–510`); D-309
+- handle and roots — `config/glyph.ts#GlyphHandle` (`:581–589`), `internal/configured-handle.ts#createHandleProxy`
+  (`:265–303`), `#root` (`:159–207`); D-307
+- the boundary test: the example imports only `@pmndrs/glyph` root types and public `/config/*` leaves, never a
+  relative path into the engine, and the engine names it nowhere —
+  `packages/glyph-example-renderer/tests/package-boundary.test.ts:24–58`
+- the secondary walkthrough with diagrams — `docs/guides/renderer-integration.md` (headings at `:36–867`); its
+  "Current gaps" (`:867–880`) list the explicit `GlyphSchema<…>` annotation the example still needs and the no-op
+  `syncTransforms`
+*/}
 
 ![The engine in the middle; around it the schema, fonts, encode, resolve, renderer, root and commands, each annotated with when the engine calls it.](/examples/diagrams/config-parts.svg)
 
 ## The shape of a config
 
-This is the example renderer's config, trimmed of nothing that matters:
-
-```ts
-import { defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/glyph';
+```ts no-check
+import type { Codec, CodecProgram, GlyphBindings, GlyphConfigFor, GlyphHandle, GlyphRoot, GlyphSchema } from '@pmndrs/glyph';
+import { defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/glyph/config/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 
-export const ExampleSchema = defineGlyphSchema({
+interface ExampleRootContext {
+  readonly name: string | undefined;
+}
+
+export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = defineGlyphSchema({
   drawRoot: () => undefined,                                   // no scene graph to attach to
-  program: (_root, program) => Object.freeze({ kind: 'example-program', program }),
+  program: (_root: ExampleRootContext, program) => Object.freeze({ kind: 'example-program', program }),
   buffer: (_root, input) => Object.freeze({ kind: 'example-buffer', input }),
   material: (_root, material) => material,
   transform: (_root, transform) => transform,
@@ -41,13 +72,16 @@ export const ExampleSchema = defineGlyphSchema({
   instanceSpan: (_root, input) => Object.freeze({ kind: 'example-instance-span', input }),
 });
 
-export function defineExampleConfig(device = new RecordingExampleRendererDevice()) {
+export type ExampleGlyphConfig = GlyphConfigFor<typeof ExampleSchema, ExampleRoot, ExampleDrawList, Codec, ExampleFontFormats>;
+
+export function defineExampleConfig(device: ExampleRendererDevice = new RecordingExampleRendererDevice()): ExampleGlyphConfig {
+  const techniqueId = device.shader.variant.techniqueId;
   return defineGlyphConfig({
     schema: ExampleSchema,
     fonts: { default: glyphExample.kind, formats: { glyphExample } },
     encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
     resolve: ({ format, resourceName, payload }) => {
-      if (format !== device.shader.variant.techniqueId) throw new TypeError(`cannot render "${format}"`);
+      if (format !== techniqueId) throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${format}"`);
       return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () => undefined);
     },
     renderer: () => ({
@@ -71,9 +105,36 @@ export function defineExampleConfig(device = new RecordingExampleRendererDevice(
 const handle = glyph.handle('example', defineExampleConfig());
 ```
 
-Its output is a retained draw list — a plain object with `engineRevision`, `planRevision`, `checkpoint`, and one
-entry per span — which its tests read, and which a TypeGPU device turns into an offscreen texture. Nothing touches a
-DOM, a canvas, or a console.
+{/*
+write
+- Question: what does a complete config look like before I understand any one part of it?
+- One sentence above the code: this is the example renderer's config, trimmed of nothing that matters; read it
+  once top to bottom, then come back for each field below.
+- One paragraph under the code: what comes out the other end — a retained draw list, a plain object with
+  `engineRevision`, `planRevision`, `publicationGeneration`, `checkpoint`, `changed`, and one entry per span —
+  which its tests read directly and which a TypeGPU device turns into an offscreen texture; nothing in it touches
+  a DOM, a canvas, or a console.
+- Point at: `resolve` refusing any format the shader cannot draw (one `if`), and `renderer` handing the whole
+  transaction to a device object with `decode`/`reset` — the two places the example's opinions live.
+- Avoid: explaining `schema` here; the next two sections do that.
+- Shape: one sentence, the code, one paragraph.
+
+notes · internals
+- source of the snippet — `packages/glyph-example-renderer/src/config.ts:86–146` (`ExampleSchema`, `defineExampleConfig`);
+  the snippet is opted out of the check because `@pmndrs/glyph-example-raster` and the example's own device, codec,
+  and root classes are not on the snippet project's path
+- `ExampleBindings` is a `GlyphBindings<…>` of eleven slots (resource, buffer, program, material, transform, batch,
+  instance, instanceSpan, drawRoot, materialInput, transformInput) — `config.ts:62–74`, `config/glyph.ts#GlyphBindings` (`:160–187`)
+- the explicit `GlyphSchema<ExampleBindings, ExampleRootContext>` annotation is still required for inference —
+  `docs/guides/renderer-integration.md:867–871`
+- the draw list — `packages/glyph-example-renderer/src/draw-list.ts#ExampleDrawList` (`:40–47`), `#ExampleDraw` (`:12–24`)
+- the device seam: `decode(view)` returns a pending submission with `commit()`/`discard()`; `reset()` releases
+  accepted state — `device.ts#ExampleRendererDevice` (`:109–115`), `#RecordingExampleRendererDevice.decode` (`:169–268`)
+- the TypeGPU device — `packages/glyph-example-renderer/src/webgpu-device.ts` (`TypeGpuExampleRendererDevice`, exported
+  from `index.ts:37`); it submits a device-owned offscreen pass at commit — guide `:874–875`
+- `glyph.handle(name, config)` requires `init`, a nonempty unique name, and a `defineGlyphConfig` object —
+  `packages/glyph/src/glyph.ts:59–92`
+*/}
 
 ## Each part
 
@@ -83,57 +144,174 @@ DOM, a canvas, or a console.
 | `fonts` | no | read once at `glyph.handle()` | `{ default: key, formats: Record<key, RasterFormat> }`; becomes `context.fonts` for the root recipe |
 | `encode` | yes | once per handle, in the constructor; the descriptor is compiled and registered in Wasm immediately | `{ integration: handleName, ids }` → `{ descriptor, capabilitySet?, dispose? }` |
 | `resolve` | yes | during projection, for every `(resourceId, generation)` new to a root; again for every `breakApart` copy | `{ format, resourceKind, resourceName, payload, resources, previous, signal }` → `ResourceLease` from `resourceLease(value, release)` |
-| `renderer` | yes | once per root, when the root is created; once per copy | `{ drawRoot, signal, codec, defaultRenderer? }` → `{ decode, syncTransforms, dispose }` |
-| `root` | yes | anonymous root eagerly in the handle constructor; each named root on first `handle(name)` | `{ name, codec, config, fonts, services, create }` → must call `context.create(extension, options)` exactly once and return it |
+| `renderer` | yes | once per root, when its plan target is built; once per copy | `{ drawRoot, signal, codec, defaultRenderer? }` → `{ decode, syncTransforms, dispose }` |
+| `root` | yes | the anonymous root eagerly in the handle constructor; each named root on its first `handle(name)` | `{ name, codec, config, fonts, services, create }` → must call `context.create(extension, options)` exactly once and return it |
 | `commands` | no | read once per root when its planner activates | `{ limits, requestBytes, resultBytes, textUnits }`; defaults 64 KiB request, 256 KiB result, 256 text units |
 
-`context.create(extension, options)` takes a `boundary` (required; it is the first argument to every schema callback
-and reaches `renderer` as its context), an optional `defaultRenderer` the config may hand back, optional `shape`
-hooks `{ prepare, accepted, rejected }`, and an optional `dispose` for host cleanup. It returns a proxy over your
-extension that adds `name`, `handle`, `disposed`, and `dispose`. A config is a frozen, branded object; spreading one
-and replacing a field keeps the brand, so `{ ...ThreeConfig, renderer }` is a legal way to wrap three's.
+{/*
+write
+- Question: which of these do I write first, and when will the engine call it?
+- One sentence above the table: read the "Called" column as a timeline — `encode` at handle construction, `root`
+  right after, `renderer` when the root builds its target, `resolve` on the first frame that needs a resource.
+- One paragraph under the table on `context.create(extension, options)`: `boundary` is required and becomes the
+  first argument of every schema callback and the renderer's `drawRoot` source; `defaultRenderer` is how a config
+  can hand back a renderer the root built (three does); `shape` is three optional hooks `{ prepare, accepted,
+  rejected }`; `dispose` is host cleanup; what comes back is a proxy over your extension with `name`, `handle`,
+  `disposed`, `dispose` added and reserved.
+- One sentence: a config is frozen and branded; the sanctioned way to extend three's is to spread it into a new
+  `defineGlyphConfig` call (the raster proof does exactly this to add a format).
+- Avoid: repeating the table in prose.
+- Shape: one sentence, the table, one paragraph, one sentence.
+
+notes · internals
+- `fonts` builds one `FontFaceHandleStore(formats, default)` per handle — `packages/glyph/src/glyph.ts:70–71`;
+  reaches the recipe as `context.fonts` — `internal/configured-handle.ts:177`
+- `encode` runs inside `installCodec` in the handle constructor — `configured-handle.ts:120–124`; the descriptor is
+  snapshotted, compiled with `compileCodec`, and registered with the engine at once — `internal/handle-state.ts#installCodec`
+  (`:330–338`); context — `config/glyph.ts#EncodeContext` (`:351–356`); return — `#Codec` (`:343–349`); a missing
+  return throws `GlyphConfig.encode() did not produce a Codec` (`configured-handle.ts:129–133`)
+- `resolve` is called from the projector for each resource whose `(id, generation)` is not retained —
+  `internal/create-engine.ts:117–137`; context fields — `config/glyph.ts#ResolveContext` (`:364–373`); lease
+  helper — `#resourceLease` (`:938–955`, idempotent dispose); a copy gets its own projector and so its own resolves —
+  `configured-handle.ts#copy` (`:514–521`) → `createGlyphPlanTarget` → `createEngine` (`internal/glyph-plan-target.ts:74–80`)
+- `renderer` is called once in the plan target constructor with `drawRoot: schema.drawRoot(root)` — `glyph-plan-target.ts:82–89`;
+  context — `config/glyph.ts#RendererContext` (`:512–522`)
+- `root.create`: anonymous root in the constructor — `configured-handle.ts:135–137`; named on first call — `:266–271`
+  → `#root` (`:159–162`); `context.create` may run once (`:183–184`) and the recipe must return its result (`:193–195`)
+- `commands` read at `activate` — `configured-handle.ts:440–450`; defaults `:447–449`; `DEFAULT_LIMITS` `:49–58`;
+  three's own — `three/handle.ts:215–229`
+- `GlyphRootCreateOptions { boundary, defaultRenderer?, shape?, dispose? }` — `config/glyph.ts:696–701`; hooks —
+  `#GlyphRootShapeHooks` (`:650–657`); the proxy's reserved keys — `configured-handle.ts:234–262`
+- boundary reaches schema callbacks as `root` — `glyph-plan-target.ts:77`, `create-engine.ts` (`this.#root` at `:155`, `:217`, `:231`)
+- brand and freeze — `config/glyph.ts:929–933`; re-wrapping three's config —
+  `packages/glyph-example-raster/tests/glyph-example.test.ts:267–278` (`defineGlyphConfig({ ...ThreeConfig, fonts })`)
+- [verify] whether a bare `{ ...ThreeConfig, renderer }` without re-calling `defineGlyphConfig` keeps the brand:
+  `invokeGlyphConfigHandleFactory` checks only the symbol-keyed factory (`config/glyph.ts:837–845`) and object spread
+  copies own enumerable symbols, but nothing in the tree relies on it — test before documenting
+*/}
 
 ## The schema
 
-Every callback receives your `boundary` first. What it returns is what the display list will contain — the engine
-stores it opaquely and hands it back in `decode`, in retirements, and in transform updates.
-
 | Callback | Receives | Frequency |
 | --- | --- | --- |
-| `drawRoot(boundary)` | — | once per root, once per `replace` display list |
+| `drawRoot(boundary)` | — | once per root when its renderer is built, and once per `replace` display list |
 | `program(boundary, program)` | the `CodecProgram` from your descriptor | once per program, memoised |
 | `buffer(boundary, { program, declaration })` | `{ kind: 'codec', value: CodecBuffer }` or `{ kind: 'order' }` for the engine's order buffer | once per buffer `(id, generation)`; the map survives across publications |
 | `material(boundary, input)` | the value a text or span passed as `material` | once per identity, memoised |
 | `transform(boundary, input, recordIndex)` | the value bound as a transform, and its row in the transform table | once per binding, memoised |
-| `instanceSpan(boundary, input)` | kind, program, resource, buffer, `recordIndex`, `recordCount`, `logicalOrder`, clip, extents | every span of every `replace` |
-| `batch(boundary, input)` | a draw's program, material, buffers, resources, clip, depth, order, indirect buffer, plus its bound `instances` | every batch child |
+| `instanceSpan(boundary, input)` | kind, program, programVariant, resource, buffer, `recordIndex`, `recordCount`, `logicalOrder`, clip, semantic, extents | every span of every `replace` |
+| `batch(boundary, input)` | a draw's program, material, buffers, resources, flags, clip, depthKey, order, indirect, plus its bound `instances` | every batch child |
 | `instance(boundary, input)` | the same as a batch, plus one `transform` and one span | every root-instance child |
 
-three's schema returns its own objects — `Object3D` for transforms and the draw root, a frozen wrapper carrying the
-root for materials — and lets the boundary remap transform objects, which is how a detached `Glyphs` copy drives its
-own matrices.
+{/*
+write
+- Question: what is a schema for, if the engine already knows what a buffer is?
+- Paragraph 1: the engine stores numeric ids; it will not give them to you; instead it asks you, once per new
+  identity, "what object do you want to stand for this?" and hands that object back in every later display list,
+  retirement, and transform update. The schema is those eight questions.
+- Paragraph 2: every callback receives your `boundary` first — the object you gave `context.create` — so a root
+  can answer differently from its siblings; three uses it to attach the draw parent and to remap transforms for a
+  detached `Glyphs` copy.
+- Point at: the `buffer` row — the order buffer is the one buffer you did not declare, and the engine tells you so
+  with `{ kind: 'order' }`.
+- Avoid: describing what three does with each object beyond one clause; that is the render-plan page.
+- Shape: two paragraphs under the table.
+
+notes · internals
+- callback signatures — `config/glyph.ts#GlyphSchema` (`:255–264`); inputs — `#GlyphBufferBindingInput` (`:205–208`),
+  `#GlyphInstanceSpanBindingInput` (`:210–226`), `#GlyphDrawBindingInput` (`:228–239`), `#GlyphBatchBindingInput`
+  (`:241–244`), `#GlyphRootInstanceBindingInput` (`:246–252`); the two declaration kinds — `#GlyphBufferDeclaration` (`:203`)
+- `drawRoot` at renderer construction — `internal/glyph-plan-target.ts:84`; per `replace` — `internal/create-engine.ts:231`
+- memoisation: programs by identity (`create-engine.ts:352–357`), materials (`:390–393`), transforms (`:399–402`)
+- buffers keyed by `(id, generation)`; a new generation calls `schema.buffer` again — `create-engine.ts:151–158`
+- retirements drop only the matching generation — `create-engine.ts:176–191`
+- three's schema — `three/handle.ts#ThreeSchema` (`:117–127`): `drawRoot` is an `Object3D` (`:118`), `material`
+  folds the root fallback in (`:121–122`), `transform` goes through `objectForTransform` (`:123`, declared `:114`)
+- three's bindings — `three/handle.ts#ThreeBindings` (`:76–88`); the example's — `packages/glyph-example-renderer/src/config.ts:62–74`
+*/}
 
 ## Lifecycle
 
-1. `await glyph.init()` instantiates the Wasm shaper once; concurrent calls share the promise.
-2. `glyph.handle(name, config)` — requires init and a unique name; builds the font store if `fonts` is declared; calls `encode` and registers the codec bytes; calls `root.create` for the anonymous root, which activates a planner, registers the root with `shape`, and constructs the plan target, which calls `schema.drawRoot` and `renderer`.
-3. `handle(name)` runs the same recipe once per name and returns the same root afterwards.
-4. Fonts: `glyph.fontFace(source, { format })` declares; `face.load()` loads; `root.loadFont(face)` binds the handle's format; `root.createText({ font: face })` acquires an immutable `Font` lease the text owns. An unloaded selection throws `FONT_FACE_FORMAT_NOT_LOADED`.
-5. Text state reaches the planner through `services.createText` and `controller.update`; that is where fonts enter Wasm, as registrations and stacks.
-6. `glyph.shape()` — synchronous, non-reentrant, a no-op when nothing is dirty. Each dirty root's `prepare` hook may skip it; the rest are staged; **one Wasm crossing** serves every staged root across every handle; then, per root, the publication is adopted and `accept` runs: project, `decode`, `commit`, settle. A throw runs `discard` and settles as rejected; `shape()` rethrows one error or an `AggregateError` after every root has been visited.
-7. `accepted` and `rejected` hooks run per root. three's `accepted` marks committed revisions and publishes measurements; the example renderer's stores the draw list.
-8. Every frame afterwards, `syncTransforms` receives the retained transform list from the last `replace` and never enters Wasm. `measure()` and `glyphs()` are separate synchronous engine calls and never consume a publication.
-9. Dispose in this order: text (controller, then owned fonts) → root (`services.dispose` before your `dispose`) → handle (every root, the font store, then codec and engine state — deferred while a `breakApart` copy is alive).
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
 
-Errors from the engine arrive as `GlyphEngineStatusError` with codes such as `style-range-invalid`,
-`font-stack-missing`, and `result-too-large`. three swallows the throw from `shape()` inside its traversal and
-attributes it to every render member and its groups: `text.error`, `text.onError`, `group.error`, and
-`commitState()` reporting `{ status: 'failed', error }`. An unchanged frame is not retried; recovery needs an
-invalidating change.
+await glyph.init(); // the Wasm shaper, once; concurrent callers share the promise
+const app = glyph.handle('app', defineThreeConfig()); // encode, then the anonymous root
+const hud = app('hud'); // one named root, interned by name
 
-> [!NOTE]
-> `TextFrameError`, with its `rejection.cause` union, is exported from `/three` but nothing constructs it in the
-> current tree. Handle the raw engine and renderer errors until it is wired.
+const Inter = glyph.fontFace('/fonts/Inter.glb');
+await Inter.load();
+const label = hud.createText({ font: Inter, text: 'Hello' }); // acquires an immutable Font lease the text owns
+
+glyph.shape(); // every dirty root of every handle, one Wasm crossing
+
+label.dispose();
+hud.dispose();
+app.dispose();
+```
+
+| Moment | What the engine does | Your part |
+| --- | --- | --- |
+| `glyph.init()` | instantiates the shaper once; a second call returns the same promise | await it before any handle |
+| `glyph.handle(name, config)` | builds the font store, runs `encode`, registers the codec, runs `root.create` for the anonymous root | `encode`, `root.create`, `schema.drawRoot`, `renderer` |
+| `handle(name)` | runs the recipe once per name; later calls return the same root | the same, once |
+| `createText` through `services.createText` | binds the font stack, material, and transform; retains the text in the planner | your extension's `createText` |
+| `glyph.shape()` | `prepare` each dirty root, stage the survivors, cross into Wasm once, then per root: project, `decode`, `commit`, settle | `shape.prepare`, `decode`, `commit`/`discard`, `shape.accepted`/`rejected` |
+| every frame after | nothing enters Wasm; `syncTransforms` receives the retained transform list | `syncTransforms` |
+| dispose | text → root (`services` before your `dispose`) → handle (roots, font store, then codec and engine state) | release what you leased |
+
+{/*
+write
+- Question: in what order will my callbacks fire, and what is one frame?
+- Paragraph 1 (above the code): the application side is six calls, and the code shows them in order; under three
+  the same handle is what `Text` uses, so this is not a special path.
+- Paragraph 2 (under the table): what `shape()` is — synchronous, not reentrant, a no-op when nothing is dirty;
+  `prepare` may decline a root for this frame; every staged root across every handle crosses into Wasm together;
+  then, per root, the publication is adopted and the transaction runs; a throw in one root runs `discard` and is
+  reported as that root's rejection without touching the others; `shape()` rethrows after every root was visited.
+- Paragraph 3: after `shape()`, `measure()` and `glyphs()` are separate synchronous calls that never consume a
+  publication, and `syncTransforms` is the only per-frame work.
+- Paragraph 4: errors — engine failures arrive as `GlyphEngineStatusError` with a code such as
+  `style-range-invalid`, `font-stack-missing`, or `result-too-large`; three catches the throw inside its traversal
+  and attributes it to every member (`text.error`, `text.onError`, `commitState()`), and an unchanged frame is not
+  retried.
+- Point at: the "Your part" column as the checklist of what a minimal integration implements.
+- Avoid: describing the wire; that is Reading the render plan.
+- Shape: one paragraph, the code, the table, three paragraphs.
+
+notes · internals
+- `init` shares one promise and clears it on failure — `packages/glyph/src/glyph.ts:44–57`; `handle` requires init,
+  a unique nonempty name, and builds the font store — `:59–92`; `shape` — `:94–98`
+- handle constructor order: `installCodec` (`encode`) → anonymous root — `internal/configured-handle.ts:117–156`;
+  root activation: plan target (`renderer`) → planner → shape participant → dirty observer — `:426–482`
+- text state enters through `services.createText` → `ConfiguredTextController` → `planner.createText` —
+  `configured-handle.ts:484–489`, `:769–782`; fonts bind as stacks and enter the handle state there — `:635–646`
+- `shape()` is one Wasm crossing for every staged root across handles — `glyph-engine.ts#_shape` (`:385–431`),
+  `#updateShapeBatch` (`:461–530`: `updateBatchPointer`, one `update_batch` call); reentry throws (`:387`);
+  no dirty roots → return (`:388`); D-312
+- `prepare` returning `false` skips the root this frame — `configured-handle.ts#stageShape` (`:732–739`),
+  `config/glyph.ts:651–652`
+- per-root outcomes: consume under one borrowed-plan gate (`glyph-engine.ts:504–516`), settle accepted ones
+  (`:517–526`), report per registration (`#settleShapeParticipants`, `:531`); D-318, D-319
+- the transaction — `config/glyph.ts#applyGlyphPublication` (`:528–562`); the target wraps commit/discard so commit
+  runs once and discard after commit is a no-op — `internal/glyph-plan-target.ts:100–115`
+- `accepted` receives the renderer's last committed result — `configured-handle.ts:741–745`; three's hooks —
+  `three/handle.ts:248–252`; the example stores the draw list — `packages/glyph-example-renderer/src/config.ts:141`, `:173–175`
+- `syncTransforms` never enters Wasm — `three/transform-synchronizer.ts:15–20`; the target replays the retained
+  list from the last `replace` — `glyph-plan-target.ts:93–99`, `:133–136`
+- `measure()` / `inspect()` are synchronous controller calls — `config/glyph.ts#GlyphTextController` (`:620–626`),
+  `configured-handle.ts:803–813`
+- dispose order: controller then leases (`configured-handle.ts:829–837`); root: `services.dispose` then host
+  `dispose` (`:217–233`); handle: roots, release, infrastructure only when no copy is alive (`:305–330`, `:345–365`)
+- error codes — `packages/glyph/src/engine-error.ts:20–51` (`result-too-large` `:20`, `font-stack-missing` `:26`,
+  `style-range-invalid` `:28`), class `:60`; three surfaces — `three/text.ts:756–759` (`commitState`), `:921`, `:1043` (`onError`)
+- [verify] `TextFrameError` is exported from `/three` (`packages/glyph/src/three.ts:24`) but the outline's findings say
+  `textFrameError()` has no caller; confirm in `three/frame-error.ts` before promising it, and keep the "handle the raw
+  engine error" advice until it is wired
+- [verify] "an unchanged frame is not retried": find where three clears or keeps the failed state on the next
+  traversal (`three/text.ts` around `:842–844`) before stating it as a rule
+*/}
 
 ## Roots
 
@@ -142,23 +320,101 @@ invalidating change.
 | a handle fronts its anonymous root | `handle.name` is `undefined`, `handle.handle === handle`, every root member reflects through it |
 | `handle(name)` interns one root per name | roots are terminal; there is no nesting; a named root's `handle` is its owner |
 | each root owns one planner, one codec lease, one plan target with its own projector and renderer | resources resolved for one root are leased to that root |
-| capacity `{ size, policy }` with `grow`, `chunk`, or `fixed` | three defaults to 4096 `chunk`; under `fixed` a frame whose text exceeds `size` is skipped at `prepare` and the text stays `pending` |
+| capacity `{ size, policy }` with `grow`, `chunk`, or `fixed` | three defaults to 4096 `chunk`; under `fixed` a frame whose text exceeds `size` is declined at `prepare` |
 | compositing `'ordered'` or `'independent'` | sent with every prepare; `setCompositing` invalidates the root |
-| one `Scene` per three root | a root whose texts span two scenes throws and names the fix: pick another root per scene |
-| a publication exists from the first member to the last disposal | a root can publish again later |
+| one `Scene` per three root | a root whose texts span two scenes is an error; pick another root per scene |
 | `breakApart` asks the config for a fresh `renderer` and re-resolves resources | the handle's infrastructure outlives `handle.dispose()` until the copy is disposed |
+
+{/*
+write
+- Question: what is a root, and why does the handle act like one?
+- Paragraph 1: a root is the unit of publication — one planner, one stream of publications, one renderer; the
+  handle is its own anonymous root so the common case needs no name; `handle('hud')` makes a sibling, never a
+  child.
+- Paragraph 2: the two per-root knobs three exposes, capacity and compositing, are root-level because they are
+  sent with the root's frame; a `fixed` root that overflows simply sits out the frame.
+- Paragraph 3: `breakApart` is the one time the config is asked for a second renderer for the same root; the copy
+  keeps the handle alive until it is gone.
+- Avoid: re-deriving D-307 in full; the table is the rule set.
+- Shape: three short paragraphs.
+
+notes · internals
+- handle proxy: `name` undefined, `handle` reflexive, members forwarded — `internal/configured-handle.ts:265–303`;
+  named selection requires a nonempty string (`:266–271`); D-307
+- per-root ownership: planner, codec lease, target — `configured-handle.ts:426–462`; resources are leased by the
+  root's projector — `internal/create-engine.ts:126–137`
+- capacity — `three/text.ts:192` (`{ size: 4_096, policy: 'chunk' }`), policies — `text-properties.ts:26–27`;
+  `fixed` overflow declines at `prepare` — `three/text.ts:1260–1269`
+- compositing — `three/text.ts:81`, `#setCompositing` (`:248–253`), sent as `GlyphShapeOptions.compositing`
+  (`:1269`, `config/glyph.ts:629–632`); D-232
+- one scene per root — D-307; `three/text.ts#nearestScene` (`:1594`) and the reconciliation at `:544`
+- `breakApart` → `services.copy(text, request, { boundary, renderer })` — `config/glyph.ts:642–646`, `:663–666`;
+  `three/text.ts:784`; copy leases keep infrastructure alive — `configured-handle.ts:322–328`, `:332–343`
+- [verify] the exact error text for a root spanning two scenes: read `three/text.ts:540–560`
+- [verify] "the text stays `pending`" under a declined `fixed` frame: `commitState()` returns `pending` at
+  `three/text.ts:761`; confirm the capacity-exceeded branch maps there
+*/}
 
 ## Fonts through the config
 
-`fonts: { default, formats }` builds a per-handle store with `isLoaded`, `load` (narrowed to the handle's format),
-`acquire` (a clone the caller disposes), and `peek`. A format key resolves `undefined` to the default, a string to a
-map key, and a `RasterFormat` object only if it is one of the configured formats. What `resolve` sees for a bound
-font is the compiled font's portable payloads — `buffer`, `texture`, `texture-array`, `geometry`, or `group` — keyed
-by the technique id and the schema's resource name, with the companions of the same font in `resources`. three keeps
-`resolve` trivial and realises textures and storage attributes at decode time, sharing GPU resources per handle
-through a registry owned by the codec `encode` returned.
+{/*
+write
+- Question: how does a font reach my renderer, and what do I actually receive?
+- Paragraph 1: `fonts: { default, formats }` gives the handle a store with `isLoaded`, `load`, `acquire`, and
+  `peek`; a face's format resolves through it — `undefined` to the default, a string to a map key, a `RasterFormat`
+  or a `format({ … })` request only if it is one of the configured formats — so a handle only ever binds formats
+  its codec has a program for.
+- Paragraph 2: what `resolve` sees for a bound font is not the font: it is one portable payload — `buffer`,
+  `texture`, `texture-array`, `geometry`, or `group` — keyed by technique id and the schema's resource name, with the
+  same font's companions in `resources`; the example turns that into a name/payload pair and lets the device
+  validate it; three keeps `resolve` trivial and realises GPU objects at decode, shared per handle through a
+  registry the codec owns.
+- Point at: the declaration is always `glyph.fontFace(url, { format })` then `await face.load()`; the handle never
+  loads a font itself.
+- Avoid: the loading pipeline; link Loading fonts.
+- Shape: two paragraphs.
+
+notes · internals
+- the store — `packages/glyph/src/font-face.ts#FontFaceHandleStore` (`:314–380`): `isLoaded` `:339`, `load` `:344`,
+  `acquire` `:349`, `peek` `:357`; `#resolveFormat` `:368–380` (undefined → default, string → map key,
+  format/request → must be a configured format or `font format … is not supported`)
+- the integrator-facing type — `config/glyph.ts#GlyphHandleFonts` (`:751–757`); `fonts.default` must name a key of
+  `formats` — `#GlyphFontConfig` (`:770–773`)
+- a custom format becomes a face member by its `kind` — `font-face.ts#FormatKey` (`:57–63`), `FontFace` (`:95–97`);
+  a string key resolves among imported formats — `config/raster-format.ts#rasterFormatForKey` (`:158–168`)
+- the example acquires a lease per text and disposes it with the text — `packages/glyph-example-renderer/src/engine.ts:66–72`, `:86`
+- resolve inputs come from the compiled font — `internal/create-engine.ts:124–134`; payload kinds —
+  `config/resources.ts#portableResourceKinds` (`:32`); companions keyed by schema name (`:127`)
+- three's trivial `resolve` — `three/handle.ts:200–208`; realisation at decode — `three/engine-plan-target.ts#readBoundResources`
+  (`:435–449`); shared GPU objects — `three/renderer-resources.ts#acquireRenderResource` (`:76–100`), owned by the
+  codec `encode` returns (`:32–58`)
+- unloaded selection throws `FONT_FACE_FORMAT_NOT_LOADED` — `font-face.ts:643–648`; D-310
+- [in flight] `GlyphHandleFonts.acquire` still returns the immutable `Font` lease (`config/glyph.ts:754`) and the
+  planner binds fonts as stacks (`configured-handle.ts:635–646`, `loaded-font.ts#createFontStack`); the other agent is
+  retiring the immutable-Font loaders — keep this page on `glyph.fontFace` and re-check the acquire/stack seam after
+  the merge (D-310)
+*/}
 
 ## Minimal versus three
+
+```ts
+import { defineGlyphConfig } from '@pmndrs/glyph/config/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+
+export const TracedThreeConfig = defineGlyphConfig({
+  ...ThreeConfig,
+  renderer: (context) => {
+    const inner = ThreeConfig.renderer(context);
+    return {
+      ...inner,
+      decode: (view) => {
+        console.debug('publication', view.planRevision, view.checkpoint ? 'checkpoint' : 'incremental');
+        return inner.decode(view);
+      },
+    };
+  },
+});
+```
 
 | Concern | Required by the engine | Example renderer | three.js config |
 | --- | --- | --- | --- |
@@ -169,18 +425,56 @@ through a registry owned by the codec `encode` returned.
 | `fonts` | optional | one custom format | bitmap, msdf, slug |
 | `encode` | any `Codec` | descriptor only | descriptor plus a shared GPU resource registry and `dispose` |
 | transforms | optional per frame | constant | `Object3D` matrices synced every traversal |
-| extension surface | anything | `createText`, `drawList` | `createText`, `createTextGroup`, capacity, compositing, material, `gpuBytes` |
+| extension surface | anything | `createText`, `drawList` | `createText`, `createTextGroup`, capacity, compositing, material |
+
+{/*
+write
+- Question: how much of three's config is contract, and how much is three?
+- One sentence above the code: the code is the cheapest way to see the seam — instrumentation wraps the renderer
+  and touches nothing else, which is the shape D-309 chose on purpose.
+- One paragraph under the table: the middle column is the floor; everything three adds in the right column is a
+  scene-graph opinion — a draw parent, a scene rule, a capacity policy, GPU resource sharing — and none of it is
+  required to publish text.
+- Point at: `renderer()` — three's returns `context.defaultRenderer` because the root builds its executor before the
+  config is asked; the example builds its own because it has no root-side object to hand over.
+- Shape: one sentence, the code, the table, one paragraph.
+
+notes · internals
+- wrapping keeps three's brand because `defineGlyphConfig` re-brands the spread — `config/glyph.ts:929–933`;
+  instrumentation wraps the renderer, not a decoder hook — D-309
+- three's `renderer` requires `context.defaultRenderer` — `three/handle.ts:209–214`; the root supplies it —
+  `:245–247` (`defaultRenderer: root.renderer`)
+- three's `prepare` — `three/text.ts:436–447`, `:1260–1269`; hooks wired at `three/handle.ts:248–252`
+- three's `encode` → `createThreeCodec(ids, transformMode, descriptor, material)` — `three/handle.ts:187–199`,
+  `three/renderer-resources.ts:32–58`
+- the example's `syncTransforms` is a no-op — `packages/glyph-example-renderer/src/config.ts:131`; guide `:872`
+- extension surfaces — example `config.ts:97–102`; three `three/text.ts` (`ThreeRoot` class, `createText` `:256`,
+  `createTextGroup` `:284`)
+*/}
 
 ## What the example proves
 
-Its integration test bakes a real font with the example baker, creates a handle with an injectable device, loads a
-face, and creates a text. Then it asserts that an injected `decode` failure makes `glyph.shape()` throw and leaves
-zero accepted resources; that the next update publishes with `changed: true`, the `glyphGeometry` resource and the
-`origin`, `size`, and `color` buffers present, and every draw's `instanceCount` equal to its span's `recordCount`;
-that an unchanged `shape()` returns the same draw list and submits nothing; that a text update republishes; that
-disposing the text releases every resource; and that `handle.dispose()` keeps them at zero. A boundary test forbids
-the package from importing anything but `@pmndrs/glyph`.
+{/*
+write
+- Question: what does "proves the contract" mean, concretely?
+- One paragraph walking the integration test in order: it bakes a real font with the example baker, declares it
+  with `glyph.fontFace` and the example format, creates a handle with an injectable device, creates a text; then it
+  asserts that an injected `decode` failure makes `glyph.shape()` throw and leaves zero accepted resources; that the
+  next update publishes with `changed: true`, the `glyphGeometry` resource and the `origin`, `size`, `color`
+  buffers present, and every realised draw's `instanceCount` equal to its span's `recordCount`; that an unchanged
+  `shape()` returns the same draw list and submits nothing; that a text update republishes; that disposing the text
+  releases every resource; and that `handle.dispose()` keeps them at zero.
+- One sentence: a second test forbids the package from importing anything but `@pmndrs/glyph` and its public leaves.
+- Close with where to go next: Building a codec for what `encode` returns, Reading the render plan for what `decode`
+  receives, Custom raster formats for the format side of the same example.
+- Shape: one paragraph, one sentence, one line of links.
 
-Where to go next: [Building a codec](/docs/advanced/codec) for what `encode` returns, [Reading the render
-plan](/docs/advanced/render-plan) for what `decode` receives, and [Custom raster formats](/docs/advanced/custom-techniques)
-for the format side of the same example.
+notes · internals
+- the test — `packages/glyph-example-renderer/tests/example-render.test.ts:51–136`: bake `:55–64`, handle `:68`,
+  face `:70–74`, injected failure `:85–88`, first publication `:91–112`, unchanged frame `:114–119`, update `:121–126`,
+  dispose `:128–135`
+- the boundary test — `packages/glyph-example-renderer/tests/package-boundary.test.ts:24–58`
+- [in flight] the test declares the face as `glyph.fontFace({ baked: dataUrl }, { format: glyphExample({ paletteSeed: 7 }) })`
+  (`:70–74`); `{ baked }` sources are being retired — describe it as "declares the baked GLB through `glyph.fontFace`"
+  and re-check the source form after the merge (D-310)
+*/}

@@ -2,46 +2,232 @@
 title: Testing
 description: Text in Node with the R3F test renderer, in headless Chromium with a GPU, and what CI can and cannot see.
 nav: 59
+sourcecode: packages/glyph/tests/support/three-handle.mjs
 ---
 
-<Intro>
-  Shaping and layout run in Node; drawing needs a browser. Test measurement and content without a GPU, test pixels
-  in a real Chromium, and know that a hosted CI runner has WebGL2 but no WebGPU.
-</Intro>
+{/*
+reader
+- Ships text and wants tests that fail for the right reasons. Knows `node --test` or Vitest and has a CI runner;
+  may not know that shaping and layout run in Node without a GPU, or that a hosted runner has WebGL2 and no WebGPU.
+  Arrives asking "what can I assert without a browser?"; should leave with three lanes — Node for content and
+  measurement, headless Chromium for pixels, CI for both minus WebGPU — and a rule for what to assert in each.
+
+write · intro
+- Question it answers: which layer needs which environment?
+- Say: shaping and layout run in Node; drawing needs a browser. Measure and assert content without a GPU, compare
+  pixels in a real Chromium, and know that a hosted runner falls back to WebGL2.
+- Anchor: "the engine is testable where the renderer is not".
+- Shape: two sentences.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- A handle needs no renderer, scene, or canvas; `measure()` answers in Node.
+- The R3F WebGPU test renderer mounts `<Text>` in Node after one `localStorage` shim.
+- Pixel tests run through Playwright's Chromium with `--dpr`, samples, and warm-ups declared.
+- Assert exact values for shaping and layout, envelopes for filtered rasters, and lifecycle through `commitState()`.
+
+notes · internals for the page
+- a handle without a renderer — `docs/planning/three-api.md:64–66`; test helper `tests/support/three-handle.mjs:7–13`
+- test renderer — `tests/integration/react-lease-lifecycle.test.mjs:62`, `:156`; the shim `tests/support/browser-globals.mjs`
+- headless — `apps/benchmarks/scripts/run-headless.mts:60–90`; CI — `.github/workflows/ci.yml:86–142`
+*/}
 
 ## Node
 
 ```ts
-import ReactThreeTestRenderer from '@react-three/test-renderer/webgpu';
-import { createParagraph, loadFont } from '@pmndrs/glyph';
-import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/three/msdf';
 
-const font = await loadFont({ baked: bytes }, msdf);
-const paragraph = await createParagraph({ font, text: 'Hello', style: { fontSize: 32 } });
-expect(paragraph.measure({ width: { mode: 'at-most', size: 480 } }).lineCount).toBe(1);
+/** Shapes and measures without a renderer, scene, camera, or canvas. */
+export async function lineCountAt480(fixture: BlobPart): Promise<number> {
+  await glyph.init();
+  const app = glyph.handle('test:measure', ThreeConfig);
+  const Inter = glyph.fontFace(new Blob([fixture]), { format: msdf }); // a test's font is declared like an app's
+  try {
+    await Inter.load();
+    const label = app.createText({
+      font: Inter,
+      text: 'Hello',
+      style: { fontSize: 32 },
+      constraints: { width: { mode: 'at-most', size: 480 } },
+    });
+    const lines = label.measure().lineCount;
+    label.dispose();
+    return lines;
+  } finally {
+    app.dispose(); // text → handle → face
+    Inter.dispose();
+  }
+}
 ```
 
-{/* prose: the shaper Wasm loads in Node; `Paragraph` needs no renderer; the R3F test renderer mounts `<Text>` and
-lets you read `measure()` from a ref without drawing. The package's own test-renderer shim supplies `localStorage`
-for three's Inspector at module scope. */}
+```ts no-check
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+test('a short label is one line at 480', async () => {
+  assert.equal(await lineCountAt480(await readFile('fixtures/inter.font.glb')), 1);
+});
+```
+
+```tsx no-check
+import ReactThreeTestRenderer from '@react-three/test-renderer/webgpu';
+import { Text } from '@pmndrs/glyph/react';
+import type { Text as ThreeText } from '@pmndrs/glyph/three';
+import { createRef } from 'react';
+
+import '../support/browser-globals'; // three's Inspector reads localStorage at module scope
+
+const ref = createRef<ThreeText<typeof msdf>>();
+const renderer = await ReactThreeTestRenderer.create(<Text ref={ref} font={inter}>Hello</Text>);
+await ReactThreeTestRenderer.waitFor(() => ref.current !== null);
+ref.current!.measure().lineCount; // no frame was drawn
+await renderer.unmount();
+```
+
+{/*
+write
+- Question: what runs without a GPU?
+- Paragraph 1: everything up to the draw. A handle needs no renderer, scene, camera, or canvas; the shaper Wasm
+  loads in Node; `createText` and `measure()` answer from the engine; `dispose` in `t.after` keeps handles from
+  leaking between tests. A test's font is declared the same way an app's is — `glyph.fontFace` over a `Blob` of the
+  fixture's bytes — and loaded once per file.
+- Paragraph 2: React. `@react-three/test-renderer/webgpu` mounts `<Text>` without drawing; the WebGPU entry reaches
+  three's Inspector, which reads `localStorage` at module scope, so import a one-line shim first. Under the test
+  renderer r3f disposes synchronously, which is what lets lease accounting be asserted directly. The renderer
+  starts its loop against `requestAnimationFrame`; a no-op stub keeps Node quiet.
+- Paragraph 3: what the package itself proves this way, so the reader knows the lane is load-bearing: exact glyph
+  ids and positions per edit, span alignment, frame rejection, lease balance under StrictMode, a seeded property
+  sequence over the public Three surface with no wall clock and no retry.
+- Shape: three paragraphs.
+
+notes · internals
+- handle needs no renderer — `docs/planning/three-api.md:64–66`; `createThreeTestHandle` with `t.after(dispose)` —
+  `tests/support/three-handle.mjs:7–13`
+- `FontFaceSource` accepts a `Blob` — `font-face.ts:27`, `:740`, `:749`; the tree's tests pass fixture bytes —
+  `tests/integration/react-lease-lifecycle.test.mjs:50–59`
+- test renderer `create` / `waitFor` — `tests/integration/react-lease-lifecycle.test.mjs:62`, `:156`; the shim —
+  `tests/support/browser-globals.mjs:1–20`; r3f disposes synchronously under `IS_REACT_ACT_ENVIRONMENT` — `:9–11`;
+  the rAF stubs — `:43–48`
+- the R3F WebGPU entry is pinned to `10.0.0-alpha.3` — `tests/package/r3f-webgpu.test.mjs:8–25`
+- runner: `node --test` over `tests/package`, `tests/integration`, `tests/fuzz` — `scripts/test.mts:33–35`
+- what is proven in Node — `docs/packages/glyph.md:598–618` (sequence property gate: fixed seeds, no wall clock, no
+  retry; StrictMode lease accounting; teardown in r3f's order)
+- [in flight] `createParagraph` (renderer-free measurement) takes an immutable `Font` at HEAD, not a face member —
+  `paragraph.ts:71`, `:549`; show it only once it accepts `Inter.msdf`
+- [verify] the test-renderer snippet is `no-check` because the site does not install `@react-three/test-renderer`;
+  typecheck it in the package before publishing. The `node:test` wrapper is `no-check` because the site's snippet
+  tsconfig has `types: ["vite/client"]` and no Node types (`site/tsconfig.json`); the Glyph half is checked
+*/}
 
 ## Headless Chromium
 
-{/* prose: the repository's conformance suite renders reference, candidate, and difference through headless
-Chromium with `--dpr` and sample counts, and compares against pinned captures; Vitexec and Playwright are the
-GPU-capable local lanes. */}
+```bash
+# apps/benchmarks — the conformance suite through Playwright's Chromium
+node scripts/run-headless.mts --suite conformance --dpr 1 --samples 3 --warmup 1 --port 5181
+
+# use the machine's browser instead of the Playwright-managed one
+PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome-stable node scripts/run-headless.mts --suite conformance
+```
+
+| Control | Meaning |
+| --- | --- |
+| `--dpr` | device pixel ratio the page is measured at (0 < dpr ≤ 4) |
+| `--samples`, `--warmup` | frames measured and frames discarded first |
+| `--target`, `--scenario` | one case instead of the suite |
+
+{/*
+write
+- Question: how do I test pixels?
+- Paragraph 1: the repository's conformance lane opens the benchmark app in headless Chromium, drives each target
+  and scenario with declared DPR, samples, and warm-ups, and compares captures against pinned references; a case
+  reports median and p95 time, output bytes, and a content hash, so a regression is a number, not a look. The
+  Bitmap lane is pixel-exact against an independent CPU oracle; the filtered formats carry an error envelope.
+- Paragraph 2: Chromium comes from Playwright, or from an executable path in the environment, which is how CI uses
+  the runner's own browser. The single-shot probes under `vitexec/` are the GPU-capable local lane for one
+  question at a time.
+- Shape: two paragraphs; the table explains the flags.
+
+notes · internals
+- argument parsing and the conformance suite — `apps/benchmarks/scripts/run-headless.mts:60–90`; the case list
+  (`*-webgl2` targets) — `:24–31`; the runner page `?runner=headless` — `:139`
+- Chromium launch and the env var — `apps/benchmarks/scripts/support/project-chromium.mts:3`, `:20–27`
+- summary fields (`medianMs`, `p95Ms`, `outputBytes`, `hash`) — `apps/benchmarks/src/benchmark/contracts.ts:37–60`
+- Bitmap 32/32 pixel-exact frames against the CPU oracle, pinned SHA-256 — `docs/packages/glyph.md:602–603`
+- vitexec probes — `apps/benchmarks/vitexec/*.probe.ts`; `vitexec` pinned at 0.1.17 — `apps/benchmarks/package.json:51`
+- [verify] "reference, candidate, and difference" images: find the capture writer under
+  `apps/benchmarks/src/benchmark/targets/conformance/raster/*-capture.ts` before describing the artefacts
+*/}
 
 ## CI has no WebGPU
 
-> [!NOTE]
-> Hosted runners fall back to WebGL2. Faking `navigator.gpu` breaks three's own fallback. Assert on
-> `renderer.backend.isWebGPUBackend` when a test depends on the backend, and let the rest run on WebGL2.
+| Job | Runner | What it sees |
+| --- | --- | --- |
+| static checks | `ubuntu-24.04` | types, lint, unit tests; no browser |
+| package size | `ubuntu-24.04`, pull requests | the delivery graphs against the PR base |
+| runtime | `ubuntu-24.04`, 30 min | Node gates, then the browser conformance suite in the runner's system Chromium — WebGL2 |
+
+{/*
+write
+- Question: why is my WebGPU-only assertion green locally and red in CI?
+- Paragraph 1: hosted runners have no GPU that WebGPU accepts, so three's `WebGPURenderer` falls back to its WebGL2
+  backend and every conformance target in CI is the `-webgl2` one. Faking `navigator.gpu` to force the other path
+  breaks that fallback and proves nothing.
+- Paragraph 2: write backend-dependent assertions to branch on the backend three actually built, and let the rest
+  run on WebGL2; the package's own presentation matrix is green on both, which is what makes the WebGL2 lane a
+  valid stand-in for most of what a text test checks.
+- Use a `> [!NOTE]` for the one-line rule.
+- Shape: two paragraphs plus the callout.
+
+notes · internals
+- the jobs — `.github/workflows/ci.yml:18–24` (static), `:44–50` (size), `:86–142` (runtime: system Chromium via
+  `PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH`, then `runtime.ci.vitest.mts`); the browser gate —
+  `apps/benchmarks/scripts/runtime.ci.vitest.mts:30–40`
+- every headless conformance target is a `*-webgl2` target — `apps/benchmarks/scripts/run-headless.mts:24–31`
+- the 48-cell matrix is green on WebGPU and forced WebGL2 — `docs/packages/glyph.md:682–686`
+- WebGPU detection — `apps/benchmarks/src/benchmark/environment.ts:9` (`'gpu' in navigator`)
+- [verify] "faking `navigator.gpu` breaks three's fallback" and the `renderer.backend.isWebGPUBackend` check: this
+  repo's own finding (memory: CI has no WebGPU; `vitexec --gpu` fakes `navigator.gpu`), not in the codex tree; grep
+  found no `isWebGPUBackend` there. Name three's actual backend property before publishing
+*/}
 
 ## What to assert
 
 | Layer | Assert on |
 | --- | --- |
 | shaping | exact glyph ids, clusters, positions, flags — not counts |
-| layout | `measure()` fields under exact constraints |
-| rendering | pixel comparisons with an error envelope for filtered techniques; exact for Bitmap |
-| lifecycle | `commitState()`, `gpuBytes`, disposal order |
+| layout | `measure()` fields under exact constraints: `lineCount`, `width`, `contentWidth`, baselines |
+| rendering | pixel comparisons with an error envelope for filtered formats; exact for Bitmap |
+| lifecycle | `commitState()` transitions, `gpuBytes`, disposal order and lease balance |
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+text.commitState(); // { status: 'pending' } — desired, not yet accepted
+glyph.shape();
+text.commitState(); // { status: 'committed', revision } — or { status: 'failed', error }
+```
+
+{/*
+write
+- Question: what is a good assertion here?
+- Paragraph 1: exactness where the engine is exact — shaping and layout are deterministic integers, so assert the
+  value, not a count or a range; a count that happens to match hides a reorder. Pixels are exact only for Bitmap;
+  the filtered formats get an envelope you state.
+- Paragraph 2: lifecycle through the public surface: `commitState()` says unbound, pending, committed, or failed
+  with the error; `gpuBytes` says what a root retains; a lease test needs a positive control that a lease is
+  genuinely held, or its silence is vacuous.
+- Paragraph 3: the determinism rule: no sleeps, no timer cushions, no retries, no regenerated goldens as a fix.
+- Shape: three paragraphs.
+
+notes · internals
+- `commitState()` union and semantics — `three/text.ts:93–98`, `:756–764`; D-272; asserted at
+  `tests/integration/text-frame-rejection.test.mjs:138–144`
+- `measure()` fields — `layout.ts#ParagraphLayoutSummary` (`:116–123`), `#ParagraphMeasurement` (`:63–90`)
+- exact shaping assertions in the tree — `tests/integration/text-mutation-span-alignment.test.mjs`,
+  `text-mutation-script-topology.test.mjs`, `text-mutation-gpu-lanes.test.mjs`
+- positive-control lease test — `docs/packages/glyph.md:615–616`
+- the determinism rule as the repository states it — this repo, `AGENTS.md` ("Keep tests deterministic; do not use
+  sleeps, timer cushions, arbitrary retries, or regenerated goldens as correctness mechanisms")
+*/}

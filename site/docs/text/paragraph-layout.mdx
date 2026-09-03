@@ -9,22 +9,47 @@ sourcecode: packages/glyph/src/text-properties.ts
 <script type="module" src="/docs/assets/explainer.js"></script>
 <glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
 
-<Intro>
-  A paragraph has three orthogonal inputs. `style` is inherited presentation, `layout` is flow policy, and
-  `constraints` is the box a parent imposes. Keeping them apart means a layout rule can be reused across boxes and a
-  box can change without restating the rule.
-</Intro>
+{/*
+reader
+- Has a paragraph and a box it must fit, and has been surprised by a width that shrank or a line that did not
+  justify. Knows CSS `width`, `max-width`, `text-align`. Arrives asking "how do I make it wrap here and line up
+  there?", should leave able to separate the flow rule from the box, bound justification, flow columns, and read
+  `overflowed`.
+
+write · intro
+- Question: why three inputs instead of one `layout` object?
+- Say: a paragraph has three orthogonal inputs — `style` is inherited presentation, `layout` is flow policy,
+  `constraints` is the box a parent imposes — so a layout rule can be reused across boxes and a box can change
+  without restating the rule.
+- Anchor: the figure; "the rule, the box, and the words meet in one paragraph".
+- Shape: two sentences, then the figure and the code.
+
+write · keypoints
+- `at-most` and `unconstrained` widths resolve to the content width; `exact` keeps the stated box.
+- `layout` holds wrap, align, overflow, line cap, indent, spacing, justification bounds, and columns.
+- Justification shrinks and grows word spaces within your ratios and spills the rest into letter gaps.
+- Columns require an exact width and fill in order without balancing.
+
+notes · internals for the page
+- the three inputs — `text-properties.ts#ParagraphBaseProperties` (`:121–131`); D-291
+- `Constraints`, `AxisConstraint` — `text-properties.ts:36–45`; `ParagraphLayout` — `:47–80`
+- validation — `#assertParagraphLayout` (`:233–264`), `#assertConstraints` (`:267–282`), called at construction —
+  `three/text.ts:1439–1441`
+- measurement — `layout.ts#ParagraphMeasurement` (`:63–91`), `Text.measure()` — `three/text.ts:736–742`
+*/}
 
 ![What a paragraph is made of: inherited style, the paragraph's layout policy, and the constraints its parent gives it meet in one paragraph that can be measured and drawn.](/examples/diagrams/paragraph-model.svg)
 
 ```tsx
+import { Text } from '@pmndrs/glyph/react';
+
 <Text
-  font={inter}
+  font={Inter}
   layout={{ wrap: 'word', align: 'justify', maxLines: 6, overflow: 'ellipsis', firstLineIndent: 0.3 }}
   constraints={{ width: { mode: 'exact', size: 8 }, height: { mode: 'at-most', size: 4 } }}
 >
   …
-</Text>
+</Text>;
 ```
 
 <glyph-proxy root="scenes" data-scene="paragraph-layout" aria-label="Wrap, align, overflow, and columns on an animated box" aspect="16 / 9" />
@@ -38,8 +63,22 @@ type AxisConstraint =
   | { mode: 'exact'; size: number };
 ```
 
-{/* prose: `at-most` and `unconstrained` resolve to the content width — a short line shrinks to its text; `exact`
-preserves the stated box for alignment and columns. `height` bounds the block axis for `maxLines`/`overflow`. */}
+{/*
+write
+- Question: why is my centred paragraph not centred?
+- Paragraph 1: `at-most` and `unconstrained` resolve to the content width — a short line shrinks to its text, so
+  there is nothing to align within; `exact` preserves the stated box for alignment and columns. `height` bounds the
+  block axis for `maxLines` and `overflow`.
+- Paragraph 2: `measure()` reports both: `width`/`height` is the resolved box, `contentWidth`/`contentHeight` the
+  advance extent before clamping; `inkBounds` is what the glyphs actually cover (link Measurement).
+- Shape: two paragraphs.
+
+notes · internals
+- `AxisConstraint`, `Constraints` — `text-properties.ts:36–45`; `unconstrained` must not state a `size`, the others
+  require a nonnegative one — `#assertAxis` (`:273–282`)
+- flexible widths resolve to content width, `exact` preserves the box — D-291
+- resolved box versus advance extent versus ink — `layout.ts:52–91`
+*/}
 
 ## Layout
 
@@ -51,17 +90,17 @@ preserves the stated box for alignment and columns. `height` bounds the block ax
 | `wrap` | `'none' \| 'word' \| 'character'` | UAX 14 word breaks, or any cluster |
 | `align` | `'start' \| 'center' \| 'end' \| 'justify'` | logical start/end follow direction |
 | `overflow` | `'visible' \| 'clip' \| 'ellipsis'` | what happens past `maxLines`/height |
-| `maxLines` | `number` | line cap |
+| `maxLines` | `number` | line cap; positive integer |
 | `firstLineIndent` | `number` | inline offset of the first line |
 | `spaceBefore`, `spaceAfter` | `number` | block-axis spacing carried in measurement |
 | `justify` | `{ minWordSpaceRatio?, maxWordSpaceRatio?, letterSpaceExpansion? }` | see below |
 | `lastLine` | `'auto' \| 'justify'` | whether final and hard-broken lines justify |
-| `columns` | `{ count, gap? }` | ordered columns inside an exact width |
+| `columns` | `{ count, gap? }` | ordered columns inside an exact width; 1 to 16 |
 
 </details>
 
 ```ts
-import { ParagraphLayout, Constraints } from '@pmndrs/glyph';
+import { Constraints, ParagraphLayout } from '@pmndrs/glyph';
 
 const layouts = ParagraphLayout.create({
   editorial: { wrap: 'word', align: 'justify', columns: { count: 3, gap: 0.4 } },
@@ -69,37 +108,114 @@ const layouts = ParagraphLayout.create({
 });
 const boxes = Constraints.create({ column: { width: { mode: 'exact', size: 9 } } });
 
-<Text layout={layouts.editorial} constraints={boxes.column}>…</Text>;
+three.createText({ font: Inter, text: 'Editorial', layout: layouts.editorial, constraints: boxes.column });
 ```
+
+{/*
+write
+- Question: what is a flow rule, and how do I name one?
+- One paragraph: everything in the table is policy that does not depend on the box; `ParagraphLayout.create` and
+  `Constraints.create` name rules once, validate them, and return them frozen, and both accept the same
+  left-to-right lists `style` does. Point at the two named rules in the code and at the table for the ranges.
+- Shape: one paragraph; the table is the reference.
+
+notes · internals
+- members and doc comments — `text-properties.ts:47–80`; validation — `#assertParagraphLayout` (`:233–264`):
+  `maxLines` positive integer `:235–237`, enums `:238–240`, `:244`, nonnegative lengths `:241–243`
+- `create` registries — `text-properties.ts:149–156`, `#createPropertyRegistry` (`:158–179`)
+- wrap modes reach the engine as `WRAP_NONE | WRAP_WORD | WRAP_CHARACTER` — `rust/shaper/src/engine/frame.rs:53–55`;
+  UAX #14 — `rust/shaper/src/line_break.rs:1–2`
+- `spaceBefore`/`spaceAfter` are carried in measurement — `text-properties.ts:55–58`
+*/}
 
 ## Justification bounds
 
 ```ts
-layout={{
-  align: 'justify',
-  justify: { minWordSpaceRatio: 0.85, maxWordSpaceRatio: 1.35, letterSpaceExpansion: 0.045 },
-  lastLine: 'auto',
-}}
+three.createText({
+  font: Inter,
+  text: 'Justified',
+  layout: {
+    align: 'justify',
+    justify: { minWordSpaceRatio: 0.85, maxWordSpaceRatio: 1.35, letterSpaceExpansion: 0.045 },
+    lastLine: 'auto',
+  },
+  constraints: { width: { mode: 'exact', size: 6 } },
+});
 ```
 
-{/* prose: word spaces shrink to `min` and grow to `max` as multiples of their natural advance; the remaining deficit
-spills into per-gap letter-space expansion up to `letterSpaceExpansion`; unset sides are unbounded. Distribution is
-euclidean in integer layout units so fragments and cursor advances agree bit-for-bit (D-254). */}
+{/*
+write
+- Question: how do I stop justification from opening rivers?
+- Paragraph 1: word spaces shrink to `minWordSpaceRatio` and grow to `maxWordSpaceRatio` as multiples of their
+  natural advance; the remaining deficit spills into per-gap letter-space expansion up to `letterSpaceExpansion`;
+  unset sides are unbounded, and a line that cannot fill within its bounds reads as under-full rather than
+  stretched. Trailing spaces are trimmed before the deficit is measured.
+- Paragraph 2: `lastLine: 'justify'` also justifies the final line and lines ending in a hard break; `'auto'` leaves
+  them ragged. Distribution is euclidean in integer layout units, so fragment advances and cursor positions agree
+  bit for bit.
+- Shape: two paragraphs.
+
+notes · internals
+- bounds and validation — `text-properties.ts:59–70`, `:245–256` (`min` in `(0, 1]`, `max` ≥ 1, expansion ≥ 0)
+- engine controls, zero = unbounded — `rust/shaper/src/engine/positioning.rs#JustifyControls` (`:1704–1713`)
+- expansion: word spaces grow to the cap, remainder spills into inter-cluster gaps bounded per gap, residue stays
+  unfilled — `rust/shaper/src/engine/positioning.rs:1827–1860`; compression never below the minimum — `:1873–1885`
+- euclidean remainder in layout units — `rust/shaper/src/engine/positioning.rs:1730–1736`; D-254
+- trailing spaces trimmed before distribution — `rust/shaper/src/engine/line_composition.rs:432–436`
+- `lastLine` — `text-properties.ts:71–72`; `LAST_LINE_AUTO | LAST_LINE_JUSTIFY` — `rust/shaper/src/engine/frame.rs:60–61`
+*/}
 
 <glyph-proxy root="scenes" data-scene="justify" aria-label="Justification bounds and last-line policy" aspect="16 / 9" />
 
 ## Columns
 
-{/* prose: text fills each column in order without balancing, so the last may run short; requires `exact` width;
-`gap` is inline space between columns in paragraph-local units. The landing's chorus is a three-column justified
-paragraph. */}
+{/*
+write
+- Question: can one paragraph flow through several columns?
+- One paragraph: yes, inside an exact width: `columns: { count, gap }` splits the box into `count` ordered columns
+  with `gap` between them in paragraph-local units; text fills each column in order without balancing, so the last
+  may run short. More than one column without an exact width throws at the boundary. The landing page's chorus is a
+  three-column justified paragraph.
+- Shape: one paragraph.
+
+notes · internals
+- doc and shape — `text-properties.ts:73–79`; count 1..16 — `:257–263`
+- exact width required when `count > 1` — `engine-encoding.ts#normalizedColumns` (`:21–37`), called at construction —
+  `three/text.ts:1441`
+- [verify] the exact throw message at `engine-encoding.ts:37–40` before quoting it
+- [verify] the landing chorus is three columns: read `site/` landing source before naming it
+*/}
 
 ## Overflow and ellipsis
 
-{/* prose: `clip` cuts at the box; `ellipsis` replaces the tail of the last permitted line; `visible` overflows and
-sets `measure().overflowed`. */}
+{/*
+write
+- Question: what happens to text that does not fit?
+- One paragraph: `clip` cuts at the box; `ellipsis` replaces the tail of the last permitted line, shaping the
+  ellipsis through the same fonts as the text; `visible` lets lines run past the box and sets
+  `measure().overflowed` so you can react. `maxLines` and `height` both decide where "past" is.
+- Shape: one paragraph.
+
+notes · internals
+- enum — `text-properties.ts:52`; `OVERFLOW_VISIBLE | CLIP | ELLIPSIS` — `rust/shaper/src/engine/frame.rs:62–64`
+- clip decision — `rust/shaper/src/engine/flow_composition.rs:179`; ellipsis truncation —
+  `#truncate_for_ellipsis` (`:620–665`); the ellipsis glyph is shaped through the font stack in order —
+  `rust/shaper/src/engine/state.rs:3985–4001`
+- `overflowed` — `layout.ts:90`, `paragraph.ts:685`
+*/}
 
 ## Direction
 
-{/* prose: `align: 'start'` is left for LTR paragraphs and right for RTL ones; mixed-direction runs reorder within a
-line per UAX 9 while the paragraph keeps one base direction. Link the shaping example. */}
+{/*
+write
+- Question: what does `align: 'start'` mean in an RTL paragraph?
+- One paragraph: `start` is left for LTR paragraphs and right for RTL ones, and `end` the reverse; mixed-direction
+  runs reorder within a line per the bidi algorithm while the paragraph keeps one base direction, chosen by
+  `style.direction` (link Styling → Language and direction and the shaping example).
+- Shape: one paragraph.
+
+notes · internals
+- `start`/`end` swap by paragraph level — `rust/shaper/src/engine/positioning.rs:1691–1692`
+- base direction from `direction` — `rust/shaper/src/bidi.rs:52–57`
+- `direction` lives on `style`, not `layout` — `text-properties.ts:93`
+*/}
