@@ -7,7 +7,6 @@ import type { AnyRasterFormat } from '../config/raster-format.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import { compileRasterFont, resolveRasterCodec, type CompiledRasterFont } from '../config/raster.js';
 import type { PortableResource } from '../config/resources.js';
-import { portableResourceIdentity } from './portable-resource-identity.js';
 import { createRenderPlanner, type RenderPlanner, type RenderPlannerOptions } from './render-planner.js';
 import { compileCodec, type CodecDescriptor, type CodecIdFactory } from '../config/codec.js';
 import { CodecIdScope } from './render-id.js';
@@ -208,7 +207,6 @@ interface RetainedHandleFontBinding {
 
 interface RetainedPortablePayload {
   readonly referenceId: number;
-  readonly identity: object;
   readonly techniqueId: string;
   readonly resourceName: string;
   readonly payload: PortableResource;
@@ -550,13 +548,11 @@ export class GlyphHandleState {
 
   /** @internal */
   _acquirePortablePayload(referenceId: number): Readonly<{
-    identity: object;
     techniqueId: string;
     resourceName: string;
     payload: PortableResource;
     resources: readonly Readonly<{
       referenceId: number;
-      identity: object;
       resourceName: string;
       payload: PortableResource;
     }>[];
@@ -572,7 +568,6 @@ export class GlyphHandleState {
     for (const resource of resources) resource.leases += 1;
     let disposed = false;
     return Object.freeze({
-      identity: resolved.identity,
       techniqueId: resolved.techniqueId,
       resourceName: resolved.resourceName,
       payload: resolved.payload,
@@ -580,7 +575,6 @@ export class GlyphHandleState {
         resources.map((resource) =>
           Object.freeze({
             referenceId: resource.referenceId,
-            identity: resource.identity,
             resourceName: resource.resourceName,
             payload: resource.payload,
           }),
@@ -908,7 +902,6 @@ export class GlyphHandleState {
         if (retained === undefined) {
           retained = {
             referenceId,
-            identity: portableResourceIdentity(payload),
             techniqueId: raster.id,
             resourceName,
             payload,
@@ -917,12 +910,6 @@ export class GlyphHandleState {
             leases: 0,
           };
           this.#portablePayloads.set(referenceId, retained);
-        } else if (
-          retained.techniqueId !== raster.id ||
-          retained.resourceName !== resourceName ||
-          !samePortableResource(retained.payload, payload)
-        ) {
-          throw new TypeError(`portable payload reference ${referenceId} resolves to different content`);
         }
         retained.owners += 1;
         payloads.set(referenceId, retained);
@@ -956,11 +943,6 @@ export class GlyphHandleState {
       const selected = payloads.get(this.#wireIdentities.resource(key));
       if (selected === undefined) throw new Error(`compiled font does not own selected resource "${key}"`);
       const group = Object.freeze([selected, ...companions]);
-      if (selected.group !== undefined && !samePortablePayloadGroup(selected.group, group)) {
-        throw new TypeError(
-          `portable payload reference ${selected.referenceId} resolves to different companion resources`,
-        );
-      }
       selected.group ??= group;
     }
   }
@@ -1104,67 +1086,6 @@ export class GlyphHandleState {
     if (this.#disposed) throw new Error('Glyph handle state is disposed');
     this.#assertEngineAvailable?.();
   }
-}
-
-function samePortablePayloadGroup(
-  left: readonly RetainedPortablePayload[],
-  right: readonly RetainedPortablePayload[],
-): boolean {
-  if (left.length !== right.length) return false;
-  return left.every((resource, index) => right[index] === resource);
-}
-
-function samePortableResource(left: PortableResource, right: PortableResource): boolean {
-  if (left === right) return true;
-  if (left.kind !== right.kind) return false;
-  if (left.kind === 'group' && right.kind === 'group') {
-    const leftNames = Object.keys(left.members).sort();
-    const rightNames = Object.keys(right.members).sort();
-    return (
-      leftNames.length === rightNames.length &&
-      leftNames.every((name, index) => {
-        const leftMember = left.members[name];
-        const rightMember = right.members[rightNames[index]!];
-        return (
-          name === rightNames[index] &&
-          leftMember !== undefined &&
-          rightMember !== undefined &&
-          samePortableResource(leftMember, rightMember)
-        );
-      })
-    );
-  }
-  if (left.kind === 'group' || right.kind === 'group') return false;
-  if (!sameBytes(left.bytes, right.bytes)) return false;
-  if (left.kind === 'buffer' && right.kind === 'buffer') return left.stride === right.stride;
-  if (left.kind === 'texture' && right.kind === 'texture') {
-    return left.format === right.format && left.width === right.width && left.height === right.height;
-  }
-  if (left.kind === 'texture-array' && right.kind === 'texture-array') {
-    return (
-      left.format === right.format &&
-      left.width === right.width &&
-      left.height === right.height &&
-      left.layers === right.layers
-    );
-  }
-  if (left.kind !== 'geometry' || right.kind !== 'geometry') return false;
-  return (
-    left.topology === right.topology &&
-    JSON.stringify(left.views) === JSON.stringify(right.views) &&
-    JSON.stringify(left.accessors) === JSON.stringify(right.accessors) &&
-    JSON.stringify(left.attributes) === JSON.stringify(right.attributes) &&
-    JSON.stringify(left.indices) === JSON.stringify(right.indices) &&
-    JSON.stringify(left.drawRange) === JSON.stringify(right.drawRange)
-  );
-}
-
-function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
-  if (left.byteLength !== right.byteLength) return false;
-  for (let index = 0; index < left.byteLength; index += 1) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
 }
 
 class CodecRegistrationImpl implements CodecRegistration {

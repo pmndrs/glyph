@@ -56,12 +56,6 @@ export interface PlanOrigin {
   readonly [planOriginBrand]: true;
 }
 
-declare const payloadIdentityBrand: unique symbol;
-/** Unforgeable identity of one retained portable payload. */
-export interface PortablePayloadIdentity {
-  readonly [payloadIdentityBrand]: true;
-}
-
 declare const renderPlanTransformBrand: unique symbol;
 /** Engine-owned host transform identity used only while mapping a trusted publication. */
 type RenderPlanTransformId = number & { readonly [renderPlanTransformBrand]: true };
@@ -95,7 +89,6 @@ export interface BorrowedRenderPlan extends RenderPlanReader {
 /** One renderer-neutral payload resolved from a plan resource reference. */
 export interface ResolvedPortablePayload {
   readonly referenceId: ResourceHandle;
-  readonly identity: PortablePayloadIdentity;
   readonly resourceName: string;
   readonly payload: PortableResource;
 }
@@ -1083,7 +1076,6 @@ class RenderPlannerImpl {
     let disposed = false;
     return Object.freeze({
       referenceId,
-      identity: lease.identity as PortablePayloadIdentity,
       techniqueId: lease.techniqueId,
       resourceName: lease.resourceName,
       payload: lease.payload,
@@ -1091,7 +1083,6 @@ class RenderPlannerImpl {
         lease.resources.map((resource) =>
           Object.freeze({
             referenceId: resource.referenceId as ResourceHandle,
-            identity: resource.identity as PortablePayloadIdentity,
             resourceName: resource.resourceName,
             payload: resource.payload,
           }),

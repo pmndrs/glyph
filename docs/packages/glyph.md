@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:8c804d7b35f9cc70efa65a18d52af032f0480cd29244ca33c7d09ab39318e429'
+source_digest: 'sha256:e1f3f013e3693f0eb77ad53392cd5f14845da6c6afae8b93b4f9a2c9ce53d1bd'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -453,6 +453,11 @@ the primary render resource used by the plan primitive. Bitmap repeated strikes,
 repeated page groups all compile through this contract. Capability profiles contain capabilities only;
 `compileCodec()` assigns their nonzero wire IDs by descriptor order, and ordinary single-profile frames omit the
 selector.
+
+`RasterResourceId` is the authoritative identity of one renderer resource realization. Reusing an ID means the format,
+schema role, companion set, metadata, and bytes are unchanged; a Codec must mint a new ID when any of those change. The
+handle retains and reference-counts the first payload under that ID without rescanning immutable bytes. Distinct authored
+strings that collide after compact wire hashing are rejected once by the handle's `CodecIdScope` before retention.
 
 Codec-authored wire identities are hashed domain/name pairs returned as branded numbers. Module-level Codec and buffer
 constants use `id(kind, stableName)`. Handle construction supplies collision-checked identities to `encode()` and keeps

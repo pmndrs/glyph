@@ -569,15 +569,9 @@ interface PlanOrigin {
   readonly [planOriginBrand]: true;
 }
 
-declare const payloadIdentityBrand: unique symbol;
-interface PortablePayloadIdentity {
-  readonly [payloadIdentityBrand]: true;
-}
-
 type RenderPlanTableName = 'resources' | 'buffers' | 'patches' | 'primitives' | 'draws' | 'retirements' | 'diagnostics';
 
 interface PortablePayloadLease {
-  readonly identity: PortablePayloadIdentity;
   readonly payload: PortableResource;
   readonly disposed: boolean;
   dispose(): void;
@@ -585,7 +579,6 @@ interface PortablePayloadLease {
 
 interface ResolvedPlanPayload {
   readonly referenceId: ResourceHandle;
-  readonly identity: PortablePayloadIdentity;
   readonly payload: PortableResource;
 }
 
@@ -978,14 +971,14 @@ with `RenderPlanView.bindBytes()` and validates every supplied payload against t
 A cache hit may omit payload bytes only when the receiving endpoint already holds the same authenticated digest and
 descriptor.
 
-`PortablePayloadIdentity` equality is content-derived from a collision-resistant digest over the technique identity,
-canonical descriptor/format metadata, and payload bytes; it is not JavaScript backing-object identity and is never the
-compact wire `referenceId`. The package creates and validates identities in each realm. This lets independently loaded or
-transferred copies of the same artifact share a receiving-realm device realization without treating equal backend-local
-numbers as equal resources. After commit or rejection, the receiving endpoint transfers the plan buffer back with the
-transaction token and result. The source endpoint correlates that return to its one pending candidate, reclaims or recycles
-the returned buffer, and resolves `accept()`. Only an accepted result advances the render planner's private cursor and makes older
-engine storage eligible for retirement. Same-realm ownership provenance is not serialized.
+Within one handle, `RasterResourceId` is the authoritative renderer-realization key: equal IDs mean equal format, schema
+role, companion set, metadata, and bytes. The handle retains the first immutable payload and reference-counts later uses
+without hashing or comparing its bytes. Cross-realm FontFace transfer carries content-addressed artifact dependencies; the
+receiving registry reuses those inputs and the selected raster decoder reconstructs its authored resource IDs. After commit
+or rejection, the receiving endpoint transfers the command buffer back with the transaction token and result. The source
+endpoint correlates that return to its one pending candidate, reclaims or recycles the returned buffer, and resolves
+`accept()`. Only an accepted result advances the renderer cursor and makes older engine storage eligible for retirement.
+Same-realm ownership provenance is not serialized.
 
 Disposing a render planner aborts an in-flight async target signal, invalidates that transaction, settles the public `publish()`
 promise with `RenderPlannerDisposedError` from a core-owned abort race, and ignores every late answer. Correct worker
@@ -1161,10 +1154,10 @@ the engine-private binding cache, while each owns its own policy, portable bindi
 pools—not backends—own physical resources. A second canvas alone does not require another backend, though separate policy or
 teardown ownership may justify one.
 
-Cross-backend realization sharing never uses `referenceId`, which is only a compact backend-scoped wire identity. Candidate
-resource resolution returns a package-created `PortablePayloadIdentity` tied to the exact validated backing slice and
-metadata. A renderer pools only by `(GPUDevice, PortablePayloadIdentity, renderer variant)`. Equal wire numbers from two
-backends therefore cannot alias; two backends bound to the same backing may deliberately receive the same payload identity.
+Cross-handle realization sharing never uses `referenceId`, which is only a compact handle-scoped wire identity. A renderer
+that pools physical resources outside a handle keys them by its device/context, the authored `RasterResourceId`, and its
+renderer variant. The serialized FontFace dependency manifest preserves content-addressed source dependencies when data
+crosses realms; the receiving decoder deterministically reconstructs the authored IDs.
 
 ### React and Suspense ownership
 
