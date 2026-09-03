@@ -17,6 +17,8 @@ export const STATE_COLORS: Readonly<Record<string, string>> = {
 export interface Run {
   readonly text: string;
   readonly color: string | undefined;
+  /** Where the run starts in the line — its identity, stable as the text is typed. */
+  readonly at: number;
 }
 
 /**
@@ -29,7 +31,7 @@ export function runsOf(typed: string): readonly Run[] {
   let cursor = 0;
   const push = (end: number, color?: string) => {
     if (end <= cursor) return;
-    runs.push({ text: typed.slice(cursor, end), color });
+    runs.push({ at: cursor, text: typed.slice(cursor, end), color });
     cursor = end;
   };
   const state = /^Status: ([a-z]+)/.exec(typed);

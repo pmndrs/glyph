@@ -60,11 +60,11 @@ export default function Editing() {
       <Text ref={ref} font={inter} style={{ fontSize: FONT_SIZE, color: PAPER }} layout={{ wrap: 'none' }}>
         {runs.length === 0
           ? ' '
-          : runs.map((run, index) =>
+          : runs.map((run) =>
               run.color === undefined ? (
                 run.text
               ) : (
-                <Text key={index} style={{ color: run.color }}>
+                <Text key={`${run.at}:${run.text}`} style={{ color: run.color }}>
                   {run.text}
                 </Text>
               ),

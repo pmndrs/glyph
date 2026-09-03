@@ -96,9 +96,9 @@ export default function Caret() {
       >
         {PASSAGE}
       </Text>
-      {placement?.rects.map((rect, index) => (
+      {placement?.rects.map((rect) => (
         // Paragraph space is y-down from the box's top-left; the group's origin is that corner.
-        <mesh key={index} position={[rect.x + rect.width / 2, -(rect.y + rect.height / 2), -0.01]}>
+        <mesh key={`${rect.x},${rect.y}`} position={[rect.x + rect.width / 2, -(rect.y + rect.height / 2), -0.01]}>
           <planeGeometry args={[rect.width, rect.height]} />
           <meshBasicNodeMaterial color={ACCENT} transparent opacity={0.28} />
         </mesh>
