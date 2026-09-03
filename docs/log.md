@@ -2,6 +2,10 @@
 
 ## 2026-09-03
 
+- **Trusted constraint-region partitions** — A public two-Text request now includes both a one-region paragraph and a
+  two-column paragraph and proves their region spans form the exact contiguous planner partition with no resume region.
+  Rust no longer pre-validates that package-owned relationship before consuming the already memory-bounded region table.
+
 - **Trusted region and transform identities** — Removed the Rust request reader's quadratic duplicate-region scan and
   redundant nonzero checks over package-minted region and transform identities. The public two-Text Three integration
   captures both regions from the real planner request and proves their identities are distinct and their transforms are

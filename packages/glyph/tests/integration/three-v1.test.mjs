@@ -1560,7 +1560,12 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   const scene = new THREE.Scene();
   const group = three.createTextGroup({ renderOrder: 3 });
   const left = three.createText({ font, text: 'AB' });
-  const right = three.createText({ font, text: 'CD' });
+  const right = three.createText({
+    font,
+    text: 'CD',
+    constraints: { width: { mode: 'exact', size: 100 }, height: { mode: 'exact', size: 100 } },
+    layout: { columns: { count: 2, gap: 10 } },
+  });
   left.position.x = 2;
   right.position.x = 5;
   group.add(left, right);
@@ -1585,9 +1590,17 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   );
   assert.equal(new Set(constraints.map(({ flowThreadId }) => flowThreadId)).size, 2);
   assert.ok(constraints.every(({ flowThreadId }) => flowThreadId !== 0));
+  assert.deepEqual(
+    constraints.map(({ regionStart, regionCount, resumeRegion }) => ({ regionStart, regionCount, resumeRegion })),
+    [
+      { regionStart: 0, regionCount: 1, resumeRegion: 0 },
+      { regionStart: 1, regionCount: 2, resumeRegion: 0 },
+    ],
+    'planner geometry must publish one contiguous region partition per paragraph',
+  );
   const regions = instrumented.latestRegions();
-  assert.equal(regions.length, 2);
-  assert.equal(new Set(regions.map(({ id }) => id)).size, 2);
+  assert.equal(regions.length, 3);
+  assert.equal(new Set(regions.map(({ id }) => id)).size, 3);
   assert.ok(regions.every(({ id, transformIndex }) => id !== 0 && transformIndex !== 0));
   const draws = rootDraws(scene);
   assert.equal(draws.length, 1, 'compatible paragraphs must batch in Rust before Three sees the plan');
@@ -1879,6 +1892,9 @@ function instrumentNextGlyphEngine() {
         return {
           paragraphId: view.getUint32(record + constraint.paragraphId, true),
           flowThreadId: view.getUint32(record + constraint.flowThreadId, true),
+          regionStart: view.getUint32(record + constraint.regionStart, true),
+          regionCount: view.getUint16(record + constraint.regionCount, true),
+          resumeRegion: view.getUint16(record + constraint.resumeRegion, true),
         };
       });
     },
