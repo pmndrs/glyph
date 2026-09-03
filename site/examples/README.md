@@ -22,7 +22,7 @@ examples/
   src/scenes/<slug>/
     scene.tsx                    the R3F scene that runs — a composition, a few dozen lines
     three.ts                     the three.js twin: the same thing imperatively, typechecked, never executed here
-    components/                  the scene's own pieces when it has more than one (Ring, Glow, Knot, WordTile, …)
+    components/                  the scene's own pieces when it has more than one (Ring, Glow, Knot, StripTile, …)
     materials.ts, config.ts      when a scene owns materials or shared constants
 
 ../docs/components/

@@ -1,5 +1,5 @@
 import { defineTextMaterial } from '@pmndrs/glyph/three';
-import { color, mix, positionWorld, texture, uniform, uv, vec2 } from 'three/tsl';
+import { color, mix, normalView, positionWorld, texture, uniform, uv, vec2 } from 'three/tsl';
 import { MeshBasicNodeMaterial, type Texture } from 'three/webgpu';
 
 /**
@@ -21,12 +21,14 @@ export const pathInk = defineTextMaterial((context) => {
 export const surfaceScroll = uniform(0);
 
 /**
- * The knot's skin: unlit, the way the Codrops piece is. The render target is
- * a tile holding one word; it repeats `repeat.x` times along the knot and
+ * The knot's skin, the Codrops way: the render target is a strip holding the
+ * passage as it is typed; it repeats `repeat.x` times along the knot and
  * `repeat.y` times around the tube and scrolls by a uniform — the Codrops
- * `fract(uv * repeat - time)` — and a fake shadow darkens what sits deeper in
- * the scene. The tile is a live Slug scene, so the word can change under the
- * pattern without the pattern noticing.
+ * `uv * repeat - time`, wrapped by the sampler rather than a `fract`. The strip's colour is taken as is, so the
+ * accented word stays accented on the surface; a facing term and a depth
+ * term shade the tube so the knot reads as a solid. The strip is a live Slug
+ * scene, so the words can change under the pattern without the pattern
+ * noticing.
  */
 export function surfaceMaterial(
   surface: Texture,
@@ -34,10 +36,11 @@ export function surfaceMaterial(
 ): MeshBasicNodeMaterial {
   const material = new MeshBasicNodeMaterial();
   // u runs against the reading direction on this geometry, so x is mirrored back; scrolling then runs with the text.
-  const scrolled = uv().mul(vec2(-repeat.x, repeat.y)).add(vec2(surfaceScroll, 0)).fract();
-  const ink = texture(surface, scrolled).r;
-  const shadow = positionWorld.z.add(5.5).div(6.5).clamp(0.08, 1);
-  material.colorNode = mix(color('#0a0d13'), color('#f2f4f8'), ink).mul(shadow);
+  const scrolled = uv().mul(vec2(-repeat.x, repeat.y)).add(vec2(surfaceScroll, 0)); // the sampler wraps
+  const ink = texture(surface, scrolled).rgb;
+  const facing = normalView.z.abs().mul(0.7).add(0.3);
+  const depth = positionWorld.z.add(5.5).div(6.5).clamp(0.12, 1);
+  material.colorNode = ink.add(color('#0b0e14')).mul(facing).mul(depth);
   return material;
 }
 

@@ -13,9 +13,9 @@ export function PassageLine({ typed, done }: { readonly typed: string; readonly 
     <Text
       font={inter}
       style={{ fontSize: 0.26, color: PAPER_DIM, lineHeight: 1.3 }}
-      layout={{ wrap: 'word', align: 'start' }}
-      constraints={{ width: { mode: 'exact', size: 7.5 } }}
-      position={[-5.2, -2.25, 0.5]}
+      layout={{ wrap: 'word', align: 'center' }}
+      constraints={{ width: { mode: 'exact', size: 9 } }}
+      position={[-4.5, -2.25, 0.5]}
     >
       {before}
       <Text style={{ color: ACCENT }}>{current}</Text>

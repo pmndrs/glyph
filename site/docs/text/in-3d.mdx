@@ -215,7 +215,7 @@ const carousel = defineTextMaterial((context) => {
 three.createText({ font: Inter, text: 'around and around', material: carousel });
 ```
 
-<glyph-proxy fit="cover" root="scenes" data-scene="kinetic" aria-label="A band on a turning carousel, a passage on a waving flag, the current word spotlit" aspect="16 / 9" />
+<glyph-proxy fit="cover" root="scenes" data-scene="kinetic" aria-label="The passage as it is typed, wrapped live around a knot" aspect="16 / 9" />
 
 {/*
 write
@@ -292,7 +292,7 @@ write
 - Paragraph 2: the second scene needs its own root, because a root spans at most one `Scene`; `handle('surface')`
   is a named root on the same handle, one `GlyphProvider` away in React and one `createText` call away in
   three.js. Render the tile before the main scene; `glyph.shape()` shapes every dirty root, both scenes, in one call.
-- Point at: the kinetic scene does exactly this for the knot's skin and keeps the rings as real glyphs on paths beside it.
+- Point at: the kinetic scene does exactly this for the knot's skin; the ribbon and arc scenes are the real-glyphs-on-a-path counterpart.
 - Shape: two paragraphs.
 
 notes · internals
