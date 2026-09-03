@@ -11,10 +11,11 @@ import { ACCENT, PAPER, PAPER_DIM } from '../../theme';
 /**
  * The default material draws over everything — `depthTest: false` — so a
  * label is never lost behind the model it annotates. Turn the test on and the
- * text is a surface in the scene: geometry in front of it hides it, geometry
- * behind it does not. `depthWrite` stays off either way; a glyph quad is
- * transparent outside its ink and would punch a rectangle into whatever it
- * covers.
+ * text is a surface in the scene: geometry in front of it hides it. A ball
+ * slides across both words at one depth, in front of the text plane: it hides
+ * the occluded word and passes under the overlaid one. `depthWrite` stays off
+ * either way; a glyph quad is transparent outside its ink and would punch a
+ * rectangle into whatever it covers.
  */
 const inScene = defineTextMaterial((context) => {
   const material = context.createDefaultMaterial();
@@ -22,20 +23,29 @@ const inScene = defineTextMaterial((context) => {
   return material;
 });
 
+const BALL_RADIUS = 0.9;
+/** The whole ball stays in front of the text plane at z = 0. */
+const BALL_Z = BALL_RADIUS + 0.25;
+/** Level with the words' middle. */
+const BALL_Y = 0.05;
+/** Far enough to clear both words. */
+const BALL_SWING = 3.9;
+
 export default function Depth() {
   const inter = useMsdf(INTER);
   const ball = useRef<Mesh>(null);
 
   useFrame(({ elapsed }) => {
-    const t = elapsed * 0.6;
-    // An ellipse through both words: in front of them for half a turn, behind for the other half.
-    ball.current?.position.set(Math.sin(t) * 3.4, 0.15, Math.cos(t) * 1.4);
+    // One axis: the ball slides across both words at a fixed depth just in
+    // front of the text plane, so it never intersects the text. The occluded
+    // word hides behind it; the overlaid word draws over it.
+    ball.current?.position.set(Math.sin(elapsed * 0.6) * BALL_SWING, BALL_Y, BALL_Z);
   });
 
   return (
     <>
-      <mesh ref={ball}>
-        <sphereGeometry args={[0.9, 48, 32]} />
+      <mesh ref={ball} position={[0, BALL_Y, BALL_Z]}>
+        <sphereGeometry args={[BALL_RADIUS, 48, 32]} />
         <meshStandardNodeMaterial color={ACCENT} metalness={0.1} roughness={0.35} />
       </mesh>
       <Text

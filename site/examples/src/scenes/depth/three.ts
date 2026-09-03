@@ -15,6 +15,11 @@ const inScene = defineTextMaterial((context) => {
   return material;
 });
 
+const BALL_RADIUS = 0.9;
+const BALL_Z = BALL_RADIUS + 0.25;
+const BALL_Y = 0.05;
+const BALL_SWING = 3.9;
+
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:depth', ThreeConfig);
@@ -22,9 +27,10 @@ export async function mount(scene: Scene): Promise<() => void> {
   await inter.load();
 
   const ball = new Mesh(
-    new SphereGeometry(0.9, 48, 32),
+    new SphereGeometry(BALL_RADIUS, 48, 32),
     new MeshStandardNodeMaterial({ color: '#ffd166', metalness: 0.1, roughness: 0.35 }),
   );
+  ball.position.set(0, BALL_Y, BALL_Z);
 
   const occluded = three.createText({
     font: inter,
@@ -52,8 +58,7 @@ export async function mount(scene: Scene): Promise<() => void> {
   let elapsed = 0;
   const tick = (): void => {
     elapsed += 1 / 60;
-    const t = elapsed * 0.6;
-    ball.position.set(Math.sin(t) * 3.4, 0.15, Math.cos(t) * 1.4);
+    ball.position.x = Math.sin(elapsed * 0.6) * BALL_SWING; // one axis, in front of the text plane
     frame = requestAnimationFrame(tick);
   };
   frame = requestAnimationFrame(tick);
