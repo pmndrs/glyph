@@ -13,7 +13,7 @@ import { PLAYWRITE } from '../../fonts';
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:measurement', ThreeConfig);
-  const script = glyph.fontFace({ baked: PLAYWRITE }, { format: slug });
+  const script = glyph.fontFace(PLAYWRITE, { format: slug });
   await script.load();
 
   const word = three.createText({
@@ -35,7 +35,7 @@ export async function mount(scene: Scene): Promise<() => void> {
   void baseline;
 
   // Renderer-free: the same numbers from a Paragraph that owns no scene object.
-  const font = await loadFont({ baked: PLAYWRITE }, slug);
+  const font = await loadFont(PLAYWRITE, slug);
   const paragraph = await createParagraph({ font, text: 'glyph', style: { fontSize: 1.2 } });
   const metrics = paragraph.measure({ width: { mode: 'unconstrained' } });
   void metrics.minContentWidth; // longest unbreakable run, from the same pass

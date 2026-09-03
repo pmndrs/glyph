@@ -15,7 +15,7 @@ const TEXT = 'one matrix per glyph * breakApart() * one matrix per glyph * break
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:arc', ThreeConfig);
-  const inter = glyph.fontFace({ baked: INTER });
+  const inter = glyph.fontFace(INTER);
   await inter.load();
 
   const line = three.createText({

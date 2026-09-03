@@ -13,7 +13,7 @@ const SIZE = 32;
 export async function mount(scene: Scene, width: number, height: number): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:zoom', ThreeConfig);
-  const Inter = glyph.fontFace({ baked: INTER }, { format: [msdf, slug, { raster: bitmap, options: INTER_STRIKES }] });
+  const Inter = glyph.fontFace(INTER, { format: [msdf, slug, bitmap(INTER_STRIKES)] });
   await Inter.load();
 
   const formats = [

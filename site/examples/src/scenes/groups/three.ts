@@ -13,7 +13,7 @@ const COUNT = 48;
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:groups', ThreeConfig);
-  const inter = glyph.fontFace({ baked: INTER });
+  const inter = glyph.fontFace(INTER);
   await inter.load();
 
   const ring = three.createTextGroup({ renderOrder: 1 });

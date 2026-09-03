@@ -17,14 +17,9 @@ const HOLD = 2.5;
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:shaping', ThreeConfig);
-  const inter = glyph.fontFace({ baked: INTER });
+  const inter = glyph.fontFace(INTER);
   // The chorus faces were baked with their own MSDF options; the same options name the same raster.
-  const faces = new Map(
-    ROWS.map((row) => [
-      row.face,
-      glyph.fontFace({ baked: CHORUS[row.face] }, { format: { raster: msdf, options: CHORUS_MSDF } }),
-    ]),
-  );
+  const faces = new Map(ROWS.map((row) => [row.face, glyph.fontFace(CHORUS[row.face], { format: msdf(CHORUS_MSDF) })]));
   await Promise.all([inter.load(), ...[...faces.values()].map((face) => face.load())]);
 
   const rows = ROWS.map((row, index) => {

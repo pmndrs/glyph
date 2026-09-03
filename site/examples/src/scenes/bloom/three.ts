@@ -14,7 +14,7 @@ import { INTER } from '../../fonts';
 export async function mount(scene: Scene, camera: Camera, renderer: Renderer): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:bloom', ThreeConfig);
-  const inter = glyph.fontFace({ baked: INTER });
+  const inter = glyph.fontFace(INTER);
   await inter.load();
 
   const headline = three.createText({

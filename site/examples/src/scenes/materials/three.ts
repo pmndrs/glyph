@@ -32,7 +32,7 @@ const lit = defineTextMaterial((context) => {
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:materials', ThreeConfig);
-  const inter = glyph.fontFace({ baked: INTER });
+  const inter = glyph.fontFace(INTER);
   await inter.load();
 
   const key = new DirectionalLight('#f2f6ff', 3.4);

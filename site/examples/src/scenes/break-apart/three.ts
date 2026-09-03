@@ -13,7 +13,7 @@ import { PLAYWRITE } from '../../fonts';
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
   const three = glyph.handle('examples:break-apart', ThreeConfig);
-  const script = glyph.fontFace({ baked: PLAYWRITE }, { format: slug });
+  const script = glyph.fontFace(PLAYWRITE, { format: slug });
   await script.load();
 
   const word = three.createText({

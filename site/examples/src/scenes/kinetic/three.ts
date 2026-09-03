@@ -30,10 +30,7 @@ import { RADIUS, REPEAT, RING, RING_TEXT, TILE, TUBE } from './config';
 export async function mount(scene: Scene, renderer: Renderer): Promise<() => void> {
   await glyph.init();
   const handle = glyph.handle('examples:kinetic', ThreeConfig);
-  const [interSlug, interMsdf] = await Promise.all([
-    loadFont({ baked: INTER }, slug),
-    loadFont({ baked: INTER }, msdf),
-  ]);
+  const [interSlug, interMsdf] = await Promise.all([loadFont(INTER, slug), loadFont(INTER, msdf)]);
   const accent = span({ color: '#ffd166' });
   const dim = span({ color: '#97a1b4' });
 
