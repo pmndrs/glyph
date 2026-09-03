@@ -6,34 +6,26 @@ glyph-proxy {
   position: relative;
   box-sizing: border-box;
   display: block;
-  width: calc(100% - 2rem);
-  min-height: 12rem;
-  margin-inline: 1rem;
+  width: 100%;
+  margin-block: 1.5rem;
   overflow: hidden;
   contain: layout paint;
-  contain-intrinsic-size: auto 12rem;
-  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
   border-radius: 0.75rem;
-  background: #0a0c12;
+  background: #07080b;
 }
 
 glyph-proxy[height] {
   height: attr(height type(<length-percentage>), 12rem);
-  margin-block: 2rem;
 }
 
 glyph-proxy[width] {
   width: attr(width type(<length-percentage>), 100%);
 }
 
-glyph-proxy canvas {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  display: block;
-  max-width: none;
-  box-sizing: border-box;
-  transform: translate(-50%, -50%);
+glyph-proxy:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
 }
 
 glyph-scene-control {

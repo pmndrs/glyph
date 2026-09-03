@@ -466,3 +466,11 @@ The pane the examples are verified in is hidden between tool calls (`document.hi
   scene and twin with `tsc -p`, and `GLYPH_SOURCE=<checkout>/packages/glyph pnpm build:examples` builds the real
   bundle through aliases read from that package's `exports` map. Both pass at zero errors. `check:examples` joins
   the site's `check` when the package on this branch carries the same surface.
+- Examples run inline through the explainer element copied from #138 (`site/docs/components/explainer`, with its
+  unit tests under `pnpm --filter @pmndrs/glyph-site test`) and updated: leases gated by IntersectionObserver, a
+  `pointer` activation mode with rest-based hover intent for the gallery, a retained poster in the proxy's shadow root
+  that the next live frame fades out, a per-page `prepare`/`camera` hook, and `max-dpr`. `build:docs-components`
+  emits `docs/assets/explainer.{js,css}`; the docs build runs with `--base-path /docs` so the site serves whole from
+  `site/dist`; `copy:docs-assets` carries the bundle into `dist/docs/assets`. Verified in the pane: the gallery
+  (two leases, hover intent, scroll-out → cached poster), `?example=` (one lease), and `text/in-3d` with five inline
+  proxies and no hydration error.

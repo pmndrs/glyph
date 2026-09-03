@@ -1,1 +1,1 @@
-export { ExamplePreview } from './ExamplePreview';
+export { Preview } from './Preview';

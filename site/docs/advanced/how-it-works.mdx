@@ -5,6 +5,10 @@ nav: 52
 sourcecode: packages/glyph/src/glyph-engine.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   Text you assign is validated in JavaScript, analysed for scripts, directions, and break opportunities, then
   crosses into Rust once per `glyph.shape()` for every dirty root at once. There it is shaped with HarfRust, laid
@@ -24,12 +28,7 @@ strings.
 
 ## Shaping
 
-<iframe
-  src="/examples/?example=shaping"
-  title="Eight scripts arriving one grapheme cluster at a time"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="shaping" aria-label="Eight scripts arriving one grapheme cluster at a time" aspect="16 / 9" />
 
 Each run is shaped with HarfRust against the stack's first font. Clusters whose glyph is missing are collected and
 re-shaped with the next font in the stack, as many times as the stack is deep; a cluster still missing after the

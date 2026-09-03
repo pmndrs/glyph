@@ -5,6 +5,10 @@ nav: 25
 sourcecode: packages/glyph/src/glyph-placement.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   `caretAt` and `selectionRects` read the placement the renderer last accepted, in paragraph-local units. They answer
   in clusters, not characters — a ligature is one glyph over several code units, and under bidi the character after
@@ -16,12 +20,7 @@ const caret = label.caretAt(localX, localY);      // GlyphCaret | undefined
 const rects = label.selectionRects(start, end);   // LayoutBox[] | undefined
 ```
 
-<iframe
-  src="/examples/?example=caret"
-  title="Click to place a caret, drag to select"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="caret" aria-label="Click to place a caret, drag to select" aspect="16 / 9" />
 
 ## From a pointer to a caret
 

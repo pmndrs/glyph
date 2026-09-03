@@ -5,6 +5,10 @@ nav: 29
 sourcecode: packages/glyph/src/three/frame-error.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   Malformed input fails where it enters — construction, `set()`, a query — with the offending value in the stack.
   A rejection the engine reports during `glyph.shape()` is retained on the text and its root and forwarded to
@@ -19,12 +23,7 @@ label.onError = (error) => {
 };
 ```
 
-<iframe
-  src="/examples/?example=errors"
-  title="Provoke each TextFrameError cause"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="errors" aria-label="Provoke each TextFrameError cause" aspect="16 / 9" />
 
 > [!IMPORTANT]
 > In the current tree `TextFrameError` and its `rejection.cause` union are exported, but nothing constructs them yet.

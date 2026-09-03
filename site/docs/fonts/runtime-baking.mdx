@@ -5,6 +5,10 @@ nav: 14
 sourcecode: packages/glyph/src/runtime-bake.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   The same baker that runs in the CLI runs in a module Worker. Give a FontFace a source font and a runtime baker and
   it produces the identical GLB on the client, caching the validated result in CacheStorage. It is the fallback for
@@ -32,12 +36,7 @@ await Upload.load();
 const upload = useMsdf({ source: fileUrl, runtimeBake: bakeFontInWorker });
 ```
 
-<iframe
-  src="/examples/?example=runtime-bake"
-  title="Load a TTF and watch the Worker bake it"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="runtime-bake" aria-label="Load a TTF and watch the Worker bake it" aspect="16 / 9" />
 
 ## What the Worker does
 

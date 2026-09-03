@@ -5,6 +5,10 @@ nav: 40
 sourcecode: packages/glyph/src/react.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   `<Text>` and `<TextGroup>` are the same three.js objects the imperative API creates, reconciled by React Three
   Fiber. Ordinary use needs no provider: the first text initializes the runtime and a default handle. A
@@ -88,12 +92,7 @@ const hud = glyph.handle('hud', ThreeConfig);
 | `fallback` | Suspense fallback while mapped faces load |
 | `errorFallback` | node or `(error: FontLoadError) => node`; catches only font load errors, rethrows the rest |
 
-<iframe
-  src="/examples/?example=provider"
-  title="Two roots, two providers, one font"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="provider" aria-label="Two roots, two providers, one font" aspect="16 / 9" />
 
 {/* prose: the provider captures its initial `handle` and `fontFaces` and throws if either prop changes — remount
 with a `key` to select another. It disposes only faces it declared from shorthand entries, never an externally

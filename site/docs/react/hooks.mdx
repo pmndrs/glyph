@@ -5,6 +5,10 @@ nav: 41
 sourcecode: packages/glyph/src/react.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   One generic hook declares a FontFace on the selected handle and returns a loaded `Font`; three typed wrappers make
   the common formats one line. A ready font renders synchronously — the hook checks `isLoaded()` first and only
@@ -28,12 +32,7 @@ useSlug(source)                        // Font<typeof slug>
 | `source` | a URL string, `{ baked }`, `{ source, runtimeBake }`, a `Blob`, or a `SerializedFontFace` |
 | `format` | a format value (`msdf`), a request `{ raster: msdf, options }`, or a string key the handle knows |
 
-<iframe
-  src="/examples/?example=hooks"
-  title="Preload, Suspense, StrictMode"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="hooks" aria-label="Preload, Suspense, StrictMode" aspect="16 / 9" />
 
 ## What a hook does
 

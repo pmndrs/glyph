@@ -4,6 +4,10 @@ description: Where a frame's time goes, what decides a draw boundary, and the fi
 nav: 50
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   Text is retained. A frame with no semantic change costs a transform sync and no Wasm; a frame with changes costs one
   engine batch for every dirty root. Draw count is decided by the plan, and you have two levers on it — roots and
@@ -38,12 +42,7 @@ in a `TextGroup` with one material fold to 2; thirty labels in a group alternati
 same thirty sorted into one run per material plan 2. `compositing: 'independent'` did not reduce the interleaved
 case on the current tree (still 30); what folds is adjacency. */}
 
-<iframe
-  src="/examples/?example=batching"
-  title="Interleaved versus contiguous materials in one TextGroup"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="batching" aria-label="Interleaved versus contiguous materials in one TextGroup" aspect="16 / 9" />
 
 ## Roots
 
@@ -76,12 +75,7 @@ Slug reconstruct their edge from the gradient and must not snap. */}
 
 ## Format cost at scale
 
-<iframe
-  src="/examples/?example=zoom"
-  title="Continuous zoom across formats"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="zoom" aria-label="Continuous zoom across formats" aspect="16 / 9" />
 
 {/* prose: Bitmap is cheapest per fragment, MSDF next, Slug evaluates curves per fragment; the benchmark harness
 reports CPU frame time, FPS, and GPU time where timestamp queries are supported. */}

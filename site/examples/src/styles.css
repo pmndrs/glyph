@@ -30,20 +30,13 @@ body {
   font-family: var(--font-ui);
 }
 
-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  touch-action: none;
-}
+/* ── One scene, filling the page ─────────────────────────────────────────── */
 
-.fallback {
-  display: grid;
-  width: 100%;
+glyph-proxy.preview {
   height: 100%;
-  place-items: center;
-  color: var(--paper-dim);
-  font-size: 0.875rem;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
 }
 
 /* The one link out of an embedded example: back to the page that explains it. */
@@ -59,76 +52,101 @@ canvas {
   font-size: 0.75rem;
   font-weight: 600;
   text-decoration: none;
-  backdrop-filter: blur(12px);
 }
 
 .example-source:hover {
   color: var(--paper);
 }
 
-/* Optional in-scene controls an example may render above the canvas. */
-.example-controls {
-  position: fixed;
-  top: 0.75rem;
-  left: 0.75rem;
-  display: flex;
-  gap: 0.35rem;
-  padding: 0.3rem;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  background: rgb(7 8 11 / 85%);
-  backdrop-filter: blur(12px);
+/* ── The gallery ─────────────────────────────────────────────────────────── */
+
+html[data-mode='gallery'],
+html[data-mode='gallery'] body,
+html[data-mode='gallery'] #root {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
 }
 
-.example-controls button {
-  padding: 0.35rem 0.7rem;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
+.gallery {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+.gallery-header {
+  max-width: 40rem;
+  margin-bottom: 2rem;
+}
+
+.gallery-header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  letter-spacing: -0.01em;
+}
+
+.gallery-header p {
+  margin: 0;
   color: var(--paper-dim);
-  font: 600 0.75rem var(--font-ui);
+  line-height: 1.5;
+}
+
+.masonry {
+  columns: 3 15rem;
+  column-gap: 1rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 1rem;
+  break-inside: avoid;
+  border: 1px solid var(--rule);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: #0b0d13;
+  transition: border-color 200ms ease;
+}
+
+.card:has(glyph-proxy[data-glyph-state='live']) {
+  border-color: #3a4560;
+}
+
+.card glyph-proxy {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
   cursor: pointer;
 }
 
-.example-controls button[aria-pressed='true'] {
-  background: #1a3a56;
-  color: #fff;
+.card glyph-proxy:focus-visible {
+  outline-offset: -2px;
 }
 
-/* The preview: the canvas, and over it the picture that stands in until it has drawn. */
-.preview {
-  position: relative;
-  width: 100%;
-  height: 100%;
+.card footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem 0.7rem;
+  border-top: 1px solid var(--rule);
 }
 
-.poster {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 1;
-  transition: opacity 420ms ease-out;
-}
-
-.poster[data-hidden='true'] {
-  opacity: 0;
-}
-
-.poster img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.sentinel {
-  display: grid;
-  width: 100%;
-  height: 100%;
-  place-items: center;
-  background: radial-gradient(ellipse at 50% 60%, #10141d 0%, var(--ink) 70%);
-  color: var(--paper-dim);
-  font-size: clamp(1rem, 3vw, 1.5rem);
+.card h2 {
+  margin: 0;
+  font-size: 0.85rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+}
+
+.card footer a {
+  color: var(--paper-dim);
+  font-size: 0.72rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.card footer a:hover {
+  color: var(--paper);
 }
