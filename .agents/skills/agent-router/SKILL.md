@@ -9,11 +9,6 @@ Use the repository's pinned `ai-cli-mcp@2.22.0` server for external-model work. 
 
 Every run is resumable. Start it with `run`, retain the returned PID, use `peek` only for a bounded progress sample, use `wait` or `get_result` for the authoritative outcome, and resume with the returned `session_id` when a provider fails or the user asks for another pass. A one-off task is still started in the background; `wait` immediately afterward is the blocking recipe.
 
-Read rolling JSONL traces only with `.agents/tools/read-append-log.mjs`; never load an entire trace or `docs/log.md` into
-context. `--delta` advances a cursor, while `--lines <n> --bytes <n>` gives a bounded diagnostic tail. Trace samples are
-not authoritative results: retrieve the completed response through `wait` or `get_result`. Keep raw traces in ignored
-`.cache/` storage and publish only a human-readable summary when the result belongs in repository knowledge.
-
 ## Setup and health check
 
 Before using a new checkout or machine:
