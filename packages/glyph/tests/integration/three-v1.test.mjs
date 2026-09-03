@@ -1568,6 +1568,15 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   scene.updateMatrixWorld();
 
   assert.equal(group.error, undefined);
+  const paragraphMutations = instrumented.latestParagraphMutations();
+  assert.equal(paragraphMutations.length, 2);
+  assert.equal(new Set(paragraphMutations.map(({ paragraphId }) => paragraphId)).size, 2);
+  assert.ok(paragraphMutations.every(({ paragraphId }) => paragraphId !== 0));
+  assert.deepEqual(
+    paragraphMutations.map(({ order }) => order),
+    [0, 1],
+    'the retained planner must publish each paragraph once in scene order',
+  );
   const draws = rootDraws(scene);
   assert.equal(draws.length, 1, 'compatible paragraphs must batch in Rust before Three sees the plan');
   assert.equal(draws[0].geometry.instanceCount, 4);
@@ -1830,6 +1839,21 @@ function instrumentNextGlyphEngine() {
       crossings = 0;
       measureCrossings = 0;
       latestBatchRootIds = [];
+    },
+    latestParagraphMutations() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const mutation = abi.layouts.engineParagraphMutation;
+      const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+      const offset = view.getUint32(request.paragraphMutationsOffset, true);
+      const count = view.getUint32(request.paragraphMutationCount, true);
+      return Array.from({ length: count }, (_recordValue, index) => {
+        const record = offset + index * mutation.size;
+        return {
+          paragraphId: view.getUint32(record + mutation.paragraphId, true),
+          order: view.getUint32(record + mutation.order, true),
+        };
+      });
     },
     latestTextMutations() {
       assert.ok(latestRequest, 'a text update request must have been captured');
