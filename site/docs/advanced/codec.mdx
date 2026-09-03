@@ -448,7 +448,9 @@ notes · internals
   decoration draws — `rust/shaper/src/engine/plan_draw.rs:108`
 - the decoration program is looked up per capability set — `rust/shaper/src/engine/codec.rs:300–309`
 - only `solid` is implemented at construction time — outline findings table ("Only `solid` decoration style");
-  [verify] the throw site in `three/text.ts` or `engine-encoding.ts` before repeating the message
+  the throws: `'<style>' decoration lines are not implemented yet; only 'solid' is supported` at
+  `engine-encoding.ts:216`, and `<label> style '<style>' is not implemented; only 'solid' is supported` at
+  `text-properties.ts:316`
 - the codec-page snippet assembles buffers by hand; three appends its system buffers through `programBuffers`
   (`three/codec.ts:215–221`); the raw `createCodecProgram` path accepts a buffer without `capacityClass` or
   `usage`: they default to class 1 and `storage | copyDst` on the wire — `config/codec.ts:985`, `:988`, `:1233`

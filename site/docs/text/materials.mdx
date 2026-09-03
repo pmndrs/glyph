@@ -281,9 +281,9 @@ notes · internals
   passes by `depthKey` 0 and 2 — `three/decorations.ts:54–64`
 - `TextDecorationStyle` — `text-properties.ts:105–119`; non-solid throws `… is not implemented; only 'solid' is supported` — `:315–316`
 - the decorations scene: every line, colour, thickness, offset, and the gradient branch — `site/examples/src/scenes/decorations/scene.tsx`
-- [verify] the finding "decoration draws collapse to nothing" (transform-index lane carries a flag bit,
-  `indexedTransformNodes` reads a zero matrix) — `docs/planning/docs-site-outline.md:496`; check the decorations
-  scene renders before publishing this section
+- the finding "decoration draws collapse to nothing" (`docs/planning/docs-site-outline.md:496`) no longer
+  reproduces: the decorations scene draws every line style and the gradient decoration material at the current
+  build (still captured 2026-09-03, `site/examples/public/thumbnails/decorations.webp`)
 */}
 
 <glyph-proxy fit="cover" root="scenes" data-scene="decorations" aria-label="A gradient underline from the decoration branch" aspect="16 / 9" />

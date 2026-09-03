@@ -170,8 +170,8 @@ notes · internals
 - one Promise per selection and format, cached until the face releases it — `font-face.ts:502–503`, `:525`;
   rejection deletes it — `:520–523`; the aggregate load behaves the same — `:393`, `:404–407`
 - the face-owned lease is published before the Promise fulfils, so the retry render sees `isLoaded()` — D-300
-- [verify] StrictMode double-invocation is covered by a test: `docs/packages/glyph.md:619` names "React paragraph
-  lease accounting under StrictMode"; find the spec file under `packages/glyph/src` (a `.test.ts` or `.test.tsx` file) and cite it
+- [verify] StrictMode double-invocation: no file under `packages/glyph/src` mentions `StrictMode` at codex `98c86c8a6`;
+  `docs/packages/glyph.md:619` names a "React paragraph" proof, so find where it lives before promising coverage
 */}
 
 ## Custom formats

@@ -47,8 +47,8 @@ notes · internals for the page
 
 {/*
 notes · internals
-- [verify] there is no `fallback-stack` scene in `site/examples/src/catalog.ts` (`EXAMPLES`); add one or retarget
-  this proxy before publishing
+- no scene here by design (canon rule, 2026-09-03): which face drew a cluster is not a rendering technique the eye
+  can compare; the table and the code carry it
 */}
 
 ## Resolution
@@ -127,7 +127,7 @@ notes · internals
 write
 - Question: what does a CJK face need from me?
 - Paragraph 1: bake a TrueType face and subset to the code points you draw; a whole CJK font at MSDF defaults is
-  the largest asset on this site (link Raster formats → What each one costs). Name the CFF caveat only after the
+  the largest asset on this site (link Raster formats → What each one costs). Name the CFF caveat as an observed symptom (notes below).
   [verify] below is settled.
 - Paragraph 2: line breaking follows UAX #14 with script extensions resolved from context, so kana after kanji
   breaks where a reader expects; vertical layout is not supported yet — the vertical tables travel in the shaping
@@ -139,11 +139,15 @@ notes · internals
   `rust/shaper/src/unicode.rs:131–205`, `#script_extensions` (`:246`)
 - `vhea`, `vmtx`, `VORG` are retained — `rust/font-baker/src/sfnt.rs:33–42`; `ParagraphLayout` has no writing-mode
   member — `text-properties.ts:48–80`
-- [verify] the CFF caveat ("CFF-only Noto Sans CJK produces no outlines through the current baker") from this
-  repository's outline findings: read `rust/mtsdf-baker/src/artifact.rs#font_outline_source` and the bitmap baker's
-  `outlines.get` path before stating it
-- [verify] which CJK faces the landing page ships (M PLUS 1p, Nanum Gothic, ZCOOL XiaoWei): read this repo's
-  `site/examples/public/fonts` before naming them
+- the CFF caveat is observed, not explained: when the landing chorus was baked, Noto Sans CJK (CFF-only) came out as shaping data and
+  an empty raster with no error or warning, so words laid out at full width and drew as holes —
+  `site/scripts/bake-chorus.mts:55–59`; the outline readers are skrifa's `font.outline_glyphs()`
+  (`rust/bitmap-baker/src/rasterize.rs:141`; `rust/mtsdf-baker/src/artifact.rs:12`, `:481`), which serves `glyf`,
+  `CFF`, and `CFF2` alike, so the cause is open. [verify] by baking one CFF face through the current baker before
+  writing a cause; name the symptom, not a reason
+- the landing ships M PLUS 1p (Japanese), Nanum Gothic (Korean), and ZCOOL XiaoWei (Chinese) from Google Fonts,
+  static TrueType by choice — `site/scripts/bake-chorus.mts:61–68`; Noto Sans JP/SC/KR are variable-only and the
+  baker rejects them (`:58–59`); the other scripts are Noto Sans per-script subsets (`:31–49`)
 */}
 
 ## Emoji
@@ -156,8 +160,8 @@ write
 
 notes · internals
 - Slug bakes every glyph from outlines with no options — `raster/slug.ts:53`, `bakers/slug.ts:25`
-- [verify] no colour-table reader: `rg -l "COLR|CBDT" rust/slug-fontations/src rust/slug-core/src rust/mtsdf-fontations/src`
-  finds nothing at 09d7ae569; confirm the raster bakers reject or ignore colour tables rather than crash before stating it
+- no colour-table reader: a grep for `COLR` or `CBDT` across `packages/glyph/rust` finds nothing at codex `98c86c8a6`; colour
+  emoji formats are not read by any baker
 */}
 
 ## Leading across faces

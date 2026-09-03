@@ -94,8 +94,8 @@ notes · internals
   (`:2799`); a `missing` cluster (`glyph_id == 0`, `:4120`) re-shapes with the next font — `:2856–2905`; test
   `fallback_clusters_restore_logical_order_and_merge_missing_glyphs` (`:4425`); the ellipsis uses the same rule (`:3975–4000`)
 - coverage — `raster-coverage.ts#RasterCoverageError` (`:24–31`), `internal/raster-coverage-artifact.ts#assertRasterCoverage` (`:46–63`)
-- [verify] where `assertRasterCoverage` is invoked on the draw path at HEAD (the decoders import only
-  `decodeRasterCoverage`); confirm before writing "raises at draw time"
+- `assertRasterCoverage` is defined (`internal/raster-coverage-artifact.ts:46`) and has no caller on the draw path
+  at codex `98c86c8a6`; do not describe a draw-time coverage assertion
 - [in flight] `FontStack` is the immutable-Font path (`loaded-font.ts:8–21`); how a FontFace declares fallback is the
   other agent's; describe fallback by mechanism here, not by loader
 */}
