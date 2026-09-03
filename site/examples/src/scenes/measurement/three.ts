@@ -20,7 +20,7 @@ export async function mount(scene: Scene): Promise<() => void> {
   const word = three.createText({
     font: script,
     text: 'glyph',
-    style: { fontSize: 1.2, color: '#e7ecf6' },
+    style: { fontSize: 1.5, color: '#e7ecf6' },
     layout: { wrap: 'none' },
   });
   word.position.set(-3.4, 1, 0);
@@ -38,7 +38,7 @@ export async function mount(scene: Scene): Promise<() => void> {
   // Renderer-free: the same numbers from a Paragraph that owns no scene object. A Paragraph takes an
   // immutable Font, which the face path does not hand out; the integrator loader does.
   const font = await loadFont(PLAYWRITE, slug);
-  const paragraph = await createParagraph({ font, text: 'glyph', style: { fontSize: 1.2 } });
+  const paragraph = await createParagraph({ font, text: 'glyph', style: { fontSize: 1.5 } });
   const metrics = paragraph.measure({ width: { mode: 'unconstrained' } });
   void metrics.minContentWidth; // longest unbreakable run, from the same pass
   paragraph.dispose();

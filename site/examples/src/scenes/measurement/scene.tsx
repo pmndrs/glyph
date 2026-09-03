@@ -39,8 +39,9 @@ export default function Measurement() {
   });
 
   return (
-    <group position={[-3.4, 1, 0]}>
-      <Text ref={ref} font={script} style={{ fontSize: 1.2, color: PAPER }} layout={{ wrap: 'none' }}>
+    // Centred on the advance box once it is known; the box hangs down from the group's origin.
+    <group position={boxes === undefined ? [-1.6, 1, 0] : [-boxes.advance[2] / 2, boxes.advance[3] / 2 + 0.3, 0]}>
+      <Text ref={ref} font={script} style={{ fontSize: 1.5, color: PAPER }} layout={{ wrap: 'none' }}>
         glyph
       </Text>
       {boxes !== undefined && (

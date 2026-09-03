@@ -14,12 +14,12 @@ import { ACCENT, PAPER, PAPER_DIM } from '../../theme';
  * row animates opacity to show that opacity is inherited on its own.
  */
 const styles = TextStyle.create({
-  base: { fontSize: 0.36, color: PAPER, lineHeight: 1.1 },
+  base: { fontSize: 0.34, color: PAPER, lineHeight: 1.1 },
   caption: { fontSize: 0.14, color: PAPER_DIM, letterSpacing: 0.02 },
 });
 
 const ROWS = [
-  ['fontSize', { fontSize: 0.52 }],
+  ['fontSize', { fontSize: 0.47 }],
   ['lineHeight', { lineHeight: 0.8 }],
   ['letterSpacing', { letterSpacing: 0.06 }],
   ['wordSpacing', { wordSpacing: 0.25 }],
@@ -44,7 +44,7 @@ export default function Styling() {
   return (
     <>
       {rows.map(([name, override], index) => (
-        <group key={name} position={[0, 2.4 - index * 0.47, 0]}>
+        <group key={name} position={[0.8, 2.62 - index * 0.49, 0]}>
           <Text
             font={inter}
             style={styles.caption}

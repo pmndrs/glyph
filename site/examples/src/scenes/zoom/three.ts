@@ -53,7 +53,7 @@ export async function mount(scene: Scene, width: number, height: number): Promis
   let elapsed = 0;
   const tick = (): void => {
     elapsed += 1 / 60;
-    const scale = 2 ** (Math.sin(elapsed * 0.45) * 2);
+    const scale = 2 ** (1 + Math.sin(elapsed * 0.45)); // 1× to 4×
     for (const { zoomed } of columns) zoomed.scale.setScalar(scale);
     frame = requestAnimationFrame(tick);
   };
