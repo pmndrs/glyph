@@ -51,7 +51,7 @@ useSlug(url)                        // Font<typeof slug>
 | `url` | the same source `glyph.fontFace` takes: a URL string, a `URL`, a `Blob`, or a `SerializedFontFace` |
 | `options` | `useMsdf`: `{ emSize?, pixelRange?, coverage? }` · `useBitmap`: `{ strikes, coverage? }` (required) · `useSlug`: none |
 
-<glyph-proxy fit="cover" root="scenes" data-scene="hooks" aria-label="Preload, Suspense, StrictMode" aspect="16 / 9" />
+<glyph-proxy fit="cover" root="scenes" data-scene="hooks" aria-label="Mounted cold versus preloaded" aspect="16 / 9" />
 
 {/*
 write
@@ -66,12 +66,14 @@ notes · internals
   `raster/bitmap.ts:36–39`; Slug has no options — `raster/slug.ts:53`
 - `FontFaceSource = LoadFontInput | Blob | SerializedFontFace` — `font-face.ts:27`; a string or `URL` —
   `font.ts:71`
-- [in flight] the hooks are typed `LoadFontInput` (`react/msdf.ts:8`), narrower than `FontFaceSource` (no `Blob`,
-  no `SerializedFontFace`) and wider in the immutable-Font direction (`{ baked }`, `{ source, runtimeBake }` —
-  `loader.ts:86–92`); the table states the canonical set. Re-check after the merge.
+- the hooks take `FontFaceSource` since codex `b0979cf55` (`react/msdf.ts:8`, `react/bitmap.ts:8`,
+  `react/slug.ts:8`): the table's set is the tree's set
 - [in flight] internally each wrapper builds `{ raster, options }` (`react/msdf.ts:17`); that object form is not
   public API on the FontFace path (D-297 names `msdf({ emSize })`)
-- [verify] the `hooks` scene is not in `site/examples/src/catalog.ts`; the proxy above is dead until it lands
+- the scene — `site/examples/src/scenes/hooks/scene.tsx`: each cycle mounts the next chorus face cold under a
+  Suspense boundary in one column and preloaded (`useMsdf.preload` 1.4 s earlier) in the other, and each column
+  reports how long its fallback was on screen; a query string makes every cycle a new face, and `useMsdf.clear`
+  releases the previous cycle's. The twin `three.ts` is `face.load()` awaited late versus started early
 */}
 
 ## What a hook does
