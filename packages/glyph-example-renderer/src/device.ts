@@ -10,9 +10,9 @@ import {
   type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
 } from '@pmndrs/glyph';
-import { resolveRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+import { resolveRasterCodec } from '@pmndrs/glyph/config/raster';
 import { assertPortableResource } from '@pmndrs/glyph/config/resources';
-import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
+import { glyphExampleCodec } from '@pmndrs/glyph-example-raster';
 import {
   glyphExampleFragment,
   glyphExampleTypeGpuVariant,
@@ -75,7 +75,7 @@ export interface RecordingPendingSubmission extends ExamplePendingSubmission {
 }
 
 type GlyphExampleRendererShader = ExampleRendererShader<typeof glyphExampleTypeGpuVariant>;
-const GLYPH_EXAMPLE_PROGRAM_VARIANT = glyphExamplePlanProgram.programVariant ?? 0;
+const GLYPH_EXAMPLE_PROGRAM_VARIANT = glyphExampleCodec.programVariant ?? 0;
 
 let resolvedExampleRendererShader: GlyphExampleRendererShader | undefined;
 
@@ -504,9 +504,9 @@ function assertExampleRendererShader(shader: ExampleRendererShader): void {
   if (typeof shader.variant.techniqueId !== 'string' || shader.variant.techniqueId.length === 0) {
     throw new TypeError('example renderer shader technique id is required');
   }
-  const portable = resolveRasterPlanProgram(shader.variant.techniqueId);
+  const portable = resolveRasterCodec(shader.variant.techniqueId);
   if (portable === undefined)
-    throw new TypeError(`example renderer has no portable plan for "${shader.variant.techniqueId}"`);
+    throw new TypeError(`example renderer has no portable raster codec for "${shader.variant.techniqueId}"`);
   if (
     shader.variant.geometry !== portable.schema.render.geometry ||
     shader.variant.resources !== portable.schema.resources
@@ -523,7 +523,7 @@ function assertExampleRendererShader(shader: ExampleRendererShader): void {
     throw new RangeError('example renderer shader program variant must be an unsigned u16');
   }
   if (shader.programVariant !== (portable.programVariant ?? 0)) {
-    throw new TypeError('example renderer shader program variant does not match its portable plan');
+    throw new TypeError('example renderer shader program variant does not match its portable raster codec');
   }
   assertObject(shader.variant.buffers, 'shader buffers');
   const expected = Object.keys(portable.schema.buffers);

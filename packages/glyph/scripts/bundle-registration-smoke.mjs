@@ -26,9 +26,9 @@ try {
   await writeFile(
     entry,
     `${imports}
-       import { resolveRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+       import { resolveRasterCodec } from '@pmndrs/glyph/config/raster';
        const ids = ${JSON.stringify(techniqueIds)};
-       if (ids.some((id) => resolveRasterPlanProgram(id) === undefined)) {
+       if (ids.some((id) => resolveRasterCodec(id) === undefined)) {
          throw new Error('portable registration was tree-shaken');
        }
        process.stdout.write('portable-registered');`,

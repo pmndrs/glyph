@@ -18,12 +18,12 @@ import {
   Glyphs,
   Text,
   TextGroup,
-  type ThreeRoot,
   ThreeConfig,
   ThreeFontFormats,
   defineThreeConfig,
   defineTextMaterial,
   span as threeSpan,
+  type ThreeCodec,
   type ThreeHandle,
 } from '../../src/three.js';
 
@@ -41,6 +41,12 @@ const constraints = Constraints.create({
   naturalHeight: { height: { mode: 'unconstrained' } },
 });
 const three: ThreeHandle = glyph.handle('three:type-fixture', ThreeConfig);
+declare const threeCodec: ThreeCodec;
+threeCodec.descriptor satisfies object;
+// @ts-expect-error Three renderer resources remain package-owned state.
+void threeCodec.resources;
+// @ts-expect-error Compiled Three raster programs remain package-owned state.
+void threeCodec.programs;
 const extendedThreeConfig = defineGlyphConfig({
   ...ThreeConfig,
   fonts: {

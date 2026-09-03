@@ -10,16 +10,16 @@ import { type PortableGeometryPayload } from '@pmndrs/glyph';
 import { f32, techniqueProgram } from '@pmndrs/glyph/config/codec-program';
 import { defineGlyphConfig } from '@pmndrs/glyph/config/glyph';
 import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
-import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+import { registerRasterCodec } from '@pmndrs/glyph/config/raster';
 import { defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
 import {
-  registerThreeRasterPlanProgram,
+  registerThreeRasterProgram,
   defineTextMaterial,
   ThreeConfig,
   ThreeFontFormats,
   threeCodecAbi,
-  type ThreePlanProgramBuffer,
-  type ThreePlanProgramMaterialContext,
+  type ThreeRasterProgramBuffer,
+  type ThreeRasterMaterialContext,
   type ThreeRootContext,
   type ThreeTextMaterialContextMap,
 } from '@pmndrs/glyph/three';
@@ -29,7 +29,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import glyphExampleBaker from '../src/baker.js';
 import { glyphExampleSchema } from '../src/portable.js';
-import { glyphExamplePlanProgram } from '../src/register.js';
+import { glyphExampleCodec } from '../src/register.js';
 import { glyphExampleTslShader, glyphExampleTslVariant } from '../src/tsl.js';
 import {
   GLYPH_EXAMPLE_KIND,
@@ -58,7 +58,7 @@ const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter
 const temporaryDirectories: string[] = [];
 const materials: THREE.NodeMaterial[] = [];
 const genericMaterialContexts: GlyphExampleMaterialContext[] = [];
-const suppliedMaterialContexts: ThreePlanProgramMaterialContext[] = [];
+const suppliedMaterialContexts: ThreeRasterMaterialContext[] = [];
 
 afterEach(async () => {
   vi.unstubAllGlobals();
@@ -312,7 +312,7 @@ const suppliedGlyphExampleSchema = defineTechniqueSchema({
 
 const stripGeometry = triangleStripGeometry(glyphExampleIndexedQuadGeometry);
 
-registerRasterPlanProgram({
+registerRasterCodec({
   raster: suppliedGlyphExample,
   schema: suppliedGlyphExampleSchema,
   codecBody(system) {
@@ -361,7 +361,7 @@ const suppliedThreeProgram = {
     resources: suppliedGlyphExampleSchema.resources!,
     outputs: glyphExampleTslVariant.outputs,
     geometry: suppliedGlyphExampleSchema.render!.geometry,
-    createMaterial(context: ThreePlanProgramMaterialContext) {
+    createMaterial(context: ThreeRasterMaterialContext) {
       suppliedMaterialContexts.push(context);
       const material = createThreeMaterial(context);
       materials.push(material);
@@ -371,8 +371,8 @@ const suppliedThreeProgram = {
 };
 
 const threeProgram = {
-  raster: glyphExamplePlanProgram.raster,
-  schema: glyphExamplePlanProgram.schema,
+  raster: glyphExampleCodec.raster,
+  schema: glyphExampleCodec.schema,
   variant: {
     id: 'tsl',
     language: 'tsl',
@@ -380,7 +380,7 @@ const threeProgram = {
     resources: glyphExampleTslVariant.resources,
     outputs: glyphExampleTslVariant.outputs,
     geometry: glyphExampleTslVariant.geometry,
-    createMaterial(context: ThreePlanProgramMaterialContext) {
+    createMaterial(context: ThreeRasterMaterialContext) {
       const material = createThreeMaterial(context);
       materials.push(material);
       return material;
@@ -388,10 +388,10 @@ const threeProgram = {
   },
 };
 
-registerThreeRasterPlanProgram(threeProgram);
-registerThreeRasterPlanProgram(suppliedThreeProgram);
+registerThreeRasterProgram(threeProgram);
+registerThreeRasterProgram(suppliedThreeProgram);
 
-function createThreeMaterial(context: ThreePlanProgramMaterialContext): THREE.NodeMaterial {
+function createThreeMaterial(context: ThreeRasterMaterialContext): THREE.NodeMaterial {
   const origin = floatBuffer(context.namedBuffers, 'origin', 2);
   const size = floatBuffer(context.namedBuffers, 'size', 2);
   const color = floatBuffer(context.namedBuffers, 'color', 4);
@@ -435,7 +435,7 @@ function glyphAttribute(bufferId: number): string {
   return `_pmndrsGlyph_${bufferId}`;
 }
 
-function floatBuffer(buffers: ReadonlyMap<string, ThreePlanProgramBuffer>, name: string, vectorWidth: number) {
+function floatBuffer(buffers: ReadonlyMap<string, ThreeRasterProgramBuffer>, name: string, vectorWidth: number) {
   const buffer = buffers.get(name);
   if (buffer === undefined || buffer.scalarType !== 'f32' || buffer.vectorWidth !== vectorWidth) {
     throw new TypeError(`glyph-example draw requires f32x${vectorWidth} policy buffer "${name}"`);

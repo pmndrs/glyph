@@ -1,14 +1,14 @@
 import {
-  registerThreeRasterPlanProgram,
+  registerThreeRasterProgram,
   threeCodecAbi,
-  type ThreePlanProgramBuffer,
-  type ThreePlanProgramMaterialContext,
+  type ThreeRasterProgramBuffer,
+  type ThreeRasterMaterialContext,
   type ThreeRootContext,
 } from '@pmndrs/glyph/three';
 import { positionLocal, storage, uv } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
-import { glyphExamplePlanProgram, glyphExampleShaderContract } from '@pmndrs/glyph-example-raster';
+import { glyphExampleCodec, glyphExampleShaderContract } from '@pmndrs/glyph-example-raster';
 import { glyphExampleTslShader, glyphExampleTslVariant } from '@pmndrs/glyph-example-raster/tsl';
 
 declare module '@pmndrs/glyph/three' {
@@ -24,10 +24,10 @@ declare module '@pmndrs/glyph/three' {
   }
 }
 
-/** The external consumer's Three implementation of the portable glyph-example plan. */
+/** The external consumer's Three implementation of the portable glyph-example Codec. */
 const externalGlyphExampleThreeProgram = {
-  raster: glyphExamplePlanProgram.raster,
-  schema: glyphExamplePlanProgram.schema,
+  raster: glyphExampleCodec.raster,
+  schema: glyphExampleCodec.schema,
   variant: {
     id: 'tsl',
     language: 'tsl',
@@ -35,7 +35,7 @@ const externalGlyphExampleThreeProgram = {
     resources: glyphExampleTslVariant.resources,
     outputs: glyphExampleTslVariant.outputs,
     geometry: glyphExampleTslVariant.geometry,
-    createMaterial(context: ThreePlanProgramMaterialContext) {
+    createMaterial(context: ThreeRasterMaterialContext) {
       const origins = floatBuffer(
         context.namedBuffers,
         'origin',
@@ -67,7 +67,7 @@ const externalGlyphExampleThreeProgram = {
         context.material?.create({
           root: context.root,
           kind: 'glyph',
-          format: glyphExamplePlanProgram.raster.id,
+          format: glyphExampleCodec.raster.id,
           outputs: new Map<string, THREE.Node>([
             ['position', shader.position],
             ['color', shader.color],
@@ -82,14 +82,14 @@ const externalGlyphExampleThreeProgram = {
 };
 
 export function registerExternalGlyphExampleThree(): void {
-  registerThreeRasterPlanProgram(externalGlyphExampleThreeProgram);
+  registerThreeRasterProgram(externalGlyphExampleThreeProgram);
 }
 
 function floatBuffer(
-  buffers: ReadonlyMap<string, ThreePlanProgramBuffer>,
+  buffers: ReadonlyMap<string, ThreeRasterProgramBuffer>,
   name: string,
   vectorWidth: number,
-): ThreePlanProgramBuffer {
+): ThreeRasterProgramBuffer {
   const buffer = buffers.get(name);
   if (
     buffer === undefined ||

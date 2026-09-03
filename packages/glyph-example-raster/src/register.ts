@@ -1,8 +1,6 @@
-import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+import { registerRasterCodec } from '@pmndrs/glyph/config/raster';
 
-import { glyphExamplePlanProgramDefinition } from './portable.js';
+import { glyphExampleCodecDefinition } from './portable.js';
 
 /** Renderer-neutral registration performed by the portable package root. */
-export const glyphExamplePlanProgram: typeof glyphExamplePlanProgramDefinition = registerRasterPlanProgram(
-  glyphExamplePlanProgramDefinition,
-);
+export const glyphExampleCodec: typeof glyphExampleCodecDefinition = registerRasterCodec(glyphExampleCodecDefinition);

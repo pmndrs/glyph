@@ -7,7 +7,7 @@ import type { ThreeBufferBinding, ThreeResolvedResourceBinding } from '../handle
 import type { RetainedBuffer, StagedBufferMutations } from './host-buffer.js';
 
 export type ThreeHostResource = ThreeResolvedResourceBinding &
-  Readonly<{ program?: ReturnType<ThreeRendererResources['planProgram']> }>;
+  Readonly<{ program?: ReturnType<ThreeRendererResources['rasterProgram']> }>;
 
 export interface RetainedResource {
   readonly binding: ThreeResolvedResourceBinding;

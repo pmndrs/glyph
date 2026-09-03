@@ -1,11 +1,12 @@
 import type { Codec } from '../../config/glyph.js';
 import type { CodecIdFactory } from '../../config/codec.js';
+import type { ThreeCodec } from '../handle.js';
 import type { ThreeTextMaterial } from '../material.js';
 import {
-  compiledThreeRasterPlanPrograms,
-  releaseThreeRasterPlanProgramSnapshot,
-  type CompiledThreeRasterPlanProgram,
-} from './plan-program-registry.js';
+  compiledThreeRasterPrograms,
+  releaseThreeRasterProgramSnapshot,
+  type CompiledThreeRasterProgram,
+} from './raster-program-registry.js';
 
 interface DisposableThreeRenderResource {
   dispose(): void;
@@ -21,53 +22,60 @@ export interface ThreeRenderResourceLease<Resource extends DisposableThreeRender
   dispose(): void;
 }
 
-/** Exact Codec value created once for one Three handle. */
-export interface ThreeCodec extends Codec {
-  readonly programs: ReadonlyMap<string, CompiledThreeRasterPlanProgram>;
+interface ThreeCodecState {
+  readonly programs: ReadonlyMap<string, CompiledThreeRasterProgram>;
   readonly resources: ThreeRendererResources;
 }
+
+const threeCodecStates = new WeakMap<ThreeCodec, ThreeCodecState>();
 
 export function createThreeCodec(
   ids: CodecIdFactory,
   transformMode: 'direct' | 'indexed',
-  descriptor: (programs: readonly CompiledThreeRasterPlanProgram[]) => Codec['descriptor'],
+  descriptor: (programs: readonly CompiledThreeRasterProgram[]) => Codec['descriptor'],
   material: ThreeTextMaterial | undefined,
 ): ThreeCodec {
-  const programs = compiledThreeRasterPlanPrograms(ids, transformMode);
+  const programs = compiledThreeRasterPrograms(ids, transformMode);
   const resources = new ThreeRendererResources(
     new Map(programs.map((program) => [program.raster.id, program])),
     material,
   );
   let disposed = false;
-  return Object.freeze({
+  const codec: ThreeCodec = Object.freeze({
     descriptor: descriptor(programs),
-    programs: resources.programs,
-    resources,
     dispose: () => {
       if (disposed) return;
       disposed = true;
       try {
         resources.dispose();
       } finally {
-        releaseThreeRasterPlanProgramSnapshot(ids);
+        releaseThreeRasterProgramSnapshot(ids);
       }
     },
   });
+  threeCodecStates.set(codec, Object.freeze({ programs: resources.programs, resources }));
+  return codec;
+}
+
+export function threeCodecResources(codec: ThreeCodec): ThreeRendererResources {
+  const state = threeCodecStates.get(codec);
+  if (state === undefined) throw new TypeError('Codec was not created by the Glyph Three config');
+  return state.resources;
 }
 
 /** Handle-owned renderer-only state shared by sibling Three roots. */
 export class ThreeRendererResources {
-  readonly programs: ReadonlyMap<string, CompiledThreeRasterPlanProgram>;
+  readonly programs: ReadonlyMap<string, CompiledThreeRasterProgram>;
   readonly material: ThreeTextMaterial | undefined;
   readonly #renderResources = new Map<object, RetainedThreeRenderResource>();
   #disposed = false;
 
-  constructor(programs: ReadonlyMap<string, CompiledThreeRasterPlanProgram>, material: ThreeTextMaterial | undefined) {
+  constructor(programs: ReadonlyMap<string, CompiledThreeRasterProgram>, material: ThreeTextMaterial | undefined) {
     this.programs = programs;
     this.material = material;
   }
 
-  planProgram(techniqueId: string): CompiledThreeRasterPlanProgram | undefined {
+  rasterProgram(techniqueId: string): CompiledThreeRasterProgram | undefined {
     return this.programs.get(techniqueId);
   }
 

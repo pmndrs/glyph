@@ -8,7 +8,7 @@ import { type CodecIdFactory, type CodecBufferId, type CodecCapabilitySet, type 
 import { compileCodec, id } from '@pmndrs/glyph/config/codec';
 import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
 import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
-import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
+import { glyphExampleCodec } from '@pmndrs/glyph-example-raster';
 
 const EXAMPLE_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-example-renderer/stable-glyph');
 
@@ -37,7 +37,7 @@ export function exampleCodecDescriptor(ids?: CodecIdFactory): CodecDescriptor {
   return Object.freeze({
     capabilitySets: [capabilitySet],
     programs: [
-      createRasterCodecProgram(glyphExamplePlanProgram, {
+      createRasterCodecProgram(glyphExampleCodec, {
         namespace: EXAMPLE_RENDERER_PROGRAM_NAMESPACE,
         system: exampleSystemBuffers,
         capabilitySet,

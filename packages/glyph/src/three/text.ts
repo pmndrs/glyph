@@ -703,13 +703,14 @@ export class Text<Technique extends AnyRasterFormat> extends THREE.Object3D {
     token: typeof threeTextConstructionToken,
     properties: StandaloneTextProperties<Technique>,
     ownedFonts: readonly Font<AnyRasterFormat>[],
-    root: ThreeRootHost,
+    root: object,
   ) {
     super();
     if (token !== threeTextConstructionToken) {
       throw new TypeError('Three Text must be created with handle.createText() or an R3F Text component');
     }
-    if (root === undefined) {
+    const host = threeRootHosts.get(root);
+    if (host === undefined) {
       throw new TypeError('Three Text must be created by a Glyph Three root');
     }
     assertNoRawSpans(properties, 'Text properties');
@@ -717,8 +718,8 @@ export class Text<Technique extends AnyRasterFormat> extends THREE.Object3D {
     this.#ownedFonts = ownedFonts;
     this.#desired = desired;
     this.#pixelSnapping = normalizePixelSnapping(properties.pixelSnapping);
-    this.#root = root;
-    root.register(eraseTextTechnique(this));
+    this.#root = host;
+    host.register(eraseTextTechnique(this));
   }
 
   get textGroup(): TextGroup | undefined {
@@ -1033,14 +1034,15 @@ export class TextGroup extends THREE.Object3D {
   onError: ((error: unknown) => void) | undefined;
 
   /** Ordinary applications construct TextGroup through `handle.createTextGroup()`. */
-  constructor(token: typeof threeTextConstructionToken, options: TextGroupOptions, root: ThreeRootHost) {
+  constructor(token: typeof threeTextConstructionToken, options: TextGroupOptions, root: object) {
     super();
     if (token !== threeTextConstructionToken) {
       throw new TypeError(
         'Three TextGroup must be created with handle.createTextGroup() or an R3F TextGroup component',
       );
     }
-    if (root === undefined) {
+    const host = threeRootHosts.get(root);
+    if (host === undefined) {
       throw new TypeError('Three TextGroup must be created by a Glyph Three root');
     }
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
@@ -1048,7 +1050,7 @@ export class TextGroup extends THREE.Object3D {
     }
     this.#pixelSnapping =
       options.pixelSnapping === undefined ? undefined : normalizePixelSnapping(options.pixelSnapping);
-    this.#root = root;
+    this.#root = host;
     this.#material = options.material;
     if (options.renderOrder !== undefined) {
       if (!Number.isFinite(options.renderOrder)) throw new RangeError('TextGroup renderOrder must be finite');
@@ -1058,7 +1060,7 @@ export class TextGroup extends THREE.Object3D {
       stated: options.renderOrder,
       observed: this.renderOrder,
     });
-    textGroupRoots.set(this, root);
+    textGroupRoots.set(this, host);
   }
 
   get textCount(): number {

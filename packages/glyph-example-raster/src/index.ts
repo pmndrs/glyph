@@ -11,7 +11,7 @@ export {
 } from './contract.js';
 export { glyphExample, type GlyphExampleData } from './raster.js';
 export { glyphExampleIndexedQuadGeometry, glyphExampleSuppliedGeometryDeclaration } from './geometry-fixture.js';
-export { glyphExamplePlanProgram } from './register.js';
+export { glyphExampleCodec } from './register.js';
 export { glyphExampleSchema } from './portable.js';
 export {
   glyphExampleShaderContract,

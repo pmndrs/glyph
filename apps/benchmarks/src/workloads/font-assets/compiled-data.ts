@@ -10,14 +10,14 @@ import {
   type PortableTextureArrayPayload,
   type PortableTexturePayload,
 } from '@pmndrs/glyph';
-import { compileRasterFont, readCompiledRasterFont, resolveRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+import { compileRasterFont, readCompiledRasterFont, resolveRasterCodec } from '@pmndrs/glyph/config/raster';
 
 import type { SlugCpuReferenceData } from '../../benchmark/low-level/raster/slug-cpu-reference';
 
 const DENSE_GLYPH_RECORD_STRIDE = 20;
 const ABSENT_PAGE = 0xffff;
 
-/** Reconstruct the benchmark Bitmap oracle from the exact portable program consumed by renderers. */
+/** Reconstruct the benchmark Bitmap oracle from the exact portable Codec consumed by renderers. */
 export function compiledBitmapData(font: Font<typeof bitmap>): BitmapData {
   const { compiled, view } = compiledView(font);
   if (view.scope !== 'strike') throw new TypeError('Bitmap compiled binding must use strike scope');
@@ -51,7 +51,7 @@ export function compiledBitmapData(font: Font<typeof bitmap>): BitmapData {
   return { strikes };
 }
 
-/** Reconstruct the benchmark MTSDF oracle from the exact portable program consumed by renderers. */
+/** Reconstruct the benchmark MTSDF oracle from the exact RasterCodec consumed by renderers. */
 export function compiledMsdfData(font: Font<typeof msdf>, configuration: MsdfConfiguration): MsdfData {
   const { view } = compiledView(font);
   if (view.scope !== 'glyph' || view.strikes.length !== 1) {
@@ -99,7 +99,7 @@ export function compiledMsdfData(font: Font<typeof msdf>, configuration: MsdfCon
   };
 }
 
-/** Reconstruct the benchmark Slug oracle from the exact portable program consumed by renderers. */
+/** Reconstruct the benchmark Slug oracle from the exact RasterCodec consumed by renderers. */
 export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData {
   const { view } = compiledView(font);
   if (view.scope !== 'glyph' || view.strikes.length !== 1) {
@@ -152,10 +152,10 @@ function compiledView(font: Font<typeof bitmap | typeof msdf | typeof slug>): {
   readonly view: CompiledRasterFontView;
 } {
   const compiled = compileRasterFont(font);
-  if (compiled === undefined) throw new TypeError(`no portable program is registered for "${font.raster.id}"`);
-  const program = resolveRasterPlanProgram(font.raster.id);
-  if (program === undefined) throw new TypeError(`no portable program is registered for "${font.raster.id}"`);
-  return { compiled, view: readCompiledRasterFont(compiled, program) };
+  if (compiled === undefined) throw new TypeError(`no RasterCodec is registered for "${font.raster.id}"`);
+  const codec = resolveRasterCodec(font.raster.id);
+  if (codec === undefined) throw new TypeError(`no portable raster codec is registered for "${font.raster.id}"`);
+  return { compiled, view: readCompiledRasterFont(compiled, codec) };
 }
 
 function declaredResource(

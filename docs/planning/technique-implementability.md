@@ -15,7 +15,7 @@ generated:
 ## Status and decision
 
 The portable contract, external TypeGPU example, generic Three variant/material path, and first-party Bitmap, MSDF, and
-Slug portable plans are implemented. Repeated resource cardinality and fixed-member resource groups close the former
+Slug portable RasterCodecs are implemented. Repeated resource cardinality and fixed-member resource groups close the former
 first-party multiplicity gap without moving renderer logic into the technique contract.
 
 The locked decision is:
@@ -27,7 +27,7 @@ Three may expose a renderer-local `createMaterial(context)` helper. That helper 
 ## What is already fixed
 
 Each `GlyphConfig` handle installs the Codec returned by `encode`, while internal handle state resolves every registered
-portable technique program through one binding compiler (`packages/glyph/src/internal/font-binding.ts`). This
+portable RasterCodec through one binding compiler (`packages/glyph/src/internal/font-binding.ts`). This
 fixes the old asymmetry where Paragraph called `loadedFontBindingBytes` without the lookup that Three performed and
 removes the duplicate first-party binding compilers.
 
@@ -36,7 +36,7 @@ The current branch also provides:
 - a portable schema and Codec-body factory;
 - host-specific Codec assembly;
 - a renderer-neutral compiled font result containing binding bytes and resources;
-- core technique-id lookup and binding composition;
+- renderer-neutral raster-id lookup and binding composition;
 - Three resource/program retention;
 - a non-Three example engine with a deterministic recording oracle plus a concrete TypeGPU/WebGPU device,
   supplied-geometry realization, and changing-pixel acceptance.
@@ -70,14 +70,14 @@ The current first-party target already composes shader outputs into renderer-own
 
 The change is not to ban `createMaterial(context)`. The change is to place it correctly:
 
-- `/core` publishes no material factory;
+- renderer-neutral config leaves publish no material factory;
 - a Three/TSL or Three/TypeGPU implementation may publish `createMaterial(context)`;
 - the generic Three executor creates the context from named retained bindings, resources, instance addressing, primitive data, and transforms;
-- the executor selects and invokes the helper without requiring the portable plan to know Three.
+- the executor selects and invokes the helper without requiring the portable RasterCodec to know Three.
 
 The context must consume logical names, not require a technique helper to hard-code host Codec numbers.
 
-Bitmap, MSDF, and Slug now register their renderer-neutral plans from their raster modules and use the same compiled-font
+Bitmap, MSDF, and Slug now register their renderer-neutral RasterCodecs from their raster modules and use the same compiled-font
 and named portable-resource path as extensions. Three still dispatches to its built-in material functions by technique
 identity, which is renderer-owned shader/material selection rather than a second Codec or binding implementation.
 
@@ -87,9 +87,9 @@ This branch closes the constrained core representation and generic Three consump
 payload ownership, cardinality, group shape, and geometry accessors before a device is touched. First-party techniques use
 the same path.
 
-`registerRasterPlanProgram` infers the compiler's authored resource input at the real `retain()` call site. Compilation
+`registerRasterCodec` infers the compiler's authored resource input at the real `retain()` call site. Compilation
 normalizes reserved payload kinds into owned portable data before exposing `CompiledRasterFont`; no renderer-owned
-`realizeResource` callback crosses the portable or Three program contracts.
+`realizeResource` callback crosses the portable Codec or Three program contracts.
 
 The portable resource payload is self-describing enough for generic realization: buffer or texture class, element/sample
 format, dimensions or record layout, array-texture layer count where applicable, usage, immutable bytes or geometry data,
@@ -107,7 +107,7 @@ Resource realization and geometry views must therefore distinguish the shared ge
 
 ### Decoration remains a renderer-owned built-in
 
-`pmndrs.decoration` is currently a Three-Codec-reserved, resource-free branch rather than a portable raster program (`packages/glyph/src/three/codec.ts:40-62,235-266`). The generic executor must preserve that branch while raster programs move to the variant path; the built-in migration layer must explicitly test decoration before deleting or simplifying the old executor branches (`packages/glyph/src/three/engine-plan-target.ts:484-490,501-525,731-771`). It is not silently converted into a raster package in this change.
+`pmndrs.decoration` is a Three-Codec-reserved, resource-free branch rather than a portable RasterCodec (`packages/glyph/src/three/codec.ts`). The generic executor preserves that branch while raster programs use the renderer-variant path. It is not silently converted into a raster package.
 
 ## Target ownership model
 
@@ -130,9 +130,9 @@ The compiled font owns immutable portable payloads; it does not own their GPU li
 payloads in a device-scoped pool keyed by the command buffer's stable resource identity and leases the same texture,
 buffer, or geometry to compatible roots. Internal handle state owns Wasm registrations and each root owns one revisioned
 publication lifetime; neither is a scene, device, pass, or implicit global batch. This lets a TypeGPU, TSL, WGSL, or GLSL renderer
-reuse the same portable plan without moving renderer concepts into `/core`.
+reuse the same portable RasterCodec without moving renderer concepts into renderer-neutral config.
 
-The portable plan does not carry shader source. The technique package publishes shader realizations as optional subpath modules; each realization consumes the same logical contract regardless of whether it was authored in TypeGPU, TSL, WGSL, or GLSL.
+The portable RasterCodec does not carry shader source. The raster package publishes shader realizations as optional subpath modules; each realization consumes the same logical contract regardless of whether it was authored in TypeGPU, TSL, WGSL, or GLSL.
 
 ## Package reorganization
 
@@ -140,26 +140,26 @@ The repository must show the external package topology instead of hiding the Thr
 
 ```text
 packages/glyph-example-raster/
-  portable technique, artifact contract, decoder, baker, plan/schema
+  portable raster, artifact contract, decoder, baker, Codec/schema
   /typegpu shader realization and its typed binding/geometry descriptor
   optional /tsl shader realization; neither subpath owns engine registration
 
 packages/glyph-example-renderer/
   external TypeGPU-backed host proof with recording oracle and real WebGPU device
-  imports the portable raster package, its /typegpu realization, and public Glyph core APIs
+  imports the portable raster package, its /typegpu realization, and public Glyph config APIs
 
 packages/glyph/src/three/
   reference Three executor and Glyph-owned built-in registrations
-  public registration surface for an application-supplied TSL realization
+  public `registerThreeRasterProgram` surface for an application-supplied TSL realization
 ```
 
-The exact published names may use subpath exports where optional peer dependencies remain genuinely optional, but the invariant is fixed: importing the root portable entrypoint must not install or execute renderer code. The `/typegpu` and `/tsl` shader subpaths are explicit opt-ins; they contain shader functions and compatibility metadata, not Three engine registration or material/resource lifecycle. The root package remains usable without either shader language. A TSL subpath may depend on the Three TSL peer because TSL is its implementation language, but that dependency must not leak into the portable root or the renderer-neutral plan/data modules.
+The exact published names may use subpath exports where optional peer dependencies remain genuinely optional, but the invariant is fixed: importing the root portable entrypoint must not install or execute renderer code. The `/typegpu` and `/tsl` shader subpaths are explicit opt-ins; they contain shader functions and compatibility metadata, not Three engine registration or material/resource lifecycle. The root package remains usable without either shader language. A TSL subpath may depend on the Three TSL peer because TSL is its implementation language, but that dependency must not leak into the portable root or renderer-neutral Codec/data modules.
 
 The example renderer is intentionally a concrete TypeGPU-backed host, not a second opaque recorder that merely proves bytes exist. It exercises the generic host responsibilities an external TypeGPU engine owns: select the technique's `/typegpu` realization, map named plan buffers and retained resources, upload supplied indexed geometry, create a hardware render pipeline, submit the draw list to WebGPU, and read back changing RGBA pixels. A different engine can consume the portable package and choose the TypeGPU, TSL, WGSL, GLSL, or its own implementation.
 
-Importing the portable technique registers its renderer-neutral plan program; this is safe for every engine and does not realize GPU resources. Mark the concrete portable registration module and the root facade that imports it in the portable package's `sideEffects` list so a production bundler cannot discard the registration before traversing the root. Keep the portable definition and shader subpaths outside that list. Shader subpaths do not silently register a renderer implementation. The engine or application selects the shader realization it supports: the TypeGPU example consumes `/typegpu` directly, while a Three application supplies the `/tsl` realization to the public `@pmndrs/glyph/three` registration surface. Glyph's own `/three` convenience entrypoint may register Glyph-owned built-ins because Glyph owns that renderer integration. Registration occurs before the first engine snapshot; re-registering the same descriptor object is a no-op, while another object for the same technique id is rejected even if structurally equal. Unused techniques still avoid GPU/resource realization; consumers that need minimum bundle bytes can import only the individual shader subpaths.
+Importing the portable raster registers its renderer-neutral RasterCodec; this is safe for every engine and does not realize GPU resources. Mark the concrete portable registration module and the root facade that imports it in the portable package's `sideEffects` list so a production bundler cannot discard the registration before traversing the root. Keep the portable definition and shader subpaths outside that list. Shader subpaths do not silently register a renderer implementation. The engine or application selects the shader realization it supports: the TypeGPU example consumes `/typegpu` directly, while a Three application supplies the `/tsl` realization through `registerThreeRasterProgram`. Glyph's own `/three` convenience entrypoint owns its built-in Three realizations. Registration occurs before the first engine snapshot; re-registering the same descriptor object is a no-op, while another object for the same raster id is rejected even if structurally equal. Unused raster formats still avoid GPU/resource realization; consumers that need minimum bundle bytes can import only the individual shader subpaths.
 
-This intentionally supersedes D-158's “one technique-scoped import registers both halves” rule: the portable root registers only the plan; a shader subpath supplies only the implementation artifact; the engine or application owns renderer-specific registration and resource realization. The decision-register update must record this split and retain the bundle-size rationale for not registering unused shader variants.
+This intentionally supersedes D-158's “one technique-scoped import registers both halves” rule: the portable root registers only the RasterCodec; a shader subpath supplies only the implementation artifact; the engine or application owns renderer-specific registration and resource realization.
 
 ## Required implementation changes
 
@@ -187,9 +187,9 @@ Make the Three material context technique-neutral. The current `ThreeTextMateria
 
 ### 3. Replace the Three program escape hatch with a generic variant path
 
-Refactor `packages/glyph/src/three/plan-program-registry.ts`, `engine-coordinator.ts`, and `engine-plan-target.ts` so the renderer:
+The implementation in `packages/glyph/src/three/raster-program.ts` and `engine-plan-target.ts` makes the renderer:
 
-- resolves a portable plan;
+- resolve a portable RasterCodec;
 - selects a compatible shader implementation;
 - creates named binding views and generic resource views;
 - realizes the declared primitive;
@@ -198,9 +198,9 @@ Refactor `packages/glyph/src/three/plan-program-registry.ts`, `engine-coordinato
 
 Define variant lifecycle explicitly. A renderer or application selects one implementation by registering it before the first host/runtime snapshot; a snapshot freezes that `(technique, variant, renderer)` descriptor for the runtime, a second variant for the same technique fails at registration, and disposing the runtime releases the snapshot without disposing package-owned descriptors. Every selected variant reports the geometry/resource capabilities it consumes. Shader-language variants never change the wire `programVariant`: all alternatives share one policy program and compiled binding, and choosing another language means registering that renderer-side realization instead. These rules preserve the registry's freeze and release behavior without inventing a second runtime preference API.
 
-The generic path must support `createMaterial(context)`. Resolve the portable plan independently of the Three variant: a portable program without a compatible Three implementation must fail with an explicit unsupported-variant diagnostic, not fall through to the first-party resource resolver. What disappears is the requirement that a portable technique register a Three-specific program containing policy interpretation, resource ownership, and an opaque callback contract.
+The generic path supports `createMaterial(context)`. Resolve the portable RasterCodec independently of the Three variant: a registered RasterCodec without a compatible ThreeRasterProgram fails with an explicit unsupported-variant diagnostic rather than falling through to a first-party resource resolver. The portable raster never registers policy interpretation, resource ownership, or an opaque renderer callback.
 
-First-party Bitmap, MSDF, and Slug use the portable plan/compiler path. Their TSL shader and material logic remains in
+First-party Bitmap, MSDF, and Slug use the portable RasterCodec/compiler path. Their TSL shader and material logic remains in
 Three, where renderer realization belongs; no first-party binding/resource fallback remains.
 
 ### 4. Reorganize and implement `glyph-example-raster`
@@ -226,7 +226,7 @@ Update its policy and TypeGPU device to consume the same portable render contrac
 
 The renderer tests must keep `synthetic-quad` as the generated-geometry contract fixture and prove an explicit indexed `quad` using an immutable supplied geometry payload. They must record index/draw range and instance count separately so an indexed quad cannot accidentally be treated as four policy records.
 
-Layer 2 must test undeclared resource-name retention and stable resource identity across compiler calls. Layer 3 must test generic user-material delivery, schema-driven glyph-origin augmentation, indexed geometry reuse, decoration preservation, and the diagnostic for a portable plan with no compatible Three variant. Layer 4 must fail variant-only registration at registration time rather than at first runtime construction. The Three acceptance also includes `apps/benchmarks` and its `benchmark:external-raster` visible-pixel proof.
+Layer 2 must test undeclared resource-name retention and stable resource identity across compiler calls. Layer 3 must test generic user-material delivery, schema-driven glyph-origin augmentation, indexed geometry reuse, decoration preservation, and the diagnostic for a RasterCodec with no compatible Three variant. Layer 4 must fail variant-only registration at registration time rather than at first runtime construction. The Three acceptance also includes `apps/benchmarks` and its `benchmark:external-raster` visible-pixel proof.
 
 The acceptance test continues to use the real baker and font loader only to obtain a loaded font. The engine itself must still be written against public core/portable surfaces plus the technique's public `/typegpu` shader subpath.
 
@@ -272,7 +272,7 @@ Done means all of the following are true:
 - the portable example package imports without a renderer dependency;
 - installing the portable root or TypeGPU example does not require a Three peer; the TSL peer is scoped to the explicit `/tsl` path;
 - Three consumes the example through its public `/three` registration API and the example's explicit `/tsl` shader subpath;
-- Three may use a `createMaterial(context)` helper, but the portable plan does not depend on it;
+- Three may use a `createMaterial(context)` helper, but the portable RasterCodec does not depend on it;
 - the example renderer consumes the portable contract through the example's `/typegpu` realization, without Three or TSL imports;
 - Bitmap, MSDF, Slug, decoration, and the example preserve explicit wire primitive handling plus declared geometry kinds;
 - Bitmap repeated strikes and Slug repeated grouped pages compile through the portable resource contract;
@@ -289,5 +289,5 @@ Done means all of the following are true:
 ## Cost
 
 The reusable plan work is complete as a medium-to-large renderer refactor across core metadata, generic Three realization,
-first-party portable plans, two example packages, tests, benchmarks, and docs. This work did not rewrite shaping, baking,
+first-party portable RasterCodecs, two example packages, tests, benchmarks, and docs. This work did not rewrite shaping, baking,
 layout, or the Wasm engines.

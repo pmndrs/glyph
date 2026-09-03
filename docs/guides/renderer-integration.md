@@ -287,7 +287,7 @@ import type { CodecCapabilitySet, CodecDescriptor, CodecIdFactory } from '@pmndr
 import { id } from '@pmndrs/glyph/config/codec';
 import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
 import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
-import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
+import { glyphExampleCodec } from '@pmndrs/glyph-example-raster';
 
 const stableGlyphId = id.buffer('glyph-example-renderer/stable-glyph');
 const system = defineCodecBuffers({
@@ -311,7 +311,7 @@ function descriptor(ids: CodecIdFactory): CodecDescriptor {
   return Object.freeze({
     capabilitySets: [capabilities],
     programs: [
-      createRasterCodecProgram(glyphExamplePlanProgram, {
+      createRasterCodecProgram(glyphExampleCodec, {
         namespace: 'example-renderer',
         system,
         capabilitySet: capabilities,
@@ -445,9 +445,9 @@ const traced = defineGlyphConfig({
     const renderer = base.renderer(context);
     return {
       decode(view) {
-        performance.mark(`glyph:${view.planRevision}:decode:start`);
+        performance.mark(`glyph:${view.revision}:decode:start`);
         const pending = renderer.decode(view);
-        performance.mark(`glyph:${view.planRevision}:decode:end`);
+        performance.mark(`glyph:${view.revision}:decode:end`);
         return pending;
       },
       syncTransforms: (updates) => renderer.syncTransforms(updates),

@@ -125,6 +125,7 @@
       "import": "./dist/three.js"
     },
     "./three/internal/*": null,
+    "./three/plan-program-registry": null,
     "./three/codec": null,
     "./three/decorations": null,
     "./three/detached-object": null,

@@ -39,7 +39,7 @@ describe('package boundary', () => {
     const sources = await packageSources();
     const tsl = sources.find(([file]) => file === 'src/tsl.ts')?.[1];
     expect(tsl).toBeDefined();
-    expect(tsl).not.toContain('registerThreeRasterPlanProgram');
+    expect(tsl).not.toContain('registerThreeRasterProgram');
     expect(tsl).not.toContain('@pmndrs/glyph/three');
     const typegpu = sources.find(([file]) => file === 'src/typegpu.ts')?.[1];
     expect(typegpu).toBeDefined();

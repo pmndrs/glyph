@@ -54,7 +54,7 @@ test('application types stay at root while integration construction lives on con
     'config/glyph.d.ts': ['defineGlyphConfig', 'defineGlyphSchema', 'resourceLease'],
     'config/codec.d.ts': ['compileCodec', 'createCodecProgram', 'id', 'normalizeCodecCapabilitySet'],
     'config/codec-program.d.ts': ['codecProgram', 'f32', 'techniqueProgram', 'u32'],
-    'config/raster.d.ts': ['compileRasterFont', 'createRasterCodecProgram', 'registerRasterPlanProgram'],
+    'config/raster.d.ts': ['compileRasterFont', 'createRasterCodecProgram', 'registerRasterCodec'],
     'config/raster-format.d.ts': ['defineRasterFormat', 'defineRasterResourceId'],
     'config/resources.d.ts': ['assertPortableResource', 'definePortableVertexSemantic'],
     'config/schema.d.ts': ['defineCodecBuffers', 'defineTechniqueSchema'],
@@ -83,7 +83,7 @@ test('application types stay at root while integration construction lives on con
 
   const privateLeafHelpers = {
     'config/codec-program.d.ts': ['assertTechniqueCodecBody', 'normalizeCodecProgramSystemBuffers'],
-    'config/raster.d.ts': ['registerGlyphRasterPlanProgram'],
+    'config/raster.d.ts': ['registerGlyphRasterCodec'],
     'config/raster-format.d.ts': ['isRasterFormat', 'rasterFormatForKey', 'rasterFormatForReference'],
     'config/resources.d.ts': ['portableResourceIdentity'],
   };

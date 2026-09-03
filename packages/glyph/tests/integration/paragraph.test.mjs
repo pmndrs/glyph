@@ -8,7 +8,7 @@ import { createParagraph, FontLoadError, glyph, txt } from '@pmndrs/glyph';
 import { loadFont } from '../../dist/loader.js';
 import { techniqueProgram } from '@pmndrs/glyph/config/codec-program';
 import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
-import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+import { registerRasterCodec } from '@pmndrs/glyph/config/raster';
 import { defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 
@@ -45,7 +45,7 @@ const portableSchema = defineTechniqueSchema({
   render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
 });
 let portableCompileCalls = 0;
-registerRasterPlanProgram({
+registerRasterCodec({
   raster: portableTechnique,
   schema: portableSchema,
   codecBody(system) {

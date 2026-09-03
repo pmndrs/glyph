@@ -8,7 +8,7 @@ import { id } from '@pmndrs/glyph/config/codec';
 import { defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/glyph/config/glyph';
 import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
 import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
-import { bitmap as portableBitmap, bitmapPlanProgram } from '@pmndrs/glyph/raster/bitmap';
+import { bitmap as portableBitmap, bitmapCodec } from '@pmndrs/glyph/raster/bitmap';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { slug } from '@pmndrs/glyph/raster/slug';
@@ -59,7 +59,7 @@ function defineFontAwareConfig() {
       descriptor: {
         capabilitySets: [portableCapabilities],
         programs: [
-          createRasterCodecProgram(bitmapPlanProgram, {
+          createRasterCodecProgram(bitmapCodec, {
             namespace: 'font-face-test',
             system: portableSystemBuffers,
             capabilitySet: portableCapabilities,

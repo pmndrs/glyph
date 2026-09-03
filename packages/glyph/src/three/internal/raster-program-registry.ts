@@ -1,37 +1,37 @@
-import { createRasterCodecProgram, resolveRasterPlanProgram } from '../../config/raster.js';
+import { createRasterCodecProgram, resolveRasterCodec } from '../../config/raster.js';
 import type { CodecIdFactory, CodecProgram } from '../../config/codec.js';
 import type { AnyTechniqueSchema } from '../../config/schema.js';
 import type { AnyRasterFormat } from '../../config/raster-format.js';
 import { threeCodecCapabilitySet, threeSystemBuffers } from '../codec.js';
-import type { ThreeRasterPlanProgram, ThreeRasterPlanVariant } from '../plan-program-registry.js';
+import type { ThreeRasterProgram, ThreeRasterVariant } from '../raster-program.js';
 
-export interface CompiledThreeRasterPlanProgram {
+export interface CompiledThreeRasterProgram {
   readonly raster: AnyRasterFormat;
   readonly schema: AnyTechniqueSchema;
-  readonly variant: ThreeRasterPlanVariant;
+  readonly variant: ThreeRasterVariant;
   readonly techniqueId: number;
   readonly programId: number;
   readonly codec: CodecProgram;
-  createMaterial: ThreeRasterPlanVariant['createMaterial'];
+  createMaterial: ThreeRasterVariant['createMaterial'];
 }
 
-const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>>();
-const registeredSources = new WeakMap<object, ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>>();
+const programs = new Map<string, ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema>>();
+const registeredSources = new WeakMap<object, ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema>>();
 const snapshotsByRegistry = new WeakMap<CodecIdFactory, WeakRef<CodecIdFactory>[]>();
 const snapshotReferences = new Set<WeakRef<CodecIdFactory>>();
 const snapshotFinalizer = new FinalizationRegistry<WeakRef<CodecIdFactory>>((reference) => {
   snapshotReferences.delete(reference);
 });
 
-export function registeredThreeRasterPlanProgram(
+export function registeredThreeRasterProgram(
   source: object,
-): ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema> | undefined {
+): ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema> | undefined {
   return registeredSources.get(source);
 }
 
-export function commitThreeRasterPlanProgram(
+export function commitThreeRasterProgram(
   source: object,
-  program: ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>,
+  program: ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema>,
 ): void {
   const existing = programs.get(program.raster.id);
   if (existing !== undefined) {
@@ -50,10 +50,10 @@ export function commitThreeRasterPlanProgram(
   registeredSources.set(source, program);
 }
 
-export function compiledThreeRasterPlanPrograms(
+export function compiledThreeRasterPrograms(
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct' = 'indexed',
-): readonly CompiledThreeRasterPlanProgram[] {
+): readonly CompiledThreeRasterProgram[] {
   const selected = [...programs.values()].sort((left, right) => left.raster.id.localeCompare(right.raster.id));
   const compiled = selected.map((program) => compileProgram(program, identities, transformMode));
   const reference = new WeakRef(identities);
@@ -65,7 +65,7 @@ export function compiledThreeRasterPlanPrograms(
   return compiled;
 }
 
-export function releaseThreeRasterPlanProgramSnapshot(identities: CodecIdFactory): void {
+export function releaseThreeRasterProgramSnapshot(identities: CodecIdFactory): void {
   const references = snapshotsByRegistry.get(identities);
   if (references === undefined) return;
   const reference = references.pop();
@@ -85,13 +85,12 @@ function liveSnapshotCount(): number {
 }
 
 function compileProgram(
-  program: ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>,
+  program: ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema>,
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct',
-): CompiledThreeRasterPlanProgram {
-  const portable = resolveRasterPlanProgram(program.raster.id);
-  if (portable === undefined)
-    throw new Error(`no portable raster plan program is registered for "${program.raster.id}"`);
+): CompiledThreeRasterProgram {
+  const portable = resolveRasterCodec(program.raster.id);
+  if (portable === undefined) throw new Error(`no portable raster codec is registered for "${program.raster.id}"`);
   const system = transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
   const codec = createRasterCodecProgram(portable, {
     namespace: 'three',

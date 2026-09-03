@@ -9,14 +9,14 @@ export type {
   ThreeTextMaterialContext,
   ThreeTextMaterialContextMap,
 } from './three/material.js';
-export { registerThreeRasterPlanProgram, threeCodecAbi } from './three/plan-program-registry.js';
+export { registerThreeRasterProgram, threeCodecAbi } from './three/raster-program.js';
 export type {
-  ThreePlanProgramBuffer,
-  ThreePlanProgramMaterialContext,
-  ThreeRasterPlanBufferCapability,
-  ThreeRasterPlanProgram,
-  ThreeRasterPlanVariant,
-} from './three/plan-program-registry.js';
+  ThreeRasterProgramBuffer,
+  ThreeRasterMaterialContext,
+  ThreeRasterBufferCapability,
+  ThreeRasterProgram,
+  ThreeRasterVariant,
+} from './three/raster-program.js';
 export { TextFrameError } from './three/frame-error.js';
 export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.js';
 export { Text, TextGroup } from './three/text.js';
@@ -28,6 +28,7 @@ export {
   type ThreeBatchBinding,
   type ThreeBindings,
   type ThreeBufferBinding,
+  type ThreeCodec,
   type ThreeConfigOptions,
   type ThreeGlyphConfig,
   type ThreeHandle,
@@ -40,7 +41,6 @@ export {
   type ThreeResolvedResourceBinding,
   type ThreeRootBinding,
 } from './three/handle.js';
-export type { ThreeCodec } from './three/internal/renderer-resources.js';
 export type {
   StandaloneTextProperties,
   TextCommitState,

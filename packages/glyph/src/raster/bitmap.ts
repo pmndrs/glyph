@@ -98,8 +98,8 @@ export const bitmap: RasterFormat<
 
 import { f32, techniqueProgram } from '../config/codec-program.js';
 import { id, type CodecBufferId } from '../config/codec.js';
-import type { RasterPlanProgram } from '../config/raster.js';
-import { registerGlyphRasterPlanProgram } from '../internal/raster-plan-program-registry.js';
+import type { RasterCodec } from '../config/raster.js';
+import { registerGlyphRasterCodec } from '../internal/raster-codec-registry.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
 const BITMAP_ORIGIN_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.bitmap/origin');
@@ -179,7 +179,7 @@ export const bitmapSchema: TechniqueSchema<
   render: { resource: 'atlas', geometry: { kind: 'synthetic-quad' } },
 });
 
-export const bitmapPlanProgram: RasterPlanProgram<typeof bitmap, typeof bitmapSchema> = registerGlyphRasterPlanProgram({
+export const bitmapCodec: RasterCodec<typeof bitmap, typeof bitmapSchema> = registerGlyphRasterCodec({
   raster: bitmap,
   schema: bitmapSchema,
   codecBody(system) {
