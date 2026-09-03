@@ -895,7 +895,7 @@ export type GlyphProxyState = 'empty' | 'cached' | 'live';
  * and `sentinel`.
  */
 export class GlyphProxyElement extends HTMLElement {
-  static observedAttributes = ['root', 'data-scene', 'aria-label', 'aspect', 'width', 'height'];
+  static observedAttributes = ['root', 'data-scene', 'aria-label', 'aspect', 'width', 'height', 'poster'];
 
   #canvas: HTMLCanvasElement | undefined;
   #poster: HTMLImageElement | undefined;
@@ -962,6 +962,7 @@ export class GlyphProxyElement extends HTMLElement {
     if (name === 'data-scene') this.#root?.updateProxyScene(this);
     if (name === 'aria-label' && this.#sentinel) this.#sentinel.textContent = this.#label();
     if (name === 'aspect' || name === 'width' || name === 'height') this.#applySize();
+    if (name === 'poster') this.#applyPoster();
     this.#bind();
   }
 
@@ -998,6 +999,7 @@ export class GlyphProxyElement extends HTMLElement {
     if (!canvas || !poster) return;
     this.#releasing = true;
     const token = ++this.#releaseToken;
+    poster.removeAttribute('data-still');
     poster.style.width = canvas.style.width;
     poster.style.height = canvas.style.height;
     canvas.toBlob(
@@ -1047,6 +1049,26 @@ export class GlyphProxyElement extends HTMLElement {
     this.#poster = shadow.querySelector('img') ?? undefined;
     this.#sentinel = shadow.querySelector('div') ?? undefined;
     if (this.#sentinel) this.#sentinel.textContent = this.#label();
+    this.#applyPoster();
+  }
+
+  /**
+   * A `poster` attribute is a still of the scene, shown before any frame the
+   * way a retained frame would be; the first live frame fades it out, and a
+   * later release replaces it with a fresh photograph.
+   */
+  #applyPoster() {
+    const poster = this.#poster;
+    const source = this.getAttribute('poster');
+    if (!poster || source === null || this.#state !== 'empty') return;
+    poster.setAttribute('data-still', '');
+    poster.src = source;
+    poster.decode().then(
+      () => {
+        if (this.#state === 'empty' && poster.getAttribute('src') === source) this.#setState('cached');
+      },
+      () => poster.removeAttribute('data-still'), // a missing still leaves the sentinel in place
+    );
   }
 
   /** `aspect`, `width`, and `height` attributes size the window; a bare `aspect` needs only the page's width. */
@@ -1218,6 +1240,14 @@ img {
 :host([data-glyph-state='cached']) img {
   opacity: 1;
   transition: none;
+}
+img[data-still] {
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: none;
 }
 div {
   position: absolute;
