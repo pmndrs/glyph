@@ -27,7 +27,10 @@
     "./src/raster/slug.ts",
     "./dist/raster/bitmap.js",
     "./dist/raster/msdf.js",
-    "./dist/raster/slug.js"
+    "./dist/raster/slug.js",
+    "./dist/internal/bitmap-*.js",
+    "./dist/internal/msdf-*.js",
+    "./dist/internal/slug-*.js"
   ],
   "exports": {
     ".": {

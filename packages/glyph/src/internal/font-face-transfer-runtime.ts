@@ -21,8 +21,8 @@ export function snapshotSerializedFontFace(
   const rasters: SerializedFontFaceRaster[] = [];
   const seen = new Set<string>();
   const resourceIdentities = new Set<string>();
-  for (const font of fonts) {
-    const fontResources = immutableFontResources(font);
+  for (const variant of fonts) {
+    const fontResources = immutableFontResources(variant);
     const rasterKey = fontResources.raster.rasterKey;
     if (seen.has(rasterKey)) continue;
     seen.add(rasterKey);
