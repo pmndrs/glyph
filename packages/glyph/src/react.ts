@@ -607,7 +607,7 @@ function TextGroupObject({
 
   useLayoutEffect(() => {
     if (object === undefined) return;
-    object.setMaterial(options.material);
+    object.material = options.material;
     invalidate();
   }, [invalidate, object, options.material]);
 
