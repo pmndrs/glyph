@@ -3,7 +3,7 @@ import { ThreeConfig } from '@pmndrs/glyph/three';
 import type { Scene } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
-import { hueHex } from './scene';
+import { hueHex } from '../../lib/color';
 
 /**
  * The imperative twin: outline and shadow are style, and a colour change is a

@@ -1,11 +1,8 @@
 import { Text } from '@pmndrs/glyph/react';
 import { useMsdf } from '@pmndrs/glyph/react/msdf';
-import { useFrame, useRenderPipeline } from '@react-three/fiber/webgpu';
-import { useRef } from 'react';
-import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
-import type { UniformNode } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
+import { Glow } from './components/Glow';
 
 /**
  * Post-processing sees text as pixels in the scene pass, nothing more. Bloom
@@ -41,23 +38,4 @@ export default function Bloom() {
       </Text>
     </>
   );
-}
-
-function Glow() {
-  const strength = useRef<UniformNode<'float', number> | null>(null);
-
-  useRenderPipeline(({ passes, renderPipeline }) => {
-    // Nullable on this r3f alpha: the callback also runs for the teardown pass.
-    if (renderPipeline === null) return;
-    const scene = passes.scenePass.getTextureNode();
-    const glow = bloom(scene, 0.9, 0.4, 0.55);
-    strength.current = glow.strength;
-    renderPipeline.outputNode = scene.add(glow);
-  });
-
-  useFrame(({ elapsed }) => {
-    if (strength.current !== null) strength.current.value = 0.75 + Math.sin(elapsed * 1.4) * 0.45;
-  });
-
-  return null;
 }

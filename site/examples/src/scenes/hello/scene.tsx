@@ -2,7 +2,7 @@ import { Text } from '@pmndrs/glyph/react';
 import { useMsdf } from '@pmndrs/glyph/react/msdf';
 
 import { INTER } from '../../fonts';
-import { PAPER } from '../../stage';
+import { PAPER } from '../../theme';
 
 /** One font, one Text, one line. Everything else on this site is a variation of this. */
 export default function Hello() {

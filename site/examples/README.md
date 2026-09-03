@@ -5,14 +5,22 @@ page can iframe its example from the same origin.
 
 ```
 examples/
-  index.html            the one page
-  src/main.tsx          reads ?example=, loads that scene's module, mounts it on the stage
-  src/catalog.ts        slug → title, docs page, stage options, scene loader
-  src/stage.tsx         the canvas, camera, dark ground, and (when asked) a light rig
-  src/fonts.ts          the checked-in fonts every scene draws from
+  index.html                     the one page
+  public/diagrams/               the docs' SVG figures, served at /examples/diagrams/
+  src/main.tsx                   reads ?example=, hands the catalog entry to the preview
+  src/catalog.ts                 slug → title, docs page, stage options, scene loader
+  src/theme.ts                   ground, paper, accent, and the world width every scene assumes
+  src/fonts.ts                   the checked-in fonts every scene draws from
+  src/components/
+    stage/                       Stage — the canvas, camera, dark ground, optional light rig; FitWidth
+    preview/                     ExamplePreview — in view: the scene; off screen: its last frame; Poster, FirstFrame
+    text/                        shared text building blocks: Caption, Billboard, LabeledRow, TextOnPath
+  src/lib/                       paths (torus knot, circle, placeOnPath), typewriter, colour, planned-draws
   src/scenes/<slug>/
-    scene.tsx           the R3F scene that runs
-    three.ts            the three.js twin: the same thing imperatively, typechecked, never executed here
+    scene.tsx                    the R3F scene that runs — a composition, a few dozen lines
+    three.ts                     the three.js twin: the same thing imperatively, typechecked, never executed here
+    components/                  the scene's own pieces when it has more than one (Ring, Glow, Knot, WordTile, …)
+    materials.ts, config.ts      when a scene owns materials or shared constants
 ```
 
 A scene is one feature and a few dozen lines. Art is generated — gradients, lit materials, simple geometry — never

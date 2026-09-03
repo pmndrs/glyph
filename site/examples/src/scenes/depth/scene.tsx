@@ -6,7 +6,7 @@ import { useRef } from 'react';
 import type { Mesh } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
-import { ACCENT, PAPER, PAPER_DIM } from '../../stage';
+import { ACCENT, PAPER, PAPER_DIM } from '../../theme';
 
 /**
  * The default material draws over everything — `depthTest: false` — so a

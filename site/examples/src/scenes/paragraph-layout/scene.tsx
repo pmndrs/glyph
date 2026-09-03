@@ -4,7 +4,7 @@ import { useFrame } from '@react-three/fiber/webgpu';
 import { useState } from 'react';
 
 import { INTER } from '../../fonts';
-import { ACCENT, PAPER, PAPER_DIM } from '../../stage';
+import { ACCENT, PAPER, PAPER_DIM } from '../../theme';
 
 /**
  * One paragraph, three flow policies, and a box that breathes. `layout` is

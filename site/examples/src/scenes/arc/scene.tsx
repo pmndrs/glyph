@@ -7,7 +7,7 @@ import { useEffect, useRef } from 'react';
 import { Matrix4, Quaternion, Vector3 } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
-import { PAPER } from '../../stage';
+import { PAPER } from '../../theme';
 
 /**
  * Text on a circle. The paragraph is laid out on one straight line; once it

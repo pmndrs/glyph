@@ -4,7 +4,7 @@ import { useFrame } from '@react-three/fiber/webgpu';
 import { useMemo, useState } from 'react';
 
 import { CHORUS, CHORUS_MSDF, INTER } from '../../fonts';
-import { PAPER, PAPER_DIM } from '../../stage';
+import { PAPER, PAPER_DIM } from '../../theme';
 
 /**
  * Eight scripts arriving one grapheme cluster at a time. Every arrival

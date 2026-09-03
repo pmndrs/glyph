@@ -7,7 +7,7 @@ import { useEffect, useRef } from 'react';
 import { Matrix4, Quaternion, Vector3 } from 'three/webgpu';
 
 import { PLAYWRITE } from '../../fonts';
-import { PAPER } from '../../stage';
+import { PAPER } from '../../theme';
 
 /**
  * Explode, tumble, settle, repeat. Once the word is committed, `breakApart()`

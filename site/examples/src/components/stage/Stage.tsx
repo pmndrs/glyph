@@ -1,6 +1,9 @@
-import { Canvas, useFrame } from '@react-three/fiber/webgpu';
+import { Canvas } from '@react-three/fiber/webgpu';
 import type { ReactNode } from 'react';
-import { AgXToneMapping, NoToneMapping, PerspectiveCamera } from 'three/webgpu';
+import { AgXToneMapping, NoToneMapping } from 'three/webgpu';
+
+import { GROUND } from '../../theme';
+import { FOV, FitWidth } from './FitWidth';
 
 /**
  * What every example stands on: the canvas, a camera, the dark ground, and
@@ -19,16 +22,6 @@ export interface StageOptions {
   /** Add a studio light rig and film-like tone mapping for PBR materials. */
   readonly lit?: boolean;
 }
-
-/** The width, in world units, that a perspective scene may assume is visible. */
-export const WORLD_WIDTH = 11;
-
-export const GROUND = '#07080b';
-export const PAPER = '#e7ecf6';
-export const PAPER_DIM = '#97a1b4';
-export const ACCENT = '#ffd166';
-
-const FOV = 32;
 
 export function Stage({
   orthographic = false,
@@ -62,19 +55,4 @@ export function Stage({
       {children}
     </Canvas>
   );
-}
-
-/** Keeps `WORLD_WIDTH` units visible across the viewport whatever its aspect. */
-function FitWidth() {
-  useFrame(({ camera, size }) => {
-    if (!(camera instanceof PerspectiveCamera)) return;
-    const aspect = size.width / Math.max(size.height, 1);
-    // Visible height at distance d is 2·d·tan(fov/2); width is that times aspect.
-    const distance = WORLD_WIDTH / 2 / Math.tan((FOV / 2) * (Math.PI / 180)) / aspect;
-    if (Math.abs(camera.position.z - distance) > 1e-3) {
-      camera.position.z = distance;
-      camera.updateProjectionMatrix();
-    }
-  });
-  return null;
 }

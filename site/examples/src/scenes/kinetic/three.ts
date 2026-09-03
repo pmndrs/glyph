@@ -16,20 +16,10 @@ import {
 } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
-import { circle, placeOnPath } from './knot';
+import { circle, placeOnPath } from '../../lib/paths';
 import { groundMaterial, pathInk, surfaceMaterial, surfaceScroll } from './materials';
-import {
-  RADIUS,
-  REPEAT,
-  RING,
-  RING_TEXT,
-  TILE,
-  TUBE,
-  lastWord,
-  passageAt,
-  passageFrame,
-  splitCurrentWord,
-} from './scene';
+import { lastWord, passageAt, passageFrame, splitCurrentWord } from '../../lib/typewriter';
+import { RADIUS, REPEAT, RING, RING_TEXT, TILE, TUBE } from './config';
 
 /**
  * The imperative twin: a second Scene on a named root renders one word to a

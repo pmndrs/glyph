@@ -5,7 +5,7 @@ import { useFrame } from '@react-three/fiber/webgpu';
 import { useState } from 'react';
 
 import { INTER } from '../../fonts';
-import { ACCENT, PAPER, PAPER_DIM } from '../../stage';
+import { ACCENT, PAPER, PAPER_DIM } from '../../theme';
 
 /**
  * Every `TextStyle` property, one row each, over one base style. `create`

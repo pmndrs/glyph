@@ -7,7 +7,7 @@ import { useRef, useState } from 'react';
 import type { Group } from 'three/webgpu';
 
 import { INTER, INTER_STRIKES } from '../../fonts';
-import { PAPER, PAPER_DIM } from '../../stage';
+import { PAPER, PAPER_DIM } from '../../theme';
 
 /**
  * The same word, the same 32 px raster, magnified 0.25× to 4× by the scene

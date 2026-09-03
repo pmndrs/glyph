@@ -3,11 +3,11 @@ import { Text } from '@pmndrs/glyph/react';
 import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
-import type { ReactNode } from 'react';
 import { color, mix, positionLocal, uniform } from 'three/tsl';
 
+import { LabeledRow } from '../../components/text';
 import { INTER } from '../../fonts';
-import { ACCENT, PAPER, PAPER_DIM } from '../../stage';
+import { ACCENT, PAPER } from '../../theme';
 
 /**
  * Every decoration line, its color, thickness, and offset, then one custom
@@ -19,7 +19,6 @@ import { ACCENT, PAPER, PAPER_DIM } from '../../stage';
  */
 const styles = TextStyle.create({
   base: { fontSize: 0.34, color: PAPER, lineHeight: 1.1 },
-  caption: { fontSize: 0.14, color: PAPER_DIM, letterSpacing: 0.02 },
 });
 
 export const ROWS = [
@@ -54,13 +53,13 @@ export default function Decorations() {
   return (
     <>
       {ROWS.map(([name, decoration], index) => (
-        <Row key={name} index={index} name={name}>
+        <LabeledRow key={name} index={index} name={name}>
           <Text font={inter} style={[styles.base, { decoration }]} layout={{ wrap: 'none' }} constraints={WIDTH}>
             Sphinx of black quartz
           </Text>
-        </Row>
+        </LabeledRow>
       ))}
-      <Row index={ROWS.length} name="material">
+      <LabeledRow index={ROWS.length} name="material">
         <Text
           font={inter}
           material={gradientLine}
@@ -70,33 +69,7 @@ export default function Decorations() {
         >
           Sphinx of black quartz
         </Text>
-      </Row>
+      </LabeledRow>
     </>
-  );
-}
-
-function Row({
-  index,
-  name,
-  children,
-}: {
-  readonly index: number;
-  readonly name: string;
-  readonly children: ReactNode;
-}) {
-  const inter = useMsdf(INTER);
-  return (
-    <group position={[0, 2.2 - index * 0.5, 0]}>
-      <Text
-        font={inter}
-        style={styles.caption}
-        layout={{ wrap: 'none' }}
-        constraints={{ width: { mode: 'exact', size: 2 } }}
-        position={[-5.2, 0.08, 0]}
-      >
-        {name}
-      </Text>
-      <group position={[-3.2, 0.18, 0]}>{children}</group>
-    </group>
   );
 }

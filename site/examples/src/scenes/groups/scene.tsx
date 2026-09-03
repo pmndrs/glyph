@@ -1,13 +1,16 @@
 import { glyph } from '@pmndrs/glyph';
-import { GlyphProvider, Text, TextGroup } from '@pmndrs/glyph/react';
+import { GlyphProvider } from '@pmndrs/glyph/react';
+import { Text } from '@pmndrs/glyph/react';
 import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import { ThreeConfig, type TextGroup as ThreeTextGroup } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
-import { type Ref, use, useRef, useState } from 'react';
+import { use, useRef, useState } from 'react';
+
+import { COUNT, Ring } from './components/Ring';
 
 import { INTER } from '../../fonts';
 import { plannedDraws } from '../../lib/planned-draws';
-import { ACCENT, PAPER, PAPER_DIM } from '../../stage';
+import { PAPER_DIM } from '../../theme';
 
 /**
  * Many labels in one `TextGroup` on a named root. The group is a scene parent
@@ -16,8 +19,6 @@ import { ACCENT, PAPER, PAPER_DIM } from '../../stage';
  * named so the count in the centre is the ring's alone; the caption lives on
  * the default root.
  */
-const COUNT = 48;
-const LABELS = Array.from({ length: COUNT }, (_, index) => `label ${String(index + 1).padStart(2, '0')}`);
 
 /** A handle needs the engine, so it waits on `glyph.init()`; the component suspends on this like on a font. */
 const handleReady = glyph.init().then(() => glyph.handle('examples:groups', ThreeConfig));
@@ -49,30 +50,5 @@ export default function Groups() {
         {`${COUNT} labels, ${draws} ${draws === 1 ? 'draw' : 'draws'}`}
       </Text>
     </>
-  );
-}
-
-function Ring({ ref }: { readonly ref: Ref<ThreeTextGroup> }) {
-  const inter = useMsdf(INTER);
-  return (
-    <TextGroup ref={ref} renderOrder={1}>
-      {LABELS.map((label, index) => {
-        const angle = (index / COUNT) * Math.PI * 2;
-        const radius = 2.4;
-        return (
-          <Text
-            key={label}
-            font={inter}
-            style={{ fontSize: 0.16, color: index % 6 === 0 ? ACCENT : PAPER }}
-            layout={{ align: 'center', wrap: 'none' }}
-            constraints={{ width: { mode: 'exact', size: 1.2 } }}
-            position={[Math.cos(angle) * radius - 0.6, Math.sin(angle) * radius + 0.08, 0]}
-            rotation={[0, 0, angle]}
-          >
-            {label}
-          </Text>
-        );
-      })}
-    </TextGroup>
   );
 }
