@@ -3,20 +3,20 @@ import { readFile } from 'node:fs/promises';
 import {
   glyph,
   type Constraints,
-  type Font,
+  type FontFace,
   type GlyphLayoutInspection,
   type ParagraphLayout,
+  type RasterFormatRequest,
   type TextStyle,
 } from '@pmndrs/glyph';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
-import { loadFont } from '../../../../packages/glyph/src/loader.js';
 import { defineThreeConfig } from '@pmndrs/glyph/three';
 
 await glyph.init();
 let nextContractHandle = 1;
 
-export type ContractFont = Font<typeof bitmap>;
+export type ContractFont = FontFace<RasterFormatRequest<typeof bitmap>>;
 
 /** Fixture-owned font plus authenticated shaping identity retained outside the public Font API. */
 export interface ContractFontFixture {
@@ -41,17 +41,14 @@ export interface LegacyConstraints {
 
 export async function loadContractFont(url: URL, coverage?: string): Promise<ContractFontFixture> {
   const bytes = await readFile(url);
-  const [font, artifact] = await Promise.all([
-    loadFont(
-      { baked: { bytes, ownership: 'copy' } },
-      {
-        raster: bitmap,
-        options: { strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) },
-      },
-    ),
-    validateFontArtifact(bytes),
-  ]);
-  return { font, shapingHash: artifact.shapingHash, dispose: () => font.dispose() };
+  const font = glyph.fontFace(new Blob([Uint8Array.from(bytes)]), {
+    format: bitmap({
+      strikes: [16],
+      ...(coverage === undefined ? {} : { coverage: { text: coverage } }),
+    }),
+  });
+  const [loaded, artifact] = await Promise.all([font.load(), validateFontArtifact(bytes)]);
+  return { font: loaded, shapingHash: artifact.shapingHash, dispose: () => font.dispose() };
 }
 
 export function createContractText(font: ContractFont, text: string, style: TextStyle) {
