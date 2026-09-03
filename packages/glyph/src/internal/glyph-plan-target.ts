@@ -1,6 +1,6 @@
 import { createEngine, type GlyphDisplayListProjector } from './create-engine.js';
 import {
-  type AnyGlyphBindings,
+  type GlyphBindingSet,
   type CommandBufferView,
   type GlyphRenderer,
   type GlyphSchema,
@@ -15,15 +15,15 @@ import type { HandleMaterialBinding, HandleTransformBinding } from './handle-sta
 import type { PlanAcceptance, PlanCandidate, PlanTarget } from './render-planner.js';
 import type { BorrowedTypedCommandBuffer } from './typed-command-buffer.js';
 
-type PlanTargetConfig<Bindings extends AnyGlyphBindings, Result, Root, CodecValue extends Codec> = Readonly<{
+type PlanTargetConfig<Bindings extends GlyphBindingSet, Result, Root, CodecValue extends Codec> = Readonly<{
   schema: GlyphSchema<Bindings, Root>;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
-  renderer(context: RendererContext<Bindings, Result, CodecValue>): GlyphRenderer<Bindings, Result>;
+  renderer(context: RendererContext<Bindings, Result, CodecValue, Root>): GlyphRenderer<Bindings, Result>;
 }>;
 
 /** Inputs for one renderer-neutral configured plan target. */
 export interface CreateGlyphPlanTargetOptions<
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   Result,
   Root,
   CodecValue extends Codec,
@@ -37,7 +37,7 @@ export interface CreateGlyphPlanTargetOptions<
 }
 
 /** One configured synchronous plan target and its most recently committed renderer result. */
-export interface GlyphPlanTarget<Bindings extends AnyGlyphBindings, Result> extends PlanTarget {
+export interface GlyphPlanTarget<Bindings extends GlyphBindingSet, Result> extends PlanTarget {
   readonly lastResult: Result;
   syncTransforms(updates?: readonly TransformUpdate<Bindings['transform']>[]): void;
   dispose(): void;
@@ -47,13 +47,13 @@ export interface GlyphPlanTarget<Bindings extends AnyGlyphBindings, Result> exte
  * Creates the shared decode, bind, prepare, commit, and cleanup boundary for one publication root.
  * The returned target owns the configured renderer, optional built-in renderer, and command binder.
  */
-export function createGlyphPlanTarget<Bindings extends AnyGlyphBindings, Result, Root, CodecValue extends Codec>(
+export function createGlyphPlanTarget<Bindings extends GlyphBindingSet, Result, Root, CodecValue extends Codec>(
   options: CreateGlyphPlanTargetOptions<Bindings, Result, Root, CodecValue>,
 ): GlyphPlanTarget<Bindings, Result> {
   return new ConfiguredGlyphPlanTarget(options);
 }
 
-function applyGlyphPublication<Bindings extends AnyGlyphBindings, Result>(
+function applyGlyphPublication<Bindings extends GlyphBindingSet, Result>(
   candidate: PlanCandidate,
   signal: AbortSignal,
   projector: GlyphDisplayListProjector<Bindings>,
@@ -90,7 +90,7 @@ function applyGlyphPublication<Bindings extends AnyGlyphBindings, Result>(
 }
 
 class ConfiguredGlyphPlanTarget<
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   Result,
   Root,
   CodecValue extends Codec,
@@ -118,7 +118,7 @@ class ConfiguredGlyphPlanTarget<
     this.#defaultRenderer = options.defaultRenderer;
     const configured = options.config.renderer(
       Object.freeze({
-        drawRoot: options.config.schema.drawRoot(options.root),
+        boundary: options.root,
         signal: this.#rendererAbort.signal,
         codec: options.codec,
         ...(options.defaultRenderer === undefined ? {} : { defaultRenderer: options.defaultRenderer }),

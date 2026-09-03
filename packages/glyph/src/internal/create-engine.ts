@@ -1,7 +1,7 @@
 import type { PortablePayloadLease } from './render-planner.js';
 import type { HandleMaterialBinding, HandleTransformBinding } from './handle-state.js';
 import type {
-  AnyGlyphBindings,
+  GlyphBindingSet,
   CommandBufferView,
   DisplayListInstanceSpan,
   GlyphInstanceSpanBindingInput,
@@ -24,7 +24,7 @@ import {
 } from './typed-command-buffer.js';
 
 /** Package-owned retained projector used by one root publication transaction. */
-export interface GlyphDisplayListProjector<Bindings extends AnyGlyphBindings> {
+export interface GlyphDisplayListProjector<Bindings extends GlyphBindingSet> {
   source(candidate: import('./render-planner.js').PlanCandidate, signal: AbortSignal): BorrowedTypedCommandBuffer;
   project(source: BorrowedTypedCommandBuffer): CommandBufferView<Bindings>;
   settle(source: BorrowedTypedCommandBuffer, update: CommandBufferView<Bindings> | undefined, accepted: boolean): void;
@@ -43,14 +43,14 @@ interface RetainedBuffer<Buffer extends object> {
   readonly value: Buffer;
 }
 
-interface ProjectedState<Bindings extends AnyGlyphBindings> {
+interface ProjectedState<Bindings extends GlyphBindingSet> {
   readonly resources: Map<number, RetainedResource<Bindings['resource']>>;
   readonly buffers: Map<number, RetainedBuffer<Bindings['buffer']>>;
   readonly fresh: ReadonlySet<RetainedResource<Bindings['resource']>>;
 }
 
 /** Inputs for the renderer-neutral command binding engine used by one publication root. */
-export interface CreateEngineOptions<Bindings extends AnyGlyphBindings, Root> {
+export interface CreateEngineOptions<Bindings extends GlyphBindingSet, Root> {
   readonly config: Readonly<{
     schema: GlyphSchema<Bindings, Root>;
     resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
@@ -67,13 +67,13 @@ export interface CreateEngineOptions<Bindings extends AnyGlyphBindings, Root> {
  * Creates the retained mapper/binder for one publication root. Integrations provide only
  * their config schema; raw plan access, resource transactions, and identity settlement stay here.
  */
-export function createEngine<Bindings extends AnyGlyphBindings, Root>(
+export function createEngine<Bindings extends GlyphBindingSet, Root>(
   options: CreateEngineOptions<Bindings, Root>,
 ): GlyphDisplayListProjector<Bindings> {
   return new CommandBindingEngine(options);
 }
 
-class CommandBindingEngine<Bindings extends AnyGlyphBindings, Root> implements GlyphDisplayListProjector<Bindings> {
+class CommandBindingEngine<Bindings extends GlyphBindingSet, Root> implements GlyphDisplayListProjector<Bindings> {
   readonly #config: CreateEngineOptions<Bindings, Root>['config'];
   readonly #root: Root;
   readonly #materialInput: CreateEngineOptions<Bindings, Root>['materialInput'];
@@ -205,24 +205,25 @@ class CommandBindingEngine<Bindings extends AnyGlyphBindings, Root> implements G
 
       const bindSpan = (span: TypedInstanceSpan) => {
         const details = this.#mapper.instanceSpanBindingDescriptor(source, span.identity);
-        const input: GlyphInstanceSpanBindingInput<Bindings> = Object.freeze({
-          identity: span.identity,
-          kind: span.kind,
-          program: this.#program(details.program),
-          programVariant: details.programVariant,
-          resource:
-            details.resource === undefined ? undefined : this.#resource(details.resource, resources, resourceValues),
-          buffer: details.buffer === undefined ? undefined : this.#buffer(details.buffer, buffers),
-          recordIndex: span.recordIndex,
-          recordCount: span.recordCount,
-          logicalOrder: span.logicalOrder,
-          clip: details.clip,
-          semantic: details.semantic,
-          inlineStart: details.inlineStart,
-          blockStart: details.blockStart,
-          inlineExtent: details.inlineExtent,
-          blockExtent: details.blockExtent,
-        });
+        const input: GlyphInstanceSpanBindingInput<Bindings['resource'], Bindings['buffer'], Bindings['program']> =
+          Object.freeze({
+            identity: span.identity,
+            kind: span.kind,
+            program: this.#program(details.program),
+            programVariant: details.programVariant,
+            resource:
+              details.resource === undefined ? undefined : this.#resource(details.resource, resources, resourceValues),
+            buffer: details.buffer === undefined ? undefined : this.#buffer(details.buffer, buffers),
+            recordIndex: span.recordIndex,
+            recordCount: span.recordCount,
+            logicalOrder: span.logicalOrder,
+            clip: details.clip,
+            semantic: details.semantic,
+            inlineStart: details.inlineStart,
+            blockStart: details.blockStart,
+            inlineExtent: details.inlineExtent,
+            blockExtent: details.blockExtent,
+          });
         return Object.freeze({
           value: this.#config.schema.instanceSpan(this.#root, input),
           kind: span.kind,
@@ -238,7 +239,6 @@ class CommandBindingEngine<Bindings extends AnyGlyphBindings, Root> implements G
           : Object.freeze({
               kind: 'replace' as const,
               value: Object.freeze({
-                drawRoot: this.#config.schema.drawRoot(this.#root),
                 transforms: mapBorrowedSequence(this.#mapper.transformBindings(source), ({ binding, transformIndex }) =>
                   Object.freeze({ value: this.#transform(binding, transformIndex), recordIndex: transformIndex }),
                 ),

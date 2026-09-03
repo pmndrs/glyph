@@ -1,6 +1,6 @@
 import {
   type GlyphBatchBindingInput,
-  type GlyphBindings,
+  type GlyphBindingSet,
   type GlyphBufferBindingInput,
   type GlyphConfigFor,
   type GlyphHandle,
@@ -34,7 +34,7 @@ export interface ExampleResolvedResource {
 
 export interface ExampleBufferBinding {
   readonly kind: 'example-buffer';
-  readonly input: GlyphBufferBindingInput<ExampleBindings>;
+  readonly input: GlyphBufferBindingInput<ExampleProgramBinding>;
 }
 export interface ExampleProgramBinding {
   readonly kind: 'example-program';
@@ -42,15 +42,28 @@ export interface ExampleProgramBinding {
 }
 export interface ExampleInstanceSpanBinding {
   readonly kind: 'example-instance-span';
-  readonly input: GlyphInstanceSpanBindingInput<ExampleBindings>;
+  readonly input: GlyphInstanceSpanBindingInput<ExampleResolvedResource, ExampleBufferBinding, ExampleProgramBinding>;
 }
 export interface ExampleBatchBinding {
   readonly kind: 'example-batch';
-  readonly input: GlyphBatchBindingInput<ExampleBindings>;
+  readonly input: GlyphBatchBindingInput<
+    ExampleResolvedResource,
+    ExampleBufferBinding,
+    ExampleProgramBinding,
+    ExampleMaterial,
+    ExampleInstanceSpanBinding
+  >;
 }
 export interface ExampleInstanceBinding {
   readonly kind: 'example-instance';
-  readonly input: GlyphRootInstanceBindingInput<ExampleBindings>;
+  readonly input: GlyphRootInstanceBindingInput<
+    ExampleResolvedResource,
+    ExampleBufferBinding,
+    ExampleProgramBinding,
+    ExampleMaterial,
+    ExampleTransform,
+    ExampleInstanceSpanBinding
+  >;
 }
 export interface ExampleMaterial {
   readonly kind: 'example-material';
@@ -59,19 +72,18 @@ export interface ExampleTransform {
   readonly kind: 'example-transform';
 }
 
-export type ExampleBindings = GlyphBindings<
-  ExampleResolvedResource,
-  ExampleBufferBinding,
-  ExampleProgramBinding,
-  ExampleMaterial,
-  ExampleTransform,
-  ExampleBatchBinding,
-  ExampleInstanceBinding,
-  ExampleInstanceSpanBinding,
-  undefined,
-  ExampleMaterial,
-  ExampleTransform
->;
+export interface ExampleBindings extends GlyphBindingSet {
+  readonly resource: ExampleResolvedResource;
+  readonly buffer: ExampleBufferBinding;
+  readonly program: ExampleProgramBinding;
+  readonly material: ExampleMaterial;
+  readonly transform: ExampleTransform;
+  readonly batch: ExampleBatchBinding;
+  readonly instance: ExampleInstanceBinding;
+  readonly instanceSpan: ExampleInstanceSpanBinding;
+  readonly materialInput: ExampleMaterial;
+  readonly transformInput: ExampleTransform;
+}
 
 export interface ExampleRootContext {
   readonly name: string | undefined;
@@ -84,7 +96,6 @@ export interface ExampleFontFormats {
 export const ExampleFontFormats: ExampleFontFormats = Object.freeze({ glyphExample });
 
 export const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = defineGlyphSchema({
-  drawRoot: () => undefined,
   program: (_root: ExampleRootContext, program) => Object.freeze({ kind: 'example-program', program }),
   buffer: (_root, input) => Object.freeze({ kind: 'example-buffer', input }),
   material: (_root, material) => material,

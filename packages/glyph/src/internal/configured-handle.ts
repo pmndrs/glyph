@@ -15,8 +15,8 @@ import {
 } from './handle-state.js';
 import { createGlyphPlanTarget, type GlyphPlanTarget } from './glyph-plan-target.js';
 import type {
-  AnyGlyphBindings,
-  AnyGlyphConfig,
+  GlyphBindingSet,
+  GlyphConfigValue,
   Codec,
   GlyphCommandLimits,
   GlyphConfig,
@@ -67,50 +67,45 @@ interface HandleInput {
 }
 
 /** Construct a handle from one branded structural config, including a spread/wrapped config value. */
-export function createConfiguredGlyphHandleForConfig<Config extends AnyGlyphConfig>(
+export function createConfiguredGlyphHandleForConfig<Config extends GlyphConfigValue>(
   input: HandleInput,
   config: Config,
 ): GlyphConfigHandle<Config> {
-  type RuntimeConfig = GlyphConfig<GlyphRoot, AnyGlyphBindings, unknown, object, unknown, Codec, object>;
+  type RuntimeConfig = GlyphConfig<GlyphRoot, GlyphBindingSet, unknown, object, unknown, Codec, object>;
   return createConfiguredGlyphHandle(input, config as unknown as RuntimeConfig) as GlyphConfigHandle<Config>;
 }
 
 /** @internal Core-owned constructor installed by defineGlyphConfig. */
 export function createConfiguredGlyphHandle<
   Root extends GlyphRoot,
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   RendererResult,
-  FontTechniques extends object,
+  FontFormats extends object,
   Boundary,
   CodecValue extends Codec,
   ConfigExtension extends object,
 >(
   input: HandleInput,
-  config: GlyphConfig<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue, ConfigExtension>,
+  config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>,
 ): GlyphHandle<Root> {
-  return new ConfiguredHandleDomain<
-    Root,
-    Bindings,
-    RendererResult,
-    FontTechniques,
-    Boundary,
-    CodecValue,
-    ConfigExtension
-  >(input, config).handle;
+  return new ConfiguredHandleDomain<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>(
+    input,
+    config,
+  ).handle;
 }
 
 class ConfiguredHandleDomain<
   Root extends GlyphRoot,
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   RendererResult,
-  FontTechniques extends object,
+  FontFormats extends object,
   Boundary,
   CodecValue extends Codec,
   ConfigExtension extends object,
 > {
   readonly handle: GlyphHandle<Root>;
   readonly #input: HandleInput;
-  readonly #config: GlyphConfig<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue, ConfigExtension>;
+  readonly #config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>;
   readonly #handleState: GlyphHandleState;
   readonly #codecRegistration;
   readonly #codec: CodecValue;
@@ -121,7 +116,7 @@ class ConfiguredHandleDomain<
 
   constructor(
     input: HandleInput,
-    config: GlyphConfig<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue, ConfigExtension>,
+    config: GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension>,
   ) {
     this.#input = input;
     this.#config = config;
@@ -380,15 +375,17 @@ class ConfiguredHandleDomain<
   }
 }
 
-interface RootRuntimeConfig<Bindings extends AnyGlyphBindings, RendererResult, Boundary, CodecValue extends Codec> {
+interface RootRuntimeConfig<Bindings extends GlyphBindingSet, RendererResult, Boundary, CodecValue extends Codec> {
   readonly schema: GlyphSchema<Bindings, Boundary>;
   readonly commands?: Partial<import('../config/glyph.js').GlyphCommandCapacity>;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
-  renderer(context: RendererContext<Bindings, RendererResult, CodecValue>): GlyphRenderer<Bindings, RendererResult>;
+  renderer(
+    context: RendererContext<Bindings, RendererResult, CodecValue, Boundary>,
+  ): GlyphRenderer<Bindings, RendererResult>;
 }
 
 class ConfiguredRootServices<
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   RendererResult,
   Boundary,
   CodecValue extends Codec,
@@ -767,7 +764,7 @@ interface BoundTextState {
 
 class ConfiguredTextController<
   Technique extends AnyRasterFormat,
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   RendererResult,
   Boundary,
   CodecValue extends Codec,

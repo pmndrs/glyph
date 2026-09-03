@@ -53,63 +53,35 @@ export interface SemanticIdentity {
 export type GlyphInstanceKind = 'glyph' | 'decoration' | 'inline-object' | 'clip' | 'codec';
 
 /** Renderer binding vocabulary selected by one GlyphConfig. */
-export interface GlyphBindings<
-  Resource extends object,
-  Buffer extends object,
-  Program extends object,
-  Material extends object,
-  Transform extends object,
-  Batch extends object,
-  Instance extends object,
-  InstanceSpan extends object,
-  DrawRoot extends object | undefined = Transform,
-  MaterialInput = Material,
-  TransformInput = Transform,
-> {
-  readonly resource: Resource;
-  readonly buffer: Buffer;
-  readonly program: Program;
-  readonly material: Material;
-  readonly transform: Transform;
-  readonly batch: Batch;
-  readonly instance: Instance;
-  readonly instanceSpan: InstanceSpan;
-  /** Per-boundary renderer root; integrations without scene hierarchy use `undefined`. */
-  readonly drawRoot: DrawRoot;
+export interface GlyphBindingSet {
+  readonly resource: object;
+  readonly buffer: object;
+  readonly program: object;
+  readonly material: object;
+  readonly transform: object;
+  readonly batch: object;
+  readonly instance: object;
+  readonly instanceSpan: object;
   /** Adapter-authored material value accepted by root Text state. */
-  readonly materialInput: MaterialInput;
+  readonly materialInput: unknown;
   /** Adapter-authored transform value accepted by root Text state. */
-  readonly transformInput: TransformInput;
+  readonly transformInput: unknown;
 }
-
-export type AnyGlyphBindings = GlyphBindings<
-  object,
-  object,
-  object,
-  object,
-  object,
-  object,
-  object,
-  object,
-  object | undefined,
-  unknown,
-  unknown
->;
 
 export type GlyphBufferDeclaration = Readonly<{ kind: 'codec'; value: CodecBuffer }> | Readonly<{ kind: 'order' }>;
 
-export interface GlyphBufferBindingInput<Bindings extends AnyGlyphBindings> {
-  readonly program: Bindings['program'];
+export interface GlyphBufferBindingInput<Program extends object> {
+  readonly program: Program;
   readonly declaration: GlyphBufferDeclaration;
 }
 
-export interface GlyphInstanceSpanBindingInput<Bindings extends AnyGlyphBindings> {
+export interface GlyphInstanceSpanBindingInput<Resource extends object, Buffer extends object, Program extends object> {
   readonly identity: InstanceSpanIdentity;
   readonly kind: GlyphInstanceKind;
-  readonly program: Bindings['program'];
+  readonly program: Program;
   readonly programVariant: number;
-  readonly resource: Bindings['resource'] | undefined;
-  readonly buffer: Bindings['buffer'] | undefined;
+  readonly resource: Resource | undefined;
+  readonly buffer: Buffer | undefined;
   readonly recordIndex: number;
   readonly recordCount: number;
   readonly logicalOrder: number;
@@ -121,42 +93,79 @@ export interface GlyphInstanceSpanBindingInput<Bindings extends AnyGlyphBindings
   readonly blockExtent: number;
 }
 
-export interface GlyphDrawBindingInput<Bindings extends AnyGlyphBindings> {
-  readonly program: Bindings['program'];
+export interface GlyphDrawBindingInput<
+  Resource extends object,
+  Buffer extends object,
+  Program extends object,
+  Material extends object,
+> {
+  readonly program: Program;
   readonly programVariant: number;
-  readonly material: Bindings['material'] | undefined;
-  readonly buffers: BorrowedCommandSequence<Bindings['buffer']>;
-  readonly resources: BorrowedCommandSequence<Bindings['resource']>;
+  readonly material: Material | undefined;
+  readonly buffers: BorrowedCommandSequence<Buffer>;
+  readonly resources: BorrowedCommandSequence<Resource>;
   readonly flags: number;
   readonly clip: ClipIdentity | undefined;
   readonly depthKey: number;
   readonly order: number;
-  readonly indirect: Readonly<{ buffer: Bindings['buffer']; byteOffset: number }> | undefined;
+  readonly indirect: Readonly<{ buffer: Buffer; byteOffset: number }> | undefined;
 }
 
-export interface GlyphBatchBindingInput<Bindings extends AnyGlyphBindings> extends GlyphDrawBindingInput<Bindings> {
+export interface GlyphBatchBindingInput<
+  Resource extends object,
+  Buffer extends object,
+  Program extends object,
+  Material extends object,
+  InstanceSpan extends object,
+> extends GlyphDrawBindingInput<Resource, Buffer, Program, Material> {
   readonly identity: BatchIdentity;
-  readonly instances: BorrowedCommandSequence<DisplayListInstanceSpan<Bindings['instanceSpan']>>;
+  readonly instances: BorrowedCommandSequence<DisplayListInstanceSpan<InstanceSpan>>;
 }
 
 export interface GlyphRootInstanceBindingInput<
-  Bindings extends AnyGlyphBindings,
-> extends GlyphDrawBindingInput<Bindings> {
+  Resource extends object,
+  Buffer extends object,
+  Program extends object,
+  Material extends object,
+  Transform extends object,
+  InstanceSpan extends object,
+> extends GlyphDrawBindingInput<Resource, Buffer, Program, Material> {
   readonly identity: InstanceIdentity;
-  readonly transform: Bindings['transform'] | undefined;
-  readonly instance: DisplayListInstanceSpan<Bindings['instanceSpan']>;
+  readonly transform: Transform | undefined;
+  readonly instance: DisplayListInstanceSpan<InstanceSpan>;
 }
 
 /** Config-owned schema that binds trusted engine meanings to renderer payloads. */
-export interface GlyphSchema<Bindings extends AnyGlyphBindings, Boundary> {
-  drawRoot(boundary: Boundary): Bindings['drawRoot'];
+export interface GlyphSchema<Bindings extends GlyphBindingSet, Boundary> {
   program(boundary: Boundary, program: CodecProgram): Bindings['program'];
-  buffer(boundary: Boundary, input: GlyphBufferBindingInput<Bindings>): Bindings['buffer'];
+  buffer(boundary: Boundary, input: GlyphBufferBindingInput<Bindings['program']>): Bindings['buffer'];
   material(boundary: Boundary, material: Bindings['materialInput']): Bindings['material'];
   transform(boundary: Boundary, transform: Bindings['transformInput'], recordIndex: number): Bindings['transform'];
-  batch(boundary: Boundary, input: GlyphBatchBindingInput<Bindings>): Bindings['batch'];
-  instance(boundary: Boundary, input: GlyphRootInstanceBindingInput<Bindings>): Bindings['instance'];
-  instanceSpan(boundary: Boundary, input: GlyphInstanceSpanBindingInput<Bindings>): Bindings['instanceSpan'];
+  batch(
+    boundary: Boundary,
+    input: GlyphBatchBindingInput<
+      Bindings['resource'],
+      Bindings['buffer'],
+      Bindings['program'],
+      Bindings['material'],
+      Bindings['instanceSpan']
+    >,
+  ): Bindings['batch'];
+  instance(
+    boundary: Boundary,
+    input: GlyphRootInstanceBindingInput<
+      Bindings['resource'],
+      Bindings['buffer'],
+      Bindings['program'],
+      Bindings['material'],
+      Bindings['transform'],
+      Bindings['instanceSpan']
+    >,
+  ): Bindings['instance'];
+  instanceSpan(
+    boundary: Boundary,
+    input: GlyphInstanceSpanBindingInput<Bindings['resource'], Bindings['buffer'], Bindings['program']>,
+  ): Bindings['instanceSpan'];
 }
 
 type DefinedGlyphBindings<
@@ -168,22 +177,20 @@ type DefinedGlyphBindings<
   Batch extends object,
   Instance extends object,
   InstanceSpan extends object,
-  DrawRoot extends object | undefined,
   MaterialInput,
   TransformInput,
-> = GlyphBindings<
-  Resource,
-  Buffer,
-  Program,
-  Material,
-  Transform,
-  Batch,
-  Instance,
-  InstanceSpan,
-  DrawRoot,
-  MaterialInput,
-  TransformInput
->;
+> = {
+  readonly resource: Resource;
+  readonly buffer: Buffer;
+  readonly program: Program;
+  readonly material: Material;
+  readonly transform: Transform;
+  readonly batch: Batch;
+  readonly instance: Instance;
+  readonly instanceSpan: InstanceSpan;
+  readonly materialInput: MaterialInput;
+  readonly transformInput: TransformInput;
+};
 
 /** Define one boundary schema while inferring its complete binding vocabulary from the callbacks. */
 export function defineGlyphSchema<
@@ -195,7 +202,6 @@ export function defineGlyphSchema<
   Batch extends object,
   Instance extends object,
   InstanceSpan extends object,
-  DrawRoot extends object | undefined,
   MaterialInput = Material,
   TransformInput = Transform,
   Boundary = unknown,
@@ -210,7 +216,6 @@ export function defineGlyphSchema<
       Batch,
       Instance,
       InstanceSpan,
-      DrawRoot,
       MaterialInput,
       TransformInput
     >,
@@ -220,16 +225,7 @@ export function defineGlyphSchema<
   if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) {
     throw new TypeError('Glyph schema must be an object');
   }
-  for (const key of [
-    'drawRoot',
-    'program',
-    'buffer',
-    'material',
-    'transform',
-    'batch',
-    'instance',
-    'instanceSpan',
-  ] as const) {
+  for (const key of ['program', 'buffer', 'material', 'transform', 'batch', 'instance', 'instanceSpan'] as const) {
     if (typeof schema[key] !== 'function') throw new TypeError(`Glyph schema ${key} must be a function`);
   }
   return Object.freeze({ ...schema });
@@ -333,12 +329,11 @@ export interface DisplayListRootInstance<Instance extends object, Transform exte
   readonly transform: Transform | undefined;
 }
 
-export type DisplayListChild<Bindings extends AnyGlyphBindings> =
+export type DisplayListChild<Bindings extends GlyphBindingSet> =
   | DisplayListBatch<Bindings['batch'], Bindings['instanceSpan']>
   | DisplayListRootInstance<Bindings['instance'], Bindings['transform']>;
 
-export interface DisplayList<Bindings extends AnyGlyphBindings> {
-  readonly drawRoot: Bindings['drawRoot'];
+export interface DisplayList<Bindings extends GlyphBindingSet> {
   readonly transforms: BorrowedCommandSequence<DisplayListTransform<Bindings['transform']>>;
   readonly children: BorrowedCommandSequence<DisplayListChild<Bindings>>;
 }
@@ -349,7 +344,7 @@ export interface DisplayListTransform<Transform extends object> {
   readonly recordIndex: number;
 }
 
-export type DisplayListPhase<Bindings extends AnyGlyphBindings> =
+export type DisplayListPhase<Bindings extends GlyphBindingSet> =
   | Readonly<{ kind: 'unchanged' }>
   | Readonly<{ kind: 'replace'; value: DisplayList<Bindings> }>;
 
@@ -359,7 +354,7 @@ export type Retirement<Resource extends object, Buffer extends object> =
   | Readonly<{ kind: 'slot-range'; byteOffset: number; byteLength: number }>
   | Readonly<{ kind: 'output-bytes'; byteOffset: number; byteLength: number }>;
 
-export interface DisplayListChanges<Bindings extends AnyGlyphBindings> {
+export interface DisplayListChanges<Bindings extends GlyphBindingSet> {
   readonly resources: BorrowedCommandSequence<ResourceUpdate<Bindings['resource']>>;
   readonly buffers: BorrowedCommandSequence<BufferUpdate<Bindings['buffer'], Bindings['program']>>;
   readonly patches: BorrowedCommandSequence<BufferPatch<Bindings['buffer']>>;
@@ -370,7 +365,7 @@ export interface DisplayListChanges<Bindings extends AnyGlyphBindings> {
  * One phase-structured retained display-list update. Every reference is already a typed
  * binding; numeric engine IDs and the trusted wire representation remain private.
  */
-export interface CommandBufferView<Bindings extends AnyGlyphBindings> {
+export interface CommandBufferView<Bindings extends GlyphBindingSet> {
   readonly delivery: 'borrowed-command-buffer';
   readonly engineRevision: number;
   /** Monotonic revision of this root's Codec-produced command state. */
@@ -392,18 +387,20 @@ export interface TransformUpdate<Transform extends object> {
 }
 
 /** Adapter-side decoder: stages retained host objects; it does not submit a host render pass. */
-export interface GlyphRenderer<Bindings extends AnyGlyphBindings, Result> {
+export interface GlyphRenderer<Bindings extends GlyphBindingSet, Result> {
   decode(view: CommandBufferView<Bindings>): PreparedRendererCommit<Result>;
   syncTransforms(updates: readonly TransformUpdate<Bindings['transform']>[]): void;
   dispose(): void;
 }
 
 export interface RendererContext<
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   Result = unknown,
   CodecValue extends Codec = Codec,
+  Boundary = unknown,
 > {
-  readonly drawRoot: Bindings['drawRoot'];
+  /** Adapter-owned publication boundary captured by this root's renderer. */
+  readonly boundary: Boundary;
   readonly signal: AbortSignal;
   readonly codec: CodecValue;
   /** Built-in renderer selected by an adapter before a config wrapper is applied. */
@@ -481,7 +478,7 @@ export interface GlyphShapeOptions {
 }
 
 /** Core-owned shaping/publication services scoped to exactly one anonymous or named root. */
-export interface GlyphRootServices<Bindings extends AnyGlyphBindings, RendererResult, Boundary = unknown> {
+export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererResult, Boundary = unknown> {
   createText<Technique extends AnyRasterFormat>(
     state: GlyphTextState<Technique, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Technique, Bindings['materialInput'], Bindings['transformInput']>;
@@ -509,7 +506,7 @@ export type GlyphCopyRequest =
   | Readonly<{ kind: 'glyphs'; stableIds: ArrayLike<number> }>
   | Readonly<{ kind: 'decorations' }>;
 
-export interface GlyphCopyDestination<Bindings extends AnyGlyphBindings, RendererResult, Boundary> {
+export interface GlyphCopyDestination<Bindings extends GlyphBindingSet, RendererResult, Boundary> {
   readonly boundary: Boundary;
   readonly renderer: GlyphRenderer<Bindings, RendererResult>;
 }
@@ -542,7 +539,7 @@ export interface GlyphCommandCapacity {
 }
 
 /** Adapter-provided host boundary used to finish one core-owned publication root. */
-export interface GlyphRootCreateOptions<Bindings extends AnyGlyphBindings, RendererResult, Boundary> {
+export interface GlyphRootCreateOptions<Bindings extends GlyphBindingSet, RendererResult, Boundary> {
   readonly boundary: Boundary;
   readonly defaultRenderer?: GlyphRenderer<Bindings, RendererResult>;
   readonly shape?: GlyphRootShapeHooks<RendererResult>;
@@ -551,23 +548,25 @@ export interface GlyphRootCreateOptions<Bindings extends AnyGlyphBindings, Rende
 
 /** Exact immutable config surface visible while one adapter root is constructed. */
 export type SelectedGlyphConfig<
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   RendererResult,
   Boundary,
   CodecValue extends Codec,
   ConfigExtension extends object,
 > = Readonly<ConfigExtension> & {
   readonly schema: GlyphSchema<Bindings, Boundary>;
-  readonly fonts?: AnyGlyphFontConfig;
+  readonly fonts?: GlyphFontConfigValue;
   readonly commands?: Partial<GlyphCommandCapacity>;
   encode(context: EncodeContext): CodecValue;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
-  renderer(context: RendererContext<Bindings, RendererResult, CodecValue>): GlyphRenderer<Bindings, RendererResult>;
+  renderer(
+    context: RendererContext<Bindings, RendererResult, CodecValue, Boundary>,
+  ): GlyphRenderer<Bindings, RendererResult>;
 };
 
 /** Two-phase root construction breaks the services/root/boundary cycle without exposing internals. */
 export interface GlyphRootRecipeContext<
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   RendererResult,
   Boundary,
   CodecValue extends Codec = Codec,
@@ -587,7 +586,7 @@ export interface GlyphRootRecipeContext<
 /** Config recipe for the anonymous root and every idempotent named root. */
 export interface GlyphRootRecipe<
   Root extends GlyphRoot,
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   RendererResult,
   Boundary,
   CodecValue extends Codec = Codec,
@@ -614,16 +613,16 @@ export interface GlyphFontConfig<Formats extends object> {
   readonly formats: Formats & { readonly [Key in keyof Formats]: AnyRasterFormat };
 }
 
-interface AnyGlyphFontConfig {
+interface GlyphFontConfigValue {
   readonly default: string;
   readonly formats: Readonly<object>;
 }
 
 interface GlyphConfigContract<
   Root extends GlyphRoot,
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   RendererResult,
-  FontTechniques extends object = object,
+  FontFormats extends object = object,
   Boundary = unknown,
   CodecValue extends Codec = Codec,
   ConfigExtension extends object = object,
@@ -631,7 +630,7 @@ interface GlyphConfigContract<
   readonly [glyphConfigBrand]: true;
   readonly [glyphConfigRootType]?: () => Root;
   readonly schema: GlyphSchema<Bindings, Boundary>;
-  readonly fonts?: GlyphFontConfig<FontTechniques>;
+  readonly fonts?: GlyphFontConfig<FontFormats>;
   readonly commands?: Partial<GlyphCommandCapacity>;
   readonly root: GlyphRootRecipe<
     Root,
@@ -643,24 +642,26 @@ interface GlyphConfigContract<
   >;
   encode(context: EncodeContext): CodecValue;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
-  renderer(context: RendererContext<Bindings, RendererResult, CodecValue>): GlyphRenderer<Bindings, RendererResult>;
+  renderer(
+    context: RendererContext<Bindings, RendererResult, CodecValue, Boundary>,
+  ): GlyphRenderer<Bindings, RendererResult>;
 }
 
 export type GlyphConfig<
   Root extends GlyphRoot,
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   RendererResult,
-  FontTechniques extends object = object,
+  FontFormats extends object = object,
   Boundary = unknown,
   CodecValue extends Codec = Codec,
   ConfigExtension extends object = object,
-> = GlyphConfigContract<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue, ConfigExtension> &
+> = GlyphConfigContract<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue, ConfigExtension> &
   Readonly<ConfigExtension>;
 
 /** Minimal covariant surface the root runtime needs to construct an inferred handle. */
-export interface AnyGlyphConfig {
+export interface GlyphConfigValue {
   readonly [glyphConfigBrand]: true;
-  readonly fonts?: AnyGlyphFontConfig;
+  readonly fonts?: GlyphFontConfigValue;
 }
 
 export type GlyphConfigHandle<Config> = Config extends {
@@ -684,25 +685,25 @@ export type GlyphConfigFor<
   Root extends GlyphRoot,
   RendererResult,
   CodecValue extends Codec = Codec,
-  FontTechniques extends object = object,
+  FontFormats extends object = object,
 > =
   Schema extends GlyphSchema<infer Bindings, infer Boundary>
-    ? GlyphConfig<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue>
+    ? GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>
     : never;
 
 export function defineGlyphConfig<
   Root extends GlyphRoot,
-  Bindings extends AnyGlyphBindings,
+  Bindings extends GlyphBindingSet,
   RendererResult,
-  FontTechniques extends object,
+  FontFormats extends object,
   Boundary,
   CodecValue extends Codec,
 >(
   config: Omit<
-    GlyphConfigContract<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue>,
+    GlyphConfigContract<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>,
     typeof glyphConfigBrand
   >,
-): GlyphConfig<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue> {
+): GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue> {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw new TypeError('GlyphConfig must be an object');
   }
@@ -715,16 +716,7 @@ export function defineGlyphConfig<
   if (typeof config.root !== 'object' || config.root === null || typeof config.root.create !== 'function') {
     throw new TypeError('GlyphConfig.root must define create');
   }
-  for (const key of [
-    'drawRoot',
-    'program',
-    'buffer',
-    'material',
-    'transform',
-    'batch',
-    'instance',
-    'instanceSpan',
-  ] as const) {
+  for (const key of ['program', 'buffer', 'material', 'transform', 'batch', 'instance', 'instanceSpan'] as const) {
     if (typeof config.schema[key] !== 'function') throw new TypeError(`GlyphConfig.schema must define ${key}`);
   }
   if (config.fonts !== undefined) {
@@ -740,7 +732,7 @@ export function defineGlyphConfig<
       throw new TypeError('GlyphConfig.fonts needs a default key and format map');
     }
   }
-  type DefinedConfig = GlyphConfig<Root, Bindings, RendererResult, FontTechniques, Boundary, CodecValue>;
+  type DefinedConfig = GlyphConfig<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>;
   const defined = Object.freeze({
     ...config,
     [glyphConfigBrand]: true as const,

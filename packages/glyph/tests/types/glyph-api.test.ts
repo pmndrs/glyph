@@ -1,6 +1,6 @@
 import {
   glyph,
-  type GlyphBindings,
+  type GlyphBindingSet,
   type GlyphConfigBindings,
   type GlyphConfigHandle,
   type GlyphHandle,
@@ -27,12 +27,8 @@ instanceKinds satisfies readonly ('glyph' | 'decoration')[];
 
 type IsAny<Value> = 0 extends 1 & Value ? true : false;
 
-interface RecordingDrawRoot {
-  readonly kind: 'recording-draw-root';
-}
-
 interface RecordingBoundary {
-  readonly drawRoot: RecordingDrawRoot;
+  readonly kind: 'recording-boundary';
 }
 
 interface RecordingMaterialInput {
@@ -76,19 +72,18 @@ interface RecordingInstanceSpan {
   readonly kind: 'recording-instance-span';
 }
 
-type RecordingBindings = GlyphBindings<
-  RecordingResource,
-  RecordingBuffer,
-  RecordingProgram,
-  RecordingMaterial,
-  RecordingTransform,
-  RecordingBatch,
-  RecordingInstance,
-  RecordingInstanceSpan,
-  RecordingDrawRoot,
-  RecordingMaterialInput,
-  RecordingTransformInput
->;
+interface RecordingBindings extends GlyphBindingSet {
+  readonly resource: RecordingResource;
+  readonly buffer: RecordingBuffer;
+  readonly program: RecordingProgram;
+  readonly material: RecordingMaterial;
+  readonly transform: RecordingTransform;
+  readonly batch: RecordingBatch;
+  readonly instance: RecordingInstance;
+  readonly instanceSpan: RecordingInstanceSpan;
+  readonly materialInput: RecordingMaterialInput;
+  readonly transformInput: RecordingTransformInput;
+}
 
 interface RecordingRoot extends GlyphRoot {
   readonly kind: 'recording-root';
@@ -96,7 +91,6 @@ interface RecordingRoot extends GlyphRoot {
 }
 
 const recordingSchema: GlyphSchema<RecordingBindings, RecordingBoundary> = {
-  drawRoot: (boundary: RecordingBoundary) => boundary.drawRoot,
   program: () => Object.freeze({ kind: 'recording-program' as const }),
   buffer: () => Object.freeze({ kind: 'recording-buffer' as const }),
   material: (_boundary, material: RecordingMaterialInput) =>
@@ -137,9 +131,7 @@ const recordingConfig = defineGlyphConfig({
         },
       };
       return context.create(extension, {
-        boundary: Object.freeze({
-          drawRoot: Object.freeze({ kind: 'recording-draw-root' as const }),
-        }),
+        boundary: Object.freeze({ kind: 'recording-boundary' as const }),
         shape: {
           accepted: (accepted) => {
             accepted.kind satisfies 'recording-result';
@@ -167,7 +159,6 @@ view.displayList.kind satisfies 'unchanged' | 'replace';
 view.updates.resources.at(0)?.resource.kind satisfies 'recording-resource' | undefined;
 view.updates.buffers.at(0)?.buffer.kind satisfies 'recording-buffer' | undefined;
 if (view.displayList.kind === 'replace') {
-  view.displayList.value.drawRoot.kind satisfies 'recording-draw-root';
   view.displayList.value.transforms.at(0)?.value.kind satisfies 'recording-transform' | undefined;
   const child = view.displayList.value.children.at(0);
   if (child?.kind === 'batch') child.value.kind satisfies 'recording-batch';

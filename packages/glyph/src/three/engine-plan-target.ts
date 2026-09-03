@@ -318,7 +318,7 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
       preparedDraws =
         frame.displayList.kind === 'replace'
           ? prepareDrawReplacement({
-              root: frame.displayList.value.drawRoot,
+              root: this.#owner.drawRoot,
               children: frame.displayList.value.children,
               context,
               coordinator: this.#resourcesContext,

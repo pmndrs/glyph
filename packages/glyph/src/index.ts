@@ -28,7 +28,7 @@ export {
   type GlyphEngineStatusDetails,
 } from './engine-error.js';
 export type {
-  AnyGlyphBindings,
+  GlyphBindingSet,
   BorrowedCommandSequence,
   BatchIdentity,
   BufferPatch,
@@ -46,7 +46,6 @@ export type {
   DisplayListTransform,
   EncodeContext,
   GlyphBatchBindingInput,
-  GlyphBindings,
   GlyphBufferDeclaration,
   GlyphBufferBindingInput,
   GlyphCommandCapacity,

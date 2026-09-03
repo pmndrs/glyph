@@ -4,7 +4,7 @@ import {
   defineGlyphConfig,
   defineGlyphSchema,
   resourceLease,
-  type GlyphBindings,
+  type GlyphBindingSet,
   type GlyphBatchBindingInput,
   type GlyphBufferBindingInput,
   type GlyphConfigFor,
@@ -40,22 +40,35 @@ export interface ThreeProgramBinding {
 
 export interface ThreeBufferBinding {
   readonly kind: 'three-buffer';
-  readonly input: GlyphBufferBindingInput<ThreeBindings>;
+  readonly input: GlyphBufferBindingInput<ThreeProgramBinding>;
 }
 
 export interface ThreeInstanceSpanBinding {
   readonly kind: 'three-instance-span';
-  readonly input: GlyphInstanceSpanBindingInput<ThreeBindings>;
+  readonly input: GlyphInstanceSpanBindingInput<ThreeResolvedResourceBinding, ThreeBufferBinding, ThreeProgramBinding>;
 }
 
 export interface ThreeBatchBinding {
   readonly kind: 'three-batch';
-  readonly input: GlyphBatchBindingInput<ThreeBindings>;
+  readonly input: GlyphBatchBindingInput<
+    ThreeResolvedResourceBinding,
+    ThreeBufferBinding,
+    ThreeProgramBinding,
+    ThreeResolvedMaterialBinding,
+    ThreeInstanceSpanBinding
+  >;
 }
 
 export interface ThreeInstanceBinding {
   readonly kind: 'three-instance';
-  readonly input: GlyphRootInstanceBindingInput<ThreeBindings>;
+  readonly input: GlyphRootInstanceBindingInput<
+    ThreeResolvedResourceBinding,
+    ThreeBufferBinding,
+    ThreeProgramBinding,
+    ThreeResolvedMaterialBinding,
+    THREE.Object3D,
+    ThreeInstanceSpanBinding
+  >;
 }
 
 export interface ThreePortableResource {
@@ -77,19 +90,18 @@ export interface ThreeResolvedMaterialBinding extends ThreeMaterialBinding {
   readonly root: ThreeRootContext;
 }
 
-export type ThreeBindings = GlyphBindings<
-  ThreeResolvedResourceBinding,
-  ThreeBufferBinding,
-  ThreeProgramBinding,
-  ThreeResolvedMaterialBinding,
-  THREE.Object3D,
-  ThreeBatchBinding,
-  ThreeInstanceBinding,
-  ThreeInstanceSpanBinding,
-  THREE.Object3D,
-  ThreeMaterialBinding,
-  THREE.Object3D
->;
+export interface ThreeBindings extends GlyphBindingSet {
+  readonly resource: ThreeResolvedResourceBinding;
+  readonly buffer: ThreeBufferBinding;
+  readonly program: ThreeProgramBinding;
+  readonly material: ThreeResolvedMaterialBinding;
+  readonly transform: THREE.Object3D;
+  readonly batch: ThreeBatchBinding;
+  readonly instance: ThreeInstanceBinding;
+  readonly instanceSpan: ThreeInstanceSpanBinding;
+  readonly materialInput: ThreeMaterialBinding;
+  readonly transformInput: THREE.Object3D;
+}
 
 /** Callable Three handle. Its direct factories delegate to the one anonymous root. */
 export type ThreeHandle = GlyphHandle<ThreeRoot>;
@@ -122,7 +134,6 @@ export interface ThreeRootBinding {
 }
 
 export const ThreeSchema: GlyphSchema<ThreeBindings, ThreeRootBinding> = defineGlyphSchema({
-  drawRoot: (root: ThreeRootBinding) => root.drawRoot,
   program: (_root, program) => Object.freeze({ kind: 'three-program', program }),
   buffer: (_root, input) => Object.freeze({ kind: 'three-buffer', input }),
   material: (root, binding) =>
@@ -174,7 +185,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
         }),
         () => undefined,
       ),
-    renderer: (context: RendererContext<ThreeBindings, void, ThreeCodec>) => {
+    renderer: (context: RendererContext<ThreeBindings, void, ThreeCodec, ThreeRootBinding>) => {
       if (context.defaultRenderer === undefined) {
         throw new TypeError('ThreeConfig.renderer() must be constructed by a Three publication boundary');
       }
