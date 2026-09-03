@@ -18,7 +18,7 @@ import {
   Glyphs,
   Text,
   TextGroup,
-  ThreeRoot,
+  type ThreeRoot,
   ThreeConfig,
   ThreeFontFormats,
   defineThreeConfig,
@@ -68,6 +68,10 @@ const inter = glyph.fontFace('/fonts/Inter.font.glb', {
   family: 'Inter',
   format: [slug, bitmap({ strikes: [8, 16] })],
 });
+// @ts-expect-error Font loading belongs to FontFace, not the renderer handle.
+three.loadFont(inter);
+// @ts-expect-error Internal Font acquisition does not leak through named roots.
+hud.acquireFont(inter.slug);
 // @ts-expect-error Bitmap requires its bake contract; use bitmap({ strikes: [...] }).
 glyph.fontFace('/fonts/bitmap-without-options.font.glb', { format: bitmap });
 // @ts-expect-error A FontFace format declaration must not be empty.

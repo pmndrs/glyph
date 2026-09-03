@@ -1,11 +1,11 @@
-import type { Codec } from '../config/glyph.js';
-import type { CodecIdFactory } from '../config/codec.js';
-import type { ThreeTextMaterial } from './material.js';
+import type { Codec } from '../../config/glyph.js';
+import type { CodecIdFactory } from '../../config/codec.js';
+import type { ThreeTextMaterial } from '../material.js';
 import {
   compiledThreeRasterPlanPrograms,
   releaseThreeRasterPlanProgramSnapshot,
   type CompiledThreeRasterPlanProgram,
-} from './plan-program-registry.js';
+} from '../plan-program-registry.js';
 
 interface DisposableThreeRenderResource {
   dispose(): void;
@@ -16,7 +16,6 @@ interface RetainedThreeRenderResource {
   references: number;
 }
 
-/** Counted lease for a handle-shared Three GPU resource. */
 export interface ThreeRenderResourceLease<Resource extends DisposableThreeRenderResource> {
   readonly resource: Resource;
   dispose(): void;
@@ -28,7 +27,6 @@ export interface ThreeCodec extends Codec {
   readonly resources: ThreeRendererResources;
 }
 
-/** Creates the complete Three Codec, including every renderer program used by its command buffer. */
 export function createThreeCodec(
   ids: CodecIdFactory,
   transformMode: 'direct' | 'indexed',

@@ -1,5 +1,12 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-03
+
+- **Closed the source-condition Three root backdoor** — Public Three handles and terminal roots now expose only retained
+  Text/TextGroup construction, identity/lifecycle, counts, and mutable material presentation. Renderer draw roots,
+  discovered Scenes, root services, command boundaries, and Font lease acquisition moved behind package-private host
+  identity; explicit export-map denials keep those implementation leaves unavailable to source and packed consumers.
+
 ## 2026-09-02
 
 - **Retired the duplicate public font-loader story** — `glyph.fontFace()` now owns the only application loading path and

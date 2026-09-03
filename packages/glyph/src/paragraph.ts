@@ -74,7 +74,7 @@ const measurementCapabilities: CodecCapabilitySet = Object.freeze({
 });
 
 interface ParagraphBaseOptions<Technique extends AnyRasterFormat> {
-  readonly font: FontSelection<Technique> | AnyFontFaceSelection;
+  readonly font: FontSelection<Technique>;
   /** Text shaping and presentation properties inherited by inline spans. */
   readonly style?: PropertyList<TextStyle>;
   readonly rasterPixelRatio?: number;
@@ -84,6 +84,11 @@ interface ParagraphBaseOptions<Technique extends AnyRasterFormat> {
 
 export type ParagraphOptions<Technique extends AnyRasterFormat> = ParagraphBaseOptions<Technique> &
   ParagraphContentProperties<Technique>;
+
+type FontFaceParagraphOptions<Selection extends AnyFontFaceSelection> = Omit<
+  ParagraphOptions<FontFaceRasterOf<Selection>>,
+  'font'
+> & { readonly font: Selection };
 
 type ParagraphContentUpdate<Technique extends AnyRasterFormat> = Readonly<{
   text?: ParagraphOptions<Technique>['text'];
@@ -310,20 +315,20 @@ function writeParagraphQueryCache<Value>(cache: Map<string, Value>, key: string,
 
 /** Initialize renderer-free measurement, then return a synchronously queryable Paragraph. */
 export function createParagraph<const Selection extends AnyFontFaceSelection>(
-  options: Omit<ParagraphOptions<FontFaceRasterOf<Selection>>, 'font'> & { readonly font: Selection },
+  options: FontFaceParagraphOptions<Selection>,
 ): Promise<Paragraph<FontFaceRasterOf<Selection>>>;
 export function createParagraph<Technique extends AnyRasterFormat>(
   options: ParagraphOptions<Technique>,
 ): Promise<Paragraph<Technique>>;
 export async function createParagraph<Technique extends AnyRasterFormat>(
-  options: ParagraphOptions<Technique>,
+  options: ParagraphOptions<Technique> | FontFaceParagraphOptions<AnyFontFaceSelection>,
 ): Promise<Paragraph<Technique>> {
   if (options === undefined) throw new TypeError('paragraph options are required');
   assertNoRawSpans(options, 'paragraph options');
   const resolved = resolveParagraphFont(options.font);
   let desired: ResolvedParagraphState<Technique>;
   try {
-    desired = normalizeParagraphState({ ...options, font: resolved.font });
+    desired = normalizeParagraphState({ ...options, font: resolved.font } as ResolvedParagraphOptions<Technique>);
   } catch (error) {
     resolved.owned?.dispose();
     throw error;

@@ -40,7 +40,7 @@ import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } fro
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding, ThreeRootBinding } from './handle.js';
-import type { ThreeRendererResources } from './renderer-resources.js';
+import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import {
   measureGlyphPlacements,
   type ThreeGlyphGeometrySource,
@@ -110,7 +110,7 @@ interface DesiredTextState<Technique extends AnyRasterFormat> {
 interface TextReconciler {
   desired<Technique extends AnyRasterFormat>(text: Text<Technique>): DesiredTextState<Technique>;
   desiredRevision(text: Text<AnyRasterFormat>): number;
-  root(text: Text<AnyRasterFormat>): ThreeRoot;
+  root(text: Text<AnyRasterFormat>): ThreeRootHost;
   markCommitted(text: Text<AnyRasterFormat>): void;
   publishMeasurement(text: Text<AnyRasterFormat>, measurement: ParagraphLayoutSummary): void;
   bind(text: Text<AnyRasterFormat>, binding: ThreeRootPublication, group: TextGroup | undefined): void;
@@ -146,8 +146,31 @@ class ThreeRootDrawObject extends THREE.Object3D {
   }
 }
 
-/** One handle-owned publication root. A name is customization metadata, not a Three Scene identity. */
-export class ThreeRoot implements GlyphRoot {
+/** Public terminal root selected from a Three handle. */
+export interface ThreeRoot extends GlyphRoot {
+  readonly handle: import('./handle.js').ThreeHandle;
+  readonly textCount: number;
+  readonly gpuBytes: number;
+  material: ThreeTextMaterial | undefined;
+  setMaterial(value: ThreeTextMaterial | undefined): void;
+  createText<Technique extends AnyRasterFormat>(properties: StandaloneTextProperties<Technique>): Text<Technique>;
+  createText<const Selection extends AnyFontFaceSelection | string>(
+    properties: Omit<StandaloneTextProperties<FontFaceRasterOf<Selection>>, 'font'> & { readonly font: Selection },
+  ): Text<FontFaceRasterOf<Selection>>;
+  createTextGroup(options?: TextGroupOptions): TextGroup;
+}
+
+const threeRootHosts = new WeakMap<ThreeRoot, ThreeRootHost>();
+
+/** @internal Resolve the package-owned host behind a public root or its lifecycle proxy. */
+export function threeRootHost(root: ThreeRoot): ThreeRootHost {
+  const host = threeRootHosts.get(root);
+  if (host === undefined) throw new TypeError('root is not configured for Three');
+  return host;
+}
+
+/** @internal Package-owned implementation behind one public Three root. */
+export class ThreeRootHost implements ThreeRoot {
   readonly name: string | undefined;
   readonly #fonts: import('../config/glyph.js').GlyphHandleFonts;
   readonly #services: GlyphRootServices<ThreeBindings, void, ThreeRootBinding>;
@@ -201,6 +224,7 @@ export class ThreeRoot implements GlyphRoot {
       root: this,
       visibleObject: (object) => this.visible(object),
     });
+    threeRootHosts.set(this, this);
   }
 
   get disposed(): boolean {
@@ -319,9 +343,7 @@ export class ThreeRoot implements GlyphRoot {
     const implementation = this;
     return Object.freeze({
       drawRoot: this.#drawRoot,
-      get root() {
-        return implementation.#publicRoot ?? implementation;
-      },
+      root: implementation,
       material,
     });
   }
@@ -332,6 +354,7 @@ export class ThreeRoot implements GlyphRoot {
       throw new Error('Three root public identity was already bound');
     }
     this.#publicRoot = root;
+    threeRootHosts.set(root, this);
   }
 
   /** @internal Register one retained leaf with this publication root. */
@@ -586,7 +609,7 @@ export class Text<Technique extends AnyRasterFormat> extends THREE.Object3D {
   readonly #boundingBox = new THREE.Box3();
   #desired: DesiredTextState<Technique>;
   readonly #pixelSnapping: boolean;
-  readonly #root: ThreeRoot;
+  readonly #root: ThreeRootHost;
   #binding: ThreeRootPublication | undefined;
   #textGroup: TextGroup | undefined;
   #desiredRevision = 0;
@@ -601,7 +624,7 @@ export class Text<Technique extends AnyRasterFormat> extends THREE.Object3D {
     token: typeof threeTextConstructionToken,
     properties: StandaloneTextProperties<Technique>,
     ownedFonts: readonly Font<AnyRasterFormat>[],
-    root: ThreeRoot,
+    root: ThreeRootHost,
   ) {
     super();
     if (token !== threeTextConstructionToken) {
@@ -912,7 +935,7 @@ interface TextGroupRenderOrderState {
 }
 
 const textGroupRenderOrders = new WeakMap<TextGroup, TextGroupRenderOrderState>();
-const textGroupRoots = new WeakMap<TextGroup, ThreeRoot>();
+const textGroupRoots = new WeakMap<TextGroup, ThreeRootHost>();
 const textPresentations = new WeakMap<Text<AnyRasterFormat>, TextPresentation>();
 
 export class TextGroup extends THREE.Object3D {
@@ -923,7 +946,7 @@ export class TextGroup extends THREE.Object3D {
     };
   }
   readonly #pixelSnapping: boolean | undefined;
-  readonly #root: ThreeRoot;
+  readonly #root: ThreeRootHost;
   #material: ThreeTextMaterial | undefined;
   readonly #texts: Text<AnyRasterFormat>[] = [];
   #disposed = false;
@@ -931,7 +954,7 @@ export class TextGroup extends THREE.Object3D {
   onError: ((error: unknown) => void) | undefined;
 
   /** Ordinary applications construct TextGroup through `handle.createTextGroup()`. */
-  constructor(token: typeof threeTextConstructionToken, options: TextGroupOptions, root: ThreeRoot) {
+  constructor(token: typeof threeTextConstructionToken, options: TextGroupOptions, root: ThreeRootHost) {
     super();
     if (token !== threeTextConstructionToken) {
       throw new TypeError(
@@ -1058,7 +1081,7 @@ interface CanonicalInspection {
 
 class ThreeRootPublication {
   readonly #services: GlyphRootServices<ThreeBindings, void, ThreeRootBinding>;
-  readonly #root: ThreeRoot;
+  readonly #root: ThreeRootHost;
   readonly #target: ThreeTextRenderPlanExecutor;
   readonly #entries = new Map<Text<AnyRasterFormat>, BoundTextEntry>();
   readonly #inspections = new Map<Text<AnyRasterFormat>, CanonicalInspection>();
@@ -1070,7 +1093,7 @@ class ThreeRootPublication {
   #materialInvalidated = false;
   #disposed = false;
 
-  constructor(capacity: GlyphBufferCapacity, compositing: 'ordered' | 'independent', root: ThreeRoot) {
+  constructor(capacity: GlyphBufferCapacity, compositing: 'ordered' | 'independent', root: ThreeRootHost) {
     this.#services = root.services;
     this.#root = root;
     this.#capacity = capacity;
@@ -1329,7 +1352,7 @@ function coreTextState(
   desired: DesiredTextState<AnyRasterFormat>,
   transform: THREE.Object3D,
   presentation: TextPresentation,
-  root: ThreeRoot,
+  root: ThreeRootHost,
   order: number,
   materialBinding: (
     material: ThreeTextMaterial | undefined,
@@ -1577,7 +1600,7 @@ function collectTextTree(object: THREE.Object3D, result: Text<AnyRasterFormat>[]
 
 function orderedTexts(
   texts: readonly Text<AnyRasterFormat>[],
-  root: ThreeRoot,
+  root: ThreeRootHost,
 ): readonly Readonly<{ order: number; text: Text<AnyRasterFormat>; presentation: TextPresentation }>[] {
   return texts.map((text) => ({
     order: root.publicationOrder(text),
@@ -1643,7 +1666,7 @@ function sameTextPresentation(left: TextPresentation, right: TextPresentation): 
 }
 
 function validateTextDomains(texts: readonly Text<AnyRasterFormat>[]): void {
-  let root: ThreeRoot | undefined;
+  let root: ThreeRootHost | undefined;
   for (const text of texts) {
     if (text.disposed) throw new TypeError('disposed Text cannot be attached');
     const candidate = reconciler.root(text);

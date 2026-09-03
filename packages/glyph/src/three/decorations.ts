@@ -4,7 +4,7 @@ import type { GlyphCopy } from '../config/glyph.js';
 import type { AnyRasterFormat } from '../config/raster-format.js';
 import { ThreeTextRenderPlanExecutor, type ThreeTextEnginePlanOwner } from './engine-plan-target.js';
 import type { ThreeRootBinding } from './handle.js';
-import type { ThreeRendererResources } from './renderer-resources.js';
+import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import type { Text } from './text.js';
 import { copyCurrentLocalTransform } from './detached-object.js';
 

@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:f82d0173099b38347b5bc5a7ed2632f7e2180e395b2eb0a35b34eb0ca41dd10f'
+source_digest: 'sha256:e3204bd1f52bb1d7153a0ac7114f41296d5c657df4e820a1fb87247cba3cc2ba'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest

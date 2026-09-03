@@ -1,7 +1,7 @@
 import type * as THREE from 'three/webgpu';
 
 import type { TslSlugPageResources } from '../../tsl.js';
-import type { ThreeRenderResourceLease, ThreeRendererResources } from '../renderer-resources.js';
+import type { ThreeRenderResourceLease, ThreeRendererResources } from './renderer-resources.js';
 import type { ThreeGlyphGeometrySource } from '../glyph-measurement.js';
 import type { ThreeBufferBinding, ThreeResolvedResourceBinding } from '../handle.js';
 import type { RetainedBuffer, StagedBufferMutations } from './host-buffer.js';
