@@ -29,7 +29,7 @@ export default function SlugAnatomy() {
         style={{ fontSize: FONT_SIZE, color: '#e7ecf6' }}
         layout={{ align: 'center', wrap: 'none' }}
         constraints={{ width: { mode: 'exact', size: 8 } }}
-        position={[-4, 3.1, 0]}
+        position={[-4, 2.55, 0]}
       >
         {GLYPH}
       </Text>
@@ -38,7 +38,7 @@ export default function SlugAnatomy() {
         style={{ fontSize: 0.26, color: CAPTION, letterSpacing: 0.04 }}
         layout={{ align: 'center', wrap: 'none' }}
         constraints={{ width: { mode: 'exact', size: 10 } }}
-        position={[-5, -3.05, 0]}
+        position={[-5, -2.7, 0]}
       >
         16 by 16 bands, the two a pixel walks, and the analytic edge
       </Text>
