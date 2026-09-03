@@ -111,19 +111,19 @@ test('round-trips embedded and external Inter pages through every bitmap validat
 test('keeps every packaged bitmap schema byte-identical to its canonical source', async () => {
   const pairs = [
     [
-      '../../../../docs/planning/extensions/PMNDRS_font_bitmap/schema/glTF.PMNDRS_font_bitmap.schema.json',
+      '../../../../.agents/docs/planning/extensions/PMNDRS_font_bitmap/schema/glTF.PMNDRS_font_bitmap.schema.json',
       '../../src/bakers/schemas/glTF.PMNDRS_font_bitmap.schema.json',
     ],
     [
-      '../../../../docs/planning/extensions/schema/resourceSource.PMNDRS_font.schema.json',
+      '../../../../.agents/docs/planning/extensions/schema/resourceSource.PMNDRS_font.schema.json',
       '../../src/bakers/schemas/resourceSource.PMNDRS_font.schema.json',
     ],
     [
-      '../../../../docs/planning/extensions/schema/textureResource.PMNDRS_font.schema.json',
+      '../../../../.agents/docs/planning/extensions/schema/textureResource.PMNDRS_font.schema.json',
       '../../src/bakers/schemas/textureResource.PMNDRS_font.schema.json',
     ],
     [
-      '../../../../docs/planning/extensions/schema/texturePages.PMNDRS_font.schema.json',
+      '../../../../.agents/docs/planning/extensions/schema/texturePages.PMNDRS_font.schema.json',
       '../../src/bakers/schemas/texturePages.PMNDRS_font.schema.json',
     ],
   ];

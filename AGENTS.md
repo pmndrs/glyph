@@ -2,7 +2,7 @@
 
 `pmndrs/glyph` is an ESM-only monorepo for portable font baking, universal shaping, paragraph layout, and optional raster renderers. New packages and applications belong under `packages/` or `apps/`; do not add implementation artifacts at the repository root.
 
-Before writing or reviewing Rust, TypeScript, React, Wasm boundaries, or tests, read the canonical [engineering standard](docs/engineering/code-style.md). Use the repository-local `maintainability-review` skill for a deliberate cleanup, pre-release review, or milestone-wide audit; the skill owns the procedure, while the engineering standard owns the rules.
+Before writing or reviewing Rust, TypeScript, React, Wasm boundaries, or tests, read the canonical [engineering standard](.agents/docs/engineering/code-style.md). Use the repository-local `maintainability-review` skill for a deliberate cleanup, pre-release review, or milestone-wide audit; the skill owns the procedure, while the engineering standard owns the rules.
 
 Classify validation by who can author the value, not by module, package, Worker, language, or Wasm crossings. Validate
 public caller input, third-party callback results, and genuinely external data once; retain raw memory-safety and work
@@ -19,7 +19,7 @@ Use the vendored `typegpu` skill from TypeGPU's own maintainers before writing o
 
 Use the repository-local `agent-router` skill for every external-model review, delegated implementation, or research run. It routes through the pinned `ai-cli-mcp` server, preserves resumable sessions, and requires an isolated worktree for mutation-capable CLIs.
 
-Read rolling JSONL traces only with `.agents/tools/read-append-log.mjs`; never load an entire trace or `docs/log.md` into
+Read rolling JSONL traces only with `.agents/tools/read-append-log.mjs`; never load an entire trace or `.agents/docs/log.md` into
 context. `--delta` advances a cursor, while `--lines <n> --bytes <n>` gives a bounded diagnostic tail. Trace samples are
 not authoritative results: retrieve the completed response through `wait` or `get_result`. Keep raw traces in ignored
 `.cache/` storage and publish only a human-readable summary when the result belongs in repository knowledge.
@@ -30,12 +30,12 @@ not substitutes.
 
 Consult the repository-local `evidence-first` skill as the default style guidance for human-facing engineering communication, including chat updates and final answers, reports, reviews, handoffs, PR and issue prose, READMEs, and technical documentation. It offers situational cues rather than a fixed template. Domain skills still determine the work and valid evidence, `open-knowledge-format` governs bundle structure and provenance, and `diataxis-docs` governs the purpose and top-level structure of reader-facing documentation.
 
-Use these canonical sources instead of creating shadow plans or duplicate status prose:
+Start at `.agents/docs/index.md` and follow its linked indexes for self-discovery. Use these canonical sources instead of creating shadow plans or duplicate status prose:
 
-- `docs/roadmap/roadmap.md` for milestone order and checkbox status;
-- `docs/planning/decision-register.md` for architectural decisions;
-- `docs/packages/*.md` for current package ownership, boundaries, and evidence;
-- `docs/log.md` for knowledge-bundle chronology.
+- `.agents/docs/roadmap/roadmap.md` for milestone order and checkbox status;
+- `.agents/docs/planning/decision-register.md` for architectural decisions;
+- `.agents/docs/packages/*.md` for current package ownership, boundaries, and evidence;
+- `.agents/docs/log.md` for knowledge-bundle chronology.
 
 Update affected canonical documentation in the same change as source. Package source or configuration changes require reviewing the matching package concept, re-pinning its `source_digest` with `mise exec -- pnpm scripts run docs:update`, and verifying with `mise exec -- pnpm scripts run docs:check`.
 

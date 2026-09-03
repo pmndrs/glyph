@@ -1,6 +1,6 @@
 /* @workflow {
   "name": "docs:check",
-  "summary": "Validate the Open Knowledge Format bundle under docs, including every concept source_digest.",
+  "summary": "Validate the Open Knowledge Format agent archive under .agents/docs, including every concept source_digest.",
   "requirements": "Ruby from the root mise toolchain. Run through mise so the interpreter resolves.",
   "writes": "stdout"
 } */
@@ -9,7 +9,7 @@
   "args": ["--write"],
   "summary": "Re-pin every package concept source_digest from the working tree, then validate the bundle.",
   "requirements": "Ruby from the root mise toolchain. Run through mise so the interpreter resolves.",
-  "writes": "docs/packages/*.md source_digest pins and stdout"
+  "writes": ".agents/docs/packages/*.md source_digest pins and stdout"
 } */
 import { execFile } from 'node:child_process';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
@@ -33,7 +33,7 @@ const generator = `${skillScripts}/generate_package_digests.rb`;
  */
 export async function runKnowledgeBaseCheck(options: { readonly write?: boolean } = {}): Promise<void> {
   if (options.write === true) await repinPackageDigests();
-  await run('ruby', [validator, '../../docs', '--workspace-root', '../..']);
+  await run('ruby', [validator, '../../.agents/docs', '--workspace-root', '../..']);
 }
 
 /**
@@ -66,7 +66,7 @@ async function repinPackageDigests(): Promise<void> {
 }
 
 async function workspacePackageConcepts(): Promise<ReadonlyMap<string, string>> {
-  const directory = '../../docs/packages';
+  const directory = '../../.agents/docs/packages';
   const concepts = new Map<string, string>();
   for (const entry of await readdir(directory)) {
     if (!entry.endsWith('.md')) continue;

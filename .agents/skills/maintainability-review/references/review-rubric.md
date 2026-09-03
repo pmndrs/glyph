@@ -1,6 +1,6 @@
 # Maintainability review rubric
 
-Use the canonical [engineering house style](../../../../docs/engineering/code-style.md) to judge code. This rubric defines the evidence a review must return; it intentionally does not copy the standard.
+Use the canonical [engineering house style](../../../../.agents/docs/engineering/code-style.md) to judge code. This rubric defines the evidence a review must return; it intentionally does not copy the standard.
 
 ## Finding contract
 
