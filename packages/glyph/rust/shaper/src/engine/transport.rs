@@ -648,11 +648,20 @@ mod tests {
     use crate::{
         STATUS_ROOT_MISSING,
         abi_contract::{
-            ENGINE_RESULT_CODEC_HANDLE, ENGINE_UPDATE_BATCH_ROOT_ID,
-            ENGINE_UPDATE_BATCH_REQUEST_LENGTH, ENGINE_UPDATE_BATCH_RESULT_POINTER,
+            ENGINE_RESULT_CODEC_HANDLE, ENGINE_RESULT_DIAGNOSTIC_COUNT,
+            ENGINE_RESULT_DIAGNOSTICS_OFFSET, ENGINE_RESULT_DRAW_COUNT, ENGINE_RESULT_DRAWS_OFFSET,
+            ENGINE_RESULT_PATCH_COUNT, ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_PRIMITIVE_COUNT,
+            ENGINE_RESULT_PRIMITIVES_OFFSET, ENGINE_RESULT_RESOURCE_COUNT,
+            ENGINE_RESULT_RESOURCES_OFFSET, ENGINE_RESULT_RETIREMENT_COUNT,
+            ENGINE_RESULT_RETIREMENTS_OFFSET, ENGINE_UPDATE_BATCH_REQUEST_LENGTH,
+            ENGINE_UPDATE_BATCH_RESULT_POINTER, ENGINE_UPDATE_BATCH_ROOT_ID,
             ENGINE_UPDATE_BATCH_STATUS, PATCH_PAYLOAD_OFFSET,
         },
-        engine::render_plan::{BUFFER_ORDERED_DIRECT, BufferRecord, PATCH_WRITE, PatchRecord},
+        engine::render_plan::{
+            BUFFER_ORDERED_DIRECT, BufferRecord, DiagnosticRecord, DrawRecord, PATCH_WRITE,
+            PRIMITIVE_GLYPH, PatchRecord, PrimitiveRecord, RESOURCE_ACTION_CREATE, RETIRE_BUFFER,
+            ResourceRecord, RetirementRecord,
+        },
     };
 
     #[test]
@@ -969,11 +978,20 @@ mod tests {
 
     #[test]
     fn publication_header_addresses_the_exact_plan_tables_and_payload() {
-        let buffers = [BufferRecord {
+        let resources = [ResourceRecord {
             id: 1,
             generation: 2,
-            program_id: 3,
-            codec_buffer_id: 4,
+            technique_id: 3,
+            resource_kind: 1,
+            action: RESOURCE_ACTION_CREATE,
+            upper_bound: 4,
+            ..ResourceRecord::default()
+        }];
+        let buffers = [BufferRecord {
+            id: 5,
+            generation: 2,
+            program_id: 6,
+            codec_buffer_id: 7,
             scalar_type: 1,
             vector_width: 4,
             strategy: BUFFER_ORDERED_DIRECT,
@@ -984,29 +1002,117 @@ mod tests {
         }];
         let patches = [PatchRecord {
             opcode: PATCH_WRITE,
-            buffer_id: 1,
+            buffer_id: 5,
             buffer_generation: 2,
             byte_length: 4,
             ..PatchRecord::default()
+        }];
+        let primitives = [PrimitiveRecord {
+            id: 8,
+            kind: PRIMITIVE_GLYPH,
+            technique_id: 3,
+            resource_id: 1,
+            resource_generation: 2,
+            program_id: 6,
+            record_count: 1,
+            buffer_id: 5,
+            inline_extent: 8.0,
+            block_extent: 12.0,
+            ..PrimitiveRecord::default()
+        }];
+        let draws = [DrawRecord {
+            id: 9,
+            program_id: 6,
+            primitive_count: 1,
+            buffer_count: 1,
+            resource_count: 1,
+            ..DrawRecord::default()
+        }];
+        let retirements = [RetirementRecord {
+            kind: RETIRE_BUFFER,
+            id: 10,
+            generation: 2,
+            after_publication_generation: 3,
+            ..RetirementRecord::default()
+        }];
+        let diagnostics = [DiagnosticRecord {
+            code: 11,
+            severity: 2,
+            phase: 3,
+            value0: 12,
+            ..DiagnosticRecord::default()
         }];
         let plan = RenderPlanView {
             codec_handle: 9,
             capability_set: 10,
             codec_fingerprint: 0x1122_3344_5566_7788,
+            resources: &resources,
             buffers: &buffers,
             patches: &patches,
+            primitives: &primitives,
+            draws: &draws,
+            retirements: &retirements,
+            diagnostics: &diagnostics,
             payload: &[1, 2, 3, 4],
             ..RenderPlanView::default()
         };
         let mut transport = FrameTransport::new(256, 1024).unwrap();
         let staged = transport.stage_plan(plan).unwrap();
+        let expected = staged.layout;
         transport.publish_success(commit(1), staged);
         let bytes = transport.outputs[0].bytes();
         let patch_offset = read_u32(bytes, ENGINE_RESULT_PATCHES_OFFSET).unwrap() as usize;
         let payload_offset = read_u32(bytes, patch_offset + PATCH_PAYLOAD_OFFSET).unwrap() as usize;
         assert_eq!(read_u32(bytes, ENGINE_RESULT_CODEC_HANDLE).unwrap(), 9);
-        assert_eq!(read_u32(bytes, ENGINE_RESULT_BUFFER_COUNT).unwrap(), 1);
-        assert_eq!(read_u32(bytes, ENGINE_RESULT_PATCH_COUNT).unwrap(), 1);
+        assert_eq!(
+            (
+                read_u32(bytes, ENGINE_RESULT_RESOURCES_OFFSET).unwrap(),
+                read_u32(bytes, ENGINE_RESULT_RESOURCE_COUNT).unwrap()
+            ),
+            (expected.resources.offset, expected.resources.count)
+        );
+        assert_eq!(
+            (
+                read_u32(bytes, ENGINE_RESULT_BUFFERS_OFFSET).unwrap(),
+                read_u32(bytes, ENGINE_RESULT_BUFFER_COUNT).unwrap()
+            ),
+            (expected.buffers.offset, expected.buffers.count)
+        );
+        assert_eq!(
+            (
+                read_u32(bytes, ENGINE_RESULT_PATCHES_OFFSET).unwrap(),
+                read_u32(bytes, ENGINE_RESULT_PATCH_COUNT).unwrap()
+            ),
+            (expected.patches.offset, expected.patches.count)
+        );
+        assert_eq!(
+            (
+                read_u32(bytes, ENGINE_RESULT_PRIMITIVES_OFFSET).unwrap(),
+                read_u32(bytes, ENGINE_RESULT_PRIMITIVE_COUNT).unwrap()
+            ),
+            (expected.primitives.offset, expected.primitives.count)
+        );
+        assert_eq!(
+            (
+                read_u32(bytes, ENGINE_RESULT_DRAWS_OFFSET).unwrap(),
+                read_u32(bytes, ENGINE_RESULT_DRAW_COUNT).unwrap()
+            ),
+            (expected.draws.offset, expected.draws.count)
+        );
+        assert_eq!(
+            (
+                read_u32(bytes, ENGINE_RESULT_RETIREMENTS_OFFSET).unwrap(),
+                read_u32(bytes, ENGINE_RESULT_RETIREMENT_COUNT).unwrap()
+            ),
+            (expected.retirements.offset, expected.retirements.count)
+        );
+        assert_eq!(
+            (
+                read_u32(bytes, ENGINE_RESULT_DIAGNOSTICS_OFFSET).unwrap(),
+                read_u32(bytes, ENGINE_RESULT_DIAGNOSTIC_COUNT).unwrap()
+            ),
+            (expected.diagnostics.offset, expected.diagnostics.count)
+        );
         assert_eq!(&bytes[payload_offset..payload_offset + 4], &[1, 2, 3, 4]);
     }
 

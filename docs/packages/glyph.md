@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:303f07090436d0bf96b200b81e69bfe72fcf1d5b7bb750c5947f754ec5ce8334'
+source_digest: 'sha256:587bde07b77c80e66e0b7b075a9a0ed722750d0afab056ed222a93ceb66e98f1'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -138,6 +138,14 @@ trusted data through the schema and resolver into a borrowed `CommandBufferView`
 authoritative batch/root-instance order. `GlyphRenderer.decode(view)` stages retained host objects and returns the
 transactional result/commit/discard boundary. The host renderer later traverses or submits committed objects. There is no
 configurable intermediate decoder and ordinary renderer code receives no numeric IDs.
+
+The producer boundary is the proof boundary. Application and integration inputs are validated where they enter the public
+GlyphConfig services; package-owned retained state is then trusted. Rust validates raw ABI requests where memory safety
+requires it and emits the canonical publication layout. JavaScript reads that package-owned publication directly rather
+than rescanning every table, scalar, and registration on every frame.
+Rust encoder and transport tests pin every emitted table span and payload rebase, while multi-handle product tests prove
+root, Codec, and font ownership across a shared engine batch. A failed owned invariant is a package defect covered by those
+tests, not an application-facing recovery path repeated in the hot runtime.
 
 Portable fonts are schema-validated when Glyph bakes them. The rendering loader does not ship AJV or the Khronos glTF
 validator: it checks the GLB envelope, the reserved `PMNDRS_font` extension and compatible version identity, then proves

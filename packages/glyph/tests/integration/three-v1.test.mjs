@@ -190,7 +190,7 @@ test('one initialized Glyph runtime creates independent named Three handles over
   reused.dispose();
 });
 
-test('glyph.shape batches dirty roots across handles into one engine update', async (t) => {
+test('glyph.shape preserves root, codec, and font ownership while batching handles', async (t) => {
   const first = await createThreeTestHandle(t);
   const second = await createThreeTestHandle(t);
   const named = first('batch-scene');
@@ -218,6 +218,9 @@ test('glyph.shape batches dirty roots across handles into one engine update', as
     assert.ok(rootDraws(firstScene).length > 0);
     assert.ok(rootDraws(secondScene, 'batch-scene').length > 0);
     assert.ok(rootDraws(thirdScene).length > 0);
+    assert.equal(rootDraws(firstScene, 'batch-scene').length, 0, 'a named root cannot leak into its handle default root');
+    assert.equal(rootDraws(secondScene).length, 0, 'the default root cannot leak into a named root publication');
+    assert.equal(rootDraws(thirdScene, 'batch-scene').length, 0, 'one handle cannot consume another handle root');
 
     glyph.shape();
     assert.equal(instrumentedGlyph.crossings, 1, 'an unchanged global shape performs no engine update');

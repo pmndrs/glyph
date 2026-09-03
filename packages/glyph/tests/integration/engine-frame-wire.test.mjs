@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compilePlannerFrameUpdate, validatePlannerFrameRecords } from '../../dist/internal/frame-wire.js';
+import { compilePlannerFrameUpdate } from '../../dist/internal/frame-wire.js';
 import { permanentGlyphId } from '../../dist/internal/glyph-id.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
@@ -10,7 +10,6 @@ const ROOT_ID = permanentGlyphId('planner', 'engine-frame-wire/planner');
 const CODEC_ID = permanentGlyphId('codec', 'engine-frame-wire/codec');
 const FONT_STACK_ID = permanentGlyphId('font-stack', 'engine-frame-wire/font-stack');
 const PARAGRAPH_ID = permanentGlyphId('paragraph', 'engine-frame-wire/paragraph');
-const OTHER_PARAGRAPH_ID = permanentGlyphId('paragraph', 'engine-frame-wire/other-paragraph');
 const STYLE_ID = permanentGlyphId('style', 'engine-frame-wire/style');
 const FLOW_THREAD_ID = permanentGlyphId('flow-thread', 'engine-frame-wire/flow-thread');
 const REGION_ID = permanentGlyphId('region', 'engine-frame-wire/region');
@@ -18,30 +17,6 @@ const EXCLUSION_ID = permanentGlyphId('exclusion', 'engine-frame-wire/exclusion'
 const INLINE_OBJECT_ID = permanentGlyphId('inline-object', 'engine-frame-wire/inline-object');
 const MATERIAL_ID = permanentGlyphId('material', 'engine-frame-wire/material');
 const RESOURCE_ID = permanentGlyphId('resource', 'engine-frame-wire/resource');
-
-test('record validation rejects malformed user-derived values without serializing a frame', () => {
-  const style = {
-    opcode: 'upsert',
-    paragraphId: PARAGRAPH_ID,
-    styleId: STYLE_ID,
-    cascadeOrder: 0,
-    start: 0,
-    end: 1,
-    root: true,
-    value: { fontStackHandle: FONT_STACK_ID, direction: 'sideways' },
-  };
-  assert.throws(() => validatePlannerFrameRecords({ styleMutations: [style] }), /direction is invalid/);
-  assert.throws(
-    () =>
-      validatePlannerFrameRecords({
-        paragraphMutations: [
-          { opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 0 },
-          { opcode: 'upsert', paragraphId: OTHER_PARAGRAPH_ID, order: 0 },
-        ],
-      }),
-    /duplicate paragraph orders/,
-  );
-});
 
 test('production frame compiler preserves the established benchmark request bytes', async () => {
   const abi = textShaperAbi;

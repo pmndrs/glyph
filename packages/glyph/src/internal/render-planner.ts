@@ -28,7 +28,6 @@ import {
   type PlannerParagraphMutation,
   type PlannerRegion,
   type PlannerStyleMutation,
-  validatePlannerFrameRecords,
 } from './frame-wire.js';
 import type {
   HandleFontStackBinding,
@@ -515,7 +514,7 @@ class RenderPlannerImpl {
       inspection: undefined,
     };
     try {
-      this.#validateState(state);
+      this.#validateAggregateLimits(state);
     } catch (error) {
       releaseResolvedText(desired);
       throw error;
@@ -539,7 +538,7 @@ class RenderPlannerImpl {
     const desired = resolveTextOptions(this.#handleState, source, state.ordinal);
     const candidate = { ...state, desired, metrics: retainedTextMetrics(desired, state.ordinal), dirty: true };
     try {
-      this.#validateState(candidate, state);
+      this.#validateAggregateLimits(candidate, state);
     } catch (error) {
       releaseResolvedText(desired);
       throw error;
@@ -885,31 +884,6 @@ class RenderPlannerImpl {
     });
   }
 
-  #validateState(state: RetainedTextState, replacing?: RetainedTextState): void {
-    const styles = compileStyles(this.#handleState, state);
-    const geometry = compileGeometry(this.#handleState, state, 0, 0);
-    const inlineObjects = compileInlineObjects(this.#handleState, state);
-    validatePlannerFrameRecords(
-      {
-        paragraphMutations: [
-          {
-            opcode: 'upsert',
-            paragraphId: state.paragraphId,
-            order: state.desired.source.order ?? state.ordinal - 1,
-          },
-        ],
-        textMutations: [{ paragraphId: state.paragraphId, start: 0, deleteCount: 0, insert: state.desired.text }],
-        styleMutations: styles,
-        constraints: [geometry.constraint],
-        regions: geometry.regions,
-        exclusions: geometry.exclusions,
-        inlineObjects,
-      },
-      this.#limits,
-    );
-    this.#validateAggregateLimits(state, replacing);
-  }
-
   #validateAggregateLimits(candidate: RetainedTextState, replacing?: RetainedTextState): void {
     const owner = this.#textsByOrder.get(candidate.metrics.order);
     if (owner !== undefined && owner !== replacing) {
@@ -943,6 +917,8 @@ class RenderPlannerImpl {
     if (inlineObjectCount > this.#limits.maxInlineObjects) {
       throw new RangeError('retained inline objects exceed limits.maxInlineObjects');
     }
+    const maxLines = candidate.desired.source.layout?.maxLines ?? Math.max(1, candidate.desired.text.length);
+    if (maxLines > this.#limits.maxLines) throw new RangeError('retained text maxLines exceeds limits.maxLines');
     if (this.#removed.size + dirtyTextCount > this.#limits.maxParagraphs) {
       throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
     }
@@ -1360,7 +1336,7 @@ function resolveTextOptions(
   ordinal: number,
 ): ResolvedTextOptions {
   if (!isNonArrayObject(value)) throw new TypeError('text engine text options must be an object');
-  validateTextScalarOptions(value, ordinal);
+  validateTextScalarOptions(value);
   const formattedText = normalizeTextInput(value.text);
   const style = value.style ?? {};
   const layout = value.layout ?? {};
@@ -1563,7 +1539,7 @@ function snapshotTextOptions(
   });
 }
 
-function validateTextScalarOptions(value: RetainedTextOptions, ordinal: number): void {
+function validateTextScalarOptions(value: RetainedTextOptions): void {
   if (value.order !== undefined) uint32(value.order, 'text order');
   if (
     value.rasterPixelRatio !== undefined &&
@@ -1571,27 +1547,6 @@ function validateTextScalarOptions(value: RetainedTextOptions, ordinal: number):
   ) {
     throw new RangeError('text rasterPixelRatio must be positive and finite');
   }
-  if (
-    value.flow !== undefined &&
-    (!isNonArrayObject(value.flow) || !Array.isArray(value.flow.regions) || value.flow.regions.length === 0)
-  ) {
-    throw new TypeError('text flow must contain at least one region');
-  }
-  for (const [index, input] of (value.flow?.regions ?? []).entries()) {
-    if (!isNonArrayObject(input) || !isNonArrayObject(input.region)) {
-      throw new TypeError(`text flow region ${index} must contain a region object`);
-    }
-    if (input.exclusions !== undefined && !Array.isArray(input.exclusions)) {
-      throw new TypeError(`text flow region ${index} exclusions must be an array`);
-    }
-  }
-  if (value.inlineObjects !== undefined && !Array.isArray(value.inlineObjects)) {
-    throw new TypeError('text inlineObjects must be an array');
-  }
-  for (const [index, object] of (value.inlineObjects ?? []).entries()) {
-    if (!isNonArrayObject(object)) throw new TypeError(`text inline object ${index} must be an object`);
-  }
-  uint32(ordinal, 'text ordinal');
 }
 
 function compileStyles(handleState: GlyphHandleState, state: RetainedTextState): readonly PlannerStyleMutation[] {
