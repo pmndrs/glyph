@@ -2,6 +2,11 @@
 
 ## 2026-09-03
 
+- **Trusted constraint ownership identities** — The Rust request reader no longer rechecks planner-owned paragraph IDs or
+  performs a quadratic duplicate search over flow-thread IDs. The public two-Text Three producer proof now binds each
+  real constraint to its paragraph mutation and pins distinct nonzero flow-thread identities; caller-authored layout,
+  typography, work-limit, and raw-memory checks remain.
+
 - **Trusted planner-owned paragraph identity** — The Rust request reader no longer performs quadratic duplicate-ID and
   duplicate-order scans over paragraph mutations or rechecks that package-minted paragraph IDs are nonzero. The public
   two-Text Three integration now captures the real retained-planner Wasm request and proves unique nonzero identities in

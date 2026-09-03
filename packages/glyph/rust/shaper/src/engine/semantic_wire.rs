@@ -1270,25 +1270,7 @@ fn validate_constraints(
     region_count: u32,
     limits: UpdateLimits,
 ) -> Result<(), u32> {
-    for (index, record) in constraints
-        .chunks_exact(abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize)
-        .enumerate()
-    {
-        if read_u32(record, abi::ENGINE_CONSTRAINT_PARAGRAPH_ID)? == 0 {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-        let flow_thread_id = read_u32(record, abi::ENGINE_CONSTRAINT_FLOW_THREAD_ID)?;
-        if flow_thread_id == 0
-            || prior_u32_duplicate(
-                constraints,
-                abi::ENGINE_CONSTRAINT_RECORD_SIZE,
-                abi::ENGINE_CONSTRAINT_FLOW_THREAD_ID,
-                index,
-                flow_thread_id,
-            )?
-        {
-            return Err(STATUS_INVALID_REQUEST);
-        }
+    for record in constraints.chunks_exact(abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize) {
         let width_mode = byte(record, abi::ENGINE_CONSTRAINT_WIDTH_MODE)?;
         let height_mode = byte(record, abi::ENGINE_CONSTRAINT_HEIGHT_MODE)?;
         let width = finite(record, abi::ENGINE_CONSTRAINT_WIDTH)?;
