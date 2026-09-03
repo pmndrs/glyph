@@ -220,6 +220,8 @@ notes · internals
 
 <glyph-proxy fit="cover" root="scenes" data-scene="groups" aria-label="One root, many labels, one draw per boundary" aspect="16 / 9" />
 
+<glyph-proxy fit="cover" root="scenes" data-scene="split-flap" aria-label="A split-flap board: 150 one-character texts on one root, flipping in one draw" aspect="16 / 9" />
+
 ## Shape
 
 ```ts
@@ -248,6 +250,8 @@ write
 - Shape: three short paragraphs.
 
 notes · internals
+- the split-flap scene is 150 one-character texts on one root; each flip is a group rotation with `text.set()` at the midpoint —
+  `site/examples/src/scenes/split-flap/scene.tsx`
 - `glyph.shape()` — `glyph.ts:94–98`; one `pmndrs_glyph_engine_update_batch` crossing, per-entry status — D-312
 - root hooks: `prepareShape` (reconcile members, capacity check) — `three/text.ts:436–448`; `acceptShape` `:451–459`;
   `rejectShape` keeps the last draw and attributes the error `:462–465`

@@ -214,6 +214,8 @@ notes · internals
 
 <glyph-proxy fit="cover" root="scenes" data-scene="zoom" aria-label="One 32 px raster per format under continuous magnification" aspect="16 / 9" />
 
+<glyph-proxy fit="cover" root="scenes" data-scene="slug-anatomy" aria-label="One Slug glyph with its bands, the two a pixel walks, and the analytic edge drawn over it" aspect="16 / 9" />
+
 ## What each one costs
 
 | | Bitmap 16 + 32 | MSDF 64 / 8 | Slug |
@@ -242,6 +244,8 @@ write
 - Avoid: adjectives; let the numbers carry it.
 
 notes · internals
+- the anatomy scene draws the band grid from the quad's UV and the sweep from a uniform, reading only `context.shader.coverage` —
+  `site/examples/src/scenes/slug-anatomy/materials.ts`
 - the byte figures are the full Inter face, every glyph, default options, from the package-size report quoted in
   `docs/planning/payload-budget.md` (codex tree) — re-run the report and re-date the table before publishing
 - instance buffer layouts — `raster/bitmap.ts#bitmapSchema` (`:117`), `raster/msdf.ts#msdfSchema` (`:103`),
