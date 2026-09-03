@@ -63,6 +63,7 @@
 - [Shaper and baker Wasm size reduction](wasm-size-reduction.md) — measured byte attribution for the distributed Wasm artifacts, the remaining levers, and the staged-table delivery model that keeps one runtime.
 - [GPU compression and Rust container ownership](gpu-compression.md) — transport/GPU compression constraints plus the GLB/KTX2 serializer decision.
 - [Slug audit](slug-audit.md) — prior-art findings and implementation disposition.
+- [Rust code audit](rust-audit.md) — measured audit of the twelve Rust crates: the deliberate design laws that hold, the confirmed defects, and the outstanding work.
 
 ## Governance
 
