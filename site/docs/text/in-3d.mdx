@@ -109,6 +109,44 @@ depth-tested material lets a nearer body hide it. `scene.fog` reaches it because
 {/* prose: see fonts/techniques for the full comparison; `rasterPixelRatio` raises MSDF/Bitmap sampling for a
 paragraph that will be seen larger than authored. */}
 
+## Warping text onto surfaces
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { cos, sin, uniform, vec3 } from 'three/tsl';
+
+const spin = uniform(0);
+const RADIUS = 5.2;
+
+const carousel = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  if (context.kind !== 'glyph') return material;
+  const p = context.position;                     // paragraph-local, after the engine's transform
+  const angle = p.x.div(RADIUS).add(spin);        // advance along the line → angle around Y
+  material.positionNode = vec3(sin(angle).mul(RADIUS), p.y, cos(angle).mul(RADIUS).sub(RADIUS));
+  material.colorNode = context.shader.color.mul(cos(angle).mul(0.5).add(0.5).mul(0.88).add(0.12)); // the far side dims
+  material.opacityNode = context.shader.opacity;
+  return material;
+});
+```
+
+<iframe
+  src="/examples/?example=kinetic"
+  title="A band on a turning carousel, a passage on a waving flag, the current word spotlit"
+  loading="lazy"
+  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
+/>
+
+Text is geometry, so a material may move its vertices. Wrap a line around a cylinder, ripple a paragraph like a
+flag, hang words on a curve: `context.position` in, somewhere else out, with a uniform per frame for the motion
+and no re-shape. The text underneath stays live — the passage in the showcase types itself in and reflows on the
+warped surface every tick.
+
+> [!IMPORTANT]
+> Warp MSDF or Bitmap text. Slug's vertex stage returns an analytically dilated quad tied to its render coordinate,
+> and a Slug draw whose `positionNode` is replaced did not draw in the current tree. Keep Slug for the flat,
+> razor-sharp word and put the warped surfaces in MSDF.
+
 ## Post-processing
 
 ```tsx
