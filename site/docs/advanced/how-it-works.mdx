@@ -57,7 +57,7 @@ write
   resolved onto grapheme-cluster boundaries; effects are checked against every font in the paragraph.
 - Paragraph 2: what JavaScript does not do. Scripts, bidi levels, line-break opportunities, and grapheme clusters
   are derived in Rust from the retained UTF-16, as A/B session state that is untouched when the text is unchanged.
-  The one JavaScript Unicode routine left is grapheme segmentation for span alignment, pinned to the same Unicode
+  The one JavaScript Unicode routine left is grapheme cluster breaks for span alignment, pinned to the same Unicode
   version and gated by the same 766 official vectors.
 - Correct the earlier draft: analysis is not in JavaScript any more (D-320).
 - Shape: two paragraphs.

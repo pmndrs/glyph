@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 300" width="1120" height="300" role="img" aria-labelledby="t d">
   <title id="t">The glyph pipeline</title>
-  <desc id="d">Text and fonts enter JavaScript for Unicode analysis, cross into Rust for shaping, layout and planning, come back as one published byte buffer, and a renderer decodes it into draw objects.</desc>
+  <desc id="d">Text and styles enter JavaScript, where only grapheme cluster breaks are found so spans snap to clusters. Everything else — Unicode analysis, shaping, layout, and planning — runs in Rust, comes back as one published byte buffer, and a renderer decodes it into draw objects.</desc>
   <defs>
     <style>
       .bg { fill: #07080b; }
@@ -21,53 +21,57 @@
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5570"/>
     </marker>
   </defs>
-  <rect class="bg" width="960" height="300" rx="14"/>
+  <rect class="bg" width="1120" height="300" rx="14"/>
 
   <!-- lanes -->
   <rect class="lane" x="24" y="44" width="228" height="212" rx="10"/>
   <text class="lanename" x="40" y="66">JAVASCRIPT</text>
-  <rect class="lane" x="268" y="44" width="400" height="212" rx="10"/>
+  <rect class="lane" x="268" y="44" width="560" height="212" rx="10"/>
   <text class="lanename" x="284" y="66">RUST · WASM</text>
-  <rect class="lane" x="684" y="44" width="252" height="212" rx="10"/>
-  <text class="lanename" x="700" y="66">YOUR RENDERER</text>
+  <rect class="lane" x="844" y="44" width="252" height="212" rx="10"/>
+  <text class="lanename" x="860" y="66">YOUR RENDERER</text>
 
-  <!-- javascript -->
+  <!-- javascript: what you wrote, and the one Unicode step that stays here: grapheme cluster breaks -->
   <rect class="box js" x="44" y="90" width="188" height="56"/>
   <text class="label" x="60" y="114">Text · TextStyle</text>
   <text class="sub" x="60" y="134">what you wrote, validated</text>
   <rect class="box js" x="44" y="170" width="188" height="56"/>
-  <text class="label" x="60" y="194">Unicode analysis</text>
-  <text class="sub" x="60" y="214">scripts, bidi, breaks</text>
+  <text class="label" x="60" y="194">Cluster breaks</text>
+  <text class="sub" x="60" y="214">UAX 29 · spans snap to them</text>
 
-  <!-- rust -->
-  <rect class="box rs" x="288" y="90" width="112" height="56"/>
-  <text class="label" x="304" y="114">Shaper</text>
-  <text class="sub" x="304" y="134">HarfRust</text>
-  <rect class="box rs" x="416" y="90" width="112" height="56"/>
-  <text class="label" x="432" y="114">Layout</text>
-  <text class="sub" x="432" y="134">lines, columns</text>
-  <rect class="box rs" x="544" y="90" width="104" height="56"/>
-  <text class="label" x="560" y="114">Planner</text>
-  <text class="sub" x="560" y="134">draws, batches</text>
-  <rect class="box out" x="288" y="170" width="360" height="56"/>
+  <!-- rust: analysis, shaping, layout, planning -->
+  <rect class="box rs" x="288" y="90" width="130" height="56"/>
+  <text class="label" x="304" y="114">Analysis</text>
+  <text class="sub" x="304" y="134">UAX 9 · 14 · 24 · 29</text>
+  <rect class="box rs" x="430" y="90" width="118" height="56"/>
+  <text class="label" x="446" y="114">Shaper</text>
+  <text class="sub" x="446" y="134">HarfRust</text>
+  <rect class="box rs" x="560" y="90" width="118" height="56"/>
+  <text class="label" x="576" y="114">Layout</text>
+  <text class="sub" x="576" y="134">lines, columns</text>
+  <rect class="box rs" x="690" y="90" width="118" height="56"/>
+  <text class="label" x="706" y="114">Planner</text>
+  <text class="sub" x="706" y="134">draws, batches</text>
+  <rect class="box out" x="288" y="170" width="520" height="56"/>
   <text class="label" x="304" y="194">Publication</text>
   <text class="sub" x="304" y="214">one borrowed byte buffer: header, tables, patches</text>
-  <text class="mono" x="612" y="160">glyph.shape()</text>
+  <text class="mono" x="762" y="163">glyph.shape()</text>
 
   <!-- renderer -->
-  <rect class="box out" x="704" y="90" width="212" height="56"/>
-  <text class="label" x="720" y="114">renderer.decode()</text>
-  <text class="sub" x="720" y="134">read tables, upload buffers</text>
-  <rect class="box gpu" x="704" y="170" width="212" height="56"/>
-  <text class="label" x="720" y="194">Draw objects</text>
-  <text class="sub" x="720" y="214">instanced, one per batch</text>
+  <rect class="box out" x="864" y="90" width="212" height="56"/>
+  <text class="label" x="880" y="114">renderer.decode()</text>
+  <text class="sub" x="880" y="134">read tables, upload buffers</text>
+  <rect class="box gpu" x="864" y="170" width="212" height="56"/>
+  <text class="label" x="880" y="194">Draw objects</text>
+  <text class="sub" x="880" y="214">instanced, one per batch</text>
 
   <!-- edges -->
   <path class="edge" d="M 138 146 L 138 170"/>
   <path class="edge" d="M 232 198 C 256 198, 256 118, 288 118"/>
-  <path class="edge" d="M 400 118 L 416 118"/>
-  <path class="edge" d="M 528 118 L 544 118"/>
-  <path class="edge hot" d="M 596 146 L 596 170"/>
-  <path class="edge hot" d="M 648 198 C 676 198, 676 118, 704 118"/>
-  <path class="edge" d="M 810 146 L 810 170"/>
+  <path class="edge" d="M 418 118 L 430 118"/>
+  <path class="edge" d="M 548 118 L 560 118"/>
+  <path class="edge" d="M 678 118 L 690 118"/>
+  <path class="edge hot" d="M 749 146 L 749 170"/>
+  <path class="edge hot" d="M 808 198 C 836 198, 836 118, 864 118"/>
+  <path class="edge" d="M 970 146 L 970 170"/>
 </svg>
