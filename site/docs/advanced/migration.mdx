@@ -40,7 +40,7 @@ notes · internals for the page
 | `new FontLoader().loadAsync({ input, raster })`, `loadFont(input, msdf)` | `const Inter = glyph.fontFace(url, { format: msdf }); await Inter.load()` | one declaration over one shared graph; members are selections | D-297, D-310 |
 | implicit engine on first font use | `await glyph.init(); glyph.handle('app', ThreeConfig)` | explicit, disposable, several may coexist | D-307 |
 | `new Text(props)` | `app.createText(props)`, `app('hud').createText(props)` | every text belongs to a root | D-307 |
-| `TextGroup` with `capacity` and `compositing` | the root owns them; `TextGroup` is a scene parent | one planner per root; groups organise | D-307 |
+| `TextGroup` with `capacity` and `compositing` | the root owns them; `TextGroup` is a scene parent | one encoder per root; groups organise | D-307 |
 | `text.shape()`, `group.shape()` | `glyph.shape()` | one publication for every dirty root on every handle | D-312 |
 | `text.layout()` | `text.measure()` | measurement is an action; `layout` is the flow policy | D-291 |
 | `paint: { color }` | `style: { color }` | one inherited presentation object | D-291 |
@@ -179,7 +179,7 @@ node .agents/skills/codemod/scripts/run-codemod.mjs 2026-09-01-glyph-handles <pr
 | `2026-08-28-font-load-arguments` | loader argument shapes |
 | `2026-08-28-paragraph-contract` | paragraph properties: paint, content box → style, layout, constraints |
 | `2026-08-28-react-integration` | React component props |
-| `2026-08-28-text-engine-lifecycle`, `-vocabulary` | engine lifecycle and planner vocabulary |
+| `2026-08-28-text-engine-lifecycle`, `-vocabulary` | engine lifecycle and encoder vocabulary |
 | `2026-09-01-font-face-token-loading` | `loadFont` / tokens → `glyph.fontFace` |
 | `2026-09-01-glyph-handles` | implicit runtime → `glyph.init()` and handles |
 | `2026-09-01-react-font-faces` | `useFont` → typed hooks and provider font faces |

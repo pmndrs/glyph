@@ -1,6 +1,6 @@
 ---
 title: Reading the render plan
-description: What the planner publishes on every accepted update — one borrowed byte range with a header and six tables — how draws are batched, when a plan is a checkpoint, why it expires, and the sequence a renderer follows to consume it.
+description: What the encoder publishes on every accepted update — one borrowed byte range with a header and six tables — how draws are batched, when a plan is a checkpoint, why it expires, and the sequence a renderer follows to consume it.
 nav: 56
 sourcecode: packages/glyph/src/internal/plan-view.ts
 ---
@@ -52,7 +52,7 @@ notes · internals for the page
 | --- | --- |
 | `abiVersion`, `byteLength`, `status` | checked first, in that order; anything else is read only after they pass |
 | `flags` | bit 1 is `checkpoint`: this plan replaces every buffer and resource |
-| `plannerId` | which root's planner answered |
+| `plannerId` | which root's encoder answered |
 | `engineRevision`, `planRevision` | both advance by one per accepted update |
 | `requiredBaseRevision` | the plan revision this one patches; a checkpoint patches nothing |
 | `publicationGeneration` | a fence the renderer acknowledges on its next request |

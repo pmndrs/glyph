@@ -239,7 +239,7 @@ const ok = span({ color: '#4ade80' });
 let value = 'Status: online';
 
 value += '!';
-text.text = value; // the planner derives the smallest scalar-aligned replace from the two strings
+text.text = value; // the encoder derives the smallest scalar-aligned replace from the two strings
 
 text.text = txt`${value.slice(0, 8)}${ok`${value.slice(8)}`}`; // a styled document is restated as a document
 ```

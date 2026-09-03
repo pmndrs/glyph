@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 300" width="1160" height="300" role="img" aria-labelledby="t d">
   <title id="t">The glyph pipeline</title>
-  <desc id="d">Text and styles enter JavaScript, where only grapheme cluster breaks are found so spans snap to clusters. Everything else — Unicode analysis, shaping, layout, and planning — runs in Rust, comes back as one published byte buffer, and a renderer decodes it into draw objects.</desc>
+  <desc id="d">Text and styles enter JavaScript, where only grapheme cluster breaks are found so spans snap to clusters. Everything else — Unicode analysis, shaping, layout, and encoding through the codec — runs in Rust, comes back as one published byte buffer, and a renderer decodes it into draw objects.</desc>
   <defs>
     <style>
       .bg { fill: #07080b; }
@@ -39,7 +39,7 @@
   <text class="label" x="60" y="194">Cluster breaks</text>
   <text class="sub" x="60" y="214">UAX 29 · spans snap to them</text>
 
-  <!-- rust: analysis, shaping, layout, planning -->
+  <!-- rust: analysis, shaping, layout, encoding -->
   <rect class="box rs" x="312" y="90" width="150" height="56"/>
   <text class="label" x="328" y="114">Analysis</text>
   <text class="sub" x="328" y="134">UAX 9 · 14 · 24 · 29</text>
@@ -50,8 +50,8 @@
   <text class="label" x="620" y="114">Layout</text>
   <text class="sub" x="620" y="134">lines, columns</text>
   <rect class="box rs" x="734" y="90" width="118" height="56"/>
-  <text class="label" x="750" y="114">Planner</text>
-  <text class="sub" x="750" y="134">draws, batches</text>
+  <text class="label" x="750" y="114">Encode</text>
+  <text class="sub" x="750" y="134">codec · draws, batches</text>
   <rect class="box out" x="312" y="170" width="540" height="56"/>
   <text class="label" x="328" y="194">Publication</text>
   <text class="sub" x="328" y="214">one borrowed byte buffer: header, tables, patches</text>
@@ -59,8 +59,8 @@
 
   <!-- renderer -->
   <rect class="box out" x="908" y="90" width="212" height="56"/>
-  <text class="label" x="924" y="114">renderer.decode()</text>
-  <text class="sub" x="924" y="134">read tables, upload buffers</text>
+  <text class="label" x="924" y="114">Decode</text>
+  <text class="sub" x="924" y="134">renderer.decode(): tables → buffers</text>
   <rect class="box gpu" x="908" y="170" width="212" height="56"/>
   <text class="label" x="924" y="194">Draw objects</text>
   <text class="sub" x="924" y="214">instanced, one per batch</text>

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" width="960" height="340" role="img" aria-labelledby="t d">
   <title id="t">The retained frame transaction</title>
-  <desc id="d">An app assigns desired state to Text objects; glyph.shape publishes each dirty root once; the planner lends the renderer a borrowed plan; the renderer decodes, resolves and prepares, then commits the whole root or discards it and keeps the last accepted draw.</desc>
+  <desc id="d">An app assigns desired state to Text objects; glyph.shape publishes each dirty root once; the encoder lends the renderer a borrowed plan; the renderer decodes, resolves and prepares, then commits the whole root or discards it and keeps the last accepted draw.</desc>
   <defs>
     <style>
       .bg { fill: #07080b; }
@@ -37,7 +37,7 @@
   <text class="label" x="286" y="49">Text · root</text>
   <text class="sub" x="286" y="66">retained, dirty-tracked</text>
   <rect class="actor rs" x="500" y="28" width="150" height="48"/>
-  <text class="label" x="516" y="49">Planner</text>
+  <text class="label" x="516" y="49">Encoder</text>
   <text class="sub" x="516" y="66">Rust · Wasm</text>
   <rect class="actor out" x="730" y="28" width="190" height="48"/>
   <text class="label" x="746" y="49">renderer.decode()</text>

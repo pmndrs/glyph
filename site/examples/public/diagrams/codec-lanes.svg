@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" role="img" aria-labelledby="t d">
   <title id="t">What a codec program does</title>
-  <desc id="d">Semantics from the engine and binding values from the font's raster records enter a straight-line program compiled per technique; the planner runs it per glyph to fill the lanes of each declared buffer; the lanes arrive in the publication as patches to renderer-owned storage buffers, which the shader reads by instance.</desc>
+  <desc id="d">Semantics from the engine and binding values from the font's raster records enter a straight-line program compiled per technique; the encoder runs it per glyph to fill the lanes of each declared buffer; the lanes arrive in the publication as patches to renderer-owned storage buffers, which the shader reads by instance.</desc>
   <defs>
     <style>
       .bg { fill: #07080b; }

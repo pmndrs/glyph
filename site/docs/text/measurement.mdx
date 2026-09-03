@@ -188,8 +188,8 @@ notes · internals
 
 | Situation | `measure()` | Notes |
 | --- | --- | --- |
-| Detached `Text` | works | routed through the root-owned planner; see the [verify] below |
-| `Text` under a `TextGroup` | works | same planner; sequential queries extend one speculative transaction the next traversal adopts |
+| Detached `Text` | works | routed through the root-owned encoder; see the [verify] below |
+| `Text` under a `TextGroup` | works | same encoder; sequential queries extend one speculative transaction the next traversal adopts |
 | Before the first frame | works | does not commit; `commitState()` stays `pending` |
 | Unchanged since last call | free | returns the retained result without a Wasm crossing |
 

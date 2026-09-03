@@ -18,7 +18,7 @@
 
   <rect class="core" x="350" y="150" width="210" height="100"/>
   <text class="label" x="366" y="178">Engine · handle</text>
-  <text class="sub" x="366" y="198">shaper, layout, planner in Wasm</text>
+  <text class="sub" x="366" y="198">shaper, layout, encoder in Wasm</text>
   <text class="sub" x="366" y="216">one codec, N roots, one publication</text>
   <text class="sub" x="366" y="234">per root per shape()</text>
 
