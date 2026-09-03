@@ -66,7 +66,7 @@ test('rejects malformed host input before allocation and reports outline failure
   );
   assert.throws(
     () => generator.generate({ ...valid, commands: [{ kind: 'move', x: 0, y: 0 }] }),
-    (error) => error instanceof MtsdfGenerationError && error.code === 'INVALID_OUTLINE',
+    (error) => error instanceof MtsdfGenerationError && error.reason === 'INVALID_OUTLINE',
   );
   assert.throws(
     () =>
@@ -74,7 +74,7 @@ test('rejects malformed host input before allocation and reports outline failure
         ...valid,
         commands: [{ kind: 'move', x: 0, y: 0 }, { kind: 'move', x: 1, y: 1 }, { kind: 'close' }],
       }),
-    (error) => error instanceof MtsdfGenerationError && error.code === 'INVALID_OUTLINE',
+    (error) => error instanceof MtsdfGenerationError && error.reason === 'INVALID_OUTLINE',
   );
 });
 

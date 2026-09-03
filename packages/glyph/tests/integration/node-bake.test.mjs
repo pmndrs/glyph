@@ -158,7 +158,7 @@ test('rolls back every earlier artifact when a later publication fails', async (
 
   await assert.rejects(
     bakeFont({ ...bakeOptions, output }),
-    (error) => error instanceof NodeBakeError && error.code === 'OUTPUT_TARGET_TYPE',
+    (error) => error instanceof NodeBakeError && error.reason === 'OUTPUT_TARGET_TYPE',
   );
   for (const [file, bytes] of previous) assert.deepEqual(await readFile(file), bytes);
   assert.equal(
@@ -223,7 +223,7 @@ test('bakeProject rejects distinct sources that resolve to one output before bak
 
   await assert.rejects(
     bakeProject({ projectRoot: root, outputRoot: join(root, 'generated') }),
-    (error) => error instanceof NodeBakeError && error.code === 'OUTPUT_CONFLICT',
+    (error) => error instanceof NodeBakeError && error.reason === 'OUTPUT_CONFLICT',
   );
   await assert.rejects(readFile(join(root, 'generated', 'fonts', 'Inter-Regular.font.glb')), {
     code: 'ENOENT',
@@ -311,13 +311,13 @@ test('pre-cancellation and source/output overlap fail before filesystem mutation
   await writeFile(input, await readFile(fontUrl));
   await assert.rejects(
     bakeFont({ input, output: input, font: { fontFaceIndex: 0 } }),
-    (error) => error instanceof NodeBakeError && error.code === 'OUTPUT_OVERLAPS_INPUT',
+    (error) => error instanceof NodeBakeError && error.reason === 'OUTPUT_OVERLAPS_INPUT',
   );
   const aliasedOutput = join(root, 'font.font.glb');
   await link(input, aliasedOutput);
   await assert.rejects(
     bakeFont({ input, output: aliasedOutput, font: { fontFaceIndex: 0 } }),
-    (error) => error instanceof NodeBakeError && error.code === 'OUTPUT_OVERLAPS_INPUT',
+    (error) => error instanceof NodeBakeError && error.reason === 'OUTPUT_OVERLAPS_INPUT',
   );
 
   const controller = new AbortController();
@@ -362,7 +362,7 @@ test('rejects unsafe package-owned artifact IDs before writing any output', asyn
         },
       ],
     }),
-    (error) => error instanceof NodeBakeError && error.code === 'UNSAFE_ARTIFACT_ID',
+    (error) => error instanceof NodeBakeError && error.reason === 'UNSAFE_ARTIFACT_ID',
   );
   await assert.rejects(readFile(output), { code: 'ENOENT' });
   await assert.rejects(readFile(join(root, '..', 'escape.glb')), { code: 'ENOENT' });

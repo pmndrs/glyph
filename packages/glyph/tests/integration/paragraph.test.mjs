@@ -140,7 +140,7 @@ test('a loaded FontFace selection gives Paragraph its own immutable Font lease',
   try {
     await assert.rejects(
       createParagraph({ font: face.bitmap, text: TEXT, style: { fontSize: 16 } }),
-      (error) => error instanceof FontLoadError && error.code === 'FONT_FACE_FORMAT_NOT_LOADED',
+      (error) => error instanceof FontLoadError && error.reason === 'FONT_FACE_FORMAT_NOT_LOADED',
     );
     assert.equal(await face.bitmap.load(), face.bitmap);
     const paragraph = await createParagraph({ font: face.bitmap, text: TEXT, style: { fontSize: 16 } });
@@ -163,7 +163,7 @@ test('renderer-free Paragraph rejects an undeclared handle-relative FontFace def
     await face.load();
     await assert.rejects(
       createParagraph({ font: face, text: TEXT }),
-      (error) => error instanceof FontLoadError && error.code === 'FONT_FACE_FORMAT_REQUIRED',
+      (error) => error instanceof FontLoadError && error.reason === 'FONT_FACE_FORMAT_REQUIRED',
     );
   } finally {
     face.dispose();

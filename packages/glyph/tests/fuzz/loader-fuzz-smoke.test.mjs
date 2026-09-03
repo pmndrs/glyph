@@ -43,7 +43,7 @@ async function outcome(bytes) {
     assert(error instanceof FontLoadError);
     return {
       ok: false,
-      code: error.code,
+      code: error.reason,
       cause: error.cause?.name,
       issues: error.cause?.issues?.map(({ code }) => code),
     };

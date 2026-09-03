@@ -1,4 +1,5 @@
 import { fontBakerAbi, type FontBakerAbi } from './generated/font-baker-abi.js';
+import { GlyphError } from '../glyph-error.js';
 
 export { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from './contract.js';
 export { fontBakerAbi } from './generated/font-baker-abi.js';
@@ -120,14 +121,14 @@ export interface SerializedBakeError {
   readonly path?: string;
 }
 
-export class FontBakeError extends Error {
-  readonly code: string;
+export class FontBakeError extends GlyphError<'bake-failed'> {
+  readonly reason: string;
   readonly path: string | undefined;
 
   constructor(error: SerializedBakeError) {
-    super(error.message);
+    super('bake-failed', error.message);
     this.name = 'FontBakeError';
-    this.code = error.code;
+    this.reason = error.code;
     this.path = error.path;
   }
 }

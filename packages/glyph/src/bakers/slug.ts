@@ -19,6 +19,7 @@ import {
   type SlugDescriptor,
 } from '../internal/slug-contract.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
+import { GlyphError } from '../glyph-error.js';
 
 export { slugBakerAbi } from '../generated/slug-baker-abi.js';
 
@@ -49,14 +50,14 @@ export interface SlugBakerCore {
 export type SlugBakerWasmSource = BufferSource | WebAssembly.Module;
 export type { SlugBakerAbi };
 
-export class SlugBakeError extends Error {
-  readonly code: string;
+export class SlugBakeError extends GlyphError<'bake-failed'> {
+  readonly reason: string;
   readonly path: string | undefined;
 
   constructor(error: SerializedBakeError) {
-    super(error.message);
+    super('bake-failed', error.message);
     this.name = 'SlugBakeError';
-    this.code = error.code;
+    this.reason = error.code;
     this.path = error.path;
   }
 }

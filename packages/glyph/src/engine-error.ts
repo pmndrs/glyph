@@ -1,4 +1,5 @@
 import { textShaperAbi } from './generated/text-shaper-abi.js';
+import { GlyphError } from './glyph-error.js';
 import type { ParagraphId, StyleId } from './internal/glyph-id.js';
 
 /** Request identities used by an integration to map a rejected frame back to authored state. */
@@ -57,14 +58,14 @@ const GLYPH_ENGINE_STATUS_CODES: ReadonlyMap<number, GlyphEngineStatusCode> = ne
 ]);
 
 /** A synchronous engine call rejected with a stable code and its raw diagnostic status. */
-export class GlyphEngineStatusError extends Error {
-  readonly code: GlyphEngineStatusCode;
+export class GlyphEngineStatusError extends GlyphError<'engine-failed'> {
+  readonly statusCode: GlyphEngineStatusCode;
   readonly status: number;
 
   constructor(operation: string, status: number) {
-    super(`${operation} failed with glyph-engine status ${status}`);
+    super('engine-failed', `${operation} failed with glyph-engine status ${status}`);
     this.name = 'GlyphEngineStatusError';
-    this.code = GLYPH_ENGINE_STATUS_CODES.get(status) ?? 'unknown';
+    this.statusCode = GLYPH_ENGINE_STATUS_CODES.get(status) ?? 'unknown';
     this.status = status;
   }
 }

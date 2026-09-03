@@ -1,3 +1,4 @@
+import { GlyphError } from '../glyph-error.js';
 import type { ParsedGlb } from './glb-reader.js';
 import {
   RasterKtxValidationError,
@@ -15,11 +16,12 @@ export interface RasterArtifactValidationIssue {
   readonly path?: string;
 }
 
-export class RasterArtifactValidationError extends Error {
+export class RasterArtifactValidationError extends GlyphError<'artifact-invalid'> {
   readonly issues: readonly RasterArtifactValidationIssue[];
 
   constructor(issues: readonly RasterArtifactValidationIssue[]) {
     super(
+      'artifact-invalid',
       issues
         .map((issue) => `${issue.code}${issue.path === undefined ? '' : ` ${issue.path}`}: ${issue.message}`)
         .join('\n'),
@@ -88,7 +90,7 @@ export function validateDenseRasterRecords(
   } catch (error) {
     if (error instanceof DenseGlyphRecordError) {
       fail(
-        error.code,
+        error.reason,
         `${label} ${error.message}`,
         error.glyphId === undefined ? path : `${path}/records/${error.glyphId}`,
       );
@@ -216,7 +218,7 @@ export function validateNativeKtx2(
   try {
     validateNativeKtx2Container(bytes, width, height, format);
   } catch (error) {
-    if (error instanceof RasterKtxValidationError) fail(error.code, error.message, path);
+    if (error instanceof RasterKtxValidationError) fail(error.reason, error.message, path);
     throw error;
   }
 }

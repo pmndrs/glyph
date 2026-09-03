@@ -308,11 +308,11 @@ test('baked-only failures never fetch a source or invoke fallback', async () => 
 
   await assert.rejects(
     loader.load({ baked: '/missing.glb' }),
-    (error) => error instanceof FontLoadError && error.code === 'BAKED_FONT_MISSING',
+    (error) => error instanceof FontLoadError && error.reason === 'BAKED_FONT_MISSING',
   );
   await assert.rejects(
     loader.load('/invalid.glb'),
-    (error) => error instanceof FontLoadError && error.code === 'BAKED_FONT_INVALID',
+    (error) => error instanceof FontLoadError && error.reason === 'BAKED_FONT_INVALID',
   );
   assert.equal(bakes, 0);
 });
@@ -331,7 +331,7 @@ test('runtime output cannot claim provenance for different source bytes', async 
 
   await assert.rejects(
     loader.load('/source.ttf'),
-    (error) => error instanceof FontLoadError && error.code === 'FONT_SOURCE_IDENTITY',
+    (error) => error instanceof FontLoadError && error.reason === 'FONT_SOURCE_IDENTITY',
   );
 });
 
@@ -427,7 +427,7 @@ test('external raster loading resolves relative to the baked core and authentica
       byteLength: pageBytes.byteLength,
       artifactHash: '0'.repeat(64),
     }),
-    (error) => error instanceof FontLoadError && error.code === 'RASTER_RESOURCE_HASH',
+    (error) => error instanceof FontLoadError && error.reason === 'RASTER_RESOURCE_HASH',
   );
   const controller = new AbortController();
   controller.abort(new Error('page cancelled'));
@@ -449,7 +449,7 @@ test('external raster loading resolves relative to the baked core and authentica
   const otherFont = await otherRegistry.registerAsset(externalCoreBytes);
   await assert.rejects(
     otherRegistry.attachRaster(otherFont, embeddedBytes),
-    (error) => error instanceof FontLoadError && error.code === 'RASTER_ARTIFACT_HASH',
+    (error) => error instanceof FontLoadError && error.reason === 'RASTER_ARTIFACT_HASH',
   );
 });
 
@@ -675,7 +675,7 @@ test('registries isolate generations, own their bytes, enforce limits, and inval
   const limited = new FontRegistry({ maxArtifactBytes: embeddedBytes.byteLength - 1 });
   await assert.rejects(
     limited.registerAsset(embeddedBytes),
-    (error) => error instanceof FontLoadError && error.code === 'FONT_RESOURCE_LIMIT',
+    (error) => error instanceof FontLoadError && error.reason === 'FONT_RESOURCE_LIMIT',
   );
 });
 
@@ -691,7 +691,7 @@ test('raster handles are generation-scoped and become stale on disposal', async 
   assert.equal(font.getRaster(reference.rasterKey), undefined);
   assert.throws(
     () => first.view(view),
-    (error) => error instanceof FontLoadError && error.code === 'STALE_RASTER_HANDLE',
+    (error) => error instanceof FontLoadError && error.reason === 'STALE_RASTER_HANDLE',
   );
 
   const second = await font.loadRaster({ rasterKey: reference.rasterKey, kind: 'bitmap' });
@@ -699,7 +699,7 @@ test('raster handles are generation-scoped and become stale on disposal', async 
   font.dispose();
   assert.throws(
     () => second.view(view),
-    (error) => error instanceof FontLoadError && error.code === 'STALE_FONT_HANDLE',
+    (error) => error instanceof FontLoadError && error.reason === 'STALE_FONT_HANDLE',
   );
 });
 
@@ -710,7 +710,7 @@ test('fetch limits reject both declared and streamed excess before registration'
   });
   await assert.rejects(
     streamed.load({ baked: 'https://assets.test/streamed.glb' }),
-    (error) => error instanceof FontLoadError && error.code === 'BAKED_FONT_RESOURCE_LIMIT',
+    (error) => error instanceof FontLoadError && error.reason === 'BAKED_FONT_RESOURCE_LIMIT',
   );
 
   const declared = new FontLoader({
@@ -721,7 +721,7 @@ test('fetch limits reject both declared and streamed excess before registration'
   });
   await assert.rejects(
     declared.load({ baked: 'https://assets.test/declared.glb' }),
-    (error) => error instanceof FontLoadError && error.code === 'BAKED_FONT_RESOURCE_LIMIT',
+    (error) => error instanceof FontLoadError && error.reason === 'BAKED_FONT_RESOURCE_LIMIT',
   );
 });
 

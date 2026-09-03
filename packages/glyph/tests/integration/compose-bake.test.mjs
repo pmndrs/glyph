@@ -161,7 +161,7 @@ test('rejects tampered artifacts, reciprocal mismatches, and duplicate raster ke
   tampered.artifacts[0].bytes[0] ^= 1;
   await assert.rejects(
     composeFontBake(core, [{ raster: tampered, packaging: { artifact: 'embedded', pages: 'embedded' } }]),
-    (error) => error instanceof BakeCompositionError && error.code === 'ARTIFACT_HASH',
+    (error) => error instanceof BakeCompositionError && error.reason === 'ARTIFACT_HASH',
   );
 
   await assert.rejects(
@@ -171,7 +171,7 @@ test('rejects tampered artifacts, reciprocal mismatches, and duplicate raster ke
         packaging: { artifact: 'embedded', pages: 'embedded' },
       },
     ]),
-    (error) => error instanceof BakeCompositionError && error.code === 'RASTER_RECIPROCAL_IDENTITY',
+    (error) => error instanceof BakeCompositionError && error.reason === 'RASTER_RECIPROCAL_IDENTITY',
   );
 
   await assert.rejects(
@@ -179,7 +179,7 @@ test('rejects tampered artifacts, reciprocal mismatches, and duplicate raster ke
       { raster: bitmapEmbedded, packaging: { artifact: 'embedded', pages: 'embedded' } },
       { raster: bitmapEmbedded, packaging: { artifact: 'external', pages: 'embedded' } },
     ]),
-    (error) => error instanceof BakeCompositionError && error.code === 'RASTER_KEY_DUPLICATE',
+    (error) => error instanceof BakeCompositionError && error.reason === 'RASTER_KEY_DUPLICATE',
   );
 });
 

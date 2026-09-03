@@ -14,6 +14,7 @@ import {
 } from '../font-baker/index.js';
 import { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
 import { validateFontArtifact } from '../font-baker/validator.js';
+import { GlyphError } from '../glyph-error.js';
 
 export {
   FontBakeError,
@@ -120,14 +121,14 @@ export interface ProjectBakeReport {
   readonly diagnostics: readonly ProjectBakeDiagnostic[];
 }
 
-export class NodeBakeError extends Error {
-  readonly code: string;
+export class NodeBakeError extends GlyphError<'bake-failed'> {
+  readonly reason: string;
   readonly path: string | undefined;
 
-  constructor(code: string, message: string, path?: string) {
-    super(message);
+  constructor(reason: string, message: string, path?: string, options?: ErrorOptions) {
+    super('bake-failed', message, options);
     this.name = 'NodeBakeError';
-    this.code = code;
+    this.reason = reason;
     this.path = path;
   }
 }

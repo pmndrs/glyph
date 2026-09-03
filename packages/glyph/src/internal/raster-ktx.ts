@@ -12,16 +12,17 @@ import {
   type KTX2Container,
   type KTX2DataFormatDescriptorBasicFormat,
 } from 'ktx-parse';
+import { GlyphError } from '../glyph-error.js';
 
 export type RasterKtxValidationErrorCode = 'KTX2_INVALID' | 'KTX2_VARIANT' | 'KTX2_DFD' | 'KTX2_METADATA';
 
-export class RasterKtxValidationError extends Error {
-  readonly code: RasterKtxValidationErrorCode;
+export class RasterKtxValidationError extends GlyphError<'artifact-invalid'> {
+  readonly reason: RasterKtxValidationErrorCode;
 
   constructor(code: RasterKtxValidationErrorCode, message: string, options?: ErrorOptions) {
-    super(message, options);
+    super('artifact-invalid', message, options);
     this.name = 'RasterKtxValidationError';
-    this.code = code;
+    this.reason = code;
   }
 }
 

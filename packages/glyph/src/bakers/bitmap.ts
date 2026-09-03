@@ -16,6 +16,7 @@ import {
   type BitmapDescriptor,
 } from '../internal/bitmap-contract.js';
 import type { RasterCoverage } from '../raster-coverage.js';
+import { GlyphError } from '../glyph-error.js';
 
 export { bitmapBakerAbi } from '../generated/bitmap-baker-abi.js';
 
@@ -50,14 +51,14 @@ export type BitmapBakerWasmSource = BufferSource | WebAssembly.Module;
 
 export type { BitmapBakerAbi };
 
-export class BitmapBakeError extends Error {
-  readonly code: string;
+export class BitmapBakeError extends GlyphError<'bake-failed'> {
+  readonly reason: string;
   readonly path: string | undefined;
 
   constructor(error: SerializedBakeError) {
-    super(error.message);
+    super('bake-failed', error.message);
     this.name = 'BitmapBakeError';
-    this.code = error.code;
+    this.reason = error.code;
     this.path = error.path;
   }
 }

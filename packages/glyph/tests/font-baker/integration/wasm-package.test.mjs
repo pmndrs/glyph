@@ -49,7 +49,7 @@ test('the TypeScript wrapper returns structured Rust errors', async () => {
         source: new Uint8Array([0, 1, 2, 3]),
         descriptor: { formatVersion: 0, fontFaceIndex: 0 },
       }),
-    (error) => error instanceof FontBakeError && error.code === 'INVALID_FONT',
+    (error) => error instanceof FontBakeError && error.reason === 'INVALID_FONT',
   );
 });
 
