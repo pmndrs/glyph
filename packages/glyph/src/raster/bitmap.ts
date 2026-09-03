@@ -99,7 +99,7 @@ export const bitmap: RasterFormat<
 import { f32, techniqueProgram } from '../config/codec-program.js';
 import { id, type CodecBufferId } from '../config/codec.js';
 import type { RasterPlanProgram } from '../config/raster.js';
-import { registerGlyphRasterPlanProgram } from '../config/raster.js';
+import { registerGlyphRasterPlanProgram } from '../internal/raster-plan-program-registry.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
 const BITMAP_ORIGIN_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.bitmap/origin');

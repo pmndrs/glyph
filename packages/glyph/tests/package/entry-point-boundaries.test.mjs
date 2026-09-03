@@ -52,7 +52,7 @@ test('application types stay at root while integration construction lives on con
 
   const leaves = {
     'config/glyph.d.ts': ['defineGlyphConfig', 'defineGlyphSchema', 'resourceLease'],
-    'config/codec.d.ts': ['compileCodec', 'createCodecProgram', 'id'],
+    'config/codec.d.ts': ['compileCodec', 'createCodecProgram', 'id', 'normalizeCodecCapabilitySet'],
     'config/codec-program.d.ts': ['codecProgram', 'f32', 'techniqueProgram', 'u32'],
     'config/raster.d.ts': ['compileRasterFont', 'createRasterCodecProgram', 'registerRasterPlanProgram'],
     'config/raster-format.d.ts': ['defineRasterFormat', 'defineRasterResourceId'],
@@ -79,6 +79,19 @@ test('application types stay at root while integration construction lives on con
     'selectCodecCapabilitySet',
   ]) {
     assert.equal(codecLeaf.has(packageOwned), false, `config/codec.d.ts must not publish ${packageOwned}`);
+  }
+
+  const privateLeafHelpers = {
+    'config/codec-program.d.ts': ['assertTechniqueCodecBody', 'normalizeCodecProgramSystemBuffers'],
+    'config/raster.d.ts': ['registerGlyphRasterPlanProgram'],
+    'config/raster-format.d.ts': ['isRasterFormat', 'rasterFormatForKey', 'rasterFormatForReference'],
+    'config/resources.d.ts': ['portableResourceIdentity'],
+  };
+  for (const [path, names] of Object.entries(privateLeafHelpers)) {
+    const leaf = published(await declaration(path));
+    for (const name of names) {
+      assert.equal(leaf.has(name), false, `${path} must not publish package-owned helper ${name}`);
+    }
   }
 });
 
