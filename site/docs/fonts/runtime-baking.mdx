@@ -132,8 +132,9 @@ notes · internals
 - progress phases — `bake.ts:6–22` (`queued loading baking rasterizing packaging transferring complete`),
   `runtime-bake.ts:49–53`
 - the baker Wasm is fetched inside the Worker — `runtime-bake-worker.ts:23–29`
-- [verify] "the GLB's generator is `@pmndrs/glyph` regardless of producer" (`docs/packages/glyph.md:332–335`, codex
-  tree): find `asset.generator` in `internal/compose-bake.ts` or the Rust `glb.rs` before stating it
+- the GLB's `asset.generator` is written by the Rust bakers — `rust/font-baker/src/glb.rs:35` (the `asset`
+  object), `rust/mtsdf-baker/src/glb.rs:131` (`MSDF_GENERATOR`); composition (`internal/compose-bake.ts`) writes
+  none. [verify] the two string constants before quoting "regardless of producer" (`docs/packages/glyph.md:332–335`)
 */}
 
 ## Caching
@@ -172,8 +173,8 @@ write
 notes · internals
 - dynamic import of `./runtime-bake.js` — `loader.ts:1957–1969`; the explicit entry — `package.json` `./runtime-bake`
   (`:288–294`); the Worker fetches `fontBakerWasmUrl` — `runtime-bake-worker.ts:23–29`
-- [verify] "no static edge from the root": `index.ts` imports nothing from `runtime-bake.ts` at 09d7ae569; confirm
-  with the package's size report before quoting a number
+- "no static edge from the root", still true at codex `1dc580a87`: `index.ts`, `glyph.ts`, and `font-face.ts` import
+  nothing from `runtime-bake.ts` (grep). [verify] the package's size report before quoting a number
 */}
 
 ## A baked GLB never re-bakes

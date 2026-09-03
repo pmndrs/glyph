@@ -273,7 +273,8 @@ notes · internals
 - [in flight] `FontFaceSource` still admits the immutable-Font `FontInput` objects (`font.ts:57–71`) and the
   `{ source, runtimeBake, unicodeRanges }` form (`loader.ts:86–92`); D-297 lists URL, Request, Blob, and bytes only.
   Document the object forms nowhere until the retirement lands.
-- [verify] `Request` as a source and its transport identity (D-298): find where a `Request` is accepted in `loader.ts`
+- no `Request` source at codex `1dc580a87`: grep of `loader.ts`, `font.ts`, and `font-face.ts` finds no `Request`
+  handling; `FontFaceSource` is `string | URL | Blob | SerializedFontFace` (`font-face.ts:27`). Do not list `Request`
 */}
 
 ## Errors
@@ -356,7 +357,8 @@ notes · internals
   `@pmndrs/glyph/config/font-library` (D-299 as revised: "controlled fetch/runtime-bake infrastructure", delegating
   into the same graph); `createFontStack` is still a root export — `index.ts:238`. The FontFace path enters the same
   shared library — `glyph.ts:109–116`, `font-face.ts:104`
-- [verify] whether a Three `FontLoader` exists at HEAD: `src/three/font-loader.ts` is absent at 09d7ae569
+- no Three `FontLoader` at codex `1dc580a87`: `src/three/font-loader.ts` is absent and no `class FontLoader` exists
+  under `src/three`; D-299 (revised) records its removal
 */}
 
 ## Ownership
@@ -382,6 +384,8 @@ notes · internals
   `font-face.ts#disposeFontFaceResourceOwner` (`:679–692`); must be the declaration, not a member `:272–274`
 - handle disposal releases its name for reuse — `glyph.ts:76–79`
 - finalizer for an unreachable face — `font-face.ts:153–157`; D-286 (explicit disposal decides correctness)
-- [verify] "a face disposed before its text keeps the text alive": the face disposes its own record fonts (`:684–687`)
-  while the text holds a separate lease; confirm the backing survives until the text's lease ends in `loaded-font.ts`
+- "a face disposed before its text keeps the text alive": the backing is one state retained by every technique
+  variant and lease, with a `leases` count and a `released` flag — `loaded-font.ts:19–20`, `:156–158`; acquiring
+  from a released backing throws (`:168`); variants retain and release it — `:111`, `:142`. [verify] whether
+  `FontFace.dispose()` releases the backing outright or only its own lease (`font-face.ts`, the dispose path)
 */}

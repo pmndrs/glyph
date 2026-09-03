@@ -348,6 +348,8 @@ notes · internals
 - bindings are cached per material object and per `(pixelSnapping, renderOrder)` — `three/text.ts#ThreeMaterialBindingCache` (`:1408–1426`)
 - reentrancy: `glyph.shape()` cannot be reentered — `glyph-engine.ts:389`; creation runs under the borrowed plan —
   `:504`, `#enterBorrowedPlan` (`:587`); `docs/planning/three-api.md:305–306`
-- [verify] "the coordinator rejects such reentrancy": find the guard that a measure or update inside a factory hits
-  (`glyph-engine.ts#enterBorrowedPlan`) and name the error before promising it
+- "the coordinator rejects such reentrancy": `#borrowedPlanActive` is set by `#enterBorrowedPlan` (`glyph-engine.ts:587`)
+  and a call that re-enters while it is set throws `glyph engine cannot be reentered while a borrowed render plan
+  is active` (`:582–583`); disposal inside one throws `... cannot be disposed while a borrowed render plan is
+  active` (`:242–243`)
 */}

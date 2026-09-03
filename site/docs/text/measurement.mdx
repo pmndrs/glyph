@@ -117,7 +117,8 @@ notes · internals
 - intrinsic widths: `maxContentWidth` between forced breaks, `minContentWidth` with soft breaks taken per wrap
   policy; columns, caps, and clipping do not participate — `layout.ts:126–138`
 - per-line metrics — `layout.ts#ParagraphLineMetrics` (`:93–109`)
-- [verify] whether `measure()` on a `Text` carries `inkBounds` or only `glyphs()` does: the root asks for
+- `measure()` on a `Text` carries `inkBounds`: the measurement scene reads `text.measure().inkBounds` and typechecks
+  against the tree (`site/examples/src/scenes/measurement/scene.tsx:31–33`); the root asks for
   `semanticViews: 'measurement'` (`three/text.ts:1269`) and the measurement scene reads `inkBounds` from
   `measure()` and draws a box, so it does there; confirm the semantic view before stating it as a rule
 */}

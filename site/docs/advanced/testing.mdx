@@ -156,8 +156,9 @@ notes · internals
 - summary fields (`medianMs`, `p95Ms`, `outputBytes`, `hash`) — `apps/benchmarks/src/benchmark/contracts.ts:37–60`
 - Bitmap 32/32 pixel-exact frames against the CPU oracle, pinned SHA-256 — `docs/packages/glyph.md:602–603`
 - vitexec probes — `apps/benchmarks/vitexec/*.probe.ts`; `vitexec` pinned at 0.1.17 — `apps/benchmarks/package.json:51`
-- [verify] "reference, candidate, and difference" images: find the capture writer under
-  `apps/benchmarks/src/benchmark/targets/conformance/raster/*-capture.ts` before describing the artefacts
+- the capture writers exist per format — `apps/benchmarks/src/benchmark/targets/conformance/raster/bitmap-capture.ts`,
+  `mtsdf-capture.ts`, `slug-capture.ts` — and each names reference, candidate, and difference images; [verify] the
+  file naming and where they are written before describing the artefacts
 */}
 
 ## CI has no WebGPU
