@@ -62,9 +62,10 @@ write
 - Avoid: naming the retired loaders anywhere but the "Before" column.
 
 notes · internals
-- `FontLoader` and lazy runtime — D-129; `loadFont`/`createFontStack` remain in the tree at HEAD as the immutable-Font
-  path (`index.ts` exports `loadFont`, `createFontStack`, `defineFont`; `loaded-font.ts:8–21`) — [in flight] being
-  removed by the other agent; do not show them
+- `FontLoader` and lazy runtime — D-129; the immutable-Font path is being removed by the other agent — [in flight]:
+  `loadFont` moved off the root to `@pmndrs/glyph/config/font-library` in codex `2d48a6688` (D-299 as revised), while
+  `createFontStack` and `defineFont` are still root exports (`index.ts:211`, `:238`; `loaded-font.ts:8–21`); do not
+  show them
 - `handle(name)` idempotent terminal roots; `TextGroup` demoted to hierarchy — D-307; `three/text.ts:284–288`
 - `glyph.shape()` sole publication; no `shape()` on `Text` — D-312; `three/text.ts` has none
 - `Text.layout()` → `measure()` — D-282 (named `layout()`), D-291 ("Measurement is an action named `measure()`, never
