@@ -95,7 +95,7 @@ async function bundle(
               let changed = false;
               for (const asset of wasmAssets) {
                 const expression = new RegExp(
-                  `new URL\\(([\"'\x60])\\.{1,2}\\/(?:\\.{1,2}\\/)*(?:dist\\/)?${asset}\\1,\\s*import\\.meta\\.url\\)`,
+                  `new URL\\((["'\x60])\\.{1,2}\\/(?:\\.{1,2}\\/)*(?:dist\\/)?${asset}\\1,\\s*import\\.meta\\.url\\)`,
                   'g',
                 );
                 transformed = transformed.replace(expression, (_match, quote: string) => {
@@ -340,10 +340,7 @@ const coreJavaScript = await measureJavaScript(
   true,
   true,
   {
-    expectedDynamic: [
-      '/packages/glyph/dist/runtime-bake',
-      '/packages/glyph/dist/internal/font-face-transfer-runtime',
-    ],
+    expectedDynamic: ['/packages/glyph/dist/runtime-bake', '/packages/glyph/dist/internal/font-face-transfer-runtime'],
     excludedInitial: [
       '/packages/glyph/dist/runtime-bake',
       '/packages/glyph/dist/runtime-bake-worker',
@@ -428,10 +425,7 @@ const threeRuntime = await measureJavaScript(
   {
     // Bake owns schema and Khronos validation. Rendering reads only the package extension
     // identity and the byte ranges needed to create safe typed-array views.
-    expectedDynamic: [
-      '/packages/glyph/dist/runtime-bake',
-      '/packages/glyph/dist/internal/font-face-transfer-runtime',
-    ],
+    expectedDynamic: ['/packages/glyph/dist/runtime-bake', '/packages/glyph/dist/internal/font-face-transfer-runtime'],
     excludedInitial: [
       '/packages/glyph/dist/runtime-bake',
       '/packages/glyph/dist/internal/font-face-transfer-runtime',
