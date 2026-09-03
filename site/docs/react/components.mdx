@@ -221,7 +221,9 @@ notes · internals
 - `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` adds a boundary that rethrows anything
   but `FontLoadError` — `react.ts:243–249`, `:361–374`
 - `Text`/`TextGroup` reject a `handle` prop — `react.ts:871–875`
-- [verify] the `provider` scene is not in `site/examples/src/catalog.ts`; the proxy above is dead until it lands
+- the scene — `site/examples/src/scenes/provider/scene.tsx`: three providers by string, two roots, one face; a text
+  with no provider on the store's default root; the roots read back off the scene by their `@pmndrs/glyph:<root>`
+  draw objects. The twin `three.ts` is `handle(name)` three times
 */}
 
 ## The default handle
