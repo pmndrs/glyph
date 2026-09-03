@@ -14,7 +14,8 @@ import {
   type PortableTextureFormat,
   type PortableVertexInput,
 } from './resources.js';
-import { assertGlyphId, type CodecBuffer, type CodecBufferId } from './codec.js';
+import type { CodecBuffer, CodecBufferId } from './codec.js';
+import { assertGlyphId } from '../internal/glyph-id.js';
 
 export type CodecScalarKind = 'f32' | 'u32';
 

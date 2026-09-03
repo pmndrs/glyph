@@ -44,14 +44,9 @@ import type {
 import { RenderPlanView, type RenderPlanTable } from './plan-view.js';
 import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
 import type { PortableResource } from '../config/resources.js';
-import {
-  codecCapabilitySetSelectionId,
-  selectCodecCapabilitySet,
-  type MaterialHandle,
-  type ParagraphId,
-  type CodecCapabilitySet,
-  type ResourceHandle,
-} from '../config/codec.js';
+import type { CodecCapabilitySet } from '../config/codec.js';
+import type { MaterialHandle, ParagraphId, ResourceHandle } from './glyph-id.js';
+import { codecCapabilitySetSelectionId, selectCodecCapabilitySet } from './codec-capability-selection.js';
 
 const MAX_U32 = 0xffff_ffff;
 const claimedTargets = new WeakSet<object>();

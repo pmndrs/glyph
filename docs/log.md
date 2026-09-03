@@ -2,6 +2,11 @@
 
 ## 2026-09-03
 
+- **Narrowed Codec identity authoring to the actual DSL** — `/config/codec` now exposes only buffer, technique, program,
+  and baked-resource identity helpers. Handle-scoped Codec, font, root-planning, paragraph, style, material, layout, and
+  live-resource identities moved under package-private engine state, along with capability-set wire selection. Exact
+  membership in the already-compiled Codec descriptor replaces a redundant second validation pass.
+
 - **Closed the raw command-projection surface** — GlyphConfig integrations now receive only the renderer-bound
   `CommandBufferView` through `GlyphRenderer.decode`. The borrowed Rust publication, typed command tree, projector, and
   publication transaction moved behind the package boundary; the public closed `GlyphInstanceKind` union retains the

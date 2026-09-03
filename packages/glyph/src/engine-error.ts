@@ -1,5 +1,5 @@
 import { textShaperAbi } from './generated/text-shaper-abi.js';
-import type { ParagraphId, StyleId } from './config/codec.js';
+import type { ParagraphId, StyleId } from './internal/glyph-id.js';
 
 /** Request identities used by an integration to map a rejected frame back to authored state. */
 export interface GlyphEngineFault {

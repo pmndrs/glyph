@@ -1,14 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  assertGlyphId,
-  compileCodec,
-  createCodecProgram,
-  GlyphIdScope,
-  id,
-  selectCodecCapabilitySet,
-} from '../../dist/config/codec.js';
+import { compileCodec, createCodecProgram, id } from '../../dist/config/codec.js';
+import { selectCodecCapabilitySet } from '../../dist/internal/codec-capability-selection.js';
+import { assertGlyphId, GlyphIdScope, permanentGlyphId } from '../../dist/internal/glyph-id.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 
 const opcodes = textShaperAbi.codec.opcodes;
@@ -55,12 +50,12 @@ test('semantic ID helpers are stable and namespace program variants', () => {
   assert.notEqual(MSDF_TECHNIQUE_ID, MSDF_PROGRAM_ID);
 });
 
-test('host ID helpers are stable, nonzero, domain-separated, and collision-checked', () => {
-  assert.equal(id.codec('example/default'), id.codec('example/default'));
-  assert.notEqual(id.codec('example/default'), id.planner('example/default'));
+test('package-owned host IDs are stable, nonzero, domain-separated, and collision-checked', () => {
+  assert.equal(permanentGlyphId('codec', 'example/default'), permanentGlyphId('codec', 'example/default'));
+  assert.notEqual(permanentGlyphId('codec', 'example/default'), permanentGlyphId('planner', 'example/default'));
   assert.ok(id.buffer('example/origin') > 0 && id.buffer('example/origin') <= 0xffff);
-  assert.throws(() => id.codec(''), /nonempty string/);
-  assert.throws(() => id('unknown', 'example'), /exactly one stable name/);
+  assert.throws(() => permanentGlyphId('codec', ''), /nonempty string/);
+  assert.equal('planner' in id, false);
   id.buffer('collision-36');
   assert.throws(() => id.buffer('collision-326'), /ID collision/);
 });
@@ -74,7 +69,7 @@ test('runtime ID scopes retain shared provenance until their last owner is dispo
   first.dispose();
   assert.equal(assertGlyphId(secondId, 'paragraph', 'scoped paragraph'), secondId);
   second.dispose();
-  assert.throws(() => assertGlyphId(firstId, 'paragraph', 'scoped paragraph'), /must come from id/);
+  assert.throws(() => assertGlyphId(firstId, 'paragraph', 'scoped paragraph'), /package-owned Glyph identity/);
   assert.throws(() => second.id('paragraph', 'test.identities/after-dispose'), /scope has been disposed/);
 });
 
@@ -85,7 +80,7 @@ test('identity registries reject colliding program names at assembly', () => {
 });
 
 test('capability profiles are selected from descriptors without exposing wire ordinals', () => {
-  const codecHandle = id.codec('test.identities/capability-profile');
+  const codecHandle = permanentGlyphId('codec', 'test.identities/capability-profile');
   const first = capabilitySet();
   const second = { ...capabilitySet(), maxBufferBytes: 2 * 1024 * 1024 };
   const descriptor = {
@@ -97,7 +92,7 @@ test('capability profiles are selected from descriptors without exposing wire or
   assert.ok(Object.isFrozen(selection));
   assert.throws(
     () => selectCodecCapabilitySet(codecHandle, descriptor, { ...second, maxBufferBytes: 3 * 1024 * 1024 }),
-    /not declared/,
+    /does not belong/,
   );
 });
 

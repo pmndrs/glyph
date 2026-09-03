@@ -8,22 +8,20 @@ import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import { compileRasterFont, resolveRasterPlanProgram, type CompiledRasterFont } from '../config/raster.js';
 import { portableResourceIdentity, type PortableResource } from '../config/resources.js';
 import { createRenderPlanner, type RenderPlanner, type RenderPlannerOptions } from './render-planner.js';
+import { compileCodec, type CodecDescriptor, type CodecIdFactory } from '../config/codec.js';
+import { CodecIdScope } from './render-id.js';
 import {
   assertGlyphId,
-  compileCodec,
   createHandleIdFactory,
   GlyphIdScope,
-  CodecIdScope,
+  type CodecHandle,
   type FontBindingHandle,
   type FontStackHandle,
   type HandleIdFactory,
   type ParagraphId,
-  type CodecDescriptor,
-  type CodecHandle,
-  type CodecIdFactory,
-  type StyleId,
   type PlannerHandle,
-} from '../config/codec.js';
+  type StyleId,
+} from './glyph-id.js';
 
 const MAX_U32 = 0xffff_ffff;
 

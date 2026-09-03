@@ -1,13 +1,8 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { Font } from '../font.js';
 import type { AnyRasterFormat, RasterResourceId } from '../config/raster-format.js';
-import {
-  assertCodecIdFactory,
-  CodecIdScope,
-  type CodecIdFactory,
-  type CodecResourceId,
-  type CodecTechniqueId,
-} from '../config/codec.js';
+import { type CodecIdFactory, type CodecResourceId, type CodecTechniqueId } from '../config/codec.js';
+import { assertCodecIdFactory, CodecIdScope } from './render-id.js';
 import { compileRasterFont } from '../config/raster.js';
 const MAX_U32 = 0xffff_ffff;
 const MAX_U16 = 0xffff;

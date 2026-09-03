@@ -1,6 +1,12 @@
 import type { CodecF32Value, CodecU32Value } from '../../dist/index.js';
 import { f32, codecProgram, u32 } from '../../dist/config/codec-program.js';
 import { id } from '../../dist/config/codec.js';
+import * as CodecConfigApi from '../../dist/config/codec.js';
+
+// @ts-expect-error Host identity scopes are engine machinery, not Codec authoring API.
+void CodecConfigApi.GlyphIdScope;
+// @ts-expect-error Capability-set wire selection is chosen by the configured handle.
+void CodecConfigApi.selectCodecCapabilitySet;
 
 // A program declares its named inputs once; every later reference is a handle,
 // never a number.
@@ -36,7 +42,7 @@ f32.add(inlineOrigin, u32Value);
 p.storeU32(id.buffer('type-test/wrong-scalar'), [left]);
 // @ts-expect-error Buffer stores reject arbitrary numeric IDs at typecheck.
 p.storeF32(1, [left]);
-// @ts-expect-error ID domains cannot be interchanged.
+// @ts-expect-error Host/planner identities are package-owned and absent from the public Codec DSL.
 p.storeF32(id.planner('type-test/planner'), [left]);
 // @ts-expect-error Binding names are declared, not invented at use sites.
 void p.binding.kerning;
