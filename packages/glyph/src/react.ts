@@ -188,8 +188,8 @@ export type GlyphProviderFontFace =
   | Readonly<{ src: FontFaceSource; format?: FontFaceConfig['format'] }>;
 
 export interface GlyphProviderProps {
-  /** Select a Three handle's anonymous root or one named root returned by `handle(name)`. */
-  readonly handle?: ThreeHandle | ThreeRoot;
+  /** Select a Three handle/root, or a named root on R3F's built-in default handle. */
+  readonly handle?: ThreeHandle | ThreeRoot | string;
   readonly fontFaces?: Readonly<Record<string, GlyphProviderFontFace>>;
   readonly fallback?: ReactNode;
   readonly errorFallback?: ReactNode | ((error: FontLoadError) => ReactNode);
@@ -220,6 +220,9 @@ export function GlyphProvider({
     const defaultHandle = getInitializedDefaultThreeHandle() ?? use(defaultThreeHandle());
     defaultResource = defaultGlyphContext(store, defaultHandle);
     selection = defaultResource.context;
+  } else if (typeof handle === 'string') {
+    const defaultHandle = getInitializedDefaultThreeHandle() ?? use(defaultThreeHandle());
+    selection = Object.freeze({ handle: defaultHandle, root: defaultHandle(handle) });
   } else {
     selection = selectReactRoot(handle);
   }

@@ -240,6 +240,26 @@ test('GlyphProvider selects one terminal named root without rebinding the anonym
   assert.equal(hud.textCount, 0);
 });
 
+test('GlyphProvider string shorthand selects a named root on the built-in default handle', async () => {
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const fixture = await loadFixture();
+  const renderer = await create(
+    createElement(
+      GlyphProvider,
+      { handle: 'provider-string-root' },
+      createElement(Text, { font: fixture.font }, 'named'),
+    ),
+  );
+  try {
+    const scene = renderer.scene.instance;
+    scene.updateMatrixWorld(true);
+    assert.ok(scene.children.some(({ name }) => name === '@pmndrs/glyph:provider-string-root'));
+  } finally {
+    await renderer.unmount();
+    fixture.dispose();
+  }
+});
+
 test('an R3F portal selects a distinct terminal root for its target Scene', async () => {
   const { create } = (await import('@react-three/test-renderer/webgpu')).default;
   const { createPortal } = await import('@react-three/fiber/webgpu');

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:b01312c3fce73d093bada9f798ddcaae31913adadd57dc7fd1d6ac33ca729b3a'
+source_digest: 'sha256:9841aee47af9654954367877c4fa9cf5a3671672f8300aa482571b312257c9d2'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -211,7 +211,8 @@ than invented semantic labels. Rich vendor labels and aliases remain external ca
 
 R3F `<Text>` and `<TextGroup>` expose no handle prop. They read a selected `ThreeHandle` or terminal `ThreeRoot` from the
 nearest optional `GlyphProvider`, or suspend on one module-owned default Three handle that calls idempotent `glyph.init()`
-and installs `ThreeConfig` once. A provider captures its initial selection and `fontFaces` alias table and never updates
+and installs `ThreeConfig` once. `handle="surface"` is shorthand for the idempotent `defaultHandle('surface')` named root;
+an omitted provider selection still uses the Canvas-local default root. A provider captures its initial selection and `fontFaces` alias table and never updates
 the context value; selecting another root, handle, or alias table requires remounting the provider. Context is constructor dependency
 injection only: it owns no engine, runtime, scene, renderer, canvas, publication cursor, or semantic resource cache, and
 it never disposes an externally owned handle or FontFace. It disposes only FontFaces it declared from shorthand table
