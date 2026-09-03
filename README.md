@@ -209,9 +209,12 @@ Capacity is optional immutable handle policy. `ThreeConfig` defaults every root 
 ```ts
 import { defineThreeConfig } from '@pmndrs/glyph/three';
 
-const dense = glyph.handle('dense-labels', defineThreeConfig({
-  capacity: { size: 20_000, policy: 'chunk' },
-}));
+const dense = glyph.handle(
+  'dense-labels',
+  defineThreeConfig({
+    capacity: { size: 20_000, policy: 'chunk' },
+  }),
+);
 const denseLabels = dense.createTextGroup();
 ```
 
@@ -250,7 +253,7 @@ pnpm exec glyph bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 
 
 Add `--unicodes U+0020-007E` to bake a subset, or `--check` to rebuild temporarily and require byte-identical output.
 
-Or let the CLI discover every `defineFont()` declaration in a project and write each artifact beside its source asset:
+Or let the CLI discover every `glyph.fontFace()` declaration in a project and write each artifact beside its source asset:
 
 ```sh
 pnpm exec glyph bake --project-root . --entry src/text.ts --asset-root public
