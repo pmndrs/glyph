@@ -12,20 +12,20 @@ use crate::{
         ENGINE_RESULT_ENGINE_REVISION, ENGINE_RESULT_FAULT_PARAGRAPH_ID,
         ENGINE_RESULT_FAULT_STYLE_ID, ENGINE_RESULT_FLAGS, ENGINE_RESULT_HEADER_ALIGNMENT,
         ENGINE_RESULT_HEADER_SIZE, ENGINE_RESULT_OUTPUT_SLOT, ENGINE_RESULT_PATCH_COUNT,
-        ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_REVISION, ENGINE_RESULT_ROOT_ID,
-        ENGINE_RESULT_PRIMITIVE_COUNT, ENGINE_RESULT_PRIMITIVES_OFFSET,
-        ENGINE_RESULT_PUBLICATION_GENERATION, ENGINE_RESULT_REQUEST_CAPACITY,
-        ENGINE_RESULT_REQUIRED_BASE_REVISION, ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY,
-        ENGINE_RESULT_REQUIRED_RESULT_CAPACITY, ENGINE_RESULT_RESOURCE_COUNT,
-        ENGINE_RESULT_RESOURCES_OFFSET, ENGINE_RESULT_RESULT_CAPACITY,
-        ENGINE_RESULT_RETIREMENT_COUNT, ENGINE_RESULT_RETIREMENTS_OFFSET,
+        ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_PRIMITIVE_COUNT,
+        ENGINE_RESULT_PRIMITIVES_OFFSET, ENGINE_RESULT_PUBLICATION_GENERATION,
+        ENGINE_RESULT_REQUEST_CAPACITY, ENGINE_RESULT_REQUIRED_BASE_REVISION,
+        ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY, ENGINE_RESULT_REQUIRED_RESULT_CAPACITY,
+        ENGINE_RESULT_RESOURCE_COUNT, ENGINE_RESULT_RESOURCES_OFFSET,
+        ENGINE_RESULT_RESULT_CAPACITY, ENGINE_RESULT_RETIREMENT_COUNT,
+        ENGINE_RESULT_RETIREMENTS_OFFSET, ENGINE_RESULT_REVISION, ENGINE_RESULT_ROOT_ID,
         ENGINE_RESULT_SEMANTICS_COUNT, ENGINE_RESULT_SEMANTICS_OFFSET, ENGINE_RESULT_STATUS,
-        ENGINE_UPDATE_BATCH_ENTRY_SIZE, ENGINE_UPDATE_BATCH_ROOT_ID,
-        ENGINE_UPDATE_BATCH_REQUEST_LENGTH, ENGINE_UPDATE_BATCH_RESULT_POINTER,
+        ENGINE_UPDATE_BATCH_ENTRY_SIZE, ENGINE_UPDATE_BATCH_REQUEST_LENGTH,
+        ENGINE_UPDATE_BATCH_RESULT_POINTER, ENGINE_UPDATE_BATCH_ROOT_ID,
         ENGINE_UPDATE_BATCH_STATUS, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     },
     engine::{
-        frame::{CommittedUpdate, RootRevision, RESULT_FLAG_CHECKPOINT},
+        frame::{CommittedUpdate, RESULT_FLAG_CHECKPOINT, RootRevision},
         render_plan::RenderPlanView,
         render_plan_wire::{EncodedPlanLayout, encode_publication, encode_query},
         semantic_view::SemanticRecord,
@@ -46,7 +46,6 @@ pub(crate) struct UpdateBatchResult {
 #[derive(Default)]
 pub(crate) struct UpdateBatchTransport {
     arena: AlignedArena,
-    root_ids: Vec<u32>,
 }
 
 impl UpdateBatchTransport {
@@ -54,14 +53,6 @@ impl UpdateBatchTransport {
         let required = count
             .checked_mul(ENGINE_UPDATE_BATCH_ENTRY_SIZE)
             .ok_or(STATUS_RESULT_TOO_LARGE)?;
-        let target = growth_capacity(self.arena.capacity(), required)?;
-        let target_count = usize::try_from(target / ENGINE_UPDATE_BATCH_ENTRY_SIZE)
-            .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-        if target_count > self.root_ids.capacity() {
-            self.root_ids
-                .try_reserve_exact(target_count - self.root_ids.len())
-                .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-        }
         self.arena.reserve(required)
     }
 
@@ -77,8 +68,6 @@ impl UpdateBatchTransport {
         self.arena.capacity() / ENGINE_UPDATE_BATCH_ENTRY_SIZE
     }
 
-    /// Validates the complete descriptor table before invoking any entry. This makes duplicate
-    /// Root IDs and malformed table bounds are batch-level errors with no root mutation.
     pub fn process(
         &mut self,
         entries_pointer: usize,
@@ -94,32 +83,14 @@ impl UpdateBatchTransport {
         let Ok(byte_length) = usize::try_from(byte_length) else {
             return STATUS_INVALID_REQUEST;
         };
-        let Some(entries) = self.arena.bytes().get(..byte_length) else {
+        if self.arena.bytes().get(..byte_length).is_none() {
             return STATUS_INVALID_REQUEST;
-        };
-        self.root_ids.clear();
+        }
         for index in 0..count as usize {
-            let Some(root_id) = entry_u32(entries, index, ENGINE_UPDATE_BATCH_ROOT_ID) else {
-                return STATUS_INVALID_REQUEST;
+            let root_id = match entry_u32(self.arena.bytes(), index, ENGINE_UPDATE_BATCH_ROOT_ID) {
+                Some(value) => value,
+                None => return STATUS_INVALID_REQUEST,
             };
-            if root_id == 0 {
-                return STATUS_INVALID_REQUEST;
-            }
-            if self.root_ids.len() == self.root_ids.capacity() {
-                return STATUS_RESULT_TOO_LARGE;
-            }
-            self.root_ids.push(root_id);
-        }
-        self.root_ids.sort_unstable();
-        if self.root_ids.windows(2).any(|pair| pair[0] == pair[1]) {
-            return STATUS_INVALID_REQUEST;
-        }
-        for index in 0..count as usize {
-            let root_id =
-                match entry_u32(self.arena.bytes(), index, ENGINE_UPDATE_BATCH_ROOT_ID) {
-                    Some(value) => value,
-                    None => return STATUS_INVALID_REQUEST,
-                };
             let request_length = match entry_u32(
                 self.arena.bytes(),
                 index,
@@ -728,43 +699,6 @@ mod tests {
     }
 
     #[test]
-    fn update_batch_reserves_duplicate_scratch_for_its_full_advertised_capacity() {
-        let mut batch = UpdateBatchTransport::default();
-        batch.reserve(2).unwrap();
-        batch.reserve(3).unwrap();
-        assert_eq!(
-            batch.capacity(),
-            4,
-            "arena doubling is visible as entry capacity"
-        );
-        for index in 0..batch.capacity() as usize {
-            write_batch_entry(
-                batch.entries_mut(),
-                index,
-                index as u32 + 1,
-                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
-                0,
-                0,
-            );
-        }
-        let pointer = batch.pointer();
-        let capacity = batch.capacity();
-        let mut calls = 0;
-
-        assert_eq!(
-            batch.process(pointer, capacity, |_, _| {
-                calls += 1;
-                UpdateBatchResult {
-                    result_pointer: 1,
-                    status: 0,
-                }
-            }),
-            0
-        );
-        assert_eq!(calls, 4);
-    }
-
-    #[test]
     fn rejected_update_batch_growth_and_bounds_preserve_the_owned_arena() {
         let mut batch = UpdateBatchTransport::default();
         batch.reserve(2).unwrap();
@@ -856,30 +790,6 @@ mod tests {
                 *root_id
             );
         }
-    }
-
-    #[test]
-    fn duplicate_update_batch_roots_are_rejected_before_outputs_or_roots_mutate() {
-        let mut batch = UpdateBatchTransport::default();
-        batch.reserve(2).unwrap();
-        write_batch_entry(batch.entries_mut(), 0, 3, 80, 0xaaaa_aaaa, 0xbbbb_bbbb);
-        write_batch_entry(batch.entries_mut(), 1, 3, 96, 0xcccc_cccc, 0xdddd_dddd);
-        let before = batch.arena.bytes().to_vec();
-        let pointer = batch.pointer();
-        let mut calls = 0;
-
-        assert_eq!(
-            batch.process(pointer, 2, |_, _| {
-                calls += 1;
-                UpdateBatchResult {
-                    result_pointer: 0,
-                    status: 0,
-                }
-            }),
-            STATUS_INVALID_REQUEST
-        );
-        assert_eq!(calls, 0);
-        assert_eq!(batch.arena.bytes(), before);
     }
 
     #[test]

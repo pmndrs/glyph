@@ -215,10 +215,16 @@ test('glyph.shape preserves root, codec, and font ownership while batching handl
     glyph.shape();
     assert.equal(instrumentedGlyph.crossings, 1, 'all dirty roots share one engine update call');
     assert.equal(instrumentedGlyph.latestBatchCount, 3, 'the batch carries every dirty root exactly once');
+    const firstBatchRootIds = instrumentedGlyph.latestBatchRootIds;
+    assert.equal(new Set(firstBatchRootIds).size, labels.length, 'the public root set emits each identity once');
     assert.ok(rootDraws(firstScene).length > 0);
     assert.ok(rootDraws(secondScene, 'batch-scene').length > 0);
     assert.ok(rootDraws(thirdScene).length > 0);
-    assert.equal(rootDraws(firstScene, 'batch-scene').length, 0, 'a named root cannot leak into its handle default root');
+    assert.equal(
+      rootDraws(firstScene, 'batch-scene').length,
+      0,
+      'a named root cannot leak into its handle default root',
+    );
     assert.equal(rootDraws(secondScene).length, 0, 'the default root cannot leak into a named root publication');
     assert.equal(rootDraws(thirdScene, 'batch-scene').length, 0, 'one handle cannot consume another handle root');
 
@@ -229,6 +235,7 @@ test('glyph.shape preserves root, codec, and font ownership while batching handl
     glyph.shape();
     assert.equal(instrumentedGlyph.crossings, 2);
     assert.equal(instrumentedGlyph.latestBatchCount, 3);
+    assert.deepEqual(instrumentedGlyph.latestBatchRootIds, firstBatchRootIds, 'later batches preserve root identity');
   } finally {
     for (const label of labels) label.dispose();
     font.dispose();
@@ -1728,6 +1735,7 @@ function instrumentNextGlyphEngine() {
   let latestUpdateFlags = 0;
   let latestUpdateGeneration = 0;
   let latestBatchCount = 0;
+  let latestBatchRootIds = [];
   WebAssembly.instantiate = async (source, imports) => {
     const instance = await originalInstantiate(source, imports);
     const exports = { ...instance.exports };
@@ -1753,11 +1761,13 @@ function instrumentNextGlyphEngine() {
     exports[abi.functions.textUpdateBatch] = (pointer, count) => {
       crossings += 1;
       latestBatchCount = count;
+      latestBatchRootIds = [];
       const entry = abi.layouts.engineUpdateBatchEntry;
       const before = new DataView(exports.memory.buffer, pointer, count * entry.size);
       for (let index = 0; index < count; index += 1) {
         const offset = index * entry.size;
         const rootId = before.getUint32(offset + entry.rootId, true);
+        latestBatchRootIds.push(rootId);
         const length = before.getUint32(offset + entry.requestLength, true);
         const request = requestPointer(rootId);
         latestRequest = new Uint8Array(exports.memory.buffer, request, length).slice();
@@ -1805,6 +1815,9 @@ function instrumentNextGlyphEngine() {
     get latestBatchCount() {
       return latestBatchCount;
     },
+    get latestBatchRootIds() {
+      return [...latestBatchRootIds];
+    },
     get latestAcknowledgedGeneration() {
       assert.ok(latestRequest, 'a text update request must have been captured');
       const request = abi.layouts.engineUpdateRequest;
@@ -1816,6 +1829,7 @@ function instrumentNextGlyphEngine() {
     reset() {
       crossings = 0;
       measureCrossings = 0;
+      latestBatchRootIds = [];
     },
     latestTextMutations() {
       assert.ok(latestRequest, 'a text update request must have been captured');
