@@ -26,8 +26,7 @@ declare module '@pmndrs/glyph/three' {
 
 /** The external consumer's Three implementation of the portable glyph-example Codec. */
 const externalGlyphExampleThreeProgram = {
-  raster: glyphExampleCodec.raster,
-  schema: glyphExampleCodec.schema,
+  codec: glyphExampleCodec,
   variant: {
     id: 'tsl',
     language: 'tsl',

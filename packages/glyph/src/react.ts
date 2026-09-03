@@ -594,22 +594,12 @@ function TextGroupObject({
     },
     threeRootHost(root),
   ]);
-  const [store] = useState(() => createObjectStore<ThreeTextGroup>());
-  const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  const invalidate = useThree((state) => state.invalidate);
   const publishObject = useMemo(
     () => (value: ThreeTextGroup | null) => {
-      store.publish(value ?? undefined);
       publishCommittedObject(value);
     },
-    [publishCommittedObject, store],
+    [publishCommittedObject],
   );
-
-  useLayoutEffect(() => {
-    if (object === undefined) return;
-    object.material = options.material;
-    invalidate();
-  }, [invalidate, object, options.material]);
 
   return createElement(
     ThreeTextGroupElement,
@@ -900,7 +890,7 @@ function objectProperties<Technique extends AnyRasterFormat>(properties: R3fText
 
 function groupObjectProperties(properties: R3fTextGroupProps): TextGroupElementProps {
   const object = { ...properties } as Record<string, unknown>;
-  for (const key of ['material', 'pixelSnapping', 'children', 'onError', 'ref']) delete object[key];
+  for (const key of ['pixelSnapping', 'children', 'onError', 'ref']) delete object[key];
   return object as TextGroupElementProps;
 }
 

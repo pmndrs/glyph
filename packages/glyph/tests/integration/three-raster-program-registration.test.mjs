@@ -67,8 +67,7 @@ const rasterProgram = (techniqueIdentity, declaration = {}) => {
       resources,
       render,
     });
-    portable = { raster: technique, schema };
-    registerRasterCodec({
+    portable = registerRasterCodec({
       raster: technique,
       schema,
       codecBody(system) {
@@ -103,8 +102,7 @@ const rasterProgram = (techniqueIdentity, declaration = {}) => {
     ]),
   );
   return {
-    raster: portable.raster,
-    schema: portable.schema,
+    codec: portable,
     variant: {
       id: 'test',
       language: 'test',
@@ -207,50 +205,20 @@ test('variant registration rejects incompatible capabilities before an engine ex
   delete missingResource.variant.resources.atlas;
   assert.throws(() => registerThreeRasterProgram(missingResource), /omits resource "atlas"/);
 
-  const witnessed = rasterProgram('test-wrong-schema-witness');
-  witnessed.schema = defineTechniqueSchema({
-    technique: witnessed.raster.id,
-    scope: 'glyph',
-    binding: {},
-    buffers: {},
-  });
-  assert.throws(() => registerThreeRasterProgram(witnessed), /needs its registered portable schema/);
-
-  const copiedRaster = rasterProgram('test-copied-raster-format');
-  copiedRaster.raster = Object.assign(() => ({}), copiedRaster.raster);
+  const copiedCodec = rasterProgram('test-copied-raster-codec');
+  copiedCodec.codec = { ...copiedCodec.codec };
   assert.throws(
-    () => registerThreeRasterProgram(copiedRaster),
-    /needs its registered RasterFormat/,
-    'a structural copy must not impersonate the package-owned RasterFormat',
+    () => registerThreeRasterProgram(copiedCodec),
+    /need a registered RasterCodec/,
+    'a structural copy must not impersonate the registered portable Codec',
   );
-
-  assert.throws(() => {
-    const anchor = rasterProgram('test-portable-registration-anchor');
-    const unregisteredTechnique = defineRasterFormat({
-      id: 'test-no-portable',
-      kind: 'test',
-      extension: 'TEST_raster',
-      version: 0,
-      textEffects: [],
-      descriptor: () => ({}),
-      async decode() {
-        return {};
-      },
-      dispose() {},
-    });
-    registerThreeRasterProgram({
-      ...anchor,
-      raster: unregisteredTechnique,
-    });
-  }, /no portable raster codec is registered/);
 });
 
 test('registration selects one renderer variant per technique before engine construction', async () => {
   const primary = rasterProgram('test-variant-selection');
-  const unsupported = rasterProgram('test-portable-without-three').raster;
+  const unsupported = rasterProgram('test-portable-without-three').codec.raster;
   const secondary = {
-    raster: primary.raster,
-    schema: primary.schema,
+    codec: primary.codec,
     variant: { ...primary.variant, id: 'second' },
   };
   registerThreeRasterProgram(primary);
@@ -331,8 +299,7 @@ test('engine construction rejects a portable body compiled for different system 
     compileFont() {},
   });
   registerThreeRasterProgram({
-    raster: portable.raster,
-    schema: portable.schema,
+    codec: portable,
     variant: {
       id: 'test',
       language: 'test',

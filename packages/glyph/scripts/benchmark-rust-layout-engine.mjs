@@ -230,10 +230,7 @@ function measureWarm(name) {
 
 function createRoot(requestCapacity) {
   const beforeBytes = memory.buffer.byteLength;
-  requireStatus(
-    fn.createRoot(rootId, requestCapacity, outputCapacity, utf16.length + 1),
-    'create benchmark planner',
-  );
+  requireStatus(fn.createRoot(rootId, requestCapacity, outputCapacity, utf16.length + 1), 'create benchmark planner');
   if (plannerMemory === undefined) {
     plannerMemory = { beforeBytes, afterBytes: memory.buffer.byteLength };
   }

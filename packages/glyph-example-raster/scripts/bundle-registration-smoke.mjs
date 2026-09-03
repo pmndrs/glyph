@@ -56,8 +56,7 @@ try {
       import { glyphExampleTslVariant } from '@pmndrs/glyph-example-raster/tsl';
 
       registerThreeRasterProgram({
-        raster: glyphExampleCodec.raster,
-        schema: glyphExampleCodec.schema,
+        codec: glyphExampleCodec,
         variant: {
           ...glyphExampleTslVariant,
           id: 'bundle-tsl',

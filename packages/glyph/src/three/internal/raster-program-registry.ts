@@ -4,7 +4,6 @@ import type { AnyTechniqueSchema } from '../../config/schema.js';
 import type { AnyRasterFormat } from '../../config/raster-format.js';
 import { threeCodecCapabilitySet, threeSystemBuffers } from '../codec.js';
 import type { ThreeRasterProgram, ThreeRasterVariant } from '../raster-program.js';
-import { resolveRasterCodecInternal } from '../../internal/raster-codec-registry.js';
 
 export interface CompiledThreeRasterProgram {
   readonly raster: AnyRasterFormat;
@@ -34,20 +33,21 @@ export function commitThreeRasterProgram(
   source: object,
   program: ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema>,
 ): void {
-  const existing = programs.get(program.raster.id);
+  const techniqueId = program.codec.raster.id;
+  const existing = programs.get(techniqueId);
   if (existing !== undefined) {
     throw new TypeError(
-      `Three already selected raster variant "${existing.variant.id}" for technique "${program.raster.id}"`,
+      `Three already selected raster variant "${existing.variant.id}" for technique "${techniqueId}"`,
     );
   }
   const engineCount = liveSnapshotCount();
   if (engineCount !== 0) {
     throw new Error(
-      `Three raster variant "${program.raster.id}/${program.variant.id}" was registered after ${engineCount} glyph engine(s) ` +
+      `Three raster variant "${techniqueId}/${program.variant.id}" was registered after ${engineCount} glyph engine(s) ` +
         'already read the registry; register every technique before its first Text or TextGroup realization',
     );
   }
-  programs.set(program.raster.id, program);
+  programs.set(techniqueId, program);
   registeredSources.set(source, program);
 }
 
@@ -55,7 +55,9 @@ export function compiledThreeRasterPrograms(
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct' = 'indexed',
 ): readonly CompiledThreeRasterProgram[] {
-  const selected = [...programs.values()].sort((left, right) => left.raster.id.localeCompare(right.raster.id));
+  const selected = [...programs.values()].sort((left, right) =>
+    left.codec.raster.id.localeCompare(right.codec.raster.id),
+  );
   const compiled = selected.map((program) => compileProgram(program, identities, transformMode));
   const reference = new WeakRef(identities);
   const references = snapshotsByRegistry.get(identities) ?? [];
@@ -90,8 +92,7 @@ function compileProgram(
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterProgram {
-  const portable = resolveRasterCodecInternal(program.raster.id);
-  if (portable === undefined) throw new Error(`no portable raster codec is registered for "${program.raster.id}"`);
+  const portable = program.codec;
   const system = transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
   const codec = createRasterCodecProgram(portable, {
     namespace: 'three',
@@ -102,7 +103,7 @@ function compileProgram(
     ids: identities,
   });
   return {
-    raster: program.raster,
+    raster: portable.raster,
     schema: portable.schema,
     variant: program.variant,
     techniqueId: codec.techniqueId,

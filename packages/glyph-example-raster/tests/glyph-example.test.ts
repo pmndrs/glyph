@@ -312,7 +312,7 @@ const suppliedGlyphExampleSchema = defineTechniqueSchema({
 
 const stripGeometry = triangleStripGeometry(glyphExampleIndexedQuadGeometry);
 
-registerRasterCodec({
+const suppliedGlyphExampleCodec = registerRasterCodec({
   raster: suppliedGlyphExample,
   schema: suppliedGlyphExampleSchema,
   codecBody(system) {
@@ -352,8 +352,7 @@ registerRasterCodec({
 });
 
 const suppliedThreeProgram = {
-  raster: suppliedGlyphExample,
-  schema: suppliedGlyphExampleSchema,
+  codec: suppliedGlyphExampleCodec,
   variant: {
     id: 'tsl-strip',
     language: 'tsl',
@@ -371,8 +370,7 @@ const suppliedThreeProgram = {
 };
 
 const threeProgram = {
-  raster: glyphExampleCodec.raster,
-  schema: glyphExampleCodec.schema,
+  codec: glyphExampleCodec,
   variant: {
     id: 'tsl',
     language: 'tsl',

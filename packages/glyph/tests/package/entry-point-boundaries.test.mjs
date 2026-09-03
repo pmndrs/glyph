@@ -63,7 +63,7 @@ test('application types stay at root while integration construction lives on con
     'config/glyph.d.ts': ['defineGlyphConfig', 'defineGlyphSchema', 'resourceLease'],
     'config/codec.d.ts': ['compileCodec', 'createCodecProgram', 'id', 'normalizeCodecCapabilitySet'],
     'config/codec-program.d.ts': ['codecProgram', 'f32', 'techniqueProgram', 'u32'],
-    'config/raster.d.ts': ['compileRasterFont', 'createRasterCodecProgram', 'registerRasterCodec'],
+    'config/raster.d.ts': ['compileRasterFont', 'createRasterCodecProgram', 'isRasterCodec', 'registerRasterCodec'],
     'config/raster-format.d.ts': ['defineRasterFormat', 'defineRasterResourceId'],
     'config/resources.d.ts': ['assertPortableResource', 'definePortableVertexSemantic'],
     'config/schema.d.ts': ['defineCodecBuffers', 'defineTechniqueSchema'],
