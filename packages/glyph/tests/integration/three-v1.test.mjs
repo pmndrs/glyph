@@ -1731,9 +1731,9 @@ function instrumentNextGlyphEngine() {
       const before = new DataView(exports.memory.buffer, pointer, count * entry.size);
       for (let index = 0; index < count; index += 1) {
         const offset = index * entry.size;
-        const plannerId = before.getUint32(offset + entry.plannerId, true);
+        const rootId = before.getUint32(offset + entry.rootId, true);
         const length = before.getUint32(offset + entry.requestLength, true);
-        const request = requestPointer(plannerId);
+        const request = requestPointer(rootId);
         latestRequest = new Uint8Array(exports.memory.buffer, request, length).slice();
       }
       const status = updateBatch(pointer, count);

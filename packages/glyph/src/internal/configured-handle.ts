@@ -449,10 +449,10 @@ class ConfiguredRootServices<
     let stopObservingDirty: (() => void) | undefined;
     try {
       const commands = this.#config.commands;
-      const capabilitySet = this.#codec.descriptor.capabilitySets[this.#codec.capabilitySet ?? 0];
+      const capabilitySetIndex = this.#codec.capabilitySet ?? 0;
       planner = this.#handleState.createRootPlanner({
         codec: this.#codecRegistration,
-        ...(capabilitySet === undefined ? {} : { capabilitySet }),
+        capabilitySetIndex,
         target: () => target,
         limits: commands?.limits ?? DEFAULT_LIMITS,
         requestCapacity: commands?.requestBytes ?? 64 * 1024,

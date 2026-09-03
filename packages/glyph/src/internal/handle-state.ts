@@ -116,7 +116,7 @@ export interface PlanPublication {
   readonly memoryBuffer: ArrayBuffer;
   readonly memoryGrew: boolean;
   readonly engineRevision: number;
-  readonly planRevision: number;
+  readonly revision: number;
   readonly requiredBaseRevision: number;
   readonly publicationGeneration: number;
   readonly outputSlot: number;
@@ -258,7 +258,7 @@ const handleOpaqueBindings = new WeakMap<
   Readonly<{ handleState: GlyphHandleState; state: RetainedOpaqueBinding }>
 >();
 
-/** Owns one renderer integration's policies, bindings, render planners, and transports. */
+/** Owns one renderer integration's Codecs, bindings, root planners, and transports. */
 export class GlyphHandleState {
   readonly integration: string;
   readonly #identityNamespace: string;
@@ -765,7 +765,7 @@ export class GlyphHandleState {
     try {
       claimed = this.#claim(this.#owners.planners, handle, 'render planner');
       requireStatus(
-        this.#exports.createPlanner(handle, requestCapacity, resultCapacity, textCapacity),
+        this.#exports.createRoot(handle, requestCapacity, resultCapacity, textCapacity),
         'create render planner',
       );
       const transport = new PlanTransport(
@@ -1340,7 +1340,7 @@ export class PlanTransport {
     textCapacity = uint32(textCapacity, 'text capacity');
     this.#invalidate();
     requireStatus(
-      this.#exports.reservePlanner(this.#handle, requestCapacity, resultCapacity, textCapacity),
+      this.#exports.reserveRoot(this.#handle, requestCapacity, resultCapacity, textCapacity),
       'reserve render planner',
     );
     this.#requestCapacity = Math.max(this.#requestCapacity, requestCapacity);
@@ -1369,7 +1369,7 @@ export class PlanTransport {
     }
     const requestPointer = this.#exports.requestPointer(this.#handle);
     if (requestPointer === 0) {
-      throw engineStatusError('resolve text request arena', textShaperAbi.status.plannerMissing);
+      throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
     }
     new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
     this.#stagedUpdate = { requestLength, initialMemoryBuffer };
@@ -1437,7 +1437,7 @@ export class PlanTransport {
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
       if (requestPointer === 0)
-        throw engineStatusError('resolve text request arena', textShaperAbi.status.plannerMissing);
+        throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
       new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
       const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
       const memoryBuffer = this.#exports.memory.buffer;
@@ -1577,7 +1577,7 @@ export class PlanTransport {
       memoryBuffer,
       memoryGrew: memoryBuffer !== initialMemoryBuffer,
       engineRevision: header.getUint32(layout.engineRevision, true),
-      planRevision: header.getUint32(layout.planRevision, true),
+      revision: header.getUint32(layout.revision, true),
       requiredBaseRevision: header.getUint32(layout.requiredBaseRevision, true),
       publicationGeneration: header.getUint32(layout.publicationGeneration, true),
       outputSlot: header.getUint32(layout.outputSlot, true),
@@ -1597,7 +1597,7 @@ export class PlanTransport {
   dispose(): void {
     if (this.#disposed) return;
     this.#assertEngineAvailable();
-    requireStatus(this.#exports.disposePlanner(this.#handle), 'dispose render planner');
+    requireStatus(this.#exports.disposeRoot(this.#handle), 'dispose Glyph root');
     this.#stagedUpdate = undefined;
     this.#invalidate();
     this.#disposed = true;
@@ -1643,7 +1643,7 @@ function frameRegistrationReferences(bytes: Uint8Array): FrameRegistrationRefere
     }
   }
   return {
-    plannerHandle: uint32Handle(view.getUint32(request.plannerId, true), 'frame planner handle'),
+    plannerHandle: uint32Handle(view.getUint32(request.rootId, true), 'frame root handle'),
     codecHandle: uint32Handle(view.getUint32(request.codecHandle, true), 'frame codec handle'),
     fontStackHandles,
   };

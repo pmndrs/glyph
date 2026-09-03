@@ -53,10 +53,10 @@ export function kernelCodecBytes(abi) {
 export function engineUpdateBytes(
   abi,
   {
-    plannerId,
+    rootId,
     codecHandle,
     expectedEngineRevision,
-    consumedPlanRevision,
+    consumedRevision,
     acknowledgedPublicationGeneration = 0,
     textMutations = [],
   },
@@ -72,9 +72,9 @@ export function engineUpdateBytes(
   const view = new DataView(bytes.buffer);
   view.setUint32(layout.abiVersion, abi.version, true);
   view.setUint32(layout.byteLength, bytes.byteLength, true);
-  view.setUint32(layout.plannerId, plannerId, true);
+  view.setUint32(layout.rootId, rootId, true);
   view.setUint32(layout.expectedEngineRevision, expectedEngineRevision, true);
-  view.setUint32(layout.consumedPlanRevision, consumedPlanRevision, true);
+  view.setUint32(layout.consumedRevision, consumedRevision, true);
   view.setUint32(layout.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
   view.setUint32(layout.codecHandle, codecHandle, true);
   view.setUint32(layout.capabilitySet, 1, true);
@@ -115,7 +115,7 @@ export function engineUpdateBytes(
 export function engineFrameUpdateBytes(
   abi,
   {
-    plannerId,
+    rootId,
     codecHandle,
     fontStackHandle,
     paragraphId = 1,
@@ -124,7 +124,7 @@ export function engineFrameUpdateBytes(
     regionId = 1,
     transformIndex = 1,
     expectedEngineRevision = 0,
-    consumedPlanRevision = 0,
+    consumedRevision = 0,
     acknowledgedPublicationGeneration = 0,
     textMutation,
     style,
@@ -156,9 +156,9 @@ export function engineFrameUpdateBytes(
   const view = new DataView(bytes.buffer);
   view.setUint32(request.abiVersion, abi.version, true);
   view.setUint32(request.byteLength, bytes.byteLength, true);
-  view.setUint32(request.plannerId, plannerId, true);
+  view.setUint32(request.rootId, rootId, true);
   view.setUint32(request.expectedEngineRevision, expectedEngineRevision, true);
-  view.setUint32(request.consumedPlanRevision, consumedPlanRevision, true);
+  view.setUint32(request.consumedRevision, consumedRevision, true);
   view.setUint32(request.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
   view.setUint32(request.codecHandle, codecHandle, true);
   view.setUint32(request.capabilitySet, 1, true);

@@ -12,7 +12,7 @@ use crate::{
         ENGINE_RESULT_ENGINE_REVISION, ENGINE_RESULT_FAULT_PARAGRAPH_ID,
         ENGINE_RESULT_FAULT_STYLE_ID, ENGINE_RESULT_FLAGS, ENGINE_RESULT_HEADER_ALIGNMENT,
         ENGINE_RESULT_HEADER_SIZE, ENGINE_RESULT_OUTPUT_SLOT, ENGINE_RESULT_PATCH_COUNT,
-        ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_PLAN_REVISION, ENGINE_RESULT_PLANNER_ID,
+        ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_REVISION, ENGINE_RESULT_ROOT_ID,
         ENGINE_RESULT_PRIMITIVE_COUNT, ENGINE_RESULT_PRIMITIVES_OFFSET,
         ENGINE_RESULT_PUBLICATION_GENERATION, ENGINE_RESULT_REQUEST_CAPACITY,
         ENGINE_RESULT_REQUIRED_BASE_REVISION, ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY,
@@ -20,12 +20,12 @@ use crate::{
         ENGINE_RESULT_RESOURCES_OFFSET, ENGINE_RESULT_RESULT_CAPACITY,
         ENGINE_RESULT_RETIREMENT_COUNT, ENGINE_RESULT_RETIREMENTS_OFFSET,
         ENGINE_RESULT_SEMANTICS_COUNT, ENGINE_RESULT_SEMANTICS_OFFSET, ENGINE_RESULT_STATUS,
-        ENGINE_UPDATE_BATCH_ENTRY_SIZE, ENGINE_UPDATE_BATCH_PLANNER_ID,
+        ENGINE_UPDATE_BATCH_ENTRY_SIZE, ENGINE_UPDATE_BATCH_ROOT_ID,
         ENGINE_UPDATE_BATCH_REQUEST_LENGTH, ENGINE_UPDATE_BATCH_RESULT_POINTER,
         ENGINE_UPDATE_BATCH_STATUS, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     },
     engine::{
-        frame::{CommittedUpdate, PlannerRevision, RESULT_FLAG_CHECKPOINT},
+        frame::{CommittedUpdate, RootRevision, RESULT_FLAG_CHECKPOINT},
         render_plan::RenderPlanView,
         render_plan_wire::{EncodedPlanLayout, encode_publication, encode_query},
         semantic_view::SemanticRecord,
@@ -46,7 +46,7 @@ pub(crate) struct UpdateBatchResult {
 #[derive(Default)]
 pub(crate) struct UpdateBatchTransport {
     arena: AlignedArena,
-    planner_ids: Vec<u32>,
+    root_ids: Vec<u32>,
 }
 
 impl UpdateBatchTransport {
@@ -57,9 +57,9 @@ impl UpdateBatchTransport {
         let target = growth_capacity(self.arena.capacity(), required)?;
         let target_count = usize::try_from(target / ENGINE_UPDATE_BATCH_ENTRY_SIZE)
             .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-        if target_count > self.planner_ids.capacity() {
-            self.planner_ids
-                .try_reserve_exact(target_count - self.planner_ids.len())
+        if target_count > self.root_ids.capacity() {
+            self.root_ids
+                .try_reserve_exact(target_count - self.root_ids.len())
                 .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
         }
         self.arena.reserve(required)
@@ -78,7 +78,7 @@ impl UpdateBatchTransport {
     }
 
     /// Validates the complete descriptor table before invoking any entry. This makes duplicate
-    /// planner IDs and malformed table bounds batch-level errors with no planner mutation.
+    /// Root IDs and malformed table bounds are batch-level errors with no root mutation.
     pub fn process(
         &mut self,
         entries_pointer: usize,
@@ -97,26 +97,26 @@ impl UpdateBatchTransport {
         let Some(entries) = self.arena.bytes().get(..byte_length) else {
             return STATUS_INVALID_REQUEST;
         };
-        self.planner_ids.clear();
+        self.root_ids.clear();
         for index in 0..count as usize {
-            let Some(planner_id) = entry_u32(entries, index, ENGINE_UPDATE_BATCH_PLANNER_ID) else {
+            let Some(root_id) = entry_u32(entries, index, ENGINE_UPDATE_BATCH_ROOT_ID) else {
                 return STATUS_INVALID_REQUEST;
             };
-            if planner_id == 0 {
+            if root_id == 0 {
                 return STATUS_INVALID_REQUEST;
             }
-            if self.planner_ids.len() == self.planner_ids.capacity() {
+            if self.root_ids.len() == self.root_ids.capacity() {
                 return STATUS_RESULT_TOO_LARGE;
             }
-            self.planner_ids.push(planner_id);
+            self.root_ids.push(root_id);
         }
-        self.planner_ids.sort_unstable();
-        if self.planner_ids.windows(2).any(|pair| pair[0] == pair[1]) {
+        self.root_ids.sort_unstable();
+        if self.root_ids.windows(2).any(|pair| pair[0] == pair[1]) {
             return STATUS_INVALID_REQUEST;
         }
         for index in 0..count as usize {
-            let planner_id =
-                match entry_u32(self.arena.bytes(), index, ENGINE_UPDATE_BATCH_PLANNER_ID) {
+            let root_id =
+                match entry_u32(self.arena.bytes(), index, ENGINE_UPDATE_BATCH_ROOT_ID) {
                     Some(value) => value,
                     None => return STATUS_INVALID_REQUEST,
                 };
@@ -128,7 +128,7 @@ impl UpdateBatchTransport {
                 Some(value) => value,
                 None => return STATUS_INVALID_REQUEST,
             };
-            let result = update(planner_id, request_length);
+            let result = update(root_id, request_length);
             let Some(entry) = entry_mut(self.arena.bytes_mut(), index) else {
                 return STATUS_INVALID_REQUEST;
             };
@@ -247,7 +247,7 @@ impl FrameTransport {
     }
 
     /// Grows only the inactive output. The currently published pointer remains valid until the
-    /// normal next successful publication for this planner switches A/B ownership.
+    /// normal next successful publication for this root switches A/B ownership.
     pub fn reserve_publish_capacity(&mut self, byte_length: u32) -> Result<(), u32> {
         let slot = self.inactive_slot();
         self.outputs[slot].reserve(byte_length)
@@ -283,8 +283,8 @@ impl FrameTransport {
     /// Encodes a complete detached checkpoint without advancing publication state.
     pub fn stage_detached_plan(
         &mut self,
-        planner_id: u32,
-        revision: PlannerRevision,
+        root_id: u32,
+        revision: RootRevision,
         plan: RenderPlanView<'_>,
         max_output_bytes: u32,
     ) -> Result<usize, u32> {
@@ -299,7 +299,7 @@ impl FrameTransport {
                 status: 0,
                 fault: FrameFault::default(),
                 flags: RESULT_FLAG_CHECKPOINT,
-                planner_id,
+                root_id,
                 revision,
                 required_base_revision: 0,
                 publication_generation: self.publication_generation,
@@ -326,7 +326,7 @@ impl FrameTransport {
                 } else {
                     0
                 },
-                planner_id: commit.planner_id,
+                root_id: commit.root_id,
                 revision: commit.revision,
                 required_base_revision: commit.required_base_revision,
                 publication_generation: generation,
@@ -350,8 +350,8 @@ impl FrameTransport {
     /// alternation stay untouched.
     pub fn stage_query(
         &mut self,
-        planner_id: u32,
-        revision: PlannerRevision,
+        root_id: u32,
+        revision: RootRevision,
         semantic_views: &[SemanticRecord],
     ) -> Result<usize, u32> {
         let slot = self.inactive_slot();
@@ -362,9 +362,9 @@ impl FrameTransport {
                 status: 0,
                 fault: FrameFault::default(),
                 flags: 0,
-                planner_id,
+                root_id,
                 revision,
-                required_base_revision: revision.plan,
+                required_base_revision: revision.root,
                 publication_generation: self.publication_generation,
                 required_request_capacity: 0,
                 required_result_capacity: 0,
@@ -379,8 +379,8 @@ impl FrameTransport {
 
     pub fn publish_failure(
         &mut self,
-        planner_id: u32,
-        revision: PlannerRevision,
+        root_id: u32,
+        revision: RootRevision,
         status: u32,
         fault: FrameFault,
         required_request_capacity: u32,
@@ -393,9 +393,9 @@ impl FrameTransport {
                 status,
                 fault,
                 flags: 0,
-                planner_id,
+                root_id,
                 revision,
-                required_base_revision: revision.plan,
+                required_base_revision: revision.root,
                 publication_generation: self.publication_generation,
                 required_request_capacity,
                 required_result_capacity,
@@ -424,9 +424,9 @@ impl FrameTransport {
         write_u32(bytes, ENGINE_RESULT_BYTE_LENGTH, values.layout.byte_length);
         write_u32(bytes, ENGINE_RESULT_STATUS, values.status);
         write_u32(bytes, ENGINE_RESULT_FLAGS, values.flags);
-        write_u32(bytes, ENGINE_RESULT_PLANNER_ID, values.planner_id);
+        write_u32(bytes, ENGINE_RESULT_ROOT_ID, values.root_id);
         write_u32(bytes, ENGINE_RESULT_ENGINE_REVISION, values.revision.engine);
-        write_u32(bytes, ENGINE_RESULT_PLAN_REVISION, values.revision.plan);
+        write_u32(bytes, ENGINE_RESULT_REVISION, values.revision.root);
         write_u32(
             bytes,
             ENGINE_RESULT_REQUIRED_BASE_REVISION,
@@ -524,8 +524,8 @@ struct HeaderValues {
     /// Identifiers the status names, all zero for a success and for a status that names none.
     fault: FrameFault,
     flags: u32,
-    planner_id: u32,
-    revision: PlannerRevision,
+    root_id: u32,
+    revision: RootRevision,
     required_base_revision: u32,
     publication_generation: u32,
     required_request_capacity: u32,
@@ -646,9 +646,9 @@ const _: () = assert!(ENGINE_RESULT_HEADER_ALIGNMENT as usize == ARENA_ALIGNMENT
 mod tests {
     use super::*;
     use crate::{
-        STATUS_PLANNER_MISSING,
+        STATUS_ROOT_MISSING,
         abi_contract::{
-            ENGINE_RESULT_CODEC_HANDLE, ENGINE_UPDATE_BATCH_PLANNER_ID,
+            ENGINE_RESULT_CODEC_HANDLE, ENGINE_UPDATE_BATCH_ROOT_ID,
             ENGINE_UPDATE_BATCH_REQUEST_LENGTH, ENGINE_UPDATE_BATCH_RESULT_POINTER,
             ENGINE_UPDATE_BATCH_STATUS, PATCH_PAYLOAD_OFFSET,
         },
@@ -671,7 +671,7 @@ mod tests {
     }
 
     #[test]
-    fn update_batch_processes_every_unique_planner_and_isolates_entry_failures() {
+    fn update_batch_processes_every_unique_root_and_isolates_entry_failures() {
         let mut batch = UpdateBatchTransport::default();
         batch.reserve(2).unwrap();
         write_batch_entry(batch.entries_mut(), 0, 3, 80, 0xaaaa_aaaa, 0xbbbb_bbbb);
@@ -680,9 +680,9 @@ mod tests {
         let mut visited = Vec::new();
 
         assert_eq!(
-            batch.process(pointer, 2, |planner_id, request_length| {
-                visited.push((planner_id, request_length));
-                if planner_id == 3 {
+            batch.process(pointer, 2, |root_id, request_length| {
+                visited.push((root_id, request_length));
+                if root_id == 3 {
                     UpdateBatchResult {
                         result_pointer: 0x1000,
                         status: 0,
@@ -690,7 +690,7 @@ mod tests {
                 } else {
                     UpdateBatchResult {
                         result_pointer: 0,
-                        status: STATUS_PLANNER_MISSING,
+                        status: STATUS_ROOT_MISSING,
                     }
                 }
             }),
@@ -711,7 +711,7 @@ mod tests {
         );
         assert_eq!(
             entry_u32(batch.arena.bytes(), 1, ENGINE_UPDATE_BATCH_STATUS),
-            Some(STATUS_PLANNER_MISSING)
+            Some(STATUS_ROOT_MISSING)
         );
     }
 
@@ -787,7 +787,7 @@ mod tests {
     }
 
     #[test]
-    fn update_batch_keeps_each_planner_output_pointer_live() {
+    fn update_batch_keeps_each_root_output_pointer_live() {
         let mut batch = UpdateBatchTransport::default();
         batch.reserve(2).unwrap();
         write_batch_entry(batch.entries_mut(), 0, 3, 80, 0, 0);
@@ -800,37 +800,37 @@ mod tests {
         let mut published = Vec::new();
 
         assert_eq!(
-            batch.process(pointer, 2, |planner_id, _| {
+            batch.process(pointer, 2, |root_id, _| {
                 let transport = transports
                     .iter_mut()
-                    .find(|(id, _)| *id == planner_id)
+                    .find(|(id, _)| *id == root_id)
                     .map(|(_, transport)| transport)
                     .unwrap();
                 let staged = transport.stage_plan(plan()).unwrap();
-                let native_pointer = transport.publish_success(commit_for(planner_id, 1), staged);
-                published.push((planner_id, native_pointer));
+                let native_pointer = transport.publish_success(commit_for(root_id, 1), staged);
+                published.push((root_id, native_pointer));
                 UpdateBatchResult {
                     // Native pointers do not fit the Wasm32 wire field. The token proves each
                     // descriptor keeps its own returned identity; `published` verifies that the
                     // actual arena pointers and bytes remain live after the complete batch.
-                    result_pointer: 0x1000 + planner_id,
+                    result_pointer: 0x1000 + root_id,
                     status: 0,
                 }
             }),
             0
         );
 
-        for (index, (planner_id, transport)) in transports.iter().enumerate() {
+        for (index, (root_id, transport)) in transports.iter().enumerate() {
             let result_pointer = entry_u32(
                 batch.arena.bytes(),
                 index,
                 ENGINE_UPDATE_BATCH_RESULT_POINTER,
             )
             .unwrap();
-            assert_eq!(result_pointer, 0x1000 + planner_id);
+            assert_eq!(result_pointer, 0x1000 + root_id);
             let native_pointer = published
                 .iter()
-                .find(|(id, _)| id == planner_id)
+                .find(|(id, _)| id == root_id)
                 .map(|(_, pointer)| *pointer)
                 .unwrap();
             assert_eq!(transport.result_status(native_pointer), Some(0));
@@ -840,14 +840,14 @@ mod tests {
                 .find(|output| output.pointer() == native_pointer)
                 .unwrap();
             assert_eq!(
-                read_u32(output.bytes(), ENGINE_RESULT_PLANNER_ID).unwrap(),
-                *planner_id
+                read_u32(output.bytes(), ENGINE_RESULT_ROOT_ID).unwrap(),
+                *root_id
             );
         }
     }
 
     #[test]
-    fn duplicate_update_batch_planners_are_rejected_before_outputs_or_planners_mutate() {
+    fn duplicate_update_batch_roots_are_rejected_before_outputs_or_roots_mutate() {
         let mut batch = UpdateBatchTransport::default();
         batch.reserve(2).unwrap();
         write_batch_entry(batch.entries_mut(), 0, 3, 80, 0xaaaa_aaaa, 0xbbbb_bbbb);
@@ -902,7 +902,7 @@ mod tests {
 
         let failure = transport.publish_failure(
             3,
-            PlannerRevision { engine: 1, plan: 1 },
+            RootRevision { engine: 1, root: 1 },
             STATUS_INVALID_REQUEST,
             FrameFault::default(),
             512,
@@ -932,7 +932,7 @@ mod tests {
         let first_plan = transport.stage_plan(plan()).unwrap();
         transport.publish_success(commit(1), first_plan);
 
-        let revision = PlannerRevision { engine: 7, plan: 5 };
+        let revision = RootRevision { engine: 7, root: 5 };
         let detached = transport
             .stage_detached_plan(3, revision, plan(), 1024)
             .unwrap();
@@ -947,7 +947,7 @@ mod tests {
             RESULT_FLAG_CHECKPOINT
         );
         assert_eq!(read_u32(bytes, ENGINE_RESULT_ENGINE_REVISION).unwrap(), 7);
-        assert_eq!(read_u32(bytes, ENGINE_RESULT_PLAN_REVISION).unwrap(), 5);
+        assert_eq!(read_u32(bytes, ENGINE_RESULT_REVISION).unwrap(), 5);
         assert_eq!(
             read_u32(bytes, ENGINE_RESULT_REQUIRED_BASE_REVISION).unwrap(),
             0
@@ -1014,12 +1014,12 @@ mod tests {
         commit_for(3, revision)
     }
 
-    fn commit_for(planner_id: u32, revision: u32) -> CommittedUpdate {
+    fn commit_for(root_id: u32, revision: u32) -> CommittedUpdate {
         CommittedUpdate {
-            planner_id,
-            revision: PlannerRevision {
+            root_id,
+            revision: RootRevision {
                 engine: revision,
-                plan: revision,
+                root: revision,
             },
             required_base_revision: revision - 1,
             checkpoint: revision == 1,
@@ -1036,13 +1036,13 @@ mod tests {
     fn write_batch_entry(
         bytes: &mut [u8],
         index: usize,
-        planner_id: u32,
+        root_id: u32,
         request_length: u32,
         result_pointer: u32,
         status: u32,
     ) {
         let entry = entry_mut(bytes, index).unwrap();
-        write_u32(entry, ENGINE_UPDATE_BATCH_PLANNER_ID, planner_id);
+        write_u32(entry, ENGINE_UPDATE_BATCH_ROOT_ID, root_id);
         write_u32(entry, ENGINE_UPDATE_BATCH_REQUEST_LENGTH, request_length);
         write_u32(entry, ENGINE_UPDATE_BATCH_RESULT_POINTER, result_pointer);
         write_u32(entry, ENGINE_UPDATE_BATCH_STATUS, status);

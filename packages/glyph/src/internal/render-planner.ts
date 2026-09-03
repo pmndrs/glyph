@@ -44,7 +44,6 @@ import type {
 import { RenderPlanView, type RenderPlanTable } from './plan-view.js';
 import { readPlannerLayouts, readPlannerMeasurements } from './layout-query-view.js';
 import type { PortableResource } from '../config/resources.js';
-import type { CodecCapabilitySet } from '../config/codec.js';
 import type { MaterialHandle, ParagraphId, ResourceHandle } from './glyph-id.js';
 import { codecCapabilitySetSelectionId, selectCodecCapabilitySet } from './codec-capability-selection.js';
 
@@ -124,7 +123,7 @@ export interface PlanCandidate {
   readonly origin: PlanOrigin;
   readonly plan: BorrowedRenderPlan;
   readonly engineRevision: number;
-  readonly planRevision: number;
+  readonly revision: number;
   readonly publicationGeneration: number;
   /** Whether this publication is a complete renderer checkpoint rather than an incremental update. */
   readonly checkpoint: boolean;
@@ -258,7 +257,7 @@ export interface RenderPlanner {
 /** Construction options for one retained-text planner and render target. */
 export interface RenderPlannerOptions {
   readonly codec: CodecRegistration;
-  readonly capabilitySet?: CodecCapabilitySet;
+  readonly capabilitySetIndex: number;
   readonly target: (control: PlanTargetControl) => PlanTarget;
   readonly limits: RenderPlannerLimits;
   readonly requestCapacity: number;
@@ -348,7 +347,7 @@ interface StagedBatchPublication {
 
 /** @internal One retained synchronous planner staged for the engine-wide shape batch. */
 export interface StagedRenderPlanner {
-  readonly plannerId: number;
+  readonly rootId: number;
   readonly requestLength: number;
   adopt(resultPointer: number, memoryBuffer: ArrayBuffer): void;
   consume(): PlanAcceptance;
@@ -410,7 +409,7 @@ class RenderPlannerImpl {
   #pendingStyleCount = 0;
   #nextTextOrdinal = 1;
   #engineRevision = 0;
-  #planRevision = 0;
+  #revision = 0;
   #acknowledgedGeneration = 0;
   #checkpointGeneration = 0;
   #acceptedCheckpointGeneration = 0;
@@ -463,10 +462,9 @@ class RenderPlannerImpl {
       this.#dirtyListener?.();
     });
     try {
-      const capabilitySet =
-        renderOptions.capabilitySet === undefined
-          ? undefined
-          : selectCodecCapabilitySet(codec.handle, codec.descriptor, renderOptions.capabilitySet);
+      const capabilitySet = codec.descriptor.capabilitySets[renderOptions.capabilitySetIndex];
+      if (capabilitySet === undefined) throw new RangeError('Codec capability set index is out of range');
+      const selectedCapabilitySet = selectCodecCapabilitySet(codec.handle, codec.descriptor, capabilitySet);
       target = renderOptions.target(control);
       assertTarget(target);
       if (claimedTargets.has(target)) throw new TypeError('plan target is already attached to another render planner');
@@ -482,7 +480,7 @@ class RenderPlannerImpl {
       this.#target = target;
       this.#control = control;
       this.#codec = codec;
-      this.#capabilitySet = capabilitySet;
+      this.#capabilitySet = selectedCapabilitySet;
     } catch (error) {
       control.dispose();
       codec.dispose();
@@ -657,7 +655,7 @@ class RenderPlannerImpl {
     return this;
   }
 
-  get plannerId(): number {
+  get rootId(): number {
     if (this.#stagedBatch === undefined) throw new Error('render planner is not staged');
     return this.#transport.handle;
   }
@@ -793,11 +791,11 @@ class RenderPlannerImpl {
     const geometry = compileGeometry(this.#handleState, state, 0, 0);
     const textChanged = !state.published || state.publishedText !== state.desired.text;
     const request = compilePlannerFrameUpdate({
-      plannerId: this.#transport.handle,
+      rootId: this.#transport.handle,
       codecHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
-      consumedPlanRevision: this.#planRevision,
+      consumedRevision: this.#revision,
       acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
       semanticViewMask: inspection
         ? textShaperAbi.engine.semanticViewMasks.layoutInspection
@@ -875,11 +873,11 @@ class RenderPlannerImpl {
       inlineObjects.push(...compileInlineObjects(this.#handleState, state));
     }
     return compilePlannerFrameUpdate({
-      plannerId: this.#transport.handle,
+      rootId: this.#transport.handle,
       codecHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
-      consumedPlanRevision: checkpointGeneration === this.#acceptedCheckpointGeneration ? this.#planRevision : 0,
+      consumedRevision: checkpointGeneration === this.#acceptedCheckpointGeneration ? this.#revision : 0,
       acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
       semanticViewMask: options.semanticViewMask,
       compositingIndependent: options.compositingIndependent,
@@ -1032,7 +1030,7 @@ class RenderPlannerImpl {
       origin: this.#origin,
       plan: lease.reader,
       engineRevision: lease.publication.engineRevision,
-      planRevision: lease.publication.planRevision,
+      revision: lease.publication.revision,
       publicationGeneration: lease.publication.publicationGeneration,
       checkpoint: publicationIsCheckpoint(lease.publication),
       transforms: Object.freeze(this.#resolvedTransforms()),
@@ -1195,7 +1193,7 @@ class RenderPlannerImpl {
   }
 
   #accept({ publication, checkpointGeneration }: PendingPublication): void {
-    this.#planRevision = publication.planRevision;
+    this.#revision = publication.revision;
     this.#acknowledgedGeneration = publication.publicationGeneration;
     this.#acceptedCheckpointGeneration = checkpointGeneration;
   }

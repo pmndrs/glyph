@@ -210,7 +210,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     const buffersByName = buffersByNameFrom(this.shader, buffers);
     const result: ExampleDrawList = Object.freeze({
       engineRevision: frame.engineRevision,
-      planRevision: frame.planRevision,
+      revision: frame.revision,
       publicationGeneration: frame.publicationGeneration,
       checkpoint: frame.checkpoint,
       changed: replacesRenderState,

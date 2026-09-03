@@ -152,10 +152,10 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   const codec = copyToWasm(memory, fn.allocate, codecBytes);
   assert.equal(fn.registerCodec(23, codec.pointer, codec.length), abi.status.ok);
   fn.deallocate(codec.pointer, codec.length);
-  assert.equal(fn.createPlanner(29, 2048, 64 * 1024, 4), abi.status.ok);
+  assert.equal(fn.createRoot(29, 2048, 64 * 1024, 4), abi.status.ok);
   const styleWarmBuffer = memory.buffer;
   const initialUpdate = engineStyleUpdateBytes(abi, {
-    plannerId: 29,
+    rootId: 29,
     codecHandle: 23,
     fontStackHandle: 17,
     text: [0x61, 0x62, 0x63, 0x64],
@@ -175,11 +175,11 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   assert.equal(fn.planCount(), 1, 'text_update must shape retained runs through HarfRust');
 
   const warmUpdate = engineStyleUpdateBytes(abi, {
-    plannerId: 29,
+    rootId: 29,
     codecHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: 1,
-    consumedPlanRevision: 1,
+    consumedRevision: 1,
     acknowledgedPublicationGeneration: 1,
     textEnd: 4,
     geometry: true,
@@ -194,11 +194,11 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   assert.equal(result.getUint32(abi.layouts.engineResult.patchCount, true), 0);
 
   const removeRoot = engineStyleUpdateBytes(abi, {
-    plannerId: 29,
+    rootId: 29,
     codecHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: 2,
-    consumedPlanRevision: 2,
+    consumedRevision: 2,
     acknowledgedPublicationGeneration: 2,
     removeRoot: true,
   });
@@ -210,7 +210,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.invalidRequest);
   assert.equal(result.getUint32(abi.layouts.engineResult.engineRevision, true), 2);
   assert.equal(fn.planCount(), 1, 'an aborted update must not perform another shape');
-  assert.equal(fn.disposePlanner(29), abi.status.ok);
+  assert.equal(fn.disposeRoot(29), abi.status.ok);
   assert.equal(fn.disposeCodec(23), abi.status.ok);
 
   assert.equal(fn.disposeFont(101), abi.status.fontInUse);
@@ -254,10 +254,10 @@ test('text_update advances missing clusters through an ordered font stack', asyn
   const codec = copyToWasm(memory, fn.allocate, codecBytes);
   assert.equal(fn.registerCodec(23, codec.pointer, codec.length), abi.status.ok);
   fn.deallocate(codec.pointer, codec.length);
-  assert.equal(fn.createPlanner(29, 2048, 64 * 1024, 0), abi.status.ok);
+  assert.equal(fn.createRoot(29, 2048, 64 * 1024, 0), abi.status.ok);
 
   const update = engineStyleUpdateBytes(abi, {
-    plannerId: 29,
+    rootId: 29,
     codecHandle: 23,
     fontStackHandle: 17,
     text: [0x0915],
@@ -312,14 +312,14 @@ test('text_update appends a reordered Devanagari grapheme after a conjunct', asy
   const codec = copyToWasm(memory, fn.allocate, codecBytes);
   assert.equal(fn.registerCodec(23, codec.pointer, codec.length), abi.status.ok);
   fn.deallocate(codec.pointer, codec.length);
-  assert.equal(fn.createPlanner(29, 16 * 1024, 256 * 1024, 64), abi.status.ok);
+  assert.equal(fn.createRoot(29, 16 * 1024, 256 * 1024, 64), abi.status.ok);
 
   const prefix = 'कर्म क्षेत्र में प्रगति निरंतर चलती है। प्र';
   const appended = 'त्ये';
   assert.equal(prefix.length, 43);
   assert.equal(appended.length, 4);
   const initial = engineStyleUpdateBytes(abi, {
-    plannerId: 29,
+    rootId: 29,
     codecHandle: 23,
     fontStackHandle: 17,
     text: utf16Units(prefix),
@@ -334,11 +334,11 @@ test('text_update appends a reordered Devanagari grapheme after a conjunct', asy
   assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.ok);
 
   const update = engineStyleUpdateBytes(abi, {
-    plannerId: 29,
+    rootId: 29,
     codecHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: 1,
-    consumedPlanRevision: 1,
+    consumedRevision: 1,
     acknowledgedPublicationGeneration: 1,
     text: utf16Units(appended),
     textStart: prefix.length,
@@ -429,11 +429,11 @@ function twoTechniqueCodecBytes(abi) {
 function engineStyleUpdateBytes(
   abi,
   {
-    plannerId,
+    rootId,
     codecHandle,
     fontStackHandle,
     expectedEngineRevision = 0,
-    consumedPlanRevision = 0,
+    consumedRevision = 0,
     acknowledgedPublicationGeneration = 0,
     text = [],
     textStart = 0,
@@ -466,9 +466,9 @@ function engineStyleUpdateBytes(
   const view = new DataView(bytes.buffer);
   view.setUint32(request.abiVersion, abi.version, true);
   view.setUint32(request.byteLength, bytes.byteLength, true);
-  view.setUint32(request.plannerId, plannerId, true);
+  view.setUint32(request.rootId, rootId, true);
   view.setUint32(request.expectedEngineRevision, expectedEngineRevision, true);
-  view.setUint32(request.consumedPlanRevision, consumedPlanRevision, true);
+  view.setUint32(request.consumedRevision, consumedRevision, true);
   view.setUint32(request.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
   view.setUint32(request.codecHandle, codecHandle, true);
   view.setUint32(request.capabilitySet, 1, true);
@@ -610,7 +610,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   const codec = copyToWasm(memory, fn.allocate, codecBytes);
   assert.equal(fn.registerCodec(23, codec.pointer, codec.length), abi.status.ok);
   fn.deallocate(codec.pointer, codec.length);
-  assert.equal(fn.createPlanner(29, 4096, 128 * 1024, 0), abi.status.ok);
+  assert.equal(fn.createRoot(29, 4096, 128 * 1024, 0), abi.status.ok);
 
   const resultLayout = abi.layouts.engineResult;
   const record = abi.layouts.engineSemanticView;
@@ -651,7 +651,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   const text = Array.from('alpha beta gamma delta', (character) => character.charCodeAt(0));
   const seeded = run(
     engineStyleUpdateBytes(abi, {
-      plannerId: 29,
+      rootId: 29,
       codecHandle: 23,
       fontStackHandle: 17,
       text,
@@ -664,11 +664,11 @@ test('measure_paragraph answers synchronously without publishing or burning revi
 
   // The narrow measure reflects the queried constraint, not the committed one.
   const measureRequest = engineStyleUpdateBytes(abi, {
-    plannerId: 29,
+    rootId: 29,
     codecHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: seeded.engineRevision,
-    consumedPlanRevision: seeded.engineRevision,
+    consumedRevision: seeded.engineRevision,
     acknowledgedPublicationGeneration: seeded.publicationGeneration,
     maxClusters: 64,
     styles: false,
@@ -695,11 +695,11 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   assert.equal(repeated.status, abi.status.ok);
   assert.deepEqual(measurementFor(repeated, 1), narrow, 'a repeated query answers identically');
   const widerRequest = engineStyleUpdateBytes(abi, {
-    plannerId: 29,
+    rootId: 29,
     codecHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: seeded.engineRevision,
-    consumedPlanRevision: seeded.engineRevision,
+    consumedRevision: seeded.engineRevision,
     acknowledgedPublicationGeneration: seeded.publicationGeneration,
     maxClusters: 64,
     styles: false,
@@ -723,11 +723,11 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   // Reverting to the committed constraint must revert the speculative layout
   // tail: the answer comes from committed flow, not the narrow query's leftovers.
   const committedWidthRequest = engineStyleUpdateBytes(abi, {
-    plannerId: 29,
+    rootId: 29,
     codecHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: seeded.engineRevision,
-    consumedPlanRevision: seeded.engineRevision,
+    consumedRevision: seeded.engineRevision,
     acknowledgedPublicationGeneration: seeded.publicationGeneration,
     maxClusters: 64,
     styles: false,
@@ -752,11 +752,11 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   // pre-measure revisions.
   const followUp = run(
     engineStyleUpdateBytes(abi, {
-      plannerId: 29,
+      rootId: 29,
       codecHandle: 23,
       fontStackHandle: 17,
       expectedEngineRevision: seeded.engineRevision,
-      consumedPlanRevision: seeded.engineRevision,
+      consumedRevision: seeded.engineRevision,
       acknowledgedPublicationGeneration: seeded.publicationGeneration,
       maxClusters: 64,
       styles: false,
@@ -766,7 +766,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   );
   assert.equal(followUp.status, abi.status.ok);
   assert.equal(followUp.engineRevision, seeded.engineRevision + 1);
-  assert.equal(fn.disposePlanner(29), abi.status.ok);
+  assert.equal(fn.disposeRoot(29), abi.status.ok);
 });
 
 /**
@@ -798,7 +798,7 @@ test('the committing frame adopts the speculative transaction and its reserved g
   const codec = copyToWasm(memory, fn.allocate, codecBytes);
   assert.equal(fn.registerCodec(23, codec.pointer, codec.length), abi.status.ok);
   fn.deallocate(codec.pointer, codec.length);
-  assert.equal(fn.createPlanner(29, 4096, 256 * 1024, 0), abi.status.ok);
+  assert.equal(fn.createRoot(29, 4096, 256 * 1024, 0), abi.status.ok);
 
   const resultLayout = abi.layouts.engineResult;
   const record = abi.layouts.engineSemanticView;
@@ -841,7 +841,7 @@ test('the committing frame adopts the speculative transaction and its reserved g
   const geometry = { width: 300, height: 200, maxLines: 16 };
   const seeded = run(
     engineStyleUpdateBytes(abi, {
-      plannerId: 29,
+      rootId: 29,
       codecHandle: 23,
       fontStackHandle: 17,
       text: base,
@@ -854,11 +854,11 @@ test('the committing frame adopts the speculative transaction and its reserved g
   assert.ok(seeded.glyphIds.length > 0, 'the seeded frame reports committed glyphs');
 
   const appended = (suffix) => ({
-    plannerId: 29,
+    rootId: 29,
     codecHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: seeded.engineRevision,
-    consumedPlanRevision: seeded.engineRevision,
+    consumedRevision: seeded.engineRevision,
     acknowledgedPublicationGeneration: seeded.publicationGeneration,
     text: Array.from(suffix, (character) => character.charCodeAt(0)),
     textStart: base.length,
@@ -890,7 +890,7 @@ test('the committing frame adopts the speculative transaction and its reserved g
     secondNew,
     'the committing frame adopts the exact glyph identities the query reported',
   );
-  assert.equal(fn.disposePlanner(29), abi.status.ok);
+  assert.equal(fn.disposeRoot(29), abi.status.ok);
 });
 
 /**
@@ -925,7 +925,7 @@ test('measurement-only queries leave the committing frame byte-identical to a ne
     const codec = copyToWasm(memory, fn.allocate, codecBytes);
     assert.equal(fn.registerCodec(23, codec.pointer, codec.length), abi.status.ok);
     fn.deallocate(codec.pointer, codec.length);
-    assert.equal(fn.createPlanner(37, 4096, 256 * 1024, 0), abi.status.ok);
+    assert.equal(fn.createRoot(37, 4096, 256 * 1024, 0), abi.status.ok);
     const resultLayout = abi.layouts.engineResult;
     const run = (bytes, entry, mask, paragraphId) => {
       new DataView(bytes.buffer).setUint32(abi.layouts.engineUpdateRequest.semanticViewMask, mask, true);
@@ -955,14 +955,14 @@ test('measurement-only queries leave the committing frame byte-identical to a ne
   const text = Array.from('alpha beta gamma delta', (character) => character.charCodeAt(0));
   const request = (geometryWidth, seeded, withText) =>
     engineStyleUpdateBytes(abi, {
-      plannerId: 37,
+      rootId: 37,
       codecHandle: 23,
       fontStackHandle: 17,
       ...(seeded === undefined
         ? {}
         : {
             expectedEngineRevision: seeded.engineRevision,
-            consumedPlanRevision: seeded.engineRevision,
+            consumedRevision: seeded.engineRevision,
             acknowledgedPublicationGeneration: seeded.publicationGeneration,
           }),
       ...(withText ? { text } : { styles: false }),
@@ -1051,7 +1051,7 @@ test('resize equivalence adopts committed positioning and still relayouts on bre
   const codec = copyToWasm(memory, fn.allocate, codecBytes);
   assert.equal(fn.registerCodec(23, codec.pointer, codec.length), abi.status.ok);
   fn.deallocate(codec.pointer, codec.length);
-  assert.equal(fn.createPlanner(41, 4096, 128 * 1024, 0), abi.status.ok);
+  assert.equal(fn.createRoot(41, 4096, 128 * 1024, 0), abi.status.ok);
 
   const resultLayout = abi.layouts.engineResult;
   const record = abi.layouts.engineSemanticView;
@@ -1096,14 +1096,14 @@ test('resize equivalence adopts committed positioning and still relayouts on bre
   const update = (width, seeded, withText) =>
     run(
       engineStyleUpdateBytes(abi, {
-        plannerId: 41,
+        rootId: 41,
         codecHandle: 23,
         fontStackHandle: 17,
         ...(seeded === undefined
           ? {}
           : {
               expectedEngineRevision: seeded.engineRevision,
-              consumedPlanRevision: seeded.engineRevision,
+              consumedRevision: seeded.engineRevision,
               acknowledgedPublicationGeneration: seeded.publicationGeneration,
             }),
         ...(withText ? { text } : { styles: false }),
@@ -1137,7 +1137,7 @@ test('resize equivalence adopts committed positioning and still relayouts on bre
   assert.equal(restored.status, abi.status.ok);
   assert.equal(restored.measurement?.lineCount, 1);
   assert.equal(restored.measurement?.inlineExtent, 181.3671875);
-  assert.equal(fn.disposePlanner(41), abi.status.ok);
+  assert.equal(fn.disposeRoot(41), abi.status.ok);
 });
 
 /**
@@ -1173,7 +1173,7 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
   const codec = copyToWasm(memory, fn.allocate, codecBytes);
   assert.equal(fn.registerCodec(23, codec.pointer, codec.length), abi.status.ok);
   fn.deallocate(codec.pointer, codec.length);
-  assert.equal(fn.createPlanner(31, 4096, 128 * 1024, 0), abi.status.ok);
+  assert.equal(fn.createRoot(31, 4096, 128 * 1024, 0), abi.status.ok);
 
   const resultLayout = abi.layouts.engineResult;
   const record = abi.layouts.engineSemanticView;
@@ -1214,7 +1214,7 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
   const text = Array.from('alpha beta gamma delta', (character) => character.charCodeAt(0));
   const seeded = run(
     engineStyleUpdateBytes(abi, {
-      plannerId: 31,
+      rootId: 31,
       codecHandle: 23,
       fontStackHandle: 17,
       text,
@@ -1244,11 +1244,11 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
   ];
   for (const [width, lineCount, inlineExtent] of pinned) {
     const measureRequest = engineStyleUpdateBytes(abi, {
-      plannerId: 31,
+      rootId: 31,
       codecHandle: 23,
       fontStackHandle: 17,
       expectedEngineRevision: seeded.engineRevision,
-      consumedPlanRevision: seeded.engineRevision,
+      consumedRevision: seeded.engineRevision,
       acknowledgedPublicationGeneration: seeded.publicationGeneration,
       maxClusters: 64,
       styles: false,
@@ -1266,5 +1266,5 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
     assert.equal(measurement.lineCount, lineCount, `line count at width ${width}`);
     assert.equal(measurement.inlineExtent, inlineExtent, `exact f32 extent at width ${width}`);
   }
-  assert.equal(fn.disposePlanner(31), abi.status.ok);
+  assert.equal(fn.disposeRoot(31), abi.status.ok);
 });

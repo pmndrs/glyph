@@ -60,16 +60,16 @@ async function execute(module, abi, codecCases, frameCases) {
 
     const frameCase = frameCases[index];
     const requestCapacity = Math.max(abi.layouts.engineUpdateRequest.size, frameCase.bytes.byteLength);
-    assert.equal(fn.createPlanner(1, requestCapacity, abi.layouts.engineResult.size, 0), abi.status.ok);
+    assert.equal(fn.createRoot(1, requestCapacity, abi.layouts.engineResult.size, 0), abi.status.ok);
     const requestPointer = fn.requestPointer(1);
     new Uint8Array(memory.buffer, requestPointer, frameCase.bytes.byteLength).set(frameCase.bytes);
     const resultPointer = fn.textUpdate(1, requestPointer, frameCase.length);
     const frameStatus = new DataView(memory.buffer).getUint32(resultPointer + abi.layouts.engineResult.status, true);
     assert.ok(statuses.has(frameStatus));
-    assert.equal(fn.disposePlanner(1), abi.status.ok);
+    assert.equal(fn.disposeRoot(1), abi.status.ok);
 
     const recovery = frameBytes(abi, 3);
-    assert.equal(fn.createPlanner(3, recovery.byteLength, abi.layouts.engineResult.size, 0), abi.status.ok);
+    assert.equal(fn.createRoot(3, recovery.byteLength, abi.layouts.engineResult.size, 0), abi.status.ok);
     const recoveryPointer = fn.requestPointer(3);
     new Uint8Array(memory.buffer, recoveryPointer, recovery.byteLength).set(recovery);
     const recoveredResult = fn.textUpdate(3, recoveryPointer, recovery.byteLength);
@@ -78,18 +78,18 @@ async function execute(module, abi, codecCases, frameCases) {
       true,
     );
     assert.equal(recoveryStatus, abi.status.ok, `mutation ${index} poisoned the next valid transaction`);
-    assert.equal(fn.disposePlanner(3), abi.status.ok);
+    assert.equal(fn.disposeRoot(3), abi.status.ok);
     outcomes.push({ codecStatus, frameStatus });
   }
   return outcomes;
 }
 
-function frameBytes(abi, plannerId) {
+function frameBytes(abi, rootId) {
   return engineUpdateBytes(abi, {
-    plannerId,
+    rootId,
     codecHandle: 1,
     expectedEngineRevision: 0,
-    consumedPlanRevision: 0,
+    consumedRevision: 0,
   });
 }
 

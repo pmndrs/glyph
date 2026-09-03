@@ -12,7 +12,7 @@ export type RasterFormatId = string & { readonly [rasterFormatIdBrand]: true };
 /** Stable raster-authored identity for one physical raster resource. */
 export type RasterResourceId = string & { readonly [rasterResourceIdBrand]: true };
 
-/** Text effects a raster's policy and shader can render. */
+/** Text effects a raster format and its shader can render. */
 export type RasterTextEffect = 'outline' | 'shadow';
 
 interface RasterFormatTypeMap<Options, Descriptor, Data> {

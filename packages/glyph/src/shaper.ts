@@ -71,19 +71,19 @@ interface ShaperExports {
   readonly disposeFontStack: (handle: number) => number;
   readonly registerCodec: (handle: number, pointer: number, length: number) => number;
   readonly disposeCodec: (handle: number) => number;
-  readonly createPlanner: (
+  readonly createRoot: (
     handle: number,
     requestCapacity: number,
     resultCapacity: number,
     textCapacity: number,
   ) => number;
-  readonly reservePlanner: (
+  readonly reserveRoot: (
     handle: number,
     requestCapacity: number,
     resultCapacity: number,
     textCapacity: number,
   ) => number;
-  readonly disposePlanner: (handle: number) => number;
+  readonly disposeRoot: (handle: number) => number;
   readonly requestPointer: (handle: number) => number;
   readonly requestCapacity: (handle: number) => number;
   readonly reserveUpdateBatch: (count: number) => number;
@@ -271,9 +271,9 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       disposeFontStack: exportedFunction(instance, functions.disposeFontStack),
       registerCodec: exportedFunction(instance, functions.registerCodec),
       disposeCodec: exportedFunction(instance, functions.disposeCodec),
-      createPlanner: exportedFunction(instance, functions.createPlanner),
-      reservePlanner: exportedFunction(instance, functions.reservePlanner),
-      disposePlanner: exportedFunction(instance, functions.disposePlanner),
+      createRoot: exportedFunction(instance, functions.createRoot),
+      reserveRoot: exportedFunction(instance, functions.reserveRoot),
+      disposeRoot: exportedFunction(instance, functions.disposeRoot),
       requestPointer: exportedFunction(instance, functions.requestPointer),
       requestCapacity: exportedFunction(instance, functions.requestCapacity),
       reserveUpdateBatch: exportedFunction(instance, functions.reserveUpdateBatch),

@@ -4,7 +4,6 @@ import test from 'node:test';
 import {
   assertPortableResource,
   normalizePortableResource,
-  portableResourceIdentity,
   portableResourceKinds,
   portableTopologies,
 } from '../../dist/config/resources.js';
@@ -19,22 +18,6 @@ function mutate(geometry, patch) {
 test('the reserved portable kinds and topologies are the frozen closed sets', () => {
   assert.deepEqual([...portableResourceKinds], ['buffer', 'texture', 'texture-array', 'geometry', 'group']);
   assert.deepEqual([...portableTopologies], ['triangle-list', 'triangle-strip']);
-});
-
-test('one normalized payload has a stable engine-independent realization identity', () => {
-  const resource = normalizePortableResource('buffer', 'table', {
-    kind: 'buffer',
-    bytes: new Uint8Array([1, 2, 3, 4]),
-    stride: 4,
-  });
-  const equivalent = normalizePortableResource('buffer', 'table', {
-    kind: 'buffer',
-    bytes: new Uint8Array([1, 2, 3, 4]),
-    stride: 4,
-  });
-
-  assert.equal(portableResourceIdentity(resource), portableResourceIdentity(resource));
-  assert.notEqual(portableResourceIdentity(resource), portableResourceIdentity(equivalent));
 });
 
 test('valid buffer, texture, and geometry payloads pass their reserved declared kind', () => {

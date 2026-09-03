@@ -39,7 +39,7 @@ export type ExampleResourceRecord = ExampleResolvedResource;
  */
 export interface ExampleDrawList {
   readonly engineRevision: number;
-  readonly planRevision: number;
+  readonly revision: number;
   readonly publicationGeneration: number;
   readonly checkpoint: boolean;
   readonly changed: boolean;

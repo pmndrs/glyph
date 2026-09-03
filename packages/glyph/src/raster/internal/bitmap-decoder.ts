@@ -56,7 +56,7 @@ export async function decodeBitmapData(font: RasterDecodeFont, raster: RasterDec
     raster.rasterKey !==
     (await bitmapDescriptorRasterKey(canonicalizeBitmapDescriptor(strikesPpem, coverage?.descriptor)))
   ) {
-    throw new TypeError('bitmap raster key does not match its generation policy');
+    throw new TypeError('bitmap raster key does not match its generation descriptor');
   }
   const strikes: BitmapStrikeData[] = [];
   let retainedBytes = 0;

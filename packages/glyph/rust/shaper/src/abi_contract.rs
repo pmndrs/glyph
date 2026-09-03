@@ -18,7 +18,7 @@ use crate::engine::frame::{
     BASELINE_TEXT_TOP, BLOCK_ALIGN_CENTER, BLOCK_ALIGN_END, BLOCK_ALIGN_START, DECORATION_DASHED,
     DECORATION_DOTTED, DECORATION_DOUBLE, DECORATION_FLAGS_MASK, DECORATION_LINE_THROUGH,
     DECORATION_NONE, DECORATION_OVERLINE, DECORATION_SKIP_INK, DECORATION_SOLID,
-    DECORATION_UNDERLINE, DECORATION_WAVY, DEFAULT_PLANNER_TEXT_CAPACITY, EXCLUSION_WRAP_BOTH,
+    DECORATION_UNDERLINE, DECORATION_WAVY, DEFAULT_ROOT_TEXT_CAPACITY, EXCLUSION_WRAP_BOTH,
     EXCLUSION_WRAP_INLINE_END, EXCLUSION_WRAP_INLINE_START, EXCLUSION_WRAP_LARGEST, LAST_LINE_AUTO,
     LAST_LINE_JUSTIFY, ORIENTATION_MIXED, ORIENTATION_SIDEWAYS, ORIENTATION_UPRIGHT, OVERFLOW_CLIP,
     OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT,
@@ -194,9 +194,9 @@ struct CodecOperationRecord {
 struct EngineUpdateRequestHeader {
     abi_version: u32,
     byte_length: u32,
-    planner_id: u32,
+    root_id: u32,
     expected_engine_revision: u32,
-    consumed_plan_revision: u32,
+    consumed_revision: u32,
     acknowledged_publication_generation: u32,
     codec_handle: u32,
     capability_set: u32,
@@ -230,7 +230,7 @@ struct EngineUpdateRequestHeader {
 
 #[repr(C)]
 struct EngineUpdateBatchEntry {
-    planner_id: u32,
+    root_id: u32,
     request_length: u32,
     result_pointer: u32,
     status: u32,
@@ -403,9 +403,9 @@ struct EngineResultHeader {
     byte_length: u32,
     status: u32,
     flags: u32,
-    planner_id: u32,
+    root_id: u32,
     engine_revision: u32,
-    plan_revision: u32,
+    revision: u32,
     required_base_revision: u32,
     publication_generation: u32,
     output_slot: u32,
@@ -903,9 +903,9 @@ field_offset!(
     abi_version
 );
 field_offset!(
-    ENGINE_UPDATE_BATCH_PLANNER_ID,
+    ENGINE_UPDATE_BATCH_ROOT_ID,
     EngineUpdateBatchEntry,
-    planner_id
+    root_id
 );
 field_offset!(
     ENGINE_UPDATE_BATCH_REQUEST_LENGTH,
@@ -924,9 +924,9 @@ field_offset!(
     byte_length
 );
 field_offset!(
-    ENGINE_UPDATE_PLANNER_ID,
+    ENGINE_UPDATE_ROOT_ID,
     EngineUpdateRequestHeader,
-    planner_id
+    root_id
 );
 field_offset!(
     ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
@@ -934,9 +934,9 @@ field_offset!(
     expected_engine_revision
 );
 field_offset!(
-    ENGINE_UPDATE_CONSUMED_PLAN_REVISION,
+    ENGINE_UPDATE_CONSUMED_REVISION,
     EngineUpdateRequestHeader,
-    consumed_plan_revision
+    consumed_revision
 );
 field_offset!(
     ENGINE_UPDATE_ACKNOWLEDGED_PUBLICATION_GENERATION,
@@ -1610,16 +1610,16 @@ field_offset!(ENGINE_RESULT_ABI_VERSION, EngineResultHeader, abi_version);
 field_offset!(ENGINE_RESULT_BYTE_LENGTH, EngineResultHeader, byte_length);
 field_offset!(ENGINE_RESULT_STATUS, EngineResultHeader, status);
 field_offset!(ENGINE_RESULT_FLAGS, EngineResultHeader, flags);
-field_offset!(ENGINE_RESULT_PLANNER_ID, EngineResultHeader, planner_id);
+field_offset!(ENGINE_RESULT_ROOT_ID, EngineResultHeader, root_id);
 field_offset!(
     ENGINE_RESULT_ENGINE_REVISION,
     EngineResultHeader,
     engine_revision
 );
 field_offset!(
-    ENGINE_RESULT_PLAN_REVISION,
+    ENGINE_RESULT_REVISION,
     EngineResultHeader,
-    plan_revision
+    revision
 );
 field_offset!(
     ENGINE_RESULT_REQUIRED_BASE_REVISION,
@@ -1910,10 +1910,10 @@ pub fn json() -> String {
             "registerCodec": "pmndrs_glyph_engine_register_codec",
             "disposeCodec": "pmndrs_glyph_engine_dispose_codec",
             "codecCount": "pmndrs_glyph_engine_codec_count",
-            "createPlanner": "pmndrs_glyph_engine_create_planner",
-            "reservePlanner": "pmndrs_glyph_engine_reserve_planner",
-            "disposePlanner": "pmndrs_glyph_engine_dispose_planner",
-            "plannerCount": "pmndrs_glyph_engine_planner_count",
+            "createRoot": "pmndrs_glyph_engine_create_root",
+            "reserveRoot": "pmndrs_glyph_engine_reserve_root",
+            "disposeRoot": "pmndrs_glyph_engine_dispose_root",
+            "rootCount": "pmndrs_glyph_engine_root_count",
             "requestPointer": "pmndrs_glyph_engine_request_ptr",
             "requestCapacity": "pmndrs_glyph_engine_request_capacity",
             "reserveUpdateBatch": "pmndrs_glyph_engine_reserve_update_batch",
@@ -2061,9 +2061,9 @@ pub fn json() -> String {
                 "alignment": ENGINE_UPDATE_REQUEST_HEADER_ALIGNMENT,
                 "abiVersion": ENGINE_UPDATE_ABI_VERSION,
                 "byteLength": ENGINE_UPDATE_BYTE_LENGTH,
-                "plannerId": ENGINE_UPDATE_PLANNER_ID,
+                "rootId": ENGINE_UPDATE_ROOT_ID,
                 "expectedEngineRevision": ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
-                "consumedPlanRevision": ENGINE_UPDATE_CONSUMED_PLAN_REVISION,
+                "consumedRevision": ENGINE_UPDATE_CONSUMED_REVISION,
                 "acknowledgedPublicationGeneration": ENGINE_UPDATE_ACKNOWLEDGED_PUBLICATION_GENERATION,
                 "codecHandle": ENGINE_UPDATE_CODEC_HANDLE,
                 "capabilitySet": ENGINE_UPDATE_CAPABILITY_SET,
@@ -2097,7 +2097,7 @@ pub fn json() -> String {
             "engineUpdateBatchEntry": {
                 "size": ENGINE_UPDATE_BATCH_ENTRY_SIZE,
                 "alignment": ENGINE_UPDATE_BATCH_ENTRY_ALIGNMENT,
-                "plannerId": ENGINE_UPDATE_BATCH_PLANNER_ID,
+                "rootId": ENGINE_UPDATE_BATCH_ROOT_ID,
                 "requestLength": ENGINE_UPDATE_BATCH_REQUEST_LENGTH,
                 "resultPointer": ENGINE_UPDATE_BATCH_RESULT_POINTER,
                 "status": ENGINE_UPDATE_BATCH_STATUS
@@ -2268,9 +2268,9 @@ pub fn json() -> String {
                 "byteLength": ENGINE_RESULT_BYTE_LENGTH,
                 "status": ENGINE_RESULT_STATUS,
                 "flags": ENGINE_RESULT_FLAGS,
-                "plannerId": ENGINE_RESULT_PLANNER_ID,
+                "rootId": ENGINE_RESULT_ROOT_ID,
                 "engineRevision": ENGINE_RESULT_ENGINE_REVISION,
-                "planRevision": ENGINE_RESULT_PLAN_REVISION,
+                "revision": ENGINE_RESULT_REVISION,
                 "requiredBaseRevision": ENGINE_RESULT_REQUIRED_BASE_REVISION,
                 "publicationGeneration": ENGINE_RESULT_PUBLICATION_GENERATION,
                 "outputSlot": ENGINE_RESULT_OUTPUT_SLOT,
@@ -2501,7 +2501,7 @@ pub fn json() -> String {
             }
         },
         "engine": {
-            "defaultPlannerTextCapacity": DEFAULT_PLANNER_TEXT_CAPACITY,
+            "defaultRootTextCapacity": DEFAULT_ROOT_TEXT_CAPACITY,
             "frameFlags": {
                 "compositingIndependent": crate::engine::frame::FRAME_FLAG_COMPOSITING_INDEPENDENT
             },
@@ -2712,8 +2712,8 @@ pub fn json() -> String {
             "resultTooLarge": 7,
             "codecConflict": 8,
             "codecMissing": 9,
-            "plannerConflict": 10,
-            "plannerMissing": 11,
+            "rootConflict": 10,
+            "rootMissing": 11,
             "revisionConflict": 12,
             "fontStackMissing": 13,
             "fontInUse": 14,

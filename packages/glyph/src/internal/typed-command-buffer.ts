@@ -108,7 +108,7 @@ export interface TypedUpdatePhases {
 export interface BorrowedTypedCommandBuffer {
   readonly delivery: 'borrowed';
   readonly engineRevision: number;
-  readonly planRevision: number;
+  readonly revision: number;
   readonly publicationGeneration: number;
   readonly checkpoint: boolean;
   readonly updates: TypedUpdatePhases;
@@ -261,7 +261,7 @@ export class TypedCommandBufferMapper {
     const source = Object.freeze({
       delivery: 'borrowed' as const,
       engineRevision: candidate.engineRevision,
-      planRevision: candidate.planRevision,
+      revision: candidate.revision,
       publicationGeneration: candidate.publicationGeneration,
       checkpoint: candidate.checkpoint,
       updates: Object.freeze({

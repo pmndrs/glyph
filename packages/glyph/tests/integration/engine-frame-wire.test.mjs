@@ -6,7 +6,7 @@ import { permanentGlyphId } from '../../dist/internal/glyph-id.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
-const PLANNER_ID = permanentGlyphId('planner', 'engine-frame-wire/planner');
+const ROOT_ID = permanentGlyphId('planner', 'engine-frame-wire/planner');
 const CODEC_ID = permanentGlyphId('codec', 'engine-frame-wire/codec');
 const FONT_STACK_ID = permanentGlyphId('font-stack', 'engine-frame-wire/font-stack');
 const PARAGRAPH_ID = permanentGlyphId('paragraph', 'engine-frame-wire/paragraph');
@@ -49,7 +49,7 @@ test('production frame compiler preserves the established benchmark request byte
   const units = Array.from({ length: text.length }, (_, index) => text.charCodeAt(index));
   const limits = { maxClusters: 8, maxLines: 8, maxOutputBytes: 65_536 };
   const expected = engineFrameUpdateBytes(abi, {
-    plannerId: PLANNER_ID,
+    rootId: ROOT_ID,
     codecHandle: CODEC_ID,
     fontStackHandle: FONT_STACK_ID,
     paragraphId: PARAGRAPH_ID,
@@ -63,10 +63,10 @@ test('production frame compiler preserves the established benchmark request byte
     limits,
   });
   const actual = compilePlannerFrameUpdate({
-    plannerId: PLANNER_ID,
+    rootId: ROOT_ID,
     codecHandle: CODEC_ID,
     expectedEngineRevision: 0,
-    consumedPlanRevision: 0,
+    consumedRevision: 0,
     acknowledgedPublicationGeneration: 0,
     limits: {
       ...limits,
@@ -140,10 +140,10 @@ test('production frame compiler preserves the established benchmark request byte
 test('production frame compiler carries full style, polygon, exclusion, and inline-object payloads', async () => {
   const abi = textShaperAbi;
   const bytes = compilePlannerFrameUpdate({
-    plannerId: PLANNER_ID,
+    rootId: ROOT_ID,
     codecHandle: CODEC_ID,
     expectedEngineRevision: 3,
-    consumedPlanRevision: 4,
+    consumedRevision: 4,
     acknowledgedPublicationGeneration: 5,
     semanticViewMask: abi.engine.semanticViewMasks.all,
     compositingIndependent: true,
@@ -341,10 +341,10 @@ test('style payloads stay in per-record order when several paragraphs carry lang
     permanentGlyphId('paragraph', `engine-frame-wire/paragraph/${index}`),
   );
   const bytes = compilePlannerFrameUpdate({
-    plannerId: PLANNER_ID,
+    rootId: ROOT_ID,
     codecHandle: CODEC_ID,
     expectedEngineRevision: 0,
-    consumedPlanRevision: 0,
+    consumedRevision: 0,
     acknowledgedPublicationGeneration: 0,
     semanticViewMask: 0,
     compositingIndependent: false,
@@ -413,10 +413,10 @@ test('production frame compiler encodes typography controls and their defaults',
   });
   const compile = (typography) =>
     compilePlannerFrameUpdate({
-      plannerId: PLANNER_ID,
+      rootId: ROOT_ID,
       codecHandle: CODEC_ID,
       expectedEngineRevision: 0,
-      consumedPlanRevision: 0,
+      consumedRevision: 0,
       acknowledgedPublicationGeneration: 0,
       limits: {
         maxParagraphs: 1,

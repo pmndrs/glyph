@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:74e8f44798f6deb836c0544998facc2b325f85b889e29be44fe45cd1c1e58d87'
+source_digest: 'sha256:2931c26c5e297b69bf5f7d4b3348c5edcd995027eedd4832d2a979c1af63bd70'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -113,7 +113,7 @@ The package owns six runtime layers:
 | Root runtime and config | TypeScript core       | Initialize one Glyph engine, construct named adapter handles, and coordinate projection/decode/commit transactions.                   |
 | Font and raster loading | TypeScript core       | Read portable GLB envelopes, register shaping payloads, decode selected raster resources, and retain font identity.                   |
 | Shaping and layout      | Rust/Wasm             | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                    |
-| Codec and command plan  | Rust/Wasm             | Interpret a validated Codec, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.              |
+| Codec and command buffer | Rust/Wasm             | Interpret a validated Codec, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.             |
 | Three.js integration    | `@pmndrs/glyph/three` | Compile Codec programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
 | React integration       | `@pmndrs/glyph/react` | Reconcile React values into the same imperative `Text` and `TextGroup` objects.                                                       |
 
@@ -122,7 +122,7 @@ font-baker Wasm alone enables a feature-gated `std` adapter for Fontations subse
 pass its `wasm32-unknown-unknown --no-default-features` build. The text engine uses the existing compile-time direct-memory mapping
 for font registrations. Ordinary publication enters once through
 `pmndrs_glyph_engine_update_batch(entriesPointer, count)`, whose entries address the already-written request slice and
-existing A/B result storage for each dirty planner. Paragraph-scoped semantic queries remain separate synchronous calls.
+existing A/B result storage for each dirty root. Paragraph-scoped semantic queries remain separate synchronous calls.
 TypeScript does not independently shape, lay out, or pack paragraphs.
 
 The root `glyph` runtime initializes one engine idempotently. `glyph.handle(name, config)` creates independent mutable
@@ -629,14 +629,16 @@ imports can still reach those files. Packed-package tests import representative 
 fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
 
 Configured rendering has one publication contract: `glyph.shape()` stages every dirty root, crosses the Wasm boundary
-once, and synchronously offers each root's borrowed command-buffer view to its renderer. The view expires when decode
+once, and synchronously offers each root's borrowed command-buffer view to its renderer. `CommandBufferView.revision`
+is the monotonic revision of that root's Codec-produced command state; `engineRevision` independently identifies the
+engine transaction that produced it. The view expires when decode
 returns; renderer commit/discard settles the corresponding publication before the batch closes. The removed owned-target
-branch copied every plan, resolved a second payload manifest, awaited a separate target, and pooled returned buffers, but
+branch copied every publication, resolved a second payload manifest, awaited a separate target, and pooled returned buffers, but
 no GlyphConfig integration could use it and it could not participate in the engine-wide shape batch. Cross-realm font
 movement remains the explicit lazy `FontFace.clone()` operation; render-plan transfer is not a parallel publication API.
 The former direct planner/transport update path is also gone: it had no production caller and would have restored one
 Wasm crossing per root beside the staged batch. The example renderer proves TypeGPU and WebGPU realization directly
-against the same borrowed Rust command plan.
+against the same borrowed Rust command buffer.
 
 ## Current correctness evidence
 

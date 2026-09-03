@@ -1,7 +1,7 @@
 //! Renderer-neutral retained display-list records.
 //!
 //! These types describe rendering intent and revision-relative resource changes. They deliberately
-//! contain no backend command, JavaScript callback, GPU object, or host pointer.
+//! contain no renderer command, JavaScript callback, GPU object, or host pointer.
 
 pub const RESOURCE_ACTION_CREATE: u16 = 1;
 pub const RESOURCE_ACTION_UPDATE: u16 = 2;
