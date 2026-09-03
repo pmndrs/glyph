@@ -159,8 +159,9 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
     throw new Error('R3F React Text frame did not submit a draw');
   }
 
-  const drawCount = countDraws(core);
-  const paintCount = countUniquePaints(core);
+  const scene = resources.store.getState().scene;
+  const drawCount = countDraws(scene);
+  const paintCount = countUniquePaints(scene);
   if (drawCount !== 1 || paintCount !== 2) {
     throw new Error(
       `React Text did not preserve its nested-span draw and paint contract: ${drawCount} draws, ${paintCount} paints`,
@@ -336,7 +337,7 @@ function requiredLayout(core: BitmapTextObject): GlyphLayout {
   return layout;
 }
 
-function countDraws(object: BitmapTextObject): number {
+function countDraws(object: THREE.Object3D): number {
   let count = 0;
   object.traverse((child) => {
     if (child.type === 'Mesh') count += 1;
@@ -344,7 +345,7 @@ function countDraws(object: BitmapTextObject): number {
   return count;
 }
 
-function countUniquePaints(object: BitmapTextObject): number {
+function countUniquePaints(object: THREE.Object3D): number {
   const paints = new Set<string>();
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
