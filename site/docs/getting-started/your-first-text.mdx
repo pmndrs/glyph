@@ -107,8 +107,10 @@ notes · internals
   `react.ts:376–407`, `:165` (`'@pmndrs/glyph/react:default'`)
 - defaults when `style` is absent: `fontSize` 16, `color` white — `internal/render-planner.ts:1626`
   (`fontSize ?? 16`), `engine-encoding.ts:254` (`color ?? '#ffffff'`)
-- [verify] what 16 means in world units under the example stage's camera — `site/docs/components/pages/examples/stage.tsx`;
-  the earlier stub said "1 world unit per em", which the planner default contradicts
+- `fontSize` is in the scene's own units, so the default is 16 units tall under a perspective camera; the example
+  stage keeps 11 units across the frame (`site/docs/components/pages/examples/stage.tsx#FitWidth`) and the scene
+  sets `fontSize: 0.6` (`site/examples/src/scenes/first-text/scene.tsx:32`). Say "about 0.6 units, a line across
+  a fifth of the frame", not "1 world unit per em"; the default — ``
 */}
 
 ## 4. Style it
@@ -207,8 +209,10 @@ notes · internals
   "not measured", never "empty" — `layout.ts:56–61`, `:73–75`, `:80–89`
 - the `ref` is the three.js `Text` — `react.ts:95`, assigned after the object is published — `:451–452`
 - the same centering, in the running example — `site/examples/src/scenes/first-text/scene.tsx:19–26`
-- [verify] the sign of `ink.y` (paragraph space is y-down, three is y-up): confirm against `layout.ts#LayoutBox`
-  before explaining the formula
+- the sign of `ink.y`: paragraph space is y-down from the box's top-left (`glyph-placement.ts:4–14`, `GlyphSpace`),
+  `LayoutBox` is `{ x, y, width, height }` in that space (`layout.ts:8–13`), and the measurement scene draws the ink
+  box at `-(y + height / 2)` in three's y-up space and lands on the glyphs
+  (`site/examples/src/scenes/measurement/scene.tsx`, `Outline`)
 - `computeBoundingBox()` is the `Box3` alternative — `three/text.ts:766–769`
 */}
 

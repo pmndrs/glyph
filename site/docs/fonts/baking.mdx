@@ -291,8 +291,9 @@ notes · internals
   zero-size); `rust/mtsdf-baker/src/artifact.rs:243–246`, `:252–258` (`EmptyOutline | InvalidBounds` → absent)
 - [verify] the CFF claim from this repo's outline ("a CFF face bakes shaping data and an empty raster"): there is no
   `font_outline_source` in `rust/mtsdf-baker/src/artifact.rs` at codex `2c0fbcc4a`; the only CFF-aware code found
-  is glyph naming, `GlyphNameSource::Cff` (`rust/font-baker/src/source_font.rs:65`, `:136`). Find where outlines
-  are read (skrifa's `OutlineGlyphCollection` handles `glyf` and `CFF`/`CFF2` alike) before naming CFF
+  is glyph naming, `GlyphNameSource::Cff` (`rust/font-baker/src/source_font.rs:65`, `:136`). Outlines are read
+  through skrifa's `font.outline_glyphs()` (`rust/bitmap-baker/src/rasterize.rs:141`; `rust/mtsdf-baker/src/artifact.rs:12`,
+  `:481`), which serves `glyf`, `CFF`, and `CFF2` alike, so the claim has no support; drop it
 */}
 
 ## What is in the file

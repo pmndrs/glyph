@@ -319,8 +319,10 @@ notes · internals
 - every font load hashes with `crypto.subtle.digest` — `loader.ts:3125`; also `internal/raster-identity.ts:102`,
   `internal/compose-bake.ts:397`, `internal/runtime-font-cache.ts:125`
 - this site already warns — `site/docs/getting-started/installation.mdx:52–59`
-- [verify] the `fix/font-identity-no-secure-context` branch in this repo removes the hashing; confirm it merged before
-  writing "fixed"
+- not fixed in the codex tree: it still hashes through `crypto.subtle` at `loader.ts:2849`, `internal/compose-bake.ts:397`,
+  `internal/raster-identity.ts:102`, `internal/runtime-font-cache.ts:125` (codex `1dc580a87`); this repository's
+  branch `fix/font-identity-no-secure-context` (`d274de7f`, "load baked fonts outside a secure context") is not
+  in `origin/main`. Write "open", not "fixed"
 */}
 
 ## CJK renders nothing
@@ -337,8 +339,10 @@ notes · internals
 - "no every-glyph-rasterised-empty guard": bitmap and MTSDF bakers mark unreadable outlines absent silently —
   this repo, `docs/planning/docs-site-outline.md` (Findings for core)
 - the Slug path converts CFF cubics — `rust/slug-fontations/src/lib.rs:239–247` — so the limitation is per baker
-- [verify] which outline reader `rust/bitmap-baker/src/rasterize.rs` and `rust/mtsdf-baker/src/artifact.rs` use and
-  whether it reads `CFF `; name the exact call before writing "CFF-only faces produce none"
+- both bakers read outlines through skrifa: `font.outline_glyphs()` — `rust/bitmap-baker/src/rasterize.rs:141`
+  (`:8` import); `rust/mtsdf-baker/src/artifact.rs:12` (`FontRef`, `MetadataProvider`), `:481`
+  (`skrifa::outline::DrawError`). skrifa's `OutlineGlyphCollection` serves `glyf`, `CFF`, and `CFF2` alike, so
+  "CFF-only faces produce none" has no support; do not write it
 */}
 
 ## Each letter lit separately

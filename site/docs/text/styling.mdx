@@ -147,8 +147,10 @@ notes · internals
 - packing: hex parsed as sRGB bytes, tuples encoded through the sRGB transfer, alpha × opacity —
   `engine-encoding.ts#packedForeground` (`:249–257`), `#linearColorBytes` (`:280–286`)
 - opacity inherited independently — `text-properties.ts:97–98`
-- [verify] where the sRGB → linear decode happens on the GPU side (the decoration shader decodes through the EOTF
-  per D-248); confirm glyph draws do the same before writing "converted to linear"
+- the GPU-side decode: packed colours are sRGB bytes decoded through `unpackSrgbRgba` in the shaders — MSDF's
+  outline and shadow colours at `tsl/msdf-shader.ts:70–71` (`:4` import), decorations per the convention stated at
+  `tsl/decoration-shader.ts:27–29` (D-248). [verify] the fill colour's path (`instance.fillColor`) before writing
+  "every colour is converted to linear"
 */}
 
 ## Outline and shadow
@@ -170,8 +172,10 @@ notes · internals
 - shader: outline ring `max(outlineCoverage − fillCoverage, 0)` — `tsl/msdf-shader.ts:88–89`; shadow sample at an
   offset, masked by `1 − glyphAlpha` — `:90–101`
 - reach bounded by the bake — `internal/msdf-contract.ts:18` (`MSDF_MAX_OUTLINE_ATLAS_PIXELS = pixelRange / 2`)
-- [verify] how `outline.width` in paragraph-local units maps to atlas pixels: read `instance.outlineWidth` encoding
-  in `raster/msdf.ts` before quoting the bound
+- `outline.width`: the shader adds `instance.outlineWidth` to the true signed distance before coverage —
+  `tsl/msdf-shader.ts:88`; the realizer derives that node from the page's `z` component —
+  `three/internal/material-realizer.ts:216`. [verify] the scale factor on that line before quoting a bound in
+  paragraph units
 */}
 
 <glyph-proxy fit="cover" root="scenes" data-scene="effects" aria-label="Outline, shadow, animated color" aspect="16 / 9" />

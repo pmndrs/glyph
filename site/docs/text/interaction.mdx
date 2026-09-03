@@ -97,8 +97,8 @@ notes · internals
 - the world-to-paragraph flip: scene y = −paragraph y — `three/text.ts#Text.#setBoundingBox` (`:887–897`),
   `three/glyph-measurement.ts#paragraphBox` (`:209–214`)
 - the pointer handler and `ref` prop on `<Text>` — `react.ts#R3fTextProps` (`:82–96`: `Object3DProps` carries the R3F event handlers, `ref: Ref<ThreeText>`)
-- [verify] the sign of y in `caretAt` from a pointer hit: derived from the bounding-box mapping above, not run;
-  confirm in the caret scene once it exists
+- the sign of y in `caretAt` from a pointer hit, confirmed by the caret scene: `text.caretAt(local.x, -local.y)`
+  places the caret under the pointer (`site/examples/src/scenes/caret/scene.tsx`, the drain loop)
 */}
 
 ## Selection
@@ -196,6 +196,7 @@ write
 notes · internals
 - the minimal edit — `engine-encoding.ts#minimalTextMutation` (`:312–335`); assignment is `set({ text })` — `three/text.ts:676–678`
 - a rect's x extent is `min(x, x + advance)` to `max(…)`, so the trailing edge for RTL is `box.x` — `glyph-placement.ts:538–540`
-- [verify] a caret-from-offset helper does not exist at HEAD (`glyph-placement.ts:151–154` lists `caretAt(x, y)` and
-  `selectionRects` only); ask whether one is planned before documenting the workaround as the way
+- a caret-from-offset helper does not exist at codex `1dc580a87`: `GlyphPlacements` exposes `caretAt(x, y)` and
+  `selectionRects` only (`glyph-placement.ts:152–154`, `:284–285`); `selectionRects(offset, offset + 1)` is the
+  workaround. Ask the other agent whether a helper is planned before documenting the workaround as the way
 */}
