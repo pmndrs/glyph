@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:dae390e512328fcfc202bb8ef065cc1fc8fcf8fdefac50567fad6c161a899991'
+source_digest: 'sha256:e951830ba10d74e69dcaa710d2d940504ed8c85d2ca460db141b5a79de2e3381'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -22,7 +22,7 @@ sources:
     title: Portable technique schema and Codec-body definition
   - id: registration
     resource: ../../packages/glyph-example-raster/src/register.ts
-    title: Root-imported renderer-neutral plan registration
+    title: Root-imported renderer-neutral Codec registration
   - id: geometry-fixture
     resource: ../../packages/glyph-example-raster/src/geometry-fixture.ts
     title: Portable GLB-like indexed geometry fixture
@@ -71,7 +71,7 @@ The external lane authenticates the companion GLB and its separate record payloa
 resolvers; the embedded lane proves recursive `BufferView` rebasing through the public Node composition host.
 
 The package now supplies the portable Codec and renderer-facing halves of the Rust command-buffer boundary separately. `glyphExample` is a portable
-`defineRasterTechnique` that owns identity, decoding, one stable resource identity, and disposal while importing no renderer or
+`defineRasterFormat` that owns identity, decoding, one stable resource identity, and disposal while importing no renderer or
 instance-packing contract. Importing the package root runs the renderer-neutral `registerRasterCodec` call through a
 dedicated registration module. The manifest marks that module and its root facade as side-effectful so a production bundle
 keeps the registration; the portable definition and shader subpaths remain free of registration side effects.
@@ -90,7 +90,7 @@ and observes retained draw/geometry identity. No test reconstructs the removed T
 
 The package's actual render resource is a small immutable indexed unit quad. It follows the portable GLB-like contract—semantic
 three-component position and two-component UV vertex attributes, typed accessors, indices, topology, and draw range—so an engine can choose supplied
-geometry without importing Three or learning technique-private implementation details. The plan's primitive record span,
+geometry without importing Three or learning technique-private implementation details. The command-buffer primitive's record span,
 not the geometry payload, supplies the draw's instance count.
 
 The hardware-browser target uses a public `FontFace`, package runtime baker, and a spread-wrapped `ThreeConfig` whose font

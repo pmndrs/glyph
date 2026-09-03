@@ -60,7 +60,7 @@ export interface CodecOperation {
 export interface CodecProgram {
   readonly techniqueId: CodecTechniqueId;
   readonly programId: CodecProgramId;
-  /** Plan primitive kind this program's records publish as; glyph when omitted. */
+  /** Command-buffer primitive kind this program's records publish as; glyph when omitted. */
   readonly primitiveKind?: 'glyph' | 'decoration';
   /** Capability profile this program targets; omitted programs apply to every profile. */
   readonly capabilitySet?: CodecCapabilitySet;

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:274620a06eac2fb44eb3fc314d16911dde0f0d5fd1ee061c5a2475d49ecb0d45'
+source_digest: 'sha256:b9625f9f1659ab631ca53f959eadfea7cf0720d75f0debcd172aad4bc3613764'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -291,7 +291,7 @@ font registration; malformed data never waits for scene traversal to fail. A res
 internal invariant defect through `TextFrameError` while the last committed draw state remains live. Renderer preparation is
 separate: if an engine-accepted publication cannot realize its resources or material, Three discards the candidate, keeps
 the last accepted draw state and fences, and retains the error. It does not retry unchanged frames. Explicit material or
-other renderer-relevant invalidation requests a checkpoint from the last consumed plan revision. A malformed emitted plan
+other renderer-relevant invalidation requests a checkpoint from the last consumed command revision. A malformed emitted plan
 is an engine defect and never enters this recovery path (D-285).
 
 `registerThreeRasterProgram` refuses a format registered after a runtime has read the registry (D-271), naming the
@@ -364,7 +364,7 @@ font it loads for finite, positive-thickness values. Decoration rendering consum
 spans declare `decoration` (solid underline, overline, and line-through; other line styles are rejected at the
 boundary), the engine cascade stamps the CSS decorating box so one continuous line spans nested font-size changes at
 the declaring span's scale, and records flow through both planners as resource-free rows of the reserved
-`pmndrs.decoration` Codec technique. Plan programs carry a primitive kind in the former reserved wire field; underline and
+`pmndrs.decoration` Codec technique. Codec programs carry a primitive kind in the former reserved wire field; underline and
 overline rows precede the paragraph's glyphs while line-through follows them, matching CSS paint order, and Three
 realizes decorations as separate ordered draw objects. The same `defineTextMaterial()` factory used by glyph formats
 receives a `kind: 'glyph' | 'decoration'` discriminated context and may keep or override the default flat-quad TSL
@@ -415,7 +415,7 @@ scene tree.
 
 Rust publishes one revision containing:
 
-- engine and plan revision headers;
+- engine and command revision headers;
 - physical-buffer allocation and retirement commands;
 - coalesced per-buffer dirty byte ranges;
 - resource bindings;
@@ -457,7 +457,7 @@ decode, or copy the binding's scalar value tables; ordinary renderers continue t
 
 Portable resource declarations select `one` or `many` cardinality. Fixed-member groups carry synchronized leaf buffers
 and textures under one retained identity; groups cannot nest, geometry cannot repeat, and every resourceful schema names
-the primary render resource used by the plan primitive. Bitmap repeated strikes, MSDF atlas/range companions, and Slug
+the primary render resource used by the command-buffer primitive. Bitmap repeated strikes, MSDF atlas/range companions, and Slug
 repeated page groups all compile through this contract. Capability profiles contain capabilities only;
 `compileCodec()` assigns their nonzero wire IDs by descriptor order, and ordinary single-profile frames omit the
 selector.
@@ -486,7 +486,7 @@ same tail-latency target.
 identity may split draws without forcing a second copy of the canonical glyph buffers.
 
 Bitmap atlas pages within one strike are renderer layers, not independent draw resources. The font binding exposes one
-strike resource, the Rust policy writes the selected page as one u32 instance lane, and Three uploads the strike as one
+strike resource, the Rust Codec program writes the selected page as one u32 instance lane, and Three uploads the strike as one
 R8 texture array. This preserves authored glyph order while preventing page transitions inside ordinary prose from
 splitting a paragraph into hundreds of draws. The multi-page integration fixture asserts one ordered draw and a live
 Chrome run reduced the sampled Paragraph Stress CPU frame from roughly 80 ms before the correction to 0.47–1.3 ms after
@@ -707,7 +707,7 @@ test-only line-break oracle so their expected topology is not derived from the e
 The former TypeScript `RasterRuntime`, raster
 candidate/commit transaction, `select`, `createStorage`, and `writeStorage` surfaces are deleted from production source
 and public exports. Current raster formats own identity, artifact decoding, retained CPU resource data, and disposal;
-Rust policy programs own instance packing and dirty-range publication. The package gate retains production render-plan,
+Rust Codec programs own instance packing and dirty-range publication. The package gate retains production render-plan,
 font-binding, Three execution, artifact-validation, and Unicode conformance coverage instead of test-only TypeScript
 packers.
 

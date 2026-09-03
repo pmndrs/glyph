@@ -470,7 +470,7 @@ test('normalizing a retained payload owns bytes and structural metadata', () => 
   assert(Object.isFrozen(normalized.accessors));
 });
 
-test('instance count and per-record data remain plan-owned', () => {
+test('instance count and per-record data remain command-buffer-owned', () => {
   const quad = indexedQuadGeometry();
   assert.throws(
     () =>
@@ -479,7 +479,7 @@ test('instance count and per-record data remain plan-owned', () => {
         'mesh',
         mutate(quad, (g) => (g.instances = { source: 'fixed', count: 0 })),
       ),
-    (error) => error instanceof TypeError && error.message.includes('instance count comes from plan records'),
+    (error) => error instanceof TypeError && error.message.includes('instance count comes from command-buffer records'),
   );
   assert.throws(
     () =>
@@ -488,7 +488,7 @@ test('instance count and per-record data remain plan-owned', () => {
         'mesh',
         mutate(quad, (g) => (g.instances = { source: 'records-plus' })),
       ),
-    (error) => error instanceof TypeError && error.message.includes('instance count comes from plan records'),
+    (error) => error instanceof TypeError && error.message.includes('instance count comes from command-buffer records'),
   );
   assert.throws(
     () =>

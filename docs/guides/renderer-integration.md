@@ -662,7 +662,7 @@ function acquireLoadedFont(selection: AnyFontFaceSelection) {
 }
 ```
 
-Application code loads through the returned FontFace token; the adapter handle is needed only when Text binds the loaded
+Application code loads through the returned FontFace declaration; the adapter handle is needed only when Text binds the loaded
 selection:
 
 ```ts
