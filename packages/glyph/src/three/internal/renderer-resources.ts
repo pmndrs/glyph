@@ -5,7 +5,7 @@ import {
   compiledThreeRasterPlanPrograms,
   releaseThreeRasterPlanProgramSnapshot,
   type CompiledThreeRasterPlanProgram,
-} from '../plan-program-registry.js';
+} from './plan-program-registry.js';
 
 interface DisposableThreeRenderResource {
   dispose(): void;
