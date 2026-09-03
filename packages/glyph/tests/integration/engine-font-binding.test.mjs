@@ -2,15 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import {
-  createRasterCodecProgram,
-  defineRasterResourceId,
-  defineRasterFormat,
-  defineTechniqueSchema,
-  id,
-  registerRasterPlanProgram,
-  techniqueProgram,
-} from '../../dist/index.js';
+import { techniqueProgram } from '../../dist/config/codec-program.js';
+import { id } from '../../dist/config/codec.js';
+import { defineRasterFormat, defineRasterResourceId } from '../../dist/config/raster-format.js';
+import { createRasterCodecProgram, registerRasterPlanProgram } from '../../dist/config/raster.js';
+import { defineTechniqueSchema } from '../../dist/config/schema.js';
 import { bitmap } from '../../dist/raster/bitmap.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
 import { createFontStack, immutableFontResources } from '../../dist/loaded-font.js';

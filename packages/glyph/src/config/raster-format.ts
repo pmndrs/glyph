@@ -1,5 +1,5 @@
-import type { RasterDecodeFont } from './font.js';
-import type { JsonValue, RasterDecodeArtifact, RasterOptionsArgument, RuntimeRasterBakerLoader } from './raster.js';
+import type { RasterDecodeFont } from '../font.js';
+import type { JsonValue, RasterDecodeArtifact, RasterOptionsArgument, RuntimeRasterBakerLoader } from '../raster.js';
 
 declare const rasterFormatIdBrand: unique symbol;
 declare const rasterResourceIdBrand: unique symbol;

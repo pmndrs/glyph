@@ -1,15 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { defineRasterFormat } from '@pmndrs/glyph';
-import {
-  createRasterCodecProgram,
-  defineCodecBuffers,
-  defineTechniqueSchema,
-  registerRasterPlanProgram,
-  techniqueProgram,
-  id,
-} from '../../dist/index.js';
+import { techniqueProgram } from '../../dist/config/codec-program.js';
+import { id } from '../../dist/config/codec.js';
+import { defineRasterFormat } from '../../dist/config/raster-format.js';
+import { createRasterCodecProgram, registerRasterPlanProgram } from '../../dist/config/raster.js';
+import { defineCodecBuffers, defineTechniqueSchema } from '../../dist/config/schema.js';
 
 const TEST_PROGRAM_VARIANT = 3;
 const TEST_PROGRAM_NAMESPACE = 'test-renderer';

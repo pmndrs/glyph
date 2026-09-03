@@ -12,7 +12,7 @@ import type {
   TechniqueResourceDeclaration,
   TechniqueResourceDeclarations,
 } from '../config/schema.js';
-import { isRasterFormat, type AnyRasterFormat } from '../raster-format.js';
+import { isRasterFormat, type AnyRasterFormat } from '../config/raster-format.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { threeCodecCapabilitySet, threeSystemBuffers } from './codec.js';
 

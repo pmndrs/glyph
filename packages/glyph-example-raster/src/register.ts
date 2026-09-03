@@ -1,4 +1,4 @@
-import { registerRasterPlanProgram } from '@pmndrs/glyph';
+import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
 
 import { glyphExamplePlanProgramDefinition } from './portable.js';
 

@@ -1,8 +1,6 @@
 import tgpu from 'typegpu';
 
 import {
-  assertPortableResource,
-  resolveRasterPlanProgram,
   type BufferPatch,
   type CommandBufferView,
   type CodecBufferId,
@@ -12,6 +10,8 @@ import {
   type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
 } from '@pmndrs/glyph';
+import { resolveRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+import { assertPortableResource } from '@pmndrs/glyph/config/resources';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 import {
   glyphExampleFragment,

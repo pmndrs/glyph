@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { assertPortableResource, portableResourceKinds, portableTopologies } from '../../dist/index.js';
-import { normalizePortableResource, portableResourceIdentity } from '../../dist/config/resources.js';
+import {
+  assertPortableResource,
+  normalizePortableResource,
+  portableResourceIdentity,
+  portableResourceKinds,
+  portableTopologies,
+} from '../../dist/config/resources.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 
 function mutate(geometry, patch) {

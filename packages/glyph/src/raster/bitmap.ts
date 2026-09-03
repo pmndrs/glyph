@@ -9,7 +9,12 @@ import {
 import { nearestBitmapStrikeIndex } from '../internal/bitmap-strike.js';
 import { DENSE_GLYPH_RECORD_STRIDE, type RasterAtlasPage } from '../internal/raster-atlas.js';
 import type { RasterCoverage } from '../raster-coverage.js';
-import { defineRasterFormat, type RasterResourceId, type RasterFormat, type RasterFormatId } from '../raster-format.js';
+import {
+  defineRasterFormat,
+  type RasterResourceId,
+  type RasterFormat,
+  type RasterFormatId,
+} from '../config/raster-format.js';
 
 export {
   BITMAP_EXTENSION,

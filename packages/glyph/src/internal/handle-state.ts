@@ -3,7 +3,7 @@ import { GlyphEngineStatusError, setGlyphEngineStatusErrorDetails, type GlyphEng
 import type { Font } from '../font.js';
 import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
-import type { AnyRasterFormat } from '../raster-format.js';
+import type { AnyRasterFormat } from '../config/raster-format.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import { compileRasterFont, resolveRasterPlanProgram, type CompiledRasterFont } from '../config/raster.js';
 import { portableResourceIdentity, type PortableResource } from '../config/resources.js';

@@ -16,7 +16,7 @@ import type {
   TypedMaterial,
   TypedProgram,
   TypedResource,
-} from '../glyph-config.js';
+} from '../config/glyph.js';
 import type { CodecBuffer, CodecDescriptor, CodecProgram } from '../config/codec.js';
 import { bindPatch, bindRetirement } from './bind-command-buffer.js';
 import { mapBorrowedSequence, TypedCommandBufferMapper } from './typed-command-buffer.js';

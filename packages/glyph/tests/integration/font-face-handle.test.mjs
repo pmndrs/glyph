@@ -3,16 +3,11 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { Scene } from 'three/webgpu';
 
-import {
-  FontLoadError,
-  createRasterCodecProgram,
-  defineGlyphConfig,
-  defineGlyphSchema,
-  defineCodecBuffers,
-  glyph,
-  id,
-  resourceLease,
-} from '@pmndrs/glyph';
+import { FontLoadError, glyph } from '@pmndrs/glyph';
+import { id } from '@pmndrs/glyph/config/codec';
+import { defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/glyph/config/glyph';
+import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
+import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
 import { bitmap as portableBitmap, bitmapPlanProgram } from '@pmndrs/glyph/raster/bitmap';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';

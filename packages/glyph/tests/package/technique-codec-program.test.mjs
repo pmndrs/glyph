@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { defineCodecBuffers, defineTechniqueSchema, techniqueProgram, id } from '../../dist/index.js';
+import { techniqueProgram } from '../../dist/config/codec-program.js';
+import { id } from '../../dist/config/codec.js';
+import { defineCodecBuffers, defineTechniqueSchema } from '../../dist/config/schema.js';
 
 const ORIGIN_BUFFER_ID = id.buffer('test.codec-contract/origin');
 const PAGE_BUFFER_ID = id.buffer('test.codec-contract/page');

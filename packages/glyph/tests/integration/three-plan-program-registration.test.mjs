@@ -17,17 +17,13 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { defineRasterFormat, glyph } from '@pmndrs/glyph';
+import { glyph } from '@pmndrs/glyph';
 import { registerThreeRasterPlanProgram, ThreeConfig } from '@pmndrs/glyph/three';
-import {
-  defineTechniqueGeometryKind,
-  defineTechniqueSchema,
-  f32,
-  registerRasterPlanProgram,
-  techniqueProgram,
-  u32,
-  id,
-} from '@pmndrs/glyph';
+import { f32, techniqueProgram, u32 } from '@pmndrs/glyph/config/codec-program';
+import { id } from '@pmndrs/glyph/config/codec';
+import { defineRasterFormat } from '@pmndrs/glyph/config/raster-format';
+import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+import { defineTechniqueGeometryKind, defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
 import {
   createImmutableFontBacking,
   createImmutableFontLease,

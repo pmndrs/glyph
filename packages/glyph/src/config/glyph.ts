@@ -1,14 +1,14 @@
-import type { Font } from './font.js';
-import type { GlyphEngine } from './glyph-engine.js';
-import type { AnyFontFaceSelection } from './font-face.js';
-import type { GlyphLayoutInspection, ParagraphLayoutSummary } from './layout.js';
-import type { FontSelection } from './loaded-font.js';
+import type { Font } from '../font.js';
+import type { GlyphEngine } from '../glyph-engine.js';
+import type { AnyFontFaceSelection } from '../font-face.js';
+import type { GlyphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
+import type { FontSelection } from '../loaded-font.js';
 import type { AnyRasterFormat } from './raster-format.js';
-import type { Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
-import { createConfiguredGlyphHandle } from './internal/configured-handle.js';
-import type { PortableResource } from './config/resources.js';
-import type { CodecBuffer, CodecDescriptor, CodecIdFactory, CodecProgram } from './config/codec.js';
-import type { PlanAcceptance, PlanCandidate } from './internal/render-planner.js';
+import type { Constraints, ParagraphLayout, TextStyle } from '../text-properties.js';
+import { createConfiguredGlyphHandle } from '../internal/configured-handle.js';
+import type { PortableResource } from './resources.js';
+import type { CodecBuffer, CodecDescriptor, CodecIdFactory, CodecProgram } from './codec.js';
+import type { PlanAcceptance, PlanCandidate } from '../internal/render-planner.js';
 
 declare const typedCommandBufferBrand: unique symbol;
 declare const typedCommandIdentityBrand: unique symbol;

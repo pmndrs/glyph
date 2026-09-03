@@ -2,7 +2,7 @@ import { DEV } from './internal/dev.js';
 
 import type { Font, FontMetrics, RegisteredFont } from './font.js';
 import type { RegisteredRaster, RasterKindOf } from './raster.js';
-import type { AnyRasterFormat, RasterDataOf } from './raster-format.js';
+import type { AnyRasterFormat, RasterDataOf } from './config/raster-format.js';
 
 /** Portable application selection accepted by renderer-neutral text APIs. */
 export type FontSelection<Technique extends AnyRasterFormat> = Font<Technique> | FontStack<Technique, Font<Technique>>;

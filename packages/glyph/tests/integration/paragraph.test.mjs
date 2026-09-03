@@ -4,15 +4,11 @@ import test from 'node:test';
 
 import * as THREE from 'three/webgpu';
 
-import {
-  createParagraph,
-  defineRasterResourceId,
-  defineRasterFormat,
-  defineTechniqueSchema,
-  registerRasterPlanProgram,
-  techniqueProgram,
-  txt,
-} from '@pmndrs/glyph';
+import { createParagraph, txt } from '@pmndrs/glyph';
+import { techniqueProgram } from '@pmndrs/glyph/config/codec-program';
+import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
+import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+import { defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader } from '@pmndrs/glyph/three';
 

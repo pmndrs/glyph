@@ -1,4 +1,5 @@
-import { definePortableVertexSemantic, type PortableGeometryPayload } from '../../dist/index.js';
+import type { PortableGeometryPayload } from '../../dist/index.js';
+import { definePortableVertexSemantic } from '../../dist/config/resources.js';
 
 const geometry = {
   kind: 'geometry',

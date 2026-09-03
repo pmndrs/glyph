@@ -7,7 +7,12 @@ import {
   type MsdfOptions,
 } from '../internal/msdf-contract.js';
 import { DENSE_GLYPH_RECORD_STRIDE, type RasterAtlasPage } from '../internal/raster-atlas.js';
-import { defineRasterFormat, type RasterResourceId, type RasterFormat, type RasterFormatId } from '../raster-format.js';
+import {
+  defineRasterFormat,
+  type RasterResourceId,
+  type RasterFormat,
+  type RasterFormatId,
+} from '../config/raster-format.js';
 
 export {
   MSDF_EXTENSION,

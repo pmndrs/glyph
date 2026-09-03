@@ -1,14 +1,15 @@
 /**
  * Where a name lives, and why.
  *
- * The package publishes one root integration vocabulary and several renderer subpaths. A name has
- * exactly one home, so a reader never has to guess which subpath to import it from:
+ * The package publishes one application vocabulary, renderer subpaths, and leaf integration helpers.
+ * A name has exactly one home, so a reader never has to guess which subpath to import it from:
  *
  *   `.`        what text IS -- fonts, authoring, layout and measurement types, raster formats,
  *              paint. Every consumer speaks it, whether they render with Three.js or drive the
  *              engine themselves.
- *   `.`        also carries the GlyphConfig, Codec, schema, and technique DSL required to build an
- *              integration. Handle/planner/wire implementation details have no package subpath.
+ *   `.`        also carries the types applications can encounter through GlyphConfig and handles.
+ *   `./config/*` carries renderer-neutral construction helpers for integration authors without
+ *              charging every application for the complete integration DSL.
  *   `./three`  the Three.js integration -- `Text`, `TextGroup`, `FontLoader`, materials.
  *
  * An integration may re-export a root name ONLY when that name appears in one of its own
@@ -39,21 +40,34 @@ function published(source) {
   return names;
 }
 
-test('GlyphConfig is the only public engine-integration surface', async () => {
+test('application types stay at root while integration construction lives on config leaves', async () => {
   const root = published(await declaration('index.d.ts'));
   const manifest = JSON.parse(await declaration('../package.json'));
   assert.equal(manifest.exports['./core'], undefined, 'handle/planner internals must not have a public subpath');
-  for (const name of [
-    'defineGlyphConfig',
-    'defineGlyphSchema',
-    'compileCodec',
-    'createRasterCodecProgram',
-    'techniqueProgram',
-  ]) {
-    assert.equal(root.has(name), true, `the root integration DSL must publish ${name}`);
+  assert.ok(manifest.exports['./config/*'], 'renderer-neutral integration leaves must be public');
+
+  for (const name of ['GlyphConfig', 'Codec', 'TechniqueSchema', 'RasterFormat']) {
+    assert.equal(root.has(name), true, `applications must be able to name ${name} from the root`);
+  }
+
+  const leaves = {
+    'config/glyph.d.ts': ['defineGlyphConfig', 'defineGlyphSchema', 'resourceLease'],
+    'config/codec.d.ts': ['compileCodec', 'createCodecProgram', 'id'],
+    'config/codec-program.d.ts': ['codecProgram', 'f32', 'techniqueProgram', 'u32'],
+    'config/raster.d.ts': ['compileRasterFont', 'createRasterCodecProgram', 'registerRasterPlanProgram'],
+    'config/raster-format.d.ts': ['defineRasterFormat', 'defineRasterResourceId'],
+    'config/resources.d.ts': ['assertPortableResource', 'definePortableVertexSemantic'],
+    'config/schema.d.ts': ['defineCodecBuffers', 'defineTechniqueSchema'],
+  };
+  for (const [path, names] of Object.entries(leaves)) {
+    const leaf = published(await declaration(path));
+    for (const name of names) {
+      assert.equal(leaf.has(name), true, `${path} must publish ${name}`);
+      assert.equal(root.has(name), false, `runtime integration helper ${name} must not leak through the root`);
+    }
   }
   for (const retired of ['compileRenderPolicy', 'createRasterPolicyProgram', 'definePolicyBuffers', 'policyProgram']) {
-    assert.equal(root.has(retired), false, `the root integration DSL must not publish retired ${retired}`);
+    assert.equal(root.has(retired), false, `the public integration surface must not publish retired ${retired}`);
   }
 });
 

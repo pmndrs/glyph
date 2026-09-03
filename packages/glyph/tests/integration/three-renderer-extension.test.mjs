@@ -3,14 +3,17 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { glyph } from '@pmndrs/glyph';
-import { defineTechniqueSchema, registerRasterPlanProgram, techniqueProgram, id } from '../../dist/index.js';
+import { techniqueProgram } from '../../dist/config/codec-program.js';
+import { id } from '../../dist/config/codec.js';
+import { defineRasterResourceId, defineRasterFormat } from '../../dist/config/raster-format.js';
+import { registerRasterPlanProgram } from '../../dist/config/raster.js';
+import { defineTechniqueSchema } from '../../dist/config/schema.js';
 import {
   createImmutableFontBacking,
   createImmutableFontLease,
   createImmutableFontVariant,
 } from '../../dist/loaded-font.js';
 import { FontRegistry } from '../../dist/loader.js';
-import { defineRasterResourceId, defineRasterFormat } from '../../dist/raster-format.js';
 import { markStorageAttributeUpdated } from '../../dist/three/engine-plan-target.js';
 import { registerThreeRasterPlanProgram, ThreeConfig } from '../../dist/three.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';

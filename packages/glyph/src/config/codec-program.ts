@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { RasterTextEffect } from '../raster-format.js';
+import type { RasterTextEffect } from './raster-format.js';
 import type { CodecBufferId, CodecInput, CodecInputScope, CodecOperation } from './codec.js';
 import type { CodecBufferDeclaration, AnyTechniqueSchema } from './schema.js';
 import { isTechniqueSchema } from './schema.js';

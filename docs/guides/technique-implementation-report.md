@@ -1,6 +1,6 @@
 ---
 type: Explanation
-title: Portable raster-technique implementation report
+title: Portable raster-format implementation report
 description: Explains the ownership, API, and evidence for reusable technique data, Codec programs, raster decoders, shader variants, bakers, and renderer integration.
 documentation_type: explanation
 tags: [technique, raster, codec, baker, renderer, glyph-config]
@@ -37,7 +37,7 @@ generated:
   at: '2026-09-02T00:00:00Z'
 ---
 
-# Portable raster-technique implementation report
+# Portable raster-format implementation report
 
 Glyph separates reusable technique data from renderer implementation without making either side Three-specific. A
 technique package owns its raster decoder, physical schema, portable Codec expression body, immutable resource payloads,
@@ -55,7 +55,7 @@ flowchart LR
   Source[TTF / OTF] --> Baker[RasterBakerModule]
   Baker --> Artifact[Validated GLB artifact]
   Artifact --> Load[loadFont]
-  Load --> Raster[RasterTechnique.decode]
+  Load --> Raster[RasterFormat.decode]
   Raster --> Font[Immutable Font + typed raster data]
   Schema[Technique schema + portable program] --> Codec[Renderer Codec / encode]
   Font --> Root[Glyph handle root + Text desired state]
@@ -95,9 +95,9 @@ The raster layer validates one artifact extension and returns typed immutable da
 example's essential shape is:
 
 ```ts
-import { defineRasterResourceId, defineRasterTechnique } from '@pmndrs/glyph';
+import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
 
-export const glyphExample = defineRasterTechnique({
+export const glyphExample = defineRasterFormat({
   id: 'studio.glyph-example',
   kind: GLYPH_EXAMPLE_KIND,
   extension: GLYPH_EXAMPLE_EXTENSION,
@@ -126,15 +126,16 @@ export const glyphExample = defineRasterTechnique({
 });
 ```
 
-`RasterTechnique` carries no renderer object. Validate user-controlled artifact framing and payload lengths before data
+`RasterFormat` carries no renderer object. Validate user-controlled artifact framing and payload lengths before data
 enters the retained font. Resource type is inferred later where the portable font compiler calls `retain()`.
 
 ## 2. Define one physical technique schema
 
-The schema is the source of truth shared by Codec authoring and shader variants. Its helpers are root exports:
+The schema is the source of truth shared by Codec authoring and shader variants. Its helpers use explicit config leaves:
 
 ```ts
-import { defineTechniqueSchema, id } from '@pmndrs/glyph';
+import { id } from '@pmndrs/glyph/config/codec';
+import { defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
 
 export const glyphExampleSchema = defineTechniqueSchema({
   technique: glyphExample.id,
@@ -173,7 +174,8 @@ The portable program combines a constrained expression callback with cold per-fo
 `RasterPlanProgram`, imported from the root:
 
 ```ts
-import { f32, techniqueProgram, type RasterPlanProgram } from '@pmndrs/glyph';
+import type { RasterPlanProgram } from '@pmndrs/glyph';
+import { f32, techniqueProgram } from '@pmndrs/glyph/config/codec-program';
 
 export const glyphExamplePlanProgramDefinition: RasterPlanProgram<typeof glyphExample, typeof glyphExampleSchema> = {
   technique: glyphExample,
@@ -221,7 +223,7 @@ its result is portable binding data and leased resource payloads.
 Register the portable program from the package's side-effectful main path:
 
 ```ts
-import { registerRasterPlanProgram } from '@pmndrs/glyph';
+import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
 import { glyphExamplePlanProgramDefinition } from './portable.js';
 
 export const glyphExamplePlanProgram = registerRasterPlanProgram(glyphExamplePlanProgramDefinition);
@@ -231,18 +233,15 @@ Keep TypeGPU, TSL, WGSL, or GLSL code behind explicit subpaths so unused shader 
 
 ## 4. Assemble the renderer Codec through `encode`
 
-The renderer combines its own system lanes and capabilities with the portable program. All authoring names are root
-exports, and `GlyphConfig.encode()` receives the collision-checked identity factory:
+The renderer combines its own system lanes and capabilities with the portable program. Application-facing types remain
+at root; authoring helpers use explicit config leaves. `GlyphConfig.encode()` receives the collision-checked identity
+factory:
 
 ```ts
-import {
-  createRasterCodecProgram,
-  defineCodecBuffers,
-  id,
-  type CodecCapabilitySet,
-  type CodecDescriptor,
-  type CodecIdFactory,
-} from '@pmndrs/glyph';
+import type { CodecCapabilitySet, CodecDescriptor, CodecIdFactory } from '@pmndrs/glyph';
+import { id } from '@pmndrs/glyph/config/codec';
+import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
+import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
 
 const system = defineCodecBuffers({
   stableGlyphId: {
@@ -349,7 +348,7 @@ The public renderer boundary is config-only. `defineGlyphConfig()` ties the sche
 renderer result, boundary, and root API together:
 
 ```ts
-import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph';
+import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph/config/glyph';
 
 export type ExampleGlyphConfig = GlyphConfigFor<typeof ExampleSchema, ExampleRoot, ExampleDrawList>;
 
@@ -458,7 +457,8 @@ objects, then let the caller supply its canvas context, render pass, target, sha
 
 The current implementation proves:
 
-- technique and renderer production code use published root APIs and explicit shader/baker subpaths only;
+- raster-format and renderer production code use root application types, `/config/*` helpers, and explicit
+  shader/baker subpaths only;
 - TypeGPU and TSL variants consume the same named buffers, geometry, resources, and edge behavior;
 - the example renderer composes its own Codec through `encode()`;
 - a real `GPUDevice` receives supplied indexed geometry, instance buffers, and nonempty draws;

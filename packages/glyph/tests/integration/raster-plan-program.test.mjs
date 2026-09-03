@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { defineRasterResourceId, defineRasterFormat } from '../../dist/index.js';
+import { id as glyphId } from '../../dist/config/codec.js';
+import { defineRasterFormat, defineRasterResourceId } from '../../dist/config/raster-format.js';
 import {
   compileRasterFont,
-  defineTechniqueSchema,
   readCompiledRasterFont,
   registerRasterPlanProgram,
   resolveRasterPlanProgram,
-  id as glyphId,
-} from '../../dist/index.js';
+} from '../../dist/config/raster.js';
+import { defineTechniqueSchema } from '../../dist/config/schema.js';
 import { fontBindingResources } from '../../dist/internal/font-binding.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { createImmutableFontLease, immutableFontVariantIdentity } from '../../dist/loaded-font.js';

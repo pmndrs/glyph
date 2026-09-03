@@ -3,9 +3,6 @@ import type { bitmap, BitmapData, BitmapStrikeData } from '@pmndrs/glyph/raster/
 import type { msdf, MsdfConfiguration, MsdfData } from '@pmndrs/glyph/raster/msdf';
 import { SLUG_PLANE_UNITS_PER_EM, type slug, type SlugPageData } from '@pmndrs/glyph/raster/slug';
 import {
-  compileRasterFont,
-  readCompiledRasterFont,
-  resolveRasterPlanProgram,
   type CompiledRasterFont,
   type CompiledRasterFontResource,
   type CompiledRasterFontView,
@@ -13,6 +10,7 @@ import {
   type PortableTextureArrayPayload,
   type PortableTexturePayload,
 } from '@pmndrs/glyph';
+import { compileRasterFont, readCompiledRasterFont, resolveRasterPlanProgram } from '@pmndrs/glyph/config/raster';
 
 import type { SlugCpuReferenceData } from '../../benchmark/low-level/raster/slug-cpu-reference';
 

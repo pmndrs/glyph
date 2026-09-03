@@ -373,7 +373,7 @@ test('external techniques bake through their own declared baker, never the Worke
     ],
   });
   const artifact = await readFile(stubOutput);
-  const { defineRasterFormat } = await import('@pmndrs/glyph');
+  const { defineRasterFormat } = await import('@pmndrs/glyph/config/raster-format');
   const { workerRasterKinds } = await import('@pmndrs/glyph/runtime-bake');
   const external = defineRasterFormat({
     id: 'test.external-route',

@@ -34,7 +34,7 @@ import { FontLoadError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
 import { type Constraints, type ParagraphLayout, type PropertyList, type TextStyle } from './text-properties.js';
-import type { AnyRasterFormat } from './raster-format.js';
+import type { AnyRasterFormat } from './config/raster-format.js';
 import {
   acquireThreeHandleFont,
   isThreeHandleFontLoaded,

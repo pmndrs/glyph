@@ -6,7 +6,12 @@ import {
   slugDescriptor,
   type SlugDescriptor,
 } from '../internal/slug-contract.js';
-import { defineRasterFormat, type RasterResourceId, type RasterFormat, type RasterFormatId } from '../raster-format.js';
+import {
+  defineRasterFormat,
+  type RasterResourceId,
+  type RasterFormat,
+  type RasterFormatId,
+} from '../config/raster-format.js';
 
 export {
   SLUG_DEFAULT_BAND_COUNT,

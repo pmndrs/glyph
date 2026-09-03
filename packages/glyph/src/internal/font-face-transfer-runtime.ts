@@ -2,7 +2,7 @@ import type { Font, RegisteredFont } from '../font.js';
 import type { SerializedFontFace, SerializedFontFaceRaster } from '../font-face-transfer.js';
 import { FontLoadError, FontRegistry } from '../loader.js';
 import { immutableFontResources } from '../loaded-font.js';
-import type { AnyRasterFormat } from '../raster-format.js';
+import type { AnyRasterFormat } from '../config/raster-format.js';
 import { freezeSerializedFontFace } from './font-face-transfer.js';
 import { getRegisteredFontData } from './registered-font.js';
 

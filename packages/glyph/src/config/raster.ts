@@ -1,7 +1,7 @@
 import type { Font } from '../font.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { immutableFontResources, immutableFontVariantIdentity } from '../loaded-font.js';
-import { isRasterFormat, type AnyRasterFormat, type RasterResourceId } from '../raster-format.js';
+import { isRasterFormat, type AnyRasterFormat, type RasterResourceId } from './raster-format.js';
 import {
   compileFontBinding,
   emptyFontBindingTable,
@@ -141,7 +141,7 @@ export interface RasterPlanProgramFontCompiler<Technique extends AnyRasterFormat
 export interface RasterPlanFont<Technique extends AnyRasterFormat> {
   readonly raster: Technique;
   readonly glyphCount: number;
-  readonly data: import('../raster-format.js').RasterDataOf<Technique>;
+  readonly data: import('./raster-format.js').RasterDataOf<Technique>;
 }
 
 /** Portable technique data shared by every engine that consumes a raster plan. */

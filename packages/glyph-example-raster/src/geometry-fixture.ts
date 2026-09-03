@@ -1,4 +1,5 @@
-import { assertPortableResource, type PortableGeometryPayload, type TechniqueGeometryDeclaration } from '@pmndrs/glyph';
+import type { PortableGeometryPayload, TechniqueGeometryDeclaration } from '@pmndrs/glyph';
+import { assertPortableResource } from '@pmndrs/glyph/config/resources';
 
 /** The raster format's small indexed GLB-like unit quad. */
 const bytes = new Uint8Array(92);

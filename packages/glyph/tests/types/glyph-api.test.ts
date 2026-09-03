@@ -1,7 +1,5 @@
 import {
-  defineGlyphConfig,
   glyph,
-  resourceLease,
   type GlyphBindings,
   type GlyphConfigBindings,
   type GlyphConfigHandle,
@@ -10,6 +8,7 @@ import {
   type GlyphSchema,
   type PortableResource,
 } from '@pmndrs/glyph';
+import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph/config/glyph';
 
 type IsAny<Value> = 0 extends 1 & Value ? true : false;
 

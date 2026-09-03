@@ -20,7 +20,7 @@ import {
   type AnyRasterFormat,
   type RasterFormatInput,
   type RasterFormatRequest,
-} from './raster-format.js';
+} from './config/raster-format.js';
 import { canonicalJson } from './internal/raster-identity.js';
 
 /** Source accepted by a reusable FontFace declaration. */

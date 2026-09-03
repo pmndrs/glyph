@@ -18,7 +18,7 @@ import {
   SLUG_PLANE_UNITS_PER_EM,
 } from '../../internal/slug-contract.js';
 import type { JsonValue, RasterDecodeArtifact, RasterResourceSource } from '../../raster.js';
-import { defineRasterResourceId } from '../../raster-format.js';
+import { defineRasterResourceId } from '../../config/raster-format.js';
 import type { SlugData, SlugPageData } from '../slug.js';
 
 const ABSENT_PAGE = 0xffff;

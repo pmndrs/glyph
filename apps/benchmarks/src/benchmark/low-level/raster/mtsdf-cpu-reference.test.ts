@@ -1,4 +1,5 @@
-import { defineRasterResourceId, type GlyphLayout } from '@pmndrs/glyph';
+import type { GlyphLayout } from '@pmndrs/glyph';
+import { defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
 import type { MsdfData as MtsdfData } from '@pmndrs/glyph/raster/msdf';
 import { describe, expect, it } from 'vitest';
 
