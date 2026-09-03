@@ -295,6 +295,7 @@
     "ajv": "6.15.0",
     "gltf-validator": "2.0.0-dev.3.10",
     "ktx-parse": "1.1.0",
+    "suspend-react": "0.1.3",
     "unicode-segmenter": "0.15.0"
   },
   "devDependencies": {

@@ -50,6 +50,20 @@ async function createThreeTestHandle(t, config = ThreeConfig) {
   return handle;
 }
 
+test('failed Glyph initialization retains one rejected operation until the module is replaced', async () => {
+  const isolatedModule = await import(new URL('../../dist/glyph.js?failed-initialization', import.meta.url));
+  const isolatedGlyph = isolatedModule.glyph;
+  const invalidWasm = new Uint8Array([0]);
+  const firstInit = isolatedGlyph.init({ wasm: invalidWasm });
+
+  assert.equal(isolatedGlyph.init({ wasm: invalidWasm }), firstInit, 'concurrent failure shares one operation');
+  await assert.rejects(firstInit, WebAssembly.CompileError);
+
+  const repeatedInit = isolatedGlyph.init({ wasm: invalidWasm });
+  assert.equal(repeatedInit, firstInit, 'a rejected initialization cannot start another Wasm engine implicitly');
+  await assert.rejects(repeatedInit, WebAssembly.CompileError);
+});
+
 test('one initialized Glyph runtime creates independent named Three handles over immutable root fonts', async () => {
   const firstInit = glyph.init();
   const secondInit = glyph.init();

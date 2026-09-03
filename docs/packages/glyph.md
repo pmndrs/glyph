@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:2931c26c5e297b69bf5f7d4b3348c5edcd995027eedd4832d2a979c1af63bd70'
+source_digest: 'sha256:48a40299a6f545b62ccfb6b1e0994aff6281e22f004a041375e667bd2e6ad4fc'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -108,14 +108,14 @@ Status: foundation merged; canary publishing configured while publishing-feature
 
 The package owns six runtime layers:
 
-| Layer                   | Owner                 | Responsibility                                                                                                                        |
-| ----------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Root runtime and config | TypeScript core       | Initialize one Glyph engine, construct named adapter handles, and coordinate projection/decode/commit transactions.                   |
-| Font and raster loading | TypeScript core       | Read portable GLB envelopes, register shaping payloads, decode selected raster resources, and retain font identity.                   |
-| Shaping and layout      | Rust/Wasm             | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                    |
-| Codec and command buffer | Rust/Wasm             | Interpret a validated Codec, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.             |
-| Three.js integration    | `@pmndrs/glyph/three` | Compile Codec programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
-| React integration       | `@pmndrs/glyph/react` | Reconcile React values into the same imperative `Text` and `TextGroup` objects.                                                       |
+| Layer                    | Owner                 | Responsibility                                                                                                                        |
+| ------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Root runtime and config  | TypeScript core       | Initialize one Glyph engine, construct named adapter handles, and coordinate projection/decode/commit transactions.                   |
+| Font and raster loading  | TypeScript core       | Read portable GLB envelopes, register shaping payloads, decode selected raster resources, and retain font identity.                   |
+| Shaping and layout       | Rust/Wasm             | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                    |
+| Codec and command buffer | Rust/Wasm             | Interpret a validated Codec, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.              |
+| Three.js integration     | `@pmndrs/glyph/three` | Compile Codec programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
+| React integration        | `@pmndrs/glyph/react` | Reconcile React values into the same imperative `Text` and `TextGroup` objects.                                                       |
 
 Runtime Rust and all shared Rust code remain `no_std + alloc` compatible with the package allocator contract. The optional
 font-baker Wasm alone enables a feature-gated `std` adapter for Fontations subsetting; the same crate continues to
@@ -240,10 +240,14 @@ Likewise, `defineGlyphConfig()` returns inert structural data with no hidden cal
 declaration DSL, while only `glyph.handle(name, config)` enters package-private construction. Spreading or wrapping a
 config preserves its inferred handle/root type and may override fields without depending on exact object identity.
 
-Successful initialization retains one settled `Promise<void>` forever: concurrent and later `glyph.init()` calls receive
-the same object. React still checks synchronous initialized and loaded state first, so ready renders do not call `use()`
-or cross a microtask. Each FontFace selection retains one Promise for the lifetime of its declaration-owned load record;
-disposing the face releases that record, and a rejected operation is evicted so the next call can retry.
+Glyph initialization retains one settled `Promise<void>` forever, whether it fulfills or rejects: concurrent and later
+`glyph.init()` calls receive the same object. Initialization failure is fatal for that module lifetime, so an error path
+cannot repeatedly allocate large Wasm memories; a full page or module replacement is the retry boundary. Vite HMR carries
+the process-local Glyph runtime through replacement data instead of instantiating a second engine. React still checks
+synchronous initialized and loaded state first, so ready renders do not enter Suspense or cross a microtask. Pending font
+loads use `suspend-react` only as React's stable suspension cache; Glyph's FontFace resource graph remains the semantic
+cache and lease owner. Each FontFace selection retains one Promise for the lifetime of its declaration-owned load record;
+disposing the face releases that record, and a rejected font operation is evicted so an explicit later load can retry.
 
 The R3F `Text` component infers the raster-format union from a required outer font selection, including a font stack chosen
 from runtime state. Callers do not widen dynamic selections to `AnyRasterFormat`. A nested `Text` is flattened into

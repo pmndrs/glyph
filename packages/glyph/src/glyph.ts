@@ -41,15 +41,9 @@ class GlyphRuntime implements Glyph {
 
   init(options: GlyphEngineOptions = {}): Promise<void> {
     if (this.#initializing !== undefined) return this.#initializing;
-    const initializing = createGlyphEngine(options).then(
-      (engine) => {
-        this.#engine = engine;
-      },
-      (error: unknown) => {
-        if (this.#initializing === initializing) this.#initializing = undefined;
-        throw error;
-      },
-    );
+    const initializing = createGlyphEngine(options).then((engine) => {
+      this.#engine = engine;
+    });
     this.#initializing = initializing;
     return initializing;
   }
@@ -106,9 +100,22 @@ class GlyphRuntime implements Glyph {
   }
 }
 
-/** The process-local Glyph runtime. Successful initialization occurs at most once. */
-const sharedFontLibrary = processFontLibrary();
-const glyphRuntime = new GlyphRuntime(sharedFontLibrary);
+interface GlyphHotData {
+  glyphRuntime?: GlyphRuntime;
+}
+
+interface GlyphHotContext {
+  readonly data: GlyphHotData;
+  dispose(callback: (data: GlyphHotData) => void): void;
+}
+
+/** The process-local Glyph runtime. Initialization is attempted at most once per module lifetime. */
+const hot = (import.meta as ImportMeta & { readonly hot?: GlyphHotContext }).hot;
+const glyphRuntime = hot?.data.glyphRuntime ?? new GlyphRuntime(processFontLibrary());
+const sharedFontLibrary = glyphRuntime.fontLibrary;
+hot?.dispose((data) => {
+  data.glyphRuntime = glyphRuntime;
+});
 export const glyph: Glyph = glyphRuntime;
 
 /** @internal Shared semantic font cache used by every configured handle. */
