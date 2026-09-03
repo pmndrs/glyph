@@ -15,7 +15,7 @@ const PROSE =
 const rules = ParagraphLayout.create({
   ragged: { wrap: 'word', align: 'start' },
   justified: { wrap: 'word', align: 'justify', lastLine: 'auto' },
-  capped: { wrap: 'word', align: 'start', maxLines: 4, overflow: 'ellipsis' },
+  capped: { wrap: 'word', align: 'start', maxLines: 4, overflow: 'clip' }, // the Inter subset has no ellipsis glyph
 });
 
 export async function mount(scene: Scene): Promise<() => void> {

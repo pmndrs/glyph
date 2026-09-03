@@ -26,7 +26,7 @@ export async function mount(scene: Scene): Promise<() => void> {
       layout: { align: 'center', wrap: 'none' },
       constraints: { width: { mode: 'exact', size: 1.2 } },
     });
-    label.position.set(Math.cos(angle) * 2.4 - 0.6, Math.sin(angle) * 2.4 + 0.08, 0);
+    label.position.set(Math.cos(angle) * 2.05, Math.sin(angle) * 2.05 + 0.08, 0);
     label.rotation.z = angle;
     ring.add(label);
     return label;

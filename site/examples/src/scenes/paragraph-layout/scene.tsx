@@ -17,7 +17,7 @@ const PROSE =
 const COLUMNS = [
   ['wrap: word, align: start', { wrap: 'word', align: 'start' }],
   ['align: justify, lastLine: auto', { wrap: 'word', align: 'justify', lastLine: 'auto' }],
-  ['maxLines: 4, overflow: ellipsis', { wrap: 'word', align: 'start', maxLines: 4, overflow: 'ellipsis' }],
+  ['maxLines: 4, overflow: clip', { wrap: 'word', align: 'start', maxLines: 4, overflow: 'clip' }],
 ] as const;
 
 export default function ParagraphLayout() {
@@ -25,34 +25,34 @@ export default function ParagraphLayout() {
   const [width, setWidth] = useState(3);
 
   useFrame(({ elapsed }) => {
-    setWidth(2.6 + Math.sin(elapsed * 0.6) * 0.7);
+    setWidth(2.95 + Math.sin(elapsed * 0.6) * 0.55);
   });
 
   return (
     <>
       {COLUMNS.map(([caption, layout], index) => {
-        const x = -5.4 + index * 3.7;
+        const x = -5.35 + index * 3.7;
         return (
           <group key={caption} position={[x, 2.2, 0]}>
             <Text
               font={inter}
-              style={{ fontSize: 0.13, color: PAPER_DIM, letterSpacing: 0.02 }}
+              style={{ fontSize: 0.19, color: PAPER_DIM, letterSpacing: 0.02 }}
               layout={{ wrap: 'none' }}
               constraints={{ width: { mode: 'exact', size: 3.4 } }}
-              position={[0, 0.3, 0]}
+              position={[0, 0.36, 0]}
             >
               {caption}
             </Text>
             {/* The box, drawn so the reflow reads against something. */}
-            <mesh position={[width / 2, -1.5, -0.01]}>
-              <planeGeometry args={[width, 3.2]} />
+            <mesh position={[width / 2, -2.2, -0.01]}>
+              <planeGeometry args={[width, 4.4]} />
               <meshBasicNodeMaterial color="#0f1218" />
             </mesh>
             <Text
               font={inter}
-              style={{ fontSize: 0.2, color: index === 1 ? ACCENT : PAPER, lineHeight: 1.3 }}
+              style={{ fontSize: 0.27, color: index === 1 ? ACCENT : PAPER, lineHeight: 1.32 }}
               layout={layout}
-              constraints={{ width: { mode: 'exact', size: width }, height: { mode: 'at-most', size: 3.2 } }}
+              constraints={{ width: { mode: 'exact', size: width }, height: { mode: 'at-most', size: 4.4 } }}
             >
               {PROSE}
             </Text>

@@ -72,10 +72,10 @@ export default function Arc() {
     <Text
       ref={text}
       font={inter}
-      style={{ fontSize: 0.46, color: PAPER, letterSpacing: 0.01 }}
+      style={{ fontSize: 0.54, color: PAPER, letterSpacing: 0.01 }}
       layout={{ align: 'start', wrap: 'none' }}
       constraints={{ width: { mode: 'exact', size: 30 } }}
-      position={[0, 0.15, 0]}
+      position={[0, 0.5, 0]}
     >
       {TEXT}
     </Text>

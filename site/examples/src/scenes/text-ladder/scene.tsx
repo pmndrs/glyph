@@ -29,13 +29,24 @@ export default function TextLadder() {
     ['slug', slug],
   ] as const;
   const columnWidth = width / columns.length;
-  const sizes = SIZES.filter((size) => size * WIDTH_PER_PX <= columnWidth - 32);
+  // Rows that fit the column's width, then the frame's height; the ladder is centred on the frame.
+  const HEADER = 26;
+  const sizes: number[] = [];
+  let total = HEADER;
+  for (const size of SIZES) {
+    if (size * WIDTH_PER_PX > columnWidth - 32) break;
+    const row = size * 1.15 + 6;
+    if (total + row > height - 24) break;
+    sizes.push(size);
+    total += row;
+  }
+  const top = total / 2;
 
   return (
     <>
       {columns.map(([label, font], column) => {
         const x = -width / 2 + column * columnWidth + 24;
-        let y = height / 2 - 64;
+        let y = top - HEADER;
         return (
           <group key={label}>
             <Text
@@ -43,7 +54,7 @@ export default function TextLadder() {
               style={{ fontSize: 12, color: PAPER_DIM, letterSpacing: 1 }}
               layout={{ wrap: 'none' }}
               constraints={{ width: { mode: 'exact', size: columnWidth } }}
-              position={[x, y, 0]}
+              position={[x, top, 0]}
             >
               {label.toUpperCase()}
             </Text>

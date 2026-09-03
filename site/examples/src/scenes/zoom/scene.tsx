@@ -10,7 +10,7 @@ import { INTER, INTER_STRIKES } from '../../fonts';
 import { PAPER, PAPER_DIM } from '../../theme';
 
 /**
- * The same word, the same 32 px raster, magnified 0.25× to 4× by the scene
+ * The same word, the same 32 px raster, magnified 1× to 4× by the scene
  * transform — not by `fontSize`. What each format does under magnification is
  * the whole difference between them: a Bitmap strike is pixels and blurs, an
  * MSDF field holds a clean edge until its range runs out, and Slug evaluates
@@ -28,8 +28,9 @@ export default function Zoom() {
   const [magnification, setMagnification] = useState(1);
 
   useFrame(({ elapsed }) => {
-    // 0.25 → 4 and back, exponential so each doubling takes the same time.
-    const scale = 2 ** (Math.sin(elapsed * 0.45) * 2);
+    // 1 → 4 and back, exponential so each doubling takes the same time; below 1× the three look alike,
+    // and above 4× the columns would overlap.
+    const scale = 2 ** (1 + Math.sin(elapsed * 0.45));
     for (const column of columns.current) column?.scale.setScalar(scale);
     if (Math.abs(scale - shown.current) > 0.05) {
       shown.current = scale;

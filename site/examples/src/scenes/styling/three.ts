@@ -9,12 +9,12 @@ import { INTER } from '../../fonts';
  * row, merged through the property list at the `style` boundary.
  */
 const styles = TextStyle.create({
-  base: { fontSize: 0.36, color: '#e7ecf6', lineHeight: 1.1 },
+  base: { fontSize: 0.34, color: '#e7ecf6', lineHeight: 1.1 },
   caption: { fontSize: 0.14, color: '#97a1b4', letterSpacing: 0.02 },
 });
 
 const ROWS = [
-  ['fontSize', { fontSize: 0.52 }],
+  ['fontSize', { fontSize: 0.47 }],
   ['letterSpacing', { letterSpacing: 0.06 }],
   ['wordSpacing', { wordSpacing: 0.25 }],
   ['color', { color: '#ffd166' }],

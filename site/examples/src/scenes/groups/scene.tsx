@@ -45,7 +45,7 @@ export default function Groups() {
         style={{ fontSize: 0.22, color: PAPER_DIM }}
         layout={{ align: 'center', wrap: 'none' }}
         constraints={{ width: { mode: 'exact', size: 4 } }}
-        position={[-2, 0.12, 0]}
+        position={[-2, 0.16, 0]}
       >
         {`${COUNT} labels, ${draws} ${draws === 1 ? 'draw' : 'draws'}`}
       </Text>
