@@ -14,13 +14,8 @@ import {
   isSerializedFontFace,
   serializedFontFaceBuffers,
 } from './internal/font-face-transfer.js';
-import {
-  isRasterFormat,
-  rasterFormatForKey,
-  type AnyRasterFormat,
-  type RasterFormatInput,
-  type RasterFormatRequest,
-} from './config/raster-format.js';
+import type { AnyRasterFormat, RasterFormatInput, RasterFormatRequest } from './config/raster-format.js';
+import { isRasterFormat, rasterFormatForKey } from './internal/raster-format-registry.js';
 import { canonicalJson } from './internal/raster-identity.js';
 
 /** Canonical source accepted by a reusable FontFace declaration. */

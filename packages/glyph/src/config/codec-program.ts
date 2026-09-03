@@ -3,6 +3,7 @@ import type { RasterTextEffect } from './raster-format.js';
 import type { CodecBufferId, CodecInput, CodecInputScope, CodecOperation } from './codec.js';
 import type { CodecBufferDeclaration, AnyTechniqueSchema } from './schema.js';
 import { isTechniqueSchema } from './schema.js';
+import { normalizeCodecProgramSystemBuffers, recordTechniqueCodecBody } from '../internal/codec-program-contract.js';
 
 /**
  * Expression DSL over the codec-program register machine. Authors reference named
@@ -207,13 +208,6 @@ export interface CodecProgramOptions<
 }
 
 declare const compiledCodecSchemaBrand: unique symbol;
-interface CompiledCodecMetadata {
-  readonly schema: AnyTechniqueSchema;
-  readonly stableGlyphId: CodecBufferId | undefined;
-  readonly transformIndex: CodecBufferId | undefined;
-}
-
-const compiledCodecMetadata = new WeakMap<object, CompiledCodecMetadata>();
 
 export interface CompiledCodecProgramBody<Schema extends AnyTechniqueSchema | undefined = undefined> {
   readonly [compiledCodecSchemaBrand]: Schema;
@@ -339,7 +333,7 @@ export function techniqueProgram<const Schema extends AnyTechniqueSchema>(
         }
       }
       const body = program.compile();
-      compiledCodecMetadata.set(body, {
+      recordTechniqueCodecBody(body, {
         schema,
         stableGlyphId: system?.stableGlyphId.id,
         transformIndex: system?.transformIndex?.id,
@@ -347,50 +341,6 @@ export function techniqueProgram<const Schema extends AnyTechniqueSchema>(
       return body as unknown as CompiledCodecProgramBody<Schema>;
     },
   });
-}
-
-/** @internal Snapshot and validate renderer-owned lanes before invoking a technique body. */
-export function normalizeCodecProgramSystemBuffers(
-  technique: import('./schema.js').CodecBufferDeclarations,
-  value: unknown,
-): CodecProgramSystemBuffers {
-  if (!isNonArrayObject(value)) throw new TypeError('codec system buffers need an object');
-  const stableGlyphId = snapshotSystemBuffer(value.stableGlyphId, 'stableGlyphId');
-  const transformIndex =
-    value.transformIndex === undefined ? undefined : snapshotSystemBuffer(value.transformIndex, 'transformIndex');
-  const ids = new Set(Object.values(technique).map((buffer) => buffer.id));
-  if (ids.has(stableGlyphId.id)) throw new TypeError('stableGlyphId system buffer collides with a technique buffer');
-  if (transformIndex !== undefined) {
-    if (transformIndex.id === stableGlyphId.id) {
-      throw new TypeError('transformIndex and stableGlyphId system buffers collide');
-    }
-    if (ids.has(transformIndex.id))
-      throw new TypeError('transformIndex system buffer collides with a technique buffer');
-  }
-  return Object.freeze({ stableGlyphId, ...(transformIndex === undefined ? {} : { transformIndex }) });
-}
-
-function snapshotSystemBuffer<const Name extends 'stableGlyphId' | 'transformIndex'>(
-  value: unknown,
-  name: Name,
-): CodecBufferDeclaration<'u32', readonly [Name]> {
-  if (!isNonArrayObject(value)) throw new TypeError(`${name} system buffer needs one u32 "${name}" lane`);
-  const lanes = value.lanes;
-  if (
-    !Number.isSafeInteger(value.id) ||
-    (value.id as number) <= 0 ||
-    (value.id as number) > 0xffff ||
-    value.scalar !== 'u32' ||
-    !Array.isArray(lanes) ||
-    lanes.length !== 1 ||
-    lanes[0] !== name
-  ) {
-    throw new TypeError(`${name} system buffer needs one u32 "${name}" lane`);
-  }
-  return Object.freeze({ id: value.id, scalar: 'u32', lanes: Object.freeze([name]) }) as CodecBufferDeclaration<
-    'u32',
-    readonly [Name]
-  >;
 }
 
 export function codecProgram<
@@ -641,24 +591,6 @@ function normalizeTextEffects(value: readonly RasterTextEffect[] | undefined): r
   }
   if (new Set(value).size !== value.length) throw new TypeError('codec textEffects must not contain duplicates');
   return value;
-}
-
-/** @internal Reject a compiled body that was not produced from this exact schema witness. */
-export function assertTechniqueCodecBody(
-  body: unknown,
-  schema: AnyTechniqueSchema,
-  system?: CodecProgramSystemBuffers,
-): asserts body is CompiledCodecProgramBody<AnyTechniqueSchema> {
-  const metadata = typeof body === 'object' && body !== null ? compiledCodecMetadata.get(body) : undefined;
-  if (metadata?.schema !== schema) {
-    throw new TypeError(`technique "${schema.technique}" codec body does not belong to its registered schema`);
-  }
-  if (
-    system !== undefined &&
-    (metadata.stableGlyphId !== system.stableGlyphId.id || metadata.transformIndex !== system.transformIndex?.id)
-  ) {
-    throw new TypeError(`technique "${schema.technique}" codec body does not use the requested system buffers`);
-  }
 }
 
 function f32Bits(value: number): number {

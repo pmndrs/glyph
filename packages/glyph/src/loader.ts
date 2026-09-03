@@ -42,8 +42,6 @@ import type { RuntimeBakeRaster, RuntimeBakeUnicodeRange } from './internal/runt
 import { workerRasterKinds } from './internal/runtime-bake-protocol.js';
 import { DEV } from './internal/dev.js';
 import {
-  isRasterFormat,
-  rasterFormatForReference,
   type AnyRasterFormat,
   type RasterDataOf,
   type RasterOptionsOf,
@@ -51,6 +49,7 @@ import {
   type RasterFormatRequest,
   type RasterFormatTypesOf,
 } from './config/raster-format.js';
+import { isRasterFormat, rasterFormatForReference } from './internal/raster-format-registry.js';
 import type {
   RasterKindOf,
   RasterOptionsArgument,

@@ -2,6 +2,11 @@
 
 ## 2026-09-03
 
+- **Narrowed wildcard config leaves to integrator-owned operations** — Raster-format lookup, portable-resource identity,
+  compiled Codec-body authentication, system-lane normalization, and Glyph's reserved built-in raster registration bypass
+  moved under package-private state. Custom renderer integrations keep the portable registration and capability helpers
+  they can meaningfully author, and declaration boundaries now reject every privileged helper.
+
 - **Narrowed Codec identity authoring to the actual DSL** — `/config/codec` now exposes only buffer, technique, program,
   and baked-resource identity helpers. Handle-scoped Codec, font, root-planning, paragraph, style, material, layout, and
   live-resource identities moved under package-private engine state, along with capability-set wire selection. Exact

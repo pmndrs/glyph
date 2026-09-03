@@ -647,7 +647,7 @@ function nonzeroU32(value: number, label: string): number {
   return value;
 }
 
-/** @internal Validate and snapshot one host capability set before invoking technique code. */
+/** Validate and freeze one renderer-owned Codec capability set before invoking technique code. */
 export function normalizeCodecCapabilitySet(value: unknown, label = 'codec capability set'): CodecCapabilitySet {
   if (!isNonArrayObject(value)) throw new TypeError(`${label} needs an object`);
   const sourceCapabilities = value.capabilities;

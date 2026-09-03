@@ -1,11 +1,10 @@
 import type { RasterDecodeFont } from '../font.js';
 import type { JsonValue, RasterDecodeArtifact, RasterOptionsArgument, RuntimeRasterBakerLoader } from '../raster.js';
+import { registerRasterFormat } from '../internal/raster-format-registry.js';
 
 declare const rasterFormatIdBrand: unique symbol;
 declare const rasterResourceIdBrand: unique symbol;
 declare const rasterFormatTypes: unique symbol;
-const rasterFormatInstances = new WeakSet<object>();
-const rasterFormats = new Set<AnyRasterFormat>();
 
 /** Stable public identity for one portable raster format. */
 export type RasterFormatId = string & { readonly [rasterFormatIdBrand]: true };
@@ -142,54 +141,8 @@ export function defineRasterFormat<
       dispose: format.dispose,
     }),
   ) as unknown as Defined;
-  rasterFormatInstances.add(defined);
-  rasterFormats.add(defined);
+  registerRasterFormat(defined);
   return defined;
-}
-
-/** @internal Authenticate the exact raster witness created by `defineRasterFormat`. */
-export function isRasterFormat(value: unknown): value is AnyRasterFormat {
-  return (
-    (typeof value === 'object' || typeof value === 'function') && value !== null && rasterFormatInstances.has(value)
-  );
-}
-
-/** @internal Resolve one imported raster from its public format key. */
-export function rasterFormatForKey(key: string): AnyRasterFormat | undefined {
-  let match: AnyRasterFormat | undefined;
-  for (const raster of rasterFormats) {
-    if (raster.kind !== key && raster.id !== key) continue;
-    if (match !== undefined && match !== raster) {
-      throw new TypeError(`font format key ${JSON.stringify(key)} matches more than one imported raster format`);
-    }
-    match = raster;
-  }
-  return match;
-}
-
-/** @internal Resolve the imported decoder matching one authenticated raster-directory entry. */
-export function rasterFormatForReference(reference: {
-  readonly kind: string;
-  readonly extension: string;
-  readonly version: number;
-}): AnyRasterFormat | undefined {
-  let match: AnyRasterFormat | undefined;
-  for (const raster of rasterFormats) {
-    if (
-      raster.kind !== reference.kind ||
-      raster.extension !== reference.extension ||
-      raster.version !== reference.version
-    ) {
-      continue;
-    }
-    if (match !== undefined && match !== raster) {
-      throw new TypeError(
-        `raster directory entry ${JSON.stringify(reference.kind)} matches more than one imported raster format`,
-      );
-    }
-    match = raster;
-  }
-  return match;
 }
 
 /** Brand a stable resource identity produced by a portable technique. */

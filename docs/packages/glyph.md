@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:86e08e8f9f0c0e39fe42d6be7c5c545c0922d208792a192bbeb5e79fd6db6811'
+source_digest: 'sha256:74e8f44798f6deb836c0544998facc2b325f85b889e29be44fe45cd1c1e58d87'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -156,6 +156,12 @@ the same process-local, lease-counted font resource graph. Low-level loading and
 than a second application or integrator API. A consumer loads a FontFace selection; Text or Paragraph then owns the
 independent immutable Font lease needed by its engine binding. Portable compiled resources remain immutable payload data,
 while each renderer owns physical textures, buffers, geometry, and their device-relative leases.
+
+The `/config/*` leaves contain only renderer-neutral authoring operations. Package registries and identity maps, compiled
+Codec-body authentication, system-lane normalization, and Glyph's reserved built-in raster registration path stay under
+`src/internal`; they are neither root exports nor wildcard subpath APIs. Integrators can register their own portable raster
+programs through `registerRasterPlanProgram()` and can normalize a renderer-owned capability set explicitly when composing
+config helpers.
 
 ## Public package surfaces
 

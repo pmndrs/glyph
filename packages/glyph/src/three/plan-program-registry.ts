@@ -11,7 +11,8 @@ import type {
   TechniqueResourceDeclaration,
   TechniqueResourceDeclarations,
 } from '../config/schema.js';
-import { isRasterFormat, type AnyRasterFormat } from '../config/raster-format.js';
+import type { AnyRasterFormat } from '../config/raster-format.js';
+import { isRasterFormat } from '../internal/raster-format-registry.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { threeSystemBuffers } from './codec.js';
 import { commitThreeRasterPlanProgram, registeredThreeRasterPlanProgram } from './internal/plan-program-registry.js';
