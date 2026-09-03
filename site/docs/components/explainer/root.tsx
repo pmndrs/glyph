@@ -728,9 +728,12 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
       if (this.#statsEnabled) this.#renderer?.info.reset();
       // One global scheduler step updates every logical root. Each root owns a render-phase
       // presenter which renders and copies immediately, before the next root overwrites the host.
+      // The scheduler stamps its own clock with `performance.now()` whenever a root invalidates it, and a
+      // rAF timestamp is the frame's start, earlier than that stamp: advancing with the rAF time made every
+      // step short and scene time crawl at half speed on a 120 Hz display. Advance with the same clock.
       advancePooledRoots(
         activeSlots.map((slot) => slot.store),
-        timestamp,
+        performance.now(),
       );
       if (this.#statsEnabled) this.#drawCalls = this.#renderer?.info.render.drawCalls ?? 0;
     }
