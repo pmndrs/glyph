@@ -9,6 +9,10 @@ import {
   type PortableResource,
 } from '@pmndrs/glyph';
 import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph/config/glyph';
+import * as GlyphConfigApi from '@pmndrs/glyph/config/glyph';
+
+// @ts-expect-error Handle construction is package-owned, not part of the public GlyphConfig DSL.
+void GlyphConfigApi.invokeGlyphConfigHandleFactory;
 
 type IsAny<Value> = 0 extends 1 & Value ? true : false;
 

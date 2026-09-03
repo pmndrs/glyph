@@ -12,6 +12,10 @@
   moved under `/three/internal`, mixed implementation leaves are exact-denied, and an unused retained-geometry validation
   pass was deleted instead of carried forward.
 
+- **Made GlyphConfig construction data-only** — `defineGlyphConfig()` now returns inert structural data, and
+  `glyph.handle(name, config)` passes it directly into package-private construction. The public config leaf no longer
+  leaks an invocation helper or callable factory property, while Vite-style spread/wrapped overrides keep working.
+
 ## 2026-09-02
 
 - **Retired the duplicate public font-loader story** — `glyph.fontFace()` now owns the only application loading path and
