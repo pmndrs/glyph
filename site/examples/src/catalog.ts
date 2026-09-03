@@ -134,6 +134,24 @@ export const EXAMPLES = {
     stage: {},
     load: () => import('./scenes/rich-text/scene'),
   },
+  editing: {
+    title: 'Editing',
+    page: '/docs/text/rich-text',
+    stage: {},
+    load: () => import('./scenes/editing/scene'),
+  },
+  caret: {
+    title: 'Caret and selection',
+    page: '/docs/text/interaction',
+    stage: {},
+    load: () => import('./scenes/caret/scene'),
+  },
+  errors: {
+    title: 'Errors',
+    page: '/docs/text/errors',
+    stage: {},
+    load: () => import('./scenes/errors/scene'),
+  },
   measurement: {
     title: 'Measurement',
     page: '/docs/text/measurement',

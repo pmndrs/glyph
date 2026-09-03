@@ -8,6 +8,7 @@ import {
   type ExampleEntry,
   type ExampleSlug,
 } from '../../../../examples/src/catalog';
+import { SceneInputsContext } from '../../../../examples/src/lib/inputs';
 import { defineExplainerPage, type GlyphSceneProps } from '../../explainer/page';
 import { Planned } from './planned';
 import { ExampleStage, FOV } from './stage';
@@ -21,11 +22,13 @@ import { ExampleStage, FOV } from './stage';
 function staged(slug: ExampleSlug): ComponentType<GlyphSceneProps> {
   const Scene = lazy(EXAMPLES[slug].load);
   const { stage } = EXAMPLES[slug];
-  return function ExampleScene({ onReady }: GlyphSceneProps) {
+  return function ExampleScene({ inputs, onReady }: GlyphSceneProps) {
     return (
-      <ExampleStage options={stage} onReady={onReady}>
-        <Scene />
-      </ExampleStage>
+      <SceneInputsContext.Provider value={inputs}>
+        <ExampleStage options={stage} onReady={onReady}>
+          <Scene />
+        </ExampleStage>
+      </SceneInputsContext.Provider>
     );
   };
 }
