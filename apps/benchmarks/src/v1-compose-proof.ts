@@ -1,6 +1,6 @@
-import type { Font } from '@pmndrs/glyph';
+import { loadFont, type Font } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { defineTextMaterial, FontLoader, type Text } from '@pmndrs/glyph/three';
+import { defineTextMaterial, type Text } from '@pmndrs/glyph/three';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from './three-root';
@@ -42,7 +42,6 @@ async function render(): Promise<TargetV1ComposeResult> {
   if (canvas === null) throw new Error('target-v1 compose proof canvas is missing');
   const forceWebGL = new URLSearchParams(location.search).get('backend') === 'webgl2';
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, forceWebGL });
-  const loader = new FontLoader();
   const target = new THREE.RenderTarget(256, 128, { format: THREE.RGBAFormat, type: THREE.UnsignedByteType });
   const root = createBenchmarkThreeRoot('v1-compose');
   target.texture.colorSpace = THREE.NoColorSpace;
@@ -61,10 +60,10 @@ async function render(): Promise<TargetV1ComposeResult> {
     renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 1);
 
-    canonicalFont = await loader.loadAsync({
-      input: { baked: '/fixtures/rendering/inter-bitmap-16.font.glb' },
-      raster: { raster: bitmap, options: { strikes: [16] } },
-    });
+    canonicalFont = await loadFont(
+      { baked: '/fixtures/rendering/inter-bitmap-16.font.glb' },
+      { raster: bitmap, options: { strikes: [16] } },
+    );
     canonicalText = root.createText({
       font: canonicalFont,
       text: 'Target v1 Bitmap',
@@ -107,7 +106,6 @@ async function render(): Promise<TargetV1ComposeResult> {
     composedText?.removeFromParent();
     composedText?.dispose();
     canonicalFont?.dispose();
-    loader.dispose();
     disposeBenchmarkThreeRoot(root);
     target.dispose();
     renderer.dispose();

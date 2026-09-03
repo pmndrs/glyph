@@ -13,9 +13,10 @@ library.clear(input, msdf);
 data after the automatic pass; its calls become `loadFont(request.input, request.raster)` or
 `loadFont(request.input, request.rasters)`. Remove the wrapper when it no longer improves local readability.
 
-Do not flatten a framework adapter whose callback contract requires one request value. Three's `FontLoader.load()` and
-`loadAsync()` retain a Three-owned request object, but that object is no longer a root `FontRequest`. Migrate a custom
-adapter the same way only if its host framework has the same cardinality constraint.
+This historical recipe predates the config-based Three integration. Current Glyph no longer exports a Three
+`FontLoader`: do not recreate it or treat `THREE.LoadingManager` as font ownership. When migrating a checkout that still
+contains that adapter, first migrate its consumers to the shared Glyph font graph, then delete the adapter once no public
+call site remains. Preserve a host-framework request wrapper only when the framework itself requires that cardinality.
 
 Replace public annotations using `FontRequest`, `MultiRasterFontRequest`, or `FontRasterRequests` with explicit
 `LoadFontInput` plus `RasterTechniqueInput`, or with `FontRasterInputs` for a nonempty typed tuple. Do not recreate the

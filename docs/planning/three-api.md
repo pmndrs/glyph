@@ -12,9 +12,9 @@ sources:
   - id: rust-engine
     resource: rust-layout-engine.md
     title: Rust text engine and render-plan ABI
-  - id: current-loader
-    resource: ../../packages/glyph/src/three/font-loader.ts
-    title: Current Three.js font loader
+  - id: current-font-face
+    resource: ../../packages/glyph/src/font-face.ts
+    title: Current renderer-neutral FontFace lifecycle
   - id: current-text
     resource: ../../packages/glyph/src/three/text.ts
     title: Current Three.js Text lifecycle
@@ -30,9 +30,6 @@ sources:
   - id: three-object3d
     resource: https://threejs.org/docs/pages/Object3D.html
     title: Three.js Object3D
-  - id: three-loader
-    resource: https://threejs.org/docs/pages/Loader.html
-    title: Three.js Loader
 generated:
   by: openai-codex/gpt-5.6
   at: '2026-08-15T15:53:27Z'
@@ -93,9 +90,8 @@ handle can live in different scenes. A single `Object3D` still has only one pare
 const font = await loadFont({ baked: '/fonts/inter-msdf.font.glb' }, msdf);
 ```
 
-Root `Font` values are immutable and renderer-neutral. The same value may bind into multiple Three handles. Compatibility
-`FontLoader` remains available when an application specifically needs `THREE.LoadingManager`; handle construction no
-longer depends on a font-associated implicit Three domain.
+Root `Font` values are immutable and renderer-neutral. The same value may bind into multiple Three handles. Font loading
+belongs to Glyph's shared font graph; Three's `LoadingManager` is not a font-ownership or handle boundary.
 
 Source-font loading requires a caller-supplied runtime baker:
 
@@ -399,7 +395,7 @@ updates and inverts the ancestor chain on every call. These are rendering facts,
 Materials are cloned into each detached branch and exposed through `materials`; changing one cannot mutate the source
 `Text` or its sibling detached branch. Immutable atlas/page GPU resources are leased from the existing Three engine domain
 instead of uploaded again. Each returned object retains that domain until its own disposal, so the detached rendering may
-outlive the source `Text`, `Font`, and `FontLoader`. The caller owns scene attachment, source visibility, animation,
+outlive the source `Text` and caller-owned `Font` lease. The caller owns scene attachment, source visibility, animation,
 physics bodies, reset timing, and disposal. Adding the returned groups to the source `Text` parent overlays them exactly
 at creation.
 
@@ -430,8 +426,8 @@ The complete copy and ownership contract is recorded in
 - `Text.dispose()` unbinds the object and releases its font leases.
 - `TextGroup.dispose()` releases the group's private publication boundary and GPU resources but does not dispose descendant `Text` objects.
 - `handle.dispose()` prevents new `Text`/`TextGroup` construction and releases its adapter domain after existing object leases end.
-- `LoadedFont.dispose()` releases font and raster resources after all text leases are gone.
-- `FontLoader.dispose()` releases its claim on the manager-scoped runtime.
+- `Font.dispose()` releases its caller-owned lease after all text leases are gone.
+- `FontFace.dispose()` releases its declarative source lease without invalidating fonts already retained by text.
 
 Dispose text objects before their loaded fonts. A disposed `TextGroup` can be removed while its still-live `Text` children
 are moved into another group.

@@ -6,8 +6,8 @@ import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-diges
 import { createUikitLayoutFixture, YogaMeasureMode } from '../src/benchmark/uikit-layout-fixture.ts';
 import {
   createContractText,
-  createParagraphContractRuntime,
   layoutOnly,
+  loadContractFont,
   preserveEquivalentLegacyNumbers,
   type LegacyConstraints,
 } from './support/paragraph-contract-runtime.mts';
@@ -25,10 +25,9 @@ const retainedUikit = retained as {
     readonly resolved: { readonly layout: { readonly measurement: { readonly contentHeight: number } } };
   };
 };
-const runtime = await createParagraphContractRuntime();
 const [amiri, inter] = await Promise.all([
-  runtime.loadFont(new URL('../fixtures/rendering/amiri-bitmap-16.font.glb', import.meta.url)),
-  runtime.loadFont(new URL('../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+  loadContractFont(new URL('../fixtures/rendering/amiri-bitmap-16.font.glb', import.meta.url)),
+  loadContractFont(new URL('../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
 ]);
 
 try {
@@ -174,7 +173,6 @@ try {
 } finally {
   amiri.dispose();
   inter.dispose();
-  runtime.dispose();
 }
 
 async function publish(document: unknown): Promise<void> {

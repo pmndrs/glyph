@@ -16,8 +16,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { loadFont } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
@@ -97,29 +97,22 @@ function integer(random, min, max) {
 }
 
 async function loadFonts() {
-  const loader = new FontLoader();
-  try {
-    const entries = await Promise.all(
-      Object.entries(FONT_FIXTURES).map(async ([name, file]) => [
-        name,
-        await loader.loadAsync({
-          input: { baked: { bytes: await readFile(new URL(file, fixtures)), ownership: 'copy' } },
-          raster: { raster: bitmap, options: { strikes: [16] } },
-        }),
-      ]),
-    );
-    const fonts = Object.fromEntries(entries);
-    return {
-      fonts,
-      dispose() {
-        for (const font of Object.values(fonts)) font.dispose();
-        loader.dispose();
-      },
-    };
-  } catch (error) {
-    loader.dispose();
-    throw error;
-  }
+  const entries = await Promise.all(
+    Object.entries(FONT_FIXTURES).map(async ([name, file]) => [
+      name,
+      await loadFont(
+        { baked: { bytes: await readFile(new URL(file, fixtures)), ownership: 'copy' } },
+        { raster: bitmap, options: { strikes: [16] } },
+      ),
+    ]),
+  );
+  const fonts = Object.fromEntries(entries);
+  return {
+    fonts,
+    dispose() {
+      for (const font of Object.values(fonts)) font.dispose();
+    },
+  };
 }
 
 const MEASUREMENT_KEYS = [

@@ -1,6 +1,6 @@
-import type { AnyRasterFormat, Font } from '@pmndrs/glyph';
+import { loadFont, type AnyRasterFormat, type Font } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
-import { FontLoader, type Text, type TextGroup } from '@pmndrs/glyph/three';
+import type { Text, TextGroup } from '@pmndrs/glyph/three';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import * as THREE from 'three/webgpu';
 
@@ -45,28 +45,27 @@ export async function runRenderTechniqueThreeLab({
 } = {}): Promise<RenderTechniqueThreeLabReport> {
   assertCount(samples, 'samples', 1);
   assertCount(warmup, 'warmup', 0);
-  const loader = new FontLoader();
   let genericFont: Font<typeof glyphExample> | undefined;
   let bitmapFont: Font<typeof bitmap> | undefined;
   try {
     const genericStarted = performance.now();
-    genericFont = await loader.loadAsync({
-      input: {
+    genericFont = await loadFont(
+      {
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       },
-      raster: { raster: glyphExample, options: { paletteSeed: 17, inset: 0.1 } },
-    });
+      { raster: glyphExample, options: { paletteSeed: 17, inset: 0.1 } },
+    );
     const genericFontLoadMs = performance.now() - genericStarted;
 
     const bitmapStarted = performance.now();
-    bitmapFont = await loader.loadAsync({
-      input: {
+    bitmapFont = await loadFont(
+      {
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       },
-      raster: { raster: bitmap, options: { strikes: [16] } },
-    });
+      { raster: bitmap, options: { strikes: [16] } },
+    );
     const bitmapFontLoadMs = performance.now() - bitmapStarted;
 
     const generic = measureTechnique(genericFont, warmup, samples);
@@ -88,7 +87,6 @@ export async function runRenderTechniqueThreeLab({
   } finally {
     genericFont?.dispose();
     bitmapFont?.dispose();
-    loader.dispose();
   }
 }
 
