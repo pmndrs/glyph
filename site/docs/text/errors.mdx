@@ -35,11 +35,7 @@ notes · internals for the page
 - `TextFrameError`, `TextFrameRejection`, `TextFrameSubject` — `three/frame-error.ts:17–62`; exported from `/three` — `three.ts:24–25`; D-268
 - `GlyphEngineStatusError` with `code` and `status` — `engine-error.ts:59–70`; exported from the root — `index.ts:22–28`
 - retention and `onError` — `three/text.ts#Text.#reportError` (`:918–922`), `#ThreeRoot.#reportError` (`:494–502`)
-- the scene — `site/examples/src/scenes/errors/scene.tsx`: one malformed `set()` per tick (`config.ts#ATTEMPTS`),
-  the thrown name and message printed under an unchanged paragraph, `commitState()` and `error` read back; only the
-  door, because nothing at HEAD constructs a frame rejection (next note). First observed: `RangeError: Text
-  rasterPixelRatio must be positive and finite`; `commitState()` stays `committed at revision 1` and `error`
-  `undefined` across every refused call
+- no scene here by design: an error is a message, not something to see; the table below is the reference
 */}
 
 ```ts
@@ -52,7 +48,6 @@ text.onError = (error) => {
 };
 ```
 
-<glyph-proxy fit="cover" root="scenes" data-scene="errors" aria-label="Bad input is refused at the call; the text stays" aspect="16 / 9" />
 
 ## Causes
 

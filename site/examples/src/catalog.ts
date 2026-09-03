@@ -59,12 +59,6 @@ export const EXAMPLES = {
     stage: {},
     load: () => import('./scenes/ribbon/scene'),
   },
-  hello: {
-    title: 'Hello world',
-    page: '/docs/getting-started/introduction',
-    stage: {},
-    load: () => import('./scenes/hello/scene'),
-  },
   'first-text': {
     title: 'Your first text',
     page: '/docs/getting-started/your-first-text',
@@ -145,24 +139,6 @@ export const EXAMPLES = {
     page: '/docs/text/interaction',
     stage: {},
     load: () => import('./scenes/caret/scene'),
-  },
-  errors: {
-    title: 'Errors',
-    page: '/docs/text/errors',
-    stage: {},
-    load: () => import('./scenes/errors/scene'),
-  },
-  provider: {
-    title: 'Providers and roots',
-    page: '/docs/react/components',
-    stage: {},
-    load: () => import('./scenes/provider/scene'),
-  },
-  hooks: {
-    title: 'Suspense and preload',
-    page: '/docs/react/hooks',
-    stage: {},
-    load: () => import('./scenes/hooks/scene'),
   },
   measurement: {
     title: 'Measurement',
