@@ -35,7 +35,13 @@ notes · internals for the page
   `#glyphPlacements()` (`:771–774`)
 - the snapshot and its one coordinate space — `glyph-placement.ts#GlyphPlacements` (`:122–155`), `#GlyphSpace` (`:4–14`)
 - cluster-first rationale — `glyph-placement.ts:95–102`
-- the caret scene is not in `site/examples/src/scenes` at this commit; the proxy stays for when it lands
+- the scene — `site/examples/src/scenes/caret/scene.tsx`: pointer input arrives from the host as frame pixels
+  (`site/examples/src/lib/inputs.ts#pointerToWorld` casts it onto the text's plane), then `worldToLocal`, y flipped,
+  `caretAt`; the anchor is the pointerdown offset and `selectionRects(anchor, head)` follows the drag; one word is
+  selected before the reader touches anything. The twin `three.ts` does the same from a canvas `PointerEvent` with a
+  `Raycaster`
+- [verify] the snippet above puts `onPointerDown` on `<Text>`: whether R3F raycasts the glyph draw meshes (quads are
+  positioned in the shader) has not been checked; the scene hit-tests the plane instead
 */}
 
 ```ts
