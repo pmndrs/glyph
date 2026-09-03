@@ -1196,7 +1196,7 @@ pub(crate) fn parse_geometry(
         abi::ENGINE_INLINE_OBJECT_RECORD_SIZE,
         abi::ENGINE_INLINE_OBJECT_RECORD_ALIGNMENT,
     )?;
-    validate_constraints(constraints, region_count, limits)?;
+    validate_constraints(constraints, limits)?;
     validate_regions(request, regions, exclusions)?;
     validate_exclusions(request, exclusions, regions)?;
     validate_inline_objects(inline_objects)?;
@@ -1265,11 +1265,7 @@ fn take_records<'a>(
         .ok_or(STATUS_INVALID_REQUEST)
 }
 
-fn validate_constraints(
-    constraints: &[u8],
-    region_count: u32,
-    limits: UpdateLimits,
-) -> Result<(), u32> {
+fn validate_constraints(constraints: &[u8], limits: UpdateLimits) -> Result<(), u32> {
     for record in constraints.chunks_exact(abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize) {
         let width_mode = byte(record, abi::ENGINE_CONSTRAINT_WIDTH_MODE)?;
         let height_mode = byte(record, abi::ENGINE_CONSTRAINT_HEIGHT_MODE)?;
@@ -1328,17 +1324,6 @@ fn validate_constraints(
                 byte(record, abi::ENGINE_CONSTRAINT_LAST_LINE)?,
                 LAST_LINE_AUTO | LAST_LINE_JUSTIFY
             )
-        {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-        let region_start = read_u32(record, abi::ENGINE_CONSTRAINT_REGION_START)?;
-        let selected_count = u32::from(read_u16(record, abi::ENGINE_CONSTRAINT_REGION_COUNT)?);
-        let resume_region = u32::from(read_u16(record, abi::ENGINE_CONSTRAINT_RESUME_REGION)?);
-        if selected_count == 0
-            || region_start
-                .checked_add(selected_count)
-                .is_none_or(|end| end > region_count)
-            || resume_region > selected_count
         {
             return Err(STATUS_INVALID_REQUEST);
         }

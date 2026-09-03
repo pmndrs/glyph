@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:8857d1df86e5c91992d3cdb223262914eac840d77dfb1eb96679a3b9223fd061'
+source_digest: 'sha256:30edd2ece196f31b53ae3b3f51a8926baa3b8812c35125991ee5be01091aac6d'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -743,6 +743,11 @@ Every ordinary constraint also produces a distinct nonzero region identity bound
 The same captured request proves that producer contract. Rust consumes those identities directly instead of searching the
 region table for duplicates or rechecking package-minted zero sentinels; it retains caller-authored geometry and raw-memory
 checks.
+
+Constraint region spans are also compiler-owned: every paragraph receives one nonempty contiguous partition, including
+multi-column layouts, and starts with no resume region. The public producer proof covers one ordinary and one two-column
+Text in the same request. Rust no longer pre-scans those relationships before the flow arena consumes the already-bounded
+region table.
 
 A Mori 0.19.1 production-source scan (review profile, same-language threshold 0.85, minimum 40 tokens) corroborated the
 deleted parallel path and identified exact shared planner machinery. Ordered and stable planning now use one retained
