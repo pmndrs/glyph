@@ -29,8 +29,9 @@ For each reported function:
    Do not spend a production refactor budget on generated output or a dated one-off recipe.
 2. Name the function's actual obligations. If they belong to different phases, owners, lifetimes, or trust boundaries,
    split on that seam. If they are one ordered algorithm, keep them together unless a helper can state a real sub-rule.
-3. Identify the trust boundary. Validate JavaScript inputs, fetched artifacts, Worker messages, and data sent to Rust once.
-   Do not revalidate a typed render plan returned by Rust or add defensive branches inside its hot iteration path.
+3. Identify the value authority. A Worker, Rust, or Wasm crossing does not create a trust boundary when both producer and
+   consumer belong to this package. Validate public caller input, third-party callback returns, and external bytes once;
+   retain memory-safety bounds for raw pointers and lengths. Trust package-produced requests, messages, and publications.
 4. Identify the transaction owner. The object that stages resources or host objects must also commit, discard, and release
    them. Move branches with that ownership instead of moving individual statements.
 5. Identify runtime witnesses before changing types. Preserve the associated schema, bindings, resources, handle, font
@@ -42,19 +43,19 @@ For each reported function:
 
 ### Split by phase and return a named result
 
-Use phase-specific helpers when a function validates input, derives a plan, computes offsets, and writes output. A useful
-shape for `compileRenderPolicy`, for example, is:
+Use phase-specific helpers when a public-input compiler validates input, derives a Codec, computes offsets, and writes
+output. For example:
 
 ```ts
-const plan = preflightPolicy(descriptor); // validates once and retains derived IDs/counts
-const layout = layoutPolicyTables(plan);
-const bytes = allocatePolicyBytes(layout);
-writePolicyHeader(bytes, plan, layout);
-writePolicyTables(bytes, plan, layout);
+const codec = normalizeCodec(descriptor); // caller boundary; validates once
+const layout = layoutCodecTables(codec);
+const bytes = allocateCodecBytes(layout);
+writeCodecHeader(bytes, codec, layout);
+writeCodecTables(bytes, codec, layout);
 return bytes;
 ```
 
-`preflightPolicy` should return the already-needed normalized capability sets, per-program capability IDs, row starts,
+`normalizeCodec` should return the already-needed normalized capability sets, per-program capability IDs, row starts,
 and counts. Later phases consume those values; they must not walk and validate the descriptor again. Keep indexed writers
 as ordinary loops when they are the cheapest representation.
 
@@ -207,9 +208,10 @@ Remaining review targets are not permission to change public contracts without t
   `useHandleFontFace<Technique>(selection: AnyFontFaceSelection)` still lets its caller choose the result technique and
   casts the mounted store snapshot to that choice.
 
-Legitimate `unknown` boundary checks in `frame-wire.ts`, artifact validators, Worker protocols, and custom shader input
-must remain. Those values come from JavaScript, network, or cross-thread input. Conversely, the bound command buffer and
-typed render plan are trusted internal Rust output and must not gain parallel schema validation.
+Legitimate `unknown` checks remain for public JavaScript input, third-party callback output, external artifacts, and
+externally authored messages. Do not infer untrusted authorship from a filename such as `frame-wire.ts` or from crossing a
+Worker/Wasm boundary: package-compiled frames, package Worker messages, bound command buffers, and typed Rust publications
+are trusted internal values. Only their raw pointer/range/capacity envelope retains memory-safety checks.
 
 ## Recommended current refactor slices
 
