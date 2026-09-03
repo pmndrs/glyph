@@ -8,7 +8,7 @@ import { msdfSchema } from '../../raster/msdf.js';
 import { msdf } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug.js';
 import { slug } from '../../raster/slug.js';
-import { decorationShader } from '@pmndrs/glyph/tsl/decoration';
+import { decorationShader } from '../../tsl/decoration-shader.js';
 import type { ThreeRendererResources } from '../renderer-resources.js';
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
 import type { ThreePlanProgramBuffer } from '../plan-program-registry.js';
