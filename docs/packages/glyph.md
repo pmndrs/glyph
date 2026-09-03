@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:fab29fc98b8d763c7062947d8d9b5eb90de59c3276c6a24429b0b9ae241ede53'
+source_digest: 'sha256:b01312c3fce73d093bada9f798ddcaae31913adadd57dc7fd1d6ac33ca729b3a'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -161,8 +161,8 @@ while each renderer owns physical textures, buffers, geometry, and their device-
 
 | Subpath                      | Purpose                                                                                                                                     |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing immutable font/raster contracts, loading, fallback stacks, formatting helpers, and paragraphs. |
-| `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, and portable-resource construction helpers for integration authors.             |
+| `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing FontFace/font/raster contracts, fallback stacks, formatting helpers, and paragraphs.            |
+| `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, portable-resource, and low-level font-loading helpers for integration authors.   |
 | `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, material factories, and Codec registration.                                      |
 | `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                        |
 | `@pmndrs/glyph/react/bitmap` | Typed `useBitmap(input, options)` convenience over `useFont`.                                                                               |
@@ -261,10 +261,11 @@ keep its identity registry alive or permanently poison later registration after 
 `ParagraphLayoutSummary`, `GlyphLayoutInspection`, `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a
 `/three` importer can name what `Text.measure()`, `Text.glyphs()`, and `TextStyle.features` give it.
 
-One baked GLB may expose several raster formats without repeating its input identity. Root
-`loadFont(input, rasters, options?)` accepts a nonempty raster tuple and returns a position-preserving tuple of `Font`
-values, fetching and reading the artifact once while retaining each format's exact data type. The declaration
-surface is `glyph.fontFace(source, { family?, format? })`. The face is its aggregate/default selection, `.default` aliases
+One baked GLB may expose several raster formats without repeating its input identity. The ordinary declaration and loading
+surface is `glyph.fontFace(source, { family?, format? })`; root does not export `loadFont`, `createFontLibrary`, or
+`FontLibrary`. The low-level `/config/font-library` leaf remains available to integration infrastructure that needs a
+custom fetch or runtime-bake callback, and it returns immutable `Font` values through the same resource graph. The face is
+its aggregate/default selection, `.default` aliases
 it, and declared keys such as `.bitmap`, `.msdf`, or `.slug` are distinct inferred format selections. The declaration
 owns loading: `face.load()` loads every authoritative imported format advertised by the main font plus every declared
 exact format, while `face.slug.load()` loads only that exact declared format. `face.formats()` inspects the authoritative

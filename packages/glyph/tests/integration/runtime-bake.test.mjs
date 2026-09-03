@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { loadFont } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake';
 import { createFontBaker } from '@pmndrs/glyph/bake';

@@ -19,7 +19,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 
-import { glyph, loadFont, span, txt } from '@pmndrs/glyph';
+import { glyph, span, txt } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 

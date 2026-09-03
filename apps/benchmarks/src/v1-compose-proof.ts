@@ -1,4 +1,5 @@
-import { loadFont, type Font } from '@pmndrs/glyph';
+import { type Font } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { defineTextMaterial, type Text } from '@pmndrs/glyph/three';
 import * as TSL from 'three/tsl';

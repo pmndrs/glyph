@@ -53,6 +53,7 @@ test('the published contract is ESM-only', async () => {
     './react/*',
     './raster/*',
     './config/*',
+    './config/font-library',
   ]) {
     assert.ok(subpath in manifest.exports, `${subpath} must remain a tree-shakeable package boundary`);
   }
@@ -125,10 +126,13 @@ test('the published contract is ESM-only', async () => {
 });
 
 test('the public loader graph exposes immutable loading without mutable registration handles', async () => {
-  assert.equal(typeof glyph.loadFont, 'function');
-  assert.equal(typeof glyph.createFontLibrary, 'function');
+  assert.equal('loadFont' in glyph, false);
+  assert.equal('createFontLibrary' in glyph, false);
   assert.equal('FontLoader' in glyph, false);
   assert.equal('FontRegistry' in glyph, false);
+  const fontLibrary = await import('@pmndrs/glyph/config/font-library');
+  assert.equal(typeof fontLibrary.loadFont, 'function');
+  assert.equal(typeof fontLibrary.createFontLibrary, 'function');
   const [entry, runtimeWorker] = await Promise.all([
     readFile(new URL('../../dist/index.js', import.meta.url), 'utf8'),
     readFile(new URL('../../dist/runtime-bake-worker.js', import.meta.url), 'utf8'),

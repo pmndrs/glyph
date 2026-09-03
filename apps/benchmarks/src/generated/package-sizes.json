@@ -43,11 +43,11 @@
       "label": "Core JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "797fac77b4b45eb0a9d6fa088075456d53c10ae7fec892e63ae04a7c06652cd1",
-      "rawBytes": 325169,
-      "minifiedBytes": 317267,
-      "gzipBytes": 80435,
-      "brotliBytes": 66955
+      "sha256": "0b2e7f13e89aba8790a9ce94f641c31fb6d2817afb7475412762ee541e2a790a",
+      "rawBytes": 324917,
+      "minifiedBytes": 317015,
+      "gzipBytes": 80383,
+      "brotliBytes": 66953
     },
     {
       "id": "text-shaper-wasm",
@@ -175,33 +175,33 @@
       "label": "Bitmap runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "sha256": "8e8ea7183cd1a1b6dd07534247b8a7b84670e28311f56efd8424ae9dec89432c",
-      "rawBytes": 236872,
-      "minifiedBytes": 228954,
-      "gzipBytes": 61444,
-      "brotliBytes": 52526
+      "sha256": "d2aa0ce807d2ee279562be21dffde17b47658b9e423f035d20ca1eaee001b593",
+      "rawBytes": 236905,
+      "minifiedBytes": 228871,
+      "gzipBytes": 61697,
+      "brotliBytes": 52561
     },
     {
       "id": "mtsdf-runtime-js",
       "label": "MSDF runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "sha256": "024734f7449160527a2c5f97f8e3807e46ad7dad3d8d3767e7807cb792bbbe37",
-      "rawBytes": 236863,
-      "minifiedBytes": 228949,
-      "gzipBytes": 61435,
-      "brotliBytes": 52519
+      "sha256": "12b06c5d68f277c65418399668445743bdf36594cb821bda7e99c088aea94665",
+      "rawBytes": 236896,
+      "minifiedBytes": 228869,
+      "gzipBytes": 61708,
+      "brotliBytes": 52547
     },
     {
       "id": "slug-runtime-js",
       "label": "Slug runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "sha256": "baaac1c47397eead2aac7a672b3e2ba0a5a9c9ac2571ffa02c8de1dea67ea30f",
-      "rawBytes": 236874,
-      "minifiedBytes": 228947,
-      "gzipBytes": 61445,
-      "brotliBytes": 52629
+      "sha256": "a4af3c9e258b3f3c817677c1b6e102d420c3daf1fc9201ecd378960a5eb15ac9",
+      "rawBytes": 236907,
+      "minifiedBytes": 228864,
+      "gzipBytes": 61719,
+      "brotliBytes": 52545
     },
     {
       "id": "bitmap-baker-wasm",

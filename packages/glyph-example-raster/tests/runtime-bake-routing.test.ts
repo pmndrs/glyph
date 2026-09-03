@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createFontLibrary, type RuntimeFontBakeRequest } from '@pmndrs/glyph';
+import { createFontLibrary, type RuntimeFontBakeRequest } from '@pmndrs/glyph/config/font-library';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { workerRasterKinds } from '@pmndrs/glyph/runtime-bake';
 import { afterEach, test } from 'vitest';

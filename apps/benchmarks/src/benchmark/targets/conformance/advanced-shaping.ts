@@ -1,4 +1,5 @@
-import { loadFont, type Font, type RasterFormatInput } from '@pmndrs/glyph';
+import { type Font, type RasterFormatInput } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import type { Text, TextStyle } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
