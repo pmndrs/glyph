@@ -1294,10 +1294,19 @@ img {
   max-width: none;
   transform: translate(-50%, -50%);
 }
+/* Explicit layers: the live canvas underneath, the poster over it, the sentinel over both, the button on top. */
+canvas {
+  z-index: 0;
+}
 img {
+  z-index: 1;
   opacity: 0;
   transition: opacity 420ms ease;
   pointer-events: none;
+}
+/* A canvas that is not presenting has nothing to show; keep it out of the way of the poster and the sentinel. */
+:host(:not([data-glyph-state='live'])) canvas {
+  visibility: hidden;
 }
 :host([data-glyph-state='cached']) img {
   opacity: 1;
@@ -1333,6 +1342,7 @@ button {
   position: absolute;
   right: 0.5rem;
   bottom: 0.5rem;
+  z-index: 3;
   display: grid;
   width: 2rem;
   height: 2rem;
@@ -1361,6 +1371,7 @@ button svg {
 div {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: grid;
   padding: 1rem;
   place-items: center;
