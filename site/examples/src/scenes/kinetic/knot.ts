@@ -1,28 +1,28 @@
 import { Matrix4, Quaternion, Vector3 } from 'three/webgpu';
 
-/**
- * A torus knot as a path with a moving frame, sampled by arc length so text
- * flows along it at a constant speed. p and q are the winding numbers; the
- * tube radius is where the text sits around the core.
- */
-export interface Knot {
+/** A path sampled by arc length, with a moving frame at every point. */
+export interface Path {
   readonly length: number;
-  frameAt(s: number, out: KnotFrame): KnotFrame;
+  frameAt(s: number, out: PathFrame): PathFrame;
 }
 
-export interface KnotFrame {
+export interface PathFrame {
   readonly position: Vector3;
   readonly tangent: Vector3;
   readonly normal: Vector3;
   readonly binormal: Vector3;
 }
 
-export function torusKnot(p: number, q: number, major: number, minor: number, samples = 1024): Knot {
+/**
+ * A torus knot with the parametrisation three's `TorusKnotGeometry(major,
+ * tube, …, p, q)` uses — minor radius `major / 2` — so a path built here sits
+ * exactly on that geometry's core.
+ */
+export function torusKnot(p: number, q: number, major: number, minor: number, samples = 1024): Path {
   const point = (t: number, out: Vector3): Vector3 => {
     const ring = major + minor * Math.cos(q * t);
     return out.set(ring * Math.cos(p * t), ring * Math.sin(p * t), minor * Math.sin(q * t));
   };
-  // Arc-length table over one full turn.
   const arc = new Float32Array(samples + 1);
   const a = new Vector3();
   const b = new Vector3();
@@ -57,7 +57,6 @@ export function torusKnot(p: number, q: number, major: number, minor: number, sa
       point(t + 1e-3, ahead);
       point(t - 1e-3, behind);
       out.tangent.copy(ahead).sub(behind).normalize();
-      // A stable frame: the binormal leans on the world up, the normal completes it.
       out.binormal.copy(up).cross(out.tangent).normalize();
       out.normal.copy(out.tangent).cross(out.binormal).normalize();
       return out;
@@ -65,7 +64,23 @@ export function torusKnot(p: number, q: number, major: number, minor: number, sa
   };
 }
 
-const frame: KnotFrame = {
+/** A circle in the XZ plane whose normal is world up, so type stands on it facing outward. */
+export function circle(radius: number): Path {
+  const up = new Vector3(0, 1, 0);
+  return {
+    length: Math.PI * 2 * radius,
+    frameAt(s, out) {
+      const t = s / radius;
+      out.position.set(Math.cos(t) * radius, 0, -Math.sin(t) * radius);
+      out.tangent.set(-Math.sin(t), 0, -Math.cos(t));
+      out.normal.copy(up);
+      out.binormal.copy(out.tangent).cross(up).normalize();
+      return out;
+    },
+  };
+}
+
+const frame: PathFrame = {
   position: new Vector3(),
   tangent: new Vector3(),
   normal: new Vector3(),
@@ -80,21 +95,21 @@ const q = new Quaternion();
 const scale = new Vector3();
 
 /**
- * Places one glyph on the knot: `s` is its arc position, `angle` its place
- * around the tube, `height` how far its baseline sits from the core, and
- * `originalMatrix` its committed transform, whose scale is kept. The glyph's
- * x runs along the tangent and its y points away from the core, so the text
- * reads along the tube with its baseline on the surface.
+ * Places one glyph on a path: `s` is its arc position, `angle` its place
+ * around the path's frame (0 is the normal), `height` how far its baseline
+ * sits from the path, and `originalMatrix` its committed transform, whose
+ * scale is kept. The glyph's x runs along the tangent and its y along the
+ * chosen radial, so the text reads along the path standing on it.
  */
-export function placeOnKnot(
-  knot: Knot,
+export function placeOnPath(
+  path: Path,
   s: number,
   angle: number,
   height: number,
   originalMatrix: Matrix4,
   out: Matrix4,
 ): Matrix4 {
-  knot.frameAt(s, frame);
+  path.frameAt(s, frame);
   radial.copy(frame.normal).multiplyScalar(Math.cos(angle)).addScaledVector(frame.binormal, Math.sin(angle));
   facing.copy(frame.tangent).cross(radial).normalize();
   originalMatrix.decompose(home, q, scale);

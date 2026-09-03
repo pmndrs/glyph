@@ -123,7 +123,7 @@ materials — never loaded, to keep the bundle small.
 
 | Slug | Page | Shows |
 | --- | --- | --- |
-| kinetic | getting-started/examples, text/in-3d | showcase after Codrops' kinetic typography: three rows of Slug glyphs flowing along a torus knot by `breakApart()` matrices with a depth-dim material, a passage typing in word by word on a waving MSDF surface inside a breathing measure, the current word spotlit in Slug |
+| kinetic | getting-started/examples, text/in-3d | showcase after Codrops' kinetic typography: a live Slug strip (the passage typing in) rendered to a RenderTarget on its own named root and wrapped around a lit torus knot by `fract(uv * repeat - scroll)`; two rings of Slug glyphs on circle paths by `breakApart()` matrices, depth-tested; the current word spotlit |
 | hello | getting-started/introduction | one `<Text>`, one font, one line |
 | first-text | getting-started/your-first-text | the tutorial's finished state |
 | techniques | fonts/techniques | the same word in Bitmap, MSDF, Slug at three sizes |
@@ -328,6 +328,7 @@ its docs page.
 - Render order: a `Text`'s draws take its `renderOrder`; `TextGroup({ renderOrder })` states one for every child; decorations under → glyphs → line-through (`three/text.ts` `renderOrderBase`).
 - Labels: child of the body, a billboard group copying `camera.quaternion`, depth-tested; scene fog applies because the material is a `NodeMaterial`.
 - Steep angles: Slug per-pixel, MSDF until the atlas stretches, Bitmap screen-space only; `rasterPixelRatio` for MSDF/Bitmap seen larger than authored.
+- Text as a texture: a second `Scene` on `handle('surface')` rendered to a `RenderTarget` in `useFrame` before the main draw; a material samples it with the Codrops `fract(uv * repeat - scroll)`; the texture is live text.
 - Warping: `positionNode = f(context.position)` in a `defineTextMaterial` (carousel, flag); MSDF and Bitmap only — a Slug draw with a replaced `positionNode` did not draw (the shader returns a dilated `vec3(x, y, 0)` tied to `renderCoordinate`).
 - Post-processing: `useRenderPipeline` (r3f) / `PostProcessing` (three) with `bloom` from `three/examples/jsm/tsl/display/BloomNode.js`; `bloom().strength` is a uniform.
 - Example: depth, labels, off-axis, bloom.

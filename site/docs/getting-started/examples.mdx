@@ -21,10 +21,10 @@ example itself. */}
   style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
 />
 
-Three rows of Slug type flowing along a torus knot — each glyph a committed glyph copied out with `breakApart()` and
-placed by matrix every frame, dimmed with depth — while a passage types itself in word by word on a waving surface
-inside a breathing measure and the word being typed is spotlit above. The Codrops piece, with real type instead of
-a texture.
+The Codrops piece with the engine where the bitmap font used to be: a line of Slug type — the passage, typing
+itself in — is rendered to a render target every frame and wrapped around a lit torus knot with the same
+`fract(uv * repeat - time)`; two rings of Slug glyphs orbit it on paths, copied out with `breakApart()` and placed
+by matrix, depth-tested so the knot hides them; the word being typed is spotlit above.
 
 ## Getting started
 
