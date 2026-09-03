@@ -152,6 +152,12 @@ export const EXAMPLES = {
     stage: {},
     load: () => import('./scenes/errors/scene'),
   },
+  provider: {
+    title: 'Providers and roots',
+    page: '/docs/react/components',
+    stage: {},
+    load: () => import('./scenes/provider/scene'),
+  },
   measurement: {
     title: 'Measurement',
     page: '/docs/text/measurement',
