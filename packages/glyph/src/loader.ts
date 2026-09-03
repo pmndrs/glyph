@@ -8,6 +8,7 @@ import {
   createImmutableFontBacking,
   createImmutableFontLease,
   createImmutableFontVariant,
+  observeImmutableFontDispose,
   releaseImmutableFontVariant,
   retainImmutableFontVariant,
   type ImmutableFontVariant,
@@ -61,7 +62,6 @@ import type {
 const DEFAULT_MAX_ARTIFACT_BYTES = 64 * 1024 * 1024;
 const DEFAULT_MAX_BUFFER_VIEWS = 4_096;
 const DEFAULT_MAX_RASTERS = 256;
-const DEFAULT_MAX_LIBRARY_ENTRIES = 64;
 
 let nextRegistryId = 1;
 let nextFontHandle = 1;
@@ -105,7 +105,7 @@ export type Fonts<Rasters extends FontRasterInputs> = {
   readonly [Index in keyof Rasters]: Font<RasterFormatOfInput<Rasters[Index]>>;
 };
 
-/** Options for an application-owned immutable font cache. */
+/** Options for an application-owned view of Glyph's immutable font resource graph. */
 export interface FontLibraryOptions {
   readonly fetch?: typeof fetch;
   readonly baseUrl?: string | URL;
@@ -116,10 +116,9 @@ export interface FontLibraryOptions {
   readonly maxArtifactBytes?: number;
   readonly maxBufferViews?: number;
   readonly maxRasters?: number;
-  readonly maximumEntries?: number;
 }
 
-/** Application-owned cache of immutable font backings. */
+/** Application-owned loading boundary over Glyph's immutable font resource graph. */
 export interface FontLibrary {
   readonly disposed: boolean;
 
@@ -140,13 +139,7 @@ export interface FontLibrary {
     options?: FontLoadOptions,
   ): Promise<Fonts<Rasters>>;
 
-  /** Evict the cache entry for a statically discoverable Font token. */
-  clear<Format extends AnyRasterFormat>(token: FontToken<Format>): void;
-  /** Evict one raster variant from this library's cache. */
-  clear<Format extends AnyRasterFormat>(input: LoadFontInput, raster: RasterFormatInput<Format>): void;
-  /** Evict one multi-raster tuple from this library's cache. */
-  clear(input: LoadFontInput, rasters: FontRasterInputs): void;
-  /** Release every cache lease and reject pending loads. */
+  /** Release every source, decoded variant, and adapter-resource lease. */
   dispose(): void;
 }
 
@@ -770,31 +763,12 @@ interface PreparedRasterRequest {
   readonly identity: string;
 }
 
-interface PreparedFontRequest {
-  readonly input: FontInput;
-  readonly runtimeBake?: RuntimeFontBake;
-  readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
-  readonly rasters: readonly [PreparedRasterRequest, ...PreparedRasterRequest[]];
-  readonly key: string;
-  readonly multiple: boolean;
-}
-
 interface PreparedFontFaceSourceRequest {
   readonly input: FontInput;
   readonly runtimeBake?: RuntimeFontBake;
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
   readonly initialRasters: readonly PreparedRasterRequest[];
   readonly key: string;
-}
-
-interface SharedImmutableLoad {
-  readonly controller: AbortController;
-  readonly promise: Promise<readonly ImmutableFontVariant<AnyRasterFormat>[]>;
-  readonly releaseWhenIdle: boolean;
-  consumers: number;
-  settled: boolean;
-  released: boolean;
-  value: readonly ImmutableFontVariant<AnyRasterFormat>[] | undefined;
 }
 
 interface SharedFontFaceSourceLoad {
@@ -805,20 +779,15 @@ interface SharedFontFaceSourceLoad {
   value: FontFaceSourceNode | undefined;
 }
 
-interface FontLibraryEntry {
-  readonly variants: readonly ImmutableFontVariant<AnyRasterFormat>[];
-}
-
 interface FontLibraryOwnedResource<Value> {
   readonly value: Value;
   readonly dispose: () => void;
 }
 
-const topLevelFontLoads = new Map<string, SharedImmutableLoad>();
-
 interface ImmutableLoadArguments {
   readonly input: LoadFontInput;
-  readonly rasters: RasterFormatInput<AnyRasterFormat> | FontRasterInputs;
+  readonly rasters: readonly unknown[];
+  readonly multiple: boolean;
   readonly options: FontLoadOptions;
 }
 
@@ -831,39 +800,22 @@ function immutableLoadArguments(
     if (loadOptions !== undefined) throw new TypeError('font token loading accepts one options argument');
     return {
       input: inputOrToken.input,
-      rasters: {
-        raster: inputOrToken.raster,
-        ...(inputOrToken.options === undefined ? {} : { options: inputOrToken.options }),
-      },
+      rasters: [
+        {
+          raster: inputOrToken.raster,
+          ...(inputOrToken.options === undefined ? {} : { options: inputOrToken.options }),
+        },
+      ],
+      multiple: false,
       options: (rasterOrOptions === undefined ? {} : rasterOrOptions) as FontLoadOptions,
     };
   }
   if (rasterOrOptions === undefined) throw new TypeError('font loading requires a raster format');
   return {
     input: inputOrToken as LoadFontInput,
-    rasters: rasterOrOptions as RasterFormatInput<AnyRasterFormat> | FontRasterInputs,
+    rasters: Array.isArray(rasterOrOptions) ? rasterOrOptions : [rasterOrOptions],
+    multiple: Array.isArray(rasterOrOptions),
     options: loadOptions === undefined ? {} : (loadOptions as FontLoadOptions),
-  };
-}
-
-function immutableClearArguments(
-  inputOrToken: unknown,
-  rasters: unknown,
-): Pick<ImmutableLoadArguments, 'input' | 'rasters'> {
-  if (isFontTokenArgument(inputOrToken)) {
-    if (rasters !== undefined) throw new TypeError('font token clearing accepts no raster argument');
-    return {
-      input: inputOrToken.input,
-      rasters: {
-        raster: inputOrToken.raster,
-        ...(inputOrToken.options === undefined ? {} : { options: inputOrToken.options }),
-      },
-    };
-  }
-  if (rasters === undefined) throw new TypeError('font clearing requires a raster format');
-  return {
-    input: inputOrToken as LoadFontInput,
-    rasters: rasters as RasterFormatInput<AnyRasterFormat> | FontRasterInputs,
   };
 }
 
@@ -894,22 +846,8 @@ export function loadFont(
   rasterOrOptions?: unknown,
   loadOptions?: unknown,
 ): Promise<Font<AnyRasterFormat> | readonly Font<AnyRasterFormat>[]> {
-  const { input, rasters, options } = immutableLoadArguments(inputOrToken, rasterOrOptions, loadOptions);
-  const signal = fontLoadSignal(options);
-  signal?.throwIfAborted();
-  const prepared = prepareImmutableRequest(input, rasters, {});
-  let shared = topLevelFontLoads.get(prepared.key);
-  if (shared === undefined || shared.controller.signal.aborted) {
-    const created = createSharedImmutableLoad(ownPreparedRequestBytes(prepared), {}, true);
-    shared = created;
-    topLevelFontLoads.set(prepared.key, created);
-    void created.promise
-      .finally(() => {
-        if (topLevelFontLoads.get(prepared.key) === created) topLevelFontLoads.delete(prepared.key);
-      })
-      .catch(() => undefined);
-  }
-  return consumeImmutableLoad(shared, prepared.multiple, signal);
+  const args = immutableLoadArguments(inputOrToken, rasterOrOptions, loadOptions);
+  return loadFontsFromGraph(sharedGlyphFontLibrary, args);
 }
 
 export function createFontLibrary(options: FontLibraryOptions = {}): FontLibrary {
@@ -951,16 +889,12 @@ export function openSerializedFontFaceSource(
 
 class FontLibraryImpl implements FontLibrary {
   readonly #config: ImmutableLoaderConfig;
-  readonly #maximumEntries: number;
-  readonly #entries = new Map<string, FontLibraryEntry>();
-  readonly #pending = new Map<string, SharedImmutableLoad>();
   readonly #fontFaceSources = new Map<string, SharedFontFaceSourceLoad>();
   readonly #fontFaceContent = new Map<string, FontFaceSourceNode>();
   readonly #resources = new Map<object, FontLibraryOwnedResource<unknown>>();
   #disposed = false;
 
   constructor(options: FontLibraryOptions) {
-    this.#maximumEntries = positiveLimit(options.maximumEntries, DEFAULT_MAX_LIBRARY_ENTRIES, 'maximumEntries');
     this.#config = {
       ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
       ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
@@ -998,38 +932,8 @@ class FontLibraryImpl implements FontLibrary {
     loadOptions?: unknown,
   ): Promise<Font<AnyRasterFormat> | readonly Font<AnyRasterFormat>[]> {
     this.#assertActive();
-    const { input, rasters, options } = immutableLoadArguments(inputOrToken, rasterOrOptions, loadOptions);
-    const signal = fontLoadSignal(options);
-    signal?.throwIfAborted();
-    const prepared = prepareImmutableRequest(input, rasters, this.#config);
-    const cached = this.#entries.get(prepared.key);
-    if (cached !== undefined) {
-      this.#entries.delete(prepared.key);
-      this.#entries.set(prepared.key, cached);
-      return Promise.resolve(createImmutableFontResult(cached.variants, prepared.multiple));
-    }
-    let shared = this.#pending.get(prepared.key);
-    if (shared === undefined || shared.controller.signal.aborted) {
-      const created = createSharedImmutableLoad(ownPreparedRequestBytes(prepared), this.#config, false);
-      shared = created;
-      this.#pending.set(prepared.key, created);
-      void created.promise.then(
-        (variants) => {
-          const current = this.#pending.get(prepared.key) === created;
-          if (current) this.#pending.delete(prepared.key);
-          if (!current || this.#disposed) {
-            releaseSharedImmutableValue(created);
-            return;
-          }
-          this.#entries.set(prepared.key, { variants });
-          this.#evictOverflow();
-        },
-        () => {
-          if (this.#pending.get(prepared.key) === created) this.#pending.delete(prepared.key);
-        },
-      );
-    }
-    return consumeImmutableLoad(shared, prepared.multiple, signal);
+    const args = immutableLoadArguments(inputOrToken, rasterOrOptions, loadOptions);
+    return loadFontsFromGraph(this, args);
   }
 
   openFontFaceSource(
@@ -1075,25 +979,6 @@ class FontLibraryImpl implements FontLibrary {
     }
   }
 
-  clear<Format extends AnyRasterFormat>(token: FontToken<Format>): void;
-  clear<Format extends AnyRasterFormat>(input: LoadFontInput, raster: RasterFormatInput<Format>): void;
-  clear(input: LoadFontInput, rasters: FontRasterInputs): void;
-  clear(inputOrToken: unknown, rasters?: unknown): void {
-    this.#assertActive();
-    const args = immutableClearArguments(inputOrToken, rasters);
-    const prepared = prepareImmutableRequest(args.input, args.rasters, this.#config);
-    const entry = this.#entries.get(prepared.key);
-    if (entry !== undefined) {
-      this.#entries.delete(prepared.key);
-      releaseImmutableVariants(entry.variants);
-    }
-    const pending = this.#pending.get(prepared.key);
-    if (pending !== undefined) {
-      this.#pending.delete(prepared.key);
-      pending.controller.abort(new FontLoadError('FONT_LIBRARY_CLEARED', 'font library entry was cleared'));
-    }
-  }
-
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -1105,27 +990,12 @@ class FontLibraryImpl implements FontLibrary {
       }
     }
     this.#resources.clear();
-    for (const pending of this.#pending.values()) {
-      pending.controller.abort(new FontLoadError('FONT_LIBRARY_DISPOSED', 'font library was disposed'));
-    }
-    this.#pending.clear();
     for (const shared of this.#fontFaceSources.values()) {
       shared.controller.abort(new FontLoadError('FONT_LIBRARY_DISPOSED', 'font library was disposed'));
       shared.value?.dispose();
     }
     this.#fontFaceSources.clear();
     this.#fontFaceContent.clear();
-    for (const entry of this.#entries.values()) releaseImmutableVariants(entry.variants);
-    this.#entries.clear();
-  }
-
-  #evictOverflow(): void {
-    while (this.#entries.size > this.#maximumEntries) {
-      const oldest = this.#entries.entries().next().value as [string, FontLibraryEntry] | undefined;
-      if (oldest === undefined) return;
-      this.#entries.delete(oldest[0]);
-      releaseImmutableVariants(oldest[1].variants);
-    }
   }
 
   #assertActive(): void {
@@ -1167,6 +1037,57 @@ class FontLibraryImpl implements FontLibrary {
   }
 }
 
+const sharedGlyphFontLibrary = new FontLibraryImpl({});
+
+/** @internal Process-local font resource graph shared by Glyph and transitional low-level loads. */
+export function glyphFontLibrary(): FontLibrary {
+  return sharedGlyphFontLibrary;
+}
+
+function loadFontsFromGraph(
+  library: FontLibraryImpl,
+  args: ImmutableLoadArguments,
+): Promise<Font<AnyRasterFormat> | readonly Font<AnyRasterFormat>[]> {
+  if (args.rasters.length === 0) throw new TypeError('font request requires at least one raster format');
+  const rasters = args.rasters.map((raster, index) => prepareRasterRequest(raster, index));
+  const identities = new Set<string>();
+  for (const raster of rasters) {
+    if (identities.has(raster.identity)) throw new TypeError('font request cannot repeat one raster variant');
+    identities.add(raster.identity);
+  }
+  const requests = rasters.map(({ request }) => request);
+  const sourcePromise = library.openFontFaceSource(args.input, requests, args.options);
+  return sourcePromise.then((source) => loadFontsFromSource(source, requests, args.multiple));
+}
+
+async function loadFontsFromSource(
+  source: FontFaceSourceLease,
+  requests: readonly RasterFormatRequest<AnyRasterFormat>[],
+  multiple: boolean,
+): Promise<Font<AnyRasterFormat> | readonly Font<AnyRasterFormat>[]> {
+  const loads = requests.map((raster) => source.load(raster));
+  try {
+    const fonts = await Promise.all(loads);
+    retainFontSourceLease(source, fonts);
+    return multiple ? Object.freeze(fonts) : fonts[0]!;
+  } catch (error) {
+    const settled = await Promise.allSettled(loads);
+    for (const result of settled) if (result.status === 'fulfilled') result.value.dispose();
+    source.dispose();
+    throw error;
+  }
+}
+
+function retainFontSourceLease(source: FontFaceSourceLease, fonts: readonly Font<AnyRasterFormat>[]): void {
+  let remaining = fonts.length;
+  for (const font of fonts) {
+    observeImmutableFontDispose(font, () => {
+      remaining -= 1;
+      if (remaining === 0) source.dispose();
+    });
+  }
+}
+
 /** @internal Assert that a value is a FontLibrary created by this package instance. */
 export function assertFontLibrary(value: unknown, owner: string): asserts value is FontLibrary {
   if (!(value instanceof FontLibraryImpl)) throw new TypeError(`${owner} requires a FontLibrary`);
@@ -1180,39 +1101,6 @@ export function fontLibraryOwnedResource<Value>(
 ): Value {
   assertFontLibrary(library, 'font library resource');
   return (library as FontLibraryImpl).resource(key, create);
-}
-
-function createSharedImmutableLoad(
-  prepared: PreparedFontRequest,
-  config: ImmutableLoaderConfig,
-  releaseWhenIdle: boolean,
-): SharedImmutableLoad {
-  const controller = new AbortController();
-  let created!: SharedImmutableLoad;
-  const promise = Promise.resolve()
-    .then(() => loadImmutableVariants(prepared, config, controller.signal))
-    .then(
-      (variants) => {
-        created.value = variants;
-        created.settled = true;
-        if (created.releaseWhenIdle && created.consumers === 0) releaseSharedImmutableValue(created);
-        return variants;
-      },
-      (error: unknown) => {
-        created.settled = true;
-        throw error;
-      },
-    );
-  created = {
-    controller,
-    promise,
-    releaseWhenIdle,
-    consumers: 0,
-    settled: false,
-    released: false,
-    value: undefined,
-  };
-  return created;
 }
 
 function createSharedFontFaceSourceLoad(
@@ -1283,129 +1171,9 @@ function consumeFontFaceSourceLoad(
   });
 }
 
-function consumeImmutableLoad(
-  shared: SharedImmutableLoad,
-  multiple: boolean,
-  signal: AbortSignal | undefined,
-): Promise<Font<AnyRasterFormat> | readonly Font<AnyRasterFormat>[]> {
-  signal?.throwIfAborted();
-  shared.consumers += 1;
-  return new Promise((resolve, reject) => {
-    let active = true;
-    const release = (): void => {
-      if (!active) return;
-      active = false;
-      signal?.removeEventListener('abort', aborted);
-      shared.controller.signal.removeEventListener('abort', sharedAborted);
-      shared.consumers -= 1;
-      if (shared.consumers === 0) {
-        if (!shared.settled) shared.controller.abort(abortReason(signal));
-        else if (shared.releaseWhenIdle) releaseSharedImmutableValue(shared);
-      }
-    };
-    const aborted = (): void => {
-      release();
-      reject(abortReason(signal));
-    };
-    const sharedAborted = (): void => {
-      release();
-      reject(abortReason(shared.controller.signal));
-    };
-    signal?.addEventListener('abort', aborted, { once: true });
-    shared.controller.signal.addEventListener('abort', sharedAborted, { once: true });
-    shared.promise.then(
-      (variants) => {
-        if (!active) return;
-        try {
-          resolve(createImmutableFontResult(variants, multiple));
-        } catch (error) {
-          reject(error);
-        } finally {
-          release();
-        }
-      },
-      (error: unknown) => {
-        if (!active) return;
-        release();
-        reject(error);
-      },
-    );
-  });
-}
-
-function releaseSharedImmutableValue(shared: SharedImmutableLoad): void {
-  if (shared.released || shared.value === undefined) return;
-  shared.released = true;
-  releaseImmutableVariants(shared.value);
-}
-
-function createImmutableFontResult(
-  variants: readonly ImmutableFontVariant<AnyRasterFormat>[],
-  multiple: boolean,
-): Font<AnyRasterFormat> | readonly Font<AnyRasterFormat>[] {
-  if (!multiple) return createImmutableFontLease(variants[0]!);
-  return Object.freeze(variants.map((variant) => createImmutableFontLease(variant)));
-}
-
-function releaseImmutableVariants(variants: readonly ImmutableFontVariant<AnyRasterFormat>[]): void {
-  for (const variant of variants) releaseImmutableFontVariant(variant);
-}
-
-async function loadImmutableVariants(
-  prepared: PreparedFontRequest,
-  config: ImmutableLoaderConfig,
-  signal: AbortSignal,
-): Promise<readonly ImmutableFontVariant<AnyRasterFormat>[]> {
-  const registry = new FontRegistry({
-    ...(config.maxArtifactBytes === undefined ? {} : { maxArtifactBytes: config.maxArtifactBytes }),
-    ...(config.maxBufferViews === undefined ? {} : { maxBufferViews: config.maxBufferViews }),
-    ...(config.maxRasters === undefined ? {} : { maxRasters: config.maxRasters }),
-  });
-  const workerRasters = await Promise.all(
-    prepared.rasters
-      .filter(({ request }) => workerRasterKinds.includes(request.raster.kind))
-      .map(({ request, descriptor }) => runtimeBakeRaster(request.raster, descriptor)),
-  );
-  const selectedRuntimeBake = prepared.runtimeBake ?? config.runtimeBake;
-  const runtimeBake: RuntimeFontBake = async (request) => {
-    const bake = selectedRuntimeBake ?? (await loadDefaultRuntimeBake(request.sourceUrl));
-    return bake({
-      ...request,
-      ...(prepared.unicodeRanges === undefined ? {} : { unicodeRanges: prepared.unicodeRanges }),
-      rasters: workerRasters,
-    });
-  };
-  const loader = new FontLoader({
-    registry,
-    ...(config.fetch === undefined ? {} : { fetch: config.fetch }),
-    ...(config.baseUrl === undefined ? {} : { baseUrl: config.baseUrl }),
-    ...(config.development === undefined ? {} : { development: config.development }),
-    runtimeBake,
-    ...(prepared.unicodeRanges === undefined ? {} : { runtimeSourceIdentity: 'transformed' }),
-    ...(config.onDiagnostic === undefined ? {} : { onDiagnostic: config.onDiagnostic }),
-    ...(config.onWarning === undefined ? {} : { onWarning: config.onWarning }),
-  });
-  const registered = await loader.load(prepared.input, { signal });
-  signal.throwIfAborted();
-  const backing = createImmutableFontBacking(registered);
-  const variants: ImmutableFontVariant<AnyRasterFormat>[] = [];
-  try {
-    for (const preparedRaster of prepared.rasters) {
-      const variant = await loadImmutableVariant(registered, backing, preparedRaster, signal);
-      retainImmutableFontVariant(variant);
-      variants.push(variant);
-    }
-    delete getRegisteredFontData(registered).sourceBytes;
-    return Object.freeze(variants);
-  } catch (error) {
-    releaseImmutableVariants(variants);
-    if (variants.length === 0) registered.dispose();
-    throw error;
-  }
-}
-
 interface SharedFontFaceVariant {
   readonly promise: Promise<ImmutableFontVariant<AnyRasterFormat>>;
+  value: ImmutableFontVariant<AnyRasterFormat> | undefined;
 }
 
 class FontFaceSourceNode {
@@ -1523,10 +1291,11 @@ class FontFaceSourceNode {
       this.#font.dispose();
       return;
     }
-    void Promise.allSettled(variants.map(({ promise }) => promise)).then((results) => {
-      for (const result of results) {
-        if (result.status === 'fulfilled') releaseImmutableFontVariant(result.value);
-      }
+    const pending = variants.filter(({ value }) => value === undefined);
+    for (const variant of variants) if (variant.value !== undefined) releaseImmutableFontVariant(variant.value);
+    if (pending.length === 0) return;
+    void Promise.allSettled(pending.map(({ promise }) => promise)).then((results) => {
+      for (const result of results) if (result.status === 'fulfilled') releaseImmutableFontVariant(result.value);
       if (this.#backing.leases === 0 && !this.#backing.released) this.#font.dispose();
     });
   }
@@ -1563,6 +1332,7 @@ class FontFaceSourceNode {
     let shared!: SharedFontFaceVariant;
     const promise = create().then(
       (variant) => {
+        shared.value = variant;
         retainImmutableFontVariant(variant);
         if (this.#disposed || this.#variants.get(key) !== shared) {
           releaseImmutableFontVariant(variant);
@@ -1575,7 +1345,7 @@ class FontFaceSourceNode {
         throw error;
       },
     );
-    shared = { promise };
+    shared = { promise, value: undefined };
     this.#variants.set(key, shared);
     return promise;
   }
@@ -1762,35 +1532,6 @@ async function runtimeBakeFormat(
   });
 }
 
-function prepareImmutableRequest(
-  input: unknown,
-  rasterInput: unknown,
-  config: ImmutableLoaderConfig,
-): PreparedFontRequest {
-  const multiple = Array.isArray(rasterInput);
-  const rasterValues = multiple ? rasterInput : [rasterInput];
-  if (!Array.isArray(rasterValues) || rasterValues.length === 0) {
-    throw new TypeError('font request requires at least one raster format');
-  }
-  const rasters = rasterValues.map((raster, index) => prepareRasterRequest(raster, index));
-  const identities = new Set<string>();
-  for (const raster of rasters) {
-    if (identities.has(raster.identity)) throw new TypeError('font request cannot repeat one raster variant');
-    identities.add(raster.identity);
-  }
-  const normalizedInput = prepareLoadInput(input);
-  const resolved = resolveFontRequest(normalizedInput.input, resolveBaseUrl(config.baseUrl));
-  const key = `${requestKey(resolved)}:runtime:${functionIdentity(normalizedInput.runtimeBake ?? config.runtimeBake)}:ranges:${canonicalJson((normalizedInput.unicodeRanges ?? null) as never)}:rasters:${rasters.map(({ identity }) => identity).join('|')}`;
-  return {
-    input: normalizedInput.input,
-    ...(normalizedInput.runtimeBake === undefined ? {} : { runtimeBake: normalizedInput.runtimeBake }),
-    ...(normalizedInput.unicodeRanges === undefined ? {} : { unicodeRanges: normalizedInput.unicodeRanges }),
-    rasters: rasters as unknown as readonly [PreparedRasterRequest, ...PreparedRasterRequest[]],
-    key,
-    multiple,
-  };
-}
-
 function prepareFontFaceSourceRequest(
   input: LoadFontInput,
   initialRasters: readonly RasterFormatInput<AnyRasterFormat>[],
@@ -1812,23 +1553,6 @@ function prepareFontFaceSourceRequest(
     initialRasters: rasters,
     key: `${requestKey(resolved)}:runtime:${functionIdentity(normalizedInput.runtimeBake ?? config.runtimeBake)}:ranges:${canonicalJson((normalizedInput.unicodeRanges ?? null) as never)}:font-face-source`,
   };
-}
-
-/** @internal Validate font arguments and return the loader's canonical cache identity. */
-export function immutableFontRequestKey<Format extends AnyRasterFormat>(
-  input: LoadFontInput,
-  raster: RasterFormatInput<Format>,
-): string;
-export function immutableFontRequestKey<const Rasters extends FontRasterInputs>(
-  input: LoadFontInput,
-  rasters: Rasters,
-): string;
-export function immutableFontRequestKey(input: LoadFontInput, rasters: unknown): string {
-  return prepareImmutableRequest(input, rasters, {}).key;
-}
-
-function ownPreparedRequestBytes(prepared: PreparedFontRequest): PreparedFontRequest {
-  return { ...prepared, input: ownFontInputBytes(prepared.input) };
 }
 
 function ownPreparedFontFaceSourceBytes(prepared: PreparedFontFaceSourceRequest): PreparedFontFaceSourceRequest {
