@@ -1,11 +1,5 @@
-import {
-  type AnyRasterFormat,
-  type BakeProgressListener,
-  type Font,
-  type RuntimeFontBake,
-  type RuntimeFontBakeRequest,
-  type RasterFormatInput,
-} from '@pmndrs/glyph';
+import { type AnyRasterFormat, type BakeProgressListener, type Font, type RasterFormatInput } from '@pmndrs/glyph';
+import type { RuntimeFontBake, RuntimeFontBakeRequest } from '@pmndrs/glyph/config/font-library';
 
 import type { FontDelivery } from '../../benchmark/url-state';
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';

@@ -1,6 +1,5 @@
 import {
   createParagraph,
-  loadFont,
   type Constraints,
   type Font,
   type Paragraph,
@@ -8,6 +7,7 @@ import {
   type GlyphLayoutInspection,
   type TextStyle,
 } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import type { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';

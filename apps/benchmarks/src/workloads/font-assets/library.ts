@@ -1,4 +1,4 @@
-import { createFontLibrary } from '@pmndrs/glyph';
+import { createFontLibrary } from '@pmndrs/glyph/config/font-library';
 
 import { benchmarkFontArtifactByteLimit } from './limits';
 

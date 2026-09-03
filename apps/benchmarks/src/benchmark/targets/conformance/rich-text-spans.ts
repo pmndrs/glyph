@@ -1,4 +1,5 @@
-import { loadFont, type Font, type GlyphLayout, type RasterFormatInput } from '@pmndrs/glyph';
+import { type Font, type GlyphLayout, type RasterFormatInput } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { id as hashId } from '@pmndrs/glyph/config/codec';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 import type { TextGroup, ThreeRoot } from '@pmndrs/glyph/three';

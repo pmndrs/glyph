@@ -4,7 +4,8 @@ import test from 'node:test';
 
 import * as THREE from 'three/webgpu';
 
-import { createParagraph, loadFont, txt } from '@pmndrs/glyph';
+import { createParagraph, txt } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { techniqueProgram } from '@pmndrs/glyph/config/codec-program';
 import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
 import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';

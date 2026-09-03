@@ -3,16 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
-import {
-  Constraints,
-  createFontLibrary,
-  createFontStack,
-  glyph,
-  loadFont,
-  ParagraphLayout,
-  TextStyle,
-  txt,
-} from '@pmndrs/glyph';
+import { Constraints, createFontStack, glyph, ParagraphLayout, TextStyle, txt } from '@pmndrs/glyph';
+import { createFontLibrary, loadFont } from '@pmndrs/glyph/config/font-library';
 import { GlyphHandleState } from '../../dist/internal/handle-state.js';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';

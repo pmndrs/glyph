@@ -218,6 +218,14 @@
       "source": "./src/config/*.ts",
       "import": "./dist/config/*.js"
     },
+    "./config/font-library": {
+      "types": {
+        "source": "./src/loader.ts",
+        "default": "./dist/loader.d.ts"
+      },
+      "source": "./src/loader.ts",
+      "import": "./dist/loader.js"
+    },
     "./bakers/bitmap": {
       "types": {
         "source": "./src/bakers/bitmap.ts",

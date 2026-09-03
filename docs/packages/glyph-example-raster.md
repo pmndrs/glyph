@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:24fc8db9442c2e064c765d437132aa88890b503b9d6d54fbe6de333ce2abd534'
+source_digest: 'sha256:d739739d102fcec53f9bf28360965dfdbf1ee25d8727d143598508a611244c33'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest

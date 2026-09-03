@@ -2,13 +2,13 @@ import { readFile } from 'node:fs/promises';
 
 import {
   glyph,
-  loadFont,
   type Constraints,
   type Font,
   type GlyphLayoutInspection,
   type ParagraphLayout,
   type TextStyle,
 } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph/config/font-library';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { ThreeConfig } from '@pmndrs/glyph/three';

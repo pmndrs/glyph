@@ -231,18 +231,8 @@ export { createParagraph, Paragraph } from './paragraph.js';
 
 export type { GlyphCaret, GlyphKey } from './glyph-placement.js';
 
-export type {
-  FontLoadDiagnostic,
-  FontLoadOptions,
-  FontLibrary,
-  FontLibraryOptions,
-  FontRasterInputs,
-  Fonts,
-  LoadFontInput,
-  RuntimeFontBake,
-  RuntimeFontBakeRequest,
-} from './loader.js';
-export { createFontLibrary, FontLoadError, loadFont } from './loader.js';
+// FontFace loading can throw this application-visible error; loader construction lives on /config/font-library.
+export { FontLoadError } from './loader.js';
 
 export type { FontSelection, FontStack } from './loaded-font.js';
 export { createFontStack } from './loaded-font.js';

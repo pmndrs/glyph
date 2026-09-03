@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 
-import { glyphFlags, loadFont as loadGlyphFont } from '@pmndrs/glyph';
+import { glyphFlags } from '@pmndrs/glyph';
+import { loadFont as loadGlyphFont } from '@pmndrs/glyph/config/font-library';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import * as THREE from 'three/webgpu';
 
