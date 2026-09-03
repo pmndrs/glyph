@@ -8,7 +8,7 @@ font assets. The root page dynamically loads only the selected integration:
 
 The imperative example is the smallest complete public lifecycle. It initializes Glyph once, creates a Three handle,
 declares and loads one renderer-neutral FontFace, creates a `Text`, and attaches it to an ordinary Three scene. Its
-explicit `glyph.shape()` call publishes every dirty root and attaches the planned `Mesh` below the `Text` before the
+explicit `glyph.shape()` call publishes every dirty root and attaches the decoded `Mesh` below the `Text` before the
 application initializes `WebGPURenderer`; only `renderer.render(scene, camera)` performs the host draw.
 
 The R3F twin renders `Hello world` through the public React adapter, binds the globe span to a subsetted Font Awesome
@@ -40,5 +40,5 @@ mise exec -- pnpm --filter @pmndrs/glyph-examples check
 `bake:inter` and `bake:icons` regenerate one asset each; `bake:check:inter` and `bake:check:icons` verify them
 independently. Each font-specific command still embeds all three raster techniques in one GLB. The final check also runs
 two browser probes: the R3F route exercises all three technique branches, and the imperative route verifies that the
-scene owns the `Text`, the `Text` owns one planned draw mesh, and Three sees ten visible glyph instances for `Hello world`
+scene owns the `Text`, the `Text` owns one decoded draw mesh, and Three sees ten visible glyph instances for `Hello world`
 (the space shapes but does not draw).

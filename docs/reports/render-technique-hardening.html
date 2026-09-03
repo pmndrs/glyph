@@ -235,9 +235,14 @@
       <div class="eyebrow">pmndrs/glyph · durable implementation report</div>
       <h1>From immutable font to accepted GPU draw</h1>
       <p class="lede">
-        This is the current renderer-neutral contract. A Glyph engine owns shaping memory, a backend owns one renderer
-        integration, a render planner owns desired text and one acceptance frontier, and a plan target joins that core
-        hierarchy to a renderer device or context.
+        <strong>Historical report — superseded.</strong> This page records the pre-GlyphConfig backend/planner API from
+        draft PR #120. Do not copy its API examples. The current integration contract is the
+        <a href="../guides/renderer-integration.html">GlyphConfig renderer integration guide</a>.
+      </p>
+      <p class="lede">
+        In this historical design, a Glyph engine owned shaping memory, a backend owned one renderer integration, a
+        render planner owns desired text and one acceptance frontier, and a plan target joins that core hierarchy to a
+        renderer device or context.
       </p>
 
       <nav>

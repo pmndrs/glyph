@@ -38,11 +38,11 @@ generated:
 # Three.js text API
 
 `@pmndrs/glyph/three` is the maintained renderer integration. `Text` and `TextGroup` are Three.js `Object3D` subclasses;
-scene traversal collects desired mutations, calls the Rust engine, consumes its render-plan command buffer, uploads dirty
-ranges, and updates draw proxies.
+scene traversal collects desired mutations, participates in root publication, consumes the resulting command buffer,
+uploads dirty ranges, and updates draw proxies.
 
 ```ts
-import { glyph, loadFont } from '@pmndrs/glyph';
+import { glyph } from '@pmndrs/glyph';
 import { ThreeConfig, defineTextMaterial } from '@pmndrs/glyph/three';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
@@ -52,12 +52,12 @@ await glyph.init();
 const three = glyph.handle('main', ThreeConfig);
 ```
 
-Import only the technique modules an application uses. Each module registers the matching Three policy program and
-material implementation.
+Import only the RasterFormat modules an application names explicitly. `ThreeConfig` already supports its built-in
+Bitmap, MSDF, and Slug formats and realizes their Three materials.
 
-`ThreeConfig` is a pure built-in config value. Spread it to wrap `encode`, `decode`, `resolve`, or renderer preparation
-without sharing mutable handle state. `defineThreeConfig({ transformMode, allocationMode })` creates a variant. Several
-named Three handles may coexist over the same immutable loaded fonts.
+`ThreeConfig` is the built-in config value. `defineThreeConfig({ transformMode, allocationMode, capacity, compositing })`
+creates an immutable variant. Several named Three handles may coexist over the same loaded FontFace data while owning
+independent roots and renderer state.
 
 ## Resolver, draw root, and actual rendering
 
@@ -76,7 +76,7 @@ does not draw it:
 const label = three.createText({ font, text: 'Hello' });
 scene.add(label);
 
-label.shape(); // optional explicit semantic flush; Mesh children now sit below label
+glyph.shape(); // one semantic flush publishes every dirty root
 renderer.render(scene, camera); // Three traverses and actually submits those meshes
 ```
 
@@ -87,19 +87,22 @@ handle can live in different scenes. A single `Object3D` still has only one pare
 ## Load a font
 
 ```ts
-const font = await loadFont({ baked: '/fonts/inter-msdf.font.glb' }, msdf);
+const inter = glyph.fontFace('/fonts/Inter.font.glb', {
+  family: 'Inter',
+  format: [msdf, bitmap({ strikes: [16, 32] }), slug],
+});
+
+const font = await inter.load(); // font === inter; all declared formats load in parallel
+// Or load exactly one typed selection: await inter.slug.load();
 ```
 
-Root `Font` values are immutable and renderer-neutral. The same value may bind into multiple Three handles. Font loading
-belongs to Glyph's shared font graph; Three's `LoadingManager` is not a font-ownership or handle boundary.
+The FontFace declaration is renderer-neutral and owns its load lease. Text creation synchronously acquires a separate
+immutable `Font` lease from the selected loaded format. A string family uses the live FontFace catalog and the handle's
+configured default format. If the selected format is not loaded, Text creation throws; React hooks suspend on the same
+stable cached load Promise. Three's `LoadingManager` is not a font-ownership or handle boundary.
 
-Source-font loading requires a caller-supplied runtime baker:
-
-```ts
-const font = await loadFont({ source: '/fonts/inter.ttf', runtimeBake }, msdf);
-```
-
-No runtime baker is pulled into the default Three bundle.
+Passing a TTF or OTF source requests runtime baking; the baker remains a dynamically imported subpath and is not pulled
+into the default Three bundle.
 
 ## Create text
 
@@ -124,21 +127,31 @@ may override font selection, text style, and material.
 ## Batch text
 
 ```ts
-const group = three.createTextGroup({
-  capacity: { size: 4096, policy: 'grow' },
-  compositing: 'ordered',
-});
+const group = three.createTextGroup({ renderOrder: 10 });
 
 group.add(title, body, iconLabel);
 scene.add(group);
 ```
 
-All descendant `Text` objects that belong to the same handle participate in one retained planner and one
-render plan. Compatible Bitmap, MSDF, and Slug records may share backing storage while the plan emits the draw boundaries
-required by technique, font resource, material, clipping, and compositing policy.
+All descendant `Text` objects under the group participate in its retained hierarchy and nearest root publication.
+Compatible Bitmap, MSDF, and Slug records may share backing storage while the command buffer emits the draw boundaries
+required by raster, font resource, material, clipping, and compositing policy.
 
 `compositing: 'ordered'` preserves authored draw order. `independent` allows Rust to reorder compatible work when the
 application asserts that blending order is irrelevant.
+
+Capacity and compositing belong to `defineThreeConfig()`, not mutable TextGroup or handle methods. The policy controls
+every anonymous or named root created by that handle:
+
+```ts
+const dense = glyph.handle(
+  'dense',
+  defineThreeConfig({
+    capacity: { size: 16_384, policy: 'chunk' },
+    compositing: 'independent',
+  }),
+);
+```
 
 Capacity policy controls the instance arena:
 
@@ -153,8 +166,8 @@ an engine failure: traversal leaves the last complete draw live, `commitState()`
 reports the desired paragraph. Shortening the text or increasing capacity is checked again on the next traversal, so
 recovery does not depend on a latch or unrelated input churn (D-282).
 
-The default group capacity is 4,096 glyphs with `chunk` policy. A standalone `Text` defaults to 256 glyphs with `grow`
-policy. `setCapacity()` changes the retained capacity policy without changing text semantics.
+`ThreeConfig` defaults every root to 4,096-glyph chunks and ordered compositing. To use another immutable policy, create
+another handle from another config.
 
 ## Update retained values
 
@@ -171,11 +184,10 @@ Setters change desired state. The nearest `TextGroup` applies all pending descen
 `updateMatrixWorld()` traversal. Reassigning a value that normalizes to the current state is a no-op. Transform-only
 changes update the transform buffer and do not reshape or recompose text.
 
-Call `label.shape()` or `group.shape()` to synchronously publish current semantic desired state without waiting for host
-render traversal. `shape()` first updates the boundary's matrices, publishes at most one semantic transaction, then runs
-the cheap transform synchronizer. If no semantics are pending, it performs only transform synchronization. Ordinary
-`updateMatrixWorld()` preserves traversal safety by retaining an error on `Text`/`TextGroup`; explicit `shape()` throws a
-failure at the call that requested it.
+Call `glyph.shape()` to synchronously publish all dirty roots in one Rust/Wasm crossing instead of crossing once per
+TextGroup or named root. Three scene traversal also participates in publication before draw-list construction. If no
+semantics are pending, `updateMatrixWorld()` uses only the cheap transform synchronizer. Traversal retains an error on
+`Text`/`TextGroup`; explicit `glyph.shape()` throws a publication failure at the call that requested it.
 
 One group traversal performs at most one mutating `pmndrs_glyph_engine_update` transaction for that group's pending
 values. An earlier `measure()` query uses the non-publishing paragraph measurement call and retains a speculative batch
@@ -299,9 +311,9 @@ const material = defineTextMaterial((context) => {
 const label = three.createText({ font, text: 'Custom', material });
 ```
 
-The factory is renderer-owned. Rust carries a numeric `materialId` through style resolution and draw planning; it does not
+The factory is renderer-owned. Rust carries an internal material identity through style resolution and command-buffer construction; it does not
 execute the factory. Three invokes `create()` when it needs a material for a built-in Bitmap, MSDF, Slug, or decoration
-pipeline. A registered external plan program owns its separate typed `createMaterial` contract.
+pipeline. A registered external `ThreeRasterProgram` owns its separate typed `createMaterial` contract.
 Material creation runs while Three holds borrowed plan-backed attributes. It must return synchronously and must not query
 or update text; the coordinator rejects such reentrancy before another Wasm call can detach those views.
 
@@ -326,28 +338,15 @@ therefore unifies material selection without merging decoration geometry into th
 material.
 
 A material on a span overrides the text material; a text material overrides the group material. Equal material objects
-share identity. Different materials may still share instance buffers—the render plan determines draw segmentation, while
+share identity. Different materials may still share instance buffers—the command buffer determines draw segmentation, while
 the Three executor decides which GPU resources can be shared safely.
 
-## Mix fallback techniques
+## Mix fallback raster formats
 
-```ts
-const prose = await loader.loadAsync({
-  input: '/fonts/inter-msdf.font.glb',
-  raster: { technique: msdf, options: {} },
-});
-const emoji = await loader.loadAsync({
-  input: '/fonts/emoji-slug.font.glb',
-  raster: { technique: slug, options: {} },
-});
-
-const font = createFontStack(prose, emoji);
-const label = three.createText({ font, text: 'Status 🌍' });
-```
-
-The font stack carries resource and technique identity. The user-facing text API does not repeat a technique selector.
-Rust resolves missing-glyph fallback, and the render plan partitions the selected glyphs by the capabilities and resources
-declared by the active Three policy.
+`createFontStack()` accepts already loaded immutable `Font` values in fallback order, including Fonts returned by the
+React raster hooks. The stack carries resource and raster identity, so the user-facing Text API does not repeat a format
+selector. Rust resolves missing glyphs and the command buffer partitions the selected glyphs by the capabilities and
+resources declared by the active Three Codec.
 
 ## Break committed glyphs into an independent object
 
@@ -464,6 +463,6 @@ maintained renderer target is `@react-three/fiber/webgpu`, which inherits Three'
 
 ## Deliberately absent surfaces
 
-There is no effects/variant API, JavaScript layout callback, public TypeGPU batch, or user-authored command parser in this
-surface. Custom visual behavior uses `material`; renderer-directed batching uses the compiled Rust policy and render plan.
-TypeGPU will be rebuilt against that plan in a later stack.
+There is no JavaScript layout callback or user-authored command parser in this surface. Custom visual behavior uses
+`material`; renderer-directed batching uses the compiled Codec and command buffer. TypeGPU consumes the same public
+`GlyphConfig` contract through the example renderer.

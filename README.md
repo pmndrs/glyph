@@ -2,7 +2,7 @@
 
 Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for every Canvas.
 
-`@pmndrs/glyph` retains authored text, shapes and lays it out in Rust/Wasm, then publishes a transient render plan for the active renderer. The maintained Three.js integration supports Bitmap, MSDF, and Slug through WebGPU and Three's WebGL fallback.
+`@pmndrs/glyph` retains authored text, shapes and lays it out in Rust/Wasm, then publishes a revisioned command buffer for the active renderer. The maintained Three.js integration supports Bitmap, MSDF, and Slug through WebGPU and Three's WebGL fallback.
 
 ## Render text with React Three Fiber
 
@@ -76,14 +76,28 @@ An outer `Text` is a retained paragraph and a Three `Object3D`. A nested `Text` 
 
 `defineThreeConfig({ compositing: 'ordered' })` preserves authored draw order and is the default. Use `independent` only when overlapping text does not depend on blending order as it lets the planner reorder compatible work into fewer draws.
 
+`GlyphProvider` is optional. Use it only to select a named/custom root for a subtree or to declare scoped string FontFace
+aliases. Its handle and FontFace table are immutable for the lifetime of that provider:
+
+```tsx
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
+
+<GlyphProvider handle="hud" fontFaces={{ Inter: '/fonts/Inter.font.glb' }} fallback={null}>
+  <Text font="Inter">Hello, HUD</Text>
+</GlyphProvider>;
+```
+
+`handle="hud"` selects the idempotent `hud` root on R3F's default Three handle. Pass an existing handle or root instead
+when a custom `ThreeConfig` is required. `<Text>` intentionally has no handle prop.
+
 ## Render text with Three.js
 
 ```ts
 import { glyph, span, txt } from '@pmndrs/glyph';
-import { defineThreeConfig } from '@pmndrs/glyph/three';
+import { ThreeConfig } from '@pmndrs/glyph/three';
 
 await glyph.init();
-const three = glyph.handle('main', defineThreeConfig({ compositing: 'independent' }));
+const three = glyph.handle('main', ThreeConfig);
 const interFace = await glyph.fontFace('/fonts/Inter.font.glb').load();
 
 const accent = span({ color: '#70d6ff' });
@@ -98,12 +112,14 @@ const label = three.createText({
 
 labels.add(label);
 scene.add(labels);
+glyph.shape();
+renderer.render(scene, camera);
 ```
 
 Three uses `txt` and `span` where React uses nested `Text`. A span may override its font selection or text style without manually maintaining UTF-16 ranges; the Three `spans` form also accepts a material override.
 
-`handle.createText()` creates an ordinary Three `Object3D`, not a canvas or renderer. During `shape()` or Three scene
-traversal, Glyph attaches planned `Mesh` children below that `Text`/`TextGroup`; the application's later
+`handle.createText()` creates an ordinary Three `Object3D`, not a canvas or renderer. During `glyph.shape()` or Three
+scene traversal, Glyph attaches decoded `Mesh` children below that `Text`/`TextGroup`; the application's later
 `renderer.render(scene, camera)` performs the actual host draw. Dispose the text/group, FontFace, and handle when their
 owning application scope ends.
 
@@ -225,7 +241,9 @@ const denseLabels = dense.createTextGroup();
 keeps the last complete revision visible. The requirement is a text-length upper bound computed before shaping, so
 content can be sized against the cap rather than discovered past it.
 
-Custom materials are renderer-owned factories. Rust carries their numeric `materialId` through planning, while Three creates the actual material only when a draw needs it. Different materials may still share instance buffers.
+Custom materials are renderer-owned factories. Rust carries their internal material identity through command-buffer
+construction, while Three creates the actual material only when a draw needs it. Different materials may still share
+instance buffers.
 
 ```ts
 import { defineTextMaterial } from '@pmndrs/glyph/three';
@@ -240,7 +258,7 @@ const custom = three.createText({ font: interFace, text: 'Custom material', mate
 ```
 
 Call `dispose()` when a `Text`, `TextGroup`, FontFace, immutable loaded Font, or handle will not be reused. Disposing a
-group releases its render planner and renderer resources but does not dispose descendant `Text` objects, which may move
+group releases its publication boundary and renderer resources but does not dispose descendant `Text` objects, which may move
 to another live group.
 
 ## Bake fonts
@@ -324,7 +342,7 @@ gpuDevice.destroy();
 `defineExampleConfig()` is intentionally an external package using the same public configuration leaves available to any
 integrator. Its renderer synchronously decodes a borrowed `CommandBufferView`, stages one device transaction, and returns
 `commit()`/`discard()` without retaining the view. `glyph.shape()` publishes every dirty root across every live handle in
-one engine crossing. Raw Wasm offsets and numeric plan identities remain package-private. See the
+one engine crossing. Raw Wasm offsets and numeric identities remain package-private. See the
 [renderer integration guide](docs/guides/renderer-integration.md) and the
 [`glyph-example-renderer` source](packages/glyph-example-renderer/src/config.ts) for the complete configuration.
 
@@ -357,16 +375,16 @@ flowchart TD
   assemble --> commands["Command buffer<br/><i>fixed-record data</i>"]
   raster --> binding --> commands
   subgraph engine["Written once per engine"]
-    gpu["Bind buffers, textures, resources<br/><i>from the plan</i>"]
+    gpu["Bind buffers, textures, resources<br/><i>from the command buffer</i>"]
     material["Realize material and submit"]
   end
   commands --> gpu --> draw["Draws"]
   commands --> material --> draw
 ```
 
-The portable program and compiled font result contain no renderer types. The program owns the schema, Codec body, and
-cold binding/resource composition; each engine supplies its own system-lane numbers, capabilities, transform and
-allocation choices, and final `CodecProgram` assembly. Only buffer/texture/resource binding and material realization
+The portable `RasterCodec` and compiled font result contain no renderer types. The `RasterCodec` owns the schema, Codec
+body, and cold binding/resource composition; each engine supplies its own system-lane numbers, capabilities, transform
+and allocation choices, and final `CodecProgram` assembly. Only buffer/texture/resource binding and material realization
 are engine objects. A RasterFormat is therefore authored once and consumed by any renderer whose Codec and shader
 support it.
 
