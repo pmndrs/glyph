@@ -1000,6 +1000,7 @@ export class GlyphProxyElement extends HTMLElement {
     this.#releasing = true;
     const token = ++this.#releaseToken;
     poster.removeAttribute('data-still');
+    this.removeAttribute('data-glyph-still');
     poster.style.width = canvas.style.width;
     poster.style.height = canvas.style.height;
     canvas.toBlob(
@@ -1062,6 +1063,7 @@ export class GlyphProxyElement extends HTMLElement {
     const source = this.getAttribute('poster');
     if (!poster || source === null || this.#state !== 'empty') return;
     poster.setAttribute('data-still', '');
+    this.setAttribute('data-glyph-still', '');
     poster.src = source;
     poster.decode().then(
       () => {
@@ -1265,6 +1267,9 @@ div {
 }
 :host(:not([data-glyph-state='empty'])) div {
   opacity: 0;
+}
+:host([data-glyph-still]) div {
+  transition: none;
 }
 `;
 
