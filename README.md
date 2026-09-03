@@ -343,7 +343,7 @@ gpuDevice.destroy();
 integrator. Its renderer synchronously decodes a borrowed `CommandBufferView`, stages one device transaction, and returns
 `commit()`/`discard()` without retaining the view. `glyph.shape()` publishes every dirty root across every live handle in
 one engine crossing. Raw Wasm offsets and numeric identities remain package-private. See the
-[renderer integration guide](docs/guides/renderer-integration.md) and the
+[renderer integration guide](.agents/docs/guides/renderer-integration.md) and the
 [`glyph-example-renderer` source](packages/glyph-example-renderer/src/config.ts) for the complete configuration.
 
 ## Codec and command buffer
@@ -431,7 +431,7 @@ shader/material realization, GPU resources, and transform synchronization.
 Each RasterFormat declares which authored text effects its Codec and shader support. MSDF supports outline and shadow;
 Bitmap and Slug currently support neither. Unsupported effects throw rather than disappearing from the display list.
 
-Start with the [renderer integration guide](docs/guides/renderer-integration.md), which walks these responsibilities with
+Start with the [renderer integration guide](.agents/docs/guides/renderer-integration.md), which walks these responsibilities with
 the external TypeGPU implementation. Internal engine, wire, projection, and planner modules are deliberately not package
 exports.
 
@@ -459,7 +459,7 @@ pnpm dev
 
 ### Enable the repository hooks
 
-Every `docs/packages/<name>.md` pins a `source_digest` over its package tree, and CI rejects commits whose
+Every `.agents/docs/packages/<name>.md` pins a `source_digest` over its package tree, and CI rejects commits whose
 digests trail their sources. Hook definitions ship versioned in the repository's `.gitconfig` (Git 2.54
 config-based hooks) with their scripts in `.githooks/`; the committed pre-commit hook re-pins those digests
 automatically at commit time and runs the knowledge-base validation, so the pin can never go stale by
@@ -473,7 +473,7 @@ git config set include.path ../.gitconfig
 Verify with `git hook list --show-scope pre-commit`. On older Git, `git config core.hooksPath .githooks`
 enables the same script through the fallback dispatcher. The hook never blocks a commit: it computes
 digests from the staged tree (unstaged edits never leak into a pin), rewrites and stages the affected
-`docs/packages/*.md` pins automatically, and downgrades anything it cannot do — including a missing
+`.agents/docs/packages/*.md` pins automatically, and downgrades anything it cannot do — including a missing
 Ruby — to a warning, leaving CI's knowledge-base gate as the enforcement. It runs on any Ruby 3.1 or
 newer, however installed; no managed toolchain is required. Run it directly at any time as
 `.githooks/okf-digests`.

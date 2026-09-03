@@ -107,7 +107,7 @@ test('keeps the packaged extension schema byte-identical to the canonical schema
     await Promise.all([
       readFile(
         new URL(
-          '../../../../../docs/planning/extensions/PMNDRS_font/schema/glTF.PMNDRS_font.schema.json',
+          '../../../../../.agents/docs/planning/extensions/PMNDRS_font/schema/glTF.PMNDRS_font.schema.json',
           import.meta.url,
         ),
       ),

@@ -15,7 +15,7 @@ describe.sequential('static repository gates', () => {
       '.claude/settings.json',
       '.claude/tsconfig.json',
       'package.json',
-      'docs/log.md',
+      '.agents/docs/log.md',
     ]),
   );
   gate('core formatting', () => pnpmAt('../../packages/glyph', ['exec', 'oxfmt', '--check', '.']));

@@ -5,7 +5,7 @@ import test, { before } from 'node:test';
 import Ajv from 'ajv';
 import draft04Schema from 'ajv/lib/refs/json-schema-draft-04.json' with { type: 'json' };
 
-const extensionRoot = new URL('../../../../../docs/planning/extensions/', import.meta.url);
+const extensionRoot = new URL('../../../../../.agents/docs/planning/extensions/', import.meta.url);
 let validateDistanceField;
 let validateSlug;
 

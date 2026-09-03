@@ -249,7 +249,7 @@ test('keeps the packaged MSDF schema byte-identical to its canonical source', as
   assert.deepEqual(
     await readFile(
       new URL(
-        '../../../../docs/planning/extensions/PMNDRS_font_distance_field/schema/glTF.PMNDRS_font_distance_field.schema.json',
+        '../../../../.agents/docs/planning/extensions/PMNDRS_font_distance_field/schema/glTF.PMNDRS_font_distance_field.schema.json',
         import.meta.url,
       ),
     ),

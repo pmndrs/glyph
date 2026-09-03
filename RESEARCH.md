@@ -374,7 +374,7 @@ Extracted:
 - Basis Universal is portable but requires a transcoder; its module, transcode time, selected target, and resulting GPU bytes belong in the payload report.
 - Standard GPU block formats are lossy and are inappropriate for exact Slug band addresses/counts.
 - High-quality UASTC-derived curve or distance-field textures are plausible experiments, but geometry/edge errors require output-based quality gates and an uncompressed fallback.
-- The concrete Slug strategy and Lucide sizing model are recorded in [GPU compression and compact Slug storage](docs/planning/gpu-compression.md).
+- The concrete Slug strategy and Lucide sizing model are recorded in [GPU compression and compact Slug storage](.agents/docs/planning/gpu-compression.md).
 
 ### Three Flatland Slug implementation
 
@@ -385,7 +385,7 @@ Sources:
 - [Slug Node bake module](https://github.com/thejustinwalsh/three-flatland/blob/c596ac2313e33cace825fe197a6d730269019175/packages/slug/src/bake.ts)
 - [Shared browser-safe/Node-split bake package](https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175/packages/bake)
 - [Slug package exports and baker registration](https://github.com/thejustinwalsh/three-flatland/blob/c596ac2313e33cace825fe197a6d730269019175/packages/slug/package.json)
-- [Local file-level audit](docs/planning/slug-audit.md)
+- [Local file-level audit](.agents/docs/planning/slug-audit.md)
 
 Type: project source code and derived audit
 Reviewed revision: `c596ac2313e33cace825fe197a6d730269019175`
@@ -424,7 +424,7 @@ Extracted:
 - The baked path removes SVG parsing and DOM work from runtime, while preserving names, multiple handles/fills, fill rules, and view boxes.
 - Full-library and imported-subset costs must be measured separately. The checked-in Lucide artifact is a stress case, not the expected payload for an application importing a few icons.
 - The fork's RGBA16F curve and R32F band texture layout is the relevant optimized Slug baseline; older font artifacts used a larger RG32F band texture.
-- The [font payload budget](docs/planning/payload-budget.md) records the current Inter, Font Awesome, and Lucide measurements and keeps serialized geometry separate from GPU-resident textures.
+- The [font payload budget](.agents/docs/planning/payload-budget.md) records the current Inter, Font Awesome, and Lucide measurements and keeps serialized geometry separate from GPU-resident textures.
 
 ### Slug Library
 
@@ -700,7 +700,7 @@ Extracted:
 - uikit should own signal adaptation, point-scale rounding, padding/border removal, centered-coordinate conversion, transforms, clipping, and render-group integration.
 - `pmndrs/glyph` must not expose Yoga, Preact Signals, or uikit-specific types merely to support this consumer.
 - Current character-entry caret and selection code cannot represent ligatures, combining marks, reordered glyphs, or cluster boundaries; a later migration step must use cluster-aware queries rather than adapting glyph IDs back into character entries.
-- See the [uikit integration explanation](docs/planning/uikit-integration.md) for the resulting incremental migration.
+- See the [uikit integration explanation](.agents/docs/planning/uikit-integration.md) for the resulting incremental migration.
 
 ### harfbuzzjs
 
@@ -729,4 +729,4 @@ Extracted:
 
 ## Research queue
 
-Open investigations, prototype questions, and deferred topics are maintained in [`open-questions.md`](docs/planning/open-questions.md). New sources should be added here only after they have been reviewed and annotated.
+Open investigations, prototype questions, and deferred topics are maintained in [`open-questions.md`](.agents/docs/planning/open-questions.md). New sources should be added here only after they have been reviewed and annotated.

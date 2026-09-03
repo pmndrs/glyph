@@ -1,7 +1,7 @@
 #!/bin/sh
 # Keep OKF source digests current at commit time — automatically and silently.
 #
-# Every docs/packages/<name>.md pins a source_digest over its package tree.
+# Every .agents/docs/packages/<name>.md pins a source_digest over its package tree.
 # This hook recomputes the digests for whatever packages a commit stages,
 # rewrites the pins, and stages the result. It computes from the STAGED tree
 # (materialized via checkout-index), so unstaged edits never leak into a pin,
@@ -37,8 +37,8 @@ for root in apps/benchmarks apps/r3f-hello-world packages/glyph packages/glyph-e
   fi
 done
 if [ -z "$affected" ]; then
-  if printf '%s\n' "$staged" | grep -q "^docs/"; then
-    run_ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb docs --workspace-root . ||
+  if printf '%s\n' "$staged" | grep -q "^.agents/docs/"; then
+    run_ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb .agents/docs --workspace-root . ||
       echo "okf-digests: validation reported issues above (commit not blocked; CI enforces)." >&2
   fi
   exit 0
@@ -56,7 +56,7 @@ digests=$(run_ruby .agents/skills/open-knowledge-format/scripts/generate_package
 }
 
 for root in $affected; do
-  doc="docs/packages/$(basename "$root").md"
+  doc=".agents/docs/packages/$(basename "$root").md"
   [ -f "$doc" ] || continue
   digest=$(printf '%s\n' "$digests" | awk -F'\t' -v r="$root" '$3 == r { print $2 }')
   [ -n "$digest" ] || continue
@@ -67,6 +67,6 @@ for root in $affected; do
   fi
 done
 
-run_ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb docs --workspace-root . ||
+run_ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb .agents/docs --workspace-root . ||
   echo "okf-digests: validation reported issues above (commit not blocked; CI enforces)." >&2
 exit 0

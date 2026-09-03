@@ -3,7 +3,7 @@
  *
  * It exists to keep the engine-integration surface honest: if a second renderer cannot
  * be written against the root GlyphConfig surface without reaching into package internals, this package
- * stops compiling. See `docs/planning/example-renderer.md`.
+ * stops compiling. See `.agents/docs/planning/example-renderer.md`.
  */
 export type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResourceRecord } from './draw-list.js';
 export {
