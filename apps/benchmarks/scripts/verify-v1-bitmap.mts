@@ -13,8 +13,8 @@ import { launchProjectChromium } from './support/project-chromium.mts';
 
 interface RasterProofResult {
   readonly backend: 'webgpu' | 'webgl2';
-  readonly decorationPixels?: number;
-  readonly decorationRecords?: number;
+  readonly decorationPixels: number;
+  readonly decorationRecords: number;
   readonly drawCount: number;
   readonly glyphCount: number;
   readonly litPixels: number;
@@ -79,7 +79,6 @@ try {
     if (result.backend !== expected) throw new Error(`expected ${expected}, received ${result.backend}`);
     if (
       result.drawCount < 3 ||
-      result.decorationPixels === undefined ||
       result.decorationPixels < 1 ||
       result.decorationRecords !== 2 ||
       result.glyphCount !== 16 ||
@@ -116,7 +115,9 @@ try {
     if (errors.length !== 0) throw new Error(`${expected} MTSDF browser errors: ${errors.join(' | ')}`);
     if (result.backend !== expected) throw new Error(`expected ${expected}, received ${result.backend}`);
     if (
-      result.drawCount < 1 ||
+      result.drawCount < 3 ||
+      result.decorationPixels < 1 ||
+      result.decorationRecords !== 2 ||
       result.glyphCount !== 15 ||
       result.litPixels < 32 ||
       !result.retainedDraw ||
@@ -149,7 +150,9 @@ try {
     if (errors.length !== 0) throw new Error(`${expected} Slug browser errors: ${errors.join(' | ')}`);
     if (result.backend !== expected) throw new Error(`expected ${expected}, received ${result.backend}`);
     if (
-      result.drawCount < 1 ||
+      result.drawCount < 3 ||
+      result.decorationPixels < 1 ||
+      result.decorationRecords !== 2 ||
       result.glyphCount !== 14 ||
       result.litPixels < 32 ||
       !result.retainedDraw ||
