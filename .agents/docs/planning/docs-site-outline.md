@@ -436,6 +436,57 @@ Unloaded font at construction · outer `<Text>` without `font` · options not ma
 
 - Table old → new: `new FontLoader().loadAsync` → `loadFont`/hooks; implicit domain → `glyph.handle`; `Text.layout()` → `measure()`; `insertText`/`deleteText`/`replaceText`/`setSpan`/`removeSpan` → assignment; `paint` → `style`.
 
+## Page format
+
+Every page is a scaffold Justin writes into, not finished prose. What a page keeps visible is structure and evidence:
+headings, tables, figures, the inline `<glyph-proxy>` examples, and code blocks in the canonical API. Every
+explanation lives in an MDX comment so it never ships:
+
+```mdx
+{/*
+reader
+- who is reading, what they know, what they arrive asking, what they should leave able to do
+
+write · intro
+- the question it answers; what to say, in order; an anchor image; the shape (length, list or not)
+
+write · keypoints
+- the four claims, one clause each
+
+notes · internals for the page
+- fact — `packages/glyph/src/file.ts#symbol` or `…file.ts:120–134`
+*/}
+
+## Heading
+
+<evidence: table, code, figure, proxy>
+
+{/*
+write
+- the question this section answers for the reader
+- what to say, paragraph by paragraph, in plain words; what to point at in the evidence; what to avoid
+- an anchor or analogy when one helps; the shape (how many paragraphs, a callout, a list)
+
+notes · internals
+- fact — `path#symbol` or `path:line–line`
+- [verify] a claim not yet found in the tree, and where to look
+- [in flight] a canonical form the tree has not caught up to, with the decision number
+*/}
+```
+
+The `write` block comes first and is written to be read while writing: it carries the claims in plain words, not
+pointers. The `notes` block is the internals behind them, each with its source.
+
+Sources are paths in the redesign tree (`feat/glyph-config-api`; line numbers as of `09d7ae569`) or decision-register
+numbers. The exemplar is `site/docs/fonts/techniques.mdx`. The canonical API is the FontFace path — `glyph.fontFace(url,
+{ format })`, `await face.load()`, keyed members, callable format requests such as `bitmap({ strikes })` — and the
+immutable-Font loaders (`loadFont`, `createFontStack`, `defineFont`, `FontLoader`, `useFont`) do not appear; the
+other agent is removing them. Every `ts`/`tsx` block typechecks against the tree through
+`pnpm --filter @pmndrs/glyph-site check:snippets` (`site/scripts/check-snippets.mts`, ambient names in
+`scripts/snippet-ambient.d.ts`); a deliberate fragment carries `no-check` on its fence. The examples under
+`site/examples` are written against what the tree accepts today and are ported after the API merges and this branch
+rebases.
+
 ## Findings for core (2026-09-02, codex tree at 4ed218c1d plus uncommitted planner/retention edits)
 
 Measured while building the examples against `GLYPH_SOURCE=<codex>/packages/glyph`; each is reproducible from the named example.
@@ -456,6 +507,44 @@ Measured while building the examples against `GLYPH_SOURCE=<codex>/packages/glyp
 | no "every glyph rasterised empty" guard | bitmap and MTSDF bakers mark unreadable outlines absent silently; a CFF face bakes shaping data and an empty raster | baking page warns |
 
 The pane the examples are verified in is hidden between tool calls (`document.hidden === true`, no rAF), and r3f's Canvas mounts children only once its container measures: take a throwaway screenshot before waiting, then the real one, and navigate with a fresh query string after every rebuild so cached HTML does not 404 on old chunks.
+| FontFace in spans and nested React `Text` | `span(font)` takes an immutable `FontSelection` (`three/span.ts:20`, `formatted-text.ts:121–126`); a nested `<Text font={Icons.slug}>` throws `nested R3F Text font declarations must be loaded with useFont before use` (`react.ts:793–801`). D-310 binds faces into `Text` but says nothing about spans. | docs show the face-member form under `no-check` with [in flight]; the fonts and text scaffolds carry the note |
+| `Text.font` setter and `set({ font })` | typed over immutable `FontSelection` (`three/text.ts:74–75`, `:670–672`); D-310 promises `FONT_FACE_FORMAT_NOT_LOADED` on update with an unloaded face, but the setter is not on the FontFace type yet | [in flight] on text/text-and-groups and fonts/loading |
+| Runtime-bake subset form | `{ source, runtimeBake, unicodeRanges }` is a `LoadFontInput` (`loader.ts:86–92`) and the only way to subset at runtime; D-297 lists URL/Request/Blob/bytes sources only | fonts/runtime-baking shows it with [in flight]; needs a decision |
+| Discovery after `defineFont` retires | `discovery.ts:101–104` scans for `defineFont` imports; D-296 says no token is required and names no replacement | fonts/baking keeps the CLI and table, drops the token snippet, asks in [verify] |
+| Fallback stacks at the face level | D-297 forbids source arrays inside one FontFace; nothing through D-314 defines a stack over faces; at HEAD a stack is `createFontStack` over immutable fonts (`loaded-font.ts:46–69`) | fonts/fallback-stacks shows no stack declaration until a decision lands |
+| Hook input type | `useMsdf`/`useBitmap`/`useSlug` take `LoadFontInput` (`react/msdf.ts:8`), not `FontFaceSource` (`font-face.ts:27`); whether the hooks accept `Blob`/`SerializedFontFace` and drop `{ baked }` / `{ source, runtimeBake }` is undecided | react/hooks states the `FontFaceSource` set with [in flight] |
+| Custom raster formats from React | with bare `useFont` retired there is no hook for a custom format; the scaffold hands `glyph.fontFace(url, { format: 'acme' })` straight to `<Text font>` | react/hooks "Custom formats" asks whether a wrapper factory is intended |
+| `FontStack` in React and spans | `R3fFontSelection` (`react.ts:73`) and `three/span.ts:20` still admit a `FontStack`; no stack form is defined on the FontFace path | react/components props table says `Font` only |
+| Default `fontSize` | the planner defaults `fontSize` to 16 (`internal/render-planner.ts:1626`); the old tutorial said "1 world unit per em" | getting-started/your-first-text needs one sentence on what the default means |
+| WebGL2 fallback path | three's `getFallback` (`WebGPURenderer.js:57–71`, `Renderer.js:785`) is reachable only if an absent `navigator.gpu` surfaces as a rejection rather than a throw at `WebGPUBackend.js:217`; not provable from the tree | getting-started/introduction "Does it need WebGPU?" carries [verify] |
+| Batch boundary keys | which keys partition draws (format, resource, material, clip, compositing) is stated nowhere citable; deriving them needs `internal/render-planner.ts` plus `rust/shaper/src/engine/plan_draw.rs` | advanced/performance and text/text-and-groups reference the planner with [verify] |
+| Unicode version | only crate/npm pins and `provenance.unicodeVersion` exist; no version number is stated in the tree | getting-started/introduction "Which scripts and languages?" carries [verify] |
+| Corrections to earlier docs claims | layout units are F16.16, not F26.6 (`rust/shaper/src/engine/layout_units.rs:1–20`); UAX 14 line breaking runs in Rust (`rust/shaper/src/line_break.rs`), JS holds grapheme boundaries only (`internal/graphemes.ts`) | fixed in the scaffolds' notes |
+| `Text.spans` | no public getter at HEAD (`three/text.ts:667–710`) while D-265, `three/frame-error.ts:15`, and `docs/three-api.md:209–221` speak of it; `three-api.md:217–221` still passes raw `spans:` to `createText`, which `assertNoRawSpans` (`three/text.ts:1489`) rejects | text/rich-text "Reading the result" under `no-check` |
+| `alignSpansToClusters` | not exported from the root entry (`index.ts:263–274`); D-265 calls it the exported offset check | text/rich-text "The cluster rule" [verify] |
+| `createParagraph({ font })` | takes a loaded immutable `FontSelection` (`paragraph.ts:71`); no handle-free way to bind a FontFace to a renderer-neutral `Paragraph` | text/measurement "Paragraph without a renderer" under `no-check` |
+| Detached `Text.measure()` | D-282 says it throws, `three-api.md:275` says implicit standalone planner; at HEAD it routes through the root-owned planner regardless of attachment (`three/text.ts:409–412`, `:1193–1201`) | text/measurement "When you can measure" |
+| Raising `capacity` | no `ThreeConfigOptions` member raises the planner arenas (`three/handle.ts:93–99` vs `:215–229`); the errors page can only say "file it" | text/errors "Fixed capacity is not an error" |
+| `TextFrameError` | exported, but `textFrameError()` has no caller at HEAD | text/errors keeps a caveat |
+| Fixed-capacity retry | D-282 promises a retry every traversal; staging drops the root from the dirty set (`glyph-engine.ts:446`), so an unchanged over-budget root may wait for an invalidation | text/errors |
+| Lit-text normal | the materials scene derives its normal from `positionLocal` (per-glyph unit quad, per `tsl/*-shader.ts` docstrings) while its comment claims paragraph space | text/materials "Lit text" asks for a render of both |
+| Bitmap custom materials and snapping | the default routes `clipPosition` into `vertexNode` (`three/material-realizer.ts:616–623`); a factory setting only `positionNode` likely loses `pixelSnapping` | text/materials [verify] |
+| Corrections to earlier docs claims (text pages) | `inkBounds === undefined` means "did not position", never "empty" (`layout.ts:80–89`); `root.error` does not exist, only `text.error` / `group.error`; Bitmap's shader output includes `opacity`; `errorFallback` catches any `FontLoadError` beneath it (`react.ts:371`); `caretAt` takes paragraph space, so a three.js local point needs `-local.y` | fixed in the scaffolds' notes |
+| Missing example scenes | `editing`, `caret`, `errors`, `hooks`, `provider`, `fallback-stack`, `runtime-bake`, `raster-ratio` are referenced by proxies but absent from `site/examples/src/catalog.ts`; the carousel/flag warp behind the "Slug ignores `positionNode`" finding is no longer in `kinetic` | pending examples; each proxy carries [verify] |
+| Unicode analysis location | UAX 9/14/24/29 run in Rust (`rust/shaper/src/unicode.rs`, `bidi.rs`, `line_break.rs`; D-320 deleted the TS analyzer); only grapheme segmentation for span alignment stays in JS | advanced/how-it-works corrected |
+| Layout unit format | `layout_units.rs:1–34` is F16.16 (`LAYOUT_UNIT_BITS = 16`); D-254 and `docs/planning/integer-layout-units.md` still say F26.6 | advanced/how-it-works [in flight] until the register catches up |
+| Implicit shaping in plain three.js | scene traversal shapes through the root's draw object (`three/text.ts:139–142`, `:478–493`, `:421–429`) and swallows rejections into `text.error`; only an explicit `glyph.shape()` throws | advanced/pitfalls "nothing draws and nothing threw" |
+| Device loss on the Three side | `requestCheckpoint` has no caller under `src/three/*`; the only recipe is dispose and recreate | advanced/topologies flags the gap |
+| `<TextSpan>` retirement | nested `<Text>` exists and no `TextSpan` is exported, but D-005 predates D-277 and no decision names the retirement | advanced/migration cites D-277 with [verify] |
+| Landing performance numbers | "505 → 121 draws" and "243 MB" exist in no source; only the 732 MB comment in `site/landing/src/main.tsx:46–52` | advanced/performance keeps them as [verify] |
+| CFF outlines in the Bitmap and MTSDF bakers | `slug-fontations` converts CFF cubics; the other two bakers' outline reader is unnamed in what was read (see #114) | advanced/pitfalls CJK row [verify] |
+| `createCodecProgram` signature | positional `(techniqueId, programId, body, buffers, transformMode, allocationMode)`; masks are fixed (`config/codec.ts:712–721`): storage = technique·program·resource·depth, draw adds material·clip·order (+transform in `direct`); there is no `partitionBy` | advanced/codec corrected |
+| Who assembles a raster lane program | a renderer never writes it; it calls `createRasterCodecProgram(planProgram, { namespace, system, capabilitySet, transformMode, allocationMode, ids })` (`config/raster.ts:168–217`) | advanced/codec corrected |
+| Independent-compositing sort key | `(depthKey << 32) \| orderToken` (`plan_draw.rs:19–21`), not `orderToken` alone | advanced/render-plan corrected |
+| Wire table count | eight tables: the renderer's six plus `semanticViews` and `diagnostics` | advanced/render-plan notes it |
+| Config brand on spread | whether `{ ...ThreeConfig, renderer }` without re-calling `defineGlyphConfig` keeps the brand; the raster test always re-wraps | advanced/custom-renderers [verify] |
+| `useFont` for custom formats | `useFont(url, { format: myFormat({ … }) })` is the only hook path for a custom format; D-302 and `react.ts:138–150` keep it, while this outline listed it among retiring loaders — needs the author's call | advanced/custom-techniques "Using it" |
+| Codec operation limit | `MAX_OPERATIONS_PER_CODEC_PROGRAM` is declared in TS with no throw site found; Rust enforces it (`codec.rs:11`) | advanced/codec [verify] |
 
 ## Verification
 

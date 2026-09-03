@@ -48,7 +48,14 @@ mise exec -- pnpm --filter @pmndrs/glyph-site build:examples    # → dist/examp
 mise exec -- pnpm --filter @pmndrs/glyph-site build:docs-components  # → docs/assets/explainer.{js,css}, for the pages
 mise exec -- pnpm --filter @pmndrs/glyph-site check:examples    # typecheck + both builds
 mise exec -- pnpm --filter @pmndrs/glyph-site test              # the explainer's unit tests
+GLYPH_SOURCE=/path/to/checkout/packages/glyph mise exec -- pnpm --filter @pmndrs/glyph-site check:snippets
+                                                                # every ts/tsx block in the docs typechecks against that checkout
 ```
+
+The docs pages are scaffolds: their code blocks are the canonical API (`glyph.fontFace(url)`, `await face.load()`,
+`face.slug`, `bitmap({ strikes })`) and are typechecked by `check:snippets`; the scenes here are written against
+what the checkout accepts today and are ported after the API merges. See "Page format" in
+`docs/planning/docs-site-outline.md`.
 
 The scenes are written against the API on the redesign branch. Until it merges, verify them against that checkout:
 
