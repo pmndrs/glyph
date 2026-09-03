@@ -43,8 +43,9 @@ import {
  * The imperative twin: a second Scene on a named root renders the typed
  * passage and two small lanes to a RenderTarget before the main scene each
  * frame; the knot wears its texture; two rings are shaped once, broken
- * apart, and placed by matrix on tumbling circles; the strip and the passage
- * line are `set({ text })` on every tick.
+ * apart, and placed by matrix on tumbling circles (the React scene writes
+ * them word by word instead, one paragraph per word, the same placement);
+ * the strip and the passage line are `set({ text })` on every tick.
  */
 export async function mount(scene: Scene, renderer: Renderer): Promise<() => void> {
   await glyph.init();
