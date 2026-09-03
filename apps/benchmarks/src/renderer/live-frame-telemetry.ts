@@ -199,7 +199,7 @@ function estimateRefreshRateHz(
   length: number,
   nextIndex: number,
 ): number {
-  const sampleCount = copyAndSort(frameDurations, scratch, length, nextIndex);
+  const sampleCount = copyFiniteHistory(frameDurations, scratch, length, nextIndex);
   if (sampleCount < MINIMUM_REFRESH_ESTIMATE_SAMPLES) return 60;
   const refreshPeriodMs = quantile(scratch, sampleCount, REFRESH_PERIOD_QUANTILE);
   return refreshPeriodMs > 0 ? 1_000 / refreshPeriodMs : 60;
@@ -234,8 +234,10 @@ function snapshot(options: {
     submitQuantileScratch,
   } = options;
   const length = cursor.length;
-  const submitLength = copyAndSort(submitHistory, submitQuantileScratch, length, cursor.nextIndex);
-  const gpuLength = gpuTimingSupported ? copyAndSort(gpuHistory, gpuQuantileScratch, length, cursor.nextIndex) : 0;
+  const submitLength = copyFiniteHistory(submitHistory, submitQuantileScratch, length, cursor.nextIndex);
+  const gpuLength = gpuTimingSupported
+    ? copyFiniteHistory(gpuHistory, gpuQuantileScratch, length, cursor.nextIndex)
+    : 0;
   const normalizedRefreshRate = Math.max(Number.EPSILON, refreshRateHz);
   return {
     frameCount,
@@ -271,47 +273,61 @@ function snapshot(options: {
 
 function historyMinimum(history: Float32Array, length: number, nextIndex: number): number {
   let minimum = Number.POSITIVE_INFINITY;
-  forEachHistoryValue(history, length, nextIndex, (value) => {
+  const start = length === history.length ? nextIndex : 0;
+  for (let index = 0; index < length; index += 1) {
+    const value = history[(start + index) % history.length] ?? Number.NaN;
     if (Number.isFinite(value)) minimum = Math.min(minimum, value);
-  });
+  }
   return minimum === Number.POSITIVE_INFINITY ? 0 : minimum;
 }
 
 function historyMaximum(history: Float32Array, length: number, nextIndex: number): number {
   let maximum = Number.NEGATIVE_INFINITY;
-  forEachHistoryValue(history, length, nextIndex, (value) => {
+  const start = length === history.length ? nextIndex : 0;
+  for (let index = 0; index < length; index += 1) {
+    const value = history[(start + index) % history.length] ?? Number.NaN;
     if (Number.isFinite(value)) maximum = Math.max(maximum, value);
-  });
+  }
   return maximum === Number.NEGATIVE_INFINITY ? 0 : maximum;
 }
 
-function copyAndSort(source: Float32Array, target: Float32Array, length: number, nextIndex: number): number {
+function copyFiniteHistory(source: Float32Array, target: Float32Array, length: number, nextIndex: number): number {
   let copied = 0;
-  forEachHistoryValue(source, length, nextIndex, (value) => {
-    if (!Number.isFinite(value)) return;
+  const start = length === source.length ? nextIndex : 0;
+  for (let index = 0; index < length; index += 1) {
+    const value = source[(start + index) % source.length] ?? Number.NaN;
+    if (!Number.isFinite(value)) continue;
     target[copied] = value;
     copied += 1;
-  });
-  target.subarray(0, copied).sort();
+  }
   return copied;
 }
 
-function forEachHistoryValue(
-  history: Float32Array,
-  length: number,
-  nextIndex: number,
-  visit: (value: number) => void,
-): void {
-  const start = length === history.length ? nextIndex : 0;
-  for (let index = 0; index < length; index += 1) {
-    visit(history[(start + index) % history.length] ?? Number.NaN);
-  }
-}
-
-function quantile(sorted: Float32Array, length: number, fraction: number): number {
+/** Selects the nearest-rank quantile in place without sorting or allocating a prefix view. */
+function quantile(values: Float32Array, length: number, fraction: number): number {
   if (length === 0) return 0;
-  const index = Math.min(length - 1, Math.ceil(length * fraction) - 1);
-  return sorted[index] ?? 0;
+  const selectedIndex = Math.min(length - 1, Math.ceil(length * fraction) - 1);
+  let left = 0;
+  let right = length - 1;
+  while (left < right) {
+    const pivot = values[(left + right) >>> 1] ?? 0;
+    let lower = left;
+    let upper = right;
+    while (lower <= upper) {
+      while ((values[lower] ?? 0) < pivot) lower += 1;
+      while ((values[upper] ?? 0) > pivot) upper -= 1;
+      if (lower > upper) break;
+      const value = values[lower] ?? 0;
+      values[lower] = values[upper] ?? 0;
+      values[upper] = value;
+      lower += 1;
+      upper -= 1;
+    }
+    if (selectedIndex <= upper) right = upper;
+    else if (selectedIndex >= lower) left = lower;
+    else break;
+  }
+  return values[selectedIndex] ?? 0;
 }
 
 function optionalPositive(value: number | undefined, label: string): number | undefined {
