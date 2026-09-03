@@ -394,17 +394,16 @@ root exposes `createText()` and `publish()` by delegating to `services.createTex
 The application owns the immutable Font and configured handle:
 
 ```ts
-import { glyph, loadFont } from '@pmndrs/glyph';
+import { glyph } from '@pmndrs/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import { defineExampleConfig, RecordingExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
 
 await glyph.init();
 const device = new RecordingExampleRendererDevice();
 const handle = glyph.handle('example:main', defineExampleConfig(device));
-const font = await loadFont(
-  { baked: '/fonts/Inter.font.glb' },
-  { technique: glyphExample, options: { paletteSeed: 7 } },
-);
+const font = await glyph
+  .fontFace('/fonts/Inter.font.glb', { format: glyphExample({ paletteSeed: 7 }) })
+  .load();
 
 const text = handle.createText({ font, text: 'Portable', fontSize: 64 });
 const first = text.publish();
