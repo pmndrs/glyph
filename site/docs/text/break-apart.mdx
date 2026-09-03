@@ -5,6 +5,10 @@ nav: 28
 sourcecode: packages/glyph/src/three/glyphs.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   `breakApart()` takes the glyphs the renderer last committed and copies them into a `Glyphs` object with one
   matrix per glyph, plus a `Decorations` object for underlines when there are any. The source keeps shaping; the
@@ -29,12 +33,7 @@ decorations?.dispose();
 label.visible = true;
 ```
 
-<iframe
-  src="/examples/?example=break-apart"
-  title="Explode, tumble, reset"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="break-apart" aria-label="Explode, tumble, reset" aspect="16 / 9" />
 
 ## Preconditions
 
@@ -84,12 +83,7 @@ for (let i = 0; i < glyphs.count; i += 1) {
 }
 ```
 
-<iframe
-  src="/examples/?example=arc"
-  title="A line of text bent into a turning ring"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="arc" aria-label="A line of text bent into a turning ring" aspect="16 / 9" />
 
 {/* prose: layout stays straight; the bend is a matrix per glyph, written once. Any path works the same way —
 sample it by arc length at each glyph's `originalMatrix` x. */}

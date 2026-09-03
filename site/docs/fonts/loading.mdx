@@ -5,6 +5,10 @@ nav: 12
 sourcecode: packages/glyph/src/font-face.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   A FontFace is a declaration: one source, an optional family name, the raster formats you intend to use. `load()` is
   the one load boundary. The declaration is itself its default selection, each declared format is a distinct member,
@@ -100,12 +104,7 @@ useMsdf.preload({ baked: '/fonts/inter.font.glb' }); // Promise<void>, at module
 {/* prose: starts the default handle's load before render; the hook later finds it loaded. `.clear()` drops the
 hook's declaration cache and disposes the face it declared; a mounted lease is unaffected. */}
 
-<iframe
-  src="/examples/?example=hooks"
-  title="Preload, Suspense, StrictMode"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="hooks" aria-label="Preload, Suspense, StrictMode" aspect="16 / 9" />
 
 ## Strings and the provider
 

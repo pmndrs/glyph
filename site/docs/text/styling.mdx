@@ -5,6 +5,10 @@ nav: 21
 sourcecode: packages/glyph/src/text-properties.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   `style` is the inherited presentation of a paragraph. A span overrides what it names and inherits the rest. Every
   length is in paragraph-local units — the units `fontSize` is in — so a style scales with the text it decorates.
@@ -30,12 +34,7 @@ sourcecode: packages/glyph/src/text-properties.ts
 </Text>
 ```
 
-<iframe
-  src="/examples/?example=styling"
-  title="Every TextStyle property, one control each"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="styling" aria-label="Every TextStyle property, one control each" aspect="16 / 9" />
 
 <details>
 <summary>TextStyle members</summary>
@@ -88,12 +87,7 @@ span can fade without restating color. */}
 field and rejects them at the boundary rather than degrading. Width and offset are in paragraph-local units; a wider
 outline needs a larger `pixelRange` at bake. */}
 
-<iframe
-  src="/examples/?example=effects"
-  title="Outline, shadow, animated color"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="effects" aria-label="Outline, shadow, animated color" aspect="16 / 9" />
 
 ## Decoration
 
@@ -102,12 +96,7 @@ outline needs a larger `pixelRange` at bake. */}
 > `solid` only; any other value throws `Text style decoration style '…' is not implemented; only 'solid' is supported`
 > at construction. The other four are reserved for the wire format (`frame-wire.ts`) and land with the decoration work.
 
-<iframe
-  src="/examples/?example=decorations"
-  title="Every decoration line and style, and a custom decoration material"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="decorations" aria-label="Every decoration line and style, and a custom decoration material" aspect="16 / 9" />
 
 ```ts
 decoration: { underline: true, lineThrough: false, color: '#ffd166', thickness: 0.03, offset: 0 }

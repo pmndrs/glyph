@@ -1,32 +1,39 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { EXAMPLES, type ExampleSlug, isExampleSlug } from './catalog';
-import { ExamplePreview } from './components/preview';
+import { installExplainerPages } from '../../docs/components/explainer';
+import examples from '../../docs/components/pages/examples';
+import { EXAMPLES, isExampleSlug } from './catalog';
+import { Gallery } from './components/gallery';
+import { Preview } from './components/preview';
 import './styles.css';
 
 /**
- * One page, one scene. `?example=<slug>` selects a scene from the catalog and
- * only that scene's module is loaded, so the docs can iframe any example
- * without paying for the others. The preview owns the scene's life: it runs
- * while in view and keeps its last frame while it is not.
+ * Two pages on one element. `?example=<slug>` is one scene filling the page,
+ * for the docs to iframe. No slug is the gallery: every example, one root,
+ * scenes started by hand.
  */
-const url = new URL(window.location.href);
-const requested = url.searchParams.get('example');
-const slug: ExampleSlug = requested !== null && isExampleSlug(requested) ? requested : 'hello';
-const entry = EXAMPLES[slug];
+installExplainerPages(new Map([['examples', examples]]));
 
-document.title = `${entry.title} · @pmndrs/glyph`;
-document.documentElement.dataset['example'] = slug;
-
+const requested = new URL(window.location.href).searchParams.get('example');
 const root = document.querySelector('#root');
 if (root === null) throw new Error('the examples page needs a #root element');
 
-createRoot(root).render(
-  <StrictMode>
-    <ExamplePreview slug={slug} entry={entry} />
-    <a className="example-source" href={entry.page} target="_top">
-      {entry.title} — read the page
-    </a>
-  </StrictMode>,
-);
+if (requested !== null && isExampleSlug(requested)) {
+  const entry = EXAMPLES[requested];
+  document.title = `${entry.title} · @pmndrs/glyph`;
+  document.documentElement.dataset['example'] = requested;
+  createRoot(root).render(
+    <StrictMode>
+      <Preview slug={requested} entry={entry} />
+    </StrictMode>,
+  );
+} else {
+  document.title = 'Examples · @pmndrs/glyph';
+  document.documentElement.dataset['mode'] = 'gallery';
+  createRoot(root).render(
+    <StrictMode>
+      <Gallery />
+    </StrictMode>,
+  );
+}

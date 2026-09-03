@@ -25,6 +25,24 @@ import { rankViewportTargets } from './viewport-ranking';
 
 const RESIZE_SETTLE_MS = 120;
 const STATS_INTERVAL_MS = 250;
+const DEFAULT_HOVER_DELAY_MS = 160;
+const DEFAULT_MAX_DPR = 2;
+
+/**
+ * Who decides which proxies hold a lease. `viewport`: the visible proxies
+ * nearest the viewport centre, on their own. `pointer`: only proxies the reader
+ * has engaged — hovered with intent, touched, clicked, or focused — most recent
+ * first; a proxy that scrolls out of view drops its lease and waits to be
+ * engaged again.
+ */
+export type GlyphActivation = 'viewport' | 'pointer';
+
+export type GlyphCameraOptions = Readonly<{
+  fov: number;
+  near: number;
+  far: number;
+  position: readonly [number, number, number];
+}>;
 
 export type GlyphRenderStats = Readonly<{
   active: number;
@@ -45,7 +63,6 @@ type GlyphProxyHandle = HTMLElement & {
   releaseFrame(): void;
   rootId: string | undefined;
   scene: string;
-  setActive(active: boolean): void;
 };
 
 type GlyphR3fRoot = ReturnType<typeof createRoot>;
@@ -54,6 +71,7 @@ type GlyphPresenter = CanvasRenderingContext2D | ImageBitmapRenderingContext;
 type GlyphPresentationState = Readonly<{
   camera: Parameters<WebGPURenderer['render']>[1];
   scene: Parameters<WebGPURenderer['render']>[0];
+  renderPipeline?: { render(): unknown } | null;
 }>;
 
 type GlyphRenderSlot = {
@@ -88,12 +106,15 @@ function GlyphSlotPresenter({ present }: { present: (state: GlyphPresentationSta
  * root uses one page-level virtual frame; each proxy is a centered HTML clipping window over it.
  */
 export abstract class GlyphOffscreenRootElement extends HTMLElement {
-  static observedAttributes = ['id', 'max-slots', 'idle-ttl'];
+  static observedAttributes = ['id', 'max-slots', 'idle-ttl', 'activation'];
 
   #pool = new GlyphRenderPool<GlyphProxyHandle>(2);
   #slots = new Map<number, GlyphRenderSlot>();
   #proxies = new Set<GlyphProxyHandle>();
   #visible = new Map<GlyphProxyHandle, Readonly<{ distance: number; ratio: number }>>();
+  #intersecting = new Set<GlyphProxyHandle>();
+  #engaged = new Map<GlyphProxyHandle, number>();
+  #intent: Readonly<{ proxy: GlyphProxyHandle; timer: ReturnType<typeof setTimeout> }> | undefined;
   #sceneOverrides = new Map<GlyphProxyHandle, string>();
   #observer: IntersectionObserver | undefined;
   #resizeObserver: ResizeObserver | undefined;
@@ -126,10 +147,30 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
 
   protected abstract createScene(props: GlyphSceneProps): ReactNode;
 
+  /**
+   * Renderer state a scene needs before its frame — tone mapping, say. The
+   * renderer is shared by every pooled root, so this runs before every frame.
+   */
+  protected prepareRender(_scene: string, _renderer: WebGPURenderer): void {}
+
+  /** The camera every logical root is configured with. */
+  protected cameraOptions(): GlyphCameraOptions {
+    return { fov: 35, far: 100, near: 0.01, position: [0, 0, 7] };
+  }
+
   connectedCallback() {
     this.setAttribute('data-glyph-root', '');
     this.#pool = new GlyphRenderPool(this.#maxSlots());
-    this.#observer = new IntersectionObserver(() => this.#queueVisibilitySync());
+    // Intersection is the lease authority: a proxy the observer cannot see —
+    // including one whose iframe has left the top-level viewport — is not ranked.
+    this.#observer = new IntersectionObserver((records) => {
+      for (const record of records) {
+        const proxy = record.target as GlyphProxyHandle;
+        if (record.isIntersecting) this.#intersecting.add(proxy);
+        else this.#intersecting.delete(proxy);
+      }
+      this.#queueVisibilitySync();
+    });
     this.#register();
     this.#statsEnabled =
       this.hasAttribute('stats') || new URLSearchParams(window.location.search).get('stats') === 'true';
@@ -181,6 +222,9 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     for (const proxy of this.#proxies) proxy.releaseFrame();
     this.#proxies.clear();
     this.#visible.clear();
+    this.#intersecting.clear();
+    this.#engaged.clear();
+    this.#cancelIntent();
     this.#sceneOverrides.clear();
     this.#copyMs = 0;
     this.#readyEventSent = false;
@@ -230,6 +274,9 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   unregister(proxy: GlyphProxyHandle) {
     this.#proxies.delete(proxy);
     this.#visible.delete(proxy);
+    this.#intersecting.delete(proxy);
+    this.#engaged.delete(proxy);
+    if (this.#intent?.proxy === proxy) this.#cancelIntent();
     this.#observer?.unobserve(proxy);
     this.#sceneOverrides.delete(proxy);
     this.#frameSizeDirty = true;
@@ -241,6 +288,62 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   updateProxyScene(proxy: GlyphProxyHandle) {
     this.#sceneOverrides.delete(proxy);
     this.#scheduleReconcile();
+  }
+
+  // Properties reflect their attributes both ways: a framework that finds a
+  // property on the element assigns it instead of setting the attribute.
+  get activation(): GlyphActivation {
+    return this.getAttribute('activation') === 'pointer' ? 'pointer' : 'viewport';
+  }
+
+  set activation(value: GlyphActivation) {
+    this.setAttribute('activation', value);
+  }
+
+  /** How long a mouse must rest on a proxy before that counts as intent. */
+  get hoverDelay(): number {
+    const raw = Number.parseInt(this.getAttribute('hover-delay') ?? '', 10);
+    return Number.isNaN(raw) ? DEFAULT_HOVER_DELAY_MS : Math.max(0, raw);
+  }
+
+  set hoverDelay(value: number) {
+    this.setAttribute('hover-delay', String(value));
+  }
+
+  /**
+   * A proxy asks for a lease under pointer activation. With a delay the request
+   * is intent: it takes effect only if the pointer is still there when the
+   * delay runs out, and intent for another proxy replaces it, so a pass across
+   * a row of proxies starts nothing until the pointer rests on one.
+   */
+  engage(proxy: GlyphProxyHandle, delayMs = 0) {
+    if (this.activation !== 'pointer') return;
+    if (delayMs > 0 && this.#intent?.proxy === proxy) return; // already counting down for this one
+    this.#cancelIntent();
+    if (delayMs > 0) {
+      const timer = setTimeout(() => {
+        this.#intent = undefined;
+        this.#engage(proxy);
+      }, delayMs);
+      this.#intent = { proxy, timer };
+      return;
+    }
+    this.#engage(proxy);
+  }
+
+  /** Withdraw a pending intent — the pointer left before it rested. A held lease is unaffected. */
+  cancelIntent(proxy: GlyphProxyHandle) {
+    if (this.#intent?.proxy === proxy) this.#cancelIntent();
+  }
+
+  #engage(proxy: GlyphProxyHandle) {
+    this.#engaged.set(proxy, performance.now());
+    this.#scheduleReconcile();
+  }
+
+  #cancelIntent() {
+    if (this.#intent !== undefined) clearTimeout(this.#intent.timer);
+    this.#intent = undefined;
   }
 
   #register() {
@@ -269,9 +372,14 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     return Math.max(0, Number.parseInt(raw ?? '30000', 10) || 0);
   }
 
+  #maxDpr() {
+    const raw = Number.parseFloat(this.getAttribute('max-dpr') ?? '');
+    return Number.isNaN(raw) ? DEFAULT_MAX_DPR : Math.max(0.5, raw);
+  }
+
   #syncVisibility() {
     const ranked = rankViewportTargets(
-      [...this.#proxies].map((proxy) => {
+      [...this.#intersecting].map((proxy) => {
         const rect = proxy.getBoundingClientRect();
         return { key: proxy, top: rect.top, bottom: rect.bottom, height: rect.height };
       }),
@@ -279,6 +387,8 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     );
     this.#visible.clear();
     for (const { key, distance, ratio } of ranked) this.#visible.set(key, { distance, ratio });
+    // An engaged proxy that scrolls away stops, and does not resume on its own.
+    for (const proxy of this.#engaged.keys()) if (!this.#visible.has(proxy)) this.#engaged.delete(proxy);
     this.setAttribute('data-glyph-visible-count', String(this.#visible.size));
   }
 
@@ -293,6 +403,12 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   };
 
   #rankVisible() {
+    if (this.activation === 'pointer') {
+      const engaged = [...this.#engaged.entries()]
+        .filter(([proxy]) => this.#visible.has(proxy))
+        .sort((a, b) => b[1] - a[1]);
+      return engaged.map(([key], index) => [key, engaged.length - index] as const);
+    }
     const ranked = [...this.#visible.entries()].sort(
       (a, b) => a[1].distance - b[1].distance || b[1].ratio - a[1].ratio,
     );
@@ -345,17 +461,11 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     for (const [proxy, slot] of desired) {
       const isNewProxy = slot.proxy !== proxy;
       if (isNewProxy) {
-        slot.proxy?.setActive(false);
         slot.proxy = proxy;
         slot.inputs.clear();
-        proxy.setActive(false);
       }
       const scene = this.#sceneFor(proxy);
-      if (isNewProxy || slot.scene !== scene) {
-        this.#render(slot, scene);
-      } else if (slot.ready) {
-        proxy.setActive(true);
-      }
+      if (isNewProxy || slot.scene !== scene) this.#render(slot, scene);
     }
 
     for (const proxy of this.#proxies) {
@@ -386,7 +496,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     const r3f = createRoot(rootSurface);
     const { dpr, height, width } = this.#frameSize;
     await r3f.configure({
-      camera: { fov: 35, far: 100, near: 0.01, position: [0, 0, 7] },
+      camera: this.cameraOptions(),
       dpr,
       frameloop: 'never',
       orthographic: false,
@@ -467,7 +577,6 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   #render(slot: GlyphRenderSlot, scene: string) {
     const token = beginGlyphRender(slot);
     slot.scene = scene;
-    slot.proxy?.setActive(false);
     slot.store = slot.r3f.render(
       createElement(
         Fragment,
@@ -514,7 +623,7 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   };
 
   #measureVirtualFrame() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, this.#maxDpr());
     return largestGlyphSurface(
       [...this.#proxies].map((proxy) => {
         const rect = proxy.getBoundingClientRect();
@@ -568,8 +677,11 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
     const surface = this.#surface;
     const proxy = slot.proxy;
     if (!renderer || !surface || !proxy || !slot.ready || slot.resizing) return;
+    this.prepareRender(slot.scene ?? '', renderer);
     renderer.setViewport(0, 0, this.#frameSize.width, this.#frameSize.height);
-    renderer.render(state.scene, state.camera);
+    // A scene that registered a post-processing pipeline renders through it, as R3F's own loop would.
+    if (state.renderPipeline?.render) state.renderPipeline.render();
+    else renderer.render(state.scene, state.camera);
     const copyStartedAt = performance.now();
     proxy.copy(surface, this.#frameSize, this.hasAttribute('opaque'));
     const copyElapsed = performance.now() - copyStartedAt;
@@ -770,17 +882,31 @@ function isGlyphSceneChange(value: unknown): value is { scene: string } {
   return typeof value === 'object' && value !== null && 'scene' in value && typeof value.scene === 'string';
 }
 
+export type GlyphProxyState = 'empty' | 'cached' | 'live';
+
+/**
+ * One HTML window onto a scene. Its canvas shows live frames while the proxy
+ * holds a lease. When the lease ends the last frame stays: the canvas is
+ * photographed into a poster that covers it, and the first frame of the next
+ * lease fades that poster out. Before any frame at all, a sentinel names the
+ * scene. The three live in a shadow root, so a framework hydrating the page
+ * finds the light DOM exactly as it was served. `data-glyph-state` carries
+ * `empty`, `live`, or `cached` for CSS, and the parts are `canvas`, `poster`,
+ * and `sentinel`.
+ */
 export class GlyphProxyElement extends HTMLElement {
-  static observedAttributes = ['root', 'data-scene'];
+  static observedAttributes = ['root', 'data-scene', 'aria-label', 'aspect', 'width', 'height'];
 
   #canvas: HTMLCanvasElement | undefined;
+  #poster: HTMLImageElement | undefined;
+  #sentinel: HTMLElement | undefined;
   #presenter: GlyphPresenter | undefined;
   #root: GlyphOffscreenRootElement | undefined;
+  #state: GlyphProxyState = 'empty';
+  #releasing = false;
+  #releaseToken = 0;
+  #posterUrl: string | undefined;
   #onRootReady = () => this.#bind();
-  #onFadeOut = (event: TransitionEvent) => {
-    if (event.target !== this || event.propertyName !== 'opacity' || this.style.opacity !== '0') return;
-    this.#clearFrame();
-  };
 
   get rootId() {
     return this.getAttribute('root') ?? this.closest('[data-glyph-root]')?.id;
@@ -790,28 +916,23 @@ export class GlyphProxyElement extends HTMLElement {
     return this.getAttribute('data-scene') ?? 'default';
   }
 
+  get state(): GlyphProxyState {
+    return this.#state;
+  }
+
   connectedCallback() {
     this.setAttribute('data-glyph-proxy', '');
     if (!this.hasAttribute('role')) this.setAttribute('role', 'img');
-    this.style.display = 'block';
-    this.style.position = 'relative';
-    this.style.overflow = 'hidden';
-    this.style.opacity = '0';
-    this.style.transition = `opacity ${this.getAttribute('fade') ?? '180'}ms ease`;
-    this.style.contain = 'layout paint';
-    const declaredWidth = this.getAttribute('width');
-    const declaredHeight = this.getAttribute('height');
-    if (declaredWidth) this.style.width = declaredWidth;
-    if (declaredHeight) this.style.height = declaredHeight;
+    this.#applySize();
+    this.#mountShadow();
+    this.#setState(this.#state);
 
-    this.#canvas = this.querySelector('canvas') ?? document.createElement('canvas');
-    styleProxyCanvas(this.#canvas);
-    if (!this.#canvas.parentElement) this.append(this.#canvas);
     this.addEventListener('pointermove', this.#sendPointer);
     this.addEventListener('pointerdown', this.#sendPointerDown);
     this.addEventListener('pointerup', this.#sendPointerUp);
     this.addEventListener('pointercancel', this.#sendPointerUp);
     this.addEventListener('pointerleave', this.#sendPointerLeave);
+    this.addEventListener('focus', this.#onFocus);
     this.addEventListener('keydown', this.#sendKeyDown);
     if (
       !this.hasAttribute('tabindex') &&
@@ -831,14 +952,16 @@ export class GlyphProxyElement extends HTMLElement {
     this.removeEventListener('pointerup', this.#sendPointerUp);
     this.removeEventListener('pointercancel', this.#sendPointerUp);
     this.removeEventListener('pointerleave', this.#sendPointerLeave);
+    this.removeEventListener('focus', this.#onFocus);
     this.removeEventListener('keydown', this.#sendKeyDown);
-    this.removeEventListener('transitionend', this.#onFadeOut);
     window.removeEventListener('glyph-root-ready', this.#onRootReady);
   }
 
   attributeChangedCallback(name: string) {
     if (!this.isConnected) return;
     if (name === 'data-scene') this.#root?.updateProxyScene(this);
+    if (name === 'aria-label' && this.#sentinel) this.#sentinel.textContent = this.#label();
+    if (name === 'aspect' || name === 'width' || name === 'height') this.#applySize();
     this.#bind();
   }
 
@@ -848,25 +971,101 @@ export class GlyphProxyElement extends HTMLElement {
     this.#root = root;
   }
 
-  setActive(active: boolean) {
-    if (active) this.removeEventListener('transitionend', this.#onFadeOut);
-    this.style.opacity = active ? '1' : '0';
-  }
-
-  releaseFrame() {
-    this.removeEventListener('transitionend', this.#onFadeOut);
-    this.setActive(false);
-    if (getComputedStyle(this).opacity === '0') this.#clearFrame();
-    else this.addEventListener('transitionend', this.#onFadeOut);
-  }
-
+  /** A presented frame. The first one after a lease begins ends the poster's, or the sentinel's, cover. */
   copy(surface: OffscreenCanvas | HTMLCanvasElement, frame: GlyphSurfaceSize, opaque: boolean) {
     const canvas = this.#canvas;
     if (!canvas) return;
     const resolved = presentSurface(canvas, this.#presenter, surface, frame, opaque);
     if (!resolved) return;
     this.#presenter = resolved;
-    this.setActive(true);
+    if (this.#state !== 'live' || this.#releasing) {
+      this.#releaseToken += 1; // a photograph still in flight is of a frame that is no longer last
+      this.#releasing = false;
+      this.#setState('live');
+    }
+  }
+
+  /**
+   * The lease ended. The canvas keeps showing its last frame while that frame is
+   * encoded into the poster; once the poster has decoded it takes over, and the
+   * full-size canvas is let go. A frame is a few dozen kilobytes of WebP, so a
+   * page can retain every proxy it has ever shown.
+   */
+  releaseFrame() {
+    if (this.#state !== 'live' || this.#releasing) return;
+    const canvas = this.#canvas;
+    const poster = this.#poster;
+    if (!canvas || !poster) return;
+    this.#releasing = true;
+    const token = ++this.#releaseToken;
+    poster.style.width = canvas.style.width;
+    poster.style.height = canvas.style.height;
+    canvas.toBlob(
+      (blob) => {
+        if (token !== this.#releaseToken || blob === null) return;
+        const url = URL.createObjectURL(blob);
+        poster.src = url;
+        poster.decode().then(
+          () => {
+            if (token !== this.#releaseToken) {
+              URL.revokeObjectURL(url);
+              return;
+            }
+            if (this.#posterUrl !== undefined) URL.revokeObjectURL(this.#posterUrl);
+            this.#posterUrl = url;
+            this.#releasing = false;
+            this.#setState('cached');
+            this.#clearFrame();
+          },
+          () => URL.revokeObjectURL(url),
+        );
+      },
+      'image/webp',
+      0.85,
+    );
+  }
+
+  /** Bottom to top: the live canvas, the retained poster, the sentinel. */
+  #mountShadow() {
+    const shadow = this.shadowRoot ?? this.attachShadow({ mode: 'open' });
+    if (shadow.childElementCount === 0) {
+      const style = document.createElement('style');
+      style.textContent = PROXY_SHADOW_STYLE;
+      const canvas = document.createElement('canvas');
+      canvas.setAttribute('part', 'canvas');
+      canvas.setAttribute('aria-hidden', 'true');
+      const poster = document.createElement('img');
+      poster.setAttribute('part', 'poster');
+      poster.alt = '';
+      poster.decoding = 'async';
+      poster.draggable = false;
+      const sentinel = document.createElement('div');
+      sentinel.setAttribute('part', 'sentinel');
+      shadow.append(style, canvas, poster, sentinel);
+    }
+    this.#canvas = shadow.querySelector('canvas') ?? undefined;
+    this.#poster = shadow.querySelector('img') ?? undefined;
+    this.#sentinel = shadow.querySelector('div') ?? undefined;
+    if (this.#sentinel) this.#sentinel.textContent = this.#label();
+  }
+
+  /** `aspect`, `width`, and `height` attributes size the window; a bare `aspect` needs only the page's width. */
+  #applySize() {
+    const aspect = this.getAttribute('aspect');
+    const width = this.getAttribute('width');
+    const height = this.getAttribute('height');
+    this.style.aspectRatio = aspect ?? '';
+    this.style.width = width ?? '';
+    this.style.height = height ?? '';
+  }
+
+  #label() {
+    return this.getAttribute('aria-label') ?? this.scene;
+  }
+
+  #setState(state: GlyphProxyState) {
+    this.#state = state;
+    this.setAttribute('data-glyph-state', state);
   }
 
   #bind() {
@@ -888,67 +1087,76 @@ export class GlyphProxyElement extends HTMLElement {
     canvas.style.height = '1px';
   }
 
-  #sendPointer = (event: PointerEvent) => {
+  #point(event: PointerEvent) {
     const rect = this.getBoundingClientRect();
-    const point = this.#root?.mapProxyPoint(this, {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
+    const local = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    return this.#root?.mapProxyPoint(this, local) ?? local;
+  }
+
+  #target() {
+    return this.id ? { proxyId: this.id } : ('root' as const);
+  }
+
+  #onFocus = () => {
+    this.#root?.engage(this);
+  };
+
+  #sendPointer = (event: PointerEvent) => {
+    // A mouse that actually moves here, then rests, is intent. The move a browser
+    // synthesises after a scroll has no movement and means nothing.
+    if (event.pointerType === 'mouse' && (event.movementX !== 0 || event.movementY !== 0)) {
+      this.#root?.engage(this, this.#root.hoverDelay);
+    }
+    const point = this.#point(event);
     this.#root?.sendInput(
       {
         type: 'pointermove',
         buttons: event.buttons,
         pointerId: event.pointerId,
         value: event.pointerType,
-        x: point?.x ?? event.clientX - rect.left,
-        y: point?.y ?? event.clientY - rect.top,
+        x: point.x,
+        y: point.y,
       },
-      this.id ? { proxyId: this.id } : 'root',
+      this.#target(),
     );
   };
 
   #sendPointerDown = (event: PointerEvent) => {
+    this.#root?.engage(this);
     this.focus({ preventScroll: true });
     this.setPointerCapture(event.pointerId);
-    const rect = this.getBoundingClientRect();
-    const point = this.#root?.mapProxyPoint(this, {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
+    const point = this.#point(event);
     this.#root?.sendInput(
       {
         type: 'pointerdown',
         buttons: event.buttons,
         pointerId: event.pointerId,
         value: event.pointerType,
-        x: point?.x ?? event.clientX - rect.left,
-        y: point?.y ?? event.clientY - rect.top,
+        x: point.x,
+        y: point.y,
       },
-      this.id ? { proxyId: this.id } : 'root',
+      this.#target(),
     );
   };
 
   #sendPointerUp = (event: PointerEvent) => {
     if (this.hasPointerCapture(event.pointerId)) this.releasePointerCapture(event.pointerId);
-    const rect = this.getBoundingClientRect();
-    const point = this.#root?.mapProxyPoint(this, {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
+    const point = this.#point(event);
     this.#root?.sendInput(
       {
         type: event.type,
         buttons: event.buttons,
         pointerId: event.pointerId,
         value: event.pointerType,
-        x: point?.x ?? event.clientX - rect.left,
-        y: point?.y ?? event.clientY - rect.top,
+        x: point.x,
+        y: point.y,
       },
-      this.id ? { proxyId: this.id } : 'root',
+      this.#target(),
     );
   };
 
   #sendPointerLeave = (event: PointerEvent) => {
+    this.#root?.cancelIntent(this);
     this.#root?.sendInput(
       {
         type: 'pointerleave',
@@ -956,13 +1164,14 @@ export class GlyphProxyElement extends HTMLElement {
         pointerId: event.pointerId,
         value: event.pointerType,
       },
-      this.id ? { proxyId: this.id } : 'root',
+      this.#target(),
     );
   };
 
   #sendKeyDown = (event: KeyboardEvent) => {
     if (['ArrowLeft', 'ArrowRight', 'Backspace', ' '].includes(event.key)) event.preventDefault();
     if (this.getAttribute('role') === 'button' && (event.key === 'Enter' || event.key === ' ')) {
+      this.#root?.engage(this);
       const rect = this.getBoundingClientRect();
       const point = this.#root?.mapProxyPoint(this, { x: rect.width / 2, y: rect.height / 2 });
       this.#root?.sendInput(
@@ -972,23 +1181,62 @@ export class GlyphProxyElement extends HTMLElement {
           x: point?.x ?? rect.width / 2,
           y: point?.y ?? rect.height / 2,
         },
-        this.id ? { proxyId: this.id } : 'root',
+        this.#target(),
       );
       return;
     }
-    this.#root?.sendInput({ type: 'keydown', value: event.key }, this.id ? { proxyId: this.id } : 'root');
+    this.#root?.sendInput({ type: 'keydown', value: event.key }, this.#target());
   };
 }
 
-function styleProxyCanvas(canvas: HTMLCanvasElement) {
-  canvas.setAttribute('aria-hidden', 'true');
-  canvas.style.position = 'absolute';
-  canvas.style.left = '50%';
-  canvas.style.top = '50%';
-  canvas.style.display = 'block';
-  canvas.style.maxWidth = 'none';
-  canvas.style.transform = 'translate(-50%, -50%)';
+/**
+ * The window's insides. The canvas and the poster sit at the same place and
+ * size, centred, so the hand-off between them is invisible; the sentinel
+ * fills the window until the first frame.
+ */
+const PROXY_SHADOW_STYLE = `
+:host {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  contain: layout paint;
 }
+canvas,
+img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  max-width: none;
+  transform: translate(-50%, -50%);
+}
+img {
+  opacity: 0;
+  transition: opacity 420ms ease;
+  pointer-events: none;
+}
+:host([data-glyph-state='cached']) img {
+  opacity: 1;
+  transition: none;
+}
+div {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  padding: 1rem;
+  place-items: center;
+  color: #97a1b4;
+  font: 600 0.8rem/1.3 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.02em;
+  text-align: center;
+  opacity: 1;
+  transition: opacity 420ms ease;
+  pointer-events: none;
+}
+:host(:not([data-glyph-state='empty'])) div {
+  opacity: 0;
+}
+`;
 
 function presentSurface(
   canvas: HTMLCanvasElement,
@@ -1087,10 +1335,23 @@ const pageDefinitions = new Map<string, ExplainerPageDefinition>();
 
 class GlyphExplainerRootElement extends GlyphOffscreenRootElement {
   protected createScene(props: GlyphSceneProps) {
+    const definition = this.#definition();
+    return createElement(definition.scenes[props.scene] ?? definition.fallback, props);
+  }
+
+  protected override prepareRender(scene: string, renderer: WebGPURenderer) {
+    this.#definition().prepare?.(scene, renderer);
+  }
+
+  protected override cameraOptions() {
+    return this.#definition().camera ?? super.cameraOptions();
+  }
+
+  #definition() {
     const page = this.dataset.explainerPage;
     const definition = page === undefined ? undefined : pageDefinitions.get(page);
     if (definition === undefined) throw new TypeError(`Unknown docs explainer page: ${page ?? '(missing)'}`);
-    return createElement(definition.scenes[props.scene] ?? definition.fallback, props);
+    return definition;
   }
 }
 

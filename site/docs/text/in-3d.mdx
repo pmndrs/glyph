@@ -5,6 +5,10 @@ nav: 27
 sourcecode: packages/glyph/src/three/internal/material-realizer.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   A `Text` is an `Object3D` whose draws are meshes under the root, so the camera, the depth buffer, fog, lights,
   and post-processing already apply. Two defaults are chosen for you: text draws over geometry, and it never writes
@@ -33,12 +37,7 @@ three.createText({ font: Inter, text: 'occluded', material: inScene });
 three.createText({ font: Inter, text: 'overlaid' }); // the default draws over everything
 ```
 
-<iframe
-  src="/examples/?example=depth"
-  title="A sphere passing in front of and behind two words"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="depth" aria-label="A sphere passing in front of and behind two words" aspect="16 / 9" />
 
 | Setting | Default | Change it when |
 | --- | --- | --- |
@@ -80,12 +79,7 @@ function Billboard({ children }) {
 </mesh>
 ```
 
-<iframe
-  src="/examples/?example=labels"
-  title="Moons with depth-tested labels in fog"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="labels" aria-label="Moons with depth-tested labels in fog" aspect="16 / 9" />
 
 {/* prose: the label is a child of the body, so it moves with it for free; the billboard group turns it; the
 depth-tested material lets a nearer body hide it. `scene.fog` reaches it because the text material is a
@@ -93,12 +87,7 @@ depth-tested material lets a nearer body hide it. `scene.fog` reaches it because
 
 ## Steep angles
 
-<iframe
-  src="/examples/?example=off-axis"
-  title="A paragraph turning away from the camera"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="off-axis" aria-label="A paragraph turning away from the camera" aspect="16 / 9" />
 
 | Format | Off-axis | Why |
 | --- | --- | --- |
@@ -130,12 +119,7 @@ const carousel = defineTextMaterial((context) => {
 });
 ```
 
-<iframe
-  src="/examples/?example=kinetic"
-  title="A band on a turning carousel, a passage on a waving flag, the current word spotlit"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="kinetic" aria-label="A band on a turning carousel, a passage on a waving flag, the current word spotlit" aspect="16 / 9" />
 
 Text is geometry, so a material may move its vertices. Wrap a line around a cylinder, ripple a paragraph like a
 flag, hang words on a curve: `context.position` in, somewhere else out, with a uniform per frame for the motion
@@ -202,12 +186,7 @@ glyph.shape();
 post.render();
 ```
 
-<iframe
-  src="/examples/?example=bloom"
-  title="One bright word through bloom"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="bloom" aria-label="One bright word through bloom" aspect="16 / 9" />
 
 {/* prose: bloom thresholds on brightness, so colour is the control: dim words stay put, the bright one blooms.
 `bloom().strength` is a uniform — animate it per frame without rebuilding the pipeline. */}

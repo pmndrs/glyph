@@ -5,6 +5,10 @@ nav: 20
 sourcecode: packages/glyph/src/three/text.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   `Text` is a three.js `Object3D` that holds desired state — font, text, style, layout, constraints. Every `Text`
   belongs to a root: the handle's anonymous root, or a named sibling from `handle(name)`. A root owns the planner,
@@ -123,12 +127,7 @@ scene.add(panel);
 from. It creates no planner and no publication stream — batching is the root's job, and every Text on a root already
 shares it. Use groups to organize; use roots to isolate. */}
 
-<iframe
-  src="/examples/?example=groups"
-  title="One root, many labels, one draw per boundary"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="groups" aria-label="One root, many labels, one draw per boundary" aspect="16 / 9" />
 
 ## Shape
 

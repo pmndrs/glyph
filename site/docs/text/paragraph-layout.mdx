@@ -5,6 +5,10 @@ nav: 22
 sourcecode: packages/glyph/src/text-properties.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   A paragraph has three orthogonal inputs. `style` is inherited presentation, `layout` is flow policy, and
   `constraints` is the box a parent imposes. Keeping them apart means a layout rule can be reused across boxes and a
@@ -23,12 +27,7 @@ sourcecode: packages/glyph/src/text-properties.ts
 </Text>
 ```
 
-<iframe
-  src="/examples/?example=paragraph-layout"
-  title="Wrap, align, overflow, and columns on an animated box"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="paragraph-layout" aria-label="Wrap, align, overflow, and columns on an animated box" aspect="16 / 9" />
 
 ## Constraints
 
@@ -87,12 +86,7 @@ layout={{
 spills into per-gap letter-space expansion up to `letterSpaceExpansion`; unset sides are unbounded. Distribution is
 euclidean in integer layout units so fragments and cursor advances agree bit-for-bit (D-254). */}
 
-<iframe
-  src="/examples/?example=justify"
-  title="Justification bounds and last-line policy"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="justify" aria-label="Justification bounds and last-line policy" aspect="16 / 9" />
 
 ## Columns
 

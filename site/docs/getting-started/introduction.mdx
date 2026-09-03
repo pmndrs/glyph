@@ -4,6 +4,10 @@ description: Portable font baking, Unicode shaping, paragraph layout, and batche
 nav: 0
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   `@pmndrs/glyph` retains authored text, shapes and lays it out in Rust/Wasm, then publishes a transient render plan
   for the active renderer. The maintained three.js integration supports Bitmap, MSDF, and Slug through WebGPU and
@@ -73,12 +77,7 @@ function Labels() {
 run that inherits font, style, and material and creates no scene object; TextGroup is a scene-hierarchy parent. Three
 fonts, three raster formats, one component. */}
 
-<iframe
-  src="/examples/?example=hello"
-  title="Hello world"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="hello" aria-label="Hello world" aspect="16 / 9" />
 
 ## Render text with three.js
 

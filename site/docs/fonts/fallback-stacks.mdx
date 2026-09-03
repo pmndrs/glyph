@@ -5,6 +5,10 @@ nav: 13
 sourcecode: packages/glyph/src/loaded-font.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   A stack is an ordered list of loaded fonts. The engine resolves each grapheme cluster against the first font that
   covers it, so one paragraph can mix a Latin face, an icon font, and a CJK face without the caller choosing per
@@ -27,12 +31,7 @@ const prose = createFontStack(useMsdf(INTER), useMsdf(ICONS), useMsdf(CJK));
 <Text font={prose}>Status 🌍 你好</Text>
 ```
 
-<iframe
-  src="/examples/?example=fallback-stack"
-  title="Latin, icons, and CJK from one stack"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="fallback-stack" aria-label="Latin, icons, and CJK from one stack" aspect="16 / 9" />
 
 ## Resolution
 

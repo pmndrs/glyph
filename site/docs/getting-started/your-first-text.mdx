@@ -4,6 +4,10 @@ description: Bake a font, put a line of text in a scene, style it, wrap it, and 
 nav: 2
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   This tutorial takes one font from a TTF on disk to a styled, wrapped, measured paragraph on screen. Each step ends
   with what you now see.
@@ -127,11 +131,6 @@ Everything else is identical. */}
 
 ## The result
 
-<iframe
-  src="/examples/?example=first-text"
-  title="Your first text"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="first-text" aria-label="Your first text" aspect="16 / 9" />
 
 {/* prose: where to go next — Raster formats for Bitmap and Slug; Text, roots, and TextGroup for batching. */}

@@ -5,6 +5,10 @@ nav: 23
 sourcecode: packages/glyph/src/formatted-text.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   A paragraph is one shaped unit; a span is a range inside it that overrides font, style, or material. You author
   runs as `txt`/`span` fragments in three.js or as nested `<Text>` in React — both compile to the same document with
@@ -48,12 +52,7 @@ returns a tag whose font is a loaded `Font`/`FontStack` (the paragraph's own `fo
 Object3D, carries no transform, and accepts only `children`, `font`, `style`, and `material`; a box prop on it is
 named and rejected at mount. */}
 
-<iframe
-  src="/examples/?example=rich-text"
-  title="txt/span and nested Text, per-span font and material"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="rich-text" aria-label="txt/span and nested Text, per-span font and material" aspect="16 / 9" />
 
 ## What a span may override
 
@@ -103,9 +102,4 @@ label.text = txt`${document.before}${ok`${document.selected}`}${document.after}`
 document, never as offsets. The removed helpers (`insertText`, `deleteText`, `replaceText`, `setSpan`, `removeSpan`)
 let a caller hand the engine an offset the tree cannot express. */}
 
-<iframe
-  src="/examples/?example=editing"
-  title="Keystroke editing with retained runs"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="editing" aria-label="Keystroke editing with retained runs" aspect="16 / 9" />

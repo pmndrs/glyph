@@ -5,6 +5,10 @@ nav: 24
 sourcecode: packages/glyph/src/layout.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   Measurement answers for desired state, synchronously, before anything commits. `measure()` is allocation-light and
   returns the paragraph's box, baselines, ink, and lines; `glyphs()` pays for positioned per-glyph columns. Neither
@@ -17,12 +21,7 @@ const ink = summary.inkBounds;
 if (ink) label.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0);
 ```
 
-<iframe
-  src="/examples/?example=measurement"
-  title="Advance box versus ink bounds, live"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="measurement" aria-label="Advance box versus ink bounds, live" aspect="16 / 9" />
 
 ## Ink versus advance
 

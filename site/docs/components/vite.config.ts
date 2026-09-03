@@ -1,48 +1,39 @@
 import babel from '@rolldown/plugin-babel';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
-import { rm } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { defineConfig } from 'vite';
+import { defaultClientConditions, defineConfig } from 'vite';
 
-const generatedRootFiles = [
-  'font-awesome-icons-msdf.font.glb',
-  'geist-msdf.font.glb',
-  'explainer.css',
-  'explainer.js',
-  'introduction.css',
-  'lovers-quarrel-slug.font.glb',
-  'mplus1p-japanese.font.glb',
-  'runtime-bake-worker.js',
-  'text-shaper.wasm',
-  'vt323-bitmap.font.glb',
-] as const;
+import { glyphSourceAliases } from '../../scripts/glyph-source';
 
-const cleanGeneratedDocsAssets = {
-  name: 'clean-generated-docs-assets',
-  apply: 'build' as const,
-  async buildStart() {
-    const output = resolve('docs/assets');
-    await rm(resolve(output, 'assets'), { force: true, recursive: true });
-    await Promise.all(generatedRootFiles.map((file) => rm(resolve(output, file), { force: true })));
-  },
-};
-
+/**
+ * The explainer element and every example scene, built to stable names under
+ * `docs/assets/` so a docs page can load them with one script and one
+ * stylesheet tag; `copy:docs-assets` carries the folder into the built site.
+ */
 export default defineConfig({
   base: '/docs/assets/',
   build: {
-    emptyOutDir: false,
+    emptyOutDir: true,
     outDir: 'docs/assets',
     rollupOptions: {
       input: 'docs/components/load-explainers.ts',
       output: {
-        assetFileNames: (asset) => (asset.name?.endsWith('.css') ? 'explainer.css' : '[name][extname]'),
+        assetFileNames: (asset) =>
+          asset.names.some((name) => name.endsWith('.css')) ? 'explainer.css' : '[name][extname]',
         entryFileNames: 'explainer.js',
       },
     },
     target: 'es2022',
   },
-  plugins: [cleanGeneratedDocsAssets, react(), babel({ presets: [reactCompilerPreset()] })],
+  plugins: [react(), babel({ presets: [reactCompilerPreset()] })],
   resolve: {
+    conditions: ['source', ...defaultClientConditions],
     dedupe: ['react', 'react-dom', 'three', '@react-three/fiber'],
+    alias: [
+      {
+        find: 'three/addons/inspector/Inspector.js',
+        replacement: new URL('../../landing/src/three-inspector-stub.ts', import.meta.url).pathname,
+      },
+      ...glyphSourceAliases(),
+    ],
   },
 });

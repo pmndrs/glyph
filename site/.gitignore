@@ -1,3 +1,4 @@
 dist/
 .npx-cache/
 .examples-codex.tsconfig.json
+docs/assets/

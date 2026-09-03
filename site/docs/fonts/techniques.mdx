@@ -5,6 +5,10 @@ nav: 11
 sourcecode: packages/glyph/src/raster-format.ts
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   Shaping and layout are the same for every format; a format only decides how an outline becomes pixels. Bitmap
   bakes pixels at the sizes you choose. MSDF bakes a distance field once and decodes an edge wherever it lands.
@@ -34,12 +38,7 @@ sourcecode: packages/glyph/src/raster-format.ts
 | is tiny and must be crisp | **Bitmap** at that strike, else **MSDF** | Bitmap is exact at its ppem; MSDF floors its antialiasing range at one pixel |
 | is a whole CJK font | **Bitmap** or **MSDF** with `coverage` | Slug always bakes every glyph; the other two can be seeded with the code points you use |
 
-<iframe
-  src="/examples/?example=techniques"
-  title="The same word in Bitmap, MSDF, and Slug"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="techniques" aria-label="The same word in Bitmap, MSDF, and Slug" aspect="16 / 9" />
 
 ## Bitmap
 
@@ -129,12 +128,7 @@ three.createText({ font: hero, text: 'glÿph', style: { fontSize: 320 } });
 Cost scales with covered area times curves per band, so a full-screen paragraph in Slug is the wrong tool and a
 full-screen word is the right one.
 
-<iframe
-  src="/examples/?example=zoom"
-  title="One 32 px raster per format under continuous magnification"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="zoom" aria-label="One 32 px raster per format under continuous magnification" aspect="16 / 9" />
 
 ## What each one costs
 
@@ -219,12 +213,7 @@ const [interBitmap, interMsdf, interSlug] = await loadFont({ baked: '/fonts/inte
 
 ## See them side by side
 
-<iframe
-  src="/examples/?example=text-ladder"
-  title="8 to 1024 px, one format per column"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="text-ladder" aria-label="8 to 1024 px, one format per column" aspect="16 / 9" />
 
 Bitmap is sharp at its strikes and soft between them. MSDF holds its edge at every size and flattens its curves past
 its `emSize`. Slug is the same outline at every row.

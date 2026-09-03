@@ -4,22 +4,22 @@ description: One small example per feature, hosted beside the docs and linked fr
 nav: 3
 ---
 
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
 <Intro>
   Every example is one feature, one screen, and a few dozen lines. They share a harness that owns the canvas, camera,
   and lighting, so each source file is only the text it demonstrates. Art is generated, not loaded.
 </Intro>
 
-{/* prose: how to read a card — title, the page it belongs to, what to look for. Thumbnails are captured from the
-example itself. */}
+Every scene below runs inline, on one renderer shared by the whole page: two run at a time, the nearest to the
+middle of the window, and the others keep their last frame. The [gallery](/examples/) has all of them on one page,
+started by hand — rest on a card and it runs.
 
 ## Showcase
 
-<iframe
-  src="/examples/?example=kinetic"
-  title="Kinetic typography with live shaping"
-  loading="lazy"
-  style={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: '0.5rem' }}
-/>
+<glyph-proxy root="scenes" data-scene="kinetic" aria-label="Kinetic typography with live shaping" aspect="16 / 9" />
 
 The Codrops piece with the engine where the bitmap font used to be: a line of Slug type — the passage, typing
 itself in — is rendered to a render target every frame and wrapped around a lit torus knot with the same
@@ -30,10 +30,10 @@ by matrix, depth-tested so the knot hides them; the word being typed is spotlit 
 
 <Grid cols={2}>
   <li>
-    <p>[![hello](/examples/thumbnails/hello.webp)](/examples/?example=hello) -- <span>one Text, one font</span></p>
+    <p>[**hello**](/examples/?example=hello) -- <span>one Text, one font</span></p>
   </li>
   <li>
-    <p>[![first text](/examples/thumbnails/first-text.webp)](/examples/?example=first-text) -- <span>style</span>, <span>layout</span>, <span>measure</span></p>
+    <p>[**first text**](/examples/?example=first-text) -- <span>style</span>, <span>layout</span>, <span>measure</span></p>
   </li>
 </Grid>
 
@@ -41,16 +41,16 @@ by matrix, depth-tested so the knot hides them; the word being typed is spotlit 
 
 <Grid cols={2}>
   <li>
-    <p>[![techniques](/examples/thumbnails/techniques.webp)](/examples/?example=techniques) -- <span>bitmap</span>, <span>msdf</span>, <span>slug</span></p>
+    <p>[**techniques**](/examples/?example=techniques) -- <span>bitmap</span>, <span>msdf</span>, <span>slug</span></p>
   </li>
   <li>
-    <p>[![text ladder](/examples/thumbnails/text-ladder.webp)](/examples/?example=text-ladder) -- <span>8 → 1024 px</span></p>
+    <p>[**text ladder**](/examples/?example=text-ladder) -- <span>8 → 1024 px</span></p>
   </li>
   <li>
-    <p>[![fallback stack](/examples/thumbnails/fallback-stack.webp)](/examples/?example=fallback-stack) -- <span>icons</span>, <span>CJK</span>, <span>per-cluster face</span></p>
+    <p>[**fallback stack**](/examples/?example=fallback-stack) -- <span>icons</span>, <span>CJK</span>, <span>per-cluster face</span></p>
   </li>
   <li>
-    <p>[![runtime bake](/examples/thumbnails/runtime-bake.webp)](/examples/?example=runtime-bake) -- <span>TTF</span>, <span>Worker</span></p>
+    <p>[**runtime bake**](/examples/?example=runtime-bake) -- <span>TTF</span>, <span>Worker</span></p>
   </li>
 </Grid>
 
@@ -58,40 +58,40 @@ by matrix, depth-tested so the knot hides them; the word being typed is spotlit 
 
 <Grid cols={2}>
   <li>
-    <p>[![groups](/examples/thumbnails/groups.webp)](/examples/?example=groups) -- <span>TextGroup</span>, <span>draw calls</span></p>
+    <p>[**groups**](/examples/?example=groups) -- <span>TextGroup</span>, <span>draw calls</span></p>
   </li>
   <li>
-    <p>[![styling](/examples/thumbnails/styling.webp)](/examples/?example=styling) -- <span>every TextStyle property</span></p>
+    <p>[**styling**](/examples/?example=styling) -- <span>every TextStyle property</span></p>
   </li>
   <li>
-    <p>[![paragraph layout](/examples/thumbnails/paragraph-layout.webp)](/examples/?example=paragraph-layout) -- <span>wrap</span>, <span>align</span>, <span>columns</span></p>
+    <p>[**paragraph layout**](/examples/?example=paragraph-layout) -- <span>wrap</span>, <span>align</span>, <span>columns</span></p>
   </li>
   <li>
-    <p>[![justify](/examples/thumbnails/justify.webp)](/examples/?example=justify) -- <span>word-space bounds</span></p>
+    <p>[**justify**](/examples/?example=justify) -- <span>word-space bounds</span></p>
   </li>
   <li>
-    <p>[![rich text](/examples/thumbnails/rich-text.webp)](/examples/?example=rich-text) -- <span>spans</span>, <span>txt/span</span></p>
+    <p>[**rich text**](/examples/?example=rich-text) -- <span>spans</span>, <span>txt/span</span></p>
   </li>
   <li>
-    <p>[![editing](/examples/thumbnails/editing.webp)](/examples/?example=editing) -- <span>keystrokes</span>, <span>retained spans</span></p>
+    <p>[**editing**](/examples/?example=editing) -- <span>keystrokes</span>, <span>retained spans</span></p>
   </li>
   <li>
-    <p>[![measurement](/examples/thumbnails/measurement.webp)](/examples/?example=measurement) -- <span>ink vs advance</span></p>
+    <p>[**measurement**](/examples/?example=measurement) -- <span>ink vs advance</span></p>
   </li>
   <li>
-    <p>[![caret](/examples/thumbnails/caret.webp)](/examples/?example=caret) -- <span>caretAt</span>, <span>selectionRects</span></p>
+    <p>[**caret**](/examples/?example=caret) -- <span>caretAt</span>, <span>selectionRects</span></p>
   </li>
   <li>
-    <p>[![materials](/examples/thumbnails/materials.webp)](/examples/?example=materials) -- <span>lit PBR text</span></p>
+    <p>[**materials**](/examples/?example=materials) -- <span>lit PBR text</span></p>
   </li>
   <li>
-    <p>[![effects](/examples/thumbnails/effects.webp)](/examples/?example=effects) -- <span>outline</span>, <span>shadow</span></p>
+    <p>[**effects**](/examples/?example=effects) -- <span>outline</span>, <span>shadow</span></p>
   </li>
   <li>
-    <p>[![break apart](/examples/thumbnails/break-apart.webp)](/examples/?example=break-apart) -- <span>Glyphs</span>, <span>matrices</span></p>
+    <p>[**break apart**](/examples/?example=break-apart) -- <span>Glyphs</span>, <span>matrices</span></p>
   </li>
   <li>
-    <p>[![errors](/examples/thumbnails/errors.webp)](/examples/?example=errors) -- <span>TextFrameError</span></p>
+    <p>[**errors**](/examples/?example=errors) -- <span>TextFrameError</span></p>
   </li>
 </Grid>
 
@@ -99,10 +99,10 @@ by matrix, depth-tested so the knot hides them; the word being typed is spotlit 
 
 <Grid cols={2}>
   <li>
-    <p>[![provider](/examples/thumbnails/provider.webp)](/examples/?example=provider) -- <span>GlyphProvider</span>, <span>two handles</span></p>
+    <p>[**provider**](/examples/?example=provider) -- <span>GlyphProvider</span>, <span>two handles</span></p>
   </li>
   <li>
-    <p>[![hooks](/examples/thumbnails/hooks.webp)](/examples/?example=hooks) -- <span>preload</span>, <span>Suspense</span></p>
+    <p>[**hooks**](/examples/?example=hooks) -- <span>preload</span>, <span>Suspense</span></p>
   </li>
 </Grid>
 
@@ -110,15 +110,15 @@ by matrix, depth-tested so the knot hides them; the word being typed is spotlit 
 
 <Grid cols={2}>
   <li>
-    <p>[![batching](/examples/thumbnails/batching.webp)](/examples/?example=batching) -- <span>compositing</span>, <span>draw count</span></p>
+    <p>[**batching**](/examples/?example=batching) -- <span>compositing</span>, <span>draw count</span></p>
   </li>
   <li>
-    <p>[![off-axis](/examples/thumbnails/off-axis.webp)](/examples/?example=off-axis) -- <span>steep angles</span>, <span>DPR</span></p>
+    <p>[**off-axis**](/examples/?example=off-axis) -- <span>steep angles</span>, <span>DPR</span></p>
   </li>
   <li>
-    <p>[![zoom](/examples/thumbnails/zoom.webp)](/examples/?example=zoom) -- <span>continuous zoom</span></p>
+    <p>[**zoom**](/examples/?example=zoom) -- <span>continuous zoom</span></p>
   </li>
   <li>
-    <p>[![shaping](/examples/thumbnails/shaping.webp)](/examples/?example=shaping) -- <span>Arabic</span>, <span>Indic</span>, <span>bidi</span>, <span>CJK</span></p>
+    <p>[**shaping**](/examples/?example=shaping) -- <span>Arabic</span>, <span>Indic</span>, <span>bidi</span>, <span>CJK</span></p>
   </li>
 </Grid>
