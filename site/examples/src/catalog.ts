@@ -59,6 +59,12 @@ export const EXAMPLES = {
     stage: {},
     load: () => import('./scenes/ribbon/scene'),
   },
+  orbit: {
+    title: 'Text in orbit',
+    page: '/docs/text/in-3d',
+    stage: {},
+    load: () => import('./scenes/orbit/scene'),
+  },
   'first-text': {
     title: 'Your first text',
     page: '/docs/getting-started/your-first-text',
