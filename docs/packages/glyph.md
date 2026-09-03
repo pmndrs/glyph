@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:641ceebcfe6d1283e1a408825b1e2192f0937d8261837a1c3a762a15d320c69f'
+source_digest: 'sha256:01c8f35f24e6b8d47c4e495b66a88f71a797a9ec653ec97a29d3ffdfeb890829'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -219,6 +219,12 @@ it never disposes an externally owned handle or FontFace. It disposes only FontF
 entries. Supplying `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` handles only `FontLoadError`
 and rethrows unrelated errors. Imperative construction uses `handle.createText()` and `handle.createTextGroup()` for the
 anonymous root, or `handle(name).createText()` and `handle(name).createTextGroup()` for a named root.
+
+The public `ThreeRoot` contract stops at that retained scene API: identity and disposal, Text/TextGroup construction,
+counts, and mutable material presentation. The renderer draw object, discovered Three Scene, root services, command
+boundary, and Font lease acquisition belong to the package-owned root host. They are unavailable through both source
+conditions and built declarations; package internals recover the host through private identity rather than exposing a
+second renderer/runtime object to applications.
 
 Successful initialization retains one settled `Promise<void>` forever: concurrent and later `glyph.init()` calls receive
 the same object. React still checks synchronous initialized and loaded state first, so ready renders do not call `use()`

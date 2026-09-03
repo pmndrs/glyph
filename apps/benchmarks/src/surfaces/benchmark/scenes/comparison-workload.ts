@@ -947,10 +947,14 @@ async function createComparisonWorkloadRuntime(
         const activeZoomEntry =
           configuration.workload === 'zoom-text' ? entries[zoomAnimationState.phraseIndex] : undefined;
         const zoomScale = activeZoomEntry?.node.scale.x ?? 1;
+        const drawRoot = scene.getObjectByName(
+          glyphRoot.name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${glyphRoot.name}`,
+        );
+        if (drawRoot === undefined) throw new Error('Glyph draw root is not attached to the benchmark scene');
         if (configuration.workload === 'icon-grid') {
-          measureIconGridRenderMetrics(entries, glyphRoot.drawRoot, visibleEntryMetrics, visibleGeometryScratch);
+          measureIconGridRenderMetrics(entries, drawRoot, visibleEntryMetrics, visibleGeometryScratch);
         } else {
-          measureVisibleEntries(entries, glyphRoot.drawRoot, zoomScale, visibleEntryMetrics, visibleGeometryScratch);
+          measureVisibleEntries(entries, drawRoot, zoomScale, visibleEntryMetrics, visibleGeometryScratch);
         }
         const effectiveCssFontSize =
           configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX * zoomScale : configuration.fontSize;

@@ -61,6 +61,8 @@ test('the published contract is ESM-only', async () => {
     './generated/*',
     './font-baker/*',
     './three/internal/*',
+    './three/renderer-resources',
+    './three/text',
     './raster/internal/*',
     './tsl/internal/*',
     './typegpu/internal/*',

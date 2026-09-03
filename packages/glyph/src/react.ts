@@ -44,7 +44,7 @@ import {
   threeHandleFontSource,
   threeHandleRoot,
   threeRootHandle,
-} from './three/handle.js';
+} from './three/internal/handle-access.js';
 import {
   ThreeConfig,
   Text as ThreeText,
@@ -55,7 +55,12 @@ import {
   type ThreeRoot,
   type ThreeTextMaterial,
 } from './three.js';
-import { threeTextConstructionToken, type TextSpan as ThreeTextSpanRecord } from './three/text.js';
+import {
+  threeRootHost,
+  threeTextConstructionToken,
+  type TextSpan as ThreeTextSpanRecord,
+  type ThreeRootHost,
+} from './three/text.js';
 
 type Object3DProps = Omit<ThreeElements['object3D'], 'children' | 'ref'>;
 
@@ -521,8 +526,8 @@ function TextObject({
   readonly publishObject: (value: ThreeText<AnyRasterFormat> | null) => void;
 }): ReactElement {
   const [constructorArguments] = useState<
-    [typeof threeTextConstructionToken, StandaloneTextProperties<AnyRasterFormat>, readonly [], ThreeRoot]
-  >(() => [threeTextConstructionToken, desired as StandaloneTextProperties<AnyRasterFormat>, [], root]);
+    [typeof threeTextConstructionToken, StandaloneTextProperties<AnyRasterFormat>, readonly [], ThreeRootHost]
+  >(() => [threeTextConstructionToken, desired as StandaloneTextProperties<AnyRasterFormat>, [], threeRootHost(root)]);
   const appliedRef = useRef(desired);
   const [store] = useState(() => createObjectStore<ThreeText<AnyRasterFormat>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -583,14 +588,14 @@ function TextGroupObject({
   readonly options: Omit<R3fTextGroupProps, 'ref'>;
   readonly publishObject: (value: ThreeTextGroup | null) => void;
 }): ReactElement {
-  const [constructorArguments] = useState<[typeof threeTextConstructionToken, TextGroupOptions, ThreeRoot]>(() => [
+  const [constructorArguments] = useState<[typeof threeTextConstructionToken, TextGroupOptions, ThreeRootHost]>(() => [
     threeTextConstructionToken,
     {
       ...(options.renderOrder === undefined ? {} : { renderOrder: options.renderOrder }),
       ...(options.material === undefined ? {} : { material: options.material }),
       ...(options.pixelSnapping === undefined ? {} : { pixelSnapping: options.pixelSnapping }),
     },
-    root,
+    threeRootHost(root),
   ]);
   const [store] = useState(() => createObjectStore<ThreeTextGroup>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);

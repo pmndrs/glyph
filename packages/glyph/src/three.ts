@@ -19,7 +19,8 @@ export type {
 } from './three/plan-program-registry.js';
 export { TextFrameError } from './three/frame-error.js';
 export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.js';
-export { Text, TextGroup, ThreeRoot } from './three/text.js';
+export { Text, TextGroup } from './three/text.js';
+export type { ThreeRoot } from './three/text.js';
 export {
   ThreeConfig,
   ThreeFontFormats,
@@ -39,7 +40,7 @@ export {
   type ThreeResolvedResourceBinding,
   type ThreeRootBinding,
 } from './three/handle.js';
-export type { ThreeCodec } from './three/renderer-resources.js';
+export type { ThreeCodec } from './three/internal/renderer-resources.js';
 export type {
   StandaloneTextProperties,
   TextCommitState,

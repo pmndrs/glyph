@@ -122,6 +122,8 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     '@pmndrs/glyph/generated/text-shaper-abi',
     '@pmndrs/glyph/font-baker/validator',
     '@pmndrs/glyph/three/internal/draw-realizer',
+    '@pmndrs/glyph/three/renderer-resources',
+    '@pmndrs/glyph/three/text',
     '@pmndrs/glyph/three/engine-plan-target',
     '@pmndrs/glyph/raster/internal/bitmap-decoder',
     '@pmndrs/glyph/tsl/slug-shaders/tsl-compat',

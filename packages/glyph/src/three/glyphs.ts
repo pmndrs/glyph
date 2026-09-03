@@ -11,7 +11,7 @@ import {
 import type { ThreeGlyphGeometrySource, ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { measureGlyphPlacements } from './glyph-measurement.js';
 import type { ThreeRootBinding } from './handle.js';
-import type { ThreeRendererResources } from './renderer-resources.js';
+import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import type { Text } from './text.js';
 import { copyCurrentLocalTransform } from './detached-object.js';
 

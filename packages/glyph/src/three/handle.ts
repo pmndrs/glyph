@@ -16,8 +16,6 @@ import {
 } from '../config/glyph.js';
 import type { CodecProgram } from '../config/codec.js';
 import type { PortableResource } from '../config/resources.js';
-import type { AnyFontFaceSelection, FontFaceRasterOf } from '../font-face.js';
-import type { Font } from '../font.js';
 import { bitmap } from '../raster/bitmap.js';
 import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug.js';
@@ -25,8 +23,14 @@ import { normalizeGlyphBufferCapacity } from '../text-properties.js';
 import { threeCodecDescriptor } from './codec.js';
 import type { ThreeAllocationMode, ThreeTransformMode } from './codec.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
-import { createThreeCodec, type ThreeCodec } from './renderer-resources.js';
-import { ThreeRoot, normalizeThreeRootCompositing, threeTextConstructionToken, type ThreeRootOptions } from './text.js';
+import { createThreeCodec, type ThreeCodec } from './internal/renderer-resources.js';
+import {
+  ThreeRootHost,
+  normalizeThreeRootCompositing,
+  threeTextConstructionToken,
+  type ThreeRoot,
+  type ThreeRootOptions,
+} from './text.js';
 
 export interface ThreeProgramBinding {
   readonly kind: 'three-program';
@@ -127,48 +131,6 @@ export const ThreeSchema: GlyphSchema<ThreeBindings, ThreeRootBinding> = defineG
 
 export type ThreeGlyphConfig = GlyphConfigFor<typeof ThreeSchema, ThreeRoot, void, ThreeCodec, ThreeFontFormats>;
 
-/** @internal Resolve the anonymous root fronted by a Three handle. */
-export function threeHandleRoot(handle: ThreeHandle): ThreeRoot {
-  if (handle.handle !== handle || typeof handle.createText !== 'function') {
-    throw new TypeError('handle is not configured for Three');
-  }
-  return handle;
-}
-
-/** @internal Resolve the owning handle for a root selected from a callable Three handle. */
-export function threeRootHandle(root: ThreeRoot): ThreeHandle {
-  return root.handle;
-}
-
-/** @internal Acquire an independent mounted Font lease from one loaded handle selection. */
-export function acquireThreeHandleFont<const Selection extends AnyFontFaceSelection>(
-  handle: ThreeHandle,
-  selection: Selection,
-): Font<FontFaceRasterOf<Selection>> {
-  return threeHandleRoot(handle).acquireFont(selection);
-}
-
-/** @internal Borrow the handle store's immutable source for a render-phase snapshot. */
-export function threeHandleFontSource<const Selection extends AnyFontFaceSelection>(
-  handle: ThreeHandle,
-  selection: Selection,
-): Font<FontFaceRasterOf<Selection>> {
-  return threeHandleRoot(handle).fontSource(selection);
-}
-
-/** @internal Read whether the selected handle can synchronously acquire this FontFace technique. */
-export function isThreeHandleFontLoaded(handle: ThreeHandle, selection: AnyFontFaceSelection): boolean {
-  return threeHandleRoot(handle).isFontLoaded(selection);
-}
-
-/** @internal Load the exact FontFace technique selected by this handle. */
-export function loadThreeHandleFont(
-  handle: ThreeHandle,
-  selection: AnyFontFaceSelection,
-): Promise<AnyFontFaceSelection> {
-  return threeHandleRoot(handle).loadFont(selection);
-}
-
 /** Creates a pure Three config descriptor; every handle still owns independent mutable state. */
 export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphConfig {
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {
@@ -236,7 +198,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
           ...(capacity === undefined ? {} : { capacity }),
           ...(compositing === undefined ? {} : { compositing }),
         };
-        const root = new ThreeRoot(
+        const root = new ThreeRootHost(
           threeTextConstructionToken,
           context.name,
           context.fonts,

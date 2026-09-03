@@ -12,7 +12,7 @@ import { bitmapShader } from '../../tsl/bitmap-shader.js';
 import { decorationShader } from '../../tsl/decoration-shader.js';
 import { msdfShader } from '../../tsl/msdf-shader.js';
 import { slugShader } from '../../tsl/slug-shader.js';
-import type { ThreeRendererResources } from '../renderer-resources.js';
+import type { ThreeRendererResources } from './renderer-resources.js';
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
 import type { ThreePlanProgramBuffer } from '../plan-program-registry.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
