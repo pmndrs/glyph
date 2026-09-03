@@ -1,6 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { Font } from '../font.js';
-import type { AnyRasterFormat, RasterResourceId } from '../raster-format.js';
+import type { AnyRasterFormat, RasterResourceId } from '../config/raster-format.js';
 import {
   assertCodecIdFactory,
   CodecIdScope,

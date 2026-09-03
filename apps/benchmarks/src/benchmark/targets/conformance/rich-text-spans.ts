@@ -1,5 +1,5 @@
 import type { Font, GlyphLayout, RasterFormatInput } from '@pmndrs/glyph';
-import { id as hashId } from '@pmndrs/glyph';
+import { id as hashId } from '@pmndrs/glyph/config/codec';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, type Text, type TextGroup, type ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';

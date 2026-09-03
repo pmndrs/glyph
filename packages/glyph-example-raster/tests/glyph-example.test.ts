@@ -3,24 +3,14 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
-import {
-  createFontLibrary,
-  defineRasterResourceId,
-  defineRasterFormat,
-  glyph,
-  loadFont,
-  type RasterKey,
-  type Sha256Hex,
-} from '@pmndrs/glyph';
+import { createFontLibrary, glyph, loadFont, type RasterKey, type Sha256Hex } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { rasterBake } from '@pmndrs/glyph/baker';
-import {
-  defineTechniqueSchema,
-  f32,
-  registerRasterPlanProgram,
-  techniqueProgram,
-  type PortableGeometryPayload,
-} from '@pmndrs/glyph';
+import { type PortableGeometryPayload } from '@pmndrs/glyph';
+import { f32, techniqueProgram } from '@pmndrs/glyph/config/codec-program';
+import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
+import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+import { defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
 import {
   registerThreeRasterPlanProgram,
   defineTextMaterial,

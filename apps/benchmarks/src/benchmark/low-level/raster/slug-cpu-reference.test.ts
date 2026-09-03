@@ -1,4 +1,5 @@
-import { defineRasterResourceId, type GlyphLayout } from '@pmndrs/glyph';
+import type { GlyphLayout } from '@pmndrs/glyph';
+import { defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
 import type { SlugPageData } from '@pmndrs/glyph/raster/slug';
 import { describe, expect, it } from 'vitest';
 

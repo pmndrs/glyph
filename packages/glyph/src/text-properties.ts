@@ -2,7 +2,7 @@ import type { FontFeature } from './font-feature.js';
 import type { TextInput } from './formatted-text.js';
 import type { FontSelection } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
-import type { AnyRasterFormat } from './raster-format.js';
+import type { AnyRasterFormat } from './config/raster-format.js';
 
 export interface GlyphBufferCapacity {
   readonly size: number;

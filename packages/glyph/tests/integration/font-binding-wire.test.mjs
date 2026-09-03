@@ -13,7 +13,7 @@ import { fontBindingBytes } from '../../dist/internal/font-binding.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap.js';
 import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
 import { slug, slugDescriptor } from '../../dist/raster/slug.js';
-import { defineRasterResourceId } from '../../dist/raster-format.js';
+import { defineRasterResourceId } from '../../dist/config/raster-format.js';
 import { techniqueProof } from '../../scripts/support/render-technique-proof.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 import { immutableTestFont } from '../support/immutable-font.mjs';

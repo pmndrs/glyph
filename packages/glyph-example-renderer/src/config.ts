@@ -1,7 +1,4 @@
 import {
-  defineGlyphConfig,
-  defineGlyphSchema,
-  resourceLease,
   type GlyphBatchBindingInput,
   type GlyphBindings,
   type GlyphBufferBindingInput,
@@ -16,6 +13,7 @@ import {
   type Codec,
   type CodecProgram,
 } from '@pmndrs/glyph';
+import { defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/glyph/config/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 
 import type { ExampleRendererDevice } from './device.js';

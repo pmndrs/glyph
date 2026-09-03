@@ -1,4 +1,6 @@
-import { f32, codecProgram, u32, type CodecF32Value, type CodecU32Value, id } from '../../dist/index.js';
+import type { CodecF32Value, CodecU32Value } from '../../dist/index.js';
+import { f32, codecProgram, u32 } from '../../dist/config/codec-program.js';
+import { id } from '../../dist/config/codec.js';
 
 // A program declares its named inputs once; every later reference is a handle,
 // never a number.

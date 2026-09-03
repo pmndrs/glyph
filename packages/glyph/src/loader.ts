@@ -49,7 +49,7 @@ import {
   type RasterFormatInput,
   type RasterFormatRequest,
   type RasterFormatTypesOf,
-} from './raster-format.js';
+} from './config/raster-format.js';
 import type {
   RasterKindOf,
   RasterOptionsArgument,

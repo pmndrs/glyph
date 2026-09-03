@@ -1,5 +1,5 @@
 import type { RasterLoadOptions, RasterReference, RasterSelection, RegisteredRaster } from './raster.js';
-import { isRasterFormat, type AnyRasterFormat, type RasterFormatInput } from './raster-format.js';
+import { isRasterFormat, type AnyRasterFormat, type RasterFormatInput } from './config/raster-format.js';
 import type { FontHandle, FontKey, RasterKey, Sha256Hex } from './identity.js';
 
 /** Renderer-independent metrics expressed in font units. */
@@ -74,7 +74,7 @@ export type FontInput = string | URL | FontSourceOverride | BakedFontSource;
 export interface FontToken<Format extends AnyRasterFormat, Input extends FontInput = FontInput> {
   readonly input: Input;
   readonly raster: Format;
-  readonly options?: import('./raster-format.js').RasterOptionsOf<Format>;
+  readonly options?: import('./config/raster-format.js').RasterOptionsOf<Format>;
 }
 
 /** Format-erased font token used by build-time discovery. */

@@ -1,14 +1,12 @@
+import { type CodecBuffer, type CodecF32Value } from '../../dist/index.js';
+import { f32, techniqueProgram } from '../../dist/config/codec-program.js';
+import { id } from '../../dist/config/codec.js';
 import {
   defineCodecBuffers,
   defineTechniqueGeometryKind,
   defineTechniqueSchema,
-  f32,
   schemaCodecBuffers,
-  techniqueProgram,
-  type CodecBuffer,
-  type CodecF32Value,
-  id,
-} from '../../dist/index.js';
+} from '../../dist/config/schema.js';
 import { schemaFieldTable, type FontBindingFieldTable } from '../../dist/internal/font-binding.js';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 

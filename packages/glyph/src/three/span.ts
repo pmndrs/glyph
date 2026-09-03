@@ -8,7 +8,7 @@ import {
   type UnboundSpanTag,
 } from '../formatted-text.js';
 import type { FontSelection } from '../loaded-font.js';
-import type { AnyRasterFormat } from '../raster-format.js';
+import type { AnyRasterFormat } from '../config/raster-format.js';
 import type { ThreeTextMaterial } from './material.js';
 
 type ThreeSpanFormat<Technique extends AnyRasterFormat> = SpanFormat<Technique> | ThreeTextMaterial;

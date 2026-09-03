@@ -16,14 +16,14 @@ sources:
     resource: ../../packages/glyph/src/glyph.ts
     title: Root Glyph runtime and handle registry
   - id: glyph-config
-    resource: ../../packages/glyph/src/glyph-config.ts
-    title: Root-exported GlyphConfig and renderer contracts
+    resource: ../../packages/glyph/src/config/glyph.ts
+    title: GlyphConfig and renderer contracts
   - id: configured-handle
     resource: ../../packages/glyph/src/internal/configured-handle.ts
     title: Internal configured-handle ownership
   - id: example-config
     resource: ../../packages/glyph-example-renderer/src/config.ts
-    title: Root-only example integration
+    title: Public config-leaf example integration
   - id: guide
     resource: ../guides/renderer-integration.md
     title: Renderer integration guide
@@ -34,12 +34,13 @@ generated:
 
 # Glyph integration API
 
-All applications and renderer integrations import the Glyph integration vocabulary from `@pmndrs/glyph`. The former
+Applications import the values and types they encounter from `@pmndrs/glyph`. Integration authors import the
+renderer-neutral construction helpers from explicit `@pmndrs/glyph/config/*` leaves. The former
 public `/core` engine-driving surface was removed by D-308 and commit `1990ebf3d`; its low-level ownership model is now an
 implementation detail. This file retains its canonical path for existing documentation links, but specifies only the
 current root API.
 
-Three and React are integrations over the same root contract available to third parties. Canvas, scene, GPU device,
+Three and React are integrations over the same public contract available to third parties. Canvas, scene, GPU device,
 material, pipeline, and render pass remain renderer-owned.
 
 ## Glyph runtime and handles
@@ -78,7 +79,7 @@ boundary, root extension, font techniques, and config extension fields.
 The external example is the canonical minimal configuration:
 
 ```ts
-import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph';
+import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph/config/glyph';
 
 const config = defineGlyphConfig({
   schema: ExampleSchema,

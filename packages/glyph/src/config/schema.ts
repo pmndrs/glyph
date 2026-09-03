@@ -7,7 +7,7 @@
  * derive from the declaration; none of them restate it.
  */
 
-import type { RasterFormatId } from '../raster-format.js';
+import type { RasterFormatId } from './raster-format.js';
 import {
   assertPortableVertexSemantic,
   portableTextureFormats,

@@ -13,7 +13,7 @@ import {
   type RuntimeFontBake,
 } from '../loader.js';
 import { glyphFontLibrary } from '../glyph.js';
-import type { AnyRasterFormat, RasterFormatInput } from '../raster-format.js';
+import type { AnyRasterFormat, RasterFormatInput } from '../config/raster-format.js';
 
 export interface ThreeFontLoaderOptions {
   readonly runtimeBake?: RuntimeFontBake;

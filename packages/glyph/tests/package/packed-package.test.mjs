@@ -84,6 +84,8 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     '@pmndrs/glyph/three/material',
     '@pmndrs/glyph/react/bitmap',
     '@pmndrs/glyph/raster/bitmap',
+    '@pmndrs/glyph/config/glyph',
+    '@pmndrs/glyph/config/raster-format',
     '@pmndrs/glyph/config/schema',
   ]) {
     const resolved = import.meta.resolve(specifier, consumerEntry);

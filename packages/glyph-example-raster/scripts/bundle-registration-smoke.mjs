@@ -19,7 +19,7 @@ try {
     'portable',
     `
       import '@pmndrs/glyph-example-raster';
-      import { resolveRasterPlanProgram } from '@pmndrs/glyph';
+      import { resolveRasterPlanProgram } from '@pmndrs/glyph/config/raster';
       if (resolveRasterPlanProgram(${JSON.stringify(glyphExample.id)}) === undefined) {
         throw new Error('portable root registration was tree-shaken');
       }

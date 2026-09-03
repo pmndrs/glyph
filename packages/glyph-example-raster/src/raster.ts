@@ -8,7 +8,7 @@ import type {
   RasterFormatId,
   Sha256Hex,
 } from '@pmndrs/glyph';
-import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph';
+import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
 
 import { isGlyphExampleHeader, type GlyphExampleExtension } from './artifact.js';
 import {

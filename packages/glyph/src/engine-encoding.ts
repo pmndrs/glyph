@@ -1,5 +1,5 @@
 import type { ParagraphSpan } from './formatted-text.js';
-import type { AnyRasterFormat } from './raster-format.js';
+import type { AnyRasterFormat } from './config/raster-format.js';
 import type { AxisConstraint, Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
 import type {
   PlannerConstraint,

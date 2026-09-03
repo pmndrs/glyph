@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:0bd7ca6f400432b609aa1ca623581ed4b105ebdcbfa41d7503c4ec9b08c6dab0'
+source_digest: 'sha256:bc137bee24497708e626a347217fe50488ed9fed1d6942be7d4ebb4e1ad112c6'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -24,7 +24,7 @@ sources:
     resource: ../../packages/glyph/src/font-face.ts
     title: Renderer-neutral FontFace declarations and loading
   - id: glyph-config
-    resource: ../../packages/glyph/src/glyph-config.ts
+    resource: ../../packages/glyph/src/config/glyph.ts
     title: Reusable GlyphConfig publication contracts
   - id: glyph-engine
     resource: ../../packages/glyph/src/glyph-engine.ts
@@ -158,23 +158,24 @@ their device-relative leases.
 
 ## Public package surfaces
 
-| Subpath                      | Purpose                                                                                                                                   |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `@pmndrs/glyph`              | Root `glyph` runtime plus immutable font/raster contracts, loading, fallback stacks, formatting helpers, paragraphs, and portable bakers. |
-| `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, compatibility `FontLoader`, material factories, and Codec registration.        |
-| `@pmndrs/glyph/three/bitmap` | Compatibility alias re-exporting the renderer-neutral Bitmap raster module.                                                               |
-| `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                                 |
-| `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                                 |
-| `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                      |
-| `@pmndrs/glyph/react/bitmap` | Typed `useBitmap(input, options)` convenience over `useFont`.                                                                             |
-| `@pmndrs/glyph/react/msdf`   | Typed `useMsdf(input, options?)` convenience over `useFont`.                                                                              |
-| `@pmndrs/glyph/react/slug`   | Typed `useSlug(input)` convenience over `useFont`.                                                                                        |
-| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                              |
-| `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                                 |
-| `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                          |
-| `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                          |
-| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.                   |
-| `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                          |
+| Subpath                      | Purpose                                                                                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing immutable font/raster contracts, loading, fallback stacks, formatting helpers, and paragraphs. |
+| `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, and portable-resource construction helpers for integration authors.             |
+| `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, compatibility `FontLoader`, material factories, and Codec registration.          |
+| `@pmndrs/glyph/three/bitmap` | Compatibility alias re-exporting the renderer-neutral Bitmap raster module.                                                                 |
+| `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                                   |
+| `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                                   |
+| `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                        |
+| `@pmndrs/glyph/react/bitmap` | Typed `useBitmap(input, options)` convenience over `useFont`.                                                                               |
+| `@pmndrs/glyph/react/msdf`   | Typed `useMsdf(input, options?)` convenience over `useFont`.                                                                                |
+| `@pmndrs/glyph/react/slug`   | Typed `useSlug(input)` convenience over `useFont`.                                                                                          |
+| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                                |
+| `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                                   |
+| `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                            |
+| `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                            |
+| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.                     |
+| `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                            |
 
 The three renderer-neutral raster leaves and their `three/*` compatibility barrels retain registration side effects under
 tree shaking. Shader implementations remain explicit `/tsl` or `/typegpu` imports and are not pulled in by registration.
@@ -559,13 +560,14 @@ There are no instance-ignoring runtime ABI readers. Package builds isolate the d
 `artifact-baker` feature sets from kernel-only test targets and reject an optimized module missing any contract-declared
 artifact export, preventing Cargo's shared top-level artifact path from silently publishing a smaller test variant.
 
-Renderer integration publishes from root `@pmndrs/glyph`: `GlyphConfig`, `defineGlyphConfig`, Codec authoring,
-schema bindings, `CommandBufferView`/`DisplayList`, resource leases, constrained root services, and
-`GlyphRenderer.decode`. D-306 and D-308 supersede D-249's former public `/core` engine-driving layer. Internal projection,
+Renderer-facing types that applications can encounter publish from root `@pmndrs/glyph`, including `GlyphConfig`,
+`CommandBufferView`/`DisplayList`, constrained root services, and `GlyphRenderer.decode`. Runtime construction helpers
+such as `defineGlyphConfig`, Codec authoring, schema binding, raster-format definition, and resource leases live on
+explicit `@pmndrs/glyph/config/*` leaves. D-306 and D-308 supersede D-249's former public `/core` engine-driving layer. Internal projection,
 identity mapping, planning, settlement, and Wasm transport are package machinery rather than an application or integrator
 API. The explicit `/tsl` and `/typegpu` shader subpaths own technique shader realizations and no scene, runtime, or root.
 
-Three and `packages/glyph-example-renderer` consume the same root contract available to third-party integrations. The
+Three and `packages/glyph-example-renderer` consume the same public root types and `/config/*` helpers available to third-party integrations. The
 example is the standing second-engine proof: its Codec describes storage, the trusted internal projection supplies one
 borrowed ordered view, its renderer stages and commits host objects synchronously, exact identities govern retirement,
 and its caller-owned TypeGPU/WebGPU host later submits work. Portable font compilation retains only validated buffer,

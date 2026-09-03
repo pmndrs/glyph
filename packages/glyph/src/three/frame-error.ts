@@ -4,7 +4,7 @@ import {
   type GlyphEngineFault,
   type GlyphEngineStatusCode,
 } from '../engine-error.js';
-import type { AnyRasterFormat } from '../raster-format.js';
+import type { AnyRasterFormat } from '../config/raster-format.js';
 import type { Text, TextSpan } from './text.js';
 
 /**

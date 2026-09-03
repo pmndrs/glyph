@@ -85,7 +85,7 @@ test('the published contract is ESM-only', async () => {
   // The typed ABI subpaths published struct offsets for pointer arithmetic and the validator subpaths
   // published bake-time artifact checks; neither had a consumer outside this package. The modules are still built
   // and packed — only the entry points are withdrawn, so a re-added name is a decision to make, not an
-  // accident to ship. The root GlyphConfig DSL is the engine-integration surface a custom renderer builds on.
+  // accident to ship. Public `/config/*` leaves are the GlyphConfig integration surface a custom renderer builds on.
   for (const removed of [
     './text-shaper-abi',
     './bitmap-baker-abi',

@@ -2,7 +2,7 @@ import { alignSpansToClusters, type FormattedText, type ParagraphSpan } from './
 import type { Font } from './font.js';
 import { createFontStack, immutableFontSelectionFonts, type FontSelection, type FontStack } from './loaded-font.js';
 import { copyGlyphLayoutInspection, type GlyphLayoutInspection, type ParagraphMetrics } from './layout.js';
-import type { AnyRasterFormat } from './raster-format.js';
+import type { AnyRasterFormat } from './config/raster-format.js';
 import { mergePropertyList } from './property-list.js';
 import type {
   ParagraphContentProperties,

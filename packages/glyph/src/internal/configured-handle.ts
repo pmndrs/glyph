@@ -6,7 +6,7 @@ import {
   type GlyphShapeRegistration,
 } from '../glyph-engine.js';
 import { createFontStack, immutableFontSelectionFonts, type FontSelection, type FontStack } from '../loaded-font.js';
-import type { AnyRasterFormat } from '../raster-format.js';
+import type { AnyRasterFormat } from '../config/raster-format.js';
 import {
   GlyphHandleState,
   type HandleMaterialBinding,
@@ -35,7 +35,7 @@ import type {
   ResourceLease,
   GlyphTextController,
   GlyphTextState,
-} from '../glyph-config.js';
+} from '../config/glyph.js';
 import type { HandleFontStackBinding } from './handle-state.js';
 import type {
   RenderPlanner,
@@ -371,7 +371,7 @@ class ConfiguredHandleDomain<
 
 interface RootRuntimeConfig<Bindings extends AnyGlyphBindings, RendererResult, Boundary, CodecValue extends Codec> {
   readonly schema: GlyphSchema<Bindings, Boundary>;
-  readonly commands?: Partial<import('../glyph-config.js').GlyphCommandCapacity>;
+  readonly commands?: Partial<import('../config/glyph.js').GlyphCommandCapacity>;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
   renderer(context: RendererContext<Bindings, RendererResult, CodecValue>): GlyphRenderer<Bindings, RendererResult>;
 }

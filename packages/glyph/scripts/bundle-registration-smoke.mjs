@@ -28,7 +28,7 @@ try {
     await writeFile(
       entry,
       `${imports}
-       import { resolveRasterPlanProgram } from '@pmndrs/glyph';
+       import { resolveRasterPlanProgram } from '@pmndrs/glyph/config/raster';
        const ids = ${JSON.stringify(techniqueIds)};
        if (ids.some((id) => resolveRasterPlanProgram(id) === undefined)) {
          throw new Error('${lane} registration was tree-shaken');

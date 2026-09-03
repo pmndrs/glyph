@@ -374,7 +374,7 @@ const glyphConfig = await measureJavaScript(
   true,
   true,
   {
-    // The root integration DSL must not pull any renderer integration.
+    // The renderer-neutral config leaf closure must not pull any renderer integration.
     expectedDynamic: [],
     excludedInitial: [
       '/packages/glyph/dist/react.js',

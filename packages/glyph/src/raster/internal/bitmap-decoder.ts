@@ -19,7 +19,7 @@ import {
 } from '../../internal/raster-atlas.js';
 import { decodeRasterCoverage } from '../../internal/raster-coverage-artifact.js';
 import type { RasterDecodeArtifact } from '../../raster.js';
-import { defineRasterResourceId } from '../../raster-format.js';
+import { defineRasterResourceId } from '../../config/raster-format.js';
 import type { BitmapData, BitmapPageData, BitmapStrikeData } from '../bitmap.js';
 
 const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE;

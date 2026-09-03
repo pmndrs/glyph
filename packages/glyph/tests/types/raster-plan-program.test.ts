@@ -1,10 +1,7 @@
-import {
-  defineTechniqueSchema,
-  registerRasterPlanProgram,
-  type CompiledCodecProgramBody,
-  type RasterFontBinding,
-} from '../../dist/index.js';
+import { type CompiledCodecProgramBody, type RasterFontBinding } from '../../dist/index.js';
 import type { RasterResourceId, RasterFormat, RasterFormatId } from '../../dist/index.js';
+import { registerRasterPlanProgram } from '../../dist/config/raster.js';
+import { defineTechniqueSchema } from '../../dist/config/schema.js';
 
 declare const technique: RasterFormat<
   RasterFormatId & 'vendor.plan-contract',

@@ -2,7 +2,7 @@ import { type ClusterAlignableRange, resolveRangesToClusters } from './internal/
 import { statedProperties } from './internal/span-cascade.js';
 import { isImmutableFontSelection, type FontSelection } from './loaded-font.js';
 import { assertTextStyle, type TextStyle } from './text-properties.js';
-import type { AnyRasterFormat } from './raster-format.js';
+import type { AnyRasterFormat } from './config/raster-format.js';
 
 declare const textLiteralTechnique: unique symbol;
 declare const textSpanFragmentTechnique: unique symbol;

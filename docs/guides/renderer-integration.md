@@ -8,7 +8,7 @@ sources:
     resource: ../../.agents/skills/engine-call-contract/SKILL.md
     title: Engine call contract
   - id: glyph-config-contract
-    resource: ../../packages/glyph/src/glyph-config.ts
+    resource: ../../packages/glyph/src/config/glyph.ts
     title: Public GlyphConfig and renderer contracts
   - id: root-entry
     resource: ../../packages/glyph/src/index.ts
@@ -38,7 +38,8 @@ generated:
 This guide builds a renderer adapter with `GlyphConfig`, then follows one publication through the repository's real
 TypeGPU 0.12 example. The finished adapter:
 
-- uses only public root imports from `@pmndrs/glyph` plus explicit technique and `/typegpu` subpaths;
+- uses only public application types from `@pmndrs/glyph`, renderer-neutral helpers from `/config/*`, and explicit
+  technique and `/typegpu` subpaths;
 - creates one inferred handle with an anonymous root and idempotent named roots;
 - retains Text state and publishes it through `shape()`;
 - receives an engine-projected, borrowed `CommandBufferView` in `GlyphRenderer.decode()`;
@@ -66,7 +67,7 @@ flowchart LR
   Portable --> Glyph
   Shader --> Portable
   Adapter --> Device
-  Three[Three integration] -. same root API .-> Glyph
+  Three[Three integration] -. same public API .-> Glyph
   R3F[R3F integration] -. immutable selected root .-> Three
 ```
 
@@ -175,7 +176,6 @@ never handles numeric engine IDs:
 
 ```ts
 import {
-  defineGlyphSchema,
   type GlyphBatchBindingInput,
   type GlyphBindings,
   type GlyphBufferBindingInput,
@@ -184,6 +184,7 @@ import {
   type GlyphSchema,
   type CodecProgram,
 } from '@pmndrs/glyph';
+import { defineGlyphSchema } from '@pmndrs/glyph/config/glyph';
 
 export interface ExampleResolvedResource {
   readonly name: string;
@@ -282,14 +283,10 @@ hierarchy: `DisplayList.children` already interleaves batches and root instances
 emit packed buffers, programs, ordering, and capabilities:
 
 ```ts
-import {
-  createRasterCodecProgram,
-  defineCodecBuffers,
-  id,
-  type CodecCapabilitySet,
-  type CodecDescriptor,
-  type CodecIdFactory,
-} from '@pmndrs/glyph';
+import type { CodecCapabilitySet, CodecDescriptor, CodecIdFactory } from '@pmndrs/glyph';
+import { id } from '@pmndrs/glyph/config/codec';
+import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
+import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 
 const stableGlyphId = id.buffer('glyph-example-renderer/stable-glyph');
@@ -338,7 +335,7 @@ Changing batching, record layout, capabilities, or ordering is Codec work; it is
 names, the resource kind, portable payload, singleton companions, previous accepted value, and an abort signal.
 
 ```ts
-import { resourceLease } from '@pmndrs/glyph';
+import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph/config/glyph';
 
 resolve: ({ format, resourceName, payload }) => {
   if (format !== techniqueId) {
@@ -851,7 +848,8 @@ abandoned FontFace declarations, never the correctness mechanism.
 
 ## Verify a new integration
 
-1. **Package boundary:** imports come only from `@pmndrs/glyph`, technique packages, and explicit shader subpaths.
+1. **Package boundary:** application types come from `@pmndrs/glyph`; construction helpers come from public
+   `/config/*` leaves; technique and shader code uses its explicit subpaths.
 2. **Type inference:** `glyph.handle('name', config)` infers the concrete handle without casts or explicit Glyph generics.
 3. **Codec:** real text produces expected lanes, variants, capabilities, batching, and order.
 4. **Hierarchy:** `DisplayList.children` reaches the renderer in authoritative order with no numeric IDs.

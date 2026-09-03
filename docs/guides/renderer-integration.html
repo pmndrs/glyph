@@ -297,15 +297,17 @@
       <section id="boundary">
         <h2>One public integration boundary</h2>
         <p>
-          A custom integration imports its complete Glyph vocabulary from <code>@pmndrs/glyph</code>. Portable raster
-          packages and explicit shader subpaths remain separate so unused techniques and shaders can tree-shake.
+          A custom integration imports application-facing types from <code>@pmndrs/glyph</code> and construction helpers
+          from explicit <code>@pmndrs/glyph/config/*</code> leaves. Portable raster packages and shader subpaths remain
+          separate so unused formats, helpers, and shaders can tree-shake.
         </p>
         <div class="diagram">
           <svg viewBox="0 0 1080 390" role="img" aria-labelledby="boundary-title boundary-desc">
             <title id="boundary-title">Public package and dependency boundary</title>
             <desc id="boundary-desc">
-              Applications and integrations use the Glyph root package. Portable technique packages feed Codec metadata
-              into Glyph, while explicit TypeGPU shader subpaths feed the host renderer. Rust and Wasm stay private.
+              Applications use the Glyph root package and integrations use its public config leaves. Portable raster
+              packages feed Codec metadata into Glyph, while explicit TypeGPU shader subpaths feed the host renderer.
+              Rust and Wasm stay private.
             </desc>
             <defs>
               <marker id="arrow-a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
@@ -488,7 +490,10 @@ if (handle.drawList.draws.length === 0) throw new Error('the renderer produced n
           </tbody>
         </table>
         <h3>Actual example config</h3>
-        <pre><code>export type ExampleGlyphConfig = GlyphConfigFor&lt;
+        <pre><code>import type { Codec, GlyphConfigFor } from '@pmndrs/glyph';
+import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph/config/glyph';
+
+export type ExampleGlyphConfig = GlyphConfigFor&lt;
   typeof ExampleSchema,
   ExampleRoot,
   ExampleDrawList,

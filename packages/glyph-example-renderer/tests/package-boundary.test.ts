@@ -21,12 +21,19 @@ describe('package boundary', () => {
   // literals it forbids.
   const threeImport = new RegExp(`from '${'three'}|from "${'three'}`);
 
-  test('integrates only through the root GlyphConfig vocabulary', async () => {
+  test('integrates only through root application types and public config leaves', async () => {
     for (const [file, source] of await packageSources()) {
-      const glyphImports = [...source.matchAll(/from ['"](@pmndrs\/glyph(?=\/|['"])(?:\/[A-Za-z0-9_.-]+)?)/g)].map(
+      const glyphImports = [...source.matchAll(/from ['"](@pmndrs\/glyph(?=\/|['"])(?:\/[A-Za-z0-9_.-]+)*)/g)].map(
         ([, specifier]) => specifier!,
       );
-      const allowed = new Set(['@pmndrs/glyph']);
+      const allowed = new Set([
+        '@pmndrs/glyph',
+        '@pmndrs/glyph/config/codec',
+        '@pmndrs/glyph/config/glyph',
+        '@pmndrs/glyph/config/raster',
+        '@pmndrs/glyph/config/resources',
+        '@pmndrs/glyph/config/schema',
+      ]);
       for (const specifier of glyphImports) expect(allowed, `${file}: ${specifier}`).toContain(specifier);
       // No scene-graph integration or Three dependency.
       expect(source, file).not.toMatch(threeImport);

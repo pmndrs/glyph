@@ -4,16 +4,10 @@
  * A host supplies its own system lanes and compiles the shared portable technique body
  * into validated Codec bytes.
  */
-import {
-  compileCodec,
-  createRasterCodecProgram,
-  defineCodecBuffers,
-  type CodecIdFactory,
-  type CodecBufferId,
-  type CodecCapabilitySet,
-  type CodecDescriptor,
-  id,
-} from '@pmndrs/glyph';
+import { type CodecIdFactory, type CodecBufferId, type CodecCapabilitySet, type CodecDescriptor } from '@pmndrs/glyph';
+import { compileCodec, id } from '@pmndrs/glyph/config/codec';
+import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
+import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 
 const EXAMPLE_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-example-renderer/stable-glyph');

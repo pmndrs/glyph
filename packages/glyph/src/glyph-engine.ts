@@ -7,7 +7,7 @@ import {
   immutableFontVariantIdentity,
   type ImmutableFontResourceLease,
 } from './loaded-font.js';
-import type { AnyRasterFormat, RasterDataOf } from './raster-format.js';
+import type { AnyRasterFormat, RasterDataOf } from './config/raster-format.js';
 import type { RasterKindOf, RegisteredRaster } from './raster.js';
 import { createRuntimeShaper, runtimeShaperEngineExports, type RuntimeShaper } from './shaper.js';
 import { GlyphEngineStatusError } from './engine-error.js';

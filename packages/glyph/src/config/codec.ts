@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { AnyRasterFormat, RasterResourceId } from '../raster-format.js';
+import type { AnyRasterFormat, RasterResourceId } from './raster-format.js';
 
 const MAX_U32 = 0xffff_ffff;
 

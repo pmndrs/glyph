@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { codecProgram, f32, id } from '../../dist/index.js';
+import { codecProgram, f32 } from '../../dist/config/codec-program.js';
+import { id } from '../../dist/config/codec.js';
 
 const OPTIONS = { scope: 'glyph', bindingF32: ['bearingX'] };
 const BUFFER = { id: id.buffer('test.codec-provenance/position'), scalar: 'f32', lanes: ['x', 'y'] };

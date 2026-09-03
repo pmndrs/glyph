@@ -1,5 +1,7 @@
-import { defineTechniqueSchema, type PortableResource, id } from '../../src/index.js';
-import { defineRasterFormat } from '../../src/raster-format.js';
+import type { PortableResource } from '../../src/index.js';
+import { id } from '../../src/config/codec.js';
+import { defineRasterFormat } from '../../src/config/raster-format.js';
+import { defineTechniqueSchema } from '../../src/config/schema.js';
 import {
   registerThreeRasterPlanProgram,
   type ThreePlanProgramMaterialContext,
