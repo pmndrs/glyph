@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:261f1fb8f6970ae831a679cc06d4c5da994883b80b34d8128e283fd6c0b2136e'
+source_digest: 'sha256:01655c6b8c73c0479f26295fb37ceeef95c62c2be6e97466e122c858dd3dda7b'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -731,9 +731,10 @@ updates. Rust therefore bounds the owned batch arena and processes its entries d
 array, sort it, or scan for duplicates before every global shape.
 
 The retained planner likewise mints one nonzero paragraph identity per Text and emits each paragraph once in scene order.
-The public two-Text Three integration captures that actual Wasm request and pins both identity and order. Rust still
-checks the paragraph table's range, alignment, opcode, reserved bytes, and removal shape, but it does not search earlier
-records for duplicate package-owned identities or orders.
+The public two-Text and replacement Three integrations capture actual Wasm requests and pin identity, order, opcodes,
+zeroed reserved fields, and the canonical zero order for removals. Rust checks the paragraph table's range and alignment,
+then decodes each opcode where the mutation is consumed; it does not pre-scan compiler-owned record canonicality or search
+earlier records for duplicate package-owned identities or orders.
 
 That same public request proves one constraint per paragraph and a distinct nonzero flow-thread identity for each. The
 request reader therefore trusts those planner-owned identities instead of rescanning the constraint table; caller-authored

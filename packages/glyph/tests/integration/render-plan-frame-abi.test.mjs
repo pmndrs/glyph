@@ -270,24 +270,6 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     outputSlot: 1,
     flags: 0,
   });
-  const geometryHeader = resultBytes(memory, geometryPointer, resultLayout).slice();
-
-  const invalidGeometry = geometryRequestBytes(abi, 6, 6, 6);
-  const exclusionOffset = new DataView(invalidGeometry.buffer).getUint32(requestLayout.exclusionsOffset, true);
-  new DataView(invalidGeometry.buffer).setUint32(exclusionOffset + abi.layouts.engineExclusion.regionId, 9, true);
-  new Uint8Array(memory.buffer, requestPointer, invalidGeometry.byteLength).set(invalidGeometry);
-  const invalidGeometryPointer = fn.textUpdate(rootId, requestPointer, invalidGeometry.byteLength);
-  assertResult(memory, invalidGeometryPointer, abi, {
-    status: abi.status.invalidRequest,
-    engineRevision: 6,
-    revision: 6,
-    requiredBaseRevision: 6,
-    publicationGeneration: 6,
-    outputSlot: 0,
-    flags: 0,
-  });
-  assert.deepEqual(resultBytes(memory, geometryPointer, resultLayout), geometryHeader);
-
   const oldBuffer = memory.buffer;
   const grownCapacity = 8 * 1024 * 1024;
   assert.equal(fn.reserveRoot(rootId, grownCapacity, grownCapacity, 0), abi.status.ok);

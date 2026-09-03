@@ -140,6 +140,8 @@ test('one initialized Glyph runtime creates independent named Three handles over
   });
   const group = second.createTextGroup();
   const grouped = second.createText({ font, text: 'Independent', style: { fontSize: 16 } });
+  const disposed = second.createText({ font, text: 'Disposed', style: { fontSize: 16 } });
+  disposed.dispose();
   group.add(grouped);
   scene.add(label, group);
   secondScene.add(secondSceneLabel);
@@ -175,8 +177,13 @@ test('one initialized Glyph runtime creates independent named Three handles over
       'the second root owns its own renderer meshes',
     );
     assert.throws(() => group.add(label), /different Glyph roots/);
+    assert.throws(() => group.add(disposed), /disposed Text cannot be attached/);
+    scene.updateMatrixWorld(true);
+    assert.equal(group.textCount, 1, 'rejected Text attachments leave the valid hierarchy unchanged');
+    assert.ok(rootDraws(scene).length > 0, 'the valid hierarchy still renders through ordinary scene traversal');
     assert.throws(() => glyph.handle('three:integration:first', ThreeConfig), /already exists/);
   } finally {
+    disposed.dispose();
     label.dispose();
     secondSceneLabel.dispose();
     grouped.dispose();
@@ -969,6 +976,70 @@ test('Three handle ownership follows immutable variants across user-font disposa
   label.dispose();
   library.dispose();
   assert.equal(label.disposed, true);
+});
+
+test('Three balances resolved font-stack ownership across measurement, updates, publication, and disposal', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const registerFontStack = GlyphHandleState.prototype.registerFontStack;
+  const disposeFontStack = GlyphHandleState.prototype.disposeFontStack;
+  let registrations = 0;
+  let disposals = 0;
+  GlyphHandleState.prototype.registerFontStack = function (...args) {
+    registrations += 1;
+    return registerFontStack.apply(this, args);
+  };
+  GlyphHandleState.prototype.disposeFontStack = function (...args) {
+    disposals += 1;
+    return disposeFontStack.apply(this, args);
+  };
+  t.after(() => {
+    GlyphHandleState.prototype.registerFontStack = registerFontStack;
+    GlyphHandleState.prototype.disposeFontStack = disposeFontStack;
+  });
+
+  const first = await loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
+  const second = await loadFont(
+    { baked: dataUrl(await readFile(amiriFontUrl)) },
+    { raster: bitmap, options: { strikes: [16] } },
+  );
+  const scene = new THREE.Scene();
+  const label = three.createText({ font: first, text: 'first' });
+  try {
+    assert.ok(label.measure().glyphCount > 0);
+    assert.deepEqual([registrations, disposals], [1, 0], 'measurement retains the initial resolved font stack');
+
+    label.font = second;
+    label.text = 'الثاني';
+    assert.ok(label.measure().glyphCount > 0);
+    assert.deepEqual([registrations, disposals], [2, 1], 'measuring an update releases the replaced resolved state');
+
+    scene.add(label);
+    scene.updateMatrixWorld(true);
+    assert.equal(label.error, undefined);
+    assert.deepEqual([registrations, disposals], [2, 1], 'publication shares the current resolved state');
+
+    label.font = first;
+    label.text = 'published replacement';
+    scene.updateMatrixWorld(true);
+    assert.equal(label.error, undefined);
+    assert.deepEqual([registrations, disposals], [3, 2], 'publication releases the previously committed state');
+
+    label.dispose();
+    assert.deepEqual(
+      [registrations, disposals],
+      [3, 2],
+      'a disposed text keeps its committed state until removal publication or root teardown',
+    );
+    three.dispose();
+    assert.equal(disposals, registrations, 'terminal disposal releases the desired and committed references once');
+  } finally {
+    label.dispose();
+    first.dispose();
+    second.dispose();
+  }
 });
 
 test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose through the scene graph', async (t) => {
@@ -1875,6 +1946,9 @@ function instrumentNextGlyphEngine() {
       return Array.from({ length: count }, (_recordValue, index) => {
         const record = offset + index * mutation.size;
         return {
+          opcode: view.getUint8(record + mutation.opcode),
+          flags: view.getUint8(record + mutation.flags),
+          reserved0: view.getUint16(record + mutation.reserved0, true),
           paragraphId: view.getUint32(record + mutation.paragraphId, true),
           order: view.getUint32(record + mutation.order, true),
         };
@@ -2183,11 +2257,24 @@ test('one Three root atomically replaces child paragraphs without multiplying re
   scene.add(group);
   scene.updateMatrixWorld();
 
+  instrumentedGlyph.reset();
   const second = ['C', 'D', 'E'].map((text) => three.createText({ font, text }));
   group.remove(...first);
   group.add(...second);
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
+  const paragraphMutations = instrumentedGlyph.latestParagraphMutations();
+  const opcodes = textShaperAbi.engine.paragraphMutationOpcodes;
+  assert.equal(paragraphMutations.filter(({ opcode }) => opcode === opcodes.remove).length, 2);
+  assert.equal(paragraphMutations.filter(({ opcode }) => opcode === opcodes.upsert).length, 3);
+  assert.ok(
+    paragraphMutations.every(({ flags, reserved0 }) => flags === 0 && reserved0 === 0),
+    'the retained planner owns zeroed paragraph mutation reserved fields',
+  );
+  assert.ok(
+    paragraphMutations.filter(({ opcode }) => opcode === opcodes.remove).every(({ order }) => order === 0),
+    'the retained planner owns the canonical zero order for paragraph removals',
+  );
   assert.equal(rootDraws(scene).length, 1);
   assert.equal(rootDraws(scene)[0].geometry.instanceCount, 3);
 
