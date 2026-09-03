@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:4ab849711af77d7caf9f80afcca669f68ae10c657d17173bdc80e3cb05c9fbf3'
+source_digest: 'sha256:ec1fed1ff8ecaa6f2160bf13c0b797785a590bd919ea753a35382ae99e4cf104'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -714,7 +714,9 @@ packers.
 Publication layout is computed once at the Wasm boundary, checked against the caller's output limit, and passed unchanged
 to the encoder. The encoder writes that package-owned layout directly; it does not rescan the immutable plan to recreate
 or revalidate the same offsets before publication. Rust transport tests pin every emitted table offset, count, and payload
-range against the compiler-owned plan.
+range against the compiler-owned plan. The complete record-relationship oracle is compiled only for tests and runs over
+real ordered, stable, and mixed planner outputs; release publication retains only checked size arithmetic and destination
+bounds.
 
 A Mori 0.19.1 production-source scan (review profile, same-language threshold 0.85, minimum 40 tokens) corroborated the
 deleted parallel path and identified exact shared planner machinery. Ordered and stable planning now use one retained
