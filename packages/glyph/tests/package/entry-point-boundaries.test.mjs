@@ -94,7 +94,6 @@ test('application types stay at root while integration construction lives on con
     'config/codec-program.d.ts': ['assertTechniqueCodecBody', 'normalizeCodecProgramSystemBuffers'],
     'config/raster.d.ts': ['registerGlyphRasterCodec'],
     'config/raster-format.d.ts': ['isRasterFormat', 'rasterFormatForKey', 'rasterFormatForReference'],
-    'config/resources.d.ts': ['portableResourceIdentity'],
   };
   for (const [path, names] of Object.entries(privateLeafHelpers)) {
     const leaf = published(await declaration(path));

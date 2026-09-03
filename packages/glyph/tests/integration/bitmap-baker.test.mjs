@@ -155,6 +155,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
     dispose() {},
   };
   const data = await bitmap.decode(font, runtimeRaster);
+  assert.equal(data.strikes[0].pages[0].resource, `pmndrs.bitmap/${shapingHash}/${rasterKey}/0/0`);
   assert.equal(data.coverage[43 >> 3] & (1 << (43 & 7)), 1 << (43 & 7));
   assert.equal(data.coverage[45 >> 3] & (1 << (45 & 7)), 0);
   bitmap.dispose(data);

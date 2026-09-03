@@ -192,6 +192,10 @@ records into its render graph.
 `resolve(context)` receives the selected technique, resource name and kind, portable payload, companion resources,
 previous accepted resource, and an abort signal. It returns `ResourceLease<Value>`.
 
+The selected `RasterResourceId` is authoritative: equal IDs mean equal format, schema role, companion set, metadata, and
+bytes. A Codec mints a new ID whenever that realization changes. The handle therefore performs keyed retention and
+reference counting; it does not deep-compare immutable payload bytes on repeated lookup.
+
 Resolution does not inherently need a canvas, context, scene, or GPU device. A renderer may keep the value portable and
 realize it later, or capture a device and create a physical resource when the resource lease is the correct lifetime.
 Candidate discard, resource retirement, root disposal, and handle disposal release leases exactly once.

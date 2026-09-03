@@ -273,16 +273,14 @@ test('resource selection receives explicit glyph and strike coordinates', () => 
   );
 });
 
-test('authored resource identities remain stable across independent compiler calls', () => {
+test('one authored resource identity describes the same immutable payload across compiler calls', () => {
   const value = technique('test.plan-stable-resource-identity');
-  let invocation = 0;
   registerRasterCodec({
     raster: value,
     schema: schemaFor(value),
     codecBody: body,
     compileFont(compiler) {
-      invocation += 1;
-      return validCompile(compiler, new Uint8Array([invocation, 2, 3, 4]));
+      return validCompile(compiler, new Uint8Array([1, 2, 3, 4]));
     },
   });
   const identities = glyphId;
@@ -294,7 +292,7 @@ test('authored resource identities remain stable across independent compiler cal
   assert.deepEqual(bindingResourceIds(first.binding), bindingResourceIds(second.binding));
   assert.ok(bindingResourceIds(first.binding).includes(identities.resource(COLORS)));
   assert.equal(first.resources.get(COLORS).bytes[0], 1);
-  assert.equal(second.resources.get(COLORS).bytes[0], 2);
+  assert.deepEqual(second.resources.get(COLORS), first.resources.get(COLORS));
 });
 
 test('standalone font compilation scopes dynamic resource collisions to one call', () => {

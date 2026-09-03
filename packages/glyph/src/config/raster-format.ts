@@ -10,7 +10,11 @@ declare const rasterFormatRequestBrand: unique symbol;
 /** Stable public identity for one portable raster format. */
 export type RasterFormatId = string & { readonly [rasterFormatIdBrand]: true };
 
-/** Stable raster-authored identity for one physical raster resource. */
+/**
+ * Stable raster-authored identity for one renderer resource realization.
+ * Equal IDs must describe the same format, schema role, companion set, metadata,
+ * and bytes. Mint a new ID whenever any part of that realization changes.
+ */
 export type RasterResourceId = string & { readonly [rasterResourceIdBrand]: true };
 
 /** Text effects a raster format and its shader can render. */
@@ -151,7 +155,7 @@ export function defineRasterFormat<
   return defined;
 }
 
-/** Brand a stable resource identity produced by a portable technique. */
+/** Brand a stable renderer-resource identity produced by a portable raster format. */
 export function defineRasterResourceId<const Id extends string>(id: Id): RasterResourceId & Id {
   assertIdentifier(id, 'raster resource ID');
   return id as RasterResourceId & Id;
