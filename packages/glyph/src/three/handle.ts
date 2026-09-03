@@ -13,6 +13,7 @@ import {
   type GlyphRootInstanceBindingInput,
   type GlyphSchema,
   type RendererContext,
+  type Codec,
 } from '../config/glyph.js';
 import type { CodecProgram } from '../config/codec.js';
 import type { PortableResource } from '../config/resources.js';
@@ -23,7 +24,7 @@ import { normalizeGlyphBufferCapacity } from '../text-properties.js';
 import { threeCodecDescriptor } from './codec.js';
 import type { ThreeAllocationMode, ThreeTransformMode } from './codec.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
-import { createThreeCodec, type ThreeCodec } from './internal/renderer-resources.js';
+import { createThreeCodec, threeCodecResources } from './internal/renderer-resources.js';
 import {
   ThreeRootHost,
   normalizeThreeRootCompositing,
@@ -106,6 +107,9 @@ export interface ThreeFontFormats {
   readonly msdf: typeof msdf;
   readonly slug: typeof slug;
 }
+
+/** Exact public Codec value created once for one Three handle. */
+export interface ThreeCodec extends Codec {}
 
 export const ThreeFontFormats: ThreeFontFormats = Object.freeze({ bitmap, msdf, slug });
 
@@ -203,7 +207,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
           context.name,
           context.fonts,
           context.services,
-          context.codec.resources,
+          threeCodecResources(context.codec),
           rootOptions,
         );
         const selected = context.create(root.publicRoot(), {

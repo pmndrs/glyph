@@ -4,7 +4,7 @@ import test from 'node:test';
 import { techniqueProgram } from '../../dist/config/codec-program.js';
 import { id } from '../../dist/config/codec.js';
 import { defineRasterFormat } from '../../dist/config/raster-format.js';
-import { createRasterCodecProgram, registerRasterPlanProgram } from '../../dist/config/raster.js';
+import { createRasterCodecProgram, registerRasterCodec } from '../../dist/config/raster.js';
 import { defineCodecBuffers, defineTechniqueSchema } from '../../dist/config/schema.js';
 
 const TEST_PROGRAM_VARIANT = 3;
@@ -65,7 +65,7 @@ const capabilitySet = {
 };
 
 function plan(codecBody) {
-  return registerRasterPlanProgram({
+  return registerRasterCodec({
     raster: technique,
     schema,
     programVariant: TEST_PROGRAM_VARIANT,
@@ -85,7 +85,7 @@ const portable = plan((hostSystem, hostCapabilitySet) => {
   const p = techniqueProgram(schema, { system: hostSystem });
   return p.compile({ origin: [p.semantics.inlineOrigin, p.semantics.blockOrigin] });
 });
-const wrongSystemPortable = registerRasterPlanProgram({
+const wrongSystemPortable = registerRasterCodec({
   raster: wrongSystemTechnique,
   schema: wrongSystemSchema,
   programVariant: TEST_PROGRAM_VARIANT,
@@ -170,6 +170,6 @@ test('portable codec assembly rejects structurally copied programs', () => {
           allocationMode: 'ordered',
         },
       ),
-    /needs the registered portable plan program/,
+    /needs a registered RasterCodec/,
   );
 });

@@ -1,5 +1,5 @@
 /**
- * When a Three raster plan program may still be registered.
+ * When a Three raster codec may still be registered.
  *
  * The registry is module-global, and a `GlyphEngine`'s Three coordinator reads it exactly
  * once, at construction. Nothing re-reads it. A registration after that point was a perfectly legal
@@ -18,11 +18,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { glyph } from '@pmndrs/glyph';
-import { registerThreeRasterPlanProgram, ThreeConfig } from '@pmndrs/glyph/three';
+import { registerThreeRasterProgram, ThreeConfig } from '@pmndrs/glyph/three';
 import { f32, techniqueProgram, u32 } from '@pmndrs/glyph/config/codec-program';
 import { id } from '@pmndrs/glyph/config/codec';
 import { defineRasterFormat } from '@pmndrs/glyph/config/raster-format';
-import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+import { registerRasterCodec } from '@pmndrs/glyph/config/raster';
 import { defineTechniqueGeometryKind, defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
 import {
   createImmutableFontBacking,
@@ -37,7 +37,7 @@ const TRANSFORM_BUFFER_ID = id.buffer('test.three-plan-program/system/transform-
 await glyph.init();
 
 const portablePrograms = new Map();
-const planProgram = (techniqueIdentity, declaration = {}) => {
+const rasterProgram = (techniqueIdentity, declaration = {}) => {
   let portable = portablePrograms.get(techniqueIdentity);
   if (portable === undefined) {
     const technique = defineRasterFormat({
@@ -68,7 +68,7 @@ const planProgram = (techniqueIdentity, declaration = {}) => {
       render,
     });
     portable = { raster: technique, schema };
-    registerRasterPlanProgram({
+    registerRasterCodec({
       raster: technique,
       schema,
       codecBody(system) {
@@ -120,30 +120,30 @@ const planProgram = (techniqueIdentity, declaration = {}) => {
 };
 
 test('variant registration rejects incompatible capabilities before an engine exists', () => {
-  const missingOutputs = planProgram('test-missing-outputs');
+  const missingOutputs = rasterProgram('test-missing-outputs');
   delete missingOutputs.variant.outputs;
-  assert.throws(() => registerThreeRasterPlanProgram(missingOutputs), /needs named shader outputs/);
+  assert.throws(() => registerThreeRasterProgram(missingOutputs), /needs named shader outputs/);
 
-  const unknownBuffer = planProgram('test-unknown-buffer');
+  const unknownBuffer = rasterProgram('test-unknown-buffer');
   unknownBuffer.variant.buffers = { foreign: { scalar: 'f32', vectorWidth: 1 } };
-  assert.throws(() => registerThreeRasterPlanProgram(unknownBuffer), /unknown buffer "foreign"/);
+  assert.throws(() => registerThreeRasterProgram(unknownBuffer), /unknown buffer "foreign"/);
 
-  const unknownResource = planProgram('test-unknown-resource');
+  const unknownResource = rasterProgram('test-unknown-resource');
   unknownResource.variant.resources = {
     ...unknownResource.variant.resources,
     foreign: { kind: 'buffer' },
   };
-  assert.throws(() => registerThreeRasterPlanProgram(unknownResource), /unknown resource "foreign"/);
+  assert.throws(() => registerThreeRasterProgram(unknownResource), /unknown resource "foreign"/);
 
-  const wrongGeometry = planProgram('test-wrong-geometry');
+  const wrongGeometry = rasterProgram('test-wrong-geometry');
   wrongGeometry.variant.geometry = { kind: 'quad', resource: 'foreign', coordinates: 'unit-square' };
-  assert.throws(() => registerThreeRasterPlanProgram(wrongGeometry), /declares incompatible geometry/);
+  assert.throws(() => registerThreeRasterProgram(wrongGeometry), /declares incompatible geometry/);
 
-  const extraGeometryField = planProgram('test-extra-geometry-field');
+  const extraGeometryField = rasterProgram('test-extra-geometry-field');
   extraGeometryField.variant.geometry = { kind: 'synthetic-quad', name: 'not-part-of-this-shape' };
-  assert.throws(() => registerThreeRasterPlanProgram(extraGeometryField), /declares incompatible geometry/);
+  assert.throws(() => registerThreeRasterProgram(extraGeometryField), /declares incompatible geometry/);
 
-  const wrongPositionWidth = planProgram('test-wrong-position-width', {
+  const wrongPositionWidth = rasterProgram('test-wrong-position-width', {
     resources: {
       mesh: {
         kind: 'geometry',
@@ -153,11 +153,11 @@ test('variant registration rejects incompatible capabilities before an engine ex
     render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
   });
   assert.throws(
-    () => registerThreeRasterPlanProgram(wrongPositionWidth),
+    () => registerThreeRasterProgram(wrongPositionWidth),
     /geometry attribute "position" needs 3 components; got 2/,
   );
 
-  const inheritedSemanticName = planProgram('test-inherited-semantic-name', {
+  const inheritedSemanticName = rasterProgram('test-inherited-semantic-name', {
     resources: {
       mesh: {
         kind: 'geometry',
@@ -166,10 +166,10 @@ test('variant registration rejects incompatible capabilities before an engine ex
     },
     render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
   });
-  assert.doesNotThrow(() => registerThreeRasterPlanProgram(inheritedSemanticName));
+  assert.doesNotThrow(() => registerThreeRasterProgram(inheritedSemanticName));
 
   const customGeometryName = defineTechniqueGeometryKind('test-custom-shape');
-  const wrongCustomGeometryName = planProgram('test-wrong-custom-geometry-name', {
+  const wrongCustomGeometryName = rasterProgram('test-wrong-custom-geometry-name', {
     resources: {
       mesh: {
         kind: 'geometry',
@@ -181,43 +181,51 @@ test('variant registration rejects incompatible capabilities before an engine ex
     },
   });
   wrongCustomGeometryName.variant.geometry.name = defineTechniqueGeometryKind('test-other-custom-shape');
-  assert.throws(() => registerThreeRasterPlanProgram(wrongCustomGeometryName), /declares incompatible geometry/);
+  assert.throws(() => registerThreeRasterProgram(wrongCustomGeometryName), /declares incompatible geometry/);
 
-  const wrongScalar = planProgram('test-wrong-scalar', {
+  const wrongScalar = rasterProgram('test-wrong-scalar', {
     buffers: { rect: { id: RECT_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] } },
   });
   wrongScalar.variant.buffers.rect.scalar = 'u32';
-  assert.throws(() => registerThreeRasterPlanProgram(wrongScalar), /buffer "rect" must consume f32x2/);
+  assert.throws(() => registerThreeRasterProgram(wrongScalar), /buffer "rect" must consume f32x2/);
 
-  const missingBuffer = planProgram('test-missing-buffer', {
+  const missingBuffer = rasterProgram('test-missing-buffer', {
     buffers: { rect: { id: RECT_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] } },
   });
   delete missingBuffer.variant.buffers.rect;
-  assert.throws(() => registerThreeRasterPlanProgram(missingBuffer), /omits buffer "rect"/);
+  assert.throws(() => registerThreeRasterProgram(missingBuffer), /omits buffer "rect"/);
 
-  const wrongFormat = planProgram('test-wrong-format', {
+  const wrongFormat = rasterProgram('test-wrong-format', {
     resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } },
   });
   wrongFormat.variant.resources.atlas.format = 'r8unorm';
-  assert.throws(() => registerThreeRasterPlanProgram(wrongFormat), /resource "atlas" must consume texture:rgba8unorm/);
+  assert.throws(() => registerThreeRasterProgram(wrongFormat), /resource "atlas" must consume texture:rgba8unorm/);
 
-  const missingResource = planProgram('test-missing-resource', {
+  const missingResource = rasterProgram('test-missing-resource', {
     resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } },
   });
   delete missingResource.variant.resources.atlas;
-  assert.throws(() => registerThreeRasterPlanProgram(missingResource), /omits resource "atlas"/);
+  assert.throws(() => registerThreeRasterProgram(missingResource), /omits resource "atlas"/);
 
-  const witnessed = planProgram('test-wrong-schema-witness');
+  const witnessed = rasterProgram('test-wrong-schema-witness');
   witnessed.schema = defineTechniqueSchema({
     technique: witnessed.raster.id,
     scope: 'glyph',
     binding: {},
     buffers: {},
   });
-  assert.throws(() => registerThreeRasterPlanProgram(witnessed), /needs its registered portable schema/);
+  assert.throws(() => registerThreeRasterProgram(witnessed), /needs its registered portable schema/);
+
+  const copiedRaster = rasterProgram('test-copied-raster-format');
+  copiedRaster.raster = Object.assign(() => ({}), copiedRaster.raster);
+  assert.throws(
+    () => registerThreeRasterProgram(copiedRaster),
+    /needs its registered RasterFormat/,
+    'a structural copy must not impersonate the package-owned RasterFormat',
+  );
 
   assert.throws(() => {
-    const anchor = planProgram('test-portable-registration-anchor');
+    const anchor = rasterProgram('test-portable-registration-anchor');
     const unregisteredTechnique = defineRasterFormat({
       id: 'test-no-portable',
       kind: 'test',
@@ -230,24 +238,24 @@ test('variant registration rejects incompatible capabilities before an engine ex
       },
       dispose() {},
     });
-    registerThreeRasterPlanProgram({
+    registerThreeRasterProgram({
       ...anchor,
       raster: unregisteredTechnique,
     });
-  }, /no portable raster plan program is registered/);
+  }, /no portable raster codec is registered/);
 });
 
 test('registration selects one renderer variant per technique before engine construction', async () => {
-  const primary = planProgram('test-variant-selection');
-  const unsupported = planProgram('test-portable-without-three').raster;
+  const primary = rasterProgram('test-variant-selection');
+  const unsupported = rasterProgram('test-portable-without-three').raster;
   const secondary = {
     raster: primary.raster,
     schema: primary.schema,
     variant: { ...primary.variant, id: 'second' },
   };
-  registerThreeRasterPlanProgram(primary);
+  registerThreeRasterProgram(primary);
   assert.throws(
-    () => registerThreeRasterPlanProgram(secondary),
+    () => registerThreeRasterProgram(secondary),
     /already selected raster variant "test" for technique "test-variant-selection"/,
   );
   const handle = glyph.handle('three:program-registration:selection', ThreeConfig);
@@ -263,9 +271,9 @@ test('registration selects one renderer variant per technique before engine cons
 test('a technique registered after an engine exists is refused, not silently dropped', async () => {
   const handle = glyph.handle('three:program-registration:late', ThreeConfig);
 
-  const late = planProgram('test-late-technique');
+  const late = rasterProgram('test-late-technique');
   assert.throws(
-    () => registerThreeRasterPlanProgram(late),
+    () => registerThreeRasterProgram(late),
     (error) =>
       error instanceof Error &&
       error.message.includes('test-late-technique') &&
@@ -276,12 +284,12 @@ test('a technique registered after an engine exists is refused, not silently dro
   // Once nothing holds a snapshot there is nothing a registration could miss, so it is legal again.
   // Without this, one disposed engine would poison the module-global registry for the process.
   handle.dispose();
-  assert.doesNotThrow(() => registerThreeRasterPlanProgram(late));
+  assert.doesNotThrow(() => registerThreeRasterProgram(late));
   // Re-registering the IDENTICAL program stays a no-op, so a module evaluated twice is not an error.
-  assert.doesNotThrow(() => registerThreeRasterPlanProgram(late));
+  assert.doesNotThrow(() => registerThreeRasterProgram(late));
   // A different program claiming the same technique is still the pre-existing collision.
   assert.throws(
-    () => registerThreeRasterPlanProgram(planProgram('test-late-technique')),
+    () => registerThreeRasterProgram(rasterProgram('test-late-technique')),
     TypeError,
     'two different programs must not claim one technique id',
   );
@@ -308,7 +316,7 @@ test('engine construction rejects a portable body compiled for different system 
     resources: { payload: { kind: 'buffer' } },
     render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
   });
-  const portable = registerRasterPlanProgram({
+  const portable = registerRasterCodec({
     raster: technique,
     schema,
     codecBody() {
@@ -322,7 +330,7 @@ test('engine construction rejects a portable body compiled for different system 
     },
     compileFont() {},
   });
-  registerThreeRasterPlanProgram({
+  registerThreeRasterProgram({
     raster: portable.raster,
     schema: portable.schema,
     variant: {

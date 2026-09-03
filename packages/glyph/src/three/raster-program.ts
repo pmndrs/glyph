@@ -1,6 +1,6 @@
 import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/webgpu';
 
-import { resolveRasterPlanProgram } from '../config/raster.js';
+import { resolveRasterCodec } from '../config/raster.js';
 import type { CodecScalarType } from '../config/codec.js';
 import type { PortableResource, PortableTextureFormat } from '../config/resources.js';
 import type {
@@ -12,18 +12,17 @@ import type {
   TechniqueResourceDeclarations,
 } from '../config/schema.js';
 import type { AnyRasterFormat } from '../config/raster-format.js';
-import { isRasterFormat } from '../internal/raster-format-registry.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import { threeSystemBuffers } from './codec.js';
-import { commitThreeRasterPlanProgram, registeredThreeRasterPlanProgram } from './internal/plan-program-registry.js';
+import { commitThreeRasterProgram, registeredThreeRasterProgram } from './internal/raster-program-registry.js';
 
-export interface ThreePlanProgramBuffer {
+export interface ThreeRasterProgramBuffer {
   readonly scalarType: CodecScalarType;
   readonly vectorWidth: number;
   readonly attribute: StorageInstancedBufferAttribute;
 }
 
-export interface ThreePlanProgramMaterialContext {
+export interface ThreeRasterMaterialContext {
   /** Publication root selected by the configured Three handle. */
   readonly root: ThreeRootContext;
   /** Portable raster selected for this draw. */
@@ -35,7 +34,7 @@ export interface ThreePlanProgramMaterialContext {
   /** Shader-language label for diagnostics and implementation selection. */
   readonly language: string;
   /** Buffers addressed by the schema's declared names, never host wire ids. */
-  readonly namedBuffers: ReadonlyMap<string, ThreePlanProgramBuffer>;
+  readonly namedBuffers: ReadonlyMap<string, ThreeRasterProgramBuffer>;
   /** Retained resources addressed by the schema's declared names. */
   readonly namedResources: ReadonlyMap<string, PortableResource>;
   /** Named output types declared by the selected renderer implementation. */
@@ -48,7 +47,7 @@ export interface ThreePlanProgramMaterialContext {
   transformPosition(position: Node<'vec3'>): Node<'vec3'>;
 }
 
-export interface ThreeRasterPlanBufferCapability<
+export interface ThreeRasterBufferCapability<
   Scalar extends CodecScalarKind = CodecScalarKind,
   VectorWidth extends number = number,
 > {
@@ -56,49 +55,49 @@ export interface ThreeRasterPlanBufferCapability<
   readonly vectorWidth: VectorWidth;
 }
 
-export type ThreeRasterPlanBufferCapabilities<Buffers extends CodecBufferDeclarations> = {
-  readonly [Name in keyof Buffers]: ThreeRasterPlanBufferCapability<
+export type ThreeRasterBufferCapabilities<Buffers extends CodecBufferDeclarations> = {
+  readonly [Name in keyof Buffers]: ThreeRasterBufferCapability<
     Buffers[Name]['scalar'],
     Buffers[Name]['lanes']['length']
   >;
 };
 
-export type ThreeRasterPlanResourceCapability<Declaration> = Declaration extends TechniqueResourceDeclaration
+export type ThreeRasterResourceCapability<Declaration> = Declaration extends TechniqueResourceDeclaration
   ? Declaration extends { readonly kind: 'group'; readonly members: infer Members }
     ? {
         readonly kind: 'group';
-        readonly members: { readonly [Name in keyof Members]: ThreeRasterPlanResourceCapability<Members[Name]> };
+        readonly members: { readonly [Name in keyof Members]: ThreeRasterResourceCapability<Members[Name]> };
       }
     : Declaration extends { readonly format: PortableTextureFormat }
       ? { readonly kind: Declaration['kind']; readonly format: Declaration['format'] }
       : { readonly kind: Declaration['kind']; readonly format?: never }
   : never;
 
-export type ThreeRasterPlanResourceCapabilities<Resources extends TechniqueResourceDeclarations> = {
-  readonly [Name in keyof Resources]: ThreeRasterPlanResourceCapability<Resources[Name]>;
+export type ThreeRasterResourceCapabilities<Resources extends TechniqueResourceDeclarations> = {
+  readonly [Name in keyof Resources]: ThreeRasterResourceCapability<Resources[Name]>;
 };
 
 /** Renderer-selected shader realization, derived from the exact portable schema witness. */
-export interface ThreeRasterPlanVariant<Schema extends AnyTechniqueSchema = AnyTechniqueSchema> {
+export interface ThreeRasterVariant<Schema extends AnyTechniqueSchema = AnyTechniqueSchema> {
   /** Stable renderer-local id; packages may publish alternatives, but Three registers one per technique. */
   readonly id: string;
   /** Shader implementation language, for example `tsl`, `wgsl`, or `glsl`. */
   readonly language: string;
   /** Shader-visible named Codec-buffer shapes consumed by this implementation. */
-  readonly buffers: ThreeRasterPlanBufferCapabilities<Schema['buffers']>;
+  readonly buffers: ThreeRasterBufferCapabilities<Schema['buffers']>;
   /** Named portable resource kinds and formats consumed by this implementation. */
-  readonly resources: ThreeRasterPlanResourceCapabilities<Schema['resources']>;
+  readonly resources: ThreeRasterResourceCapabilities<Schema['resources']>;
   /** Named shader outputs exposed to renderer-owned material composition. */
   readonly outputs: Readonly<Record<string, string>>;
   /** Geometry shape consumed by this implementation. */
   readonly geometry: Schema['render']['geometry'];
-  createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
+  createMaterial(context: ThreeRasterMaterialContext): NodeMaterial;
 }
 
-export interface ThreeRasterPlanProgram<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema> {
+export interface ThreeRasterProgram<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema> {
   readonly raster: Technique;
   readonly schema: Schema & { readonly technique: Technique['id'] };
-  readonly variant: NoInfer<ThreeRasterPlanVariant<Schema>>;
+  readonly variant: NoInfer<ThreeRasterVariant<Schema>>;
 }
 
 const THREE_RESERVED_ATTRIBUTE_WIDTHS: Readonly<Record<string, readonly number[]>> = Object.freeze({
@@ -109,48 +108,56 @@ const THREE_RESERVED_ATTRIBUTE_WIDTHS: Readonly<Record<string, readonly number[]
   color: [3, 4],
 });
 
-/** Register only the renderer-specific resource and material half of a portable program. */
-export function registerThreeRasterPlanProgram<
+/** Register only the Three resource and material half of a portable RasterCodec. */
+export function registerThreeRasterProgram<
   const Technique extends AnyRasterFormat,
   const Schema extends AnyTechniqueSchema,
->(program: ThreeRasterPlanProgram<Technique, Schema>): void {
+>(program: ThreeRasterProgram<Technique, Schema>): void {
   if (typeof program !== 'object' || program === null || Array.isArray(program)) {
-    throw new TypeError('Three raster plan programs need a program object');
+    throw new TypeError('Three raster programs need a program object');
   }
-  const source = program as ThreeRasterPlanProgram<Technique, Schema> & Record<string, unknown>;
-  const technique = source.raster;
-  const techniqueId = isRasterFormat(technique) ? technique.id : undefined;
+  const source = program as ThreeRasterProgram<Technique, Schema> & Record<string, unknown>;
+  const raster = source.raster;
+  const techniqueId =
+    (typeof raster === 'object' || typeof raster === 'function') &&
+    raster !== null &&
+    typeof (raster as { readonly id?: unknown }).id === 'string'
+      ? (raster as { readonly id: string }).id
+      : undefined;
   if (typeof techniqueId !== 'string' || techniqueId.length === 0) {
-    throw new TypeError('Three raster plan programs need a technique with a nonempty id');
+    throw new TypeError('Three raster programs need a raster with a nonempty id');
   }
-  const portable = resolveRasterPlanProgram(techniqueId);
+  const portable = resolveRasterCodec(techniqueId);
   if (portable === undefined) {
-    throw new TypeError(`no portable raster plan program is registered for "${techniqueId}"`);
+    throw new TypeError(`no portable raster codec is registered for "${techniqueId}"`);
+  }
+  if (portable.raster !== raster) {
+    throw new TypeError(`Three raster program "${techniqueId}" needs its registered RasterFormat`);
   }
   if (source.schema !== portable.schema) {
-    throw new TypeError(`Three raster plan program "${techniqueId}" needs its registered portable schema`);
+    throw new TypeError(`Three raster program "${techniqueId}" needs its registered portable schema`);
   }
   const variant = source.variant;
   if (typeof variant !== 'object' || variant === null || Array.isArray(variant)) {
-    throw new TypeError(`Three raster plan program "${techniqueId}" needs a variant descriptor`);
+    throw new TypeError(`Three raster program "${techniqueId}" needs a variant descriptor`);
   }
   const variantId = variant.id;
   if (typeof variantId !== 'string' || variantId.length === 0) {
-    throw new TypeError(`Three raster plan program "${techniqueId}" needs a nonempty variant id`);
+    throw new TypeError(`Three raster program "${techniqueId}" needs a nonempty variant id`);
   }
   const language = variant.language;
   if (typeof language !== 'string' || language.length === 0) {
-    throw new TypeError(`Three raster plan variant "${variantId}" needs a language label`);
+    throw new TypeError(`Three raster variant "${variantId}" needs a language label`);
   }
   const createMaterial = variant.createMaterial;
   if (typeof createMaterial !== 'function') {
-    throw new TypeError(`Three raster plan variant "${variantId}" needs createMaterial`);
+    throw new TypeError(`Three raster variant "${variantId}" needs createMaterial`);
   }
-  const registered = registeredThreeRasterPlanProgram(program as object);
+  const registered = registeredThreeRasterProgram(program as object);
   if (registered !== undefined) {
     if (registered.raster.id !== techniqueId || registered.variant.id !== variantId) {
       throw new TypeError(
-        `Three raster plan program source changed identity from "${registered.raster.id}/${registered.variant.id}" to "${techniqueId}/${variantId}"`,
+        `Three raster program source changed identity from "${registered.raster.id}/${registered.variant.id}" to "${techniqueId}/${variantId}"`,
       );
     }
     return;
@@ -175,8 +182,8 @@ export function registerThreeRasterPlanProgram<
       geometry: expectedGeometry,
       createMaterial,
     }),
-  }) as ThreeRasterPlanProgram<AnyRasterFormat, AnyTechniqueSchema>;
-  commitThreeRasterPlanProgram(program as object, snapshot);
+  }) as ThreeRasterProgram<AnyRasterFormat, AnyTechniqueSchema>;
+  commitThreeRasterProgram(program as object, snapshot);
 }
 
 /** Three-owned semantic values used by renderer-specific shader adapters. */
@@ -260,12 +267,12 @@ function normalizeBufferCapabilities(
   variantId: string,
   value: unknown,
   schema: AnyTechniqueSchema,
-): Readonly<Record<string, ThreeRasterPlanBufferCapability>> {
+): Readonly<Record<string, ThreeRasterBufferCapability>> {
   if (!isNonArrayObject(value)) {
     throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs named buffer capabilities`);
   }
   assertExactNames(value, Object.keys(schema.buffers), techniqueId, variantId, 'buffer');
-  const owned: Record<string, ThreeRasterPlanBufferCapability> = Object.create(null);
+  const owned: Record<string, ThreeRasterBufferCapability> = Object.create(null);
   for (const [name, declaration] of Object.entries(schema.buffers)) {
     const capability = value[name];
     if (!isNonArrayObject(capability)) {

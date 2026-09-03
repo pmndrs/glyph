@@ -1,4 +1,4 @@
-import { type CodecBufferId, type RasterPlanProgram, type TechniqueSchema } from '@pmndrs/glyph';
+import { type CodecBufferId, type RasterCodec, type TechniqueSchema } from '@pmndrs/glyph';
 import { f32, techniqueProgram } from '@pmndrs/glyph/config/codec-program';
 import { id } from '@pmndrs/glyph/config/codec';
 import { defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
@@ -60,7 +60,7 @@ export const glyphExampleSchema: TechniqueSchema<
 
 const GLYPH_EXAMPLE_PROGRAM_VARIANT = 0;
 
-export const glyphExamplePlanProgramDefinition: RasterPlanProgram<typeof glyphExample, typeof glyphExampleSchema> = {
+export const glyphExampleCodecDefinition: RasterCodec<typeof glyphExample, typeof glyphExampleSchema> = {
   raster: glyphExample,
   schema: glyphExampleSchema,
   programVariant: GLYPH_EXAMPLE_PROGRAM_VARIANT,

@@ -73,12 +73,12 @@ interface ThreeTextMaterial {
   create(context: ThreeTextMaterialContext): THREE.NodeMaterial;
 }
 
-interface ThreePlanProgramMaterialContext {
-  readonly technique: AnyRasterTechnique;
+interface ThreeRasterMaterialContext {
+  readonly raster: AnyRasterFormat;
   readonly schema: TechniqueSchema;
   readonly variantId: string;
   readonly language: string;
-  readonly namedBuffers: ReadonlyMap<string, ThreePlanProgramBuffer>;
+  readonly namedBuffers: ReadonlyMap<string, ThreeRasterProgramBuffer>;
   readonly namedResources: ReadonlyMap<string, PortableResource>;
   readonly outputTypes: Readonly<Record<string, string>>;
   readonly resourceName: string;
@@ -88,16 +88,16 @@ interface ThreePlanProgramMaterialContext {
   transformPosition(position: Node<'vec3'>): Node<'vec3'>;
 }
 
-interface ThreeRasterPlanVariant {
+interface ThreeRasterVariant {
   readonly id: string;
   readonly language: string;
   readonly geometry: TechniqueGeometryDeclaration;
-  createMaterial(context: ThreePlanProgramMaterialContext): THREE.NodeMaterial;
+  createMaterial(context: ThreeRasterMaterialContext): THREE.NodeMaterial;
 }
 
-interface ThreeRasterPlanProgram {
-  readonly technique: AnyRasterTechnique;
-  readonly variant: ThreeRasterPlanVariant;
+interface ThreeRasterProgram {
+  readonly raster: AnyRasterFormat;
+  readonly variant: ThreeRasterVariant;
 }
 
 declare function defineTextMaterial(
@@ -141,7 +141,7 @@ text.spans = [{ start: 0, end: 3, material: warning }];
 `createDefaultMaterial()` is the DRY path for changing ordinary material state while retaining the package's canonical
 placement, coverage, color, and opacity nodes. Creating another `NodeMaterial` is the low-level path for lighting,
 shadows, depth writes/tests, and other standard Three behavior. Neither path may replace or duplicate the technique's
-glyph coverage algorithm unless the application registers a complete custom raster plan program.
+glyph coverage algorithm unless the application registers a complete custom ThreeRasterProgram.
 
 The construction function, runtime-scoped identity registry, command-buffer executor, and public `TextGroup`/`Text`/span
 `material` properties are implemented through the atomic Rust-session path.

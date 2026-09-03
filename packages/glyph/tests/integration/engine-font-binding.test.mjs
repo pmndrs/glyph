@@ -5,7 +5,7 @@ import test from 'node:test';
 import { techniqueProgram } from '../../dist/config/codec-program.js';
 import { id } from '../../dist/config/codec.js';
 import { defineRasterFormat, defineRasterResourceId } from '../../dist/config/raster-format.js';
-import { createRasterCodecProgram, registerRasterPlanProgram } from '../../dist/config/raster.js';
+import { createRasterCodecProgram, registerRasterCodec } from '../../dist/config/raster.js';
 import { defineTechniqueSchema } from '../../dist/config/schema.js';
 import { bitmap } from '../../dist/raster/bitmap.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
@@ -51,7 +51,7 @@ function collisionPlan(technique, resource) {
     resources: { payload: { kind: 'buffer' } },
     render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
   });
-  return registerRasterPlanProgram({
+  return registerRasterCodec({
     raster: technique,
     schema,
     codecBody(system) {

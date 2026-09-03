@@ -73,8 +73,8 @@ export const slug: RasterFormat<RasterFormatId & 'pmndrs.slug', typeof SLUG_KIND
 
 import { f32, techniqueProgram, u32 } from '../config/codec-program.js';
 import { id, type CodecBufferId } from '../config/codec.js';
-import type { RasterPlanProgram } from '../config/raster.js';
-import { registerGlyphRasterPlanProgram } from '../internal/raster-plan-program-registry.js';
+import type { RasterCodec } from '../config/raster.js';
+import { registerGlyphRasterCodec } from '../internal/raster-codec-registry.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
 const SLUG_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/rect');
@@ -212,7 +212,7 @@ export const slugSchema: TechniqueSchema<
   render: { resource: 'page', geometry: { kind: 'synthetic-quad' } },
 });
 
-export const slugPlanProgram: RasterPlanProgram<typeof slug, typeof slugSchema> = registerGlyphRasterPlanProgram({
+export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGlyphRasterCodec({
   raster: slug,
   schema: slugSchema,
   codecBody(system) {

@@ -5,7 +5,7 @@ import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { AnyRasterFormat } from '../config/raster-format.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
-import { compileRasterFont, resolveRasterPlanProgram, type CompiledRasterFont } from '../config/raster.js';
+import { compileRasterFont, resolveRasterCodec, type CompiledRasterFont } from '../config/raster.js';
 import type { PortableResource } from '../config/resources.js';
 import { portableResourceIdentity } from './portable-resource-identity.js';
 import { createRenderPlanner, type RenderPlanner, type RenderPlannerOptions } from './render-planner.js';
@@ -370,7 +370,7 @@ export class GlyphHandleState {
       }
       const compiled = compileRasterFont(font, this.#wireIdentities);
       if (compiled === undefined) {
-        throw new TypeError(`no portable raster plan program is registered for "${font.raster.id}"`);
+        throw new TypeError(`no portable raster codec is registered for "${font.raster.id}"`);
       }
       const ordinal = this.#nextFontBindingOrdinal;
       const handle = this.id('font-binding', `${this.#identityNamespace}/font/${ordinal}`);
@@ -940,13 +940,13 @@ export class GlyphHandleState {
     compiled: CompiledRasterFont,
     payloads: ReadonlyMap<number, RetainedPortablePayload>,
   ): void {
-    const program = resolveRasterPlanProgram(raster.id);
-    if (program === undefined) throw new Error(`portable plan program "${raster.id}" is no longer registered`);
-    const selectedName = program.schema.render.resource;
-    if (selectedName === undefined) throw new Error(`portable plan program "${raster.id}" has no render resource`);
+    const codec = resolveRasterCodec(raster.id);
+    if (codec === undefined) throw new Error(`portable raster codec "${raster.id}" is no longer registered`);
+    const selectedName = codec.schema.render.resource;
+    if (selectedName === undefined) throw new Error(`portable raster codec "${raster.id}" has no render resource`);
     const companions: RetainedPortablePayload[] = [];
     for (const [name, keys] of compiled.declaredResources) {
-      if (name === selectedName || program.schema.resources[name]?.cardinality === 'many') continue;
+      if (name === selectedName || codec.schema.resources[name]?.cardinality === 'many') continue;
       if (keys.length !== 1) throw new Error(`singleton resource "${name}" does not have exactly one payload`);
       const companion = payloads.get(this.#wireIdentities.resource(keys[0]!));
       if (companion === undefined) throw new Error(`compiled font does not own companion resource "${name}"`);
@@ -1436,8 +1436,7 @@ export class PlanTransport {
     let retriedResultGrowth = false;
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
-      if (requestPointer === 0)
-        throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
+      if (requestPointer === 0) throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
       new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
       const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
       const memoryBuffer = this.#exports.memory.buffer;

@@ -22,9 +22,9 @@ import {
   type AnyTechniqueSchema,
   type TechniqueSchema,
 } from '../config/schema.js';
-import { bitmapPlanProgram } from '../raster/bitmap.js';
-import { msdfPlanProgram } from '../raster/msdf.js';
-import { slugPlanProgram } from '../raster/slug.js';
+import { bitmapCodec } from '../raster/bitmap.js';
+import { msdfCodec } from '../raster/msdf.js';
+import { slugCodec } from '../raster/slug.js';
 
 const THREE_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/stable-glyph');
 const THREE_TRANSFORM_INDEX_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/transform-index');
@@ -125,7 +125,7 @@ export function threeCodecDescriptor(
   const capabilitySet = threeCodecCapabilitySet();
   // The portable assembler validates the handle-supplied factory before Three invokes it directly.
   const rasterPrograms: CodecProgram[] = [
-    createRasterCodecProgram(bitmapPlanProgram, {
+    createRasterCodecProgram(bitmapCodec, {
       namespace: THREE_PROGRAM_NAMESPACE,
       system: codecSystemBuffers(modes.bitmap),
       capabilitySet,
@@ -133,7 +133,7 @@ export function threeCodecDescriptor(
       allocationMode,
       ids,
     }),
-    createRasterCodecProgram(msdfPlanProgram, {
+    createRasterCodecProgram(msdfCodec, {
       namespace: THREE_PROGRAM_NAMESPACE,
       system: codecSystemBuffers(modes.msdf),
       capabilitySet,
@@ -141,7 +141,7 @@ export function threeCodecDescriptor(
       allocationMode,
       ids,
     }),
-    createRasterCodecProgram(slugPlanProgram, {
+    createRasterCodecProgram(slugCodec, {
       namespace: THREE_PROGRAM_NAMESPACE,
       system: codecSystemBuffers(modes.slug),
       capabilitySet,

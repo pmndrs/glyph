@@ -57,7 +57,7 @@ flowchart LR
   Artifact --> Load[FontFace.load]
   Load --> Raster[RasterFormat.decode]
   Raster --> Font[Immutable Font + typed raster data]
-  Schema[Technique schema + portable program] --> Codec[Renderer Codec / encode]
+  Schema[Technique schema + RasterCodec] --> Codec[Renderer Codec / encode]
   Font --> Root[Glyph handle root + Text desired state]
   Codec --> Rust[Rust shaping / layout / packed commands]
   Root --> Rust
@@ -168,17 +168,17 @@ Authors choose stable names, not numeric IDs. Synthetic geometry asks the render
 geometry carries immutable GLB-like vertex views, attributes, optional indices, topology, and draw range. The display-list
 instance span—not the geometry payload—provides instance count and logical order.
 
-## 3. Implement and register the portable program
+## 3. Implement and register the portable RasterCodec
 
-The portable program combines a constrained expression callback with cold per-font compilation. The actual public type is
-`RasterPlanProgram`, imported from the root:
+The portable RasterCodec combines a constrained expression callback with cold per-font compilation. The public type is
+`RasterCodec`, imported from the root:
 
 ```ts
-import type { RasterPlanProgram } from '@pmndrs/glyph';
+import type { RasterCodec } from '@pmndrs/glyph';
 import { f32, techniqueProgram } from '@pmndrs/glyph/config/codec-program';
 
-export const glyphExamplePlanProgramDefinition: RasterPlanProgram<typeof glyphExample, typeof glyphExampleSchema> = {
-  technique: glyphExample,
+export const glyphExampleCodecDefinition: RasterCodec<typeof glyphExample, typeof glyphExampleSchema> = {
+  raster: glyphExample,
   schema: glyphExampleSchema,
   programVariant: 0,
   codecBody(system) {
@@ -220,20 +220,20 @@ The `codecBody` member is the technique expression body compiled into a renderer
 for a font binding, not once per frame or glyph;
 its result is portable binding data and leased resource payloads.
 
-Register the portable program from the package's side-effectful main path:
+Register the portable Codec from the package's side-effectful main path:
 
 ```ts
-import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
-import { glyphExamplePlanProgramDefinition } from './portable.js';
+import { registerRasterCodec } from '@pmndrs/glyph/config/raster';
+import { glyphExampleCodecDefinition } from './portable.js';
 
-export const glyphExamplePlanProgram = registerRasterPlanProgram(glyphExamplePlanProgramDefinition);
+export const glyphExampleCodec = registerRasterCodec(glyphExampleCodecDefinition);
 ```
 
 Keep TypeGPU, TSL, WGSL, or GLSL code behind explicit subpaths so unused shader implementations do not enter the bundle.
 
 ## 4. Assemble the renderer Codec through `encode`
 
-The renderer combines its own system lanes and capabilities with the portable program. Application-facing types remain
+The renderer combines its own system lanes and capabilities with the portable Codec. Application-facing types remain
 at root; authoring helpers use explicit config leaves. `GlyphConfig.encode()` receives the collision-checked identity
 factory:
 
@@ -268,7 +268,7 @@ export function exampleCodecDescriptor(ids?: CodecIdFactory): CodecDescriptor {
   return Object.freeze({
     capabilitySets: [capabilitySet],
     programs: [
-      createRasterCodecProgram(glyphExamplePlanProgram, {
+      createRasterCodecProgram(glyphExampleCodec, {
         namespace: 'example-renderer',
         system,
         capabilitySet,
@@ -401,9 +401,7 @@ import { defineExampleConfig, RecordingExampleRendererDevice } from '@pmndrs/gly
 await glyph.init();
 const device = new RecordingExampleRendererDevice();
 const handle = glyph.handle('example:main', defineExampleConfig(device));
-const font = await glyph
-  .fontFace('/fonts/Inter.font.glb', { format: glyphExample({ paletteSeed: 7 }) })
-  .load();
+const font = await glyph.fontFace('/fonts/Inter.font.glb', { format: glyphExample({ paletteSeed: 7 }) }).load();
 
 const text = handle.createText({ font, text: 'Portable', fontSize: 64 });
 const first = text.publish();

@@ -63,7 +63,7 @@
       }
     },
     {
-      "files": ["src/three.ts", "src/react.ts"],
+      "files": ["src/three.ts"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
@@ -73,7 +73,25 @@
               "three/src/*",
               "three/addons/*",
               "three/examples/*",
-              "**/internal/**",
+              "**/generated/**",
+              "**/core/**",
+              "**/tsl/**"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/react.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "paths": ["three", "@react-three/fiber"],
+            "patterns": [
+              "three/src/*",
+              "three/addons/*",
+              "three/examples/*",
               "**/generated/**",
               "**/core/**",
               "**/tsl/**"

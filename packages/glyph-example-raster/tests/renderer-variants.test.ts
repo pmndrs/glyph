@@ -1,11 +1,11 @@
-import { registerThreeRasterPlanProgram } from '@pmndrs/glyph/three';
+import { registerThreeRasterProgram } from '@pmndrs/glyph/three';
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 import { afterAll, expect, test } from 'vitest';
 import { positionLocal, storage, uint, uv } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
-import { glyphExamplePlanProgram, glyphExampleSchema, glyphExampleShaderContract } from '@pmndrs/glyph-example-raster';
+import { glyphExampleCodec, glyphExampleSchema, glyphExampleShaderContract } from '@pmndrs/glyph-example-raster';
 import { glyphExampleTslShader, glyphExampleTslVariant } from '@pmndrs/glyph-example-raster/tsl';
 import {
   glyphExampleTypeGpuVariant,
@@ -37,11 +37,11 @@ test('renderer languages share one exact portable shader contract', () => {
 
 test('a Three consumer manually registers the example TSL realization', () => {
   expect(glyphExampleTslVariant.language).toBe('tsl');
-  expect(glyphExampleTslVariant.techniqueId).toBe(glyphExamplePlanProgram.raster.id);
+  expect(glyphExampleTslVariant.techniqueId).toBe(glyphExampleCodec.raster.id);
 
   const program = {
-    raster: glyphExamplePlanProgram.raster,
-    schema: glyphExamplePlanProgram.schema,
+    raster: glyphExampleCodec.raster,
+    schema: glyphExampleCodec.schema,
     variant: {
       id: 'tsl',
       language: 'tsl',
@@ -49,7 +49,7 @@ test('a Three consumer manually registers the example TSL realization', () => {
       resources: glyphExampleTslVariant.resources,
       outputs: glyphExampleTslVariant.outputs,
       geometry: glyphExampleTslVariant.geometry,
-      createMaterial(context: import('@pmndrs/glyph/three').ThreePlanProgramMaterialContext) {
+      createMaterial(context: import('@pmndrs/glyph/three').ThreeRasterMaterialContext) {
         if (context.material !== undefined) throw new TypeError('glyph-example test expects the default material');
         const origin = context.namedBuffers.get('origin');
         const size = context.namedBuffers.get('size');
@@ -82,8 +82,8 @@ test('a Three consumer manually registers the example TSL realization', () => {
     },
   };
 
-  registerThreeRasterPlanProgram(program);
-  registerThreeRasterPlanProgram(program);
+  registerThreeRasterProgram(program);
+  registerThreeRasterProgram(program);
   const attribute = new THREE.StorageInstancedBufferAttribute(new Float32Array(4), 2);
   const namedBuffers = new Map([
     ['origin', { scalarType: 'f32' as const, vectorWidth: 2, attribute }],
@@ -91,8 +91,8 @@ test('a Three consumer manually registers the example TSL realization', () => {
     ['color', { scalarType: 'f32' as const, vectorWidth: 4, attribute }],
   ]);
   const material = program.variant.createMaterial({
-    raster: glyphExamplePlanProgram.raster,
-    schema: glyphExamplePlanProgram.schema,
+    raster: glyphExampleCodec.raster,
+    schema: glyphExampleCodec.schema,
     variantId: 'tsl',
     language: 'tsl',
     outputTypes: glyphExampleTslVariant.outputs,
@@ -115,7 +115,7 @@ test('the TypeGPU realization matches the same contract and resolves to WGSL', (
     buffers: glyphExampleTslVariant.buffers,
   });
   expect(glyphExampleShaderContract).toMatchObject({
-    techniqueId: glyphExamplePlanProgram.raster.id,
+    techniqueId: glyphExampleCodec.raster.id,
     geometry: glyphExampleSchema.render?.geometry,
     buffers: {
       origin: { id: glyphExampleSchema.buffers.origin.id, vectorWidth: glyphExampleSchema.buffers.origin.lanes.length },

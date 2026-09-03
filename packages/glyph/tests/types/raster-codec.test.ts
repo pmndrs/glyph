@@ -1,6 +1,6 @@
 import { type CompiledCodecProgramBody, type RasterFontBinding } from '../../dist/index.js';
 import type { RasterResourceId, RasterFormat, RasterFormatId } from '../../dist/index.js';
-import { registerRasterPlanProgram } from '../../dist/config/raster.js';
+import { registerRasterCodec } from '../../dist/config/raster.js';
 import { defineTechniqueSchema } from '../../dist/config/schema.js';
 
 declare const technique: RasterFormat<
@@ -58,7 +58,7 @@ void incompleteResourceCoordinates;
 declare const body: CompiledCodecProgramBody<typeof schema>;
 declare const otherBody: CompiledCodecProgramBody<typeof otherSchema>;
 
-registerRasterPlanProgram({
+registerRasterCodec({
   raster: otherTechnique,
   // @ts-expect-error Raster plans publish glyph resources, so their schema cannot be resource-free.
   schema: otherSchema,
@@ -68,7 +68,7 @@ registerRasterPlanProgram({
   },
 });
 
-const program = registerRasterPlanProgram({
+const program = registerRasterCodec({
   raster: technique,
   schema,
   codecBody: () => body,
@@ -93,7 +93,7 @@ const program = registerRasterPlanProgram({
 
 void program.schema.resources.mesh;
 
-registerRasterPlanProgram({
+registerRasterCodec({
   raster: technique,
   // @ts-expect-error A plan schema must carry the same technique identity as its technique.
   schema: otherSchema,
@@ -103,7 +103,7 @@ registerRasterPlanProgram({
   },
 });
 
-registerRasterPlanProgram({
+registerRasterCodec({
   raster: technique,
   schema,
   codecBody: () => body,
@@ -118,7 +118,7 @@ registerRasterPlanProgram({
   },
 });
 
-registerRasterPlanProgram({
+registerRasterCodec({
   raster: technique,
   schema,
   codecBody: () => body,
@@ -137,7 +137,7 @@ registerRasterPlanProgram({
   },
 });
 
-registerRasterPlanProgram({
+registerRasterCodec({
   raster: technique,
   schema,
   codecBody: () => body,

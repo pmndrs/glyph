@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:7a1862045cfbca7ad935a98ae51e916199aa0f838409672fa008ce87bc2f5b61'
+source_digest: 'sha256:7df5cad5773529b3b88e398212795fc998a0bebcd99401f9c48d96224e11f5e6'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -77,9 +77,9 @@ sources:
   - id: three-decorations
     resource: ../../packages/glyph/src/three/decorations.ts
     title: Three.js detached Decorations object
-  - id: three-policy
-    resource: ../../packages/glyph/src/three/plan-program-registry.ts
-    title: Three.js Codec-program registry
+  - id: three-raster-program
+    resource: ../../packages/glyph/src/three/raster-program.ts
+    title: Three.js raster-program registry
   - id: react
     resource: ../../packages/glyph/src/react.ts
     title: React Three Fiber adapter
@@ -160,7 +160,7 @@ while each renderer owns physical textures, buffers, geometry, and their device-
 The `/config/*` leaves contain only renderer-neutral authoring operations. Package registries and identity maps, compiled
 Codec-body authentication, system-lane normalization, and Glyph's reserved built-in raster registration path stay under
 `src/internal`; they are neither root exports nor wildcard subpath APIs. Integrators can register their own portable raster
-programs through `registerRasterPlanProgram()` and can normalize a renderer-owned capability set explicitly when composing
+Codecs through `registerRasterCodec()` and can normalize a renderer-owned capability set explicitly when composing
 config helpers.
 
 ## Public package surfaces
@@ -181,7 +181,7 @@ config helpers.
 | `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.           |
 | `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                  |
 
-The three renderer-neutral raster leaves retain portable plan-registration side effects under tree shaking. Built-in
+The three renderer-neutral raster leaves retain portable Codec-registration side effects under tree shaking. Built-in
 Three material realization imports its TSL shader implementations directly rather than routing through package
 self-imports or a module-global shader registry; `/tsl/*` remains the direct public shader surface for application
 composition. The unshipped `/three/bitmap`, `/three/msdf`, and `/three/slug` forwarding aliases were removed: applications
@@ -232,13 +232,19 @@ boundary, and Font lease acquisition belong to the package-owned root host. They
 conditions and built declarations; package internals recover the host through private identity rather than exposing a
 second renderer/runtime object to applications.
 
-The unbundled source graph follows the same boundary. `/three/plan-program-registry` exposes the custom-raster
+The unbundled source graph follows the same boundary. `/three/raster-program` exposes the custom-raster
 registration DSL but keeps compiled snapshots and renderer lifecycle state under the denied `/three/internal/*` tree.
 Mixed implementation modules for Text, detached Glyphs/Decorations, frame translation, and measurement are exact-denied
 as direct package paths; the curated `/three` entry re-exports only their supported classes, functions, and result types.
 Likewise, `defineGlyphConfig()` returns inert structural data with no hidden callable factory; the config leaf exports the
 declaration DSL, while only `glyph.handle(name, config)` enters package-private construction. Spreading or wrapping a
 config preserves its inferred handle/root type and may override fields without depending on exact object identity.
+
+`ThreeCodec` exposes only the ordinary `Codec` contract an application can encounter through `ThreeConfig`. The
+compiled Three raster programs and renderer-resource pool are recovered through package-owned Codec identity inside the
+adapter; they are not public properties and do not force `@pmndrs/glyph/three` to re-export an internal type. R3F's
+implementation uses one package-private Three construction bridge because it creates the same retained Three objects;
+that bridge does not create another runtime or an alternate renderer integration API.
 
 Glyph initialization retains one settled `Promise<void>` forever, whether it fulfills or rejects: concurrent and later
 `glyph.init()` calls receive the same object. Initialization failure is fatal for that module lifetime, so an error path
@@ -280,7 +286,7 @@ the last accepted draw state and fences, and retains the error. It does not retr
 other renderer-relevant invalidation requests a checkpoint from the last consumed plan revision. A malformed emitted plan
 is an engine defect and never enters this recovery path (D-285).
 
-`registerThreeRasterPlanProgram` refuses a technique registered after a runtime has read the registry (D-271), naming the
+`registerThreeRasterProgram` refuses a format registered after a runtime has read the registry (D-271), naming the
 technique instead of applying to nothing. Snapshot tracking uses weak registry references, so an abandoned runtime cannot
 keep its identity registry alive or permanently poison later registration after collection. `/three` also re-exports
 `ParagraphLayoutSummary`, `GlyphLayoutInspection`, `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a

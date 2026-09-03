@@ -14,7 +14,7 @@ import { msdfShader } from '../../tsl/msdf-shader.js';
 import { slugShader } from '../../tsl/slug-shader.js';
 import type { ThreeRendererResources } from './renderer-resources.js';
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
-import type { ThreePlanProgramBuffer } from '../plan-program-registry.js';
+import type { ThreeRasterProgramBuffer } from '../raster-program.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
 import type { ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../handle.js';
 import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
@@ -319,7 +319,7 @@ export class ThreeMaterialRealizer {
     const cached = this.#context.materials.get(key);
     if (cached !== undefined) return cached.material;
     const instance = physicalInstance(runInstance(), addressing);
-    const namedBuffers = new Map<string, ThreePlanProgramBuffer>();
+    const namedBuffers = new Map<string, ThreeRasterProgramBuffer>();
     for (const [name, declaration] of Object.entries(resolved.program.schema.buffers)) {
       const source = buffers.get(declaration.id);
       if (source === undefined) throw new Error(`Three draw is missing declared Codec buffer "${name}"`);

@@ -530,7 +530,7 @@ const target = {
   delivery: 'borrowed',
   accept(candidate, signal) {
     signal.throwIfAborted();
-    const transaction = device.beginCandidate(candidate.planRevision);
+    const transaction = device.beginCandidate(candidate.revision);
     try {
       decodeAndStage(candidate, transaction);
       transaction.commit();
@@ -739,7 +739,7 @@ const recovered = planner.publish();</code></pre>
             </p>
           </div>
         </div>
-        <pre><code>export const plan = {
+        <pre><code>export const codec = {
   technique,
   schema,
   programVariant: 0,
@@ -766,11 +766,11 @@ const recovered = planner.publish();</code></pre>
       f32: { inset: row =&gt; compiler.font.data.insets[row] },
     });
   },
-} satisfies RasterPlanProgram;</code></pre>
+} satisfies RasterCodec;</code></pre>
         <p>
-          The main technique import performs only renderer-neutral plan registration. Shader variants remain explicit
+          The main raster import performs only renderer-neutral Codec registration. Shader variants remain explicit
           subpath imports. Three, TypeGPU, and another engine all consume the same schema, payloads, and plan records
-          without technique-specific core adapters.
+          without raster-specific core adapters.
         </p>
       </section>
 

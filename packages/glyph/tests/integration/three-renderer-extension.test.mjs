@@ -6,7 +6,7 @@ import { glyph } from '@pmndrs/glyph';
 import { techniqueProgram } from '../../dist/config/codec-program.js';
 import { id } from '../../dist/config/codec.js';
 import { defineRasterResourceId, defineRasterFormat } from '../../dist/config/raster-format.js';
-import { registerRasterPlanProgram } from '../../dist/config/raster.js';
+import { registerRasterCodec } from '../../dist/config/raster.js';
 import { defineTechniqueSchema } from '../../dist/config/schema.js';
 import {
   createImmutableFontBacking,
@@ -15,7 +15,7 @@ import {
 } from '../../dist/loaded-font.js';
 import { FontRegistry } from '../../dist/loader.js';
 import { markStorageAttributeUpdated } from '../../dist/three/engine-plan-target.js';
-import { registerThreeRasterPlanProgram, ThreeConfig } from '../../dist/three.js';
+import { registerThreeRasterProgram, ThreeConfig } from '../../dist/three.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 import * as THREE from 'three/webgpu';
 
@@ -53,7 +53,7 @@ const suppliedGeometrySchema = defineTechniqueSchema({
   render: { resource: 'mesh', geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
 });
 
-registerRasterPlanProgram({
+registerRasterCodec({
   raster: suppliedGeometryTechnique,
   schema: suppliedGeometrySchema,
   codecBody(system) {
@@ -67,7 +67,7 @@ registerRasterPlanProgram({
   },
 });
 
-registerThreeRasterPlanProgram({
+registerThreeRasterProgram({
   raster: suppliedGeometryTechnique,
   schema: suppliedGeometrySchema,
   variant: {

@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:f72517521141e2ac678f9352699ac6a93c121d80fb13f5a7404764276f59ff8d'
+source_digest: 'sha256:40e9fae60f125a2baf94a096bcb79d88596bbe8b1248341a59de750df431ad1e'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -70,14 +70,14 @@ diagnostic rather than a text-quality recommendation. The baker accepts both emb
 The external lane authenticates the companion GLB and its separate record payload through the public raster and resource
 resolvers; the embedded lane proves recursive `BufferView` rebasing through the public Node composition host.
 
-The package now supplies the portable and renderer-facing halves of the Rust command-plan boundary separately. `glyphExample` is a portable
+The package now supplies the portable Codec and renderer-facing halves of the Rust command-buffer boundary separately. `glyphExample` is a portable
 `defineRasterTechnique` that owns identity, decoding, one stable resource identity, and disposal while importing no renderer or
-instance-packing contract. Importing the package root runs the renderer-neutral `registerRasterPlanProgram` call through a
+instance-packing contract. Importing the package root runs the renderer-neutral `registerRasterCodec` call through a
 dedicated registration module. The manifest marks that module and its root facade as side-effectful so a production bundle
 keeps the registration; the portable definition and shader subpaths remain free of registration side effects.
 The `/typegpu` and `/tsl` subpaths export shader functions and the same named-input descriptor; they do not register a
 renderer or own resource/material caches. A Three consumer imports `/tsl` and manually calls public
-`registerThreeRasterPlanProgram`, while the example renderer imports `/typegpu`. The Codec body describes the exact Rust
+`registerThreeRasterProgram`, while the example renderer imports `/typegpu`. The Codec body describes the exact Rust
 inputs, buffers, scalar operations, and storage/draw keys. A cold compiler lowers validated glyph colors and inset data
 into one font binding and retains the supplied indexed quad under that stable resource identity; the selected host binds
 the resulting origin, size, and color buffers plus geometry to its shader. The package no longer owns a

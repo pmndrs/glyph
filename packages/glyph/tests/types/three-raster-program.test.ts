@@ -3,13 +3,13 @@ import { id } from '../../src/config/codec.js';
 import { defineRasterFormat } from '../../src/config/raster-format.js';
 import { defineTechniqueSchema } from '../../src/config/schema.js';
 import {
-  registerThreeRasterPlanProgram,
-  type ThreePlanProgramMaterialContext,
-  type ThreeRasterPlanProgram,
-  type ThreeRasterPlanVariant,
+  registerThreeRasterProgram,
+  type ThreeRasterMaterialContext,
+  type ThreeRasterProgram,
+  type ThreeRasterVariant,
 } from '../../src/three.js';
 
-declare const materialContext: ThreePlanProgramMaterialContext;
+declare const materialContext: ThreeRasterMaterialContext;
 const namedResource: PortableResource | undefined = materialContext.namedResources.get('atlas');
 void namedResource;
 
@@ -45,7 +45,7 @@ const schema = defineTechniqueSchema({
   render: { resource: 'atlas', geometry: { kind: 'quad', resource: 'mesh', coordinates: 'em' } },
 });
 
-type Variant = ThreeRasterPlanVariant<typeof schema>;
+type Variant = ThreeRasterVariant<typeof schema>;
 
 const variant = {
   id: 'tsl',
@@ -66,7 +66,7 @@ const variant = {
   },
 } as const satisfies Variant;
 
-registerThreeRasterPlanProgram({ raster: technique, schema, variant });
+registerThreeRasterProgram({ raster: technique, schema, variant });
 
 const wrongScalar: Variant = {
   ...variant,
@@ -162,8 +162,8 @@ const otherSchema = defineTechniqueSchema({
   binding: {},
   buffers: {},
 });
-const mismatched: ThreeRasterPlanProgram<typeof technique, typeof otherSchema> = {
-  technique,
+const mismatched: ThreeRasterProgram<typeof technique, typeof otherSchema> = {
+  raster: technique,
   // @ts-expect-error A renderer witness must name the same technique.
   schema: otherSchema,
   variant: {
@@ -181,4 +181,4 @@ const mismatched: ThreeRasterPlanProgram<typeof technique, typeof otherSchema> =
 void mismatched;
 
 // @ts-expect-error Dynamic registration still needs the registered schema witness.
-registerThreeRasterPlanProgram({ technique, variant });
+registerThreeRasterProgram({ raster: technique, variant });

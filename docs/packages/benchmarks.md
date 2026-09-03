@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:b15145dbf46da320406bcf6610dcf48f873fd16397eb4a437238cafe5cde17c2'
+source_digest: 'sha256:4a35f2f8bfce38317739cf2202bc44336c64b3c14885b32c5c064940b154d50c'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -294,7 +294,7 @@ hands the resulting immutable Font to the same public Three API. No published en
 loader, and benchmark call sites import only the harness-owned `loadBenchmarkFont` operation.
 
 Every benchmark surface now loads through the shared Glyph font graph and renders through the `/three` adapter. A scene binds the
-canonical `loaded` Font and reads CPU-oracle compatibility data reconstructed from its exact registered portable plan.
+canonical `loaded` Font and reads CPU-oracle compatibility data reconstructed from its exact registered RasterCodec.
 Bitmap, MTSDF, and Slug therefore exercise the same named bindings and retained resources an external renderer sees
 without publishing internal decoded Font data. A fresh matrix after the move rendered all seven workloads visibly for
 Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per case.

@@ -435,7 +435,7 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
   #readBoundResources(frame: CommandBufferView<ThreeBindings>, context: PreparationContext): void {
     for (const command of frame.updates.resources) {
       if (context.resources.has(command.resource)) continue;
-      const program = this.#resourcesContext.planProgram(command.resource.format);
+      const program = this.#resourcesContext.rasterProgram(command.resource.format);
       const resolved: ThreeHostResource = Object.freeze({
         ...command.resource,
         ...(program === undefined ? {} : { program }),

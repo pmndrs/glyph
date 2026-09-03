@@ -59,7 +59,7 @@ export function fontBindingBytes(
 ): Uint8Array {
   const compiled = compileRasterFont(font, identities);
   if (compiled !== undefined) return compiled.binding;
-  throw new TypeError(`no portable raster plan program is registered for "${font.raster.id}"`);
+  throw new TypeError(`no portable raster codec is registered for "${font.raster.id}"`);
 }
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
