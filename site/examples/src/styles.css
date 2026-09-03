@@ -94,3 +94,41 @@ canvas {
   background: #1a3a56;
   color: #fff;
 }
+
+/* The preview: the canvas, and over it the picture that stands in until it has drawn. */
+.preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.poster {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 420ms ease-out;
+}
+
+.poster[data-hidden='true'] {
+  opacity: 0;
+}
+
+.poster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sentinel {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  background: radial-gradient(ellipse at 50% 60%, #10141d 0%, var(--ink) 70%);
+  color: var(--paper-dim);
+  font-size: clamp(1rem, 3vw, 1.5rem);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}

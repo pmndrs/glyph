@@ -21,6 +21,12 @@ export interface ExampleEntry {
 }
 
 export const EXAMPLES = {
+  kinetic: {
+    title: 'Kinetic typography',
+    page: '/docs/getting-started/examples',
+    stage: { lit: true },
+    load: () => import('./scenes/kinetic/scene'),
+  },
   hello: {
     title: 'Hello world',
     page: '/docs/getting-started/introduction',

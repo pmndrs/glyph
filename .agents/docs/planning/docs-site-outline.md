@@ -123,6 +123,7 @@ materials — never loaded, to keep the bundle small.
 
 | Slug | Page | Shows |
 | --- | --- | --- |
+| kinetic | getting-started/examples, text/in-3d | showcase after Codrops' kinetic typography: three rows of Slug glyphs flowing along a torus knot by `breakApart()` matrices with a depth-dim material, a passage typing in word by word on a waving MSDF surface inside a breathing measure, the current word spotlit in Slug |
 | hello | getting-started/introduction | one `<Text>`, one font, one line |
 | first-text | getting-started/your-first-text | the tutorial's finished state |
 | techniques | fonts/techniques | the same word in Bitmap, MSDF, Slug at three sizes |
@@ -327,6 +328,7 @@ its docs page.
 - Render order: a `Text`'s draws take its `renderOrder`; `TextGroup({ renderOrder })` states one for every child; decorations under → glyphs → line-through (`three/text.ts` `renderOrderBase`).
 - Labels: child of the body, a billboard group copying `camera.quaternion`, depth-tested; scene fog applies because the material is a `NodeMaterial`.
 - Steep angles: Slug per-pixel, MSDF until the atlas stretches, Bitmap screen-space only; `rasterPixelRatio` for MSDF/Bitmap seen larger than authored.
+- Warping: `positionNode = f(context.position)` in a `defineTextMaterial` (carousel, flag); MSDF and Bitmap only — a Slug draw with a replaced `positionNode` did not draw (the shader returns a dilated `vec3(x, y, 0)` tied to `renderCoordinate`).
 - Post-processing: `useRenderPipeline` (r3f) / `PostProcessing` (three) with `bloom` from `three/examples/jsm/tsl/display/BloomNode.js`; `bloom().strength` is a uniform.
 - Example: depth, labels, off-axis, bloom.
 - Sources: `three/internal/material-realizer.ts`, `three/text.ts`, `three/material.ts`, `site/landing/src/effects.tsx`, the benchmark `off-axis-3d` workload.
@@ -444,6 +446,8 @@ Measured while building the examples against `GLYPH_SOURCE=<codex>/packages/glyp
 | `compositing: 'independent'` does not fold interleaved materials | thirty labels alternating two materials in one `TextGroup` plan 30 draws under both modes; sorted into two runs they plan 2; standalone Texts plan one draw each | batching |
 | A thrown Text construction error in React becomes a retry loop | after the `'double'` throw, `Cannot convert undefined or null to object` repeats from the React layer (the rejected-promise eviction seen with fonts); the scene stays blank with no boundary | decorations, before its fix |
 | React recovered from a render error | `Minified React error #520` (recovered by a synchronous render) with cause `#467` (update hook called on initial render), once, on the decorations page under the React Compiler | decorations |
+| Slug ignores a replaced `positionNode` | the carousel warp rendered nothing on Slug and correctly on MSDF; `tsl/slug-shader.ts` returns `vec3(dilated.x, dilated.y, 0)` paired with its render coordinate | kinetic |
+| Preview lifecycle | `IntersectionObserver` only reports during rendering steps, so a hidden pane never deactivates; `canvas.toDataURL('image/webp')` on a WebGPU canvas returns the last presented frame even when hidden | kinetic, the preview host |
 | `measure().width` is the resolved box; `contentWidth` is the advance extent | a ring built from `width` left a gap; `contentWidth` closes it | arc |
 | `/core` subpath is gone; the codec DSL and `defineGlyphConfig` are root exports | `package.json` exports and `tests/package/entry-point-boundaries.test.mjs` assert `exports['./core'] === undefined`; `docs/log.md` still names `/core` | — |
 | `TextFrameError` is declared, never produced | `three/frame-error.ts` exports the cause union; `textFrameError()` has no caller; `shape()` failures surface as `GlyphEngineStatusError` on `text.error` / `onError` / `commitState()` | errors page carries the caveat |
