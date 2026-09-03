@@ -1197,8 +1197,8 @@ pub(crate) fn parse_geometry(
         abi::ENGINE_INLINE_OBJECT_RECORD_ALIGNMENT,
     )?;
     validate_constraints(constraints, limits)?;
-    validate_regions(request, regions, exclusions)?;
-    validate_exclusions(request, exclusions, regions)?;
+    validate_regions(request, regions)?;
+    validate_exclusions(request, exclusions)?;
     validate_inline_objects(inline_objects)?;
     Ok(GeometryBatch {
         request,
@@ -1331,10 +1331,8 @@ fn validate_constraints(constraints: &[u8], limits: UpdateLimits) -> Result<(), 
     Ok(())
 }
 
-fn validate_regions(request: &[u8], regions: &[u8], exclusions: &[u8]) -> Result<(), u32> {
-    let exclusion_total = exclusions.len() / abi::ENGINE_EXCLUSION_RECORD_SIZE as usize;
+fn validate_regions(request: &[u8], regions: &[u8]) -> Result<(), u32> {
     for record in regions.chunks_exact(abi::ENGINE_REGION_RECORD_SIZE as usize) {
-        let id = read_u32(record, abi::ENGINE_REGION_ID)?;
         let shape = byte(record, abi::ENGINE_REGION_SHAPE)?;
         if read_u16(record, abi::ENGINE_REGION_FLAGS)? != 0
             || byte(record, abi::ENGINE_REGION_RESERVED0)? != 0
@@ -1379,48 +1377,13 @@ fn validate_regions(request: &[u8], regions: &[u8], exclusions: &[u8]) -> Result
             abi::ENGINE_REGION_VERTEX_COUNT,
             region_bounds,
         )?;
-        let exclusion_start = usize::from(read_u16(record, abi::ENGINE_REGION_EXCLUSION_START)?);
-        let exclusion_count = usize::from(read_u16(record, abi::ENGINE_REGION_EXCLUSION_COUNT)?);
-        let end = exclusion_start
-            .checked_add(exclusion_count)
-            .ok_or(STATUS_INVALID_REQUEST)?;
-        if end > exclusion_total {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-        for exclusion in exclusions[exclusion_start * abi::ENGINE_EXCLUSION_RECORD_SIZE as usize
-            ..end * abi::ENGINE_EXCLUSION_RECORD_SIZE as usize]
-            .chunks_exact(abi::ENGINE_EXCLUSION_RECORD_SIZE as usize)
-        {
-            if read_u32(exclusion, abi::ENGINE_EXCLUSION_REGION_ID)? != id {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-        }
     }
     Ok(())
 }
 
-fn validate_exclusions(request: &[u8], exclusions: &[u8], regions: &[u8]) -> Result<(), u32> {
-    for (index, record) in exclusions
-        .chunks_exact(abi::ENGINE_EXCLUSION_RECORD_SIZE as usize)
-        .enumerate()
-    {
-        let id = read_u32(record, abi::ENGINE_EXCLUSION_ID)?;
-        let region_id = read_u32(record, abi::ENGINE_EXCLUSION_REGION_ID)?;
-        if id == 0
-            || prior_u32_duplicate(
-                exclusions,
-                abi::ENGINE_EXCLUSION_RECORD_SIZE,
-                abi::ENGINE_EXCLUSION_ID,
-                index,
-                id,
-            )?
-            || !contains_u32(
-                regions,
-                abi::ENGINE_REGION_RECORD_SIZE,
-                abi::ENGINE_REGION_ID,
-                region_id,
-            )?
-            || read_u16(record, abi::ENGINE_EXCLUSION_FLAGS)? != 0
+fn validate_exclusions(request: &[u8], exclusions: &[u8]) -> Result<(), u32> {
+    for record in exclusions.chunks_exact(abi::ENGINE_EXCLUSION_RECORD_SIZE as usize) {
+        if read_u16(record, abi::ENGINE_EXCLUSION_FLAGS)? != 0
             || read_u16(record, abi::ENGINE_EXCLUSION_RESERVED0)? != 0
             || !matches!(
                 byte(record, abi::ENGINE_EXCLUSION_WRAP_SIDE)?,
@@ -1457,23 +1420,8 @@ fn validate_exclusions(request: &[u8], exclusions: &[u8], regions: &[u8]) -> Res
 }
 
 fn validate_inline_objects(records: &[u8]) -> Result<(), u32> {
-    for (index, record) in records
-        .chunks_exact(abi::ENGINE_INLINE_OBJECT_RECORD_SIZE as usize)
-        .enumerate()
-    {
-        let id = read_u32(record, abi::ENGINE_INLINE_OBJECT_ID)?;
-        if read_u32(record, abi::ENGINE_INLINE_OBJECT_PARAGRAPH_ID)? == 0
-            || id == 0
-            || prior_u32_duplicate(
-                records,
-                abi::ENGINE_INLINE_OBJECT_RECORD_SIZE,
-                abi::ENGINE_INLINE_OBJECT_ID,
-                index,
-                id,
-            )?
-            || read_u32(record, abi::ENGINE_INLINE_OBJECT_RESOURCE_ID)? == 0
-            || read_u32(record, abi::ENGINE_INLINE_OBJECT_RESOURCE_GENERATION)? == 0
-            || finite(record, abi::ENGINE_INLINE_OBJECT_INLINE_EXTENT)? < 0.0
+    for record in records.chunks_exact(abi::ENGINE_INLINE_OBJECT_RECORD_SIZE as usize) {
+        if finite(record, abi::ENGINE_INLINE_OBJECT_INLINE_EXTENT)? < 0.0
             || finite(record, abi::ENGINE_INLINE_OBJECT_BLOCK_EXTENT)? < 0.0
             || !finite(record, abi::ENGINE_INLINE_OBJECT_BASELINE_OFFSET)?.is_finite()
             || !finite(record, abi::ENGINE_INLINE_OBJECT_MARGIN_INLINE_START)?.is_finite()
@@ -1590,30 +1538,6 @@ fn finite(record: &[u8], offset: usize) -> Result<f32, u32> {
 
 fn byte(record: &[u8], offset: usize) -> Result<u8, u32> {
     record.get(offset).copied().ok_or(STATUS_INVALID_REQUEST)
-}
-
-fn prior_u32_duplicate(
-    records: &[u8],
-    stride: u32,
-    field: usize,
-    index: usize,
-    value: u32,
-) -> Result<bool, u32> {
-    for record in records[..index * stride as usize].chunks_exact(stride as usize) {
-        if read_u32(record, field)? == value {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-fn contains_u32(records: &[u8], stride: u32, field: usize, value: u32) -> Result<bool, u32> {
-    for record in records.chunks_exact(stride as usize) {
-        if read_u32(record, field)? == value {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
 
 fn mix_bytes(hash: &mut u64, bytes: &[u8]) {
@@ -2165,15 +2089,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_geometry_relationships_and_bounds() {
-        let mut wrong_region = valid_geometry_bytes();
-        write_u32(
-            &mut wrong_region,
-            EXCLUSION_OFFSET + abi::ENGINE_EXCLUSION_REGION_ID,
-            9,
-        );
-        assert!(parse_valid_geometry(&wrong_region).is_err());
-
+    fn rejects_invalid_geometry_values_and_work_bounds() {
         let mut nonfinite = valid_geometry_bytes();
         write_f32(
             &mut nonfinite,
@@ -2201,6 +2117,22 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn retained_geometry_rejects_a_span_beyond_the_borrowed_exclusion_table() {
+        let mut bytes = valid_geometry_bytes();
+        write_u16(
+            &mut bytes,
+            REGION_OFFSET + abi::ENGINE_REGION_EXCLUSION_COUNT,
+            2,
+        );
+        let geometry = parse_valid_geometry(&bytes).unwrap();
+        let mut retained = FlowGeometryArena::default();
+        assert!(matches!(
+            retained.build(geometry),
+            Err(crate::engine::EngineError::InvalidRequest)
+        ));
     }
 
     const CONSTRAINT_OFFSET: usize = abi::ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;

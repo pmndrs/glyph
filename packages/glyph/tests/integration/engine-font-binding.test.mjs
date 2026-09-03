@@ -11,6 +11,8 @@ import { bitmap } from '../../dist/raster/bitmap.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
 import { createFontStack, immutableFontResources } from '../../dist/loaded-font.js';
 import { loadFont } from '../../dist/loader.js';
+import { createMeasurementPlanner } from '../../dist/internal/render-planner.js';
+import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 import { threeCodecCapabilitySet, threeCodecDescriptor, threeSystemBuffers } from '../../dist/three/codec.js';
 import {
   acquireEngineFontBinding,
@@ -78,6 +80,32 @@ async function fixtureFont() {
 
 async function fixtureEngine() {
   return createGlyphEngine({ wasm: await readFile(wasmUrl) });
+}
+
+function captureNextMeasureRequest() {
+  const originalInstantiate = WebAssembly.instantiate;
+  let latestRequest;
+  WebAssembly.instantiate = async (source, imports) => {
+    const instance = await originalInstantiate(source, imports);
+    const exports = { ...instance.exports };
+    const measure = exports[textShaperAbi.functions.measureParagraph];
+    assert.equal(typeof measure, 'function', 'instrumented shaper must export measure_paragraph');
+    exports[textShaperAbi.functions.measureParagraph] = (...arguments_) => {
+      const [, pointer, length] = arguments_;
+      latestRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
+      return measure(...arguments_);
+    };
+    return { exports };
+  };
+  return {
+    restore() {
+      WebAssembly.instantiate = originalInstantiate;
+    },
+    bytes() {
+      assert.ok(latestRequest, 'a paragraph measurement request must have been captured');
+      return latestRequest;
+    },
+  };
 }
 
 test('one immutable font binds independently into two glyph engines', async () => {
@@ -248,4 +276,167 @@ test('a glyph-engine-owned handle state binds immutable font stacks and retains 
   codec.dispose();
   handleState.dispose();
   glyphEngine.dispose();
+});
+
+test('the retained planner publishes canonical flow, exclusion, and inline-object identities', async () => {
+  const font = await fixtureFont();
+  const capture = captureNextMeasureRequest();
+  let glyphEngine;
+  try {
+    glyphEngine = await fixtureEngine();
+  } finally {
+    capture.restore();
+  }
+  const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.render-planner-topology' });
+  const codec = handleState.installCodec(threeCodecDescriptor);
+  const fontBinding = handleState.bindFontStack(createFontStack(font));
+  const transforms = [handleState.createTransformBinding(), handleState.createTransformBinding()];
+  const inlineMaterials = [handleState.createMaterialBinding(), handleState.createMaterialBinding()];
+  const inlineResources = [handleState.createResourceBinding(), handleState.createResourceBinding()];
+  const planner = createMeasurementPlanner(handleState, {
+    codec,
+    limits: {
+      maxParagraphs: 1,
+      maxClusters: 64,
+      maxLines: 16,
+      maxRegions: 2,
+      maxExclusions: 2,
+      maxInlineObjects: 2,
+      maxSlotsPerBand: 4,
+      maxOutputBytes: 1_048_576,
+    },
+    requestCapacity: 65_536,
+    resultCapacity: 1_048_576,
+    textCapacity: 1_024,
+  });
+  const region = (transform, inlineStart, inlineEnd) => ({
+    transform,
+    shape: 'rectangle',
+    writingMode: 'horizontal-tb',
+    textOrientation: 'mixed',
+    inlineStart,
+    blockStart: 0,
+    inlineEnd,
+    blockEnd: 80,
+    clipInlineStart: inlineStart,
+    clipBlockStart: 0,
+    clipInlineEnd: inlineEnd,
+    clipBlockEnd: 80,
+  });
+  const exclusion = (inlineStart, inlineEnd) => ({
+    shape: 'rectangle',
+    wrapSide: 'both',
+    inlineStart,
+    blockStart: 10,
+    inlineEnd,
+    blockEnd: 20,
+    marginInline: 1,
+    marginBlock: 2,
+  });
+  const inlineObject = (textOffset, material, resource) => ({
+    textOffset,
+    material,
+    resource,
+    inlineExtent: 8,
+    blockExtent: 10,
+    baselineOffset: 2,
+    marginInlineStart: 1,
+    marginInlineEnd: 1,
+    marginBlockStart: 0,
+    marginBlockEnd: 0,
+    baselineAlignment: 'alphabetic',
+  });
+  const text = planner.createText({
+    font: fontBinding,
+    text: 'A\uFFFcB\uFFFcC',
+    constraints: {
+      width: { mode: 'exact', size: 160 },
+      height: { mode: 'exact', size: 80 },
+    },
+    flow: {
+      regions: [
+        { region: region(transforms[0], 0, 80), exclusions: [exclusion(20, 30)] },
+        { region: region(transforms[1], 80, 160), exclusions: [exclusion(100, 110)] },
+      ],
+    },
+    inlineObjects: [
+      inlineObject(1, inlineMaterials[0], inlineResources[0]),
+      inlineObject(3, inlineMaterials[1], inlineResources[1]),
+    ],
+  });
+
+  try {
+    assert.equal(text.measure().lineCount > 0, true);
+    const bytes = capture.bytes();
+    const request = textShaperAbi.layouts.engineUpdateRequest;
+    const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const readRecords = (offsetField, countField, record) => {
+      const offset = header.getUint32(offsetField, true);
+      const count = header.getUint32(countField, true);
+      return Array.from(
+        { length: count },
+        (_value, index) => new DataView(bytes.buffer, bytes.byteOffset + offset + index * record.size, record.size),
+      );
+    };
+    const paragraph = readRecords(
+      request.paragraphMutationsOffset,
+      request.paragraphMutationCount,
+      textShaperAbi.layouts.engineParagraphMutation,
+    )[0].getUint32(textShaperAbi.layouts.engineParagraphMutation.paragraphId, true);
+    const regions = readRecords(
+      request.regionsOffset,
+      request.regionCount,
+      textShaperAbi.layouts.engineRegion,
+    );
+    const exclusions = readRecords(
+      request.exclusionsOffset,
+      request.exclusionCount,
+      textShaperAbi.layouts.engineExclusion,
+    );
+    const inlineObjects = readRecords(
+      request.inlineObjectsOffset,
+      request.inlineObjectCount,
+      textShaperAbi.layouts.engineInlineObject,
+    );
+    const regionIds = regions.map((value) => value.getUint32(textShaperAbi.layouts.engineRegion.id, true));
+    const exclusionIds = exclusions.map((value) => value.getUint32(textShaperAbi.layouts.engineExclusion.id, true));
+    const inlineObjectIds = inlineObjects.map((value) =>
+      value.getUint32(textShaperAbi.layouts.engineInlineObject.id, true),
+    );
+
+    assert.equal(paragraph > 0, true);
+    assert.equal(new Set(regionIds).size, 2);
+    assert.equal(new Set(exclusionIds).size, 2);
+    assert.equal(new Set(inlineObjectIds).size, 2);
+    assert.equal(regionIds.every((value) => value > 0), true);
+    assert.equal(exclusionIds.every((value) => value > 0), true);
+    assert.equal(inlineObjectIds.every((value) => value > 0), true);
+    assert.deepEqual(
+      regions.map((value) => ({
+        start: value.getUint16(textShaperAbi.layouts.engineRegion.exclusionStart, true),
+        count: value.getUint16(textShaperAbi.layouts.engineRegion.exclusionCount, true),
+      })),
+      [
+        { start: 0, count: 1 },
+        { start: 1, count: 1 },
+      ],
+    );
+    assert.deepEqual(
+      exclusions.map((value) => value.getUint32(textShaperAbi.layouts.engineExclusion.regionId, true)),
+      regionIds,
+    );
+    assert.deepEqual(
+      inlineObjects.map((value) => value.getUint32(textShaperAbi.layouts.engineInlineObject.paragraphId, true)),
+      [paragraph, paragraph],
+    );
+  } finally {
+    text.dispose();
+    planner.dispose();
+    fontBinding.dispose();
+    for (const binding of [...transforms, ...inlineMaterials, ...inlineResources]) binding.dispose();
+    codec.dispose();
+    handleState.dispose();
+    glyphEngine.dispose();
+    font.dispose();
+  }
 });
