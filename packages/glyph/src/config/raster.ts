@@ -227,11 +227,6 @@ export function registerRasterCodec<const Technique extends AnyRasterFormat, con
   return registerRasterCodecInternal(codec, false);
 }
 
-/** Resolve the portable raster Codec associated with a RasterFormat id. */
-export function resolveRasterCodec(id: string): RasterCodec<AnyRasterFormat, AnyTechniqueSchema> | undefined {
-  return resolveRasterCodecInternal(id);
-}
-
 /** Compile an immutable font through the registered RasterCodec, if it has one. */
 export function compileRasterFont(
   font: Font<AnyRasterFormat>,

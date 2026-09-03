@@ -1,9 +1,10 @@
-import { createRasterCodecProgram, resolveRasterCodec } from '../../config/raster.js';
+import { createRasterCodecProgram } from '../../config/raster.js';
 import type { CodecIdFactory, CodecProgram } from '../../config/codec.js';
 import type { AnyTechniqueSchema } from '../../config/schema.js';
 import type { AnyRasterFormat } from '../../config/raster-format.js';
 import { threeCodecCapabilitySet, threeSystemBuffers } from '../codec.js';
 import type { ThreeRasterProgram, ThreeRasterVariant } from '../raster-program.js';
+import { resolveRasterCodecInternal } from '../../internal/raster-codec-registry.js';
 
 export interface CompiledThreeRasterProgram {
   readonly raster: AnyRasterFormat;
@@ -89,7 +90,7 @@ function compileProgram(
   identities: CodecIdFactory,
   transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterProgram {
-  const portable = resolveRasterCodec(program.raster.id);
+  const portable = resolveRasterCodecInternal(program.raster.id);
   if (portable === undefined) throw new Error(`no portable raster codec is registered for "${program.raster.id}"`);
   const system = transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
   const codec = createRasterCodecProgram(portable, {

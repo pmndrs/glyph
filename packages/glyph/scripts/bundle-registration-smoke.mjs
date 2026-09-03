@@ -3,13 +3,14 @@ import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { build } from 'vite';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const smokeRoot = await mkdtemp(join(tmpdir(), 'glyph-bundle-registration-'));
 const techniqueIds = ['pmndrs.bitmap', 'pmndrs.msdf', 'pmndrs.slug'];
+const registryUrl = pathToFileURL(join(packageRoot, 'dist/internal/raster-codec-registry.js')).href;
 
 try {
   const scope = join(smokeRoot, 'node_modules', '@pmndrs');
@@ -18,17 +19,17 @@ try {
   await symlink(fileURLToPath(new URL('../', import.meta.resolve('three'))), join(smokeRoot, 'node_modules', 'three'));
   await writeFile(join(smokeRoot, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
 
-  const imports = ['raster/bitmap', 'raster/msdf', 'raster/slug']
-    .map((subpath) => `import '@pmndrs/glyph/${subpath}';`)
-    .join('\n');
   const entry = join(smokeRoot, 'portable.mjs');
   const outDir = join(smokeRoot, 'portable');
   await writeFile(
     entry,
-    `${imports}
-       import { resolveRasterCodec } from '@pmndrs/glyph/config/raster';
+    `import { bitmapCodec } from '@pmndrs/glyph/raster/bitmap';
+       import { msdfCodec } from '@pmndrs/glyph/raster/msdf';
+       import { slugCodec } from '@pmndrs/glyph/raster/slug';
+       import { isRegisteredRasterCodec } from ${JSON.stringify(registryUrl)};
+       const codecs = [bitmapCodec, msdfCodec, slugCodec];
        const ids = ${JSON.stringify(techniqueIds)};
-       if (ids.some((id) => resolveRasterCodec(id) === undefined)) {
+       if (codecs.some((codec, index) => codec.raster.id !== ids[index] || !isRegisteredRasterCodec(codec))) {
          throw new Error('portable registration was tree-shaken');
        }
        process.stdout.write('portable-registered');`,

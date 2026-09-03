@@ -26,7 +26,7 @@ import {
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from './engine-encoding.js';
 import { createGlyphEngine, createGlyphHandleState, type GlyphEngine } from './glyph-engine.js';
 import type { HandleFontStackBinding, CodecRegistration, GlyphHandleState } from './internal/handle-state.js';
-import { createRasterCodecProgram, resolveRasterCodec, type RasterCodec } from './config/raster.js';
+import { createRasterCodecProgram, type RasterCodec } from './config/raster.js';
 import {
   createMeasurementPlanner,
   type MeasurementPlanner,
@@ -35,6 +35,7 @@ import {
 } from './internal/render-planner.js';
 import { type CodecCapabilitySet, type CodecDescriptor, type CodecIdFactory, id } from './config/codec.js';
 import { defineCodecBuffers, type AnyTechniqueSchema } from './config/schema.js';
+import { resolveRasterCodecInternal } from './internal/raster-codec-registry.js';
 
 const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const MAX_PARAGRAPH_TEXT_UNITS = 0x00ff_ffff;
@@ -515,7 +516,7 @@ function measurementCodecDescriptor(
   desired: ResolvedParagraphState<AnyRasterFormat>,
 ): CodecDescriptor {
   const programs = uniqueTechniques(desired).map((technique) => {
-    const codec = resolveRasterCodec(technique.id);
+    const codec = resolveRasterCodecInternal(technique.id);
     if (codec === undefined) {
       throw new TypeError(`no portable raster codec is registered for "${technique.id}"`);
     }

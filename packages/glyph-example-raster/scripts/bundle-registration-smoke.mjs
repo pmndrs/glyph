@@ -18,9 +18,10 @@ try {
   const portable = await bundle(
     'portable',
     `
-      import '@pmndrs/glyph-example-raster';
-      import { resolveRasterCodec } from '@pmndrs/glyph/config/raster';
-      if (resolveRasterCodec(${JSON.stringify(glyphExample.id)}) === undefined) {
+      import { glyphExampleCodec } from '@pmndrs/glyph-example-raster';
+      import { registerRasterCodec } from '@pmndrs/glyph/config/raster';
+      if (glyphExampleCodec.raster.id !== ${JSON.stringify(glyphExample.id)} ||
+          registerRasterCodec(glyphExampleCodec) !== glyphExampleCodec) {
         throw new Error('portable root registration was tree-shaken');
       }
       process.stdout.write('portable-registered');

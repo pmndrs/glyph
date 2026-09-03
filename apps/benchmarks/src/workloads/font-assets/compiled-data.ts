@@ -1,7 +1,7 @@
 import type { Font } from '@pmndrs/glyph';
-import type { bitmap, BitmapData, BitmapStrikeData } from '@pmndrs/glyph/raster/bitmap';
-import type { msdf, MsdfConfiguration, MsdfData } from '@pmndrs/glyph/raster/msdf';
-import { SLUG_PLANE_UNITS_PER_EM, type slug, type SlugPageData } from '@pmndrs/glyph/raster/slug';
+import { bitmap, bitmapCodec, type BitmapData, type BitmapStrikeData } from '@pmndrs/glyph/raster/bitmap';
+import { msdf, msdfCodec, type MsdfConfiguration, type MsdfData } from '@pmndrs/glyph/raster/msdf';
+import { SLUG_PLANE_UNITS_PER_EM, slug, slugCodec, type SlugPageData } from '@pmndrs/glyph/raster/slug';
 import {
   type CompiledRasterFont,
   type CompiledRasterFontResource,
@@ -10,7 +10,13 @@ import {
   type PortableTextureArrayPayload,
   type PortableTexturePayload,
 } from '@pmndrs/glyph';
-import { compileRasterFont, readCompiledRasterFont, resolveRasterCodec } from '@pmndrs/glyph/config/raster';
+import {
+  compileRasterFont,
+  readCompiledRasterFont,
+  type RasterCodec,
+} from '@pmndrs/glyph/config/raster';
+import type { AnyRasterFormat } from '@pmndrs/glyph/config/raster-format';
+import type { AnyTechniqueSchema } from '@pmndrs/glyph/config/schema';
 
 import type { SlugCpuReferenceData } from '../../benchmark/low-level/raster/slug-cpu-reference';
 
@@ -19,7 +25,7 @@ const ABSENT_PAGE = 0xffff;
 
 /** Reconstruct the benchmark Bitmap oracle from the exact portable Codec consumed by renderers. */
 export function compiledBitmapData(font: Font<typeof bitmap>): BitmapData {
-  const { compiled, view } = compiledView(font);
+  const { compiled, view } = compiledView(font, bitmapCodec);
   if (view.scope !== 'strike') throw new TypeError('Bitmap compiled binding must use strike scope');
   const resourceIndex = new Map(view.resources.map((resource, index) => [resource.key, index]));
   const strikes: BitmapStrikeData[] = view.strikes.map((ppem, strikeIndex) => {
@@ -53,7 +59,7 @@ export function compiledBitmapData(font: Font<typeof bitmap>): BitmapData {
 
 /** Reconstruct the benchmark MTSDF oracle from the exact RasterCodec consumed by renderers. */
 export function compiledMsdfData(font: Font<typeof msdf>, configuration: MsdfConfiguration): MsdfData {
-  const { view } = compiledView(font);
+  const { view } = compiledView(font, msdfCodec);
   if (view.scope !== 'glyph' || view.strikes.length !== 1) {
     throw new TypeError('MTSDF compiled binding must use one glyph-scoped strike');
   }
@@ -101,7 +107,7 @@ export function compiledMsdfData(font: Font<typeof msdf>, configuration: MsdfCon
 
 /** Reconstruct the benchmark Slug oracle from the exact RasterCodec consumed by renderers. */
 export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData {
-  const { view } = compiledView(font);
+  const { view } = compiledView(font, slugCodec);
   if (view.scope !== 'glyph' || view.strikes.length !== 1) {
     throw new TypeError('Slug compiled binding must use one glyph-scoped strike');
   }
@@ -147,14 +153,15 @@ export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData 
   return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, glyphs, pages };
 }
 
-function compiledView(font: Font<typeof bitmap | typeof msdf | typeof slug>): {
+function compiledView<Technique extends AnyRasterFormat, Schema extends AnyTechniqueSchema>(
+  font: Font<Technique>,
+  codec: RasterCodec<Technique, Schema>,
+): {
   readonly compiled: CompiledRasterFont;
-  readonly view: CompiledRasterFontView;
+  readonly view: CompiledRasterFontView<Schema>;
 } {
   const compiled = compileRasterFont(font);
   if (compiled === undefined) throw new TypeError(`no RasterCodec is registered for "${font.raster.id}"`);
-  const codec = resolveRasterCodec(font.raster.id);
-  if (codec === undefined) throw new TypeError(`no portable raster codec is registered for "${font.raster.id}"`);
   return { compiled, view: readCompiledRasterFont(compiled, codec) };
 }
 

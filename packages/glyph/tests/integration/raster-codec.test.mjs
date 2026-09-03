@@ -7,7 +7,6 @@ import {
   compileRasterFont,
   readCompiledRasterFont,
   registerRasterCodec,
-  resolveRasterCodec,
 } from '../../dist/config/raster.js';
 import { defineTechniqueSchema } from '../../dist/config/schema.js';
 import { fontBindingResources } from '../../dist/internal/font-binding.js';
@@ -81,7 +80,6 @@ test('registration preserves authenticated technique and schema witnesses', () =
 
   assert.equal(registered.raster, value);
   assert.equal(registered.schema, schema);
-  assert.equal(resolveRasterCodec(value.id), registered);
   assert.equal(registerRasterCodec(source), registered);
   assert.equal(registerRasterCodec(registered), registered);
   assert.throws(() => registerRasterCodec({ ...source }), /different raster codec/);
