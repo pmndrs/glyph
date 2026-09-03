@@ -34,7 +34,7 @@ interface BundleResult {
 }
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const diagnosticModuleFragments = ['/packages/glyph/dist/internal/raster-baker-profile.js'];
+const diagnosticModuleFragments = ['/packages/glyph/dist/internal/raster-baker-profile'];
 const diagnosticCodeFragments = [
   'createProfiledDirectRasterBakerFromInstance',
   'profiled MSDF baker',
@@ -95,7 +95,7 @@ async function bundle(
               let changed = false;
               for (const asset of wasmAssets) {
                 const expression = new RegExp(
-                  `new URL\\((["'])\\.{1,2}\\/(?:\\.{1,2}\\/)*(?:dist\\/)?${asset}\\1,\\s*import\\.meta\\.url\\)`,
+                  `new URL\\(([\"'\x60])\\.{1,2}\\/(?:\\.{1,2}\\/)*(?:dist\\/)?${asset}\\1,\\s*import\\.meta\\.url\\)`,
                   'g',
                 );
                 transformed = transformed.replace(expression, (_match, quote: string) => {
@@ -341,23 +341,23 @@ const coreJavaScript = await measureJavaScript(
   true,
   {
     expectedDynamic: [
-      '/packages/glyph/dist/runtime-bake.js',
-      '/packages/glyph/dist/internal/font-face-transfer-runtime.js',
+      '/packages/glyph/dist/runtime-bake',
+      '/packages/glyph/dist/internal/font-face-transfer-runtime',
     ],
     excludedInitial: [
-      '/packages/glyph/dist/runtime-bake.js',
-      '/packages/glyph/dist/runtime-bake-worker.js',
-      '/packages/glyph/dist/internal/font-face-transfer-runtime.js',
-      '/packages/glyph/dist/react.js',
-      '/packages/glyph/dist/three.js',
-      '/packages/glyph/dist/raster/bitmap-technique.js',
-      '/packages/glyph/dist/raster/msdf.js',
-      '/packages/glyph/dist/raster/slug-technique.js',
-      '/packages/glyph/dist/bakers/msdf.js',
+      '/packages/glyph/dist/runtime-bake',
+      '/packages/glyph/dist/runtime-bake-worker',
+      '/packages/glyph/dist/internal/font-face-transfer-runtime',
+      '/packages/glyph/dist/react',
+      '/packages/glyph/dist/three',
+      '/packages/glyph/dist/raster/bitmap',
+      '/packages/glyph/dist/raster/msdf',
+      '/packages/glyph/dist/raster/slug',
+      '/packages/glyph/dist/bakers/msdf',
       '/packages/glyph/dist/node/',
-      '/packages/glyph/dist/font-baker/index.js',
-      '/packages/glyph/dist/font-baker/validator.js',
-      '/packages/glyph/dist/font-baker/wasm-url.js',
+      '/packages/glyph/dist/font-baker/index',
+      '/packages/glyph/dist/font-baker/validator',
+      '/packages/glyph/dist/font-baker/wasm-url',
     ],
   },
 );
@@ -377,9 +377,9 @@ const glyphConfig = await measureJavaScript(
     // The renderer-neutral config leaf closure must not pull any renderer integration.
     expectedDynamic: [],
     excludedInitial: [
-      '/packages/glyph/dist/react.js',
-      '/packages/glyph/dist/three.js',
-      '/packages/glyph/dist/tsl.js',
+      '/packages/glyph/dist/react',
+      '/packages/glyph/dist/three',
+      '/packages/glyph/dist/tsl',
       '/packages/glyph/dist/three/',
       '/packages/glyph/dist/tsl/',
     ],
@@ -395,7 +395,7 @@ const tslSubpath = await measureJavaScript(
   {
     // The shader library must not pull the Three scene integration or React.
     expectedDynamic: [],
-    excludedInitial: ['/packages/glyph/dist/react.js', '/packages/glyph/dist/three.js', '/packages/glyph/dist/three/'],
+    excludedInitial: ['/packages/glyph/dist/react', '/packages/glyph/dist/three'],
   },
 );
 const typegpuSubpath = await measureJavaScript(
@@ -410,9 +410,9 @@ const typegpuSubpath = await measureJavaScript(
     // the `typegpu` runtime itself is an optional peer and stays outside the graph.
     expectedDynamic: [],
     excludedInitial: [
-      '/packages/glyph/dist/react.js',
-      '/packages/glyph/dist/three.js',
-      '/packages/glyph/dist/tsl.js',
+      '/packages/glyph/dist/react',
+      '/packages/glyph/dist/three',
+      '/packages/glyph/dist/tsl',
       '/packages/glyph/dist/three/',
       '/packages/glyph/dist/tsl/',
     ],
@@ -429,13 +429,13 @@ const threeRuntime = await measureJavaScript(
     // Bake owns schema and Khronos validation. Rendering reads only the package extension
     // identity and the byte ranges needed to create safe typed-array views.
     expectedDynamic: [
-      '/packages/glyph/dist/runtime-bake.js',
-      '/packages/glyph/dist/internal/font-face-transfer-runtime.js',
+      '/packages/glyph/dist/runtime-bake',
+      '/packages/glyph/dist/internal/font-face-transfer-runtime',
     ],
     excludedInitial: [
-      '/packages/glyph/dist/runtime-bake.js',
-      '/packages/glyph/dist/internal/font-face-transfer-runtime.js',
-      '/packages/glyph/dist/font-baker/validator.js',
+      '/packages/glyph/dist/runtime-bake',
+      '/packages/glyph/dist/internal/font-face-transfer-runtime',
+      '/packages/glyph/dist/font-baker/validator',
       '/node_modules/ajv/',
       '/node_modules/gltf-validator/',
     ],
@@ -510,12 +510,12 @@ const entries: SizeEntry[] = [
     false,
     {
       expectedDynamic: [
-        '/packages/glyph/dist/bakers/bitmap.js',
-        '/packages/glyph/dist/bakers/msdf.js',
-        '/packages/glyph/dist/bakers/slug.js',
+        '/packages/glyph/dist/bakers/bitmap',
+        '/packages/glyph/dist/bakers/msdf',
+        '/packages/glyph/dist/bakers/slug',
       ],
       excludedInitial: [
-        '/packages/glyph/dist/font-baker/validator.js',
+        '/packages/glyph/dist/font-baker/validator',
         '/node_modules/ajv/',
         '/node_modules/gltf-validator/',
       ],

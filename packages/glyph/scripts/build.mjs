@@ -5,7 +5,6 @@ import { basename, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { captureCommand } from './support/capture-command.mjs';
-import { embedTypeGpuMetadata } from './support/embed-typegpu-metadata.mjs';
 import { writeGeneratedTypescriptAbi } from './support/generated-typescript-abi.mjs';
 import { reproducibleRustEnvironment } from './support/reproducible-rust-env.mjs';
 
@@ -50,6 +49,9 @@ const publishRaceBudgetMs = 10_000;
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const tsc = fileURLToPath(
   new URL(process.platform === 'win32' ? '../node_modules/.bin/tsc.CMD' : '../node_modules/.bin/tsc', import.meta.url),
+);
+const tsdown = fileURLToPath(
+  new URL(process.platform === 'win32' ? '../node_modules/.bin/tsdown.CMD' : '../node_modules/.bin/tsdown', import.meta.url),
 );
 const rustEnvironment = reproducibleRustEnvironment(workspaceRoot);
 const shaperSimdSetting = process.env.PMNDRS_GLYPH_SHAPER_SIMD;
@@ -270,7 +272,11 @@ await run(tsc, [
   '--tsBuildInfoFile',
   join(fileURLToPath(stagingDirectory), '.tsbuildinfo'),
 ]);
-await embedTypeGpuMetadata(fileURLToPath(stagingDirectory));
+// Keep the complete unbundled emit for package-internal tests and maintenance tools, then
+// replace every supported application entry with a tree-shaken tsdown bundle. This keeps
+// private test seams out of the public module graph while the published subpaths share
+// package-owned chunks and TypeGPU metadata compiled at publish time.
+await run(tsdown, ['--out-dir', fileURLToPath(stagingDirectory), '--no-clean']);
 await run(wasmOpt, [
   '--enable-bulk-memory',
   '--enable-nontrapping-float-to-int',

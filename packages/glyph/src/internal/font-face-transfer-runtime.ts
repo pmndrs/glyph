@@ -1,6 +1,6 @@
 import type { Font, RegisteredFont } from '../font.js';
 import type { SerializedFontFace, SerializedFontFaceRaster } from '../font-face-transfer.js';
-import { FontLoadError, FontRegistry } from '../loader.js';
+import { FontRegistry } from '../loader.js';
 import { immutableFontResources } from '../loaded-font.js';
 import type { AnyRasterFormat } from '../config/raster-format.js';
 import { freezeSerializedFontFace } from './font-face-transfer.js';
@@ -93,65 +93,25 @@ export async function loadSerializedFontFaceSource(
     font = await registry._registerAsset(new Uint8Array(serialized.data), {}, 'adopt');
     signal?.throwIfAborted();
     const registered = getRegisteredFontData(font);
-    if (registered.artifactHash !== serialized.artifactHash) {
-      throw new FontLoadError(
-        'FONT_FACE_TRANSFER_IDENTITY',
-        'SerializedFontFace main data does not match its identity',
-      );
-    }
     for (const raster of serialized.rasters) {
       const source = registered.rasterSources.get(raster.rasterKey);
-      if (
-        source === undefined ||
-        source.reference.kind !== raster.kind ||
-        source.reference.extension !== raster.extension ||
-        source.reference.version !== raster.version
-      ) {
-        throw new FontLoadError(
-          'FONT_FACE_TRANSFER_RASTER',
-          'SerializedFontFace raster does not match the authoritative main font',
-        );
-      }
-      if (source.reference.source.type === 'embedded') {
-        if (raster.data !== undefined) {
-          throw new FontLoadError('FONT_FACE_TRANSFER_RASTER', 'an embedded raster must not carry a sidecar artifact');
-        }
-      } else {
-        if (raster.data === undefined || raster.artifactHash === undefined) {
-          throw new FontLoadError('FONT_FACE_TRANSFER_RASTER', 'an external raster must carry its sidecar artifact');
-        }
+      if (source === undefined) throw new Error('serialized FontFace raster is absent from its main font');
+      if (raster.data !== undefined) {
         await registry._attachRaster(font, new Uint8Array(raster.data), {}, 'adopt');
-        const retained = getRegisteredFontData(font).rasterSources.get(raster.rasterKey);
-        if (retained?.artifactHash !== raster.artifactHash) {
-          throw new FontLoadError(
-            'FONT_FACE_TRANSFER_IDENTITY',
-            'SerializedFontFace raster data does not match its identity',
-          );
-        }
       }
       signal?.throwIfAborted();
     }
-    const resourceRecords = await Promise.all(
-      serialized.resources.map(async (resource) => {
-        const bytes = new Uint8Array(resource.data);
-        if ((await sha256(bytes)) !== resource.artifactHash) {
-          throw new FontLoadError(
-            'FONT_FACE_TRANSFER_IDENTITY',
-            'SerializedFontFace resource data does not match its identity',
-          );
-        }
-        return {
-          identity: `${resource.artifactHash}:${resource.byteLength}`,
-          value: Object.freeze({
-            artifactHash: resource.artifactHash,
-            byteLength: resource.byteLength,
-            bytes,
-          }),
-        };
-      }),
-    );
     signal?.throwIfAborted();
-    for (const resource of resourceRecords) registered.resources.set(resource.identity, resource.value);
+    for (const resource of serialized.resources) {
+      registered.resources.set(
+        `${resource.artifactHash}:${resource.byteLength}`,
+        Object.freeze({
+          artifactHash: resource.artifactHash,
+          byteLength: resource.byteLength,
+          bytes: new Uint8Array(resource.data),
+        }),
+      );
+    }
     return font;
   } catch (error) {
     font?.dispose();
@@ -161,9 +121,4 @@ export async function loadSerializedFontFaceSource(
 
 function copyBuffer(value: ArrayBufferView): ArrayBuffer {
   return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice().buffer;
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes.slice().buffer);
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }

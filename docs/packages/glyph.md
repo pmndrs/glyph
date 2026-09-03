@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:32591591ec2f003c8e44694837fcded64c89574dcbde433da4b09fe3938591a8'
+source_digest: 'sha256:33e9896de24151351ddb4ba15c67707ace3d33731365b3e5af011a0dc75cac5c'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -292,10 +292,11 @@ worker.postMessage(serialized, { transfer });
 selection. Both return fresh full-span `ArrayBuffer`s, so transferring them may detach the clone without changing the
 originating FontFace, immutable Font values, or cache. The receiving realm passes the inert, versioned
 `SerializedFontFace` directly to `glyph.fontFace(serialized)`. Glyph synchronously claims its buffers into private
-ownership after checking and canonicalizing only the safe structured-clone envelope: version, arrays, scalar fields,
-live full-span buffers, and non-aliasing buffer ownership. The lazy importer then performs the single semantic identity
-check against the authoritative GLB and dependency bytes while importing the main GLB, selected raster sidecars, and
-only their resolved external resources into the same content graph used by URL-string, `URL`, and `Blob` declarations.
+ownership. The versioned discriminator selects this cross-realm path; because only Glyph produces the snapshot, the
+receiver does not normalize its fields, revalidate its dependency metadata, or re-hash its bytes. Ordinary GLB parsing
+still fails at the operation that cannot consume malformed bytes. The lazy importer adopts the main GLB, selected raster
+sidecars, and only their resolved external resources into the same content graph used by URL-string, `URL`, and `Blob`
+declarations.
 A complete existing graph is reused without fetching;
 partial transfers may progressively add formats to that graph. No live FontFace, Font, Promise, handle, or renderer
 resource crosses the realm boundary, and no normal `load()`, Text construction, `glyph.shape()`, or renderer path invokes
@@ -660,15 +661,23 @@ a 20-warmup/51-sample cold check measured 15.452 ms median / 15.670 ms p95 at 1.
 
 ## Current size and performance evidence
 
-The latest checked package-size record after the baker ABI cleanup reports:
+The latest checked package-size record after the tsdown distribution cutover reports:
 
 | Graph                                   |         Raw |      gzip |    Brotli |
 | --------------------------------------- | ----------: | --------: | --------: |
-| Core JavaScript plus shaper Wasm        | 1,194,036 B | 443,967 B | 351,843 B |
-| Three adapter plus core and shaper Wasm | 1,442,346 B | 483,478 B | 384,647 B |
+| Core JavaScript plus shaper Wasm        | 1,524,942 B | 547,975 B | 429,901 B |
+| Three adapter plus core and shaper Wasm | 1,718,613 B | 594,736 B | 467,591 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
+
+The distribution build keeps TypeScript's complete source-shaped declarations and private maintenance emit, then uses
+tsdown to bundle and minify every supported application entry with peer dependencies externalized. Source maps remain in
+the package for debugging; the hand-authored export map remains authoritative for source/type/import conditions, wildcard
+leaves, private-path guards, and Wasm assets. Compared with the preceding checked JavaScript graph, measured Core falls
+from 499,251 to 327,570 raw bytes and from 81,007 to 80,505 gzip bytes; Three falls from 802,390 to 521,241 raw bytes and
+from 127,744 to 127,266 gzip bytes. The fixed Three gzip ceiling remains unmet and is tracked as cleanup work rather than
+being raised.
 
 The optimized shaper is 1,101,396 raw / 425,300 gzip / 335,661 Brotli bytes after the shared sort kernel (D-243)
 replaced twelve per-type engine sort instantiations and the Binaryen merge pipeline landed (D-244); the pre-golf
