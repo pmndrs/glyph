@@ -519,8 +519,9 @@ notes · internals
 - `ThreeTextMaterialContextMap` augmentation — `three/material.ts:55–63`; D-308; the variant's outputs reach the
   factory as `context.outputs` (test `:173`)
 - registered external programs own their typed `createMaterial`; they do not widen the built-in union — D-306
-- [verify] no in-tree module augments `ThreeTextMaterialContextMap` (grep found only `material.ts`); write the
-  augmentation snippet against `three/material.ts:55–63` and typecheck it before publishing
+- no in-tree module augments `ThreeTextMaterialContextMap` at codex `1dc580a87`: the interface and its derived type
+  live at `three/material.ts:56` and `:63` and are re-exported from `three.ts:10`; the augmentation snippet above is
+  written against them
 - [verify] the name and shape of `createMaterial(glyphExampleTslShader, context)` in the snippet: the test builds
   the material inline (`:396–420`); cite that body or inline it
 */}

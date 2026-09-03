@@ -236,8 +236,8 @@ notes · internals
 - Slug returns `vec3(dilated.position.x, dilated.position.y, 0)` and pairs it with `renderCoordinate` —
   `tsl/slug-shader.ts:141–142`; `position` and `coverage` are one graph — `:100–101`
 - the finding "Slug ignores a replaced positionNode" — `docs/planning/docs-site-outline.md:501` (findings table, from the kinetic build)
-- [verify] the carousel and flag warps are not in `site/examples/src/scenes/kinetic` at this commit (no
-  `positionNode` there; the scene now renders to a target and places glyphs by matrix); the finding above was
+- the carousel and flag warps are not in `site/examples/src/scenes/kinetic` (grep finds no `positionNode`; the
+  scene renders to a target and places glyphs by matrix); the finding above was
   recorded from an earlier build. Re-run the warp on Slug and on MSDF before the callout ships, and restore the
   warp to the scene or repoint the proxy
 */}

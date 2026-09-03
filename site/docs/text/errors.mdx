@@ -89,8 +89,9 @@ notes · internals
 - `textFrameError()` has no caller at HEAD: `grep -rn 'textFrameError(' packages/glyph/src` finds only its
   definition (`three/frame-error.ts:83`); the finding — `docs/planning/docs-site-outline.md:505`
 - the split by actionability and the `FrameFault { paragraph_id, style_id }` in the result header — D-268
-- [verify] "raising `commands` capacities on the config" for `capacity`: `defineThreeConfig` sets `commands`
-  internally (`three/handle.ts:215–229`) and `ThreeConfigOptions` does not expose it (`:93–99`); the cause doc says
+- there is no knob for `capacity`: `defineThreeConfig` fixes `commands` internally — limits, `requestBytes`
+  64 KiB, `resultBytes` 256 KiB (`three/handle.ts:217–229`) — and `ThreeConfigOptions` does not expose it
+  (`:93–99`), so the fix column stays "file it"; the cause doc says
   the handle already grew the arenas (`three/frame-error.ts:41`). Until an option exists, the fix column says "file it"
 */}
 
@@ -189,8 +190,9 @@ notes · internals
   a `false` prepare is `SKIPPED`: neither accepted nor rejected — `glyph-engine.ts:451–453`, `:538`, `config/glyph.ts:651`
 - raising capacity invalidates when exceeded — `three/text.ts:1115–1119`; the root setter — `:240–246`
 - `fixed` re-admitted after D-267 removed it — D-282
-- [verify] "retried on every traversal": staging removes the root from the dirty set (`glyph-engine.ts:446`), so an
-  unchanged over-budget root re-enters only after an invalidation; D-282 says "retries the capacity decision every
+- "retried on every traversal" overstates: staging removes the root from the dirty set whatever `stage()` answered
+  (`glyph-engine.ts:441–446`), so an unchanged over-budget root re-enters only after an invalidation such as a text
+  edit; write "retried on the next traversal that touches the root". D-282 says "retries the capacity decision every
   traversal without a rejection latch". Check `three/text.ts#ThreeRoot.#commitTraversal` (`:478–492`) → `needsReconcile` on an unchanged root before stating either
 */}
 
