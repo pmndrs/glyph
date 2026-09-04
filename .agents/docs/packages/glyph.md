@@ -1082,9 +1082,16 @@ End-to-end this is worth about 0.8% of `text_update` on a 22k-glyph paragraph, b
 benchmark's noise floor, because bidi lookup is roughly one percent of a shaping-dominated
 pipeline. The per-lookup figure is the claim.
 
-`line_break` (18.56 ns -> 1.32 ns, 14.1x) and `script` (15.78 -> 1.32, 11.9x) measure larger wins
-on the same structure and remain open; `SCRIPT_EXTENSION_OFFSETS` is excluded because it is
-already directly indexed and has no search to remove.
+`line_break::properties` (18.56 ns -> 1.32 ns, 14.1x) and `unicode::script` (15.78 -> 1.32, 11.9x)
+now use the same structure through the shared `scripts/support/code-point-trie.mjs` helper, which
+also replaced the bidi generator's hand-written copy. Across all three tables the artifact moves
+1,191,281 -> 1,258,319 raw (+67,038), 460,939 -> 453,053 gzip (-7,886), 363,430 -> 357,253 Brotli
+(-6,177) — smaller over the wire under both encodings, and roughly five times the saving bidi gave
+alone.
+
+`SCRIPT_EXTENSION_END_VALUES` stays on the range search: its 284 distinct values overflow a u8
+stage-2 index and need a wider table. `SCRIPT_EXTENSION_OFFSETS` is excluded permanently because it
+is already directly indexed and has no search to remove.
 
 A same-host comparison against the original pre-cleanup build covers the export reduction, root format move, and core naming.
 Browser core moves from 85,612 to 85,829 B under gzip; Three moves from 133,725 to 133,711 B;
