@@ -795,11 +795,13 @@ Both implementations compiled into one binary and run over identical inputs, bes
 | cjk | 6.78 ns | 1.17 ns | 5.8x |
 | mixed script | 7.32 ns | 1.22 ns | 6.0x |
 
-Artifact effect, same toolchain and `wasm-opt` pipeline: 1,187,062 -> 1,202,878 raw
-(+15,816), 458,121 -> 455,261 gzip (-2,853), 354,829 -> 360,228 Brotli (+5,399). Brotli was
-already compressing the monotonic range table well and does not gain what gzip gains. The growth
-is confined to the data section (220,350 -> 237,110) while the code section shrinks
-(966,819 -> 963,087) because the search loop is gone.
+Artifact effect, same-session A/B on `main` with identical source, flags, and `wasm-opt` pipeline:
+1,191,281 -> 1,209,532 raw (+18,251), 460,939 -> 459,414 gzip (-1,526), 363,430 -> 362,789 Brotli
+(-641). Smaller over the wire under both encodings. An earlier reading of +5,399 Brotli is
+withdrawn: it compared against a build of a different branch rather than a same-session baseline,
+and isolated table compression was found to be a poor predictor of marginal cost inside a 1.2 MB
+module. The growth is confined to the data section (220,350 -> 237,110) while the code section
+shrinks (966,819 -> 963,087) because the search loop is gone.
 
 Cold start is unchanged. Compile and instantiate medians are indistinguishable across four
 repeated and order-reversed runs of 60 samples: compile minima cluster at 0.134-0.149 ms for both
