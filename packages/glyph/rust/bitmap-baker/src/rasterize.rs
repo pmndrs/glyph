@@ -139,6 +139,16 @@ pub(crate) fn rasterize_strike(
     pages.push(AtlasPage::new(ATLAS_LIMIT, 1)?);
 
     let outlines = font.outline_glyphs();
+    // Once, before the loop. A font carrying no outline table at all draws an
+    // empty raster for every glyph, and `mark_absent` records that identically
+    // to a glyph the coverage set never selected — so the artifact looks whole
+    // and renders blank. Refuse it here instead, where the cause is still known.
+    if outlines.format().is_none() {
+        return Err(BitmapBakeError::new(
+            BitmapBakeErrorCode::InvalidFont,
+            "font has no glyf, CFF, or CFF2 outline table to rasterize",
+        ));
+    }
     crate::progress::report(progress_offset, progress_total);
     let mut selected_index = 0_u32;
     for raw_glyph_id in 0..glyph_count {

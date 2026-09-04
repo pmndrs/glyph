@@ -355,6 +355,15 @@ fn select_font<'source>(
     let font = FontRef::from_index(source, face_index).map_err(|error| {
         MtsdfBakeError::new(MtsdfBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
     })?;
+    // Once, before the loop. Without an outline table every glyph produces an
+    // empty field, which is stored identically to a legitimately blank glyph —
+    // the artifact looks whole and renders nothing.
+    if font.outline_glyphs().format().is_none() {
+        return Err(MtsdfBakeError::new(
+            MtsdfBakeErrorCode::InvalidFont,
+            "font has no glyf, CFF, or CFF2 outline table to generate a field from",
+        ));
+    }
     let actual_glyph_count = glyph_count(&font)
         .map_err(|error| MtsdfBakeError::new(MtsdfBakeErrorCode::InvalidFont, error))?;
     if actual_glyph_count != expected_glyph_count {
