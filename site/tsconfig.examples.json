@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "customConditions": ["source"]
+  },
+  "include": [
+    "examples/src",
+    "docs/components",
+    "vite.examples.config.ts",
+    "docs/components/vite.config.ts",
+    "scripts/glyph-source.ts"
+  ]
+}

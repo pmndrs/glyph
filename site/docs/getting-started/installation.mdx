@@ -1,0 +1,232 @@
+---
+title: Installation
+description: Install the package, pick the subpaths you need, and point your bundler at the WebGPU entry.
+nav: 1
+---
+
+{/*
+reader
+- Has decided to try it and knows their bundler. Arrives asking "what do I install, what do I import, and will the
+  bundle drag in a baker or a second three?"; should leave with a working import and a canvas that draws.
+
+write · intro
+- Question: how much of this package do I actually load?
+- Say: one package, many entry points; each raster format, the React layer, the shader realizations, and the bakers
+  are separate graphs, so a bundle carries only what it renders. Then the install line.
+- Anchor: "import the door you use".
+- Shape: two sentences, then the `bash` block.
+
+write · keypoints (four claims)
+- Peers are optional: `three`, `@react-three/fiber` on its WebGPU entry, React 19.
+- Importing a format module registers it; `/three` registers all three.
+- Serve from `localhost` or `https`, or fonts will not load.
+- The root entry never pulls the baker, the validator, or any Wasm beyond the shaper.
+
+notes · internals for the page
+- the exports map — `packages/glyph/package.json` exports (root, `/three`, `/react`,
+  `/react/{bitmap,msdf,slug}`, `/raster/{bitmap,msdf,slug}`, `/raster/*`, `/config/*`, `/tsl`, `/tsl/*`, `/typegpu`,
+  `/typegpu/*`, `/bake`, `/baker`, `/bakers/*`, `/runtime-bake`, five `.wasm`); the old `/three/{bitmap,msdf,slug}`
+  format leaves are gone — a format is imported from `/raster/*`
+- peers: `three >=0.185.1`, `@react-three/fiber >=10.0.0-alpha.3 <11`, `react >=19.2 <19.3`,
+  `typegpu >=0.12.3 <0.13`, all optional — `package.json` peerDependencies, peerDependenciesMeta
+- the root has no static edge to the baker, Ajv, the glTF validator, or any Wasm beyond the shaper —
+  `.agents/docs/packages/glyph.md:181–183`
+- registration side effects are declared so a format survives tree shaking — `package.json` sideEffects
+*/}
+
+```bash
+npm install three @react-three/fiber @pmndrs/glyph
+```
+
+## Entry points
+
+<details>
+<summary>Every subpath and what it pulls into a bundle</summary>
+
+| Subpath | Exports | Pulls in |
+| --- | --- | --- |
+| `@pmndrs/glyph` | `glyph`, `glyphFlags`, `TextStyle`, `ParagraphLayout`, `Constraints`, `txt`, `span`, `GlyphFontError`, `GlyphEngineStatusError`; types `Font`, `FontFace`, `FontFaceSelection` | the shaper Wasm, on `glyph.init()` |
+| `@pmndrs/glyph/three` | `ThreeConfig`, `defineThreeConfig`, `ThreeFontFormats`, `Text`, `TextGroup`, `ThreeRoot`, `span`, `defineTextMaterial`, `Glyphs`, `Decorations`, `TextFrameError`, `registerThreeRasterProgram` | three.js and all three built-in formats with their TSL shaders |
+| `@pmndrs/glyph/raster/bitmap` · `/msdf` · `/slug` | the format value (`bitmap`, `msdf`, `slug`), its constants and option types | that format's decoder and TSL shader, registered on import |
+| `@pmndrs/glyph/react` | `GlyphProvider`, `Text`, `TextGroup` | React Three Fiber (`/webgpu` entry) and `/three` |
+| `@pmndrs/glyph/react/bitmap` · `/msdf` · `/slug` | `useBitmap`, `useMsdf`, `useSlug` | that format |
+| `@pmndrs/glyph/raster/*` | renderer-neutral format contracts | no renderer |
+| `@pmndrs/glyph/config/*` | `defineGlyphConfig`, `defineRasterFormat`, schema and Codec helpers for integrators | no renderer |
+| `@pmndrs/glyph/tsl` · `/tsl/{bitmap,msdf,slug,decoration}` | TSL shader realizations | `three/tsl`; no scene integration |
+| `@pmndrs/glyph/typegpu` · `/typegpu/bitmap` | TypeGPU shader realizations | `typegpu`; no scene integration |
+| `@pmndrs/glyph/bake` · `/baker` · `/bakers/*` | Node baking and inspection, the portable baker contracts, the raster bakers | the baker Wasm, Ajv, the glTF validator |
+| `@pmndrs/glyph/runtime-bake` | `bakeFontInWorker` | a module Worker, on demand |
+| `@pmndrs/glyph/*.wasm` | `text-shaper`, `font-baker`, `bitmap-baker`, `mtsdf-baker`, `slug-baker` | distribution artifacts |
+
+</details>
+
+{/*
+write
+- Question: which subpath do I import for what?
+- One paragraph under the table: the root entry is the runtime and the portable vocabulary; it has no static edge
+  to the baker, the validator, or any Wasm beyond the shaper, which loads inside `glyph.init()`. A format registers
+  itself when its module is imported, and `/three` imports all three, so an ordinary three.js app needs nothing
+  beyond `/three`. The React layer pulls `/three` and R3F's WebGPU entry. Baking is Node, or an explicit Worker you
+  opt into.
+- Avoid: `createFontStack` and `useFont`, still on the root and `/react` at HEAD (the [in flight] items below).
+- Shape: one paragraph.
+
+notes · internals
+- root value exports — `packages/glyph/src/index.ts:20` (`glyph`), `:200` (`glyphFlags`), `:232` (`TextStyle`,
+  `ParagraphLayout`, `Constraints`), `:245` (`span`, `txt`), `:216` (`GlyphFontError`)
+- `createParagraph` and `Paragraph` are gone with the config API: intrinsic widths ride the same `measure()` pass on
+  the text itself, so a renderer-free paragraph object is no longer the way to reach them
+- `loadFont`, `createFontLibrary`, `FontLibrary`, `defineFont`, and the token inputs are gone from the public surface
+  and the `/config/font-library` leaf is removed — `index.ts` exports only `Font`, `FontMetrics`, `RasterDecodeFont`
+  from `font.ts`; D-326 (codex `98c86c8a6`). Still on the root: `createFontStack` (`index.ts:225`) — [in flight], the face-level
+  stack is undefined
+- the shaper Wasm resolves beside `dist` and loads inside `glyph.init()` — `shaper.ts:236`
+  (`new URL('../dist/text-shaper.wasm', import.meta.url)`), `glyph-engine.ts:108–116`
+- `/three` reaches all three formats through its Codec — `three/codec.ts:25–27` (`bitmapCodec`, `msdfCodec`, `slugCodec`)
+- a format module registers itself when imported — `raster/bitmap.ts`, `raster/msdf.ts`, `raster/slug.ts`;
+  `sideEffects` lists exactly those three sources and their `dist` twins — `package.json`
+- `/react` pulls `/three` — `react.ts:46–55`; and R3F's WebGPU entry — `react.ts:1`
+- [in flight] `/react` also exports `useFont` at HEAD (`react.ts:628`); the typed hooks are the documented surface
+- the hooks — `react/bitmap.ts:16`, `react/msdf.ts:16`, `react/slug.ts:16`
+- `/config/*` — `defineGlyphConfig` in `config/glyph.ts` (imported at `three/handle.ts:4`), `defineRasterFormat`
+  `config/raster-format.ts:93–148`
+- `/tsl` and `/typegpu` have no scene integration; TypeGPU is an optional peer — `.agents/docs/packages/glyph.md:172–173`,
+  `:189–191`
+- `bakeFontInWorker` — `runtime-bake.ts:56`
+- `bin: glyph` — `package.json` bin; `packages/glyph/bin/glyph.js`
+- `source` condition on every TS subpath for workspace hot reload — `package.json` exports (`source` keys),
+  `.agents/docs/packages/glyph.md:178–180`
+*/}
+
+## Renderer entry
+
+```tsx
+import { Canvas } from '@react-three/fiber/webgpu';
+```
+
+{/*
+write
+- Question: which `Canvas` do I import?
+- Say: the WebGPU entry, which is the one the React layer itself imports. three's `WebGPURenderer` constructs a
+  WebGL2 backend when a WebGPU adapter is unavailable; there is nothing to configure.
+- Then an `> [!NOTE]` callout: `navigator.gpu` exists only in a secure context; on `http://<lan-ip>` you get WebGL2,
+  not a broken page; on `https://` or `localhost` you get WebGPU; Wasm loads on any origin.
+- Shape: two sentences and the callout.
+
+notes · internals
+- the React layer itself imports `@react-three/fiber/webgpu` — `react.ts:1`
+- `WebGPURenderer` supplies a `getFallback` that builds `WebGLBackend`; `forceWebGL` skips WebGPU —
+  `packages/glyph/node_modules/three/src/renderers/webgpu/WebGPURenderer.js:57–71` (three 0.185.1); the base renderer
+  swaps when backend init fails — `…/renderers/common/Renderer.js:785`
+- a missing `navigator.gpu` takes that path: `WebGPUBackend.init` is `async`, so the `TypeError` its
+  `navigator.gpu.requestAdapter()` raises (`WebGPUBackend.js:217`) is a rejection, and `Renderer.init` catches it and
+  constructs `getFallback(error)` — `Renderer.js:775–790`, `WebGPURenderer.js:57–69` (three 0.185.1)
+- `navigator.gpu` is gated on a secure context, which is a property of the origin — `site/vite.config.ts:12–15`;
+  the `NavigatorGPU` mixin is `[SecureContext]` — WebGPU, "navigator.gpu", https://www.w3.org/TR/webgpu/#navigator-gpu
+- the hello-world app's `<Canvas fallback>` names both backends — `apps/r3f-hello-world/src/r3f-example.tsx:12–17`
+*/}
+
+## Serving
+
+| Origin | `navigator.gpu` | `crypto.subtle` | What you get |
+| --- | --- | --- | --- |
+| `https://…`, `http://localhost` | present | present | WebGPU; fonts load |
+| `http://<lan-ip>`, `http://<hostname>` | absent | absent | WebGL2 backend; every font load rejects |
+
+{/*
+write
+- Question: why does my LAN address draw the scene but no text?
+- Open with an `> [!WARNING]`: serve from `localhost` or over `https`. Every font load hashes the artifact with
+  `crypto.subtle`, which browsers expose only in a secure context, so a page opened at a plain LAN address fails to
+  load fonts while three's WebGL2 fallback still draws the rest of the scene. The baked `.font.glb` files are static
+  assets: any host that serves them with a correct `Content-Length` works, and `Cache-Control` on a source font
+  decides how long a runtime bake is kept.
+- Shape: the callout, four sentences; the table carries the matrix.
+
+notes · internals
+- every load hashes bytes with `crypto.subtle.digest('SHA-256', …)`: the main GLB — `loader.ts:3125`; raster
+  artifacts — `internal/raster-artifact-validation.ts:380`; the raster key — `internal/raster-identity.ts:102`;
+  transfers — `internal/font-face-transfer-runtime.ts:167`; runtime-bake cache — `internal/runtime-font-cache.ts:125`
+- `crypto.subtle` is undefined on an insecure origin: `Crypto.subtle` is `[SecureContext]` in the Web Cryptography
+  API — https://www.w3.org/TR/WebCryptoAPI/#crypto-interface; the tree only shows the calls
+- `content-length` is read and compared — `loader.ts:2813`; `cache-control` decides how long a runtime bake is kept —
+  `loader.ts:2734`
+- baked `.font.glb` files are static assets; the docs serve them from `site/docs/assets/*.font.glb`
+*/}
+
+## Bundlers
+
+### Vite
+
+```ts
+import inter from './fonts/inter.font.glb?url';
+```
+
+{/*
+write
+- Question: how does Vite see a font and the Wasm?
+- Say: fonts are assets, and `?url` gives a hashed path; the shaper Wasm is resolved with `import.meta.url`, which
+  Vite emits as an asset. When drei is present, dedupe `react`, `react-dom`, `three`, and `@react-three/fiber` so
+  hooks resolve against one copy. No cross-origin isolation headers are needed. The `source` condition is for
+  workspace development only.
+- Shape: four sentences.
+
+notes · internals
+- `?url` in the maintained app — `apps/r3f-hello-world/src/app.tsx:13–14`
+- dedupe `react`, `react-dom`, `three`, `@react-three/fiber` when drei is present, or hooks read a second copy —
+  `site/vite.config.ts:17–20`
+- no COOP/COEP needed: neither Wasm declares shared memory — `site/vite.config.ts:4–11`; the hello-world app still
+  sets them — `apps/r3f-hello-world/vite.config.ts:6–9`, `:39–40`; carried over from #47 on the assumption the
+  Wasm needed them. It does not: isolation buys only `SharedArrayBuffer`, neither the shaper nor the baker module
+  declares a shared memory, and `COEP: require-corp` rejects every cross-origin subresource without CORP — this
+  site dropped the headers and renders identically (site commit `62db3270`); the benchmarks app only records
+  `crossOriginIsolated` as environment evidence (`apps/benchmarks/src/benchmark/environment.ts:10`). Recommend
+  neither
+- workspace apps opt into the `source` condition — `apps/r3f-hello-world/vite.config.ts:22`
+- the Wasm URL is resolved with `import.meta.url`, which Vite rewrites as an asset — `shaper.ts:236`
+*/}
+
+### Next.js
+
+{/*
+write
+- Question: does it work under Next?
+- Nothing until the [verify] below is closed; then two sentences: `transpilePackages` for three's ESM subpaths,
+  and whether `import.meta.url` Wasm resolution survives Next's bundler.
+
+notes · internals
+- [verify] nothing in the tree covers Next; find the pmndrs paris-site workaround for three's ESM subpaths
+  (`transpilePackages`) and check `import.meta.url` Wasm resolution under the Next bundler before writing
+- one data point: this site is Next (pmndrs/docs) and sidesteps both questions by building the explainer with Vite
+  (`site/docs/components/vite.config.ts`) and loading it as a static bundle from `/docs/assets/explainer.js`, so
+  the Next bundler never sees `@pmndrs/glyph`, three's subpaths, or the Wasm URL
+*/}
+
+## TypeScript
+
+```ts
+import type { Font, FontFace } from '@pmndrs/glyph';
+import type { msdf } from '@pmndrs/glyph/raster/msdf';
+import type { slug } from '@pmndrs/glyph/raster/slug';
+
+let body: Font<typeof msdf>;
+let face: FontFace<typeof msdf | typeof slug>;
+```
+
+{/*
+write
+- Question: what does the type system give me for free?
+- Say: `exactOptionalPropertyTypes` is respected. The format generic is inferred from the face you declare: a face
+  declared with `msdf` and `slug` has exactly `.msdf` and `.slug`, and `.bitmap` is a compile error; `createText`
+  and `<Text>` carry that format into the `Text` they return.
+- Shape: two sentences; link Advanced → TypeScript.
+
+notes · internals
+- the package compiles with `exactOptionalPropertyTypes` — `tsconfig.base.json:6`
+- `glyph.fontFace` is `const`-generic over the declaration; the keyed members are synthesized from it, so an
+  undeclared member fails at compile time — `glyph.ts:24–27`, `font-face.ts:35–39` (`FontFaceDeclaredFormat`),
+  `:95–97` (`FontFace`); D-310
+- `createText` infers the raster from the selection — `three/text.ts:257–259`; R3F `Text` infers it from `font` —
+  `react.ts:431–438` (`TextComponent`)
+- `Font<Format>` and `FontFace<Formats>` are root types — `index.ts:201`, `:181`
+*/}

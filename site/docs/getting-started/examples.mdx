@@ -1,0 +1,151 @@
+---
+title: Examples
+description: Every example on one page — a still of each scene, running when you rest on it, each linking to the page that explains it.
+nav: 3
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="gallery" data-explainer-page="examples" activation="pointer" hover-delay="160" max-slots="2" idle-ttl="15000" max-dpr="1.5" opaque />
+
+{/*
+reader
+- Browsing. Wants to see what the library does before reading anything; will click through to the page behind the
+  scene that catches them.
+
+write · intro
+- Question: what am I looking at?
+- Say: one card per example, a still of the scene, in a grid; rest on a card and it runs, two at a time on
+  one renderer; every caption is the page that explains it. Say nothing else — the pictures are the page.
+- Shape: two sentences above the grid, none below.
+
+notes · internals for the page
+- the cards are `<glyph-proxy>` windows under one pointer-activated root (`site/docs/components/explainer/root.tsx`,
+  `activation="pointer"`, `hover-delay`); stills come from `poster`, captured from the scenes themselves into
+  `site/examples/public/thumbnails/<slug>.webp`
+- the same scenes, one at a time, live at `/examples/?example=<slug>`; the masonry gallery at `/examples/`
+- every slug is a `site/examples/src/catalog.ts` entry; a scene the catalog lacks shows a planned card
+*/}
+
+<div className="glyph-bento">
+  <figure data-span="2">
+    <glyph-proxy fit="cover" root="gallery" data-scene="kinetic" aria-label="Kinetic typography" poster="/examples/thumbnails/kinetic.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/getting-started/examples">Kinetic typography</a> · after <a href="https://tympanus.net/codrops/2020/06/02/kinetic-typography-with-three-js/">Kinetic Typography with Three.js</a> by Mario Carrillo for Codrops (2020); the passages are Dickinson and Whitman</figcaption>
+  </figure>
+  <figure data-span="2">
+    <glyph-proxy fit="cover" root="gallery" data-scene="split-flap" aria-label="Split-flap board" poster="/examples/thumbnails/split-flap.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/text-and-groups">Split-flap board</a></figcaption>
+  </figure>
+  <figure data-span="2">
+    <glyph-proxy fit="cover" root="gallery" data-scene="relief" aria-label="Relief type" poster="/examples/thumbnails/relief.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/materials">Relief type</a></figcaption>
+  </figure>
+  <figure data-span="2">
+    <glyph-proxy fit="cover" root="gallery" data-scene="ribbon" aria-label="Ribbon" poster="/examples/thumbnails/ribbon.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/break-apart">Ribbon</a></figcaption>
+  </figure>
+  <figure data-span="2">
+    <glyph-proxy fit="cover" root="gallery" data-scene="orbit" aria-label="Text in orbit" poster="/examples/thumbnails/orbit.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/in-3d">Text in orbit</a> · rings of live type circle a sphere and their letters fall on it as shadows</figcaption>
+  </figure>
+  <figure data-span="2">
+    <glyph-proxy fit="cover" root="gallery" data-scene="ripple" aria-label="Text on a wave" poster="/examples/thumbnails/ripple.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/materials">Text on a wave</a> · a passage types itself out while a vertex shader runs a wave along it</figcaption>
+  </figure>
+  <figure data-span="2">
+    <glyph-proxy fit="cover" root="gallery" data-scene="slug-anatomy" aria-label="Slug anatomy" poster="/examples/thumbnails/slug-anatomy.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/fonts/techniques">Slug anatomy</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="first-text" aria-label="Your first text" poster="/examples/thumbnails/first-text.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/getting-started/your-first-text">Your first text</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="techniques" aria-label="Raster formats" poster="/examples/thumbnails/techniques.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/fonts/techniques">Raster formats</a></figcaption>
+  </figure>
+  <figure data-span="2">
+    <glyph-proxy fit="cover" root="gallery" data-scene="text-ladder" aria-label="Text ladder" poster="/examples/thumbnails/text-ladder.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/fonts/techniques">Text ladder</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="zoom" aria-label="Zoom" poster="/examples/thumbnails/zoom.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/fonts/techniques">Zoom</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="styling" aria-label="Styling" poster="/examples/thumbnails/styling.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/styling">Styling</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="decorations" aria-label="Decorations" poster="/examples/thumbnails/decorations.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/styling">Decorations</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="effects" aria-label="Effects" poster="/examples/thumbnails/effects.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/materials">Effects</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="rich-text" aria-label="Rich text" poster="/examples/thumbnails/rich-text.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/rich-text">Rich text</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="editing" aria-label="Editing" poster="/examples/thumbnails/editing.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/rich-text">Editing</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="caret" aria-label="Caret and selection" poster="/examples/thumbnails/caret.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/interaction">Caret and selection</a></figcaption>
+  </figure>
+  <figure data-span="2">
+    <glyph-proxy fit="cover" root="gallery" data-scene="paragraph-layout" aria-label="Paragraph layout" poster="/examples/thumbnails/paragraph-layout.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/paragraph-layout">Paragraph layout</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="justify" aria-label="Justification and columns" poster="/examples/thumbnails/justify.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/paragraph-layout">Justification and columns</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="measurement" aria-label="Measurement" poster="/examples/thumbnails/measurement.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/measurement">Measurement</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="materials" aria-label="Materials" poster="/examples/thumbnails/materials.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/materials">Materials</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="depth" aria-label="Depth and occlusion" poster="/examples/thumbnails/depth.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/in-3d">Depth and occlusion</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="labels" aria-label="Labels in a scene" poster="/examples/thumbnails/labels.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/in-3d">Labels in a scene</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="off-axis" aria-label="Off-axis" poster="/examples/thumbnails/off-axis.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/in-3d">Off-axis</a></figcaption>
+  </figure>
+  <figure data-span="2">
+    <glyph-proxy fit="cover" root="gallery" data-scene="bloom" aria-label="Bloom" poster="/examples/thumbnails/bloom.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/in-3d">Bloom</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="break-apart" aria-label="Break apart" poster="/examples/thumbnails/break-apart.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/break-apart">Break apart</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="arc" aria-label="Text on a circle" poster="/examples/thumbnails/arc.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/break-apart">Text on a circle</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="groups" aria-label="Roots and groups" poster="/examples/thumbnails/groups.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/text/text-and-groups">Roots and groups</a></figcaption>
+  </figure>
+  <figure>
+    <glyph-proxy fit="cover" root="gallery" data-scene="batching" aria-label="Batching" poster="/examples/thumbnails/batching.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/advanced/performance">Batching</a></figcaption>
+  </figure>
+  <figure data-span="2">
+    <glyph-proxy fit="cover" root="gallery" data-scene="shaping" aria-label="Shaping" poster="/examples/thumbnails/shaping.webp" aspect="16 / 9" role="button" />
+    <figcaption><a href="/advanced/how-it-works">Shaping</a></figcaption>
+  </figure>
+</div>

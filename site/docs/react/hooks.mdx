@@ -1,0 +1,205 @@
+---
+title: Hooks
+description: useMsdf, useSlug, and useBitmap — signatures, what they declare, preload and clear, and why a ready font never suspends.
+nav: 41
+sourcecode: packages/glyph/src/react.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
+{/*
+reader
+- Uses `<Text>` already. Arrives asking "how do I get a font in one line, what does that line cache, and what do
+  `preload` and `clear` do under StrictMode and Suspense?"; should leave trusting that a ready font never suspends
+  and knowing which handle `preload` warms.
+
+write · intro
+- Question: what is a font hook?
+- Say: three typed hooks, one per format; each declares a `FontFace` through `glyph.fontFace` on the handle your
+  canvas uses and returns a loaded `Font` that lives as long as the component. A ready font renders synchronously:
+  the hook checks `isLoaded()` first and suspends on the face's one load Promise only when it must.
+- Shape: three sentences, then the signature block.
+
+write · keypoints (four claims)
+- The cache key is the source plus the format descriptor; different options are a different face.
+- `preload()` returns the real Promise and warms the default handle.
+- `clear()` drops the declaration, never a mounted lease.
+- One load Promise serves every retry; a rejection evicts it so the next render can try again.
+
+notes · internals for the page
+- the wrappers — `react/msdf.ts:16–17`, `react/slug.ts:16`, `react/bitmap.ts:16–17`
+- the shared implementation declares through `glyph.fontFace` — `react.ts#useFont` (`:628–631`), `:667–683`
+- `isLoaded()` first, `use(load())` only when not — `react.ts:658–665`; D-300
+- the key — `font-face.ts:303–305`, `:774–789`; `preload`/`clear` — `react.ts:632–656`; the Promise —
+  `font-face.ts:496–527`; D-305
+*/}
+
+```ts no-check
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
+
+useMsdf(url, options?)              // Font<typeof msdf>
+useBitmap(url, { strikes })         // Font<typeof bitmap>
+useSlug(url)                        // Font<typeof slug>
+```
+
+| Argument | Accepts |
+| --- | --- |
+| `url` | the same source `glyph.fontFace` takes: a URL string, a `URL`, a `Blob`, or a `SerializedFontFace` |
+| `options` | `useMsdf`: `{ emSize?, pixelRange?, coverage? }` · `useBitmap`: `{ strikes, coverage? }` (required) · `useSlug`: none |
+
+
+{/*
+write
+- Question: what do I pass?
+- Nothing above the table. One line under it: the options are the same ones the bake took, and they are part of
+  the face's identity (link Raster formats, "Options are identity").
+
+notes · internals
+- signatures — `react/msdf.ts:7–13` (`UseMsdf`), `react/bitmap.ts:7–13` (`UseBitmap`), `react/slug.ts:7–13`
+  (`UseSlug`); each carries `preload` and `clear`
+- `MsdfOptions` — `internal/msdf-contract.ts:20–26` (defaults 64 and 8 — `:10–11`); `BitmapFormatOptions` —
+  `raster/bitmap.ts:36–39`; Slug has no options — `raster/slug.ts:53`
+- `FontFaceSource = LoadFontInput | Blob | SerializedFontFace` — `font-face.ts:27`; a string or `URL` —
+  `font.ts:71`
+- the hooks take `FontFaceSource` since codex `b0979cf55` (`react/msdf.ts:8`, `react/bitmap.ts:8`,
+  `react/slug.ts:8`): the table's set is the tree's set
+- [in flight] internally each wrapper builds `{ raster, options }` (`react/msdf.ts:17`); that object form is not
+  public API on the FontFace path (D-297 names `msdf({ emSize })`)
+- no scene here by design: a hook call has no visual; Suspense timing is a number, and numbers go in prose
+*/}
+
+## What a hook does
+
+![What a font hook does: the source becomes a FontFace cached per handle; a loaded selection returns the mounted Font lease, otherwise the hook suspends on the load.](/examples/diagrams/hook-flow.svg)
+
+{/*
+write
+- Question: what is cached, where, and by whom?
+- Say, reading the figure left to right: the source and format become one `FontFace` per handle, keyed by the
+  source's identity and the format's canonical descriptor, so two components asking for the same URL share one
+  declaration. The handle says which exact raster that declaration means and whether it is loaded; if it is, the
+  hook hands back a mounted lease at once, otherwise it suspends on the face's load. The lease is the component's
+  own and is released when it unmounts; there is no second cache beside Glyph's resource graph.
+- Shape: three sentences.
+
+notes · internals
+- the selected handle: the nearest provider's, else the default — `react.ts:253–266`
+- one `FontFace` per handle per key; a disposed face is re-declared — `react.ts:667–683`
+  (`reactFontFaceResource`, `glyph.fontFace(input, config)`)
+- key = source identity + canonical format descriptor JSON — `font-face.ts:303–305`, `:763–772`
+  (`fontFaceSourceKey`: string, `URL`, or object identity), `:774–789` (`fontFaceFormatIdentity`)
+- the handle answers which exact raster the declaration denotes and whether it is loaded —
+  `three/handle.ts:157–168`, `font-face.ts:339–347` (`FontFaceHandleStore`)
+- the mounted lease: acquired on first subscribe, disposed on last unsubscribe — `react.ts:723–746`
+  (`createMountedFontStore`), `three/handle.ts:144–150` (`acquireThreeHandleFont`)
+- no second cache beside Glyph's resource graph — D-298, D-299
+*/}
+
+## preload
+
+```ts
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+
+void useMsdf.preload('/fonts/inter.font.glb'); // Promise<void>, at module scope
+```
+
+{/*
+write
+- Question: how do I avoid the first-render waterfall?
+- Say: call `preload` at module scope; it starts the load on the default handle and returns the actual Promise, so
+  a later render finds `isLoaded()` true and never suspends. Say "default handle" plainly: a provider with its own
+  handle is not warmed by this.
+- Shape: two sentences.
+
+notes · internals
+- starts the default handle's load and keeps the Promise by key; a rejection evicts it so the next call retries —
+  `react.ts:632–645`
+- default handle only: it awaits `defaultThreeHandle()`, which runs `glyph.init()` if needed — `react.ts:389–407`
+- the later render finds `isLoaded()` true and never calls `use()` — `react.ts:662`
+- the wrappers forward their format — `react/msdf.ts:18–19`, `react/bitmap.ts:18`, `react/slug.ts:17`
+- in use — `apps/r3f-hello-world/src/app.tsx:29–36`
+*/}
+
+## clear
+
+```ts
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+
+useMsdf.clear('/fonts/inter.font.glb');
+```
+
+{/*
+write
+- Question: how do I let a font go?
+- Say: `clear` drops the hook's declaration for that key on the default handle and disposes the face it declared; a
+  component that is still mounted keeps its own lease until it unmounts, so nothing on screen disappears.
+- Shape: two sentences.
+
+notes · internals
+- drops the preload entry and, on the default handle, the hook's declaration for that key, then disposes that
+  `FontFace` — `react.ts:646–656`
+- a mounted component's lease is independent and survives — `react.ts:723–746`; D-302 ("clear ... does not
+  invalidate an independently mounted Font")
+- disposing a face releases only its graph leases; nodes retire when nothing reaches them — D-298
+*/}
+
+## StrictMode and Suspense
+
+| Event | Effect |
+| --- | --- |
+| mount / unmount / remount | leases acquire and release; the face is not disposed |
+| Suspense retry | the same stable promise; no second fetch |
+| load rejection | the record is evicted so the next render can retry |
+| `clear()` while mounted | the mounted lease survives |
+
+{/*
+write
+- Question: will StrictMode's double mount or a Suspense retry fetch twice?
+- Say, one sentence per row: a mount takes a lease and an unmount releases it, and the face outlives both; a retry
+  reads the same Promise the first render suspended on, so nothing is fetched again; a rejected load is evicted so
+  the next render gets a fresh attempt rather than a cached failure; `clear()` under a mounted component changes
+  nothing that component can see.
+- Shape: four sentences.
+
+notes · internals
+- acquire on first subscriber, release on last — `react.ts:728–743`; `useSyncExternalStore` drives it — `:664`
+- one Promise per selection and format, cached until the face releases it — `font-face.ts:502–503`, `:525`;
+  rejection deletes it — `:520–523`; the aggregate load behaves the same — `:393`, `:404–407`
+- the face-owned lease is published before the Promise fulfils, so the retry render sees `isLoaded()` — D-300
+- [verify] StrictMode double-invocation: no file under `packages/glyph/src` mentions `StrictMode` at codex `98c86c8a6`;
+  `.agents/docs/packages/glyph.md:619` names a "React paragraph" proof, so find where it lives before promising coverage
+*/}
+
+## Custom formats
+
+```tsx
+import { glyph } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/react';
+
+const Acme = glyph.fontFace('/fonts/acme.font.glb', { format: 'acme' }); // a key the handle's config registers
+
+<Text font={Acme}>no hook needed</Text>;
+```
+
+{/*
+write
+- Question: my format has no hook; what do I do?
+- Say: nothing extra. Declare the face with `glyph.fontFace` — a string key names a format the handle's config
+  registered — and hand it to `<Text font>`; it takes the same road a hook does, `isLoaded()` then suspend. Link
+  Custom techniques for defining and registering the format.
+- Shape: two sentences.
+
+notes · internals
+- a face handed to `<Text font>` takes the same road as a hook: `isLoaded()` then `use(load())` —
+  `react.ts:464–466`, `:658–665`
+- a string format key resolves through the handle's registered format map; `ThreeConfig` registers `bitmap`,
+  `msdf`, `slug` — `font-face.ts:368–372` (`#resolveFormat`), `three/handle.ts:101–107` (`ThreeFontFormats`),
+  `:184–186`; D-297
+- a custom raster is defined with `defineRasterFormat` and registered by a config — `config/raster-format.ts:93–148`
+- [in flight] the wrappers delegate to `useFont(source, { format })` at HEAD (`react.ts:628`, `:137–154`); it is not
+  part of the documented surface
+*/}

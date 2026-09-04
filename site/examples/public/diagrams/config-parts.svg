@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 520" width="1160" height="520" role="img" aria-labelledby="t d">
+  <title id="t">The parts of a GlyphConfig</title>
+  <desc id="d">The engine sits in the middle. A config gives it a schema that names the renderer's objects, fonts it may bind, an encode function that returns the codec, a resolve function that leases resources, a renderer that decodes publications, a root recipe, and optional command capacities. Each part is called at a known moment.</desc>
+  <defs>
+    <style>
+      .bg { fill: #07080b; }
+      .core { fill: #141927; stroke: #ffd166; stroke-width: 1.5; rx: 12; }
+      .box { fill: #0e1118; stroke: #2a3247; stroke-width: 1.25; rx: 8; }
+      .box.js { stroke: #70d6ff; } .box.out { stroke: #a855f7; } .box.gpu { stroke: #34d399; } .box.dim { stroke: #2a3247; stroke-dasharray: 4 3; }
+      .label { font: 600 15px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .sub { font: 400 12.5px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; }
+      .when { font: 500 11.5px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; fill: #ffd166; }
+      .edge { fill: none; stroke: #4a5570; stroke-width: 1.25; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5570"/></marker>
+  </defs>
+  <rect class="bg" width="1160" height="520" rx="14"/>
+
+  <!-- the engine, and the handle a config makes of it -->
+  <rect class="core" x="440" y="190" width="280" height="120"/>
+  <text class="label" x="456" y="218">Engine · handle</text>
+  <text class="sub" x="456" y="240">shaper, layout, encoder in Wasm</text>
+  <text class="sub" x="456" y="258">one codec, N roots, one publication</text>
+  <text class="sub" x="456" y="276">per root per shape()</text>
+
+  <!-- what the config declares -->
+  <rect class="box js" x="30" y="40" width="360" height="96"/>
+  <text class="label" x="46" y="64">schema</text>
+  <text class="sub" x="46" y="84">names your objects: drawRoot, program, buffer,</text>
+  <text class="sub" x="46" y="100">material, transform, batch, instance, instanceSpan</text>
+  <text class="when" x="46" y="122">fixed at defineGlyphConfig()</text>
+
+  <rect class="box js" x="30" y="192" width="360" height="96"/>
+  <text class="label" x="46" y="216">fonts</text>
+  <text class="sub" x="46" y="236">the formats a handle may bind, and its default</text>
+  <text class="when" x="46" y="274">read at glyph.handle()</text>
+
+  <rect class="box js" x="30" y="344" width="360" height="96"/>
+  <text class="label" x="46" y="368">encode(ctx) → Codec</text>
+  <text class="sub" x="46" y="388">the descriptor naming your programs and buffers</text>
+  <text class="when" x="46" y="426">once per handle, compiled into Wasm</text>
+
+  <!-- what the engine calls back -->
+  <rect class="box out" x="770" y="40" width="360" height="96"/>
+  <text class="label" x="786" y="64">resolve(ctx) → lease</text>
+  <text class="sub" x="786" y="84">a portable payload becomes your GPU resource</text>
+  <text class="when" x="786" y="122">per new (resource, generation)</text>
+
+  <rect class="box out" x="770" y="192" width="360" height="96"/>
+  <text class="label" x="786" y="216">renderer(ctx)</text>
+  <text class="sub" x="786" y="236">returns { decode, sync, dispose }:</text>
+  <text class="sub" x="786" y="252">decode stages, commit applies, discard cleans up</text>
+  <text class="when" x="786" y="274">once per root; decode once per publication</text>
+
+  <rect class="box gpu" x="770" y="344" width="360" height="96"/>
+  <text class="label" x="786" y="368">root.create(ctx)</text>
+  <text class="sub" x="786" y="388">your root: ctx.create(extension, options), once</text>
+  <text class="when" x="786" y="426">anonymous root eagerly, named on handle(name)</text>
+
+  <rect class="box dim" x="440" y="380" width="280" height="72"/>
+  <text class="label" x="456" y="404">commands</text>
+  <text class="sub" x="456" y="424">optional capacities: limits, request</text>
+  <text class="sub" x="456" y="440">and result bytes, text units</text>
+
+  <!-- declared parts flow in; callbacks flow out; commands sit under the engine -->
+  <path class="edge" d="M 390 88 C 415 88, 415 214, 440 214"/>
+  <path class="edge" d="M 390 240 C 415 240, 415 250, 440 250"/>
+  <path class="edge" d="M 390 392 C 415 392, 415 286, 440 286"/>
+  <path class="edge" d="M 720 214 C 745 214, 745 88, 770 88"/>
+  <path class="edge" d="M 720 250 C 745 250, 745 240, 770 240"/>
+  <path class="edge" d="M 720 286 C 745 286, 745 392, 770 392"/>
+  <path class="edge" d="M 580 380 L 580 310"/>
+</svg>

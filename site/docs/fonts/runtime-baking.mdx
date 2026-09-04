@@ -1,0 +1,194 @@
+---
+title: Runtime baking
+description: Bake a source TTF in the browser through a Worker when you cannot bake ahead of time — and what it costs.
+nav: 14
+sourcecode: packages/glyph/src/runtime-bake.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
+{/*
+reader
+- Has fonts that cannot be baked at build time — user uploads, a font picker, a prototype — and has read Baking
+  fonts. Knows what a Worker is. Arrives asking "can the browser do the bake?", should leave knowing that it can,
+  what it costs, where the result is cached, and that a baked GLB never re-bakes.
+
+write · intro
+- Question: what runs in the browser, and when should it?
+- Say: the same baker that runs in the CLI runs in a module Worker; give a FontFace a source font and it produces
+  the identical GLB on the client and caches the result in `CacheStorage`. It is the fallback for fonts you cannot
+  pre-bake, never the production default.
+- Anchor: "the build step, moved to the client, paid once per font".
+- Shape: two sentences, then the table.
+
+write · keypoints
+- A `.ttf`/`.otf` URL or `File` given to `glyph.fontFace` is baked in a Worker the first time it is needed.
+- The sibling `.font.glb` is probed first; only a miss bakes.
+- The Worker caches only the final validated GLB, with a lifetime inherited from the source response.
+- Nothing reaches the Worker or the baker Wasm unless a source font is used.
+
+notes · internals for the page
+- a non-`.glb` URL resolves to a source plus a sibling `.font.glb` probe — `loader.ts#resolveFontRequest` (`:2693–2699`)
+- probe, then runtime bake through the default Worker baker — `loader.ts:601–643`, `#loadDefaultRuntimeBake` (`:1957–1969`)
+- `File`/`Blob` by name or MIME — `font-face.ts#fontFaceLoadInput` (`:747–761`)
+- the Worker host and entry — `runtime-bake.ts:17–59` (`bakeFontInWorker`), `runtime-bake-worker.ts:38–73`
+- cache — `internal/runtime-font-cache.ts`; lifetime — `loader.ts#persistentResponseExpiration` (`:2733–2752`)
+*/}
+
+| Approach | Best for | Tradeoff |
+| --- | --- | --- |
+| [Pre-baked GLB](./baking) | production, static fonts | one build step, no runtime cost |
+| Runtime bake | user-supplied fonts, fast iteration | the baker Wasm and a Worker load on demand; a bake per new font |
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+
+const Upload = glyph.fontFace('/fonts/Inter-Regular.ttf', { format: msdf });
+await Upload.load(); // probes /fonts/Inter-Regular.font.glb, then bakes MSDF in the Worker
+```
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+
+declare const file: File; // from <input type="file">
+const Custom = glyph.fontFace(file, { format: msdf });
+await Custom.load();
+```
+
+```ts no-check
+import { glyph } from '@pmndrs/glyph';
+import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+
+const Latin = glyph.fontFace(
+  { source: '/fonts/Inter-Regular.ttf', runtimeBake: bakeFontInWorker, unicodeRanges: [{ start: 0x20, end: 0x7e }] },
+  { format: msdf },
+);
+await Latin.load();
+```
+
+```tsx
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+
+const upload = useMsdf('/fonts/Inter-Regular.ttf');
+```
+
+{/*
+write
+- Question: what do I write differently from a baked font?
+- Paragraph 1: nothing but the source: a `.ttf` URL or a `File` in place of the GLB, and the format you want baked.
+  The declaration is the same call; the hook is the same hook. Declare the format explicitly — a source font has no
+  directory to advertise one, so an undeclared face has nothing to bake.
+- Paragraph 2: the third block is the explicit form: name the Worker baker and subset the bake to the code points
+  you draw, the way `--unicodes` does at build time. Hold that paragraph until the [in flight] item below settles.
+- Shape: two paragraphs after the blocks.
+
+notes · internals
+- string source → source URL + sibling probe — `loader.ts:2686–2699`; `File`/`Blob` → `{ source }` when the name ends
+  in `.otf`/`.ttf` or the MIME is `font/ttf`, `font/otf`, `application/x-font-*` — `font-face.ts:752–757`
+- a source font must declare its formats: aggregate load with nothing declared or advertised →
+  `FONT_FACE_FORMAT_REQUIRED` — `font-face.ts:457–462`
+- the default baker is imported lazily — `loader.ts:619`, `#loadDefaultRuntimeBake` (`:1957–1969`); a fetch failure
+  is `RUNTIME_BAKER_UNAVAILABLE`
+- `bakeFontInWorker` — `runtime-bake.ts:56–59`; the request carries `unicodeRanges`, normalized — `:35–37`;
+  `RuntimeFontBakeRequest` — `loader.ts:153–163`
+- the hook accepts the same sources — `react/msdf.ts:16–17`
+- [in flight] runtime baking has no public entry at codex `98c86c8a6`: the `{ source, runtimeBake }` form lived on
+  the loader that D-326 (codex `98c86c8a6`) made private, and `index.ts` exports nothing named `runtimeBake`; hold the page's
+  application sections until a FontFace-level form lands
+*/}
+
+
+{/*
+notes · internals
+- no scene here by design (canon rule, 2026-09-03): a bake is a wait, not something to see
+*/}
+
+## What the Worker does
+
+{/*
+write
+- Question: is the client's GLB the same file the CLI would write?
+- Paragraph 1: one request normalizes the Unicode ranges, prepares the source once, and feeds the exact prepared
+  bytes to the shaping bake and every requested raster bake; it composes one canonical GLB and transfers it back.
+  Validation is skipped: the Worker trusts its own output the way the runtime trusts a CLI bake.
+- Paragraph 2: only Bitmap, MSDF, and Slug bake inside the Worker; a custom format bakes host-side through the
+  baker its own declaration names. Progress arrives as stage and phase events if you want a progress bar.
+- Shape: two paragraphs.
+
+notes · internals
+- Worker entry: cache lookup, then `bakeFontPipeline` without `validateArtifact`, then cache put and transfer —
+  `runtime-bake-worker.ts:38–73`; prepare once, feed core and rasters — `internal/font-bake-pipeline.ts:35–57`, `:71–87`
+- Worker raster kinds — `internal/runtime-bake-protocol.ts#workerRasterKinds` (`:10–18`); host-side bake for other
+  formats — `loader.ts#runtimeBakeFormat` (`:1722–1745`)
+- one request at a time per Worker — `runtime-bake-worker.ts:30–36`; the host serializes too — `runtime-bake.ts:17–25`
+  (`SerialWorkerHost`), Worker URL `../dist/runtime-bake-worker.js` `:25`
+- progress phases — `bake.ts:6–22` (`queued loading baking rasterizing packaging transferring complete`),
+  `runtime-bake.ts:49–53`
+- the baker Wasm is fetched inside the Worker — `runtime-bake-worker.ts:23–29`
+- the GLB's `asset.generator` is written by the Rust bakers — `rust/font-baker/src/glb.rs:35` (the `asset`
+  object), `rust/mtsdf-baker/src/glb.rs:131` (`MSDF_GENERATOR`); composition (`internal/compose-bake.ts`) writes
+  none. The main GLB's `asset.generator` is the literal `"@pmndrs/glyph"` (`rust/font-baker/src/glb.rs:35`);
+  companion rasters carry their own labels, `MSDF_GENERATOR_LABEL` (`rust/mtsdf-baker/src/model.rs:14`, used at
+  `glb.rs:131`) and `BITMAP_GENERATOR_LABEL` (`rust/bitmap-baker/src/glb.rs:121`) — so "regardless of producer"
+  holds for the main artifact only
+*/}
+
+## Caching
+
+{/*
+write
+- Question: will the same font bake again next visit?
+- Paragraph 1: only the final validated GLB is cached, in `CacheStorage`, under a key of the source bytes, the face
+  index, the normalized ranges, and the ordered raster descriptors; the cache name carries the format and baker
+  versions, so an upgrade is a clean miss.
+- Paragraph 2: persistence follows the source response: `no-store`, `no-cache`, missing freshness, or an already
+  expired response stays memory-only; `max-age` (from the response `Date`) or `Expires` sets the derived
+  expiration. Quota eviction, private modes, and corruption are transparent misses followed by the same bake.
+  An uploaded `File` has no response, so it is memory-only.
+- Shape: two paragraphs; a table of the freshness rules if you prefer.
+
+notes · internals
+- cache name `pmndrs-glyph-font-bakes-<format>-<baker>` — `internal/runtime-font-cache.ts:7`; key = SHA-256 of
+  `{ face, rasters, sourceHash, unicodeRanges }` — `:40–49`
+- `put` only with a future `expiresAt` — `:83–85`; expired, short, or hash-mismatched entries are deleted on read
+  `:56–77`; storage failures never fail the bake `:79–81`, `:101–103`; requires an `http(s)` origin `:27–34`
+- freshness from the source response — `loader.ts#persistentResponseExpiration` (`:2733–2752`); attached to the
+  request as `cache.expiresAt` — `:629–635`; byte sources have no expiry `:624–627`
+- the Worker skips the cache when the expiry is absent or past — `runtime-bake-worker.ts:41–42`; D-298
+*/}
+
+## Bundle boundary
+
+{/*
+write
+- Question: what does a project that never runtime-bakes pay?
+- Two sentences: nothing; the root entry has no static edge to the baker, `@pmndrs/glyph/runtime-bake` is the
+  explicit import that loads it, and the loader reaches it through a dynamic import only when a source font is used.
+  The Worker fetches the baker Wasm itself, so the main bundle never carries it.
+
+notes · internals
+- dynamic import of `./runtime-bake.js` — `loader.ts:1957–1969`; the explicit entry — `package.json` `./runtime-bake`
+  (`:288–294`); the Worker fetches `fontBakerWasmUrl` — `runtime-bake-worker.ts:23–29`
+- "no static edge from the root", still true at codex `1dc580a87`: `index.ts`, `glyph.ts`, and `font-face.ts` import
+  nothing from `runtime-bake.ts` (grep). [verify] the package's size report before quoting a number
+*/}
+
+## A baked GLB never re-bakes
+
+{/*
+write
+- Question: if my GLB lacks Slug, will the runtime bake it for me?
+- Two sentences: no; a member whose exact descriptor the GLB does not advertise rejects with
+  `FONT_FACE_FORMAT_UNAVAILABLE`, and runtime baking runs only for a source font that authenticates as TTF/OTF.
+  Link Raster formats → Options are identity.
+
+notes · internals
+- rejection without baking — `font-face.ts:549–560`; D-310; D-298 ("a GLB with a missing requested format throws
+  and never invokes a baker"; baking is entered only after the bytes authenticate as SFNT)
+- a `.glb` URL has no source, so a miss is `BAKED_FONT_MISSING`, not a bake — `loader.ts:604–611`
+*/}

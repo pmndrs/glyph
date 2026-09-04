@@ -1,0 +1,367 @@
+---
+title: Performance
+description: Where a frame's time goes, what decides a draw boundary, and the five controls that move the numbers — with measurements.
+nav: 50
+sourcecode: packages/glyph/src/glyph-engine.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
+{/*
+reader
+- Has text on screen and a frame budget, and a profiler open. Knows what a draw call and an instanced mesh are; may
+  not know that text here is retained and that most frames never enter Wasm. Arrives asking "why is this frame
+  slow, and which knob is mine?"; should leave able to name which of the two paths a frame took, and which of the
+  five controls (roots, compositing, capacity, raster density, snapping) moves the number they are looking at.
+
+write · intro
+- Question it answers: what does a frame of text cost, and what decides it?
+- Say: text is retained; a frame with no semantic change costs a matrix sync and no Wasm; a frame with changes
+  costs one engine batch for every dirty root, however many handles there are. Draw count is decided by the plan,
+  and you have two levers on it (roots, compositing) and three on fill cost (capacity, raster density, pixel
+  snapping).
+- Anchor: "two doors into a frame: the cheap one for moving, the expensive one for changing".
+- Shape: three sentences, no list.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- A moved text never enters Wasm; a changed one enters once, batched with every other dirty root.
+- A draw boundary is a change of program, resource, material, clip, or paint layer; adjacency is what folds.
+- `fixed` capacity is a promise to the GPU, not a limit on the text: over budget keeps the last draw.
+- Raster density is a Text property (`rasterPixelRatio`), the canvas DPR is the host's; do not conflate them.
+
+notes · internals for the page
+- shape path: `glyph-engine.ts#GlyphEngineImpl._shape` (`:387–433`) — no-op with no dirty roots (`:390`), one
+  `textUpdateBatch` for every staged root (`#updateShapeBatch`, `:461–528`, the call at `:490`); D-312
+- transform path: `three/text.ts#ThreeRoot.#commitTraversal` (`:478–493`) → `#syncTransforms` (`:467–476`) →
+  `three/transform-synchronizer.ts#ThreeTransformSynchronizer.sync` (`:20–88`); no engine crossing
+- draw boundaries: `rust/shaper/src/engine/stable_plan.rs#compile_ordered_draws` (`:1386–1479`), `#same_draw_span`
+  (`:1585–1605`); independent sort key `plan_draw.rs#independent_draw_sort_key` (`:16–21`)
+- capacity: `text-properties.ts#GlyphBufferCapacity` (`:7–16`); `three/text.ts#ThreeRootPublication.prepareShape`
+  (`:1260–1270`); D-282
+- raster density: `internal/bitmap-strike.ts:11` (`targetPpem = cssFontSize × rasterPixelRatio`); `three/text.ts:699–703`
+*/}
+
+## Where time goes
+
+![Two paths through a frame: a semantic change goes through one Wasm batch and a decode-and-commit; a transform-only change syncs matrices without entering Wasm.](/examples/diagrams/frame-paths.svg)
+
+| Path | Enters Wasm | What it costs |
+| --- | --- | --- |
+| `text`, `style`, `layout`, `constraints`, `font`, or `material` changed | once per `glyph.shape()`, every dirty root in one batch | shape, layout, plan, decode, commit |
+| position, rotation, scale, visibility, reparenting changed | no | one 16-float row per changed transform, uploaded as a range |
+| `measure()` on unchanged text | no | a cache read |
+| nothing changed | no | `shape()` returns at its first check |
+
+| Measured, 25,515 positioned glyphs, one paragraph | Median | p95 |
+| --- | ---: | ---: |
+| cold (first shape) | 17.84 ms | 18.99 ms |
+| font size changed | 6.32 ms | 6.64 ms |
+| column width changed | 3.04 ms | 4.60 ms |
+| text replaced | 13.84 ms | 14.01 ms |
+
+{/*
+write
+- Question: which door did my frame go through?
+- Paragraph 1: the cheap door. Every frame, three's own `updateMatrixWorld` reaches the root's draw object, which
+  runs `glyph.shape()` (a no-op when nothing is dirty) and then a transform sync: for each text whose world matrix
+  changed, one 16-float row is written into the transform storage attribute and marked as an update range. No Wasm,
+  no allocation; camera motion costs nothing at all because only the texts' matrices are read.
+- Paragraph 2: the expensive door. A semantic change marks its root dirty; the next `shape()` stages every dirty root
+  across every live handle, writes one batch descriptor per root, and crosses into Wasm once. What comes back is
+  decoded by three into buffer patches and, when the display list changed, new meshes; unchanged roots are not in
+  the batch at all.
+- Paragraph 3: read the numbers table as "what the engine plus three's plan application cost, GPU submission
+  excluded"; say where they were measured (the public 25,515-glyph lane, eight warm-ups, 31 samples, one paragraph),
+  and that a real app has many small paragraphs whose per-root cost is a fraction of this.
+- Point at the figure: left path is the second paragraph, right path is the first.
+- Avoid: describing the plan tables here; that is How it works and Render plan.
+- Shape: three paragraphs.
+
+notes · internals
+- traversal-driven shape: `three/text.ts#ThreeRootDrawObject.updateMatrixWorld` (`:139–142`) → `#commitTraversal`
+  (`:478–493`) — `glyph.shape()` inside a try/catch, then `#syncTransforms`
+- transform sync writes `transformId * 16` floats and `addUpdateRange(offset, 16)`; an invisible text gets a zero
+  matrix — `three/transform-synchronizer.ts:43–56`; direct-mode draws copy the matrix onto the mesh (`:60–75`)
+- `_shape` returns before touching Wasm when `#dirtyShapeRegistrations.size === 0` — `glyph-engine.ts:390`
+- one Wasm call for every staged root — `glyph-engine.ts:490` (`exports.textUpdateBatch(pointer, count)`); the Rust
+  export is `rust/shaper/src/wasm.rs:629` (`pmndrs_glyph_engine_update_batch`); D-312
+- the numbers: `.agents/docs/packages/glyph.md:689–693` (outside-only mode wrapping one `updateMatrixWorld()`, 25,515 glyphs,
+  eight warm-ups / 31 samples, "exclude GPU submission"); the per-technique lane table at `:748–752`
+- semantic sidecar cost on the same corpus: 0.002 ms unchanged publication, 0.174 ms measurement, 0.582 ms full
+  inspection — `.agents/docs/packages/glyph.md:470–473`
+- [verify] re-run the benchmark lane and re-date the table before publishing; the figures are from the codex tree's
+  package concept, not from this site's own run
+*/}
+
+## Draw boundaries
+
+| Boundary | Why it splits |
+| --- | --- |
+| program (raster format) | a different pipeline and shader |
+| resource (font atlas or page) | a different bound texture |
+| material | a different node graph, when the program keys on material |
+| transform | only in `transformMode: 'direct'`, where each draw carries its own matrix |
+| clip | a different scissor |
+| paint layer under `ordered` | a run cannot cross an incompatible run without changing what draws over what |
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+const hud = glyph.handle('hud', defineThreeConfig({ compositing: 'independent' })); // every root of this handle
+// The policy is immutable for the handle's life; another policy is another handle.
+```
+
+<glyph-proxy fit="cover" root="scenes" data-scene="batching" aria-label="Interleaved versus contiguous materials in one TextGroup" aspect="16 / 9" />
+
+{/*
+write
+- Question: why do sixty labels cost sixty draws, and what folds them?
+- Paragraph 1: the plan walks glyphs in logical order and extends a draw while the next glyph shares the current
+  draw's program, storage batch, resource, and (when the program asks for it) material and transform; a draw also
+  ends at 65,535 records. So a draw boundary is a change of neighbour, not a count of texts: thirty labels
+  alternating two materials plan thirty draws; the same thirty sorted into two runs plan two.
+- Paragraph 2: `compositing`. `ordered` keeps authored draw order, so two incompatible runs cannot be merged across a
+  third. `independent` says blending order does not matter for this root: draws are sorted by paint layer then
+  encounter order, which lets compatible runs meet. Say plainly what it does not do: it does not resort interleaved
+  materials inside one root's run — measured in the batching example, the interleaved column stays at thirty under
+  both modes.
+- Paragraph 3: the practical rule. Sort what you can sort: put texts that share a material next to each other, keep
+  one material per group, and let standalone texts be standalone only when they need their own order.
+- Point at the proxy: left column interleaved, right column sorted, draw counts under each.
+- Shape: three paragraphs.
+
+notes · internals
+- draw extension rule: same pending batch (program + storage), contiguous order records, ≤ `u16::MAX` records, and
+  material/transform only when the program's `draw_key_mask` carries `BATCH_MATERIAL` / `BATCH_TRANSFORM` —
+  `rust/shaper/src/engine/stable_plan.rs:1408–1424`, `#same_draw_span` (`:1585–1605`); the mask bits at
+  `codec.rs:34` and `:38`; resource by id + generation `:1434–1442`
+- `ordered` vs `independent` selects `compile_ordered_draws` / `compile_independent_draws` — `stable_plan.rs:1379–1383`,
+  `ordered_plan.rs:1039–1043`; independent sort key = `depth_key << 32 | order_token` — `plan_draw.rs:16–21`
+- the option crosses as `compositing_independent` — `internal/render-planner.ts:1363–1369`, `rust/.../frame.rs:113`
+- compositing is immutable per handle: `defineThreeConfig({ compositing })` — `three/handle.ts#ThreeConfigOptions`
+  (extends `ThreeRootOptions`, `three/text.ts:78–82`), normalized at `three/handle.ts:182–185` and handed to every
+  root (`:237`); the root setter was removed in codex `b4012b703` — D-325
+- three's realization key adds clip, depth key, transform generation, and geometry —
+  `three/internal/draw-realizer.ts:141–151`; one `THREE.Mesh` per instance span (`:179`)
+- measured in this site's batching example: standalone texts one draw each; thirty interleaved labels in one group →
+  30 draws under both modes; sorted into two runs → 2 — `.agents/docs/planning/docs-site-outline.md` (Findings for core,
+  "compositing: 'independent' does not fold interleaved materials"); the scene is
+  `site/examples/src/scenes/batching/scene.tsx:14–22`
+- [verify] the landing's "505 draws ordered → 121 independent, 6 → 60 FPS" claim from the earlier draft: no source in
+  either repo; re-measure on the landing before writing a number
+*/}
+
+## Roots
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+
+const app = glyph.handle('app', ThreeConfig); // the anonymous root: text that changes together
+const ticker = app('ticker'); // a named sibling: text that changes every frame
+ticker.createText({ font: Inter, text: '00:00' });
+
+app.gpuBytes; // retained buffers, transform table, and atlas bytes for this root
+ticker.gpuBytes;
+text.gpuBytes; // the root's figure, seen from a member
+```
+
+{/*
+write
+- Question: when is a second root worth having?
+- Paragraph 1: a root is one publication stream: one planner, one command buffer, one acceptance. Everything on it
+  republishes together, so a ticker that changes every frame on the same root as a page of static copy makes the
+  static copy part of every batch entry's reconcile. Put text that changes at different rates, or that lives in
+  different scenes, on different roots; `handle(name)` gives a sibling that shares fonts and the engine and nothing
+  else.
+- Paragraph 2: `gpuBytes` is the honest number: buffers, the transform table, and the atlas or page bytes this root
+  retains. A text reports its root's figure, not its own share.
+- Avoid: calling a root a "batch"; that word belongs to the plan.
+- Shape: two paragraphs.
+
+notes · internals
+- `handle(name)` returns one idempotent terminal sibling root — `config/glyph.ts#GlyphHandle` (`:581–589`),
+  `#GlyphNamedRoot` (`:575–578`); D-307
+- unchanged roots do not enter the batch — `glyph-engine.ts#stageShapeParticipants` (`:435–459`, a root that
+  declines returns `undefined` and is `SKIPPED`); a root's `prepare` — `three/text.ts#ThreeRoot.prepareShape` (`:436–449`)
+- `gpuBytes` sums retained buffers, the transform attribute, bitmap textures, MSDF atlases, and Slug pages —
+  `three/engine-plan-target.ts#ThreeTextRenderPlanExecutor.gpuBytes` (`:126–140`); root getter `three/text.ts:214–216`;
+  text getter `:661–663`
+- fonts are shared by every handle through one library — `glyph.ts:107–116`
+*/}
+
+## Capacity
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+const labels = glyph.handle('labels', defineThreeConfig({ capacity: { size: 512, policy: 'fixed' } }));
+// Capacity is fixed for the handle's life. A different budget is another handle:
+const wide = glyph.handle('labels-wide', defineThreeConfig({ capacity: { size: 1024, policy: 'chunk' } }));
+```
+
+| Policy | Allocation | Over budget |
+| --- | --- | --- |
+| `grow` | resize to what the content needs | never |
+| `chunk` (default, `size: 4096`) | resize in multiples of `size` | never |
+| `fixed` | never past `size` | the root declines the batch and keeps its last accepted draw; `commitState()` stays `pending` |
+
+{/*
+write
+- Question: what does capacity buy, and what does `fixed` cost me?
+- Paragraph 1: capacity is glyph-instance slots per physical buffer, sized before shaping from UTF-16 length, which
+  is a safe upper bound on glyphs. `grow` and `chunk` differ only in how often the buffers are reallocated; `chunk`
+  amortises.
+- Paragraph 2: `fixed` is a promise to the GPU, not a limit on the text. When desired text exceeds it the root does
+  not publish, the last draw stays, `measure()` still answers, and the decision is retried on every traversal — so
+  shortening the text or raising the cap recovers without any other change.
+- Shape: two paragraphs; the table carries the policies.
+
+notes · internals
+- policies and the UTF-16 bound — `text-properties.ts#GlyphBufferCapacity` (`:7–16`), `#normalizeGlyphBufferCapacity` (`:19–31`)
+- root default `{ size: 4_096, policy: 'chunk' }` — `three/text.ts:191–194`
+- `fixed`: `required = Σ text.length`; over budget returns `false` from `prepareShape` and records `capacityExceeded` —
+  `three/text.ts:1260–1270`; capacity is config, not root state — `three/handle.ts:180–181`, `:236`; D-325
+- `commitState()` → `'pending'` while uncommitted — `three/text.ts:756–764`; D-282 (fixed keeps the last accepted
+  draw and retries every traversal), D-131 (size + policy are the only public capacity dimensions)
+*/}
+
+## Raster density and DPR
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import { Canvas } from '@react-three/fiber/webgpu';
+
+export function Hud() {
+  return (
+    <Canvas dpr={[1, 1.5]}>
+      <Text font={inter} rasterPixelRatio={2}>
+        raster at 2×, whatever the canvas does
+      </Text>
+    </Canvas>
+  );
+}
+```
+
+```ts
+text.rasterPixelRatio = 2; // a Text property; layout does not change
+```
+
+{/*
+write
+- Question: which pixel ratio is mine?
+- Paragraph 1: the canvas DPR is the host's: it sizes every render target, and with a post chain it multiplies float
+  targets. The landing clamps to `[1, 1.5]` because its post chain at native DPR was measured at 732 MB of texture.
+- Paragraph 2: `rasterPixelRatio` is a Text property and only chooses raster density: for Bitmap it selects the
+  strike (`fontSize × rasterPixelRatio` in ppem, nearest wins); for MSDF and Slug it scales nothing on the GPU. It
+  does not touch layout. Use it when text is seen larger than authored (magnified, close to the camera), and
+  cross-link the steep-angle scene on Text in 3D, which is the same trade seen from the format side.
+- Shape: two paragraphs.
+
+notes · internals
+- `rasterPixelRatio` positive and finite, default 1 — `internal/render-planner.ts:1585–1588`, `:1627`; Text
+  getter/setter `three/text.ts:699–703`; React prop `react.ts:91`
+- strike choice `targetPpem = cssFontSize × rasterPixelRatio` — `internal/bitmap-strike.ts:11`
+- the landing's clamp and the 732 MB measurement — this repo, `site/landing/src/main.tsx:46–52`
+- [verify] "clamping to 1.5 cut it to 243 MB": the number is in no source; re-measure before stating
+- `rasterPixelRatio` reaches every format the same way: the gather passes it into `binding.select(glyph_id,
+  font_size, raster_pixel_ratio)` — `rust/shaper/src/engine/codec_gather.rs:341`, `:498` — and the binding
+  multiplies it into the target size it picks a strike by — `font_binding.rs:216–226`; a binding with one
+  resource (MSDF, Slug) has nothing to pick, so "scales nothing" holds for them
+*/}
+
+## Pixel snapping
+
+```ts
+three.createText({ font: Inter.bitmap, text: 'HP 100', style: { fontSize: 16 }, pixelSnapping: true });
+three.createTextGroup({ pixelSnapping: true }); // inherited by members that do not state their own
+```
+
+{/*
+write
+- Question: when should a text snap?
+- Two sentences: `pixelSnapping` rounds a Bitmap quad to whole device pixels, so a HUD at rest is texel-exact and a
+  moving one shimmers; MSDF and Slug reconstruct their edge from screen-space derivatives and never snap, so the
+  flag is accepted and ignored for them. It is part of the material key, so snapped and unsnapped texts of one font
+  are two draws.
+- Shape: one short paragraph.
+
+notes · internals
+- Text and TextGroup carry the flag — `three/text.ts:612`, `:641`, `:971`; it enters the material realization key —
+  `three/internal/material-realizer.ts:154`, `:170`
+- Bitmap's vertex path rounds the physical position — `tsl/bitmap-shader.ts:78`, `:104`; Slug publishes no
+  `clipPosition` and "must keep the default projection" — `tsl/slug-shader.ts:83–84`
+- MSDF ignores the flag at the shader level: its output publishes no `clipPosition` — `tsl/msdf-shader.ts:45–46`
+  (the comment); Bitmap's `clipPosition` is chosen by `pixelSnapping` — `tsl/bitmap-shader.ts:78`,
+  `#pixelSnappedClipPosition` (`:91`)
+*/}
+
+## Format cost at scale
+
+<glyph-proxy fit="cover" root="scenes" data-scene="zoom" aria-label="Continuous zoom across formats" aspect="16 / 9" />
+
+| Lane, 22,000-glyph corpus, medians | Bitmap | MSDF | Slug |
+| --- | ---: | ---: | ---: |
+| cold | 15.90 ms | 16.50 ms | 16.73 ms |
+| font size | 6.04 ms | 6.41 ms | 6.64 ms |
+| column width | 2.78 ms | 2.73 ms | 2.96 ms |
+| suffix edit | 13.48 ms | 13.52 ms | 14.37 ms |
+| local edit | 1.18 ms | 1.18 ms | 1.31 ms |
+| middle splice | 8.52 ms | 8.73 ms | 8.94 ms |
+
+{/*
+write
+- Question: does the format change the CPU cost, or only the GPU cost?
+- Paragraph 1: on the CPU the three are within a millisecond of each other on every lane; the plan is the same shape
+  and the format only changes which records are packed. On the GPU they differ per fragment: Bitmap one fetch, MSDF
+  two fetches and a median, Slug a band walk and a quadratic solve per curve. So "which format" is a fill-rate
+  question, and the zoom proxy is the picture of it.
+- Paragraph 2: the harness. Say what the benchmark app records (CPU duration per sample, median and p95, output
+  bytes and a hash, GPU timestamps where the target declares the capability) and that the DPR is a benchmark
+  control, not a page default.
+- Shape: two paragraphs; the table is the evidence.
+
+notes · internals
+- the lane table — `.agents/docs/packages/glyph.md:744–752` (final sequential eight-warm-up / 31-sample checkpoint; 22,000
+  targets → 25,515 positioned, 21,805 renderable glyphs; GPU submission excluded)
+- per-fragment cost by format — see Raster formats (`tsl/bitmap-shader.ts`, `tsl/msdf-shader.ts`, `tsl/slug-shaders/slug-band.ts`)
+- harness contract: capabilities include `'gpu-timestamps'` — `apps/benchmarks/src/benchmark/contracts.ts:1–9`;
+  controls `dpr`, `samples`, `warmup` — `:21–25`; summary `medianMs`, `p95Ms`, `outputBytes`, per-sample `hash` — `:37–60`
+- environment reports `webgpu: 'gpu' in navigator` — `apps/benchmarks/src/benchmark/environment.ts:9`
+- stable allocation's no-op costs 1.083 ms against ordered-direct's 0.001 ms, which is why `ordered` is the default —
+  `.agents/docs/packages/glyph.md:812–814`; `allocationMode: 'ordered' | 'stable'` — `config/codec.ts:549`
+*/}
+
+## Measuring
+
+```ts
+const box = text.measure(); // desired state; a cache hit until the next semantic change
+const columns = text.glyphs(); // copies the positioned columns — call it when you need positions, not per frame
+```
+
+{/*
+write
+- Question: what does a measurement cost, and when?
+- Paragraph 1: `measure()` answers from a cache the root refreshes on every accepted publication; the first query
+  after a change runs a paragraph-scoped speculative preparation in Wasm without publishing, and the next `shape()`
+  adopts that work instead of shaping twice. `glyphs()` requests the positioned lane and copies every column, so it is
+  a per-event call, not a per-frame one.
+- Paragraph 2: one number for scale: the measure-query lane at 22,000 glyphs answers a width change in 1.815 ms
+  median with zero publication bytes, beside 2.996 ms for the full update.
+- Shape: two paragraphs.
+
+notes · internals
+- `Text.measure()` → `ThreeRootPublication.measurement` (reconcile, then `entry.handle.measure()`) — `three/text.ts:736–742`,
+  `:1193–1201`; `glyphs()` copies — `:748–754`
+- the root requests `semanticViews: 'measurement'` on every publication it stages — `three/text.ts:1269`; the cache is
+  refreshed in `acceptShape` (`:1272–1281`)
+- speculative transaction adopted by the next frame — `.agents/docs/packages/glyph.md:476–492`; D-253; the Rust query export
+  `rust/shaper/src/wasm.rs:956` (`pmndrs_glyph_engine_measure_paragraph`) writes the inactive slot without a flip —
+  `engine/transport.rs:347–367`
+- measure-query 1.815 ms median / 1.930 ms p95 vs full update 2.996 / 4.483 ms — `.agents/docs/packages/glyph.md:781–787`
+- `Text.measure()` returns the retained result without a Wasm crossing when nothing changed since the last call
+*/}

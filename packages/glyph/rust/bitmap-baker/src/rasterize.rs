@@ -141,6 +141,12 @@ pub(crate) fn rasterize_strike(
     let outlines = font.outline_glyphs();
     crate::progress::report(progress_offset, progress_total);
     let mut selected_index = 0_u32;
+    // A glyph can be absent for two very different reasons: it was not asked
+    // for, or it was asked for and produced nothing. Counting them apart is
+    // what lets a raster that rasterised nothing at all be told from one that
+    // was simply never requested.
+    let mut requested = 0_u32;
+    let mut rasterized = 0_u32;
     for raw_glyph_id in 0..glyph_count {
         if coverage.is_some_and(|selection| !selection.contains(raw_glyph_id)) {
             records.mark_absent(raw_glyph_id)?;
@@ -151,6 +157,7 @@ pub(crate) fn rasterize_strike(
             progress_total,
         );
         selected_index = selected_index.saturating_add(1);
+        requested = requested.saturating_add(1);
         let glyph_id = GlyphId::new(u32::from(raw_glyph_id));
         let Some(outline) = outlines.get(glyph_id) else {
             records.mark_absent(raw_glyph_id)?;
@@ -205,6 +212,25 @@ pub(crate) fn rasterize_strike(
             atlas,
             u16::try_from(page_index).map_err(|_| overflow())?,
         )?;
+        rasterized = rasterized.saturating_add(1);
+    }
+
+    // Every requested glyph came back blank. A font of nothing but spaces is not
+    // a thing anyone bakes, so this is the outline data failing to draw — CFF
+    // sources reach here — and the caller must hear about it. Left silent the
+    // bake writes a well-formed artifact with no coverage, text lays out at full
+    // width and draws holes, and nothing downstream can tell: shaping resolved
+    // the glyphs, so the layout's own missing-glyph count is honestly zero.
+    if requested > 0 && rasterized == 0 {
+        return Err(BitmapBakeError::new(
+            BitmapBakeErrorCode::InvalidGlyphOutline,
+            format!(
+                "no requested glyph produced an outline at {ppem} ppem; \
+                 {requested} glyph(s) were selected and every one rasterised empty, \
+                 which usually means this face's outline format is not supported"
+            ),
+        )
+        .at("/glyphs"));
     }
 
     let mut finished_pages = Vec::with_capacity(pages.len());

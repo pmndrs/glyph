@@ -1,0 +1,248 @@
+---
+title: TypeScript
+description: How the format generic flows from a face into Text and a material, what PropertyList accepts, and which values are branded.
+nav: 58
+sourcecode: packages/glyph/src/font-face.ts
+---
+
+{/*
+reader
+- Writes TypeScript with `strict` on and wants the types to carry the format so a Bitmap face cannot be handed an
+  outline and a material factory cannot forget a format. Knows generics and discriminated unions; may not know
+  `const` type parameters. Arrives asking "what do I annotate?"; should leave knowing that they annotate almost
+  nothing — declare the formats once and let inference carry them — and where a brand or an augmentation is needed.
+
+write · intro
+- Question it answers: where does the format live in the types?
+- Say: the format is a type. A face declared with `format: [msdf, slug, bitmap({ … })]` has members typed by that
+  tuple; `createText({ font: Inter.slug })` infers `Text<typeof slug>`; a hook returns `Font<typeof msdf>`; a material
+  context narrows on `kind` then `format`. Nothing in ordinary code is cast to `RasterFormatMetadata`.
+- Anchor: "declare once, infer everywhere".
+- Shape: three sentences.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- A face's members are exactly the formats it declared; `Inter.bitmap` on an MSDF-only face is a compile error.
+- `createText` and `<Text font>` infer the technique from the selection; `ref` is `Text<typeof slug>` for free.
+- Property lists nest and skip falsy entries; `TextStyle.create` returns typed, frozen, named rules.
+- Brands (`GlyphKey`, `RasterKey`, `Sha256Hex`) are never constructed by hand.
+
+notes · internals for the page
+- `glyph.fontFace<const Declaration>` → `FontFace<FontFaceDeclaredFormat<Declaration>>` — `glyph.ts:24–27`,
+  `font-face.ts:38–40`; the mapped members — `font-face.ts#FontFace` (`:94–97`); D-310
+- `createText` overload on `const Selection` — `three/text.ts:256–263`; React `TextComponent` — `react.ts:431–440`
+- material map — `three/material.ts#ThreeTextMaterialContextMap` (`:56–63`); D-306, D-308
+- brands — `identity.ts:1–11`, `glyph-placement.ts:33`
+*/}
+
+```ts
+import { glyph, type Font, type FontFace } from '@pmndrs/glyph';
+import type { Text } from '@pmndrs/glyph/three';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { slug } from '@pmndrs/glyph/raster/slug';
+
+const Inter = glyph.fontFace('/fonts/Inter.glb', { format: [msdf, slug, bitmap({ strikes: [16, 32] })] });
+const declared: FontFace<typeof msdf | typeof slug | ReturnType<typeof bitmap>> = Inter; // the tuple became a union
+const title: Text<typeof slug> = three.createText({ font: Inter.slug, text: 'Hero' }); // inferred from the member
+const body: Font<typeof msdf> = inter; // what useMsdf(url) hands you
+```
+
+## Inference
+
+| Site | Infers from |
+| --- | --- |
+| `glyph.fontFace(url, { format })` | the `format` value or tuple; members are keyed by each format's `kind` |
+| `Inter.slug`, `Inter.bitmap` | the declared member; an undeclared key is a compile error |
+| `three.createText({ font })` | a face, a member, or a loaded `Font`; a family string erases to `RasterFormatMetadata` |
+| `<Text font={…}>` | the same selection; `ref` is `Ref<Text<Technique>>` |
+| `useMsdf` / `useSlug` / `useBitmap` | fixed: `Font<typeof msdf>`, `Font<typeof slug>`, `Font<typeof bitmap>` |
+| `defineTextMaterial((context) => …)` | `context.kind`, then `context.format` |
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import { useSlug } from '@pmndrs/glyph/react/slug';
+import type { Text as ThreeText } from '@pmndrs/glyph/three';
+import type { slug } from '@pmndrs/glyph/raster/slug';
+import { useRef } from 'react';
+
+export function Title() {
+  const title = useSlug(url);
+  const ref = useRef<ThreeText<typeof slug>>(null);
+  return (
+    <Text ref={ref} font={title}>
+      Hero
+    </Text>
+  );
+}
+```
+
+{/*
+write
+- Question: what do I have to write down?
+- Paragraph 1: the declaration. `glyph.fontFace` takes a `const` type parameter, so the format tuple keeps its
+  members and each becomes a property named by the format's `kind`; the face itself is its default selection. A
+  request like `bitmap({ strikes })` carries the same format type as bare `bitmap`, so options never widen the type.
+- Paragraph 2: the consumers. `createText` has an overload on the selection that maps a face member to its raster,
+  so `Text<typeof slug>` falls out; the React component has the same pair of signatures; the typed hooks return a
+  fixed `Font<…>`. A family string is the one escape hatch and erases to `RasterFormatMetadata`.
+- Avoid: explaining `FontStack`; it is the immutable-Font path.
+- Shape: two paragraphs; the table is the index.
+
+notes · internals
+- `FontFaceDeclaredFormat` (tuple → union) — `font-face.ts:38–40`; `FormatKey` maps a format or request to its `kind`
+  (`:57–63`); `FontFaceRasterOf` (`:53–55`); the face is its own default (`:84`)
+- `RasterFormatRequest<Format>` from the callable format — `config/raster-format.ts:128–133`
+- `createText` overloads — `three/text.ts:256–263`; the string branch — `:578–588`
+- React `TextComponent` — `react.ts:431–440`; `ref?: Ref<ThreeText<Technique>>` — `:95`; `useMsdf(): Font<typeof msdf>` —
+  `react/msdf.ts:8–18`
+- [in flight] `FontStack` / `FontSelection` unions (`loaded-font.ts:8–21`) are the immutable-Font path; do not document
+  "a stack unions the technique" until the other agent lands the FontFace replacement
+*/}
+
+## Narrowing a material
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const soft = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  if (context.kind === 'glyph' && context.format === 'pmndrs.msdf') {
+    material.opacityNode = context.shader.fillCoverage; // TslMsdfShaderOutput here, nothing else
+  }
+  return material;
+});
+```
+
+{/*
+write
+- Question: how does a material know which format it is drawing?
+- Two paragraphs: `context` is a closed discriminated union — `kind: 'decoration'` with no format, or
+  `kind: 'glyph'` with `format` one of the three built-ins — and `shader` narrows with it, so the MSDF branch sees
+  `fillCoverage` and the Slug branch sees `renderCoordinate`. A custom raster augments the map at its own format
+  literal, which keeps the switch exhaustive without a catch-all string.
+- Shape: two short paragraphs.
+
+notes · internals
+- the union — `three/material.ts:19–63`; `defineTextMaterial` — `:70–73`; D-306 (closed union on `kind`), D-308 (augmentable map)
+- augmentation in the wild — `packages/glyph-example-raster/tests/glyph-example.test.ts:42–48` (`declare module
+  '@pmndrs/glyph/three' { interface ThreeTextMaterialContextMap { … } }`)
+- shader outputs — `tsl/msdf-shader.ts#TslMsdfShaderOutput` (`:49–60`), `tsl/slug-shader.ts#TslSlugShaderOutput` (`:85–95`)
+*/}
+
+## PropertyList
+
+```ts
+type PropertyList<Value> = Value | false | null | undefined | readonly PropertyList<Value>[];
+```
+
+```ts
+import { Constraints, ParagraphLayout, TextStyle } from '@pmndrs/glyph';
+
+const styles = TextStyle.create({ base: { fontSize: 16 }, accent: [{ color: '#ffd166' }, false, null] });
+const layouts = ParagraphLayout.create({ prose: { wrap: 'word', align: 'start' } });
+const boxes = Constraints.create({ card: { width: { mode: 'at-most', size: 320 } } });
+
+text.style = [styles.base, styles.accent, { opacity: 0.8 }]; // left to right; falsy entries are skipped
+text.layout = layouts.prose;
+text.constraints = boxes.card;
+```
+
+{/*
+write
+- Question: what shapes does `style` accept?
+- Two sentences: a value, or a nested list of values merged left to right with `false`, `null`, and `undefined`
+  skipped, so a conditional rule is `condition && rule`; `TextStyle.create`, `ParagraphLayout.create`, and
+  `Constraints.create` take a record of named rules — each itself a list — and return them validated and frozen under
+  the same names, and an unknown authored field is a type error because the rule type is the property type.
+- Shape: one paragraph.
+
+notes · internals
+- the type — `text-properties.ts:33`; merge — `property-list.ts#mergePropertyList` (called at `text-properties.ts:172`,
+  `three/text.ts:1435–1437`)
+- registries — `text-properties.ts:140–157`, `#createPropertyRegistry` (`:159–180`); D-291
+- setters take a list — `three/text.ts:683–697`
+*/}
+
+## Text input
+
+```ts
+import type { RasterFormatMetadata, FormattedText } from '@pmndrs/glyph';
+
+type TextInput<T extends RasterFormatMetadata> = string | FormattedText<T>;
+```
+
+```ts
+import { span, txt } from '@pmndrs/glyph';
+
+text.text = 'plain'; // a string
+text.text = txt`plain and ${span({ color: '#ffd166' })`styled`}`; // a literal that carries its own spans
+```
+
+{/*
+write
+- Question: where do spans go?
+- Two sentences: a plain string, or a `txt` literal whose spans were compiled from its fragments; there is no
+  `spans` property on an update, and an object that states raw offsets is rejected at the boundary, so the only
+  way to author a span is structurally, where a boundary cannot land inside a cluster. The literal's technique
+  parameter defaults to `never` and widens to the fonts named in its spans.
+- Shape: one paragraph.
+
+notes · internals
+- `TextInput`, `FormattedText`, `TextLiteral<Technique = never>` — `formatted-text.ts:18–22`, `:71–72`
+- `TextUpdate` has `text?: TextInput`, no `spans` — `three/text.ts:74–76`; raw spans rejected —
+  `three/text.ts:718` (`assertNoRawSpans`), proven at `tests/integration/text-frame-rejection.test.mjs:26–36`
+- `txt` and `span` — `formatted-text.ts:113–126`; the Three `span` also takes a material — `three/span.ts:17–26`
+*/}
+
+## Branded values
+
+| Type | Where |
+| --- | --- |
+| `GlyphKey` | `GlyphPlacement.key` on placements read through `caretAt` and `measureGlyphs` |
+| `RasterKey`, `Sha256Hex` | artifact identity: the raster descriptor hash, the GLB content hash |
+| `FontSlot`, `LocalGlyphId` | plain numbers, exported for readability, not branded |
+
+```ts
+import type { GlyphCaret, RasterKey, Sha256Hex } from '@pmndrs/glyph';
+
+const caret: GlyphCaret | undefined = text.caretAt(12, -4); // offset, line, leading, rect
+```
+
+{/*
+write
+- Question: why can I not make a `RasterKey` from a string?
+- Two sentences: brands stop identities from different registries being mixed, so a key is only ever produced by the
+  code that owns the registry and read by you; `FontHandle`, `RasterHandle`, and `FontKey` exist but are not exported
+  from the root, which is the point.
+- Shape: one paragraph.
+
+notes · internals
+- `Brand<Value, Name>` and the five brands — `identity.ts:1–11`; root exports only `FontSlot`, `LocalGlyphId`,
+  `RasterKey`, `Sha256Hex` — `index.ts` (`export type { FontSlot, LocalGlyphId, RasterKey, Sha256Hex } from './identity.js'`)
+- `GlyphKey` — `glyph-placement.ts:33`; `GlyphCaret` — `:103–114`; both exported from `/three` — `three.ts:66`
+- `GlyphKey` is the first field of the public `ThreeGlyphMeasurement`: `readonly key: GlyphKey` —
+  `three/glyph-measurement.ts:36–37`
+*/}
+
+## `exactOptionalPropertyTypes`
+
+```ts
+import { defineThreeConfig, type GlyphBufferCapacity } from '@pmndrs/glyph/three';
+
+declare const capacity: GlyphBufferCapacity | undefined;
+defineThreeConfig({ ...(capacity === undefined ? {} : { capacity }) }); // never `capacity: undefined`
+```
+
+{/*
+write
+- Question: will the package fight my strict config?
+- Two sentences: the package compiles under `exactOptionalPropertyTypes` and spreads conditionally rather than
+  passing `undefined`, so a consumer with the flag on sees no friction; the pattern above is the one the package
+  uses for its own options.
+- Shape: one paragraph.
+
+notes · internals
+- the flag — `tsconfig.base.json:6`; the pattern — `three/handle.ts:242–245`
+- type tests compile with `tsc -p tsconfig.types.json` and assert with `@ts-expect-error` —
+  `scripts/test.mts:23`, `tests/types/three-v1-api.test.ts:53–60`
+*/}

@@ -1,0 +1,505 @@
+---
+title: Building a codec
+description: A codec is the contract between the encoder and your shader — the per-instance buffers, the lanes they carry, and the program that fills each lane from the engine's semantics and the font's raster records.
+nav: 55
+sourcecode: packages/glyph/src/config/codec-program.ts
+---
+
+{/*
+reader
+- Is writing `encode` for a renderer, or a raster codec for a new raster format, and needs to know what the planner
+  will put in the instance buffers the shader reads. Knows vertex attributes and instancing; has not seen the
+  register machine or the wire ids. Arrives asking "how do I tell the engine what my shader wants per glyph?",
+  should leave able to declare a technique schema, write its lane program, assemble it into a `CodecProgram`
+  with a capability set, and know which of the eight batch keys split storage and which split draws.
+
+write · intro
+- Question: who decides what a vertex shader reads per glyph, if the planner does not know my shader?
+- Say: the planner knows, per glyph, where it sits, how big it is, what colour and effects it carries, and what the
+  font's raster record says about it; a codec is the small straight-line program that turns those facts into the
+  exact lanes a shader reads, plus the declaration of which buffers those lanes live in; the technique's author
+  writes the program once, the renderer assembles it into a descriptor once per handle, the planner runs it for
+  every glyph on every accepted update and ships the results as patches.
+- Anchor: "a tiny assembler whose only instructions are load, add, subtract, multiply, convert, store".
+- Shape: three sentences, then the figure.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- A technique schema declares the buffers and their lanes; a program fills every lane exactly once from semantics
+  and bindings.
+- The program is straight-line arithmetic — `add`, `sub`, `mul`, constants, `toF32` — compiled to at most 32
+  live registers and 128 operations.
+- Ids are hashes of names: buffer ids are 16-bit, technique and program ids 32-bit, all derived from the strings you
+  pass.
+- Storage batches split on technique, program, resource, and depth; draws additionally split on material, clip,
+  order, and — in `direct` transform mode — transform.
+
+notes · internals for the page
+- the DSL is authoring only; wire format, validator, and interpreter are untouched — `packages/glyph/src/config/codec-program.ts:7–13`
+- who writes what: a raster format's raster codec owns `codecBody` — `config/raster.ts#RasterCodec` (`:149–155`);
+  a renderer assembles it with its own system lanes, namespace, capability set, and modes —
+  `#createRasterCodecProgram` (`:168–217`); the renderer never rewrites a raster's lanes
+- `Codec` is the public name for the former Policy; ordering and batching changes belong to it — D-309
+- limits — `rust/shaper/src/engine/codec.rs:8–14` (`MAX_PROGRAMS` 32, `MAX_CAPABILITY_SETS` 8,
+  `MAX_BUFFERS_PER_PROGRAM` 16, `MAX_OPERATIONS_PER_PROGRAM` 128, `MAX_REGISTERS` 32, `MAX_VECTOR_WIDTH` 4);
+  mirrored in `config/codec.ts:7–12`
+- batch key bits — `generated/text-shaper-abi.ts` `codec.batchFields` (`:8–17`); `codec.rs:31–38`
+- ids are FNV-1a over UTF-8 — `config/codec.ts#renderWireId` (`:401–409`)
+- the three worked examples: MSDF — `raster/msdf.ts#msdfSchema` (`:103–200`), `#msdfCodec` (`:202–275`);
+  decoration — `three/codec.ts#decorationSchema` (`:59–81`), `#decorationProgram` (`:185–208`); the third-party
+  example — `packages/glyph-example-raster/src/portable.ts`
+*/}
+
+![Semantics and binding values enter a compiled program; the encoder runs it per glyph to fill each buffer's lanes; the lanes arrive as patches into buffers you own and your shader reads by instance.](/examples/diagrams/codec-lanes.svg)
+
+## Step 1 — declare the technique
+
+```ts
+import { id } from '@pmndrs/glyph/config/codec';
+import { defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
+
+export const sdfSchema = defineTechniqueSchema({
+  technique: 'studio.sdf', // the wire identity; `pmndrs.` is reserved for the shipped formats
+  scope: 'glyph', // one binding row per glyph; 'strike' and 'resource' also exist
+  binding: {
+    // values the font's raster records supply per row, read by name in the program
+    f32: ['bearingX', 'bearingY', 'width', 'height', 'u0', 'v0', 'uSpan', 'vSpan'],
+    u32: ['page'],
+  },
+  buffers: {
+    // what the shader will read, one record per instance; the lane count is the vector width
+    rect: { id: id.buffer('studio.sdf/rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    uvRect: { id: id.buffer('studio.sdf/uv-rect'), scalar: 'f32', lanes: ['u0', 'v0', 'uSpan', 'vSpan'] },
+    color: { id: id.buffer('studio.sdf/color'), scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+    page: { id: id.buffer('studio.sdf/page'), scalar: 'u32', lanes: ['page'] },
+  },
+  resources: { atlas: { kind: 'texture-array', format: 'rgba8unorm' } }, // named payloads a draw binds
+  render: { resource: 'atlas', geometry: { kind: 'synthetic-quad' } },
+  glyphOrigin: { buffer: 'rect' }, // lanes 0–1 of `rect` are the glyph origin, for measurement queries
+});
+```
+
+| Field | Rule |
+| --- | --- |
+| `technique` | a nonempty string; `id.technique()` hashes it to the 32-bit wire id; `pmndrs.` is refused for third-party raster codecs |
+| `scope` | `'glyph'`, `'strike'`, or `'resource'` — how many binding rows the font supplies |
+| `binding` | names the raster record fields the program may read, typed `f32` or `u32`; names are unique across both lists |
+| `buffers` | each has an `id` from `id.buffer(name)` (nonzero, 16-bit, unique in the schema), one `scalar`, and 1 to 4 named lanes |
+| `resources` | `buffer`, `texture`, `texture-array`, `geometry`, or `group`, by name; at most one may be `cardinality: 'many'` |
+| `render` | which resource a draw binds and what geometry it realises; `synthetic-quad` is the default and needs no resource |
+| `glyphOrigin` | optional; names an `f32` buffer with at least two lanes whose first two lanes are the glyph origin |
+
+{/*
+write
+- Question: what is a schema the single authority for?
+- Paragraph 1: the physical shape of one technique — buffer ids, scalar kinds, lane names, the resources a draw
+  binds, the geometry it realises — declared once next to the technique; codec stores, font-binding compilers,
+  plan executors, and shader interfaces all derive from it and none restate it.
+- Paragraph 2: `binding` is the font's side of the deal — the per-row values the format's decoded records will
+  supply — and `buffers` is the shader's side; the program in Step 2 is the bridge and can only read the names on
+  the left and write the names on the right.
+- Point at: `glyphOrigin` — the one piece of metadata a renderer consults to animate glyphs, deliberately not in
+  any particular space.
+- Avoid: explaining resources kinds beyond the row; link Custom raster formats for `compileFont`.
+- Shape: two paragraphs under the table.
+
+notes · internals
+- authority statement — `config/schema.ts:1–8`
+- validation order — `#defineTechniqueSchema` (`:288–424`): technique string (`:325–327`), scope (`:328–331`),
+  binding names unique (`:336–339`), buffers via `defineCodecBuffers` (`:340`), resources (`:344–355`), render
+  required when resources exist (`:358–360`), render resource must be declared (`:369–374`), one repeated resource
+  and it must be the render resource (`:375–383`), glyphOrigin needs a declared `f32` buffer with ≥2 lanes (`:389–406`)
+- buffer rules — `#defineCodecBuffers` (`:43–77`): nonzero u16 id (`:61–63`), unique (`:64`), `f32`/`u32` (`:66–68`),
+  1–4 lanes (`:69–71`), unique lane names (`:72`)
+- resource declarations — `:79–139`; texture formats — `config/resources.ts#PortableTextureFormat` (`:15`); geometry
+  kinds `synthetic-quad | quad | hull | custom` — `schema.ts:142–183`; `defineTechniqueGeometryKind` brands a custom kind (`:596–604`)
+- `glyphOrigin` rationale: MSDF and Slug pack the ink box's top-left, Bitmap adds the strike bearing; renderers
+  animate by displacement from rest — `schema.ts:229–241`, `three/engine-plan-target.ts:148–158`
+- `pmndrs.` reserved at raster-codec registration, not at schema definition — `internal/raster-codec-registry.ts:52–53`
+- `schemaCodecBuffers(schema)` derives the wire `CodecBuffer[]` in declaration order — `schema.ts:630–636`
+- the shipped MSDF schema this one is cut down from — `raster/msdf.ts:162–200` (six buffers, a `group` atlas with
+  `texture`, `pixelRange`, `effectScale` members)
+*/}
+
+## Step 2 — write the program
+
+```ts
+import { id } from '@pmndrs/glyph/config/codec';
+import { f32, techniqueProgram, u32 } from '@pmndrs/glyph/config/codec-program';
+import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
+import { msdf, msdfSchema } from '@pmndrs/glyph/raster/msdf';
+
+// The renderer's own lanes. `stableGlyphId` is required; `transformIndex` only under `indexed` transforms.
+const system = defineCodecBuffers({
+  stableGlyphId: { id: id.buffer('my-renderer/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
+  transformIndex: { id: id.buffer('my-renderer/transform-index'), scalar: 'u32', lanes: ['transformIndex'] },
+});
+
+export function msdfBody() {
+  const p = techniqueProgram(msdfSchema, { textEffects: msdf.textEffects, system });
+  const { inlineOrigin, blockOrigin, fontSize, color, outline, shadow } = p.semantics;
+  if (outline === undefined || shadow === undefined) throw new Error('MSDF declares outline and shadow');
+  const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, uvMaxX, uvMaxY, page } = p.binding;
+
+  return p.compile({
+    rect: [
+      f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
+      f32.sub(blockOrigin, f32.mul(bearingY, fontSize)),
+      f32.mul(width, fontSize),
+      f32.mul(height, fontSize),
+    ],
+    uvRect: [uvOriginX, uvOriginY, uvSizeX, uvSizeY],
+    uvBounds: [uvOriginX, uvOriginY, uvMaxX, uvMaxY],
+    color: [color.red, color.green, color.blue, color.alpha],
+    effectColor: [outline.color, shadow.color],
+    page: [shadow.offsetXEm, shadow.offsetYEm, outline.widthEm, u32.toF32(page)],
+  });
+}
+```
+
+| Semantic | Type | Meaning |
+| --- | --- | --- |
+| `inlineOrigin`, `blockOrigin` | `f32` | the glyph's pen position in paragraph-local units |
+| `fontSize` | `f32` | resolved size, so `binding × fontSize` is a length in paragraph units |
+| `color.{red,green,blue,alpha}` | `f32` | the resolved paint; the engine has no background |
+| `outline.{color,widthEm}` | `u32`, `f32` | present only when `textEffects` lists `outline`; the colour is packed RGBA |
+| `shadow.{color,offsetXEm,offsetYEm}` | `u32`, `f32`, `f32` | present only when `textEffects` lists `shadow` |
+| `inverseFontSize` | `f32` | present when `inverseFontSize: true`; Slug asks for it |
+| `transformIndex`, `stableGlyphId` | `u32` | system lanes; `compile` stores them into your system buffers for you |
+
+{/*
+write
+- Question: what can a program read, and what must it write?
+- Paragraph 1: `techniqueProgram(schema, { system, textEffects?, inverseFontSize? })` hands back three things —
+  `semantics`, what the engine knows per glyph; `binding`, the typed record values named in the schema; and
+  `compile`, which takes exactly one value tuple per declared buffer. The values are expression handles, not
+  numbers; nothing runs until the planner runs it.
+- Paragraph 2: the rules `compile` enforces — every declared buffer present, no undeclared buffer, exactly
+  `lanes.length` values of the buffer's scalar, and one `compile` per builder; then it appends the system stores
+  (`stableGlyphId` always, `transformIndex` when the system declares it) and lowers the expression graph to
+  registers, failing if more than 32 are live at once.
+- Paragraph 3: this body is exactly what the shipped MSDF raster codec's `codecBody` does; a renderer using MSDF
+  never writes it — it is here so you can see one that is real. Your own technique's body is the same shape with
+  your names.
+- Anchor: "you write arithmetic on names; the compiler picks the registers".
+- Avoid: the opcode numbers; they are internals.
+- Shape: three paragraphs under the table.
+
+notes · internals
+- builder — `config/codec-program.ts#techniqueProgram` (`:279–350`): schema witness required (`:292`), `system`
+  snapshotted against the schema's ids (`:297–298`, `#normalizeCodecProgramSystemBuffers` `:353–371`)
+- `compile` rules — `:310–334`: once (`:311`), undeclared buffer (`:318–321`), omitted buffer (`:322–323`), lane
+  count (`:327–331`); system stores appended (`:335–340`); the body is tagged with its schema so assembly can
+  authenticate it (`:342–346`, `#assertTechniqueCodecBody` `:647–662`)
+- semantics — `#CodecProgramSemantics` (`:180–196`); effect lanes only when declared (`:480–492`); input order the
+  engine validates (`:440–465`); `f32InputCount = 7 + outline + 2·shadow + inverseFontSize + bindings` (`:429–435`);
+  more than 32 inputs of one kind throws (`:436–438`)
+- expressions — `f32.add/sub/mul/const` (`:147–159`), `u32.const/toF32` (`:162–170`); constants are range-checked (`:140–143`)
+- register allocation with liveness and reuse; >32 live throws — `:565–574`; store emission (`:624–628`)
+- the shipped body this mirrors — `raster/msdf.ts:205–226`; Slug asks for `inverseFontSize` — `raster/slug.ts:219–221`
+- system buffers: `stableGlyphId` required, `transformIndex` optional — `#CodecProgramSystemBuffers` (`:239–242`);
+  three's — `three/codec.ts#threeSystemBuffers` (`:35–49`), added only under `indexed` (`:210–212`)
+- [verify] the "paragraph-local units" wording for `inlineOrigin`/`blockOrigin`: the semantic fields are named in
+  `generated/text-shaper-abi.ts` `semanticF32Fields` (`:168–182`) but their unit is defined in Rust
+  (`rust/shaper/src/engine/codec_gather.rs`); read the gather before stating the space
+*/}
+
+## Step 3 — make it a program
+
+```ts
+import { id, type CodecCapabilitySet, type CodecIdFactory } from '@pmndrs/glyph/config/codec';
+import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
+import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
+import { msdfCodec } from '@pmndrs/glyph/raster/msdf';
+
+const system = defineCodecBuffers({
+  stableGlyphId: { id: id.buffer('my-renderer/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
+  transformIndex: { id: id.buffer('my-renderer/transform-index'), scalar: 'u32', lanes: ['transformIndex'] },
+});
+
+export const capabilitySet: CodecCapabilitySet = {
+  capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'],
+  maxBufferBytes: 16 * 1024 * 1024,
+  updateAlignment: 4,
+  coalesceGapBytes: 128,
+  rangeCallPenaltyBytes: 256,
+  maxBuffersPerDraw: 8,
+  maxResourcesPerDraw: 4,
+  maxIndirectDraws: 0,
+  fragmentationBudget: 8,
+  wholeBufferThresholdBasisPoints: 7_500,
+};
+
+// `ids` comes from `encode({ ids })`; every id it derives is collision-checked for this handle.
+export const msdfProgram = (ids: CodecIdFactory) =>
+  createRasterCodecProgram(msdfCodec, {
+    namespace: 'my-renderer', // with the technique id and an optional programName, this is the program id
+    system,
+    capabilitySet,
+    transformMode: 'indexed',
+    allocationMode: 'ordered',
+    ids,
+  });
+```
+
+| Mask | Bits | Effect |
+| --- | --- | --- |
+| `storageKeyMask` | technique, program, resource, depth | which keys separate **storage batches** — the buffers glyphs are packed into |
+| `drawKeyMask` | the above plus material, clip, order, and transform in `direct` mode | which keys end a **draw span** |
+| bit values | technique 1, resource 2, program 4, material 8, clip 16, depth 32, order 64, transform 128 | how a mask reads on the wire |
+
+{/*
+write
+- Question: how does a body become something the engine can register, and who chooses the ids?
+- Paragraph 1: for a raster format, `createRasterCodecProgram(planProgram, options)` does the whole assembly — it
+  calls the format's registered `codecBody` with your system lanes and capability set, authenticates the body
+  against the registered schema, derives the technique and program ids from the format's id, your namespace, and
+  an optional program name, appends your system buffers after the schema's, and fixes the two masks; what comes
+  back is frozen.
+- Paragraph 2: for a program that is not a raster format — a decoration, or anything you author end to end —
+  `createCodecProgram(techniqueId, programId, body, buffers, transformMode, allocationMode)` is the same step
+  without the registry lookup; the ids come from `ids.technique(name)` and `ids.program(technique, namespace,
+  variant?)`.
+- Paragraph 3: the masks are not a choice — storage splits on technique, program, resource, and depth (paint layers
+  need distinct physical pools so independent compositing can flatten them without copies); draws also split on
+  material, clip, and order, and on transform only in `direct` mode. The `ids` factory matters: a handle passes one
+  through `encode` so two names that hash to the same 32-bit id are caught at assembly instead of on the wire.
+- Point at: `namespace` — two renderers can assemble the same format's program under different program ids.
+- Avoid: listing the capability set fields; the table on Step 4 and the notes carry them.
+- Shape: three paragraphs, then the masks table with its one-line legend.
+
+notes · internals
+- raster assembly — `config/raster.ts#createRasterCodecProgram` (`:168–217`): registered program required (`:173–175`),
+  namespace/programName/modes validated (`:180–194`), `ids` authenticated (`:195–197`), body from `codecBody(system,
+  capabilitySet)` (`:203`), authenticated (`:204`), buffers = schema then system (`:210`), `capabilitySet` and
+  `variant` attached (`:214–215`)
+- raw assembly — `config/codec.ts#createCodecProgram` (`:641–723`): positional `(techniqueId, programId, body,
+  buffers, transformMode, allocationMode)`; frozen snapshots (`:662–696`); `allocationStrategy` from the mode
+  (`:706–709`); masks (`:712–721`) with the paint-layer comment (`:710–711`)
+- required masks in Rust — `rust/shaper/src/engine/codec.rs:47–49` (`STORAGE_KEY_FIELDS` excludes order and
+  transform; `REQUIRED_STORAGE_KEYS` technique|resource|program|depth; `REQUIRED_DRAW_KEYS` adds order); D-204, D-214, D-216
+- ids — `config/codec.ts#CodecIdFactory` (`:412–419`); program key `['glyph-program-v1', technique, namespace, variant]`
+  (`:530–538`, variant defaults to `'default'` `:445`); collision check (`#CodecIdScope.idFor` `:431–439`); the
+  handle's factory reaches `encode` as `context.ids` — `config/glyph.ts#EncodeContext` (`:351–356`)
+- `CodecBuffer` optional fields `alignment`, `stride`, `usage`, `capacityClass` — `config/codec.ts:265–274`;
+  wire defaults alignment = scalar bytes, stride = scalar × width, usage `storage | copyDst`, capacityClass 1
+  (`:977–988`); `copyDst` is required — the preflight rejects a usage without it or with unknown bits
+  (`config/codec.ts:1233–1235`), and a zero `capacityClass` (`:1237`)
+- `primitiveKind` (`'glyph' | 'decoration'`, default glyph) and `resourceKindMask` (default 1) —
+  `config/codec.ts#CodecProgram` (`:287–307`), wire defaults (`:944`, `:962`)
+- three assembles the three shipped programs this way with `namespace: 'three'` — `three/codec.ts:127–152`; the
+  example renderer with `'example-renderer'` and `transformMode: 'direct'` —
+  `packages/glyph-example-renderer/src/codec.ts:35–50`
+*/}
+
+## Step 4 — put programs in a descriptor
+
+```ts
+import { compileCodec, id, type CodecCapabilitySet, type CodecDescriptor, type CodecIdFactory } from '@pmndrs/glyph/config/codec';
+import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
+import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
+import { msdfCodec } from '@pmndrs/glyph/raster/msdf';
+
+const system = defineCodecBuffers({
+  stableGlyphId: { id: id.buffer('my-renderer/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
+});
+
+const capabilitySet: CodecCapabilitySet = {
+  capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'],
+  maxBufferBytes: 16 * 1024 * 1024,
+  updateAlignment: 4,
+  coalesceGapBytes: 128,
+  rangeCallPenaltyBytes: 256,
+  maxBuffersPerDraw: 8,
+  maxResourcesPerDraw: 4,
+  maxIndirectDraws: 0,
+  fragmentationBudget: 8,
+  wholeBufferThresholdBasisPoints: 7_500,
+};
+
+export function descriptor(ids: CodecIdFactory): CodecDescriptor {
+  return {
+    capabilitySets: [capabilitySet],
+    programs: [
+      createRasterCodecProgram(msdfCodec, {
+        namespace: 'my-renderer',
+        system,
+        capabilitySet,
+        transformMode: 'direct', // no transformIndex lane: each draw carries its own transform
+        allocationMode: 'ordered',
+        ids,
+      }),
+    ],
+  };
+}
+
+// What `encode` returns. The handle compiles and registers the descriptor at once; this is the same preflight.
+export const encode = (context: { readonly ids: CodecIdFactory }) => {
+  const value = descriptor(context.ids);
+  compileCodec(value);
+  return { descriptor: value };
+};
+```
+
+| Limit | Value |
+| --- | --- |
+| capability sets per descriptor | 1 to 8; no two equivalent; every one referenced by some program |
+| programs per descriptor | 1 to 32; program ids unique |
+| `(capabilitySet, technique, variant)` | unique per descriptor |
+| buffers per program | 16; buffer ids unique within a program |
+| operations per program | 128 |
+| registers | 32, allocated for you |
+| capability set | must include `ordered-direct` or `stable-indirect`; `maxBufferBytes`, `maxBuffersPerDraw` (≤ 16), `maxResourcesPerDraw`, `fragmentationBudget` nonzero; `updateAlignment` a power of two ≤ 256 |
+
+{/*
+write
+- Question: what does the engine check before it will run my codec, and when?
+- Paragraph 1: a descriptor is capability sets plus programs; `encode` returns it and the handle compiles it to
+  bytes and registers it with the engine in the handle constructor, so a bad codec fails at `glyph.handle()`, not
+  on the first frame; `compileCodec` is the same preflight you can run yourself, and it mirrors the shaper's own
+  validator rule for rule.
+- Paragraph 2: the capability set is where a renderer states what its buffers can do — storage buffers, vec2/vec4
+  aliasing, which allocation strategies, and the byte and count limits the planner must respect when it coalesces
+  patches; a program may pin one set or apply to all.
+- Point at: the table as the rulebook; every row is a thrown `RangeError` or `TypeError` with a message that names
+  the program.
+- Avoid: the byte layout of the compiled codec.
+- Shape: two paragraphs, the table.
+
+notes · internals
+- `Codec` return shape — `config/glyph.ts#Codec` (`:343–349`); `capabilitySet` index selects one set, default the first
+- registration in the handle constructor — `internal/configured-handle.ts:120–124` → `internal/handle-state.ts#installCodec`
+  (`:330–338`: snapshot, `compileCodec`, `registerCodec`)
+- `compileCodec` preflight — `config/codec.ts#compileCodec` (`:734–1010`): sets 1–8 (`:746–751`), no equivalent
+  repeats (`:756–759`), programs 1–32 (`:762–765`), numeric domains before semantic rules (`:773–827`), program id
+  unique (`:833–834`), `(capabilitySet, technique, variant)` unique (`:835–837`), every set referenced (`:842–848`)
+- capability set rules — `#preflightCapabilitySet` (`:1075–1100+`): an allocation strategy (`:1086–1088`), nonzero
+  limits within 16 buffers per draw (`:1089–1099`), power-of-two alignment ≤ 256 (`:1100`, `MAX_CODEC_ALIGNMENT` `:13`)
+- capability names — `#CodecCapability` (`:310–317`); set fields — `#CodecCapabilitySet` (`:319–332`); Rust flags —
+  `rust/shaper/src/engine/codec.rs:18–23`
+- three's set and descriptor — `three/codec.ts#threeCodecCapabilitySet` (`:163–176`), `#threeCodecDescriptor`
+  (`:106–161`); the example renderer's — `packages/glyph-example-renderer/src/codec.ts:53–64`, `:35–50`
+- 64 MiB `maxOutputBytes` is a separate frame safety limit, not a codec limit — `internal/configured-handle.ts:57`, D-229
+- `MAX_OPERATIONS_PER_CODEC_PROGRAM` (128) — `config/codec.ts:10`; the TS preflight throws past it —
+  `:1241–1242` ("declares more than 128 operations"); the Rust side pins the same bound —
+  `rust/shaper/src/engine/codec.rs:11` (`MAX_OPERATIONS_PER_PROGRAM`), checked in `validate_codec` (`:1518`)
+*/}
+
+## The decoration program
+
+```ts
+import { createCodecProgram, id, type CodecIdFactory, type CodecProgram } from '@pmndrs/glyph/config/codec';
+import { techniqueProgram } from '@pmndrs/glyph/config/codec-program';
+import { defineCodecBuffers, defineTechniqueSchema, schemaCodecBuffers } from '@pmndrs/glyph/config/schema';
+
+const system = defineCodecBuffers({
+  stableGlyphId: { id: id.buffer('my-renderer/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
+});
+
+// Rows are resource-free and fill the gather lanes directly: the f32 lanes are the rectangle,
+// the u32 lanes carry the packed colour and flags.
+const decorationSchema = defineTechniqueSchema({
+  technique: 'pmndrs.decoration',
+  scope: 'glyph',
+  binding: { u32: ['color', 'flags'] },
+  buffers: {
+    rect: { id: id.buffer('my-renderer/decoration/rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    packed: { id: id.buffer('my-renderer/decoration/packed'), scalar: 'u32', lanes: ['color', 'flags'] },
+  },
+});
+
+export function decorationProgram(ids: CodecIdFactory): CodecProgram {
+  const p = techniqueProgram(decorationSchema, { system });
+  const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
+  return {
+    ...createCodecProgram(
+      ids.technique(decorationSchema.technique),
+      ids.program(decorationSchema.technique, 'my-renderer'),
+      p.compile({
+        rect: [inlineOrigin, blockOrigin, fontSize, color.red], // gather lanes 0–3 already are the rectangle
+        packed: [p.binding.color, p.binding.flags],
+      }),
+      [...schemaCodecBuffers(decorationSchema), { id: system.stableGlyphId.id, scalar: 'u32', vectorWidth: 1 }],
+      'direct',
+      'ordered',
+    ),
+    primitiveKind: 'decoration',
+    resourceKindMask: 0, // legal only for decoration programs
+  };
+}
+```
+
+{/*
+write
+- Question: what is the smallest useful codec?
+- Paragraph 1: a decoration — an underline or a strike — is a rectangle and a packed colour with no font resource;
+  its rows come from the engine, not from a raster record, so the "semantic" handles are really gather lanes by
+  position: the first four f32 lanes are the rectangle and the binding's two u32 values are colour and flags.
+- Paragraph 2: `pmndrs.decoration` is a reserved technique of a renderer's codec, not a raster format; it is the
+  reason codec vocabulary says `technique` rather than `raster` — a decoration has no raster.
+- Point at: `primitiveKind: 'decoration'` and `resourceKindMask: 0` — the two fields that tell the planner a draw
+  of this program binds no resource.
+- Avoid: implying a decoration can be styled beyond `solid` today.
+- Shape: two paragraphs.
+
+notes · internals
+- source — `three/codec.ts#decorationSchema` (`:55–81`), `#decorationProgram` (`:178–208`); the gather-lane comment (`:178–184`)
+- reserved and internal-only as a material discriminator — D-306, D-311; `pmndrs.decoration` is never a raster format
+- `resourceKindMask: 0` and `primitiveKind: 'decoration'` — `three/codec.ts:205–206`; `resource_count` is zero for
+  decoration draws — `rust/shaper/src/engine/plan_draw.rs:108`
+- the decoration program is looked up per capability set — `rust/shaper/src/engine/codec.rs:300–309`
+- only `solid` is implemented at construction time — outline findings table ("Only `solid` decoration style");
+  the throws: `'<style>' decoration lines are not implemented yet; only 'solid' is supported` at
+  `engine-encoding.ts:216`, and `<label> style '<style>' is not implemented; only 'solid' is supported` at
+  `text-properties.ts:316`
+- the codec-page snippet assembles buffers by hand; three appends its system buffers through `programBuffers`
+  (`three/codec.ts:215–221`); the raw `createCodecProgram` path accepts a buffer without `capacityClass` or
+  `usage`: they default to class 1 and `storage | copyDst` on the wire — `config/codec.ts:985`, `:988`, `:1233`
+*/}
+
+## How the lanes reach your shader
+
+```ts no-check
+// three's reference realisation of one lane, from packages/glyph/src/three/internal/material-realizer.ts
+const runStart = TSL.uniform(0, 'uint').onObjectUpdate(({ object }) => object?.userData.pmndrsGlyphRunStart ?? 0);
+const instance = TSL.instanceIndex.add(runStart); // the span's recordIndex + this instance
+const rect = TSL.storage(attribute, 'vec4', attribute.count).setPBO(true).element(instance);
+```
+
+| Plan side | three.js side |
+| --- | --- |
+| every program buffer appears in the plan's `buffers` table per storage batch, identified by `(id, generation)` and sized in bytes | a `StorageInstancedBufferAttribute` per buffer, item size = the buffer's lane count, named `_pmndrsGlyph_<bufferId>` |
+| its contents arrive as `patches` whose payloads are exactly the lanes the program wrote | `write`, `fill`, and `copy` are staged with merged upload ranges; `allocate-or-resize` and `retire` are handled when the buffer is bound |
+| each `draw` names the buffers it reads and a span `recordIndex`, `recordCount` | `instanceCount = recordCount`; `userData.pmndrsGlyphRunStart = recordIndex`; the shader reads `instanceIndex + runStart` |
+| under `indexed` transforms the `transformIndex` lane selects a row | four `vec4` columns at `transformIndex × 4` in the shared `_pmndrsGlyphTransforms` attribute |
+| under `direct` transforms `transformId` is set on the draw | one matrix per mesh, `matrixAutoUpdate` off |
+
+{/*
+write
+- Question: I wrote lanes; where do they come out?
+- Paragraph 1: the output side is the render plan, and the next page reads it in full; in one line each: every
+  program buffer is a row in the plan's `buffers` table, its contents are `patches`, and every `draw` names the
+  buffers it reads and the record span that is its instance range.
+- Paragraph 2: what three does with that, as the table shows, so a reader can map the same three steps onto any
+  renderer: one storage buffer per plan buffer, an instance offset per draw, a transform row or a matrix per draw.
+- Closing note (a `> [!NOTE]`): nothing in a codec is three-specific; the same schema and body feed the TypeGPU
+  path, which is why the raster formats publish their schemas from `@pmndrs/glyph/raster/*` and the renderers only
+  add shaders.
+- Point at: the `no-check` fragment — three's literal read of one lane.
+- Avoid: re-explaining batching; that is the next page.
+- Shape: two short paragraphs, the table, the callout.
+
+notes · internals
+- attribute naming — `three/internal/host-buffer.ts:68` (`` `_pmndrsGlyph_${id}` ``); attribute creation with
+  `vectorWidth` as item size — `three/engine-plan-target.ts#readBoundBuffers` (`:451–470`)
+- lane read — `three/internal/material-realizer.ts:552–555` (`runStart` uniform, `instanceIndex.add(runStart)`),
+  `:565–573` (`storage(...).setPBO(true).element(instance)` per width)
+- `instanceCount = recordCount`, `pmndrsGlyphRunStart = recordIndex`, `renderOrder = base + drawIndex` —
+  `three/internal/draw-realizer.ts:171–187`; `matrixAutoUpdate` off under `direct` (`:184`)
+- transforms: `_pmndrsGlyphTransforms` attribute (`draw-realizer.ts:178`); four columns from `transformIndex`
+  (`material-realizer.ts:600–606`); the synchroniser writes rows at `transformId × 16` (`three/transform-synchronizer.ts:44–58`)
+- patches staged with merged ranges; allocate/retire skipped at staging — `engine-plan-target.ts#stageBoundBufferMutations`
+  (`:472–522`, skip at `:489`)
+- the TypeGPU path reads the same schema — `packages/glyph-example-raster/src/typegpu.ts`, `shader-contract.ts:10–29`;
+  the example device maps plan buffers to shader names by codec buffer id —
+  `packages/glyph-example-renderer/src/device.ts#realizeDraw` (`:331–355`)
+*/}

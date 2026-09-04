@@ -1,0 +1,51 @@
+{
+  "name": "@pmndrs/glyph-site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm build:docs-components && pnpm build:landing && pnpm build:examples && pnpm build:docs",
+    "build:docs": "npm_config_cache=.npx-cache npx -y @pmndrs/docs@4.1.2 build docs dist/docs --format website --base-path /docs --libname \"@pmndrs/glyph\" --libname-short glyph --libname-dotsuffix-label docs --libname-dotsuffix-href https://docs.pmnd.rs --icon ♠️ --github https://github.com/pmndrs/glyph --discord https://discord.gg/poimandres --home-redirect /getting-started/introduction --theme-primary \"#0a0c12\" --theme-scheme neutral --theme-contrast 0 && pnpm copy:docs-assets",
+    "build:docs-components": "vite build --config docs/components/vite.config.ts",
+    "build:examples": "vite build --config vite.examples.config.ts",
+    "build:landing": "vite build",
+    "capture:thumbnails": "node ./scripts/capture-thumbnails.mts",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm check:docs && pnpm build:landing",
+    "check:docs": "npm_config_cache=.npx-cache npx -y @pmndrs/docs@4.1.2 build docs dist/.mdx-check",
+    "check:examples": "tsc --noEmit -p tsconfig.examples.json && pnpm check:snippets && pnpm build:examples && pnpm build:docs-components",
+    "check:snippets": "node ./scripts/check-snippets.mts",
+    "copy:docs-assets": "node ./scripts/copy-docs-assets.mts",
+    "dev": "vite",
+    "dev:examples": "vite --config vite.examples.config.ts",
+    "format": "oxfmt docs/components landing/src examples/src scripts package.json tsconfig.json tsconfig.examples.json vite.config.ts vite.examples.config.ts",
+    "format:check": "oxfmt --check docs/components landing/src examples/src scripts package.json tsconfig.json tsconfig.examples.json vite.config.ts vite.examples.config.ts",
+    "lint": "oxlint --deny-warnings .",
+    "preview": "node ./scripts/preview.mts",
+    "test": "vitest run --root . docs/components",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pmndrs/glyph": "workspace:*",
+    "@react-three/drei": "11.0.0-alpha.5",
+    "@react-three/fiber": "10.0.0-alpha.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@rolldown/plugin-babel": "0.2.3",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@types/three": "0.185.4",
+    "@vitejs/plugin-react": "6.0.1",
+    "babel-plugin-react-compiler": "1.0.0",
+    "leva": "^0.10.1",
+    "oxfmt": "0.35.0",
+    "oxlint": "1.75.0",
+    "playwright": "1.61.1",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.0"
+  }
+}

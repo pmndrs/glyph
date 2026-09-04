@@ -1,0 +1,202 @@
+---
+title: Interaction
+description: Caret placement, selection rectangles, hit testing, and an editing loop built on accepted glyph placement.
+nav: 25
+sourcecode: packages/glyph/src/glyph-placement.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
+{/*
+reader
+- Is building something a user clicks into: an input, a selectable label, a text editor. Has done this with DOM
+  ranges and expects `caretAt` to return a character index. Arrives asking "where did they click?", should leave able
+  to turn a pointer hit into a caret, draw a selection, and wire a keystroke loop that never reads stale placement.
+
+write · intro
+- Question: what do the interaction queries read, and in which units?
+- Say: `caretAt` and `selectionRects` read the placement the renderer last accepted, in paragraph-local units, and
+  answer in clusters, not characters: a ligature is one glyph over several code units, a combining mark is several
+  code units at one position, and under bidi the character after an offset can be drawn to its left. Measurement
+  is desired-state; interaction is accepted-state; while the two differ the queries answer `undefined`.
+- Anchor: "a caret stop is a cluster boundary".
+- Shape: three sentences.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- `caretAt(x, y)` returns the nearest cluster boundary with its line and a zero-width rect.
+- `selectionRects(start, end)` returns one advance box per line segment; bidi yields several per line.
+- Both are paragraph-local and y-down; flip y from a three.js local point.
+- `undefined` means the renderer has not accepted this state yet.
+
+notes · internals for the page
+- the queries on `Text` — `three/text.ts#Text.caretAt` (`:861–863`), `#Text.selectionRects` (`:865–867`), both over
+  `#glyphPlacements()` (`:771–774`)
+- the snapshot and its one coordinate space — `glyph-placement.ts#GlyphPlacements` (`:122–155`), `#GlyphSpace` (`:4–14`)
+- cluster-first rationale — `glyph-placement.ts:95–102`
+- the scene — `site/examples/src/scenes/caret/scene.tsx`: pointer input arrives from the host as frame pixels
+  (`site/examples/src/lib/inputs.ts#pointerToWorld` casts it onto the text's plane), then `worldToLocal`, y flipped,
+  `caretAt`; the anchor is the pointerdown offset and `selectionRects(anchor, head)` follows the drag; one word is
+  selected before the reader touches anything. The twin `three.ts` does the same from a canvas `PointerEvent` with a
+  `Raycaster`
+- [verify] the snippet above puts `onPointerDown` on `<Text>`: whether R3F raycasts the glyph draw meshes (quads are
+  positioned in the shader) has not been checked; the scene hit-tests the plane instead
+*/}
+
+```ts
+const caret = text.caretAt(0.4, 0.2);   // GlyphCaret | undefined — paragraph-local, y-down
+const rects = text.selectionRects(0, 5); // readonly LayoutBox[] | undefined
+```
+
+<glyph-proxy fit="cover" root="scenes" data-scene="caret" aria-label="Click to place a caret, drag to select" aspect="16 / 9" />
+
+## From a pointer to a caret
+
+```tsx
+import type { GlyphCaret } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/react';
+import type { Text as ThreeText } from '@pmndrs/glyph/three';
+import type { msdf } from '@pmndrs/glyph/raster/msdf';
+import { useRef, useState } from 'react';
+
+const ref = useRef<ThreeText<typeof msdf>>(null);
+const [cursor, setCursor] = useState<GlyphCaret | undefined>(undefined);
+
+<Text
+  ref={ref}
+  font={Inter.msdf}
+  onPointerDown={(event) => {
+    const target = ref.current;
+    if (target === null) return;
+    const local = target.worldToLocal(event.point.clone());
+    const caret = target.caretAt(local.x, -local.y); // paragraph space is y-down
+    if (caret !== undefined) setCursor(caret);
+  }}
+>
+  Click to place the caret
+</Text>;
+```
+
+{/*
+write
+- Question: I have a pointer event; where is the caret?
+- Paragraph 1: R3F raycasts the text's draw meshes, so the event carries a world point; bring it into the text's
+  local space, flip y, and ask. `caretAt` picks the line whose box contains y (or the nearest line), then the
+  nearest cluster edge on that line, comparing leading and trailing edges so a right-to-left glyph resolves to the
+  boundary logically before it even though that edge is drawn on its right.
+- Paragraph 2: what comes back: `offset` (a UTF-16 cluster boundary), `line`, `leading`, and `rect`, a zero-width
+  box the height of the line; draw the caret from `rect` as a child of the text.
+- Avoid: explaining raycasting; point at R3F's event docs.
+- Shape: two paragraphs.
+
+notes · internals
+- `GlyphCaret` — `glyph-placement.ts:95–112`
+- line pick by box, nearest when outside — `glyph-placement.ts#lineAt` (`:435–450`); edge comparison, RTL handling —
+  `#caretAt` (`:456–502`); the empty-paragraph answer (`:470–472`)
+- the world-to-paragraph flip: scene y = −paragraph y — `three/text.ts#Text.#setBoundingBox` (`:887–897`),
+  `three/glyph-measurement.ts#paragraphBox` (`:209–214`)
+- the pointer handler and `ref` prop on `<Text>` — `react.ts#R3fTextProps` (`:82–96`: `Object3DProps` carries the R3F event handlers, `ref: Ref<ThreeText>`)
+- the sign of y in `caretAt` from a pointer hit, confirmed by the caret scene: `text.caretAt(local.x, -local.y)`
+  places the caret under the pointer (`site/examples/src/scenes/caret/scene.tsx`, the drain loop)
+*/}
+
+## Selection
+
+```ts
+import { Mesh, MeshBasicNodeMaterial, PlaneGeometry } from 'three/webgpu';
+
+const [anchor, focus] = [3, 9];
+for (const box of text.selectionRects(anchor, focus) ?? []) {
+  const highlight = new Mesh(new PlaneGeometry(box.width, box.height), new MeshBasicNodeMaterial({ color: '#264f78' }));
+  highlight.position.set(box.x + box.width / 2, -(box.y + box.height / 2), -0.01);
+  text.add(highlight); // a child inherits the text's transform
+}
+```
+
+{/*
+write
+- Question: how do I draw a highlight over a range?
+- Paragraph 1: one rectangle per line segment, spanning the union of the selected glyphs' advance boxes on that
+  line and the full height of the line box — what `Range.getClientRects()` returns for DOM text; a highlight is a
+  layout-box artefact, not an ink one. A bidi line whose selected characters are drawn in two places yields two
+  rectangles rather than one across the gap.
+- Paragraph 2: `start` and `end` may be given in either order; an empty range yields no boxes; non-finite offsets
+  throw. Draw the boxes as children of the text so they inherit its transform, just behind the glyphs.
+- Shape: two paragraphs.
+
+notes · internals
+- `selectionRects` semantics and the bidi split — `glyph-placement.ts:504–545` (docstring `:504–511`, gap closes a run `:534–537`)
+- order-insensitive, empty range → `[]`, non-finite throws `RangeError` — `glyph-placement.ts:518–521`
+- `LayoutBox` — `layout.ts:4–13`
+- the glyph render order: highlights placed just behind the text's draws — `three/internal/draw-realizer.ts:186` (`renderOrderBase + drawIndex`)
+*/}
+
+## `undefined` means pending
+
+| State | `caretAt` / `selectionRects` |
+| --- | --- |
+| never traversed | `undefined` |
+| desired change not yet committed | `undefined` |
+| renderer rejected the last candidate | `undefined` until a checkpoint succeeds |
+| committed | answers |
+
+{/*
+write
+- Question: why did it return `undefined`?
+- Paragraph 1: the queries read a snapshot built from the committed layout and the drawn origins in the retained
+  render records, so they can only answer for a revision the renderer accepted. Before the first traversal there is
+  no binding; after `set()` the desired revision is ahead of the committed one; after a rejected candidate the
+  binding is flagged until a later checkpoint succeeds. `commitState()` reports the same states by name.
+- Paragraph 2: measurement is desired-state and never returns `undefined`; do not mix the two in one frame's
+  logic, and do not poll — the next traversal after a successful `glyph.shape()` answers.
+- Shape: two short paragraphs; the table carries the cases.
+
+notes · internals
+- placements only for a committed revision, never after a rejection — `three/text.ts#ThreeRootPublication.#canonicalInspection`
+  (`:1343–1357`), `#glyphPlacements` (`:1213–1225`)
+- the rejection flag — `three/text.ts:1283–1286` (`rejectShape`), cleared at `:1272–1274` (`acceptShape`)
+- `commitState()` — `three/text.ts:756–764`; D-285 (placement queries return `undefined` until a checkpoint realises)
+- the snapshot carries drawn origins and names glyphs it could not read — `glyph-placement.ts:137–150` (`incomplete`)
+*/}
+
+## An editing loop
+
+```ts
+import { Mesh } from 'three/webgpu';
+
+let value = 'Hello';
+let cursor = value.length;
+const caretMesh = new Mesh();
+
+function onKey(key: string): void {
+  value = value.slice(0, cursor) + key + value.slice(cursor);
+  text.text = value; // one narrow edit is derived from the assignment
+  cursor += key.length;
+}
+
+function onFrame(): void {
+  const [box] = text.selectionRects(cursor - 1, cursor) ?? []; // the cluster before the cursor, once the frame is accepted
+  if (box !== undefined) caretMesh.position.set(box.x + box.width, -(box.y + box.height / 2), 0);
+}
+```
+
+{/*
+write
+- Question: how do keystrokes, the engine, and the caret line up in time?
+- Paragraph 1: keystroke → assignment (the planner derives one scalar-aligned replace) → the next traversal
+  publishes → the frame after that, the caret query answers for the new text. Keep the cursor offset in your own
+  state; read placement only to draw.
+- Paragraph 2: there is no caret-from-offset call; `caretAt` is point-based. To draw a caret at an offset, take the
+  cluster before it from `selectionRects(offset − 1, offset)` and use its trailing edge, or keep the `GlyphCaret`
+  the last pointer hit returned.
+- Close by pointing at Rich text → Editing for restating styled runs on each keystroke.
+- Shape: two paragraphs, one pointer.
+
+notes · internals
+- the minimal edit — `engine-encoding.ts#minimalTextMutation` (`:312–335`); assignment is `set({ text })` — `three/text.ts:676–678`
+- a rect's x extent is `min(x, x + advance)` to `max(…)`, so the trailing edge for RTL is `box.x` — `glyph-placement.ts:538–540`
+- a caret-from-offset helper does not exist at codex `1dc580a87`: `GlyphPlacements` exposes `caretAt(x, y)` and
+  `selectionRects` only (`glyph-placement.ts:152–154`, `:284–285`); `selectionRects(offset, offset + 1)` is the
+  workaround. Ask the other agent whether a helper is planned before documenting the workaround as the way
+*/}

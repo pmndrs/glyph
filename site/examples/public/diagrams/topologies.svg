@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" role="img" aria-labelledby="t d">
+  <title id="t">Three deployment topologies</title>
+  <desc id="d">One handle with its anonymous root feeding one scene and canvas; one handle with an anonymous root and a named root feeding two scenes and two canvases; and a worker that owns init, handle and renderer, drawing to a transferred OffscreenCanvas while the main thread sends messages and clones a font face once.</desc>
+  <defs>
+    <style>
+      .bg { fill: #07080b; }
+      .lane { fill: #0e1118; stroke: #1c2130; stroke-width: 1; }
+      .box { fill: #141927; stroke: #2a3247; stroke-width: 1.25; rx: 8; }
+      .box.js { stroke: #70d6ff; } .box.rs { stroke: #ffd166; } .box.out { stroke: #a855f7; } .box.gpu { stroke: #34d399; } .box.dim { stroke: #2a3247; }
+      .label { font: 600 16px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #e7ecf6; }
+      .sub { font: 400 13px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; }
+      .lanename { font: 600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif; fill: #97a1b4; letter-spacing: 0.12em; }
+      .mono { font: 500 12.5px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; fill: #ffd166; }
+      .mono.cyan { fill: #70d6ff; } .mono.green { fill: #34d399; }
+      .edge { fill: none; stroke: #4a5570; stroke-width: 1.5; marker-end: url(#arrow); }
+      .edge.hot { stroke: #a855f7; marker-end: url(#arrowv); } .edge.fast { stroke: #34d399; marker-end: url(#arrowg); } .edge.dash { stroke-dasharray: 5 4; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5570"/></marker>
+    <marker id="arrowv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7"/></marker>
+    <marker id="arrowg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/></marker>
+  </defs>
+  <rect class="bg" width="960" height="420" rx="14"/>
+
+  <text class="lanename" x="40" y="46">ONE HANDLE, ONE SCENE</text>
+  <rect class="box js" x="40" y="60" width="120" height="48"/><text class="label" x="56" y="82">FontFace</text><text class="sub" x="56" y="100">loaded once</text>
+  <rect class="box rs" x="200" y="60" width="200" height="48"/><text class="label" x="216" y="82">handle('main')</text><text class="sub" x="216" y="100">fronts its anonymous root</text>
+  <rect class="box dim" x="440" y="60" width="120" height="48"/><text class="label" x="456" y="82">Scene</text><text class="sub" x="456" y="100">≤ 1 per root</text>
+  <rect class="box gpu" x="600" y="60" width="170" height="48"/><text class="label" x="616" y="82">WebGPURenderer</text><text class="sub" x="616" y="100">host draw</text>
+  <rect class="box gpu" x="810" y="60" width="110" height="48"/><text class="label" x="826" y="82">Canvas</text>
+  <path class="edge" d="M 160 84 L 200 84"/><path class="edge" d="M 400 84 L 440 84"/><path class="edge" d="M 560 84 L 600 84"/><path class="edge" d="M 770 84 L 810 84"/>
+
+  <text class="lanename" x="40" y="166">ONE HANDLE, TWO ROOTS, TWO SCENES</text>
+  <rect class="box js" x="40" y="180" width="120" height="48"/><text class="label" x="56" y="202">FontFace</text><text class="sub" x="56" y="220">shared by both roots</text>
+  <rect class="box rs" x="200" y="180" width="140" height="48"/><text class="label" x="216" y="202">handle</text><text class="sub" x="216" y="220">one engine binding</text>
+  <rect class="box rs" x="380" y="150" width="200" height="48"/><text class="label" x="396" y="172">anonymous root</text><text class="sub" x="396" y="190">the handle itself</text>
+  <rect class="box rs" x="380" y="212" width="200" height="48"/><text class="label" x="396" y="234">handle('hud')</text><text class="sub" x="396" y="252">named root, idempotent</text>
+  <rect class="box dim" x="620" y="150" width="120" height="48"/><text class="label" x="636" y="172">Scene A</text>
+  <rect class="box dim" x="620" y="212" width="120" height="48"/><text class="label" x="636" y="234">Scene B</text>
+  <rect class="box gpu" x="780" y="150" width="140" height="48"/><text class="label" x="796" y="172">Canvas A</text>
+  <rect class="box gpu" x="780" y="212" width="140" height="48"/><text class="label" x="796" y="234">Canvas B</text>
+  <path class="edge" d="M 160 204 L 200 204"/>
+  <path class="edge" d="M 340 204 C 360 204, 360 174, 380 174"/><path class="edge" d="M 340 204 C 360 204, 360 236, 380 236"/>
+  <path class="edge" d="M 580 174 L 620 174"/><path class="edge" d="M 580 236 L 620 236"/>
+  <path class="edge" d="M 740 174 L 780 174"/><path class="edge" d="M 740 236 L 780 236"/>
+
+  <text class="lanename" x="40" y="322">WORKER WITH AN OFFSCREENCANVAS</text>
+  <rect class="lane" x="40" y="336" width="300" height="64" rx="10"/><text class="lanename" x="56" y="356">MAIN THREAD</text>
+  <rect class="box js" x="56" y="362" width="268" height="30"/><text class="label" x="68" y="382">authored state · messages</text>
+  <rect class="lane" x="400" y="336" width="520" height="64" rx="10"/><text class="lanename" x="416" y="356">WORKER</text>
+  <rect class="box rs" x="416" y="362" width="300" height="30"/><text class="label" x="428" y="382">glyph.init() · handle · renderer</text>
+  <rect class="box gpu" x="740" y="362" width="164" height="30"/><text class="label" x="752" y="382">OffscreenCanvas</text>
+  <path class="edge" d="M 324 377 L 416 377"/><path class="edge" d="M 716 377 L 740 377"/>
+  <text class="mono cyan" x="60" y="416">face.clone() once, then postMessage</text>
+</svg>

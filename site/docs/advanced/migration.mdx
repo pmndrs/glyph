@@ -1,0 +1,201 @@
+---
+title: Migration
+description: Moving from the pre-handle API — loaders, paint, content boxes, the layout query, group-owned batching, and the offset helpers — to the current surface.
+nav: 60
+sourcecode: packages/glyph/src/glyph.ts
+---
+
+{/*
+reader
+- Has code against an earlier surface — `FontLoader`, `loadFont`, `new Text`, `paint`, `contentBox`, `layout()`,
+  `text.shape()`, `insertText` — and a compiler full of errors. Knows the old API well. Arrives asking "what is the
+  one new form for each old one?"; should leave with the table and the two before/after blocks, and know which
+  changes are mechanical (a codemod exists) and which need a decision.
+
+write · intro
+- Question it answers: what changed, and why each thing changed?
+- Say: fonts became declarations (`glyph.fontFace` + `load()` + members) over one shared graph; the implicit runtime
+  became `glyph.init()` and named handles with roots; roots took batching from groups; `paint` and `contentBox`
+  split into `style`, `layout`, `constraints`; the layout query became `measure()`; publication moved to
+  `glyph.shape()`; the offset-taking edit helpers went away. Each old form maps to exactly one new form.
+- Anchor: "the runtime stopped being implicit, and everything else followed".
+- Shape: three sentences, then the table.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- One load boundary: `glyph.fontFace(url, { format })`, `await face.load()`, `face.slug`.
+- One publication call: `glyph.shape()`; `Text` and `TextGroup` have none.
+- Three inputs: `style`, `layout`, `constraints`; measurement is `measure()`.
+- Assignment is the edit API: `text.text = next` derives the minimal replacement.
+
+notes · internals for the page
+- fontFace — D-297, D-310; handles and roots — D-307; shape — D-312; inputs and `measure()` — D-291; `/core` gone —
+  D-314, D-317, D-321; raster vocabulary — D-311; hooks — D-302
+- what the old surface was — D-129 (`FontLoader`, `TextGroup` batches, `Text`), D-124 (paint, content box),
+  D-282 (`Text.layout()`), D-277 (`TextSpan`), D-287 (`useFont(input, technique, options?)`)
+- codemods archived in the tree — `.agents/skills/codemod/codemods/` (dated directories)
+*/}
+
+| Before | After | Why | Decision |
+| --- | --- | --- | --- |
+| `new FontLoader().loadAsync({ input, raster })`, `loadFont(input, msdf)` | `const Inter = glyph.fontFace(url, { format: msdf }); await Inter.load()` | one declaration over one shared graph; members are selections | D-297, D-310 |
+| implicit engine on first font use | `await glyph.init(); glyph.handle('app', ThreeConfig)` | explicit, disposable, several may coexist | D-307 |
+| `new Text(props)` | `app.createText(props)`, `app('hud').createText(props)` | every text belongs to a root | D-307 |
+| `TextGroup` with `capacity` and `compositing` | the root owns them; `TextGroup` is a scene parent | one encoder per root; groups organise | D-307 |
+| `text.shape()`, `group.shape()` | `glyph.shape()` | one publication for every dirty root on every handle | D-312 |
+| `text.layout()` | `text.measure()` | measurement is an action; `layout` is the flow policy | D-291 |
+| `paint: { color }` | `style: { color }` | one inherited presentation object | D-291 |
+| `contentBox: { width, wrap, align }` | `layout: { wrap, align }` + `constraints: { width }` | flow policy and the parent's box are separate inputs | D-291 |
+| `<TextSpan>` | nested `<Text>` | one component; an inline run carries only span properties | D-277 |
+| `insertText`, `deleteText`, `replaceText`, `setSpan`, `removeSpan` | `text.text = next`, `text.set({ text })` | assignment derives the minimal edit; offsets never leave your document | D-173 |
+| `useFont(input, technique, options?)` per subpath | `useMsdf(url)`, `useSlug(url)`, `useBitmap(url, { strikes })` | each declares through `glyph.fontFace`; `.preload()`, `.clear()` | D-302 |
+| `{ technique: msdf, options }`, `{ raster: msdf, options }` | `msdf({ emSize, pixelRange })` | a format is callable; "technique" is Codec vocabulary | D-311 |
+| `@pmndrs/glyph/core` | the root entry, and `/config/*` for integrators | one integrator contract | D-314, D-321 |
+| `bindBytes()`, owned plan targets | none; the whole stack lives in one realm | one synchronous zero-copy contract | D-318, D-319 |
+
+{/*
+write
+- Question: what is the one new form for each old one?
+- One sentence above the table: read the rows top to bottom; the first four are one change (an explicit runtime)
+  seen from four sides.
+- One sentence under it: the "Why" column is the thing to internalise; the decision column is where the reasoning
+  lives if a row surprises you.
+- Avoid: naming the retired loaders anywhere but the "Before" column.
+
+notes · internals
+- `FontLoader` and lazy runtime — D-129; the immutable-Font loaders are retired: `loadFont`, `createFontLibrary`,
+  `defineFont`, and tokens are not public — D-326 (codex `98c86c8a6`); `createFontStack` is still a root export (`index.ts:225`,
+  `loaded-font.ts:8–21`) — [in flight]; do not show it
+- `handle(name)` idempotent terminal roots; `TextGroup` demoted to hierarchy — D-307; `three/text.ts:284–288`
+- `glyph.shape()` sole publication; no `shape()` on `Text` — D-312; `three/text.ts` has none
+- `Text.layout()` → `measure()` — D-282 (named `layout()`), D-291 ("Measurement is an action named `measure()`, never
+  the `layout` property"); `three/text.ts:736–742`
+- `paint` / `content box` vocabulary — D-124; the three inputs — D-291; `three/text.ts:56–76`
+- nested `<Text>` compiles to spans — `react.ts:65–71`, `:759–790`; `TextSpan` as the never-mounted inline run — D-277;
+  `react.ts` exports no `TextSpan`
+- assignment derives the common-prefix/suffix replacement — `.agents/docs/planning/three-api.md:180–202` (codex tree);
+  mutation records — D-173
+- hooks — `react/msdf.ts`, `react/bitmap.ts`, `react/slug.ts`; D-302; the old `useFont(input, technique, options?)` — D-287
+- callable formats — `config/raster-format.ts:128–133`; D-311
+- `/core` removed; `defineGlyphConfig` on `/config/glyph` — D-314, D-317, D-321; `tests/package/entry-point-boundaries.test.mjs`
+- owned/transferred publications removed — D-318, D-319
+- [verify] which decision retired `<TextSpan>` in favour of nested `<Text>`: D-005 predates D-277 and the code has
+  nested `<Text>`; find the row that names the component before citing it as "D-277"
+- [in flight] `.agents/docs/planning/three-api.md:124–158` and `:172–176` still describe group-owned capacity and `label.shape()`;
+  the code is the source here
+*/}
+
+## R3F
+
+```tsx no-check
+// before
+<Text font={font} paint={{ color: '#fff' }} contentBox={{ width: { mode: 'at-most', size: 6 }, wrap: 'word' }}>
+  Hello <TextSpan paint={{ color: '#ffd166' }}>world</TextSpan>
+</Text>
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+
+export function Greeting() {
+  const font = useMsdf(url); // declares through glyph.fontFace; suspends until loaded
+  return (
+    <Text font={font} style={{ color: '#fff' }} layout={{ wrap: 'word' }} constraints={{ width: { mode: 'at-most', size: 6 } }}>
+      Hello <Text style={{ color: '#ffd166' }}>world</Text>
+    </Text>
+  );
+}
+```
+
+{/*
+write
+- Question: what does a component look like now?
+- Two sentences: `paint` became `style`; `contentBox` split into the flow policy (`layout`) and the parent's box
+  (`constraints`); the inline run is a nested `<Text>` with span properties only, so a `ref` or a transform on it
+  is a type error rather than a silently dropped prop. The font comes from a typed hook that suspends.
+- Shape: one paragraph between the two blocks.
+
+notes · internals
+- props — `react.ts#R3fTextProps` (`:82–96`); the inline-run restriction — D-277
+- `useMsdf` — `react/msdf.ts:8–18`; suspension — `react.ts:655–660`; D-301, D-302
+*/}
+
+## Imperative
+
+```ts no-check
+// before
+const loader = new FontLoader();
+const font = await loader.loadAsync({ input: url, raster: { technique: msdf } });
+const text = new Text({ font, text: 'Hello', paint: { color: '#fff' } });
+scene.add(text);
+const box = text.layout();
+text.shape();
+renderer.render(scene, camera);
+```
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
+
+await glyph.init();
+const app = glyph.handle('app', ThreeConfig);
+const Inter = glyph.fontFace('/fonts/Inter.glb', { format: msdf });
+await Inter.load();
+
+const label = app.createText({ font: Inter, text: 'Hello', style: { color: '#fff' } });
+scene.add(label);
+const box = label.measure(); // desired state, no publication
+glyph.shape(); // every dirty root, once
+renderer.render(scene, camera);
+```
+
+{/*
+write
+- Question: what does the imperative loop look like now?
+- Two sentences: the runtime is explicit — `init` once, a named handle, a declared face — and everything else is the
+  same five lines in a different vocabulary; `measure()` never publishes and `glyph.shape()` publishes everything
+  that is dirty, so the order "edit, measure, shape, render" is the loop. Traversal shapes too, but swallows the
+  error; the explicit call is where a rejection throws.
+- Shape: one paragraph between the two blocks.
+
+notes · internals
+- the proof sequence `glyph.init() → glyph.handle() → face.load() → handle.createText() → scene.add(text) →
+  glyph.shape() → renderer.render(scene, camera)` — D-304
+- `Text` construction is token-guarded: "Three Text must be created with handle.createText() or an R3F Text
+  component" — `three/text.ts:630–632`
+- traversal shape swallows into `text.error` — `three/text.ts:478–486`
+*/}
+
+## Codemods
+
+```bash
+node .agents/skills/codemod/scripts/list-codemods.mjs
+node .agents/skills/codemod/scripts/run-codemod.mjs 2026-09-01-glyph-handles <project-dir>
+```
+
+| Codemod | Covers |
+| --- | --- |
+| `2026-08-28-font-load-arguments` | loader argument shapes |
+| `2026-08-28-paragraph-contract` | paragraph properties: paint, content box → style, layout, constraints |
+| `2026-08-28-react-integration` | React component props |
+| `2026-08-28-text-engine-lifecycle`, `-vocabulary` | engine lifecycle and encoder vocabulary |
+| `2026-09-01-font-face-token-loading` | `loadFont` / tokens → `glyph.fontFace` |
+| `2026-09-01-glyph-handles` | implicit runtime → `glyph.init()` and handles |
+| `2026-09-01-react-font-faces` | `useFont` → typed hooks and provider font faces |
+
+{/*
+write
+- Question: which of this is mechanical?
+- Two sentences: the repository archives dated ts-morph codemods for every migration that reached the default
+  branch; run the list script to see them, and a codemod that cannot rewrite a call site mechanically leaves a
+  note rather than a guess. Point at the skill's README for how to author one for a fork.
+- Shape: one paragraph.
+
+notes · internals
+- the archive and runners — codex tree `.agents/skills/codemod/codemods/` (nine dated directories),
+  `scripts/list-codemods.mjs`, `scripts/run-codemod.mjs`, `scripts/run-all-codemods.mjs`; the skill —
+  `.agents/skills/codemod/SKILL.md:1–12`
+- [verify] each codemod's "Covers" cell is inferred from its directory name; read each directory's README before
+  publishing the table
+*/}
