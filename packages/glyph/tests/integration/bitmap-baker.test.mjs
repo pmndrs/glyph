@@ -86,6 +86,15 @@ test('bakes canonical Inter deterministically through the public direct-memory s
   assert.ok(first.artifacts.every(({ role }) => role === 'raster'));
   assert.match(first.artifacts[0].id, new RegExp(`^bitmap-${shapingHash}-[0-9a-f]{64}\\.glb$`));
   assert.deepEqual([...first.artifacts[0].bytes.subarray(0, 4)], [0x67, 0x6c, 0x54, 0x46]);
+  const validated = await validateBitmapArtifact(first.artifacts[0].bytes, {
+    rasterKey: first.rasterKey,
+    shapingHash,
+    glyphCount: 2937,
+    glyphIdWidth: 16,
+    descriptor,
+  });
+  assert.equal(validated.strikes[0].records.byteLength, first.report.metadataBytes);
+  assert.equal(validated.strikes[0].pages.length, first.report.pages.length);
   assert.deepEqual(progress.at(-1), [2937, 2937]);
   assert.ok(progress.every((entry) => entry[1] === 2937));
 });

@@ -15,7 +15,6 @@ import {
   jsonObject,
   nonnegativeSafeInteger,
   positiveSafeInteger,
-  validateDenseGlyphRecords,
 } from '../../internal/raster-atlas.js';
 import { decodeRasterCoverage } from '../../internal/raster-coverage-artifact.js';
 import type { RasterDecodeArtifact } from '../../raster.js';
@@ -105,7 +104,6 @@ export async function decodeBitmapData(font: RasterDecodeFont, raster: RasterDec
         };
       },
     );
-    validateDenseGlyphRecords(records, pages, 'bitmap');
     strikes.push({ ppem, planeUnitsPerEm, records, pages });
   }
   return { strikes, ...(coverage === undefined ? {} : { coverage: coverage.bits }) };
