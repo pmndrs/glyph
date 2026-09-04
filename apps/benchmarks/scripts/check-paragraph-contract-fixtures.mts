@@ -43,9 +43,9 @@ async function authenticateShaping(
   url: URL,
   label: string,
 ): Promise<void> {
-  const expected = string(metadata.shapingHash, `${label} shapingHash`);
+  const expected = string(metadata.shapingFingerprint, `${label} shapingFingerprint`);
   const font = await validateFontArtifact(await readFile(url));
-  assertEqual(font.shapingHash, expected, `${label} shaping hash`);
+  assertEqual(font.shapingFingerprint, expected, `${label} shaping fingerprint`);
 }
 
 async function authenticateOracles(

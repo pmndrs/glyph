@@ -195,7 +195,11 @@ export type {
 
 export type { Font, FontMetrics, RasterDecodeFont } from './font.js';
 
-export type { FontSlot, LocalGlyphId, RasterKey, Sha256Hex } from './identity.js';
+export type { FontSlot, LocalGlyphId, RasterKey, Fingerprint } from './identity.js';
+// A technique stamps this in its own extension so a core font and its raster agree through one
+// comparison; a third-party technique needs it for the same reason a first-party one does.
+export { compatibilityFingerprint } from './internal/raster-identity.js';
+export { fingerprint } from './identity.js';
 
 export { glyphFlags } from './layout.js';
 export type {

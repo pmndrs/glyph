@@ -338,7 +338,7 @@ struct WasmResultMetadata<'result> {
 struct WasmArtifactMetadata<'artifact> {
     role: &'artifact str,
     id: &'artifact str,
-    sha256: &'artifact str,
+    fingerprint: &'artifact str,
     byte_offset: usize,
     byte_length: usize,
 }
@@ -387,7 +387,7 @@ fn prepare_artifact_response(
         artifacts.push(WasmArtifactMetadata {
             role: &artifact.role,
             id: &artifact.id,
-            sha256: &artifact.sha256,
+            fingerprint: &artifact.fingerprint,
             byte_offset: offset,
             byte_length: artifact.bytes.len(),
         });

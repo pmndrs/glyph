@@ -29,7 +29,10 @@ fn arbitrary_font_bytes_fail_safely_and_deterministically() {
                 assert_eq!(first.artifacts.len(), second.artifacts.len());
                 for (first, second) in first.artifacts.iter().zip(second.artifacts.iter()) {
                     assert_eq!(first.id, second.id, "case {case}, seed {SEED}");
-                    assert_eq!(first.sha256, second.sha256, "case {case}, seed {SEED}");
+                    assert_eq!(
+                        first.fingerprint, second.fingerprint,
+                        "case {case}, seed {SEED}"
+                    );
                     assert_eq!(first.bytes, second.bytes, "case {case}, seed {SEED}");
                 }
             }

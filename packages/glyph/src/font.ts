@@ -1,6 +1,6 @@
 import type { RasterLoadOptions, RasterReference, RasterSelection, RegisteredRaster } from './raster.js';
 import type { RasterFormatMetadata } from './config/raster-format.js';
-import type { FontHandle, FontKey, RasterKey, Sha256Hex } from './identity.js';
+import type { FontHandle, FontKey, RasterKey, Fingerprint } from './identity.js';
 
 /** Renderer-independent metrics expressed in font units. */
 export interface FontMetrics {
@@ -16,7 +16,9 @@ export interface FontMetrics {
 
 /** Immutable font metadata exposed to a raster format while decoding its artifact. */
 export interface RasterDecodeFont {
-  readonly shapingHash: Sha256Hex;
+  /** Identity of the prepared source this font was baked from; rasters are built from its outlines. */
+  readonly sourceFingerprint: Fingerprint;
+  readonly shapingFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
   readonly metrics: FontMetrics;

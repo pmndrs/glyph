@@ -6,9 +6,9 @@ import type {
   RasterDecodeFont,
   RasterFormat,
   RasterFormatId,
-  Sha256Hex,
 } from '@pmndrs/glyph';
 import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/config/raster-format';
+import { compatibilityFingerprint } from '@pmndrs/glyph';
 
 import { isGlyphExampleHeader, type GlyphExampleExtension } from './artifact.js';
 import {
@@ -62,7 +62,7 @@ export const glyphExample: RasterFormat<
       throw new RangeError('glyph-example record payload length does not match the font glyph count');
     }
     return {
-      resource: defineRasterResourceId(`studio.glyph-example/${font.shapingHash}/${raster.rasterKey}`),
+      resource: defineRasterResourceId(`studio.glyph-example/${font.shapingFingerprint}/${raster.rasterKey}`),
       inset: extension.descriptor.inset,
       colors,
       glyphCount: font.glyphCount,
@@ -81,9 +81,16 @@ function decodeExtension(
   if (
     extension.version !== GLYPH_EXAMPLE_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingHash !== font.shapingHash ||
-    extension.glyphCount !== font.glyphCount ||
-    extension.glyphIdWidth !== 16 ||
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: font.glyphCount,
+        glyphIdWidth: 16,
+        kind: GLYPH_EXAMPLE_KIND,
+        rasterKey: raster.rasterKey,
+        shaping: font.shapingFingerprint,
+        source: font.sourceFingerprint,
+        version: GLYPH_EXAMPLE_FORMAT_VERSION,
+      }) ||
     extension.recordStride !== RECORD_STRIDE
   ) {
     throw new TypeError('glyph-example extension identity does not match its registered font');
@@ -98,9 +105,15 @@ function decodeExtension(
   return {
     version: 0,
     rasterKey: raster.rasterKey,
-    shapingHash: font.shapingHash,
-    glyphCount: font.glyphCount,
-    glyphIdWidth: 16,
+    fingerprint: compatibilityFingerprint({
+      glyphCount: font.glyphCount,
+      glyphIdWidth: 16,
+      kind: GLYPH_EXAMPLE_KIND,
+      rasterKey: raster.rasterKey,
+      shaping: font.shapingFingerprint,
+      source: font.sourceFingerprint,
+      version: GLYPH_EXAMPLE_FORMAT_VERSION,
+    }),
     descriptor,
     headerBufferView,
     records,
@@ -110,24 +123,11 @@ function decodeExtension(
 
 function resourceSource(value: unknown): RasterResourceSource {
   const source = objectValue(value, 'glyph-example records');
-  if (source.type === 'bufferView') {
-    return {
-      type: 'bufferView',
-      bufferView: nonnegativeInteger(source.bufferView, 'glyph-example records.bufferView'),
-    };
-  }
-  if (source.type !== 'external') throw new TypeError('glyph-example record source has an unsupported type');
-  if (typeof source.uri !== 'string' || source.uri.length === 0) {
-    throw new TypeError('glyph-example external record source must have a URI');
-  }
-  if (typeof source.artifactHash !== 'string' || !/^[0-9a-f]{64}$/.test(source.artifactHash)) {
-    throw new TypeError('glyph-example external record source must have a SHA-256 hash');
-  }
+  // Pages always travel inside the artifact that declares them.
+  if (source.type !== 'bufferView') throw new TypeError('glyph-example record source must be a bufferView');
   return {
-    type: 'external',
-    uri: source.uri,
-    byteLength: nonnegativeInteger(source.byteLength, 'glyph-example records.byteLength'),
-    artifactHash: source.artifactHash as Sha256Hex,
+    type: 'bufferView',
+    bufferView: nonnegativeInteger(source.bufferView, 'glyph-example records.bufferView'),
   };
 }
 

@@ -21,6 +21,8 @@ export interface ResolvedRasterBakePlan {
   readonly packaging: RasterPackaging;
   readonly descriptor: JsonValue;
   readonly rasterKey: RasterKey;
+  /** Filename for an external companion; only a caller that writes files can know it. */
+  readonly companionName?: string;
 }
 
 /** Package one concrete baker/descriptor association for the heterogeneous pipeline queue. */
@@ -60,7 +62,7 @@ export async function resolveRasterBakePlan<Kind extends string, Options, Descri
   readonly options: Options;
 }): Promise<ResolvedRasterBakePlan> {
   const descriptor = plan.baker.descriptor(plan.options);
-  const rasterKey = await deriveRasterKey({
+  const rasterKey = deriveRasterKey({
     descriptor,
     extension: plan.baker.extension,
     kind: plan.baker.kind,

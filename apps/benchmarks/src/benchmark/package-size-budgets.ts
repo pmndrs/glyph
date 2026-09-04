@@ -38,10 +38,14 @@ export const packageSizeBudgets = {
     gzipBytes: 139_000,
     brotliBytes: 113_500,
   },
+  // Portable fingerprinting inlines its own hash where SHA-256 called the free `crypto.subtle`
+  // browser API, so that code now ships in every bundle stamping or verifying an artifact.
+  // gzip 5,816 -> 6,022 (+206), crossing by 22. Linux and macOS measure this JavaScript
+  // identically, so unlike the Wasm ceilings it needs no cross-host margin.
   'runtime-baker-host-js': {
     rawBytes: 18_000,
     minifiedBytes: 16_000,
-    gzipBytes: 6_000,
+    gzipBytes: 6_200,
     brotliBytes: 5_500,
   },
   'runtime-baker-worker-js': {
@@ -161,9 +165,10 @@ export const packageSizeBudgets = {
     gzipBytes: 236_000,
     brotliBytes: 181_000,
   },
+  // Carries the same inlined fingerprint hash: minified 15,726 -> 16,047 (+321), crossing by 47.
   'bitmap-baker-js': {
     rawBytes: 23_500,
-    minifiedBytes: 16_000,
+    minifiedBytes: 16_300,
     gzipBytes: 4_900,
     brotliBytes: 4_400,
   },
@@ -185,9 +190,10 @@ export const packageSizeBudgets = {
     gzipBytes: 220_000,
     brotliBytes: 173_000,
   },
+  // Carries the same inlined fingerprint hash: minified 19,218 -> 19,539 (+321), crossing by 39.
   'mtsdf-baker-js': {
     rawBytes: 27_500,
-    minifiedBytes: 19_500,
+    minifiedBytes: 19_800,
     gzipBytes: 5_700,
     brotliBytes: 5_100,
   },

@@ -15,9 +15,9 @@ import {
   type ImmutableFontVariant,
 } from './loaded-font.js';
 import type { SerializedFontFace } from './font-face-transfer.js';
-import { readBufferViews, readRuntimeFontArtifact } from './internal/font-artifact-reader.js';
+import { readBufferViews, readRuntimeFontArtifact, type RuntimeFontArtifact } from './internal/font-artifact-reader.js';
 import { readGlb, type ParsedGlb } from './internal/glb-reader.js';
-import type { FontHandle, FontKey, RasterHandle, RasterKey, Sha256Hex } from './identity.js';
+import type { FontHandle, FontKey, RasterHandle, RasterKey, Fingerprint } from './identity.js';
 import {
   deleteRegisteredFontData,
   getRegisteredFontData,
@@ -38,9 +38,10 @@ import type {
 } from './raster.js';
 import type { BakeProgressListener, RasterBakeArtifact } from './bake.js';
 import { normalizeUnicodeRanges } from './internal/font-selection.js';
-import { canonicalJson, deriveRasterKey } from './internal/raster-identity.js';
+import { canonicalJson, compatibilityFingerprint, deriveRasterKey } from './internal/raster-identity.js';
 import type { RuntimeBakeRaster, RuntimeBakeUnicodeRange } from './internal/runtime-bake-protocol.js';
 import { workerRasterKinds } from './internal/runtime-bake-protocol.js';
+import { fingerprint128, fingerprintDomain, isFingerprint } from './internal/fingerprint.js';
 import {
   type RasterFormat,
   type RasterFormatId,
@@ -163,7 +164,7 @@ export interface FontLoaderOptions {
   readonly fetch?: typeof fetch;
   readonly development?: boolean;
   readonly runtimeBake?: RuntimeFontBake;
-  /** @internal A transformed runtime source cannot be authenticated or retained as the baked shaping source. */
+  /** @internal A transformed runtime source cannot be retained as the baked shaping source. */
   readonly runtimeSourceIdentity?: 'original' | 'transformed';
   readonly onDiagnostic?: (diagnostic: FontLoadDiagnostic) => void;
   readonly onWarning?: (diagnostic: FontLoadDiagnostic) => void;
@@ -216,7 +217,7 @@ export class FontRegistry {
   readonly #maxBufferViews: number;
   readonly #maxRasters: number;
   readonly #fontsByKey = new Map<FontKey, RegisteredFontImpl>();
-  readonly #fontsByHash = new Map<Sha256Hex, RegisteredFontImpl>();
+  readonly #fontsByFingerprint = new Map<Fingerprint, RegisteredFontImpl>();
   readonly #fontsByHandle = new Map<FontHandle, RegisteredFontImpl>();
   readonly #disposeListeners = new Set<(font: RegisteredFont) => void>();
 
@@ -247,7 +248,7 @@ export class FontRegistry {
   ): Promise<RegisteredFont> {
     this.#checkArtifactSize(bytes.byteLength);
     const owned = ownFontBytes(bytes, ownership);
-    const artifactHash = (await sha256(owned)) as Sha256Hex;
+    const artifactFingerprint = fingerprint128(owned, fingerprintDomain.artifact);
     let artifact: ReturnType<typeof readRuntimeFontArtifact>;
     try {
       artifact = readRuntimeFontArtifact(owned);
@@ -258,11 +259,14 @@ export class FontRegistry {
     const document = parsed.document;
     const metricsValue = fontExtension.metrics;
     const provenance = fontExtension.provenance;
-    const sourceHash = string(provenance.sourceHash, 'provenance.sourceHash');
-    const fontFaceIndex = await authenticatedFontFaceIndex(provenance);
-    if (context.sourceBytes !== undefined && (await sha256(context.sourceBytes)) !== sourceHash) {
-      throw new GlyphFontError('FONT_SOURCE_IDENTITY', 'runtime source bytes do not match the baked font provenance');
+    const sourceFingerprint = string(provenance.sourceFingerprint, 'provenance.sourceFingerprint');
+    if (!isFingerprint(sourceFingerprint)) {
+      throw new GlyphFontError(
+        'INVALID_FONT_ASSET',
+        'provenance.sourceFingerprint must be lowercase 128-bit hexadecimal',
+      );
     }
+    const fontFaceIndex = declaredFontFaceIndex(provenance);
     const references = rasterReferences(fontExtension.rasters);
     const binaryBytes = parsed.bin.subarray(0, parsed.declaredBinLength);
     if (views.length > this.#maxBufferViews) {
@@ -277,23 +281,25 @@ export class FontRegistry {
         `font artifact has ${references.length} raster references; limit is ${this.#maxRasters}`,
       );
     }
-    const shapingHash = artifact.shapingHash;
-    const existing = this.#fontsByHash.get(shapingHash);
+    const shapingFingerprint = artifact.shapingFingerprint;
+    const existing = this.#fontsByFingerprint.get(shapingFingerprint);
     if (existing !== undefined) {
       existing.assertActive();
+      assertMatchingShapingShape(existing, artifact);
       mergeRasterSources(existing, binaryBytes, document, views, references, context.artifactUrl, context.fetch);
-      mergeSourceContext(existing, sourceHash, context);
+      mergeSourceContext(existing, sourceFingerprint, context);
       return existing;
     }
 
     const generation = nextFontHandle++;
-    const key = `font:${this.#id}:${generation}:${shapingHash}` as FontKey;
+    const key = `font:${this.#id}:${generation}:${shapingFingerprint}` as FontKey;
     const handle = generation as FontHandle;
     const font = new RegisteredFontImpl({
       registry: this,
       key,
       handle,
-      shapingHash,
+      sourceFingerprint: sourceFingerprint as Fingerprint,
+      shapingFingerprint,
       glyphCount: integer(metricsValue.glyphCount, 'metrics.glyphCount'),
       metrics: {
         unitsPerEm: integer(metricsValue.unitsPerEm, 'metrics.unitsPerEm'),
@@ -309,16 +315,16 @@ export class FontRegistry {
     const rasterSources = new Map<string, RegisteredRasterSourceData>();
     setRegisteredFontData(font, {
       artifactBytes: owned,
-      artifactHash,
+      artifactFingerprint,
       fontFaceIndex,
-      sourceHash,
+      sourceFingerprint,
       ...(context.sourceBytes === undefined ? {} : { sourceBytes: context.sourceBytes }),
       sourceCandidates:
         context.sourceUrl === undefined
           ? []
           : [
               {
-                sourceHash,
+                sourceFingerprint,
                 sourceUrl: context.sourceUrl,
                 ...(context.fetch === undefined ? {} : { fetch: context.fetch }),
               },
@@ -332,7 +338,7 @@ export class FontRegistry {
     });
     mergeRasterSources(font, binaryBytes, document, views, references, context.artifactUrl, context.fetch);
     this.#fontsByKey.set(key, font);
-    this.#fontsByHash.set(shapingHash, font);
+    this.#fontsByFingerprint.set(shapingFingerprint, font);
     this.#fontsByHandle.set(handle, font);
     return font;
   }
@@ -384,15 +390,7 @@ export class FontRegistry {
       );
     }
     const match = matchRasterExtension(registered, parsed.document);
-    const artifactHash = await sha256(owned);
-    if (match.reference.source.type === 'external' && match.reference.source.artifactHash !== undefined) {
-      if (artifactHash !== match.reference.source.artifactHash) {
-        throw new GlyphFontError(
-          'RASTER_ARTIFACT_HASH',
-          'external raster artifact hash does not match its font directory entry',
-        );
-      }
-    }
+    const artifactFingerprint = fingerprint128(owned, fingerprintDomain.artifact);
     const source = retainRasterArtifactData(
       registered,
       match.reference,
@@ -400,7 +398,7 @@ export class FontRegistry {
       parsed.bin.subarray(0, parsed.declaredBinLength),
       views,
       owned,
-      artifactHash,
+      artifactFingerprint,
       [context],
     );
     return registered.registerRaster(
@@ -412,7 +410,7 @@ export class FontRegistry {
     );
   }
 
-  /** @internal Attach a runtime-generated raster against its caller-authenticated identity. */
+  /** @internal Attach a runtime-generated raster against its caller-declared identity. */
   async _attachGeneratedRaster<const Kind extends string>(
     font: RegisteredFont,
     bytes: ArrayBufferView,
@@ -451,7 +449,7 @@ export class FontRegistry {
       binaryBytes,
       views,
       owned,
-      await sha256(owned),
+      fingerprint128(owned, fingerprintDomain.artifact),
       [],
     );
     return registered.registerRaster(
@@ -467,7 +465,7 @@ export class FontRegistry {
   _disposeFont(font: RegisteredFontImpl): void {
     if (this.#fontsByKey.get(font.key) !== font) return;
     this.#fontsByKey.delete(font.key);
-    this.#fontsByHash.delete(font.shapingHash);
+    this.#fontsByFingerprint.delete(font.shapingFingerprint);
     this.#fontsByHandle.delete(font.handle);
     for (const listener of this.#disposeListeners) listener(font);
     deleteRegisteredFontData(font);
@@ -952,7 +950,7 @@ class FontLibraryImpl implements FontLibrary {
     this.#assertActive();
     const signal = fontLoadSignal(options);
     signal?.throwIfAborted();
-    const existing = this.#fontFaceContent.get(serialized.artifactHash);
+    const existing = this.#fontFaceContent.get(serialized.artifactFingerprint);
     if (existing !== undefined && existing.contains(serialized)) return existing.acquire();
     const { loadSerializedFontFaceSource } = await import('./internal/font-face-transfer-runtime.js');
     const candidate = await loadSerializedFontFaceSource(serialized, this.#config, signal);
@@ -988,8 +986,8 @@ class FontLibraryImpl implements FontLibrary {
   }
 
   #convergeFontFaceSource(candidate: RegisteredFont): FontFaceSourceNode {
-    const contentHash = getRegisteredFontData(candidate).artifactHash;
-    const existing = this.#fontFaceContent.get(contentHash);
+    const contentFingerprint = getRegisteredFontData(candidate).artifactFingerprint;
+    const existing = this.#fontFaceContent.get(contentFingerprint);
     if (existing !== undefined) {
       existing.mergeAcquisition(candidate);
       candidate.dispose();
@@ -997,12 +995,12 @@ class FontLibraryImpl implements FontLibrary {
     }
     let node!: FontFaceSourceNode;
     node = new FontFaceSourceNode(candidate, () => {
-      if (this.#fontFaceContent.get(contentHash) === node) this.#fontFaceContent.delete(contentHash);
+      if (this.#fontFaceContent.get(contentFingerprint) === node) this.#fontFaceContent.delete(contentFingerprint);
       for (const [key, shared] of this.#fontFaceSources) {
         if (shared.value === node) this.#fontFaceSources.delete(key);
       }
     });
-    this.#fontFaceContent.set(contentHash, node);
+    this.#fontFaceContent.set(contentFingerprint, node);
     return node;
   }
 }
@@ -1172,7 +1170,7 @@ class FontFaceSourceNode {
   contains(serialized: SerializedFontFace): boolean {
     this.#assertActive();
     const registered = getRegisteredFontData(this.#font);
-    if (registered.artifactHash !== serialized.artifactHash) return false;
+    if (registered.artifactFingerprint !== serialized.artifactFingerprint) return false;
     for (const raster of serialized.rasters) {
       const source = registered.rasterSources.get(raster.rasterKey);
       if (
@@ -1183,11 +1181,12 @@ class FontFaceSourceNode {
       ) {
         return false;
       }
-      if (raster.data !== undefined && source.artifactHash !== raster.artifactHash) return false;
+      if (raster.data !== undefined && source.artifactFingerprint !== raster.artifactFingerprint) return false;
       if (source.reference.source.type === 'external' && source.artifactBytes === undefined) return false;
     }
     for (const resource of serialized.resources) {
-      if (!registered.resources.has(rasterResourceIdentity(resource.artifactHash, resource.byteLength))) return false;
+      if (!registered.resources.has(rasterResourceIdentity(resource.artifactFingerprint, resource.byteLength)))
+        return false;
     }
     return true;
   }
@@ -1385,11 +1384,9 @@ async function loadFontFaceSourceFont(
     ...(config.maxBufferViews === undefined ? {} : { maxBufferViews: config.maxBufferViews }),
     ...(config.maxRasters === undefined ? {} : { maxRasters: config.maxRasters }),
   });
-  const workerRasters = await Promise.all(
-    prepared.initialRasters
-      .filter(({ operation }) => workerRasterKinds.includes(operation.format.kind))
-      .map(({ operation, descriptor }) => runtimeBakeRaster(operation.format, descriptor)),
-  );
+  const workerRasters = prepared.initialRasters
+    .filter(({ operation }) => workerRasterKinds.includes(operation.format.kind))
+    .map(({ operation, descriptor }) => runtimeBakeRaster(operation.format, descriptor));
   const selectedRuntimeBake = prepared.runtimeBake ?? config.runtimeBake;
   const runtimeBake: RuntimeFontBake = async (request) => {
     const bake = selectedRuntimeBake ?? (await loadDefaultRuntimeBake(request.sourceUrl));
@@ -1444,7 +1441,7 @@ async function loadImmutableVariant(
 ): Promise<ClosedFontVariant> {
   return prepared.operation.visit({
     async visit(format, request) {
-      const rasterKey = await deriveRasterKey({
+      const rasterKey = deriveRasterKey({
         descriptor: prepared.descriptor,
         extension: format.extension,
         kind: format.kind,
@@ -1500,6 +1497,7 @@ async function runtimeBakeFormat<
   assertMatchingBaker(format, baker);
   const bakeRequest = Object.assign({}, request, {
     source: registered.sourceBytes.slice(),
+    sourceFingerprint: registered.sourceFingerprint,
     font,
     fontFaceIndex: registered.fontFaceIndex,
     rasterKey,
@@ -1511,7 +1509,11 @@ async function runtimeBakeFormat<
   if (artifacts.length !== 1) {
     throw new GlyphFontError('INVALID_RASTER_ASSET', 'runtime raster generation must return one raster artifact');
   }
-  return fontRegistry(font)._attachGeneratedRaster(font, artifacts[0]!.bytes, {
+  const artifact = artifacts[0]!;
+  if (artifact.fingerprint !== fingerprint128(artifact.bytes, fingerprintDomain.artifact)) {
+    throw new GlyphFontError('INVALID_RASTER_ASSET', 'runtime raster bytes do not match their stamped fingerprint');
+  }
+  return fontRegistry(font)._attachGeneratedRaster(font, artifact.bytes, {
     rasterKey,
     kind: baked.kind,
     extension: baked.extension,
@@ -1619,12 +1621,12 @@ function prepareRasterRequest(value: unknown, index: number): PreparedRasterRequ
   };
 }
 
-async function runtimeBakeRaster(format: RasterFormatMetadata, descriptor: JsonValue): Promise<RuntimeBakeRaster> {
+function runtimeBakeRaster(format: RasterFormatMetadata, descriptor: JsonValue): RuntimeBakeRaster {
   return {
     kind: format.kind,
     extension: format.extension,
     version: format.version,
-    rasterKey: await deriveRasterKey({
+    rasterKey: deriveRasterKey({
       descriptor,
       extension: format.extension,
       kind: format.kind,
@@ -1694,7 +1696,8 @@ interface RegisteredFontInit {
   readonly registry: FontRegistry;
   readonly key: FontKey;
   readonly handle: FontHandle;
-  readonly shapingHash: Sha256Hex;
+  readonly sourceFingerprint: Fingerprint;
+  readonly shapingFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly metrics: FontMetrics;
 }
@@ -1703,7 +1706,8 @@ class RegisteredFontImpl implements RegisteredFont {
   readonly registry: FontRegistry;
   readonly key: FontKey;
   readonly handle: FontHandle;
-  readonly shapingHash: Sha256Hex;
+  readonly sourceFingerprint: Fingerprint;
+  readonly shapingFingerprint: Fingerprint;
   readonly glyphCount: number;
   readonly glyphIdWidth = 16 as const;
   readonly metrics: FontMetrics;
@@ -1714,7 +1718,8 @@ class RegisteredFontImpl implements RegisteredFont {
     this.registry = init.registry;
     this.key = init.key;
     this.handle = init.handle;
-    this.shapingHash = init.shapingHash;
+    this.sourceFingerprint = init.sourceFingerprint;
+    this.shapingFingerprint = init.shapingFingerprint;
     this.glyphCount = init.glyphCount;
     this.metrics = Object.freeze({ ...init.metrics });
   }
@@ -1774,16 +1779,6 @@ class RegisteredFontImpl implements RegisteredFont {
     const failures: unknown[] = [];
     for (const candidate of source.externalCandidates) {
       if (!('uri' in candidate.source)) continue;
-      if (candidate.source.artifactHash === undefined) {
-        failures.push(
-          new GlyphFontError(
-            'RASTER_ARTIFACT_HASH_REQUIRED',
-            'URI-addressed raster artifacts require an authenticated hash',
-            { url: candidate.source.uri },
-          ),
-        );
-        continue;
-      }
       let url: string;
       try {
         url = new URL(candidate.source.uri, candidate.artifactUrl).href;
@@ -1894,9 +1889,6 @@ class RegisteredRasterImpl implements RegisteredRaster {
   readonly #owner: RegisteredFontImpl;
   readonly #binaryBytes: Uint8Array;
   readonly #views: readonly RegisteredBufferView[];
-  readonly #reference: RasterReference;
-  readonly #resources: Map<string, RegisteredRasterResourceData>;
-  readonly #resourceLoads = new Map<string, Promise<Uint8Array<ArrayBuffer>>>();
   readonly #resourceCandidates: RegisteredRasterResourceCandidate[];
   readonly rasterKey: RasterKey;
   readonly handle: RasterHandle;
@@ -1911,8 +1903,6 @@ class RegisteredRasterImpl implements RegisteredRaster {
     this.#owner = init.owner;
     this.#binaryBytes = init.binaryBytes;
     this.#views = init.views;
-    this.#reference = freezeReference(init.reference);
-    this.#resources = init.resources;
     this.#resourceCandidates = mergeResourceCandidates([], init.resourceCandidates);
     this.rasterKey = init.reference.rasterKey;
     this.handle = init.handle;
@@ -1930,126 +1920,12 @@ class RegisteredRasterImpl implements RegisteredRaster {
     return this.#binaryBytes.subarray(view.byteOffset, view.byteOffset + view.byteLength);
   }
 
+  // Page payloads always travel inside the artifact that declares them, so resolving one is a
+  // buffer-view read and never a fetch.
   async resource(source: RasterResourceSource, signal?: AbortSignal): Promise<Uint8Array> {
     this.#assertActive();
     signal?.throwIfAborted();
-    if (source.type === 'bufferView') return this.view(source.bufferView);
-    assertExternalResourceSource(source);
-    if (source.byteLength > this.#owner.registry._artifactByteLimit()) {
-      throw new GlyphFontError(
-        'RASTER_RESOURCE_LIMIT',
-        'external raster resource exceeds the configured resource limit',
-      );
-    }
-
-    const identity = rasterResourceIdentity(source.artifactHash, source.byteLength);
-    const cached = this.#resources.get(identity);
-    if (cached !== undefined) {
-      this.#retainResourceIdentity(identity);
-      return cached.bytes;
-    }
-    const pending = this.#resourceLoads.get(identity);
-    if (pending !== undefined) return pending;
-    let operation!: Promise<Uint8Array<ArrayBuffer>>;
-    operation = this.#loadExternalResource(source, signal).then(
-      (bytes) => {
-        if (this.#resourceLoads.get(identity) === operation) this.#resourceLoads.delete(identity);
-        const resource = Object.freeze({
-          artifactHash: source.artifactHash,
-          byteLength: source.byteLength,
-          bytes,
-        });
-        this.#resources.set(identity, resource);
-        this.#retainResourceIdentity(identity);
-        return bytes;
-      },
-      (error: unknown) => {
-        if (this.#resourceLoads.get(identity) === operation) this.#resourceLoads.delete(identity);
-        throw error;
-      },
-    );
-    this.#resourceLoads.set(identity, operation);
-    return operation;
-  }
-
-  #retainResourceIdentity(identity: string): void {
-    const source = getRegisteredFontData(this.#owner).rasterSources.get(this.rasterKey);
-    if (source === undefined) throw new Error('registered raster source data is unavailable');
-    source.resourceIdentities.add(identity);
-  }
-
-  async #loadExternalResource(
-    source: Extract<RasterResourceSource, { readonly type: 'external' }>,
-    signal: AbortSignal | undefined,
-  ): Promise<Uint8Array<ArrayBuffer>> {
-    const failures: unknown[] = [];
-    for (const candidate of this.#resourceCandidates) {
-      if (candidate.resolveResource !== undefined) {
-        try {
-          const resolved = await candidate.resolveResource({
-            font: this.#owner,
-            reference: this.#reference,
-            source,
-            ...(signal === undefined ? {} : { signal }),
-          });
-          signal?.throwIfAborted();
-          if (resolved !== undefined) {
-            if (resolved.byteLength > this.#owner.registry._artifactByteLimit()) {
-              throw new GlyphFontError(
-                'RASTER_RESOURCE_LIMIT',
-                'resolved raster resource exceeds the configured resource limit',
-              );
-            }
-            return authenticateRasterResource(copyView(resolved), source);
-          }
-        } catch (error) {
-          signal?.throwIfAborted();
-          if (error instanceof GlyphFontError && error.reason === 'RASTER_RESOURCE_LIMIT') throw error;
-          failures.push(error);
-        }
-      }
-
-      let url: string;
-      try {
-        url =
-          candidate.artifactUrl === undefined
-            ? new URL(source.uri).href
-            : new URL(source.uri, candidate.artifactUrl).href;
-      } catch (error) {
-        failures.push(error);
-        continue;
-      }
-      const fetcher = candidate.fetch ?? globalThis.fetch;
-      if (typeof fetcher !== 'function') {
-        failures.push(new TypeError('no fetch implementation is available'));
-        continue;
-      }
-      try {
-        const response = await fetcher(url, signal === undefined ? undefined : { signal });
-        if (!response.ok) {
-          throw new GlyphFontError(
-            'RASTER_RESOURCE_FETCH',
-            `raster resource request failed with HTTP ${response.status}`,
-            { url },
-          );
-        }
-        const bytes = await readResponseBytes(
-          response,
-          this.#owner.registry._artifactByteLimit(),
-          'RASTER_RESOURCE_LIMIT',
-          url,
-          signal,
-        );
-        return authenticateRasterResource(bytes, source, url);
-      } catch (error) {
-        signal?.throwIfAborted();
-        if (error instanceof GlyphFontError && error.reason === 'RASTER_RESOURCE_LIMIT') throw error;
-        failures.push(error);
-      }
-    }
-    throw new GlyphFontError('RASTER_RESOURCE_FETCH', 'external raster resource is unavailable', {
-      cause: new AggregateError(failures),
-    });
+    return this.view(source.bufferView);
   }
 
   addResourceCandidates(candidates: readonly RegisteredRasterResourceCandidate[]): void {
@@ -2064,13 +1940,11 @@ class RegisteredRasterImpl implements RegisteredRaster {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#resourceLoads.clear();
     this.#owner.removeRaster(this);
   }
 
   disposeFromOwner(): void {
     this.#disposed = true;
-    this.#resourceLoads.clear();
   }
 
   #assertActive(): void {
@@ -2089,7 +1963,7 @@ function mergeRegisteredFontAcquisition(target: RegisteredFont, candidate: Regis
     if (
       !targetData.sourceCandidates.some(
         (current) =>
-          current.sourceHash === source.sourceHash &&
+          current.sourceFingerprint === source.sourceFingerprint &&
           current.sourceUrl === source.sourceUrl &&
           current.fetch === source.fetch,
       )
@@ -2101,7 +1975,7 @@ function mergeRegisteredFontAcquisition(target: RegisteredFont, candidate: Regis
     const targetSource = targetData.rasterSources.get(rasterKey)!;
     if (targetSource.artifactBytes === undefined && source.artifactBytes !== undefined) {
       if (
-        source.artifactHash === undefined ||
+        source.artifactFingerprint === undefined ||
         source.extensionData === undefined ||
         source.binaryBytes === undefined ||
         source.bufferViews === undefined
@@ -2109,7 +1983,7 @@ function mergeRegisteredFontAcquisition(target: RegisteredFont, candidate: Regis
         throw new Error('retained raster artifact data is incomplete');
       }
       targetSource.artifactBytes = source.artifactBytes;
-      targetSource.artifactHash = source.artifactHash;
+      targetSource.artifactFingerprint = source.artifactFingerprint;
       targetSource.extensionData = source.extensionData;
       targetSource.binaryBytes = source.binaryBytes;
       targetSource.bufferViews = source.bufferViews;
@@ -2137,6 +2011,10 @@ function mergeRegisteredFontAcquisition(target: RegisteredFont, candidate: Regis
   }
 }
 
+function rasterResourceIdentity(artifactFingerprint: string, byteLength: number): string {
+  return `${artifactFingerprint}:${byteLength}`;
+}
+
 function retainRasterArtifactData(
   font: RegisteredFontImpl,
   reference: RasterReference,
@@ -2144,7 +2022,7 @@ function retainRasterArtifactData(
   binaryBytes: Uint8Array,
   views: readonly RegisteredBufferView[],
   artifactBytes: Uint8Array<ArrayBuffer>,
-  artifactHash: string,
+  artifactFingerprint: string,
   resourceCandidates: readonly RegisteredRasterResourceCandidate[],
 ): RegisteredRasterSourceData {
   const sources = getRegisteredFontData(font).rasterSources;
@@ -2156,7 +2034,7 @@ function retainRasterArtifactData(
       binaryBytes,
       bufferViews: views,
       artifactBytes,
-      artifactHash,
+      artifactFingerprint,
       resourceIdentities: new Set(),
       externalCandidates: [],
       resourceCandidates: mergeResourceCandidates([], resourceCandidates),
@@ -2168,7 +2046,7 @@ function retainRasterArtifactData(
     current.reference.kind !== reference.kind ||
     current.reference.extension !== reference.extension ||
     current.reference.version !== reference.version ||
-    (current.artifactHash !== undefined && current.artifactHash !== artifactHash)
+    (current.artifactFingerprint !== undefined && current.artifactFingerprint !== artifactFingerprint)
   ) {
     throw new GlyphFontError('RASTER_REFERENCE_CONFLICT', 'one raster identity resolved to conflicting artifact data');
   }
@@ -2176,7 +2054,7 @@ function retainRasterArtifactData(
   current.binaryBytes ??= binaryBytes;
   current.bufferViews ??= views;
   current.artifactBytes ??= artifactBytes;
-  current.artifactHash ??= artifactHash;
+  current.artifactFingerprint ??= artifactFingerprint;
   current.resourceCandidates.splice(
     0,
     current.resourceCandidates.length,
@@ -2275,19 +2153,23 @@ function mergeRasterSources(
   }
 }
 
-function mergeSourceContext(font: RegisteredFontImpl, sourceHash: string, context: FontAssetContext): void {
+function mergeSourceContext(font: RegisteredFontImpl, sourceFingerprint: Fingerprint, context: FontAssetContext): void {
   const data = getRegisteredFontData(font);
-  if (sourceHash === data.sourceHash && context.sourceBytes !== undefined && data.sourceBytes === undefined) {
+  if (
+    sourceFingerprint === data.sourceFingerprint &&
+    context.sourceBytes !== undefined &&
+    data.sourceBytes === undefined
+  ) {
     data.sourceBytes = context.sourceBytes;
   }
   if (
     context.sourceUrl !== undefined &&
     !data.sourceCandidates.some(
-      (candidate) => candidate.sourceHash === sourceHash && candidate.sourceUrl === context.sourceUrl,
+      (candidate) => candidate.sourceFingerprint === sourceFingerprint && candidate.sourceUrl === context.sourceUrl,
     )
   ) {
     data.sourceCandidates.push({
-      sourceHash,
+      sourceFingerprint,
       sourceUrl: context.sourceUrl,
       ...(context.fetch === undefined ? {} : { fetch: context.fetch }),
     });
@@ -2305,11 +2187,16 @@ function matchRasterExtension(
     if (candidate === undefined) continue;
     const extension = requireNonArrayObject(candidate, source.reference.extension);
     if (
-      extension.rasterKey !== source.reference.rasterKey ||
-      extension.shapingHash !== font.shapingHash ||
-      extension.glyphCount !== font.glyphCount ||
-      extension.glyphIdWidth !== 16 ||
-      extension.version !== source.reference.version
+      extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: font.glyphCount,
+        glyphIdWidth: 16,
+        kind: source.reference.kind,
+        rasterKey: source.reference.rasterKey,
+        shaping: font.shapingFingerprint,
+        source: font.sourceFingerprint,
+        version: source.reference.version,
+      })
     ) {
       continue;
     }
@@ -2334,16 +2221,19 @@ function generatedRasterExtension(
 ): JsonValue {
   const extensions = requireNonArrayObject(document.extensions, 'extensions');
   const candidate = requireNonArrayObject(extensions[reference.extension], reference.extension);
-  if (
-    candidate.rasterKey !== reference.rasterKey ||
-    candidate.shapingHash !== font.shapingHash ||
-    candidate.glyphCount !== font.glyphCount ||
-    candidate.glyphIdWidth !== 16 ||
-    candidate.version !== reference.version
-  ) {
+  const expected = compatibilityFingerprint({
+    glyphCount: font.glyphCount,
+    glyphIdWidth: 16,
+    kind: reference.kind,
+    rasterKey: reference.rasterKey,
+    shaping: font.shapingFingerprint,
+    source: font.sourceFingerprint,
+    version: reference.version,
+  });
+  if (candidate.fingerprint !== expected) {
     throw new GlyphFontError(
       'RASTER_RECIPROCAL_IDENTITY',
-      'runtime raster artifact does not match its requested font and raster identity',
+      `runtime raster fingerprint ${String(candidate.fingerprint)} does not match this font's ${expected}; rebake this font's rasters`,
     );
   }
   return jsonValue(candidate, reference.extension);
@@ -2367,19 +2257,8 @@ function rasterReferences(value: unknown): readonly RasterReference[] {
 
 function rasterSource(value: Record<string, unknown>, path: string): RasterReference['source'] {
   if (value.type === 'embedded') return { type: 'embedded' };
-  const artifactHash =
-    value.artifactHash === undefined ? undefined : (string(value.artifactHash, `${path}.artifactHash`) as Sha256Hex);
-  if (value.uri === undefined) {
-    return { type: 'external', ...(artifactHash === undefined ? {} : { artifactHash }) };
-  }
-  if (artifactHash === undefined) {
-    throw new TypeError(`${path}.artifactHash is required when uri is present`);
-  }
-  return {
-    type: 'external',
-    uri: string(value.uri, `${path}.uri`),
-    artifactHash,
-  };
+  if (value.uri === undefined) return { type: 'external' };
+  return { type: 'external', uri: string(value.uri, `${path}.uri`) };
 }
 
 function resolveFontRequest(input: FontInput, baseUrl: URL | undefined): ResolvedFontRequest {
@@ -2751,7 +2630,7 @@ function sameExternalSource(
   left: Extract<RasterReference['source'], { readonly type: 'external' }>,
   right: Extract<RasterReference['source'], { readonly type: 'external' }>,
 ): boolean {
-  return left.uri === right.uri && left.artifactHash === right.artifactHash;
+  return left.uri === right.uri;
 }
 
 function withResourceResolver(
@@ -2781,63 +2660,23 @@ function mergeResourceCandidates(
   return result;
 }
 
-function assertExternalResourceSource(source: Extract<RasterResourceSource, { readonly type: 'external' }>): void {
-  if (
-    source.uri.length === 0 ||
-    !Number.isSafeInteger(source.byteLength) ||
-    source.byteLength <= 0 ||
-    !/^[0-9a-f]{64}$/.test(source.artifactHash)
-  ) {
-    throw new TypeError('external raster resource has invalid URI, length, or SHA-256 identity');
-  }
-}
-
-async function authenticateRasterResource(
-  bytes: Uint8Array,
-  source: Extract<RasterResourceSource, { readonly type: 'external' }>,
-  url?: string,
-): Promise<Uint8Array<ArrayBuffer>> {
-  if (bytes.byteLength !== source.byteLength) {
-    throw new GlyphFontError(
-      'RASTER_RESOURCE_LENGTH',
-      'external raster resource byte length does not match its directory entry',
-      { ...(url === undefined ? {} : { url }) },
-    );
-  }
-  if ((await sha256(bytes)) !== source.artifactHash) {
-    throw new GlyphFontError(
-      'RASTER_RESOURCE_HASH',
-      'external raster resource hash does not match its directory entry',
-      { ...(url === undefined ? {} : { url }) },
-    );
-  }
-  return bytes as Uint8Array<ArrayBuffer>;
-}
-
-function rasterResourceIdentity(artifactHash: string, byteLength: number): string {
-  return `${artifactHash}:${byteLength}`;
-}
-
-async function authenticatedFontFaceIndex(provenance: Readonly<Record<string, unknown>>): Promise<number> {
-  const descriptorHash = string(provenance.descriptorHash, 'provenance.descriptorHash');
+function declaredFontFaceIndex(provenance: Readonly<Record<string, unknown>>): number {
   const declared = provenance.fontFaceIndex;
   const fontFaceIndex = declared === undefined ? 0 : integer(declared, 'provenance.fontFaceIndex');
   if (fontFaceIndex < 0 || fontFaceIndex > 0xffff_ffff) {
     throw new GlyphFontError('INVALID_FONT_ASSET', 'provenance.fontFaceIndex must be an unsigned 32-bit integer');
   }
-  const canonical = new TextEncoder().encode(`{"fontFaceIndex":${fontFaceIndex},"formatVersion":0}`);
-  if ((await sha256(canonical)) !== descriptorHash) {
-    throw new GlyphFontError(
-      'INVALID_FONT_ASSET',
-      declared === undefined
-        ? 'legacy font artifact does not identify its nonzero collection face'
-        : 'font face index does not match the authenticated bake descriptor',
-    );
-  }
   return fontFaceIndex;
 }
 
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes.slice().buffer);
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
+function assertMatchingShapingShape(existing: RegisteredFontImpl, candidate: RuntimeFontArtifact): void {
+  const current = getRegisteredFontData(existing);
+  if (
+    existing.glyphCount !== candidate.extension.metrics.glyphCount ||
+    current.shapingSfnt.byteLength !== candidate.shapingSfnt.byteLength ||
+    current.glyphExtents.byteLength !== candidate.glyphExtents.byteLength ||
+    current.glyphExtentsAvailability.byteLength !== candidate.glyphExtentsAvailability.byteLength
+  ) {
+    throw new GlyphFontError('INVALID_FONT_ASSET', 'font shaping fingerprint contradicts its declared payload shape');
+  }
 }

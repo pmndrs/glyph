@@ -1,4 +1,4 @@
-import type { RasterDecodeArtifact, RasterDecodeFont } from '@pmndrs/glyph';
+import type { RasterDecodeArtifact, RasterDecodeFont, RasterKey } from '@pmndrs/glyph';
 import {
   validateMsdfArtifact,
   type MsdfArtifactValidationContext,
@@ -31,8 +31,10 @@ void configuredOptions;
 void kind;
 void data;
 void validation;
-void msdfDescriptorRasterKey();
-void msdfRasterKey({ emSize: 32, pixelRange: 4 });
+const descriptorRasterKey: RasterKey = msdfDescriptorRasterKey();
+const configuredRasterKey: RasterKey = msdfRasterKey({ emSize: 32, pixelRange: 4 });
+void descriptorRasterKey;
+void configuredRasterKey;
 
 // @ts-expect-error MSDF emSize is numeric.
 msdfDescriptor({ emSize: '32' });

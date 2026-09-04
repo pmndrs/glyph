@@ -79,7 +79,7 @@ export function canonicalizeBitmapDescriptor(strikes: readonly number[], coverag
 }
 
 /** Derive a key from a descriptor that has already crossed package-owned validation. */
-export function bitmapDescriptorRasterKey(descriptor: BitmapDescriptor): Promise<RasterKey> {
+export function bitmapDescriptorRasterKey(descriptor: BitmapDescriptor): RasterKey {
   return deriveRasterKey({
     descriptor,
     extension: BITMAP_EXTENSION,
@@ -89,8 +89,8 @@ export function bitmapDescriptorRasterKey(descriptor: BitmapDescriptor): Promise
 }
 
 /** Derive the bitmap raster key shared by discovery, bakers, and runtimes. */
-export async function bitmapRasterKey<const Strikes extends readonly [number, ...number[]]>(
+export function bitmapRasterKey<const Strikes extends readonly [number, ...number[]]>(
   options: BitmapOptions<Strikes>,
-): Promise<RasterKey> {
+): RasterKey {
   return bitmapDescriptorRasterKey(bitmapDescriptor(options));
 }

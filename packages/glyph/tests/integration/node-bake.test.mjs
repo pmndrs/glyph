@@ -14,6 +14,7 @@ import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/glyph/raster/bitmap';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 
 import { runCli } from '../../dist/node/cli.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const iconFontUrl = new URL(
@@ -38,7 +39,7 @@ test('bakeFont writes exact combined embedded and external artifacts with comple
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options: { strikes: [16] },
       },
     ],
@@ -66,7 +67,7 @@ test('bakeFont writes exact combined embedded and external artifacts with comple
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'external', pages: 'external' },
+        packaging: { artifact: 'external' },
         options: { strikes: [16] },
       },
     ],
@@ -78,10 +79,11 @@ test('bakeFont writes exact combined embedded and external artifacts with comple
     assert.equal(hash(bytes), expected.sha256);
   }
   assert.deepEqual(
-    external.execution.outputs.map(({ role, bytes, sha256 }) => ({ role, bytes, sha256 })),
-    golden.composed.external.artifacts.map(({ role, bytes, sha256 }) => ({ role, bytes, sha256 })),
+    external.execution.outputs.map(({ role, bytes, fingerprint }) => ({ role, bytes, fingerprint })),
+    golden.composed.external.artifacts.map(({ role, bytes, fingerprint }) => ({ role, bytes, fingerprint })),
   );
-  assert.equal(external.transport.filter(({ artifactId }) => artifactId.endsWith('.ktx2')).length, 1);
+  // A split bake writes the core and one companion; no page is ever its own file.
+  assert.equal(external.transport.filter(({ artifactId }) => artifactId.endsWith('.ktx2')).length, 0);
   assert.ok((await readdir(join(root, 'external'))).every((name) => !name.endsWith('.tmp')));
 });
 
@@ -99,7 +101,7 @@ test('bakeFont preserves bounded raster options through the Node composition pat
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options,
       },
     ],
@@ -108,8 +110,9 @@ test('bakeFont preserves bounded raster options through the Node composition pat
   const core = await validateFontArtifact(bytes);
   const descriptor = bitmapDescriptor(options);
   const validated = await validateBitmapArtifact(bytes, {
-    rasterKey: await bitmapRasterKey(options),
-    shapingHash: core.shapingHash,
+    rasterKey: bitmapRasterKey(options),
+    sourceFingerprint: core.sourceFingerprint,
+    shapingFingerprint: core.shapingFingerprint,
     glyphCount: core.glyphCount,
     glyphIdWidth: 16,
     descriptor,
@@ -132,7 +135,7 @@ test('rolls back every earlier artifact when a later publication fails', async (
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'external', pages: 'external' },
+        packaging: { artifact: 'external' },
         options: { strikes: [16] },
       },
     ],
@@ -168,8 +171,18 @@ test('rolls back every earlier artifact when a later publication fails', async (
   assert.ok((await readdir(dirname(output))).every((name) => !name.endsWith('.tmp') && !name.endsWith('.bak')));
 });
 
-test('bakeProject groups static definitions, imports only the resolved baker, and mirrors outputs', async (t) => {
+test('bakeProject rejects one font declaring the same technique twice', async (t) => {
   const root = await projectFixture(32);
+  t.after(() => rm(root, { recursive: true, force: true }));
+  // Two strike sets belong to one raster's options, not to two rasters of one technique.
+  await assert.rejects(
+    bakeProject({ projectRoot: root, outputRoot: join(root, 'generated') }),
+    (error) => error instanceof NodeBakeError && error.reason === 'RASTER_EXTENSION_DUPLICATE',
+  );
+});
+
+test('bakeProject groups static definitions, imports only the resolved baker, and mirrors outputs', async (t) => {
+  const root = await projectFixture(16);
   t.after(() => rm(root, { recursive: true, force: true }));
   const outputRoot = join(root, 'generated');
   const report = await bakeProject({ projectRoot: root, outputRoot });
@@ -180,14 +193,18 @@ test('bakeProject groups static definitions, imports only the resolved baker, an
   assert.ok(report.mappings.every(({ outputFile }) => outputFile === output));
   assert.deepEqual(
     report.fonts[0].execution.outputs.map(({ role }) => role),
-    ['font', 'raster'],
+    ['font'],
   );
   const outputBytes = await readFile(output);
-  assert.equal(hash(outputBytes), report.fonts[0].execution.outputs[0].sha256);
+  assert.equal(
+    report.fonts[0].execution.outputs[0].fingerprint,
+    fingerprint128(outputBytes, fingerprintDomain.artifact),
+  );
   const validated = await validateFontArtifact(outputBytes);
+  // Two declarations of one font with identical options resolve to a single embedded raster.
   assert.deepEqual(
     validated.document.extensions.PMNDRS_font.rasters.map(({ source }) => source.type),
-    ['embedded', 'external'],
+    ['embedded'],
   );
 
   const repeated = await bakeProject({ projectRoot: root, outputRoot });
@@ -330,7 +347,7 @@ test('pre-cancellation and source/output overlap fail before filesystem mutation
   await assert.rejects(readFile(output), { code: 'ENOENT' });
 });
 
-test('rejects unsafe package-owned artifact IDs before writing any output', async (t) => {
+test('a companion is named from its core font, so a package-owned ID never reaches disk', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-node-unsafe-artifact-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const input = join(root, 'font.ttf');
@@ -349,22 +366,14 @@ test('rejects unsafe package-owned artifact IDs before writing any output', asyn
     },
   };
 
-  await assert.rejects(
-    bakeFont({
-      input,
-      output,
-      font: { fontFaceIndex: 0 },
-      rasters: [
-        {
-          baker: unsafeBaker,
-          packaging: { artifact: 'external', pages: 'embedded' },
-          options: { strikes: [16] },
-        },
-      ],
-    }),
-    (error) => error instanceof NodeBakeError && error.reason === 'UNSAFE_ARTIFACT_ID',
-  );
-  await assert.rejects(readFile(output), { code: 'ENOENT' });
+  // The package no longer names the file, so its ID is ignored rather than sanitized.
+  await bakeFont({
+    input,
+    output,
+    font: { fontFaceIndex: 0 },
+    rasters: [{ baker: unsafeBaker, packaging: { artifact: 'external' }, options: { strikes: [16] } }],
+  });
+  await readFile(join(root, 'font.bitmap.glb'));
   await assert.rejects(readFile(join(root, '..', 'escape.glb')), { code: 'ENOENT' });
 });
 
@@ -390,7 +399,7 @@ test('rejects a lying plugin descriptor before calling its baker or publishing o
       rasters: [
         {
           baker: invalidBaker,
-          packaging: { artifact: 'embedded', pages: 'embedded' },
+          packaging: { artifact: 'embedded' },
           options: { strikes: [16] },
         },
       ],
@@ -562,3 +571,37 @@ function run(command, args) {
     });
   });
 }
+
+test('a bake is skipped only when the artifact on disk is the whole result the request asks for', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-freshness-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = join(root, 'Inter-Regular.ttf');
+  await writeFile(input, await readFile(fontUrl));
+  const output = join(root, 'Inter.font.glb');
+  const rasterCount = async () =>
+    (await validateFontArtifact(await readFile(output))).document.extensions.PMNDRS_font.rasters.length;
+  const bake = async (argv) => {
+    const io = captureIo();
+    assert.equal(await runCli(['bake', '--input', input, '--output', output, ...argv], io.io), 0, io.stderr());
+    return io.stdout();
+  };
+
+  await bake(['--bitmap', '16']);
+  assert.match(await bake(['--bitmap', '16']), /is up to date/);
+
+  // Packaging decides which files a bake writes, so a split request is not satisfied by a packed
+  // font even though every raster in it is compatible.
+  assert.doesNotMatch(await bake(['--bitmap', '16', '--split']), /is up to date/);
+  assert.equal(
+    (await validateFontArtifact(await readFile(output))).document.extensions.PMNDRS_font.rasters[0].source.type,
+    'external',
+  );
+  await readFile(join(root, 'Inter.bitmap.glb'));
+
+  // A bake publishes the whole font, so an extra raster on disk means the request would remove it.
+  // Comparing the requested rasters as a subset would make a font impossible to shrink.
+  await bake(['--bitmap', '16', '--msdf', '--force']);
+  assert.equal(await rasterCount(), 2);
+  assert.doesNotMatch(await bake(['--bitmap', '16']), /is up to date/);
+  assert.equal(await rasterCount(), 1);
+});

@@ -135,20 +135,24 @@ The companion extents-availability view is a dense bitset of exactly `ceil(glyph
 
 For a present record, the Wasm adapter returns HarfRust's i32 values as `x_bearing = xMin`, `y_bearing = yMax`, `width = xMax - xMin`, and `height = yMin - yMax`. Standard `cmap`, `hmtx`, GDEF, GSUB, and GPOS access remains zero-copy through the retained SFNT.
 
-### Shaping identity hash
+### Shaping fingerprint
 
-The raster-binding hash covers every authoritative shaping input, not only the SFNT:
+The raster-binding fingerprint covers every authoritative shaping input, not only the SFNT. It is MurmurHash3 x86 128,
+seeded with the shaping domain `0x73687030` and serialized as four little-endian `u32` lanes in 32 lowercase hexadecimal
+characters:
 
 ```text
-SHA-256(
-  UTF8("PMNDRS_font\0v0\0")
-  || u32le(sfntByteLength) || sfntBytes
+MurmurHash3-x86-128(
+  u32le(sfntByteLength) || sfntBytes
   || u32le(extentsByteLength) || extentsBytes
-  || u32le(extentsAvailabilityByteLength) || extentsAvailabilityBytes
+  || u32le(extentsAvailabilityByteLength) || extentsAvailabilityBytes,
+  seed = 0x73687030
 )
 ```
 
-This domain-separated encoding is used identically by the baker, loader, cache, and raster artifacts.
+The baker and runtime-baker calculate the fingerprint. Related artifacts repeat the stamped value, and normal loading
+compares those stamps without hashing payload bytes again. This is a compatibility identity, not a cryptographic
+integrity claim.
 
 ## Identity and duplicated header fields
 

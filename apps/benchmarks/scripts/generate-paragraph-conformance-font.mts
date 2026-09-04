@@ -23,7 +23,7 @@ try {
     rasters: [
       {
         baker: bitmapBaker,
-        packaging: { artifact: 'embedded', pages: 'embedded' },
+        packaging: { artifact: 'embedded' },
         options: { strikes: [16], coverage: { text: paragraphCjkCoverageText } },
       },
     ],

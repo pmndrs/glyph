@@ -9,12 +9,13 @@ const runtimeBaker: RuntimeRasterBakerModule<typeof GLYPH_EXAMPLE_KIND, GlyphExa
     return bakeGlyphExampleArtifact({
       font: {
         source: request.source,
+        sourceFingerprint: request.sourceFingerprint,
         fontFaceIndex: request.fontFaceIndex,
         glyphCount: request.font.glyphCount,
-        shapingHash: request.font.shapingHash,
+        shapingFingerprint: request.font.shapingFingerprint,
       },
       rasterKey: request.rasterKey as RasterKey,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       descriptor: glyphExampleDescriptor(request.options),
       ...(request.signal === undefined ? {} : { signal: request.signal }),
       ...(request.onProgress === undefined ? {} : { onProgress: request.onProgress }),

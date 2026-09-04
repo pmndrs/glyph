@@ -21,7 +21,7 @@ export type ContractFont = FontFace<RasterFormatRequest<typeof bitmap>>;
 /** Fixture-owned font plus authenticated shaping identity retained outside the public Font API. */
 export interface ContractFontFixture {
   readonly font: ContractFont;
-  readonly shapingHash: string;
+  readonly shapingFingerprint: string;
   dispose(): void;
 }
 
@@ -48,7 +48,7 @@ export async function loadContractFont(url: URL, coverage?: string): Promise<Con
     }),
   });
   const [loaded, artifact] = await Promise.all([font.load(), validateFontArtifact(bytes)]);
-  return { font: loaded, shapingHash: artifact.shapingHash, dispose: () => font.dispose() };
+  return { font: loaded, shapingFingerprint: artifact.shapingFingerprint, dispose: () => font.dispose() };
 }
 
 export function createContractText(font: ContractFont, text: string, style: TextStyle) {

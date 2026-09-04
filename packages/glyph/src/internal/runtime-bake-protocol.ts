@@ -1,6 +1,7 @@
 import type { FontBakeDescriptor, SerializedBakeError } from '../font-baker/index.js';
-import type { RasterKey } from '../identity.js';
+import type { Fingerprint, RasterKey } from '../identity.js';
 import type { JsonValue } from '../raster.js';
+import { isFingerprint } from './fingerprint.js';
 
 export type RuntimeBakeUnicodeRange = {
   readonly start: number;
@@ -48,7 +49,7 @@ export interface RuntimeBakeArtifact {
   readonly role: 'font';
   readonly id: string;
   readonly bytes: ArrayBuffer;
-  readonly sha256: string;
+  readonly fingerprint: Fingerprint;
 }
 
 export interface RuntimeBakeFailure {
@@ -133,7 +134,7 @@ function isRasters(value: unknown): value is readonly RuntimeBakeRaster[] {
         Number.isSafeInteger(raster.version) &&
         (raster.version as number) >= 0 &&
         typeof raster.rasterKey === 'string' &&
-        /^[0-9a-f]{64}$/.test(raster.rasterKey) &&
+        isFingerprint(raster.rasterKey) &&
         isJsonValue(raster.descriptor),
     )
   );
@@ -157,7 +158,7 @@ function isRuntimeBakeArtifact(value: unknown): value is RuntimeBakeArtifact {
     value.role === 'font' &&
     typeof value.id === 'string' &&
     value.bytes instanceof ArrayBuffer &&
-    typeof value.sha256 === 'string'
+    isFingerprint(value.fingerprint)
   );
 }
 

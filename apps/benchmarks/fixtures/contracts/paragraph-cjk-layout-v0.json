@@ -4,8 +4,8 @@
   "font": {
     "fixture": "noto-sans-cjk-jp-regular-v0",
     "sourceSha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
-    "artifactSha256": "eb3a6038915be8af85cf6a0fb1eab321b55843ca0fb35b3d4da0ba8b93a41a20",
-    "shapingHash": "f4e77de31444f3ee9e4a7cbdded5d0c3077455275bf81ec5def82e31f6379d58",
+    "artifactFingerprint": "451bdcf5116fded6a9b9eaa3ee15695b",
+    "shapingFingerprint": "ebc337d9a558ea41ae0584ea19e0df74",
     "sourceOracle": "../shaping/noto-sans-cjk/harfrust.json",
     "independentOracle": "../shaping/noto-sans-cjk/harfbuzz.json"
   },

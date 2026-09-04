@@ -606,7 +606,7 @@ fallback list may select an emoji-only font.[^unicode-emoji] No emoji sequence t
 
 Color artwork never enters the shared shaping SFNT, which continues to exclude `COLR`, `CPAL`, `SVG `, `CBDT`, `CBLC`,
 and `sbix`. A separately imported color-bitmap baker consumes the source font and emits an optional `rgba8unorm`, sRGB
-bitmap companion with its own selected glyph coverage, strikes, pages, records, hashes, and byte report. The first color
+bitmap companion with its own selected glyph coverage, strikes, pages, records, fingerprints, and byte report. The first color
 slice accepts OpenType-layout fonts with CBDT/CBLC or `sbix` bitmap glyphs and COLR/CPAL glyphs flattened at bake time;
 it does not add AAT `morx` shaping or an SVG runtime. CBDT embeds PNG-backed strikes, `sbix` stores standard bitmap
 graphics, and COLR describes layered or paint-graph vector compositions.[^opentype-cbdt] [^opentype-sbix]

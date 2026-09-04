@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 import { canonicalJson, deriveRasterKey } from '../../dist/internal/raster-identity.js';
+import { fingerprint128, fingerprintDomain } from '../../dist/internal/fingerprint.js';
 
 test('canonicalizes JSON according to RFC 8785 member and number rules', () => {
   const value = {
@@ -48,8 +48,8 @@ test('derives the raster key from the exact canonical contract object', async ()
     kind: 'bitmap',
     version: 0,
   };
-  const expected = createHash('sha256').update(canonicalJson(contract)).digest('hex');
+  const expected = fingerprint128(new TextEncoder().encode(canonicalJson(contract)), fingerprintDomain.descriptor);
 
   assert.equal(await deriveRasterKey(contract), expected);
-  assert.match(expected, /^[0-9a-f]{64}$/);
+  assert.match(expected, /^[0-9a-f]{32}$/);
 });

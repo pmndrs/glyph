@@ -67,8 +67,9 @@ fn bake_mtsdf_internal(
     #[cfg(feature = "profiling")] profiler: &mut BakeProfiler,
 ) -> Result<MtsdfBakeResultV0, MtsdfBakeError> {
     let settings = request.descriptor.validate()?;
-    validate_hash("shapingHash", &request.shaping_hash)?;
-    validate_hash("rasterKey", &request.raster_key)?;
+    validate_fingerprint("sourceFingerprint", &request.source_fingerprint)?;
+    validate_fingerprint("shapingFingerprint", &request.shaping_fingerprint)?;
+    validate_fingerprint("rasterKey", &request.raster_key)?;
     let expected_raster_key = descriptor_raster_key(&request.descriptor);
     if request.raster_key != expected_raster_key {
         return Err(MtsdfBakeError::new(
@@ -76,6 +77,17 @@ fn bake_mtsdf_internal(
             "raster key does not match the canonical MTSDF descriptor",
         )
         .at("/rasterKey"));
+    }
+    if pmndrs_glyph_raster_artifact::fingerprint128(
+        source,
+        pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+    ) != request.source_fingerprint
+    {
+        return Err(MtsdfBakeError::new(
+            MtsdfBakeErrorCode::InvalidIdentity,
+            "source fingerprint does not match the supplied font",
+        )
+        .at("/sourceFingerprint"));
     }
 
     let rasterized = rasterize_font(
@@ -94,17 +106,20 @@ fn bake_mtsdf_internal(
             .map_or(0, |coverage| coverage.len());
     let built = build_mtsdf_glb(
         &request.raster_key,
-        &request.shaping_hash,
+        &request.source_fingerprint,
+        &request.shaping_fingerprint,
         request.glyph_count,
-        request.packaging.pages,
         settings,
         request.descriptor.coverage.as_ref(),
         &rasterized,
         #[cfg(feature = "profiling")]
         profiler,
     )?;
-    let raster_id = format!("msdf-{}-{}.glb", request.shaping_hash, request.raster_key);
-    let raster_hash = pmndrs_glyph_raster_artifact::sha256_hex(&built.bytes);
+    let raster_fingerprint = artifact_fingerprint(&built.bytes);
+    let raster_id = format!(
+        "msdf-{}-{}.glb",
+        request.shaping_fingerprint, request.raster_key
+    );
     let mut artifacts = Vec::new();
     artifacts
         .try_reserve_exact(1 + built.pages.len())
@@ -113,7 +128,7 @@ fn bake_mtsdf_internal(
         role: "raster".into(),
         id: raster_id,
         bytes: built.bytes,
-        sha256: raster_hash,
+        fingerprint: raster_fingerprint,
     });
     let mut page_reports = Vec::new();
     page_reports
@@ -131,21 +146,9 @@ fn bake_mtsdf_internal(
             height: page.height,
             format: "rgba8unorm".into(),
             gpu_bytes: page_gpu_bytes,
-            source: if page.embedded {
-                "embedded".into()
-            } else {
-                "external".into()
-            },
+            source: "embedded".into(),
             encoded_bytes: page.bytes.len(),
         });
-        if !page.embedded {
-            artifacts.push(MtsdfBakeArtifactV0 {
-                role: "raster-page".into(),
-                id: page.id,
-                bytes: page.bytes,
-                sha256: page.sha256,
-            });
-        }
     }
     let serialized_bytes = artifacts.iter().try_fold(0_usize, |total, artifact| {
         total.checked_add(artifact.bytes.len()).ok_or_else(overflow)
@@ -196,7 +199,17 @@ pub fn descriptor_raster_key(descriptor: &MtsdfDescriptorV0) -> String {
         "{{\"descriptor\":{descriptor_json},\"extension\":\"{}\",\"kind\":\"{}\",\"version\":{}}}",
         MSDF_EXTENSION, MSDF_KIND, MSDF_FORMAT_VERSION,
     );
-    pmndrs_glyph_raster_artifact::sha256_hex(canonical.as_bytes())
+    pmndrs_glyph_raster_artifact::fingerprint128(
+        canonical.as_bytes(),
+        pmndrs_glyph_raster_artifact::DESCRIPTOR_FINGERPRINT_V0,
+    )
+}
+
+fn artifact_fingerprint(bytes: &[u8]) -> String {
+    pmndrs_glyph_raster_artifact::fingerprint128(
+        bytes,
+        pmndrs_glyph_raster_artifact::ARTIFACT_FINGERPRINT_V0,
+    )
 }
 
 fn rasterize_font(
@@ -460,8 +473,8 @@ fn checked_integer(value: f32, glyph_id: u16) -> Result<i32, MtsdfBakeError> {
     Ok(value as i32)
 }
 
-fn validate_hash(name: &str, value: &str) -> Result<(), MtsdfBakeError> {
-    if value.len() != 64
+fn validate_fingerprint(name: &str, value: &str) -> Result<(), MtsdfBakeError> {
+    if value.len() != 32
         || !value
             .as_bytes()
             .iter()
@@ -469,7 +482,7 @@ fn validate_hash(name: &str, value: &str) -> Result<(), MtsdfBakeError> {
     {
         return Err(MtsdfBakeError::new(
             MtsdfBakeErrorCode::InvalidIdentity,
-            format!("{name} must be lowercase hexadecimal SHA-256"),
+            format!("{name} must be a lowercase 128-bit fingerprint"),
         )
         .at(format!("/{name}")));
     }
@@ -509,13 +522,14 @@ mod tests {
     use super::*;
     use crate::model::{
         MAX_MTSDF_EM_SIZE, MAX_MTSDF_PIXEL_RANGE, MSDF_GENERATOR_VERSION, MTSDF_EM_SIZE,
-        MTSDF_PIXEL_RANGE, MTSDF_PLANE_UNITS_PER_EM, PagePackaging,
+        MTSDF_PIXEL_RANGE, MTSDF_PLANE_UNITS_PER_EM,
     };
 
     const INTER: &[u8] = include_bytes!(
         "../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf"
     );
-    const SHAPING_HASH: &str = "6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09";
+    const SHAPING_FINGERPRINT: &str = "0c522d6ea0db73ba74bcc389dc50263b";
+    const SOURCE_FINGERPRINT: &str = "14fa0a34f3783dd4f131d5b546e453b7";
 
     fn descriptor(em_size: Option<u16>, pixel_range: Option<u16>) -> MtsdfDescriptorV0 {
         MtsdfDescriptorV0 {
@@ -538,7 +552,7 @@ mod tests {
         let descriptor = descriptor(None, None);
         assert_eq!(
             descriptor_raster_key(&descriptor),
-            "e944ba8d2856314856289466e82e471e0adc0775a7c9c3affec7c59bfdd8fe93"
+            "c51a74581f4288c40c308436ca120d67"
         );
     }
 
@@ -546,11 +560,11 @@ mod tests {
     fn custom_descriptor_keys_match_the_typescript_contract() {
         assert_eq!(
             descriptor_raster_key(&descriptor(Some(32), Some(4))),
-            "9c8825cc24b9549e9cc923a17a32665770a4ec05be48e7439a0d5ac89f05afa1"
+            "18a97f4dfdbf96aade7117a9fbfa0b85"
         );
         assert_eq!(
             descriptor_raster_key(&descriptor(Some(32), Some(6))),
-            "fa8f5c03367db3652abb41659835618f989ad00c0dc0c39fac8dcf3e21ee16a8"
+            "d36b09cea1bfb26bcc16d3e34dc876e8"
         );
     }
 
@@ -567,7 +581,7 @@ mod tests {
         });
         assert_eq!(
             descriptor_raster_key(&descriptor),
-            "4118e8f8787ea4de99492c4869059cca10b0ae69494b780699a421d5fe22fe4d"
+            "71f88f27050d4b01aa9c1d1d60c5de77"
         );
     }
 
@@ -617,13 +631,16 @@ mod tests {
         });
         let raster_key = descriptor_raster_key(&descriptor);
         let request = MtsdfBakeRequestV0 {
+            source_fingerprint: pmndrs_glyph_raster_artifact::fingerprint128(
+                INTER,
+                pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+            ),
             font_face_index: 0,
             glyph_count: 2937,
-            shaping_hash: SHAPING_HASH.into(),
+            shaping_fingerprint: SHAPING_FINGERPRINT.into(),
             raster_key,
             packaging: crate::MtsdfPackagingV0 {
                 artifact: crate::ArtifactPackaging::Embedded,
-                pages: crate::PagePackaging::Embedded,
             },
             descriptor,
         };
@@ -708,10 +725,10 @@ mod tests {
             coverage: None,
         };
         let built = build_mtsdf_glb(
-            &"1".repeat(64),
-            &"2".repeat(64),
+            &"1".repeat(32),
+            &"3".repeat(32),
+            &"2".repeat(32),
             1,
-            PagePackaging::Embedded,
             settings(32, 5),
             None,
             &rasterized,
@@ -730,7 +747,7 @@ mod tests {
 
     #[test]
     #[ignore = "full Inter generation is the deterministic integration fixture"]
-    fn inter_mtsdf_is_deterministic_and_packaging_preserves_records() {
+    fn inter_mtsdf_is_deterministic_and_pages_are_always_embedded() {
         let settings = MtsdfBakeSettingsV0::DEFAULT;
         let rasterized = rasterize_font(
             INTER,
@@ -747,9 +764,9 @@ mod tests {
         let raster_key = descriptor_raster_key(&descriptor);
         let embedded = build_mtsdf_glb(
             &raster_key,
-            SHAPING_HASH,
+            SOURCE_FINGERPRINT,
+            SHAPING_FINGERPRINT,
             2937,
-            PagePackaging::Embedded,
             settings,
             None,
             &rasterized,
@@ -757,25 +774,24 @@ mod tests {
             &mut BakeProfiler::start(),
         )
         .expect("embedded");
-        let external = build_mtsdf_glb(
+        let repeat = build_mtsdf_glb(
             &raster_key,
-            SHAPING_HASH,
+            SOURCE_FINGERPRINT,
+            SHAPING_FINGERPRINT,
             2937,
-            PagePackaging::External,
             settings,
             None,
             &rasterized,
             #[cfg(feature = "profiling")]
             &mut BakeProfiler::start(),
         )
-        .expect("external");
-        assert_eq!(embedded.pages.len(), external.pages.len());
+        .expect("repeat");
+        assert_eq!(embedded.pages.len(), repeat.pages.len());
         assert!(!embedded.pages.is_empty());
-        for (embedded_page, external_page) in embedded.pages.iter().zip(&external.pages) {
-            assert_eq!(embedded_page.bytes, external_page.bytes);
-            assert_eq!(embedded_page.sha256, external_page.sha256);
+        for (first, second) in embedded.pages.iter().zip(&repeat.pages) {
+            assert_eq!(first.bytes, second.bytes);
         }
-        assert_eq!(record_bytes(&embedded.bytes), record_bytes(&external.bytes));
+        assert_eq!(record_bytes(&embedded.bytes), record_bytes(&repeat.bytes));
     }
 
     fn record_bytes(glb: &[u8]) -> Vec<u8> {

@@ -195,7 +195,7 @@ MTSDF GPU bytes  = textureArrayWidth × textureArrayHeight × pageCount × 4
 metadata bytes   = glyphRecordStride × representedGlyphCount + page directory
 ```
 
-MTSDF uploads only its authenticated base level. Bilinear field sampling and screen derivatives reconstruct coverage without conventional mip generation. Reports present download bytes, decoded artifact bytes, unpadded page texels, layer padding, and exact base-array GPU memory separately. Independently authored size tiers remain strike atlases or texture-array layers rather than conventional mip levels.
+MTSDF uploads only its fingerprint-addressed base level. Bilinear field sampling and screen derivatives reconstruct coverage without conventional mip generation. Reports present download bytes, decoded artifact bytes, unpadded page texels, layer padding, and exact base-array GPU memory separately. Independently authored size tiers remain strike atlases or texture-array layers rather than conventional mip levels.
 
 ## Planning totals
 
@@ -253,7 +253,7 @@ interface FontPayloadReport {
   }>;
   containers: Array<{
     artifactId: string;
-    role: 'font' | 'raster' | 'raster-page';
+    role: 'font' | 'raster';
     jsonBytes: number;
     paddingBytes: number;
     totalBytes: number;

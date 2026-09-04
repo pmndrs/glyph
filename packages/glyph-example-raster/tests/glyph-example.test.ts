@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
-import { glyph, type RasterFormatMetadata, type RasterKey, type Sha256Hex } from '@pmndrs/glyph';
+import { glyph, fingerprint, type RasterFormatMetadata, type RasterKey, type Fingerprint } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { rasterBake } from '@pmndrs/glyph/baker';
 import { type PortableGeometryPayload } from '@pmndrs/glyph';
@@ -73,28 +73,30 @@ describe('public external raster proof', () => {
     const request = {
       font: {
         source: new Uint8Array(),
+        sourceFingerprint: fingerprint.source(new Uint8Array()),
         fontFaceIndex: 0,
         glyphCount: 5,
-        shapingHash: '1'.repeat(64) as Sha256Hex,
+        shapingFingerprint: '1'.repeat(32) as Fingerprint,
       },
-      rasterKey: '2'.repeat(64) as RasterKey,
-      packaging: { artifact: 'external', pages: 'external' } as const,
+      rasterKey: '2'.repeat(32) as RasterKey,
+      packaging: { artifact: 'external' } as const,
       descriptor: glyphExampleDescriptor({ paletteSeed: 7, inset: 0.1 }),
     };
     const [left, right] = await Promise.all([glyphExampleBaker.bake(request), glyphExampleBaker.bake(request)]);
 
     expect(left).toEqual(right);
     expect(left.kind).toBe(GLYPH_EXAMPLE_KIND);
-    expect(left.artifacts.map(({ role }) => role)).toEqual(['raster', 'raster-page']);
+    expect(left.artifacts.map(({ role }) => role)).toEqual(['raster']);
     expect(left.artifacts[0]?.bytes.subarray(0, 4)).toEqual(Uint8Array.of(0x67, 0x6c, 0x54, 0x46));
   });
 
-  test('bakes, authenticates, loads, and resolves package-owned external records through public APIs', async () => {
-    const baked = await bakeFixture({ artifact: 'external', pages: 'external' });
+  test('bakes, loads, and resolves a self-contained external companion through public APIs', async () => {
+    const baked = await bakeFixture({ artifact: 'external' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     const companion = baked.execution.outputs.find(({ role }) => role === 'raster');
-    const records = baked.execution.outputs.find(({ role }) => role === 'raster-page');
-    assert.ok(core && companion && records);
+    assert.ok(core && companion);
+    // A split bake writes the core and one companion; records travel inside the companion.
+    assert.deepEqual(baked.execution.outputs.map(({ role }) => role).sort(), ['font', 'raster']);
     const files = new Map(baked.execution.outputs.map((output) => [basename(output.file), output.file] as const));
     const fetch = vi.fn(async (input: string | URL | Request) => {
       const url = input instanceof Request ? input.url : String(input);
@@ -112,14 +114,14 @@ describe('public external raster proof', () => {
         fetch.mock.calls.map(([input]) =>
           basename(new URL(input instanceof Request ? input.url : String(input)).pathname),
         ),
-      ).toEqual(expect.arrayContaining([basename(core.file), basename(companion.file), basename(records.file)]));
+      ).toEqual(expect.arrayContaining([basename(core.file), basename(companion.file)]));
     } finally {
       font.dispose();
     }
   });
 
   test('disposing a pending FontFace cancels loading and publishes no readiness', async () => {
-    const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
+    const baked = await bakeFixture({ artifact: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
     const bytes = await readFile(core.file);
@@ -134,7 +136,7 @@ describe('public external raster proof', () => {
 
   test('manually registers the TSL realization and preserves Three draw reuse', async () => {
     const three = await createThreeHandle(glyphExample);
-    const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
+    const baked = await bakeFixture({ artifact: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
     const font = glyph.fontFace(new Blob([new Uint8Array(await readFile(core.file))], { type: 'model/gltf-binary' }), {
@@ -209,7 +211,7 @@ describe('public external raster proof', () => {
 
   test('realizes and reuses supplied indexed triangle-strip geometry through Three', async () => {
     const three = await createThreeHandle(suppliedGlyphExample);
-    const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
+    const baked = await bakeFixture({ artifact: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
     const font = glyph.fontFace(new Blob([new Uint8Array(await readFile(core.file))], { type: 'model/gltf-binary' }), {
@@ -441,10 +443,7 @@ function floatBuffer(buffers: ReadonlyMap<string, ThreeRasterProgramBuffer>, nam
   return buffer;
 }
 
-async function bakeFixture(packaging: {
-  readonly artifact: 'embedded' | 'external';
-  readonly pages: 'embedded' | 'external';
-}) {
+async function bakeFixture(packaging: { readonly artifact: 'embedded' | 'external' }) {
   const directory = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-example-'));
   temporaryDirectories.push(directory);
   return bakeFont({

@@ -68,7 +68,6 @@ describe('checked raster fixture manifests', () => {
         'PMNDRS_font_bitmap',
         artifact.file,
       );
-      expect(integerProperty(raster, 'glyphCount', artifact.file)).toBe(identity.glyphCount);
       const strikes = arrayProperty(raster, 'strikes', artifact.file);
       expect(strikes).toHaveLength(manifest.strikePpems.length);
       expect(
@@ -118,7 +117,6 @@ describe('checked raster fixture manifests', () => {
     expect(integerProperty(raster, 'emSize', artifact.file)).toBe(artifact.configuration.emSize);
     expect(integerProperty(raster, 'planeUnitsPerEm', artifact.file)).toBe(artifact.configuration.emSize);
     expect(integerProperty(raster, 'pixelRange', artifact.file)).toBe(artifact.configuration.pixelRange);
-    expect(integerProperty(raster, 'glyphCount', artifact.file)).toBe(identity.glyphCount);
     expect(arrayProperty(raster, 'pages', artifact.file)).toHaveLength(artifact.raster.pages.length);
     expect(sum(artifact.raster.pages.map(({ decodedGpuBytes }) => decodedGpuBytes))).toBe(
       artifact.raster.decodedGpuBytes,
@@ -137,12 +135,12 @@ async function expectCompleteFont(
 ): Promise<void> {
   const sourceManifest = JSON.parse(
     await readFile(new URL(`${identity.directory}manifest.json`, fixtureRoot), 'utf8'),
-  ) as { readonly source: { readonly fontSha256: string } };
+  ) as { readonly source: { readonly fontFingerprint: string } };
   const font = objectProperty(objectProperty(document, 'extensions', fixtureId), 'PMNDRS_font', fixtureId);
   const metrics = objectProperty(font, 'metrics', fixtureId);
   const provenance = objectProperty(font, 'provenance', fixtureId);
   expect(integerProperty(metrics, 'glyphCount', fixtureId)).toBe(identity.glyphCount);
-  expect(stringProperty(provenance, 'sourceHash', fixtureId)).toBe(sourceManifest.source.fontSha256);
+  expect(stringProperty(provenance, 'sourceFingerprint', fixtureId)).toBe(sourceManifest.source.fontFingerprint);
   expect(integerProperty(provenance, 'fontFaceIndex', fixtureId)).toBe(0);
 }
 

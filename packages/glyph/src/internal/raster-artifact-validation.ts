@@ -7,6 +7,7 @@ import {
 } from './raster-ktx.js';
 import { DenseGlyphRecordError, validateDenseGlyphRecordTable, type RasterPageDimensions } from './raster-records.js';
 import { canonicalJson } from './raster-identity.js';
+import { isFingerprint as isFingerprintValue } from './fingerprint.js';
 import { normalizeRasterCoverage, type RasterCoverage } from '../raster-coverage.js';
 import type { JsonValue } from '../raster.js';
 
@@ -130,11 +131,7 @@ export function validateRasterCoverage(
     canonicalJson(extension.coverage as JsonValue) !== canonicalJson(actualCoverage) ||
     canonicalJson(actualCoverage) !== canonicalJson(expectedCoverage)
   ) {
-    fail(
-      'RASTER_COVERAGE_DESCRIPTOR',
-      `${label} coverage does not match the authenticated raster descriptor`,
-      `${path}/coverage`,
-    );
+    fail('RASTER_COVERAGE_DESCRIPTOR', `${label} coverage does not match the raster descriptor`, `${path}/coverage`);
   }
   const viewIndex = asInteger(extension.coverageBufferView, `${path}/coverageBufferView`, 0, views.length - 1);
   claimRasterView(claimedViews, views, viewIndex, `${path}/coverageBufferView`, label);
@@ -184,7 +181,6 @@ export async function resolveRasterPageSource(
   parsed: ParsedGlb,
   views: readonly RasterBufferView[],
   claimedViews: Set<number>,
-  externalPages: ReadonlyMap<string, Uint8Array> | undefined,
   label: string,
 ): Promise<ResolvedRasterPageSource> {
   if (source.type === 'bufferView') {
@@ -192,20 +188,7 @@ export async function resolveRasterPageSource(
     claimRasterView(claimedViews, views, viewIndex, `${path}/source/bufferView`, label);
     return { bytes: sliceRasterView(parsed, views[viewIndex]!), source: 'embedded' };
   }
-  if (source.type === 'external') {
-    const uri = asString(source.uri, `${path}/source/uri`);
-    const bytes =
-      externalPages?.get(uri) ??
-      fail('EXTERNAL_PAGE_MISSING', `external page ${uri} was not supplied for validation`, `${path}/source/uri`);
-    if (source.byteLength !== bytes.byteLength) {
-      fail('EXTERNAL_PAGE_LENGTH', 'external page byte length does not match its directory', path);
-    }
-    if (source.artifactHash !== (await sha256(bytes))) {
-      fail('EXTERNAL_PAGE_HASH', 'external page hash does not match its directory', path);
-    }
-    return { bytes, source: 'external', uri };
-  }
-  fail('PAGE_SOURCE', `${label} page source must be embedded or external`, path);
+  fail('PAGE_SOURCE', `${label} page source must be a buffer view`, path);
 }
 
 export function validateNativeKtx2(
@@ -366,8 +349,8 @@ export function checkedSum(left: number, right: number, path: string): number {
   return value;
 }
 
-export function isSha256(value: unknown): value is string {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+export function isFingerprint(value: unknown): value is string {
+  return isFingerprintValue(value);
 }
 
 export function fail(code: string, message: string, path?: string): never {
@@ -376,9 +359,4 @@ export function fail(code: string, message: string, path?: string): never {
 
 function allZero(bytes: Uint8Array): boolean {
   return bytes.every((value) => value === 0);
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes.slice().buffer);
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }

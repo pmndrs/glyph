@@ -1,8 +1,6 @@
 use alloc::{string::String, vec::Vec};
 
-pub use pmndrs_glyph_raster_artifact::{
-    ArtifactPackaging, PagePackaging, RasterCoverageV0, RasterUnicodeRangeV0,
-};
+pub use pmndrs_glyph_raster_artifact::{ArtifactPackaging, RasterCoverageV0, RasterUnicodeRangeV0};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{MtsdfBakeError, MtsdfBakeErrorCode};
@@ -106,15 +104,15 @@ impl MtsdfDescriptorV0 {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MtsdfPackagingV0 {
     pub artifact: ArtifactPackaging,
-    pub pages: PagePackaging,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MtsdfBakeRequestV0 {
+    pub source_fingerprint: String,
     pub font_face_index: u32,
     pub glyph_count: u16,
-    pub shaping_hash: String,
+    pub shaping_fingerprint: String,
     pub raster_key: String,
     pub packaging: MtsdfPackagingV0,
     pub descriptor: MtsdfDescriptorV0,
@@ -127,7 +125,7 @@ pub struct MtsdfBakeArtifactV0 {
     pub id: String,
     #[serde(skip)]
     pub bytes: Vec<u8>,
-    pub sha256: String,
+    pub fingerprint: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]

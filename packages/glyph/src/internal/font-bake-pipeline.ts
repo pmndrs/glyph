@@ -73,9 +73,10 @@ export async function bakeFontPipeline(options: FontBakePipelineOptions): Promis
     const raster = await plan.baker.bake({
       font: {
         source,
+        sourceFingerprint: coreFont.sourceFingerprint,
         fontFaceIndex,
         glyphCount: coreFont.extension.metrics.glyphCount,
-        shapingHash: coreFont.shapingHash,
+        shapingFingerprint: coreFont.shapingFingerprint,
       },
       rasterKey: plan.rasterKey,
       packaging: plan.packaging,
@@ -83,7 +84,11 @@ export async function bakeFontPipeline(options: FontBakePipelineOptions): Promis
       ...(options.signal === undefined ? {} : { signal: options.signal }),
       ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
     });
-    rasters.push({ raster, packaging: plan.packaging });
+    rasters.push({
+      raster,
+      packaging: plan.packaging,
+      ...(plan.companionName === undefined ? {} : { companionName: plan.companionName }),
+    });
   }
   timings.rasterBake = performance.now() - phase;
 

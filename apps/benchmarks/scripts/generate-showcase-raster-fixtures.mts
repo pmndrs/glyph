@@ -103,7 +103,7 @@ try {
         rasters: [
           {
             baker: bitmapBaker,
-            packaging: { artifact: 'embedded', pages: 'embedded' },
+            packaging: { artifact: 'embedded' },
             options: { strikes: [...configuration.strikes] },
           },
         ],
@@ -143,7 +143,7 @@ try {
     const generatedManifest = {
       schemaVersion: 0,
       strikePpems: configuration.strikes,
-      packaging: { artifact: 'embedded', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
       artifacts,
     };
     if (check) {

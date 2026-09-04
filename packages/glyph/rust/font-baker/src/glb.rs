@@ -40,7 +40,7 @@ pub(crate) fn build_font_glb(
             "shaping": {
                 "format": "opentype-sfnt-harfrust-v0",
                 "bufferView": 0,
-                "hash": shaping.shaping_hash,
+                "fingerprint": shaping.shaping_fingerprint,
                 "fontFunctions": {
                     "glyphExtentsBufferView": 1,
                     "glyphExtentsStride": 8,

@@ -1,5 +1,6 @@
-import type { RasterKey } from '../identity.js';
+import type { Fingerprint, RasterKey } from '../identity.js';
 import type { JsonValue } from '../raster.js';
+import { fingerprint128, fingerprintDomain } from './fingerprint.js';
 
 const textEncoder = new TextEncoder();
 const MAX_JSON_DEPTH = 256;
@@ -80,25 +81,51 @@ function withAncestor<Result>(value: object, path: string, ancestors: Set<object
   }
 }
 
-function hexadecimal(bytes: Uint8Array): string {
-  let value = '';
-  for (const byte of bytes) value += byte.toString(16).padStart(2, '0');
-  return value;
-}
-
 /** Derive a caller-independent raster key from a module-owned descriptor. */
-export async function deriveRasterKey(input: {
+export function deriveRasterKey(input: {
   readonly descriptor: JsonValue;
   readonly extension: string;
   readonly kind: string;
   readonly version: number;
-}): Promise<RasterKey> {
+}): RasterKey {
   const canonical = canonicalJson({
     descriptor: input.descriptor,
     extension: input.extension,
     kind: input.kind,
     version: input.version,
   });
-  const digest = await crypto.subtle.digest('SHA-256', textEncoder.encode(canonical));
-  return hexadecimal(new Uint8Array(digest)) as RasterKey;
+  return fingerprint128(textEncoder.encode(canonical), fingerprintDomain.descriptor) as string as RasterKey;
+}
+
+/**
+ * The single value a raster and its core font compare to decide they belong together.
+ *
+ * Every dimension that must agree is folded in here, so a consumer performs one comparison
+ * instead of re-deriving the list at each call site and forgetting a dimension when the format
+ * grows. The canonical form is published contract: a build pipeline can record the digest beside
+ * the inputs it came from and recompute it later from its own manifest.
+ *
+ * ```text
+ * {"glyphCount":2937,"glyphIdWidth":16,"kind":"bitmap","rasterKey":"d1dc…","shaping":"0c52…","source":"14fa…","version":0}
+ * ```
+ */
+export function compatibilityFingerprint(input: {
+  readonly glyphCount: number;
+  readonly glyphIdWidth: number;
+  readonly kind: string;
+  readonly rasterKey: string;
+  readonly shaping: string;
+  readonly source: string;
+  readonly version: number;
+}): Fingerprint {
+  const canonical = canonicalJson({
+    glyphCount: input.glyphCount,
+    glyphIdWidth: input.glyphIdWidth,
+    kind: input.kind,
+    rasterKey: input.rasterKey,
+    shaping: input.shaping,
+    source: input.source,
+    version: input.version,
+  });
+  return fingerprint128(textEncoder.encode(canonical), fingerprintDomain.compatibility);
 }

@@ -33,7 +33,7 @@ struct WasmResultMetadata<'a> {
 struct WasmArtifactMetadata<'a> {
     role: &'a str,
     id: &'a str,
-    sha256: &'a str,
+    fingerprint: &'a str,
 }
 
 #[unsafe(no_mangle)]
@@ -155,7 +155,7 @@ fn encode_response(result: Result<BakeResultV0, crate::BakeError>) -> Vec<u8> {
                     .map(|value| WasmArtifactMetadata {
                         role: &value.role,
                         id: &value.id,
-                        sha256: &value.sha256,
+                        fingerprint: &value.fingerprint,
                     })
                     .collect(),
                 report: &result.report,

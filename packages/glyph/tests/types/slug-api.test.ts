@@ -1,4 +1,4 @@
-import type { RasterDecodeArtifact, RasterDecodeFont } from '@pmndrs/glyph';
+import type { RasterDecodeArtifact, RasterDecodeFont, RasterKey } from '@pmndrs/glyph';
 import { SLUG_KIND, slug, slugDescriptor, slugDescriptorRasterKey, type SlugData } from '@pmndrs/glyph/raster/slug';
 
 const descriptor = slugDescriptor();
@@ -10,4 +10,5 @@ const data: Promise<SlugData> = slug.decode(font, raster);
 void descriptor;
 void kind;
 void data;
-void slugDescriptorRasterKey();
+const rasterKey: RasterKey = slugDescriptorRasterKey();
+void rasterKey;

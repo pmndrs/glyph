@@ -7,7 +7,6 @@ import {
 } from 'ktx-parse';
 
 import type { RasterDecodeFont } from '../../font.js';
-import type { Sha256Hex } from '../../identity.js';
 import { jsonArray, jsonObject, nonnegativeSafeInteger, positiveSafeInteger } from '../../internal/raster-atlas.js';
 import { validateNativeKtx2 } from '../../internal/raster-ktx.js';
 import {
@@ -20,6 +19,7 @@ import {
 import type { JsonValue, RasterDecodeArtifact, RasterResourceSource } from '../../raster.js';
 import { defineRasterResourceId } from '../../config/raster-format.js';
 import type { SlugData, SlugPageData } from '../slug.js';
+import { compatibilityFingerprint } from '../../internal/raster-identity.js';
 
 const ABSENT_PAGE = 0xffff;
 const MAX_TEXTURE_DIMENSION = 16_384;
@@ -37,9 +37,16 @@ export async function decodeSlugData(
   if (
     extension.version !== SLUG_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingHash !== font.shapingHash ||
-    extension.glyphCount !== font.glyphCount ||
-    extension.glyphIdWidth !== 16 ||
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: font.glyphCount,
+        glyphIdWidth: 16,
+        kind: 'slug',
+        rasterKey: raster.rasterKey,
+        shaping: font.shapingFingerprint,
+        source: font.sourceFingerprint,
+        version: SLUG_FORMAT_VERSION,
+      }) ||
     extension.planeUnitsPerEm !== SLUG_PLANE_UNITS_PER_EM ||
     extension.recordStride !== SLUG_GLYPH_RECORD_STRIDE
   ) {
@@ -132,7 +139,7 @@ async function decodeSlugPage(
   assertGridLength(referenceBytes, referenceCapacity, 2, `${path} reference`);
 
   return {
-    resource: defineRasterResourceId(`pmndrs.slug/${font.shapingHash}/${raster.rasterKey}/${pageIndex}`),
+    resource: defineRasterResourceId(`pmndrs.slug/${font.shapingFingerprint}/${raster.rasterKey}/${pageIndex}`),
     curveWidth,
     curveHeight,
     curveBytes,
@@ -154,19 +161,11 @@ async function rasterResourceBytes(
   signal?: AbortSignal,
 ): Promise<Uint8Array> {
   const source = jsonObject(value, path);
-  let resource: RasterResourceSource;
-  if (source.type === 'bufferView') {
-    resource = { type: 'bufferView', bufferView: nonnegativeSafeInteger(source.bufferView, `${path} bufferView`) };
-  } else if (source.type === 'external') {
-    resource = {
-      type: 'external',
-      uri: nonemptyString(source.uri, `${path} uri`),
-      byteLength: positiveSafeInteger(source.byteLength, `${path} byteLength`),
-      artifactHash: sha256Hex(source.artifactHash, `${path} artifactHash`),
-    };
-  } else {
-    throw new TypeError(`${path} must be a bufferView or authenticated external resource`);
-  }
+  if (source.type !== 'bufferView') throw new TypeError(`${path} must be a bufferView`);
+  const resource: RasterResourceSource = {
+    type: 'bufferView',
+    bufferView: nonnegativeSafeInteger(source.bufferView, `${path} bufferView`),
+  };
   return raster.resource(resource, signal);
 }
 
@@ -237,17 +236,6 @@ function assertAddressRange(base: number, count: number, capacity: number, label
   if (count === 0 || base > capacity - count) {
     throw new TypeError(`${label} range is empty or outside its page resource`);
   }
-}
-
-function nonemptyString(value: JsonValue | undefined, path: string): string {
-  if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${path} must be a nonempty string`);
-  return value;
-}
-
-function sha256Hex(value: JsonValue | undefined, path: string): Sha256Hex {
-  const text = nonemptyString(value, path);
-  if (!/^[0-9a-f]{64}$/.test(text)) throw new TypeError(`${path} must be lowercase SHA-256`);
-  return text as Sha256Hex;
 }
 
 function textureDimension(value: JsonValue | undefined, path: string): number {

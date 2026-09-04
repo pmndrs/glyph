@@ -99,10 +99,10 @@ interface RasterBakeArtifact<Kind extends string> {
 }
 
 interface BakeArtifact {
-  readonly role: 'raster' | 'raster-page';
+  readonly role: 'raster';
   readonly id: string;
   readonly bytes: Uint8Array;
-  readonly sha256: Sha256Hex;
+  readonly fingerprint: Fingerprint;
 }
 ```
 
@@ -121,7 +121,7 @@ const font = await runtime.loadFont({
 ```
 
 Before it resolves, core has loaded and validated the shaping artifact, found the selected raster companion, resolved every
-required embedded resource or hash-validated external resource, and called the technique decoder. No GPU resource exists
+required embedded resource or fingerprint-addressed external resource, and called the technique decoder. No GPU resource exists
 yet.
 
 ```ts
@@ -134,18 +134,12 @@ interface RegisteredRaster<Kind extends string> {
   resource(source: RasterResourceSource, signal?: AbortSignal): Promise<Uint8Array>;
 }
 
-type RasterResourceSource =
-  | { readonly type: 'bufferView'; readonly bufferView: number }
-  | {
-      readonly type: 'external';
-      readonly uri: string;
-      readonly byteLength: number;
-      readonly artifactHash: Sha256Hex;
-    };
+type RasterResourceSource = { readonly type: 'bufferView'; readonly bufferView: number };
 ```
 
-Raster authors use `view()` for embedded bytes and `resource()` for either embedded or SHA-256-validated external page
-bytes. Applications normally do not call either method; the selected technique's `decode()` does.
+Raster authors use `view()` for embedded bytes and `resource()` for a declared page payload. A page always travels inside
+the artifact that declares it, so both read from the same GLB. Applications normally do not call either method; the
+selected technique's `decode()` does.
 
 ```ts
 interface LoadedFont<Technique extends AnyRasterTechnique> {

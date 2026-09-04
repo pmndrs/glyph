@@ -86,7 +86,7 @@ try {
       rasters: [
         {
           baker: slugBaker,
-          packaging: { artifact: 'embedded', pages: 'embedded' },
+          packaging: { artifact: 'embedded' },
           options: undefined,
         },
       ],

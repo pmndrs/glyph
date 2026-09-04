@@ -27,6 +27,7 @@ import { decodeRasterCoverage } from '../../internal/raster-coverage-artifact.js
 import type { JsonValue, RasterDecodeArtifact } from '../../raster.js';
 import { defineRasterResourceId } from '../../config/raster-format.js';
 import type { MsdfData, MsdfPageData } from '../msdf.js';
+import { compatibilityFingerprint } from '../../internal/raster-identity.js';
 
 const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE;
 const MAX_RUNTIME_TEXTURE_BYTES = 256 * 1024 * 1024;
@@ -39,9 +40,16 @@ export async function decodeMsdfData(font: RasterDecodeFont, raster: RasterDecod
   if (
     extension.version !== MSDF_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
-    extension.shapingHash !== font.shapingHash ||
-    extension.glyphCount !== font.glyphCount ||
-    extension.glyphIdWidth !== 16 ||
+    extension.fingerprint !==
+      compatibilityFingerprint({
+        glyphCount: font.glyphCount,
+        glyphIdWidth: 16,
+        kind: 'msdf',
+        rasterKey: raster.rasterKey,
+        shaping: font.shapingFingerprint,
+        source: font.sourceFingerprint,
+        version: MSDF_FORMAT_VERSION,
+      }) ||
     extension.encoding !== 'mtsdf' ||
     extension.recordStride !== RECORD_STRIDE
   ) {
@@ -54,11 +62,11 @@ export async function decodeMsdfData(font: RasterDecodeFont, raster: RasterDecod
   const coverage = decodeRasterCoverage(extension, font.glyphCount, (view) => raster.view(view), 'MSDF');
   if (
     raster.rasterKey !==
-    (await msdfRasterKey({
+    msdfRasterKey({
       emSize,
       pixelRange,
       ...(coverage === undefined ? {} : { coverage: coverage.descriptor }),
-    }))
+    })
   ) {
     throw new TypeError('MSDF raster key does not match its generation descriptor');
   }
@@ -96,7 +104,7 @@ export async function decodeMsdfData(font: RasterDecodeFont, raster: RasterDecod
   }
   const binding = Object.freeze({ width, height, layers: pages.length });
   return {
-    resource: defineRasterResourceId(`pmndrs.msdf/${font.shapingHash}/${raster.rasterKey}`),
+    resource: defineRasterResourceId(`pmndrs.msdf/${font.shapingFingerprint}/${raster.rasterKey}`),
     binding,
     emSize,
     pixelRange,

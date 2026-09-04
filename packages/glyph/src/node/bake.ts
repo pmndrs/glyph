@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
-import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
 
 import {
   createFontBaker,
+  FONT_BAKER_VERSION,
   type FontBakeDescriptor,
   type FontInspection,
   type PreparedFontReport,
@@ -34,6 +35,7 @@ export * from '../font-baker/validator.js';
 
 import type { BakeArtifact, BakeWarning, FontPayloadReport, RasterBakePlan, RasterBakerModule } from '../bake.js';
 import type { JsonValue } from '../raster.js';
+import type { Fingerprint } from '../identity.js';
 import type {
   DiscoveryDiagnostic,
   DiscoveredFontDefinition,
@@ -44,6 +46,9 @@ import { fontBakeDescriptor } from '../internal/core-bake-policy.js';
 import { bakeFontPipeline } from '../internal/font-bake-pipeline.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
+import { fingerprint128, fingerprintDomain } from '../internal/fingerprint.js';
+import { compatibilityFingerprint } from '../internal/raster-identity.js';
+import { parseGlb } from '../font-baker/validator.js';
 
 export interface NodeBakeOptions<Rasters extends readonly object[] = readonly []> {
   readonly input: string | URL;
@@ -83,7 +88,7 @@ export interface NodeBakeExecutionReport {
     readonly role: BakeArtifact['role'];
     readonly file: string;
     readonly bytes: number;
-    readonly sha256: string;
+    readonly fingerprint: Fingerprint;
   }[];
 }
 
@@ -175,7 +180,14 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
   options.signal?.throwIfAborted();
 
   const fontBaker = await defaultFontBaker();
-  const rasters = preparedRasters ?? (await Promise.all((options.rasters ?? []).map(resolveRasterBakePlan)));
+  const resolved = preparedRasters ?? (await Promise.all((options.rasters ?? []).map(resolveRasterBakePlan)));
+  // A companion is named from the core font it belongs to. Only a caller that writes files knows
+  // that name, and no filename carries a digest: the artifact already stamps its own identity.
+  const rasters = resolved.map((plan) =>
+    plan.packaging.artifact === 'external' && plan.companionName === undefined
+      ? { ...plan, companionName: companionFileName(output, plan.baker.kind) }
+      : plan,
+  );
   const pipeline = await bakeFontPipeline({
     fontBaker,
     source: originalSource,
@@ -213,7 +225,7 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
         role: artifact.role,
         file,
         bytes: artifact.bytes.byteLength,
-        sha256: artifact.sha256,
+        fingerprint: artifact.fingerprint,
       })),
     },
   };
@@ -303,7 +315,7 @@ async function loadRasterPlan(raster: ResolvedRasterBaker): Promise<ResolvedRast
   }
   return resolveRasterBakePlan({
     baker,
-    packaging: { artifact: 'embedded', pages: 'embedded' },
+    packaging: { artifact: 'embedded' },
     options: raster.options,
   });
 }
@@ -314,13 +326,22 @@ async function loadProjectPlans(rasters: readonly ResolvedRasterBaker[]): Promis
     (left, right) =>
       left.baker.extension.localeCompare(right.baker.extension) || left.rasterKey.localeCompare(right.rasterKey),
   );
-  const embeddedExtensions = new Set<string>();
+  // One raster per technique: more strikes or different settings belong to a single raster's
+  // options, not a second raster of the same extension. External packaging is something a caller
+  // asks for, never a fallback for a collision.
+  const declared = new Set<string>();
   return resolved.map((plan) => {
-    const embedded = !embeddedExtensions.has(plan.baker.extension);
-    embeddedExtensions.add(plan.baker.extension);
+    if (declared.has(plan.baker.extension)) {
+      throw new NodeBakeError(
+        'RASTER_EXTENSION_DUPLICATE',
+        `a font may declare one ${plan.baker.kind} raster; combine the declarations into a single one whose options cover both`,
+        plan.baker.extension,
+      );
+    }
+    declared.add(plan.baker.extension);
     return {
       ...plan,
-      packaging: { artifact: embedded ? 'embedded' : 'external', pages: 'embedded' },
+      packaging: { artifact: 'embedded' },
     };
   });
 }
@@ -348,6 +369,13 @@ function outputPath(font: DiscoveredFontDefinition, outputRoot: string | undefin
   }
   const base = outputRoot === undefined ? font.assetRoot : outputRoot;
   return join(base, bakedSiblingPath(sourceRelative));
+}
+
+/** `dir/Inter.font.glb` + `bitmap` becomes `Inter.bitmap.glb`, beside the core font. */
+function companionFileName(fontOutput: string, kind: string): string {
+  const name = basename(fontOutput);
+  const stem = name.endsWith('.font.glb') ? name.slice(0, -'.font.glb'.length) : name.replace(/\.glb$/i, '');
+  return `${stem}.${kind}.glb`;
 }
 
 function bakedSiblingPath(path: string): string {
@@ -505,9 +533,8 @@ function isMissing(error: unknown): boolean {
 function finalizeTransport(report: FontPayloadReport, artifacts: readonly BakeArtifact[]): FontPayloadReport {
   return {
     ...report,
-    transport: artifacts.flatMap(({ id, role, bytes }) => {
+    transport: artifacts.flatMap(({ id, bytes }) => {
       const raw = { artifactId: id, format: 'raw', bytes: bytes.byteLength };
-      if (role === 'raster-page') return [raw];
       return [
         raw,
         { artifactId: id, format: 'gzip', bytes: gzipSync(bytes, { level: 9 }).byteLength },
@@ -546,4 +573,112 @@ function filePath(value: string | URL, field: string): string {
     return fileURLToPath(value);
   }
   return value;
+}
+
+export interface FontFreshness {
+  readonly fresh: boolean;
+  readonly reason: string;
+}
+
+/**
+ * Decide whether an existing font already contains exactly what a bake would produce.
+ *
+ * Rasterizing is the expensive half of a bake and preparing the source is the cheap half, so the
+ * check pays only the cheap half: the artifact records a fingerprint over its prepared source, and
+ * every raster records the single value that has to agree for it to be usable. Matching both means
+ * the bake would reproduce what is already on disk.
+ */
+export async function fontIsUpToDate(request: {
+  readonly output: string;
+  readonly input: string;
+  readonly fontFaceIndex: number;
+  readonly unicodeRanges?: readonly UnicodeRange[];
+  readonly rasters: readonly { readonly rasterKey: string; readonly kind: string; readonly version: number }[];
+  /** A split bake writes companions beside the core, so the same rasters are a different result. */
+  readonly split: boolean;
+}): Promise<FontFreshness> {
+  let existing: Uint8Array;
+  try {
+    existing = await readFile(request.output);
+  } catch {
+    return { fresh: false, reason: 'no font at the output path' };
+  }
+
+  const source = await readFile(request.input);
+  // Mirror the bake exactly: naming no ranges bakes the source as it is, and preparing with an
+  // empty selection is not the same request — the baker rejects it outright.
+  let baked: Uint8Array = source;
+  if (request.unicodeRanges !== undefined) {
+    const baker = await defaultFontBaker();
+    baked = baker.prepare({
+      source,
+      selection: {
+        formatVersion: 0,
+        fontFaceIndex: request.fontFaceIndex,
+        unicodeRanges: request.unicodeRanges,
+      },
+    }).bytes;
+  }
+  const sourceFingerprint = fingerprint128(baked, fingerprintDomain.source);
+
+  let document: Readonly<Record<string, unknown>>;
+  try {
+    document = parseGlb(existing).document;
+  } catch {
+    return { fresh: false, reason: 'the existing font could not be parsed' };
+  }
+  const font = (document.extensions as Record<string, Record<string, Record<string, unknown>>> | undefined)
+    ?.PMNDRS_font;
+  if (font === undefined) return { fresh: false, reason: 'the existing font is not a glyph font' };
+  if (font.provenance?.sourceFingerprint !== sourceFingerprint) {
+    return { fresh: false, reason: 'the source font, face, or unicode ranges changed' };
+  }
+  if (font.provenance?.bakerVersion !== FONT_BAKER_VERSION) {
+    return { fresh: false, reason: 'a different core baker produced this font' };
+  }
+
+  // Comparing raster keys alone would call an artifact fresh after the format changed, because a
+  // key describes the request and not what was written. Compare the digest each raster actually
+  // carries, which no artifact predating the field can satisfy.
+  const metrics = font.metrics ?? {};
+  const glyphCount = Number(metrics.glyphCount);
+  const glyphIdWidth = Number(metrics.glyphIdWidth);
+  const shaping = String((font.shaping ?? {}).fingerprint);
+  const directory = Array.isArray(font.rasters) ? (font.rasters as Record<string, unknown>[]) : [];
+  const extensions = (document.extensions ?? {}) as Record<string, Record<string, unknown> | undefined>;
+  // The requested rasters must be exactly what the font carries, not merely a subset: a bake
+  // publishes the whole file, so an extra raster means the requested bake would remove it and
+  // produce different bytes. Without this a font could never be shrunk.
+  const present = new Set(directory.map((entry) => String(entry.rasterKey)));
+  const requested = new Set(request.rasters.map((raster) => raster.rasterKey));
+  if (present.size !== requested.size || [...requested].some((key) => !present.has(key))) {
+    return { fresh: false, reason: `the font carries ${present.size} raster(s) and ${requested.size} were requested` };
+  }
+
+  // Packaging is not part of compatibility — an embedded and a split raster are equally usable —
+  // but it decides which files a bake writes, so a split request against an embedded font is not
+  // satisfied by it.
+  const embedded =
+    directory.length > 0 &&
+    directory.every((entry) => (entry.source as { type?: string } | undefined)?.type === 'embedded');
+  if (directory.length > 0 && request.split === embedded) {
+    return { fresh: false, reason: request.split ? 'the font is packed, not split' : 'the font is split, not packed' };
+  }
+
+  for (const raster of request.rasters) {
+    const entry = directory.find((candidate) => candidate.rasterKey === raster.rasterKey);
+    if (entry === undefined) return { fresh: false, reason: `${raster.kind} is not in the font` };
+    const carried = extensions[String(entry.extension)]?.fingerprint;
+    const expected = compatibilityFingerprint({
+      glyphCount,
+      glyphIdWidth,
+      kind: raster.kind,
+      rasterKey: raster.rasterKey,
+      shaping,
+      source: sourceFingerprint,
+      version: raster.version,
+    });
+    if (carried !== expected) return { fresh: false, reason: `${raster.kind} was baked by a different contract` };
+  }
+  return { fresh: true, reason: 'every requested raster is already baked from this exact source' };
 }

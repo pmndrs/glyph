@@ -16,7 +16,6 @@ std = ["dep:ktx2", "ktx2/std", "serde_json/std"]
 ktx2 = { version = "0.5.0", default-features = false, optional = true }
 serde = { version = "1.0.229", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.145", default-features = false, features = ["alloc"] }
-sha2 = { version = "0.11.0", default-features = false }
 
 [build-dependencies]
 ktx2 = { version = "0.5.0", default-features = false }
