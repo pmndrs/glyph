@@ -2,9 +2,9 @@ import { createRoot, flushSync, type RootStore } from '@react-three/fiber/webgpu
 import React, { createRef, StrictMode } from 'react';
 import * as THREE from 'three/webgpu';
 
-import { type Constraints, type GlyphLayout } from '@pmndrs/glyph';
+import { glyph, type Constraints, type GlyphLayout } from '@pmndrs/glyph';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
-import { Text, useFont } from '@pmndrs/glyph/react';
+import { Text } from '@pmndrs/glyph/react';
 import type { Text as CoreText } from '@pmndrs/glyph/three';
 
 import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-layout-v0.json' with { type: 'json' };
@@ -14,12 +14,12 @@ import { hashParagraphLayout } from '../../paragraph-layout-digest';
 import { codecAttribute, codecAttributeName } from '../three-policy-buffer-evidence';
 import { createConfiguredRenderer, disposeConfiguredRenderer } from '../../../renderer/webgpu-renderer';
 
-type BitmapTechnique = typeof bitmap;
-type BitmapTextObject = CoreText<BitmapTechnique>;
+type BitmapFormat = typeof bitmap;
+type BitmapTextObject = CoreText<BitmapFormat>;
 
-/** The paragraph and its inline run bind one technique, so both elements share one instantiation. */
-const BitmapText = Text<BitmapTechnique>;
-const BitmapInlineText = Text<BitmapTechnique>;
+/** The paragraph and its inline run bind one raster format, so both elements share one instantiation. */
+const BitmapText = Text<BitmapFormat>;
+const BitmapInlineText = Text<BitmapFormat>;
 
 const FRAME_WIDTH = 384;
 const FRAME_HEIGHT = 128;
@@ -36,6 +36,13 @@ const NATURAL_CONSTRAINTS: Constraints = { width: { mode: 'unconstrained' } };
 const fontInput = bitmapFontUrl;
 const fontOptions = { strikes: [16] } as const;
 
+function createBitmapFontFace() {
+  return glyph.fontFace(fontInput, { format: bitmap(fontOptions) });
+}
+
+type BitmapFontFace = ReturnType<typeof createBitmapFontFace>;
+type BitmapFontSelection = BitmapFontFace['bitmap'];
+
 /**
  * Target v1 reports batch failures through `onError` rather than a rejected readiness promise, so the run records the
  * first failure and fails on it instead of hashing whatever partial frame survived.
@@ -47,6 +54,7 @@ interface ReactTextFailures {
 interface ReactTextResources {
   readonly canvas: HTMLCanvasElement;
   readonly failures: ReactTextFailures;
+  readonly fontFace: BitmapFontFace;
   readonly reference: React.RefObject<BitmapTextObject | null>;
   readonly renderer: THREE.WebGPURenderer;
   readonly root: ReturnType<typeof createRoot>;
@@ -80,7 +88,7 @@ export function createReactTextTarget(): BenchmarkTarget {
       // font so teardown remains deterministic; the later host disposal is intentionally idempotent.
       resources.reference.current?.dispose();
       flushSync(() => resources.root.unmount());
-      useFont.clear(fontInput, { format: bitmap(fontOptions) });
+      resources.fontFace.dispose();
       await disposeConfiguredRenderer(resources.renderer);
     },
   };
@@ -95,6 +103,7 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
     width: FRAME_WIDTH,
     height: FRAME_HEIGHT,
   });
+  const fontFace = createBitmapFontFace();
   const root = createRoot(canvas);
   const failures: ReactTextFailures = { error: undefined };
   try {
@@ -114,13 +123,12 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
       renderer,
       size: { height: FRAME_HEIGHT, left: 0, top: 0, width: FRAME_WIDTH },
     });
-    useFont.preload(fontInput, { format: bitmap(fontOptions) });
     const reference = createRef<BitmapTextObject>();
-    const initial = await renderCommittedText(root, reference, failures);
-    return { canvas, failures, reference, renderer, root, store: initial.store };
+    const initial = await renderCommittedText(root, reference, failures, fontFace.bitmap);
+    return { canvas, failures, fontFace, reference, renderer, root, store: initial.store };
   } catch (error) {
     flushSync(() => root.unmount());
-    useFont.clear(fontInput, { format: bitmap(fontOptions) });
+    fontFace.dispose();
     await disposeConfiguredRenderer(renderer);
     throw error;
   }
@@ -135,6 +143,7 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
     resources.root,
     resources.reference,
     resources.failures,
+    resources.fontFace.bitmap,
     NARROW_WIDTH,
     '#31d7c5',
   );
@@ -144,7 +153,12 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
     throw new Error('React Text did not retain its core object across width reflow');
   }
 
-  const restored = await renderCommittedText(resources.root, resources.reference, resources.failures);
+  const restored = await renderCommittedText(
+    resources.root,
+    resources.reference,
+    resources.failures,
+    resources.fontFace.bitmap,
+  );
   const restoredLayout = requiredLayout(core);
   assertOracleLayout(restoredLayout, 'natural');
   if (restored.core !== core) throw new Error('React Text replaced its core object during restore');
@@ -190,6 +204,7 @@ async function renderCommittedText(
   root: ReturnType<typeof createRoot>,
   reference: React.RefObject<BitmapTextObject | null>,
   failures: ReactTextFailures,
+  font: BitmapFontSelection,
   width?: number,
   accent = '#ff8a00',
 ): Promise<{ readonly core: BitmapTextObject; readonly store: RootStore }> {
@@ -202,7 +217,7 @@ async function renderCommittedText(
   };
   let store: RootStore | undefined;
   flushSync(() => {
-    store = root.render(renderText(publish, failures, width, accent));
+    store = root.render(renderText(publish, failures, font, width, accent));
   });
   // StrictMode may remount after the first host ref callback, so always read the retained object back from the ref.
   await committed.promise;
@@ -217,28 +232,34 @@ async function renderCommittedText(
 function renderText(
   textRef: React.RefCallback<BitmapTextObject>,
   failures: ReactTextFailures,
+  font: BitmapFontSelection,
   width?: number,
   accent = '#ff8a00',
 ): React.ReactElement {
   return React.createElement(
     StrictMode,
     null,
-    React.createElement(CommittedText, { accent, failures, textRef, ...(width === undefined ? {} : { width }) }, null),
+    React.createElement(
+      CommittedText,
+      { accent, failures, font, textRef, ...(width === undefined ? {} : { width }) },
+      null,
+    ),
   );
 }
 
 function CommittedText({
   accent,
   failures,
+  font,
   textRef,
   width,
 }: {
   readonly accent: string;
   readonly failures: ReactTextFailures;
+  readonly font: BitmapFontSelection;
   readonly textRef: React.RefCallback<BitmapTextObject>;
   readonly width?: number;
 }): React.ReactElement {
-  const font = useFont(fontInput, { format: bitmap(fontOptions) });
   return React.createElement(
     BitmapText,
     {
@@ -295,10 +316,10 @@ function hashWithOracleLineOrigins(layout: GlyphLayout, oracleBaselines: readonl
     const delta = expected - actual;
     const glyphStart = layout.lineGlyphStarts[line] ?? 0;
     const glyphEnd = glyphStart + (layout.lineGlyphCounts[line] ?? 0);
-    for (let glyph = glyphStart; glyph < glyphEnd; glyph += 1) {
-      const position = y[glyph];
+    for (let glyphIndex = glyphStart; glyphIndex < glyphEnd; glyphIndex += 1) {
+      const position = y[glyphIndex];
       if (position === undefined) return undefined;
-      y[glyph] = Math.fround(position + delta);
+      y[glyphIndex] = Math.fround(position + delta);
     }
     lineBaselines[line] = Math.fround(expected);
   }
