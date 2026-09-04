@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:d59a39cf64172be98858122e2166d96ffc514f6fedeaf7d1df52e61ffb4aae8d'
+source_digest: 'sha256:c54d0d0542298cf6be2ef3529329ceb146fd5b31ebc777f1f989266aa7237787'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -215,6 +215,12 @@ MSDF, and Slug rasters. The prepared source bytes feed the core shaping bake and
 CLI nor the programmatic `@pmndrs/glyph/bake` path invokes a platform font tool. `--check`
 publishes only to temporary storage and compares the complete GLB byte-for-byte with the requested output. It calls the
 same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
+
+Direct baking may add `--glyph-map <path>` to publish a deterministic JSON object mapping authored glyph names to code
+points from the same `--unicodes` selection and collection face as the font artifact. The font and lookup publish as one
+rollback-safe output set, while `--check` verifies both byte-for-byte. Unnamed mappings are omitted. A name with multiple
+selected code points is rejected as ambiguous so the caller must narrow the Unicode set rather than accepting an
+order-dependent alias.
 
 The `glyph glyphs` command uses the same package-owned baker Wasm and Skrifa to enumerate Unicode mappings, exact glyph
 IDs, and names retained in a font's `post` or CFF data. Exact repeatable `--name` filters can emit structured JSON or a
