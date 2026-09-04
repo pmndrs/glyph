@@ -3,8 +3,8 @@ import type { Box3DModule, b3BodyId } from 'box3d.js/inline';
 import { Text, useFont } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { Glyphs } from '@pmndrs/glyph/three';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Matrix4, Quaternion, Vector3 } from 'three';
@@ -45,8 +45,8 @@ interface GlyphPhysicsRoot {
 }
 
 export function PhysicsScene({ inputs, onReady }: GlyphSceneProps) {
-  const titleFont = useFont(MSDF_FONT.input, MSDF_FONT.raster.technique, MSDF_FONT.raster.options);
-  const paragraphFont = useFont(BITMAP_FONT.input, BITMAP_FONT.raster.technique, BITMAP_FONT.raster.options);
+  const titleFont = useFont(MSDF_FONT.src, { format: MSDF_FONT.format });
+  const paragraphFont = useFont(BITMAP_FONT.src, { format: BITMAP_FONT.format });
   const viewport = useThree((state) => state.viewport);
   const canvasSize = useThree((state) => state.size);
   const camera = useThree((state) => state.camera);

@@ -1,7 +1,7 @@
-import type { AnyRasterTechnique, LayoutBox } from '@pmndrs/glyph';
+import type { LayoutBox, RasterFormatMetadata } from '@pmndrs/glyph';
 import { Text, useFont } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Mesh, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three';
@@ -22,7 +22,7 @@ const INITIAL_TEXT = 'edit glyphs with a caret';
 const INITIAL_SELECTION = selectionAtTextEnd(INITIAL_TEXT);
 
 export function EditingScene({ inputs, onReady }: GlyphSceneProps) {
-  const font = useFont(MSDF_FONT.input, MSDF_FONT.raster.technique, MSDF_FONT.raster.options);
+  const font = useFont(MSDF_FONT.src, { format: MSDF_FONT.format });
   const viewport = useThree((state) => state.viewport);
   const canvasSize = useThree((state) => state.size);
   const camera = useThree((state) => state.camera);
@@ -177,13 +177,13 @@ export function EditingScene({ inputs, onReady }: GlyphSceneProps) {
   );
 }
 
-function proxyPointToTextLocal<Technique extends AnyRasterTechnique>(
+function proxyPointToTextLocal<Format extends RasterFormatMetadata>(
   x: number,
   y: number,
   width: number,
   height: number,
   camera: Parameters<Raycaster['setFromCamera']>[1],
-  text: ThreeText<Technique>,
+  text: ThreeText<Format>,
   raycaster: Raycaster,
   plane: Plane,
   ndc: Vector2,

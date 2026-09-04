@@ -10,7 +10,7 @@ import { useBitmapTextScale } from './use-bitmap-text-scale';
 import { useSceneReady } from './use-scene-ready';
 
 export function ColumnsScene({ onReady }: GlyphSceneProps) {
-  const font = useFont(BITMAP_FONT.input, BITMAP_FONT.raster.technique, BITMAP_FONT.raster.options);
+  const font = useFont(BITMAP_FONT.src, { format: BITMAP_FONT.format });
   const viewport = useThree((state) => state.viewport);
   const bitmapScale = useBitmapTextScale(16);
   const group = useRef<Group>(null);

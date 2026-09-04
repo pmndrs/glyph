@@ -1,7 +1,7 @@
 import { Text, useFont } from '@pmndrs/glyph/react';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/raster/slug';
 import { Environment, Lightformer } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { Suspense, lazy, useMemo, useRef } from 'react';
@@ -21,7 +21,7 @@ import { Effects } from './effects';
 import { envelope, shake } from './drift';
 import { trackKey } from './lens';
 
-useFont.preload(fontUrl, slug);
+useFont.preload(fontUrl, { format: slug });
 
 /** Decomposed on purpose: `y` + U+0308, so the mark proves its own mark attachment. */
 const WORDMARK = 'glÿph';
@@ -43,7 +43,7 @@ const emissive = uniform(0.008);
 
 export function Scene() {
   const mark = useRef<ThreeText<typeof slug>>(null);
-  const font = useFont(fontUrl, slug);
+  const font = useFont(fontUrl, { format: slug });
   const viewport = useThree((state) => state.viewport);
   const camera = useThree((state) => state.camera);
 
@@ -65,14 +65,13 @@ export function Scene() {
   const hero = useMemo(
     () =>
       defineTextMaterial((context) => {
-        // The context is a union now: each known technique carries its own typed
-        // `shader`, and a generic arm carries an untyped `outputs` map for
-        // techniques this build does not know. Narrowing on the technique is
-        // what recovers the typed Slug output, and the fallback is honest rather
-        // than a cast.
-        if (context.technique !== 'pmndrs.slug') return context.createDefaultMaterial();
+        // The context is a discriminated union: `kind` separates glyph draws
+        // from decoration draws, and each raster `format` carries its own typed
+        // `shader`. Narrowing on both is what recovers the typed Slug output,
+        // and the fallback is honest rather than a cast.
+        if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
 
-        // The technique's own base material is the contract to match: text quads
+        // The raster's own base material is the contract to match: text quads
         // are double-sided and draw in authored order without depth writes, so a
         // front-side depth-tested material is culled outright and renders
         // nothing at all.
