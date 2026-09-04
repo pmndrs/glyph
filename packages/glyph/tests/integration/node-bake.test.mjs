@@ -177,7 +177,7 @@ test('bakeProject rejects one font declaring the same technique twice', async (t
   // Two strike sets belong to one raster's options, not to two rasters of one technique.
   await assert.rejects(
     bakeProject({ projectRoot: root, outputRoot: join(root, 'generated') }),
-    (error) => error instanceof NodeBakeError && error.code === 'RASTER_EXTENSION_DUPLICATE',
+    (error) => error instanceof NodeBakeError && error.reason === 'RASTER_EXTENSION_DUPLICATE',
   );
 });
 

@@ -27,7 +27,6 @@ export type PmndrsFontExtension = {
   };
   readonly provenance: {
     readonly sourceFingerprint: string;
-    readonly descriptorFingerprint: string;
     readonly fontFaceIndex: number;
     readonly bakerVersion: string;
     readonly harfrustVersion: string;
@@ -44,7 +43,6 @@ export type PmndrsFontExtension = {
     } | {
       readonly type: "external";
       readonly uri?: string;
-      readonly artifactFingerprint?: string;
     };
   })[];
 };

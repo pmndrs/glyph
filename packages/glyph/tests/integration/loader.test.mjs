@@ -484,24 +484,15 @@ test('FontFace source leases share one canonical main and lazily loaded sidecar 
   library.dispose();
 });
 
-test('a serialized FontFace carries an external raster and its resolved resources without another fetch', async () => {
+test('a serialized FontFace carries an external raster sidecar without another fetch', async () => {
   const calls = [];
   const coreUrl = 'https://assets.test/transfer/Inter-Regular.font.glb';
   const rasterUrl = `https://assets.test/transfer/${externalRasterId}`;
-  const pageUrl = 'https://assets.test/transfer/page.bin';
-  const pageBytes = Uint8Array.of(3, 1, 4, 1, 5, 9);
-  const pageSource = {
-    type: 'external',
-    uri: 'page.bin',
-    byteLength: pageBytes.byteLength,
-    artifactHash: createHash('sha256').update(pageBytes).digest('hex'),
-  };
   const sourceLibrary = createFontLibrary({
     fetch: fixtureFetch(
       new Map([
         [coreUrl, externalCoreBytes],
         [rasterUrl, externalRasterBytes],
-        [pageUrl, pageBytes],
       ]),
       calls,
     ),
@@ -509,16 +500,16 @@ test('a serialized FontFace carries an external raster and its resolved resource
   const source = await openFontFaceSource(sourceLibrary, coreUrl, []);
   const request = bitmap({ strikes: [16] });
   const font = await source.load(request);
-  await immutableFontResources(font).raster.resource(pageSource);
+  const rasterKey = immutableFontResources(font).raster.rasterKey;
 
   const snapshot = await source.snapshot([font]);
   assert.equal(snapshot.rasters.length, 1);
   assert.ok(snapshot.rasters[0].data instanceof ArrayBuffer, 'the external raster sidecar is carried');
-  assert.equal(snapshot.resources.length, 1);
-  assert.deepEqual(snapshot.rasters[0].resources, [
-    { artifactHash: pageSource.artifactHash, byteLength: pageSource.byteLength },
-  ]);
-  assert.deepEqual(calls, [coreUrl, rasterUrl, pageUrl]);
+  // Pages travel inside the raster that owns them, so a transferred graph carries no separate
+  // resources and the whole font costs exactly two fetches.
+  assert.deepEqual(snapshot.resources, []);
+  assert.deepEqual(snapshot.rasters[0].resources, []);
+  assert.deepEqual(calls, [coreUrl, rasterUrl]);
 
   const copiedMain = snapshot.data;
   const claimed = claimSerializedFontFace(snapshot);
@@ -535,8 +526,7 @@ test('a serialized FontFace carries an external raster and its resolved resource
   });
   const receiver = await openSerializedFontFaceSource(receiverLibrary, claimed);
   const receivedFont = await receiver.load(request);
-  const receivedPage = await immutableFontResources(receivedFont).raster.resource(pageSource);
-  assert.deepEqual(receivedPage, pageBytes);
+  assert.equal(immutableFontResources(receivedFont).raster.rasterKey, rasterKey);
 
   receivedFont.dispose();
   receiver.dispose();
@@ -593,7 +583,7 @@ test('serialized FontFace claiming trusts the package-produced transfer contract
   const sourceFont = await source.load(msdf);
   const snapshot = await source.snapshot([sourceFont]);
 
-  const claimed = claimSerializedFontFace({ ...snapshot, artifactHash: 'forged' });
+  const claimed = claimSerializedFontFace({ ...snapshot, artifactFingerprint: 'forged' });
   sourceFont.dispose();
   source.dispose();
   sourceLibrary.dispose();
