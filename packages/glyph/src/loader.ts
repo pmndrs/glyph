@@ -656,7 +656,9 @@ export class FontLoader {
     if (!response.ok) {
       return {
         status: 'invalid',
-        error: new GlyphFontError('BAKED_FONT_FETCH', `baked font request failed with HTTP ${response.status}`, { url }),
+        error: new GlyphFontError('BAKED_FONT_FETCH', `baked font request failed with HTTP ${response.status}`, {
+          url,
+        }),
       };
     }
     try {
