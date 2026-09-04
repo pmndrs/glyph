@@ -344,11 +344,11 @@ mod tests {
     );
 
     /// Both derived in JavaScript from the canonical raster-key JSON, so these
-    /// pin the Rust serializer to the TypeScript one across the ABI.
-    const DEFAULT_RASTER_KEY: &str =
-        "7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb";
-    const RATE_EIGHT_RASTER_KEY: &str =
-        "9bfc7c767a9b07e1f3280eeceb60afc9a0e866ba522e40e82890d7d3565e5b8a";
+    /// pin the Rust serializer to the TypeScript one across the ABI. Re-derived
+    /// as 128-bit fingerprints when portable identities replaced SHA-256; both
+    /// ports were run independently and produced these values.
+    const DEFAULT_RASTER_KEY: &str = "2d776923eae1be079f8aacc606d01c01";
+    const RATE_EIGHT_RASTER_KEY: &str = "0e8b45ef5345fee3a944c73facd3bd4d";
 
     #[test]
     fn a_configured_rate_derives_the_same_key_typescript_derives() {
