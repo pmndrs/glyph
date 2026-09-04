@@ -421,15 +421,40 @@ harfrust 0.12.0 exposes none. That leaves `wasm-snip`, which replaces a named bo
 `unreachable` on the author's assertion — so a wrong assertion is a runtime trap, not a link error.
 It is therefore a declared-scope product decision about supported writing systems.
 
+### Snipping script shapers: withdrawn, on both tooling and product grounds
+
+This audit proposed `wasm-snip` as the mechanism for removing unused script shapers, estimated from
+`twiggy dominators` retained size. Both halves of that proposal fail.
+
+**The tool cannot do it.** `wasm-snip` 0.4.0 is the current release and predates the SIMD proposal:
+run against the shipping artifact it aborts with `failed to parse code section / found type v128 /
+expected type i32`. It succeeds on a scalar build (2,228,786 to 1,365,128 bytes) and fails on every
+artifact this project actually ships. The estimate was never converted to a measurement because it
+cannot be.
+
+**The product should not want it.** Devanagari alone serves roughly 600-700 million readers — Hindi
+is the world's third most-spoken language, plus Marathi, Nepali, Bhojpuri, Maithili and Sanskrit.
+Dropping Indic shaping does not degrade to another script; it renders Devanagari incorrectly,
+with unshaped conjuncts and misordered matras. That is mojibake, and the readers least likely to
+have a second language are the ones most dependent on it being right.
+
+The 140,859 bytes of script-specific shaping are about 10% of the artifact and buy correct
+rendering for Arabic (~400M), Indic (~800M) and Southeast Asian scripts (~100M+) — over a billion
+readers. Most JavaScript text solutions delegate shaping to the browser; doing it correctly in the
+engine is a differentiator, not a cost line. It stays.
+
+`morx` (Apple Advanced Typography, 29,453 bytes) is a font technology rather than a writing system
+and would be defensible to drop on its own terms if a tool existed that could. None does today.
+
 ### Ranked byte plan
 
 | lever | recovery | risk |
 | --- | --- | --- |
 | ~~`opt-level = "z"` on `shaper`~~ | ~~73,344 gzip~~ | **REJECTED — 1.8-2.0× slower, measured** |
 | SoA the generated Unicode range tables | est. 40-60 KB raw, unverified | mechanical; lookups get faster |
-| `wasm-snip` `morx` | 29,453 raw | none if AAT fonts are out of scope |
+| ~~`wasm-snip` `morx`~~ | ~~29,453 raw~~ | **WITHDRAWN — the tool cannot parse a SIMD module** |
 | delete stable-indirect | ~40,100 raw | costs a capability; see above |
-| `wasm-snip` Indic/USE/Khmer/Myanmar/Thai | ~80,600 raw | declared scope decision |
+| ~~`wasm-snip` Indic/USE/Khmer/Myanmar/Thai~~ | ~~80,600 raw~~ | **WITHDRAWN — see below** |
 
 The Unicode-table estimate is arithmetic, not measurement: `BIDI_CLASS_RANGES` is
 `&[(u32, u32, BidiClass)]`, which pads to 12 bytes per entry across 1,395 entries, and 91% of its
