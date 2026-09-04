@@ -1,7 +1,8 @@
-import { Text, useFont } from '@pmndrs/glyph/react';
+import { Text } from '@pmndrs/glyph/react';
+import { useSlug } from '@pmndrs/glyph/react/slug';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
-import { slug } from '@pmndrs/glyph/three/slug';
+import type { slug } from '@pmndrs/glyph/raster/slug';
 import { Environment, Lightformer } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { Suspense, lazy, useMemo, useRef } from 'react';
@@ -21,8 +22,10 @@ import { Effects } from './effects';
 import { envelope, shake } from './drift';
 import { trackKey } from './lens';
 
-const FONT = { input: { baked: fontUrl }, raster: { technique: slug } } as const;
-useFont.preload(FONT);
+// A FontFace declares a source and the formats to bake it into. `useSlug` is
+// the Slug-shaped convenience over that declaration, so the hook returns a
+// `Font<typeof slug>` and the `Text` ref below keeps its exact format type.
+useSlug.preload(fontUrl);
 
 /** Decomposed on purpose: `y` + U+0308, so the mark proves its own mark attachment. */
 const WORDMARK = 'glÿph';
@@ -44,7 +47,7 @@ const emissive = uniform(0.008);
 
 export function Scene() {
   const mark = useRef<ThreeText<typeof slug>>(null);
-  const font = useFont(FONT);
+  const font = useSlug(fontUrl);
   const viewport = useThree((state) => state.viewport);
   const camera = useThree((state) => state.camera);
 
@@ -66,12 +69,11 @@ export function Scene() {
   const hero = useMemo(
     () =>
       defineTextMaterial((context) => {
-        // The context is a union now: each known technique carries its own typed
-        // `shader`, and a generic arm carries an untyped `outputs` map for
-        // techniques this build does not know. Narrowing on the technique is
-        // what recovers the typed Slug output, and the fallback is honest rather
-        // than a cast.
-        if (context.technique !== 'pmndrs.slug') return context.createDefaultMaterial();
+        // The context is a discriminated union: `kind` separates glyph rasters
+        // from decorations, and `format` names the raster within them. Each arm
+        // carries its own typed `shader`, so narrowing on both is what recovers
+        // the typed Slug output, and the fallback is honest rather than a cast.
+        if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return context.createDefaultMaterial();
 
         // The technique's own base material is the contract to match: text quads
         // are double-sided and draw in authored order without depth writes, so a
@@ -130,7 +132,7 @@ export function Scene() {
     // it left the mark low and put the controls through the tails of g, y and p.
     // `inkBounds` is the union of the positioned glyphs' outlines, which is what
     // the eye actually sees, so no descender allowance has to be guessed at.
-    const summary = mark.current?.layout();
+    const summary = mark.current?.measure();
     const ink = summary?.inkBounds;
     if (summary && ink !== undefined && ink.height > 0) {
       // Paragraph space runs +Y down from the box top-left, so placing the
@@ -212,13 +214,13 @@ export function Scene() {
       <Chorus />
 
       <Text
-        contentBox={{ align: 'center', width: { mode: 'exact', size: width }, wrap: 'none' }}
+        constraints={{ width: { mode: 'exact', size: width } }}
         font={font}
+        layout={{ align: 'center', wrap: 'none' }}
         material={hero}
-        paint={{ color: '#e7ecf6' }}
         ref={mark}
         visible={false}
-        style={{ fontSize }}
+        style={{ color: '#e7ecf6', fontSize }}
       >
         {WORDMARK}
       </Text>

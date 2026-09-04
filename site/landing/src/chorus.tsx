@@ -1,7 +1,8 @@
-import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
+import { Text, TextGroup } from '@pmndrs/glyph/react';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import type { msdf } from '@pmndrs/glyph/raster/msdf';
 import { useThree } from '@react-three/fiber/webgpu';
 import { useMemo, useRef } from 'react';
 
@@ -122,15 +123,9 @@ function columnsFor(width: number): number {
 // name the same ones the artifact was baked with. Ask for the defaults against
 // a 32-texel atlas and the loader finds no matching raster, falls back to
 // generating one, and fails for want of the source bytes.
-const REQUESTS = CHORUS_URLS.map(
-  (url) =>
-    ({
-      input: { baked: url },
-      raster: { options: { emSize: EM_SIZE, pixelRange: PIXEL_RANGE }, technique: msdf },
-    }) as const,
-);
+const MSDF_OPTIONS = { emSize: EM_SIZE, pixelRange: PIXEL_RANGE } as const;
 
-for (const request of REQUESTS) useFont.preload(request);
+for (const url of CHORUS_URLS) useMsdf.preload(url, MSDF_OPTIONS);
 
 /**
  * The editorial field the wordmark sits over.
@@ -140,10 +135,10 @@ for (const request of REQUESTS) useFont.preload(request);
  * application choosing a font per word.
  */
 export function Chorus() {
-  // The request list is a module constant emitted by the bake script, so its
+  // The URL list is a module constant emitted by the bake script, so its
   // length never changes at runtime and hook order is stable.
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  const fonts = REQUESTS.map((request) => useFont(request));
+  const fonts = CHORUS_URLS.map((url) => useMsdf(url, MSDF_OPTIONS));
 
   const field = useRef<ThreeText<typeof msdf>>(null);
 
@@ -152,7 +147,7 @@ export function Chorus() {
   const reported = useRef(false);
   useFrame(() => {
     if (reported.current) return;
-    const summary = field.current?.layout();
+    const summary = field.current?.measure();
     if (!summary || summary.glyphCount === 0) return;
     reported.current = true;
     if (import.meta.env.DEV) {
@@ -198,14 +193,24 @@ export function Chorus() {
   }
 
   return (
-    // `independent` lets Rust reorder compatible draws. The default is
-    // `ordered`, which forbids it — correct for text that overlaps itself, and
-    // needlessly strict here: these words never touch each other, so nothing
-    // depends on the order they are composited in, and same-atlas runs scattered
-    // through the paragraph can collapse into one draw.
-    <TextGroup compositing="independent" renderOrder={-1}>
+    // Compositing order is a root-level publication control now
+    // (`ThreeRootOptions.compositing`), not a per-group one. `independent` —
+    // which lets Rust reorder compatible draws and collapse same-atlas runs —
+    // would suit this field, since these words never touch each other, but the
+    // React default root is constructed without options, so the paragraph
+    // publishes under the `ordered` default.
+    <TextGroup renderOrder={-1}>
       <Text
-        contentBox={{
+        // Bounds imposed on the paragraph. Columns fill top to bottom and then
+        // move across, so the engine needs a bounded height to know where one
+        // column ends.
+        constraints={{
+          height: { mode: 'exact', size: height },
+          width: { mode: 'exact', size: width },
+        }}
+        font={stack}
+        // Paragraph flow, independent of the box being measured.
+        layout={{
           // Flush columns and exactly-one-space cannot both be had: justification
           // pays for a flush edge with variable word spaces. At roughly
           // twenty-five characters per line — well under the thirty-five a
@@ -216,9 +221,6 @@ export function Chorus() {
           // never closes up to a hairline just because the field sits deeper or
           // the viewport got narrow.
           columns: { count: columns, gap },
-          // Columns fill top to bottom and then move across, so the engine needs a
-          // bounded height to know where one column ends.
-          height: { mode: 'exact', size: height },
           // Elastic both ways, with the remainder spilling into letter spacing
           // rather than into the word gaps. Growth alone is what produces rivers:
           // a line that can only stretch has to open every space to reach flush,
@@ -232,7 +234,6 @@ export function Chorus() {
           // is correct rather than stretching it across the column.
           lastLine: 'auto',
           overflow: 'clip',
-          width: { mode: 'exact', size: width },
           // 'word' cannot break inside a word, exactly as CSS cannot, so a word
           // wider than the column runs straight through the gap into the next
           // one. The benchmark's editorial workload never meets this because it
@@ -242,13 +243,12 @@ export function Chorus() {
           // costs nothing next to an overflow.
           wrap: live.chorusBreak > 0.5 ? 'character' : 'word',
         }}
-        font={stack}
         ref={field}
+        position={[-width / 2, height / 2, -depth]}
+        // Colour rides `style` with the rest of the inherited presentation.
         // Set back by value, not only by depth: the field has to read as ground
         // for the mark, and at full strength it competes with it.
-        paint={{ color: '#8fa3c4', opacity: live.chorusDim }}
-        position={[-width / 2, height / 2, -depth]}
-        style={{ fontSize, lineHeight: live.chorusLeading }}
+        style={{ color: '#8fa3c4', fontSize, lineHeight: live.chorusLeading, opacity: live.chorusDim }}
       >
         {chorusFor(live.chorusRtl, live.chorusWords, live.chorusRun)}
       </Text>
