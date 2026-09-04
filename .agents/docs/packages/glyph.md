@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:2ddb1659b4cec883cc2f49f07e4f955b235804712f3ae1ef5c16fb629a066c96'
+source_digest: 'sha256:382bd72353eb58282e7f055e95f53f1c9102a3a8ebc841bebdcadd70b02b6c6d'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -779,6 +779,51 @@ The latest checked package-size record after the tsdown distribution cutover rep
 | --------------------------------------- | ----------: | --------: | --------: |
 | Core JavaScript plus shaper Wasm        | 1,524,942 B | 547,975 B | 429,901 B |
 | Three adapter plus core and shaper Wasm | 1,718,613 B | 594,736 B | 467,591 B |
+
+### Bidi class lookup: two-stage trie (D-341)
+
+`bidi_class` is called once per character on every analysis. It searched 1,267
+`(u32, u32, BidiClass)` tuples, which pad to 12 bytes, so each of roughly eleven probes strided
+three cache lines. It now indexes a two-stage code-point trie — an 8,704-entry stage-1 index over
+184 deduplicated 128-code-point blocks — in two array reads.
+
+Both implementations compiled into one binary and run over identical inputs, best of nine:
+
+| corpus | binary search | trie | |
+| --- | --- | --- | --- |
+| latin | 6.59 ns | 1.18 ns | 5.6x |
+| cjk | 6.78 ns | 1.17 ns | 5.8x |
+| mixed script | 7.32 ns | 1.22 ns | 6.0x |
+
+Artifact effect, same-session A/B on `main` with identical source, flags, and `wasm-opt` pipeline:
+1,191,281 -> 1,209,532 raw (+18,251), 460,939 -> 459,414 gzip (-1,526), 363,430 -> 362,789 Brotli
+(-641). Smaller over the wire under both encodings. An earlier reading of +5,399 Brotli is
+withdrawn: it compared against a build of a different branch rather than a same-session baseline,
+and isolated table compression was found to be a poor predictor of marginal cost inside a 1.2 MB
+module. The growth is confined to the data section (220,350 -> 237,110) while the code section
+shrinks (966,819 -> 963,087) because the search loop is gone.
+
+Cold start is unchanged. Compile and instantiate medians are indistinguishable across four
+repeated and order-reversed runs of 60 samples: compile minima cluster at 0.134-0.149 ms for both
+artifacts, and instantiate holds at ~0.06 ms despite 16,760 additional data bytes, because data
+segments are memcpy'd into linear memory rather than validated and compiled. An initial single run
+suggested an 18% compile improvement; repetition showed the sign flips with run order, so the
+honest reading is flat.
+
+End-to-end this is worth about 0.8% of `text_update` on a 22k-glyph paragraph, below that
+benchmark's noise floor, because bidi lookup is roughly one percent of a shaping-dominated
+pipeline. The per-lookup figure is the claim.
+
+`line_break::properties` (18.56 ns -> 1.32 ns, 14.1x) and `unicode::script` (15.78 -> 1.32, 11.9x)
+now use the same structure through the shared `scripts/support/code-point-trie.mjs` helper, which
+also replaced the bidi generator's hand-written copy. Across all three tables the artifact moves
+1,191,281 -> 1,258,319 raw (+67,038), 460,939 -> 453,053 gzip (-7,886), 363,430 -> 357,253 Brotli
+(-6,177) — smaller over the wire under both encodings, and roughly five times the saving bidi gave
+alone.
+
+`SCRIPT_EXTENSION_END_VALUES` stays on the range search: its 284 distinct values overflow a u8
+stage-2 index and need a wider table. `SCRIPT_EXTENSION_OFFSETS` is excluded permanently because it
+is already directly indexed and has no search to remove.
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
