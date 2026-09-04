@@ -69,10 +69,7 @@ export interface FlatSlugCpuReferenceOptions {
   readonly fill?: readonly [number, number, number, number];
 }
 
-/**
- * Reconstruct the fixed flat Slug specimen on the CPU from exact decoded curve, header,
- * and reference resources without invoking Three.js, TSL, or browser fonts.
- */
+/** Reconstructs the flat Slug specimen on the CPU from decoded curve/header/reference data, without Three.js, TSL, or browser fonts. */
 export function renderFlatSlugCpuReference(
   data: SlugCpuReferenceData,
   layout: GlyphLayout,

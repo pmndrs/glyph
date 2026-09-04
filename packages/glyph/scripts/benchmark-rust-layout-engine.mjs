@@ -1,9 +1,4 @@
-/* @workflow {
-  "name": "glyph:rust-layout-benchmark",
-  "summary": "Measures the complete retained Rust text_update path with real font data and render-plan publication.",
-  "requirements": "Built @pmndrs/glyph and @pmndrs/glyph/bake packages. Accepts --glyphs, --reps, --warmup, --case, --technique, --corpus, --allocation, --wasm, --json, and --samples.",
-  "writes": "stdout and the optional JSON report path"
-} */
+/* @workflow { "name": "glyph:rust-layout-benchmark", "summary": "Measures the complete retained Rust text_update path with real font data and render-plan publication.", "requirements": "Built @pmndrs/glyph and @pmndrs/glyph/bake packages. Accepts --glyphs, --reps, --warmup, --case, --technique, --corpus, --allocation, --wasm, --json, and --samples.", "writes": "stdout and the optional JSON report path" } */
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';

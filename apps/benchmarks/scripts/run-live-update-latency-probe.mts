@@ -1,24 +1,12 @@
-/* @workflow {
-  "name": "probe:live-update-latency",
-  "summary": "Measures input-to-visible-frame latency and verifies retained reflow for live text, font-size, layout-width, and viewport changes per raster format.",
-  "requirements": "Playwright Chromium with WebGPU. Set PROBE_BACKEND=webgl2 to measure the fallback backend.",
-  "writes": "stdout only"
-} */
+/* @workflow { "name": "probe:live-update-latency", "summary": "Measures input-to-visible-frame latency and verifies retained reflow for live text, font-size, layout-width, and viewport changes per raster format.", "requirements": "Playwright Chromium with WebGPU. Set PROBE_BACKEND=webgl2 to measure the fallback backend.", "writes": "stdout only" } */
 import { fileURLToPath } from 'node:url';
 import type { Browser, Page } from 'playwright';
 import { createServer } from 'vite';
 
 import { launchProjectChromium } from './support/project-chromium.mts';
 
-/**
- * Answers one question per technique and per kind of change: after the surface receives an input, how many rendered
- * frames pass before the canvas shows the result, and how many distinct frames does the presentation pass through?
- *
- * The signal is the presented canvas rather than harness telemetry. Live stats publish on a 250 ms report interval,
- * which would swamp the latency being measured, and instrumenting the update path would measure the instrumentation.
- * Sampling the canvas once per animation frame measures what a viewer sees. Every run also samples an idle window, so
- * a distinct-frame count can never be read as motion when it is really sampling noise.
- */
+/** Samples the presented canvas per frame, not harness telemetry (its 250 ms interval would swamp this signal).
+ * Every run also samples an idle window so a distinct-frame count is never read as motion that is really noise. */
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 process.chdir(root);
@@ -222,14 +210,8 @@ async function observeControl(
   return observations;
 }
 
-/**
- * Measures how far the presented paragraph lags the paragraph the surface has already committed.
- *
- * The typewriter runs at full reveal speed, faster than one grapheme per frame, and then the window opens on the very
- * task that pauses it. From that instant the source text is fixed, so every further distinct frame is the harness
- * still catching up: queued updates it had not applied, or a glyph transition still travelling toward a layout that
- * settled frames ago. A presentation that keeps pace goes quiet immediately.
- */
+/** Measures how far the presented paragraph lags the committed one: the window opens the instant the
+ * typewriter pauses, so any further distinct frame is the harness still catching up, not new motion. */
 async function observeTypewriter(page: Page): Promise<readonly FrameObservation[]> {
   const observations: FrameObservation[] = [];
   for (let step = 0; step < stepCount; step += 1) {
@@ -261,10 +243,7 @@ async function setRangeValue(control: ReturnType<Page['getByLabel']>, value: str
   }, value);
 }
 
-/**
- * Installs the per-frame canvas sampler as a page global so both the idle baseline and the input measurement run the
- * identical code path, with the input applied inside the same task that requests the first sampled frame.
- */
+/** Installs the sampler as a page global so the idle baseline and the input measurement share the identical code path. */
 function installCanvasProbe(): void {
   window.liveUpdateCanvasProbe = {
     observe(windowMs: number, input?: HTMLElement, value = '') {

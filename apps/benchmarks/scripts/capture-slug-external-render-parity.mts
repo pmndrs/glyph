@@ -1,11 +1,4 @@
-/* @workflow
-{
-  "name": "benchmark:slug-external-parity",
-  "summary": "Regenerate the live external-resource Slug parity evidence.",
-  "requirements": "GPU-enabled Chromium, Vitexec, and runtime package builds.",
-  "writes": "Checked-in Slug external parity evidence and temporary artifacts."
-}
-*/
+/* @workflow { "name": "benchmark:slug-external-parity", "summary": "Regenerate the live external-resource Slug parity evidence.", "requirements": "GPU-enabled Chromium, Vitexec, and runtime package builds.", "writes": "Checked-in Slug external parity evidence and temporary artifacts." } */
 import { spawn } from 'node:child_process';
 import { basename, join, resolve } from 'node:path';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';

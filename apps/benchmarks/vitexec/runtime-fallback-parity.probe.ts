@@ -29,12 +29,4 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
 }
 
 console.log('runtime-fallback-parity-probe-ready');
-/* @workflow
-{
-  "name": "benchmark:runtime-fallback",
-  "summary": "Verify exact Bitmap, MTSDF, and Slug baked/runtime delivery parity on hardware WebGPU.",
-  "requirements": "GPU-enabled Chromium and Vitexec; runs a cold source-font core and raster bake per technique.",
-  "writes": "Ignored browser caches only.",
-  "args": ["--gpu", "--path", "/?runner=probe"]
-}
-*/
+/* @workflow { "name": "benchmark:runtime-fallback", "summary": "Verify exact Bitmap, MTSDF, and Slug baked/runtime delivery parity on hardware WebGPU.", "requirements": "GPU-enabled Chromium and Vitexec; runs a cold source-font core and raster bake per technique.", "writes": "Ignored browser caches only.", "args": ["--gpu", "--path", "/?runner=probe"] } */

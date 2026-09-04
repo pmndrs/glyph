@@ -5,12 +5,7 @@ import test from 'node:test';
 
 const sourceRoot = new URL('../../src/', import.meta.url).pathname;
 
-/**
- * The technique schema is the only witness to buffer identity. Nobody else may
- * hold a literal buffer id: not executor lookups, not attribute-name strings,
- * not parallel const tables. Schema declarations (raster formats and the
- * Three codec's own buffers) are the sanctioned definition sites.
- */
+/** The technique schema is the sole witness to buffer identity — no executor lookup, attribute-name string, or parallel const table may hold a literal buffer id outside these sanctioned declaration sites. */
 const DEFINITION_SITES = new Set(['raster/bitmap.ts', 'raster/msdf.ts', 'raster/slug.ts', 'three/codec.ts']);
 
 test('buffer ids appear only inside schema declarations', async () => {

@@ -106,10 +106,7 @@ export type HandleEngineFontBinder = <Format extends RasterFormatMetadata>(
   font: Font<Format>,
 ) => HandleEngineFontBinding<Format>;
 
-/**
- * One borrowed A/B render-plan publication. Its bytes point into Wasm memory and expire when
- * this transport answers any later call. Configured renderers consume publications synchronously.
- */
+/** One borrowed A/B render-plan publication; `bytes` point into Wasm memory and expire on the transport's next call. Renderers must consume it synchronously. */
 export interface PlanPublication {
   readonly bytes: Uint8Array;
   readonly memoryBuffer: ArrayBuffer;
@@ -128,13 +125,7 @@ export interface PlanPublication {
   readonly drawCount: number;
 }
 
-/**
- * The paragraph and style a rejected frame names, read out of the result header.
- *
- * Both are the identifiers the request used, so a handle maps them to what it authored.
- * Zero means the status names none: an engine-internal invariant, a capacity watermark, or a
- * planner-level conflict attributes nothing.
- */
+/** Paragraph/style a rejected frame names, from the result header — both are request-authored ids; zero means the status names none (engine-internal, capacity, or planner-level fault). */
 const NO_FAULT: GlyphEngineFault = Object.freeze({ paragraphId: 0, styleId: 0 });
 
 interface EngineRegistrationOwners {
@@ -1320,13 +1311,7 @@ export class PlanTransport {
     this.#stagedUpdate = undefined;
   }
 
-  /**
-   * Answers one paragraph-scoped synchronous measurement without publishing. The
-   * result rides the inactive output slot under a handle-state lease: its bytes stay readable
-   * only until the next call into the same Wasm module. Engine revisions, the
-   * publication generation, and the renderer fence are untouched, so the following
-   * ordinary frame proceeds from pre-measure state.
-   */
+  /** Answers one paragraph-scoped synchronous measurement without publishing. Result bytes ride the inactive output slot and stay readable only until the next call into this Wasm module; engine revisions, publication generation, and renderer fence are untouched. */
   measureParagraph(request: Uint8Array, paragraphId: ParagraphId): PlanPublication {
     this.#assertActive();
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {

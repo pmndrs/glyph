@@ -109,20 +109,5 @@ async function run(command: string, arguments_: readonly string[]): Promise<void
     });
   });
 }
-/* @workflow
-{
-  "name": "fixture:japanese-showcase:generate",
-  "summary": "Regenerate the authenticated Japanese showcase subset.",
-  "requirements": "Provisioned HarfBuzz tools and the source CJK font.",
-  "writes": "Checked-in Japanese showcase fixture."
-}
-*/
-/* @workflow
-{
-  "name": "fixture:japanese-showcase:check",
-  "summary": "Verify the authenticated Japanese showcase subset.",
-  "requirements": "Provisioned HarfBuzz tools and the source CJK font.",
-  "writes": "Nothing.",
-  "args": ["--check"]
-}
-*/
+/* @workflow { "name": "fixture:japanese-showcase:generate", "summary": "Regenerate the authenticated Japanese showcase subset.", "requirements": "Provisioned HarfBuzz tools and the source CJK font.", "writes": "Checked-in Japanese showcase fixture." } */
+/* @workflow { "name": "fixture:japanese-showcase:check", "summary": "Verify the authenticated Japanese showcase subset.", "requirements": "Provisioned HarfBuzz tools and the source CJK font.", "writes": "Nothing.", "args": ["--check"] } */

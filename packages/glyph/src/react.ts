@@ -1077,16 +1077,7 @@ function createMountedHookFontStore(resource: ReactFontFaceResource): MountedHoo
   };
 }
 
-/**
- * Compile one `<Text>` element tree into the `(text, spans)` pair the engine consumes.
- *
- * The tree states no offsets. Every boundary below is derived at a concatenation JOIN -- `start` is
- * the length before a child's text is appended, `end` the length after -- and concatenation can
- * fuse the tail of one child with the head of the next into a single extended grapheme cluster,
- * naming an offset that is not a boundary of the text just produced. `resolveRangesToClusters`
- * settles those joins against the finished text under the one rule `compose` uses on the
- * `txt`/`span` tree: the fused cluster takes the style of its base, which is the earlier child's.
- */
+/** Boundaries are JOIN offsets in the concatenated text; when a JOIN fuses a grapheme cluster across children, `resolveRangesToClusters` gives the fused cluster the earlier child's style. */
 function flattenText(
   children: R3fTextChild<RasterFormatMetadata> | undefined,
   context: GlyphReactContext,

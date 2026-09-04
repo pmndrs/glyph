@@ -36,20 +36,5 @@ try {
   if (temporaryDirectory !== undefined) await rm(temporaryDirectory, { recursive: true, force: true });
 }
 
-/* @workflow
-{
-  "name": "fixture:paragraph-conformance-font:generate",
-  "summary": "Generate the sparse Bitmap font used by public Rust paragraph conformance.",
-  "requirements": "Built runtime packages and authenticated Noto Sans CJK source font.",
-  "writes": "Checked-in sparse paragraph conformance font asset."
-}
-*/
-/* @workflow
-{
-  "name": "fixture:paragraph-conformance-font:check",
-  "summary": "Verify the sparse Bitmap font used by public Rust paragraph conformance.",
-  "requirements": "Built runtime packages and authenticated Noto Sans CJK source font.",
-  "writes": "Nothing.",
-  "args": ["--check"]
-}
-*/
+/* @workflow { "name": "fixture:paragraph-conformance-font:generate", "summary": "Generate the sparse Bitmap font used by public Rust paragraph conformance.", "requirements": "Built runtime packages and authenticated Noto Sans CJK source font.", "writes": "Checked-in sparse paragraph conformance font asset." } */
+/* @workflow { "name": "fixture:paragraph-conformance-font:check", "summary": "Verify the sparse Bitmap font used by public Rust paragraph conformance.", "requirements": "Built runtime packages and authenticated Noto Sans CJK source font.", "writes": "Nothing.", "args": ["--check"] } */

@@ -1,21 +1,5 @@
-/* @workflow
-{
-  "name": "font-baker:shaping-oracle",
-  "summary": "Generate shaping oracle output for a supplied font and corpus.",
-  "requirements": "Stable Rust and the package oracle feature.",
-  "writes": "The caller-selected oracle output.",
-  "args": ["shaping-oracle"]
-}
-*/
-/* @workflow
-{
-  "name": "font-baker:inspect-font",
-  "summary": "Inspect one font fixture through the package oracle tooling.",
-  "requirements": "Stable Rust and the package oracle feature.",
-  "writes": "Standard output only.",
-  "args": ["inspect"]
-}
-*/
+/* @workflow { "name": "font-baker:shaping-oracle", "summary": "Generate shaping oracle output for a supplied font and corpus.", "requirements": "Stable Rust and the package oracle feature.", "writes": "The caller-selected oracle output.", "args": ["shaping-oracle"] } */
+/* @workflow { "name": "font-baker:inspect-font", "summary": "Inspect one font fixture through the package oracle tooling.", "requirements": "Stable Rust and the package oracle feature.", "writes": "Standard output only.", "args": ["inspect"] } */
 
 import { commandArguments, isMainModule, runCargo } from '../support/command.mts';
 

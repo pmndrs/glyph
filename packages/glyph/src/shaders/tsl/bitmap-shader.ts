@@ -4,10 +4,7 @@ import type { Node, Texture } from 'three/webgpu';
 // Upstream types this export as an unparameterized `Node`; it is always vec4. Narrow once, not per use.
 const modelViewProjection = TSL.modelViewProjection as Node<'vec4'>;
 
-/**
- * One glyph instance's canonical Bitmap fields, already resolved to nodes. Core owns what each field means; how a
- * program addresses it — storage buffers, instanced attributes, or a texture — stays the program's own choice.
- */
+/** One glyph instance's canonical Bitmap fields, resolved to nodes; Core owns field meaning, the program owns how it's addressed (buffer, attribute, or texture). */
 export interface TslBitmapInstanceNodes {
   /** Paragraph-local glyph origin, with y measured downward. */
   readonly origin: Node<'vec2'>;
@@ -37,11 +34,7 @@ export interface TslBitmapShaderOptions {
 /** Everything the canonical Bitmap graph produces, so a program can consume a stage or compose over its final output. */
 export interface TslBitmapShaderOutput {
   readonly position: Node<'vec3'>;
-  /**
-   * Clip-space vertex position selected by the shader options. Pixel snapping is opt-in because it preserves strike
-   * sharpness at rest but quantizes animated motion. A program must assign this to `material.vertexNode` to inherit the
-   * selected placement.
-   */
+  /** Clip-space vertex position selected by the shader options; assign to `material.vertexNode`. Pixel snapping is opt-in — sharp at rest, but quantizes animated motion. */
   readonly clipPosition: Node<'vec4'>;
   /** Atlas coordinate the page is sampled at, in the page's own top-down texel space. */
   readonly atlasUv: Node<'vec2'>;
@@ -51,14 +44,7 @@ export interface TslBitmapShaderOutput {
   readonly opacity: Node<'float'>;
 }
 
-/**
- * Builds the canonical Bitmap node graph. This is the exact graph the command-buffer executor renders, so a program that
- * composes over the returned nodes inherits the technique's coverage sampling and pixel snapping instead of
- * reimplementing them.
- *
- * The graph reads `positionLocal` and `uv()` from the technique's unit quad: both must span `[0, 1]` with the origin at
- * the glyph's upper-left corner. A program supplying different geometry owns that correspondence.
- */
+/** Builds the canonical Bitmap graph the executor renders; composing over it inherits coverage sampling and snapping. Reads `positionLocal`/`uv()` from a `[0, 1]` unit quad, origin at upper-left — different geometry must preserve that correspondence. */
 export function bitmapShader(
   instance: TslBitmapInstanceNodes,
   resources: TslBitmapShaderResources,
@@ -83,11 +69,7 @@ export function bitmapShader(
   };
 }
 
-/**
- * Rounds the projected quad to whole physical pixels. Snapping in clip space rather than paragraph space keeps the
- * paragraph transform, camera, and device pixel ratio out of the technique: whatever chain produced the clip position,
- * its device-space landing is what has to sit on the grid the atlas was baked for.
- */
+/** Rounds the projected quad to whole physical pixels in clip space (not paragraph space), so it works regardless of transform/camera/DPR — matching the grid the atlas was baked for. */
 function pixelSnappedClipPosition(): Node<'vec4'> {
   const clip = modelViewProjection;
   return TSL.vec4(

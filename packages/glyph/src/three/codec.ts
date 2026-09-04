@@ -52,10 +52,7 @@ export const TRANSFORM_BUFFER_ID: CodecBufferId = threeSystemBuffers.transformIn
 
 export const STABLE_GLYPH_BUFFER_ID: CodecBufferId = threeSystemBuffers.stableGlyphId.id;
 
-/**
- * Decoration is a reserved technique of the Three Codec rather than a raster
- * technique: rows are resource-free and fill the gather lanes directly.
- */
+/** Decoration is a reserved technique of the Three Codec, not a raster technique: rows are resource-free and fill the gather lanes directly. */
 export const decorationSchema: TechniqueSchema<
   {
     readonly rect: {
@@ -175,13 +172,7 @@ export function threeCodecCapabilitySet(): CodecCapabilitySet {
   };
 }
 
-/**
- * Resource-free decoration quads. Decoration rows fill the gather lanes directly —
- * f32 lanes 0-3 carry the rectangle and u32 lanes carry transform, stable identity,
- * color, then flags — so the semantic handles below address gather lanes by
- * position, not per-glyph meaning: the "inlineOrigin" lane is the rect's inline
- * start, and the paint arrives through the binding's packed u32 pair.
- */
+/** Decoration rows fill gather lanes by position, not per-glyph meaning: e.g. the "inlineOrigin" lane here holds the rect's inline start, not an inline origin. */
 function decorationProgram(
   techniqueId: CodecTechniqueId,
   programId: CodecProgramId,

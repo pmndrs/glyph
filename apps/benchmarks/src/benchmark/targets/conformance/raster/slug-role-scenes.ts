@@ -47,10 +47,7 @@ export interface SlugProjectionZoomSceneDefinition {
   readonly zooms: readonly [1, 8];
 }
 
-/**
- * Focused physical-pixel scenes for Slug's release role. Keeping dimensions,
- * ppem, and origins physical makes the same scene comparable at DPR 1 and 2.
- */
+/** Physical-pixel scenes: keeping dimensions, ppem, and origins physical makes the same scene comparable at DPR 1 and 2. */
 export const SLUG_ROLE_SCENES: readonly SlugRoleSceneDefinition[] = [
   {
     id: 'large-source-serif',

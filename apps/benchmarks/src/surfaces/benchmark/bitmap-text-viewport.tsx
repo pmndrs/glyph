@@ -32,14 +32,7 @@ interface LiveTextUpdateHandlers {
   readonly onError: (error: unknown) => void;
 }
 
-/**
- * Applies one authored configuration to the live scene and returns a cancel function for React's cleanup.
- *
- * The update is committed in this turn whenever the scene already holds the requested fixture, which is every change
- * but a fixture swap. Only fetching and decoding a replacement fixture is awaited, and nothing coalesces or defers the
- * shaping itself: a queue in front of `update` would drop work during continuous animation and quietly present text
- * that lags the state the surface is already rendering from.
- */
+/** Applies one configuration to the live scene, returning a cancel function; commits synchronously unless the fixture changed (then awaits load), never queuing or coalescing updates. */
 function applyLiveTextUpdate(
   scene: BitmapTextPersistentScene,
   update: RetainedLiveTextUpdate,

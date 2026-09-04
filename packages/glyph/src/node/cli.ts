@@ -615,13 +615,7 @@ async function directRasterPlans(options: DirectBakeArguments): Promise<DirectRa
   return { plans, resolved: await Promise.all(resolutions) };
 }
 
-/**
- * `em-size=32,pixel-range=6` — the technique's own settings, in the technique's
- * own terms.
- *
- * Atlas cost scales with the square of the em size, so a face set at small sizes
- * pays several times over for the default of 64 and has no way to say so.
- */
+/** Parses `em-size=32,pixel-range=6` — technique-specific settings. Atlas cost scales with the square of em size, so small-size faces can override the size-64 default. */
 function parseMsdfOptions(value: string): MsdfOptions {
   const options: { emSize?: number; pixelRange?: number } = {};
   for (const entry of value.split(',')) {

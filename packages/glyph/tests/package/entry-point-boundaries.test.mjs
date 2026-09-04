@@ -1,22 +1,4 @@
-/**
- * Where a name lives, and why.
- *
- * The package publishes one application vocabulary, renderer subpaths, and leaf integration helpers.
- * A name has exactly one home, so a reader never has to guess which subpath to import it from:
- *
- *   `.`        what text IS -- fonts, authoring, layout and measurement types, raster formats,
- *              paint. Every consumer speaks it, whether they render with Three.js or drive the
- *              engine themselves.
- *   `.`        also carries the types applications can encounter through GlyphConfig and handles.
- *   `./config/*` carries renderer-neutral construction helpers for integration authors without
- *              charging every application for the complete integration DSL.
- *   `./three`  the Three.js integration -- `ThreeConfig`, `Text`, `TextGroup`, materials.
- *
- * An integration may re-export a root name ONLY when that name appears in one of its own
- * signatures, because a caller should be able to name what `layout()` returns without
- * reaching for a second subpath. Re-exporting anything else duplicates the vocabulary and makes the
- * import site a coin toss.
- */
+/** A name has exactly one home: `.` for the application vocabulary, `./config/*` for renderer-neutral integration helpers, `./three` for the Three.js integration. An integration re-exports a root name only when it appears in its own signatures. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';

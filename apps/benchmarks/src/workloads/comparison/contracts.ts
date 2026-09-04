@@ -39,14 +39,7 @@ export interface ComparisonWorkloadConfiguration {
 export type ComparisonWorkloadUpdateKind = 'rebuild' | 'retained';
 export type WorkloadCameraKind = 'orthographic' | 'perspective';
 
-/**
- * How the host parents a workload's Texts.
- *
- * `group` mounts them under one shared `TextGroup`, so every Text in the workload prepares and packs into a single
- * paragraph batch. `standalone` leaves each Text to bind its own implicit batch of one, which is what a lone
- * large-body paragraph already is; keeping that lane standalone also keeps its telemetry directly comparable to the
- * merged-v0 scene it replaces.
- */
+/** How the host parents a workload's Texts: 'group' shares one `TextGroup` batch; 'standalone' keeps each Text's own implicit batch of one. */
 export type ComparisonWorkloadBatching = 'group' | 'standalone';
 
 /** App-private inputs made available to a workload's layout hook. */
@@ -59,11 +52,7 @@ export interface ComparisonWorkloadLayoutContext {
 /** App-private inputs made available to a workload's scene factory. */
 export interface ComparisonWorkloadCreateContext extends ComparisonWorkloadLayoutContext {
   readonly animationElapsedMs: number;
-  /**
-   * The further fixtures the route's font policy named, already resident in the host's shared registry and supplied in
-   * the order the policy declares them. Icon Grid renders its icons from its one companion; a composed workload
-   * selects its companions from spans for ranges its primary face either cannot or should not shape.
-   */
+  /** Fixtures the route's font policy named, already resident, in policy-declared order; Icon Grid's icons use its one companion, a composed workload picks companions per span. */
   readonly companionFonts: readonly WorkloadFont[];
   readonly dpr: number;
   readonly font: WorkloadFont;
@@ -81,10 +70,7 @@ export interface ComparisonWorkloadAnimationScratch {
   readonly zoomText: { phraseIndex: number; phraseRevision: number; progress: number };
 }
 
-/**
- * App-private workload policy and scene hooks. The retained host remains responsible for renderer,
- * scene activation, cancellation, telemetry, and transactional Text publication.
- */
+/** App-private workload policy and scene hooks; the retained host owns renderer, scene activation, cancellation, telemetry, and transactional Text publication. */
 export interface ComparisonWorkloadDefinition {
   readonly batching: ComparisonWorkloadBatching;
   readonly cameraKind: WorkloadCameraKind;

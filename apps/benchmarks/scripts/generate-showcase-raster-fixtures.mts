@@ -160,20 +160,5 @@ try {
     await rm(temporaryDirectory, { recursive: true, force: true });
   }
 }
-/* @workflow
-{
-  "name": "fixture:showcase-rasters:generate",
-  "summary": "Regenerate canonical showcase raster artifacts.",
-  "requirements": "Built runtime packages and authenticated source fonts.",
-  "writes": "Checked-in showcase raster fixtures."
-}
-*/
-/* @workflow
-{
-  "name": "fixture:showcase-rasters:check",
-  "summary": "Verify canonical showcase raster artifacts.",
-  "requirements": "Built runtime packages and authenticated source fonts.",
-  "writes": "Nothing.",
-  "args": ["--check"]
-}
-*/
+/* @workflow { "name": "fixture:showcase-rasters:generate", "summary": "Regenerate canonical showcase raster artifacts.", "requirements": "Built runtime packages and authenticated source fonts.", "writes": "Checked-in showcase raster fixtures." } */
+/* @workflow { "name": "fixture:showcase-rasters:check", "summary": "Verify canonical showcase raster artifacts.", "requirements": "Built runtime packages and authenticated source fonts.", "writes": "Nothing.", "args": ["--check"] } */

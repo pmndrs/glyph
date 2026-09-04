@@ -148,12 +148,7 @@ export interface MtsdfTextPersistentScene extends PersistentRenderScene {
   hasFontFixture(fixture: BenchmarkFontFixture): boolean;
   /** Fetches and decodes a replacement fixture behind the visible text. The only asynchronous step a live update has. */
   loadFontFixture(fixture: BenchmarkFontFixture): Promise<void>;
-  /**
-   * Applies and shapes one generation in the caller's own turn. Nothing here is deferred: an ordinary text, font-size,
-   * layout-width, anchor, or DPR change is visible on the next frame the host draws, which is the contract this
-   * harness exists to demonstrate. Only a fixture the scene has not loaded is refused, and `loadFontFixture` is how
-   * that is resolved.
-   */
+  /** Applies and shapes one generation synchronously — visible on the next frame drawn. Refuses a fixture that `loadFontFixture` has not resolved. */
   update(update: MtsdfTextSceneUpdate): GlyphOriginPresentation;
 }
 

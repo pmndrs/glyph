@@ -17,12 +17,7 @@ interface BakeFontRequest {
 
 type WorkerMessageListener = (event: Readonly<{ data: unknown }>) => void;
 
-/**
- * The published external contract, end to end: an external raster format
- * loads through FontFace and bakes host-side through the baker its own
- * declaration names. A successful load proves the core Worker accepted only
- * its built-in work before Glyph attached and decoded the external raster.
- */
+/** Proves the external-format contract end to end: FontFace loads `glyphExample` and bakes it host-side, while the core Worker only ever handles built-in bake-font messages. */
 test('the example raster format bakes host-side while the Worker plan stays first-party', async () => {
   const source = await readFile(new URL('Inter-Regular.ttf', fixtureDirectory));
   const fontBaker = await createFontBaker(await readFile(new URL(fontBakerWasmUrl)));

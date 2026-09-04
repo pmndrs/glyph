@@ -1,9 +1,4 @@
-/* @workflow {
-  "name": "glyph:mtsdf-admission-size",
-  "summary": "Verify or refresh the feature-minimal MTSDF generator size evidence.",
-  "requirements": "Pinned Rust and Binaryen toolchains through mise. Pass --write to refresh same-host evidence.",
-  "writes": "stdout only, or rust/mtsdf-admission/evidence/size-v0.json with --write"
-} */
+/* @workflow { "name": "glyph:mtsdf-admission-size", "summary": "Verify or refresh the feature-minimal MTSDF generator size evidence.", "requirements": "Pinned Rust and Binaryen toolchains through mise. Pass --write to refresh same-host evidence.", "writes": "stdout only, or rust/mtsdf-admission/evidence/size-v0.json with --write" } */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';

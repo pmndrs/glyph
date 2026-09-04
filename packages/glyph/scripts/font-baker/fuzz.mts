@@ -1,39 +1,7 @@
-/* @workflow
-{
-  "name": "font-baker:fuzz-validator",
-  "summary": "Run the JavaScript artifact-validator fuzzer.",
-  "requirements": "Repository-pinned Node.js and a built package.",
-  "writes": "Ignored local fuzz evidence.",
-  "args": ["validator"]
-}
-*/
-/* @workflow
-{
-  "name": "font-baker:fuzz-rust",
-  "summary": "Run the package-owned Rust cargo-fuzz target.",
-  "requirements": "The nested dated nightly and cargo-fuzz toolchain.",
-  "writes": "Ignored fuzz corpus and crash artifacts.",
-  "args": ["rust"]
-}
-*/
-/* @workflow
-{
-  "name": "font-baker:fuzz-mtsdf",
-  "summary": "Run the MTSDF outline cargo-fuzz target.",
-  "requirements": "The nested dated nightly and cargo-fuzz toolchain.",
-  "writes": "Ignored fuzz corpus and crash artifacts.",
-  "args": ["mtsdf"]
-}
-*/
-/* @workflow
-{
-  "name": "font-baker:fuzz-mutation",
-  "summary": "Run deterministic Rust mutation fuzzing.",
-  "requirements": "Stable Rust.",
-  "writes": "Ignored local fuzz evidence.",
-  "args": ["mutation"]
-}
-*/
+/* @workflow { "name": "font-baker:fuzz-validator", "summary": "Run the JavaScript artifact-validator fuzzer.", "requirements": "Repository-pinned Node.js and a built package.", "writes": "Ignored local fuzz evidence.", "args": ["validator"] } */
+/* @workflow { "name": "font-baker:fuzz-rust", "summary": "Run the package-owned Rust cargo-fuzz target.", "requirements": "The nested dated nightly and cargo-fuzz toolchain.", "writes": "Ignored fuzz corpus and crash artifacts.", "args": ["rust"] } */
+/* @workflow { "name": "font-baker:fuzz-mtsdf", "summary": "Run the MTSDF outline cargo-fuzz target.", "requirements": "The nested dated nightly and cargo-fuzz toolchain.", "writes": "Ignored fuzz corpus and crash artifacts.", "args": ["mtsdf"] } */
+/* @workflow { "name": "font-baker:fuzz-mutation", "summary": "Run deterministic Rust mutation fuzzing.", "requirements": "Stable Rust.", "writes": "Ignored local fuzz evidence.", "args": ["mutation"] } */
 
 import { commandArguments, isMainModule, runNode } from '../support/command.mts';
 

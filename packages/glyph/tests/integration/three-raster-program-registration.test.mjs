@@ -1,19 +1,4 @@
-/**
- * When a Three raster codec may still be registered.
- *
- * The registry is module-global, and a `GlyphEngine`'s Three coordinator reads it exactly
- * once, at construction. Nothing re-reads it. A registration after that point was a perfectly legal
- * call that applied to nothing: the technique was in the map, invisible to every engine already
- * built, and the loss surfaced far away and much later as a missing technique when a font using it
- * was bound. A doc comment saying "register early" is not enforcement.
- *
- * The rule this pins: a technique no live engine could ever see is refused at registration,
- * naming itself, and becomes registrable again once no engine holds a snapshot.
- *
- * This file owns its own engine and coordinator because the assertions are about the module-global
- * registry's lifecycle, and it leaves a program in that registry -- which is safe only because the
- * test runner gives each file its own process.
- */
+/** A registration after any live engine's construction-time registry snapshot is refused, naming itself, and becomes legal again once no engine holds one. Leaves state in the module-global registry — safe only because the test runner isolates each file to its own process. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';

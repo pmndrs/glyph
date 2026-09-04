@@ -52,11 +52,7 @@ export type RasterCodecBodyFactory<Schema extends TechniqueSchemaMetadata = Tech
   capabilities: CodecCapabilitySet,
 ) => CompiledCodecProgramBody<Schema>;
 
-/**
- * Portable output of cold font compilation: renderer-neutral binding bytes plus
- * retained portable resources. No renderer program or GPU object crosses this
- * boundary, and every retained resource is linked to its declared schema name.
- */
+/** Portable output of cold font compilation: renderer-neutral binding bytes plus retained portable resources. No renderer program or GPU object crosses this boundary. */
 export interface CompiledRasterFont {
   readonly binding: Uint8Array;
   readonly resources: ReadonlyMap<RasterResourceId, PortableResource>;
@@ -125,12 +121,7 @@ export type RasterFontBinding<Binding extends TechniqueBindingDeclaration> = {
 export interface RasterCodecFontCompiler<Format extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata> {
   readonly font: RasterCodecFont<Format>;
   readonly compile: (binding: RasterFontBinding<Schema['binding']>) => CompiledRasterFont;
-  /**
-   * Retain one immutable portable payload under a schema-declared resource name
-   * and its stable raster-format-authored key. Retaining an undeclared name,
-   * repeating a name or key, or breaking the declared payload contract rejects
-   * the compiled result.
-   */
+  /** Retain one immutable payload under a schema-declared resource name and stable key. An undeclared name, a repeated name/key, or a broken payload contract rejects the compiled result. */
   readonly retain: <Name extends SchemaResourceName<Schema>>(
     name: Name,
     key: RasterResourceId,
@@ -251,10 +242,7 @@ export function compileRasterFont<Format extends RasterFormatMetadata>(
   });
 }
 
-/**
- * Read named binding fields and portable resources without exposing raster-format-owned decoded data.
- * The view borrows `compiled`; mutating its public byte or payload arrays invalidates later reads.
- */
+/** Reads named binding fields and portable resources without exposing raster-format-owned decoded data. The view borrows `compiled` — mutating its public byte or payload arrays invalidates later reads. */
 export function readCompiledRasterFont<Format extends RasterFormatMetadata, Schema extends TechniqueSchemaMetadata>(
   compiled: CompiledRasterFont,
   codec: RasterCodec<Format, Schema> & { readonly raster: Format; readonly schema: Schema },

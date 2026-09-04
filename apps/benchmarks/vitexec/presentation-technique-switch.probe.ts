@@ -94,16 +94,4 @@ console.log(
   }),
 );
 
-/* @workflow
-{
-  "name": "benchmark:technique-switch",
-  "summary": "Measure repeated Presentation technique switches and report font transport reuse.",
-  "requirements": "Running benchmark server, GPU-enabled Chromium, and Vitexec.",
-  "writes": "Standard output only.",
-  "args": [
-    "--gpu",
-    "--path",
-    "/presentation?mode=benchmark&technique=slug&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=paragraph-stress"
-  ]
-}
-*/
+/* @workflow { "name": "benchmark:technique-switch", "summary": "Measure repeated Presentation technique switches and report font transport reuse.", "requirements": "Running benchmark server, GPU-enabled Chromium, and Vitexec.", "writes": "Standard output only.", "args": ["--gpu", "--path", "/presentation?mode=benchmark&technique=slug&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=paragraph-stress"] } */

@@ -33,10 +33,7 @@ export type ExamplePrimitiveRecord = Readonly<
 /** One resolved portable resource selected by the config. */
 export type ExampleResourceRecord = ExampleResolvedResource;
 
-/**
- * Accepted renderer state. The hierarchy is walked while borrowed; only renderer bindings
- * and the scalar draw contract are retained after publication.
- */
+/** Accepted renderer state: the hierarchy is walked while borrowed, but only renderer bindings and the scalar draw contract are retained after publication. */
 export interface ExampleDrawList {
   readonly engineRevision: number;
   readonly revision: number;

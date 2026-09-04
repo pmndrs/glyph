@@ -179,13 +179,7 @@ export const ADVANCED_SHAPING_PRESENTATION_CYCLE_DURATION_MS = Math.ceil(
     1_000,
 );
 
-/**
- * Who advances the case: the operator, or the timed demo.
- *
- * Only the automated presentation capture cycles cases on its own. An interactive
- * benchmark run holds the selected case until the operator changes it, so a case
- * under investigation stays on screen instead of scrolling past.
- */
+/** Who advances the case: 'manual' holds the operator's selection until they change it; 'auto' is the timed presentation-capture cycle. */
 export type AdvancedShapingCaseCycle = 'manual' | 'auto';
 
 export function initialAdvancedShapingState(caseCycle: AdvancedShapingCaseCycle): AdvancedShapingState {

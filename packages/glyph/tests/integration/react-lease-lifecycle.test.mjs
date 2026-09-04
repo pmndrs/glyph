@@ -1,19 +1,4 @@
-/**
- * React adapter lease accounting.
- *
- * The adapter holds no disposal code of its own: react-three-fiber's reconciler owns it,
- * calling `disposeOnIdle(child.object)` from `removeChild` unless `dispose={null}` opts
- * out. Two properties of that implementation make lease accounting worth asserting rather
- * than assuming. It defers disposal to idle priority, so a paragraph outlives its unmount
- * and can be disposed after the runtime an application tore down; and it swallows disposal
- * errors in a `try`/`catch`, so a throw there is invisible in React while being fatal in
- * plain Three. This fixture sets `IS_REACT_ACT_ENVIRONMENT`, which makes r3f dispose
- * synchronously — so these assertions observe the settled state directly.
- *
- * StrictMode double-invokes component bodies and, in development, mounts, unmounts, and
- * remounts. A paragraph lease taken per mount and released per unmount must therefore
- * balance across the doubled lifecycle, or every StrictMode application would leak.
- */
+/** r3f's reconciler owns disposal via idle-deferred, error-swallowing `disposeOnIdle`; `IS_REACT_ACT_ENVIRONMENT` forces it synchronous here so assertions see settled state, and StrictMode's doubled mount/unmount means leases must balance across it. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
@@ -36,9 +21,8 @@ await glyph.init();
 const r3fHandle = glyph.handle('three:react-lease-tests', ThreeConfig);
 after(() => r3fHandle.dispose());
 
-// Three's WebGPU renderer drives its animation loop through a host context that node does
-// not provide. These tests assert lifecycle accounting, never rendering, so a minimal
-// scheduler is enough to let the renderer construct and tear down.
+// Three's WebGPU renderer needs a host context node lacks; a minimal scheduler lets it
+// construct and tear down without actually rendering.
 globalThis.self ??= globalThis;
 // A no-op scheduler: the renderer may start its loop, but nothing is ever driven, so the
 // process stays quiescent and exits. These tests assert lifecycle accounting, never frames.

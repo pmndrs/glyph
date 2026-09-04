@@ -27,10 +27,7 @@ import type { BenchmarkWorkloadDefinition } from './shared/definition';
 /** Every runnable live example, including the two retained single-paragraph scenes. */
 export type BenchmarkWorkloadId = 'benchmark-ipsum' | 'advanced-shaping' | ComparisonWorkloadId;
 
-/**
- * The one complete route catalog. Each value is declared beside the authored
- * workload scene; this file only preserves application order and lookup.
- */
+/** The one complete route catalog; each value is declared beside its authored workload scene, this file only preserves application order and lookup. */
 export const BENCHMARK_WORKLOADS = {
   'benchmark-ipsum': benchmarkIpsumDefinition,
   'advanced-shaping': advancedShapingDefinition,

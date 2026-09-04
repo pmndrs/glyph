@@ -1,26 +1,4 @@
-/**
- * Incremental text mutation, verified through to the GPU.
- *
- * Every lane this engine already tested -- `layout`, `glyphs`, glyph ids, glyph
- * origins, draw counts, `instanceCount` -- reads the ENGINE. The packed instanced attributes are
- * what the GPU actually samples, and nothing asserted them. An incremental edit that leaves one
- * record slot holding its pre-edit occupant therefore passes every engine-side check while
- * rendering the wrong glyph, which is exactly the defect this file exists to catch.
- *
- * This file owns the Latin corpus and the three raster formats. The differential oracle it
- * asserts lives in `../support/text-mutation-lanes.mjs`, shared with the script-topology and span
- * files so the invariant cannot drift between them.
- *
- * Sequences are seeded and fixed. A failure names the case and step that reproduce it, with no
- * wall-clock input and no `Math.random`.
- *
- * NOT COVERED: the stable-indirect allocation policy. `ThreeTextEngineCoordinator` registers the
- * Three Codec with `threeCodecBytes`'s default `'ordered'` allocation mode and
- * `ThreeTextEngineCoordinatorOptions` exposes only `transformMode`, so no first-party path
- * reachable from `Text`/`TextGroup` selects `'stable'`. Covering it needs either a coordinator
- * option or a host-level test that drives internal handle state directly, as
- * `three-engine-coordinator.test.mjs` does.
- */
+/** Verifies edits reach the GPU-sampled packed instanced attributes, not just engine state (`layout`/`glyphs`/counts) — an edit can pass those while rendering the wrong glyph. Shared oracle lives in `../support/text-mutation-lanes.mjs`; sequences are seeded and deterministic. */
 import test, { after } from 'node:test';
 
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
@@ -59,13 +37,7 @@ const TECHNIQUES = {
 const fonts = createFontCache(TECHNIQUES);
 after(() => fonts.dispose());
 
-/**
- * Author one paragraph's content.
- *
- * Spans are derived from the text rather than fixed, so an edited node and a node freshly built
- * with the same text always carry identical authored style -- the comparison stays a test of the
- * incremental path, not of two different documents.
- */
+/** Spans derive from the text (not fixed), so an edited node and a freshly built one share identical authored style — keeping the comparison a test of the incremental path only. */
 function paragraph(text, { bounds = constraints, position, rasterPixelRatio, styled = false } = {}) {
   return {
     position,
@@ -106,20 +78,7 @@ const EDIT_CLASSES = [
   ['collapse to one character', 'ACTIVATE', 'A'],
 ];
 
-/**
- * A three-node group with per-span colours and sizes and per-node raster pixel ratios.
- *
- * One paragraph in uniform white at one size leaves the foreground, `fontSize`, and
- * `transformIndex` lanes constant, so a slot corrupted in exactly those lanes reads back correct
- * by accident. Distinct positions, sizes, and colours make each of those lanes carry a value that
- * identifies its own slot.
- *
- * `rasterPixelRatio` is not itself a packed lane -- no first-party codec program
- * reads it -- but it is one of the two resource-selection inputs, so varying it per node drives
- * the gather's selection-change branch, the one that widens a narrow change mask to every input.
- * It cannot select a DIFFERENT resource here: these fixtures bake one strike and one page each,
- * and requesting more strikes needs retained source bytes the fixtures do not carry.
- */
+/** Distinct position/size/color per node means every packed lane carries a value identifying its own slot, so slot corruption can't read back correct by accident. `rasterPixelRatio` also varies per node — not a packed lane itself, but a resource-selection input that exercises the gather's selection-change branch. */
 function styledScene(texts) {
   return texts.map((text, index) =>
     paragraph(text, {

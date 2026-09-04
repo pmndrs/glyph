@@ -97,9 +97,7 @@ const MSDF_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/color');
 const MSDF_EFFECT_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/effect-color');
 const MSDF_PAGE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/page');
 
-/**
- * The authoritative physical shape of the MSDF technique.
- */
+/** The authoritative physical shape of the MSDF technique. */
 export const msdfSchema: TechniqueSchema<
   {
     readonly rect: {

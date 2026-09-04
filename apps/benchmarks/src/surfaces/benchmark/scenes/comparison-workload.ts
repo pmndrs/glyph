@@ -344,11 +344,7 @@ async function createComparisonWorkloadRuntime(
   const canvasSurface = createCanvasSurface(renderer, width, height, configuration.showGrid);
   const rendererInitMs = persistentContext.rendererInitMs;
   let font: LoadedFormatFont | undefined;
-  /**
-   * Companion fixtures stay resident once loaded, keyed by fixture rather than held in one slot: the routes that need a
-   * companion do not all need the same one, and a Text that a previous workload published still holds a font lease, so
-   * releasing a companion at a workload switch would invalidate a font the outgoing scene has not finished with.
-   */
+  /** Companion fixtures stay resident once loaded, keyed by fixture: a previous workload's Text may still hold a lease, so switching workloads must not invalidate a font it hasn't finished with. */
   const companionFonts = new Map<BenchmarkFontFixture, LoadedFormatFont>();
   let selectedFontController: RetainedFontFixtureController<LoadedFormatFont> | undefined;
   let entries: readonly WorkloadEntry[] = [];
@@ -465,10 +461,7 @@ async function createComparisonWorkloadRuntime(
     const activeSelectedFont = selectedFontController;
     const activeFont = (): LoadedFormatFont => activeSelectedFont.current.asset;
     const loadedFontsScratch: LoadedFormatFont[] = [];
-    /**
-     * The selected fixture and a companion fixture can resolve to the same registered font, so residency is deduplicated
-     * by the loaded handle rather than by the asset wrapper — counting one font twice would double its reported bytes.
-     */
+    /** Selected and companion fixtures can resolve to the same registered font, so residency dedupes by loaded handle, not asset wrapper — else reported bytes double-count. */
     const loadedFonts = (): readonly LoadedFormatFont[] => {
       loadedFontsScratch.length = 0;
       loadedFontsScratch.push(activeFont());
@@ -491,9 +484,8 @@ async function createComparisonWorkloadRuntime(
       }
       return cachedBitmapAtlasPages;
     };
-    // Icon Grid renders its cells from the companion fixture, so that fixture owns the reported density there. Every
-    // other workload — including a composed one that only reaches its companion through a span — keeps the selected
-    // font as its density source, so a retained companion never becomes the visible configuration after navigation.
+    // Icon Grid reports density from its companion fixture; every other workload (even composed, reaching a
+    // companion only via a span) reports from the selected font.
     const statsFont = (): LoadedFormatFont =>
       configuration.workload === 'icon-grid' ? (residentCompanionFont('icon-grid') ?? activeFont()) : activeFont();
     let fontFixtureSwitching = false;
@@ -868,9 +860,8 @@ async function createComparisonWorkloadRuntime(
       ) {
         iconGridInstance?.suspend();
       }
-      // Queued, never merged. Collapsing a superseded configuration into its successor made a dragged control report
-      // the cost of the two updates that survived rather than of the twenty it requested, which is a measurement of
-      // the queue and not of the workload. Callers debounce their own input; whatever arrives here is applied.
+      // Queued, never merged: collapsing configurations would measure the queue's cost instead of the workload's.
+      // Callers debounce their own input.
       return new Promise<void>((resolve, reject) => {
         pendingUpdates.push({ configuration: next, viewportChanged, waiters: [{ resolve, reject }] });
         startUpdateDrain();
@@ -1181,11 +1172,7 @@ async function createComparisonWorkloadRuntime(
   }
 }
 
-/**
- * Multi-instance workloads mount under one shared `TextGroup`, so their Texts prepare and pack into a single paragraph
- * batch that owns one set of GPU resources. A single-paragraph workload gets a plain Group and keeps its own implicit
- * batch of one, which is what it already was.
- */
+/** Multi-instance workloads share one `TextGroup` batch (one set of GPU resources); a single-paragraph workload gets a plain Group, its own implicit batch of one. */
 function createBatchRoot(root: ThreeRoot, workload: ComparisonWorkloadId): THREE.Object3D {
   if (comparisonWorkloadDefinition(workload).batching === 'standalone') return new THREE.Group();
   return root.createTextGroup();
@@ -1291,13 +1278,7 @@ export function comparisonWorkloadRequiresIconWindowSuspension(
   return registryRequiresIconWindowSuspension(previous, next);
 }
 
-/**
- * Swaps the font fixture behind every retained Text and commits the whole set in one publication.
- *
- * The replacement `Font` is already resolved, so there is no readiness window to roll back: either the single
- * `updateMatrixWorld` commits every Text onto the new fixture or it throws with none of them published, and the caller
- * releases the candidate owner.
- */
+/** Swaps the font fixture behind every retained Text, committing the whole set in one publication: the single `updateMatrixWorld` either commits all Texts or throws with none published. */
 export function applyRetainedTextFontFixture(
   root: THREE.Object3D,
   entries: readonly WorkloadEntry[],
@@ -1312,9 +1293,7 @@ export function applyRetainedTextWidths(texts: readonly WorkloadText[], widths: 
   applyRetainedTextLayout(texts, widths, undefined);
 }
 
-/**
- * `set` replaces a property group wholesale, so each update carries forward the unaffected style or constraints.
- */
+/** `set` replaces a property group wholesale, so each update carries forward the unaffected style or constraints. */
 function applyRetainedTextLayout(
   texts: readonly WorkloadText[],
   widths: ArrayLike<number> | undefined,

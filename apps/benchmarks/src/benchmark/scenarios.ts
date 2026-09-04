@@ -1,20 +1,5 @@
 import type { BenchmarkScenario } from './contracts';
 import { ADVANCED_SHAPING_CASES } from '../workloads/advanced-shaping/scene';
-// Re-pinned once when the integer F26.6 line fit became authoritative: the
-// timeline's sub-pixel origins settle on quantized boundaries while every
-// authored count (709 glyphs, 625 rendered, 68 frames, 17,362 bytes) held.
-// Re-pinned when the line-terminating word space began to hang (D-257). Every
-// structural pin held exactly across the change -- 5 cases, 68 frames, 709 glyphs,
-// 625 rendered, 0 missing, 17,362 layout bytes, 63 draws -- so only the composed
-// position hash moved, which is the signature of a pure geometry shift.
-// Re-pinned for the RTL hung-space fix: an RTL line no longer shifts by the width of the
-// terminating space it hangs. Only glyph POSITIONS moved -- every structural metric this
-// matrix asserts is unchanged (709 glyphs, 625 rendered, 63 draws, 17,362 output bytes,
-// 68 frames, zero missing), and `a_hung_terminating_space_does_not_move_rtl_ink` pins the
-// LTR pen as unmoved, so the delta is confined to the RTL and mixed-direction cases.
-// Re-pinned when line composition moved to wide F16.16 accumulation and exact justified
-// remainder distribution. Every structural pin below stayed unchanged, so this remains a
-// pure geometry hash rather than a shaping, draw-count, or publication-lifecycle change.
 const ADVANCED_SHAPING_HASH = 'ae66ee48';
 const UPDATED_EXTERNAL_RASTER_GLYPHS = 13;
 
@@ -201,9 +186,7 @@ function slugTextValidation(values: readonly import('./contracts').BenchmarkMeas
       !finitePositive(metrics.slugHeaderBytes) ||
       !finitePositive(metrics.slugReferenceBytes) ||
       !finitePositive(metrics.slugResourceBytes) ||
-      // The technique reports what it decoded and the Three targets report what they uploaded, so a renderer that
-      // retains less than the decoded pages has lost a page rather than merely repacked one. Comparing the decoded
-      // subtotals against their own sum would only restate the app's arithmetic, so that check is gone.
+      // GPU bytes below the decoded resource total means the renderer dropped a page rather than repacking one.
       !finitePositive(metrics.slugGpuBytes) ||
       metrics.slugGpuBytes < metrics.slugResourceBytes ||
       metrics.renderTargetGpuBytes !== value.outputBytes ||
@@ -324,9 +307,7 @@ function paragraphContractsValidation(values: readonly import('./contracts').Ben
       value.metrics?.bidiLayoutCount !== 2 ||
       value.metrics.policyLayoutCount !== 9 ||
       value.metrics.cjkLayoutCount !== 12 ||
-      // One natural measurement per customLayouting() plus twenty-five constrained
-      // probes: intrinsic widths ride the natural pass instead of a second zero-width
-      // query, which is exactly the saving the Text measurement path exists for.
+      // 24 measure() calls: 1 natural (inside customLayouting) + 3 explicit probes + 20 repeated atMost calls.
       value.metrics.uikitMeasurementCount !== 24 ||
       value.metrics.uikitLayoutCount !== 1
     ) {
@@ -366,23 +347,8 @@ function advancedShapingValidation(values: readonly import('./contracts').Benchm
   return `${values.length}/${values.length} exact advanced-shaping timelines · ${frameCount} frames/sample`;
 }
 
-/**
- * The composed paragraph's exact span evidence.
- *
- * Each pin answers one question that the others cannot. Glyph-id changes prove the shaper honoured a span; origin
- * changes with unchanged ids prove a span altered metrics without altering selection; the line-count and first-break
- * pins prove a size span reached line breaking rather than only advances; the slot pins prove a font span reached the
- * shaper's font selection; and the `.notdef` pin proves the fallback span is what resolved the Devanagari at all.
- */
+/** Composed paragraph's span evidence: glyph ids prove span honoring, origins prove metric-only spans, line/break pins prove size reached layout, slots prove font selection, `.notdef` proves fallback resolution. */
 const RICH_TEXT_SPAN_EVIDENCE = {
-  // The hash alone re-pinned when the integer F26.6 fit became authoritative:
-  // every structural pin below — selection, line counts, and both first-line
-  // break positions — held while the composed origins quantized. Re-pinned again
-  // for the hanging terminating space (D-257), where only `lineThroughCount`
-  // moved among the structural pins, for the reason recorded beside it.
-  // Re-pinned for the F16.16 layout-unit migration. All structural evidence below
-  // remains exact; the digest changed because its per-case x origins intentionally
-  // retain sub-unit precision that F26.6 previously quantized away.
   hash: 'd666d3ac',
   glyphCount: 175,
   renderedGlyphCount: 149,
@@ -405,25 +371,13 @@ const RICH_TEXT_SPAN_EVIDENCE = {
   tintPaintGlyphs: 3,
   paragraphPaintGlyphs: 114,
   nestedGlyphCount: 9,
-  // One instance per continuous decorating box per line (D-248): the emphasis span underlines as a single
-  // run, while line-through covers the tint span once and the accent span once.
-  // Re-pinned from 3 when the line-terminating word space began to hang (D-257). Every
-  // pin declared above this one held exactly -- including `lineCount`, `accentPaintGlyphs`,
-  // and both first-break positions -- so the paragraph still wraps into the same three
-  // lines over the same glyphs. The recovered measure keeps the struck-through accent
-  // phrase off a line boundary, so it needs one decorating box instead of two.
+  // One instance per continuous decorating box per line: underline covers the emphasis span once,
+  // line-through covers the tint span once and the accent span once.
   underlineCount: 1,
   lineThroughCount: 2,
 } as const;
 
-/**
- * Glyphs the nested style-only span loses to the paragraph paint instead of inheriting from the span that encloses it.
- *
- * This was 9 while paint resolved by taking the innermost covering span's `paint` whole, so a span stating no paint
- * fell through to the paragraph paint rather than to the span enclosing it — contradicting the README. It reached `0`
- * when one span cascade began resolving every property by containment for both shaping and paint, and those nine
- * glyphs moved from `paragraphPaintGlyphs` into `accentPaintGlyphs`. Keep the pin: a regression would raise it again.
- */
+/** Glyphs the nested style-only span loses to the paragraph paint instead of inheriting from its enclosing span; expected 0. */
 const NESTED_SPAN_PAINT_CASCADE_DELTA = 0;
 
 function richTextSpanValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {

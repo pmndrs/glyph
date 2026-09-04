@@ -1,9 +1,4 @@
-/**
- * CPU reference math for the Bitmap technique, independent of TypeGPU and GPU texture
- * behavior. Every function mirrors one exported shader function of
- * `bitmap-shader.js` operation for operation, so a simulation of the shipped TypeGPU
- * functions can be pinned to these values exactly.
- */
+/** CPU reference math for the Bitmap technique, independent of TypeGPU/GPU texture behavior; each function mirrors one `bitmap-shader.js` function operation-for-operation, for exact pinning. */
 
 export type BitmapVec2 = readonly [number, number];
 export type BitmapVec3 = readonly [number, number, number];
@@ -23,11 +18,7 @@ export function referenceBitmapQuadPosition(
   return [origin[0] + quadPosition[0] * size[0], -(origin[1] + quadPosition[1] * size[1]), 0];
 }
 
-/**
- * CPU mirror of the projection step behind `projectClipPosition`, over an explicit
- * column-major matrix: `clip = mvp * vec4(position, 1)` with WGSL's column-times-
- * vector contraction.
- */
+/** CPU mirror of the projection behind `projectClipPosition` over an explicit column-major matrix: `clip = mvp * vec4(position, 1)` with WGSL's column-times-vector contraction. */
 export function referenceProjectClipPosition(mvp: readonly number[], position: BitmapVec3): BitmapVec4 {
   const x = position[0];
   const y = position[1];
@@ -41,10 +32,7 @@ export function referenceProjectClipPosition(mvp: readonly number[], position: B
   ];
 }
 
-/**
- * CPU mirror of `snapClipAxis`, including the final multiplication by clip w and the
- * reciprocal-multiply order of the emitted shader.
- */
+/** CPU mirror of `snapClipAxis`, including the final multiplication by clip w and the reciprocal-multiply order of the emitted shader. */
 export function referenceSnapClipAxis(clipAxis: number, clipW: number, physicalSize: number): number {
   const normalizedDevicePosition = clipAxis * (1 / clipW);
   const physicalPosition = (normalizedDevicePosition + 1) * (physicalSize * 0.5);
@@ -61,10 +49,7 @@ export function referenceSnappedClipPosition(clip: BitmapVec4, screenSize: Bitma
   ];
 }
 
-/**
- * CPU mirror of `bitmapPageCoverage`: clamp-to-edge, texel-grid scaling, floor, bound
- * clamping, exact texel fetch. Returns the linear texel index the fetch lands on.
- */
+/** CPU mirror of `bitmapPageCoverage`: clamp-to-edge, texel-grid scaling, floor, bound clamping, exact texel fetch. Returns the linear texel index. */
 export function referenceBitmapPageCoverage(dimensions: BitmapVec2, atlasUv: BitmapVec2): number {
   const clampedUv = [clamp(atlasUv[0], 0, 1), clamp(atlasUv[1], 0, 1)] as const;
   const texelCoord = [Math.floor(clampedUv[0] * dimensions[0]), Math.floor(clampedUv[1] * dimensions[1])] as const;
