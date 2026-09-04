@@ -46,7 +46,7 @@ pub fn bake_slug(
     source: &[u8],
     request: SlugBakeRequestV0,
 ) -> Result<SlugBakeResultV0, SlugBakeError> {
-    request.descriptor.validate()?;
+    let settings = request.descriptor.validate()?;
     validate_fingerprint("sourceFingerprint", &request.source_fingerprint)?;
     validate_fingerprint("shapingFingerprint", &request.shaping_fingerprint)?;
     validate_fingerprint("rasterKey", &request.raster_key)?;
@@ -69,7 +69,12 @@ pub fn bake_slug(
         .at("/sourceFingerprint"));
     }
 
-    let packed = rasterize_font(source, request.font_face_index, request.glyph_count)?;
+    let packed = rasterize_font(
+        source,
+        request.font_face_index,
+        request.glyph_count,
+        settings.cubic_subdivisions,
+    )?;
     let metadata_bytes = packed.record_bytes.len();
     let built = build_slug_glb(
         &request.raster_key,
@@ -126,8 +131,15 @@ pub fn bake_slug(
 }
 
 pub fn descriptor_raster_key(descriptor: &SlugDescriptorV0) -> String {
+    // Canonical key order is alphabetical, so an explicit rate sorts ahead of
+    // the generator version. The default is absent from the descriptor entirely,
+    // which is what keeps every existing key byte-identical.
+    let subdivisions = descriptor
+        .cubic_subdivisions
+        .map(|value| format!("\"cubicSubdivisions\":{value},"))
+        .unwrap_or_default();
     let canonical = format!(
-        "{{\"descriptor\":{{\"generatorVersion\":\"{}\"}},\"extension\":\"{}\",\"kind\":\"{}\",\"version\":{}}}",
+        "{{\"descriptor\":{{{subdivisions}\"generatorVersion\":\"{}\"}},\"extension\":\"{}\",\"kind\":\"{}\",\"version\":{}}}",
         descriptor.generator_version, SLUG_EXTENSION, SLUG_KIND, SLUG_FORMAT_VERSION,
     );
     pmndrs_glyph_raster_artifact::fingerprint128(
@@ -147,6 +159,7 @@ fn rasterize_font(
     source: &[u8],
     face_index: u32,
     expected_glyph_count: u16,
+    cubic_subdivisions: u8,
 ) -> Result<PackedSlug, SlugBakeError> {
     let font = FontRef::from_index(source, face_index).map_err(|error| {
         SlugBakeError::new(SlugBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
@@ -172,6 +185,7 @@ fn rasterize_font(
             &font,
             GlyphId::new(u32::from(raw_glyph_id)),
             DEFAULT_BAND_COUNT,
+            cubic_subdivisions,
         )
         .map_err(|error| outline_error(raw_glyph_id, error))?;
         geometries.push(match geometry {
@@ -320,11 +334,47 @@ mod tests {
         "../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf"
     );
 
+    /// Both derived in JavaScript from the canonical raster-key JSON, so these
+    /// pin the Rust serializer to the TypeScript one across the ABI.
+    const DEFAULT_RASTER_KEY: &str =
+        "7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb";
+    const RATE_EIGHT_RASTER_KEY: &str =
+        "9bfc7c767a9b07e1f3280eeceb60afc9a0e866ba522e40e82890d7d3565e5b8a";
+
+    #[test]
+    fn a_configured_rate_derives_the_same_key_typescript_derives() {
+        let configured = SlugDescriptorV0 {
+            generator_version: SLUG_GENERATOR_VERSION.into(),
+            cubic_subdivisions: Some(8),
+        };
+        assert_eq!(descriptor_raster_key(&configured), RATE_EIGHT_RASTER_KEY);
+        assert_ne!(descriptor_raster_key(&configured), DEFAULT_RASTER_KEY);
+    }
+
+    #[test]
+    fn a_rate_outside_the_supported_range_is_refused_by_name() {
+        for rate in [0_u8, 17] {
+            let error = SlugDescriptorV0 {
+                generator_version: SLUG_GENERATOR_VERSION.into(),
+                cubic_subdivisions: Some(rate),
+            }
+            .validate()
+            .expect_err("an unsupported rate must not validate");
+            assert_eq!(error.path.as_deref(), Some("/descriptor/cubicSubdivisions"));
+        }
+    }
+
     #[test]
     fn bakes_dense_inter_records_deterministically() {
         let descriptor = SlugDescriptorV0 {
             generator_version: SLUG_GENERATOR_VERSION.into(),
+            cubic_subdivisions: None,
         };
+        assert_eq!(
+            descriptor_raster_key(&descriptor),
+            DEFAULT_RASTER_KEY,
+            "the default descriptor's key must not move"
+        );
         let raster_key = descriptor_raster_key(&descriptor);
         let request = || SlugBakeRequestV0 {
             source_fingerprint: pmndrs_glyph_raster_artifact::fingerprint128(
