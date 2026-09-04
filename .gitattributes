@@ -1,1 +1,2 @@
 *.patch -whitespace
+.agents/docs/** linguist-generated=true
