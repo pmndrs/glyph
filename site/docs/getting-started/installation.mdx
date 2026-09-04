@@ -23,13 +23,14 @@ write · keypoints (four claims)
 - The root entry never pulls the baker, the validator, or any Wasm beyond the shaper.
 
 notes · internals for the page
-- the exports map — `packages/glyph/package.json` exports (root, `/three`, `/three/{bitmap,msdf,slug}`, `/react`,
-  `/react/{bitmap,msdf,slug}`, `/raster/*`, `/config/*`, `/tsl`, `/tsl/*`, `/typegpu`, `/typegpu/*`, `/bake`,
-  `/baker`, `/bakers/*`, `/runtime-bake`, five `.wasm`)
+- the exports map — `packages/glyph/package.json` exports (root, `/three`, `/react`,
+  `/react/{bitmap,msdf,slug}`, `/raster/{bitmap,msdf,slug}`, `/raster/*`, `/config/*`, `/tsl`, `/tsl/*`, `/typegpu`,
+  `/typegpu/*`, `/bake`, `/baker`, `/bakers/*`, `/runtime-bake`, five `.wasm`); the old `/three/{bitmap,msdf,slug}`
+  format leaves are gone — a format is imported from `/raster/*`
 - peers: `three >=0.185.1`, `@react-three/fiber >=10.0.0-alpha.3 <11`, `react >=19.2 <19.3`,
   `typegpu >=0.12.3 <0.13`, all optional — `package.json` peerDependencies, peerDependenciesMeta
 - the root has no static edge to the baker, Ajv, the glTF validator, or any Wasm beyond the shaper —
-  `docs/packages/glyph.md:181–183`
+  `.agents/docs/packages/glyph.md:181–183`
 - registration side effects are declared so a format survives tree shaking — `package.json` sideEffects
 */}
 
@@ -44,8 +45,8 @@ npm install three @react-three/fiber @pmndrs/glyph
 
 | Subpath | Exports | Pulls in |
 | --- | --- | --- |
-| `@pmndrs/glyph` | `glyph`, `createParagraph`, `Paragraph`, `TextStyle`, `ParagraphLayout`, `Constraints`, `txt`, `span`, `FontLoadError`, `GlyphEngineStatusError`; types `Font`, `FontFace`, `FontFaceSelection` | the shaper Wasm, on `glyph.init()` |
-| `@pmndrs/glyph/three` | `ThreeConfig`, `defineThreeConfig`, `ThreeFontFormats`, `Text`, `TextGroup`, `ThreeRoot`, `span`, `defineTextMaterial`, `Glyphs`, `Decorations`, `TextFrameError`, `registerThreeRasterPlanProgram` | three.js and all three built-in formats with their TSL shaders |
+| `@pmndrs/glyph` | `glyph`, `glyphFlags`, `TextStyle`, `ParagraphLayout`, `Constraints`, `txt`, `span`, `GlyphFontError`, `GlyphEngineStatusError`; types `Font`, `FontFace`, `FontFaceSelection` | the shaper Wasm, on `glyph.init()` |
+| `@pmndrs/glyph/three` | `ThreeConfig`, `defineThreeConfig`, `ThreeFontFormats`, `Text`, `TextGroup`, `ThreeRoot`, `span`, `defineTextMaterial`, `Glyphs`, `Decorations`, `TextFrameError`, `registerThreeRasterProgram` | three.js and all three built-in formats with their TSL shaders |
 | `@pmndrs/glyph/raster/bitmap` · `/msdf` · `/slug` | the format value (`bitmap`, `msdf`, `slug`), its constants and option types | that format's decoder and TSL shader, registered on import |
 | `@pmndrs/glyph/react` | `GlyphProvider`, `Text`, `TextGroup` | React Three Fiber (`/webgpu` entry) and `/three` |
 | `@pmndrs/glyph/react/bitmap` · `/msdf` · `/slug` | `useBitmap`, `useMsdf`, `useSlug` | that format |
@@ -71,29 +72,30 @@ write
 - Shape: one paragraph.
 
 notes · internals
-- root value exports — `packages/glyph/src/index.ts:21` (`glyph`), `:215` (`glyphFlags`), `:230` (`createParagraph`,
-  `Paragraph`), `:261` (`TextStyle`, `ParagraphLayout`, `Constraints`), `:274` (`span`, `txt`), `:245`
-  (`FontLoadError`); types `FontFace` `:181`, `Font` `:201`
+- root value exports — `packages/glyph/src/index.ts:20` (`glyph`), `:200` (`glyphFlags`), `:232` (`TextStyle`,
+  `ParagraphLayout`, `Constraints`), `:245` (`span`, `txt`), `:216` (`GlyphFontError`)
+- `createParagraph` and `Paragraph` are gone with the config API: intrinsic widths ride the same `measure()` pass on
+  the text itself, so a renderer-free paragraph object is no longer the way to reach them
 - `loadFont`, `createFontLibrary`, `FontLibrary`, `defineFont`, and the token inputs are gone from the public surface
   and the `/config/font-library` leaf is removed — `index.ts` exports only `Font`, `FontMetrics`, `RasterDecodeFont`
   from `font.ts`; D-326 (codex `98c86c8a6`). Still on the root: `createFontStack` (`index.ts:225`) — [in flight], the face-level
   stack is undefined
 - the shaper Wasm resolves beside `dist` and loads inside `glyph.init()` — `shaper.ts:236`
   (`new URL('../dist/text-shaper.wasm', import.meta.url)`), `glyph-engine.ts:108–116`
-- `/three` imports the three format modules for their side effect — `three.ts:1–3`; its exports — `three.ts:5–66`
-- a format module registers its TSL shader when imported — `three/bitmap.ts:1`, `:25`; `three/msdf.ts:29`;
-  `sideEffects` lists exactly those six files — `package.json`
+- `/three` reaches all three formats through its Codec — `three/codec.ts:25–27` (`bitmapCodec`, `msdfCodec`, `slugCodec`)
+- a format module registers itself when imported — `raster/bitmap.ts`, `raster/msdf.ts`, `raster/slug.ts`;
+  `sideEffects` lists exactly those three sources and their `dist` twins — `package.json`
 - `/react` pulls `/three` — `react.ts:46–55`; and R3F's WebGPU entry — `react.ts:1`
 - [in flight] `/react` also exports `useFont` at HEAD (`react.ts:628`); the typed hooks are the documented surface
 - the hooks — `react/bitmap.ts:16`, `react/msdf.ts:16`, `react/slug.ts:16`
 - `/config/*` — `defineGlyphConfig` in `config/glyph.ts` (imported at `three/handle.ts:4`), `defineRasterFormat`
   `config/raster-format.ts:93–148`
-- `/tsl` and `/typegpu` have no scene integration; TypeGPU is an optional peer — `docs/packages/glyph.md:172–173`,
+- `/tsl` and `/typegpu` have no scene integration; TypeGPU is an optional peer — `.agents/docs/packages/glyph.md:172–173`,
   `:189–191`
 - `bakeFontInWorker` — `runtime-bake.ts:56`
 - `bin: glyph` — `package.json` bin; `packages/glyph/bin/glyph.js`
 - `source` condition on every TS subpath for workspace hot reload — `package.json` exports (`source` keys),
-  `docs/packages/glyph.md:178–180`
+  `.agents/docs/packages/glyph.md:178–180`
 */}
 
 ## Renderer entry

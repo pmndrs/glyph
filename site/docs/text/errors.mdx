@@ -82,7 +82,7 @@ notes · internals
 - messages: `spans[i] (start, end) states a range that is inverted…` — `three/frame-error.ts:100–137`
 - the engine codes — `engine-error.ts#GlyphEngineStatusCode` (`:13–34`)
 - `textFrameError()` has no caller at HEAD: `grep -rn 'textFrameError(' packages/glyph/src` finds only its
-  definition (`three/frame-error.ts:83`); the finding — `docs/planning/docs-site-outline.md:505`
+  definition (`three/frame-error.ts:83`); the finding — `.agents/docs/planning/docs-site-outline.md:505`
 - the split by actionability and the `FrameFault { paragraph_id, style_id }` in the result header — D-268
 - there is no knob for `capacity`: `defineThreeConfig` fixes `commands` internally — limits, `requestBytes`
   64 KiB, `resultBytes` 256 KiB (`three/handle.ts:217–229`) — and `ThreeConfigOptions` does not expose it
@@ -95,17 +95,17 @@ notes · internals
 | Entry | Behaviour |
 | --- | --- |
 | `createText`, `set()`, a property setter | throw synchronously; desired state is left as it was |
-| `createText({ font })` on an unloaded face | throws `FontLoadError` `FONT_FACE_FORMAT_NOT_LOADED` |
+| `createText({ font })` on an unloaded face | throws `GlyphFontError` `FONT_FACE_FORMAT_NOT_LOADED` |
 | `glyph.shape()` | per root: retained on `text.error` and `group.error`, `onError` called once per distinct error; other roots still publish; then it throws, an `AggregateError` when more than one root refused |
-| `measure()` / `glyphs()` | throw on a disposed text; `Paragraph.measure(constraints)` throws for invalid constraints at the call |
-| a font load | rejects the selection's `load()` promise with `FontLoadError`; the failed operation is evicted so a retry is a new load |
+| `measure()` / `glyphs()` | throw on a disposed text; invalid constraints throw at the call |
+| a font load | rejects the selection's `load()` promise with `GlyphFontError`; the failed operation is evicted so a retry is a new load |
 
 {/*
 write
 - Question: which calls throw, and which ones swallow?
 - Paragraph 1: the boundary throws. `createText`, `set()`, and every property setter validate the whole next state
   before assigning it, so a `TypeError` or `RangeError` there leaves the text exactly as it was; the message names
-  the field and the value. A face that has not finished loading is a `FontLoadError` at `createText`.
+  the field and the value. A face that has not finished loading is a `GlyphFontError` at `createText`.
 - Paragraph 2: the traversal retains. `glyph.shape()` stages every dirty root, and a root that is refused gets its
   error attributed to every one of its texts in the scene and every `TextGroup` above them, then `onError` fires
   once per new error; the other roots are accepted in the same call. The call then throws the error (or an
@@ -126,8 +126,8 @@ notes · internals
 - attribution to texts and groups — `three/text.ts#ThreeRoot.rejectShape` (`:462–466`), `#reportError` (`:494–502`);
   `onError` once per distinct error — `#Text.#reportError` (`:918–922`); `text.error` falls back to the group's — `:658–660`
 - the Three traversal swallows the rethrow after attribution — `three/text.ts#ThreeRoot.#commitTraversal` (`:478–492`)
-- disposed text throws — `three/text.ts#Text.#assertActive` (`:928–930`); `Paragraph` constraints validated at the call — `paragraph.ts:506–507`
-- `FontLoadError` `code` and `url` — `loader.ts:208–218`; eviction on rejection — `font-face.ts:518–522`, `:548–551`; D-310
+- disposed text throws — `three/text.ts#Text.#assertActive` (`:928–930`); constraints are validated at the call
+- `GlyphFontError` `code` and `url` — `loader.ts:208–218`; eviction on rejection — `font-face.ts:518–522`, `:548–551`; D-310
 */}
 
 ## What the renderer keeps
@@ -194,10 +194,10 @@ notes · internals
 ## React
 
 ```tsx
-import type { FontLoadError } from '@pmndrs/glyph';
+import type { GlyphFontError } from '@pmndrs/glyph';
 import { GlyphProvider, Text, TextGroup } from '@pmndrs/glyph/react';
 
-<GlyphProvider errorFallback={(error: FontLoadError) => <group name={error.code} />}>
+<GlyphProvider errorFallback={(error: GlyphFontError) => <group name={error.code} />}>
   <TextGroup onError={console.error}>
     <Text font={Inter} onError={console.error}>
       Hello
@@ -210,14 +210,14 @@ import { GlyphProvider, Text, TextGroup } from '@pmndrs/glyph/react';
 write
 - Question: where do these land in React?
 - Two sentences: `onError` on `<Text>` and `<TextGroup>` is the same retained callback, assigned to the underlying
-  object; `GlyphProvider`'s `errorFallback` is an error boundary that renders for a `FontLoadError` thrown beneath
+  object; `GlyphProvider`'s `errorFallback` is an error boundary that renders for a `GlyphFontError` thrown beneath
   it and rethrows anything else to your own boundary. A construction error is a throw in render, so keep a boundary
   above the canvas too.
 - Shape: two sentences.
 
 notes · internals
 - `onError` props — `react.ts:94`, `:101`; assigned to the element — `:547`, `:613`
-- `errorFallback` — `react.ts:198`; the boundary catches only `FontLoadError` and rethrows the rest — `#GlyphFontErrorBoundary` (`:361–374`), wrapped at `:247–248`
+- `errorFallback` — `react.ts:198`; the boundary catches only `GlyphFontError` and rethrows the rest — `#GlyphFontErrorBoundary` (`:361–374`), wrapped at `:247–248`
 - the boundary does not check where the font came from; the fact sheet's "only from its own `fontFaces`" is narrower than the code (`react.ts:371`)
-- the finding: a thrown construction error under React became a retry loop with no boundary — `docs/planning/docs-site-outline.md:499`
+- the finding: a thrown construction error under React became a retry loop with no boundary — `.agents/docs/planning/docs-site-outline.md:499`
 */}

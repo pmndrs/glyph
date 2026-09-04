@@ -32,7 +32,7 @@ notes · internals for the page
 - the components extend the `/three` classes — `react.ts:156–157` (`extend(ThreeText)`, `extend(ThreeTextGroup)`)
 - the default handle — `react.ts:376–407`; the provider — `:208–251`; D-301, D-307
 - the four claims — `react.ts:453`, `:804–818`; D-307; `react.ts:216–219`; `react.ts:544–549`,
-  `docs/packages/glyph.md:232–234`
+  `.agents/docs/packages/glyph.md:232–234`
 */}
 
 ```tsx
@@ -114,7 +114,7 @@ notes · internals
   a face or string throws — `:793–802` (`loadedInlineProperties`)
 - a nested Text creates no scene object; the tree flattens to one string plus span records aligned to grapheme
   clusters — `react.ts:748–791` (`flattenText`), `formatted-text.ts#resolveRangesToClusters`
-- rationale — `docs/packages/glyph.md:226–231`
+- rationale — `.agents/docs/packages/glyph.md:226–231`
 */}
 
 ### Fonts
@@ -193,7 +193,7 @@ const hud = glyph.handle('hud', ThreeConfig);
 | `handle` | a `ThreeHandle` (its anonymous root), a named `ThreeRoot` from `handle(name)`, a string (that named root on the built-in default handle), or nothing (the Canvas-local default root) |
 | `fontFaces` | `{ Name: url \| face \| { src, format } }` — names for `font="Name"` in this subtree |
 | `fallback` | Suspense fallback while mapped faces load |
-| `errorFallback` | node or `(error: FontLoadError) => node`; catches only font load errors, rethrows the rest |
+| `errorFallback` | node or `(error: GlyphFontError) => node`; catches only font load errors, rethrows the rest |
 
 
 {/*
@@ -218,7 +218,7 @@ notes · internals
 - shorthand entries (`url`, `{ src, format }`) become `glyph.fontFace(...)` owned by the provider and disposed on
   unmount; a face you pass is never disposed — `react.ts:312–343` (`createProviderFontFaces`), `:235–240`
 - `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` adds a boundary that rethrows anything
-  but `FontLoadError` — `react.ts:243–249`, `:361–374`
+  but `GlyphFontError` — `react.ts:243–249`, `:361–374`
 - `Text`/`TextGroup` reject a `handle` prop — `react.ts:871–875`
 - no scene here by design: which root a text draws on is not visible; the snippet is the whole lesson
 */}
@@ -297,6 +297,6 @@ notes · internals
 - key includes `pixelSnapping` — `react.ts:456`
 - the frame path: `ThreeRootDrawObject.updateMatrixWorld` → `#commitTraversal` → `glyph.shape()` —
   `three/text.ts:139–142`, `:478–486`; D-312
-- `Activity` pre-render — `docs/packages/glyph.md:232–234`; in use — `apps/r3f-hello-world/src/app.tsx:60`
+- `Activity` pre-render — `.agents/docs/packages/glyph.md:232–234`; in use — `apps/r3f-hello-world/src/app.tsx:60`
 - lease release on last unsubscribe — `react.ts:736–742`
 */}

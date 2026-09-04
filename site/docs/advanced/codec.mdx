@@ -7,7 +7,7 @@ sourcecode: packages/glyph/src/config/codec-program.ts
 
 {/*
 reader
-- Is writing `encode` for a renderer, or a plan program for a new raster format, and needs to know what the planner
+- Is writing `encode` for a renderer, or a raster codec for a new raster format, and needs to know what the planner
   will put in the instance buffers the shader reads. Knows vertex attributes and instancing; has not seen the
   register machine or the wire ids. Arrives asking "how do I tell the engine what my shader wants per glyph?",
   should leave able to declare a technique schema, write its lane program, assemble it into a `CodecProgram`
@@ -35,7 +35,7 @@ write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
 
 notes · internals for the page
 - the DSL is authoring only; wire format, validator, and interpreter are untouched — `packages/glyph/src/config/codec-program.ts:7–13`
-- who writes what: a raster format's plan program owns `codecBody` — `config/raster.ts#RasterPlanProgram` (`:148–154`);
+- who writes what: a raster format's raster codec owns `codecBody` — `config/raster.ts#RasterCodec` (`:149–155`);
   a renderer assembles it with its own system lanes, namespace, capability set, and modes —
   `#createRasterCodecProgram` (`:168–217`); the renderer never rewrites a raster's lanes
 - `Codec` is the public name for the former Policy; ordering and batching changes belong to it — D-309
@@ -44,7 +44,7 @@ notes · internals for the page
   mirrored in `config/codec.ts:7–12`
 - batch key bits — `generated/text-shaper-abi.ts` `codec.batchFields` (`:8–17`); `codec.rs:31–38`
 - ids are FNV-1a over UTF-8 — `config/codec.ts#renderWireId` (`:401–409`)
-- the three worked examples: MSDF — `raster/msdf.ts#msdfSchema` (`:103–200`), `#msdfPlanProgram` (`:202–226`);
+- the three worked examples: MSDF — `raster/msdf.ts#msdfSchema` (`:103–200`), `#msdfCodec` (`:202–275`);
   decoration — `three/codec.ts#decorationSchema` (`:59–81`), `#decorationProgram` (`:185–208`); the third-party
   example — `packages/glyph-example-raster/src/portable.ts`
 */}
@@ -80,7 +80,7 @@ export const sdfSchema = defineTechniqueSchema({
 
 | Field | Rule |
 | --- | --- |
-| `technique` | a nonempty string; `id.technique()` hashes it to the 32-bit wire id; `pmndrs.` is refused for third-party plan programs |
+| `technique` | a nonempty string; `id.technique()` hashes it to the 32-bit wire id; `pmndrs.` is refused for third-party raster codecs |
 | `scope` | `'glyph'`, `'strike'`, or `'resource'` — how many binding rows the font supplies |
 | `binding` | names the raster record fields the program may read, typed `f32` or `u32`; names are unique across both lists |
 | `buffers` | each has an `id` from `id.buffer(name)` (nonzero, 16-bit, unique in the schema), one `scalar`, and 1 to 4 named lanes |
@@ -114,7 +114,7 @@ notes · internals
   kinds `synthetic-quad | quad | hull | custom` — `schema.ts:142–183`; `defineTechniqueGeometryKind` brands a custom kind (`:596–604`)
 - `glyphOrigin` rationale: MSDF and Slug pack the ink box's top-left, Bitmap adds the strike bearing; renderers
   animate by displacement from rest — `schema.ts:229–241`, `three/engine-plan-target.ts:148–158`
-- `pmndrs.` reserved at plan-program registration, not at schema definition — `config/raster.ts:272–274`
+- `pmndrs.` reserved at raster-codec registration, not at schema definition — `internal/raster-codec-registry.ts:52–53`
 - `schemaCodecBuffers(schema)` derives the wire `CodecBuffer[]` in declaration order — `schema.ts:630–636`
 - the shipped MSDF schema this one is cut down from — `raster/msdf.ts:162–200` (six buffers, a `group` atlas with
   `texture`, `pixelRange`, `effectScale` members)
@@ -177,7 +177,7 @@ write
   `lanes.length` values of the buffer's scalar, and one `compile` per builder; then it appends the system stores
   (`stableGlyphId` always, `transformIndex` when the system declares it) and lowers the expression graph to
   registers, failing if more than 32 are live at once.
-- Paragraph 3: this body is exactly what the shipped MSDF plan program's `codecBody` does; a renderer using MSDF
+- Paragraph 3: this body is exactly what the shipped MSDF raster codec's `codecBody` does; a renderer using MSDF
   never writes it — it is here so you can see one that is real. Your own technique's body is the same shape with
   your names.
 - Anchor: "you write arithmetic on names; the compiler picks the registers".
@@ -209,7 +209,7 @@ notes · internals
 import { id, type CodecCapabilitySet, type CodecIdFactory } from '@pmndrs/glyph/config/codec';
 import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
 import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
-import { msdfPlanProgram } from '@pmndrs/glyph/raster/msdf';
+import { msdfCodec } from '@pmndrs/glyph/raster/msdf';
 
 const system = defineCodecBuffers({
   stableGlyphId: { id: id.buffer('my-renderer/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
@@ -231,7 +231,7 @@ export const capabilitySet: CodecCapabilitySet = {
 
 // `ids` comes from `encode({ ids })`; every id it derives is collision-checked for this handle.
 export const msdfProgram = (ids: CodecIdFactory) =>
-  createRasterCodecProgram(msdfPlanProgram, {
+  createRasterCodecProgram(msdfCodec, {
     namespace: 'my-renderer', // with the technique id and an optional programName, this is the program id
     system,
     capabilitySet,
@@ -297,7 +297,7 @@ notes · internals
 import { compileCodec, id, type CodecCapabilitySet, type CodecDescriptor, type CodecIdFactory } from '@pmndrs/glyph/config/codec';
 import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
 import { defineCodecBuffers } from '@pmndrs/glyph/config/schema';
-import { msdfPlanProgram } from '@pmndrs/glyph/raster/msdf';
+import { msdfCodec } from '@pmndrs/glyph/raster/msdf';
 
 const system = defineCodecBuffers({
   stableGlyphId: { id: id.buffer('my-renderer/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
@@ -320,7 +320,7 @@ export function descriptor(ids: CodecIdFactory): CodecDescriptor {
   return {
     capabilitySets: [capabilitySet],
     programs: [
-      createRasterCodecProgram(msdfPlanProgram, {
+      createRasterCodecProgram(msdfCodec, {
         namespace: 'my-renderer',
         system,
         capabilitySet,

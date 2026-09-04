@@ -33,7 +33,7 @@ import { msdf } from '@pmndrs/glyph/raster/msdf';
 
 const Inter = glyph.fontFace('/fonts/Inter.glb', { format: msdf({ emSize: 32 }) }); // baked at the default 64
 await Inter.formats(); // ['pmndrs.msdf', …] — the keys, not the options; the mismatch is in the descriptor
-await Inter.load(); // FontLoadError FONT_FACE_FORMAT_UNAVAILABLE
+await Inter.load(); // GlyphFontError FONT_FACE_FORMAT_UNAVAILABLE
 ```
 
 {/*
@@ -66,7 +66,7 @@ three.createText({ font: Hero.slug, text: 'glÿph' });
 
 {/*
 write
-- Symptom: `createText` or `text.font =` throws `FontLoadError` `FONT_FACE_FORMAT_NOT_LOADED` — "format slug is not
+- Symptom: `createText` or `text.font =` throws `GlyphFontError` `FONT_FACE_FORMAT_NOT_LOADED` — "format slug is not
   loaded".
 - Cause: imperative construction cannot wait; the handle binds a loaded immutable font at construction time, so the
   selection you pass must already be loaded. `Inter.load()` loads every declared format; `Inter.slug.load()` only
@@ -165,11 +165,11 @@ write
 notes · internals
 - the rule and both entry points — D-265; `formatted-text.ts#alignSpansToClusters` (`:41–69`), applied in
   `three/text.ts:1453–1454`; the join rule for `txt`/`span` and nested `<Text>` — `formatted-text.ts:33–40`
-- the worked examples — `docs/planning/three-api.md:204–265` (codex tree)
+- the worked examples — `.agents/docs/planning/three-api.md:204–265` (codex tree)
 - raw `spans` are rejected at the boundary: "cannot declare raw spans; compose formatted text with txt and span" —
   `three/text.ts:718`, proven at `tests/integration/text-frame-rejection.test.mjs:26–36`
 - `Text` has no public `spans` getter (`three/text.ts:646–710`; `spans` is desired state at `:102`), and
-  `alignSpansToClusters` is exported from neither `index.ts` nor `three.ts`; `docs/planning/three-api.md:206–265`
+  `alignSpansToClusters` is exported from neither `index.ts` nor `three.ts`; `.agents/docs/planning/three-api.md:206–265`
   shows both and lags the code
 - [verify] the resolved range in the comment (`[0, 2)` for a styled base plus a plain mark): run the literal
   through `txt` before publishing the number
@@ -279,8 +279,8 @@ notes · internals
 - `Text.dispose()` unbinds, unregisters, disposes owned fonts — `three/text.ts:875–881`; `TextGroup.dispose()` — `:1032`
 - `FontFace.dispose()` must be called on the declaration; a disposed face throws on selection —
   `font-face.ts#disposeFontFace` (`:266–281`), `#fontFaceSelectionState` (`:284–295`)
-- the recommended order — `docs/planning/three-api.md:424–433` (codex tree); disposal without finalizers —
-  `docs/planning/font-runtime-ownership.md:1211–1229`
+- the recommended order — `.agents/docs/planning/three-api.md:424–433` (codex tree); disposal without finalizers —
+  `.agents/docs/planning/font-runtime-ownership.md:1211–1229`
 */}
 
 ## `hsl()` in a style
@@ -337,7 +337,7 @@ write
 
 notes · internals
 - "no every-glyph-rasterised-empty guard": bitmap and MTSDF bakers mark unreadable outlines absent silently —
-  this repo, `docs/planning/docs-site-outline.md` (Findings for core)
+  this repo, `.agents/docs/planning/docs-site-outline.md` (Findings for core)
 - the Slug path converts CFF cubics — `rust/slug-fontations/src/lib.rs:239–247` — so the limitation is per baker
 - the CFF symptom is observed, not explained: when the landing chorus was baked, Noto Sans CJK (CFF-only) came out as shaping data and
   an empty raster with no error or warning, so words laid out at full width and drew as holes —
@@ -410,12 +410,12 @@ write
 - Symptom: the network tab shows the same font fetched over and over after one failed load.
 - Cause: a rejected load is evicted so a later call is a new operation — by design, so a transient failure can be
   retried — and something in your tree keeps retrying: a component that re-renders and calls the hook again.
-- Fix: an error boundary that shows the failure once. `GlyphProvider errorFallback` catches `FontLoadError` and
+- Fix: an error boundary that shows the failure once. `GlyphProvider errorFallback` catches `GlyphFontError` and
   rethrows anything else.
 - Shape: one paragraph.
 
 notes · internals
 - rejection deletes the record — `font-face.ts:549`; D-305, D-310; the cache helper `internal/successful-promise-cache.ts#cacheSuccessfulPromise` (`:1–14`)
-- the boundary catches only `FontLoadError` — `react.ts#GlyphFontErrorBoundary` (`:360–373`); prop — `:198`
-- the React retry loop seen on the decorations example — this repo, `docs/planning/docs-site-outline.md` (Findings for core)
+- the boundary catches only `GlyphFontError` — `react.ts#GlyphFontErrorBoundary` (`:360–373`); prop — `:198`
+- the React retry loop seen on the decorations example — this repo, `.agents/docs/planning/docs-site-outline.md` (Findings for core)
 */}

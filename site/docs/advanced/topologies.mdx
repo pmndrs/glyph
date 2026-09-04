@@ -30,7 +30,7 @@ notes · internals for the page
 - handle and roots — `glyph.ts#GlyphRuntime.handle` (`:60–92`), `config/glyph.ts#GlyphHandle` (`:581–589`); D-307
 - one scene per root — `three/text.ts#ThreeRoot.#bindScene` (`:543–562`)
 - shared fonts — `glyph.ts:107–116`; clone — `font-face.ts#FontFaceSelection.clone` (`:81`), D-313
-- one engine per realm — `docs/planning/font-runtime-ownership.md:1193–1205`; D-318
+- one engine per realm — `.agents/docs/planning/font-runtime-ownership.md:1193–1205`; D-318
 */}
 
 ## One application, one canvas
@@ -130,7 +130,7 @@ notes · internals
 - options — `three/handle.ts#ThreeConfigOptions` (`:93–99`); defaults `'indexed'`, `'ordered'`, `'msdf'` (`:175–177`);
   "every handle still owns independent mutable state" (`:170`); spreading preserves hooks (`:264`)
 - the per-handle FontFace store over the shared library — `glyph.ts:71–72`, `:107–116`; `font-face.ts#FontFaceHandleStore` (`:314`)
-- unique live names, reusable after disposal — `glyph.ts:68`, `:76–79`; `docs/packages/glyph.md:127–128`
+- unique live names, reusable after disposal — `glyph.ts:68`, `:76–79`; `.agents/docs/packages/glyph.md:127–128`
 - `CodecTransformMode = 'direct' | 'indexed'`, `CodecAllocationMode = 'ordered' | 'stable'` — `config/codec.ts:548–549`
 */}
 
@@ -177,7 +177,7 @@ notes · internals
   `FontFaceTransfer = readonly [SerializedFontFace, Transferable[]]` — `font-face-transfer.ts:40`; D-313
 - `glyph.fontFace(serialized)` — `FontFaceSource` includes `SerializedFontFace` (`font-face.ts:27`); proof with a Node
   Worker — `tests/integration/font-face-preinit.test.mjs:29–45`, `tests/support/font-face-transfer-worker.mjs:13–24`
-- one engine per realm; registrations do not cross — `docs/planning/font-runtime-ownership.md:1151–1155`, `:1203`
+- one engine per realm; registrations do not cross — `.agents/docs/planning/font-runtime-ownership.md:1151–1155`, `:1203`
 - owned/transferred publication path removed — D-318, D-319 (`PlanTransport` "exposes no owned-publication copy")
 - [verify] the worker example's `OffscreenCanvas` handoff to `WebGPURenderer` is three's, not Glyph's; link three's
   docs rather than restating it
@@ -201,12 +201,12 @@ notes · internals
 - "Three's plan target does not own the GPU device; a device-owning renderer explicitly requests the same checkpoint
   only after rebuilding its lost-device resource pool" — D-285
 - the checkpoint request lives on the planner control — `internal/render-planner.ts#PlanTargetControl.requestCheckpoint`
-  (`:146–148`, impl `:1839`); the design for fan-out — `docs/planning/font-runtime-ownership.md:1185–1191`
+  (`:146–148`, impl `:1839`); the design for fan-out — `.agents/docs/planning/font-runtime-ownership.md:1185–1191`
 - `requestCheckpoint` has no caller outside the planner at codex `98c86c8a6`: only the interface and the implementation exist
   (`internal/render-planner.ts:147`, `:1839`); nothing under `src/three` requests one, so a checkpoint is the
   planner's own decision today
 - disposal cascade: `handle.dispose()` prevents new construction and releases its adapter domain —
-  `docs/planning/three-api.md:424–433`; `ThreeRoot.disposeHost` (`three/text.ts:290–300`)
+  `.agents/docs/planning/three-api.md:424–433`; `ThreeRoot.disposeHost` (`three/text.ts:290–300`)
 */}
 
 ## Cardinality
@@ -228,7 +228,7 @@ write
 - Shape: one sentence above the table.
 
 notes · internals
-- the table's source — `docs/planning/font-runtime-ownership.md:1193–1209` (codex tree), adapted to the handle/root
+- the table's source — `.agents/docs/planning/font-runtime-ownership.md:1193–1209` (codex tree), adapted to the handle/root
   vocabulary of D-307 (that doc still says "backend" and "render planner")
 - named root type is `Root & { name; handle }`, not callable — `config/glyph.ts:575–578`
 - the root owns "one planner/publication stream, capacity, compositing mode, material fallback, renderer draw root,

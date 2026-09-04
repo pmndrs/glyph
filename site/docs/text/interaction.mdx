@@ -65,7 +65,7 @@ const [cursor, setCursor] = useState<GlyphCaret | undefined>(undefined);
 
 <Text
   ref={ref}
-  font={Inter}
+  font={Inter.msdf}
   onPointerDown={(event) => {
     const target = ref.current;
     if (target === null) return;

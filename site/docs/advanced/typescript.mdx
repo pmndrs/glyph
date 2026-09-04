@@ -16,7 +16,7 @@ write · intro
 - Question it answers: where does the format live in the types?
 - Say: the format is a type. A face declared with `format: [msdf, slug, bitmap({ … })]` has members typed by that
   tuple; `createText({ font: Inter.slug })` infers `Text<typeof slug>`; a hook returns `Font<typeof msdf>`; a material
-  context narrows on `kind` then `format`. Nothing in ordinary code is cast to `AnyRasterFormat`.
+  context narrows on `kind` then `format`. Nothing in ordinary code is cast to `RasterFormatMetadata`.
 - Anchor: "declare once, infer everywhere".
 - Shape: three sentences.
 
@@ -53,7 +53,7 @@ const body: Font<typeof msdf> = inter; // what useMsdf(url) hands you
 | --- | --- |
 | `glyph.fontFace(url, { format })` | the `format` value or tuple; members are keyed by each format's `kind` |
 | `Inter.slug`, `Inter.bitmap` | the declared member; an undeclared key is a compile error |
-| `three.createText({ font })` | a face, a member, or a loaded `Font`; a family string erases to `AnyRasterFormat` |
+| `three.createText({ font })` | a face, a member, or a loaded `Font`; a family string erases to `RasterFormatMetadata` |
 | `<Text font={…}>` | the same selection; `ref` is `Ref<Text<Technique>>` |
 | `useMsdf` / `useSlug` / `useBitmap` | fixed: `Font<typeof msdf>`, `Font<typeof slug>`, `Font<typeof bitmap>` |
 | `defineTextMaterial((context) => …)` | `context.kind`, then `context.format` |
@@ -84,7 +84,7 @@ write
   request like `bitmap({ strikes })` carries the same format type as bare `bitmap`, so options never widen the type.
 - Paragraph 2: the consumers. `createText` has an overload on the selection that maps a face member to its raster,
   so `Text<typeof slug>` falls out; the React component has the same pair of signatures; the typed hooks return a
-  fixed `Font<…>`. A family string is the one escape hatch and erases to `AnyRasterFormat`.
+  fixed `Font<…>`. A family string is the one escape hatch and erases to `RasterFormatMetadata`.
 - Avoid: explaining `FontStack`; it is the immutable-Font path.
 - Shape: two paragraphs; the table is the index.
 
@@ -166,9 +166,9 @@ notes · internals
 ## Text input
 
 ```ts
-import type { AnyRasterFormat, FormattedText } from '@pmndrs/glyph';
+import type { RasterFormatMetadata, FormattedText } from '@pmndrs/glyph';
 
-type TextInput<T extends AnyRasterFormat> = string | FormattedText<T>;
+type TextInput<T extends RasterFormatMetadata> = string | FormattedText<T>;
 ```
 
 ```ts

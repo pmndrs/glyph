@@ -1,7 +1,7 @@
 import { Text } from '@pmndrs/glyph/react';
 import type { Font } from '@pmndrs/glyph';
 import type { Glyphs, Text as ThreeText, ThreeTextMaterial } from '@pmndrs/glyph/three';
-import type { AnyRasterFormat } from '@pmndrs/glyph';
+import type { RasterFormatMetadata } from '@pmndrs/glyph';
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useEffect, useRef } from 'react';
 import { Matrix4 } from 'three/webgpu';
@@ -15,7 +15,7 @@ import { placeOnPath, type Path } from '../../lib/paths';
  * advance — arc length — plus `speed × elapsed`. The path's frame decides
  * which way the letters stand.
  */
-export function TextOnPath<Technique extends AnyRasterFormat>({
+export function TextOnPath<Technique extends RasterFormatMetadata>({
   font,
   path,
   speed = 0,

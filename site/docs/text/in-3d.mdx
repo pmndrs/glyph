@@ -213,7 +213,7 @@ write
 notes · internals
 - Slug per-axis footprint from the derivative of the render coordinate — `tsl/slug-shader.ts:82–84`, `:141`; MSDF
   per-axis range floored — `tsl/msdf-shader.ts:133–135`; Bitmap snaps in clip space — `tsl/bitmap-shader.ts:91–105`
-- `rasterPixelRatio` is a Text property — `three/text.ts:699–703`, `paragraph.ts:74`
+- `rasterPixelRatio` is a Text property — `three/text.ts:106`, `:780`
 - the off-axis scene: a Slug paragraph on a turning panel — `site/examples/src/scenes/off-axis/scene.tsx`
 */}
 
@@ -260,7 +260,7 @@ notes · internals
   is the contract — `three/internal/material-realizer.ts:632–634`
 - Slug returns `vec3(dilated.position.x, dilated.position.y, 0)` and pairs it with `renderCoordinate` —
   `tsl/slug-shader.ts:141–142`; `position` and `coverage` are one graph — `:100–101`
-- the finding "Slug ignores a replaced positionNode" — `docs/planning/docs-site-outline.md:501` (findings table, from the kinetic build)
+- the finding "Slug ignores a replaced positionNode" — `.agents/docs/planning/docs-site-outline.md:501` (findings table, from the kinetic build)
 - the carousel and flag warps are not in `site/examples/src/scenes/kinetic` (grep finds no `positionNode`; the
   scene renders to a target and places glyphs by matrix); the finding above was
   recorded from an earlier build. Re-run the warp on Slug and on MSDF before the callout ships, and restore the
