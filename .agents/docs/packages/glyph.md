@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:2ddb1659b4cec883cc2f49f07e4f955b235804712f3ae1ef5c16fb629a066c96'
+source_digest: 'sha256:c580c734dc42f55fe0789cede6ac6830a8785e2ea51ff70e32c0c6907e76f566'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -814,9 +814,16 @@ End-to-end this is worth about 0.8% of `text_update` on a 22k-glyph paragraph, b
 benchmark's noise floor, because bidi lookup is roughly one percent of a shaping-dominated
 pipeline. The per-lookup figure is the claim.
 
-`line_break` (18.56 ns -> 1.32 ns, 14.1x) and `script` (15.78 -> 1.32, 11.9x) measure larger wins
-on the same structure and remain open; `SCRIPT_EXTENSION_OFFSETS` is excluded because it is
-already directly indexed and has no search to remove.
+`line_break::properties` (18.56 ns -> 1.32 ns, 14.1x) and `unicode::script` (15.78 -> 1.32, 11.9x)
+now use the same structure through the shared `scripts/support/code-point-trie.mjs` helper, which
+also replaced the bidi generator's hand-written copy. Across all three tables the artifact moves
+1,191,281 -> 1,258,319 raw (+67,038), 460,939 -> 453,053 gzip (-7,886), 363,430 -> 357,253 Brotli
+(-6,177) — smaller over the wire under both encodings, and roughly five times the saving bidi gave
+alone.
+
+`SCRIPT_EXTENSION_END_VALUES` stays on the range search: its 284 distinct values overflow a u8
+stage-2 index and need a wider table. `SCRIPT_EXTENSION_OFFSETS` is excluded permanently because it
+is already directly indexed and has no search to remove.
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
