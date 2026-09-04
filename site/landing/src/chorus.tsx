@@ -2,7 +2,7 @@ import { createFontStack } from '@pmndrs/glyph';
 import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { useThree } from '@react-three/fiber/webgpu';
 import { useMemo, useRef } from 'react';
 
@@ -124,15 +124,11 @@ function columnsFor(width: number): number {
 // a 32-texel atlas and the loader finds no matching raster, falls back to
 // generating one, and fails for want of the source bytes.
 const REQUESTS = CHORUS_URLS.map(
-  (url) =>
-    ({
-      input: url,
-      raster: { options: { emSize: EM_SIZE, pixelRange: PIXEL_RANGE }, technique: msdf },
-    }) as const,
+  (url) => ({ src: url, format: msdf({ emSize: EM_SIZE, pixelRange: PIXEL_RANGE }) }) as const,
 );
 
 for (const request of REQUESTS) {
-  useFont.preload(request.input, request.raster.technique, request.raster.options);
+  useFont.preload(request.src, { format: request.format });
 }
 
 /**
@@ -146,7 +142,7 @@ export function Chorus() {
   // The request list is a module constant emitted by the bake script, so its
   // length never changes at runtime and hook order is stable.
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  const fonts = REQUESTS.map((request) => useFont(request.input, request.raster.technique, request.raster.options));
+  const fonts = REQUESTS.map((request) => useFont(request.src, { format: request.format }));
 
   const field = useRef<ThreeText<typeof msdf>>(null);
 
@@ -205,12 +201,10 @@ export function Chorus() {
   }
 
   return (
-    // `independent` lets Rust reorder compatible draws. The default is
-    // `ordered`, which forbids it — correct for text that overlaps itself, and
-    // needlessly strict here: these words never touch each other, so nothing
-    // depends on the order they are composited in, and same-atlas runs scattered
-    // through the paragraph can collapse into one draw.
-    <TextGroup compositing="independent" renderOrder={-1}>
+    // Compositing is an adapter property rather than a group prop: the landing
+    // handle in ./handle.ts declares `independent`, which lets Rust reorder the
+    // compatible draws this field is made of.
+    <TextGroup renderOrder={-1}>
       <Text
         constraints={{
           height: { mode: 'exact', size: height },

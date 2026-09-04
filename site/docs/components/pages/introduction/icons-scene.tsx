@@ -1,6 +1,6 @@
 import { Text, useFont } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useRef } from 'react';
 import { Group } from 'three';
@@ -16,7 +16,7 @@ const ICONS = iconMap.names.slice(0, 5).map((name) => String.fromCodePoint(iconC
 const ICON_COLORS = ['#fb7185', '#f472b6', '#c084fc', '#818cf8', '#38bdf8'] as const;
 
 export function IconsScene({ onReady }: GlyphSceneProps) {
-  const font = useFont(ICON_FONT.input, ICON_FONT.raster.technique, ICON_FONT.raster.options);
+  const font = useFont(ICON_FONT.src, { format: ICON_FONT.format });
   const viewport = useThree((state) => state.viewport);
   const fontSize = Math.min(viewport.width * 0.09, 1.15);
   const group = useRef<Group>(null);

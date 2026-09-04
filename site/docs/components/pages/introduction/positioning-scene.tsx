@@ -9,7 +9,7 @@ import { paragraphTopFromCenter } from './scene-layout';
 import { useSceneReady } from './use-scene-ready';
 
 export function PositioningScene({ onReady }: GlyphSceneProps) {
-  const font = useFont(MSDF_FONT.input, MSDF_FONT.raster.technique, MSDF_FONT.raster.options);
+  const font = useFont(MSDF_FONT.src, { format: MSDF_FONT.format });
   const viewport = useThree((state) => state.viewport);
   const fontSize = Math.min(viewport.width * 0.07, 0.8);
   const group = useRef<Group>(null);

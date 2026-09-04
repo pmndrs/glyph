@@ -29,7 +29,7 @@ export function ShowcaseInfoPanel({
 }) {
   const camera = useThree((state) => state.camera) as PerspectiveCamera;
   const size = useThree((state) => state.size);
-  const msdfFont = useFont(MSDF_FONT.input, MSDF_FONT.raster.technique, MSDF_FONT.raster.options);
+  const msdfFont = useFont(MSDF_FONT.src, { format: MSDF_FONT.format });
   const layout = useMemo(() => showcaseUiLayout(size.width, size.height), [size.height, size.width]);
   const units = cameraUnitsPerPixel(size.height, camera.fov, PANEL_DISTANCE);
   const rounded = useMemo(
@@ -64,7 +64,7 @@ export function ShowcaseInfoPanel({
         <planeGeometry args={[panel.width, panel.height]} />
         <primitive attach="material" object={rounded.material} />
       </mesh>
-      <TextGroup compositing="ordered" material={textFade.material} name="showcase-panel-text" renderOrder={1000}>
+      <TextGroup material={textFade.material} name="showcase-panel-text" renderOrder={1000}>
         <Text
           constraints={{ width: { mode: 'exact', size: content.width } }}
           font={msdfFont}

@@ -16,7 +16,11 @@ export function createFadingTextMaterial(
     const next = context.createDefaultMaterial();
     next.depthTest = options.depthTest ?? false;
     next.depthWrite = false;
-    if (context.technique === 'pmndrs.msdf') next.opacityNode = context.shader.opacity.mul(opacity);
+    // The context is a discriminated union: `kind` separates glyph draws from
+    // decoration draws, and `format` names the raster the glyph arm carries.
+    if (context.kind === 'glyph' && context.format === 'pmndrs.msdf') {
+      next.opacityNode = context.shader.opacity.mul(opacity);
+    }
     return next;
   });
   return Object.freeze({

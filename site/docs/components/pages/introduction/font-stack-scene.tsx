@@ -10,8 +10,8 @@ import { paragraphTopFromCenter } from './scene-layout';
 import { useSceneReady } from './use-scene-ready';
 
 export function FontStackScene({ onReady }: GlyphSceneProps) {
-  const latin = useFont(MSDF_FONT.input, MSDF_FONT.raster.technique, MSDF_FONT.raster.options);
-  const cjk = useFont(CJK_FONT.input, CJK_FONT.raster.technique, CJK_FONT.raster.options);
+  const latin = useFont(MSDF_FONT.src, { format: MSDF_FONT.format });
+  const cjk = useFont(CJK_FONT.src, { format: CJK_FONT.format });
   const stack = useMemo(() => createFontStack(latin, cjk), [cjk, latin]);
   const viewport = useThree((state) => state.viewport);
   const fontSize = Math.min(viewport.width * 0.075, 0.9);

@@ -46,8 +46,8 @@ export function WorldLabels({
   motion: ShowcaseSelectionMotionSource;
   visibleCount: Readonly<{ current: number }>;
 }) {
-  const font = useFont(MSDF_FONT.input, MSDF_FONT.raster.technique, MSDF_FONT.raster.options);
-  const iconFont = useFont(ICON_FONT.input, ICON_FONT.raster.technique, ICON_FONT.raster.options);
+  const font = useFont(MSDF_FONT.src, { format: MSDF_FONT.format });
+  const iconFont = useFont(ICON_FONT.src, { format: ICON_FONT.format });
   const fontStack = useMemo(() => createFontStack(font, iconFont), [font, iconFont]);
   const camera = useThree((state) => state.camera);
   const primaryGroup = useRef<ThreeTextGroup>(null);
@@ -195,15 +195,10 @@ export function WorldLabels({
 
   return (
     <>
-      <TextGroup compositing="ordered" material={fading.material} name="world-label-batch" ref={primaryGroup}>
+      <TextGroup material={fading.material} name="world-label-batch" ref={primaryGroup}>
         {items.map((object, index) => (object.role === 'generated' ? null : renderLabel(object, index)))}
       </TextGroup>
-      <TextGroup
-        compositing="ordered"
-        material={generatedFading.material}
-        name="generated-label-batch"
-        ref={generatedGroup}
-      >
+      <TextGroup material={generatedFading.material} name="generated-label-batch" ref={generatedGroup}>
         {items.map((object, index) => (object.role === 'generated' ? renderLabel(object, index) : null))}
       </TextGroup>
     </>

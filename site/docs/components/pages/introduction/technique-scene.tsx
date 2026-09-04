@@ -9,9 +9,9 @@ import { useBitmapTextScale } from './use-bitmap-text-scale';
 import { useSceneReady } from './use-scene-ready';
 
 export function TechniqueScene({ onReady }: GlyphSceneProps) {
-  const slugFont = useFont(SLUG_FONT.input, SLUG_FONT.raster.technique);
-  const msdfFont = useFont(MSDF_FONT.input, MSDF_FONT.raster.technique, MSDF_FONT.raster.options);
-  const bitmapFont = useFont(BITMAP_FONT.input, BITMAP_FONT.raster.technique, BITMAP_FONT.raster.options);
+  const slugFont = useFont(SLUG_FONT.src, { format: SLUG_FONT.format });
+  const msdfFont = useFont(MSDF_FONT.src, { format: MSDF_FONT.format });
+  const bitmapFont = useFont(BITMAP_FONT.src, { format: BITMAP_FONT.format });
   const viewport = useThree((state) => state.viewport);
   const bitmapScale = useBitmapTextScale(16);
   const titleSize = Math.min(viewport.width * 0.16, 2.2);

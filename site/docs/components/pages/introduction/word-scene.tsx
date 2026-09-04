@@ -9,7 +9,7 @@ import { paragraphTopFromCenter } from './scene-layout';
 import { useSceneReady } from './use-scene-ready';
 
 export function WordScene({ inputs, onReady, scene }: GlyphSceneProps) {
-  const font = useFont(SLUG_FONT.input, SLUG_FONT.raster.technique);
+  const font = useFont(SLUG_FONT.src, { format: SLUG_FONT.format });
   const viewport = useThree((state) => state.viewport);
   const mark = useRef<Group>(null);
   const elapsed = useRef(0);
