@@ -169,7 +169,7 @@ Purpose: a reader decides in one screen whether this solves their problem.
 - What does it look like: hello example, R3F form (`useMSDF` + `<Text>`), then the same in vanilla (`glyph.init()` → `glyph.handle('main', ThreeConfig)` → `createText`).
 - FAQ as H2s, r3f-style: Does it need WebGPU? (no; WebGL2 fallback is Three's) · Is it slower than a texture atlas of sprites? (batching, one draw per technique/resource boundary) · Which scripts? (HarfRust; Arabic, Indic, CJK, bidi; horizontal) · Can I use my own shader? (`defineTextMaterial`) · Where does layout run? (Rust; JS owns Unicode analysis).
 - Ecosystem: drei, uikit (integration doc), postprocessing via `useRenderPipeline`.
-- Sources: ADR 0001–0003, `docs/packages/glyph.md` "Public package surfaces", `apps/r3f-hello-world/src/app.tsx`.
+- Sources: ADR 0001–0003, `.agents/docs/packages/glyph.md` "Public package surfaces", `apps/r3f-hello-world/src/app.tsx`.
 
 ### getting-started/installation (nav 1)
 
@@ -249,7 +249,7 @@ its docs page.
 - CacheStorage: identity, persistence follows the source response's freshness, quota eviction.
 - Cost table: uikit-style — approach · best for · tradeoff.
 - Example: runtime-bake.
-- Sources: `runtime-bake.ts`, `docs/packages/glyph.md` Worker paragraphs, `internal/runtime-font-cache.ts`.
+- Sources: `runtime-bake.ts`, `.agents/docs/packages/glyph.md` Worker paragraphs, `internal/runtime-font-cache.ts`.
 
 ### text/text-and-groups (nav 20)
 
@@ -362,7 +362,7 @@ its docs page.
 - `Activity` pre-render; `onError`.
 - `> [!NOTE]` D-296 `fonts={}` / `fallback` / `errorFallback` direction.
 - Example: provider.
-- Sources: `react.ts`, D-294, D-295, `docs/packages/glyph.md` R3F paragraphs.
+- Sources: `react.ts`, D-294, D-295, `.agents/docs/packages/glyph.md` R3F paragraphs.
 
 ### react/hooks (nav 41)
 
@@ -504,7 +504,7 @@ Measured while building the examples against `GLYPH_SOURCE=<codex>/packages/glyp
 | Rescaling advances destroys the shaping | mapping a glyph's advance onto an arc by `advance * (arc / width)` changes every pair's fit; the ring read as bad kerning. Place at the shaped advance 1:1 and absorb the difference in word spaces, the way justification does | orbit |
 | Preview lifecycle | `IntersectionObserver` only reports during rendering steps, so a hidden pane never deactivates; `canvas.toDataURL('image/webp')` on a WebGPU canvas returns the last presented frame even when hidden | kinetic, the preview host |
 | `measure().width` is the resolved box; `contentWidth` is the advance extent | a ring built from `width` left a gap; `contentWidth` closes it | arc |
-| `/core` subpath is gone; the codec DSL and `defineGlyphConfig` are root exports | `package.json` exports and `tests/package/entry-point-boundaries.test.mjs` assert `exports['./core'] === undefined`; `docs/log.md` still names `/core` | — |
+| `/core` subpath is gone; the codec DSL and `defineGlyphConfig` are root exports | `package.json` exports and `tests/package/entry-point-boundaries.test.mjs` assert `exports['./core'] === undefined`; `.agents/docs/log.md` still names `/core` | — |
 | `TextFrameError` is declared, never produced | `three/frame-error.ts` exports the cause union; `textFrameError()` has no caller; `shape()` failures surface as `GlyphEngineStatusError` on `text.error` / `onError` / `commitState()` | errors page carries the caveat |
 | every font load requires `crypto.subtle` | `loader.ts` `_registerAsset` hashes the artifact on every load; `raster-identity.ts`, `compose-bake.ts`, `runtime-font-cache.ts` too; no pure-JS fallback in that tree (the `fix/font-identity-no-secure-context` branch here removes it) | installation page warns |
 | no "every glyph rasterised empty" guard | bitmap and MTSDF bakers mark unreadable outlines absent silently; a CFF face bakes shaping data and an empty raster | baking page warns |
@@ -523,7 +523,7 @@ The pane the examples are verified in is hidden between tool calls (`document.hi
 | Batch boundary keys | which keys partition draws (format, resource, material, clip, compositing) is stated nowhere citable; deriving them needs `internal/render-planner.ts` plus `rust/shaper/src/engine/plan_draw.rs` | advanced/performance and text/text-and-groups reference the planner with [verify] |
 | Unicode version | only crate/npm pins and `provenance.unicodeVersion` exist; no version number is stated in the tree | getting-started/introduction "Which scripts and languages?" carries [verify] |
 | Corrections to earlier docs claims | layout units are F16.16, not F26.6 (`rust/shaper/src/engine/layout_units.rs:1–20`); UAX 14 line breaking runs in Rust (`rust/shaper/src/line_break.rs`), JS holds grapheme boundaries only (`internal/graphemes.ts`) | fixed in the scaffolds' notes |
-| `Text.spans` | no public getter at HEAD (`three/text.ts:667–710`) while D-265, `three/frame-error.ts:15`, and `docs/three-api.md:209–221` speak of it; `three-api.md:217–221` still passes raw `spans:` to `createText`, which `assertNoRawSpans` (`three/text.ts:1489`) rejects | text/rich-text "Reading the result" under `no-check` |
+| `Text.spans` | no public getter at HEAD (`three/text.ts:667–710`) while D-265, `three/frame-error.ts:15`, and `.agents/docs/planning/three-api.md:209–221` speak of it; `three-api.md:217–221` still passes raw `spans:` to `createText`, which `assertNoRawSpans` (`three/text.ts:1489`) rejects | text/rich-text "Reading the result" under `no-check` |
 | `alignSpansToClusters` | not exported from the root entry (`index.ts:263–274`); D-265 calls it the exported offset check | text/rich-text "The cluster rule" [verify] |
 | `createParagraph({ font })` | takes a loaded immutable `FontSelection` (`paragraph.ts:71`); no handle-free way to bind a FontFace to a renderer-neutral `Paragraph` | text/measurement "Paragraph without a renderer" under `no-check` |
 | Detached `Text.measure()` | D-282 says it throws, `three-api.md:275` says implicit standalone planner; at HEAD it routes through the root-owned planner regardless of attachment (`three/text.ts:409–412`, `:1193–1201`) | text/measurement "When you can measure" |
@@ -535,7 +535,7 @@ The pane the examples are verified in is hidden between tool calls (`document.hi
 | Corrections to earlier docs claims (text pages) | `inkBounds === undefined` means "did not position", never "empty" (`layout.ts:80–89`); `root.error` does not exist, only `text.error` / `group.error`; Bitmap's shader output includes `opacity`; `errorFallback` catches any `FontLoadError` beneath it (`react.ts:371`); `caretAt` takes paragraph space, so a three.js local point needs `-local.y` | fixed in the scaffolds' notes |
 | Missing example scenes | none: the planned `fallback-stack` and `runtime-bake` proxies were removed under the canon rule; the carousel/flag warp behind the "Slug ignores `positionNode`" finding is no longer in `kinetic` | pending examples; each proxy carries [verify] |
 | Unicode analysis location | UAX 9/14/24/29 run in Rust (`rust/shaper/src/unicode.rs`, `bidi.rs`, `line_break.rs`; D-320 deleted the TS analyzer); only grapheme segmentation for span alignment stays in JS | advanced/how-it-works corrected |
-| Layout unit format | `layout_units.rs:1–34` is F16.16 (`LAYOUT_UNIT_BITS = 16`); D-254 and `docs/planning/integer-layout-units.md` still say F26.6 | advanced/how-it-works [in flight] until the register catches up |
+| Layout unit format | `layout_units.rs:1–34` is F16.16 (`LAYOUT_UNIT_BITS = 16`); D-254 and `.agents/docs/planning/integer-layout-units.md` still say F26.6 | advanced/how-it-works [in flight] until the register catches up |
 | Implicit shaping in plain three.js | scene traversal shapes through the root's draw object (`three/text.ts:139–142`, `:478–493`, `:421–429`) and swallows rejections into `text.error`; only an explicit `glyph.shape()` throws | advanced/pitfalls "nothing draws and nothing threw" |
 | Device loss on the Three side | `requestCheckpoint` has no caller under `src/three/*`; the only recipe is dispose and recreate | advanced/topologies flags the gap |
 | `<TextSpan>` retirement | nested `<Text>` exists and no `TextSpan` is exported, but D-005 predates D-277 and no decision names the retirement | advanced/migration cites D-277 with [verify] |
