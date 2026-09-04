@@ -81,12 +81,14 @@ function FontConsumer(): null {
   useMsdf('/fonts/Inter.font.glb') satisfies Font<typeof msdf>;
   useMsdf('/fonts/Inter.font.glb', { emSize: 64, pixelRange: 8 }) satisfies Font<typeof msdf>;
   useSlug('/fonts/Inter.font.glb') satisfies Font<typeof slug>;
+  useSlug('/fonts/Inter.font.glb', { cubicSubdivisions: 8 }) satisfies Font<typeof slug>;
   void loaded;
   useFont('/fonts/Inter.font.glb', { format: bitmap({ strikes: [16] }) }) satisfies Font<typeof bitmap>;
   // @ts-expect-error Bitmap's exact request helper requires bake options.
   bitmap();
-  // @ts-expect-error Slug has no request options.
-  slug({});
+  slug({ cubicSubdivisions: 8 });
+  // @ts-expect-error Slug's only option is the cubic subdivision rate.
+  slug({ emSize: 64 });
   // @ts-expect-error FontFace hooks use the canonical source directly, not the legacy loader request object.
   useFont({ baked: '/fonts/Inter.font.glb' });
   return null;

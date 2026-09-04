@@ -215,6 +215,36 @@ mod tests {
     );
     const SHAPING_FINGERPRINT: &str = "0c522d6ea0db73ba74bcc389dc50263b";
 
+    /// Drop one table's directory record, leaving its bytes stranded. This is
+    /// the shape a CFF source reaches the raster bakers in: subsetting emits a
+    /// font whose outline table is simply gone.
+    fn without_table(source: &[u8], tag: &[u8; 4]) -> Vec<u8> {
+        let mut bytes = source.to_vec();
+        let count = usize::from(u16::from_be_bytes([bytes[4], bytes[5]]));
+        let record = (0..count)
+            .map(|index| 12 + index * 16)
+            .find(|start| &bytes[*start..*start + 4] == tag)
+            .expect("font carries the table being removed");
+        // Shift the later records down over it; the table data never moves, so
+        // every remaining offset stays valid and the tail 16 bytes go unread.
+        bytes.copy_within(record + 16..12 + count * 16, record);
+        bytes[4..6].copy_from_slice(&u16::try_from(count - 1).unwrap().to_be_bytes());
+        bytes
+    }
+
+    #[test]
+    fn a_font_without_outlines_is_refused_rather_than_baked_blank() {
+        let stripped = without_table(INTER, b"glyf");
+        let error = bake_bitmap(&stripped, request())
+            .expect_err("a font with no outline table must not bake");
+        assert_eq!(error.code, BitmapBakeErrorCode::InvalidFont);
+        assert!(
+            error.message.contains("outline table"),
+            "the message must name the cause: {}",
+            error.message
+        );
+    }
+
     fn request() -> BitmapBakeRequestV0 {
         let descriptor = BitmapDescriptorV0 {
             coverage: None,

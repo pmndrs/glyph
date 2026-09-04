@@ -1,6 +1,7 @@
 use alloc::{string::String, vec::Vec};
 
 pub use pmndrs_glyph_raster_artifact::ArtifactPackaging;
+use pmndrs_glyph_slug_core::{DEFAULT_CUBIC_SUBDIVISIONS, MAX_CUBIC_SUBDIVISIONS};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{SlugBakeError, SlugBakeErrorCode};
@@ -17,10 +18,18 @@ pub const SLUG_PLANE_UNITS_PER_EM: u16 = 2048;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SlugDescriptorV0 {
     pub generator_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cubic_subdivisions: Option<u8>,
+}
+
+/// Descriptor values resolved against their defaults.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct SlugBakeSettingsV0 {
+    pub cubic_subdivisions: u8,
 }
 
 impl SlugDescriptorV0 {
-    pub(crate) fn validate(&self) -> Result<(), SlugBakeError> {
+    pub(crate) fn validate(&self) -> Result<SlugBakeSettingsV0, SlugBakeError> {
         if self.generator_version != SLUG_GENERATOR_VERSION {
             return Err(SlugBakeError::new(
                 SlugBakeErrorCode::InvalidDescriptor,
@@ -28,7 +37,17 @@ impl SlugDescriptorV0 {
             )
             .at("/descriptor/generatorVersion"));
         }
-        Ok(())
+        let cubic_subdivisions = self
+            .cubic_subdivisions
+            .unwrap_or(DEFAULT_CUBIC_SUBDIVISIONS);
+        if cubic_subdivisions < 1 || usize::from(cubic_subdivisions) > MAX_CUBIC_SUBDIVISIONS {
+            return Err(SlugBakeError::new(
+                SlugBakeErrorCode::InvalidDescriptor,
+                "cubic subdivisions must be between 1 and 16",
+            )
+            .at("/descriptor/cubicSubdivisions"));
+        }
+        Ok(SlugBakeSettingsV0 { cubic_subdivisions })
     }
 }
 

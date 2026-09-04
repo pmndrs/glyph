@@ -1,11 +1,7 @@
 /// <reference lib="webworker" />
 
-import slugBaker, { type SlugBakerOptions } from '../bakers/slug.js';
+import slugBaker from '../bakers/slug.js';
 import { startRasterBakeWorker } from '../internal/raster-bake-worker-entry.js';
+import { normalizeSlugOptions } from '../internal/slug-contract.js';
 
 startRasterBakeWorker(slugBaker, normalizeSlugOptions);
-
-function normalizeSlugOptions(value: unknown): SlugBakerOptions {
-  if (value !== undefined) throw new TypeError('Slug runtime baker does not accept options');
-  return undefined;
-}
