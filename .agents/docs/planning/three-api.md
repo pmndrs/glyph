@@ -436,7 +436,8 @@ are moved into another group.
 
 ## React Three Fiber
 
-`@pmndrs/glyph/react` exports `GlyphProvider`, `<Text>`, and `<TextGroup>`. Ordinary R3F uses one lazily
+`@pmndrs/glyph/react` exports `GlyphProvider`, `<Text>`, `<TextGroup>`, and `useFont`; exact format leaves export
+`useBitmap`, `useMsdf`, and `useSlug`. Ordinary R3F uses one lazily
 initialized built-in Three handle without configuration at each component:
 
 ```tsx
@@ -455,14 +456,19 @@ Use a provider only when a subtree needs a previously created custom handle:
 </GlyphProvider>
 ```
 
-The provider captures its initial handle and context carries only that immutable selection into R3F host-object
-construction. It does not own a second engine, resolver, renderer, scene, canvas, publication boundary, or the supplied
-handle's disposal. Remount the provider to select another handle and reconstruct its retained Three subtree. `<Text>` and
-`<TextGroup>` intentionally expose no handle prop. Nested R3F `<Text>` values flatten into formatted spans and create no
+`Text` and `TextGroup` never accept handle or root props. The adapter obtains both from one immutable React context: a
+provider-selected value when present, otherwise the Canvas-local default root. That context is dependency injection, not
+another runtime, and it does not own an engine, resolver, renderer, scene, canvas, publication boundary, or the supplied
+handle's disposal. Remount the provider to select another handle and reconstruct its retained Three subtree. Nested R3F `<Text>` values flatten into formatted spans and create no
 Three object of their own; an outer text requires a font, while nested spans may override it. React commit applies desired
 properties in layout effects and calls R3F `invalidate()`. The subsequent Three scene traversal performs
 `shape()`-equivalent publication or cheap transform synchronization before the host renderer builds its render list. The
 maintained renderer target is `@react-three/fiber/webgpu`, which inherits Three's WebGL fallback.
+
+Fonts may be caller-owned `glyph.fontFace()` declarations passed directly to Text, hook-owned declarations returned by
+`useFont` or a typed format hook, or provider aliases declared through `fontFaces`. All three use Glyph's one FontFace
+resource graph; React retains only stable suspension identity and mounted Font leases. The complete ownership, preload,
+retry, and cleanup rules are in [React font loading](../guides/react.md).
 
 ## Deliberately absent surfaces
 

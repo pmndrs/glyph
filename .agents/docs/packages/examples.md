@@ -5,7 +5,7 @@ description: Demonstrates matching public imperative Three.js and React Three Fi
 resource: ../../../apps/r3f-hello-world
 workspace_package: '@pmndrs/glyph-examples'
 documentation_type: reference
-source_digest: 'sha256:1f85a8879746715ebf5b57407606b9dd0cbca3cafb017d5301047d2fbad44a1a'
+source_digest: 'sha256:2c80592744ed90743578f6e9cde3c13b1be722094fe5e120299c366db03c30e5'
 tags: [package, example, three, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -22,7 +22,7 @@ sources:
     title: Public R3F raster-format and nested font-span lifecycle
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-04T00:13:53Z'
+  at: '2026-09-04T00:50:50Z'
 ---
 
 # Package reference: `@pmndrs/glyph-examples`
@@ -38,10 +38,11 @@ The imperative route uses the complete ordinary contract: `await glyph.init()`, 
 not inputs to Glyph resource resolution.
 
 The R3F route uses the module-owned default Three handle unless a `GlyphProvider` selects another immutable handle.
-Module-scoped `glyph.fontFace()` declarations supply typed format selections; each `<Text>` suspends on an unloaded
-selection and owns its mounted immutable Font lease. Three
-React `Activity` branches retain the raster-format variants; nested `Text` chooses the matching icon font, and a `TextGroup`
-batches the control labels.
+Module-scoped `useBitmap.preload()`, `useMsdf.preload()`, and `useSlug.preload()` calls start the three format loads;
+the matching hooks consume those stable operations, suspend only while unresolved, and own their mounted immutable Font
+leases. Each hook declares through `glyph.fontFace()` rather than introducing another loader. Three React `Activity`
+branches retain the raster-format variants; nested `Text` chooses the matching icon font, and a `TextGroup` batches the
+control labels.
 
 The checked-in Inter asset covers Basic Latin `U+0020–U+007E`; the Font Awesome asset contains only six globe/earth PUA
 scalars. Each GLB embeds Bitmap, MSDF, and Slug resources. The manifest invokes the published baker CLI and verifies

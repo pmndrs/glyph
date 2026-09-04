@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:17e3cc218e30e1fbb82f2ccb1d29a9341f60ae5ec7d6d3696cfdc1fdf20b20f7'
+source_digest: 'sha256:7ff092a8345673c05c23e97697dc90f6ca32cb3ef0f1c4fd9e0f0f21a5d07e28'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -178,7 +178,8 @@ config helpers.
 | `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing FontFace/font/raster contracts, fallback stacks, formatting helpers, and layout results. |
 | `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, and portable-resource helpers for integration authors.                |
 | `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, material factories, and Codec registration.                            |
-| `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`, and `<TextGroup>`, reconciled through React Three Fiber.                                        |
+| `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`/`<TextGroup>`, and generic `useFont`, reconciled through React Three Fiber.                       |
+| `@pmndrs/glyph/react/*`      | Typed `useBitmap`, `useMsdf`, and `useSlug` convenience hooks on their exact format leaves.                                      |
 | `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                      |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                         |
 | `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-format contracts.                                                     |
@@ -220,16 +221,22 @@ IDs, and names retained in a font's `post` or CFF data. Exact repeatable `--name
 compressed `--unicode-set` accepted by `glyph bake --unicodes`. Fonts without authored names still expose exact IDs rather
 than invented semantic labels. Rich vendor labels and aliases remain external catalog data.
 
-R3F `<Text>` and `<TextGroup>` expose no handle prop. They read a selected `ThreeHandle` or terminal `ThreeRoot` from the
-nearest optional `GlyphProvider`, or suspend on one module-owned default Three handle that calls idempotent `glyph.init()`
-and installs `ThreeConfig` once. `handle="surface"` is shorthand for the idempotent `defaultHandle('surface')` named root;
-an omitted provider selection still uses the Canvas-local default root. A provider captures its initial selection and `fontFaces` alias table and never updates
+R3F `Text` and `TextGroup` never accept handle or root props. The adapter obtains both from one immutable React context: a
+provider-selected `ThreeHandle` or terminal `ThreeRoot` when present, otherwise the Canvas-local default root on one
+module-owned default Three handle that calls idempotent `glyph.init()` and installs `ThreeConfig` once. `handle="surface"`
+is shorthand for the idempotent `defaultHandle('surface')` named root. A provider captures its initial selection and `fontFaces` alias table and never updates
 the context value; selecting another root, handle, or alias table requires remounting the provider. Context is constructor dependency
 injection only: it owns no engine, runtime, scene, renderer, canvas, publication cursor, or semantic resource cache, and
 it never disposes an externally owned handle or FontFace. It disposes only FontFaces it declared from shorthand table
 entries. Supplying `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` handles only `FontLoadError`
 and rethrows unrelated errors. Imperative construction uses `handle.createText()` and `handle.createTextGroup()` for the
 anonymous root, or `handle(name).createText()` and `handle(name).createTextGroup()` for a named root.
+
+React font selection has three coexisting public paths. A caller-owned FontFace may be passed directly to outer or nested
+Text; `useFont` and the typed `useBitmap`/`useMsdf`/`useSlug` leaves own hook-created declarations and mounted Font
+leases; and `GlyphProvider.fontFaces` supplies optional subtree-local string aliases from sources, `{ src, format? }`, or
+caller-owned FontFaces. All three use the same Glyph resource graph. `suspend-react` retains only stable Promise/error
+identity across React retries, and is not a semantic font cache. See [React font loading](../guides/react.md).
 
 The public `ThreeRoot` contract stops at that retained scene API: identity and disposal, Text/TextGroup construction,
 counts, and mutable material presentation. The renderer draw object, discovered Three Scene, root services, command
@@ -351,8 +358,9 @@ format with fetching disabled, and neither realm initializes the shaping engine.
 
 React `<Text>` consumes the same `FontFace` declaration or selection as imperative Three. It asks the selected Three
 handle which exact format the declaration denotes and enters the shared `suspend-react` resource only while that format
-is unloaded. The selected Text owns an independent immutable Font lease and releases it on unmount. There are no public
-React font-loading hooks or `/react/*` format leaves; applications declare fonts once with `glyph.fontFace()`.
+is unloaded. The selected Text owns an independent immutable Font lease and releases it on unmount. `useFont` and its
+typed raster-format wrappers remain conveniences over `glyph.fontFace()`, with matching `.preload()` and `.clear()`;
+they do not introduce another loader or resource cache.
 
 Artifact metrics carry text decoration from bake time (D-246): required `underlinePosition`/`underlineThickness` from
 `post` and `strikeoutPosition`/`strikeoutSize` from `OS/2`, with a conservative derived fallback when a source font
