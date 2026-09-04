@@ -1,12 +1,4 @@
-/* @workflow
-{
-  "name": "glyph:bitmap-fixture:generate",
-  "summary": "Regenerate the canonical Bitmap artifact through the public baker.",
-  "requirements": "Stable Rust, Binaryen, and the @pmndrs/glyph package build.",
-  "writes": "The checked-in canonical Bitmap fixture.",
-  "args": ["bitmap"]
-}
-*/
+/* @workflow { "name": "glyph:bitmap-fixture:generate", "summary": "Regenerate the canonical Bitmap artifact through the public baker.", "requirements": "Stable Rust, Binaryen, and the @pmndrs/glyph package build.", "writes": "The checked-in canonical Bitmap fixture.", "args": ["bitmap"] } */
 
 import { commandArguments, isMainModule, runNode, runPnpm } from './support/command.mts';
 

@@ -94,9 +94,7 @@ const SLUG_INVERSE_FONT_SIZE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/i
 const SLUG_TABLE_STARTS_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/table-starts');
 const SLUG_BAND_COUNTS_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/band-counts');
 
-/**
- * The authoritative physical shape of the Slug format.
- */
+/** The authoritative physical shape of the Slug format. */
 export const slugSchema: TechniqueSchema<
   {
     readonly rect: {

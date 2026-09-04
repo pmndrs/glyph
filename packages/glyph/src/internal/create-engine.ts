@@ -63,10 +63,7 @@ export interface CreateEngineOptions<Bindings extends GlyphBindingSet, Boundary>
   readonly transformInput: (binding: HandleTransformBinding) => Bindings['transformInput'];
 }
 
-/**
- * Creates the retained mapper/binder for one publication root. Integrations provide only
- * their config schema; raw plan access, resource transactions, and identity settlement stay here.
- */
+/** Creates the retained mapper/binder for one publication root. Integrations provide only their config schema; plan access, resource transactions, and identity settlement stay here. */
 export function createEngine<Bindings extends GlyphBindingSet, Boundary>(
   options: CreateEngineOptions<Bindings, Boundary>,
 ): GlyphDisplayListProjector<Bindings> {

@@ -1,12 +1,4 @@
-/* @workflow
-{
-  "name": "glyph:bake-check",
-  "summary": "Verify generated Unicode data, test vectors, Wasm artifacts, and the native MTSDF oracle.",
-  "requirements": "The core Node, stable Rust, and Binaryen toolchain.",
-  "writes": "Temporary build outputs only; checked-in evidence must remain unchanged.",
-  "args": []
-}
-*/
+/* @workflow { "name": "glyph:bake-check", "summary": "Verify generated Unicode data, test vectors, Wasm artifacts, and the native MTSDF oracle.", "requirements": "The core Node, stable Rust, and Binaryen toolchain.", "writes": "Temporary build outputs only; checked-in evidence must remain unchanged.", "args": [] } */
 
 import { isMainModule, runNode } from './support/command.mts';
 

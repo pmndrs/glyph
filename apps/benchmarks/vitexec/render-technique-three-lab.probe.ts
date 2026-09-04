@@ -1,9 +1,4 @@
-/* @workflow {
-  "name": "benchmark:render-technique-lab",
-  "summary": "Measure generic and first-party Three plan realization and retained updates.",
-  "requirements": "Built Glyph and glyph-example packages, project Chromium, and the authenticated Inter fixture.",
-  "writes": "stdout only"
-} */
+/* @workflow { "name": "benchmark:render-technique-lab", "summary": "Measure generic and first-party Three plan realization and retained updates.", "requirements": "Built Glyph and glyph-example packages, project Chromium, and the authenticated Inter fixture.", "writes": "stdout only" } */
 const labPath = '/src/benchmark/labs/render-technique-three.ts';
 const { runRenderTechniqueThreeLab } = await import(/* @vite-ignore */ labPath);
 const report = await runRenderTechniqueThreeLab();

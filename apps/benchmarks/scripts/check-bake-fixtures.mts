@@ -1,12 +1,4 @@
-/* @workflow
-{
-  "name": "benchmark:bake-check",
-  "summary": "Verify every deterministic benchmark bake and authenticated Japanese subset.",
-  "requirements": "Core toolchain plus the scoped HarfBuzz utilities for the Japanese subset.",
-  "writes": "Temporary build outputs only; checked-in fixtures must remain unchanged.",
-  "args": []
-}
-*/
+/* @workflow { "name": "benchmark:bake-check", "summary": "Verify every deterministic benchmark bake and authenticated Japanese subset.", "requirements": "Core toolchain plus the scoped HarfBuzz utilities for the Japanese subset.", "writes": "Temporary build outputs only; checked-in fixtures must remain unchanged.", "args": [] } */
 
 import { buildRuntimePackages, isMainModule, runNodeScript } from './support/command-cli.mts';
 

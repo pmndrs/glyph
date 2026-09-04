@@ -351,12 +351,7 @@ if (process.platform !== 'win32') {
 }
 await publishStagedDistribution();
 
-/**
- * Swap the staged distribution into place. The previous tree is renamed aside first so
- * the window in which `dist/` does not exist spans two renames rather than a build, and
- * is then removed. A failed swap leaves the superseded tree on disk under its own name
- * rather than deleting a working distribution.
- */
+/** Publishes via two renames (old tree aside, then staging in); a failed swap leaves the old tree intact rather than deleted. */
 async function publishStagedDistribution() {
   const startedAt = Date.now();
   for (let attempt = 0; ; attempt += 1) {
@@ -391,11 +386,7 @@ async function publishStagedDistribution() {
   }
 }
 
-/**
- * Remove staging and superseded trees left by builds that died before their exit handler
- * ran, so a crashed or killed build cannot accumulate trees inside the cache. A
- * tree is only removed once its owning process is gone, so a concurrent build is safe.
- */
+/** Removes staging/superseded dirs from crashed builds; a dir is removed only once its owning process is dead, so concurrent builds stay safe. */
 async function reclaimAbandonedBuildDirectories() {
   const entries = await readdir(buildCacheDirectory, { withFileTypes: true }).catch(() => []);
   await Promise.all(

@@ -43,10 +43,7 @@ export interface GlyphPlanTarget<Bindings extends GlyphBindingSet, Result> exten
   dispose(): void;
 }
 
-/**
- * Creates the shared decode, bind, prepare, commit, and cleanup boundary for one publication root.
- * The returned target owns the configured renderer, optional built-in renderer, and command binder.
- */
+/** Creates the shared decode/bind/prepare/commit/cleanup boundary for one publication root; the returned target owns the configured renderer, optional built-in renderer, and command binder. */
 export function createGlyphPlanTarget<Bindings extends GlyphBindingSet, Result, Boundary, CodecValue extends Codec>(
   options: CreateGlyphPlanTargetOptions<Bindings, Result, Boundary, CodecValue>,
 ): GlyphPlanTarget<Bindings, Result> {

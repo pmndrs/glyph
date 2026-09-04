@@ -1,15 +1,9 @@
-/**
- * Adapted from three-flatland Slug at 2935a89f (MIT).
- * See RESEARCH.md for repository provenance.
- */
+/** Adapted from three-flatland Slug at 2935a89f (MIT); see RESEARCH.md for provenance. */
 import type { Node } from 'three/webgpu';
 import { lessThan, uint } from 'three/tsl';
 import { uintBitAnd, uintBitOr, uintShiftLeft, uintShiftRight } from './tsl-compat.js';
 
-/**
- * Calculate root eligibility from the signs of three control-point coordinates.
- * Bit 0 selects the first ordered root and bit 8 selects the second.
- */
+/** Root eligibility from the signs of three control-point coordinates; bit 0 selects the first ordered root, bit 8 the second. */
 export function calcRootCode(y1: Node<'float'>, y2: Node<'float'>, y3: Node<'float'>): Node<'uint'> {
   const negative1: Node<'bool'> = lessThan(y1, 0);
   const negative2: Node<'bool'> = lessThan(y2, 0);

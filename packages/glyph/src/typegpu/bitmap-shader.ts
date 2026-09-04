@@ -2,10 +2,7 @@ import tgpu, { type TgpuBindGroupLayout, type TgpuFn, type TgpuLayoutTexture } f
 import * as d from 'typegpu/data';
 import * as std from 'typegpu/std';
 
-/**
- * One glyph instance's canonical Bitmap fields, as a typed GPU schema. Core owns what each field means; how a program
- * addresses it — storage buffers, instanced attributes, or a uniform — stays the program's own choice.
- */
+/** One glyph instance's canonical Bitmap fields, as a typed GPU schema; Core owns field meaning, the program owns how it's addressed (buffer, attribute, or uniform). */
 export const TypeGpuBitmapInstance: d.WgslStruct<{
   origin: d.Vec2f;
   size: d.Vec2f;
@@ -29,12 +26,7 @@ export const TypeGpuBitmapInstance: d.WgslStruct<{
 });
 export type TypeGpuBitmapInstance = d.InferGPU<typeof TypeGpuBitmapInstance>;
 
-/**
- * The GPU resource one Bitmap glyph batch binds: the single-channel coverage pages its strike binding selected. Pages
- * are uploaded in the atlas's own top-down row order, so any flipY-style host setting must stay disabled. Coverage is
- * read as exact clamped texels — the fetch the `/tsl` realization compiles to for data textures — so no sampler enters
- * the measure.
- */
+/** Single-channel coverage pages uploaded in the atlas's own top-down row order — flipY-style host settings must stay disabled; read as exact clamped texels, no sampler. */
 export const TypeGpuBitmapPageLayout: TgpuBindGroupLayout<{
   page: TgpuLayoutTexture<d.WgslTexture2dArray<d.F32>> & { visibility?: readonly ['fragment'] };
 }> = tgpu.bindGroupLayout({
@@ -49,15 +41,9 @@ export const TypeGpuBitmapVertexInput: d.WgslStruct<{
   modelViewProjection: d.Mat4x4f;
   screenSize: d.Vec2f;
 }> = d.struct({
-  /**
-   * Unit-quad coordinate spanning `[0, 1]` with the origin at the glyph's upper-left corner. This is the coordinate
-   * `/tsl` reads from `positionLocal`; a program supplying different geometry owns that correspondence.
-   */
+  /** Unit-quad coordinate spanning `[0, 1]`, origin at upper-left — the coordinate `/tsl` reads from `positionLocal`; different geometry must preserve that correspondence. */
   quadPosition: d.vec2f,
-  /**
-   * Unit-quad texture coordinate, the coordinate `/tsl` reads from `uv()`. Equals `quadPosition` on the technique's
-   * unit quad; both are carried because `/tsl` reads them independently.
-   */
+  /** Unit-quad texture coordinate, the coordinate `/tsl` reads from `uv()`; equals `quadPosition` but carried separately since `/tsl` reads them independently. */
   quadUv: d.vec2f,
   instance: TypeGpuBitmapInstance,
   /** Column-major model-view-projection, the same matrix chain a Three renderer would apply to `position`. */
@@ -67,12 +53,7 @@ export const TypeGpuBitmapVertexInput: d.WgslStruct<{
 });
 export type TypeGpuBitmapVertexInput = d.InferGPU<typeof TypeGpuBitmapVertexInput>;
 
-/**
- * Everything the canonical Bitmap vertex stage produces, so a program can consume a stage or compose over its output.
- *
- * Unlike `/tsl`, which leaves object-space `position` for the renderer's projection, a standalone vertex result carries
- * its clip-space placement directly: `clipPosition` is what a program assigns to `@builtin(position)`.
- */
+/** Unlike `/tsl`, which leaves object-space `position` for the renderer's projection, this carries clip-space placement directly: `clipPosition` is what a program assigns to `@builtin(position)`. */
 export const TypeGpuBitmapVertexOutput: d.WgslStruct<{
   position: d.Vec3f;
   clipPosition: d.Vec4f;
@@ -105,10 +86,7 @@ export const TypeGpuBitmapFragmentInput: d.WgslStruct<{
 });
 export type TypeGpuBitmapFragmentInput = d.InferGPU<typeof TypeGpuBitmapFragmentInput>;
 
-/**
- * Everything the canonical Bitmap fragment stage produces, so a program can consume the final result or compose over
- * its coverage before paint alpha.
- */
+/** Everything the canonical Bitmap fragment stage produces; a program can consume the final result or compose over coverage before paint alpha. */
 export const TypeGpuBitmapFragmentOutput: d.WgslStruct<{
   coverage: d.F32;
   color: d.Vec3f;
@@ -135,12 +113,7 @@ export function bitmapQuadPosition(origin: d.v2f, size: d.v2f, quadPosition: d.v
   return d.vec3f(origin.x + quadPosition.x * size.x, -(origin.y + quadPosition.y * size.y), 0);
 }
 
-/**
- * Rounds one projected clip-space axis onto whole physical pixels and returns the final clip value. Snapping in clip
- * space rather than paragraph space keeps the paragraph transform, camera, and device pixel ratio out of the technique:
- * whatever chain produced the clip position, its device-space landing is what has to sit on the grid the atlas was
- * baked for. The operation order — reciprocals included — matches the TSL realization's emitted shader exactly.
- */
+/** Rounds a clip-space axis onto whole physical pixels in clip space (not paragraph space), so any transform/camera/DPR lands on the atlas's baked grid; operation order matches the TSL realization exactly. */
 export function snapClipAxis(clipAxis: number, clipW: number, physicalSize: number): number {
   'use gpu';
 
@@ -156,11 +129,7 @@ export function projectClipPosition(modelViewProjection: d.m4x4f, position: d.v3
   return std.mul(modelViewProjection, d.vec4f(position.x, position.y, position.z, 1));
 }
 
-/**
- * The canonical Bitmap vertex stage: quad placement, atlas addressing, and paint passthrough under the default
- * projection. Pixel snapping is opt-in because it preserves strike sharpness at rest but quantizes animated motion; a
- * program that wants it binds `bitmapVertexSnapped` instead.
- */
+/** The canonical Bitmap vertex stage under the default projection; a program wanting pixel snapping (sharp at rest, quantizes animated motion) binds `bitmapVertexSnapped` instead. */
 export const bitmapVertex: TgpuFn<(input: typeof TypeGpuBitmapVertexInput) => typeof TypeGpuBitmapVertexOutput> =
   tgpu.fn(
     [TypeGpuBitmapVertexInput],
@@ -179,10 +148,7 @@ export const bitmapVertex: TgpuFn<(input: typeof TypeGpuBitmapVertexInput) => ty
     });
   });
 
-/**
- * The pixel-snapped Bitmap vertex stage: the same graph with the projected x/y axes rounded onto whole physical
- * pixels. Snapping preserves strike sharpness at rest but quantizes animated motion.
- */
+/** The pixel-snapped Bitmap vertex stage: same graph with projected x/y rounded onto whole physical pixels — sharp at rest, but quantizes animated motion. */
 export const bitmapVertexSnapped: TgpuFn<(input: typeof TypeGpuBitmapVertexInput) => typeof TypeGpuBitmapVertexOutput> =
   tgpu.fn(
     [TypeGpuBitmapVertexInput],
@@ -218,10 +184,7 @@ export function bitmapPaint(coverage: number, color: d.v4f): TypeGpuBitmapFragme
   });
 }
 
-/**
- * Coverage of one atlas coordinate: the coordinate is clamped into the page, scaled onto the texel grid, floored, and
- * clamped against the bounds — the same nearest-texel fetch the `/tsl` realization compiles to for data textures.
- */
+/** Coverage of one atlas coordinate: clamped into the page, scaled onto the texel grid, floored, bound-clamped — the same nearest-texel fetch the `/tsl` realization compiles to. */
 export function bitmapPageCoverage(page: d.texture2dArray<d.F32>, atlasUv: d.v2f, pageLayer: number): number {
   'use gpu';
 
@@ -236,10 +199,7 @@ export function bitmapPageCoverage(page: d.texture2dArray<d.F32>, atlasUv: d.v2f
   return std.textureLoad(page, boundedCoord, pageLayer, 0).x;
 }
 
-/**
- * The canonical Bitmap fragment stage: single-channel coverage fetched from the bound page array at the interpolated
- * atlas coordinate, then composed with the paint colour.
- */
+/** The canonical Bitmap fragment stage: single-channel coverage fetched from the bound page array, then composed with the paint colour. */
 export const bitmapFragment: TgpuFn<(input: typeof TypeGpuBitmapFragmentInput) => typeof TypeGpuBitmapFragmentOutput> =
   tgpu.fn(
     [TypeGpuBitmapFragmentInput],

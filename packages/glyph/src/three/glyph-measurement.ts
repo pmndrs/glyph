@@ -15,15 +15,7 @@ export interface GlyphAnchor {
 /** The coordinate system used by a retained renderer geometry source. */
 export type ThreeGlyphGeometryCoordinates = 'glyph-local' | 'unit-square' | 'em';
 
-/**
- * Geometry data available to a Three adapter when a technique supplies a mesh.
- *
- * `metric-quad` is already in Text-local Three coordinates. `supplied` is the
- * immutable source mesh in the technique's declared coordinates; the technique
- * shader owns how those coordinates are scaled or otherwise transformed. This
- * distinction keeps a physics adapter from mistaking a renderer source mesh for
- * a collision guarantee while still making the exact retained shape available.
- */
+/** `metric-quad` is already in Text-local Three coordinates; `supplied` is the technique's immutable source mesh in its own declared coordinates — not a collision guarantee. */
 export interface ThreeGlyphGeometrySource {
   readonly kind: 'metric-quad' | 'supplied';
   readonly geometryKind?: 'quad' | 'hull' | 'custom';

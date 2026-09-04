@@ -1,12 +1,5 @@
 import { spawn } from 'node:child_process';
-/* @workflow
-{
-  "name": "benchmark:v1-bitmap",
-  "summary": "Render the Rust command-buffer path for Three Bitmap/MTSDF/Slug and a custom material on WebGPU and WebGL2.",
-  "requirements": "Playwright Chromium, WebGPU, WebGL2, and baked Inter fixtures.",
-  "writes": "No repository files."
-}
-*/
+/* @workflow { "name": "benchmark:v1-bitmap", "summary": "Render the Rust command-buffer path for Three Bitmap/MTSDF/Slug and a custom material on WebGPU and WebGL2.", "requirements": "Playwright Chromium, WebGPU, WebGL2, and baked Inter fixtures.", "writes": "No repository files." } */
 import { fileURLToPath } from 'node:url';
 
 import { launchProjectChromium } from './support/project-chromium.mts';

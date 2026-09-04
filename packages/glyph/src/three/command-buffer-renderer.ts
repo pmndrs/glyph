@@ -142,17 +142,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     return this.#decodeRendererCommit(view);
   }
 
-  /**
-   * Reads where each glyph is drawn, in paragraph glyph-origin space, and names what it could not read.
-   *
-   * The retained lane is NOT in glyph-origin space, and which space it is in is the technique's own
-   * business: Slug and MSDF pack the ink box's top-left corner, and Bitmap stores the origin plus the
-   * baked strike's raster bearing, which is a third space that no measure value can reconstruct. What
-   * every technique does share is that `targetX`/`targetY` is that same lane's value with the glyph
-   * at rest — the position the layout put it. So the displacement from rest, `value - target`, is in
-   * glyph-origin space for all of them, and adding it to the shaped origin converts without the
-   * renderer knowing anything about the technique's packing at all.
-   */
+  /** Each technique packs the retained lane in a different, non-glyph-origin space, but `value - target` is always the displacement in glyph-origin space, so adding it to shapedX/Y converts without knowing the packing. */
   snapshotGlyphOrigins(
     stableIds: Uint32Array,
     shapedX: Float32Array,

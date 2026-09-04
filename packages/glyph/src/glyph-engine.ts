@@ -226,12 +226,7 @@ class GlyphEngineImpl implements GlyphEngine {
     return state;
   }
 
-  /**
-   * Teardown is total: every stage runs even if an earlier one fails, so a single bad
-   * font cannot strand the shaper instance and its Wasm memory. Failures are reported
-   * rather than thrown, because this runs from `finally` blocks and unmount paths that
-   * are frequently already unwinding an earlier error.
-   */
+  /** Teardown is total — every stage runs even if an earlier one fails, so one bad font can't strand the Wasm memory. Failures are reported, not thrown, since this often runs while already unwinding. */
   dispose(): void {
     if (this.#disposed || this.#disposing) return;
     if (this.#borrowedPlanActive) {

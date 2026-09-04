@@ -6,10 +6,7 @@ export interface StyledTextRange {
   readonly style: SpanStyle;
 }
 
-/**
- * Adapt the benchmark's mutable, disjoint paint ranges to Glyph's structural `txt`/`span` input.
- * The numeric ranges remain app-private animation state and never become a public Text update.
- */
+/** Adapts the benchmark's mutable, disjoint paint ranges to Glyph's structural `txt`/`span` input; the numeric ranges stay app-private animation state, never a public Text update. */
 export function formatStyledRanges(source: string, ranges: readonly StyledTextRange[]): TextLiteral<never> {
   const values: Array<string | TextSpanFragment<never>> = [];
   let cursor = 0;

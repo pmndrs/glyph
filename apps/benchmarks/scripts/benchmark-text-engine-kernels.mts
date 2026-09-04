@@ -1,9 +1,4 @@
-/* @workflow {
-  "name": "glyph:kernel-lab-browser",
-  "summary": "Runs the scalar, auto-vectorized, and explicit SIMD retained-engine kernel packet in project Chromium.",
-  "requirements": "Built @pmndrs/glyph and package-local kernel-lab artifacts. Accepts --json.",
-  "writes": "stdout only, or the JSON report path passed to --json"
-} */
+/* @workflow { "name": "glyph:kernel-lab-browser", "summary": "Runs the scalar, auto-vectorized, and explicit SIMD retained-engine kernel packet in project Chromium.", "requirements": "Built @pmndrs/glyph and package-local kernel-lab artifacts. Accepts --json.", "writes": "stdout only, or the JSON report path passed to --json" } */
 import { readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { Browser } from 'playwright';

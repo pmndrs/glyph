@@ -8,24 +8,13 @@ import { GlyphError } from '../glyph-error.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
 import type { Text, TextSpan } from './text.js';
 
-/**
- * The authored input a rejected frame names.
- *
- * The engine reports a paragraph handle and a style id, both allocated by this layer; neither is
- * meaningful to a consumer. They are resolved here into the objects the consumer actually wrote:
- * the `Text` and, when one span owns the cause, that span together with its index in `Text.spans`.
- */
+/** The authored input a rejected frame names, resolved from the engine's internal handle/style id onto the `Text` (and span+index, when a span owns the cause) the consumer wrote. */
 export type TextFrameSubject<Format extends RasterFormatMetadata = RasterFormatMetadata> =
   | Readonly<{ kind: 'span'; text: Text<Format>; index: number; span: TextSpan<Format> }>
   | Readonly<{ kind: 'paragraph'; text: Text<Format> }>
   | Readonly<{ kind: 'unattributed' }>;
 
-/**
- * Why the engine refused the frame, in terms a consumer can branch on.
- *
- * `engine` is the residual: a status the engine does not classify further, including every internal
- * invariant violation. Treat it as a defect report rather than something to correct in the input.
- */
+/** Why the engine refused the frame, branchable by `cause`; `engine` is the residual for unclassified internal invariant violations — a defect report, not an input to fix. */
 export type TextFrameRejection<Format extends RasterFormatMetadata = RasterFormatMetadata> =
   /** A span's `[start, end)` is inverted, reaches past the text, or splits a UTF-16 surrogate pair. */
   | Readonly<{ cause: 'span-range'; subject: TextFrameSubject<Format> }>
@@ -44,12 +33,7 @@ export type TextFrameRejection<Format extends RasterFormatMetadata = RasterForma
   /** A status the engine does not classify as caller-actionable. */
   | Readonly<{ cause: 'engine' }>;
 
-/**
- * A frame the text engine refused, raised with the cause resolved onto the caller's own objects.
- *
- * Branch on `rejection.cause`; `status` is the raw engine status the rejection was decoded from and
- * exists for reporting, not for classification.
- */
+/** A frame the engine refused, with cause resolved onto the caller's own objects. Branch on `rejection.cause`; `status` is raw and for reporting only, not classification. */
 export class TextFrameError extends GlyphError<'frame-rejected'> {
   readonly rejection: TextFrameRejection;
   readonly status: number;
@@ -75,12 +59,7 @@ const CAUSE_BY_CODE: ReadonlyMap<GlyphEngineStatusCode, TextFrameRejection['caus
   ['result-too-large', 'capacity' as const],
 ]);
 
-/**
- * Re-raises an engine status as a typed rejection.
- *
- * The status alone decides the cause; nothing is recovered from the underlying message. Errors that
- * are not engine statuses pass through untouched, because they already name their own cause.
- */
+/** Re-raises an engine status as a typed rejection; the status code alone decides the cause. Non-engine-status errors pass through untouched. */
 export function textFrameError(error: unknown, resolve: TextFrameSubjectResolver): unknown {
   if (!(error instanceof GlyphEngineStatusError)) return error;
   const details = glyphEngineStatusErrorDetails(error);

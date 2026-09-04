@@ -3,10 +3,7 @@ import type { DataTexture, Node } from 'three/webgpu';
 
 import { slugDilate, slugDilateMatrix, slugRender, type SlugRenderOptions } from './slug-shaders/index.js';
 
-/**
- * One glyph instance's canonical Slug fields, already resolved to nodes. The address and count fields locate the
- * glyph's band tables inside the shared page; core owns their meaning, and a program owns how it stores them.
- */
+/** One glyph instance's canonical Slug fields, resolved to nodes; core owns address/count field meaning, the program owns how it stores them. */
 export interface TslSlugInstanceNodes {
   /** Paragraph-local glyph origin, with y measured downward. */
   readonly origin: Node<'vec2'>;
@@ -48,10 +45,7 @@ export interface TslSlugFillRule {
   readonly thicken?: Node<'float'>;
 }
 
-/**
- * The GPU resources one Slug glyph batch binds. The clip-space rows and viewport drive the analytic half-pixel
- * dilation, so they must describe the same draw the returned position node feeds.
- */
+/** The GPU resources one Slug glyph batch binds; the clip-space rows/viewport drive analytic half-pixel dilation, so they must describe the same draw the returned position feeds. */
 interface TslSlugShaderResourceBase {
   readonly page: TslSlugPageResources;
   /** Drawing-buffer size in device pixels. */
@@ -76,12 +70,7 @@ interface TslSlugShaderMatrixResources extends TslSlugShaderResourceBase {
 
 export type TslSlugShaderResources = TslSlugShaderRowResources | TslSlugShaderMatrixResources;
 
-/**
- * Everything the canonical Slug graph produces, so a program can consume a stage or compose over its final output.
- *
- * Unlike Bitmap this output publishes no `clipPosition`: Slug integrates coverage analytically from outlines, so it is
- * correct at any subpixel placement and must keep the default projection rather than snap to the physical pixel grid.
- */
+/** Unlike Bitmap, publishes no `clipPosition`: Slug integrates coverage analytically from outlines, so it must keep the default projection rather than snap to the pixel grid. */
 export interface TslSlugShaderOutput {
   /** Dilated glyph-quad position. Reading it from a vertex node is what publishes `renderCoordinate`. */
   readonly position: Node<'vec3'>;
@@ -93,16 +82,7 @@ export interface TslSlugShaderOutput {
   readonly opacity: Node<'float'>;
 }
 
-/**
- * Builds the canonical Slug node graph. This is the exact graph the command-buffer executor renders, so a program that composes
- * over the returned nodes inherits the technique's band walk, quadratic solve, and antialiasing footprint.
- *
- * `position` and `coverage` are two halves of one graph: the vertex half writes the varying the fragment half
- * integrates over. A program that uses `coverage` must also drive its material position from `position`.
- *
- * The graph reads `positionLocal` from the technique's unit quad, which must span `[0, 1]` with the origin at the
- * glyph's upper-left corner. A program supplying different geometry owns that correspondence.
- */
+/** Builds the canonical Slug graph; composing over it inherits band walk, quadratic solve, and AA. `position`/`coverage` are two halves of one graph — using `coverage` requires driving material position from `position`. Reads `positionLocal` from a `[0, 1]` unit quad, origin upper-left. */
 export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugShaderResources): TslSlugShaderOutput {
   const renderCoordinate = TSL.varyingProperty('vec2', 'pmndrsSlugRenderCoordinate');
   const position = TSL.Fn(() => {

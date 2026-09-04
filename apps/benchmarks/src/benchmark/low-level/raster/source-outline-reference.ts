@@ -61,12 +61,7 @@ export interface SourceOutlineTransform {
   readonly f: number;
 }
 
-/**
- * Renders the pinned source font through browser Canvas2D at the exact physical
- * size and paragraph baselines used by the candidate. Canvas owns glyph
- * rasterization and shaping here; the candidate pipeline contributes only the
- * line boundaries and positions needed to compare the same authored specimen.
- */
+/** Renders the pinned source font via Canvas2D at the candidate's physical size and baselines; Canvas owns shaping and rasterization, the candidate only supplies line positions. */
 export async function captureSourceOutlineFidelity(
   options: SourceOutlineReferenceOptions,
 ): Promise<SourceOutlineFidelityCapture> {

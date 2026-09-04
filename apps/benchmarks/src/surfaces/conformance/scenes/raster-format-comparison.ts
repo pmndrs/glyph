@@ -84,11 +84,7 @@ interface ComparisonShaping {
   readonly direction: 'ltr' | 'rtl';
 }
 
-/**
- * Keeps candidate rendering and comparison on the GPU. The two raster-format scenes
- * render into equal RGBA8 targets; a fullscreen TSL pass samples both targets
- * directly to display signed coverage error without readback or CPU composition.
- */
+/** Keeps candidate rendering and comparison on the GPU: both raster-format scenes render into equal RGBA8 targets, and a fullscreen TSL pass samples both directly, no readback or CPU composition. */
 export async function createRasterFormatComparison(options: {
   readonly backend: RendererBackend;
   readonly canvas: HTMLCanvasElement;
@@ -446,11 +442,7 @@ async function compileComparison(resources: ComparisonResources): Promise<void> 
   });
 }
 
-/**
- * Both publications occur in one JavaScript task. Candidate target rendering stays paused until both lines commit, so
- * a later frame can never sample one new generation beside one old generation. Returns the first line error, if any,
- * so a caller can roll the pair back together rather than leaving one panel ahead of the other.
- */
+/** Commits both lines in one task so a frame never mixes generations; returns the first error, if any, so the caller can roll the pair back together. */
 function publishComparisonLines(resources: ComparisonResources): unknown {
   resources.mtsdfLine.updateMatrixWorld(true);
   resources.slugLine.updateMatrixWorld(true);
@@ -549,10 +541,7 @@ function comparisonLineView(viewport: PersistentRenderViewport, zoom: number): C
   };
 }
 
-/**
- * `set` replaces whole property groups, so every update restates the fixture's shaping context. Dropping it would
- * silently reshape the specimen the moment the viewer zoomed.
- */
+/** `set` replaces whole property groups, so every update must restate the fixture's shaping context — dropping it would silently reshape the specimen on zoom. */
 function lineViewUpdate(
   shaping: ComparisonShaping,
   view: ComparisonLineView,

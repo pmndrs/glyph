@@ -16,18 +16,7 @@ export interface TslDecorationShaderOutput {
   readonly opacity: Node<'float'>;
 }
 
-/**
- * Builds the canonical decoration node graph: a solid quad covering the record's
- * rectangle, colored by the packed decoration paint. The graph reads `positionLocal`
- * from the decoration program's unit quad spanning `[0, 1]` with the origin at the upper-left
- * corner, matching the glyph raster programs. Only solid lines reach this graph: the public
- * boundary rejects other line styles, and `packed.y` retains the style bits for the
- * later patterned-paint implementation.
- *
- * The packed bytes are sRGB-encoded — the same wire encoding whose glyph counterpart
- * the Rust gather decodes through its sRGB-to-linear table — so the color channels pass
- * through the sRGB EOTF into the renderer's linear working space. Alpha stays linear.
- */
+/** `packed` is sRGB-encoded, matching the Rust gather's decode table — color passes through the sRGB EOTF into linear space, but alpha stays linear. `positionLocal` spans `[0, 1]` like the glyph raster programs. */
 export function decorationShader(instance: TslDecorationInstanceNodes): TslDecorationShaderOutput {
   const color = unpackSrgbRgba(instance.packed.x);
   return {

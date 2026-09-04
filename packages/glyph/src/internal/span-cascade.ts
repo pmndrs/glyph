@@ -1,13 +1,4 @@
-/**
- * The authoring half of the span cascade.
- *
- * A span states only the properties it changes, so a span stating a colour keeps the
- * font, size, outline, and shadow of the scope enclosing it. The fold itself belongs to
- * the engine: `cascadeOrder` is the authored array index and Rust resolves each offset by
- * `(root, cascade_order)`, so overlap is last-wins and needs no host-side resolution.
- * What the host still owns is separating a property a caller stated from one they left
- * absent, because an explicit `undefined` must not shadow an enclosing value.
- */
+/** Authoring half of the span cascade — a span states only what it changes. The fold is the engine's (last-wins by `cascadeOrder`); the host's job is separating a stated property from an absent one so explicit `undefined` never shadows an enclosing value. */
 
 /** A source that may hold an explicit `undefined` for any property it does not state. */
 export type StatedSource<Properties extends object> = {

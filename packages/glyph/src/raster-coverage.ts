@@ -12,10 +12,7 @@ export type RasterUnicodeRange = {
   readonly end: number;
 };
 
-/**
- * Bounded seeds for a sparse raster artifact. Seeds select nominal font-local glyph IDs only;
- * they do not request source subsetting, glyph remapping, or transitive shaping closure.
- */
+/** Bounded seeds for a sparse raster artifact; selects nominal font-local glyph IDs only, not source subsetting or shaping closure. */
 export type RasterCoverage = {
   readonly unicodeRanges?: readonly RasterUnicodeRange[];
   readonly text?: string;

@@ -26,21 +26,7 @@ import {
   referenceSnapClipAxis,
 } from '../../dist/typegpu/bitmap-reference.js';
 
-/**
- * Bitmap parity between the `/tsl` and `/typegpu` realizations of the technique.
- *
- * The two sides cannot execute against each other without a GPU, so the pin stands on
- * extractions and mirrors instead of prose:
- *
- * 1. The device-free TSL extraction compiles the canonical `/tsl` graph to the WGSL a
- *    WebGPU run executes, and the shipped TypeGPU stages resolve to WGSL through the
- *    metadata the build embeds. Each source is extracted here, at test time, from built
- *    artifacts, and each must carry the same per-step operation chains: atlas
- *    addressing, quad placement with its y flip, clamped nearest-texel coverage fetch,
- *    paint alpha scaled by coverage, and reciprocal-ordered snapping.
- * 2. Every CPU-callable shader function is compared against its CPU reference mirror,
- *    so the mirrors cannot silently drift from what ships.
- */
+/** No GPU means parity is pinned via extraction, not execution: the device-free TSL-to-WGSL extraction is compared against the shipped TypeGPU stages' embedded WGSL, and every CPU-callable shader function against its CPU reference mirror. */
 
 /** Collapse shader text so formulas can be matched whitespace-insensitively. */
 function flatten(source) {

@@ -6,12 +6,7 @@ import type { RasterFormatMetadata } from './config/raster-format.js';
 
 export interface GlyphBufferCapacity {
   readonly size: number;
-  /**
-   * `grow` resizes to what the content needs, `chunk` resizes in multiples of `size`, and `fixed`
-   * rejects an update whose glyph requirement exceeds `size` and keeps the last complete revision
-   * visible. The requirement is a text-length upper bound computed before shaping, so a caller can
-   * size content against the cap rather than discovering it after the fact.
-   */
+  /** `grow` resizes to fit; `chunk` resizes in multiples of `size`; `fixed` rejects an update exceeding `size`, keeping the last complete revision visible. */
   readonly policy: 'grow' | 'chunk' | 'fixed';
 }
 
@@ -56,13 +51,7 @@ export interface ParagraphLayout {
   readonly spaceBefore?: number;
   /** Block-axis space carried in measurements after the paragraph's final line. */
   readonly spaceAfter?: number;
-  /**
-   * Justification bounds on each word space as multiples of its natural
-   * advance: `minWordSpaceRatio` in (0, 1] permits shrinking, and
-   * `maxWordSpaceRatio` (at least 1) caps expansion before the remaining
-   * deficit spills into per-gap letter-space expansion. Unset sides stay
-   * unbounded.
-   */
+  /** Word-space bounds as multiples of natural advance: `minWordSpaceRatio` in (0, 1] permits shrinking, `maxWordSpaceRatio` (>=1) caps expansion before spilling into letter-space expansion. */
   readonly justify?: {
     readonly minWordSpaceRatio?: number;
     readonly maxWordSpaceRatio?: number;
@@ -70,12 +59,7 @@ export interface ParagraphLayout {
   };
   /** Whether the final and hard-broken lines also justify. Defaults to 'auto'. */
   readonly lastLine?: 'auto' | 'justify';
-  /**
-   * Flow the paragraph through side-by-side ordered columns inside an exact
-   * constrained width. Text fills each column in order without balancing, so
-   * the final column may run short. Requires an exact `width`; `gap` is the
-   * inline space between adjacent columns in paragraph-local units.
-   */
+  /** Flows text through ordered columns inside an exact `width`, filling in order without balancing (final column may run short); `gap` is inline space between columns. */
   readonly columns?: { readonly count: number; readonly gap?: number };
 }
 
@@ -102,12 +86,7 @@ export interface TextStyle {
   readonly shadow?: { readonly color: ColorInput; readonly offset: readonly [number, number] };
 }
 
-/**
- * Text decoration lines for a styled range. Geometry comes from the font's baked
- * underline and strikeout metrics; `thickness` and `offset` override in paragraph-local units
- * when nonzero. Only `solid` lines are implemented: requesting another line style is
- * rejected at the boundary rather than silently rendered as solid.
- */
+/** Decoration geometry comes from the font's baked underline/strikeout metrics; `thickness`/`offset` override when nonzero. Only `solid` style is implemented — others are rejected. */
 export interface TextDecorationStyle {
   readonly underline?: boolean;
   readonly overline?: boolean;

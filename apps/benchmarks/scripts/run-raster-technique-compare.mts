@@ -1,11 +1,4 @@
-/* @workflow
-{
-  "name": "benchmark:raster-comparison",
-  "summary": "Verify retained MSDF/Slug comparison and exclusive finite-capture recovery on both backends.",
-  "requirements": "GPU-enabled Chromium and Vitexec.",
-  "writes": "Ignored browser caches only."
-}
-*/
+/* @workflow { "name": "benchmark:raster-comparison", "summary": "Verify retained MSDF/Slug comparison and exclusive finite-capture recovery on both backends.", "requirements": "GPU-enabled Chromium and Vitexec.", "writes": "Ignored browser caches only." } */
 import { runVitexec } from './support/command-cli.mts';
 
 const paths = [

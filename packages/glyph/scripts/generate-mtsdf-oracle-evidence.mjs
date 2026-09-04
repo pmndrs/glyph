@@ -1,21 +1,5 @@
-/* @workflow
-{
-  "name": "glyph:mtsdf-oracle:generate",
-  "summary": "Regenerate native msdfgen comparison evidence for the production MTSDF kernel.",
-  "requirements": "Stable Rust, CMake, a C++ compiler, tar, and network access to the pinned msdfgen source.",
-  "writes": "Checked-in native MTSDF oracle evidence and an ignored pinned-tool cache.",
-  "args": []
-}
-*/
-/* @workflow
-{
-  "name": "glyph:mtsdf-oracle:check",
-  "summary": "Verify the production MTSDF kernel against checked-in native oracle evidence.",
-  "requirements": "Stable Rust and the checked-in native oracle evidence.",
-  "writes": "Nothing.",
-  "args": ["--check"]
-}
-*/
+/* @workflow { "name": "glyph:mtsdf-oracle:generate", "summary": "Regenerate native msdfgen comparison evidence for the production MTSDF kernel.", "requirements": "Stable Rust, CMake, a C++ compiler, tar, and network access to the pinned msdfgen source.", "writes": "Checked-in native MTSDF oracle evidence and an ignored pinned-tool cache.", "args": [] } */
+/* @workflow { "name": "glyph:mtsdf-oracle:check", "summary": "Verify the production MTSDF kernel against checked-in native oracle evidence.", "requirements": "Stable Rust and the checked-in native oracle evidence.", "writes": "Nothing.", "args": ["--check"] } */
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';

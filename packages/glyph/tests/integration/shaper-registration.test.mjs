@@ -580,13 +580,7 @@ function align(value, alignment) {
   return Math.ceil(value / alignment) * alignment;
 }
 
-/**
- * Roadmap 11.17 layer 1: the paragraph-scoped synchronous measure entry runs
- * preparation and measurement for one paragraph, writes the semantic table into
- * the inactive result slot without publishing, and leaves committed state
- * untouched — no revision advance, no publication-generation bump, and no
- * checkpoint hazard for the next real frame.
- */
+/** measureParagraph writes its semantic table to the inactive result slot without publishing — no revision advance, no publication-generation bump. */
 test('measure_paragraph answers synchronously without publishing or burning revisions', async () => {
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
@@ -769,13 +763,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   assert.equal(fn.disposeRoot(29), abi.status.ok);
 });
 
-/**
- * Roadmap 11.17 layer 3: the committing frame compares its per-paragraph inputs
- * against the retained speculative transaction and, on a fingerprint hit, adopts the
- * transaction's pending state together with its reserved glyph identities — the
- * stable ids a query reported stay valid in the committed frame instead of being
- * rolled back and re-allocated.
- */
+/** On a fingerprint hit, the committing frame adopts the retained speculative transaction's pending state and reserved glyph ids rather than rolling them back. */
 test('the committing frame adopts the speculative transaction and its reserved glyph identities', async () => {
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
@@ -893,15 +881,7 @@ test('the committing frame adopts the speculative transaction and its reserved g
   assert.equal(fn.disposeRoot(29), abi.status.ok);
 });
 
-/**
- * Measurement-only queries skip the per-glyph positioning tail (the
- * measurement derives at line level from flow and clusters), and the
- * committing frame runs exactly the missing tail when it adopts such a
- * transaction. The proof is end-state equality: a planner that measured
- * several widths before committing must publish a semantic table
- * byte-identical to a control planner that committed the same frame
- * without ever measuring.
- */
+/** Measurement-only queries skip per-glyph positioning (derived at line level instead); committing then runs exactly that missing tail, proved by byte-identical output vs. a never-measured control. */
 test('measurement-only queries leave the committing frame byte-identical to a never-measured control', async () => {
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
@@ -1023,12 +1003,7 @@ test('measurement-only queries leave the committing frame byte-identical to a ne
   assert.equal(remeasured.status, abi.status.ok, 'measurement-only re-query over a positioned transaction');
 });
 
-/**
- * The geometry-only resize short-circuit: a width change that composes the
- * exact committed lines adopts committed positioning and publishes nothing,
- * and a width change that moves breaks still relayouts fully afterward —
- * the committed state must answer both correctly in sequence.
- */
+/** A width change that preserves committed line breaks adopts committed positioning and publishes nothing; one that moves breaks still relayouts fully. */
 test('resize equivalence adopts committed positioning and still relayouts on break changes', async () => {
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
@@ -1140,17 +1115,7 @@ test('resize equivalence adopts committed positioning and still relayouts on bre
   assert.equal(fn.disposeRoot(41), abi.status.ok);
 });
 
-/**
- * Integer layout-units slice 5: the packaged artifact's measured f32 extents
- * are pinned EXACTLY at several widths. Every stage between text and extent
- * runs on the F16.16 rounding contract (`layout_units.rs`), whose integer
- * arithmetic and IEEE f64 scaling are deterministic across native and Wasm
- * builds and across hosts; the linux CI runner reproducing these exact
- * values is the cross-build half of the bit-exactness evidence, alongside
- * the composed conformance hashes it already reproduces. A change in any
- * pinned value is a layout-contract change and must be re-derived
- * deliberately, never absorbed.
- */
+/** f32 extents are pinned exactly per the F16.16 integer rounding contract (layout_units.rs), deterministic across native/Wasm and hosts. A pinned-value change is a layout-contract change — re-derive deliberately, never absorb. */
 test('measured f32 extents reproduce exactly at every pinned width', async () => {
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),

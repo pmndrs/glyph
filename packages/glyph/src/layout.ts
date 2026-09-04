@@ -1,10 +1,7 @@
 import type { FontHandle } from './identity.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
 
-/**
- * Axis-aligned box in paragraph-local units: origin at the paragraph box's top-left corner,
- * positive X right, positive Y down. Every box this module publishes is in that one space.
- */
+/** Axis-aligned box in paragraph-local units: origin top-left, +X right, +Y down — every box this module publishes is in that space. */
 export interface LayoutBox {
   readonly x: number;
   readonly y: number;
@@ -12,18 +9,7 @@ export interface LayoutBox {
   readonly height: number;
 }
 
-/**
- * Named bits of `GlyphLayout.glyphFlags`.
- *
- * These are the shaper's own flags, carried through the engine unchanged, so a consumer reading a
- * bit is reading HarfRust's answer rather than a pmndrs re-derivation. `produced` is the union of
- * every bit this engine can set: a bit outside it is always zero, so testing against `produced`
- * distinguishes "the shaper said no" from "the engine never asked".
- *
- * `SAFE_TO_INSERT_TATWEEL` has no name here on purpose. Producing it needs a shaping buffer flag
- * this engine does not set, so the bit is unconditionally zero and a name would invite a consumer
- * to branch on a fact that is never reported.
- */
+/** Named bits of `GlyphLayout.glyphFlags` — HarfRust's own flags, carried through unchanged. Test against `produced` (union of settable bits) to tell "shaper said no" from "engine never asked"; unproducible bits (e.g. `SAFE_TO_INSERT_TATWEEL`) have no name here. */
 export const glyphFlags: {
   /** A line break before this glyph may change how the surrounding text shapes. */
   readonly unsafeToBreak: number;
@@ -33,13 +19,7 @@ export const glyphFlags: {
   readonly produced: number;
 } = textShaperAbi.engine.glyphFlags;
 
-/**
- * Vertical metrics of one line box, or of a whole paragraph, around its baseline.
- *
- * `ascent + descent === lineHeight` exactly, and the box top is `baseline - ascent`. Half-leading is
- * already distributed into `ascent` and `descent`, so these are box metrics rather than raw font
- * metrics — which is what a caller aligning to a baseline, a cap height, or an x height needs.
- */
+/** Vertical metrics of a line or paragraph around its baseline: `ascent + descent === lineHeight` exactly, box top = `baseline - ascent`. Half-leading is already distributed into ascent/descent. */
 export interface BaselineMetrics {
   /** Distance from the top edge of the box down to the baseline. */
   readonly ascent: number;
@@ -49,17 +29,7 @@ export interface BaselineMetrics {
   readonly lineHeight: number;
 }
 
-/**
- * Allocation-light paragraph metrics for intrinsic sizing and host layout.
- * It deliberately contains no per-glyph arrays.
- *
- * Two extents are published and they are not interchangeable. `contentWidth`/`contentHeight` are
- * *advance* extents: the space the text claims, which is the correct number for a flex or grid host
- * because CSS box measure is advance-based. `inkBounds` is the *ink* extent: the union of the glyphs'
- * outlines, which is the correct number for centring something visually, because italics, accents,
- * and swashes overhang their advances. Using one where the other belongs is a silent visual error,
- * so both ship under names that cannot be confused.
- */
+/** Allocation-light paragraph metrics; no per-glyph arrays. `contentWidth`/`contentHeight` are *advance* extents (CSS box measure); `inkBounds` is the *ink* extent (glyph outlines) — using one where the other belongs is a silent visual error. */
 export interface ParagraphMeasurement extends BaselineMetrics {
   /** Whole-paragraph baseline metrics use `firstBaseline` as their reference baseline. */
   readonly ascent: number;
@@ -77,15 +47,7 @@ export interface ParagraphMeasurement extends BaselineMetrics {
   readonly firstBaseline: number;
   /** Distance from the paragraph box's top edge to the last baseline. */
   readonly lastBaseline: number;
-  /**
-   * Union of every positioned glyph's ink box.
-   *
-   * `undefined` means this query did not position glyphs, so no ink was measured. It never means
-   * "the ink is empty": a paragraph that positioned zero glyphs reports a zero-extent box, not
-   * `undefined`. The absent case is stated rather than substituted with the advance box, because a
-   * caller centring on the advance box when it asked for ink is exactly the defect this pair exists
-   * to remove.
-   */
+  /** Union of every positioned glyph's ink box. `undefined` means glyphs were not positioned by this query — never that the ink is empty (a zero-glyph paragraph reports a zero-extent box). */
   readonly inkBounds: LayoutBox | undefined;
   readonly overflowed: boolean;
 }
@@ -108,11 +70,7 @@ export interface ParagraphLineMetrics extends BaselineMetrics {
   readonly inkBounds: LayoutBox | undefined;
 }
 
-/**
- * Bounded aggregate inspection of one retained layout. Unlike `GlyphLayout`, this contains no
- * per-glyph arrays and is suitable for positioning UI, telemetry, and missing-glyph admission
- * checks.
- */
+/** Bounded aggregate inspection of one retained layout. Unlike `GlyphLayout`, this has no per-glyph arrays — suitable for positioning UI, telemetry, and missing-glyph admission checks. */
 export interface ParagraphLayoutSummary extends ParagraphMeasurement, ParagraphIntrinsicWidths {
   /** Positioned glyphs retained by layout, including non-rendering glyphs such as spaces. */
   readonly glyphCount: number;
@@ -123,35 +81,13 @@ export interface ParagraphLayoutSummary extends ParagraphMeasurement, ParagraphI
   readonly lines: readonly ParagraphLineMetrics[];
 }
 
-/**
- * Content-only inline extents published beside every paragraph measurement.
- *
- * Both widths are intrinsic: they do not depend on the constraints a host is currently
- * probing, and they ride the same measurement pass that produced the rest of the summary
- * -- no second query at zero width is required. `maxContentWidth` is the widest run between
- * forced breaks under the constraint's wrap policy, trailing spaces trimmed the way line
- * ends trim them. `minContentWidth` is the widest run that remains when soft breaks are
- * also taken: after word spaces under `'word'` wrap, before every safe boundary under
- * `'character'`, and the whole segment under `'none'`. Column splits, line caps, and
- * overflow clipping do not participate, because those are box policies rather than
- * content properties.
- */
+/** Intrinsic (constraint-independent) inline extents from the same measurement pass. `maxContentWidth` is the widest run between forced breaks; `minContentWidth` is the widest run after soft breaks too. Column splits and clipping don't participate. */
 export interface ParagraphIntrinsicWidths {
   readonly minContentWidth: number;
   readonly maxContentWidth: number;
 }
 
-/**
- * Positioned glyph output in paragraph-local coordinates. The origin is the
- * paragraph box's top-left corner; positive X is right and positive Y is down.
- *
- * **`glyphCount` is the single authority for the per-glyph columns.** Every `Uint16Array`,
- * `Uint32Array`, and `Float32Array` below has exactly `glyphCount` entries, and every line column
- * has exactly `lineCount`. The reader is the only producer and slices each column to that length,
- * so a caller indexes with `glyphCount` and never re-derives a length from one column or checks the
- * columns against each other. The one real consumer of the previous shape hand-wrote a parallel
- * length assertion over six of these arrays; that assertion is now the reader's obligation.
- */
+/** Positioned glyph output in paragraph-local coordinates (origin top-left, +X right, +Y down). `glyphCount` is the single authority for every per-glyph column's length (`lineCount` for line columns) — the reader is the only producer, so a caller never re-derives or cross-checks lengths. */
 export interface GlyphLayout extends ParagraphMeasurement {
   readonly fontHandles: Uint32Array;
   readonly glyphFontSlots: Uint16Array;
@@ -163,10 +99,7 @@ export interface GlyphLayout extends ParagraphMeasurement {
   readonly glyphFontSizes: Float32Array;
   readonly x: Float32Array;
   readonly y: Float32Array;
-  /**
-   * Shaped advance per glyph: the distance the pen moves, which is neither the ink width nor the
-   * font size. A caret between two glyphs and a selection rectangle are built from this.
-   */
+  /** Shaped advance per glyph: the distance the pen moves — neither ink width nor font size. Carets and selection rectangles are built from this. */
   readonly glyphAdvances: Float32Array;
   /** Ink box per glyph, in the paragraph space `x`/`y` use. A glyph with no outline reports zero extents at its own origin. */
   readonly glyphInkX: Float32Array;
@@ -183,15 +116,7 @@ export interface GlyphLayout extends ParagraphMeasurement {
   readonly lineAdvances: Float32Array;
 }
 
-/**
- * One positioned paragraph: the measurement view plus every per-glyph and per-line column,
- * with stable identities for directed augmentation.
- *
- * This is what an explicit `Text.glyphs()` query copies out of Wasm.
- * It is a second query after `measure()`, not a bigger copy of it: asking for these columns
- * makes the engine emit a record per glyph, which a caller probing sizes never wants to pay
- * for. See `measure()` and `Text.measure()` for the split.
- */
+/** One positioned paragraph: measurement plus every per-glyph/line column, with stable identities — what `Text.glyphs()` copies from Wasm. A second query after `measure()`, not a bigger copy: per-glyph records cost more than a size probe wants to pay. See `measure()`/`Text.measure()`. */
 export interface GlyphLayoutInspection extends GlyphLayout, ParagraphLayoutSummary, ParagraphIntrinsicWidths {
   readonly glyphStableIds: Uint32Array;
 }

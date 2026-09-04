@@ -1,9 +1,4 @@
-/**
- * The example renderer's own Codec, authored through the root GlyphConfig vocabulary.
- *
- * A host supplies its own system lanes and compiles the shared portable technique body
- * into validated Codec bytes.
- */
+/** This renderer's Codec: compiles the shared portable technique body plus this host's own system lanes into Codec bytes. */
 import { type CodecIdFactory, type CodecBufferId, type CodecCapabilitySet, type CodecDescriptor } from '@pmndrs/glyph';
 import { compileCodec, id } from '@pmndrs/glyph/config/codec';
 import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';

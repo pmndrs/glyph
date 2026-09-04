@@ -32,10 +32,7 @@ export interface Rgba8CoverageDifference {
   readonly severeErrorPixels: number;
 }
 
-/**
- * Pure-CPU comparison of opaque grayscale coverage frames. Red marks candidate-only coverage,
- * cyan marks reference-only coverage, and black marks agreement.
- */
+/** Pure-CPU comparison of grayscale coverage frames; heatmap marks candidate-favored red, reference-favored cyan, agreement black. */
 export function compareRgba8Coverage(
   candidate: Uint8Array,
   reference: Uint8Array,
@@ -97,16 +94,7 @@ export interface FlatMtsdfCpuReferenceOptions {
   readonly fill?: readonly [number, number, number, number];
 }
 
-/**
- * Reconstructs the fixed, flat MTSDF specimen without invoking Canvas text,
- * Three.js materials, texture sampling, or browser font rendering.
- *
- * The sampler deliberately reads the same immutable RGBA8 base-level page
- * texels carried by the decoded technique data, in the top-down page space the
- * glyph records address. It is suitable for an axis-aligned, untransformed fill
- * specimen; outlines, shadows, mip selection, and arbitrary object transforms
- * belong in separate conformance cases.
- */
+/** Reconstructs the flat MTSDF specimen by CPU-sampling page texels directly; axis-aligned fill only, no outlines/shadows/mip/transforms. */
 export function renderFlatMtsdfCpuReference(
   data: MtsdfData,
   layout: GlyphLayout,

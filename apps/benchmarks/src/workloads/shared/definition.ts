@@ -66,14 +66,7 @@ export type WorkloadFontPolicy =
 
 const NO_COMPANION_FIXTURES: readonly BenchmarkFontFixture[] = Object.freeze([]);
 
-/**
- * The further concrete fixtures a route needs resident beside its selected font, in declaration order.
- *
- * Icon Grid renders its icons from its one companion while its labels come from the selection; a composed route names
- * the faces its spans select for ranges the selection either cannot shape or should not shape. Both are the same host
- * obligation — load further fixtures into the shared registry — so both answer through one accessor rather than
- * through separate host branches. Order is the contract: a composed scene reads its companions positionally.
- */
+/** Further concrete fixtures a route needs resident beside its selected font, in declaration order — order is the contract, since a composed scene reads its companions positionally. */
 export function workloadCompanionFontFixtures(policy: WorkloadFontPolicy): readonly BenchmarkFontFixture[] {
   if (policy.kind === 'icon-grid') return [policy.iconFixture];
   if (policy.kind === 'composed') return policy.companionFixtures;

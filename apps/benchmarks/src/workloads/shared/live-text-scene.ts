@@ -4,12 +4,7 @@ import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 
 import type { LiveTextAnchor } from './text-style';
 
-/**
- * Authored Text input for one retained live benchmark scene.
- *
- * Renderer adapters consume this data, but do not define it: this keeps the
- * example a direct record of the public Text properties it intends to exercise.
- */
+/** Authored Text input for one retained live benchmark scene; renderer adapters consume this but do not define it, keeping the example a direct record of the public Text properties it exercises. */
 export interface LiveTextScene {
   readonly anchor: LiveTextAnchor;
   readonly direction: 'ltr' | 'rtl';
