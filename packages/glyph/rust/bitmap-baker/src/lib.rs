@@ -235,7 +235,14 @@ mod tests {
     #[test]
     fn a_font_without_outlines_is_refused_rather_than_baked_blank() {
         let stripped = without_table(INTER, b"glyf");
-        let error = bake_bitmap(&stripped, request())
+        // Identity is validated before the outline check, so the request must carry the
+        // stripped source's own fingerprint or it fails as InvalidIdentity first.
+        let mut request = request();
+        request.source_fingerprint = pmndrs_glyph_raster_artifact::fingerprint128(
+            &stripped,
+            pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+        );
+        let error = bake_bitmap(&stripped, request)
             .expect_err("a font with no outline table must not bake");
         assert_eq!(error.code, BitmapBakeErrorCode::InvalidFont);
         assert!(

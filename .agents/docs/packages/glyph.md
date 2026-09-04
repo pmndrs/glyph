@@ -238,6 +238,12 @@ CLI nor the programmatic `@pmndrs/glyph/bake` path invokes a platform font tool.
 publishes only to temporary storage and compares the complete GLB byte-for-byte with the requested output. It calls the
 same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
 
+Direct baking may add `--glyph-map <path>` to publish a deterministic JSON object mapping authored glyph names to code
+points from the same `--unicodes` selection and collection face as the font artifact. The font and lookup publish as one
+rollback-safe output set, while `--check` verifies both byte-for-byte. Unnamed mappings are omitted. A name with multiple
+selected code points is rejected as ambiguous so the caller must narrow the Unicode set rather than accepting an
+order-dependent alias.
+
 The `glyph glyphs` command uses the same package-owned baker Wasm and Skrifa to enumerate Unicode mappings, exact glyph
 IDs, and names retained in a font's `post` or CFF data. Exact repeatable `--name` filters can emit structured JSON or a
 compressed `--unicode-set` accepted by `glyph bake --unicodes`. Fonts without authored names still expose exact IDs rather
