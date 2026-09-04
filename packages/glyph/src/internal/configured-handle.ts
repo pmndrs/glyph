@@ -421,7 +421,7 @@ class ConfiguredRootServices<
     const target = createGlyphPlanTarget({
       config: this.#config,
       codec: this.#codec,
-      root: options.boundary,
+      boundary: options.boundary,
       ...(options.defaultRenderer === undefined ? {} : { defaultRenderer: options.defaultRenderer }),
       materialInput: (binding) => this.#requiredMaterial(binding),
       transformInput: (binding) => this.#requiredTransform(binding),
@@ -507,7 +507,7 @@ class ConfiguredRootServices<
       target = createGlyphPlanTarget({
         config: this.#config,
         codec: this.#codec,
-        root: destination.boundary,
+        boundary: destination.boundary,
         defaultRenderer: destination.renderer,
         materialInput: (binding) => this.#requiredMaterial(binding),
         transformInput: (binding) => this.#requiredTransform(binding),

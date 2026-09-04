@@ -50,13 +50,13 @@ interface ProjectedState<Bindings extends GlyphBindingSet> {
 }
 
 /** Inputs for the renderer-neutral command binding engine used by one publication root. */
-export interface CreateEngineOptions<Bindings extends GlyphBindingSet, Root> {
+export interface CreateEngineOptions<Bindings extends GlyphBindingSet, Boundary> {
   readonly config: Readonly<{
-    schema: GlyphSchema<Bindings, Root>;
+    schema: GlyphSchema<Bindings, Boundary>;
     resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
   }>;
   readonly codec: Readonly<{ descriptor: CodecDescriptor }>;
-  readonly root: Root;
+  readonly boundary: Boundary;
   /** Core-owned association from an opaque plan identity to the adapter-authored value. */
   readonly materialInput: (binding: HandleMaterialBinding) => Bindings['materialInput'];
   /** Core-owned association from an opaque plan identity to the adapter-authored value. */
@@ -67,17 +67,17 @@ export interface CreateEngineOptions<Bindings extends GlyphBindingSet, Root> {
  * Creates the retained mapper/binder for one publication root. Integrations provide only
  * their config schema; raw plan access, resource transactions, and identity settlement stay here.
  */
-export function createEngine<Bindings extends GlyphBindingSet, Root>(
-  options: CreateEngineOptions<Bindings, Root>,
+export function createEngine<Bindings extends GlyphBindingSet, Boundary>(
+  options: CreateEngineOptions<Bindings, Boundary>,
 ): GlyphDisplayListProjector<Bindings> {
   return new CommandBindingEngine(options);
 }
 
-class CommandBindingEngine<Bindings extends GlyphBindingSet, Root> implements GlyphDisplayListProjector<Bindings> {
-  readonly #config: CreateEngineOptions<Bindings, Root>['config'];
-  readonly #root: Root;
-  readonly #materialInput: CreateEngineOptions<Bindings, Root>['materialInput'];
-  readonly #transformInput: CreateEngineOptions<Bindings, Root>['transformInput'];
+class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implements GlyphDisplayListProjector<Bindings> {
+  readonly #config: CreateEngineOptions<Bindings, Boundary>['config'];
+  readonly #boundary: Boundary;
+  readonly #materialInput: CreateEngineOptions<Bindings, Boundary>['materialInput'];
+  readonly #transformInput: CreateEngineOptions<Bindings, Boundary>['transformInput'];
   readonly #mapper = new TypedCommandBufferMapper();
   readonly #programsById: ReadonlyMap<number, CodecProgram>;
   readonly #programs = new WeakMap<object, Bindings['program']>();
@@ -90,9 +90,9 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Root> implements Gl
   #buffersById = new Map<number, RetainedBuffer<Bindings['buffer']>>();
   #disposed = false;
 
-  constructor(options: CreateEngineOptions<Bindings, Root>) {
+  constructor(options: CreateEngineOptions<Bindings, Boundary>) {
     this.#config = options.config;
-    this.#root = options.root;
+    this.#boundary = options.boundary;
     this.#materialInput = options.materialInput;
     this.#transformInput = options.transformInput;
     this.#programsById = new Map(
@@ -162,7 +162,7 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Root> implements Gl
         let retained = buffers.get(record.id);
         if (retained?.generation !== record.generation) {
           const declaration = this.#bufferDeclaration(record.programId, record.bindingId);
-          const value = this.#config.schema.buffer(this.#root, { program, declaration });
+          const value = this.#config.schema.buffer(this.#boundary, { program, declaration });
           retained = { generation: record.generation, value };
           buffers.set(record.id, retained);
           this.#buffers.set(command.buffer, value);
@@ -225,7 +225,7 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Root> implements Gl
             blockExtent: details.blockExtent,
           });
         return Object.freeze({
-          value: this.#config.schema.instanceSpan(this.#root, input),
+          value: this.#config.schema.instanceSpan(this.#boundary, input),
           kind: span.kind,
           recordIndex: span.recordIndex,
           recordCount: span.recordCount,
@@ -268,7 +268,7 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Root> implements Gl
                     const instances = mapBorrowedSequence(child.instances, bindSpan);
                     return Object.freeze({
                       kind: child.kind,
-                      value: this.#config.schema.batch(this.#root, {
+                      value: this.#config.schema.batch(this.#boundary, {
                         identity: child.identity,
                         instances,
                         ...common,
@@ -286,7 +286,7 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Root> implements Gl
                   const instance = bindSpan(this.#mapper.rootInstanceSpan(source, child.identity));
                   return Object.freeze({
                     kind: child.kind,
-                    value: this.#config.schema.instance(this.#root, {
+                    value: this.#config.schema.instance(this.#boundary, {
                       identity: child.identity,
                       transform,
                       instance,
@@ -363,7 +363,7 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Root> implements Gl
     if (value !== undefined) return value;
     const programId = this.#mapper.programIdentity(identity);
     const program = this.#programsById.get(programId)!;
-    value = this.#config.schema.program(this.#root, program);
+    value = this.#config.schema.program(this.#boundary, program);
     this.#programs.set(identity, value);
     return value;
   }
@@ -399,7 +399,7 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Root> implements Gl
     if (identity === undefined) return undefined;
     let value = this.#materials.get(identity);
     if (value === undefined) {
-      value = this.#config.schema.material(this.#root, this.#materialInput(this.#mapper.materialBinding(identity)));
+      value = this.#config.schema.material(this.#boundary, this.#materialInput(this.#mapper.materialBinding(identity)));
       this.#materials.set(identity, value);
     }
     return value;
@@ -408,7 +408,7 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Root> implements Gl
   #transform(binding: HandleTransformBinding, recordIndex: number): Bindings['transform'] {
     let value = this.#transforms.get(binding);
     if (value === undefined) {
-      value = this.#config.schema.transform(this.#root, this.#transformInput(binding), recordIndex);
+      value = this.#config.schema.transform(this.#boundary, this.#transformInput(binding), recordIndex);
       this.#transforms.set(binding, value);
     }
     return value;

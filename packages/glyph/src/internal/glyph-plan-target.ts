@@ -15,22 +15,22 @@ import type { HandleMaterialBinding, HandleTransformBinding } from './handle-sta
 import type { PlanAcceptance, PlanCandidate, PlanTarget } from './render-planner.js';
 import type { BorrowedTypedCommandBuffer } from './typed-command-buffer.js';
 
-type PlanTargetConfig<Bindings extends GlyphBindingSet, Result, Root, CodecValue extends Codec> = Readonly<{
-  schema: GlyphSchema<Bindings, Root>;
+type PlanTargetConfig<Bindings extends GlyphBindingSet, Result, Boundary, CodecValue extends Codec> = Readonly<{
+  schema: GlyphSchema<Bindings, Boundary>;
   resolve(context: ResolveContext<Bindings['resource']>): ResourceLease<Bindings['resource']>;
-  renderer(context: RendererContext<Bindings, Result, CodecValue, Root>): GlyphRenderer<Bindings, Result>;
+  renderer(context: RendererContext<Bindings, Result, CodecValue, Boundary>): GlyphRenderer<Bindings, Result>;
 }>;
 
 /** Inputs for one renderer-neutral configured plan target. */
 export interface CreateGlyphPlanTargetOptions<
   Bindings extends GlyphBindingSet,
   Result,
-  Root,
+  Boundary,
   CodecValue extends Codec,
 > {
-  readonly config: PlanTargetConfig<Bindings, Result, Root, CodecValue>;
+  readonly config: PlanTargetConfig<Bindings, Result, Boundary, CodecValue>;
   readonly codec: CodecValue;
-  readonly root: Root;
+  readonly boundary: Boundary;
   readonly defaultRenderer?: GlyphRenderer<Bindings, Result>;
   readonly materialInput: (binding: HandleMaterialBinding) => Bindings['materialInput'];
   readonly transformInput: (binding: HandleTransformBinding) => Bindings['transformInput'];
@@ -47,8 +47,8 @@ export interface GlyphPlanTarget<Bindings extends GlyphBindingSet, Result> exten
  * Creates the shared decode, bind, prepare, commit, and cleanup boundary for one publication root.
  * The returned target owns the configured renderer, optional built-in renderer, and command binder.
  */
-export function createGlyphPlanTarget<Bindings extends GlyphBindingSet, Result, Root, CodecValue extends Codec>(
-  options: CreateGlyphPlanTargetOptions<Bindings, Result, Root, CodecValue>,
+export function createGlyphPlanTarget<Bindings extends GlyphBindingSet, Result, Boundary, CodecValue extends Codec>(
+  options: CreateGlyphPlanTargetOptions<Bindings, Result, Boundary, CodecValue>,
 ): GlyphPlanTarget<Bindings, Result> {
   return new ConfiguredGlyphPlanTarget(options);
 }
@@ -92,7 +92,7 @@ function applyGlyphPublication<Bindings extends GlyphBindingSet, Result>(
 class ConfiguredGlyphPlanTarget<
   Bindings extends GlyphBindingSet,
   Result,
-  Root,
+  Boundary,
   CodecValue extends Codec,
 > implements GlyphPlanTarget<Bindings, Result> {
   readonly delivery = 'borrowed' as const;
@@ -107,18 +107,18 @@ class ConfiguredGlyphPlanTarget<
   #transforms: readonly TransformUpdate<Bindings['transform']>[] = Object.freeze([]);
   #disposed = false;
 
-  constructor(options: CreateGlyphPlanTargetOptions<Bindings, Result, Root, CodecValue>) {
+  constructor(options: CreateGlyphPlanTargetOptions<Bindings, Result, Boundary, CodecValue>) {
     this.#projector = createEngine({
       config: options.config,
       codec: options.codec,
-      root: options.root,
+      boundary: options.boundary,
       materialInput: options.materialInput,
       transformInput: options.transformInput,
     });
     this.#defaultRenderer = options.defaultRenderer;
     const configured = options.config.renderer(
       Object.freeze({
-        boundary: options.root,
+        boundary: options.boundary,
         signal: this.#rendererAbort.signal,
         codec: options.codec,
         ...(options.defaultRenderer === undefined ? {} : { defaultRenderer: options.defaultRenderer }),

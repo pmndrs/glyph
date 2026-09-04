@@ -154,13 +154,7 @@ interface GlyphHotContext {
 /** The process-local Glyph runtime. Initialization is attempted at most once per module lifetime. */
 const hot = (import.meta as ImportMeta & { readonly hot?: GlyphHotContext }).hot;
 const glyphRuntime = hot?.data.glyphRuntime ?? new GlyphRuntime(processFontLibrary());
-const sharedFontLibrary = glyphRuntime.fontLibrary;
 hot?.dispose((data) => {
   data.glyphRuntime = glyphRuntime;
 });
 export const glyph: Glyph = glyphRuntime;
-
-/** @internal Shared semantic font cache used by every configured handle. */
-export function glyphFontLibrary(): FontLibrary {
-  return sharedFontLibrary;
-}
