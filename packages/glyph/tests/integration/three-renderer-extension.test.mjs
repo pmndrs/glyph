@@ -14,7 +14,7 @@ import {
   createImmutableFontVariant,
 } from '../../dist/loaded-font.js';
 import { FontRegistry } from '../../dist/loader.js';
-import { markStorageAttributeUpdated } from '../../dist/three/engine-plan-target.js';
+import { markStorageAttributeUpdated } from '../../dist/three/command-buffer-renderer.js';
 import { registerThreeRasterProgram, ThreeConfig } from '../../dist/three.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 import * as THREE from 'three/webgpu';

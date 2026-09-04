@@ -35,7 +35,8 @@ export class ThreeTransformSynchronizer {
         rootPrepared = true;
       }
       const object = state.transforms.get(transformId);
-      if (object === undefined) throw new Error(`Three plan target has no retained transform ${transformId}`);
+      if (object === undefined)
+        throw new Error(`Three command-buffer renderer has no retained transform ${transformId}`);
       if (!worldMatricesCurrent) object.updateWorldMatrix(true, false, true);
       if (object === state.renderObject) this.#relativeTransform.identity();
       else this.#relativeTransform.multiplyMatrices(this.#rootInverse, object.matrixWorld);

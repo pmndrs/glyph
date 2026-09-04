@@ -4,9 +4,9 @@ import type { GlyphCopy } from '../config/glyph.js';
 import type { GlyphPlacement, GlyphPlacements } from '../glyph-placement.js';
 import {
   markStorageAttributeUpdated,
-  ThreeTextRenderPlanExecutor,
-  type ThreeTextEnginePlanOwner,
-} from './engine-plan-target.js';
+  ThreeCommandBufferRenderer,
+  type ThreeRendererHost,
+} from './command-buffer-renderer.js';
 import type { ThreeGlyphGeometrySource, ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { measureGlyphPlacements } from './glyph-measurement.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
@@ -55,7 +55,7 @@ interface GlyphsOptions {
   readonly source: DetachedTextSource;
   readonly placements: GlyphPlacements;
   readonly geometry?: ReadonlyMap<number, ThreeGlyphGeometrySource>;
-  readonly copy: (renderer: ThreeTextRenderPlanExecutor, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
+  readonly copy: (renderer: ThreeCommandBufferRenderer, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
   readonly resources: ThreeRendererResources;
   readonly renderOrderBase: number;
 }
@@ -106,15 +106,15 @@ interface DetachedGlyphRecordAddress {
  * A detached render-plan branch produced by `Text.breakApart()`.
  *
  * The planner has already compacted the selected glyph records into a complete publication. This
- * object imports that publication into the normal Three render-plan executor, retaining the same
+ * object imports that publication into the normal Three command-buffer renderer, retaining the same
  * atlas/resource relationships and compatible instancing without making child Text objects.
  * Per-glyph matrices are an additional Three-side instance attribute; the live paragraph never
  * receives them and continues to shape normally.
  */
 export class Glyphs extends THREE.Object3D {
-  readonly #target: ThreeTextRenderPlanExecutor;
+  readonly #target: ThreeCommandBufferRenderer;
   readonly #copy: GlyphCopy<void>;
-  readonly #owner: ThreeTextEnginePlanOwner;
+  readonly #owner: ThreeRendererHost;
   readonly #placements: readonly GlyphPlacement[];
   readonly #glyphs: readonly DetachedGlyph[];
   readonly #measurements: readonly ThreeGlyphMeasurement[];
@@ -135,7 +135,7 @@ export class Glyphs extends THREE.Object3D {
   private constructor(token: typeof glyphsConstructorToken, options: GlyphsOptions) {
     super();
     if (token !== glyphsConstructorToken) throw new TypeError('Glyphs objects are created by Text.breakApart()');
-    let target: ThreeTextRenderPlanExecutor | undefined;
+    let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
       const incomplete = new Set(options.placements.incomplete);
@@ -191,7 +191,7 @@ export class Glyphs extends THREE.Object3D {
           return owner.#storages.get(storageKey);
         },
       };
-      target = new ThreeTextRenderPlanExecutor(options.resources, this.#owner);
+      target = new ThreeCommandBufferRenderer(options.resources, this.#owner);
       this.#target = target;
       copy = options.copy(this.#target, {
         renderObject: this,
@@ -223,7 +223,7 @@ export class Glyphs extends THREE.Object3D {
         }),
       );
       this.#initializeTransforms();
-      // Plan realization visits the root before it is attached and consumes the initial dirty flag.
+      // Command-buffer realization visits the root before it is attached and consumes the initial dirty flag.
       // Re-dirty it so the first scene traversal composes this exact local matrix with its real parent.
       this.matrixWorldNeedsUpdate = true;
     } catch (error) {

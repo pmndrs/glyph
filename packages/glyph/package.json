@@ -127,6 +127,7 @@
     "./three/internal/*": null,
     "./three/plan-program-registry": null,
     "./three/codec": null,
+    "./three/command-buffer-renderer": null,
     "./three/decorations": null,
     "./three/detached-object": null,
     "./three/engine-plan-target": null,

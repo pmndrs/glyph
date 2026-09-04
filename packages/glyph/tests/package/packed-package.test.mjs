@@ -127,6 +127,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     '@pmndrs/glyph/config/font-library',
     '@pmndrs/glyph/three/font-loader',
     '@pmndrs/glyph/three/loader',
+    '@pmndrs/glyph/three/command-buffer-renderer',
     '@pmndrs/glyph/three/internal/draw-realizer',
     '@pmndrs/glyph/three/decorations',
     '@pmndrs/glyph/three/frame-error',

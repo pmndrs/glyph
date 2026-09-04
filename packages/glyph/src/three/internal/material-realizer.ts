@@ -139,7 +139,7 @@ export class ThreeMaterialRealizer {
         addressing,
       );
     }
-    throw new Error('this Three plan target does not recognize the draw technique');
+    throw new Error('this Three command-buffer renderer does not recognize the draw technique');
   }
 
   #bitmap(

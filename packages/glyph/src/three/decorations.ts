@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 
 import type { GlyphCopy } from '../config/glyph.js';
-import { ThreeTextRenderPlanExecutor, type ThreeTextEnginePlanOwner } from './engine-plan-target.js';
+import { ThreeCommandBufferRenderer, type ThreeRendererHost } from './command-buffer-renderer.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import { copyCurrentLocalTransform } from './detached-object.js';
@@ -13,7 +13,7 @@ interface DetachedTextSource extends THREE.Object3D {
 /** @internal Constructed only by `Text.breakApart()`. */
 interface DecorationsOptions {
   readonly source: DetachedTextSource;
-  readonly copy: (renderer: ThreeTextRenderPlanExecutor, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
+  readonly copy: (renderer: ThreeCommandBufferRenderer, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
   readonly resources: ThreeRendererResources;
   readonly renderOrderBase: number;
 }
@@ -46,7 +46,7 @@ export function decorationDraws(
 
 /** An independently rendered copy of one committed paragraph's decorations. */
 export class Decorations extends THREE.Object3D {
-  readonly #target: ThreeTextRenderPlanExecutor;
+  readonly #target: ThreeCommandBufferRenderer;
   readonly #copy: GlyphCopy<void>;
   #disposed = false;
 
@@ -71,18 +71,18 @@ export class Decorations extends THREE.Object3D {
     if (token !== decorationsConstructorToken) {
       throw new TypeError('Decorations objects are created by Text.breakApart()');
     }
-    let target: ThreeTextRenderPlanExecutor | undefined;
+    let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
       copyCurrentLocalTransform(options.source, this);
 
-      const owner: ThreeTextEnginePlanOwner = {
+      const owner: ThreeRendererHost = {
         renderObject: this,
         pixelSnapping: options.source.pixelSnapping,
         renderOrderBase: options.renderOrderBase,
         objectForTransform: () => this,
       };
-      target = new ThreeTextRenderPlanExecutor(options.resources, owner);
+      target = new ThreeCommandBufferRenderer(options.resources, owner);
       this.#target = target;
       copy = options.copy(target, {
         renderObject: this,

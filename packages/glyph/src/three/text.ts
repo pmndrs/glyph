@@ -32,7 +32,7 @@ import {
 } from '../text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../config/glyph.js';
-import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
+import { ThreeCommandBufferRenderer } from './command-buffer-renderer.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding } from './handle.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
@@ -236,7 +236,7 @@ export class ThreeRootHost {
   readonly #fonts: import('../config/glyph.js').GlyphHandleFonts;
   readonly #services: GlyphRootServices<ThreeBindings, void, ThreePublicationBoundary>;
   readonly #resources: ThreeRendererResources;
-  readonly #renderer: ThreeTextRenderPlanExecutor;
+  readonly #renderer: ThreeCommandBufferRenderer;
   readonly #texts = new Set<THREE.Object3D>();
   readonly #textOrders = new WeakMap<THREE.Object3D, number>();
   readonly #renderObject: ThreePublicationObject;
@@ -292,7 +292,7 @@ export class ThreeRootHost {
       renderObject: this.#renderObject,
     });
     threeRootHosts.set(this, this);
-    this.#renderer = new ThreeTextRenderPlanExecutor(resources, {
+    this.#renderer = new ThreeCommandBufferRenderer(resources, {
       renderObject: this.#renderObject,
       root: this,
       visibleObject: (object) => this.visible(object),
@@ -383,7 +383,7 @@ export class ThreeRootHost {
   }
 
   /** @internal Built-in Three decoder installed by the root recipe. */
-  get renderer(): ThreeTextRenderPlanExecutor {
+  get renderer(): ThreeCommandBufferRenderer {
     return this.#renderer;
   }
 
@@ -1158,7 +1158,7 @@ interface CanonicalInspection {
 class ThreeRootPublication {
   readonly #services: GlyphRootServices<ThreeBindings, void, ThreePublicationBoundary>;
   readonly #root: ThreeRootHost;
-  readonly #target: ThreeTextRenderPlanExecutor;
+  readonly #target: ThreeCommandBufferRenderer;
   readonly #entries = new Map<Text<RasterFormatMetadata>, BoundTextEntry>();
   readonly #inspections = new Map<Text<RasterFormatMetadata>, CanonicalInspection>();
   readonly #materialBindings = new ThreeMaterialBindingCache();
@@ -1304,7 +1304,7 @@ class ThreeRootPublication {
   copyGlyphs(
     text: Text<RasterFormatMetadata>,
     stableIds: Uint32Array,
-    renderer: ThreeTextRenderPlanExecutor,
+    renderer: ThreeCommandBufferRenderer,
     boundary: ThreePublicationBoundary,
   ): GlyphCopy<void> {
     this.#assertActive();
@@ -1315,7 +1315,7 @@ class ThreeRootPublication {
 
   copyDecorations(
     text: Text<RasterFormatMetadata>,
-    renderer: ThreeTextRenderPlanExecutor,
+    renderer: ThreeCommandBufferRenderer,
     boundary: ThreePublicationBoundary,
   ): GlyphCopy<void> {
     this.#assertActive();

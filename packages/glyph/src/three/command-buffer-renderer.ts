@@ -46,7 +46,7 @@ import type {
 
 export { markStorageAttributeUpdated } from './internal/host-buffer.js';
 
-export interface ThreeTextEnginePlanOwner {
+export interface ThreeRendererHost {
   readonly renderObject: THREE.Object3D;
   readonly root?: ThreeRootContext;
   readonly pixelSnapping?: boolean;
@@ -67,9 +67,9 @@ export interface ThreeTextEnginePlanOwner {
 }
 
 /** Applies retained Rust command-buffer deltas to Three storage attributes and draw objects. */
-export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings, void> {
+export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, void> {
   readonly #resourcesContext: ThreeRendererResources;
-  readonly #owner: ThreeTextEnginePlanOwner;
+  readonly #owner: ThreeRendererHost;
   #buffers = new Map<ThreeBufferBinding, RetainedBuffer>();
   #resources = new Map<ThreeResolvedResourceBinding, RetainedResource>();
   #bitmapTextures = new Map<ThreeResolvedResourceBinding, RetainedTextureLease>();
@@ -98,22 +98,22 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
   #synchronizedTransformCount = 0;
   #disposed = false;
 
-  constructor(resources: ThreeRendererResources, owner: ThreeTextEnginePlanOwner) {
+  constructor(resources: ThreeRendererResources, owner: ThreeRendererHost) {
     this.#resourcesContext = resources;
     this.#owner = owner;
-    const target = this;
+    const renderer = this;
     this.#transformState = {
       renderObject: owner.renderObject,
       get draws() {
-        return target.#draws;
+        return renderer.#draws;
       },
       activeTransformIndices: this.#activeTransformIndices,
       directDrawsByTransform: this.#directDrawsByTransform,
       get transforms() {
-        return target.#transforms;
+        return renderer.#transforms;
       },
       get transformAttribute() {
-        return target.#transformAttribute;
+        return renderer.#transformAttribute;
       },
       ...(owner.visibleObject === undefined ? {} : { visibleObject: owner.visibleObject }),
     };
@@ -153,7 +153,7 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
    * every technique does share is that `targetX`/`targetY` is that same lane's value with the glyph
    * at rest — the position the layout put it. So the displacement from rest, `value - target`, is in
    * glyph-origin space for all of them, and adding it to the shaped origin converts without the
-   * executor knowing anything about the technique's packing at all.
+   * renderer knowing anything about the technique's packing at all.
    */
   snapshotGlyphOrigins(
     stableIds: Uint32Array,
@@ -198,7 +198,7 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
     return record === undefined ? undefined : { storageKey: record.storageKey, index: record.index };
   }
 
-  /** Material instances owned exclusively by this executor's current draw branch. */
+  /** Material instances owned exclusively by this renderer's current draw branch. */
   get materials(): readonly THREE.NodeMaterial[] {
     return Object.freeze([...new Set(this.#draws.map((draw) => draw.material as THREE.NodeMaterial))]);
   }
@@ -599,7 +599,8 @@ export class ThreeTextRenderPlanExecutor implements GlyphRenderer<ThreeBindings,
     const relative = new THREE.Matrix4();
     for (const transformId of transformIds) {
       const object = transforms.get(transformId);
-      if (object === undefined) throw new Error(`Three plan target has no candidate transform ${transformId}`);
+      if (object === undefined)
+        throw new Error(`Three command-buffer renderer has no candidate transform ${transformId}`);
       object.updateWorldMatrix(true, false, true);
       if (object === draws.root) relative.identity();
       else relative.multiplyMatrices(rootInverse, object.matrixWorld);
