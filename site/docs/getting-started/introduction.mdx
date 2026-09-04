@@ -18,21 +18,19 @@ npm install @pmndrs/glyph
 ## Render text with React Three Fiber
 
 ```tsx
-import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
-import { msdf } from '@pmndrs/glyph/three/msdf';
+import { Text, TextGroup } from '@pmndrs/glyph/react';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
 
-const fontRequest = {
-  input: { baked: '/fonts/Inter.font.glb' },
-  technique: msdf,
-} as const;
+const interUrl = '/fonts/Inter.font.glb';
 
-useFont.preload(fontRequest.input, fontRequest.technique);
+// Start the load before React first renders a component that asks for it.
+useMsdf.preload(interUrl);
 
 function Labels() {
-  const inter = useFont(fontRequest.input, fontRequest.technique);
+  const inter = useMsdf(interUrl);
 
   return (
-    <TextGroup compositing="independent">
+    <TextGroup>
       <Text
         font={inter}
         constraints={{ width: { mode: 'at-most', size: 480 } }}
@@ -46,12 +44,37 @@ function Labels() {
 }
 ```
 
+A font is one source plus the raster format you want it read through. `useMsdf`, `useBitmap`, and `useSlug` are
+convenience hooks over the generic `useFont(src, { format })`, which takes any registered format — including
+`msdf({ emSize, pixelRange })` or `bitmap({ strikes: [16, 32] })` when the defaults are not what you want.
+
 `Text` is a retained paragraph and a Three `Object3D`. A nested `Text` is a span, and inherits the surrounding
 font, style, paint, and material unless it overrides them.
 
 `TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the
 ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text
 semantics and lazily owns an implicit batch of one.
+
+## Choosing a compositing mode
+
+Compositing is a property of the adapter, not of a group, so it is decided once when the handle is created and
+cannot change underneath a live scene. The default is `ordered`, which preserves authored draw order — the correct
+choice for text that overlaps itself. `independent` lets Rust reorder compatible draws, so same-atlas runs scattered
+through a paragraph can collapse into one draw. Choose it when nothing in the scene depends on composite order.
+
+```tsx
+import { glyph } from '@pmndrs/glyph';
+import { GlyphProvider } from '@pmndrs/glyph/react';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+import type { ReactNode } from 'react';
+
+await glyph.init();
+const handle = glyph.handle('my-app', defineThreeConfig({ compositing: 'independent' }));
+
+function Scene({ children }: { children: ReactNode }) {
+  return <GlyphProvider handle={handle}>{children}</GlyphProvider>;
+}
+```
 
 ## An inline scene proxy
 

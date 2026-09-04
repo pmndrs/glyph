@@ -1,8 +1,10 @@
+import { GlyphProvider } from '@pmndrs/glyph/react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber/webgpu';
-import { StrictMode, Suspense, lazy } from 'react';
+import { StrictMode, Suspense, lazy, use, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AgXToneMapping } from 'three/webgpu';
 
+import { landingHandle } from './handle';
 import { live } from './look';
 import { Overlay } from './overlay';
 import { Scene } from './scene';
@@ -33,6 +35,14 @@ function Exposure() {
 // theme at module scope, which defeats tree-shaking.
 const DevOverlays = import.meta.env.DEV ? lazy(() => import('./dev/panel')) : null;
 
+/**
+ * The page's own handle rather than R3F's implicit default, because this scene
+ * asks for `independent` compositing and that is chosen on the config.
+ */
+function LandingGlyph({ children }: { children: ReactNode }) {
+  return <GlyphProvider handle={use(landingHandle())}>{children}</GlyphProvider>;
+}
+
 const root = document.querySelector('#root')!;
 createRoot(root).render(
   <StrictMode>
@@ -58,7 +68,9 @@ createRoot(root).render(
         <color args={['#07080b']} attach="background" />
         <Exposure />
         <Suspense fallback={null}>
-          <Scene />
+          <LandingGlyph>
+            <Scene />
+          </LandingGlyph>
         </Suspense>
       </Canvas>
       <Overlay />

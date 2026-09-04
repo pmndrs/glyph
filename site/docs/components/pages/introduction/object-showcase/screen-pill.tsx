@@ -24,7 +24,7 @@ export function ScreenPill({
   state: PillControlState;
   visible: boolean;
 }) {
-  const font = useFont(MSDF_FONT.input, MSDF_FONT.raster.technique, MSDF_FONT.raster.options);
+  const font = useFont(MSDF_FONT.src, { format: MSDF_FONT.format });
   const pill = useMemo(
     () => createPillControlMaterial(rectangle.width, rectangle.height),
     [rectangle.height, rectangle.width],
@@ -47,7 +47,7 @@ export function ScreenPill({
         <planeGeometry args={[rectangle.width, rectangle.height]} />
         <primitive attach="material" object={pill.material} />
       </mesh>
-      <TextGroup compositing="ordered" material={textFade.material} renderOrder={1000}>
+      <TextGroup material={textFade.material} renderOrder={1000}>
         <Text
           constraints={{ width: { mode: 'exact', size: rectangle.width } }}
           font={font}
