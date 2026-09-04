@@ -759,6 +759,37 @@ mod tests {
     }
 
     #[test]
+    fn mixed_frames_preserve_codec_declaration_order_with_stable_order_buffer_last() {
+        let codec = codec_with_non_monotonic_buffer_ids();
+        let glyphs = [glyph(1, ORDERED, 0), glyph(2, STABLE, 0)];
+        let mut compiler = RenderPlanCompiler::default();
+        prepare(&mut compiler, &codec, &glyphs, &[1.0, 2.0], true, 1, 0);
+        let plan = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+
+        let draw_buffer_ids = plan
+            .draws
+            .iter()
+            .map(|draw| {
+                let start = draw.buffer_start as usize;
+                let end = start + draw.buffer_count as usize;
+                plan.buffers[start..end]
+                    .iter()
+                    .map(|buffer| buffer.codec_buffer_id)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            draw_buffer_ids,
+            vec![
+                vec![9, 3],
+                vec![9, 3, crate::engine::render_plan::CODEC_BUFFER_ORDER],
+            ]
+        );
+    }
+
+    #[test]
     fn mixed_independent_frames_merge_by_paint_layer_then_encounter_order() {
         let codec = codec();
         let mut over = glyph(1, ORDERED, 0);
@@ -962,6 +993,52 @@ mod tests {
                 program(ORDERED, 0, ProgramId(1), ALLOCATION_ORDERED_DIRECT),
                 program(ORDERED, 1, ProgramId(2), ALLOCATION_STABLE_INDIRECT),
             ],
+        })
+        .unwrap()
+    }
+
+    fn codec_with_non_monotonic_buffer_ids() -> ValidatedCodec {
+        let mut capability = capability();
+        capability.max_buffers_per_draw = 3;
+        let mut ordered = program(ORDERED, 0, ProgramId(1), ALLOCATION_ORDERED_DIRECT);
+        let mut stable = program(STABLE, 0, ProgramId(2), ALLOCATION_STABLE_INDIRECT);
+        for program in [&mut ordered, &mut stable] {
+            program.buffers = vec![
+                BufferSchema::packed(
+                    BufferId(9),
+                    ScalarType::F32,
+                    1,
+                    BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+                    1,
+                ),
+                BufferSchema::packed(
+                    BufferId(3),
+                    ScalarType::F32,
+                    1,
+                    BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+                    1,
+                ),
+            ];
+            program.operations = vec![
+                Operation::LoadF32 {
+                    target: 0,
+                    field: 0,
+                },
+                Operation::StoreF32 {
+                    source: 0,
+                    buffer: BufferId(9),
+                    lane: 0,
+                },
+                Operation::StoreF32 {
+                    source: 0,
+                    buffer: BufferId(3),
+                    lane: 0,
+                },
+            ];
+        }
+        ValidatedCodec::new(CodecDescriptor {
+            capability_sets: vec![capability],
+            programs: vec![ordered, stable],
         })
         .unwrap()
     }

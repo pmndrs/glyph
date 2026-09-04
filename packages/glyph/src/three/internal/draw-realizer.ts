@@ -267,13 +267,9 @@ function drawRealizationKey(
   transformGeneration: number,
   geometry: string,
 ): string {
-  const bufferKey = [...buffers]
-    .sort(
-      ([left], [right]) =>
-        (left === 'order' ? Number.MAX_SAFE_INTEGER : left) - (right === 'order' ? Number.MAX_SAFE_INTEGER : right),
-    )
-    .map(([codecBufferId, buffer]) => `${codecBufferId}:${buffer.storageKey}`)
-    .join(',');
+  // The Rust plan compiler publishes Codec buffers in declaration order and the stable order buffer last.
+  // Preserve that package-owned order instead of sorting the complete binding set for every realized span.
+  const bufferKey = [...buffers].map(([codecBufferId, buffer]) => `${codecBufferId}:${buffer.storageKey}`).join(',');
   const transformKey =
     transform.kind === 'direct'
       ? `direct:${transform.transformId}`
