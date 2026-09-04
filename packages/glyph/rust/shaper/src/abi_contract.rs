@@ -902,11 +902,7 @@ field_offset!(
     EngineUpdateRequestHeader,
     abi_version
 );
-field_offset!(
-    ENGINE_UPDATE_BATCH_ROOT_ID,
-    EngineUpdateBatchEntry,
-    root_id
-);
+field_offset!(ENGINE_UPDATE_BATCH_ROOT_ID, EngineUpdateBatchEntry, root_id);
 field_offset!(
     ENGINE_UPDATE_BATCH_REQUEST_LENGTH,
     EngineUpdateBatchEntry,
@@ -923,11 +919,7 @@ field_offset!(
     EngineUpdateRequestHeader,
     byte_length
 );
-field_offset!(
-    ENGINE_UPDATE_ROOT_ID,
-    EngineUpdateRequestHeader,
-    root_id
-);
+field_offset!(ENGINE_UPDATE_ROOT_ID, EngineUpdateRequestHeader, root_id);
 field_offset!(
     ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
     EngineUpdateRequestHeader,
@@ -1616,11 +1608,7 @@ field_offset!(
     EngineResultHeader,
     engine_revision
 );
-field_offset!(
-    ENGINE_RESULT_REVISION,
-    EngineResultHeader,
-    revision
-);
+field_offset!(ENGINE_RESULT_REVISION, EngineResultHeader, revision);
 field_offset!(
     ENGINE_RESULT_REQUIRED_BASE_REVISION,
     EngineResultHeader,

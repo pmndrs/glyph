@@ -18,7 +18,7 @@ use super::{
     font_binding::FontRenderBinding,
     frame::{
         CommittedUpdate, MeasuredParagraph, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
-        RootRevision, PreparedUpdate, UpdateRequest,
+        PreparedUpdate, RootRevision, UpdateRequest,
     },
     identity_index::IdentityIndex,
     positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
@@ -4522,10 +4522,7 @@ mod tests {
         let first_plan = engine.prepared_plan(first).unwrap();
         assert_eq!(first_plan.codec_handle, 9);
         assert_eq!(first_plan.capability_set, 1);
-        assert_eq!(
-            engine.root_revision(4).unwrap(),
-            RootRevision::default()
-        );
+        assert_eq!(engine.root_revision(4).unwrap(), RootRevision::default());
         let first = engine.commit_update(first).unwrap();
         assert!(first.checkpoint);
         assert_eq!(first.required_base_revision, 0);
@@ -4574,10 +4571,7 @@ mod tests {
             engine.prepare_update(request, 1),
             Err(EngineError::InvalidRequest)
         );
-        assert_eq!(
-            engine.root_revision(4).unwrap(),
-            RootRevision::default()
-        );
+        assert_eq!(engine.root_revision(4).unwrap(), RootRevision::default());
     }
 
     #[test]
@@ -4631,10 +4625,7 @@ mod tests {
         engine.abort_update(prepared).unwrap();
         assert!(engine.gather_cache.is_none());
         assert!(engine.prepared_gather_cache.is_none());
-        assert_eq!(
-            engine.root_revision(4).unwrap(),
-            RootRevision::default()
-        );
+        assert_eq!(engine.root_revision(4).unwrap(), RootRevision::default());
         let retry = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         engine.commit_update(retry).unwrap();
     }

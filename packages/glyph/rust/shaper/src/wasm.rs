@@ -3,9 +3,9 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     STATUS_CODEC_CONFLICT, STATUS_CODEC_MISSING, STATUS_FONT_IN_USE, STATUS_FONT_STACK_MISSING,
-    STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_OK, STATUS_ROOT_CONFLICT,
-    STATUS_ROOT_MISSING, STATUS_REGISTRATION_IN_USE, STATUS_RESULT_TOO_LARGE,
-    STATUS_REVISION_CONFLICT, ShaperRegistry,
+    STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_OK, STATUS_REGISTRATION_IN_USE,
+    STATUS_RESULT_TOO_LARGE, STATUS_REVISION_CONFLICT, STATUS_ROOT_CONFLICT, STATUS_ROOT_MISSING,
+    ShaperRegistry,
     engine::{
         EngineError, FrameFault, TextEngine,
         codec::CapabilitySetId,
@@ -915,15 +915,14 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_decorations(
             Ok(revision) => revision,
             Err(_) => return 0,
         };
-        let plan = match state.engine.copy_decorations(
-            root_id,
-            codec_handle,
-            capability_set,
-            paragraph_id,
-        ) {
-            Ok(plan) => plan,
-            Err(error) => return publish_engine_failure(state, root_id, revision, error),
-        };
+        let plan =
+            match state
+                .engine
+                .copy_decorations(root_id, codec_handle, capability_set, paragraph_id)
+            {
+                Ok(plan) => plan,
+                Err(error) => return publish_engine_failure(state, root_id, revision, error),
+            };
         let view = match plan.plan_view(
             codec_handle,
             CapabilitySetId(capability_set),
