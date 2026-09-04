@@ -91,7 +91,12 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
     const accepted = handle.drawList;
     expect(accepted.changed).toBe(true);
     expect(accepted.draws.length).toBeGreaterThan(0);
-    expect(device.primary.resourcesByName.has('glyphGeometry')).toBe(true);
+    const resourceEntry = [...device.primary.resources].at(0);
+    if (resourceEntry === undefined) throw new Error('expected one resolved geometry resource');
+    const [resourceBinding, resource] = resourceEntry;
+    expect(resource.kind).toBe('geometry');
+    expect(resourceBinding.resource).toBe(resource);
+    expect(device.primary.resourcesByName.get(resourceBinding.name)).toBe(resource);
     expect(device.primary.buffersByName.has('origin')).toBe(true);
     expect(device.primary.buffersByName.has('size')).toBe(true);
     expect(device.primary.buffersByName.has('color')).toBe(true);

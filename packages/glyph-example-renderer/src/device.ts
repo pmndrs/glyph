@@ -5,12 +5,11 @@ import {
   type CommandBufferView,
   type CodecBufferId,
   type PortableGeometryPayload,
+  type PortableResource,
   type CodecScalarType,
   type TechniqueGeometryDeclaration,
-  type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
 } from '@pmndrs/glyph';
-import { assertPortableResource } from '@pmndrs/glyph/config/resources';
 import { glyphExampleCodec } from '@pmndrs/glyph-example-raster';
 import {
   glyphExampleFragment,
@@ -68,7 +67,7 @@ export interface RecordingPendingSubmission extends ExamplePendingSubmission {
   readonly replacesRenderState: boolean;
   readonly realizedDraws: readonly ExampleRealizedDraw[];
   readonly buffersByName: ReadonlyMap<string, Uint8Array>;
-  readonly activeResources: ReadonlyMap<ExampleResolvedResource, unknown>;
+  readonly activeResources: ReadonlyMap<ExampleResolvedResource, PortableResource>;
   publish(beforeCommit: () => void): boolean;
   publishAsync(beforeCommit: () => Promise<void>): Promise<boolean>;
 }
@@ -135,7 +134,7 @@ export interface ExampleGeometry {
 /** Named inputs resolved from the selected shader contract for one submission. */
 export interface ExampleDrawBindings {
   readonly buffers: ReadonlyMap<string, Uint8Array>;
-  readonly resources: ReadonlyMap<string, unknown>;
+  readonly resources: ReadonlyMap<string, PortableResource>;
 }
 
 /** One realized draw with concrete geometry and shader bindings. */
@@ -148,8 +147,8 @@ export interface ExampleRealizedDraw extends ExampleDrawBindings {
 /** Deterministic CPU oracle and reference implementation of the bound renderer contract. */
 export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   readonly shader: ExampleRendererShader;
-  readonly resources: Map<ExampleResolvedResource, unknown> = new Map();
-  readonly resourcesByName: Map<string, unknown> = new Map();
+  readonly resources: Map<ExampleResolvedResource, PortableResource> = new Map();
+  readonly resourcesByName: Map<string, PortableResource> = new Map();
   readonly geometriesByName: Map<string, ExampleGeometry> = new Map();
   readonly buffers: Map<ExampleBufferBinding, Uint8Array> = new Map();
   readonly buffersByName: Map<string, Uint8Array> = new Map();
@@ -170,7 +169,6 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     const revision = this.#revision;
     const resources = new Map(this.resources);
     for (const command of frame.updates.resources) {
-      validateResolvedResource(this.shader, command.resource);
       resources.set(command.resource, command.resource.resource);
     }
     for (const retirement of frame.updates.retirements) {
@@ -397,18 +395,20 @@ function applyPatch(
   }
 }
 
-function resourcesByNameFrom(resources: ReadonlyMap<ExampleResolvedResource, unknown>): Map<string, unknown> {
+function resourcesByNameFrom(
+  resources: ReadonlyMap<ExampleResolvedResource, PortableResource>,
+): Map<string, PortableResource> {
   return new Map([...resources].map(([binding, resource]) => [binding.name, resource]));
 }
 
 function geometriesByNameFrom(
   shader: ExampleRendererShader,
-  resources: ReadonlyMap<ExampleResolvedResource, unknown>,
+  resources: ReadonlyMap<ExampleResolvedResource, PortableResource>,
 ): Map<string, ExampleGeometry> {
   const geometries = new Map<string, ExampleGeometry>();
   if (shader.variant.geometry.kind === 'synthetic-quad') return geometries;
   for (const [binding, resource] of resources) {
-    if (binding.name === shader.variant.geometry.resource) {
+    if (binding.name === shader.variant.geometry.resource && resource.kind === 'geometry') {
       geometries.set(binding.name, realizeGeometry(shader.variant.geometry, binding.name, resource));
     }
   }
@@ -429,35 +429,16 @@ function buffersByNameFrom(
   return result;
 }
 
-function validateResolvedResource(shader: ExampleRendererShader, input: ExampleResolvedResource): void {
-  const declaration = Object.hasOwn(shader.variant.resources, input.name)
-    ? shader.variant.resources[input.name as keyof typeof shader.variant.resources]
-    : undefined;
-  if (declaration !== undefined) {
-    assertDeclaredResource(declaration, input.name, input.resource);
-    return;
-  }
-  if (shader.variant.geometry.kind !== 'synthetic-quad' && shader.variant.geometry.resource === input.name) {
-    assertPortableResource('geometry', input.name, input.resource);
-    return;
-  }
-  throw new Error(`example renderer shader does not declare resource "${input.name}"`);
-}
-
-function assertDeclaredResource(declaration: TechniqueResourceDeclaration, name: string, resource: unknown): void {
-  assertPortableResource(declaration.kind, name, resource);
-}
-
 function geometryFor(
   declaration: TechniqueGeometryDeclaration,
-  resources: ReadonlyMap<string, unknown>,
+  resources: ReadonlyMap<string, PortableResource>,
   instanceCount: number,
 ): ExampleGeometry {
   if (declaration.kind === 'synthetic-quad') return syntheticQuadGeometry(instanceCount);
   const name = declaration.resource;
   if (name === undefined) throw new Error('example renderer supplied geometry needs a resource name');
   const resource = resources.get(name);
-  if (resource === undefined) throw new Error(`example renderer has no geometry resource "${name}"`);
+  if (resource?.kind !== 'geometry') throw new Error(`example renderer has no geometry resource "${name}"`);
   return Object.freeze({ ...realizeGeometry(declaration, name, resource), instanceCount });
 }
 
@@ -472,10 +453,12 @@ function syntheticQuadGeometry(instanceCount: number): ExampleGeometry {
   });
 }
 
-function realizeGeometry(declaration: TechniqueGeometryDeclaration, name: string, resource: unknown): ExampleGeometry {
+function realizeGeometry(
+  declaration: TechniqueGeometryDeclaration,
+  name: string,
+  geometry: PortableGeometryPayload,
+): ExampleGeometry {
   if (declaration.kind === 'synthetic-quad') throw new Error('synthetic-quad geometry cannot name a resource');
-  assertPortableResource('geometry', name, resource);
-  const geometry = resource as PortableGeometryPayload;
   const position = geometry.attributes.find((attribute) => attribute.semantic === 'position');
   if (position === undefined) throw new Error(`example renderer geometry "${name}" has no position attribute`);
   const vertexAccessor = geometry.accessors[position.accessor];

@@ -12,6 +12,7 @@ import {
   type GlyphSchema,
   type Codec,
   type CodecProgram,
+  type PortableResource,
 } from '@pmndrs/glyph';
 import { defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/glyph/config/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
@@ -29,7 +30,7 @@ import { exampleCodecDescriptor } from './codec.js';
 
 export interface ExampleResolvedResource {
   readonly name: string;
-  readonly resource: unknown;
+  readonly resource: PortableResource;
 }
 
 export interface ExampleBufferBinding {

@@ -84,7 +84,7 @@ interface GpuInstanceBuffer {
 type GpuInstanceBuffers = Map<string, Map<Uint8Array, GpuInstanceBuffer>>;
 
 interface PreparedGeometry {
-  readonly resource: unknown;
+  readonly resource: PortableGeometryPayload;
   readonly geometry: GpuGeometry;
 }
 
@@ -102,7 +102,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   readonly #viewportGroup;
   readonly #pipeline;
   // Font bindings are host-lifetime; their geometry is released with the device.
-  readonly #geometries = new Map<unknown, GpuGeometry>();
+  readonly #geometries = new Map<PortableGeometryPayload, GpuGeometry>();
   readonly #instanceBuffers: GpuInstanceBuffers = new Map();
   #submittedPasses = 0;
   #lost = false;
@@ -180,9 +180,10 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     }
     const geometryName =
       this.shader.variant.geometry.kind === 'synthetic-quad' ? undefined : this.shader.variant.geometry.resource;
-    const activeGeometryResources = new Set(
-      [...pending.activeResources].filter(([binding]) => binding.name === geometryName).map(([, resource]) => resource),
-    );
+    const activeGeometryResources = new Set<PortableGeometryPayload>();
+    for (const [binding, resource] of pending.activeResources) {
+      if (binding.name === geometryName && resource.kind === 'geometry') activeGeometryResources.add(resource);
+    }
     const candidateGeometries = new Map(
       [...this.#geometries].filter(([resource]) => activeGeometryResources.has(resource)),
     );
@@ -192,7 +193,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
       if (geometryName !== undefined) {
         for (const resource of activeGeometryResources) {
           if (candidateGeometries.has(resource)) continue;
-          const geometry = this.#createGeometry(geometryName, resource as PortableGeometryPayload);
+          const geometry = this.#createGeometry(geometryName, resource);
           preparedGeometries.push({ resource, geometry });
           candidateGeometries.set(resource, geometry);
         }
@@ -387,7 +388,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   #encodeAcceptedState(
     realizedDraws: readonly ExampleRealizedDraw[],
     buffers: ReadonlyMap<string, ReadonlyMap<Uint8Array, GpuInstanceBuffer>>,
-    geometries: ReadonlyMap<unknown, GpuGeometry>,
+    geometries: ReadonlyMap<PortableGeometryPayload, GpuGeometry>,
   ): GPUCommandBuffer {
     if (realizedDraws.length === 0) {
       const encoder = this.#root['~unstable'].createCommandEncoder();
@@ -420,8 +421,8 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
         const geometryName = realized.geometry.resourceName;
         if (geometryName === undefined) throw new Error('TypeGPU example renderer needs supplied geometry');
         const geometryResource = realized.resources.get(geometryName);
-        const geometry = geometries.get(geometryResource);
-        if (geometryResource === undefined || geometry === undefined) {
+        const geometry = geometryResource?.kind === 'geometry' ? geometries.get(geometryResource) : undefined;
+        if (geometry === undefined) {
           throw new Error(`TypeGPU example renderer has no realized "${geometryName}" geometry`);
         }
         const origin = gpuBufferForDraw(buffers, realized, 'origin');
@@ -464,7 +465,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   #submitValidated(
     realizedDraws: readonly ExampleRealizedDraw[],
     buffers: ReadonlyMap<string, ReadonlyMap<Uint8Array, GpuInstanceBuffer>>,
-    geometries: ReadonlyMap<unknown, GpuGeometry>,
+    geometries: ReadonlyMap<PortableGeometryPayload, GpuGeometry>,
   ): void {
     const command = this.#encodeAcceptedState(realizedDraws, buffers, geometries);
     this.#device.queue.submit([command]);
