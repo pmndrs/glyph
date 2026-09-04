@@ -151,26 +151,26 @@
       "file": "noto-sans-cjk-showcase-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 382492,
-        "sha256": "593a2fd093136a4e35e86b2a92fa64583d1fa64596a90841e8be5d237bcec9fe"
+        "bytes": 407068,
+        "sha256": "e4beeab89889282b45003bf27c14072aded15ead66a213cf7f01e27466a54d11"
       },
       "compressed": {
-        "bytes": 96059,
-        "sha256": "5d4c74ab891479da4bc18dabe5f7e2e42a0bfbd87383e03fcd39b666c6e03d98"
+        "bytes": 139456,
+        "sha256": "b031d9544140e132c320853e327958c4a191447f69e845ac3967f91ce1c3e232"
       },
       "raster": {
         "kind": "slug",
         "metadataBytes": 6200,
-        "serializedBytes": 376140,
-        "decodedGpuBytes": 368640,
+        "serializedBytes": 400716,
+        "decodedGpuBytes": 393216,
         "pages": [
           {
             "index": 0,
             "width": 4096,
             "height": 8,
             "format": "rgba16float",
-            "encodedBytes": 368836,
-            "decodedGpuBytes": 368640
+            "encodedBytes": 393412,
+            "decodedGpuBytes": 393216
           }
         ]
       }
@@ -209,26 +209,26 @@
       "file": "dancing-script-slug.font.glb.gz",
       "transport": "gzip",
       "uncompressed": {
-        "bytes": 1658660,
-        "sha256": "16c2441dc66f63b70627e0c3cf29d27f3d98342765b0fd431f6315f48728dad3"
+        "bytes": 2887460,
+        "sha256": "c498bb3c4507a0a428f0f7a437393b1c2abb78b87b3e8669011ce38502679d6f"
       },
       "compressed": {
-        "bytes": 288130,
-        "sha256": "cc059b0fa7f7ffa3aff46638340f076303ca6c31ffd800a131e02741faec5fad"
+        "bytes": 464656,
+        "sha256": "ef9a0cdb840024f62aa835233c7b0cb91f866e15fb301a51ce2bb948bbb5f84d"
       },
       "raster": {
         "kind": "slug",
         "metadataBytes": 40680,
-        "serializedBytes": 1614856,
-        "decodedGpuBytes": 1572864,
+        "serializedBytes": 2843656,
+        "decodedGpuBytes": 2801664,
         "pages": [
           {
             "index": 0,
             "width": 4096,
-            "height": 32,
+            "height": 64,
             "format": "rgba16float",
-            "encodedBytes": 1573060,
-            "decodedGpuBytes": 1572864
+            "encodedBytes": 2801860,
+            "decodedGpuBytes": 2801664
           }
         ]
       }
