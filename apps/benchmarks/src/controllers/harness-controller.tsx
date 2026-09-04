@@ -676,7 +676,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     location.workload,
   ].join(':');
   const scene = (
-    <SceneErrorBoundary key={sceneIdentity} technique={location.technique} onError={reportRendererError}>
+    <SceneErrorBoundary identity={sceneIdentity} technique={location.technique} onError={reportRendererError}>
       <Suspense fallback={<SceneSuspenseFallback technique={location.technique} />}>
         <Scene
           activeFontFixture={activeFontFixture}

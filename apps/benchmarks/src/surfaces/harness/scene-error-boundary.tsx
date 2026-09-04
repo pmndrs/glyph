@@ -5,13 +5,29 @@ import { formatLabel } from '../benchmark/labels';
 
 /** Distinguishes a rejected scene load from the pending Suspense state. */
 export class SceneErrorBoundary extends Component<
-  Readonly<{ technique: RasterFormatName; onError: (error: unknown) => void; children: ReactNode }>,
-  Readonly<{ error: unknown }>
+  Readonly<{
+    children: ReactNode;
+    identity: string;
+    onError: (error: unknown) => void;
+    technique: RasterFormatName;
+  }>,
+  Readonly<{ error: unknown; identity: string }>
 > {
-  override state: Readonly<{ error: unknown }> = { error: undefined };
+  override state: Readonly<{ error: unknown; identity: string }> = {
+    error: undefined,
+    identity: this.props.identity,
+  };
 
   static getDerivedStateFromError(error: unknown): Readonly<{ error: unknown }> {
     return { error };
+  }
+
+  static getDerivedStateFromProps(
+    props: Readonly<{ identity: string }>,
+    state: Readonly<{ error: unknown; identity: string }>,
+  ): Readonly<{ error: undefined; identity: string }> | null {
+    if (props.identity === state.identity) return null;
+    return { error: undefined, identity: props.identity };
   }
 
   override componentDidCatch(error: unknown): void {
