@@ -30,7 +30,7 @@ write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
 - The source stays live and may be disposed first; you own attachment, motion, reset, disposal.
 
 notes · internals for the page
-- `Text.breakApart()` — `three/text.ts:783–839`; D-292; `docs/planning/detached-glyph-slice.md`
+- `Text.breakApart()` — `three/text.ts:783–839`; D-292; `.agents/docs/planning/detached-glyph-slice.md`
 - `Glyphs` — `three/glyphs.ts#Glyphs` (`:112`); `Decorations` — `three/decorations.ts#Decorations` (`:46`)
 - the scenes: explode and reset, a ring — `site/examples/src/scenes/break-apart/scene.tsx`, `site/examples/src/scenes/arc/scene.tsx`
 */}
@@ -106,7 +106,7 @@ write
 - Shape: two paragraphs; the table is the reference.
 
 notes · internals
-- surface — `three/glyphs.ts:239–314`; `DetachedGlyph` — `:79–91`; the `InstancedMesh` convention — `docs/planning/detached-glyph-slice.md:87–96`
+- surface — `three/glyphs.ts:239–314`; `DetachedGlyph` — `:79–91`; the `InstancedMesh` convention — `.agents/docs/planning/detached-glyph-slice.md:87–96`
 - record-less glyphs (`incomplete`) are filtered out — `three/glyphs.ts:139–140`; what `incomplete` means — `glyph-placement.ts:137–150`
 - root transform copied from the source without touching ancestors — `three/detached-object.ts#copyCurrentLocalTransform`; each
   record starts at its drawn origin — `three/glyphs.ts#Glyphs.#initializeTransforms` (`:316–333`)
@@ -143,7 +143,7 @@ notes · internals
 - `originalMatrix` is a translation to the drawn origin, y flipped into scene space — `three/glyph-measurement.ts:117–119`
 - `anchorPoint(anchor, 'ink' | 'advance')` — `three/glyph-measurement.ts:137–144`; `GlyphAnchor` — `:7–13`
 - geometry sources: metric quad in glyph-local coordinates, or supplied — `three/glyph-measurement.ts:15–34`, `:123–136`
-- "rendering facts, not prescribed collision bodies" — `docs/planning/three-api.md:389–393`
+- "rendering facts, not prescribed collision bodies" — `.agents/docs/planning/three-api.md:389–393`
 */}
 
 ## Text on a circle
@@ -188,7 +188,7 @@ write
 notes · internals
 - the ribbon scene places glyph copies on a three.js curve with `placeOnPath`, standing on world up, at the tube's radius —
   `site/examples/src/scenes/ribbon/scene.tsx`, `site/examples/src/lib/paths.ts#curvePath`
-- the arc scene — `site/examples/src/scenes/arc/scene.tsx:36–66`; the `width` gap finding — `docs/planning/docs-site-outline.md:503`
+- the arc scene — `site/examples/src/scenes/arc/scene.tsx:36–66`; the `width` gap finding — `.agents/docs/planning/docs-site-outline.md:503`
 - `contentWidth` vs `width` — `layout.ts:68–75`
 - the path component — `site/examples/src/components/text/TextOnPath.tsx:52–64`, `site/examples/src/lib/paths.ts`
 */}
@@ -223,8 +223,8 @@ write
 
 notes · internals
 - `worldToLocalMatrix(inverse, world, target)`, target may alias — `three/glyphs.ts:18–33`; `localToWorldMatrix` — `:35–49`
-- the bulk recommendation — `three/glyphs.ts:267–273` (docstring), `docs/planning/three-api.md:390–393`
-- writes mark storage and the WebGL2 PBO mirror; uploaded before draw on WebGPU and WebGL2 — `docs/planning/detached-glyph-slice.md:101`; D-292
+- the bulk recommendation — `three/glyphs.ts:267–273` (docstring), `.agents/docs/planning/three-api.md:390–393`
+- writes mark storage and the WebGL2 PBO mirror; uploaded before draw on WebGPU and WebGL2 — `.agents/docs/planning/detached-glyph-slice.md:101`; D-292
 - `matrixWorldNeedsUpdate` is re-dirtied after realisation so the first traversal composes with the real parent — `three/glyphs.ts:161–163`, `:224–226`
 */}
 
@@ -272,9 +272,9 @@ write
 - Shape: four sentences.
 
 notes · internals
-- the ownership contract — D-292; `docs/planning/three-api.md:395–400`; `docs/planning/detached-glyph-slice.md:33–35`, `:95–96`
+- the ownership contract — D-292; `.agents/docs/planning/three-api.md:395–400`; `.agents/docs/planning/detached-glyph-slice.md:33–35`, `:95–96`
 - immutable atlas/page resources are leased from the engine domain, mutable materials and transform storage never
-  shared — `docs/planning/detached-glyph-slice.md:95–96`; the copy retains its own engine-domain lease — `three/glyphs.ts:104–110`
+  shared — `.agents/docs/planning/detached-glyph-slice.md:95–96`; the copy retains its own engine-domain lease — `three/glyphs.ts:104–110`
 - cloned materials owned by the branch — `three/glyphs.ts#Glyphs.materials` (`:247–251`), `three/engine-plan-target.ts:201–204`
 - `dispose()` releases the copy, storage, and removes from parent; the first failure is rethrown after cleanup — `three/glyphs.ts:294–314`
 */}

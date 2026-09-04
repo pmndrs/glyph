@@ -120,12 +120,12 @@ write
 notes · internals
 - the unit and contract — `rust/shaper/src/engine/layout_units.rs:1–34` (`LAYOUT_UNIT_BITS = 16`, 1/65,536 of a
   caller unit, `floor(value * 65,536 + 1/2)`, saturating at ±2^53); `apply_ratio` (`:44–46`) for justification
-- [in flight] D-254 and `docs/planning/integer-layout-units.md:47–56` still say F26.6 (1/64); the code at HEAD is
+- [in flight] D-254 and `.agents/docs/planning/integer-layout-units.md:47–56` still say F26.6 (1/64); the code at HEAD is
   F16.16 because Three supplies font sizes below one world unit (`layout_units.rs:3–9`). Cite the code; expect a
   register entry
-- `f32` exactly once at emission — `docs/planning/integer-layout-units.md:53`
+- `f32` exactly once at emission — `.agents/docs/planning/integer-layout-units.md:53`
 - scale-late invalidation: metric restyles re-scale, geometry refreshes nothing in the arena — D-254; metric-only
-  changes reuse the HarfRust result — `docs/packages/glyph.md:373–377`
+  changes reuse the HarfRust result — `.agents/docs/packages/glyph.md:373–377`
 - `measure()` / `glyphs()` — `three/text.ts:736–754`; the speculative paragraph query — D-253, `engine/transport.rs:347–367`
 */}
 

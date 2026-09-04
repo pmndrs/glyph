@@ -187,7 +187,7 @@ notes · internals
   for every draw, sorts the pairs, and applies the order to the draw list — `rust/shaper/src/engine/stable_plan.rs:1570–1577`;
   the key itself — `plan_draw.rs:19`
 - the outline's finding that `independent` did not fold interleaved materials in the batching example (thirty labels
-  alternating two materials planned 30 draws under both modes) — `docs/planning/docs-site-outline.md` "Findings for
+  alternating two materials planned 30 draws under both modes) — `.agents/docs/planning/docs-site-outline.md` "Findings for
   core"; re-test before promising coalescing across materials
 */}
 
@@ -256,14 +256,14 @@ on throw: prepared.discard()                  clean up, then settle(committed: f
 ```
 
 ```ts
-import type { AnyGlyphBindings, CommandBufferView, GlyphRenderer, PreparedRendererCommit } from '@pmndrs/glyph';
+import type { GlyphBindingSet, CommandBufferView, GlyphRenderer, PreparedRendererCommit } from '@pmndrs/glyph';
 
 interface Staged {
   readonly writes: readonly { readonly buffer: object; readonly offset: number; readonly bytes: Uint8Array }[];
   readonly draws: number;
 }
 
-export function createRenderer<Bindings extends AnyGlyphBindings>(): GlyphRenderer<Bindings, Staged> {
+export function createRenderer<Bindings extends GlyphBindingSet>(): GlyphRenderer<Bindings, Staged> {
   let committed: Staged = { writes: [], draws: 0 };
   return {
     decode(view: CommandBufferView<Bindings>): PreparedRendererCommit<Staged> {
@@ -375,5 +375,5 @@ notes · internals
 - span semantics — `config/glyph.ts#DisplayListInstanceSpan` (`:420–426`); three sets `instanceCount` and the run
   start — `draw-realizer.ts:171–181`
 - table order and resolved keys — `config/glyph.ts:124–127`, `:236–237`
-- registration after snapshot throws — `three/plan-program-registry.ts:200–206`; D-271
+- registration after snapshot throws — `three/internal/raster-program-registry.ts:52–56`; D-271
 */}

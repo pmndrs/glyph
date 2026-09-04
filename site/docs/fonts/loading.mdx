@@ -235,7 +235,7 @@ notes · internals
   `font-face.ts#resolveFontFace` (`:257–263`); `FONT_FACE_NOT_FOUND` `react.ts:494`, `three/text.ts:584`
 - table entries: a source, a face, or `{ src, format }` — `react.ts#GlyphProviderFontFace` (`:188–191`); faces the
   table declares are owned and disposed with the provider — `#createProviderFontFaces` (`:312–343`)
-- Suspense when `fontFaces` or `fallback` is given — `react.ts:244–246`; `errorFallback` catches `FontLoadError`
+- Suspense when `fontFaces` or `fallback` is given — `react.ts:244–246`; `errorFallback` catches `GlyphFontError`
   only — `#GlyphFontErrorBoundary` (`:361–374`)
 - `handle` accepts a handle or a root — `react.ts:193–200`, `#selectReactRoot` (`:417–420`); immutable props
   `:216–219`; D-301, D-307
@@ -294,10 +294,10 @@ write
 - One paragraph under the table: `face.load()` loads every declared format and every format the file advertises
   for which a decoder has been imported; `face.slug.load()` loads one. Decoding rechecks each raster's identity,
   validates its record table and pages, and refuses an atlas over 256 MiB. GPU upload happens on first draw.
-- Shape: the table and one paragraph; every code is a `FontLoadError` with `.code` and `.url`.
+- Shape: the table and one paragraph; every code is a `GlyphFontError` with `.code` and `.url`.
 
 notes · internals
-- `FontLoadError` — `loader.ts:208–216`; `BAKED_FONT_MISSING` `:604–609`; `BAKED_FONT_FETCH` `:653`, `:660`;
+- `GlyphFontError` — `loader.ts:208–216`; `BAKED_FONT_MISSING` `:604–609`; `BAKED_FONT_FETCH` `:653`, `:660`;
   `BAKED_FONT_INVALID` / `INCOMPATIBLE` / `RESOURCE_LIMIT` `:684–700`; limits `:61–63`
 - `FONT_FACE_FORMAT_UNAVAILABLE` `font-face.ts:555`, `:655`; `FONT_FACE_FORMAT_REQUIRED` `:458–461`;
   `FONT_FACE_FORMAT_NOT_LOADED` `:644–647`; `FONT_FACE_NOT_FOUND` `three/text.ts:584`, `react.ts:494`

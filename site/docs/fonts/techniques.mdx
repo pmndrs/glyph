@@ -114,7 +114,7 @@ notes · internals
   `internal/bitmap-strike.ts#nearestBitmapStrikeIndex`
 - page cap — `rust/bitmap-baker/src/rasterize.rs#MAX_ATLAS_PAGES` (60); texel format — `config/resources.ts#PortableTextureFormat`
 - snapping: vertex path rounds the physical position — `tsl/bitmap-shader.ts:78` (`pixelSnappedClipPosition`), `:104` (`TSL.round`)
-- `rasterPixelRatio` is a Text property, not a canvas setting — `paragraph.ts:74`, `react.ts:91`
+- `rasterPixelRatio` is a Text property, not a canvas setting — `three/text.ts:106`, `react.ts:91`
 - effects: `raster/bitmap.ts` `textEffects: []` → `engine-encoding.ts:206`
 - page limit 1024 texels and 1-texel padding — `rust/bitmap-baker/src/rasterize.rs:17` (`ATLAS_LIMIT`), `:18`
   (`GLYPH_PADDING`); placement `:186–196`
@@ -255,7 +255,7 @@ notes · internals
 - the anatomy scene draws the band grid from the quad's UV and the sweep from a uniform, reading only `context.shader.coverage` —
   `site/examples/src/scenes/slug-anatomy/materials.ts`
 - the byte figures are the full Inter face, every glyph, default options, from the package-size report quoted in
-  `docs/planning/payload-budget.md` (codex tree) — re-run the report and re-date the table before publishing
+  `.agents/docs/planning/payload-budget.md` (codex tree) — re-run the report and re-date the table before publishing
 - instance buffer layouts — `raster/bitmap.ts#bitmapSchema` (`:117`), `raster/msdf.ts#msdfSchema` (`:103`),
   `raster/slug.ts#slugSchema` (`:91`)
 - texture memory cap, 256 MiB per format, checked at decode — `raster/bitmap.ts:34`, `raster/internal/msdf-decoder.ts:32`,

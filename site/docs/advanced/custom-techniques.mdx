@@ -1,6 +1,6 @@
 ---
 title: Custom raster formats
-description: Define a raster format with its identity and decoder, write the plan program that turns its records into codec lanes, ship a baker and a shader, and register it so it loads, stacks, and batches like the built-ins.
+description: Define a raster format with its identity and decoder, write the raster codec that turns its records into codec lanes, ship a baker and a shader, and register it so it loads, stacks, and batches like the built-ins.
 nav: 57
 sourcecode: packages/glyph/src/config/raster-format.ts
 ---
@@ -10,33 +10,33 @@ reader
 - Has a way of drawing glyphs that is not Bitmap, MSDF, or Slug — a colour-per-glyph diagnostic, a vector format, a
   compressed atlas — and wants it to load through `glyph.fontFace`, bind into `Text`, and batch like the built-ins.
   Has read Building a codec. Arrives asking "what do I have to ship for a new format?", should leave able to name
-  the four pieces (format, plan program, baker, shader), say which package leaf each comes from, and explain why
+  the four pieces (format, raster codec, baker, shader), say which package leaf each comes from, and explain why
   the options they bake and the options they declare must produce the same key.
 
 write · intro
 - Question: are the shipped formats privileged?
 - Say: Bitmap, MSDF, and Slug are ordinary raster formats on a public contract, and the repository keeps a third,
   `@pmndrs/glyph-example-raster`, that exists to prove it; a format owns three things — an identity and a decoder
-  for its artifact, a plan program that says how its records become codec lanes and which resources a draw binds,
+  for its artifact, a raster codec that says how its records become codec lanes and which resources a draw binds,
   and a baker; renderers add shaders; this page reads the contract through the example.
-- Anchor: "the format describes the data; the plan program describes the lanes; the renderer describes the pixels".
+- Anchor: "the format describes the data; the raster codec describes the lanes; the renderer describes the pixels".
 - Shape: three sentences, no figure on this page.
 
 write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
 - `defineRasterFormat` is identity plus decoding; it never mentions a renderer.
-- A plan program pairs a technique schema with a `codecBody` and a `compileFont`; `registerRasterPlanProgram` makes
+- A raster codec pairs a technique schema with a `codecBody` and a `compileFont`; `registerRasterCodec` makes
   it renderer-neutral.
 - Options become the descriptor; the descriptor becomes the raster key; the key is what the artifact and the
   declaration must agree on.
-- The `pmndrs.` id prefix is reserved for plan programs; `textEffects` may name only `outline` and `shadow`.
+- The `pmndrs.` id prefix is reserved for raster codecs; `textEffects` may name only `outline` and `shadow`.
 
 notes · internals for the page
 - the contract — `packages/glyph/src/config/raster-format.ts#RasterFormat` (`:36–58`), `#defineRasterFormat` (`:93–148`)
-- the plan-program half — `config/raster.ts#RasterPlanProgram` (`:148–154`), `#registerRasterPlanProgram` (`:228–233`)
+- the raster-codec half — `config/raster.ts#RasterCodec` (`:149–155`), `#registerRasterCodec` (`:223–232`)
 - the shipped three are registered through the same path with the reserved prefix —
-  `raster/bitmap.ts:182`, `raster/msdf.ts:202`, `raster/slug.ts:215` (`registerGlyphRasterPlanProgram`, `config/raster.ts:236–241`)
+  `raster/bitmap.ts:182`, `raster/msdf.ts:202`, `raster/slug.ts:215` (`registerGlyphRasterCodec`, `config/raster.ts:236–241`)
 - the example package — `packages/glyph-example-raster/src/{raster,contract,artifact,portable,register,baker,runtime-baker,shader-contract,tsl,typegpu}.ts`;
-  its root import registers the plan program as a side effect — `index.ts:1`, `register.ts:6–8`, `package.json` `sideEffects`
+  its root import registers the raster codec as a side effect — `index.ts:1`, `register.ts:6–8`, `package.json` `sideEffects`
 - `RasterFormat` is the portable font-representation term; codec `technique` is the broader program-family term — D-311
 - `FontFace` members are keyed by the format's `kind` — `font-face.ts#FormatKey` (`:57–63`), `FontFace` (`:95–97`)
 */}
@@ -46,18 +46,18 @@ notes · internals for the page
 | Piece | Entry | Owns |
 | --- | --- | --- |
 | format | `defineRasterFormat` from `@pmndrs/glyph/config/raster-format` | `id`, `kind`, `extension`, `version`, `textEffects`, `descriptor(options)`, `decode(font, raster, signal)`, `dispose(data)`, `runtimeBaker?` |
-| plan program | `registerRasterPlanProgram({ raster, schema, programVariant?, codecBody, compileFont })` from `@pmndrs/glyph/config/raster` | the technique schema, the lane program, and how a decoded font fills binding rows and retains resources |
+| raster codec | `registerRasterCodec({ raster, schema, programVariant?, codecBody, compileFont })` from `@pmndrs/glyph/config/raster` | the technique schema, the lane program, and how a decoded font fills binding rows and retains resources |
 | baker | `defineRasterBaker` from `@pmndrs/glyph/baker` at build time; `runtimeBaker` for the browser | the artifact |
 | shaders | a `tsl` and a `typegpu` module per format | reading the schema's buffers and resources on one backend |
-| three registration | `registerThreeRasterPlanProgram` from `@pmndrs/glyph/three` | the shader variant and material factory three binds to the plan program |
+| three registration | `registerThreeRasterProgram` from `@pmndrs/glyph/three` | the shader variant and material factory three binds to the raster codec |
 | three material typing | augment `ThreeTextMaterialContextMap` at your `id` | `defineTextMaterial` stays exhaustive over your format |
 
 {/*
 write
 - Question: what is the shopping list?
-- One paragraph: six pieces, and the first three are renderer-neutral — the format, its plan program, its baker
+- One paragraph: six pieces, and the first three are renderer-neutral — the format, its raster codec, its baker
   live in one package that imports only `@pmndrs/glyph`; the last three are per renderer — a shader module per
-  backend, a three registration that binds one variant to the plan program, and a type augmentation so material
+  backend, a three registration that binds one variant to the raster codec, and a type augmentation so material
   factories stay exhaustive. Say which leaf each helper comes from (the table does), so nobody reaches for the root
   entry.
 - Point at: the `Entry` column — none of these are root exports.
@@ -66,7 +66,7 @@ write
 notes · internals
 - leaves — `packages/glyph/package.json` `./config/*` (`:240`), `./baker` → `src/bake.ts` (`:272–279`), `./three` (`:159` wildcard for `./three/*`)
 - `defineRasterBaker` — `packages/glyph/src/bake.ts:117`; `rasterBake` — `:129`
-- `registerThreeRasterPlanProgram` — `three/plan-program-registry.ts:129–210`, exported at `three.ts:16`; the
+- `registerThreeRasterProgram` — `three/raster-program.ts:111–157`, exported at `three.ts:12`; the
   variant contract — `#ThreeRasterPlanVariant` (`:81–95`)
 - `ThreeTextMaterialContextMap` — `three/material.ts:55–63`; D-308
 - the example ships `./baker`, `./tsl`, `./typegpu` subpaths — `packages/glyph-example-raster/package.json` `exports`
@@ -150,7 +150,7 @@ write
 - Paragraph 1: identity — `id` on the wire, `kind` as the member key and the `fonts` map key, `extension` and
   `version` naming the glTF companion — plus `descriptor(options)`, which canonicalises options so every spelling
   of the same choice is one raster; and `decode`, which turns an authenticated artifact into the retained CPU data
-  the plan program will read; `dispose` releases it. Nothing here names a renderer.
+  the raster codec will read; `dispose` releases it. Nothing here names a renderer.
 - Paragraph 2: what `decode` receives: the registered font — `shapingHash`, `glyphCount`, `glyphIdWidth`,
   `metrics` — and the artifact — `rasterKey`, `extensionData`, a `view(bufferView)` reader for embedded bytes, and
   `resource(source, signal)` for record payloads that may be embedded or external and hashed. The example refuses
@@ -181,13 +181,13 @@ notes · internals
 - `Options = FrameOptions | undefined` is what makes `frame()` legal without an argument — `raster-format.ts:44`
 */}
 
-## The plan program
+## The raster codec
 
 ```ts
 import type { PortableGeometryPayload, RasterFormat, RasterFormatId, RasterResourceId } from '@pmndrs/glyph';
 import { id } from '@pmndrs/glyph/config/codec';
 import { f32, techniqueProgram } from '@pmndrs/glyph/config/codec-program';
-import { registerRasterPlanProgram } from '@pmndrs/glyph/config/raster';
+import { registerRasterCodec } from '@pmndrs/glyph/config/raster';
 import { defineTechniqueSchema } from '@pmndrs/glyph/config/schema';
 
 interface FrameOptions {
@@ -229,7 +229,7 @@ export const frameSchema = defineTechniqueSchema({
   glyphOrigin: { buffer: 'origin' }, // lanes 0–1 of `origin` are the glyph origin
 });
 
-export const framePlanProgram = registerRasterPlanProgram({
+export const frameCodec = registerRasterCodec({
   raster: frame,
   schema: frameSchema,
   programVariant: 0,
@@ -279,7 +279,7 @@ write
   before `compile`, the render resource selected for every glyph that has one, a synchronous return that is the
   result of `compiler.compile`, and one attempt per font. The compiled font is cached per immutable font, so the
   closures run once.
-- Paragraph 3 (the callout): `registerRasterPlanProgram` is renderer-neutral and runs at import; a renderer's
+- Paragraph 3 (the callout): `registerRasterCodec` is renderer-neutral and runs at import; a renderer's
   program registry snapshots it when an engine is created, and a three variant registered after that is refused by
   name with a count of the engines already holding a snapshot. Import your format module at the top of the app.
 - Point at: `declare const unitQuad` — a `PortableGeometryPayload` is plain bytes with accessors, built once in the
@@ -289,13 +289,13 @@ write
 
 notes · internals
 - source — `packages/glyph-example-raster/src/portable.ts:13–59` (`glyphExampleSchema`), `:63–103`
-  (`glyphExamplePlanProgramDefinition`); registration — `register.ts:6–8`; the quad — `geometry-fixture.ts:4–55`
+  (`glyphExampleCodecDefinition`); registration — `register.ts:6–8`; the quad — `geometry-fixture.ts:4–55`
   (`glyphExampleIndexedQuadGeometry`, `glyphExampleSuppliedGeometryDeclaration`)
 - the snippet declares `frame` and `unitQuad` with `declare const` so it typechecks without the example package;
   the real values are `raster.ts#glyphExample` and `geometry-fixture.ts#glyphExampleIndexedQuadGeometry`
-- `RasterPlanProgram` — `config/raster.ts:148–154`; `RasterPlanProgramFontCompiler` (`:124–138`: `font`, `compile`,
+- `RasterCodec` — `config/raster.ts:149–155`; `RasterCodecFontCompiler` (`:125–139`: `font`, `compile`,
   `retain`); `RasterFontBinding` (`:113–122`: `strikes`, `resource(glyphIndex, strikeIndex)`, `f32`/`u32` readers)
-- registration checks — `config/raster.ts#registerRasterPlanProgramOwned` (`:243–321`): raster identity (`:259–271`),
+- registration checks — `internal/raster-codec-registry.ts#registerRasterCodecInternal` (`:35–96`): raster identity (`:259–271`),
   reserved prefix (`:272–274`), schema witness (`:279–281`), schema technique matches (`:282–284`), at least one
   resource (`:285–287`), a render resource (`:288–290`), u16 variant (`:291–293`), both callbacks (`:294–296`),
   re-registering the same source is a no-op (`:297–305`), a different program for the same id throws (`:306–309`)
@@ -309,7 +309,7 @@ notes · internals
 - the shipped `compileFont`s: MSDF retains an atlas group and reads records at a fixed stride — `raster/msdf.ts:227–262`;
   Bitmap retains one atlas per strike and lists real ppems — `raster/bitmap.ts:198–240`; Slug retains a page group
   — `raster/slug.ts:255–270`
-- the three registry snapshot and the refusal — `three/plan-program-registry.ts:200–206`, `#compiledThreeRasterPlanPrograms`
+- the three registry snapshot and the refusal — `three/internal/raster-program-registry.ts:52–56`, `#compiledThreeRasterPrograms` (`:71–83`)
   (`:213–226`), released on dispose (`:257–265`); D-271
 - [verify] the exact resource id key the example uses for the geometry: `compileFont` retains it under
   `data.resource` (`portable.ts:90`), the same key the `resource` reader returns (`:93`) — confirm a supplied geometry
@@ -461,14 +461,14 @@ notes · internals
 ## Shaders
 
 ```ts no-check
-// A three consumer binds one shader variant to the registered plan program, before any handle exists.
-import { registerThreeRasterPlanProgram, type ThreePlanProgramMaterialContext } from '@pmndrs/glyph/three';
-import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
+// A three consumer binds one shader variant to the registered raster codec, before any handle exists.
+import { registerThreeRasterProgram, type ThreeRasterMaterialContext } from '@pmndrs/glyph/three';
+import { glyphExampleCodec } from '@pmndrs/glyph-example-raster';
 import { glyphExampleTslShader, glyphExampleTslVariant } from '@pmndrs/glyph-example-raster/tsl';
 
-registerThreeRasterPlanProgram({
-  raster: glyphExamplePlanProgram.raster,
-  schema: glyphExamplePlanProgram.schema,
+registerThreeRasterProgram({
+  raster: glyphExampleCodec.raster,
+  schema: glyphExampleCodec.schema,
   variant: {
     id: 'tsl',
     language: 'tsl',
@@ -476,7 +476,7 @@ registerThreeRasterPlanProgram({
     resources: glyphExampleTslVariant.resources,
     outputs: glyphExampleTslVariant.outputs, // { position: 'vec3', color: 'vec3', opacity: 'float' }
     geometry: glyphExampleTslVariant.geometry,
-    createMaterial(context: ThreePlanProgramMaterialContext) {
+    createMaterial(context: ThreeRasterMaterialContext) {
       // context.namedBuffers, context.namedResources, context.instance, context.transformPosition
       return createMaterial(glyphExampleTslShader, context);
     },
@@ -491,7 +491,7 @@ write
   TypeGPU — each reading the schema's buffers by name and the retained resources by their declared kind; both
   modules in the example are built from one shader contract derived from the schema, so a lane renamed in the
   schema fails both shaders at compile time.
-- Paragraph 2: on three, a plan program is bound to a material factory through `registerThreeRasterPlanProgram`;
+- Paragraph 2: on three, a raster codec is bound to a material factory through `registerThreeRasterProgram`;
   the variant restates the buffers, resources, outputs, and geometry it consumes and three checks each against the
   registered schema; `createMaterial` receives the buffers and resources by name, the instance index, and a
   `transformPosition` that applies the draw's transform, and returns a `NodeMaterial`.
@@ -506,15 +506,15 @@ notes · internals
 - the shader contract — `packages/glyph-example-raster/src/shader-contract.ts:10–29`, `:50–60`; the TSL module —
   `tsl.ts:31–43` (inputs `origin`, `size`, `color`, `quadPosition`, `quadUv`, `transformPosition`; outputs
   `position`, `color`, `opacity`); the TypeGPU module — `typegpu.ts:44–69`
-- three registration — `three/plan-program-registry.ts#registerThreeRasterPlanProgram` (`:129–210`): portable
+- three registration — `three/raster-program.ts#registerThreeRasterProgram` (`:111–157`): portable
   program must exist (`:142–145`), schema must be the registered witness (`:146–149`), geometry must match
   (`:174–178`), buffers/resources/outputs normalised against the schema (`:179–181`, `#normalizeBufferCapabilities`
   `:380`, `#normalizeResourceCapabilities` `:409`, `#normalizeOutputs` `:501`), one variant per technique (`:195–199`),
   refused after a snapshot (`:200–206`)
-- the material context — `#ThreePlanProgramMaterialContext` (`:25–48`: `root`, `raster`, `schema`, `variantId`,
+- the material context — `#ThreeRasterMaterialContext` (`:25–48`: `root`, `raster`, `schema`, `variantId`,
   `language`, `namedBuffers`, `namedResources`, `outputTypes`, `resourceName`, `instance`, `material`, `transformPosition`)
 - the test's registration and material — `packages/glyph-example-raster/tests/glyph-example.test.ts:376–395`
-  (`threeProgram`, `registerThreeRasterPlanProgram`), `createThreeMaterial` (`:397`); `defineTextMaterial` selecting
+  (`threeProgram`, `registerThreeRasterProgram`), `createThreeMaterial` (`:397`); `defineTextMaterial` selecting
   by `context.format === glyphExample.id` (`:146–152`)
 - `ThreeTextMaterialContextMap` augmentation — `three/material.ts:55–63`; D-308; the variant's outputs reach the
   factory as `context.outputs` (test `:173`)

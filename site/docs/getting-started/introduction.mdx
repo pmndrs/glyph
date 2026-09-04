@@ -215,8 +215,8 @@ notes · internals
   `three/text.ts:732–742`
 - `contentWidth`/`contentHeight` are advance extents (what layout claims); `inkBounds` is the union of glyph outlines
   (what was drawn); they are deliberately not interchangeable — `layout.ts:56–61`, `:73–75`, `:80–89`
-- `Paragraph.measure()` needs no renderer, scene, or matrix at all — `paragraph.ts:162–166`, `createParagraph`
-  (`:276`)
+- `Text.measure()` answers for desired state — no world matrix, no renderer resource, no committed frame —
+  `three/text.ts:814`
 */}
 
 ## Does it need WebGPU?
@@ -305,7 +305,7 @@ notes · internals
   `unicode-segmentation =1.13.3`, `unicode-bidi 0.3.18`, `harfrust 0.12.0` (`rust/shaper/Cargo.toml:25–29`);
   the field — `generated/font-artifact-schema.ts:35`
 - horizontal only: vertical shaping and layout are deferred while the vertical source tables (`BASE`, `VORG`,
-  `vhea`, `vmtx`) survive baking — `docs/roadmap/roadmap.md:491`, `:498`; vertical writing is backlog item 19
+  `vhea`, `vmtx`) survive baking — `.agents/docs/roadmap/roadmap.md:491`, `:498`; vertical writing is backlog item 19
   (`:769`), listed in 11.18's scope (`:161`)
 - the shaping example and its fonts — `site/examples/src/scenes/shaping/scene.tsx`,
   `site/docs/assets/chorus-*.font.glb`

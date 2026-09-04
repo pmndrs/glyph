@@ -35,7 +35,7 @@ notes · internals for the page
 - the two compilers and the one rule they share — `formatted-text.ts#compose` (`:134–168`),
   `react.ts#flattenText` (`:758–791`), `internal/graphemes.ts#resolveRangesToClusters` (`:120–126`); D-265
 - raw `spans` on a Text or update throw: `cannot declare raw spans; compose formatted text with txt and span` —
-  `three/text.ts#assertNoRawSpans` (`:1489–1493`), called at `:637` and `:717`; `paragraph.ts:203`
+  `three/text.ts#assertNoRawSpans` (`:1489–1493`), called at `:637` and `:717`
 - the result is frozen — `formatted-text.ts#txt` (`:117–118`), `#createSpanTag` (`:105–109`)
 */}
 
@@ -184,9 +184,9 @@ notes · internals
 - the desired state carries `spans` — `three/text.ts#DesiredTextState` (`:99–108`)
 - there is no public `spans` getter on `Text` at codex `1dc580a87` (grep `get spans` finds none): the accessors are `font`, `text`, `style`, `layout`,
   `constraints`, `rasterPixelRatio`, `material` (`three/text.ts:667–710`); D-265, `three/frame-error.ts:15`, and
-  `docs/planning/three-api.md:209–221` all speak of `Text.spans`. Ask whether the getter is coming back; the block
+  `.agents/docs/planning/three-api.md:209–221` all speak of `Text.spans`. Ask whether the getter is coming back; the block
   above is opted out of the check until then
-- `docs/planning/three-api.md:217–221` still passes raw `spans:` to `createText`; `assertNoRawSpans` rejects that at HEAD (`three/text.ts:1489`)
+- `.agents/docs/planning/three-api.md:217–221` still passes raw `spans:` to `createText`; `assertNoRawSpans` rejects that at HEAD (`three/text.ts:1489`)
 */}
 
 ## The cluster rule
@@ -224,7 +224,7 @@ notes · internals
 - inverted or out-of-range spans throw `RangeError` — `three/text.ts#assertRange` (`:1524–1532`); partial overlap
   throws `spans must nest or be disjoint` — `#assertSpansNest` (`:1534–1558`)
 - the segmenter is the package's own UAX #29 tables, never `Intl.Segmenter` — `internal/graphemes.ts#findGraphemeBoundaries` (`:17`); D-265, D-320
-- the worked example and its expected offsets — `docs/planning/three-api.md:230–234`
+- the worked example and its expected offsets — `.agents/docs/planning/three-api.md:230–234`
 - `alignSpansToClusters` is not exported from the root or `/three` at codex `1dc580a87` (grep of `index.ts` and
   `three.ts` finds none); D-265 calls it "the exported function a caller checks its own offsets with". Do not tell the
   reader to call it until it is
@@ -265,7 +265,7 @@ notes · internals
 - unchanged spans identity is preserved across an update — `three/text.ts:1451–1456`
 - a measurement query re-sends the whole text rather than a diff — `internal/render-planner.ts:812–819`
 - the removed helpers `insertText`/`deleteText`/`replaceText`/`setSpan`/`removeSpan`: none exist in `three/text.ts`
-  and no decision in `docs/planning/decision-register.md` names them (grep at codex `1dc580a87`); name them in prose
+  and no decision in `.agents/docs/planning/decision-register.md` names them (grep at codex `1dc580a87`); name them in prose
   only as "there is no offset helper", not as something that was removed
 - the scene — `site/examples/src/scenes/editing/scene.tsx`: a typist restates the line as nested runs every
   keystroke (`config.ts#runsOf`), so the document is always the tree; the counter reads `commitState()` back. The twin

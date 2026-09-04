@@ -26,7 +26,7 @@ write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
 - Assert exact values for shaping and layout, envelopes for filtered rasters, and lifecycle through `commitState()`.
 
 notes · internals for the page
-- a handle without a renderer — `docs/planning/three-api.md:64–66`; test helper `tests/support/three-handle.mjs:7–13`
+- a handle without a renderer — `.agents/docs/planning/three-api.md:64–66`; test helper `tests/support/three-handle.mjs:7–13`
 - test renderer — `tests/integration/react-lease-lifecycle.test.mjs:62`, `:156`; the shim `tests/support/browser-globals.mjs`
 - headless — `apps/benchmarks/scripts/run-headless.mts:60–90`; CI — `.github/workflows/ci.yml:86–142`
 */}
@@ -103,19 +103,20 @@ write
 - Shape: three paragraphs.
 
 notes · internals
-- handle needs no renderer — `docs/planning/three-api.md:64–66`; `createThreeTestHandle` with `t.after(dispose)` —
+- handle needs no renderer — `.agents/docs/planning/three-api.md:64–66`; `createThreeTestHandle` with `t.after(dispose)` —
   `tests/support/three-handle.mjs:7–13`
 - `FontFaceSource` accepts a `Blob` — `font-face.ts:27`, `:740`, `:749`; the tree's tests pass fixture bytes —
   `tests/integration/react-lease-lifecycle.test.mjs:50–59`
 - test renderer `create` / `waitFor` — `tests/integration/react-lease-lifecycle.test.mjs:62`, `:156`; the shim —
   `tests/support/browser-globals.mjs:1–20`; r3f disposes synchronously under `IS_REACT_ACT_ENVIRONMENT` — `:9–11`;
   the rAF stubs — `:43–48`
-- the R3F WebGPU entry is pinned to `10.0.0-alpha.3` — `tests/package/r3f-webgpu.test.mjs:8–25`
+- the R3F peer range is `>=10.0.0-alpha.3 <11` — `packages/glyph/package.json` peerDependencies; the dedicated
+  `tests/package/r3f-webgpu.test.mjs` was removed with the config API refactor (#148)
 - runner: `node --test` over `tests/package`, `tests/integration`, `tests/fuzz` — `scripts/test.mts:33–35`
-- what is proven in Node — `docs/packages/glyph.md:598–618` (sequence property gate: fixed seeds, no wall clock, no
+- what is proven in Node — `.agents/docs/packages/glyph.md:598–618` (sequence property gate: fixed seeds, no wall clock, no
   retry; StrictMode lease accounting; teardown in r3f's order)
-- `createParagraph({ font })` takes a face selection as well as an immutable font — `paragraph.ts:77`; renderer-free
-  it requires an explicit imported format on the face and never guesses a handle default — D-326 (codex `98c86c8a6`)
+- a `Text` takes a face selection as well as an immutable font, and requires an explicit imported format on the
+  face rather than guessing a handle default — D-326 (codex `98c86c8a6`)
 - [verify] the test-renderer snippet is `no-check` because the site does not install `@react-three/test-renderer`;
   typecheck it in the package before publishing. The `node:test` wrapper is `no-check` because the site's snippet
   tsconfig has `types: ["vite/client"]` and no Node types (`site/tsconfig.json`); the Glyph half is checked
@@ -154,7 +155,7 @@ notes · internals
   (`*-webgl2` targets) — `:24–31`; the runner page `?runner=headless` — `:139`
 - Chromium launch and the env var — `apps/benchmarks/scripts/support/project-chromium.mts:3`, `:20–27`
 - summary fields (`medianMs`, `p95Ms`, `outputBytes`, `hash`) — `apps/benchmarks/src/benchmark/contracts.ts:37–60`
-- Bitmap 32/32 pixel-exact frames against the CPU oracle, pinned SHA-256 — `docs/packages/glyph.md:602–603`
+- Bitmap 32/32 pixel-exact frames against the CPU oracle, pinned SHA-256 — `.agents/docs/packages/glyph.md:602–603`
 - vitexec probes — `apps/benchmarks/vitexec/*.probe.ts`; `vitexec` pinned at 0.1.17 — `apps/benchmarks/package.json:51`
 - the capture writers exist per format — `apps/benchmarks/src/benchmark/targets/conformance/raster/bitmap-capture.ts`,
   `mtsdf-capture.ts`, `slug-capture.ts` — and each names reference, candidate, and difference images; [verify] the
@@ -186,7 +187,7 @@ notes · internals
   `PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH`, then `runtime.ci.vitest.mts`); the browser gate —
   `apps/benchmarks/scripts/runtime.ci.vitest.mts:30–40`
 - every headless conformance target is a `*-webgl2` target — `apps/benchmarks/scripts/run-headless.mts:24–31`
-- the 48-cell matrix is green on WebGPU and forced WebGL2 — `docs/packages/glyph.md:682–686`
+- the 48-cell matrix is green on WebGPU and forced WebGL2 — `.agents/docs/packages/glyph.md:682–686`
 - WebGPU detection — `apps/benchmarks/src/benchmark/environment.ts:9` (`'gpu' in navigator`)
 - [verify] "faking `navigator.gpu` breaks three's fallback" and the `renderer.backend.isWebGPUBackend` check: this
   repo's own finding (memory: CI has no WebGPU; `vitexec --gpu` fakes `navigator.gpu`), not in the codex tree; grep
@@ -228,7 +229,7 @@ notes · internals
 - `measure()` fields — `layout.ts#ParagraphLayoutSummary` (`:116–123`), `#ParagraphMeasurement` (`:63–90`)
 - exact shaping assertions in the tree — `tests/integration/text-mutation-span-alignment.test.mjs`,
   `text-mutation-script-topology.test.mjs`, `text-mutation-gpu-lanes.test.mjs`
-- positive-control lease test — `docs/packages/glyph.md:615–616`
+- positive-control lease test — `.agents/docs/packages/glyph.md:615–616`
 - the determinism rule as the repository states it — this repo, `AGENTS.md` ("Keep tests deterministic; do not use
   sleeps, timer cushions, arbitrary retries, or regenerated goldens as correctness mechanisms")
 */}

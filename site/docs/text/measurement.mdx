@@ -1,6 +1,6 @@
 ---
 title: Measurement
-description: measure() and glyphs() on a Text, Paragraph without a renderer, every summary field, and what each query costs.
+description: measure() and glyphs() on a Text, intrinsic widths, every summary field, and what each query costs.
 nav: 24
 sourcecode: packages/glyph/src/layout.ts
 ---
@@ -20,7 +20,7 @@ write · intro
 - Question: what can I ask a paragraph, and when?
 - Say: measurement answers for desired state, synchronously, before anything commits; `measure()` returns the box,
   the baselines, the ink, and the lines without a per-glyph array; `glyphs()` pays for positioned per-glyph columns;
-  neither publishes a draw. When no scene object should exist at all, `Paragraph` measures on its own.
+  neither publishes a draw. Both answer before the first frame, so a layout system can size a box before drawing.
 - Anchor: "ask before you draw".
 - Shape: three sentences.
 
@@ -28,12 +28,12 @@ write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
 - Two extents, not one: advance for stacking, ink for centring.
 - `measure()` is cheap and cached; `glyphs()` copies every column and is not.
 - Both answer for desired state before the first frame and commit nothing.
-- `Paragraph` is the same engine with no renderer, for layout systems.
+- Intrinsic widths ride the same pass, so a layout system needs no second query.
 
 notes · internals for the page
 - `Text.measure()` and `Text.glyphs()` — `three/text.ts:732–754`; D-291 (`measure()` is an action, `layout` is a property)
 - the two extents are deliberately named apart — `layout.ts:52–61`
-- `Paragraph` — `paragraph.ts#Paragraph` (`:110`), `#createParagraph` (`:275–292`); D-288 (three-entry LRU)
+- the standalone `Paragraph` is gone with the config API; `Text.measure()` — `three/text.ts:814`
 - the measurement scene draws both boxes live — `site/examples/src/scenes/measurement/scene.tsx`
 */}
 
@@ -75,7 +75,7 @@ notes · internals
 - paragraph space: origin top-left, positive y down — `layout.ts:4–7`, `:147–149`; the scene flip —
   `three/text.ts#Text.#setBoundingBox` (`:887–897`: `min.y = -(y + height)`)
 - flexible widths resolve to content width; `exact` keeps the stated box — D-291
-- the arc scene's ring closes with `contentWidth` and gaps with `width` — `docs/planning/docs-site-outline.md:503` (findings table), `site/examples/src/scenes/arc/scene.tsx`
+- the arc scene's ring closes with `contentWidth` and gaps with `width` — `.agents/docs/planning/docs-site-outline.md:503` (findings table), `site/examples/src/scenes/arc/scene.tsx`
 */}
 
 ## ParagraphLayoutSummary
@@ -151,37 +151,29 @@ notes · internals
 - `Text.glyphs()` also refreshes `boundingBox` — `three/text.ts:748–754`, `:766–769`
 */}
 
-## Paragraph without a renderer
+## Intrinsic widths
 
-```ts no-check
-import { createParagraph } from '@pmndrs/glyph';
-
-const paragraph = await createParagraph({ font: Inter.msdf, text: 'Measure before rendering', style: { fontSize: 32 } });
-const metrics = paragraph.measure({ width: { mode: 'at-most', size: 480 } });
-const positioned = paragraph.glyphs({ width: { mode: 'exact', size: metrics.contentWidth } });
-paragraph.dispose();
+```ts
+const summary = text.measure();
+summary.minContentWidth; // the longest unbreakable run
+summary.maxContentWidth; // the width if nothing wrapped
 ```
 
 {/*
 write
-- Question: can I measure without a scene, a handle, or a renderer?
-- Paragraph 1: yes. `createParagraph` acquires a private measurement engine once (asynchronously), and after that
-  `measure(constraints)`, `glyphs(constraints)`, and `update()` are synchronous. Constraints are per query, so a
-  layout system can probe unconstrained, at-most, and exact widths in one negotiation.
-- Paragraph 2: a three-entry LRU per query kind keeps arbitrary probes from retaining unbounded positioned arrays;
-  `update()` clears both caches. Dispose it when the layout system is done; it also supports `using`.
+- Question: how wide does this text want to be, so a layout system can negotiate a box for it?
+- Paragraph 1: both widths are intrinsic — they do not depend on the constraints currently being probed — and they
+  ride the same measurement pass as the rest of the summary. There is no second layout to pay for and no separate
+  object to own: a host sizing a box reads them from the `measure()` it was already going to call.
+- Paragraph 2: the pair is the CSS min-content/max-content pair, so a flex or grid integration maps onto it directly.
 - Point at: uikit-style integrations as the audience.
 - Shape: two paragraphs.
 
 notes · internals
-- construction acquires the shared measurement service — `paragraph.ts#createParagraph` (`:275–292`), `#acquireMeasurementService` (`:611–638`)
-- options — `paragraph.ts#ParagraphOptions` (`:79–80`): `font`, `text`, `style`, `layout`, `rasterPixelRatio`; width and height are per-query (`:75`)
-- `measure(constraints?)` and `glyphs(constraints?)` — `paragraph.ts:166–199`; constraints validated at the call — `#resolveConstraints` (`:506–514`)
-- three-entry LRU — `paragraph.ts#MAX_CACHED_PARAGRAPH_CONSTRAINTS` (`:40`), `#writeParagraphQueryCache` (`:267–273`); D-288
-- `update()` rejects malformed input before state changes and clears the caches — `paragraph.ts:201–220`
-- `dispose()` and `[Symbol.dispose]` — `paragraph.ts:223–244`
-- `ParagraphOptions.font` is `FontSelection | AnyFontFaceSelection` — `paragraph.ts:77`; a renderer-free Paragraph
-  acquires its own immutable lease from the loaded face and releases it on dispose — D-326 (codex `98c86c8a6`)
+- `ParagraphIntrinsicWidths` — `layout.ts:139–142`; carried on every summary through `ParagraphLayoutSummary` (`:116`)
+- the standalone `Paragraph`/`createParagraph` object is gone with the config API (D-314, D-321): measurement is an
+  action on a `Text` in desired state, and the intrinsic widths that were its reason to exist now ride that pass
+- a `Text` holds the face lease for as long as it is alive and releases it on `dispose()` — `three/text.ts#Text.dispose`
 */}
 
 ## When you can measure
@@ -214,7 +206,7 @@ notes · internals
 - `boundingBox` → `computeBoundingBox()` → `glyphs()` when stale — `three/text.ts:664–666`, `:766–769`; set by
   `measure()` too (`:741`)
 - [verify] D-282 says a detached `Text.layout()` throws and detached measurement belongs to `Paragraph`;
-  `docs/planning/three-api.md:275` says a detached Text uses "its implicit standalone planner"; at HEAD `measure()`
+  `.agents/docs/planning/three-api.md:275` says a detached Text uses "its implicit standalone planner"; at HEAD `measure()`
   reaches the root-owned planner regardless of scene attachment (`three/text.ts:409–412`, `:1193–1201`). Call it on
   a Text that is not in a scene and record which happens before the table's first row is final
 */}

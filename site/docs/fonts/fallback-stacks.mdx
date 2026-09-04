@@ -41,7 +41,7 @@ notes · internals for the page
 - engine-side stacks — `rust/shaper/src/engine/state.rs#register_font_stack` (`:393–434`), fallback spans `:274–277`
 - missing count — `layout.ts:120–121`
 - effects across members — `three/text.ts:1457–1464`, `engine-encoding.ts#assertTextEffectsSupported` (`:199–212`)
-- draw partitioning — `docs/planning/three-api.md:348–350` (codex tree); `internal/render-planner.ts` [verify the partition keys]
+- draw partitioning — `.agents/docs/planning/three-api.md:348–350` (codex tree); `internal/render-planner.ts` [verify the partition keys]
 */}
 
 
@@ -72,7 +72,7 @@ notes · internals
 - cluster boundaries are UAX #29 in Rust and TypeScript, pinned to one Unicode version —
   `rust/shaper/src/unicode.rs:118–129`, `internal/graphemes.ts:3–15`
 - `.notdef` count — `layout.ts:116–124`
-- partition by format and resource — `docs/planning/three-api.md:348–350` (codex tree); see Render plan
+- partition by format and resource — `.agents/docs/planning/three-api.md:348–350` (codex tree); see Render plan
 - [verify] the general text path (not only the ellipsis candidate) resolves per cluster: read the builder of
   `fallback_spans` in `rust/shaper/src/engine/state.rs` around `pending_fallback_spans` (`:274–277`) before stating
   "per grapheme cluster" rather than "per run"

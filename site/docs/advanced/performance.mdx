@@ -87,10 +87,10 @@ notes · internals
 - `_shape` returns before touching Wasm when `#dirtyShapeRegistrations.size === 0` — `glyph-engine.ts:390`
 - one Wasm call for every staged root — `glyph-engine.ts:490` (`exports.textUpdateBatch(pointer, count)`); the Rust
   export is `rust/shaper/src/wasm.rs:629` (`pmndrs_glyph_engine_update_batch`); D-312
-- the numbers: `docs/packages/glyph.md:689–693` (outside-only mode wrapping one `updateMatrixWorld()`, 25,515 glyphs,
+- the numbers: `.agents/docs/packages/glyph.md:689–693` (outside-only mode wrapping one `updateMatrixWorld()`, 25,515 glyphs,
   eight warm-ups / 31 samples, "exclude GPU submission"); the per-technique lane table at `:748–752`
 - semantic sidecar cost on the same corpus: 0.002 ms unchanged publication, 0.174 ms measurement, 0.582 ms full
-  inspection — `docs/packages/glyph.md:470–473`
+  inspection — `.agents/docs/packages/glyph.md:470–473`
 - [verify] re-run the benchmark lane and re-date the table before publishing; the figures are from the codex tree's
   package concept, not from this site's own run
 */}
@@ -147,7 +147,7 @@ notes · internals
 - three's realization key adds clip, depth key, transform generation, and geometry —
   `three/internal/draw-realizer.ts:141–151`; one `THREE.Mesh` per instance span (`:179`)
 - measured in this site's batching example: standalone texts one draw each; thirty interleaved labels in one group →
-  30 draws under both modes; sorted into two runs → 2 — `docs/planning/docs-site-outline.md` (Findings for core,
+  30 draws under both modes; sorted into two runs → 2 — `.agents/docs/planning/docs-site-outline.md` (Findings for core,
   "compositing: 'independent' does not fold interleaved materials"); the scene is
   `site/examples/src/scenes/batching/scene.tsx:14–22`
 - [verify] the landing's "505 draws ordered → 121 independent, 6 → 60 FPS" claim from the earlier draft: no source in
@@ -326,14 +326,14 @@ write
 - Shape: two paragraphs; the table is the evidence.
 
 notes · internals
-- the lane table — `docs/packages/glyph.md:744–752` (final sequential eight-warm-up / 31-sample checkpoint; 22,000
+- the lane table — `.agents/docs/packages/glyph.md:744–752` (final sequential eight-warm-up / 31-sample checkpoint; 22,000
   targets → 25,515 positioned, 21,805 renderable glyphs; GPU submission excluded)
 - per-fragment cost by format — see Raster formats (`tsl/bitmap-shader.ts`, `tsl/msdf-shader.ts`, `tsl/slug-shaders/slug-band.ts`)
 - harness contract: capabilities include `'gpu-timestamps'` — `apps/benchmarks/src/benchmark/contracts.ts:1–9`;
   controls `dpr`, `samples`, `warmup` — `:21–25`; summary `medianMs`, `p95Ms`, `outputBytes`, per-sample `hash` — `:37–60`
 - environment reports `webgpu: 'gpu' in navigator` — `apps/benchmarks/src/benchmark/environment.ts:9`
 - stable allocation's no-op costs 1.083 ms against ordered-direct's 0.001 ms, which is why `ordered` is the default —
-  `docs/packages/glyph.md:812–814`; `allocationMode: 'ordered' | 'stable'` — `config/codec.ts:549`
+  `.agents/docs/packages/glyph.md:812–814`; `allocationMode: 'ordered' | 'stable'` — `config/codec.ts:549`
 */}
 
 ## Measuring
@@ -359,10 +359,9 @@ notes · internals
   `:1193–1201`; `glyphs()` copies — `:748–754`
 - the root requests `semanticViews: 'measurement'` on every publication it stages — `three/text.ts:1269`; the cache is
   refreshed in `acceptShape` (`:1272–1281`)
-- speculative transaction adopted by the next frame — `docs/packages/glyph.md:476–492`; D-253; the Rust query export
+- speculative transaction adopted by the next frame — `.agents/docs/packages/glyph.md:476–492`; D-253; the Rust query export
   `rust/shaper/src/wasm.rs:956` (`pmndrs_glyph_engine_measure_paragraph`) writes the inactive slot without a flip —
   `engine/transport.rs:347–367`
-- measure-query 1.815 ms median / 1.930 ms p95 vs full update 2.996 / 4.483 ms — `docs/packages/glyph.md:781–787`
-- renderer-free `Paragraph.measure(constraints?)` caches per constraint key — `paragraph.ts:166–180`;
-  `createParagraph({ font })` takes a face selection — `paragraph.ts:77`; D-326 (codex `98c86c8a6`)
+- measure-query 1.815 ms median / 1.930 ms p95 vs full update 2.996 / 4.483 ms — `.agents/docs/packages/glyph.md:781–787`
+- `Text.measure()` returns the retained result without a Wasm crossing when nothing changed since the last call
 */}

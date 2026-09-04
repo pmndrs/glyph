@@ -33,7 +33,7 @@ write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
 
 notes · internals for the page
 - the factory and its context union — `three/material.ts#defineTextMaterial` (`:70–73`), `#ThreeTextMaterialContext` (`:63`), `#ThreeTextMaterialContextMap` (`:56–61`)
-- Rust carries a numeric `materialId` — `three/material.ts:69`; `docs/planning/three-api.md:290–330`
+- Rust carries a numeric `materialId` — `three/material.ts:69`; `.agents/docs/planning/three-api.md:290–330`
 - the realizer calls `create` and owns the result — `three/internal/material-realizer.ts#ThreeMaterialRealizer.#createMaterial` (`:475–477`)
 - the materials scene — `site/examples/src/scenes/materials/scene.tsx`
 */}
@@ -103,7 +103,7 @@ notes · internals
 - `position` doc: "Final renderer-local position including Codec-selected transform indirection" — `three/material.ts:32`
 - how the realizer builds each context — `three/internal/material-realizer.ts:108–114` (decoration), `:173–179` (bitmap), `:225–231` (msdf), `:295–301` (slug)
 - `ThreeRootContext` — `three/material.ts:10–15`; a detached branch reports `{ name: undefined, scene: undefined, drawRoot: this }` — `three/glyphs.ts:196`
-- `docs/planning/three-api.md:308–311`
+- `.agents/docs/planning/three-api.md:308–311`
 */}
 
 ## Node table
@@ -277,11 +277,11 @@ write
 
 notes · internals
 - decoration context — `three/material.ts:19–25`; the shader: a solid quad over `rect`, sRGB-decoded packed colour — `tsl/decoration-shader.ts:19–42`
-- planned as separate draws with separate material instances — `docs/planning/three-api.md:323–326`; under/over
+- planned as separate draws with separate material instances — `.agents/docs/planning/three-api.md:323–326`; under/over
   passes by `depthKey` 0 and 2 — `three/decorations.ts:54–64`
 - `TextDecorationStyle` — `text-properties.ts:105–119`; non-solid throws `… is not implemented; only 'solid' is supported` — `:315–316`
 - the decorations scene: every line, colour, thickness, offset, and the gradient branch — `site/examples/src/scenes/decorations/scene.tsx`
-- the finding "decoration draws collapse to nothing" (`docs/planning/docs-site-outline.md:496`) no longer
+- the finding "decoration draws collapse to nothing" (`.agents/docs/planning/docs-site-outline.md:496`) no longer
   reproduces: the decorations scene draws every line style and the gradient decoration material at the current
   build (still captured 2026-09-03, `site/examples/public/thumbnails/decorations.webp`)
 */}
@@ -372,7 +372,7 @@ notes · internals
 - the `/three` `span` accepts one material — `three/span.ts:17–38`; the root setter — `three/text.ts:226–238`; the group option — `:85–91`
 - bindings are cached per material object and per `(pixelSnapping, renderOrder)` — `three/text.ts#ThreeMaterialBindingCache` (`:1408–1426`)
 - reentrancy: `glyph.shape()` cannot be reentered — `glyph-engine.ts:389`; creation runs under the borrowed plan —
-  `:504`, `#enterBorrowedPlan` (`:587`); `docs/planning/three-api.md:305–306`
+  `:504`, `#enterBorrowedPlan` (`:587`); `.agents/docs/planning/three-api.md:305–306`
 - "the coordinator rejects such reentrancy": `#borrowedPlanActive` is set by `#enterBorrowedPlan` (`glyph-engine.ts:587`)
   and a call that re-enters while it is set throws `glyph engine cannot be reentered while a borrowed render plan
   is active` (`:582–583`); disposal inside one throws `... cannot be disposed while a borrowed render plan is
