@@ -2,13 +2,10 @@ import * as THREE from 'three/webgpu';
 
 import type { GlyphCopy } from '../config/glyph.js';
 import type { GlyphPlacement, GlyphPlacements } from '../glyph-placement.js';
-import {
-  markStorageAttributeUpdated,
-  ThreeCommandBufferRenderer,
-  type ThreeRendererHost,
-} from './command-buffer-renderer.js';
+import { ThreeCommandBufferRenderer, type ThreeRendererHost } from './command-buffer-renderer.js';
 import type { ThreeGlyphGeometrySource, ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { measureGlyphPlacements } from './glyph-measurement.js';
+import { markStorageAttributeUpdated } from './internal/host-buffer.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import { copyCurrentLocalTransform } from './detached-object.js';

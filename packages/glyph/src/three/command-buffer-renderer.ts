@@ -44,8 +44,6 @@ import type {
   ThreeHostResource,
 } from './internal/render-state.js';
 
-export { markStorageAttributeUpdated } from './internal/host-buffer.js';
-
 export interface ThreeRendererHost {
   readonly renderObject: THREE.Object3D;
   readonly root?: ThreeRootContext;
