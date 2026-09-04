@@ -7,8 +7,8 @@
  * than assuming. It defers disposal to idle priority, so a paragraph outlives its unmount
  * and can be disposed after the runtime an application tore down; and it swallows disposal
  * errors in a `try`/`catch`, so a throw there is invisible in React while being fatal in
- * plain Three. Under the test renderer `IS_REACT_ACT_ENVIRONMENT` is set, which makes r3f
- * dispose synchronously — so these assertions observe the settled state directly.
+ * plain Three. This fixture sets `IS_REACT_ACT_ENVIRONMENT`, which makes r3f dispose
+ * synchronously — so these assertions observe the settled state directly.
  *
  * StrictMode double-invokes component bodies and, in development, mounts, unmounts, and
  * remounts. A paragraph lease taken per mount and released per unmount must therefore
@@ -28,6 +28,8 @@ import '../support/browser-globals.mjs';
 import { GlyphProvider, Text, TextGroup, useFont } from '@pmndrs/glyph/react';
 import { useBitmap } from '@pmndrs/glyph/react/bitmap';
 import * as THREE from 'three/webgpu';
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const multiFormatFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
