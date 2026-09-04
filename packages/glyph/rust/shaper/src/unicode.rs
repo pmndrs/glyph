@@ -240,7 +240,16 @@ impl UnicodeAnalysis {
 }
 
 pub fn script(code_point: u32) -> Option<u32> {
-    lookup_partition(generated::SCRIPT_END_VALUES, code_point)
+    // Two-stage trie: two reads instead of a binary probe per call. `script` runs per character on
+    // every analysis, and the tables are deliberately larger raw for it. See D-341.
+    if code_point > 0x10_ffff {
+        return None;
+    }
+    const SHIFT: usize = generated::SCRIPT_BLOCK_SHIFT;
+    let code_point = code_point as usize;
+    let block = usize::from(generated::SCRIPT_STAGE1[code_point >> SHIFT]);
+    let slot = (block << SHIFT) | (code_point & ((1 << SHIFT) - 1));
+    Some(generated::SCRIPT_VALUES[usize::from(generated::SCRIPT_STAGE2[slot])])
 }
 
 pub fn script_extensions(code_point: u32) -> Option<&'static [u32]> {
