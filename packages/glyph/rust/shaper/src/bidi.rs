@@ -137,21 +137,17 @@ pub struct Unicode17BidiData;
 
 impl BidiDataSource for Unicode17BidiData {
     fn bidi_class(&self, character: char) -> BidiClass {
-        let code_point = character as u32;
-        let mut low = 0usize;
-        let mut high = generated::BIDI_CLASS_RANGES.len();
-        while low < high {
-            let middle = low + (high - low) / 2;
-            let (start, end, class) = generated::BIDI_CLASS_RANGES[middle];
-            if code_point < start {
-                high = middle;
-            } else if code_point >= end {
-                low = middle + 1;
-            } else {
-                return class;
-            }
-        }
-        BidiClass::L
+        // Deliberate: bigger raw, smaller gzip, faster per call. Do not "optimize" this back
+        // to a range table to save raw bytes.
+        // Two-stage trie, the shape ICU calls UTrie2: stage 1 maps the code point's high bits to a
+        // deduplicated block, and the low bits index inside it. Two reads and no search, against a
+        // binary probe per call before — this runs once per character on every bidi analysis.
+        // `char` is a scalar value, so both indices are in range by construction.
+        const SHIFT: usize = generated::BIDI_CLASS_BLOCK_SHIFT;
+        let code_point = character as usize;
+        let block = usize::from(generated::BIDI_CLASS_STAGE1[code_point >> SHIFT]);
+        let slot = (block << SHIFT) | (code_point & ((1 << SHIFT) - 1));
+        generated::BIDI_CLASS_VALUES[usize::from(generated::BIDI_CLASS_STAGE2[slot])]
     }
 
     fn bidi_matched_opening_bracket(&self, character: char) -> Option<BidiMatchedOpeningBracket> {
