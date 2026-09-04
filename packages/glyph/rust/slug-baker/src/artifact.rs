@@ -9,7 +9,7 @@ use pmndrs_glyph_slug_core::{
     quantize_f16,
 };
 use pmndrs_glyph_slug_fontations::{FontOutlineError, font_glyph_geometry, glyph_count};
-use skrifa::{FontRef, GlyphId};
+use skrifa::{FontRef, GlyphId, MetadataProvider};
 
 use crate::{
     error::{SlugBakeError, SlugBakeErrorCode, overflow},
@@ -164,6 +164,15 @@ fn rasterize_font(
     let font = FontRef::from_index(source, face_index).map_err(|error| {
         SlugBakeError::new(SlugBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
     })?;
+    // Once, before the loop. Without an outline table every glyph resolves to
+    // "no geometry", which is recorded identically to a legitimately blank
+    // glyph — the artifact looks whole and renders nothing.
+    if font.outline_glyphs().format().is_none() {
+        return Err(SlugBakeError::new(
+            SlugBakeErrorCode::InvalidFont,
+            "font has no glyf, CFF, or CFF2 outline table to convert",
+        ));
+    }
     let actual_glyph_count = glyph_count(&font)
         .map_err(|error| SlugBakeError::new(SlugBakeErrorCode::InvalidFont, error))?;
     if actual_glyph_count != expected_glyph_count {
