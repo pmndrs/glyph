@@ -51,7 +51,7 @@ function measureBatch(count: number) {
   if (group.textCount !== count || nestedGroup.textCount !== count) {
     throw new Error('nested TextGroups did not retain every benchmark Text descendant');
   }
-  const initialDraws = inspectDraws(root.drawRoot);
+  const initialDraws = inspectDraws(scene);
   if (initialDraws.draws !== 1) {
     throw new Error(`one compatible TextGroup batch realized ${String(initialDraws.draws)} draws instead of 1`);
   }
@@ -65,7 +65,7 @@ function measureBatch(count: number) {
       const duration = performance.now() - started;
       if (group.error !== undefined) throw group.error;
       if (nestedGroup.error !== undefined) throw nestedGroup.error;
-      const currentDraws = inspectDraws(root.drawRoot);
+      const currentDraws = inspectDraws(scene);
       if (currentDraws.draws !== initialDraws.draws || currentDraws.glyphs !== initialDraws.glyphs) {
         throw new Error('a retained TextGroup update changed the realized batch shape');
       }
@@ -89,10 +89,10 @@ function measureBatch(count: number) {
   };
 }
 
-function inspectDraws(drawRoot: THREE.Object3D): Readonly<{ draws: number; glyphs: number }> {
+function inspectDraws(renderObject: THREE.Object3D): Readonly<{ draws: number; glyphs: number }> {
   let draws = 0;
   let glyphs = 0;
-  drawRoot.traverse((object) => {
+  renderObject.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return;
     draws += 1;
     if (object.geometry instanceof THREE.InstancedBufferGeometry) glyphs += object.geometry.instanceCount;
