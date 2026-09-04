@@ -12,6 +12,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@pmndrs/glyph-r3f-hello-world", "run", "dev", "--port", "5274", "--strictPort"],
       "port": 5274
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@pmndrs/glyph-site", "run", "dev", "--port", "5275", "--strictPort"],
+      "port": 5275
     }
   ]
 }
