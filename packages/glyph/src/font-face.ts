@@ -20,13 +20,7 @@ import type {
   RasterFormatRequest,
   RasterFormatRequestMetadata,
 } from './config/raster-format.js';
-import {
-  isRasterFormat,
-  isRasterFormatRequest,
-  rasterFormatDescriptor,
-  rasterFormatForKey,
-} from './internal/raster-format-registry.js';
-import { canonicalJson } from './internal/raster-identity.js';
+import { isRasterFormat, isRasterFormatRequest, rasterFormatForKey } from './internal/raster-format-registry.js';
 
 /** Canonical source accepted by a reusable FontFace declaration. */
 export type FontFaceSource = string | URL | Blob | SerializedFontFace;
@@ -171,11 +165,9 @@ interface FinalizerRecord {
 
 const faceStates = new WeakMap<object, FontFaceSelectionState>();
 const blobInputs = new WeakMap<Blob, Promise<LoadFontInput>>();
-const sourceIds = new WeakMap<object, number>();
 const catalog = new Map<string, CatalogEntry>();
 let nextGeneratedFamily = 1;
 let nextCatalogGeneration = 1;
-let nextSourceId = 1;
 
 const faceFinalizer = new FinalizationRegistry<FinalizerRecord>((record) => {
   disposeFontFaceResourceOwner(record.owner);
@@ -349,11 +341,6 @@ export function acquireLoadedFontFaceSelection(selection: FontFaceSelection): Fo
   }
   const raster = resolveDeclaredFormat(selected.format);
   return cloneImmutableFont(requiredFontFaceFormat(selection, raster));
-}
-
-/** @internal Canonical identity shared by React declarations and the loader's raster request cache. */
-export function fontFaceResourceKey(source: FontFaceSource, format: FontFaceConfig['format']): string {
-  return `${fontFaceSourceKey(source)}:${fontFaceFormatIdentity(format)}`;
 }
 
 interface LoadedFaceRecord {
@@ -823,28 +810,6 @@ function fontFaceLoadInput(source: FontFaceSource): Promise<LoadFontInput> {
   });
   blobInputs.set(source, pending);
   return pending;
-}
-
-function fontFaceSourceKey(source: FontFaceSource): string {
-  if (typeof source === 'string') return `string:${source}`;
-  if (source instanceof URL) return `url:${source.href}`;
-  let id = sourceIds.get(source);
-  if (id === undefined) {
-    id = nextSourceId++;
-    sourceIds.set(source, id);
-  }
-  return `object:${id}`;
-}
-
-function fontFaceFormatIdentity(format: FontFaceConfig['format']): string {
-  if (format === undefined) return 'default';
-  return formatList(format).map(singleFormatIdentity).join('|');
-}
-
-function singleFormatIdentity(format: FontFaceFormat): string {
-  if (typeof format === 'string') return `key:${format}`;
-  const raster = isRasterFormat(format) ? format : format.raster;
-  return `raster:${raster.id}:${canonicalJson(rasterFormatDescriptor(format))}`;
 }
 
 function normalizedFamily(family: unknown): string {

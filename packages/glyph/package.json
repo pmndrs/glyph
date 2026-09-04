@@ -154,38 +154,7 @@
       "source": "./src/react.ts",
       "import": "./dist/react.js"
     },
-    "./react/bitmap": {
-      "types": {
-        "source": "./src/react/bitmap.ts",
-        "default": "./dist/react/bitmap.d.ts"
-      },
-      "source": "./src/react/bitmap.ts",
-      "import": "./dist/react/bitmap.js"
-    },
-    "./react/msdf": {
-      "types": {
-        "source": "./src/react/msdf.ts",
-        "default": "./dist/react/msdf.d.ts"
-      },
-      "source": "./src/react/msdf.ts",
-      "import": "./dist/react/msdf.js"
-    },
-    "./react/slug": {
-      "types": {
-        "source": "./src/react/slug.ts",
-        "default": "./dist/react/slug.d.ts"
-      },
-      "source": "./src/react/slug.ts",
-      "import": "./dist/react/slug.js"
-    },
-    "./react/*": {
-      "types": {
-        "source": "./src/react/*.ts",
-        "default": "./dist/react/*.d.ts"
-      },
-      "source": "./src/react/*.ts",
-      "import": "./dist/react/*.js"
-    },
+    "./react/*": null,
     "./raster/bitmap": {
       "types": {
         "source": "./src/raster/bitmap.ts",

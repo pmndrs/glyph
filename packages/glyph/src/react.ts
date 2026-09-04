@@ -16,24 +16,19 @@ import {
   type ReactNode,
   type Ref,
 } from 'react';
-import { clear as clearSuspense, preload as preloadSuspense, suspend } from 'suspend-react';
+import { suspend } from 'suspend-react';
 
 import {
-  createFontFace,
-  fontFaceResourceKey,
   isFontFaceSelection,
   resolveFontFace,
   type FontFace,
   type FontFaceSelection,
-  type FontFaceConfig,
   type FontFaceFormat,
-  type FontFaceFormatInput,
   type FontFaceRasterOf,
-  type FontFaceSource,
 } from './font-face.js';
 import { resolveRangesToClusters, type FormattedText, type TextInput } from './formatted-text.js';
 import type { Font } from './font.js';
-import { glyph, glyphFontLibrary } from './glyph.js';
+import { glyph } from './glyph.js';
 import { FontLoadError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
@@ -121,6 +116,15 @@ export type R3fTextGroupProps = Object3DProps &
     readonly ref?: Ref<ThreeTextGroup>;
   };
 
+type PendingTextSpan = Omit<ThreeTextSpanRecord<RasterFormatMetadata>, 'font'> &
+  Readonly<{ font?: FontSelection<RasterFormatMetadata> | FontFaceSelection }>;
+
+interface PendingFlattenedText {
+  readonly text: string;
+  readonly spans: readonly PendingTextSpan[];
+  readonly fontFaces: readonly FontFaceSelection[];
+}
+
 interface FlattenedText<Technique extends RasterFormatMetadata> {
   readonly text: string;
   readonly spans: readonly ThreeTextSpanRecord<Technique>[];
@@ -144,28 +148,6 @@ type DesiredR3fTextInput<Technique extends RasterFormatMetadata> = Omit<
   readonly font?: R3fFontSelection<Technique>;
   readonly text: TextInput<Technique>;
 };
-
-type SelectedHookFontConfig<Format> = Readonly<{ format: FontFaceFormatInput<Format> }>;
-type DefaultHookFontConfig = Readonly<{ format?: FontFaceFormat }>;
-
-type TechniqueOfHookFormat<Format> = Format extends RasterFormatMetadata
-  ? Format
-  : Format extends { readonly raster: infer Technique extends RasterFormatMetadata }
-    ? Technique
-    : RasterFormatMetadata;
-
-/** Generic R3F font hook over the selected Three handle's FontFace cache. */
-export interface UseFont {
-  /** Load one source's default or explicitly requested format and retain its mounted lease through React. */
-  (input: FontFaceSource): Font<RasterFormatMetadata>;
-  <const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): Font<TechniqueOfHookFormat<Format>>;
-  /** Start the same default-handle load before a component requests it. */
-  preload(input: FontFaceSource): Promise<void>;
-  preload<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): Promise<void>;
-  /** Release the default-handle cache entry without invalidating mounted Font leases. */
-  clear(input: FontFaceSource): void;
-  clear<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): void;
-}
 
 const ThreeTextElement = extend(ThreeText);
 const ThreeTextGroupElement = extend(ThreeTextGroup);
@@ -199,23 +181,14 @@ let nextDefaultRootId = 1;
 let defaultThreeHandleValue: ThreeHandle | undefined;
 let defaultThreeHandlePromise: Promise<ThreeHandle> | undefined;
 
-export type GlyphProviderFontFace =
-  | FontFaceSource
-  | FontFace
-  | Readonly<{ src: FontFaceSource; format?: FontFaceConfig['format'] }>;
-
 export interface GlyphProviderProps {
   /** Select a Three handle/root, or a named root on R3F's built-in default handle. */
   readonly handle?: ThreeHandle | ThreeRoot | string;
-  readonly fontFaces?: Readonly<Record<string, GlyphProviderFontFace>>;
+  /** Add scoped family aliases for existing declarations created by `glyph.fontFace()`. */
+  readonly fontFaces?: Readonly<Record<string, FontFace>>;
   readonly fallback?: ReactNode;
   readonly errorFallback?: ReactNode | ((error: FontLoadError) => ReactNode);
   readonly children?: ReactNode;
-}
-
-interface ProviderFontFaces {
-  readonly byName: ReadonlyMap<string, FontFace>;
-  dispose(): void;
 }
 
 /** Optional immutable handle override and scoped string-FontFace table for R3F descendants. */
@@ -247,13 +220,7 @@ export function GlyphProvider({
   assertUsableRoot(selection.root);
   const [faces] = useState(() => createProviderFontFaces(fontFaces));
   const [context] = useState<GlyphReactContext>(() =>
-    Object.freeze({ handle: selection.handle, root: selection.root, fontFaces: faces.byName }),
-  );
-  useLayoutEffect(
-    () => () => {
-      faces.dispose();
-    },
-    [faces],
+    Object.freeze({ handle: selection.handle, root: selection.root, fontFaces: faces }),
   );
   useLayoutEffect(() => defaultResource?.retain(), [defaultResource]);
 
@@ -265,10 +232,6 @@ export function GlyphProvider({
     content = createElement(GlyphFontErrorBoundary, { fallback: errorFallback }, content);
   }
   return content as ReactElement;
-}
-
-function useSelectedHandle(): ThreeHandle {
-  return useSelectedGlyphContext().handle;
 }
 
 function useSelectedGlyphContext(): GlyphReactContext {
@@ -326,48 +289,16 @@ function defaultGlyphContext(store: R3fRootStore, handle: ThreeHandle): DefaultG
   return resource;
 }
 
-function createProviderFontFaces(table: GlyphProviderProps['fontFaces']): ProviderFontFaces {
+function createProviderFontFaces(table: GlyphProviderProps['fontFaces']): ReadonlyMap<string, FontFace> {
   const byName = new Map<string, FontFace>();
-  const owned: FontFace[] = [];
-  try {
-    for (const [name, declaration] of Object.entries(table ?? {})) {
-      if (name.trim().length === 0) throw new TypeError('GlyphProvider fontFaces keys must be nonempty strings');
-      let face: FontFace;
-      if (isFontFaceSelection(declaration)) {
-        face = declaration.face;
-      } else if (isProviderFontFaceConfig(declaration)) {
-        face = createFontFace(
-          glyphFontLibrary(),
-          declaration.src,
-          declaration.format === undefined ? {} : { format: declaration.format },
-        );
-        owned.push(face);
-      } else {
-        face = createFontFace(glyphFontLibrary(), declaration as FontFaceSource);
-        owned.push(face);
-      }
-      byName.set(name, face);
+  for (const [name, face] of Object.entries(table ?? {})) {
+    if (name.trim().length === 0) throw new TypeError('GlyphProvider fontFaces keys must be nonempty strings');
+    if (!isFontFaceSelection(face) || face.face !== face) {
+      throw new TypeError('GlyphProvider fontFaces values must be declarations created by glyph.fontFace()');
     }
-  } catch (error) {
-    for (const face of owned) face.dispose();
-    throw error;
+    byName.set(name, face);
   }
-  let disposed = false;
-  return Object.freeze({
-    byName,
-    dispose(): void {
-      if (disposed) return;
-      disposed = true;
-      for (const face of owned) face.dispose();
-    },
-  });
-}
-
-function isProviderFontFaceConfig(value: unknown): value is Readonly<{
-  src: FontFaceSource;
-  format?: FontFaceConfig['format'];
-}> {
-  return typeof value === 'object' && value !== null && Object.hasOwn(value, 'src');
+  return byName;
 }
 
 interface GlyphFontErrorBoundaryProps {
@@ -398,7 +329,6 @@ function getInitializedDefaultThreeHandle(): ThreeHandle | undefined {
   if (defaultThreeHandleValue?.disposed === true) {
     defaultThreeHandleValue = undefined;
     defaultThreeHandlePromise = undefined;
-    defaultFontPreloads.clear();
   }
   if (defaultThreeHandleValue !== undefined) return defaultThreeHandleValue;
   if (!glyph.initialized) return undefined;
@@ -463,54 +393,92 @@ export const Text = forwardRef(function Text(
   const context = useSelectedGlyphContext();
   const handle = context.handle;
   const root = context.root;
-  const flattened = useMemo(() => flattenText(properties.children), [properties.children]);
-  const desired = textProperties(properties, flattened);
+  const selected = resolveReactTextFont(properties.font, context);
+  const flattened = useMemo(() => flattenText(properties.children, context), [context, properties.children]);
+  const fontFaces = useMemo(() => collectTextFontFaces(selected, flattened.fontFaces), [flattened.fontFaces, selected]);
   const [object, publishObject] = useState<ThreeText<RasterFormatMetadata> | null>(null);
   useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
-  if (desired.font === undefined) throw new TypeError('an outer R3F Text requires a font');
-  const selected = resolveReactTextFont(desired.font, context);
-  const child = {
+  return createElement(ResolvedTextObject, {
     key: `${rootId(root)}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
     handle,
     root,
-    desired,
+    properties,
+    selected,
+    flattened,
+    fontFaces,
     object: objectProperties(properties),
     onError: properties.onError,
     publishObject,
-  };
-  return isFontFaceSelection(selected)
-    ? createElement(TextFontFaceObject, { ...child, selection: selected })
-    : createElement(TextObject, { ...child, desired: bindDesiredFont(child.desired, selected) });
+  });
 }) as TextComponent;
 
-function TextFontFaceObject({
-  selection,
-  desired,
-  ...properties
+function ResolvedTextObject({
+  handle,
+  properties: input,
+  selected,
+  flattened,
+  fontFaces,
+  ...renderedProperties
 }: {
-  readonly selection: FontFaceSelection;
-  readonly desired: DesiredR3fTextInput<RasterFormatMetadata>;
+  readonly properties: Omit<R3fTextProps<RasterFormatMetadata>, 'ref'>;
+  readonly selected: FontSelection<RasterFormatMetadata> | FontFaceSelection;
+  readonly flattened: PendingFlattenedText;
+  readonly fontFaces: readonly FontFaceSelection[];
   readonly handle: ThreeHandle;
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
   readonly onError: ((error: unknown) => void) | undefined;
   readonly publishObject: (value: ThreeText<RasterFormatMetadata> | null) => void;
 }): ReactElement {
-  const font = useHandleFontFace(properties.handle, selection);
-  const { handle: _handle, ...renderedProperties } = properties;
-  return createElement(TextObject, { ...renderedProperties, desired: bindDesiredFont(desired, font) });
+  const loadedFonts = useHandleFontFaces(handle, fontFaces);
+  const desired = useMemo(
+    () =>
+      bindDesiredFont(
+        textProperties(input, bindFlattenedTextFonts(flattened, loadedFonts)),
+        loadedTextFont(selected, loadedFonts),
+      ),
+    [flattened, input, loadedFonts, selected],
+  );
+  return createElement(TextObject, { ...renderedProperties, desired });
 }
 
 function resolveReactTextFont(
-  selection: R3fFontSelection<RasterFormatMetadata>,
+  selection: R3fFontSelection<RasterFormatMetadata> | undefined,
   context: GlyphReactContext,
 ): FontSelection<RasterFormatMetadata> | FontFaceSelection {
+  if (selection === undefined) throw new TypeError('an outer R3F Text requires a font');
   if (typeof selection !== 'string') return selection;
   const face = context.fontFaces.get(selection) ?? resolveFontFace(selection);
   if (face === undefined) {
     throw new FontLoadError('FONT_FACE_NOT_FOUND', `FontFace ${JSON.stringify(selection)} is not defined`);
   }
   return face;
+}
+
+function collectTextFontFaces(
+  selected: FontSelection<RasterFormatMetadata> | FontFaceSelection,
+  nested: readonly FontFaceSelection[],
+): readonly FontFaceSelection[] {
+  if (!isFontFaceSelection(selected) || nested.includes(selected)) return nested;
+  return Object.freeze([selected, ...nested]);
+}
+
+function loadedTextFont(
+  selection: FontSelection<RasterFormatMetadata> | FontFaceSelection,
+  loaded: ReadonlyMap<FontFaceSelection, Font<RasterFormatMetadata>>,
+): FontSelection<RasterFormatMetadata> {
+  return isFontFaceSelection(selection) ? loaded.get(selection)! : selection;
+}
+
+function bindFlattenedTextFonts(
+  flattened: PendingFlattenedText,
+  loaded: ReadonlyMap<FontFaceSelection, Font<RasterFormatMetadata>>,
+): FlattenedText<RasterFormatMetadata> {
+  const spans = flattened.spans.map((span): ThreeTextSpanRecord<RasterFormatMetadata> => {
+    const { font, ...properties } = span;
+    return font === undefined ? properties : Object.freeze({ ...properties, font: loadedTextFont(font, loaded) });
+  });
+  return Object.freeze({ text: flattened.text, spans: Object.freeze(spans) });
 }
 
 function bindDesiredFont(
@@ -624,72 +592,21 @@ function TextGroupObject({
   );
 }
 
-interface ReactFontFaceResource {
-  readonly face: FontFace;
-}
-
-const reactFontFaces = new WeakMap<ThreeHandle, Map<string, ReactFontFaceResource>>();
-const defaultFontPreloads = new Map<string, Promise<void>>();
 const fontSuspenseNamespace = '@pmndrs/glyph/react:font';
 type FontSuspenseKey = [typeof fontSuspenseNamespace, ThreeHandle, FontFaceSelection];
 const fontSuspenseKeys = new WeakMap<ThreeHandle, WeakMap<object, FontSuspenseKey>>();
 
-/** Load through the selected handle; React owns only the mounted immutable Font lease. */
-function useFontHook(input: FontFaceSource): Font<RasterFormatMetadata>;
-function useFontHook<const Format>(
-  input: FontFaceSource,
-  config: SelectedHookFontConfig<Format>,
-): Font<TechniqueOfHookFormat<Format>>;
-function useFontHook(input: FontFaceSource, config: DefaultHookFontConfig = {}): Font<RasterFormatMetadata> {
-  const handle = useSelectedHandle();
-  return useHandleFontFace(handle, reactFontFaceResource(handle, input, config).face);
-}
-
-function preloadFont(input: FontFaceSource): Promise<void>;
-function preloadFont<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): Promise<void>;
-function preloadFont(input: FontFaceSource, config: DefaultHookFontConfig = {}): Promise<void> {
-  const key = fontFaceResourceKey(input, config.format);
-  const existing = defaultFontPreloads.get(key);
-  if (existing !== undefined) return existing;
-  const pending = defaultThreeHandle()
-    .then((handle) => {
-      const face = reactFontFaceResource(handle, input, config).face;
-      const suspenseKey = fontSuspenseKey(handle, face);
-      preloadSuspense(loadSuspenseFont, suspenseKey);
-      return loadThreeHandleFont(handle, face);
-    })
-    .then(() => undefined)
-    .catch((error: unknown) => {
-      if (defaultFontPreloads.get(key) === pending) defaultFontPreloads.delete(key);
-      throw error;
-    });
-  defaultFontPreloads.set(key, pending);
-  return pending;
-}
-
-function clearFont(input: FontFaceSource): void;
-function clearFont<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): void;
-function clearFont(input: FontFaceSource, config: DefaultHookFontConfig = {}): void {
-  const key = fontFaceResourceKey(input, config.format);
-  defaultFontPreloads.delete(key);
-  const handle = getInitializedDefaultThreeHandle();
-  if (handle === undefined) return;
-  const cache = reactFontFaces.get(handle);
-  const resource = cache?.get(key);
-  if (resource === undefined) return;
-  cache?.delete(key);
-  clearSuspense(fontSuspenseKey(handle, resource.face));
-  resource.face.dispose();
-}
-
-export const useFont: UseFont = Object.assign(useFontHook, { preload: preloadFont, clear: clearFont });
-
-function useHandleFontFace<const Selection extends FontFaceSelection>(
+function useHandleFontFaces(
   handle: ThreeHandle,
-  selection: Selection,
-): Font<FontFaceRasterOf<Selection>> {
-  if (!isThreeHandleFontLoaded(handle, selection)) suspend(loadSuspenseFont, fontSuspenseKey(handle, selection));
-  const store = useMemo(() => createMountedFontStore(handle, selection), [handle, selection]);
+  selections: readonly FontFaceSelection[],
+): ReadonlyMap<FontFaceSelection, Font<RasterFormatMetadata>> {
+  for (const selection of selections) {
+    if (!isThreeHandleFontLoaded(handle, selection)) void loadThreeHandleFont(handle, selection);
+  }
+  for (const selection of selections) {
+    if (!isThreeHandleFontLoaded(handle, selection)) suspend(loadSuspenseFont, fontSuspenseKey(handle, selection));
+  }
+  const store = useMemo(() => createMountedFontStore(handle, selections), [handle, selections]);
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }
 
@@ -712,24 +629,6 @@ function fontSuspenseKey(handle: ThreeHandle, selection: FontFaceSelection): Fon
   const key: FontSuspenseKey = [fontSuspenseNamespace, handle, selection];
   selections.set(selection, key);
   return key;
-}
-
-function reactFontFaceResource(
-  handle: ThreeHandle,
-  input: FontFaceSource,
-  config: DefaultHookFontConfig,
-): ReactFontFaceResource {
-  let cache = reactFontFaces.get(handle);
-  if (cache === undefined) {
-    cache = new Map();
-    reactFontFaces.set(handle, cache);
-  }
-  const key = fontFaceResourceKey(input, config.format);
-  const existing = cache.get(key);
-  if (existing !== undefined && !existing.face.disposed) return existing;
-  const resource = Object.freeze({ face: createFontFace(glyphFontLibrary(), input, config) });
-  cache.set(key, resource);
-  return resource;
 }
 
 interface ObjectStore<Value> {
@@ -765,25 +664,31 @@ function assignRef<Value>(ref: Ref<Value> | undefined, value: Value | undefined)
   };
 }
 
-interface MountedFontStore<Selection extends FontFaceSelection> {
+interface MountedFontStore {
   readonly subscribe: (listener: () => void) => () => void;
-  readonly getSnapshot: () => Font<FontFaceRasterOf<Selection>>;
+  readonly getSnapshot: () => ReadonlyMap<FontFaceSelection, Font<RasterFormatMetadata>>;
 }
 
-function createMountedFontStore<const Selection extends FontFaceSelection>(
-  handle: ThreeHandle,
-  selection: Selection,
-): MountedFontStore<Selection> {
-  const source = threeHandleFontSource(handle, selection);
+const emptyLoadedFonts: ReadonlyMap<FontFaceSelection, Font<RasterFormatMetadata>> = new Map();
+const emptyMountedFontStore: MountedFontStore = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => emptyLoadedFonts,
+};
+
+function createMountedFontStore(handle: ThreeHandle, selections: readonly FontFaceSelection[]): MountedFontStore {
+  if (selections.length === 0) return emptyMountedFontStore;
+  const source = new Map(selections.map((selection) => [selection, threeHandleFontSource(handle, selection)]));
   let current = source;
-  let mounted: Font<FontFaceRasterOf<Selection>> | undefined;
+  let mounted: readonly Font<RasterFormatMetadata>[] | undefined;
   const listeners = new Set<() => void>();
   return {
     subscribe(listener) {
       listeners.add(listener);
       if (mounted === undefined) {
-        mounted = acquireThreeHandleFont(handle, selection);
-        current = mounted;
+        const acquired = new Map<FontFaceSelection, Font<RasterFormatMetadata>>();
+        for (const selection of selections) acquired.set(selection, acquireThreeHandleFont(handle, selection));
+        mounted = [...acquired.values()];
+        current = acquired;
         for (const subscriber of listeners) subscriber();
       }
       return () => {
@@ -791,7 +696,7 @@ function createMountedFontStore<const Selection extends FontFaceSelection>(
         const released = mounted;
         mounted = undefined;
         current = source;
-        released.dispose();
+        for (const font of released) font.dispose();
       };
     },
     getSnapshot: () => current,
@@ -808,14 +713,19 @@ function createMountedFontStore<const Selection extends FontFaceSelection>(
  * settles those joins against the finished text under the one rule `compose` uses on the
  * `txt`/`span` tree: the fused cluster takes the style of its base, which is the earlier child's.
  */
-function flattenText<Technique extends RasterFormatMetadata>(
-  children: R3fTextChild<Technique> | undefined,
-): FlattenedText<Technique> {
+function flattenText(
+  children: R3fTextChild<RasterFormatMetadata> | undefined,
+  context: GlyphReactContext,
+): PendingFlattenedText {
   const chunks: string[] = [];
-  const spans: ThreeTextSpanRecord<Technique>[] = [];
+  const spans: PendingTextSpan[] = [];
+  const fontFaces: FontFaceSelection[] = [];
   let length = 0;
 
-  const append = (child: R3fTextChild<Technique>, inherited: InlineProperties<Technique>): void => {
+  const append = (
+    child: R3fTextChild<RasterFormatMetadata>,
+    inherited: InlineProperties<RasterFormatMetadata>,
+  ): void => {
     if (child === null || child === false) return;
     if (typeof child === 'string' || typeof child === 'number') {
       const value = String(child);
@@ -827,7 +737,7 @@ function flattenText<Technique extends RasterFormatMetadata>(
       for (const nested of child) append(nested, inherited);
       return;
     }
-    if (!isValidElement<R3fTextProps<Technique>>(child) || child.type !== Text)
+    if (!isValidElement<R3fTextProps<RasterFormatMetadata>>(child) || child.type !== Text)
       throw new TypeError('R3F Text children must be text, numbers, arrays, or nested Text elements');
     assertInlineTextProperties(child.props);
     const inline = inlineProperties(child.props, inherited);
@@ -835,23 +745,30 @@ function flattenText<Technique extends RasterFormatMetadata>(
     const spanIndex = spans.length;
     append(child.props.children ?? null, inline);
     if (start < length && Object.keys(inline).length !== 0)
-      spans.splice(spanIndex, 0, Object.freeze({ start, end: length, ...loadedInlineProperties(inline) }));
+      spans.splice(spanIndex, 0, Object.freeze({ start, end: length, ...pendingInlineProperties(inline) }));
+  };
+
+  const pendingInlineProperties = (
+    properties: InlineProperties<RasterFormatMetadata>,
+  ): Readonly<{
+    font?: FontSelection<RasterFormatMetadata> | FontFaceSelection;
+    style?: TextStyle;
+    material?: ThreeTextMaterial;
+  }> => {
+    const { font, ...rest } = properties;
+    if (font === undefined) return rest;
+    const resolved = resolveReactTextFont(font, context);
+    if (isFontFaceSelection(resolved) && !fontFaces.includes(resolved)) fontFaces.push(resolved);
+    return { ...rest, font: resolved };
   };
 
   append(children ?? null, {});
   const text = chunks.join('');
-  return Object.freeze({ text, spans: Object.freeze(resolveRangesToClusters(text, spans)) });
-}
-
-function loadedInlineProperties<Technique extends RasterFormatMetadata>(
-  properties: InlineProperties<Technique>,
-): Readonly<{ font?: FontSelection<Technique>; style?: TextStyle; material?: ThreeTextMaterial }> {
-  const { font, ...rest } = properties;
-  if (font === undefined) return rest;
-  if (typeof font === 'string' || isFontFaceSelection(font)) {
-    throw new TypeError('nested R3F Text font declarations must be loaded with useFont before use');
-  }
-  return { ...rest, font };
+  return Object.freeze({
+    text,
+    spans: Object.freeze(resolveRangesToClusters(text, spans)),
+    fontFaces: Object.freeze(fontFaces),
+  });
 }
 
 function inlineProperties<Technique extends RasterFormatMetadata>(

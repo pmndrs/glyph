@@ -11,16 +11,16 @@ declares and loads one renderer-neutral FontFace, creates a `Text`, and attaches
 explicit `glyph.shape()` call publishes every dirty root and attaches the decoded `Mesh` below the `Text` before the
 application initializes `WebGPURenderer`; only `renderer.render(scene, camera)` performs the host draw.
 
-The R3F twin renders `Hello world` through the public React adapter, binds the globe span to a subsetted Font Awesome
-font, and switches between Bitmap, MSDF, and Slug using controls rendered inside the canvas. The typed convenience hooks
-start the checked font loads before the scene suspends on those same cached requests. The Slug-rendered controls use a
-`TextGroup` so their three labels can batch explicitly.
+The R3F twin renders `Hello world` through the public React adapter, binds the globe span to a subsetted Font Awesome font,
+and switches between Bitmap, MSDF, and Slug using controls rendered inside the canvas. Both FontFaces are declared once
+with `glyph.fontFace()`; each `Text` suspends on its selected format until that declaration is loaded. The Slug-rendered
+controls use a `TextGroup` so their three labels can batch explicitly.
 
 ```sh
 mise exec -- pnpm --filter @pmndrs/glyph-examples dev
 ```
 
-The app uses React 19, the React Compiler, the WebGPU R3F entry point, and Three's automatic WebGL fallback. Its two checked-in GLBs share shaping data across the three embedded raster techniques:
+The app uses React 19, the React Compiler, the WebGPU R3F entry point, and Three's automatic WebGL fallback. Its two checked-in GLBs share shaping data across the three embedded raster formats:
 
 - `inter-latin.font.glb` is a true Basic Latin source subset (`U+0020–U+007E`).
 - `font-awesome-world.font.glb` contains only six globe/earth variants.
@@ -38,7 +38,7 @@ mise exec -- pnpm --filter @pmndrs/glyph-examples check
 ```
 
 `bake:inter` and `bake:icons` regenerate one asset each; `bake:check:inter` and `bake:check:icons` verify them
-independently. Each font-specific command still embeds all three raster techniques in one GLB. The final check also runs
-two browser probes: the R3F route exercises all three technique branches, and the imperative route verifies that the
+independently. Each font-specific command still embeds all three raster formats in one GLB. The final check also runs
+two browser probes: the R3F route exercises all three format branches, and the imperative route verifies that the
 scene owns the `Text`, the `Text` owns one decoded draw mesh, and Three sees ten visible glyph instances for `Hello world`
 (the space shapes but does not draw).

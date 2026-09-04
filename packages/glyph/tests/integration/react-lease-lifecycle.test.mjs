@@ -17,7 +17,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
-import { Fragment, StrictMode, Suspense, createElement, useLayoutEffect } from 'react';
+import { Fragment, StrictMode, Suspense, createElement } from 'react';
 
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
@@ -25,8 +25,7 @@ import { glyph } from '@pmndrs/glyph';
 import { ThreeConfig, defineTextMaterial } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
 
-import { GlyphProvider, Text, TextGroup, useFont } from '@pmndrs/glyph/react';
-import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { GlyphProvider, Text, TextGroup } from '@pmndrs/glyph/react';
 import * as THREE from 'three/webgpu';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -174,7 +173,7 @@ test('provider-free R3F roots isolate independent Canvas stores', async () => {
   assert.equal(secondDrawRoot?.parent, null, 'the second Canvas releases its default Glyph root');
 });
 
-test('GlyphProvider resolves a scoped string through its lazy fontFaces table', async () => {
+test('GlyphProvider resolves a scoped string alias to an existing FontFace', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
   const input = new Blob([await readFile(multiFormatFontUrl)], { type: 'model/gltf-binary' });
   const face = glyph.fontFace(input, { format: msdf });
@@ -201,10 +200,78 @@ test('GlyphProvider resolves a scoped string through its lazy fontFaces table', 
     await face.load();
     await renderer.update(tree);
     await waitFor(() => mounted);
+    assert.equal(face.isLoaded(), true, 'Text suspension loads the aliased FontFace selection');
     assert.equal(mounted, true);
   } finally {
     await renderer.unmount();
     face.dispose();
+  }
+});
+
+test('Text suspends on an existing unloaded FontFace selection', async () => {
+  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const input = new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' });
+  const face = glyph.fontFace(input, { format: bitmap({ strikes: [16] }) });
+  assert.equal(face.bitmap.isLoaded(), false);
+  let mounted = false;
+  const renderer = await create(
+    createElement(
+      Suspense,
+      { fallback: null },
+      createElement(
+        Text,
+        { font: face.bitmap, ref: (object) => void (mounted = object !== null) },
+        'suspended selection',
+      ),
+    ),
+  );
+  try {
+    await face.bitmap.load();
+    await renderer.update(
+      createElement(
+        Suspense,
+        { fallback: null },
+        createElement(
+          Text,
+          { font: face.bitmap, ref: (object) => void (mounted = object !== null) },
+          'suspended selection',
+        ),
+      ),
+    );
+    await waitFor(() => mounted);
+    assert.equal(face.bitmap.isLoaded(), true);
+  } finally {
+    await renderer.unmount();
+    face.dispose();
+  }
+});
+
+test('nested Text suspends on a provider FontFace alias before publishing the paragraph', async () => {
+  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const fixture = await loadFixture();
+  const input = new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' });
+  const nestedFace = glyph.fontFace(input, { format: bitmap({ strikes: [16] }) });
+  let mounted = false;
+  const tree = createElement(
+    GlyphProvider,
+    { handle: r3fHandle, fontFaces: { Accent: nestedFace }, fallback: null },
+    createElement(
+      Text,
+      { font: fixture.font, ref: (object) => void (mounted = object !== null) },
+      'outer ',
+      createElement(Text, { font: 'Accent' }, 'nested'),
+    ),
+  );
+  const renderer = await create(tree);
+  try {
+    await nestedFace.load();
+    await renderer.update(tree);
+    await waitFor(() => mounted);
+    assert.equal(nestedFace.isLoaded(), true, 'the nested alias is loaded before the paragraph is published');
+  } finally {
+    await renderer.unmount();
+    nestedFace.dispose();
+    fixture.dispose();
   }
 });
 
@@ -398,194 +465,6 @@ test('a FontFace may dispose before React releases its mounted Text lease', asyn
   fixture.dispose();
   assert.equal(r3fHandle.textCount, 0);
 });
-
-test('R3F-cached React consumers receive independent Font leases under StrictMode', async () => {
-  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const request = {
-    input: new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' }),
-    raster: bitmap({ strikes: [16] }),
-  };
-  const observed = new Map();
-  await preloadRequest(request);
-  const renderer = await create(hookFontTree(request, observed, ['first', 'second']));
-  try {
-    await waitFor(() => observed.size === 2 && observed.get('first') !== observed.get('second'));
-    const first = observed.get('first');
-    const second = observed.get('second');
-    assert.ok(first !== undefined && second !== undefined);
-    assert.equal(first.disposed, false);
-    assert.equal(second.disposed, false);
-
-    await renderer.update(hookFontTree(request, observed, ['second']));
-    await waitFor(() => first.disposed && observed.get('second') === second);
-    assert.equal(second.disposed, false, 'unmounting one consumer must not dispose its sibling lease');
-  } finally {
-    await renderer.unmount();
-    clearRequest(request);
-  }
-  assert.equal(observed.size, 0);
-});
-
-test('clearing a React font resource leaves its mounted consumer lease live', async () => {
-  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const request = {
-    input: new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' }),
-    raster: bitmap({ strikes: [16] }),
-  };
-  const observed = new Map();
-  await preloadRequest(request);
-  const renderer = await create(hookFontTree(request, observed, ['mounted']));
-  try {
-    await waitFor(() => observed.has('mounted'));
-    const mounted = observed.get('mounted');
-    assert.ok(mounted !== undefined);
-    clearRequest(request);
-    await Promise.resolve();
-    assert.equal(mounted.disposed, false, 'clear releases the Suspense owner, not mounted leases');
-  } finally {
-    await renderer.unmount();
-  }
-  assert.equal(observed.size, 0);
-});
-
-test('the generic useFont cache survives StrictMode replay and releases its runtime domain', async () => {
-  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const request = {
-    input: new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' }),
-    raster: bitmap({ strikes: [16] }),
-  };
-  const observed = new Map();
-  await preloadRequest(request);
-  const renderer = await create(
-    createElement(
-      StrictMode,
-      null,
-      createElement(Suspense, { fallback: null }, createElement(HookFontText, { name: 'generic', observed, request })),
-    ),
-  );
-  await waitFor(() => observed.has('generic'));
-  assert.equal(observed.get('generic')?.disposed, false);
-  await renderer.unmount();
-  clearRequest(request);
-  assert.equal(observed.size, 0);
-});
-
-test('technique convenience preload and hook share the R3F resource', async () => {
-  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const input = new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' });
-  const options = { strikes: [16] };
-  const observed = new Map();
-  const preload = useBitmap.preload(input, options);
-  assert.equal(useBitmap.preload(input, options), preload, 'preload shares one pending operation');
-  await preload;
-  assert.equal(useBitmap.preload(input, options), preload, 'preload keeps the same fulfilled operation');
-  const renderer = await create(
-    createElement(
-      Suspense,
-      { fallback: null },
-      createElement(BitmapFontText, { input, name: 'bitmap', observed, options }),
-    ),
-  );
-  try {
-    await waitFor(() => observed.has('bitmap'));
-    const mounted = observed.get('bitmap');
-    assert.ok(mounted !== undefined);
-    useBitmap.clear(input, options);
-    assert.equal(mounted.disposed, false, 'clear releases the preload owner, not the mounted hook lease');
-  } finally {
-    await renderer.unmount();
-  }
-  assert.equal(observed.size, 0);
-});
-
-test('a rejected preload is evicted so the next call creates a new operation', async () => {
-  const input = new Blob([new Uint8Array([0])], { type: 'model/gltf-binary' });
-  const config = { format: bitmap({ strikes: [16] }) };
-  const failed = useFont.preload(input, config);
-  assert.equal(useFont.preload(input, config), failed, 'concurrent callers share the failing operation');
-  await assert.rejects(failed);
-  const retry = useFont.preload(input, config);
-  assert.notEqual(retry, failed, 'the call after rejection receives a new operation');
-  await assert.rejects(retry);
-  useFont.clear(input, config);
-});
-
-test('clearing a loaded R3F font resource permits a later preload and mount', async () => {
-  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const input = new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' });
-  const options = { strikes: [16] };
-  const config = { format: bitmap(options) };
-  const firstPreload = useFont.preload(input, config);
-  await firstPreload;
-  const firstObserved = new Map();
-  const firstRequest = { input, raster: bitmap(options) };
-  const firstRenderer = await create(hookFontTree(firstRequest, firstObserved, ['first']));
-  await waitFor(() => firstObserved.has('first'));
-  await firstRenderer.unmount();
-  useFont.clear(input, config);
-  const secondPreload = useFont.preload(input, config);
-  assert.notEqual(secondPreload, firstPreload, 'clear evicts the fulfilled preload operation');
-  await secondPreload;
-  const observed = new Map();
-  const request = { input, raster: bitmap(options) };
-  const renderer = await create(hookFontTree(request, observed, ['retry']));
-  await waitFor(() => observed.has('retry'));
-  await renderer.unmount();
-  useFont.clear(input, config);
-  assert.equal(observed.size, 0);
-});
-
-function hookFontTree(request, observed, names) {
-  return createElement(
-    StrictMode,
-    null,
-    createElement(
-      Suspense,
-      { fallback: null },
-      names.map((name) => createElement(HookFontText, { key: name, name, observed, request })),
-    ),
-  );
-}
-
-function HookFontText({ name, observed, request }) {
-  const font = useFont(request.input, { format: request.raster });
-  useLayoutEffect(() => {
-    observed.set(name, font);
-    return () => {
-      if (observed.get(name) === font) observed.delete(name);
-    };
-  }, [font, name, observed]);
-  return createElement(
-    Text,
-    {
-      font,
-      name,
-      style: { fontSize: 20, lineHeight: 1.25 },
-      constraints: { width: { mode: 'exact', size: 300 } },
-      layout: { wrap: 'word' },
-    },
-    name,
-  );
-}
-
-function preloadRequest(request) {
-  return useFont.preload(request.input, { format: request.raster });
-}
-
-function clearRequest(request) {
-  useFont.clear(request.input, { format: request.raster });
-}
-
-function BitmapFontText({ input, name, observed, options }) {
-  const font = useBitmap(input, options);
-  useLayoutEffect(() => {
-    observed.set(name, font);
-    return () => {
-      if (observed.get(name) === font) observed.delete(name);
-    };
-  }, [font, name, observed]);
-  return createElement(Text, { font, name }, name);
-}
 
 function nearestScene(object) {
   for (let current = object; current !== null; current = current.parent) {
