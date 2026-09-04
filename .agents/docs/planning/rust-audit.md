@@ -196,6 +196,144 @@ cost tracks a document's batch-key churn rather than its live content. Compoundi
 batch routing is a `Vec::position` linear scan — O(glyphs × distinct batches) — while an O(1)
 hash-lookup pattern (`identity_index.rs`) exists in the same module.
 
+## Artifact size — measured
+
+All figures below are from builds using the shipping flags
+(`--no-default-features --features simd128`, `--locked`) put through the exact production
+wasm-opt pipeline (`--enable-bulk-memory --enable-nontrapping-float-to-int --enable-simd
+--merge-similar-functions -Oz` applied twice). The baseline of record for `text-shaper-wasm` in
+`apps/benchmarks/src/generated/package-sizes.json` is 1,197,360 raw / 467,438 gzip / 362,940
+brotli; the default-profile build here lands at 458,121 gzip, within ~2% of it, so the method
+tracks the recorded baseline.
+
+### `opt-level`: measured, and rejected
+
+Only `font-baker` sets `opt-level = "z"`; the other ten crates take the default of 3. An earlier
+draft of this audit called that an inconsistent size policy. **It is not — it is correct per-crate
+tuning, and the benchmark proves it.**
+
+Size, through the production wasm-opt pipeline:
+
+| opt-level | raw | post-wasm-opt | gzip | brotli |
+| --- | --- | --- | --- | --- |
+| default (3) | 1,313,494 | 1,187,062 | 458,121 | 354,829 |
+| `"s"` | 1,157,201 | 1,023,809 | 414,047 | 329,779 |
+| `"z"` | 1,080,475 | 933,496 | 384,777 | 305,937 |
+
+Speed, `glyph:rust-layout-benchmark`, 21,805 renderable instances, 8 warmup / 31 measured, each
+artifact swapped into `dist/` so only shaper codegen differs (medians):
+
+| case | default | `"s"` | `"z"` |
+| --- | --- | --- | --- |
+| cold | 17.526 ms | 23.686 ms (1.35×) | 31.413 ms (1.79×) |
+| font-size | 5.532 ms | 7.065 ms (1.28×) | 11.056 ms (2.00×) |
+| column-resize | 3.379 ms | 4.368 ms (1.29×) | 7.847 ms (2.32×) |
+| measure-query | 0.614 ms | 0.900 ms (1.47×) | 1.174 ms (1.91×) |
+| suffix-edit | 15.266 ms | 20.753 ms (1.36×) | 28.529 ms (1.87×) |
+| localized-edit | 1.497 ms | 2.039 ms (1.36×) | 2.785 ms (1.86×) |
+| localized-splice | 9.545 ms | 12.116 ms (1.27×) | 18.455 ms (1.93×) |
+| publish-inspection | 0.496 ms | 3.615 ms (**7.29×**) | 4.041 ms (**8.15×**) |
+
+`"z"` buys 16.0% of the artifact for roughly half the throughput; `"s"` buys 9.6% for about a
+third. Neither is a trade a text engine chasing a sub-4 ms frame gate (D-200) should take. The
+shaper stays at the default, and this is now measured rather than assumed.
+
+`publish-inspection` degrading 7-8× under both — far out of line with the ~1.3× seen elsewhere —
+is worth a look on its own. Something on that path depends heavily on inlining that `"s"`/`"z"`
+decline to do. That is a lead for a targeted `#[inline]` review, not a profile change.
+
+**The general lesson for this codebase: size levers must be benchmarked, not reasoned about.** The
+codex rule said to measure `"s"` against `"z"` rather than assume; the stronger rule this
+experiment establishes is to measure both against *speed* before proposing either.
+
+### Where the bytes are
+
+Symbol-bearing build, attributed with `twiggy`, excluding debug sections:
+
+| | bytes | share |
+| --- | --- | --- |
+| glyph shaper (our code) | 431,140 | 32.8% |
+| **harfrust** | **308,806** | **23.5%** |
+| static data (generated Unicode tables) | 228,531 | 17.4% |
+| other / core | 177,602 | 13.5% |
+| read-fonts / skrifa | 160,641 | 12.2% |
+| unicode-bidi / segmentation | 6,779 | 0.5% |
+
+Only a third of the artifact is first-party code. Script-specific shaping accounts for
+140,859 bytes inside harfrust: `morx` 29,453 (Apple AAT), `ot_shaper_indic` 26,361,
+`ot_shaper_use` 19,201, `vowel_constraints` 17,878, `tag_table` 17,409, `ot_shaper_arabic`
+12,355, `ot_shaper_myanmar` 7,228, `ot_shaper_khmer` 7,194, `ot_shaper_thai` 2,693,
+`ot_shaper_hebrew` 1,087.
+
+**harfrust 0.12.0 exposes no script feature gates** — its entire feature set is
+`default`/`std`/`libm`/`experimental_font_api`. That 308 KB cannot be trimmed through Cargo. The
+only mechanism is `wasm-snip`, which makes it a declared-scope product decision rather than a
+cleanup: snipping `morx` is safe if no AAT fonts are supported; snipping the Indic/USE cluster is
+only honest if those scripts are out of scope.
+
+`kernel_lab` is correctly absent from the shipped artifact (0 symbols), so its 36 unsafe sites
+cost nothing at runtime.
+
+### Assumptions this audit made and then disproved
+
+Recorded because each was stated before it was measured.
+
+- **"`--merge-similar-functions` will collapse the duplicated plan compilers."** False. Post-pipeline
+  attribution puts stable-indirect at 40,100 bytes against 42,883 pre-optimization — the pass
+  merged 21 symbols into 5 but recovered only ~2.8 KB. Duplicated-then-drifted code does not
+  compress away.
+- **"harfrust's complex-script support can be feature-gated."** False; no such features exist.
+- **"Ship a scalar and a SIMD artifact."** Rejected on product grounds — one binary ships. The SIMD
+  compatibility finding (R7) therefore has no two-artifact fix and becomes a minimum-engine policy
+  decision instead.
+- **"Deleting stable-indirect is the byte win."** Overstated. At ~40 KB raw (roughly 12-15 KB
+  gzipped) it is about one fifth of the `opt-level` lever, and unlike `opt-level` it costs a
+  capability. See below.
+
+### Stable-indirect: what it costs and what it buys
+
+40,100 bytes post-wasm-opt, 3,845 source lines (`stable_plan.rs` 2,588, `stable_order.rs` 689,
+`stable_pool.rs` 568), and both plan-subsystem defects (R1, R10) are stable-only. The unused
+compiler is 1.56× the size of the one that ships (39,531 vs 25,314 attributed bytes), because it
+carries slot pools, generational quarantine, and chunked ordering.
+
+What it buys is not CPU time — it is GPU upload volume, and the renderer half is already built.
+`engine-plan-target.ts#stageBoundBufferMutations` computes a per-buffer `{start, end}` span from
+the plan's patches, `host-buffer.ts:85` commits each, and `host-buffer.ts:173` calls
+`attribute.addUpdateRange(mergedStart, mergedEnd - mergedStart)`. That merged span is a single
+contiguous range: under ordered-direct a mid-document insertion shifts every later record, so the
+span stretches to the end of the buffer. Under stable-indirect physical slots never move and the
+reorder lands in a separate order buffer (D-169's reserved `policy_buffer_id = 65,535`), so
+neither span widens — D-169 measures one 4-byte record plus one 16-byte order-chunk write, and a
+pure reorder emits only the order write.
+
+So it is the piece that keeps an already-implemented incremental-upload path narrow under
+structural edits. It is unfinished, not defeated: **"target timing remain open" appears 13 times
+in the decision register**, and D-166 states plainly that stable-indirect "performance claims
+remain unimplemented rather than inferred." No head-to-head against ordered-direct was ever run.
+The roadmap carries the open item verbatim: *stable-indirect reachable from the public API and
+under the D-261 oracle, or removed (D-262)*.
+
+The decision is a product call about editable-document scale, and it is worth roughly a fifth of
+what changing one profile line is worth. Do `opt-level` first so any later measurement has a clean
+baseline.
+
+### Ranked byte plan
+
+| lever | recovery | risk |
+| --- | --- | --- |
+| ~~`opt-level = "z"` on `shaper`~~ | ~~73,344 gzip~~ | **REJECTED — 1.8-2.0× slower, measured** |
+| SoA the generated Unicode range tables | est. 40-60 KB raw, unverified | mechanical; lookups get faster |
+| `wasm-snip` `morx` | 29,453 raw | none if AAT fonts are out of scope |
+| delete stable-indirect | ~40,100 raw | costs a capability; see above |
+| `wasm-snip` Indic/USE/Khmer/Myanmar/Thai | ~80,600 raw | declared scope decision |
+
+The Unicode-table estimate is arithmetic, not measurement: `BIDI_CLASS_RANGES` is
+`&[(u32, u32, BidiClass)]`, which pads to 12 bytes per entry across 1,395 entries, and 91% of its
+boundaries are contiguous (`end[i] == start[i+1]`), making the `end` column nearly redundant.
+Parallel `starts: &[u32]` + `classes: &[u8]` would cost 5 bytes per entry and binary-search a
+denser array. That compiled delta has not been measured and should be before the number is quoted.
+
 ## Corrections made during this audit
 
 Recorded because a future reader needs to know which conclusions were tested and revised.
