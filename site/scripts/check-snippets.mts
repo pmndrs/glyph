@@ -50,7 +50,8 @@ for (const path of mdxFiles(docs)) {
   for (const [number, line] of lines.entries()) {
     const fence = /^```(\w*)\s*(.*)$/.exec(line);
     if (open === undefined) {
-      if (fence !== null && fence[1] !== '') open = { lang: fence[1], meta: fence[2] ?? '', start: number + 1 };
+      if (fence !== null && fence[1] !== undefined && fence[1] !== '')
+        open = { lang: fence[1], meta: fence[2] ?? '', start: number + 1 };
       body = [];
       continue;
     }
