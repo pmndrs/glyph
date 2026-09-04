@@ -318,6 +318,76 @@ The decision is a product call about editable-document scale, and it is worth ro
 what changing one profile line is worth. Do `opt-level` first so any later measurement has a clean
 baseline.
 
+### The Unicode tables: tested, and mostly a mirage
+
+`BIDI_CLASS_RANGES` was `&[(u32, u32, BidiClass)]` — 12 bytes per entry across 1,267 ranges, with
+the `end` column nearly redundant because 91% of boundaries satisfy `end[i] == start[i+1]`. The
+unmatched lookup already returned `BidiClass::L`, so gaps can be filled with `L` explicitly and the
+`end` column dropped entirely.
+
+Built and measured, with the consumer rewritten to `partition_point` over a dense `&[u32]`:
+
+| | raw | post-wasm-opt | gzip |
+| --- | --- | --- | --- |
+| baseline (AoS tuples) | 1,313,494 | 1,187,062 | 458,121 |
+| SoA starts + values | 1,304,806 | 1,178,352 | 456,384 |
+| **delta** | **-8,688** | **-8,710** | **-1,737** |
+
+All 238 shaper tests pass. The raw prediction (8,864) was accurate to 98%, **and the gzip saving is
+only 1,737 bytes — 0.38%.** The `end` column was redundant, which is exactly what gzip already
+exploited; removing predictable data recovers far less than its raw size suggests.
+
+**The general rule this establishes: quote compressed deltas, not raw ones.** Raw byte counts
+overstate any saving whose redundancy the compressor was already finding.
+
+Two further facts deflate the original estimate of 40-60 KB across all three tables:
+
+- `script_data.rs` and `line_break_data.rs` are **already flat `&[u32]`** — interleaved
+  `(end, value)` pairs at 8 bytes per entry, no padding. `bidi_data.rs` was the only tuple-based
+  table in the tree, so there is no second and third helping.
+- The change belongs in `scripts/generate-unicode-bidi-data.mjs`, not the emitted file, which
+  carries a "Do not edit by hand" header. The experiment above was reverted.
+
+Worth doing for the faster lookup and simpler consumer; not worth doing for the bytes.
+
+### What bidi actually is, since the audit had to check
+
+The engine does **not** implement the bidi algorithm. `bidi.rs` imports `BidiClass`,
+`BidiDataSource`, `LTR_LEVEL`, and `RTL_LEVEL` from `unicode-bidi` and implements
+`BidiDataSource for Unicode17BidiData` — the trait that crate exposes so a caller can supply its
+own tables. The UAX #9 implementation is the crate's; only the Unicode 17.0.0 data is ours, because
+`unicode-bidi` 0.3.18 ships older tables. Same shape for `unicode-segmentation`.
+
+That is the house rule working: own the policy and the data, not a shadow specification.
+
+### Snipping script shapers: retained size, not shallow size
+
+`wasm-snip` is not installed, and hand-patching was unnecessary — `twiggy dominators` reports
+*retained* size, which is precisely what a snip would free (the function plus everything reachable
+only through it).
+
+| entry point | retained bytes |
+| --- | --- |
+| `ot_shaper_indic::initial_reordering` | 23,934 |
+| `ot_shaper_use::preprocess_text` (incl. vowel constraints) | 17,890 |
+| `ot_shaper_use::setup_syllables` | 11,697 |
+| `ot_shaper_indic::final_reordering` | 5,554 |
+| `ot_shaper_indic::setup_syllables` | 3,332 |
+| `ot_shaper_myanmar::reorder_myanmar` | 2,969 |
+| **Indic/USE cluster** | **~65,400** |
+
+Unlike the bidi table this is code, which lacks the column redundancy gzip was already exploiting,
+so it should survive compression nearer 3:1 — roughly 20-25 KB gzipped, an order of magnitude
+better than the table change. That estimate is not yet measured; a real snip would settle it.
+
+Why the other tools cannot do this: `wasm-opt --dce` removes only what it can *prove* unreachable,
+and the call edge into the script shapers is live — whether a font needs Indic reordering is a
+runtime property. `wasm-metadce` works from module boundaries, not arbitrary internal functions.
+`--merge-similar-functions` dedupes and never deletes. Cargo features are the correct mechanism and
+harfrust 0.12.0 exposes none. That leaves `wasm-snip`, which replaces a named body with
+`unreachable` on the author's assertion — so a wrong assertion is a runtime trap, not a link error.
+It is therefore a declared-scope product decision about supported writing systems.
+
 ### Ranked byte plan
 
 | lever | recovery | risk |
