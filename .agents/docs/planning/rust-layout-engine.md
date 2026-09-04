@@ -2,7 +2,7 @@
 type: Design Proposal
 title: Rust text engine and retained render-plan ABI
 description: Defines a Rust-owned shaping, layout, typography, and render-plan pipeline with one steady-state Wasm update transaction and renderer-directed incremental output.
-status: draft
+status: deprecated
 tags:
   - layout
   - shaping
@@ -13,7 +13,7 @@ tags:
   - abi
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-15T15:53:27Z'
+  at: '2026-09-04T02:01:49Z'
 sources:
   - id: layout-benchmark
     resource: ../../../packages/glyph/scripts/benchmark-paragraph-layout.mts
@@ -117,6 +117,12 @@ sources:
 ---
 
 # Rust text engine and retained render-plan ABI
+
+> **Historical design proposal — superseded.** This document records the design path that moved shaping, layout, and
+> command production into Rust. Its public Policy, render-plan, and backend vocabulary is not the current integration
+> contract. Use the [Glyph integration API](core-api.md), the
+> [renderer integration guide](../guides/renderer-integration.md), and the
+> [decision register](decision-register.md) for the accepted Codec, `CommandBufferView`, renderer, handle, and root model.
 
 This proposal supersedes the narrower “move paragraph layout into Rust” draft. The unit moving into Rust is the complete
 text engine: Unicode analysis, bidi, style itemization, shaping, cluster construction, line breaking and composition,

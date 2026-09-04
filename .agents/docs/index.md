@@ -14,14 +14,14 @@ okf_version: '0.2'
 - [React font loading](guides/react.md) — direct FontFace, lifecycle-owning hooks, provider aliases, Suspense cache, retry, and cleanup.
 - [Glyph integration API](planning/core-api.md) — current root application vocabulary and renderer-neutral GlyphConfig contract.
 - [Font and engine ownership plan](planning/font-runtime-ownership.md) — historical ownership analysis that led to immutable fonts and config-owned handle roots.
-- [Rust layout engine contract](planning/rust-layout-engine.md) — engine ABI, Codec execution, and command-buffer publication contract.
+- [Rust layout engine design](planning/rust-layout-engine.md) — superseded historical proposal; current engine and renderer contracts live in the Glyph integration API and renderer integration guide.
 - [Engine integration contract](planning/engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
 - [Raster technique and engine resource API](planning/raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
 - [TypeGPU-first shader authority](planning/typegpu-first-shader-authority.md) — exploratory TypeGPU-first shader/program architecture, Three and gpucat bridge limits, fallback authority models, and proof gates.
 - [Renderer integration guide](guides/renderer-integration.md) — the config-only path for a custom engine: define its
   schema, Codec, resource resolver, renderer decoder, and root recipe through the same public API used by Three.
-- [Technique implementation report](guides/technique-implementation-report.md) — worked portable program, Codec, raster,
-  and baker examples with ownership maps and the end-to-end draw flow.
+- [Portable raster-format implementation report](guides/technique-implementation-report.md) — worked raster format,
+  Codec, raster program, shader, baker, and renderer examples with ownership maps and the end-to-end draw flow.
 - [Merged v0 raster and baker plugin guide](planning/raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
 - [External gpucat integration fitness plan](planning/gpucat-integration.md) — source-validated proof plan for consuming the target v1 core without private imports or core changes.
 

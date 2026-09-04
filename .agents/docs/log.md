@@ -2,6 +2,10 @@
 
 ## 2026-09-03
 
+- **Retired stale renderer vocabulary** — Marked the Rust layout proposal and Fallow duplication audit as historical,
+  routed readers to the accepted GlyphConfig contract, and aligned the renderer guide and indexes with Codec,
+  command-view, renderer, and raster-format terminology.
+
 - **Trusted constraint-region partitions** — A public two-Text request now includes both a one-region paragraph and a
   two-column paragraph and proves their region spans form the exact contiguous planner partition with no resume region.
   Rust no longer pre-validates that package-owned relationship before consuming the already memory-bounded region table.

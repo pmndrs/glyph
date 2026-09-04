@@ -4,7 +4,7 @@ title: Fallow duplication audit for Glyph and Rust
 description: Evidence-backed duplication review of the in-progress Glyph API, example renderer, and Rust crates, with refactor candidates ordered against the renderer-neutral integration plan.
 documentation_type: explanation
 tags: [planning, maintainability, duplication, glyph, rust, threejs, react]
-status: draft
+status: deprecated
 sources:
   - id: integration-plan
     resource: engine-integration-boundary.md
@@ -12,12 +12,12 @@ sources:
   - id: glyph-config
     resource: ../../../packages/glyph/src/config/glyph.ts
     title: GlyphConfig and publication transaction
-  - id: typed-command-buffer
-    resource: ../../../packages/glyph/src/internal/typed-command-buffer.ts
-    title: Canonical typed command-buffer mapper
+  - id: typed-command-tree
+    resource: ../../../packages/glyph/src/internal/typed-command-tree.ts
+    title: Canonical typed command tree
   - id: three-plan-target
-    resource: ../../../packages/glyph/src/three/engine-plan-target.ts
-    title: Three configured plan target
+    resource: ../../../packages/glyph/src/three/command-buffer-renderer.ts
+    title: Three command-buffer renderer
   - id: example-engine
     resource: ../../../packages/glyph-example-renderer/src/engine.ts
     title: Example renderer plan target
@@ -44,10 +44,15 @@ sources:
     title: Fallow 3.13.0 configuration schema
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-01T22:55:50Z'
+  at: '2026-09-04T02:01:49Z'
 ---
 
 # Fallow duplication audit for Glyph and Rust
+
+> **Historical point-in-time audit — superseded.** This report preserves the evidence and remediation history from the
+> API cutover; its intermediate file names and renderer vocabulary are not current guidance. Use the
+> [Glyph integration API](core-api.md), the [renderer integration guide](../guides/renderer-integration.md), and the
+> [Glyph package concept](../packages/glyph.md) for the current Codec, command-view, renderer, and package-boundary model.
 
 ## Agent summary
 
@@ -178,9 +183,9 @@ Changing the Rust plan layout or hierarchy currently requires coordinated edits 
   source/decode, buffer retention, frame construction, and disposal blocks shared by the Three and example binders.
 - The new `TypedCommandBufferMapper.source()` already exposes lazy updates and ordered group children without visiting a
   record during source construction
-  ([typed-command-buffer.ts](../../../packages/glyph/src/internal/typed-command-buffer.ts#L98)). Its focused test proves
+  ([typed-command-tree.ts](../../../packages/glyph/src/internal/typed-command-tree.ts#L98)). Its focused test proves
   record-free construction, one-record `at()` access, stable accepted identities, rejected-overlay discard, and borrowed
-  expiry ([typed-command-buffer.test.mjs](../../../packages/glyph/tests/integration/typed-command-buffer.test.mjs#L10)).
+  expiry ([typed-command-tree.test.mjs](../../../packages/glyph/tests/integration/typed-command-tree.test.mjs#L10)).
 
 **Smallest credible correction.** The package-internal `createEngine` publication path is now the sole owner of raw-plan
 access for Three. Complete the same cutover in the example renderer: consume the bound hierarchy and delete
@@ -746,7 +751,7 @@ evidence rather than Fallow metrics.
 | Three and external raw-plan reconstruction       | **Resolved for normal config rendering.** `ThreeCommandBufferBinder` is a thin `createEngine` wrapper, and the example target calls decode/bind/renderer without a raw fallback. `PlanCandidate` remains only the planner boundary input.                          | `glyph/src/three/command-buffer.ts:14-48`, `glyph-example-renderer/src/engine.ts:269-277`                                                                   |
 | React versus core raster request identity        | **Resolved in implementation.** React preload/load/clear use the same descriptor-derived `fontFaceResourceKey()` as core. The former React-only raw option serializer is gone.                                                                                     | `glyph/src/font-face.ts:249-254,488-514`, `glyph/src/react.ts:529-560`, `tests/package/raster-identity.test.mjs:7-41`                                       |
 | Stale semantic validation of trusted Rust output | **Resolved in renderer paths.** Example and Three consume the typed/bound hierarchy. Their remaining checks are config, portable asset, host-resource, or renderer capability assertions.                                                                          | `glyph-example-renderer/src/device.ts:337-555`, `glyph/src/three/internal/draw-realizer.ts:108-249`, `glyph/src/three/internal/material-realizer.ts:75-515` |
-| Manual TypeScript ABI shadows                    | **Superseded by D-314 and D-317.** The trusted wire readers remain package-private under `src/internal`; ordinary `GlyphConfig` consumers receive `CommandBufferView` and do not receive numeric IDs.                                                              | `glyph/src/internal/plan-view.ts`, `.agents/docs/guides/renderer-integration.md`                                                                                    |
+| Manual TypeScript ABI shadows                    | **Superseded by D-314 and D-317.** The trusted wire readers remain package-private under `src/internal`; ordinary `GlyphConfig` consumers receive `CommandBufferView` and do not receive numeric IDs.                                                              | `glyph/src/internal/plan-view.ts`, `.agents/docs/guides/renderer-integration.md`                                                                            |
 | Rust Wasm response and progress duplication      | **Unresolved.** MTSDF and Slug still duplicate allocation and segmented-response ownership; three progress modules remain byte-identical.                                                                                                                          | `mtsdf-baker/src/wasm.rs:314-576`, `slug-baker/src/wasm.rs:256-515`, each baker's `src/progress.rs`                                                         |
 | JavaScript code volume and release size          | **Improved and passing, but tight.** The Three executor is decomposed and raw bridges are deleted. The built `/three` entry retains only 805 raw and 1,136 gzip bytes of budget headroom.                                                                          | Current source-size table and `release:size:check` results below                                                                                            |
 

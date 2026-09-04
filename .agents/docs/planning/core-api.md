@@ -29,7 +29,7 @@ sources:
     title: Renderer integration guide
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-04T00:13:53Z'
+  at: '2026-09-04T02:01:49Z'
 ---
 
 # Glyph integration API
@@ -66,15 +66,15 @@ therefore always attached to a root.
 `defineGlyphConfig()` preserves the relationship among schema bindings, Codec, portable resources, renderer result,
 boundary, root extension, and font formats.
 
-| Field      | Required | Contract                                                                                |
-| ---------- | -------- | --------------------------------------------------------------------------------------- |
-| `schema`   | yes      | Binds trusted meanings to renderer-owned objects within the root boundary.              |
-| `fonts`    | no       | Declares handle-relative raster-format keys and the default key.                         |
-| `encode`   | yes      | Selects the Codec that defines packed command-buffer data.                              |
-| `resolve`  | yes      | Creates or updates leased renderer resources from portable payloads.                    |
-| `renderer` | yes      | Creates a root-scoped decoder, transform synchronizer, and disposer.                    |
-| `root`     | yes      | Constructs the anonymous or named host root through constrained root services.          |
-| `commands` | no       | Overrides measured initial command-buffer and retained-text capacities.                 |
+| Field      | Required | Contract                                                                       |
+| ---------- | -------- | ------------------------------------------------------------------------------ |
+| `schema`   | yes      | Binds trusted meanings to renderer-owned objects within the root boundary.     |
+| `fonts`    | no       | Declares handle-relative raster-format keys and the default key.               |
+| `encode`   | yes      | Selects the Codec that defines packed command-buffer data.                     |
+| `resolve`  | yes      | Creates or updates leased renderer resources from portable payloads.           |
+| `renderer` | yes      | Creates root-scoped host realization, transform synchronization, and disposal. |
+| `root`     | yes      | Constructs the anonymous or named host root through constrained root services. |
+| `commands` | no       | Overrides measured initial command-buffer and retained-text capacities.        |
 
 The external example is the canonical minimal configuration:
 

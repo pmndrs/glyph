@@ -8,7 +8,7 @@
 - [Planner-assisted detached glyph slices](detached-glyph-slice.md) — synchronous committed-record copies, independent Three.js `Glyphs` and decoration objects, matrix ownership, and first-frame upload invariants.
 - [Glyph integration API](core-api.md) — authoritative application and integrator API for fonts, measurement, GlyphConfig, Codec command data, CommandBufferView, DisplayList, renderer decode, handles, and roots.
 - [Font and engine ownership plan](font-runtime-ownership.md) — accepted breaking migration from runtime-bound loaded fonts and raw shaper hosts to immutable font assets, engine-owned backends, target-bound render planners, deterministic leases, and renderer-owned device pools.
-- [Rust layout engine contract](rust-layout-engine.md) — engine ABI, Codec execution, and command-buffer publication boundary.
+- [Rust layout engine design](rust-layout-engine.md) — superseded historical proposal; use the Glyph integration API and renderer integration guide for the current contract.
 - [Engine integration contract](engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
 - [Raster technique and engine resource API](raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
 - [Session handoff](session-handoff.md) — the decisions, corrections, and open questions from the API hardening session, including why measurement is two calls and what they should be named.

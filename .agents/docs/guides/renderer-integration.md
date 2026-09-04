@@ -30,7 +30,7 @@ sources:
     title: TypeGPU shader realization
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-04T00:13:53Z'
+  at: '2026-09-04T02:01:49Z'
 ---
 
 # Integrate a renderer with Glyph
@@ -156,7 +156,7 @@ sequenceDiagram
 
   App->>Text: retain content, style, hierarchy
   App->>Root: glyph.shape()
-  Root->>Rust: shape + selected Codec plan
+  Root->>Rust: shape with selected Codec
   Rust-->>Project: trusted packed command data
   Project->>Resolve: realize changed portable resources
   Project-->>Decode: borrowed CommandBufferView + ordered DisplayList
