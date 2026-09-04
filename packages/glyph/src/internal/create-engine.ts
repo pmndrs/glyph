@@ -18,16 +18,16 @@ import type { CodecBuffer, CodecDescriptor, CodecProgram } from '../config/codec
 import { bindPatch, bindRetirement } from './bind-command-buffer.js';
 import {
   mapBorrowedSequence,
-  TypedCommandBufferMapper,
-  type BorrowedTypedCommandBuffer,
+  TypedCommandTreeMapper,
+  type BorrowedTypedCommandTree,
   type TypedInstanceSpan,
-} from './typed-command-buffer.js';
+} from './typed-command-tree.js';
 
 /** Package-owned retained projector used by one root publication transaction. */
 export interface GlyphDisplayListProjector<Bindings extends GlyphBindingSet> {
-  source(candidate: import('./render-planner.js').PlanCandidate, signal: AbortSignal): BorrowedTypedCommandBuffer;
-  project(source: BorrowedTypedCommandBuffer): CommandBufferView<Bindings>;
-  settle(source: BorrowedTypedCommandBuffer, update: CommandBufferView<Bindings> | undefined, accepted: boolean): void;
+  source(candidate: import('./render-planner.js').PlanCandidate, signal: AbortSignal): BorrowedTypedCommandTree;
+  project(source: BorrowedTypedCommandTree): CommandBufferView<Bindings>;
+  settle(source: BorrowedTypedCommandTree, update: CommandBufferView<Bindings> | undefined, accepted: boolean): void;
   dispose(): void;
 }
 
@@ -78,13 +78,13 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
   readonly #boundary: Boundary;
   readonly #materialInput: CreateEngineOptions<Bindings, Boundary>['materialInput'];
   readonly #transformInput: CreateEngineOptions<Bindings, Boundary>['transformInput'];
-  readonly #mapper = new TypedCommandBufferMapper();
+  readonly #mapper = new TypedCommandTreeMapper();
   readonly #programsById: ReadonlyMap<number, CodecProgram>;
   readonly #programs = new WeakMap<object, Bindings['program']>();
   readonly #buffers = new WeakMap<object, Bindings['buffer']>();
   readonly #materials = new WeakMap<object, Bindings['material']>();
   readonly #transforms = new WeakMap<object, Bindings['transform']>();
-  readonly #projected = new WeakMap<BorrowedTypedCommandBuffer, CommandBufferView<Bindings>>();
+  readonly #projected = new WeakMap<BorrowedTypedCommandTree, CommandBufferView<Bindings>>();
   readonly #states = new WeakMap<CommandBufferView<Bindings>, ProjectedState<Bindings>>();
   #resourcesById = new Map<number, RetainedResource<Bindings['resource']>>();
   #buffersById = new Map<number, RetainedBuffer<Bindings['buffer']>>();
@@ -105,9 +105,9 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
     return this.#mapper.source(candidate, signal);
   }
 
-  project(source: BorrowedTypedCommandBuffer): CommandBufferView<Bindings> {
+  project(source: BorrowedTypedCommandTree): CommandBufferView<Bindings> {
     this.#assertActive();
-    if (this.#projected.has(source)) throw new TypeError('a command buffer may be projected only once');
+    if (this.#projected.has(source)) throw new TypeError('a command tree may be projected only once');
     const candidate = this.#mapper.candidate(source);
     const signal = this.#mapper.signal(source);
     signal.throwIfAborted();
@@ -321,12 +321,12 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
     }
   }
 
-  settle(source: BorrowedTypedCommandBuffer, frame: CommandBufferView<Bindings> | undefined, accepted: boolean): void {
+  settle(source: BorrowedTypedCommandTree, frame: CommandBufferView<Bindings> | undefined, accepted: boolean): void {
     const projected = this.#projected.get(source);
     this.#projected.delete(source);
     let state: ProjectedState<Bindings> | undefined;
     try {
-      if (projected === undefined) throw new TypeError('cannot settle an unprojected command buffer');
+      if (projected === undefined) throw new TypeError('cannot settle an unprojected command tree');
       state = this.#states.get(projected);
       this.#states.delete(projected);
       if (state === undefined || frame !== projected)

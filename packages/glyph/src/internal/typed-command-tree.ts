@@ -18,7 +18,7 @@ import type {
 } from '../config/glyph.js';
 import { createTypedCommandIdentity } from './typed-command-identity.js';
 
-declare const typedCommandBufferBrand: unique symbol;
+declare const typedCommandTreeBrand: unique symbol;
 
 export type TypedResourceCommand = Readonly<{
   kind: 'acquire' | 'update' | 'retain';
@@ -106,7 +106,7 @@ export interface TypedUpdatePhases {
   readonly retirements: BorrowedCommandSequence<TypedRetirementCommand>;
 }
 
-export interface BorrowedTypedCommandBuffer {
+export interface BorrowedTypedCommandTree {
   readonly delivery: 'borrowed';
   readonly engineRevision: number;
   readonly revision: number;
@@ -114,7 +114,7 @@ export interface BorrowedTypedCommandBuffer {
   readonly checkpoint: boolean;
   readonly updates: TypedUpdatePhases;
   readonly group: TypedGroupPhase;
-  readonly [typedCommandBufferBrand]: true;
+  readonly [typedCommandTreeBrand]: true;
 }
 
 interface TypedSourceState {
@@ -184,8 +184,8 @@ export interface InternalBufferIdentity {
   readonly bindingId: number | 'order';
 }
 
-class BorrowedTypedCommandBufferView implements BorrowedTypedCommandBuffer {
-  declare readonly [typedCommandBufferBrand]: true;
+class BorrowedTypedCommandTreeView implements BorrowedTypedCommandTree {
+  declare readonly [typedCommandTreeBrand]: true;
   readonly delivery = 'borrowed' as const;
 
   constructor(
@@ -211,8 +211,8 @@ const retirementLayout = textShaperAbi.layouts.engineRetirement;
  * Retains only opaque JS identities. All command scalars and ranges stay in the trusted Rust
  * publication and are read lazily through the borrowed tables below.
  */
-export class TypedCommandBufferMapper {
-  readonly #sources = new WeakMap<BorrowedTypedCommandBuffer, TypedSourceState>();
+export class TypedCommandTreeMapper {
+  readonly #sources = new WeakMap<BorrowedTypedCommandTree, TypedSourceState>();
   readonly #resources = new Map<string, TypedResource>();
   readonly #resourceIdentities = new WeakMap<TypedResource, InternalResourceIdentity>();
   readonly #buffers = new Map<string, TypedBuffer>();
@@ -232,7 +232,7 @@ export class TypedCommandBufferMapper {
   readonly #semantics = new Map<number, SemanticIdentity>();
   #disposed = false;
 
-  source(candidate: PlanCandidate, signal: AbortSignal): BorrowedTypedCommandBuffer {
+  source(candidate: PlanCandidate, signal: AbortSignal): BorrowedTypedCommandTree {
     this.#assertActive();
     const plan = candidate.plan;
     const state: TypedSourceState = {
@@ -273,7 +273,7 @@ export class TypedCommandBufferMapper {
         ? new BatchView(this, state, plan, offset, primitives)
         : new RootInstanceView(this, state, plan, offset);
     });
-    const source = new BorrowedTypedCommandBufferView(
+    const source = new BorrowedTypedCommandTreeView(
       candidate.engineRevision,
       candidate.revision,
       candidate.publicationGeneration,
@@ -297,7 +297,7 @@ export class TypedCommandBufferMapper {
     return source;
   }
 
-  settle(source: BorrowedTypedCommandBuffer, accepted: boolean): void {
+  settle(source: BorrowedTypedCommandTree, accepted: boolean): void {
     const state = this.#state(source);
     this.#sources.delete(source);
     if (!accepted) return;
@@ -310,11 +310,11 @@ export class TypedCommandBufferMapper {
     for (const [id, token] of state.instanceSpanOverlay) this.#instanceSpans.set(id, token);
   }
 
-  candidate(source: BorrowedTypedCommandBuffer): PlanCandidate {
+  candidate(source: BorrowedTypedCommandTree): PlanCandidate {
     return this.#state(source).candidate;
   }
 
-  signal(source: BorrowedTypedCommandBuffer): AbortSignal {
+  signal(source: BorrowedTypedCommandTree): AbortSignal {
     return this.#state(source).signal;
   }
 
@@ -342,32 +342,32 @@ export class TypedCommandBufferMapper {
     return this.#transformIndices.get(transform)!;
   }
 
-  transformBindings(source: BorrowedTypedCommandBuffer): BorrowedCommandSequence<ResolvedPlanTransform> {
+  transformBindings(source: BorrowedTypedCommandTree): BorrowedCommandSequence<ResolvedPlanTransform> {
     return this.#state(source).candidate.transforms;
   }
 
-  batchDescriptor(source: BorrowedTypedCommandBuffer, token: BatchIdentity): InternalBatchDescriptor {
+  batchDescriptor(source: BorrowedTypedCommandTree, token: BatchIdentity): InternalBatchDescriptor {
     return this.#descriptor(this.#state(source).drawDescriptors, token, 'batch');
   }
 
-  instanceDescriptor(source: BorrowedTypedCommandBuffer, token: InstanceIdentity): InternalInstanceDescriptor {
+  instanceDescriptor(source: BorrowedTypedCommandTree, token: InstanceIdentity): InternalInstanceDescriptor {
     return this.#descriptor(this.#state(source).drawDescriptors, token, 'instance');
   }
 
   instanceSpanDescriptor(
-    source: BorrowedTypedCommandBuffer,
+    source: BorrowedTypedCommandTree,
     token: InstanceSpanIdentity,
   ): InternalInstanceSpanDescriptor {
     return this.#descriptor(this.#state(source).instanceSpanDescriptors, token, 'instance span');
   }
 
   drawBindingDescriptor(
-    source: BorrowedTypedCommandBuffer,
+    source: BorrowedTypedCommandTree,
     token: BatchIdentity | InstanceIdentity,
   ): InternalDrawBindingDescriptor {
     const state = this.#state(source);
     const descriptor = state.drawDescriptors.get(token);
-    if (descriptor === undefined) throw new TypeError('draw identity does not belong to this command buffer');
+    if (descriptor === undefined) throw new TypeError('draw identity does not belong to this command tree');
     const { view, offset } = descriptor;
     const bufferTable = view.table('buffers');
     const resourceTable = view.table('resources');
@@ -403,7 +403,7 @@ export class TypedCommandBufferMapper {
   }
 
   instanceSpanBindingDescriptor(
-    source: BorrowedTypedCommandBuffer,
+    source: BorrowedTypedCommandTree,
     token: InstanceSpanIdentity,
   ): InternalInstanceSpanBindingDescriptor {
     const state = this.#state(source);
@@ -438,7 +438,7 @@ export class TypedCommandBufferMapper {
     };
   }
 
-  rootInstanceSpan(source: BorrowedTypedCommandBuffer, token: InstanceIdentity): TypedInstanceSpan {
+  rootInstanceSpan(source: BorrowedTypedCommandTree, token: InstanceIdentity): TypedInstanceSpan {
     const state = this.#state(source);
     const { view, offset } = this.instanceDescriptor(source, token);
     const primitives = view.table('primitives');
@@ -599,9 +599,9 @@ export class TypedCommandBufferMapper {
     );
   }
 
-  #state(source: BorrowedTypedCommandBuffer): TypedSourceState {
+  #state(source: BorrowedTypedCommandTree): TypedSourceState {
     const state = this.#sources.get(source);
-    if (state === undefined) throw new TypeError('typed command buffer does not belong to this mapper');
+    if (state === undefined) throw new TypeError('typed command tree does not belong to this mapper');
     return state;
   }
 
@@ -620,12 +620,12 @@ export class TypedCommandBufferMapper {
 
   #descriptor<Key extends object, Value>(descriptors: WeakMap<Key, Value>, key: Key, kind: string): Value {
     const descriptor = descriptors.get(key);
-    if (descriptor === undefined) throw new TypeError(`${kind} identity does not belong to this command buffer`);
+    if (descriptor === undefined) throw new TypeError(`${kind} identity does not belong to this command tree`);
     return descriptor;
   }
 
   #assertActive(): void {
-    if (this.#disposed) throw new Error('typed command-buffer mapper is disposed');
+    if (this.#disposed) throw new Error('typed command-tree mapper is disposed');
   }
 }
 
@@ -659,12 +659,12 @@ export function mapBorrowedSequence<Source, Value>(
 }
 
 class ResourceCommandView implements TypedResourceCommand {
-  readonly #mapper: TypedCommandBufferMapper;
+  readonly #mapper: TypedCommandTreeMapper;
   readonly #view: RenderPlanReader;
   readonly #offset: number;
 
   constructor(
-    mapper: TypedCommandBufferMapper,
+    mapper: TypedCommandTreeMapper,
     _state: TypedSourceState,
     view: RenderPlanReader,
     table: RenderPlanTable,
@@ -694,13 +694,13 @@ class ResourceCommandView implements TypedResourceCommand {
 
 class BufferCommandView implements TypedBufferCommand {
   readonly kind = 'ensure' as const;
-  readonly #mapper: TypedCommandBufferMapper;
+  readonly #mapper: TypedCommandTreeMapper;
   readonly #state: TypedSourceState;
   readonly #view: RenderPlanReader;
   readonly #offset: number;
 
   constructor(
-    mapper: TypedCommandBufferMapper,
+    mapper: TypedCommandTreeMapper,
     state: TypedSourceState,
     view: RenderPlanReader,
     table: RenderPlanTable,
@@ -748,13 +748,13 @@ class BufferCommandView implements TypedBufferCommand {
 
 class PatchCommandView<Kind extends TypedPatchCommand['kind']> {
   readonly kind: Kind;
-  readonly #mapper: TypedCommandBufferMapper;
+  readonly #mapper: TypedCommandTreeMapper;
   readonly #state: TypedSourceState;
   readonly #view: RenderPlanReader;
   readonly #offset: number;
 
   constructor(
-    mapper: TypedCommandBufferMapper,
+    mapper: TypedCommandTreeMapper,
     state: TypedSourceState,
     view: RenderPlanReader,
     offset: number,
@@ -804,13 +804,13 @@ class PatchCommandView<Kind extends TypedPatchCommand['kind']> {
 }
 
 class InstanceSpanView implements TypedInstanceSpan {
-  readonly #mapper: TypedCommandBufferMapper;
+  readonly #mapper: TypedCommandTreeMapper;
   readonly #state: TypedSourceState;
   readonly #view: RenderPlanReader;
   readonly #offset: number;
 
   constructor(
-    mapper: TypedCommandBufferMapper,
+    mapper: TypedCommandTreeMapper,
     state: TypedSourceState,
     view: RenderPlanReader,
     table: RenderPlanTable,
@@ -854,7 +854,7 @@ class InstanceSpanView implements TypedInstanceSpan {
 
 class BatchView implements TypedBatch {
   readonly kind = 'batch' as const;
-  readonly #mapper: TypedCommandBufferMapper;
+  readonly #mapper: TypedCommandTreeMapper;
   readonly #state: TypedSourceState;
   readonly #view: RenderPlanReader;
   readonly #offset: number;
@@ -862,7 +862,7 @@ class BatchView implements TypedBatch {
   #instances: BorrowedCommandSequence<TypedInstanceSpan> | undefined;
 
   constructor(
-    mapper: TypedCommandBufferMapper,
+    mapper: TypedCommandTreeMapper,
     state: TypedSourceState,
     view: RenderPlanReader,
     offset: number,
@@ -894,12 +894,12 @@ class BatchView implements TypedBatch {
 
 class RootInstanceView implements TypedRootInstance {
   readonly kind = 'instance' as const;
-  readonly #mapper: TypedCommandBufferMapper;
+  readonly #mapper: TypedCommandTreeMapper;
   readonly #state: TypedSourceState;
   readonly #view: RenderPlanReader;
   readonly #offset: number;
 
-  constructor(mapper: TypedCommandBufferMapper, state: TypedSourceState, view: RenderPlanReader, offset: number) {
+  constructor(mapper: TypedCommandTreeMapper, state: TypedSourceState, view: RenderPlanReader, offset: number) {
     this.#mapper = mapper;
     this.#state = state;
     this.#view = view;
@@ -921,13 +921,13 @@ class RootInstanceView implements TypedRootInstance {
 
 class RetirementCommandView<Kind extends TypedRetirementCommand['kind']> {
   readonly kind: Kind;
-  readonly #mapper: TypedCommandBufferMapper;
+  readonly #mapper: TypedCommandTreeMapper;
   readonly #state: TypedSourceState;
   readonly #view: RenderPlanReader;
   readonly #offset: number;
 
   constructor(
-    mapper: TypedCommandBufferMapper,
+    mapper: TypedCommandTreeMapper,
     state: TypedSourceState,
     view: RenderPlanReader,
     offset: number,
@@ -968,7 +968,7 @@ class RetirementCommandView<Kind extends TypedRetirementCommand['kind']> {
 }
 
 function patchCommandView(
-  mapper: TypedCommandBufferMapper,
+  mapper: TypedCommandTreeMapper,
   state: TypedSourceState,
   view: RenderPlanReader,
   table: RenderPlanTable,
@@ -987,7 +987,7 @@ function patchCommandView(
 }
 
 function retirementCommandView(
-  mapper: TypedCommandBufferMapper,
+  mapper: TypedCommandTreeMapper,
   state: TypedSourceState,
   view: RenderPlanReader,
   table: RenderPlanTable,

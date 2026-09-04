@@ -2,17 +2,17 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
-import { TypedCommandBufferMapper } from '../../dist/internal/typed-command-buffer.js';
+import { TypedCommandTreeMapper } from '../../dist/internal/typed-command-tree.js';
 
 const drawLayout = textShaperAbi.layouts.engineDraw;
 const primitiveLayout = textShaperAbi.layouts.enginePrimitive;
 
-test('typed command buffers project the trusted group hierarchy lazily', () => {
-  const mapper = new TypedCommandBufferMapper();
+test('typed command trees project the trusted group hierarchy lazily', () => {
+  const mapper = new TypedCommandTreeMapper();
   const firstPlan = planFixture();
   const first = mapper.source(candidate(firstPlan.plan), new AbortController().signal);
 
-  assert.equal(Object.isFrozen(first), true, 'package-created borrowed command buffers are immutable');
+  assert.equal(Object.isFrozen(first), true, 'package-created borrowed command trees are immutable');
   assert.equal(firstPlan.recordReads(), 0, 'source construction must not visit a command record');
   assert.equal(first.group.kind, 'replace');
   assert.equal(first.group.value.children.length, 2);
@@ -92,7 +92,7 @@ test('typed command buffers project the trusted group hierarchy lazily', () => {
 });
 
 test('one transform binding resolves every root instance identity that shares it', () => {
-  const mapper = new TypedCommandBufferMapper();
+  const mapper = new TypedCommandTreeMapper();
   const binding = Object.freeze({});
   for (const instanceId of [71, 72]) {
     const fixture = planFixture({ rootTransformId: instanceId });

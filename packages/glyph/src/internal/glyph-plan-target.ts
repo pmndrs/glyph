@@ -13,7 +13,7 @@ import {
 import type { Codec } from '../config/glyph.js';
 import type { HandleMaterialBinding, HandleTransformBinding } from './handle-state.js';
 import type { PlanAcceptance, PlanCandidate, PlanTarget } from './render-planner.js';
-import type { BorrowedTypedCommandBuffer } from './typed-command-buffer.js';
+import type { BorrowedTypedCommandTree } from './typed-command-tree.js';
 
 type PlanTargetConfig<Bindings extends GlyphBindingSet, Result, Boundary, CodecValue extends Codec> = Readonly<{
   schema: GlyphSchema<Bindings, Boundary>;
@@ -60,7 +60,7 @@ function applyGlyphPublication<Bindings extends GlyphBindingSet, Result>(
   renderer: GlyphRenderer<Bindings, Result>,
 ): PlanAcceptance {
   if (signal.aborted) return { accepted: false, error: signal.reason };
-  let source: BorrowedTypedCommandBuffer | undefined;
+  let source: BorrowedTypedCommandTree | undefined;
   let update: CommandBufferView<Bindings> | undefined;
   let prepared: PreparedRendererCommit<Result> | undefined;
   let commitStarted = false;

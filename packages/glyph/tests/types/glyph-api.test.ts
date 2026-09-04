@@ -14,8 +14,8 @@ import * as GlyphConfigApi from '@pmndrs/glyph/config/glyph';
 
 // @ts-expect-error Handle construction is package-owned, not part of the public GlyphConfig DSL.
 void GlyphConfigApi.createConfiguredGlyphHandle;
-// @ts-expect-error The pre-binding typed wire view is package-owned; renderers receive CommandBufferView.
-type _BorrowedWireIsPrivate = GlyphConfigApi.BorrowedTypedCommandBuffer;
+// @ts-expect-error The pre-binding typed command tree is package-owned; renderers receive CommandBufferView.
+type _BorrowedCommandTreeIsPrivate = GlyphConfigApi.BorrowedTypedCommandTree;
 // @ts-expect-error Publication transaction machinery is package-owned.
 type _ProjectorIsPrivate = GlyphConfigApi.GlyphDisplayListProjector<RecordingBindings>;
 // @ts-expect-error Integrators implement renderer.decode instead of driving projection themselves.
