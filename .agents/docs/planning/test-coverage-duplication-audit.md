@@ -22,7 +22,7 @@ sources:
     resource: ../../../packages/glyph/tests/integration/font-face-handle.test.mjs
     title: FontFace and configured-handle integration suite
   - id: typed-command-buffer
-    resource: ../../../packages/glyph/tests/integration/typed-command-buffer.test.mjs
+    resource: ../../../packages/glyph/tests/integration/typed-command-tree.test.mjs
     title: Lazy typed command-buffer projection test
   - id: r3f-live-probe
     resource: ../../../apps/r3f-hello-world/scripts/live-check.probe.ts
@@ -239,7 +239,7 @@ the correct additional authority.
 | Surface                                                            | Decision                                             | Reason                                                                                                                                     |
 | ------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `package/root-registry.test.mjs`                                   | Keep both tests                                      | Private root-registry state machine; disposal and invalid-factory paths are distinct.                                                      |
-| `integration/typed-command-buffer.test.mjs`                        | Keep                                                 | Unique internal zero-copy, lazy record access, borrowed lifetime, and identity settlement evidence.                                        |
+| `integration/typed-command-tree.test.mjs`                        | Keep                                                 | Unique internal zero-copy, lazy record access, borrowed lifetime, and identity settlement evidence.                                        |
 | `integration/font-face-handle.test.mjs`                            | Keep all five                                        | Each owns a different public boundary: non-Three config, factory rollback, Three Text lease, handle-relative default, or alias/Blob input. |
 | `integration/three-v1.test.mjs`                                    | Keep product cases; separate private instrumentation | Highest-order Three authority, but public and internal imports should not share one claimed surface.                                       |
 | React default/provider/store/error cases                           | Keep                                                 | They prove distinct public selection and JavaScript-input boundaries.                                                                      |

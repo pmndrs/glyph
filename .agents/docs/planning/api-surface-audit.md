@@ -72,7 +72,7 @@ Published surface with no use case. Each row carries the evidence that justifies
 
 ## Keep published, and harden
 
-An earlier revision of this audit demoted `/core` (96 symbols) and `/tsl` (22 symbols) on the claim that they have **no consumers**. That claim is false. `@pmndrs/glyph/three` imports `/core` directly ([`three/text.ts:15`](../../../packages/glyph/src/three/text.ts) and `:42`, [`three/engine-plan-target.ts:4`](../../../packages/glyph/src/three/engine-plan-target.ts)), exactly as `core.ts`'s own docstring says: "`@pmndrs/glyph/three` is implemented on exactly this surface." The accurate statement is that `/core` has no consumers _outside this package_ yet, which is a different fact and does not support withdrawal.
+An earlier revision of this audit demoted `/core` (96 symbols) and `/tsl` (22 symbols) on the claim that they have **no consumers**. That claim is false. `@pmndrs/glyph/three` imports `/core` directly ([`three/text.ts:15`](../../../packages/glyph/src/three/text.ts) and `:42`, [`three/command-buffer-renderer.ts:4`](../../../packages/glyph/src/three/command-buffer-renderer.ts)), exactly as `core.ts`'s own docstring says: "`@pmndrs/glyph/three` is implemented on exactly this surface." The accurate statement is that `/core` has no consumers _outside this package_ yet, which is a different fact and does not support withdrawal.
 
 Both subpaths stay published. `/core` is the engine-integration surface, and it is the answer to "how do I integrate this with something that is not our `Text`":
 
@@ -113,7 +113,7 @@ F10. **Give `RasterTechnique` behaviour, the way `RasterBakerModule` already has
 
     - `core/font-binding.ts:55-74` -- a closed branch over `bitmap`, `msdf`, `slug`, ending in `throw new TypeError('no first-party font-binding compiler is registered for ...')`;
     - `three/engine-runtime.ts:217-234` -- the same shape again, ending in `'no first-party Three resource resolver is registered for ...'`;
-    - `three/engine-plan-target.ts:781` -- a third `technique === bitmap.id` branch.
+    - `three/command-buffer-renderer.ts:781` -- a third `technique === bitmap.id` branch.
 
     Nothing is registered in any of them; the word describes a hard-coded `if`. The consequence is that **a third-party technique cannot bind a font or resolve a Three resource at all**, even though `compileFontBinding`, `schemaFieldTable`, `FontBindingDescriptor`, and `fontBindingResources` are exported from `/core` so an integrator can build the binding correctly and then find nowhere to put it. That contradicts what `/core` is for -- the example-renderer package exists to prove a renderer can drive the engine itself -- and it is the one place first-party techniques get a private path.
 

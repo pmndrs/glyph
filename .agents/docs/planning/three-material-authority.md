@@ -22,7 +22,7 @@ sources:
     resource: ../../../packages/glyph/rust/shaper/src/engine/render_plan.rs
     title: Rust render-plan records
   - id: plan-executor
-    resource: ../../../packages/glyph/src/three/engine-plan-target.ts
+    resource: ../../../packages/glyph/src/three/command-buffer-renderer.ts
     title: Three command-buffer executor and material realization
 generated:
   by: openai-codex/gpt-5.6

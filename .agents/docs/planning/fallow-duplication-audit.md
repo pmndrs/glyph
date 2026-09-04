@@ -349,7 +349,7 @@ assert the same technique-specific error wrapper and JSON pointer are preserved.
 
 ### Defer Three-local shader/material scaffolding until after the executor migration
 
-Fallow groups eight clones in `three/engine-plan-target.ts` into a family with 110 reported duplicated lines. They repeat
+Fallow groups eight clones in `three/command-buffer-renderer.ts` into a family with 110 reported duplicated lines. They repeat
 material cache keys, `runStart`, physical instance addressing, indexed-transform position, and material creation across
 Bitmap, decoration, custom, MSDF, and Slug paths. This is real Three/TSL-local repetition, not a renderer-neutral Glyph
 utility. Extract it only after F1 removes raw plan preparation; otherwise the refactor will polish code scheduled for
@@ -675,7 +675,7 @@ largest relevant source files are:
 
 | Source                             | Raw source bytes | gzip -9 source bytes | Status                                                                               |
 | ---------------------------------- | ---------------: | -------------------: | ------------------------------------------------------------------------------------ |
-| `three/engine-plan-target.ts`      |           90,129 |               18,618 | Bound-only Three host realization; raw preparation has been deleted.                 |
+| `three/command-buffer-renderer.ts`      |           90,129 |               18,618 | Bound-only Three host realization; raw preparation has been deleted.                 |
 | `three/command-buffer.ts`          |            1,885 |                  669 | Direct `createEngine` delegate with no transitional candidate/resource bridge.       |
 | `core/plan-view.ts`                |           24,043 |                5,148 | Framing owner plus compatibility raw decoders; only the latter is removable.         |
 | `internal/typed-command-buffer.ts` |           31,894 |                5,745 | Canonical lazy mapper; do not replace its explicit views without measurement.        |
@@ -812,7 +812,7 @@ The executor decomposition replaced the former 90,129-byte bound-only monolith w
 
 | Source                                     | Raw source bytes | gzip -9 source bytes |
 | ------------------------------------------ | ---------------: | -------------------: |
-| `three/engine-plan-target.ts`              |           29,708 |                7,228 |
+| `three/command-buffer-renderer.ts`              |           29,708 |                7,228 |
 | `three/internal/draw-realizer.ts`          |           11,594 |                3,263 |
 | `three/internal/material-realizer.ts`      |           25,743 |                5,413 |
 | `three/internal/render-state.ts`           |            4,386 |                1,212 |
@@ -904,7 +904,7 @@ Relative to the immediate post-cutover scan, both modes dropped three groups, si
 Mild duplicated tokens fell by 472; weak duplicated tokens fell by 472. The four remediated fingerprints are absent.
 
 The only current mild match spanning the typed core and Three is `dup:9b0bd738`: sequential `.clear()` calls in
-`internal/typed-command-buffer.ts:362-371` and `three/engine-plan-target.ts:297-306`. This is a false positive. Each
+`internal/typed-command-buffer.ts:362-371` and `three/command-buffer-renderer.ts:297-306`. This is a false positive. Each
 method disposes a different owner's distinct maps after owner-specific cleanup; extracting a cross-boundary “clear these
 fields” helper would hide state ownership and provide no reusable semantic operation.
 
@@ -943,7 +943,7 @@ example changes. Do not re-price the baselines from this audit. First attribute 
 surface where possible, then update budgets and the generated report only with maintainer approval.
 
 For source-volume context after remediation, `glyph-example-renderer/src/device.ts` is 23,003 raw/5,464 gzip bytes,
-`three/engine-plan-target.ts` is 29,449/7,147, the shared `three/internal/scene-tree.ts` is 423/267, and
+`three/command-buffer-renderer.ts` is 29,449/7,147, the shared `three/internal/scene-tree.ts` is 423/267, and
 `core/plan-view.ts` is 24,241/5,298. These are not bundle attribution.
 
 ### Fresh documentation and whitespace evidence

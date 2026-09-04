@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:d803a13b73a0e746aed79d00ab575af2b71732112d6fd7740db83f0b8483a7da'
+source_digest: 'sha256:d81fd027d491f430f4fe4e89b55b48ed873e6ffd7e8fea0f484c219422e876f0'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -60,7 +60,7 @@ sources:
     resource: ../../../packages/glyph/src/three/text.ts
     title: Three.js retained text lifecycle
   - id: three-plan
-    resource: ../../../packages/glyph/src/three/engine-plan-target.ts
+    resource: ../../../packages/glyph/src/three/command-buffer-renderer.ts
     title: Three.js command-buffer executor
   - id: three-config
     resource: ../../../packages/glyph/src/three/handle.ts

@@ -28,7 +28,7 @@ sources:
     resource: ../../../packages/glyph/src/internal/font-binding.ts
     title: Font-binding compiler and per-technique tables
   - id: plan-executor
-    resource: ../../../packages/glyph/src/three/engine-plan-target.ts
+    resource: ../../../packages/glyph/src/three/command-buffer-renderer.ts
     title: Three command-buffer executor
 generated:
   by: openai-codex/gpt-5.6

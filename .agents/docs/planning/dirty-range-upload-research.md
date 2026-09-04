@@ -24,7 +24,7 @@ sources:
     resource: ../../../packages/glyph/rust/shaper/src/engine/stable_plan.rs
     title: Rust stable-indirect physical and order-buffer planning
   - id: text-three-target
-    resource: ../../../packages/glyph/src/three/engine-plan-target.ts
+    resource: ../../../packages/glyph/src/three/command-buffer-renderer.ts
     title: Three render-plan executor and update-range forwarding
   - id: three-webgpu
     resource: https://github.com/mrdoob/three.js/blob/r185/src/renderers/webgpu/utils/WebGPUAttributeUtils.js

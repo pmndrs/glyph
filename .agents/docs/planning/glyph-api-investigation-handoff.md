@@ -16,7 +16,7 @@ sources:
     resource: ../../../packages/glyph/src/internal/configured-handle.ts
     title: Current internal configured-handle ownership
   - id: current-three-plan-target
-    resource: ../../../packages/glyph/src/three/engine-plan-target.ts
+    resource: ../../../packages/glyph/src/three/command-buffer-renderer.ts
     title: Current Three render-plan executor
   - id: current-react
     resource: ../../../packages/glyph/src/react.ts
@@ -335,8 +335,8 @@ Evidence in the current source:
 | `packages/glyph/src/three/text.ts:639-668`               | `TextGroup.updateMatrixWorld()` collects descendant text, reconciles one group binding, and synchronizes it.                             |
 | `packages/glyph/src/three/text.ts:708-756`               | A `ThreeTextBatchBinding` owns a planner and a `ThreeTextRenderPlanExecutor`; the target is created through the planner target callback. |
 | `packages/glyph/src/three/text.ts:894-925`               | `synchronize()` skips publication when only transforms changed; otherwise it publishes, marks text committed, and syncs transforms.      |
-| `packages/glyph/src/three/engine-plan-target.ts:250-310` | The target accepts a plan candidate and performs preparation/commit through the coordinator.                                             |
-| `packages/glyph/src/three/engine-plan-target.ts:384-430` | `syncTransforms()` updates retained Three transforms and storage attributes without crossing into Wasm.                                  |
+| `packages/glyph/src/three/command-buffer-renderer.ts:250-310` | The target accepts a plan candidate and performs preparation/commit through the coordinator.                                             |
+| `packages/glyph/src/three/command-buffer-renderer.ts:384-430` | `syncTransforms()` updates retained Three transforms and storage attributes without crossing into Wasm.                                  |
 
 The current target is doing too many jobs in one class. It retains buffers, resources, materials, transforms, origin records, draws, preparation state, and retirement bookkeeping. This is the concrete reason the proposed decomposition is needed.
 
