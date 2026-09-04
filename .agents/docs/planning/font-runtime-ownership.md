@@ -392,7 +392,7 @@ re-export a root name only when its own declaration signatures reference that na
 imports without turning `/three` or `/react` into shadow copies of the root API.
 
 The root migration withdraws `LoadedFont`, mutable `FontRegistry`, engine-bound `FontLoader`, `RegisteredFont`/
-`RegisteredRaster`, and raw engine handles that no application API accepts or returns. `FontLoadError` and equivalent
+`RegisteredRaster`, and raw engine handles that no application API accepts or returns. `GlyphFontError` and equivalent
 application-observable errors remain at root. Before removing any remaining name, search declarations and packed consumers
 across the whole repository and classify whether applications encounter it, technique providers author it, or only an
 integrator constructs it. The final declaration audit records every surviving root export and its owner; no name survives

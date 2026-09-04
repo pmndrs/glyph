@@ -1339,7 +1339,7 @@ family aliases without adding another loading policy or semantic cache:
 
 The provider captures `handle` and `fontFaces` once; changing either requires a keyed remount. It disposes only FontFaces
 it declared from the table, never an externally supplied handle or face. Supplying `fontFaces` or `fallback` installs a
-local Suspense boundary; supplying `errorFallback` installs a boundary that handles `FontLoadError` and rethrows unrelated
+local Suspense boundary; supplying `errorFallback` installs a boundary that handles `GlyphFontError` and rethrows unrelated
 application/renderer errors. Without a provider, the module selects its shared default Three handle. A static
 `useFont.preload(source, config?)` primes that default handle and returns the real `Promise<void>`; advanced code with a
 custom handle can load the declaration or exact member before rendering with `void faceSelection.load()`.

@@ -684,7 +684,7 @@ console.assert(Inter.isLoaded());
 
 `Inter.load()` loads every declared format. A generated member such as `Inter.glyphExample.load()` loads only that exact
 declaration. If the main font does not advertise the declared raster format/descriptor, loading rejects with a
-`FontLoadError`; a declaration never fabricates support. An omitted `format` synthesizes no keyed members, and its
+`GlyphFontError`; a declaration never fabricates support. An omitted `format` synthesizes no keyed members, and its
 aggregate `load()` discovers the imported raster formats advertised by the authoritative main font.
 
 The adapter retains the acquired `Font` for its Text and disposes that lease with the Text. Disposing the FontFace

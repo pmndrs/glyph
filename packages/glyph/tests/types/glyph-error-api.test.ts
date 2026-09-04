@@ -1,11 +1,11 @@
-import { FontLoadError, GlyphEngineStatusError, GlyphError, type GlyphErrorCode } from '../../src/index.js';
+import { GlyphFontError, GlyphEngineStatusError, GlyphError, type GlyphErrorCode } from '../../src/index.js';
 
-declare const loadError: FontLoadError;
+declare const fontError: GlyphFontError;
 declare const engineError: GlyphEngineStatusError;
 
-loadError satisfies GlyphError;
-loadError.code satisfies 'resource-unavailable';
-loadError.reason satisfies string;
+fontError satisfies GlyphError;
+fontError.code satisfies 'resource-unavailable';
+fontError.reason satisfies string;
 engineError satisfies GlyphError;
 engineError.code satisfies 'engine-failed';
 engineError.statusCode satisfies import('../../src/engine-error.js').GlyphEngineStatusCode;

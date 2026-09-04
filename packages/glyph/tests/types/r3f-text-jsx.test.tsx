@@ -8,21 +8,23 @@ import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { slug } from '@pmndrs/glyph/raster/slug';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 
-const selected = useFont('/fonts/Inter.font.glb', { format: msdf });
-selected satisfies Font<typeof msdf>;
-useBitmap('/fonts/Inter.font.glb', { strikes: [16] }) satisfies Font<typeof bitmap>;
-useMsdf('/fonts/Inter.font.glb') satisfies Font<typeof msdf>;
-useSlug('/fonts/Inter.font.glb') satisfies Font<typeof slug>;
+function HookTypeAssertions() {
+  const selected = useFont('/fonts/Inter.font.glb', { format: msdf });
+  selected satisfies Font<typeof msdf>;
+  useBitmap('/fonts/Inter.font.glb', { strikes: [16] }) satisfies Font<typeof bitmap>;
+  useMsdf('/fonts/Inter.font.glb') satisfies Font<typeof msdf>;
+  useSlug('/fonts/Inter.font.glb') satisfies Font<typeof slug>;
 
-const text = (
-  <Text
-    font={selected}
-    ref={(value) => {
-      value satisfies ThreeText<typeof msdf> | null;
-    }}
-  >
-    Typed JSX
-  </Text>
-);
+  return (
+    <Text
+      font={selected}
+      ref={(value) => {
+        value satisfies ThreeText<typeof msdf> | null;
+      }}
+    >
+      Typed JSX
+    </Text>
+  );
+}
 
-void text;
+void HookTypeAssertions;

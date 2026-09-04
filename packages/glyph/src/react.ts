@@ -32,7 +32,7 @@ import {
 import { resolveRangesToClusters, type FormattedText, type TextInput } from './formatted-text.js';
 import type { Font } from './font.js';
 import { glyph } from './glyph.js';
-import { FontLoadError } from './loader.js';
+import { GlyphFontError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
 import { reactFontResourceKey } from './internal/react-font-resource-key.js';
@@ -218,7 +218,7 @@ export interface GlyphProviderProps {
   /** Add immutable scoped family aliases from sources, source configs, or existing FontFace declarations. */
   readonly fontFaces?: Readonly<Record<string, GlyphProviderFontFace>>;
   readonly fallback?: ReactNode;
-  readonly errorFallback?: ReactNode | ((error: FontLoadError) => ReactNode);
+  readonly errorFallback?: ReactNode | ((error: GlyphFontError) => ReactNode);
   readonly children?: ReactNode;
 }
 
@@ -449,7 +449,7 @@ function sameProviderFontFaceDeclaration(left: GlyphProviderFontFace, right: Gly
 }
 
 interface GlyphFontErrorBoundaryProps {
-  readonly fallback: ReactNode | ((error: FontLoadError) => ReactNode);
+  readonly fallback: ReactNode | ((error: GlyphFontError) => ReactNode);
   readonly children?: ReactNode;
 }
 
@@ -467,7 +467,7 @@ class GlyphFontErrorBoundary extends Component<GlyphFontErrorBoundaryProps, Glyp
   override render(): ReactNode {
     const { error } = this.state;
     if (error === undefined) return this.props.children;
-    if (!(error instanceof FontLoadError)) throw error;
+    if (!(error instanceof GlyphFontError)) throw error;
     return typeof this.props.fallback === 'function' ? this.props.fallback(error) : this.props.fallback;
   }
 }
@@ -598,7 +598,7 @@ function resolveReactTextFont(
   if (typeof selection !== 'string') return selection;
   const face = context.fontFaces.get(selection) ?? resolveFontFace(selection);
   if (face === undefined) {
-    throw new FontLoadError('FONT_FACE_NOT_FOUND', `FontFace ${JSON.stringify(selection)} is not defined`);
+    throw new GlyphFontError('FONT_FACE_NOT_FOUND', `FontFace ${JSON.stringify(selection)} is not defined`);
   }
   return face;
 }

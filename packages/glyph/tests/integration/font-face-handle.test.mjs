@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { Scene } from 'three/webgpu';
 
-import { FontLoadError, glyph } from '@pmndrs/glyph';
+import { GlyphFontError, glyph } from '@pmndrs/glyph';
 import { id } from '@pmndrs/glyph/config/codec';
 import { defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/glyph/config/glyph';
 import { createRasterCodecProgram } from '@pmndrs/glyph/config/raster';
@@ -227,7 +227,7 @@ test('a loaded FontFace constructs an imperative Three Text and owns its hidden 
     assert.equal(face.bitmap.isLoaded(), false);
     assert.throws(
       () => handle.createText({ font: face, text: 'too early' }),
-      (error) => error instanceof FontLoadError && error.reason === 'FONT_FACE_FORMAT_NOT_LOADED',
+      (error) => error instanceof GlyphFontError && error.reason === 'FONT_FACE_FORMAT_NOT_LOADED',
     );
 
     const load = face.load();
@@ -360,7 +360,7 @@ test('a declared format member loads narrowly before the aggregate FontFace', as
     assert.equal(face.isLoaded(), false, 'the aggregate is not loaded until every declaration is ready');
     assert.throws(
       () => msdfHandle.createText({ font: face, text: 'default is still unloaded' }),
-      (error) => error instanceof FontLoadError && error.reason === 'FONT_FACE_FORMAT_NOT_LOADED',
+      (error) => error instanceof GlyphFontError && error.reason === 'FONT_FACE_FORMAT_NOT_LOADED',
     );
     slugText = slugHandle.createText({ font: face.slug, text: 'exact Slug selection' });
     assert.equal(slugText.font.raster, slug);
@@ -429,7 +429,7 @@ test('a declared format rejects when the authoritative font does not implement i
     await assert.rejects(
       face.slug.load(),
       (error) =>
-        error instanceof FontLoadError &&
+        error instanceof GlyphFontError &&
         error.reason === 'FONT_FACE_FORMAT_UNAVAILABLE' &&
         /does not implement the declared/.test(error.message),
     );

@@ -11,7 +11,7 @@ import {
   type ParagraphLayoutSummary,
 } from '../layout.js';
 import { immutableFontSelectionFonts, type FontSelection } from '../loaded-font.js';
-import { FontLoadError } from '../loader.js';
+import { GlyphFontError } from '../loader.js';
 import { glyph } from '../glyph.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
 import { mergePropertyList } from '../property-list.js';
@@ -661,7 +661,7 @@ export class ThreeRootHost {
     if (typeof selection !== 'string') return selection;
     const face = resolveFontFace(selection);
     if (face === undefined) {
-      throw new FontLoadError('FONT_FACE_NOT_FOUND', `FontFace ${JSON.stringify(selection)} is not defined`);
+      throw new GlyphFontError('FONT_FACE_NOT_FOUND', `FontFace ${JSON.stringify(selection)} is not defined`);
     }
     return face;
   }

@@ -95,7 +95,7 @@ test('registration rejects structural techniques and reserved Glyph identities',
         codecBody: body,
         compileFont() {},
       }),
-    /need a technique/,
+    /need a format/,
   );
 
   const reserved = technique('pmndrs.test-plan');

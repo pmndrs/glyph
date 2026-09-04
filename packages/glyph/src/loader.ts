@@ -198,13 +198,13 @@ interface SharedFontLoad {
   settled: boolean;
 }
 
-export class FontLoadError extends GlyphError<'resource-unavailable'> {
+export class GlyphFontError extends GlyphError<'resource-unavailable'> {
   readonly reason: string;
   readonly url: string | undefined;
 
   constructor(reason: string, message: string, options: { url?: string; cause?: unknown } = {}) {
     super('resource-unavailable', message, options.cause === undefined ? undefined : { cause: options.cause });
-    this.name = 'FontLoadError';
+    this.name = 'GlyphFontError';
     this.reason = reason;
     this.url = options.url;
   }
@@ -261,18 +261,18 @@ export class FontRegistry {
     const sourceHash = string(provenance.sourceHash, 'provenance.sourceHash');
     const fontFaceIndex = await authenticatedFontFaceIndex(provenance);
     if (context.sourceBytes !== undefined && (await sha256(context.sourceBytes)) !== sourceHash) {
-      throw new FontLoadError('FONT_SOURCE_IDENTITY', 'runtime source bytes do not match the baked font provenance');
+      throw new GlyphFontError('FONT_SOURCE_IDENTITY', 'runtime source bytes do not match the baked font provenance');
     }
     const references = rasterReferences(fontExtension.rasters);
     const binaryBytes = parsed.bin.subarray(0, parsed.declaredBinLength);
     if (views.length > this.#maxBufferViews) {
-      throw new FontLoadError(
+      throw new GlyphFontError(
         'FONT_RESOURCE_LIMIT',
         `font artifact has ${views.length} buffer views; limit is ${this.#maxBufferViews}`,
       );
     }
     if (references.length > this.#maxRasters) {
-      throw new FontLoadError(
+      throw new GlyphFontError(
         'FONT_RESOURCE_LIMIT',
         `font artifact has ${references.length} raster references; limit is ${this.#maxRasters}`,
       );
@@ -347,7 +347,7 @@ export class FontRegistry {
       try {
         artifactUrl = new URL(options.baseUrl).href;
       } catch (error) {
-        throw new FontLoadError('INVALID_RASTER_BASE_URL', 'raster base URL is invalid', {
+        throw new GlyphFontError('INVALID_RASTER_BASE_URL', 'raster base URL is invalid', {
           cause: error,
         });
       }
@@ -378,7 +378,7 @@ export class FontRegistry {
       throw validationError('INVALID_RASTER_ASSET', 'raster artifact could not be read', error);
     }
     if (views.length > this.#maxBufferViews) {
-      throw new FontLoadError(
+      throw new GlyphFontError(
         'FONT_RESOURCE_LIMIT',
         `raster artifact has ${views.length} buffer views; limit is ${this.#maxBufferViews}`,
       );
@@ -387,7 +387,7 @@ export class FontRegistry {
     const artifactHash = await sha256(owned);
     if (match.reference.source.type === 'external' && match.reference.source.artifactHash !== undefined) {
       if (artifactHash !== match.reference.source.artifactHash) {
-        throw new FontLoadError(
+        throw new GlyphFontError(
           'RASTER_ARTIFACT_HASH',
           'external raster artifact hash does not match its font directory entry',
         );
@@ -436,7 +436,7 @@ export class FontRegistry {
       throw validationError('INVALID_RASTER_ASSET', 'raster artifact could not be read', error);
     }
     if (views.length > this.#maxBufferViews) {
-      throw new FontLoadError(
+      throw new GlyphFontError(
         'FONT_RESOURCE_LIMIT',
         `raster artifact has ${views.length} buffer views; limit is ${this.#maxBufferViews}`,
       );
@@ -486,7 +486,7 @@ export class FontRegistry {
 
   #ownedFont(font: RegisteredFont): RegisteredFontImpl {
     if (!(font instanceof RegisteredFontImpl) || font.registry !== this) {
-      throw new FontLoadError('FOREIGN_FONT', 'font is not owned by this registry');
+      throw new GlyphFontError('FOREIGN_FONT', 'font is not owned by this registry');
     }
     font.assertActive();
     return font;
@@ -494,7 +494,7 @@ export class FontRegistry {
 
   #checkArtifactSize(byteLength: number): void {
     if (byteLength > this.#maxArtifactBytes) {
-      throw new FontLoadError(
+      throw new GlyphFontError(
         'FONT_RESOURCE_LIMIT',
         `artifact has ${byteLength} bytes; limit is ${this.#maxArtifactBytes}`,
       );
@@ -602,7 +602,7 @@ export class FontLoader {
       if (probe.status === 'hit') return probe.font;
       if (request.sourceUrl === undefined) {
         if (probe.status === 'missing') {
-          throw new FontLoadError('BAKED_FONT_MISSING', 'baked-only font asset was not found', {
+          throw new GlyphFontError('BAKED_FONT_MISSING', 'baked-only font asset was not found', {
             url: request.bakedUrl,
           });
         }
@@ -612,7 +612,7 @@ export class FontLoader {
       else this.#emitDiagnostic(probe.error);
     }
     if (request.sourceUrl === undefined && request.sourceBytes === undefined) {
-      throw new FontLoadError('INVALID_FONT_INPUT', 'font request has no source or baked asset');
+      throw new GlyphFontError('INVALID_FONT_INPUT', 'font request has no source or baked asset');
     }
     const sourceLabel = request.sourceUrl ?? 'memory://font-source';
     const runtimeBake = this.#runtimeBake ?? (await loadDefaultRuntimeBake(sourceLabel));
@@ -649,14 +649,14 @@ export class FontLoader {
       signal.throwIfAborted();
       return {
         status: 'invalid',
-        error: new FontLoadError('BAKED_FONT_FETCH', 'baked font request failed', { url, cause }),
+        error: new GlyphFontError('BAKED_FONT_FETCH', 'baked font request failed', { url, cause }),
       };
     }
     if (response.status === 404 || response.status === 410) return { status: 'missing' };
     if (!response.ok) {
       return {
         status: 'invalid',
-        error: new FontLoadError('BAKED_FONT_FETCH', `baked font request failed with HTTP ${response.status}`, { url }),
+        error: new GlyphFontError('BAKED_FONT_FETCH', `baked font request failed with HTTP ${response.status}`, { url }),
       };
     }
     try {
@@ -681,10 +681,10 @@ export class FontLoader {
     } catch (cause) {
       signal.throwIfAborted();
       const incompatible = hasValidationIssue(cause, 'FONT_VERSION_INCOMPATIBLE');
-      const resourceLimited = cause instanceof FontLoadError && cause.reason === 'FONT_RESOURCE_LIMIT';
+      const resourceLimited = cause instanceof GlyphFontError && cause.reason === 'FONT_RESOURCE_LIMIT';
       return {
         status: 'invalid',
-        error: new FontLoadError(
+        error: new GlyphFontError(
           incompatible
             ? 'BAKED_FONT_INCOMPATIBLE'
             : resourceLimited
@@ -711,10 +711,10 @@ export class FontLoader {
       response = await this.#fetch(url, { signal });
     } catch (cause) {
       signal.throwIfAborted();
-      throw new FontLoadError(code, 'font source request failed', { url, cause });
+      throw new GlyphFontError(code, 'font source request failed', { url, cause });
     }
     if (!response.ok) {
-      throw new FontLoadError(code, `font source request failed with HTTP ${response.status}`, {
+      throw new GlyphFontError(code, `font source request failed with HTTP ${response.status}`, {
         url,
       });
     }
@@ -741,7 +741,7 @@ export class FontLoader {
     else console.warn(diagnostic.message);
   }
 
-  #emitDiagnostic(error: FontLoadError): void {
+  #emitDiagnostic(error: GlyphFontError): void {
     this.#onDiagnostic?.({
       code: error.reason,
       message: error.message,
@@ -968,7 +968,7 @@ class FontLibraryImpl implements FontLibrary {
     if (this.#disposed) return;
     this.#disposed = true;
     for (const shared of this.#fontFaceSources.values()) {
-      shared.controller.abort(new FontLoadError('FONT_LIBRARY_DISPOSED', 'font library was disposed'));
+      shared.controller.abort(new GlyphFontError('FONT_LIBRARY_DISPOSED', 'font library was disposed'));
       shared.value?.dispose();
     }
     this.#fontFaceSources.clear();
@@ -976,7 +976,7 @@ class FontLibraryImpl implements FontLibrary {
   }
 
   #assertActive(): void {
-    if (this.#disposed) throw new FontLoadError('FONT_LIBRARY_DISPOSED', 'font library has been disposed');
+    if (this.#disposed) throw new GlyphFontError('FONT_LIBRARY_DISPOSED', 'font library has been disposed');
   }
 
   async #loadFontFaceSource(prepared: PreparedFontFaceSourceRequest, signal: AbortSignal): Promise<FontFaceSourceNode> {
@@ -1213,7 +1213,7 @@ class FontFaceSourceNode {
       .map((reference) => {
         const raster = rasterFormatForReference(reference);
         if (raster === undefined) {
-          throw new FontLoadError(
+          throw new GlyphFontError(
             'FONT_FACE_FORMAT_UNAVAILABLE',
             `font advertises ${JSON.stringify(reference.kind)}, but its raster format is not imported`,
           );
@@ -1224,7 +1224,7 @@ class FontFaceSourceNode {
     const seen = new Set<string>();
     for (const { raster } of selected) {
       if (seen.has(raster.id)) {
-        throw new FontLoadError(
+        throw new GlyphFontError(
           'FONT_FACE_FORMAT_AMBIGUOUS',
           `font advertises more than one ${JSON.stringify(raster.kind)} variant; declare the exact format contract`,
         );
@@ -1483,11 +1483,11 @@ async function runtimeBakeFormat<
 ): Promise<RegisteredRaster<Kind>> {
   const loadBaker = format.runtimeBaker;
   if (loadBaker === undefined) {
-    throw new FontLoadError('RASTER_NOT_FOUND', `${format.kind} has no baked artifact or runtime baker`);
+    throw new GlyphFontError('RASTER_NOT_FOUND', `${format.kind} has no baked artifact or runtime baker`);
   }
   const registered = getRegisteredFontData(font);
   if (registered.sourceBytes === undefined) {
-    throw new FontLoadError(
+    throw new GlyphFontError(
       'RASTER_SOURCE_UNAVAILABLE',
       `${format.kind} runtime generation requires retained source bytes`,
     );
@@ -1507,7 +1507,7 @@ async function runtimeBakeFormat<
   assertMatchingArtifact(format, rasterKey, baked);
   const artifacts = baked.artifacts.filter((artifact) => artifact.role === 'raster');
   if (artifacts.length !== 1) {
-    throw new FontLoadError('INVALID_RASTER_ASSET', 'runtime raster generation must return one raster artifact');
+    throw new GlyphFontError('INVALID_RASTER_ASSET', 'runtime raster generation must return one raster artifact');
   }
   return fontRegistry(font)._attachGeneratedRaster(font, artifacts[0]!.bytes, {
     rasterKey,
@@ -1636,7 +1636,7 @@ function assertMatchingBaker<Options>(
   format: RasterFormatMetadata,
   baker: RuntimeRasterBakerModule<string, Options>,
 ): void {
-  if (baker.kind !== format.kind) throw new FontLoadError('RASTER_INCOMPATIBLE', 'runtime baker kind mismatch');
+  if (baker.kind !== format.kind) throw new GlyphFontError('RASTER_INCOMPATIBLE', 'runtime baker kind mismatch');
 }
 
 function assertMatchingArtifact(format: RasterFormatMetadata, rasterKey: string, artifact: RasterBakeArtifact): void {
@@ -1646,12 +1646,12 @@ function assertMatchingArtifact(format: RasterFormatMetadata, rasterKey: string,
     artifact.version !== format.version ||
     artifact.rasterKey !== rasterKey
   ) {
-    throw new FontLoadError('RASTER_INCOMPATIBLE', 'runtime raster artifact does not match the selected format');
+    throw new GlyphFontError('RASTER_INCOMPATIBLE', 'runtime raster artifact does not match the selected format');
   }
 }
 
 function isRasterMiss(error: unknown): boolean {
-  return error instanceof FontLoadError && error.reason === 'RASTER_NOT_FOUND';
+  return error instanceof GlyphFontError && error.reason === 'RASTER_NOT_FOUND';
 }
 
 function fontRegistry(font: RegisteredFont): FontRegistry {
@@ -1667,7 +1667,7 @@ async function loadDefaultRuntimeBake(sourceUrl: string): Promise<RuntimeFontBak
     .then(({ bakeFontInWorker }) => bakeFontInWorker)
     .catch((cause: unknown) => {
       defaultRuntimeBakePromise = undefined;
-      throw new FontLoadError(
+      throw new GlyphFontError(
         'RUNTIME_BAKER_UNAVAILABLE',
         'font source requires the dynamically imported runtime baker',
         { url: sourceUrl, cause },
@@ -1686,7 +1686,7 @@ interface ResolvedFontRequest {
 type ProbeResult =
   | { readonly status: 'hit'; readonly font: RegisteredFont }
   | { readonly status: 'missing' }
-  | { readonly status: 'invalid'; readonly error: FontLoadError };
+  | { readonly status: 'invalid'; readonly error: GlyphFontError };
 
 interface RegisteredFontInit {
   readonly registry: FontRegistry;
@@ -1744,7 +1744,7 @@ class RegisteredFontImpl implements RegisteredFont {
     }
     const source = getRegisteredFontData(this).rasterSources.get(selection.rasterKey);
     if (source === undefined || (selection.kind !== undefined && selection.kind !== source.reference.kind)) {
-      throw new FontLoadError('RASTER_NOT_FOUND', 'font has no matching raster reference');
+      throw new GlyphFontError('RASTER_NOT_FOUND', 'font has no matching raster reference');
     }
     if (source.extensionData !== undefined && source.binaryBytes !== undefined && source.bufferViews !== undefined) {
       return this.registerRaster(
@@ -1767,14 +1767,14 @@ class RegisteredFontImpl implements RegisteredFont {
       });
     }
     if (source.externalCandidates.length === 0) {
-      throw new FontLoadError('RASTER_NOT_FOUND', 'raster reference has no resolvable artifact');
+      throw new GlyphFontError('RASTER_NOT_FOUND', 'raster reference has no resolvable artifact');
     }
     const failures: unknown[] = [];
     for (const candidate of source.externalCandidates) {
       if (!('uri' in candidate.source)) continue;
       if (candidate.source.artifactHash === undefined) {
         failures.push(
-          new FontLoadError(
+          new GlyphFontError(
             'RASTER_ARTIFACT_HASH_REQUIRED',
             'URI-addressed raster artifacts require an authenticated hash',
             { url: candidate.source.uri },
@@ -1797,7 +1797,7 @@ class RegisteredFontImpl implements RegisteredFont {
       try {
         const response = await fetcher(url, options.signal === undefined ? undefined : { signal: options.signal });
         if (!response.ok) {
-          throw new FontLoadError('RASTER_FETCH', `raster request failed with HTTP ${response.status}`, { url });
+          throw new GlyphFontError('RASTER_FETCH', `raster request failed with HTTP ${response.status}`, { url });
         }
         return this.registry._attachRaster(
           this,
@@ -1810,11 +1810,11 @@ class RegisteredFontImpl implements RegisteredFont {
         );
       } catch (error) {
         options.signal?.throwIfAborted();
-        if (error instanceof FontLoadError && error.reason === 'RASTER_RESOURCE_LIMIT') throw error;
+        if (error instanceof GlyphFontError && error.reason === 'RASTER_RESOURCE_LIMIT') throw error;
         failures.push(error);
       }
     }
-    throw new FontLoadError('RASTER_FETCH', 'no external raster candidate could be loaded', {
+    throw new GlyphFontError('RASTER_FETCH', 'no external raster candidate could be loaded', {
       cause: new AggregateError(failures),
     });
   }
@@ -1851,7 +1851,7 @@ class RegisteredFontImpl implements RegisteredFont {
   }
 
   assertActive(): void {
-    if (this.#disposed) throw new FontLoadError('STALE_FONT_HANDLE', 'font has been disposed');
+    if (this.#disposed) throw new GlyphFontError('STALE_FONT_HANDLE', 'font has been disposed');
   }
 
   dispose(): void {
@@ -1866,7 +1866,7 @@ class RegisteredFontImpl implements RegisteredFont {
 /** @internal Return the active ownership domain for a package-created font. */
 export function registeredFontRegistry(font: RegisteredFont): FontRegistry {
   if (!(font instanceof RegisteredFontImpl)) {
-    throw new FontLoadError('FOREIGN_FONT', 'font is not registered by this package');
+    throw new GlyphFontError('FOREIGN_FONT', 'font is not registered by this package');
   }
   font.assertActive();
   return font.registry;
@@ -1934,7 +1934,7 @@ class RegisteredRasterImpl implements RegisteredRaster {
     if (source.type === 'bufferView') return this.view(source.bufferView);
     assertExternalResourceSource(source);
     if (source.byteLength > this.#owner.registry._artifactByteLimit()) {
-      throw new FontLoadError(
+      throw new GlyphFontError(
         'RASTER_RESOURCE_LIMIT',
         'external raster resource exceeds the configured resource limit',
       );
@@ -1993,7 +1993,7 @@ class RegisteredRasterImpl implements RegisteredRaster {
           signal?.throwIfAborted();
           if (resolved !== undefined) {
             if (resolved.byteLength > this.#owner.registry._artifactByteLimit()) {
-              throw new FontLoadError(
+              throw new GlyphFontError(
                 'RASTER_RESOURCE_LIMIT',
                 'resolved raster resource exceeds the configured resource limit',
               );
@@ -2002,7 +2002,7 @@ class RegisteredRasterImpl implements RegisteredRaster {
           }
         } catch (error) {
           signal?.throwIfAborted();
-          if (error instanceof FontLoadError && error.reason === 'RASTER_RESOURCE_LIMIT') throw error;
+          if (error instanceof GlyphFontError && error.reason === 'RASTER_RESOURCE_LIMIT') throw error;
           failures.push(error);
         }
       }
@@ -2025,7 +2025,7 @@ class RegisteredRasterImpl implements RegisteredRaster {
       try {
         const response = await fetcher(url, signal === undefined ? undefined : { signal });
         if (!response.ok) {
-          throw new FontLoadError(
+          throw new GlyphFontError(
             'RASTER_RESOURCE_FETCH',
             `raster resource request failed with HTTP ${response.status}`,
             { url },
@@ -2041,11 +2041,11 @@ class RegisteredRasterImpl implements RegisteredRaster {
         return authenticateRasterResource(bytes, source, url);
       } catch (error) {
         signal?.throwIfAborted();
-        if (error instanceof FontLoadError && error.reason === 'RASTER_RESOURCE_LIMIT') throw error;
+        if (error instanceof GlyphFontError && error.reason === 'RASTER_RESOURCE_LIMIT') throw error;
         failures.push(error);
       }
     }
-    throw new FontLoadError('RASTER_RESOURCE_FETCH', 'external raster resource is unavailable', {
+    throw new GlyphFontError('RASTER_RESOURCE_FETCH', 'external raster resource is unavailable', {
       cause: new AggregateError(failures),
     });
   }
@@ -2073,7 +2073,7 @@ class RegisteredRasterImpl implements RegisteredRaster {
 
   #assertActive(): void {
     this.#owner.assertActive();
-    if (this.#disposed) throw new FontLoadError('STALE_RASTER_HANDLE', 'raster has been disposed');
+    if (this.#disposed) throw new GlyphFontError('STALE_RASTER_HANDLE', 'raster has been disposed');
   }
 }
 
@@ -2168,7 +2168,7 @@ function retainRasterArtifactData(
     current.reference.version !== reference.version ||
     (current.artifactHash !== undefined && current.artifactHash !== artifactHash)
   ) {
-    throw new FontLoadError('RASTER_REFERENCE_CONFLICT', 'one raster identity resolved to conflicting artifact data');
+    throw new GlyphFontError('RASTER_REFERENCE_CONFLICT', 'one raster identity resolved to conflicting artifact data');
   }
   current.extensionData ??= extensionData;
   current.binaryBytes ??= binaryBytes;
@@ -2221,7 +2221,7 @@ function mergeRasterSources(
         current.reference.extension !== reference.extension ||
         current.reference.version !== reference.version
       ) {
-        throw new FontLoadError(
+        throw new GlyphFontError(
           'RASTER_REFERENCE_CONFLICT',
           'one shaping identity declared conflicting raster references',
         );
@@ -2317,7 +2317,7 @@ function matchRasterExtension(
     });
   }
   if (matches.length !== 1) {
-    throw new FontLoadError(
+    throw new GlyphFontError(
       'RASTER_RECIPROCAL_IDENTITY',
       'raster artifact must match exactly one font directory reference',
     );
@@ -2339,7 +2339,7 @@ function generatedRasterExtension(
     candidate.glyphIdWidth !== 16 ||
     candidate.version !== reference.version
   ) {
-    throw new FontLoadError(
+    throw new GlyphFontError(
       'RASTER_RECIPROCAL_IDENTITY',
       'runtime raster artifact does not match its requested font and raster identity',
     );
@@ -2413,13 +2413,13 @@ function normalizeFontInput(input: unknown): {
 } {
   if (typeof input === 'string' || input instanceof URL) return { source: input };
   if (typeof input !== 'object' || input === null) {
-    throw new FontLoadError('INVALID_FONT_INPUT', 'font input must be a URL or source object');
+    throw new GlyphFontError('INVALID_FONT_INPUT', 'font input must be a URL or source object');
   }
   const source = fontLocationValue(Reflect.get(input, 'source'), 'source');
   const bakedValue = Reflect.get(input, 'baked');
   const baked = bakedValue === null ? null : fontLocationValue(bakedValue, 'baked');
   if (source === undefined && (baked === undefined || baked === null)) {
-    throw new FontLoadError('INVALID_FONT_INPUT', 'font input must provide source or baked');
+    throw new GlyphFontError('INVALID_FONT_INPUT', 'font input must provide source or baked');
   }
   return {
     ...(source === undefined ? {} : { source }),
@@ -2438,7 +2438,7 @@ function normalizeUrl(value: string | URL, baseUrl: URL | undefined): string {
   try {
     url = value instanceof URL ? new URL(value.href) : new URL(value, baseUrl);
   } catch (cause) {
-    throw new FontLoadError('INVALID_FONT_URL', 'font URL cannot be resolved', { cause });
+    throw new GlyphFontError('INVALID_FONT_URL', 'font URL cannot be resolved', { cause });
   }
   url.hash = '';
   return url.href;
@@ -2528,7 +2528,7 @@ async function readResponseBytes(
   const declared = declaredText === null ? undefined : Number(declaredText);
   if (declared !== undefined && Number.isFinite(declared) && declared > limit) {
     await response.body?.cancel();
-    throw new FontLoadError(code, `response declares ${declared} bytes; limit is ${limit}`, {
+    throw new GlyphFontError(code, `response declares ${declared} bytes; limit is ${limit}`, {
       url,
     });
   }
@@ -2536,7 +2536,7 @@ async function readResponseBytes(
     const bytes = new Uint8Array(await response.arrayBuffer());
     signal?.throwIfAborted();
     if (bytes.byteLength > limit) {
-      throw new FontLoadError(code, `response has ${bytes.byteLength} bytes; limit is ${limit}`, {
+      throw new GlyphFontError(code, `response has ${bytes.byteLength} bytes; limit is ${limit}`, {
         url,
       });
     }
@@ -2557,7 +2557,7 @@ async function readResponseBytes(
       const chunk = result.value;
       if (!Number.isSafeInteger(total + chunk.byteLength) || total + chunk.byteLength > limit) {
         await reader.cancel();
-        throw new FontLoadError(code, `response exceeds the ${limit}-byte resource limit`, {
+        throw new GlyphFontError(code, `response exceeds the ${limit}-byte resource limit`, {
           url,
         });
       }
@@ -2671,9 +2671,9 @@ function positiveLimit(value: number | undefined, fallback: number, name: string
   return resolved;
 }
 
-function validationError(code: string, message: string, cause: unknown): FontLoadError {
-  if (cause instanceof FontLoadError) return cause;
-  return new FontLoadError(code, message, { cause });
+function validationError(code: string, message: string, cause: unknown): GlyphFontError {
+  if (cause instanceof GlyphFontError) return cause;
+  return new GlyphFontError(code, message, { cause });
 }
 
 function hasValidationIssue(error: unknown, code: string): boolean {
@@ -2796,14 +2796,14 @@ async function authenticateRasterResource(
   url?: string,
 ): Promise<Uint8Array<ArrayBuffer>> {
   if (bytes.byteLength !== source.byteLength) {
-    throw new FontLoadError(
+    throw new GlyphFontError(
       'RASTER_RESOURCE_LENGTH',
       'external raster resource byte length does not match its directory entry',
       { ...(url === undefined ? {} : { url }) },
     );
   }
   if ((await sha256(bytes)) !== source.artifactHash) {
-    throw new FontLoadError(
+    throw new GlyphFontError(
       'RASTER_RESOURCE_HASH',
       'external raster resource hash does not match its directory entry',
       { ...(url === undefined ? {} : { url }) },
@@ -2821,11 +2821,11 @@ async function authenticatedFontFaceIndex(provenance: Readonly<Record<string, un
   const declared = provenance.fontFaceIndex;
   const fontFaceIndex = declared === undefined ? 0 : integer(declared, 'provenance.fontFaceIndex');
   if (fontFaceIndex < 0 || fontFaceIndex > 0xffff_ffff) {
-    throw new FontLoadError('INVALID_FONT_ASSET', 'provenance.fontFaceIndex must be an unsigned 32-bit integer');
+    throw new GlyphFontError('INVALID_FONT_ASSET', 'provenance.fontFaceIndex must be an unsigned 32-bit integer');
   }
   const canonical = new TextEncoder().encode(`{"fontFaceIndex":${fontFaceIndex},"formatVersion":0}`);
   if ((await sha256(canonical)) !== descriptorHash) {
-    throw new FontLoadError(
+    throw new GlyphFontError(
       'INVALID_FONT_ASSET',
       declared === undefined
         ? 'legacy font artifact does not identify its nonzero collection face'

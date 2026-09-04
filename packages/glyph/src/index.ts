@@ -212,8 +212,8 @@ export type {
 
 export type { GlyphCaret, GlyphKey } from './glyph-placement.js';
 
-// FontFace loading can throw this application-visible error; loader construction remains package-private.
-export { FontLoadError } from './loader.js';
+// Font operations can throw this application-visible error; loader construction remains package-private.
+export { GlyphFontError } from './loader.js';
 
 export type { FontSelection, FontStack } from './loaded-font.js';
 export { createFontStack } from './loaded-font.js';

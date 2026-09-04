@@ -449,8 +449,8 @@ declare class FontRegistry {
   attachRaster(font: RegisteredFont, bytes: ArrayBufferView): Promise<RegisteredRaster>;
 }
 
-declare class FontLoadError extends Error {
-  readonly code: string;
+declare class GlyphFontError extends GlyphError<'resource-unavailable'> {
+  readonly reason: string;
   readonly url: string | undefined;
 }
 ```

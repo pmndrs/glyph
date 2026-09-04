@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:7ff092a8345673c05c23e97697dc90f6ca32cb3ef0f1c4fd9e0f0f21a5d07e28'
+source_digest: 'sha256:dd0d36fdd9ac40a5e194c4b561672774d27345f29667dc8466412e9ac795622a'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -228,7 +228,7 @@ is shorthand for the idempotent `defaultHandle('surface')` named root. A provide
 the context value; selecting another root, handle, or alias table requires remounting the provider. Context is constructor dependency
 injection only: it owns no engine, runtime, scene, renderer, canvas, publication cursor, or semantic resource cache, and
 it never disposes an externally owned handle or FontFace. It disposes only FontFaces it declared from shorthand table
-entries. Supplying `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` handles only `FontLoadError`
+entries. Supplying `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` handles only `GlyphFontError`
 and rethrows unrelated errors. Imperative construction uses `handle.createText()` and `handle.createTextGroup()` for the
 anonymous root, or `handle(name).createText()` and `handle(name).createTextGroup()` for a named root.
 

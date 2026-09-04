@@ -224,7 +224,7 @@ test('registration selects one renderer variant per technique before engine cons
   registerThreeRasterProgram(primary);
   assert.throws(
     () => registerThreeRasterProgram(secondary),
-    /already selected raster variant "test" for technique "test-variant-selection"/,
+    /already selected raster variant "test" for format "test-variant-selection"/,
   );
   const handle = glyph.handle('three:program-registration:selection', ThreeConfig);
   const font = await fontForTechnique(unsupported);

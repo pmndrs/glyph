@@ -1,7 +1,7 @@
 import type { Font } from './font.js';
 import { cloneImmutableFont } from './loaded-font.js';
 import {
-  FontLoadError,
+  GlyphFontError,
   openFontFaceSource,
   openSerializedFontFaceSource,
   type FontFaceSourceLease,
@@ -334,7 +334,7 @@ export function acquireLoadedFontFaceSelection<const Selection extends FontFaceS
 export function acquireLoadedFontFaceSelection(selection: FontFaceSelection): Font<RasterFormatMetadata> {
   const selected = fontFaceSelectionState(selection);
   if (selected.format === undefined) {
-    throw new FontLoadError(
+    throw new GlyphFontError(
       'FONT_FACE_FORMAT_REQUIRED',
       `FontFace ${JSON.stringify(selection.family)} requires an explicit format outside a configured handle`,
     );
@@ -501,7 +501,7 @@ async function loadAllFontFaceFormats(state: FontFaceState): Promise<void> {
   }
   const fonts = groups.flat();
   if (fonts.length === 0) {
-    throw new FontLoadError(
+    throw new GlyphFontError(
       'FONT_FACE_FORMAT_REQUIRED',
       `FontFace ${JSON.stringify(state.family)} advertises no raster formats; runtime font sources must declare the formats to bake`,
     );
@@ -601,10 +601,10 @@ function createLoadedFaceRecord(
       (error: unknown) => {
         if (owner.records.get(format) === record) owner.records.delete(format);
         if (
-          error instanceof FontLoadError &&
+          error instanceof GlyphFontError &&
           (error.reason === 'RASTER_NOT_FOUND' || error.reason === 'RASTER_SOURCE_UNAVAILABLE')
         ) {
-          throw new FontLoadError(
+          throw new GlyphFontError(
             'FONT_FACE_FORMAT_UNAVAILABLE',
             `FontFace ${JSON.stringify(family)} does not implement the declared ${JSON.stringify(format.kind)} format`,
             { cause: error },
@@ -696,7 +696,7 @@ function requiredFontFaceFormat(
   const format = rasterOf(raster);
   const font = selected.face.owner.records.get(format)?.font;
   if (font === undefined) {
-    throw new FontLoadError(
+    throw new GlyphFontError(
       'FONT_FACE_FORMAT_NOT_LOADED',
       `FontFace ${JSON.stringify(selection.family)} format ${JSON.stringify(format.kind)} is not loaded`,
     );
@@ -707,7 +707,7 @@ function requiredFontFaceFormat(
 function resolveDeclaredFormat(format: FontFaceFormat): RasterFormatInput<RasterFormatMetadata> {
   const resolved = tryResolveDeclaredFormat(format);
   if (resolved === undefined) {
-    throw new FontLoadError(
+    throw new GlyphFontError(
       'FONT_FACE_FORMAT_UNAVAILABLE',
       `font format ${JSON.stringify(format)} does not name an imported raster format`,
     );

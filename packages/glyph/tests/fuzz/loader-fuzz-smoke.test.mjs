@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { FontLoadError, FontRegistry } from '../../dist/loader.js';
+import { GlyphFontError, FontRegistry } from '../../dist/loader.js';
 import { createFontBaker } from '@pmndrs/glyph/bake';
 
 import { mutateArtifact } from '../support/artifact-mutations.mjs';
@@ -40,7 +40,7 @@ async function outcome(bytes) {
       rasters: font.rasterReferences.length,
     };
   } catch (error) {
-    assert(error instanceof FontLoadError);
+    assert(error instanceof GlyphFontError);
     return {
       ok: false,
       code: error.reason,
