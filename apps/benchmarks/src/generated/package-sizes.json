@@ -54,11 +54,11 @@
       "label": "Shaper Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "56fb35f37d0bbdcbb40b433eca870846e7115395497e69e2e7a7ae81d2246930",
-      "rawBytes": 1184451,
-      "minifiedBytes": 1184451,
-      "gzipBytes": 460355,
-      "brotliBytes": 354633
+      "sha256": "51bd075ac469efde14c6d0e6e3094cd175c7e53c5044f6c1309297f46793713b",
+      "rawBytes": 1251354,
+      "minifiedBytes": 1251354,
+      "gzipBytes": 452833,
+      "brotliBytes": 350696
     },
     {
       "id": "three-runtime-js",
@@ -208,11 +208,11 @@
       "label": "Bitmap baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "15770673d04e2f313895e38ed32e97eb9715b749b7c1de894e941da162c8dbfe",
-      "rawBytes": 622562,
-      "minifiedBytes": 622562,
-      "gzipBytes": 233803,
-      "brotliBytes": 180038
+      "sha256": "af2d1357b468e12782e39d4a6a5244b6855d5e1466bdd036b21843b2485942be",
+      "rawBytes": 622826,
+      "minifiedBytes": 622826,
+      "gzipBytes": 233910,
+      "brotliBytes": 180037
     },
     {
       "id": "bitmap-baker-js",
@@ -252,11 +252,11 @@
       "label": "MTSDF baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "522d168f990bfe8d5f6acf2f8115b5c9dccea62b4ed4c9a296bf1b4004afc835",
-      "rawBytes": 556828,
-      "minifiedBytes": 556828,
-      "gzipBytes": 218568,
-      "brotliBytes": 171460
+      "sha256": "031ec7ffe210735be523c9a85f7e0a70fbb598de156b0c5eb2a0424230d93bc9",
+      "rawBytes": 557086,
+      "minifiedBytes": 557086,
+      "gzipBytes": 218610,
+      "brotliBytes": 171598
     },
     {
       "id": "mtsdf-baker-js",
@@ -274,11 +274,11 @@
       "label": "Slug baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "8b41b0cc6f774a973b2d5dce9e4b08ed2c7a7fa492bfb7fd7c8e3ae9272e07d7",
-      "rawBytes": 461215,
-      "minifiedBytes": 461215,
-      "gzipBytes": 185598,
-      "brotliBytes": 145913
+      "sha256": "58210c7336d1b09ecf173db3bc5c04226463fce39c81b6466ec1ecb26717e736",
+      "rawBytes": 461479,
+      "minifiedBytes": 461479,
+      "gzipBytes": 185666,
+      "brotliBytes": 146140
     },
     {
       "id": "slug-baker-js",
@@ -307,11 +307,11 @@
       "label": "Font baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "c7e22206e03c2b6cc8fbb85caa219fce6acbe26ea0729fb79c7181cff2ef982d",
-      "rawBytes": 1081312,
-      "minifiedBytes": 1081312,
-      "gzipBytes": 388915,
-      "brotliBytes": 303266
+      "sha256": "8246e734f7343287f413e7ae6fb5db2409719d06517eb6ffe4d3dd6fb9a7f7d2",
+      "rawBytes": 1082048,
+      "minifiedBytes": 1082048,
+      "gzipBytes": 389065,
+      "brotliBytes": 303845
     }
   ]
 }
