@@ -197,11 +197,18 @@ export const packageSizeBudgets = {
     gzipBytes: 5_700,
     brotliBytes: 5_100,
   },
+  // The configurable CFF cubic subdivision rate and the outline-table refusal both add
+  // code to this baker. Measured on the recorded macOS host, the artifact moved 461,488
+  // raw at the base commit to 464,164 after the subdivision rate (+2,676: the split-and-fit
+  // loop, its bounded quadratic buffer, and descriptor validation) and to 464,386 after the
+  // refusal (+222: one outline-format branch per baker). Linux emits 464,113 raw / 186,785
+  // gzip / 147,013 Brotli for the same sources, so these ceilings price the larger macOS
+  // measurement plus the documented cross-host margin.
   'slug-baker-wasm': {
-    rawBytes: 464_000,
-    minifiedBytes: 464_000,
-    gzipBytes: 187_000,
-    brotliBytes: 147_000,
+    rawBytes: 467_000,
+    minifiedBytes: 467_000,
+    gzipBytes: 188_000,
+    brotliBytes: 148_000,
   },
   'slug-baker-js': {
     rawBytes: 20_000,
