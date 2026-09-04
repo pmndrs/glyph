@@ -22,17 +22,17 @@ sources:
     resource: https://github.com/TypeTogether/Playwrite
     title: Playwrite type family upstream source
   - id: text-material
-    resource: ../../packages/glyph/src/three/material.ts
+    resource: ../../../packages/glyph/src/three/material.ts
     title: Renderer-owned text material factory
   - id: text-properties
-    resource: ../../packages/glyph/src/text-properties.ts
+    resource: ../../../packages/glyph/src/text-properties.ts
     title: Paragraph content-box, column, and justification properties
   - id: editorial-flow
     resource: editorial-flow-layout.md
     title: Responsive editorial flow and mixed-raster composition
-  - id: r3f-hello-world
-    resource: ../packages/r3f-hello-world.md
-    title: Minimal public R3F example package
+  - id: examples-package
+    resource: ../packages/examples.md
+    title: Minimal public imperative Three and R3F example package
 ---
 
 # Documentation site and landing page
@@ -64,9 +64,11 @@ narrow toward examples. A deployable public web surface is neither, so it takes 
 `AGENTS.md` gains `site/` alongside `packages/` and `apps/` in its no-root-artifacts rule, and
 `pnpm-workspace.yaml` gains the entry.
 
-Every other `pmndrs/*` repository puts its MDX in root `docs/`. This repository cannot: root `docs/` is the
-Open Knowledge Format bundle. `site/docs/` keeps the upstream name one level down, so the generator argument
-reads `site/docs` exactly as uikit's reads `docs`.
+Every other `pmndrs/*` repository puts its MDX in root `docs/`. When this was decided, this repository could not:
+root `docs/` held the Open Knowledge Format bundle. The config API refactor (#148) has since moved that bundle to
+`.agents/docs/`, so the collision is gone — but `site/docs/` stays, because the site is its own workspace package
+and its MDX belongs inside it rather than at the repository root. The generator argument reads `site/docs` exactly
+as uikit's reads `docs`.
 
 ## Layout
 
@@ -128,10 +130,13 @@ and drei's alpha.5 peers `>=10.0.0-0`, so nothing here requires moving past it. 
 reconciler in the install; two versions in one workspace would install two copies.
 
 Bumping the alpha is deliberately **not** part of this work. It is a core change with a core blast radius —
-`packages/glyph`, `apps/benchmarks`, and `apps/r3f-hello-world` all move together, `tests/package/r3f-webgpu.test.mjs`
-asserts the pin by exact version, and alpha.4 was measured to break `<Text paint={...}>` type-checking in
+`packages/glyph`, `apps/benchmarks`, and `apps/r3f-hello-world` all move together, the peer range in
+`packages/glyph/package.json` states the pin, and alpha.4 was measured to break the R3F text typings in
 `tests/types/r3f-v1-api.test.ts`. That belongs in its own pull request, reviewed as an upgrade, not as a
 passenger in a documentation-site branch.
+
+(The dedicated `tests/package/r3f-webgpu.test.mjs` that asserted the pin by exact version was removed with the
+config API refactor (#148); the peer range is now the statement of record.)
 
 Post-processing does **not** use `@react-three/postprocessing`, which wraps the WebGL `EffectComposer` and is
 incompatible with `three/webgpu` node materials. paris-site carries no such dependency. The WebGPU path is
