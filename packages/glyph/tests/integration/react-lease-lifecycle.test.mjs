@@ -23,7 +23,6 @@ import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { glyph, GlyphFontError } from '@pmndrs/glyph';
 import { ThreeConfig, defineTextMaterial } from '@pmndrs/glyph/three';
-import '../support/browser-globals.mjs';
 
 import { GlyphProvider, Text, TextGroup, useFont } from '@pmndrs/glyph/react';
 import { useBitmap } from '@pmndrs/glyph/react/bitmap';

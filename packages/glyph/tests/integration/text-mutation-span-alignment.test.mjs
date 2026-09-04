@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 import { createElement } from 'react';
 
-import '../support/browser-globals.mjs';
 import { glyph, span, txt } from '@pmndrs/glyph';
 import { Text as R3fText } from '@pmndrs/glyph/react';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
