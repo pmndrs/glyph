@@ -1,10 +1,4 @@
-/**
- * A custom renderer built only from the public root GlyphConfig vocabulary.
- *
- * It exists to keep the engine-integration surface honest: if a second renderer cannot
- * be written against the root GlyphConfig surface without reaching into package internals, this package
- * stops compiling. See `.agents/docs/planning/example-renderer.md`.
- */
+/** A custom renderer built only from the public root GlyphConfig vocabulary — a compile-time canary that the surface is sufficient without reaching into package internals. */
 export type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResourceRecord } from './draw-list.js';
 export {
   ExampleText,

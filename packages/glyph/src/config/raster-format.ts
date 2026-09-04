@@ -24,11 +24,7 @@ declare const rasterFormatRequestBrand: unique symbol;
 /** Stable public identity for one portable raster format. */
 export type RasterFormatId = string & { readonly [rasterFormatIdBrand]: true };
 
-/**
- * Stable raster-authored identity for one renderer resource realization.
- * Equal IDs must describe the same format, schema role, companion set, metadata,
- * and bytes. Mint a new ID whenever any part of that realization changes.
- */
+/** Raster-authored identity for one renderer resource realization. Equal IDs must describe the same format, schema role, companion set, metadata, and bytes — mint a new ID whenever any part changes. */
 export type RasterResourceId = string & { readonly [rasterResourceIdBrand]: true };
 
 /** Text effects a raster format and its shader can render. */

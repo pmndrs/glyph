@@ -1,10 +1,6 @@
 import type { SlugCpuReferenceData } from '../../benchmark/low-level/raster/slug-cpu-reference';
 
-/**
- * Renderer-neutral Slug page allocation. Every byte figure counts decoded resource bytes the technique retains, not
- * GPU residency: a renderer repacks the 16-bit reference table before upload, so only the renderer can report what it
- * actually holds. Read retained GPU bytes from `Text.gpuBytes` or `TextGroup.gpuBytes` instead.
- */
+/** Renderer-neutral Slug page allocation: counts decoded resource bytes, not GPU residency (a renderer repacks the reference table before upload). Read actual GPU bytes from `Text.gpuBytes`/`TextGroup.gpuBytes`. */
 export interface SlugRasterConfiguration {
   readonly planeUnitsPerEm: number;
   readonly pageCount: number;

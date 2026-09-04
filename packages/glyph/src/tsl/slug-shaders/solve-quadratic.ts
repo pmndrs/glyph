@@ -1,7 +1,4 @@
-/**
- * Adapted from three-flatland Slug at 866f77f9 (MIT), before the
- * experimental eac7d015 naive-solver trade-off (MIT). See RESEARCH.md.
- */
+/** Adapted from three-flatland Slug at 866f77f9 (MIT); see RESEARCH.md for provenance. */
 import type { Node } from 'three/webgpu';
 import {
   If,
@@ -19,10 +16,7 @@ import {
   vec2,
 } from 'three/tsl';
 
-/**
- * Two real roots of `a*t^2 - 2*b*t + c = 0`, ordered to match
- * `calcRootCode`'s winding convention.
- */
+/** Two real roots of `a*t^2 - 2*b*t + c = 0`, ordered to match `calcRootCode`'s winding convention. */
 function stableRoots(
   a: Node<'float'>,
   b: Node<'float'>,

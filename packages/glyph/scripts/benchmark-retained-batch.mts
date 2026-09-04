@@ -1,9 +1,4 @@
-/* @workflow {
-  "name": "glyph:retained-batch-benchmark",
-  "summary": "Measures same-frame updates and draw batching across many retained Text instances in nested Three TextGroups.",
-  "requirements": "Built package: pnpm --filter @pmndrs/glyph build. Accepts --texts, --reps, and --warmup.",
-  "writes": "stdout only"
-} */
+/* @workflow { "name": "glyph:retained-batch-benchmark", "summary": "Measures same-frame updates and draw batching across many retained Text instances in nested Three TextGroups.", "requirements": "Built package: pnpm --filter @pmndrs/glyph build. Accepts --texts, --reps, and --warmup.", "writes": "stdout only" } */
 import * as THREE from 'three/webgpu';
 
 import { loadParagraphBenchmarkFixture } from './support/paragraph-benchmark-fixture.mts';

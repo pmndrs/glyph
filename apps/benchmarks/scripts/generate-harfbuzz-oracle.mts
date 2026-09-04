@@ -130,20 +130,5 @@ if (check) {
 } else {
   await writeFile(resolve(outputPath), output);
 }
-/* @workflow
-{
-  "name": "fixture:harfbuzz-oracle:generate",
-  "summary": "Regenerate the pinned HarfBuzz shaping oracle.",
-  "requirements": "Provisioned HarfBuzz tools and authenticated fonts.",
-  "writes": "Checked-in HarfBuzz oracle fixtures."
-}
-*/
-/* @workflow
-{
-  "name": "fixture:harfbuzz-oracle:check",
-  "summary": "Verify the pinned HarfBuzz shaping oracle.",
-  "requirements": "Provisioned HarfBuzz tools and authenticated fonts.",
-  "writes": "Nothing.",
-  "args": ["--check"]
-}
-*/
+/* @workflow { "name": "fixture:harfbuzz-oracle:generate", "summary": "Regenerate the pinned HarfBuzz shaping oracle.", "requirements": "Provisioned HarfBuzz tools and authenticated fonts.", "writes": "Checked-in HarfBuzz oracle fixtures." } */
+/* @workflow { "name": "fixture:harfbuzz-oracle:check", "summary": "Verify the pinned HarfBuzz shaping oracle.", "requirements": "Provisioned HarfBuzz tools and authenticated fonts.", "writes": "Nothing.", "args": ["--check"] } */

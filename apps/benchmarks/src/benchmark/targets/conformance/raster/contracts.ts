@@ -15,10 +15,7 @@ export interface RasterSourceOutlineCapture {
   readonly renderSubmitMs: number;
 }
 
-/**
- * Raster-format-private resources stay in the selected target module. The target owns
- * this session's warm load, capture, and disposal lifecycle without owning a renderer.
- */
+/** Owns its session's warm load, capture, and disposal lifecycle; does not own a renderer. */
 export interface RasterConformanceSession {
   load(input: BenchmarkInput, controls: BenchmarkControls, context?: BenchmarkExecutionContext): Promise<void>;
   captureSampling(

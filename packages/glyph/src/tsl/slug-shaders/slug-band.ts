@@ -1,8 +1,4 @@
-/**
- * Adapted from three-flatland Slug at 2935a89f (MIT).
- * The texture addressing is adapted to PMNDRS_font_slug V0's exact R32UI
- * header grid and R16UI glyph-local reference grid.
- */
+/** Adapted from three-flatland Slug at 2935a89f (MIT); texture addressing matches PMNDRS_font_slug V0's R32UI header grid and R16UI glyph-local reference grid. */
 import type { Node } from 'three/webgpu';
 import {
   If,

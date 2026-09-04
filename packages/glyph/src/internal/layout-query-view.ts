@@ -2,12 +2,7 @@ import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
 import type { PlanPublication } from './handle-state.js';
 
-/**
- * Reads the ink box off one semantic record, or reports its absence.
- *
- * Absence is carried by a flag bit on the paragraph record rather than by a sentinel extent,
- * because a zero-extent ink box is a legitimate answer — a paragraph of spaces has one.
- */
+/** Reads the ink box off one semantic record, or reports its absence via a flag bit — not a sentinel extent, since a zero-extent ink box (a paragraph of spaces) is a legitimate answer. */
 function inkBoundsOf(view: SemanticViewReader, record: number, measured: boolean): LayoutBox | undefined {
   if (!measured) return undefined;
   const layout = textShaperAbi.layouts.engineSemanticView;

@@ -1,48 +1,4 @@
-/**
- * Incremental text mutation where the SHAPING-RUN TOPOLOGY changes, verified through to the GPU.
- *
- * `text-mutation-gpu-lanes.test.mjs` drives the same differential oracle over Latin text, where a
- * grapheme, a scalar, and a glyph are almost always the same thing. The defect class this file
- * exists for is the one where they are not: the engine computes a glyph's semantic change mask in
- * IDENTITY space, against that glyph's own previous record slot, while the gather that consumes the
- * mask walks SLOT space. The two agree only while a slot keeps its occupant. Every mechanism that
- * moves an occupant between slots is a script mechanism:
- *
- *   - bidi reordering, where an edit anywhere on a mixed-direction line renumbers visual order;
- *   - ligature absorption, where one glyph swallows or releases a whole grapheme cluster;
- *   - Devanagari cluster reordering, where a pre-base matra typed at the TAIL of a cluster renders
- *     at its HEAD, so a tail insertion displaces a glyph that precedes it;
- *   - conjunct formation and splitting, where a single virama changes the glyph count of a cluster.
- *
- * `engine-sequence-property.test.mjs` already drives randomized edits over these same fixtures, and
- * never saw the defect, because its oracle is engine-only: it asks whether `layout` agrees
- * with `layout`. Both read the engine, and both were correct. This file points the
- * differential/packed-lane oracle -- construction from scratch, compared bit-for-bit including the
- * instanced attributes the GPU samples -- at the same fixture classes.
- *
- * Every corpus string here is a substring of the authored Advanced-shaping corpus in
- * `apps/benchmarks/src/workloads/advanced-shaping/scene.ts`, which the conformance target already
- * shapes against these exact baked fixtures with `missingGlyphCount === 0`. `assertShaped` re-proves
- * that here, so a green run cannot be a green blank.
- *
- * Sequences are seeded and fixed. A failure names the case, the edit, and the step that reproduce
- * it, with no wall-clock input and no `Math.random`.
- *
- * NOT COVERED, deliberately:
- *
- *   - Multi-scalar grapheme clusters in the Japanese corpus. Every unit in the authored CJK text is
- *     a single precomposed scalar, and combining voiced-sound marks (U+3099/U+309A) are not in the
- *     `noto-sans-cjk-showcase` subset, so a CJK edit cannot land strictly inside a grapheme cluster.
- *     Mid-cluster editing is covered instead by the scalar-boundary sequences over Devanagari and
- *     Arabic, whose clusters really are multi-scalar.
- *   - Devanagari and CJK through the Slug and MSDF packing policies. Slug lane coverage of
- *     topology change is carried by the three Amiri cases, which cover bidi reorder and ligature
- *     absorption; adding two more baked fixtures per script would multiply bake cost without
- *     reaching a different code path, since the packing policy is chosen per technique and not per
- *     script.
- *   - The stable-indirect allocation policy, for the reason documented in
- *     `text-mutation-gpu-lanes.test.mjs`: no first-party path from `Text`/`TextGroup` selects it.
- */
+/** Extends `text-mutation-gpu-lanes.test.mjs`'s differential/packed-lane oracle to scripts where slot reassignment (bidi reorder, ligature absorption, cluster reordering, conjunct formation) can desync the engine's identity-space change mask from the gather's slot-space read. Seeded and deterministic. */
 import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 
@@ -91,19 +47,7 @@ const clippedFlow = {
 };
 const paint = { color: '#ffffff' };
 
-/**
- * Author one paragraph.
- *
- * Style carries the case's direction, language, and features, because those are shaping inputs and
- * a run-topology case means nothing under the wrong ones. Features are dropped for empty text: the
- * engine validates an unbounded feature as a non-empty UTF-16 range over the paragraph, which an
- * empty paragraph cannot satisfy, and the shipped Advanced-shaping target drops them for the same
- * reason.
- *
- * Spans are derived from the text rather than fixed, so an edited node and a node freshly built
- * with the same text always carry identical authored style -- the comparison stays a test of the
- * incremental path, not of two different documents.
- */
+/** Style carries the case's direction/language/features (a topology case means nothing under the wrong ones); features are dropped for empty text since the engine rejects a feature range over an empty paragraph. Spans derive from the text so an edited and freshly built node share identical authored style. */
 function paragraph(shaping, text, { flow = wrappingFlow, position, rasterPixelRatio, styled = false } = {}) {
   return {
     position,
@@ -126,19 +70,7 @@ function paragraph(shaping, text, { flow = wrappingFlow, position, rasterPixelRa
   };
 }
 
-/**
- * Two leading runs in different colours and sizes; the remainder keeps the paragraph defaults.
- *
- * Boundaries are code-unit thirds SNAPPED OUTWARD TO GRAPHEME BOUNDARIES. The engine requires every
- * grapheme cluster to resolve to exactly one style and rejects the frame otherwise
- * (`cluster_state.rs`, `build`), which the roadmap records as validating span boundaries against
- * extended grapheme clusters. On Latin text a third almost always lands on a boundary already; on
- * these scripts it almost never does, so an unsnapped third would make every styled case fail as an
- * invalid request instead of testing the incremental path.
- *
- * A boundary inside a LIGATURE is not snapped and does not need to be: styling splits the shaping
- * run, the ligature simply does not form, and `latin-ligature` covers that on purpose.
- */
+/** Boundaries snap outward to grapheme boundaries because the engine rejects any frame whose span splits a cluster (`cluster_state.rs`, `build`); unlike Latin, these scripts rarely land a code-unit third on one already. A boundary inside a ligature is left unsnapped on purpose — the run just splits. */
 function spansFor(text) {
   const boundaries = [...findGraphemeBoundaries(text)];
   const snap = (offset) => boundaries.find((boundary) => boundary >= offset) ?? text.length;
@@ -151,13 +83,7 @@ function spansFor(text) {
   ];
 }
 
-/**
- * The script cases.
- *
- * `alphabet` is the pool a seeded sequence may splice in. Every entry is drawn from the same
- * authored corpus as the case's edits, so a randomized sequence can never wander outside the baked
- * fixture's coverage and turn a topology assertion into a `.notdef` assertion.
- */
+/** `alphabet` is the pool a seeded splice may draw from; every entry comes from the same authored corpus as the case's edits, so a randomized sequence can't wander outside the baked fixture and turn this into a `.notdef` assertion. */
 const CASES = [
   {
     id: 'arabic-joining',
@@ -310,15 +236,7 @@ const CASES = [
   },
 ];
 
-/**
- * A three-node group with per-span colours and sizes and per-node raster pixel ratios.
- *
- * One paragraph in uniform white at one size leaves the foreground, `fontSize`, and
- * `transformIndex` lanes constant, so a slot corrupted in exactly those lanes reads back correct by
- * accident. Distinct positions, sizes, and colours make each of those lanes carry a value that
- * identifies its own slot. The edit lands on the middle node, so the nodes around it must keep
- * their own lanes while the record run under them shifts.
- */
+/** Distinct position/size/color per node means every packed lane carries an identifying value, so slot corruption can't read back correct by accident. The edit lands on the middle node, so surrounding nodes must keep their lanes while the record run under them shifts. */
 function styledScene(shaping, texts) {
   return texts.map((text, index) =>
     paragraph(shaping, text, {
@@ -462,17 +380,7 @@ function spliceEdit(text, units, random) {
   return admissible(next === text ? text.slice(0, Math.max(0, text.length - 1)) : next);
 }
 
-/**
- * Trim a generated string down to one the engine will accept.
- *
- * EXCLUDED, and pinned separately: text where UAX #14 offers a line-break opportunity strictly
- * inside a UAX #29 grapheme cluster -- a SPACE followed by a combining mark is the reachable case,
- * because LB9 does not attach a mark to a preceding SPACE while GB9 does. The engine rejects that
- * whole frame rather than ignoring the opportunity, which
- * `text-mutation-known-defects.test.mjs` case 3 reproduces minimally. Splicing at scalar boundaries
- * generates it constantly, and letting it through would leave these sequences reporting a defect
- * they are not for instead of testing the packed lanes they are for.
- */
+/** Excludes text where a UAX #14 break point falls inside a UAX #29 cluster (space + combining mark, LB9 vs GB9) — that's `text-mutation-known-defects.test.mjs` case 3's defect, not this file's, and scalar splicing generates it constantly. */
 function admissible(text) {
   for (let candidate = text; candidate.length > 0; candidate = candidate.slice(0, -1)) {
     const clusters = [...findGraphemeBoundaries(candidate)];
@@ -484,13 +392,7 @@ function admissible(text) {
   return '';
 }
 
-/**
- * The offsets a splice may land on.
- *
- * Scalar sequences use every scalar boundary, so a cluster can be cut. Grapheme sequences use only
- * grapheme boundaries, so it cannot. A surrogate pair is never split either way: scalar boundaries
- * are taken from the string's own code-point iterator, not from its code-unit indices.
- */
+/** Scalar sequences use every scalar boundary (so a cluster can be cut); grapheme sequences use only grapheme boundaries. Either way a surrogate pair is never split, since scalar boundaries come from the code-point iterator. */
 function boundaryOffsets(text, units) {
   const graphemes = units.some((unit) => [...unit].length > 1 || unit.length > 1);
   if (!graphemes) return [...scalarOffsets(text)];
@@ -510,14 +412,7 @@ function graphemeUnits(source) {
   return [...GRAPHEMES.segment(source)].map((entry) => entry.segment);
 }
 
-/**
- * The oracle's negative control.
- *
- * Everything above is an assertion that two scenes agree. If `assertMatchesFreshBuild` could not
- * SEE a difference, every one of those assertions would pass on a corrupt buffer and this whole
- * file would be decorative. Corrupting one float in one packed lane -- the smallest defect the
- * mechanism under test can produce -- must make it fail, per lane, so no lane is silently exempt.
- */
+/** Negative control: proves `assertMatchesFreshBuild` can see a difference. Without this, every assertion above could pass against a corrupt buffer. Corrupting one float in one packed lane must fail, per lane. */
 test('the differential oracle fails when a single packed float is corrupted', { timeout }, async () => {
   const shaping = CASES.find((entry) => entry.id === 'indic-reordering');
   const font = await fonts.load('devanagari');

@@ -1,17 +1,4 @@
-/**
- * Sequence-level property gate for the retained text engine.
- *
- * Single-step tests fix one input and assert one output. The defects this engine has
- * actually shipped were pairings instead: a state reachable only after a particular
- * ORDER of edits, measures, and publishes. This harness drives randomized-but-seeded
- * interactive sequences through the public Three surface and asserts, after every step,
- * that valid input never fails to publish and that committed metrics never disagree with
- * themselves.
- *
- * Determinism is a requirement, not a convenience: the generator is a seeded PRNG with a
- * fixed seed list, so a failure names the seed and step that reproduce it exactly. There
- * is no wall-clock input, no Math.random, and no retry.
- */
+/** Property gate: seeded PRNG drives randomized interactive sequences through Three's public surface and asserts every step publishes valid, self-consistent metrics. Deterministic — fixed seed list, no Math.random, no retry. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -34,11 +21,7 @@ const FONT_FIXTURES = {
   cjk: 'noto-sans-cjk-showcase-bitmap-16.font.glb',
 };
 
-/**
- * Seed corpus: the authored Advanced-shaping timeline, which drives text, width,
- * direction, language, and features together and is the sequence that found the
- * ligature and style-payload defects in the live app.
- */
+/** Seed corpus: authored cases pairing text with direction, language, and features, replayed to reproduce shipped ligature and style-payload defects. */
 const SEEDED_CASES = [
   {
     id: 'latin-features',
@@ -182,11 +165,6 @@ class Subject {
   }
 }
 
-/**
- * The operation alphabet. Each entry mutates the subject's intended inputs; the runner
- * applies them and publishes. Weights favour the edit shapes that compose into the
- * pairings the engine has historically mishandled.
- */
 const OPERATIONS = [
   {
     name: 'append-text',

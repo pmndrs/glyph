@@ -114,12 +114,7 @@ export interface PlannerConstraint {
   readonly spaceBefore?: number;
   /** Block-axis space added after the paragraph's final line. */
   readonly spaceAfter?: number;
-  /**
-   * Justification bounds on each word space as multiples of its natural
-   * advance. Leave unset for the unclamped distribution; when set, minimum is
-   * in (0, 1] and maximum is at least 1. Deficit beyond the maximum spills
-   * into letter-space expansion, capped per inter-cluster gap.
-   */
+  /** Justification bounds on each word space as multiples of its natural advance: min in (0, 1], max ≥ 1. Deficit beyond max spills into capped letter-space expansion. */
   readonly justify?: {
     readonly minWordSpaceRatio?: number;
     readonly maxWordSpaceRatio?: number;

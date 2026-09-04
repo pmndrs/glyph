@@ -14,14 +14,7 @@ interface DetachedTextSource extends THREE.Object3D {
   readonly pixelSnapping: boolean;
 }
 
-/**
- * Converts an instance matrix from world space into one `Glyphs` object's local space without
- * allocating or recomputing its inverse.
- *
- * @param glyphsMatrixWorldInverse - Precomputed inverse of the owning `Glyphs` object's current `matrixWorld`.
- * @param matrixWorld - Instance transform expressed in world space.
- * @param target - Matrix that receives the local transform; it may alias `matrixWorld`.
- */
+/** Converts an instance matrix from world into one `Glyphs` object's local space using a precomputed inverse (no allocation/recompute); `target` may alias `matrixWorld`. */
 export function worldToLocalMatrix(
   glyphsMatrixWorldInverse: THREE.Matrix4,
   matrixWorld: THREE.Matrix4,
@@ -31,13 +24,7 @@ export function worldToLocalMatrix(
   return target.copy(glyphsMatrixWorldInverse).multiply(matrixWorld);
 }
 
-/**
- * Converts an instance matrix from `Glyphs`-local space into world space.
- *
- * @param glyphsMatrixWorld - Current `matrixWorld` of the `Glyphs` object that owns the instance.
- * @param matrixLocal - Instance transform expressed in the owning `Glyphs` object's local space.
- * @param target - Matrix that receives the world transform; it may alias `matrixLocal`.
- */
+/** Converts an instance matrix from `Glyphs`-local space into world space using the owner's current `matrixWorld`; `target` may alias `matrixLocal`. */
 export function localToWorldMatrix(
   glyphsMatrixWorld: THREE.Matrix4,
   matrixLocal: THREE.Matrix4,
@@ -99,15 +86,7 @@ interface DetachedGlyphRecordAddress {
   readonly index: number;
 }
 
-/**
- * A detached render-plan branch produced by `Text.breakApart()`.
- *
- * The planner has already compacted the selected glyph records into a complete publication. This
- * object imports that publication into the normal Three command-buffer renderer, retaining the same
- * atlas/resource relationships and compatible instancing without making child Text objects.
- * Per-glyph matrices are an additional Three-side instance attribute; the live paragraph never
- * receives them and continues to shape normally.
- */
+/** A detached render-plan branch from `Text.breakApart()`: imports the planner's compacted publication into the normal renderer without child Text objects; per-glyph matrices are Three-side only and never reach the live paragraph. */
 export class Glyphs extends THREE.Object3D {
   readonly #target: ThreeCommandBufferRenderer;
   readonly #copy: GlyphCopy<void>;
@@ -263,13 +242,7 @@ export class Glyphs extends THREE.Object3D {
     markStorageAttributeUpdated(storage.transforms, offset, 16);
   }
 
-  /**
-   * Writes a full affine instance transform expressed in world space.
-   *
-   * This single-record convenience updates the detached root's ancestor chain. Bulk callers should
-   * update that chain once, invert `matrixWorld` once, convert with `worldToLocalMatrix()`, and call
-   * `setMatrixAt()` per glyph.
-   */
+  /** Writes a world-space transform; this per-call convenience updates the ancestor chain and inverts `matrixWorld` each time — bulk callers should do that once and call `setMatrixAt()` per glyph. */
   setWorldMatrixAt(index: number, matrixWorld: THREE.Matrix4): void {
     this.#assertActive();
     this.updateWorldMatrix(true, false, true);

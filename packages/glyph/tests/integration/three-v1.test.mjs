@@ -2260,12 +2260,7 @@ test('one Three root grows aggregate glyph storage without reserving one aggrega
   fontDomain.dispose();
 });
 
-/**
- * Roadmap 11.17 layer 4: layout under a geometry-only change routes to the
- * paragraph-scoped synchronous engine query — no full planner updates, no
- * publication flips, no revision burn — and the following ordinary frame adopts the
- * speculative work without a checkpoint rebuild.
- */
+/** A geometry-only constraint change routes to the paragraph-scoped synchronous engine query — no full planner update, no publication flip — and the next ordinary frame adopts the speculative work without a checkpoint rebuild. */
 test('repeated layout under changing constraints stays on the paragraph query path', async (t) => {
   const abi = textShaperAbi;
   const three = await createThreeTestHandle(t);
@@ -2319,11 +2314,8 @@ test('repeated layout under changing constraints stays on the paragraph query pa
 });
 
 test('a standard ligature that absorbs a grapheme publishes and keeps typing', async (t) => {
-  // A ligature reports one glyph at the first grapheme of the pair, so the trailing
-  // grapheme's cluster owns no glyph. It still belongs to the shaped run and positioning
-  // still derives a scale for it, so the cluster arena must record the owning font's
-  // units-per-em for it as well. Amiri applies `liga` to Latin f-pairs; Inter as baked
-  // does not, which is why every existing Latin fixture missed this.
+  // A ligature's absorbed grapheme owns no glyph, but the cluster arena still records the
+  // owning font's units-per-em for it. Amiri applies `liga` to Latin f-pairs; Inter as baked does not.
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
   const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(amiriFontUrl)) }, bitmap({ strikes: [16] }));

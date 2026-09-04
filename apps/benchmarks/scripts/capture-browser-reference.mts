@@ -1,12 +1,5 @@
 import { spawn } from 'node:child_process';
-/* @workflow
-{
-  "name": "benchmark:browser-reference",
-  "summary": "Regenerate the authenticated browser-rendered Inter visual reference.",
-  "requirements": "Playwright Chromium and the licensed Inter fixture.",
-  "writes": "Checked-in browser reference PNG and manifest."
-}
-*/
+/* @workflow { "name": "benchmark:browser-reference", "summary": "Regenerate the authenticated browser-rendered Inter visual reference.", "requirements": "Playwright Chromium and the licensed Inter fixture.", "writes": "Checked-in browser reference PNG and manifest." } */
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';

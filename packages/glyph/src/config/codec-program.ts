@@ -5,13 +5,7 @@ import type { CodecBufferDeclaration, TechniqueSchemaMetadata } from './schema.j
 import { isTechniqueSchema } from './schema.js';
 import { normalizeCodecProgramSystemBuffers, recordTechniqueCodecBody } from '../internal/codec-program-contract.js';
 
-/**
- * Expression DSL over the codec-program register machine. Authors reference named
- * values instead of register numbers; `compile()` lowers the expression graph to the
- * same forward-only `CodecOperation` records the hand-numbered form produced,
- * allocating registers automatically and failing loudly on exhaustion. The wire
- * format, validator, and interpreter are untouched — this is authoring only.
- */
+/** Expression DSL over the codec-program register machine; `compile()` lowers it to the same forward-only `CodecOperation` records as the hand-numbered form. Wire format, validator, and interpreter are unaffected. */
 
 const MAX_REGISTERS = 32;
 
@@ -62,13 +56,7 @@ function nodeOf(value: CodecF32Value | CodecU32Value): Node {
   return node;
 }
 
-/**
- * A loaded value's input index only means something inside the program that
- * created it; storing it elsewhere would silently read a different field.
- * Provenance is stamped at construction and combined in O(1) per node, so
- * shared expression DAGs never require a graph walk: constants stay
- * scope-free, and mixing two authoring scopes fails at the combinator itself.
- */
+/** Authoring scope is stamped at construction and combined in O(1) here — never a graph walk. Mixing two scopes throws immediately. */
 function combinedAuthoringScope(left: Node, right: Node): object | undefined {
   if (
     left.authoringScope !== undefined &&

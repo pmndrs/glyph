@@ -236,12 +236,8 @@ try {
   await server.close();
 }
 
-/**
- * Waits until the named workload owns the viewport at its authored configuration and is publishing frames.
- *
- * `requireZoomBuildUp` is the one condition that is not a mount invariant: Zoom text only reaches its reported scale
- * part-way through its own cycle, so the settled-mount sample must not wait for it.
- */
+/** Waits until the named workload owns the viewport at its authored configuration and is publishing frames.
+ * `requireZoomBuildUp` is excluded from settle-on-mount: Zoom text reaches its reported scale mid-cycle. */
 async function waitForSettledWorkload(
   page: Page,
   workload: (typeof workloads)[number],
@@ -277,10 +273,7 @@ async function waitForSettledWorkload(
   );
 }
 
-/**
- * Draw and glyph counts are the batching evidence for one cell: the renderer issues one draw per packed glyph run, so
- * a change in batch topology shows up here and nowhere else in the probe output.
- */
+/** Draw/glyph counts are the batching evidence for one cell — the renderer issues one draw per packed glyph run. */
 async function readBatching(page: Page): Promise<{ readonly drawCount: number; readonly glyphCount: number }> {
   return page.evaluate(() => {
     const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');

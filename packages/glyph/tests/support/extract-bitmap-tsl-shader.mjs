@@ -3,22 +3,7 @@ import * as THREE from 'three/webgpu';
 
 import { bitmapShader } from '../../dist/tsl/bitmap-shader.js';
 
-/**
- * Compiles the canonical TSL Bitmap material to shader source without a GPU device.
- *
- * Node builds are pure text generation, so a real renderer over an offscreen canvas
- * stand-in reaches the generated WGSL that a hardware WebGPU run would execute. The
- * instance nodes are plain per-vertex attributes and the coverage page is an unsigned
- * byte data array — the same resource kinds the command-buffer executor binds — so the
- * extracted source is the authoritative statement of what `/tsl` produces for Bitmap.
- *
- * `renderer.hasFeature` is stubbed because it is the only builder input that requires
- * an adapter; Bitmap reads its pages through data-texture texel loads, so no optional
- * filtering feature can change the generated source.
- *
- * @param {{ pixelSnapping: boolean }} options Variant selector for the clip placement.
- * @returns {{ vertex: string, fragment: string }} Generated WGSL per stage.
- */
+/** Compiles the canonical TSL Bitmap material to WGSL without a GPU device. `renderer.hasFeature` is stubbed since Bitmap's data-texture texel loads never gate on an optional filtering feature. */
 export function extractBitmapTslShader({ pixelSnapping }) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));

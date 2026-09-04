@@ -55,10 +55,7 @@ export function createFontDeliveryMetrics(delivery: FontDelivery): FontDeliveryM
   };
 }
 
-/**
- * Records the source size, duration, and artifact size of one core bake. The baker is per load because its measurements
- * belong to one asset; a loader-wide baker could not attribute concurrent label and icon loads to separate metrics.
- */
+/** Records source size, duration, and artifact size of one core bake; per-load so concurrent loads (e.g. label vs icon) attribute to separate metrics. */
 export function measuredRuntimeFontBake(
   metrics: FontDeliveryMetrics,
   onProgress?: BakeProgressListener,
@@ -90,10 +87,7 @@ export async function loadBakedFont<Format extends RasterFormatMetadata>({
   return loadThroughBenchmarkLibrary({ baked: artifact }, raster, signal);
 }
 
-/**
- * Keeps one application-lifetime owner for a baked fixture. Short-lived scenes still acquire and dispose their own
- * Font leases, while the retained owner keeps the decoded source and raster variant warm across technique switches.
- */
+/** Keeps one application-lifetime owner for a baked fixture; short-lived scenes still acquire/dispose their own leases, while this owner keeps the decoded source and raster variant warm across technique switches. */
 export async function preloadBakedFont<Format extends RasterFormatMetadata>({
   artifact,
   raster,

@@ -1,11 +1,4 @@
-/* @workflow
-{
-  "name": "benchmark:presentation",
-  "summary": "Render every workload through Bitmap, MTSDF, and Slug on WebGPU and WebGL2.",
-  "requirements": "GPU-enabled Chromium and authenticated benchmark fixtures.",
-  "writes": "Ignored browser caches only."
-}
-*/
+/* @workflow { "name": "benchmark:presentation", "summary": "Render every workload through Bitmap, MTSDF, and Slug on WebGPU and WebGL2.", "requirements": "GPU-enabled Chromium and authenticated benchmark fixtures.", "writes": "Ignored browser caches only." } */
 import { runPresentationProbeMatrix } from './support/run-presentation-probe-matrix.mts';
 
 const backends = ['webgpu', 'webgl2'] as const;

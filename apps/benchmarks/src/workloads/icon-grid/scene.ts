@@ -273,10 +273,7 @@ export interface IconGridViewport {
   readonly width: number;
 }
 
-/**
- * The renderer owns Text readiness, scene attachment, and disposal. Icon Grid owns which of those retained Texts
- * represent the current virtual window, including its scroll, recycling, and metrics state.
- */
+/** The renderer owns Text readiness, scene attachment, and disposal; Icon Grid owns which retained Texts represent the current virtual window (scroll, recycling, metrics). */
 export interface IconGridEntryPool {
   entries(): readonly ComparisonWorkloadEntry[];
   resize(poolCapacity: number, iconSize: number, layout: IconGridLayout): Promise<void>;

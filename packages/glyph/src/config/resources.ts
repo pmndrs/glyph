@@ -1,12 +1,4 @@
-/**
- * The constrained portable resource vocabulary a compiled font may retain.
- *
- * A payload is immutable data — bytes plus the typed measure a renderer needs to
- * realize it — never a GPU object, shader-language node, or renderer callback.
- * The union is deliberately small: it describes only what the shipped raster formats
- * actually retain, not a universal GPU object model. A mismatched texture size,
- * index, accessor, or draw range is rejected before any device is touched.
- */
+/** Constrained portable resource vocabulary: immutable data (bytes + typed measure), never a GPU object, shader node, or callback. A mismatched size/index/accessor/draw range is rejected before any device is touched. */
 
 export type PortableComponentType = 'f32' | 'u32' | 'i16' | 'u16' | 'u8';
 
@@ -59,10 +51,7 @@ export interface PortableBufferView {
   readonly length: number;
 }
 
-/**
- * One typed element stream over a buffer view: `count` elements of
- * `components` scalars each, starting `offset` bytes into the view.
- */
+/** One typed element stream over a buffer view: `count` elements of `components` scalars each, starting `offset` bytes into the view. */
 export interface PortableAccessor {
   readonly componentType: PortableComponentType;
   readonly components: 1 | 2 | 3 | 4;
@@ -123,12 +112,7 @@ export interface PortableTextureArrayPayload {
   readonly bytes: Uint8Array;
 }
 
-/**
- * GLB-like geometry: immutable bytes plus typed accessors and semantic
- * attributes over internal buffer views, optional indices, topology, draw
- * range — never a renderer geometry object. The command buffer's record span is the
- * sole instance-count authority; per-record data belongs in codec buffers.
- */
+/** GLB-like geometry: immutable bytes plus typed accessors and attributes over buffer views, optional indices/topology/draw range — never a renderer geometry object. */
 export interface PortableGeometryPayload {
   readonly kind: 'geometry';
   readonly topology: PortableTopology;
@@ -167,10 +151,7 @@ export function definePortableVertexSemantic<const Semantic extends string>(
   return semantic as PortableCustomVertexSemantic & Semantic;
 }
 
-/**
- * Validate one caller-owned payload against its declared resource kind. This is
- * structural validation only; `retain` is the boundary that validates and copies reserved payloads.
- */
+/** Validates one caller-owned payload against its declared resource kind — structural only; `retain` is the boundary that validates and copies reserved payloads. */
 export function assertPortableResource(
   kind: PortableResourceKind,
   name: string,
@@ -506,11 +487,7 @@ function isTopology(value: unknown): value is PortableTopology {
   return value === 'triangle-list' || value === 'triangle-strip';
 }
 
-/**
- * Array.isArray without collapsing a typed readonly array's element type to
- * `any`: the built-in guard narrows through a mutable `any[]`, which erases
- * declared payload types this module still needs.
- */
+/** Array.isArray without collapsing a typed readonly array's element type to `any` — the built-in guard narrows through `any[]`, erasing declared payload types. */
 function isPortableList<T>(value: unknown): value is readonly T[] {
   return Array.isArray(value);
 }

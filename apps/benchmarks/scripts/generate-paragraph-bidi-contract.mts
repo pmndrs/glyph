@@ -193,20 +193,5 @@ function firstDifference(left: string, right: string): number {
   return length;
 }
 
-/* @workflow
-{
-  "name": "fixture:paragraph-bidi:generate",
-  "summary": "Regenerate the public Rust paragraph bidi contract fixture.",
-  "requirements": "Built runtime packages and authenticated checked-in fonts.",
-  "writes": "Checked-in paragraph bidi contract."
-}
-*/
-/* @workflow
-{
-  "name": "fixture:paragraph-bidi:check",
-  "summary": "Verify the public Rust paragraph bidi contract fixture by deterministic regeneration.",
-  "requirements": "Built runtime packages and authenticated checked-in fonts.",
-  "writes": "Nothing.",
-  "args": ["--check"]
-}
-*/
+/* @workflow { "name": "fixture:paragraph-bidi:generate", "summary": "Regenerate the public Rust paragraph bidi contract fixture.", "requirements": "Built runtime packages and authenticated checked-in fonts.", "writes": "Checked-in paragraph bidi contract." } */
+/* @workflow { "name": "fixture:paragraph-bidi:check", "summary": "Verify the public Rust paragraph bidi contract fixture by deterministic regeneration.", "requirements": "Built runtime packages and authenticated checked-in fonts.", "writes": "Nothing.", "args": ["--check"] } */

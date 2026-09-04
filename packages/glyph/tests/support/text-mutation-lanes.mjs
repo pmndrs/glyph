@@ -1,20 +1,4 @@
-/**
- * Differential harness for incremental mutation, read through to the GPU.
- *
- * The oracle is construction from scratch. A node edited into some content may not differ, in any
- * lane, from a node built with that content: same glyphs, same layout, same packed bytes. That
- * invariant needs no knowledge of what each buffer means, so it holds as techniques and packing
- * policies change, and it is the only oracle that sees a record slot left holding its pre-edit
- * occupant -- every engine-side lane reads correct while the GPU samples the wrong glyph.
- *
- * Both sides of every comparison are produced by the same packing code from the same authored
- * inputs, so every lane is compared bit-for-bit. Rounding here would hide exactly the corruption
- * this harness exists to detect: a stale slot whose retained bytes happen to be close to the
- * correct ones.
- *
- * This module owns the oracle and the scene plumbing. Each test file owns its own corpus, fixture
- * set, and authoring helpers, so the invariant cannot drift between the files that assert it.
- */
+/** Differential harness: an edited node must be indistinguishable, lane for lane and bit for bit, from one built fresh from the same content — no rounding, since that would hide a stale slot whose retained bytes are merely close. This module owns the oracle and scene plumbing; each test file owns its own corpus. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
@@ -39,12 +23,7 @@ let nextMountedHandle = 1;
 
 await glyph.init();
 
-/**
- * One immutable font per fixture, for the lifetime of a test file.
- *
- * Every mount is a scene built on top of them, so loading per test would retain dozens of runtimes
- * and re-bake identical rasters for no additional coverage.
- */
+/** One immutable font per fixture, cached for the file's lifetime — loading per test would retain dozens of runtimes and re-bake identical rasters for no added coverage. */
 export function createFontCache(specs) {
   const loaded = new Map();
   return {
@@ -120,14 +99,7 @@ function structuralProperties(properties) {
   return { ...rest, text: txt(strings, ...values) };
 }
 
-/**
- * Read every lane a scene exposes, engine-side and GPU-side.
- *
- * Every draw in a group shares one retained buffer per codec lane and addresses its own run
- * through `pmndrsGlyphRunStart`, so a lane must be read from `start` rather than from the head of
- * the array. Only the run's own `instanceCount` records are read: capacity beyond it is allowed to
- * hold anything, and asserting it would fail on legal slack rather than on a defect.
- */
+/** Every draw shares one retained buffer per lane, addressing its own run via `pmndrsGlyphRunStart` — read from `start`, not the array head. Only `instanceCount` records are read; capacity beyond it may hold anything. */
 export function lanes(mounted) {
   const draws = [];
   mounted.scene.traverse((object) => {
@@ -183,15 +155,7 @@ export function lanes(mounted) {
   };
 }
 
-/**
- * Assert an edited scene is indistinguishable from one built with the same content.
- *
- * Stable ids are compared separately and only for length: identity is expected to differ, because
- * retaining a glyph across an edit is the point of the incremental path. That exemption covers the
- * packed identity lane too -- it carries the same allocation-order ids -- so that lane is instead
- * held to a local invariant, resolved through `identityPositions` below. Every other lane, packed
- * bytes included, must agree exactly with the fresh build.
- */
+/** Stable/packed identity lanes are exempt from direct fresh-build comparison — retaining a glyph's identity across an edit is the point — and are instead held to the local invariant in `identityPositions` below. Every other lane must match exactly. */
 export function assertMatchesFreshBuild(font, mounted, paragraphs, context) {
   const fresh = mount(font, paragraphs);
   try {
@@ -265,20 +229,7 @@ function assertTransformBindings(scene, draw, where) {
   }
 }
 
-/**
- * Where each of a draw's slots sits in the scene's own committed identity list.
- *
- * The identity lane cannot be compared to the fresh build's values -- retaining a glyph across an
- * edit is the point of the incremental path, so the numbers legitimately differ -- and it cannot be
- * compared to a positional slice of the committed list either: a glyph that renders nothing, a
- * space above all, is committed with an identity but occupies no record slot, so the k-th slot is
- * not the k-th committed glyph. Resolving each slot's identity back to its INDEX in the committed
- * list removes both problems. The resulting index list says which committed glyphs this draw
- * renders and in what order, which is directly comparable between the two builds.
- *
- * A slot holding its pre-edit occupant fails this either way: if that identity was freed it
- * resolves to nothing, and if it was handed to another glyph it resolves to the wrong index.
- */
+/** Resolves each slot's identity to its index in the scene's own committed identity list — directly comparable between builds despite identities differing across edits, and unaffected by non-rendering glyphs (e.g. a space) that consume an identity but no record slot. */
 function identityPositions(scene, draw, where) {
   const identities = draw.attributes[IDENTITY_LANE];
   assert.equal(

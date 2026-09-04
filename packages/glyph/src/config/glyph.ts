@@ -345,10 +345,7 @@ export interface DisplayListChanges<Bindings extends GlyphBindingSet> {
   readonly retirements: BorrowedCommandSequence<Retirement<Bindings['resource'], Bindings['buffer']>>;
 }
 
-/**
- * One phase-structured retained display-list update. Every reference is already a typed
- * binding; numeric engine IDs and the trusted wire representation remain private.
- */
+/** One phase-structured retained display-list update; references are typed bindings — numeric engine IDs and the wire representation stay private. */
 export interface CommandBufferView<Bindings extends GlyphBindingSet> {
   readonly delivery: 'borrowed-command-buffer';
   readonly engineRevision: number;

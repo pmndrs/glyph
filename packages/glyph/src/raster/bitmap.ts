@@ -55,11 +55,7 @@ export interface BitmapData {
   readonly coverage?: Uint8Array;
 }
 
-/**
- * Reports the physical strike this technique selects for a logical CSS size and raster pixel ratio. Applications that
- * display or assert density behaviour must read the selection from here rather than reimplementing it, so a reported
- * strike can never diverge from the strike actually rendered.
- */
+/** Ppem of the strike selected for a CSS size and raster pixel ratio; read from here rather than reimplementing selection. */
 export function selectBitmapStrikePpem(
   strikes: readonly { readonly ppem: number }[],
   cssFontSize: number,
@@ -109,11 +105,7 @@ const BITMAP_UV_SIZE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.bitmap/uv-size
 const BITMAP_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.bitmap/color');
 const BITMAP_PAGE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.bitmap/page');
 
-/**
- * The authoritative physical shape of the Bitmap format: binding field order matches
- * the strike tables the binding compiler emits; buffer ids and lanes are the contract
- * every codec program and shader realization derives from.
- */
+/** Authoritative physical shape of the Bitmap format; field order must match the binding compiler's strike tables — the contract every codec/shader realization derives from. */
 export const bitmapSchema: TechniqueSchema<
   {
     readonly origin: {

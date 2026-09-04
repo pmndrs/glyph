@@ -807,10 +807,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     this.#boundingBoxCurrent = false;
   }
 
-  /**
-   * Measure current desired text without scene attachment or matrix traversal.
-   * A cache miss may synchronously incur font and measure lookup work in the text engine.
-   */
+  /** Measures current desired text without scene attachment or matrix traversal; a cache miss may synchronously incur font/measure lookup work. */
   measure(): ParagraphLayoutSummary {
     this.#assertActive();
     const text = this;
@@ -819,10 +816,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return measurement;
   }
 
-  /**
-   * Return caller-owned positioned glyph and line columns without requiring a rendered frame.
-   * A cache miss may synchronously incur glyph lookup and positioning work; every call copies the columns.
-   */
+  /** Returns caller-owned positioned glyph and line columns without requiring a rendered frame; a cache miss may incur lookup work, and every call copies the columns. */
   glyphs(): GlyphLayoutInspection {
     this.#assertActive();
     const text = this;

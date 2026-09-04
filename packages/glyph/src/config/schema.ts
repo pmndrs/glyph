@@ -1,11 +1,4 @@
-/**
- * The single authority for a Codec program family's physical shape. A schema declares —
- * once, colocated with the technique — the buffer ids, scalar kinds, and lane
- * meanings that its codec programs produce and its shader realizations consume,
- * plus the portable render contract: named resources and declared geometry.
- * Codec stores, binding compilers, command-buffer projectors, and shader interfaces all
- * derive from the declaration; none of them restate it.
- */
+/** Single authority for a Codec program family's physical shape — buffer ids, scalar kinds, lane meanings, and the portable render contract. Codec stores, binding compilers, projectors, and shader interfaces all derive from it. */
 
 import type { RasterFormatId } from './raster-format.js';
 import {
@@ -35,12 +28,7 @@ export type CodecBufferDeclarations = Readonly<Record<string, CodecBufferDeclara
 const techniqueSchemaBrand: unique symbol = Symbol('glyph.technique-schema');
 const techniqueSchemaInstances = new WeakSet<object>();
 
-/**
- * Validate and freeze a named buffer set: nonzero unique ids, at least one lane
- * each. The result is an owned, deeply frozen copy — caller input is never
- * mutated (rejection leaves it untouched), and caller accessors are read once
- * here so they can never change a validated width afterwards.
- */
+/** Validates and freezes a named buffer set (nonzero unique ids, at least one lane each) into an owned, deep-frozen copy — caller input is never mutated. */
 export function defineCodecBuffers<const Buffers extends CodecBufferDeclarations>(buffers: Buffers): Buffers {
   if (!isNonArrayObject(buffers)) throw new TypeError('codec buffers need a declaration object');
   const seen = new Set<number>();
@@ -126,10 +114,7 @@ export interface TechniqueResourceGroupDeclaration {
   readonly cardinality?: 'one' | 'many';
 }
 
-/**
- * One declared logical resource from the constrained portable payload
- * vocabulary. Renderer-specific or opaque payloads cannot cross this boundary.
- */
+/** One declared logical resource from the constrained portable payload vocabulary — renderer-specific or opaque payloads cannot cross this boundary. */
 export type TechniqueResourceDeclaration =
   | TechniqueBufferResourceDeclaration
   | TechniqueTextureResourceDeclaration
@@ -140,14 +125,7 @@ export type TechniqueResourceDeclaration =
 export type TechniqueResourceDeclarations = Readonly<Record<string, TechniqueResourceDeclaration>>;
 type NoTechniqueResources = Readonly<Record<never, never>>;
 
-/**
- * Portable geometry kinds, deliberately disjoint from the wire
- * `enginePrimitive` command enum (`glyph`, `decoration`, …): a wire primitive
- * is a record-span command, while this vocabulary says what geometry one draw
- * realizes. `synthetic-quad` is the implicit generated unit quad and needs no
- * resource; every other kind — `quad` today, technique kinds such as `hull`
- * later — supplies an explicit geometry resource.
- */
+/** Portable geometry kinds, deliberately disjoint from the wire `enginePrimitive` command enum. `synthetic-quad` is the implicit unit quad needing no resource; every other kind supplies an explicit geometry resource. */
 declare const techniqueGeometryKindBrand: unique symbol;
 
 /** A named supplied shape beyond the built-in quad and hull vocabulary. */
@@ -227,19 +205,7 @@ export interface TechniqueSchemaDeclaration<
   readonly resources?: Resources;
   /** The portable render contract: declared geometry and its resource linkage; absent means synthetic-quad. */
   readonly render?: TechniqueRenderDeclaration<keyof Resources & string, GeometryResourceNames<Resources>>;
-  /**
-   * Opt-in glyph-origin metadata: names the declared f32 buffer whose first two
-   * lanes carry the glyph's position. Renderers that augment glyph origins
-   * (animation retargeting) consult this instead of assuming a measure;
-   * raster formats without it are never augmented.
-   *
-   * The lanes are deliberately NOT required to be in any particular space. All
-   * three shipping raster formats differ: MSDF and Slug pack the ink box's top-left
-   * corner, and Bitmap stores the origin plus the baked strike's raster bearing.
-   * An augmenting renderer works in displacement from the rest value the Codec
-   * wrote, which is space-independent, so no technique has to describe its
-   * packing to be animatable.
-   */
+  /** Opt-in glyph-origin metadata: names the f32 buffer whose first two lanes carry glyph position. Lanes need not share a space — augmenting renderers work in displacement from the Codec's rest value, so packing is space-independent. */
   readonly glyphOrigin?: { readonly buffer: GlyphOriginBufferNames<Buffers> };
 }
 
@@ -547,11 +513,7 @@ function defineVertexInputs(value: unknown, resource: string, technique: string)
   );
 }
 
-/**
- * Validate and freeze the geometry declaration. `synthetic-quad` is the
- * no-resource path; every supplied kind must name a declared geometry resource
- * and state its coordinate convention.
- */
+/** Validates and freezes the geometry declaration. `synthetic-quad` is the no-resource path; every supplied kind must name a declared geometry resource and its coordinate convention. */
 function defineGeometryDeclaration(
   geometry: TechniqueGeometryDeclaration,
   technique: string,
@@ -629,10 +591,7 @@ function isNonArrayObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Derive the wire buffer list a technique's programs publish, in declaration
- * order — the schema is the only witness to ids, scalar kinds, and widths.
- */
+/** Derives the wire buffer list a technique's programs publish, in declaration order — the schema is the only witness to ids, scalar kinds, and widths. */
 export function schemaCodecBuffers<const Schema extends TechniqueSchemaMetadata>(schema: Schema): CodecBuffer[] {
   return Object.values(schema.buffers).map((buffer) => ({
     id: buffer.id,

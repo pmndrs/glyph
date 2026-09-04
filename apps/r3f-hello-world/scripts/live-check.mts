@@ -8,11 +8,7 @@ import { fileURLToPath } from 'node:url';
 // actually use: WebGPU on a machine that has it, WebGL2 on a runner that does not. The probe
 // reports which one it got, so the choice is stated rather than assumed.
 
-/**
- * `vitexec` prints a browser exception and still exits 0, so a throwing probe passes the gate it
- * exists to enforce. The probe reports success by printing this marker as its last statement;
- * requiring it turns "the probe ran" into "the probe succeeded".
- */
+/** `vitexec` exits 0 even after a browser exception, so each probe must print its `marker` as the last statement to prove success rather than mere completion. */
 const applicationRoot = fileURLToPath(new URL('..', import.meta.url));
 const probes = [
   { file: './scripts/live-check.probe.ts', marker: 'r3f-hello-world-live-ok', path: '/?example=r3f' },

@@ -15,10 +15,7 @@ export interface ResolvedPaint {
   };
 }
 
-/**
- * Core-owned paint attribution parallel to a GlyphLayout's glyph arrays.
- * Raster modules own how these resolved values enter their instance buffers.
- */
+/** Paint attribution parallel to a GlyphLayout's glyph arrays; raster modules map these into their own instance buffers. */
 export interface GlyphPaint {
   readonly paintIndices: Uint16Array;
   readonly palette: readonly ResolvedPaint[];

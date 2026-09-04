@@ -23,16 +23,9 @@ export interface RetainedFontFixtureController<Asset extends RetainedFontFixture
   readonly current: RetainedFontFixtureState<Asset>;
   /** Whether `commit` can build a generation on `fixture` in the caller's own turn, with nothing left to fetch. */
   has(fixture: BenchmarkFontFixture): boolean;
-  /**
-   * Fetches and decodes a replacement fixture behind the visible one. This is the only genuinely asynchronous step in
-   * a live update, and staging it here is what lets a fixture swap load without tearing down the text on screen.
-   */
+  /** Fetches and decodes a replacement fixture behind the visible one — the only async step, letting a fixture swap load without tearing down the text on screen. */
   load(fixture: BenchmarkFontFixture, load: RetainedFontFixtureLoader<Asset>): Promise<void>;
-  /**
-   * Builds one generation against `fixture` and, once `apply` returns, adopts it and releases the fixture it replaced.
-   * Synchronous by construction: a fixture with no completed `load` is a caller error rather than something to await.
-   * A throwing `apply` leaves the visible fixture and its asset exactly as they were.
-   */
+  /** Builds one generation against `fixture` and adopts it once `apply` returns; `fixture` must already be loaded (else throws), and a throwing `apply` leaves state unchanged. */
   commit<Result>(fixture: BenchmarkFontFixture, apply: (asset: Asset) => Result): Result;
   dispose(): void;
 }

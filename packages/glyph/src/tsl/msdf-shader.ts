@@ -3,10 +3,7 @@ import type { Node, Texture } from 'three/webgpu';
 
 import { unpackSrgbRgba } from './packed-color.js';
 
-/**
- * One glyph instance's canonical MSDF fields, already resolved to nodes. The technique schema owns lane meaning and
- * scalar packing; the target owns GPU storage realization.
- */
+/** One glyph instance's canonical MSDF fields, resolved to nodes; the technique schema owns lane meaning/packing, the target owns GPU storage. */
 export interface TslMsdfInstanceNodes {
   /** Paragraph-local glyph origin, with y measured downward. */
   readonly origin: Node<'vec2'>;
@@ -39,13 +36,7 @@ export interface TslMsdfShaderResources {
   readonly pixelRange: number;
 }
 
-/**
- * Everything the canonical MSDF graph produces, so a program can consume a stage or compose over its final output.
- *
- * Unlike Bitmap this output publishes no `clipPosition`: a distance field reconstructs its edge from the screen-space
- * gradient, so it is correct at any subpixel placement and must keep the default projection rather than snap to the
- * physical pixel grid.
- */
+/** Unlike Bitmap, publishes no `clipPosition`: a distance field reconstructs its edge from the screen-space gradient, so it must keep the default projection rather than snap to the pixel grid. */
 export interface TslMsdfShaderOutput {
   readonly position: Node<'vec3'>;
   /** Unclamped atlas coordinate the glyph cell is sampled at. */
@@ -59,13 +50,7 @@ export interface TslMsdfShaderOutput {
   readonly opacity: Node<'float'>;
 }
 
-/**
- * Builds the canonical MSDF node graph. This is the exact graph the command-buffer executor renders, so a program that composes
- * over the returned nodes inherits the technique's median distance decode, screen-space range, and layer compositing.
- *
- * The graph reads `positionLocal` and `uv()` from the technique's unit quad: both must span `[0, 1]` with the origin at
- * the glyph's upper-left corner. A program supplying different geometry owns that correspondence.
- */
+/** Builds the canonical MSDF graph the executor renders; composing over it inherits median decode, screen-space range, and layer compositing. Reads `positionLocal`/`uv()` from a `[0, 1]` unit quad, origin at upper-left. */
 export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfShaderResources): TslMsdfShaderOutput {
   const outlineColor = unpackSrgbRgba(instance.effectColor.x);
   const shadowColor = unpackSrgbRgba(instance.effectColor.y);

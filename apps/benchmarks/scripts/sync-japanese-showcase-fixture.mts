@@ -28,20 +28,5 @@ await syncImmutableFixture({
     },
   ],
 });
-/* @workflow
-{
-  "name": "font:japanese-showcase:sync",
-  "summary": "Synchronize the Japanese showcase source fixture.",
-  "requirements": "Authenticated source CJK font.",
-  "writes": "Checked-in showcase fixture and metadata."
-}
-*/
-/* @workflow
-{
-  "name": "font:japanese-showcase:check",
-  "summary": "Verify the Japanese showcase source fixture.",
-  "requirements": "Checked-in authenticated fixture.",
-  "writes": "Nothing.",
-  "args": ["--check"]
-}
-*/
+/* @workflow { "name": "font:japanese-showcase:sync", "summary": "Synchronize the Japanese showcase source fixture.", "requirements": "Authenticated source CJK font.", "writes": "Checked-in showcase fixture and metadata." } */
+/* @workflow { "name": "font:japanese-showcase:check", "summary": "Verify the Japanese showcase source fixture.", "requirements": "Checked-in authenticated fixture.", "writes": "Nothing.", "args": ["--check"] } */

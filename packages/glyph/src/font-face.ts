@@ -320,13 +320,7 @@ export function isFontFaceSelection(selection: unknown): selection is FontFaceSe
   return state !== undefined && !state.face.owner.disposed;
 }
 
-/**
- * @internal Acquire an independent immutable Font lease without a configured handle.
- *
- * A configured renderer may resolve an omitted or string format through its own format table.
- * A caller outside a handle has no such config, so it must provide a selection whose declared format
- * resolves to an imported raster format. The caller owns and must dispose the returned lease.
- */
+/** @internal Acquires an independent immutable Font lease without a configured handle; the selection's format must resolve on its own. The caller owns and must dispose the returned lease. */
 export function acquireLoadedFontFaceSelection<const Selection extends FontFaceSelection>(
   selection: Selection,
 ): Font<FontFaceRasterOf<Selection>>;

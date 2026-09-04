@@ -1,9 +1,4 @@
-/* @workflow {
-  "name": "glyph:layout-benchmark",
-  "summary": "Measures public TextGroup updates externally through Rust text_update and Three render-plan application.",
-  "requirements": "Built package: pnpm --filter @pmndrs/glyph build. Accepts --glyphs, --reps, --warmup, --case, --json.",
-  "writes": "stdout only, or the JSON report path passed to --json"
-} */
+/* @workflow { "name": "glyph:layout-benchmark", "summary": "Measures public TextGroup updates externally through Rust text_update and Three render-plan application.", "requirements": "Built package: pnpm --filter @pmndrs/glyph build. Accepts --glyphs, --reps, --warmup, --case, --json.", "writes": "stdout only, or the JSON report path passed to --json" } */
 import { writeFile } from 'node:fs/promises';
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
@@ -15,19 +10,8 @@ import {
   paragraphTextForGlyphs,
 } from './support/paragraph-benchmark-fixture.mts';
 
-/**
- * Answers one question: how long does a paragraph batch take to reach uploadable instance data, per glyph, at the sizes
- * an editorial page actually reaches.
- *
- * Every number here is a median of repetitions taken after the measured code has been warmed, because a first call
- * measures the optimizing compiler rather than the algorithm. The report carries the relative standard deviation beside
- * each median so a reader can tell a real change from sampling noise. This outside-only workflow deliberately owns one
- * host timer around the complete public update. `benchmark:paragraph-stress-timing` owns browser phase attribution.
- *
- * The cases are kept apart rather than averaged. They invalidate different caches: a size change reuses the shaped run
- * and recomputes every measurement, a width change reuses shaping and measurement and replans lines, and a text change
- * reshapes. Averaging them would hide whichever one is slow.
- */
+/** Measures per-glyph cost of one full public paragraph update via a single host timer around the call;
+ * `benchmark:paragraph-stress-timing` owns browser phase attribution. Cases are kept separate, not averaged. */
 
 const budget60 = 1000 / 60;
 const budget120 = 1000 / 120;
@@ -241,10 +225,7 @@ function parseArguments(argv: readonly string[]) {
   };
 }
 
-/**
- * Allocation per update is only meaningful against a collected heap, and the workflow runner cannot pass a node flag
- * ahead of the script. Enabling the flag in-process avoids a respawn while keeping the measurement honest.
- */
+/** Enables gc in-process since the workflow runner can't pass `--expose-gc` ahead of the script; toggling the flag avoids a respawn while keeping the measurement honest. */
 function exposeGarbageCollection(): () => void {
   if (typeof globalThis.gc === 'function') return globalThis.gc;
   setFlagsFromString('--expose-gc');

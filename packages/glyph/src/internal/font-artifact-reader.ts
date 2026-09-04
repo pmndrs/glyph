@@ -28,12 +28,7 @@ export class RuntimeFontArtifactError extends GlyphError<'artifact-invalid'> {
   }
 }
 
-/**
- * Locate the trusted package extension and its three shaping views.
- *
- * Bake and CI own schema validation. Runtime work is limited to the GLB envelope,
- * extension/version identity, and byte ranges required for safe typed-array views.
- */
+/** Locates the trusted package extension and its three shaping views. Bake and CI own schema validation; runtime is limited to the GLB envelope, extension/version identity, and byte ranges for safe typed-array views. */
 export function readRuntimeFontArtifact(bytes: Uint8Array): RuntimeFontArtifact {
   const parsed = readGlb(bytes);
   requireExtensionName(parsed.document.extensionsUsed, 'extensionsUsed');

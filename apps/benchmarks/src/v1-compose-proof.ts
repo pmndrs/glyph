@@ -24,10 +24,7 @@ interface TargetV1ComposeResult {
   readonly canonicalGreenPixels: number;
 }
 
-/**
- * The composed program keeps the canonical position and coverage and tints only the resolved colour. Preserving the
- * canonical glyph footprint while changing the paint is what proves it reuses the exported technique shader.
- */
+/** Composed material keeps canonical position/coverage, tinting only color — proving it reuses the exported technique shader rather than reimplementing it. */
 const composedMaterial = defineTextMaterial((context) => {
   if (context.kind !== 'glyph' || context.format !== bitmap.id) {
     return context.createDefaultMaterial();

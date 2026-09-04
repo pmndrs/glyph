@@ -95,16 +95,4 @@ function percentile(values: readonly number[], ratio: number): number {
   return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * ratio) - 1)]!;
 }
 
-/* @workflow
-{
-  "name": "benchmark:paragraph-stress-timing",
-  "summary": "Attribute Paragraph Stress reflow and frame time through User Timing spans.",
-  "requirements": "GPU-enabled Chromium and Vitexec.",
-  "writes": "Standard output; optional caller-owned CPU and performance traces.",
-  "args": [
-    "--gpu",
-    "--path",
-    "/presentation?mode=benchmark&technique=mtsdf&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=paragraph-stress&textTimings=1"
-  ]
-}
-*/
+/* @workflow { "name": "benchmark:paragraph-stress-timing", "summary": "Attribute Paragraph Stress reflow and frame time through User Timing spans.", "requirements": "GPU-enabled Chromium and Vitexec.", "writes": "Standard output; optional caller-owned CPU and performance traces.", "args": ["--gpu", "--path", "/presentation?mode=benchmark&technique=mtsdf&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=paragraph-stress&textTimings=1"] } */
