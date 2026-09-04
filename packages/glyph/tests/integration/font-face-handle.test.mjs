@@ -174,6 +174,31 @@ test('a failed exact-format load is evicted so a later call receives a fresh Pro
   }
 });
 
+test('a failed Blob read is evicted so the same FontFace can retry its source', async () => {
+  let reads = 0;
+  class RetryBlob extends Blob {
+    arrayBuffer() {
+      reads += 1;
+      if (reads === 1) return Promise.reject(new Error('transient Blob read failure'));
+      return Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    }
+  }
+  const face = glyph.fontFace(new RetryBlob([], { type: 'model/gltf-binary' }), {
+    family: 'RetryBlobFontFace',
+    format: bitmap({ strikes: [16] }),
+  });
+  try {
+    const failed = face.bitmap.load();
+    await assert.rejects(failed, /transient Blob read failure/);
+    const retry = face.bitmap.load();
+    assert.notEqual(retry, failed);
+    assert.equal(await retry, face.bitmap);
+    assert.equal(reads, 2);
+  } finally {
+    face.dispose();
+  }
+});
+
 test('Glyph owns FontFace loading for a non-Three configured handle', async () => {
   const handle = glyph.handle('font-face:portable-config', defineFontAwareConfig());
   const face = glyph.fontFace(new Blob([bytes], { type: 'model/gltf-binary' }), {

@@ -141,8 +141,9 @@ export function App() {
 Aliases are lazy: the selected Text loads only the format it resolves. The provider disposes declarations it created
 from source or `{ src, format? }` entries when its retained subtree lifetime ends. It never disposes `ExistingTitle`,
 because that declaration remains caller-owned. Supplying `fontFaces` creates the provider's local Suspense boundary;
-`fallback` customizes its pending UI. `errorFallback` catches `GlyphFontError` only and rethrows unrelated application
-errors.[^react-adapter]
+`fallback` customizes its pending UI. `errorFallback(error, dismiss)` catches `GlyphFontError` only and rethrows unrelated
+application errors. It does not recover implicitly: repair or reload the failed resource, then call `dismiss()` to retry
+the child tree. An unresolved failure is caught again.[^react-adapter]
 
 The provider may also select an immutable Three handle or named root, but it is optional for both direct FontFaces and
 hooks. `Text` and `TextGroup` never accept handle or root props. The adapter obtains both from one immutable React

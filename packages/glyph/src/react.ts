@@ -218,7 +218,8 @@ export interface GlyphProviderProps {
   /** Add immutable scoped family aliases from sources, source configs, or existing FontFace declarations. */
   readonly fontFaces?: Readonly<Record<string, GlyphProviderFontFace>>;
   readonly fallback?: ReactNode;
-  readonly errorFallback?: ReactNode | ((error: GlyphFontError) => ReactNode);
+  /** Render recoverable Glyph font failures. Call dismiss only after repairing the underlying failure. */
+  readonly errorFallback?: ReactNode | ((error: GlyphFontError, dismiss: () => void) => ReactNode);
   readonly children?: ReactNode;
 }
 
@@ -449,7 +450,7 @@ function sameProviderFontFaceDeclaration(left: GlyphProviderFontFace, right: Gly
 }
 
 interface GlyphFontErrorBoundaryProps {
-  readonly fallback: ReactNode | ((error: GlyphFontError) => ReactNode);
+  readonly fallback: ReactNode | ((error: GlyphFontError, dismiss: () => void) => ReactNode);
   readonly children?: ReactNode;
 }
 
@@ -460,6 +461,10 @@ interface GlyphFontErrorBoundaryState {
 class GlyphFontErrorBoundary extends Component<GlyphFontErrorBoundaryProps, GlyphFontErrorBoundaryState> {
   override state: GlyphFontErrorBoundaryState = { error: undefined };
 
+  readonly #dismiss = (): void => {
+    this.setState({ error: undefined });
+  };
+
   static getDerivedStateFromError(error: unknown): GlyphFontErrorBoundaryState {
     return { error };
   }
@@ -468,7 +473,7 @@ class GlyphFontErrorBoundary extends Component<GlyphFontErrorBoundaryProps, Glyp
     const { error } = this.state;
     if (error === undefined) return this.props.children;
     if (!(error instanceof GlyphFontError)) throw error;
-    return typeof this.props.fallback === 'function' ? this.props.fallback(error) : this.props.fallback;
+    return typeof this.props.fallback === 'function' ? this.props.fallback(error, this.#dismiss) : this.props.fallback;
   }
 }
 
@@ -927,7 +932,9 @@ function useHandleFontFaces(
   selections: readonly FontFaceSelection[],
 ): ReadonlyMap<FontFaceSelection, Font<RasterFormatMetadata>> {
   for (const selection of selections) {
-    if (!isThreeHandleFontLoaded(handle, selection)) void loadThreeHandleFont(handle, selection);
+    if (!isThreeHandleFontLoaded(handle, selection)) {
+      void loadThreeHandleFont(handle, selection).catch(() => undefined);
+    }
   }
   for (const selection of selections) {
     if (!isThreeHandleFontLoaded(handle, selection)) suspend(loadSuspenseFont, fontSuspenseKey(handle, selection));

@@ -37,6 +37,18 @@ Text({
   children: 'Direct generic component inference',
 });
 const provided = createElement(GlyphProvider, { handle: three }, labels);
+const recoverable = createElement(
+  GlyphProvider,
+  {
+    errorFallback: (error, dismiss) => {
+      error satisfies import('@pmndrs/glyph').GlyphFontError;
+      dismiss satisfies () => void;
+      return createElement('button', { onClick: dismiss }, 'Retry');
+    },
+  },
+  labels,
+);
+void recoverable;
 const aliased = createElement(
   GlyphProvider,
   { handle: three, fontFaces: { Inter: msdfFace } },

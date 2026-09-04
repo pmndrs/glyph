@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:07c0963d4163a152e66d2bc312cf9dd3e7579bc3157adff810d53a79b7f52adc'
+source_digest: 'sha256:1cfc30ea4a533f7e06e6e780d49d0bd0ad3434ce0324293f81173a4c18023eb7'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -228,8 +228,9 @@ is shorthand for the idempotent `defaultHandle('surface')` named root. A provide
 the context value; selecting another root, handle, or alias table requires remounting the provider. Context is constructor dependency
 injection only: it owns no engine, runtime, scene, renderer, canvas, publication cursor, or semantic resource cache, and
 it never disposes an externally owned handle or FontFace. It disposes only FontFaces it declared from shorthand table
-entries. Supplying `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback` handles only `GlyphFontError`
-and rethrows unrelated errors. Imperative construction uses `handle.createText()` and `handle.createTextGroup()` for the
+entries. Supplying `fontFaces` or `fallback` adds a local Suspense boundary; `errorFallback(error, dismiss)` handles only
+`GlyphFontError` and rethrows unrelated errors. Recovery is explicit: the caller repairs the resource, then invokes
+`dismiss()` to retry the child tree. Imperative construction uses `handle.createText()` and `handle.createTextGroup()` for the
 anonymous root, or `handle(name).createText()` and `handle(name).createTextGroup()` for a named root.
 
 React font selection has three coexisting public paths. A caller-owned FontFace may be passed directly to outer or nested

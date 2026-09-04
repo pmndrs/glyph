@@ -801,13 +801,20 @@ function fontFaceLoadInput(source: FontFaceSource): Promise<LoadFontInput> {
   if (typeof source === 'string' || source instanceof URL) return Promise.resolve(source);
   const existing = blobInputs.get(source);
   if (existing !== undefined) return existing;
-  const pending = source.arrayBuffer().then((buffer) => {
-    const bytes = { bytes: new Uint8Array(buffer), ownership: 'copy' as const };
-    const name = 'name' in source && typeof source.name === 'string' ? source.name : '';
-    const runtimeSource =
-      /\.(?:otf|ttf)$/iu.test(name) || /^(?:font\/(?:otf|ttf)|application\/x-font-(?:otf|ttf))$/iu.test(source.type);
-    return runtimeSource ? { source: bytes } : { baked: bytes };
-  });
+  let pending!: Promise<LoadFontInput>;
+  pending = source.arrayBuffer().then(
+    (buffer) => {
+      const bytes = { bytes: new Uint8Array(buffer), ownership: 'copy' as const };
+      const name = 'name' in source && typeof source.name === 'string' ? source.name : '';
+      const runtimeSource =
+        /\.(?:otf|ttf)$/iu.test(name) || /^(?:font\/(?:otf|ttf)|application\/x-font-(?:otf|ttf))$/iu.test(source.type);
+      return runtimeSource ? { source: bytes } : { baked: bytes };
+    },
+    (error: unknown) => {
+      if (blobInputs.get(source) === pending) blobInputs.delete(source);
+      throw error;
+    },
+  );
   blobInputs.set(source, pending);
   return pending;
 }

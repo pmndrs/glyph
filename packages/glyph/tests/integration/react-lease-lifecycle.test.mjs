@@ -21,7 +21,7 @@ import { Fragment, StrictMode, Suspense, createElement, useLayoutEffect } from '
 
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
-import { glyph } from '@pmndrs/glyph';
+import { glyph, GlyphFontError } from '@pmndrs/glyph';
 import { ThreeConfig, defineTextMaterial } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
 
@@ -297,6 +297,53 @@ test('nested Text suspends on a provider FontFace alias before publishing the pa
     await renderer.unmount();
     nestedFace.dispose();
     fixture.dispose();
+  }
+});
+
+test('nested font prefetch observes rejection while an earlier font suspends', async () => {
+  const { create } = await import('@react-three/test-renderer/webgpu');
+  const outerRead = Promise.withResolvers();
+  const invalidRead = Promise.withResolvers();
+  class DeferredBlob extends Blob {
+    arrayBuffer() {
+      return outerRead.promise;
+    }
+  }
+  class InvalidBlob extends Blob {
+    arrayBuffer() {
+      invalidRead.resolve();
+      return Promise.resolve(new Uint8Array([0]).buffer);
+    }
+  }
+  const outer = glyph.fontFace(new DeferredBlob([], { type: 'model/gltf-binary' }), {
+    format: bitmap({ strikes: [16] }),
+  });
+  const nested = glyph.fontFace(new InvalidBlob([], { type: 'model/gltf-binary' }), {
+    format: bitmap({ strikes: [16] }),
+  });
+  const unhandled = [];
+  const observeUnhandled = (error) => unhandled.push(error);
+  process.on('unhandledRejection', observeUnhandled);
+  const tree = () =>
+    createElement(
+      GlyphProvider,
+      { handle: r3fHandle, fallback: null },
+      createElement(Text, { font: outer.bitmap }, 'outer ', createElement(Text, { font: nested.bitmap }, 'nested')),
+    );
+  let renderer;
+  try {
+    renderer = await create(tree());
+    await invalidRead.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(unhandled, [], 'speculative nested loads must always observe their rejection');
+
+    outerRead.resolve(bytesToArrayBuffer(await readFile(fontUrl)));
+    await outer.bitmap.load();
+  } finally {
+    process.off('unhandledRejection', observeUnhandled);
+    await renderer?.unmount();
+    outer.dispose();
+    nested.dispose();
   }
 });
 
@@ -647,6 +694,46 @@ test('a rejected hook resource stays stable for the error boundary and a later p
   }
 });
 
+test('a GlyphProvider error fallback retries children only when its caller dismisses it', async () => {
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  let broken = true;
+  let rendered = false;
+  let dismiss;
+  const failure = new GlyphFontError('test-retry', 'retryable test failure');
+
+  function RecoverableChild() {
+    if (broken) throw failure;
+    rendered = true;
+    return null;
+  }
+
+  const tree = () =>
+    createElement(
+      GlyphProvider,
+      {
+        handle: r3fHandle,
+        errorFallback: (error, retry) => {
+          assert.equal(error, failure);
+          dismiss = retry;
+          return null;
+        },
+      },
+      createElement(RecoverableChild),
+    );
+
+  const renderer = await create(tree());
+  try {
+    assert.equal(rendered, false);
+    assert.equal(typeof dismiss, 'function');
+    broken = false;
+    dismiss();
+    await renderer.update(tree());
+    assert.equal(rendered, true, 'dismiss must retry the repaired child tree');
+  } finally {
+    await renderer.unmount();
+  }
+});
+
 test('clearing a loaded R3F font resource permits a later preload and mount', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
   const input = new Blob([await readFile(fontUrl)], { type: 'model/gltf-binary' });
@@ -734,6 +821,10 @@ function nearestScene(object) {
     if (current.isScene === true) return current;
   }
   return undefined;
+}
+
+function bytesToArrayBuffer(value) {
+  return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
 }
 
 function captureCreatedFontFaces() {
