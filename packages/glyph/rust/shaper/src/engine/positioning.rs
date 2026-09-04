@@ -1965,6 +1965,59 @@ mod tests {
     use super::super::shaping_state::ShapeArena;
     use super::*;
 
+    fn assert_layout_plan_producer_invariants(arena: &PositionedGlyphArena) {
+        let glyph_count = arena.glyphs.len();
+        assert_eq!(arena.semantic_change_masks.len(), glyph_count);
+        for (index, field) in arena.semantic_f32.iter().enumerate() {
+            assert!(
+                field.len() == glyph_count
+                    || (index >= SEMANTIC_F32_BASE_FIELD_COUNT && field.is_empty()),
+                "f32 lane {index} has {} rows for {glyph_count} glyphs",
+                field.len(),
+            );
+            assert!(field.iter().all(|value| value.is_finite()));
+        }
+        for (index, field) in arena.semantic_u32.iter().enumerate() {
+            assert!(
+                field.len() == glyph_count
+                    || (index >= SEMANTIC_U32_BASE_FIELD_COUNT && field.is_empty()),
+                "u32 lane {index} has {} rows for {glyph_count} glyphs",
+                field.len(),
+            );
+        }
+
+        let mut stable_ids = arena
+            .semantic_glyphs
+            .iter()
+            .map(|glyph| glyph.stable_id)
+            .collect::<Vec<_>>();
+        assert!(stable_ids.iter().all(|&stable_id| stable_id != 0));
+        stable_ids.sort_unstable();
+        assert!(stable_ids.windows(2).all(|pair| pair[0] != pair[1]));
+
+        for glyph in &arena.glyphs {
+            let semantic = &arena.semantic_glyphs[glyph.semantic_glyph_index as usize];
+            assert_eq!(semantic.stable_id, glyph.stable_id);
+            assert_ne!(glyph.content_revision, 0);
+            assert_ne!(glyph.binding_handle, 0);
+            assert_ne!(glyph.font_handle, 0);
+            assert!(glyph.inline_start.is_finite());
+            assert!(glyph.block_start.is_finite());
+            assert!(glyph.inline_extent.is_finite() && glyph.inline_extent >= 0.0);
+            assert!(glyph.block_extent.is_finite() && glyph.block_extent >= 0.0);
+            assert!((glyph.inline_start + glyph.inline_extent).is_finite());
+            assert!((glyph.block_start + glyph.block_extent).is_finite());
+        }
+        for decoration in &arena.decorations {
+            assert!(decoration.inline_start.is_finite());
+            assert!(decoration.block_start.is_finite());
+            assert!(decoration.inline_extent.is_finite() && decoration.inline_extent >= 0.0);
+            assert!(decoration.block_extent.is_finite() && decoration.block_extent >= 0.0);
+            assert!((decoration.inline_start + decoration.inline_extent).is_finite());
+            assert!((decoration.block_start + decoration.block_extent).is_finite());
+        }
+    }
+
     /// A line that ends in a space keeps that space but does not charge it to `advance`.
     /// In LTR it is laid last, past the end, and costs nothing. In RTL it is laid FIRST,
     /// so without a discount it pushes every visible glyph right by its width -- which is
@@ -2474,6 +2527,8 @@ mod tests {
             | crate::engine::frame::DECORATION_LINE_THROUGH;
         style.decoration_rgba = 0xff00_00ff;
         style.material_id = 17;
+        style.outline_width = 1.0;
+        style.shadow_offset_x = 0.5;
         let styles = [StyleSegment {
             text_start: 0,
             text_end: 3,
@@ -2589,6 +2644,7 @@ mod tests {
             )
             .unwrap();
 
+        assert_layout_plan_producer_invariants(&active);
         assert_eq!(active.decorations.len(), 2);
         let underline = active.decorations[0];
         // Centered 12.0 advance in the 20.0 slot: run spans 4.0..16.0.
@@ -2967,6 +3023,7 @@ mod tests {
                 extents,
             )
             .unwrap();
+        assert_layout_plan_producer_invariants(&active);
         assert_eq!(active.glyphs.len(), 2);
         assert_eq!(active.glyphs[0].content_revision, 1);
         assert_eq!(active.glyphs[1].content_revision, 2);
@@ -3001,6 +3058,7 @@ mod tests {
                 extents,
             )
             .unwrap();
+        assert_layout_plan_producer_invariants(&pending);
         assert_eq!(pending.glyphs[0].content_revision, 1);
         assert_eq!(pending.glyphs[1].content_revision, 2);
         assert_eq!(next_revision, 3);

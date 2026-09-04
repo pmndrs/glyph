@@ -13,7 +13,7 @@ use super::{
     },
     ordered_plan::OrderedPlanCompiler,
     plan_error::PlanError,
-    plan_input::{PlanInput, PlanInputError, validate_input},
+    plan_input::{PlanInput, PlanInputError},
     render_plan::{
         BufferRecord, DrawRecord, PATCH_WRITE, PatchRecord, PrimitiveRecord,
         RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE, RETIRE_RESOURCE, RenderPlanView,
@@ -45,8 +45,6 @@ impl From<PlanInputError> for RenderPlanCompilerError {
     fn from(error: PlanInputError) -> Self {
         match error {
             PlanInputError::InvalidShape => Self::InvalidInputShape,
-            PlanInputError::InvalidIdentity => Self::InvalidIdentity,
-            PlanInputError::InvalidResource => Self::InvalidResource,
         }
     }
 }
@@ -178,7 +176,6 @@ impl RenderPlanCompiler {
         if codec.capability_set(capability_set).is_none() {
             return Err(RenderPlanCompilerError::CapabilitySetMissing);
         }
-        validate_input(input)?;
         self.clear_merged_plan();
 
         let (mut ordered_input, mut stable_input) = (false, false);

@@ -13,10 +13,7 @@ use super::{
         SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_OUTLINE_RGBA, SEMANTIC_U32_SHADOW_RGBA,
     },
     plan_input::{PlanGlyph, PlanInput},
-    positioning::{
-        ALL_SEMANTIC_CHANGES, SEMANTIC_F32_BASE_FIELD_COUNT, SEMANTIC_F32_FIELD_COUNT,
-        SEMANTIC_U32_BASE_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT, SemanticGlyph,
-    },
+    positioning::{ALL_SEMANTIC_CHANGES, SemanticGlyph},
 };
 
 // Exact Float32 results of the IEC 61966-2-1 sRGB transfer for every byte value.
@@ -276,7 +273,6 @@ impl CodecGatherWorkspace {
         input: LayoutPlanInput<'_>,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<RetainedGather, GatherError> {
-        validate_semantic_shape(input)?;
         let mut cursor = self.retained_cursor;
         let mut source_cursor = self.retained_source_cursor;
         let mut cached_font_handle = None;
@@ -459,7 +455,6 @@ impl CodecGatherWorkspace {
         source_start: usize,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<(), GatherError> {
-        validate_semantic_shape(input)?;
         let remaining = input.glyphs.len().saturating_sub(source_start);
         if source_start > input.glyphs.len() {
             return Err(GatherError::InvalidSemanticShape);
@@ -856,33 +851,6 @@ impl GatheredPlanInput<'_> {
     }
 }
 
-fn validate_semantic_shape(input: LayoutPlanInput<'_>) -> Result<(), GatherError> {
-    if input.semantic_f32.len() > SEMANTIC_F32_FIELD_COUNT
-        || input.semantic_u32.len() > SEMANTIC_U32_FIELD_COUNT
-        || (!input.semantic_change_masks.is_empty()
-            && input.semantic_change_masks.len() != input.glyphs.len())
-        || (!input.semantic_glyphs.is_empty()
-            && input.glyphs.iter().any(|glyph| {
-                usize::try_from(glyph.semantic_glyph_index)
-                    .ok()
-                    .and_then(|index| input.semantic_glyphs.get(index))
-                    .is_none_or(|semantic| semantic.stable_id != glyph.stable_id)
-            }))
-        || input.semantic_f32.iter().enumerate().any(|(index, field)| {
-            (field.len() != input.glyphs.len()
-                && !(index >= SEMANTIC_F32_BASE_FIELD_COUNT && field.is_empty()))
-                || field.iter().any(|value| !value.is_finite())
-        })
-        || input.semantic_u32.iter().enumerate().any(|(index, field)| {
-            field.len() != input.glyphs.len()
-                && !(index >= SEMANTIC_U32_BASE_FIELD_COUNT && field.is_empty())
-        })
-    {
-        return Err(GatherError::InvalidSemanticShape);
-    }
-    Ok(())
-}
-
 fn plan_glyph(
     input: LayoutPlanInput<'_>,
     glyph_index: usize,
@@ -1121,13 +1089,15 @@ mod tests {
     use super::*;
     use crate::engine::{
         codec::{
-            ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE,
-            BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId, BufferSchema,
-            CAP_ORDERED_DIRECT, CAP_STORAGE_BUFFERS, CapabilitySet, CodecDescriptor, InputSource,
-            Operation, ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
+            ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_ORDER, BATCH_PROGRAM,
+            BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId,
+            BufferSchema, CAP_ORDERED_DIRECT, CAP_STABLE_INDIRECT, CAP_STORAGE_BUFFERS,
+            CapabilitySet, CodecDescriptor, InputSource, Operation, ProgramCapabilities,
+            ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
         },
         font_binding::{FieldTable, FontResource, FontStrike},
         render_plan_compiler::RenderPlanCompiler,
+        render_plan_wire::plan_layout,
     };
     use alloc::vec;
 
@@ -1170,7 +1140,6 @@ mod tests {
             semantic_f32: &[],
             semantic_u32: &[&foreground],
         };
-        assert_eq!(validate_semantic_shape(input), Ok(()));
         assert_eq!(
             derived_semantic_f32(SEMANTIC_F32_FOREGROUND_RED, input, 0),
             Ok(Some(f32::from_bits(SRGB8_TO_LINEAR_BITS[128])))
@@ -1198,63 +1167,6 @@ mod tests {
         assert_eq!(
             derived_semantic_f32(SEMANTIC_F32_BLOCK_ORIGIN, input, 0),
             Ok(Some(-3.25))
-        );
-    }
-
-    #[test]
-    fn semantic_shape_accepts_only_the_declared_optional_field_suffix() {
-        let glyphs = [layout_glyph(1, 0)];
-        let f32_value = [1.0];
-        let u32_value = [1];
-        let semantic_f32 = [
-            f32_value.as_slice(),
-            f32_value.as_slice(),
-            f32_value.as_slice(),
-            f32_value.as_slice(),
-            f32_value.as_slice(),
-            f32_value.as_slice(),
-            &[],
-            &[],
-            &[],
-        ];
-        let semantic_u32 = [
-            u32_value.as_slice(),
-            u32_value.as_slice(),
-            u32_value.as_slice(),
-            u32_value.as_slice(),
-            u32_value.as_slice(),
-            u32_value.as_slice(),
-            &[],
-            &[],
-        ];
-        let input = LayoutPlanInput {
-            transform_id: 1,
-            glyphs: &glyphs,
-            semantic_glyphs: &[],
-            semantic_change_masks: &[],
-            semantic_f32: &semantic_f32,
-            semantic_u32: &semantic_u32,
-        };
-        assert_eq!(validate_semantic_shape(input), Ok(()));
-
-        let mut extra_f32 = semantic_f32.to_vec();
-        extra_f32.push(&[]);
-        assert_eq!(
-            validate_semantic_shape(LayoutPlanInput {
-                semantic_f32: &extra_f32,
-                ..input
-            }),
-            Err(GatherError::InvalidSemanticShape)
-        );
-
-        let mut extra_u32 = semantic_u32.to_vec();
-        extra_u32.push(&[]);
-        assert_eq!(
-            validate_semantic_shape(LayoutPlanInput {
-                semantic_u32: &extra_u32,
-                ..input
-            }),
-            Err(GatherError::InvalidSemanticShape)
         );
     }
 
@@ -2071,6 +1983,220 @@ mod tests {
         );
     }
 
+    fn assert_gathered_plan_contract(
+        label: &str,
+        codec: &ValidatedCodec,
+        binding: &FontRenderBinding,
+        workspace: &CodecGatherWorkspace,
+    ) {
+        let gathered = workspace.view();
+        let input = gathered.plan_input();
+        let glyph_count = input.glyphs.len();
+        assert_eq!(
+            input.semantic_change_masks.len(),
+            glyph_count,
+            "{label}: semantic change masks"
+        );
+        for (index, field) in input.f32_fields.iter().enumerate() {
+            assert_eq!(field.len(), glyph_count, "{label}: f32 lane {index}");
+            assert!(
+                field.iter().all(|value| value.is_finite()),
+                "{label}: finite f32 lane {index}"
+            );
+        }
+        for (index, field) in input.u32_fields.iter().enumerate() {
+            assert_eq!(field.len(), glyph_count, "{label}: u32 lane {index}");
+        }
+
+        let mut stable_ids = input
+            .glyphs
+            .iter()
+            .map(|glyph| glyph.stable_id)
+            .collect::<Vec<_>>();
+        assert!(stable_ids.iter().all(|&stable_id| stable_id != 0));
+        stable_ids.sort_unstable();
+        assert!(
+            stable_ids.windows(2).all(|pair| pair[0] != pair[1]),
+            "{label}: duplicate stable identity"
+        );
+
+        let resource = binding.resources()[0];
+        for glyph in input.glyphs {
+            assert_ne!(glyph.content_revision, 0, "{label}: content revision");
+            assert_ne!(glyph.transform_id, 0, "{label}: transform identity");
+            assert_ne!(glyph.semantic_id, 0, "{label}: semantic identity");
+            assert!(glyph.inline_start.is_finite(), "{label}: inline start");
+            assert!(glyph.block_start.is_finite(), "{label}: block start");
+            assert!(
+                glyph.inline_extent.is_finite() && glyph.inline_extent >= 0.0,
+                "{label}: inline extent"
+            );
+            assert!(
+                glyph.block_extent.is_finite() && glyph.block_extent >= 0.0,
+                "{label}: block extent"
+            );
+            assert!(
+                (glyph.inline_start + glyph.inline_extent).is_finite(),
+                "{label}: inline end"
+            );
+            assert!(
+                (glyph.block_start + glyph.block_extent).is_finite(),
+                "{label}: block end"
+            );
+
+            let program = codec
+                .program(CAPABILITY, glyph.technique, glyph.program_variant)
+                .expect("gathered glyph must retain its selected program");
+            if program.primitive_kind == crate::engine::render_plan::PRIMITIVE_DECORATION {
+                assert_eq!(
+                    (
+                        glyph.resource_id,
+                        glyph.resource_generation,
+                        glyph.resource_kind,
+                        glyph.resource_reference,
+                    ),
+                    (0, 0, 0, 0),
+                    "{label}: resource-free decoration"
+                );
+            } else {
+                assert_eq!(
+                    (
+                        glyph.resource_id,
+                        glyph.resource_generation,
+                        glyph.resource_kind,
+                        glyph.resource_reference,
+                    ),
+                    (
+                        resource.id,
+                        resource.generation,
+                        resource.kind,
+                        resource.reference
+                    ),
+                    "{label}: selected font resource"
+                );
+                let resource_bit = 1_u32 << (glyph.resource_kind - 1);
+                assert_ne!(
+                    program.resource_kind_mask & resource_bit,
+                    0,
+                    "{label}: program resource binding"
+                );
+            }
+        }
+    }
+
+    fn prepare_produced_plan(
+        label: &str,
+        compiler: &mut RenderPlanCompiler,
+        codec: &ValidatedCodec,
+        binding: &FontRenderBinding,
+        workspace: &CodecGatherWorkspace,
+        checkpoint: bool,
+        publication_generation: u32,
+    ) {
+        assert_gathered_plan_contract(label, codec, binding, workspace);
+        compiler
+            .prepare(
+                codec,
+                CAPABILITY,
+                workspace.view().plan_input(),
+                checkpoint,
+                publication_generation,
+                0,
+            )
+            .unwrap();
+        let plan = compiler
+            .plan_view(3, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert!(plan_layout(plan).is_ok(), "{label}: valid published plan");
+        compiler.commit().unwrap();
+    }
+
+    #[test]
+    fn gathered_producer_contract_compiles_fresh_and_retained_for_both_strategies() {
+        let binding = binding();
+        let before_first = [layout_glyph(1, 0), layout_glyph(2, 1)];
+        let before_second = [layout_glyph(3, 0)];
+        let mut changed = layout_glyph(2, 1);
+        changed.content_revision = 2;
+        changed.inline_start = 12.0;
+        changed.inline_extent = 9.0;
+        let after_first = [layout_glyph(1, 0), changed];
+        let after_second = [layout_glyph(3, 0)];
+        let before: &[Paragraph<'_>] = &[(1, &before_first, &[]), (2, &before_second, &[])];
+        let after: &[Paragraph<'_>] = &[
+            (1, &after_first, &[0, ALL_SEMANTIC_CHANGES]),
+            (2, &after_second, &[]),
+        ];
+
+        for strategy in [ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT] {
+            let codec = codec_for_strategy(strategy);
+            let label = if strategy == ALLOCATION_ORDERED_DIRECT {
+                "ordered"
+            } else {
+                "stable"
+            };
+            let mut retained = CodecGatherWorkspace::default();
+            retained.reserve_codec(&codec, 16).unwrap();
+            assert!(!gather_planner(
+                &codec,
+                &binding,
+                &mut retained,
+                before,
+                false
+            ));
+            let mut compiler = RenderPlanCompiler::default();
+            prepare_produced_plan(
+                &format!("{label} fresh initial"),
+                &mut compiler,
+                &codec,
+                &binding,
+                &retained,
+                true,
+                1,
+            );
+
+            assert!(retained.begin_retained(&codec, 16).unwrap());
+            assert!(gather_planner(&codec, &binding, &mut retained, after, true));
+            prepare_produced_plan(
+                &format!("{label} retained update"),
+                &mut compiler,
+                &codec,
+                &binding,
+                &retained,
+                false,
+                2,
+            );
+
+            let mut fresh = CodecGatherWorkspace::default();
+            fresh.reserve_codec(&codec, 16).unwrap();
+            assert!(!gather_planner(&codec, &binding, &mut fresh, after, false));
+            prepare_produced_plan(
+                &format!("{label} fresh oracle"),
+                &mut RenderPlanCompiler::default(),
+                &codec,
+                &binding,
+                &fresh,
+                true,
+                1,
+            );
+            assert_eq!(
+                retained.view().plan_input().glyphs,
+                fresh.view().plan_input().glyphs,
+                "{label}: retained glyph records match fresh"
+            );
+            assert_eq!(
+                retained.view().plan_input().f32_fields,
+                fresh.view().plan_input().f32_fields,
+                "{label}: retained f32 lanes match fresh"
+            );
+            assert_eq!(
+                retained.view().plan_input().u32_fields,
+                fresh.view().plan_input().u32_fields,
+                "{label}: retained u32 lanes match fresh"
+            );
+        }
+    }
+
     impl CodecGatherWorkspace {
         fn capacities(&self) -> (usize, Vec<usize>, Vec<usize>) {
             (
@@ -2125,11 +2251,34 @@ mod tests {
     }
 
     fn codec() -> ValidatedCodec {
-        ValidatedCodec::new(base_descriptor()).unwrap()
+        codec_for_strategy(ALLOCATION_ORDERED_DIRECT)
+    }
+
+    fn codec_for_strategy(allocation_strategy: u16) -> ValidatedCodec {
+        let mut descriptor = base_descriptor();
+        descriptor.capability_sets[0].flags = CAP_STORAGE_BUFFERS
+            | if allocation_strategy == ALLOCATION_ORDERED_DIRECT {
+                CAP_ORDERED_DIRECT
+            } else {
+                CAP_STABLE_INDIRECT
+            };
+        descriptor.programs[0].allocation_strategy = allocation_strategy;
+        ValidatedCodec::new(descriptor).unwrap()
     }
 
     fn codec_with_decorations() -> ValidatedCodec {
+        codec_with_decorations_for_strategy(ALLOCATION_ORDERED_DIRECT)
+    }
+
+    fn codec_with_decorations_for_strategy(allocation_strategy: u16) -> ValidatedCodec {
         let mut descriptor = base_descriptor();
+        descriptor.capability_sets[0].flags = CAP_STORAGE_BUFFERS
+            | if allocation_strategy == ALLOCATION_ORDERED_DIRECT {
+                CAP_ORDERED_DIRECT
+            } else {
+                CAP_STABLE_INDIRECT
+            };
+        descriptor.programs[0].allocation_strategy = allocation_strategy;
         let mut program = descriptor.programs[0].clone();
         program.primitive_kind = 2;
         program.technique = TechniqueId(99);
@@ -2239,6 +2388,113 @@ mod tests {
                 .unwrap()
         );
         assert_eq!(plain_workspace.view().glyphs.len(), 0);
+    }
+
+    #[test]
+    fn gathered_decorations_preserve_the_producer_contract_for_both_strategies() {
+        let binding = binding();
+        let underline = crate::engine::positioning::DecorationRecord {
+            flags: crate::engine::frame::DECORATION_UNDERLINE,
+            style: 1,
+            color: 0xff00_00ff,
+            material_id: 7,
+            inline_start: 4.0,
+            inline_extent: 12.0,
+            block_start: 9.0,
+            block_extent: 0.5,
+            clip_id: 9,
+            region_id: 9,
+            flow_thread_id: 7,
+            transform_index: 9,
+        };
+        let line_through = crate::engine::positioning::DecorationRecord {
+            flags: crate::engine::frame::DECORATION_LINE_THROUGH,
+            block_start: 5.0,
+            ..underline
+        };
+        let mut glyphs = [layout_glyph(1, 0)];
+        glyphs[0].depth_key = PAINT_LAYER_GLYPH;
+        let semantic_x = [10.0];
+        let semantic_kind = [100];
+
+        for strategy in [ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT] {
+            let codec = codec_with_decorations_for_strategy(strategy);
+            let label = if strategy == ALLOCATION_ORDERED_DIRECT {
+                "ordered decorations"
+            } else {
+                "stable decorations"
+            };
+            let mut workspace = CodecGatherWorkspace::default();
+            workspace.begin(&codec, 8).unwrap();
+            assert!(
+                workspace
+                    .append_decorations(
+                        &codec,
+                        CAPABILITY,
+                        &[underline, line_through],
+                        3,
+                        5,
+                        DecorationPass::Under,
+                    )
+                    .unwrap()
+            );
+            workspace
+                .append(
+                    &codec,
+                    CAPABILITY,
+                    LayoutPlanInput {
+                        transform_id: 3,
+                        glyphs: &glyphs,
+                        semantic_glyphs: &[],
+                        semantic_change_masks: &[],
+                        semantic_f32: &[&semantic_x],
+                        semantic_u32: &[&semantic_kind],
+                    },
+                    |_| Some(&binding),
+                )
+                .unwrap();
+            assert!(
+                workspace
+                    .append_decorations(
+                        &codec,
+                        CAPABILITY,
+                        &[underline, line_through],
+                        3,
+                        5,
+                        DecorationPass::Over,
+                    )
+                    .unwrap()
+            );
+
+            assert_gathered_plan_contract(label, &codec, &binding, &workspace);
+            let mut compiler = RenderPlanCompiler::default();
+            compiler
+                .prepare(
+                    &codec,
+                    CAPABILITY,
+                    workspace.view().plan_input(),
+                    true,
+                    1,
+                    0,
+                )
+                .unwrap();
+            let plan = compiler
+                .plan_view(3, CAPABILITY, codec.fingerprint())
+                .unwrap();
+            assert_eq!(
+                plan.draws
+                    .iter()
+                    .map(|draw| draw.depth_key)
+                    .collect::<Vec<_>>(),
+                [
+                    PAINT_LAYER_UNDER_DECORATION,
+                    PAINT_LAYER_GLYPH,
+                    PAINT_LAYER_OVER_DECORATION,
+                ],
+                "{label}: display-list paint order"
+            );
+            assert!(plan_layout(plan).is_ok(), "{label}: valid published plan");
+        }
     }
 
     fn base_descriptor() -> CodecDescriptor {

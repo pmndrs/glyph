@@ -36,56 +36,6 @@ pub struct PlanInput<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlanInputError {
     InvalidShape,
-    InvalidIdentity,
-    InvalidResource,
-}
-
-pub fn validate_input(input: PlanInput<'_>) -> Result<(), PlanInputError> {
-    if u32::try_from(input.glyphs.len()).is_err()
-        || (!input.semantic_change_masks.is_empty()
-            && input.semantic_change_masks.len() != input.glyphs.len())
-        || input
-            .f32_fields
-            .iter()
-            .any(|field| field.len() != input.glyphs.len())
-        || input
-            .u32_fields
-            .iter()
-            .any(|field| field.len() != input.glyphs.len())
-    {
-        return Err(PlanInputError::InvalidShape);
-    }
-    Ok(())
-}
-
-/// `resource_free` admits records of decoration-kind programs, which draw without any
-/// raster resource; every other record must name a complete resource identity.
-pub fn validate_glyph(glyph: PlanGlyph, resource_free: bool) -> Result<(), PlanInputError> {
-    if glyph.stable_id == 0 || glyph.content_revision == 0 || glyph.transform_id == 0 {
-        return Err(PlanInputError::InvalidIdentity);
-    }
-    if resource_free {
-        if glyph.resource_id != 0 || glyph.resource_generation != 0 || glyph.resource_kind != 0 {
-            return Err(PlanInputError::InvalidResource);
-        }
-    } else if glyph.resource_id == 0
-        || glyph.resource_generation == 0
-        || !(1..=32).contains(&glyph.resource_kind)
-    {
-        return Err(PlanInputError::InvalidResource);
-    }
-    if !glyph.inline_start.is_finite()
-        || !glyph.block_start.is_finite()
-        || !glyph.inline_extent.is_finite()
-        || !glyph.block_extent.is_finite()
-        || glyph.inline_extent < 0.0
-        || glyph.block_extent < 0.0
-        || !(glyph.inline_start + glyph.inline_extent).is_finite()
-        || !(glyph.block_start + glyph.block_extent).is_finite()
-    {
-        return Err(PlanInputError::InvalidShape);
-    }
-    Ok(())
 }
 
 pub fn span_bounds(glyphs: &[PlanGlyph]) -> Result<(f32, f32, f32, f32), PlanInputError> {

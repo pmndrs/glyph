@@ -14,12 +14,8 @@ use super::{
         BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CapabilitySetId, ScalarType, TechniqueId,
         ValidatedCodec,
     },
-    identity_index::IdentitySet,
     plan_draw::{GlyphDraw, independent_draw_sort_key, push_glyph_draw},
-    plan_input::{
-        draw_fields_compatible, draw_span_compatible, indexed_span_bounds, span_bounds,
-        validate_glyph, validate_input,
-    },
+    plan_input::{draw_fields_compatible, draw_span_compatible, indexed_span_bounds, span_bounds},
     plan_packing::{
         MAX_PHYSICAL_BUFFERS, PendingAllocation, PhysicalBufferState, RangeJob, RecordRange,
         align_record_range, align_up, apply_writes, buffer_record_alignment,
@@ -212,7 +208,6 @@ pub struct StablePlanCompiler {
     changed_ranges: Vec<RecordRange>,
     buffer_ranges: [Vec<RecordRange>; MAX_PHYSICAL_BUFFERS],
     range_jobs: Vec<RangeJob>,
-    identity_set: IdentitySet,
     pending_allocations: Vec<PendingAllocation>,
     resources: Vec<ResourceRecord>,
     plan_buffers: Vec<BufferRecord>,
@@ -330,7 +325,6 @@ impl StablePlanCompiler {
         let capability = codec
             .capability_set(capability_set)
             .ok_or(StablePlanError::CapabilitySetMissing)?;
-        validate_input(input)?;
         for batch in &mut self.batches {
             // GPU completion is external monotonic state, not part of the publication transaction.
             // Reclamation therefore intentionally survives a later prepare failure or abort.
@@ -338,7 +332,6 @@ impl StablePlanCompiler {
         }
         self.reset_pending();
         self.pending_publication_generation = publication_generation;
-        self.identity_set.prepare(input.glyphs.len())?;
         reserve(&mut self.input_batches, input.glyphs.len())?;
         reserve(&mut self.input_slots, input.glyphs.len())?;
         reserve(&mut self.input_order_records, input.glyphs.len())?;
@@ -364,10 +357,6 @@ impl StablePlanCompiler {
                     program
                 }
             };
-            validate_glyph(glyph, program.primitive_kind == PRIMITIVE_DECORATION)?;
-            if !self.identity_set.insert(glyph.stable_id) {
-                return Err(StablePlanError::DuplicateIdentity);
-            }
             if program.allocation_strategy != ALLOCATION_STABLE_INDIRECT {
                 if strict_strategy {
                     return Err(StablePlanError::UnsupportedStrategy);
@@ -2559,8 +2548,6 @@ mod tests {
             compiler.order_chunk_scratch.capacity(),
             compiler.slot_writes.capacity(),
             compiler.changed_ranges.capacity(),
-            compiler.identity_set.capacities()[0],
-            compiler.identity_set.capacities()[1],
             compiler.pending_allocations.capacity(),
             compiler.resources.capacity(),
             compiler.plan_buffers.capacity(),

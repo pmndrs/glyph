@@ -1,8 +1,8 @@
 //! Error contract shared by render-plan storage strategies.
 
 use super::{
-    codec::CodecExecutionError, identity_index::IdentitySetError, plan_draw::PlanDrawError,
-    plan_input::PlanInputError, plan_packing::PackingError,
+    codec::CodecExecutionError, plan_draw::PlanDrawError, plan_input::PlanInputError,
+    plan_packing::PackingError,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,8 +27,6 @@ impl From<PlanInputError> for PlanError {
     fn from(error: PlanInputError) -> Self {
         match error {
             PlanInputError::InvalidShape => Self::InvalidInputShape,
-            PlanInputError::InvalidIdentity => Self::InvalidIdentity,
-            PlanInputError::InvalidResource => Self::InvalidResource,
         }
     }
 }
@@ -50,15 +48,6 @@ impl From<PlanDrawError> for PlanError {
         match error {
             PlanDrawError::AllocationFailed => Self::AllocationFailed,
             PlanDrawError::ArithmeticOverflow => Self::ArithmeticOverflow,
-        }
-    }
-}
-
-impl From<IdentitySetError> for PlanError {
-    fn from(error: IdentitySetError) -> Self {
-        match error {
-            IdentitySetError::AllocationFailed => Self::AllocationFailed,
-            IdentitySetError::ArithmeticOverflow => Self::ArithmeticOverflow,
         }
     }
 }

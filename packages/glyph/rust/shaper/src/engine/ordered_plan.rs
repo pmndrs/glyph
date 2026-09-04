@@ -12,12 +12,8 @@ use super::{
         ALLOCATION_ORDERED_DIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BufferSchema, CapabilitySetId,
         TechniqueId, ValidatedCodec,
     },
-    identity_index::IdentitySet,
     plan_draw::{GlyphDraw, independent_draw_sort_key, push_glyph_draw},
-    plan_input::{
-        draw_fields_compatible, draw_span_compatible, indexed_span_bounds, span_bounds,
-        validate_glyph, validate_input,
-    },
+    plan_input::{draw_fields_compatible, draw_span_compatible, indexed_span_bounds, span_bounds},
     plan_packing::{
         MAX_PHYSICAL_BUFFERS, PendingAllocation, PhysicalBufferState, RangeJob, RecordRange,
         align_record_range, align_up, apply_writes, buffer_record_alignment,
@@ -106,7 +102,6 @@ pub struct OrderedPlanCompiler {
     pending_allocations: Vec<PendingAllocation>,
     input_batches: Vec<u32>,
     input_slots: Vec<u32>,
-    identity_set: IdentitySet,
     batch_cursors: Vec<u32>,
     changed_ranges: Vec<RecordRange>,
     buffer_ranges: [Vec<RecordRange>; MAX_PHYSICAL_BUFFERS],
@@ -196,7 +191,7 @@ impl OrderedPlanCompiler {
         let capability = codec
             .capability_set(capability_set)
             .ok_or(OrderedPlanError::CapabilitySetMissing)?;
-        validate_input(input)?;
+        u32::try_from(input.glyphs.len()).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
         self.reset_pending();
         let retained_topology =
             !checkpoint && self.prepare_retained_topology(codec, capability_set, input)?;
@@ -397,8 +392,6 @@ impl OrderedPlanCompiler {
         self.input_batches.resize(input.glyphs.len(), NONE);
         self.input_batches.fill(NONE);
         self.input_slots.resize(input.glyphs.len(), 0);
-        self.identity_set.prepare(input.glyphs.len())?;
-
         let mut cached_kind_program = None;
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
             let program = match cached_kind_program {
@@ -415,10 +408,6 @@ impl OrderedPlanCompiler {
                     program
                 }
             };
-            validate_glyph(glyph, program.primitive_kind == PRIMITIVE_DECORATION)?;
-            if !self.identity_set.insert(glyph.stable_id) {
-                return Err(OrderedPlanError::DuplicateIdentity);
-            }
             if program.allocation_strategy != ALLOCATION_ORDERED_DIRECT {
                 if strict_strategy {
                     return Err(OrderedPlanError::UnsupportedStrategy);
@@ -489,27 +478,7 @@ impl OrderedPlanCompiler {
         {
             return Ok(false);
         }
-        self.identity_set.prepare(input.glyphs.len())?;
-        let mut cached_kind_program = None;
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
-            let program = match cached_kind_program {
-                Some((technique, variant, program))
-                    if technique == glyph.technique && variant == glyph.program_variant =>
-                {
-                    program
-                }
-                _ => {
-                    let program = codec
-                        .program(capability_set, glyph.technique, glyph.program_variant)
-                        .ok_or(OrderedPlanError::ProgramMissing)?;
-                    cached_kind_program = Some((glyph.technique, glyph.program_variant, program));
-                    program
-                }
-            };
-            validate_glyph(glyph, program.primitive_kind == PRIMITIVE_DECORATION)?;
-            if !self.identity_set.insert(glyph.stable_id) {
-                return Err(OrderedPlanError::DuplicateIdentity);
-            }
             let batch_index = self.input_batches[input_index];
             if batch_index == NONE {
                 return Ok(false);
@@ -2217,15 +2186,13 @@ mod tests {
         }]
     }
 
-    fn capacities(compiler: &OrderedPlanCompiler) -> [usize; 18] {
+    fn capacities(compiler: &OrderedPlanCompiler) -> [usize; 16] {
         [
             compiler.pending_batches.capacity(),
             compiler.pending_instances.capacity(),
             compiler.pending_allocations.capacity(),
             compiler.input_batches.capacity(),
             compiler.input_slots.capacity(),
-            compiler.identity_set.capacities()[0],
-            compiler.identity_set.capacities()[1],
             compiler.batch_cursors.capacity(),
             compiler.changed_ranges.capacity(),
             compiler.resources.capacity(),
