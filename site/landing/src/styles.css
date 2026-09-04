@@ -1,0 +1,278 @@
+/*
+ * Ground and paper.
+ *
+ * Nothing here is pure. The ground keeps a little value in it because a true
+ * #000 reads as digital void rather than a photographed black, and the paper
+ * is backed off from the maximum with a faint blue cast so it reads as light
+ * rather than as a clipped channel. Specular highlights are allowed to reach
+ * true white on their own, through tone mapping, which is where white belongs.
+ */
+:root {
+  --ink: #07080b;
+  --ink-raised: #0f1218;
+  --paper: #e7ecf6;
+  --paper-dim: #97a1b4;
+  --paper-faint: #454d5d;
+  --rule: #1a1f28;
+
+  --measure: 68rem;
+
+  /* Published by the scene: where the wordmark's line box ends, as a fraction
+     of the frame. The fallback only applies for the frame or two before the
+     paragraph has been measured. */
+  --mark-bottom: 62%;
+  --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-ui);
+  margin: 0;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.stage {
+  height: 100%;
+  position: relative;
+  width: 100%;
+}
+
+.stage canvas {
+  display: block;
+}
+
+/* The overlay never intercepts the pointer except on its own controls, so the
+   canvas keeps every drag and hover it would otherwise lose. */
+.overlay {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+/* Anchored under the mark rather than to the bottom of the screen, so the gap
+   reads the same whether the type is filling a phone or a display. */
+.links {
+  background: radial-gradient(ellipse at center, color-mix(in oklab, var(--ink) 82%, transparent) 0%, transparent 72%);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  left: 50%;
+  pointer-events: auto;
+  position: absolute;
+  top: var(--mark-bottom);
+  transform: translateX(-50%);
+}
+
+.link {
+  align-items: center;
+  backdrop-filter: blur(6px);
+  background: color-mix(in oklab, var(--ink-raised) 72%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--paper-dim);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.8125rem;
+  gap: 0.5rem;
+  justify-content: center;
+  letter-spacing: 0.06em;
+  padding: 0.65rem 1.15rem;
+  text-decoration: none;
+  text-transform: uppercase;
+  /* Lifted off the field behind them: a dark drop for separation, a soft outer
+     glow so the edge survives against bright type, and an inner highlight along
+     the top so the pill reads as a raised surface rather than a hole. */
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.55),
+    0 18px 48px -10px rgb(0 0 0 / 0.85),
+    0 34px 80px -20px rgb(0 0 0 / 0.7),
+    0 0 22px -4px color-mix(in oklab, var(--paper) 22%, transparent),
+    inset 0 1px 0 color-mix(in oklab, var(--paper) 12%, transparent);
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+
+.link:hover,
+.link:focus-visible {
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.55),
+    0 22px 56px -10px rgb(0 0 0 / 0.88),
+    0 40px 92px -20px rgb(0 0 0 / 0.75),
+    0 0 30px -2px color-mix(in oklab, var(--paper) 34%, transparent),
+    inset 0 1px 0 color-mix(in oklab, var(--paper) 18%, transparent);
+  transform: translateY(-1px);
+}
+
+/* Square-ish so the two marks sit on the same optical footprint. */
+.link-icon {
+  padding: 0.65rem;
+  width: 2.75rem;
+}
+
+.link-cta {
+  color: var(--paper);
+  padding-inline: 1.35rem;
+}
+
+.mark {
+  display: block;
+  height: 1.05rem;
+  width: 1.05rem;
+}
+
+/* The npm mark is a solid tile with the letters knocked out, so the counter has
+   to be the page ground rather than white — otherwise it glows against black. */
+.mark-cut {
+  fill: var(--ink);
+}
+
+.mark-swap {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+.mark-swap .mark {
+  animation: mark-in 220ms cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+.is-copied {
+  border-color: color-mix(in oklab, var(--paper) 45%, transparent);
+  color: var(--paper);
+}
+
+@keyframes mark-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-12deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark-swap .mark {
+    animation: none;
+  }
+}
+
+.sr-only {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.link:hover,
+.link:focus-visible {
+  background: color-mix(in oklab, var(--ink-raised) 92%, transparent);
+  border-color: color-mix(in oklab, var(--paper) 28%, transparent);
+  color: var(--paper);
+}
+
+.link:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--paper) 60%, transparent);
+  outline-offset: 2px;
+}
+
+/* Shown when neither WebGPU nor WebGL2 is available. The links above it stay
+   reachable, so the page still does its job with no canvas at all. */
+.fallback {
+  align-items: center;
+  color: var(--paper-dim);
+  display: flex;
+  font-size: 0.875rem;
+  height: 100%;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Tooltips ---------------------------------------------------------------- */
+
+.tip-anchor {
+  display: inline-flex;
+}
+
+/*
+ * Lives in the top layer, so it is positioned against the viewport and placed
+ * from the trigger's own rect. `translate` centres it on the trigger and lifts
+ * it clear; the popover's own inset defaults are cleared first, or the UA
+ * centring fights the placement.
+ */
+.tip {
+  background: color-mix(in oklab, var(--ink-raised) 92%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: 0.5rem;
+  color: var(--paper);
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 0.75rem;
+  inset: auto;
+  letter-spacing: 0.01em;
+  margin: 0;
+  overflow: visible;
+  padding: 0.45rem 0.7rem;
+  position: fixed;
+  transform: translate(-50%, calc(-100% - 0.6rem));
+  white-space: nowrap;
+}
+
+/* The little tail, so the panel reads as belonging to the button under it. */
+.tip::after {
+  background: inherit;
+  border-bottom: 1px solid var(--rule);
+  border-right: 1px solid var(--rule);
+  bottom: -0.3rem;
+  content: '';
+  height: 0.55rem;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%) rotate(45deg);
+  width: 0.55rem;
+}
+
+.tip:popover-open {
+  animation: tip-in 180ms cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+.tip-text {
+  display: block;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% + 0.2rem)) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, calc(-100% - 0.6rem)) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tip:popover-open {
+    animation: none;
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 0,
+  "names": [
+    "rocket",
+    "paintbrush",
+    "palette",
+    "bolt",
+    "power-off",
+    "pen-to-square"
+  ],
+  "icons": {
+    "rocket": 61749,
+    "paintbrush": 61948,
+    "palette": 62783,
+    "bolt": 61671,
+    "power-off": 61457,
+    "pen-to-square": 61508
+  }
+}

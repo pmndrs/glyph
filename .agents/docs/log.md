@@ -198,6 +198,15 @@
   cache leases without invalidating independently bound Fonts. The planned direct CLI zero-flag default changes from
   shaping-only to embedded Bitmap 8/16, MSDF, and Slug.
 
+## 2026-08-31
+
+- **Added reusable inline documentation explainers** — The static `pmndrs/docs` site now accepts page-local custom
+  elements backed by one bounded pool of offscreen R3F roots. Visible proxies receive complete bitmap frames, preserve the
+  last frame through resize, and stop advancing when they leave the viewport. A synchronous ordered input stream keeps
+  clicks and keys ahead of later motion without rerendering React roots. The getting-started page exercises the three font
+  techniques, fallback, icons, editing with caret and drag selection, and planner-assisted `breakApart()` physics; a
+  direct-canvas physics page remains available as a proxy-independent diagnostic.
+
 ## 2026-08-30
 
 - **Implemented planner-assisted detached glyph slices** — A committed `RetainedText` can synchronously emit a complete
