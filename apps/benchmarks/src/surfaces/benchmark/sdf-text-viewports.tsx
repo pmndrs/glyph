@@ -3,7 +3,7 @@ import { useEffect, useEffectEvent, useRef, useState, type RefObject } from 'rea
 import type { FontDelivery, GraphicsBackend } from '../../benchmark/url-state';
 import type { MtsdfTextLiveStats, MtsdfTextPersistentScene } from '../../techniques/mtsdf/persistent-scene';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
-import type { GlyphOriginPresentation } from '../../techniques/shared/glyph-origin-transition';
+import type { GlyphOriginPresentation } from '../../techniques/shared/glyph-origin-presentation';
 import type { SlugTextLiveStats, SlugTextPersistentScene } from '../../techniques/slug/persistent-scene';
 import {
   benchmarkContentWidth,
@@ -24,8 +24,7 @@ function loadSlugTextRenderer() {
 }
 
 /**
- * The live-update surface both SDF raster-format scenes expose. Unlike bitmap they present reflows from their own frame
- * clock, so a host-driven progress timeline has nothing to do here.
+ * The retained live-update surface shared by both SDF raster-format scenes.
  */
 interface SdfLiveTextScene {
   hasFontFixture(fixture: LiveTextConfiguration['fontFixture']): boolean;
@@ -117,18 +116,8 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
     publish: publishBakeProgress,
     value: bakeProgressValue,
   } = useBakeProgress('MSDF');
-  const {
-    anchor,
-    animatePresentation,
-    direction,
-    features,
-    fontFixture,
-    language,
-    layoutWidthRatio,
-    text,
-    textAlign,
-    timelineTick,
-  } = textConfiguration;
+  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign, timelineTick } =
+    textConfiguration;
   const publishStats = useEffectEvent((next: MtsdfTextLiveStats) => {
     finishBakeProgress();
     onStats(next);
@@ -146,7 +135,6 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
   });
   const sceneConfiguration = useEffectEvent(() => ({
     anchor,
-    animatePresentation,
     direction,
     features,
     fontFixture,
@@ -251,7 +239,6 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
       scene,
       {
         anchor,
-        animatePresentation,
         direction,
         features,
         fontFixture,
@@ -267,7 +254,6 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
     );
   }, [
     anchor,
-    animatePresentation,
     direction,
     dpr,
     features,
@@ -413,7 +399,7 @@ function MtsdfViewportChrome({
       {error !== undefined && (
         <div
           className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger"
-          data-testid="slug-live-error"
+          data-testid="mtsdf-live-error"
         >
           {error}
         </div>
@@ -457,18 +443,8 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
     publish: publishBakeProgress,
     value: bakeProgressValue,
   } = useBakeProgress('Slug');
-  const {
-    anchor,
-    animatePresentation,
-    direction,
-    features,
-    fontFixture,
-    language,
-    layoutWidthRatio,
-    text,
-    textAlign,
-    timelineTick,
-  } = textConfiguration;
+  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign, timelineTick } =
+    textConfiguration;
   const publishStats = useEffectEvent((next: SlugTextLiveStats) => {
     finishBakeProgress();
     onStats(next);
@@ -486,7 +462,6 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
   });
   const sceneConfiguration = useEffectEvent(() => ({
     anchor,
-    animatePresentation,
     direction,
     features,
     fontFixture,
@@ -590,7 +565,6 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
       scene,
       {
         anchor,
-        animatePresentation,
         direction,
         features,
         fontFixture,
@@ -606,7 +580,6 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
     );
   }, [
     anchor,
-    animatePresentation,
     direction,
     dpr,
     features,
@@ -750,7 +723,10 @@ function SlugViewportChrome({
         <BakeProgressOverlay backend={backend} progress={bakeProgressValue} technique="SLUG" />
       )}
       {error !== undefined && (
-        <div className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger">
+        <div
+          className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger"
+          data-testid="slug-live-error"
+        >
           {error}
         </div>
       )}

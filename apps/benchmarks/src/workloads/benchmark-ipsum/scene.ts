@@ -48,7 +48,6 @@ export function benchmarkIpsumLiveTextScene(
 ): LiveTextScene {
   return {
     anchor: 'center',
-    animatePresentation: false,
     direction: 'ltr',
     expectedGlyphCount: fontFixture === 'inter' ? BENCHMARK_IPSUM_INTER_GLYPH_COUNT : undefined,
     features: EMPTY_FONT_FEATURES,

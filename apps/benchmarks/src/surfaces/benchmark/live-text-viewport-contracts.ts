@@ -9,7 +9,6 @@ export interface LiveTextConfiguration extends LiveTextScene {
 }
 
 export interface RetainedLiveTextUpdate extends BitmapTextSceneUpdate {
-  readonly animatePresentation: boolean;
   /** Required here, unlike the scene contract: a live surface always names the fixture it wants committed. */
   readonly fontFixture: BenchmarkFontFixture;
   readonly timelineTick: number | undefined;

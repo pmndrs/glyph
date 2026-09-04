@@ -23,14 +23,11 @@ import type {
   RetainedLiveTextUpdate,
 } from './live-text-viewport-contracts';
 
-const GLYPH_POSITION_TRANSITION_MS = 110;
-
 function loadBitmapTextRenderer() {
   return import('../../techniques/bitmap/persistent-scene');
 }
 
 interface LiveTextUpdateHandlers {
-  readonly onPresentation: (snapshot: BitmapTextSceneSnapshot, progress: 0 | 1) => void;
   readonly onSettled: (snapshot: BitmapTextSceneSnapshot, input: RetainedLiveTextUpdate) => void;
   readonly onError: (error: unknown) => void;
 }
@@ -46,33 +43,13 @@ interface LiveTextUpdateHandlers {
 function applyLiveTextUpdate(
   scene: BitmapTextPersistentScene,
   update: RetainedLiveTextUpdate,
-  animatePresentation: boolean,
   handlers: LiveTextUpdateHandlers,
 ): () => void {
   let cancelled = false;
-  let animationFrame: number | undefined;
   const commit = (): void => {
     if (cancelled) return;
     const snapshot = scene.update(update);
-    handlers.onPresentation(snapshot, 0);
-    // A snapped reflow has no matched glyphs to move, so there is no timeline for the host to drive.
-    if (!animatePresentation || !snapshot.transitioned) {
-      handlers.onSettled(scene.finishPresentation(snapshot.revision), update);
-      return;
-    }
-    const startedAt = performance.now();
-    const animate = (timestamp: number): void => {
-      if (cancelled) return;
-      const linearProgress = Math.min(1, Math.max(0, (timestamp - startedAt) / GLYPH_POSITION_TRANSITION_MS));
-      const easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress);
-      const presented = scene.setPresentationProgress(snapshot.revision, easedProgress);
-      if (linearProgress === 1) {
-        handlers.onSettled(presented, update);
-        return;
-      }
-      animationFrame = requestAnimationFrame(animate);
-    };
-    animationFrame = requestAnimationFrame(animate);
+    handlers.onSettled(snapshot, update);
   };
   if (scene.hasFontFixture(update.fontFixture)) {
     try {
@@ -85,7 +62,6 @@ function applyLiveTextUpdate(
   }
   return () => {
     cancelled = true;
-    if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
   };
 }
 
@@ -228,7 +204,6 @@ export function BitmapTextViewport({
   } = useBakeProgress('bitmap');
   const {
     anchor,
-    animatePresentation,
     direction,
     expectedGlyphCount,
     features,
@@ -256,7 +231,6 @@ export function BitmapTextViewport({
   });
   const sceneConfiguration = useEffectEvent(() => ({
     anchor,
-    animatePresentation,
     direction,
     expectedGlyphCount,
     features,
@@ -342,8 +316,7 @@ export function BitmapTextViewport({
       // has moved on to since, then hand later changes to the synchronous effect below.
       activeSceneRef.current = created;
       setSettledWorkload(configuration.workload);
-      cancelInitialUpdate = applyLiveTextUpdate(created, sceneConfiguration(), false, {
-        onPresentation: publishPresentation,
+      cancelInitialUpdate = applyLiveTextUpdate(created, sceneConfiguration(), {
         onSettled: publishSettled,
         onError: publishError,
       });
@@ -382,7 +355,6 @@ export function BitmapTextViewport({
       scene,
       {
         anchor,
-        animatePresentation,
         fontFixture,
         fontSize,
         layoutWidthRatio,
@@ -395,12 +367,10 @@ export function BitmapTextViewport({
         timelineTick,
         workload,
       },
-      animatePresentation,
-      { onPresentation: publishPresentation, onSettled: publishSettled, onError: publishError },
+      { onSettled: publishSettled, onError: publishError },
     );
   }, [
     anchor,
-    animatePresentation,
     direction,
     dpr,
     expectedGlyphCount,
@@ -490,7 +460,7 @@ function BitmapViewportChrome({
       {error !== undefined && (
         <div
           className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger"
-          data-testid="mtsdf-live-error"
+          data-testid="bitmap-live-error"
         >
           {error}
         </div>

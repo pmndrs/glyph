@@ -306,7 +306,6 @@ export function advancedShapingLiveTextScene(
 ): LiveTextScene {
   return {
     anchor: 'measure-center',
-    animatePresentation: false,
     direction: frame.caseDefinition.direction,
     expectedGlyphCount: undefined,
     features: frame.caseDefinition.features,

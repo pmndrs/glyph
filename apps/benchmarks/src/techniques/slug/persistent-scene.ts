@@ -1,4 +1,5 @@
 import {
+  glyph,
   type BakeProgressListener,
   type Constraints,
   type FontFeature,
@@ -25,11 +26,7 @@ import {
   type LiveTextAnchor,
 } from '../../workloads/shared/text-style';
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from '../../renderer/text-update-telemetry';
-import {
-  type PersistentRenderFrameContext,
-  type PersistentRenderScene,
-  type PersistentRenderViewport,
-} from '../../renderer/persistent-render-host';
+import { type PersistentRenderScene, type PersistentRenderViewport } from '../../renderer/persistent-render-host';
 import { createPersistentSceneActivation } from '../../renderer/persistent-scene-activation';
 import {
   createRetainedFontFixtureController,
@@ -38,15 +35,10 @@ import {
 } from '../../renderer/retained-font-fixture';
 import type { RendererBackend } from '../../renderer/webgpu-renderer';
 import {
-  captureGlyphOriginsForPresentation,
-  createFrameDrivenGlyphTransition,
-  snapGlyphOrigins,
-  transitionPresentation,
-  type FrameDrivenGlyphTransition,
   type GlyphOriginPresentation,
-  type GlyphOriginSnapshot,
+  retainedGlyphPresentation,
   type ShapedTextIdentity,
-} from '../shared/glyph-origin-transition';
+} from '../shared/glyph-origin-presentation';
 import { slugDataConfiguration, type SlugRasterConfiguration } from './metadata';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../three-root';
 
@@ -120,7 +112,6 @@ export interface SlugTextLiveStats {
 }
 
 export interface SlugTextSceneUpdate extends LiveFontFixtureUpdate {
-  readonly animatePresentation: boolean;
   readonly anchor: LiveTextAnchor;
   readonly direction: 'ltr' | 'rtl';
   readonly features: readonly FontFeature[];
@@ -166,15 +157,6 @@ interface SlugTextState {
   readonly layout: ParagraphLayout;
   readonly style: TextStyle;
   readonly rasterPixelRatio: number;
-}
-
-/** Presentation-only motion the scene drives from its own frame clock, because its surface does not drive progress. */
-interface SlugPresentation {
-  readonly transition: FrameDrivenGlyphTransition;
-  readonly fromX: number;
-  readonly fromY: number;
-  readonly toX: number;
-  readonly toY: number;
 }
 
 export interface SlugTextPersistentScene extends PersistentRenderScene {
@@ -233,7 +215,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
   let line: Text<typeof slug> | undefined;
   let glyphRoot: ThreeRoot | undefined;
   let committedState: SlugTextState | undefined;
-  let presentation: SlugPresentation | undefined;
   let closing = false;
   let disposed = false;
   let updateRevision = 0;
@@ -260,8 +241,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
 
   const releaseActivationResources = (): void => {
     updateRevision += 1;
-    presentation?.transition.dispose();
-    presentation = undefined;
     line?.removeFromParent();
     line?.dispose();
     if (glyphRoot !== undefined) disposeBenchmarkThreeRoot(glyphRoot);
@@ -285,59 +264,9 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
     committedState = next;
   };
 
-  /**
-   * Presents one committed reflow. `before` is captured only when `glyphOriginPolicy` allows interpolation, so its
-   * absence is the decision to snap rather than a missing snapshot.
-   */
-  const presentReflow = (
-    activeLine: Text<typeof slug>,
-    before: GlyphOriginSnapshot | undefined,
-  ): GlyphOriginPresentation => {
-    const fromX = activeLine.position.x;
-    const fromY = activeLine.position.y;
-    presentation?.transition.dispose();
-    presentation = undefined;
+  const presentReflow = (activeLine: Text<typeof slug>): GlyphOriginPresentation => {
     positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
-    if (before === undefined) return snapGlyphOrigins(activeLine);
-    const toX = activeLine.position.x;
-    const toY = activeLine.position.y;
-    const transition = createFrameDrivenGlyphTransition(activeLine, before);
-    activeLine.position.set(fromX, fromY, 0);
-    presentation = { transition, fromX, fromY, toX, toY };
-    return transitionPresentation(transition);
-  };
-
-  /** Captures the origins a reflow may interpolate from, or nothing when the change replaces or reorders glyphs. */
-  const originsToInterpolate = (
-    activeLine: Text<typeof slug>,
-    committed: SlugTextState,
-    next: ShapedTextIdentity,
-    animatePresentation = true,
-  ): GlyphOriginSnapshot | undefined => {
-    return captureGlyphOriginsForPresentation(activeLine, committed.identity, next, animatePresentation);
-  };
-
-  /**
-   * Advances the frame-driven presentation. A superseded transition is a normal outcome of a reflow landing mid-motion,
-   * so it retires quietly; anything else is a real failure the surface must see.
-   */
-  const advancePresentation = (activeLine: Text<typeof slug>, context: PersistentRenderFrameContext): void => {
-    const current = presentation;
-    if (current === undefined) return;
-    try {
-      const progress = current.transition.advance(context.timestamp);
-      activeLine.position.set(
-        current.fromX + (current.toX - current.fromX) * progress,
-        current.fromY + (current.toY - current.fromY) * progress,
-        0,
-      );
-      if (progress === 1) presentation = undefined;
-    } catch (error) {
-      current.transition.dispose();
-      presentation = undefined;
-      activeLine.position.set(current.toX, current.toY, 0);
-      if (!(error instanceof DOMException && error.name === 'AbortError')) onError(error);
-    }
+    return retainedGlyphPresentation(activeLine);
   };
 
   const resizeScene = (viewport: PersistentRenderViewport): void => {
@@ -359,8 +288,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
     const updateStartedAt = performance.now();
     const revision = ++updateRevision;
     try {
-      // A viewport change leaves the shaped run intact, so its glyphs really do move continuously.
-      const before = originsToInterpolate(activeLine, state, state.identity);
       commitState(activeLine, {
         ...state,
         constraints: slugConstraints(nextContentWidth),
@@ -370,7 +297,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       if (closing || disposed || revision !== updateRevision) return;
       committedContentWidth = nextContentWidth;
       const resizeSceneStartedAt = performance.now();
-      presentReflow(activeLine, before);
+      presentReflow(activeLine);
       const finishedAt = performance.now();
       textUpdateTelemetry.record({
         scheduleMs: 0,
@@ -467,11 +394,10 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         throw error;
       }
     },
-    frame(context) {
+    frame() {
       if (closing || disposed) return;
       const active = activeResources();
       const startedAt = performance.now();
-      advancePresentation(active.line, context);
       active.canvasSurface.render(active.scene, active.camera);
       if (!firstDrawRecorded) {
         firstDrawMs = performance.now() - startedAt;
@@ -593,7 +519,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         direction: next.direction,
         features: next.features,
       };
-      const before = originsToInterpolate(activeLine, active.state, identity, next.animatePresentation);
       activeFontFixture.commit(nextFixture, (fixture) => {
         commitState(activeLine, {
           font: fixture.loadedFont,
@@ -610,7 +535,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         committedContentWidth = nextContentWidth;
       });
       const updateSceneStartedAt = performance.now();
-      const presented = presentReflow(activeLine, before);
+      const presented = presentReflow(activeLine);
       const finishedAt = performance.now();
       textUpdateTelemetry.record({
         scheduleMs: 0,
@@ -642,6 +567,7 @@ function applyState(line: Text<typeof slug>, next: SlugTextState): void {
     rasterPixelRatio: next.rasterPixelRatio,
   });
   line.visible = next.identity.text.length > 0;
+  glyph.shape();
   line.updateMatrixWorld(true);
   if (line.error !== undefined) throw line.error;
 }
