@@ -1,5 +1,12 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-04
+
+- **Captured the disposable alpha fast-follow** — Recorded the deferred Rust audit and remaining TypeScript
+  production-review leads as a post-merge execution prompt. The brief requires revalidation and maintainer approval before
+  implementation, preserves the zero-allocation and trusted-internal-data laws, and must be deleted when the accepted work
+  is complete.
+
 ## 2026-09-03
 
 - **Retired stale renderer vocabulary** — Marked the Rust layout proposal and Fallow duplication audit as historical,

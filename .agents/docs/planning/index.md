@@ -22,6 +22,7 @@
 - [Renderer-neutral core, batching, and engine integration](engine-integration-boundary.md) — superseded extraction plan retained for design history; current integrations use GlyphConfig and renderer decode.
 - [External gpucat integration fitness plan](gpucat-integration.md) — public-surface mapping, external-package boundary, ordering/lifecycle plan, and remaining shader-reuse proof for gpucat.
 - [Canonical roadmap](../roadmap/roadmap.md) — authoritative implementation order and exit gates.
+- [Glyph alpha fast-follow implementation brief](api-alpha-fast-follow.md) — disposable post-merge prompt for the deferred Rust audit and remaining production-review findings; delete it when the accepted work is complete.
 - [uikit integration](uikit-integration.md) — third-party retained-layout integration boundary.
 
 ## Data and extension contracts
