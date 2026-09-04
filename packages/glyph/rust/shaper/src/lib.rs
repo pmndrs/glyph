@@ -706,12 +706,6 @@ pub(crate) fn valid_language_bytes(bytes: &[u8]) -> bool {
     true
 }
 
-pub(crate) fn valid_tag(tag: u32) -> bool {
-    tag.to_be_bytes()
-        .iter()
-        .all(|byte| (0x20..=0x7e).contains(byte))
-}
-
 pub(crate) fn valid_utf16_boundary(text: &[u16], offset: u32) -> bool {
     let Ok(offset) = usize::try_from(offset) else {
         return false;
@@ -859,12 +853,6 @@ mod tests {
             decode_utf16_range(&text, 1, 5).unwrap(),
             [0x1f600, 0xfffd, 0x42]
         );
-    }
-
-    #[test]
-    fn tags_reject_non_opentype_bytes() {
-        assert!(valid_tag(u32::from_be_bytes(*b"Latn")));
-        assert!(!valid_tag(u32::from_be_bytes([b'L', 0, b't', b'n'])));
     }
 
     #[test]

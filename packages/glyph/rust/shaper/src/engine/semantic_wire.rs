@@ -10,27 +10,18 @@ use crate::{
         ENGINE_TEXT_MUTATION_RESERVED0, ENGINE_TEXT_MUTATION_TEXT_START,
         ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     },
-    bidi::{DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL},
     engine::frame::{
         ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START, AXIS_AT_MOST, AXIS_EXACT,
         AXIS_UNCONSTRAINED, BASELINE_ALPHABETIC, BASELINE_MIDDLE, BASELINE_TEXT_BOTTOM,
         BASELINE_TEXT_TOP, BLOCK_ALIGN_CENTER, BLOCK_ALIGN_END, BLOCK_ALIGN_START,
-        DECORATION_DASHED, DECORATION_DOTTED, DECORATION_DOUBLE, DECORATION_FLAGS_MASK,
-        DECORATION_NONE, DECORATION_SOLID, DECORATION_WAVY, EXCLUSION_WRAP_BOTH,
-        EXCLUSION_WRAP_INLINE_END, EXCLUSION_WRAP_INLINE_START, EXCLUSION_WRAP_LARGEST,
-        LAST_LINE_AUTO, LAST_LINE_JUSTIFY, ORIENTATION_MIXED, ORIENTATION_SIDEWAYS,
-        ORIENTATION_UPRIGHT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
-        PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT, SHAPE_POLYGON, SHAPE_RECTANGLE,
-        STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION,
-        STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK,
-        STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE, STYLE_FIELD_LETTER_SPACING,
-        STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK, STYLE_FIELD_MATERIAL, STYLE_FIELD_OPACITY,
-        STYLE_FIELD_OUTLINE, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_SHADOW,
-        STYLE_FIELD_WORD_SPACING, STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT,
-        TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16, UpdateLimits, WRAP_CHARACTER,
-        WRAP_NONE, WRAP_WORD, WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
+        EXCLUSION_WRAP_BOTH, EXCLUSION_WRAP_INLINE_END, EXCLUSION_WRAP_INLINE_START,
+        EXCLUSION_WRAP_LARGEST, LAST_LINE_AUTO, LAST_LINE_JUSTIFY, ORIENTATION_MIXED,
+        ORIENTATION_SIDEWAYS, ORIENTATION_UPRIGHT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS,
+        OVERFLOW_VISIBLE, PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT, SHAPE_POLYGON,
+        SHAPE_RECTANGLE, STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE, TEXT_ENCODING_UTF16_LE,
+        TEXT_MUTATION_REPLACE_UTF16, UpdateLimits, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD,
+        WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
     },
-    valid_language_bytes, valid_tag,
     wire::{array, read_f32, read_u16, read_u32},
 };
 
@@ -695,11 +686,7 @@ pub(crate) fn parse_style_mutations(
     count: u32,
 ) -> Result<StyleMutationBatch<'_>, u32> {
     if count == 0 {
-        return if offset == 0 {
-            Ok(StyleMutationBatch::empty())
-        } else {
-            Err(STATUS_INVALID_REQUEST)
-        };
+        return Ok(StyleMutationBatch::empty());
     }
     let records = record_table(
         request,
@@ -709,313 +696,37 @@ pub(crate) fn parse_style_mutations(
         abi::ENGINE_STYLE_MUTATION_RECORD_ALIGNMENT,
     )?;
     for record in records.chunks_exact(abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize) {
-        validate_style_record(request, record)?;
+        admit_style_payloads(request, record)?;
     }
     Ok(StyleMutationBatch { request, records })
 }
 
-fn validate_style_record(request: &[u8], record: &[u8]) -> Result<(), u32> {
-    let opcode = byte(record, abi::ENGINE_STYLE_MUTATION_OPCODE)?;
-    let style_id = read_u32(record, abi::ENGINE_STYLE_MUTATION_STYLE_ID)?;
-    let paragraph_id = read_u32(record, abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID)?;
-    if style_id == 0 || paragraph_id == 0 {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    if opcode == STYLE_MUTATION_REMOVE {
-        for (index, value) in record.iter().copied().enumerate() {
-            let identity = index == abi::ENGINE_STYLE_MUTATION_OPCODE
-                || (abi::ENGINE_STYLE_MUTATION_STYLE_ID..abi::ENGINE_STYLE_MUTATION_STYLE_ID + 4)
-                    .contains(&index)
-                || (abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID
-                    ..abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID + 4)
-                    .contains(&index);
-            if !identity && value != 0 {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-        }
+fn admit_style_payloads(request: &[u8], record: &[u8]) -> Result<(), u32> {
+    if byte(record, abi::ENGINE_STYLE_MUTATION_OPCODE)? == STYLE_MUTATION_REMOVE {
         return Ok(());
     }
-    if opcode != STYLE_MUTATION_UPSERT {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    let flags = byte(record, abi::ENGINE_STYLE_MUTATION_FLAGS)?;
-    let root = flags == STYLE_FLAG_ROOT;
-    if flags & !STYLE_FLAG_ROOT != 0 {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    let field_mask = read_u32(record, abi::ENGINE_STYLE_MUTATION_FIELD_MASK)?;
-    if field_mask & !STYLE_FIELD_MASK != 0 {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    let text_start = read_u32(record, abi::ENGINE_STYLE_MUTATION_TEXT_START)?;
-    let text_end = read_u32(record, abi::ENGINE_STYLE_MUTATION_TEXT_END)?;
-    if text_start > text_end || (!root && text_start == text_end) {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    validate_stated_u32(
-        record,
-        field_mask,
-        STYLE_FIELD_FONT_STACK,
-        abi::ENGINE_STYLE_MUTATION_FONT_STACK_HANDLE,
-        true,
-    )?;
-    validate_stated_u32(
-        record,
-        field_mask,
-        STYLE_FIELD_MATERIAL,
-        abi::ENGINE_STYLE_MUTATION_MATERIAL_ID,
-        true,
-    )?;
-    validate_style_payload(request, record, field_mask, text_start, text_end)?;
-    validate_style_float(
-        record,
-        field_mask,
-        STYLE_FIELD_FONT_SIZE,
-        abi::ENGINE_STYLE_MUTATION_FONT_SIZE,
-        true,
-    )?;
-    validate_style_float(
-        record,
-        field_mask,
-        STYLE_FIELD_LINE_HEIGHT,
-        abi::ENGINE_STYLE_MUTATION_LINE_HEIGHT,
-        true,
-    )?;
-    for (field, offset) in [
-        (
-            STYLE_FIELD_LETTER_SPACING,
-            abi::ENGINE_STYLE_MUTATION_LETTER_SPACING,
-        ),
-        (
-            STYLE_FIELD_WORD_SPACING,
-            abi::ENGINE_STYLE_MUTATION_WORD_SPACING,
-        ),
-        (
-            STYLE_FIELD_BASELINE_SHIFT,
-            abi::ENGINE_STYLE_MUTATION_BASELINE_SHIFT,
-        ),
-    ] {
-        validate_style_float(record, field_mask, field, offset, false)?;
-    }
-    validate_style_float(
-        record,
-        field_mask,
-        STYLE_FIELD_RASTER_PIXEL_RATIO,
-        abi::ENGINE_STYLE_MUTATION_RASTER_PIXEL_RATIO,
-        true,
-    )?;
-    if field_mask & STYLE_FIELD_RASTER_PIXEL_RATIO != 0 && !root {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    let direction = byte(record, abi::ENGINE_STYLE_MUTATION_DIRECTION)?;
-    if field_mask & STYLE_FIELD_DIRECTION == 0 {
-        if direction != 0 {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-    } else if !matches!(direction, DIRECTION_AUTO | DIRECTION_LTR | DIRECTION_RTL) {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    if field_mask & STYLE_FIELD_FOREGROUND == 0
-        && read_u32(record, abi::ENGINE_STYLE_MUTATION_FOREGROUND_RGBA)? != 0
-    {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    validate_opacity(record, field_mask)?;
-    validate_outline(record, field_mask)?;
-    validate_shadow(record, field_mask)?;
-    validate_decoration(record, field_mask)?;
-    Ok(())
-}
-
-fn validate_opacity(record: &[u8], field_mask: u32) -> Result<(), u32> {
-    if field_mask & STYLE_FIELD_OPACITY == 0 {
-        return if read_u32(record, abi::ENGINE_STYLE_MUTATION_OPACITY)? == 0 {
-            Ok(())
-        } else {
-            Err(STATUS_INVALID_REQUEST)
-        };
-    }
-    let opacity = read_f32(record, abi::ENGINE_STYLE_MUTATION_OPACITY)?;
-    if opacity.is_finite() && (0.0..=1.0).contains(&opacity) {
-        Ok(())
-    } else {
-        Err(STATUS_INVALID_REQUEST)
-    }
-}
-
-fn validate_outline(record: &[u8], field_mask: u32) -> Result<(), u32> {
-    let rgba = read_u32(record, abi::ENGINE_STYLE_MUTATION_OUTLINE_RGBA)?;
-    let width_bits = read_u32(record, abi::ENGINE_STYLE_MUTATION_OUTLINE_WIDTH)?;
-    if field_mask & STYLE_FIELD_OUTLINE == 0 {
-        return if rgba == 0 && width_bits == 0 {
-            Ok(())
-        } else {
-            Err(STATUS_INVALID_REQUEST)
-        };
-    }
-    let width = read_f32(record, abi::ENGINE_STYLE_MUTATION_OUTLINE_WIDTH)?;
-    if width.is_finite() && width >= 0.0 {
-        Ok(())
-    } else {
-        Err(STATUS_INVALID_REQUEST)
-    }
-}
-
-fn validate_shadow(record: &[u8], field_mask: u32) -> Result<(), u32> {
-    let rgba = read_u32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_RGBA)?;
-    let x_bits = read_u32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_X)?;
-    let y_bits = read_u32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_Y)?;
-    if field_mask & STYLE_FIELD_SHADOW == 0 {
-        return if rgba == 0 && x_bits == 0 && y_bits == 0 {
-            Ok(())
-        } else {
-            Err(STATUS_INVALID_REQUEST)
-        };
-    }
-    let x = read_f32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_X)?;
-    let y = read_f32(record, abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_Y)?;
-    if x.is_finite() && y.is_finite() {
-        Ok(())
-    } else {
-        Err(STATUS_INVALID_REQUEST)
-    }
-}
-
-fn validate_style_payload(
-    request: &[u8],
-    record: &[u8],
-    field_mask: u32,
-    text_start: u32,
-    text_end: u32,
-) -> Result<(), u32> {
-    let language_offset = read_u32(record, abi::ENGINE_STYLE_MUTATION_LANGUAGE_OFFSET)?;
     let language_length = u32::from(read_u16(
         record,
         abi::ENGINE_STYLE_MUTATION_LANGUAGE_LENGTH,
     )?);
-    if field_mask & STYLE_FIELD_LANGUAGE == 0 {
-        if language_offset != 0 || language_length != 0 {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-    } else {
-        let language = array(request, language_offset, language_length, 1, 1)?;
-        if language.is_empty() || !valid_language_bytes(language) {
-            return Err(STATUS_INVALID_REQUEST);
-        }
+    if language_length != 0 {
+        array(
+            request,
+            read_u32(record, abi::ENGINE_STYLE_MUTATION_LANGUAGE_OFFSET)?,
+            language_length,
+            1,
+            1,
+        )?;
     }
-    let features_offset = read_u32(record, abi::ENGINE_STYLE_MUTATION_FEATURES_OFFSET)?;
     let feature_count = u32::from(read_u16(record, abi::ENGINE_STYLE_MUTATION_FEATURE_COUNT)?);
-    if field_mask & STYLE_FIELD_FEATURES == 0 {
-        if features_offset != 0 || feature_count != 0 {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-        return Ok(());
-    }
-    if feature_count == 0 {
-        return if features_offset == 0 {
-            Ok(())
-        } else {
-            Err(STATUS_INVALID_REQUEST)
-        };
-    }
-    let features = array(
-        request,
-        features_offset,
-        feature_count,
-        abi::FEATURE_RECORD_SIZE,
-        abi::FEATURE_RECORD_ALIGNMENT,
-    )?;
-    for feature in features.chunks_exact(abi::FEATURE_RECORD_SIZE as usize) {
-        let start = read_u32(feature, abi::FEATURE_START)?;
-        let end = read_u32(feature, abi::FEATURE_END)?;
-        // An empty feature range is inert, not malformed: it is exactly what the empty
-        // root style permitted above spans, so it admits the same start == end the
-        // enclosing style range does. Only an inverted range is rejected here.
-        if !valid_tag(read_u32(feature, abi::FEATURE_TAG)?)
-            || start > end
-            || start < text_start
-            || end > text_end
-        {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-    }
-    Ok(())
-}
-
-fn validate_stated_u32(
-    record: &[u8],
-    field_mask: u32,
-    field: u32,
-    offset: usize,
-    positive: bool,
-) -> Result<(), u32> {
-    let value = read_u32(record, offset)?;
-    if field_mask & field == 0 {
-        if value != 0 {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-    } else if positive && value == 0 {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    Ok(())
-}
-
-fn validate_style_float(
-    record: &[u8],
-    field_mask: u32,
-    field: u32,
-    offset: usize,
-    positive: bool,
-) -> Result<(), u32> {
-    if field_mask & field == 0 {
-        return if read_u32(record, offset)? == 0 {
-            Ok(())
-        } else {
-            Err(STATUS_INVALID_REQUEST)
-        };
-    }
-    let value = read_f32(record, offset)?;
-    if !value.is_finite() || (positive && value <= 0.0) {
-        Err(STATUS_INVALID_REQUEST)
-    } else {
-        Ok(())
-    }
-}
-
-fn validate_decoration(record: &[u8], field_mask: u32) -> Result<(), u32> {
-    let style = byte(record, abi::ENGINE_STYLE_MUTATION_DECORATION_STYLE)?;
-    let rgba = read_u32(record, abi::ENGINE_STYLE_MUTATION_DECORATION_RGBA)?;
-    let flags = read_u32(record, abi::ENGINE_STYLE_MUTATION_DECORATION_FLAGS)?;
-    let thickness_bits = read_u32(record, abi::ENGINE_STYLE_MUTATION_DECORATION_THICKNESS)?;
-    let offset_bits = read_u32(record, abi::ENGINE_STYLE_MUTATION_DECORATION_OFFSET)?;
-    if field_mask & STYLE_FIELD_DECORATION == 0 {
-        return if style == 0 && rgba == 0 && flags == 0 && thickness_bits == 0 && offset_bits == 0 {
-            Ok(())
-        } else {
-            Err(STATUS_INVALID_REQUEST)
-        };
-    }
-    if !matches!(
-        style,
-        DECORATION_NONE
-            | DECORATION_SOLID
-            | DECORATION_DOUBLE
-            | DECORATION_DOTTED
-            | DECORATION_DASHED
-            | DECORATION_WAVY
-    ) || flags & !DECORATION_FLAGS_MASK != 0
-    {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    let thickness = read_f32(record, abi::ENGINE_STYLE_MUTATION_DECORATION_THICKNESS)?;
-    let offset = read_f32(record, abi::ENGINE_STYLE_MUTATION_DECORATION_OFFSET)?;
-    if !thickness.is_finite() || thickness < 0.0 || !offset.is_finite() {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    if style == DECORATION_NONE
-        && (flags != 0 || rgba != 0 || thickness_bits != 0 || offset_bits != 0)
-    {
-        return Err(STATUS_INVALID_REQUEST);
+    if feature_count != 0 {
+        array(
+            request,
+            read_u32(record, abi::ENGINE_STYLE_MUTATION_FEATURES_OFFSET)?,
+            feature_count,
+            abi::FEATURE_RECORD_SIZE,
+            abi::FEATURE_RECORD_ALIGNMENT,
+        )?;
     }
     Ok(())
 }
@@ -1579,7 +1290,7 @@ mod tests {
     }
 
     #[test]
-    fn validates_borrowed_style_snapshots_and_canonical_removals() {
+    fn admits_and_borrows_style_payloads() {
         let bytes = valid_style_bytes();
         let batch = parse_style_mutations(&bytes, STYLE_OFFSET as u32, 1).unwrap();
         let StyleMutation::Upsert(style) = batch.get(0).unwrap() else {
@@ -1592,72 +1303,26 @@ mod tests {
             u32::from_be_bytes(*b"kern")
         );
 
-        let mut removal = vec![0; STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize];
-        removal[STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_OPCODE] = STYLE_MUTATION_REMOVE;
+        let mut out_of_bounds_language = bytes.clone();
         write_u32(
-            &mut removal,
-            STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_STYLE_ID,
-            7,
+            &mut out_of_bounds_language,
+            STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_LANGUAGE_OFFSET,
+            bytes.len() as u32,
         );
+        assert!(parse_style_mutations(&out_of_bounds_language, STYLE_OFFSET as u32, 1).is_err());
+
+        let mut misaligned_features = bytes.clone();
+        let features_offset = read_u32(
+            &misaligned_features,
+            STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_FEATURES_OFFSET,
+        )
+        .unwrap();
         write_u32(
-            &mut removal,
-            STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
-            1,
+            &mut misaligned_features,
+            STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_FEATURES_OFFSET,
+            features_offset + 1,
         );
-        assert!(parse_style_mutations(&removal, STYLE_OFFSET as u32, 1).is_ok());
-        removal[STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_DIRECTION] = DIRECTION_LTR;
-        assert!(parse_style_mutations(&removal, STYLE_OFFSET as u32, 1).is_err());
-    }
-
-    #[test]
-    fn an_empty_root_style_carries_features_over_its_empty_range() {
-        // A paragraph with no text still carries a root style spanning [0, 0), and the
-        // public API attaches every declared feature to that root span. Rejecting the
-        // empty range would fail every `Text` that declares features before its content
-        // arrives (or after it is cleared), so the range check must admit start == end
-        // exactly where the enclosing style range check already does.
-        let mut empty = valid_style_bytes();
-        write_u32(
-            &mut empty,
-            STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_TEXT_END,
-            0,
-        );
-        let features_offset = {
-            let language_offset = STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
-            (language_offset + 2 + 3) & !3
-        };
-        write_u32(&mut empty, features_offset + abi::FEATURE_END, 0);
-        let batch = parse_style_mutations(&empty, STYLE_OFFSET as u32, 1).unwrap();
-        let StyleMutation::Upsert(style) = batch.get(0).unwrap() else {
-            panic!("upsert");
-        };
-        let feature = StyleMutationBatch::feature(style, 0).unwrap();
-        assert_eq!((feature.start, feature.end), (0, 0));
-
-        // An inverted range remains malformed, and bounds still bind.
-        let mut inverted = valid_style_bytes();
-        write_u32(&mut inverted, features_offset + abi::FEATURE_START, 3);
-        write_u32(&mut inverted, features_offset + abi::FEATURE_END, 2);
-        assert!(parse_style_mutations(&inverted, STYLE_OFFSET as u32, 1).is_err());
-
-        let mut past_end = valid_style_bytes();
-        write_u32(&mut past_end, features_offset + abi::FEATURE_END, 5);
-        assert!(parse_style_mutations(&past_end, STYLE_OFFSET as u32, 1).is_err());
-    }
-
-    #[test]
-    fn rejects_unstated_and_noncanonical_style_data() {
-        let mut unstated = valid_style_bytes();
-        write_f32(
-            &mut unstated,
-            STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_WORD_SPACING,
-            1.0,
-        );
-        assert!(parse_style_mutations(&unstated, STYLE_OFFSET as u32, 1).is_err());
-
-        let mut density_span = valid_style_bytes();
-        density_span[STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_FLAGS] = 0;
-        assert!(parse_style_mutations(&density_span, STYLE_OFFSET as u32, 1).is_err());
+        assert!(parse_style_mutations(&misaligned_features, STYLE_OFFSET as u32, 1).is_err());
     }
 
     const STYLE_OFFSET: usize = abi::ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
@@ -1667,7 +1332,8 @@ mod tests {
         let features_offset = (language_offset + 2 + 3) & !3;
         let mut bytes = vec![0; features_offset + abi::FEATURE_RECORD_SIZE as usize];
         let record = STYLE_OFFSET;
-        bytes[record + abi::ENGINE_STYLE_MUTATION_OPCODE] = STYLE_MUTATION_UPSERT;
+        bytes[record + abi::ENGINE_STYLE_MUTATION_OPCODE] =
+            crate::engine::frame::STYLE_MUTATION_UPSERT;
         bytes[record + abi::ENGINE_STYLE_MUTATION_FLAGS] = STYLE_FLAG_ROOT;
         write_u32(&mut bytes, record + abi::ENGINE_STYLE_MUTATION_STYLE_ID, 7);
         write_u32(
@@ -1683,12 +1349,12 @@ mod tests {
         write_u32(
             &mut bytes,
             record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
-            STYLE_FIELD_FONT_STACK
-                | STYLE_FIELD_LANGUAGE
-                | STYLE_FIELD_FEATURES
-                | STYLE_FIELD_FONT_SIZE
-                | STYLE_FIELD_LINE_HEIGHT
-                | STYLE_FIELD_RASTER_PIXEL_RATIO,
+            crate::engine::frame::STYLE_FIELD_FONT_STACK
+                | crate::engine::frame::STYLE_FIELD_LANGUAGE
+                | crate::engine::frame::STYLE_FIELD_FEATURES
+                | crate::engine::frame::STYLE_FIELD_FONT_SIZE
+                | crate::engine::frame::STYLE_FIELD_LINE_HEIGHT
+                | crate::engine::frame::STYLE_FIELD_RASTER_PIXEL_RATIO,
         );
         write_u32(&mut bytes, record + abi::ENGINE_STYLE_MUTATION_TEXT_END, 4);
         write_u32(

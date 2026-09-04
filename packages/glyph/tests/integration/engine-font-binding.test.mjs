@@ -11,7 +11,7 @@ import { bitmap } from '../../dist/raster/bitmap.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
 import { createFontStack, immutableFontResources } from '../../dist/loaded-font.js';
 import { loadFont } from '../../dist/loader.js';
-import { createMeasurementPlanner } from '../../dist/internal/render-planner.js';
+import { observeRenderPlannerDirty, stageRenderPlanner } from '../../dist/internal/render-planner.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 import { threeCodecCapabilitySet, threeCodecDescriptor, threeSystemBuffers } from '../../dist/three/codec.js';
 import {
@@ -22,6 +22,8 @@ import {
   engineFontBindingHandle,
   engineFontBindingResources,
   glyphEngineShaperForTests,
+  registerGlyphShapeParticipant,
+  shapeGlyphEngine,
 } from '../../dist/glyph-engine.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -278,7 +280,7 @@ test('a glyph-engine-owned handle state binds immutable font stacks and retains 
   glyphEngine.dispose();
 });
 
-test('the retained planner publishes canonical flow, exclusion, and inline-object identities', async () => {
+test('the retained planner publishes canonical styles, flow, exclusions, and inline objects', async () => {
   const font = await fixtureFont();
   const capture = captureNextMeasureRequest();
   let glyphEngine;
@@ -293,8 +295,18 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
   const transforms = [handleState.createTransformBinding(), handleState.createTransformBinding()];
   const inlineMaterials = [handleState.createMaterialBinding(), handleState.createMaterialBinding()];
   const inlineResources = [handleState.createResourceBinding(), handleState.createResourceBinding()];
-  const planner = createMeasurementPlanner(handleState, {
+  let acceptedPublications = 0;
+  const planner = handleState.createRootPlanner({
     codec,
+    capabilitySetIndex: 0,
+    target: () => ({
+      delivery: 'borrowed',
+      accept: () => {
+        acceptedPublications += 1;
+        return { accepted: true };
+      },
+      dispose() {},
+    }),
     limits: {
       maxParagraphs: 1,
       maxClusters: 64,
@@ -309,6 +321,14 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
     resultCapacity: 1_048_576,
     textCapacity: 1_024,
   });
+  const registration = registerGlyphShapeParticipant(glyphEngine, {
+    stage: () => stageRenderPlanner(planner),
+    accepted() {},
+    rejected(error) {
+      throw error;
+    },
+  });
+  const stopObservingDirty = observeRenderPlannerDirty(planner, () => registration.invalidate());
   const region = (transform, inlineStart, inlineEnd) => ({
     transform,
     shape: 'rectangle',
@@ -346,14 +366,32 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
     marginBlockEnd: 0,
     baselineAlignment: 'alphabetic',
   });
+  const sourceText = 'A\uFFFcB\uFFFcC';
   const options = {
     font: fontBinding,
-    text: 'A\uFFFcB\uFFFcC',
+    text: {
+      text: sourceText,
+      spans: [
+        {
+          start: 1,
+          end: 4,
+          style: {
+            language: 'fr',
+            features: [{ tag: 'liga' }],
+          },
+        },
+      ],
+    },
     style: {
       fontSize: 18,
       lineHeight: 1.25,
+      letterSpacing: 0.5,
+      wordSpacing: 1.5,
+      language: 'en-US',
       direction: 'rtl',
-      features: [{ tag: 'kern', value: 1, start: 0, end: 5 }],
+      features: [{ tag: 'kern', value: 2, start: 0, end: sourceText.length }],
+      color: '#44556677',
+      opacity: 0.75,
       decoration: {
         underline: true,
         lineThrough: true,
@@ -403,37 +441,49 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
     const bytes = capture.bytes();
     assert.equal(text.glyphs().glyphCount > 0, true, 'explicit glyph inspection remains available after measurement');
     const request = textShaperAbi.layouts.engineUpdateRequest;
-    const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const readRecords = (offsetField, countField, record) => {
+    const readRecords = (requestBytes, offsetField, countField, record) => {
+      const header = new DataView(requestBytes.buffer, requestBytes.byteOffset, requestBytes.byteLength);
       const offset = header.getUint32(offsetField, true);
       const count = header.getUint32(countField, true);
       return Array.from(
         { length: count },
-        (_value, index) => new DataView(bytes.buffer, bytes.byteOffset + offset + index * record.size, record.size),
+        (_value, index) =>
+          new DataView(requestBytes.buffer, requestBytes.byteOffset + offset + index * record.size, record.size),
       );
     };
     const paragraph = readRecords(
+      bytes,
       request.paragraphMutationsOffset,
       request.paragraphMutationCount,
       textShaperAbi.layouts.engineParagraphMutation,
     )[0].getUint32(textShaperAbi.layouts.engineParagraphMutation.paragraphId, true);
     const constraints = readRecords(
+      bytes,
       request.constraintsOffset,
       request.constraintCount,
       textShaperAbi.layouts.engineConstraint,
     );
     const styles = readRecords(
+      bytes,
       request.styleMutationsOffset,
       request.styleMutationCount,
       textShaperAbi.layouts.engineStyleMutation,
     );
-    const regions = readRecords(request.regionsOffset, request.regionCount, textShaperAbi.layouts.engineRegion);
+    const textMutations = readRecords(
+      bytes,
+      request.textMutationsOffset,
+      request.textMutationCount,
+      textShaperAbi.layouts.engineTextMutation,
+    );
+    const regions = readRecords(bytes, request.regionsOffset, request.regionCount, textShaperAbi.layouts.engineRegion);
     const exclusions = readRecords(
+      bytes,
       request.exclusionsOffset,
       request.exclusionCount,
       textShaperAbi.layouts.engineExclusion,
     );
     const inlineObjects = readRecords(
+      bytes,
       request.inlineObjectsOffset,
       request.inlineObjectCount,
       textShaperAbi.layouts.engineInlineObject,
@@ -446,8 +496,13 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
 
     assert.equal(paragraph > 0, true);
     assert.equal(constraints.length, 1);
-    assert.equal(styles.length, 1);
+    assert.equal(styles.length, 2);
     assert.equal(regions.length, 2);
+    assert.equal(
+      textMutations[0].getUint16(textShaperAbi.layouts.engineTextMutation.reserved0, true),
+      0,
+      'compiler-owned reserved bytes remain zero',
+    );
     assert.deepEqual(
       constraints.map((value) => value.getUint32(textShaperAbi.layouts.engineConstraint.resumeCluster, true)),
       [0],
@@ -490,25 +545,150 @@ test('the retained planner publishes canonical flow, exclusion, and inline-objec
       [1, 3],
     );
     const style = textShaperAbi.layouts.engineStyleMutation;
-    assert.equal(styles[0].getUint8(style.opcode), textShaperAbi.engine.styleMutationOpcodes.upsert);
-    assert.equal(styles[0].getUint8(style.direction), 2);
-    assert.equal(styles[0].getUint32(style.textStart, true), 0);
-    assert.equal(styles[0].getUint32(style.textEnd, true), options.text.length);
-    assert.equal(styles[0].getUint32(style.decorationFlags, true), 5);
-    assert.equal(styles[0].getFloat32(style.decorationThickness, true), 1);
-    assert.equal(styles[0].getFloat32(style.decorationOffset, true), 2);
-    assert.equal(styles[0].getUint16(style.featureCount, true), 1);
-    const feature = textShaperAbi.layouts.feature;
-    const featureView = new DataView(
-      bytes.buffer,
-      bytes.byteOffset + styles[0].getUint32(style.featuresOffset, true),
-      feature.size,
+    const fields = textShaperAbi.engine.styleFields;
+    const rootStyle = styles[0];
+    const spanStyle = styles[1];
+    assert.equal(rootStyle.getUint8(style.opcode), textShaperAbi.engine.styleMutationOpcodes.upsert);
+    assert.equal(spanStyle.getUint8(style.opcode), textShaperAbi.engine.styleMutationOpcodes.upsert);
+    assert.equal(rootStyle.getUint8(style.flags), textShaperAbi.engine.styleFlags.root);
+    assert.equal(spanStyle.getUint8(style.flags), 0);
+    assert.equal(
+      rootStyle.getUint32(style.fieldMask, true),
+      fields.fontStack |
+        fields.language |
+        fields.features |
+        fields.fontSize |
+        fields.lineHeight |
+        fields.letterSpacing |
+        fields.wordSpacing |
+        fields.rasterPixelRatio |
+        fields.direction |
+        fields.foreground |
+        fields.opacity |
+        fields.decoration,
     );
-    assert.equal(featureView.getUint32(feature.tag, true), 0x6b65_726e);
-    assert.equal(featureView.getUint32(feature.value, true), 1);
-    assert.equal(featureView.getUint32(feature.start, true), 0);
-    assert.equal(featureView.getUint32(feature.end, true), options.text.length);
+    assert.equal(spanStyle.getUint32(style.fieldMask, true), fields.language | fields.features);
+    assert.equal(rootStyle.getUint8(style.direction), 2);
+    assert.equal(spanStyle.getUint8(style.direction), 0, 'an absent direction stays zero');
+    assert.equal(rootStyle.getUint32(style.textStart, true), 0);
+    assert.equal(rootStyle.getUint32(style.textEnd, true), sourceText.length);
+    assert.equal(spanStyle.getUint32(style.textStart, true), 1);
+    assert.equal(spanStyle.getUint32(style.textEnd, true), 4);
+    assert.equal(rootStyle.getUint32(style.materialId, true), 0, 'an absent material stays zero');
+    assert.equal(rootStyle.getUint32(style.outlineRgba, true), 0, 'an absent outline stays zero');
+    assert.equal(rootStyle.getUint32(style.outlineWidth, true), 0, 'an absent outline width stays zero');
+    assert.equal(rootStyle.getUint32(style.shadowRgba, true), 0, 'an absent shadow stays zero');
+    assert.equal(rootStyle.getUint32(style.shadowOffsetX, true), 0, 'an absent shadow offset stays zero');
+    assert.equal(rootStyle.getUint32(style.shadowOffsetY, true), 0, 'an absent shadow offset stays zero');
+    assert.equal(spanStyle.getUint32(style.fontStackHandle, true), 0, 'an inherited font stays absent');
+    assert.equal(rootStyle.getUint8(style.decorationStyle), textShaperAbi.engine.decorationStyles.solid);
+    assert.equal(rootStyle.getUint32(style.decorationRgba, true), 0x4433_2211);
+    assert.equal(rootStyle.getUint32(style.decorationFlags, true), 5);
+    assert.equal(rootStyle.getFloat32(style.decorationThickness, true), 1);
+    assert.equal(rootStyle.getFloat32(style.decorationOffset, true), 2);
+    assert.equal(spanStyle.getUint8(style.decorationStyle), 0, 'an absent decoration stays zero');
+    assert.equal(spanStyle.getUint32(style.decorationFlags, true), 0, 'absent decoration flags stay zero');
+    const scalarOffsets = [
+      style.fontSize,
+      style.lineHeight,
+      style.letterSpacing,
+      style.wordSpacing,
+      style.baselineShift,
+      style.rasterPixelRatio,
+      style.opacity,
+      style.outlineWidth,
+      style.shadowOffsetX,
+      style.shadowOffsetY,
+      style.decorationThickness,
+      style.decorationOffset,
+    ];
+    assert.equal(
+      styles.every((record) => scalarOffsets.every((offset) => Number.isFinite(record.getFloat32(offset, true)))),
+      true,
+      'all emitted style scalars are finite, including canonical absent-field zeros',
+    );
+    assert.equal(
+      [
+        style.fontStackHandle,
+        style.materialId,
+        style.foregroundRgba,
+        style.decorationRgba,
+        style.decorationFlags,
+        style.outlineRgba,
+        style.shadowRgba,
+        ...scalarOffsets,
+      ].every((offset) => spanStyle.getUint32(offset, true) === 0),
+      true,
+      'every unstated scalar and packed style field remains bitwise zero',
+    );
+    const languageBytes = (styleRecord) =>
+      bytes.subarray(
+        styleRecord.getUint32(style.languageOffset, true),
+        styleRecord.getUint32(style.languageOffset, true) + styleRecord.getUint16(style.languageLength, true),
+      );
+    assert.deepEqual(Array.from(languageBytes(rootStyle)), Array.from(new TextEncoder().encode('en-US')));
+    assert.deepEqual(Array.from(languageBytes(spanStyle)), Array.from(new TextEncoder().encode('fr')));
+    const feature = textShaperAbi.layouts.feature;
+    const features = styles.map((styleRecord) => {
+      assert.equal(styleRecord.getUint16(style.featureCount, true), 1);
+      return new DataView(
+        bytes.buffer,
+        bytes.byteOffset + styleRecord.getUint32(style.featuresOffset, true),
+        feature.size,
+      );
+    });
+    assert.deepEqual(
+      features.map((featureView) => ({
+        tag: featureView.getUint32(feature.tag, true),
+        value: featureView.getUint32(feature.value, true),
+        start: featureView.getUint32(feature.start, true),
+        end: featureView.getUint32(feature.end, true),
+      })),
+      [
+        { tag: 0x6b65_726e, value: 2, start: 0, end: sourceText.length },
+        { tag: 0x6c69_6761, value: 1, start: 1, end: 4 },
+      ],
+    );
+    assert.equal(
+      features.every((featureView, index) => {
+        const start = featureView.getUint32(feature.start, true);
+        const end = featureView.getUint32(feature.end, true);
+        return (
+          start >= styles[index].getUint32(style.textStart, true) && end <= styles[index].getUint32(style.textEnd, true)
+        );
+      }),
+      true,
+      'each feature range stays within its owning style range',
+    );
+
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 1, 'the same producer state passes the Wasm publication path');
+    text.update({ text: sourceText });
+    assert.equal(
+      text.measure().lineCount > 0,
+      true,
+      'the package-authored style removal passes Wasm and returns a measurement',
+    );
+    const removalBytes = capture.bytes();
+    const removalStyles = readRecords(removalBytes, request.styleMutationsOffset, request.styleMutationCount, style);
+    assert.equal(removalStyles.length, 2);
+    assert.equal(removalStyles[0].getUint8(style.opcode), textShaperAbi.engine.styleMutationOpcodes.upsert);
+    assert.equal(removalStyles[1].getUint8(style.opcode), textShaperAbi.engine.styleMutationOpcodes.remove);
+    const removalRecord = new Uint8Array(removalBytes.buffer, removalStyles[1].byteOffset, style.size);
+    assert.equal(
+      removalRecord.every(
+        (value, index) =>
+          index === style.opcode ||
+          (index >= style.styleId && index < style.styleId + 4) ||
+          (index >= style.paragraphId && index < style.paragraphId + 4) ||
+          value === 0,
+      ),
+      true,
+      'remove records zero every field outside their opcode and identities',
+    );
   } finally {
+    stopObservingDirty();
+    registration.dispose();
     text.dispose();
     planner.dispose();
     fontBinding.dispose();
