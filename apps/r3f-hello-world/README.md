@@ -11,10 +11,10 @@ declares and loads one renderer-neutral FontFace, creates a `Text`, and attaches
 explicit `glyph.shape()` call publishes every dirty root and attaches the decoded `Mesh` below the `Text` before the
 application initializes `WebGPURenderer`; only `renderer.render(scene, camera)` performs the host draw.
 
-The R3F twin renders `Hello world` through the public React adapter, binds the globe span to a subsetted Font Awesome font,
-and switches between Bitmap, MSDF, and Slug using controls rendered inside the canvas. Both FontFaces are declared once
-with `glyph.fontFace()`; each `Text` suspends on its selected format until that declaration is loaded. The Slug-rendered
-controls use a `TextGroup` so their three labels can batch explicitly.
+The R3F twin renders `Hello world` through the public React adapter, binds the globe span to a subsetted Font Awesome
+font, and switches between Bitmap, MSDF, and Slug using controls rendered inside the canvas. The explicit per-format
+hooks preload the checked font requests and suspend on the same stable resources. The Slug-rendered controls use a
+`TextGroup` so their three labels can batch explicitly.
 
 ```sh
 mise exec -- pnpm --filter @pmndrs/glyph-examples dev

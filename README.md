@@ -7,21 +7,26 @@ Portable font baking, Unicode shaping, paragraph layout, and batched text render
 ## Render text with React Three Fiber
 
 ```tsx
-import { glyph } from '@pmndrs/glyph';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
-import { bitmap } from '@pmndrs/glyph/raster/bitmap';
-import { msdf } from '@pmndrs/glyph/raster/msdf';
-import { slug } from '@pmndrs/glyph/raster/slug';
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
 
-const vt323 = glyph.fontFace('/fonts/VT323.font.glb', { format: bitmap({ strikes: [8, 16] }) });
-const inter = glyph.fontFace('/fonts/Inter.font.glb', { format: msdf });
-const loversQuarrel = glyph.fontFace('/fonts/LoversQuarrel.font.glb', { format: slug });
+const VT323 = '/fonts/VT323.font.glb';
+const INTER = '/fonts/Inter.font.glb';
+const LOVERS_QUARREL = '/fonts/LoversQuarrel.font.glb';
+
+await useMsdf.preload(INTER);
 
 function Labels() {
+  const inter = useMsdf(INTER);
+  const loversQuarrel = useSlug(LOVERS_QUARREL);
+  const vt323 = useBitmap(VT323, { strikes: [8, 16] });
+
   return (
     <>
       <Text
-        font={loversQuarrel.slug}
+        font={loversQuarrel}
         style={{ fontSize: 32, color: '#f7f7f7' }}
         layout={{ align: 'center' }}
         constraints={{ width: { mode: 'exact', size: 480 } }}
@@ -31,7 +36,7 @@ function Labels() {
       </Text>
       <TextGroup>
         <Text
-          font={inter.msdf}
+          font={inter}
           style={{ fontSize: 32, color: '#f7f7f7' }}
           layout={{ align: 'center' }}
           constraints={{ width: { mode: 'exact', size: 480 } }}
@@ -40,7 +45,7 @@ function Labels() {
           Eos tempor iusto mollit reprehenderit dolor cillum.
         </Text>
         <Text
-          font={inter.msdf}
+          font={inter}
           style={{ fontSize: 32, color: '#f7f7f7' }}
           layout={{ align: 'center' }}
           constraints={{ width: { mode: 'exact', size: 480 } }}
@@ -50,7 +55,7 @@ function Labels() {
         </Text>
       </TextGroup>
       <Text
-        font={vt323.bitmap}
+        font={vt323}
         style={{ fontSize: 8, color: '#f7f7f7' }}
         layout={{ wrap: 'word' }}
         constraints={{ width: { mode: 'at-most', size: 480 } }}
@@ -75,12 +80,9 @@ An outer `Text` is a retained paragraph and a Three `Object3D`. A nested `Text` 
 aliases. Its handle and FontFace table are immutable for the lifetime of that provider:
 
 ```tsx
-import { glyph } from '@pmndrs/glyph';
 import { GlyphProvider, Text } from '@pmndrs/glyph/react';
 
-const inter = glyph.fontFace('/fonts/Inter.font.glb');
-
-<GlyphProvider handle="hud" fontFaces={{ Inter: inter }} fallback={null}>
+<GlyphProvider handle="hud" fontFaces={{ Inter: '/fonts/Inter.font.glb' }} fallback={null}>
   <Text font="Inter">Hello, HUD</Text>
 </GlyphProvider>;
 ```

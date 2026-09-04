@@ -1,5 +1,8 @@
-import { glyph, type FontFaceSelection } from '@pmndrs/glyph';
+import type { Font } from '@pmndrs/glyph';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
 import { slug } from '@pmndrs/glyph/raster/slug';
@@ -17,28 +20,40 @@ const RASTER_FORMATS = ['bitmap', 'msdf', 'slug'] as const;
 const COLORS = { bitmap: '#f59e0b', msdf: '#fb7185', slug: '#ff4dc4' } as const;
 
 // Multiple raster formats can be baked into one glb, or each format can be baked into its own glb.
-const latinFont = glyph.fontFace(latinFontUrl, {
-  format: [bitmap({ strikes: [32] }), msdf, slug],
-});
+const latinFont = latinFontUrl;
 
 // This icon font only bakes a few glyphs from the full Font Awesome set. You can bake any subset of glyphs into a glb.
-const iconFont = glyph.fontFace(iconFontUrl, {
-  format: [bitmap({ strikes: [32] }), msdf, slug],
-});
+const iconFont = iconFontUrl;
+const bitmapOptions = { strikes: [32] } as const;
+
+// Preload the initial scene's raster formats before React first requests them.
+useBitmap.preload(latinFont, bitmapOptions);
+useMsdf.preload(latinFont);
+useSlug.preload(latinFont);
+useBitmap.preload(iconFont, bitmapOptions);
+useMsdf.preload(iconFont);
+useSlug.preload(iconFont);
 
 export function App() {
   const viewport = useThree((state) => state.viewport);
   const [activeFormat, setActiveFormat] = useState<RasterFormatName>('msdf');
 
+  const bitmapLatin = useBitmap(latinFont, bitmapOptions);
+  const msdfLatin = useMsdf(latinFont);
+  const slugLatin = useSlug(latinFont);
+  const bitmapIcons = useBitmap(iconFont, bitmapOptions);
+  const msdfIcons = useMsdf(iconFont);
+  const slugIcons = useSlug(iconFont);
+
   const fonts = [
-    { font: latinFont.bitmap, icon: iconFont.bitmap, format: 'bitmap' },
-    { font: latinFont.msdf, icon: iconFont.msdf, format: 'msdf' },
-    { font: latinFont.slug, icon: iconFont.slug, format: 'slug' },
+    { font: bitmapLatin, icon: bitmapIcons, format: 'bitmap' },
+    { font: msdfLatin, icon: msdfIcons, format: 'msdf' },
+    { font: slugLatin, icon: slugIcons, format: 'slug' },
   ] as const;
 
   return (
     <>
-      <ButtonGroup active={activeFormat} font={latinFont.slug} onSelect={setActiveFormat} />
+      <ButtonGroup active={activeFormat} font={slugLatin} onSelect={setActiveFormat} />
       <group name="world-text">
         {fonts.map(({ font, icon, format }) => (
           <Activity key={format} mode={activeFormat === format ? 'visible' : 'hidden'}>
@@ -66,7 +81,7 @@ export function App() {
 
 interface ButtonGroupProps {
   active: RasterFormatName;
-  font: FontFaceSelection<typeof bitmap | typeof msdf | typeof slug>;
+  font: Font<typeof bitmap | typeof msdf | typeof slug>;
   onSelect: (format: RasterFormatName) => void;
   gap?: number;
   padding?: number;
@@ -97,7 +112,7 @@ function ButtonGroup({ active, font, onSelect, gap = 128, padding = 48 }: Button
 
 interface ButtonProps {
   active: boolean;
-  font: FontFaceSelection<typeof bitmap | typeof msdf | typeof slug>;
+  font: Font<typeof bitmap | typeof msdf | typeof slug>;
   onClick: () => void;
   position: [number, number, number];
   format: RasterFormatName;

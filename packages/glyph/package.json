@@ -154,7 +154,14 @@
       "source": "./src/react.ts",
       "import": "./dist/react.js"
     },
-    "./react/*": null,
+    "./react/*": {
+      "types": {
+        "source": "./src/react/*.ts",
+        "default": "./dist/react/*.d.ts"
+      },
+      "source": "./src/react/*.ts",
+      "import": "./dist/react/*.js"
+    },
     "./raster/bitmap": {
       "types": {
         "source": "./src/raster/bitmap.ts",

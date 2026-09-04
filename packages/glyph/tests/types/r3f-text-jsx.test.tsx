@@ -1,18 +1,27 @@
-import { glyph } from '@pmndrs/glyph';
-import { Text } from '@pmndrs/glyph/react';
+import type { Font } from '@pmndrs/glyph';
+import { Text, useFont } from '@pmndrs/glyph/react';
+import { useBitmap } from '@pmndrs/glyph/react/bitmap';
+import { useMsdf } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
+import { slug } from '@pmndrs/glyph/raster/slug';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 
-const inter = glyph.fontFace('/fonts/Inter.font.glb', { format: msdf });
+const selected = useFont('/fonts/Inter.font.glb', { format: msdf });
+selected satisfies Font<typeof msdf>;
+useBitmap('/fonts/Inter.font.glb', { strikes: [16] }) satisfies Font<typeof bitmap>;
+useMsdf('/fonts/Inter.font.glb') satisfies Font<typeof msdf>;
+useSlug('/fonts/Inter.font.glb') satisfies Font<typeof slug>;
 
 const text = (
   <Text
-    font={inter.msdf}
+    font={selected}
     ref={(value) => {
       value satisfies ThreeText<typeof msdf> | null;
     }}
   >
-    Typed <Text font={inter.msdf}>nested FontFace selection</Text>
+    Typed JSX
   </Text>
 );
 

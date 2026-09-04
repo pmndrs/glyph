@@ -16,15 +16,18 @@ import {
   type ReactNode,
   type Ref,
 } from 'react';
-import { suspend } from 'suspend-react';
+import { clear as clearSuspense, preload as preloadSuspense, suspend } from 'suspend-react';
 
 import {
   isFontFaceSelection,
   resolveFontFace,
   type FontFace,
+  type FontFaceConfig,
   type FontFaceSelection,
   type FontFaceFormat,
+  type FontFaceFormatInput,
   type FontFaceRasterOf,
+  type FontFaceSource,
 } from './font-face.js';
 import { resolveRangesToClusters, type FormattedText, type TextInput } from './formatted-text.js';
 import type { Font } from './font.js';
@@ -32,6 +35,7 @@ import { glyph } from './glyph.js';
 import { FontLoadError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { mergePropertyList } from './property-list.js';
+import { reactFontResourceKey } from './internal/react-font-resource-key.js';
 import { type Constraints, type ParagraphLayout, type PropertyList, type TextStyle } from './text-properties.js';
 import type { RasterFormatMetadata } from './config/raster-format.js';
 import {
@@ -149,6 +153,28 @@ type DesiredR3fTextInput<Technique extends RasterFormatMetadata> = Omit<
   readonly text: TextInput<Technique>;
 };
 
+type SelectedHookFontConfig<Format> = Readonly<{ format: FontFaceFormatInput<Format> }>;
+type DefaultHookFontConfig = Readonly<{ format?: FontFaceFormat }>;
+
+type TechniqueOfHookFormat<Format> = Format extends RasterFormatMetadata
+  ? Format
+  : Format extends { readonly raster: infer Technique extends RasterFormatMetadata }
+    ? Technique
+    : RasterFormatMetadata;
+
+/** Generic R3F hook for one source and optional raster-format declaration. */
+export interface UseFont {
+  /** Load and retain one immutable mounted Font lease through the selected R3F handle. */
+  (input: FontFaceSource): Font<RasterFormatMetadata>;
+  <const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): Font<TechniqueOfHookFormat<Format>>;
+  /** Start the same stable default-handle Suspense load before a component requests it. */
+  preload(input: FontFaceSource): Promise<void>;
+  preload<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): Promise<void>;
+  /** Release a preloaded default-handle resource without invalidating mounted Font leases. */
+  clear(input: FontFaceSource): void;
+  clear<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): void;
+}
+
 const ThreeTextElement = extend(ThreeText);
 const ThreeTextGroupElement = extend(ThreeTextGroup);
 interface GlyphReactContext {
@@ -181,11 +207,16 @@ let nextDefaultRootId = 1;
 let defaultThreeHandleValue: ThreeHandle | undefined;
 let defaultThreeHandlePromise: Promise<ThreeHandle> | undefined;
 
+export type GlyphProviderFontFace =
+  | FontFaceSource
+  | FontFace
+  | Readonly<{ src: FontFaceSource; format?: FontFaceConfig['format'] }>;
+
 export interface GlyphProviderProps {
   /** Select a Three handle/root, or a named root on R3F's built-in default handle. */
   readonly handle?: ThreeHandle | ThreeRoot | string;
-  /** Add scoped family aliases for existing declarations created by `glyph.fontFace()`. */
-  readonly fontFaces?: Readonly<Record<string, FontFace>>;
+  /** Add immutable scoped family aliases from sources, source configs, or existing FontFace declarations. */
+  readonly fontFaces?: Readonly<Record<string, GlyphProviderFontFace>>;
   readonly fallback?: ReactNode;
   readonly errorFallback?: ReactNode | ((error: FontLoadError) => ReactNode);
   readonly children?: ReactNode;
@@ -201,7 +232,7 @@ export function GlyphProvider({
 }: GlyphProviderProps): ReactElement {
   const store = useStore();
   const [initial] = useState(() => ({ handle, fontFaces }));
-  if (handle !== initial.handle || fontFaces !== initial.fontFaces) {
+  if (handle !== initial.handle || !sameProviderFontFaceTable(fontFaces, initial.fontFaces)) {
     throw new Error('GlyphProvider handle and fontFaces are immutable; remount the provider to replace them');
   }
   let selection: Readonly<{ handle: ThreeHandle; root: ThreeRoot }>;
@@ -218,10 +249,11 @@ export function GlyphProvider({
   }
   assertUsableHandle(selection.handle);
   assertUsableRoot(selection.root);
-  const [faces] = useState(() => createProviderFontFaces(fontFaces));
+  const [faces] = useState(() => providerFontFaces(fontFaces));
   const [context] = useState<GlyphReactContext>(() =>
-    Object.freeze({ handle: selection.handle, root: selection.root, fontFaces: faces }),
+    Object.freeze({ handle: selection.handle, root: selection.root, fontFaces: faces.byName }),
   );
+  useLayoutEffect(() => faces.retain(), [faces]);
   useLayoutEffect(() => defaultResource?.retain(), [defaultResource]);
 
   let content: ReactNode = createElement(GlyphHandleContext.Provider, { value: context }, children);
@@ -289,16 +321,131 @@ function defaultGlyphContext(store: R3fRootStore, handle: ThreeHandle): DefaultG
   return resource;
 }
 
-function createProviderFontFaces(table: GlyphProviderProps['fontFaces']): ReadonlyMap<string, FontFace> {
+interface ProviderFontFaces {
+  readonly byName: ReadonlyMap<string, FontFace>;
+  readonly disposed: boolean;
+  retain(): () => void;
+  dispose(): void;
+}
+
+const emptyProviderFontFaces: ProviderFontFaces = {
+  byName: emptyFontFaces,
+  disposed: false,
+  retain: () => () => undefined,
+  dispose: () => undefined,
+};
+const providerFontFaceCache = new WeakMap<Readonly<Record<string, GlyphProviderFontFace>>, ProviderFontFaces>();
+const providerFontFaceFinalizer = new FinalizationRegistry<readonly FontFace[]>((owned) => {
+  for (const face of owned) face.dispose();
+});
+
+function providerFontFaces(table: GlyphProviderProps['fontFaces']): ProviderFontFaces {
+  if (table === undefined) return emptyProviderFontFaces;
+  const existing = providerFontFaceCache.get(table);
+  if (existing !== undefined && !existing.disposed) return existing;
+  const resource = createProviderFontFaces(table);
+  providerFontFaceCache.set(table, resource);
+  return resource;
+}
+
+function createProviderFontFaces(table: Readonly<Record<string, GlyphProviderFontFace>>): ProviderFontFaces {
   const byName = new Map<string, FontFace>();
-  for (const [name, face] of Object.entries(table ?? {})) {
-    if (name.trim().length === 0) throw new TypeError('GlyphProvider fontFaces keys must be nonempty strings');
-    if (!isFontFaceSelection(face) || face.face !== face) {
-      throw new TypeError('GlyphProvider fontFaces values must be declarations created by glyph.fontFace()');
+  const owned: FontFace[] = [];
+  try {
+    for (const [name, declaration] of Object.entries(table)) {
+      if (name.trim().length === 0) throw new TypeError('GlyphProvider fontFaces keys must be nonempty strings');
+      let face: FontFace;
+      if (isFontFaceSelection(declaration)) {
+        face = declaration.face;
+      } else if (isProviderFontFaceConfig(declaration)) {
+        face =
+          declaration.format === undefined
+            ? glyph.fontFace(declaration.src)
+            : glyph.fontFace(declaration.src, { format: declaration.format });
+        owned.push(face);
+      } else {
+        face = glyph.fontFace(declaration);
+        owned.push(face);
+      }
+      byName.set(name, face);
     }
-    byName.set(name, face);
+  } catch (error) {
+    for (const face of owned) face.dispose();
+    throw error;
   }
-  return byName;
+  let references = 0;
+  let releaseRevision = 0;
+  let disposed = false;
+  providerFontFaceFinalizer.register(table, owned, byName);
+  const resource: ProviderFontFaces = Object.freeze({
+    byName,
+    get disposed(): boolean {
+      return disposed;
+    },
+    retain(): () => void {
+      if (disposed) throw new Error('GlyphProvider cannot retain disposed fontFaces');
+      references += 1;
+      releaseRevision += 1;
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        references -= 1;
+        const revision = ++releaseRevision;
+        queueMicrotask(() => {
+          if (references === 0 && releaseRevision === revision) resource.dispose();
+        });
+      };
+    },
+    dispose(): void {
+      if (disposed) return;
+      disposed = true;
+      providerFontFaceFinalizer.unregister(byName);
+      for (const face of owned) face.dispose();
+    },
+  });
+  return resource;
+}
+
+function isProviderFontFaceConfig(value: unknown): value is Readonly<{
+  src: FontFaceSource;
+  format?: FontFaceConfig['format'];
+}> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !(value instanceof URL) &&
+    !(typeof Blob !== 'undefined' && value instanceof Blob) &&
+    Object.hasOwn(value, 'src') &&
+    Object.keys(value).every((key) => key === 'src' || key === 'format')
+  );
+}
+
+function sameProviderFontFaceTable(
+  left: GlyphProviderProps['fontFaces'],
+  right: GlyphProviderProps['fontFaces'],
+): boolean {
+  if (left === right) return true;
+  if (left === undefined || right === undefined) return false;
+  const leftNames = Object.keys(left);
+  const rightNames = Object.keys(right);
+  if (leftNames.length !== rightNames.length) return false;
+  return leftNames.every((name) => {
+    if (!Object.hasOwn(right, name)) return false;
+    return sameProviderFontFaceDeclaration(left[name]!, right[name]!);
+  });
+}
+
+function sameProviderFontFaceDeclaration(left: GlyphProviderFontFace, right: GlyphProviderFontFace): boolean {
+  if (left === right) return true;
+  if (isFontFaceSelection(left) || isFontFaceSelection(right)) return false;
+  const leftKey = isProviderFontFaceConfig(left)
+    ? reactFontResourceKey(left.src, left.format)
+    : reactFontResourceKey(left, undefined);
+  const rightKey = isProviderFontFaceConfig(right)
+    ? reactFontResourceKey(right.src, right.format)
+    : reactFontResourceKey(right, undefined);
+  return leftKey === rightKey;
 }
 
 interface GlyphFontErrorBoundaryProps {
@@ -329,6 +476,7 @@ function getInitializedDefaultThreeHandle(): ThreeHandle | undefined {
   if (defaultThreeHandleValue?.disposed === true) {
     defaultThreeHandleValue = undefined;
     defaultThreeHandlePromise = undefined;
+    defaultFontPreloads.clear();
   }
   if (defaultThreeHandleValue !== undefined) return defaultThreeHandleValue;
   if (!glyph.initialized) return undefined;
@@ -592,6 +740,184 @@ function TextGroupObject({
   );
 }
 
+interface ReactFontFaceResource {
+  readonly handle: ThreeHandle;
+  readonly face: FontFace;
+  readonly ready: Promise<void>;
+  readonly suspenseKey: ReactFontSuspenseKey;
+  readonly status: 'pending' | 'fulfilled' | 'rejected';
+  markPendingMount(): void;
+  pinPreload(): void;
+  retain(): () => void;
+  clear(): void;
+}
+
+interface DefaultFontPreload {
+  promise: Promise<void>;
+  resource: ReactFontFaceResource | undefined;
+}
+
+const reactFontFaces = new WeakMap<ThreeHandle, Map<string, ReactFontFaceResource>>();
+const defaultFontPreloads = new Map<string, DefaultFontPreload>();
+const reactFontSuspenseNamespace = '@pmndrs/glyph/react:use-font';
+type ReactFontSuspenseKey = [typeof reactFontSuspenseNamespace, ThreeHandle, Promise<void>];
+
+/** Load through the selected handle while React owns the declaration and mounted immutable Font lease. */
+function useFontHook(input: FontFaceSource): Font<RasterFormatMetadata>;
+function useFontHook<const Format>(
+  input: FontFaceSource,
+  config: SelectedHookFontConfig<Format>,
+): Font<TechniqueOfHookFormat<Format>>;
+function useFontHook(input: FontFaceSource, config: DefaultHookFontConfig = {}): Font<RasterFormatMetadata> {
+  const handle = useSelectedGlyphContext().handle;
+  const resource = reactFontFaceResource(handle, input, config);
+  resource.markPendingMount();
+  if (resource.status !== 'fulfilled') suspend(loadReactFontResource, resource.suspenseKey);
+  const store = useMemo(() => createMountedHookFontStore(resource), [resource]);
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+}
+
+function preloadFont(input: FontFaceSource): Promise<void>;
+function preloadFont<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): Promise<void>;
+function preloadFont(input: FontFaceSource, config: DefaultHookFontConfig = {}): Promise<void> {
+  const key = reactFontResourceKey(input, config.format);
+  const existing = defaultFontPreloads.get(key);
+  if (existing !== undefined) return existing.promise;
+  const preload: DefaultFontPreload = { promise: Promise.resolve(), resource: undefined };
+  preload.promise = defaultThreeHandle()
+    .then((handle) => {
+      if (defaultFontPreloads.get(key) !== preload) return;
+      const rejected = reactFontFaces.get(handle)?.get(key);
+      if (rejected?.status === 'rejected') rejected.clear();
+      const resource = reactFontFaceResource(handle, input, config);
+      preload.resource = resource;
+      resource.pinPreload();
+      preloadSuspense(loadReactFontResource, resource.suspenseKey);
+      return resource.ready;
+    })
+    .catch((error: unknown) => {
+      if (defaultFontPreloads.get(key) === preload) defaultFontPreloads.delete(key);
+      throw error;
+    });
+  defaultFontPreloads.set(key, preload);
+  return preload.promise;
+}
+
+function clearFont(input: FontFaceSource): void;
+function clearFont<const Format>(input: FontFaceSource, config: SelectedHookFontConfig<Format>): void;
+function clearFont(input: FontFaceSource, config: DefaultHookFontConfig = {}): void {
+  const key = reactFontResourceKey(input, config.format);
+  const preload = defaultFontPreloads.get(key);
+  defaultFontPreloads.delete(key);
+  preload?.resource?.clear();
+  const handle = getInitializedDefaultThreeHandle();
+  if (handle !== undefined) reactFontFaces.get(handle)?.get(key)?.clear();
+}
+
+export const useFont: UseFont = Object.assign(useFontHook, { preload: preloadFont, clear: clearFont });
+
+function loadReactFontResource(
+  _namespace: typeof reactFontSuspenseNamespace,
+  _handle: ThreeHandle,
+  ready: Promise<void>,
+): Promise<void> {
+  return ready;
+}
+
+function reactFontFaceResource(
+  handle: ThreeHandle,
+  input: FontFaceSource,
+  config: DefaultHookFontConfig,
+): ReactFontFaceResource {
+  let cache = reactFontFaces.get(handle);
+  if (cache === undefined) {
+    cache = new Map();
+    reactFontFaces.set(handle, cache);
+  }
+  const key = reactFontResourceKey(input, config.format);
+  const existing = cache.get(key);
+  if (existing !== undefined && (!existing.face.disposed || existing.status === 'rejected')) return existing;
+  const face = hookFontFace(input, config);
+  let references = 0;
+  let releaseRevision = 0;
+  let pendingMount = false;
+  let preloadPinned = false;
+  let disposed = false;
+  let status: ReactFontFaceResource['status'] = 'pending';
+  const releaseFace = (): void => {
+    if (!face.disposed) face.dispose();
+  };
+  const ready = loadThreeHandleFont(handle, face).then(
+    () => {
+      status = 'fulfilled';
+    },
+    (error: unknown) => {
+      status = 'rejected';
+      pendingMount = false;
+      preloadPinned = false;
+      const preload = defaultFontPreloads.get(key);
+      if (preload?.resource?.face === face) defaultFontPreloads.delete(key);
+      releaseFace();
+      throw error;
+    },
+  );
+  const suspenseKey: ReactFontSuspenseKey = [reactFontSuspenseNamespace, handle, ready];
+  const disposeIfUnused = (): void => {
+    if (references !== 0 || pendingMount || preloadPinned || disposed) return;
+    disposed = true;
+    if (cache.get(key)?.face === face) cache.delete(key);
+    clearSuspense(suspenseKey);
+    releaseFace();
+  };
+  const resource: ReactFontFaceResource = Object.freeze({
+    handle,
+    face,
+    ready,
+    suspenseKey,
+    get status(): ReactFontFaceResource['status'] {
+      return status;
+    },
+    markPendingMount(): void {
+      if (references === 0 && status !== 'rejected') pendingMount = true;
+    },
+    pinPreload(): void {
+      preloadPinned = true;
+    },
+    retain(): () => void {
+      if (disposed) throw new Error('React cannot retain a disposed font resource');
+      references += 1;
+      releaseRevision += 1;
+      pendingMount = false;
+      preloadPinned = false;
+      const preload = defaultFontPreloads.get(key);
+      if (preload?.resource === resource) defaultFontPreloads.delete(key);
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        references -= 1;
+        const revision = ++releaseRevision;
+        queueMicrotask(() => {
+          if (references === 0 && releaseRevision === revision) disposeIfUnused();
+        });
+      };
+    },
+    clear(): void {
+      pendingMount = false;
+      preloadPinned = false;
+      if (cache.get(key)?.face === face) cache.delete(key);
+      clearSuspense(suspenseKey);
+      disposeIfUnused();
+    },
+  });
+  cache.set(key, resource);
+  return resource;
+}
+
+function hookFontFace(input: FontFaceSource, config: DefaultHookFontConfig): FontFace {
+  return config.format === undefined ? glyph.fontFace(input) : glyph.fontFace(input, { format: config.format });
+}
+
 const fontSuspenseNamespace = '@pmndrs/glyph/react:font';
 type FontSuspenseKey = [typeof fontSuspenseNamespace, ThreeHandle, FontFaceSelection];
 const fontSuspenseKeys = new WeakMap<ThreeHandle, WeakMap<object, FontSuspenseKey>>();
@@ -697,6 +1023,47 @@ function createMountedFontStore(handle: ThreeHandle, selections: readonly FontFa
         mounted = undefined;
         current = source;
         for (const font of released) font.dispose();
+      };
+    },
+    getSnapshot: () => current,
+  };
+}
+
+interface MountedHookFontStore {
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly getSnapshot: () => Font<RasterFormatMetadata>;
+}
+
+function createMountedHookFontStore(resource: ReactFontFaceResource): MountedHookFontStore {
+  const source = threeHandleFontSource(resource.handle, resource.face);
+  let current = source;
+  let mounted: Font<RasterFormatMetadata> | undefined;
+  let releaseResource: (() => void) | undefined;
+  const listeners = new Set<() => void>();
+  return {
+    subscribe(listener) {
+      listeners.add(listener);
+      if (mounted === undefined) {
+        releaseResource = resource.retain();
+        try {
+          mounted = acquireThreeHandleFont(resource.handle, resource.face);
+          current = mounted;
+        } catch (error) {
+          releaseResource();
+          releaseResource = undefined;
+          throw error;
+        }
+        for (const subscriber of listeners) subscriber();
+      }
+      return () => {
+        if (!listeners.delete(listener) || listeners.size !== 0 || mounted === undefined) return;
+        const releasedFont = mounted;
+        const releasedResource = releaseResource;
+        mounted = undefined;
+        releaseResource = undefined;
+        current = source;
+        releasedFont.dispose();
+        releasedResource?.();
       };
     },
     getSnapshot: () => current,
