@@ -4,7 +4,7 @@ title: TypeGPU raster programs and text engine
 description: Target v1 API for the package-owned TypeGPU integration subpath containing reusable technique shaders, variant-aware raster programs, and a direct WebGPU text engine that consumes renderer-neutral core paragraph batches without Three.js.
 documentation_type: reference
 tags: [api, typegpu, webgpu, shaders, raster, engine, batching, variants]
-status: draft
+status: deprecated
 sources:
   - id: core-api
     resource: core-api.md
@@ -38,10 +38,15 @@ sources:
     title: TypeGPU and TSL interoperability
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-15T15:53:27Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # TypeGPU raster programs and text engine
+
+> **Historical proposal — superseded.** Glyph does not publish a second direct TypeGPU text engine. TypeGPU integration
+> uses the same public `GlyphConfig`, Codec, `CommandBufferView`, renderer decode, and root contract as Three; shader
+> realizations remain on explicit `/typegpu/*` leaves. Use the
+> [renderer integration guide](../guides/renderer-integration.md).
 
 This is an engine-integration subpath, not part of the renderer-neutral core entry:
 

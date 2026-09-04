@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph'
-description: Implements portable font loading, retained Rust shaping and layout, renderer-directed command planning, and maintained Three.js and React Three Fiber adapters.
+description: Implements portable font loading, retained Rust shaping and layout, Codec-driven command buffers, and maintained Three.js and React Three Fiber adapters.
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:fe55c1b820b029f192facb613ec4f5b22860660fffadbc6a5e797d2c1d11bdb2'
+source_digest: 'sha256:17e3cc218e30e1fbb82f2ccb1d29a9341f60ae5ec7d6d3696cfdc1fdf20b20f7'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -52,7 +52,7 @@ sources:
     title: Internal Glyph handle state and Wasm command transport
   - id: tsl-shaders
     resource: ../../../packages/glyph/src/tsl.ts
-    title: Technique shader library layer
+    title: Raster-format shader library layer
   - id: three-api
     resource: ../../../packages/glyph/src/three.ts
     title: Three.js public exports
@@ -61,7 +61,7 @@ sources:
     title: Three.js retained text lifecycle
   - id: three-plan
     resource: ../../../packages/glyph/src/three/engine-plan-target.ts
-    title: Three.js render-plan executor
+    title: Three.js command-buffer executor
   - id: three-config
     resource: ../../../packages/glyph/src/three/handle.ts
     title: Built-in ThreeConfig and handle factories
@@ -88,7 +88,7 @@ sources:
     title: Rust text engine and render-plan design
   - id: core-api-reference
     resource: ../planning/core-api.md
-    title: Core text API reference
+    title: Glyph integration API reference
   - id: three-api-reference
     resource: ../planning/three-api.md
     title: Three.js text API reference
@@ -97,7 +97,7 @@ sources:
     title: Planner-assisted detached glyph slice
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-28T20:10:29Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -113,7 +113,7 @@ The package owns six runtime layers:
 | Root runtime and config  | TypeScript core       | Initialize one Glyph engine, construct named adapter handles, and coordinate projection/decode/commit transactions.                   |
 | Font and raster loading  | TypeScript core       | Read portable GLB envelopes, register shaping payloads, decode selected raster resources, and retain font identity.                   |
 | Shaping and layout       | Rust/Wasm             | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                    |
-| Codec and command buffer | Rust/Wasm             | Interpret a validated Codec, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.              |
+| Codec and command buffer | Rust/Wasm             | Interpret a validated Codec, pack canonical raster-format records, coalesce dirty ranges, and emit a compact command buffer.          |
 | Three.js integration     | `@pmndrs/glyph/three` | Compile Codec programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
 | React integration        | `@pmndrs/glyph/react` | Reconcile React values into the same imperative `Text` and `TextGroup` objects.                                                       |
 
@@ -175,18 +175,15 @@ config helpers.
 
 | Subpath                      | Purpose                                                                                                                           |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing FontFace/font/raster contracts, fallback stacks, formatting helpers, and paragraphs. |
+| `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing FontFace/font/raster contracts, fallback stacks, formatting helpers, and layout results. |
 | `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, and portable-resource helpers for integration authors.                |
 | `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, material factories, and Codec registration.                            |
-| `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                              |
-| `@pmndrs/glyph/react/bitmap` | Typed `useBitmap(input, options)` convenience over `useFont`.                                                                     |
-| `@pmndrs/glyph/react/msdf`   | Typed `useMsdf(input, options?)` convenience over `useFont`.                                                                      |
-| `@pmndrs/glyph/react/slug`   | Typed `useSlug(input)` convenience over `useFont`.                                                                                |
+| `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`, and `<TextGroup>`, reconciled through React Three Fiber.                                        |
 | `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                      |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                         |
-| `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                  |
-| `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                  |
-| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.           |
+| `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-format contracts.                                                     |
+| `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party raster-format interfaces; no scene integration.                              |
+| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party raster-format interfaces; no scene integration or engine driving.        |
 | `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                  |
 
 The three renderer-neutral raster leaves retain portable Codec-registration side effects under tree shaking. Built-in
@@ -204,8 +201,8 @@ baker, its `std`-enabled dependencies, Ajv, glTF Validator, or the baker Wasm; o
 load those bytes.
 
 The TypeScript paragraph engine, paragraph batches/attachments, direct shaping exports, and the text-preparation Worker
-are removed. TypeGPU is a later adapter stack built against the Rust render plan; it is not a compatibility wrapper over
-the removed batch model. The exception is the `@pmndrs/glyph/typegpu` shader library, which publishes the same technique
+are removed. TypeGPU is a later adapter stack built against the Codec command buffer; it is not a compatibility wrapper over
+the removed batch model. The exception is the `@pmndrs/glyph/typegpu` shader library, which publishes the same raster-format
 realizations as `/tsl` as typed TypeGPU functions for any WebGPU host; `typegpu` is an optional peer and the root entry
 has no static edge to it.
 
@@ -264,7 +261,7 @@ cache and lease owner. Each FontFace selection retains one Promise for the lifet
 disposing the face releases that record, and a rejected font operation is evicted so an explicit later load can retry.
 
 The R3F `Text` component infers the raster-format union from a required outer font selection, including a font stack chosen
-from runtime state. Callers do not widen dynamic selections to `AnyRasterFormat`. A nested `Text` is flattened into
+from runtime state. Callers retain that inferred union rather than widening dynamic selections to an erased catch-all. A nested `Text` is flattened into
 an inline styled run and may omit `font` because it inherits from its enclosing paragraph; a rendered outer `Text`
 without a font is invalid. Nested text creates no Three object and accepts only `children`, `font`, `style`, `paint`, and
 `material`. Because JSX erases the generic element identity needed to reject every box-only prop statically, the
@@ -295,7 +292,7 @@ other renderer-relevant invalidation requests a checkpoint from the last consume
 is an engine defect and never enters this recovery path (D-285).
 
 `registerThreeRasterProgram` refuses a format registered after a runtime has read the registry (D-271), naming the
-technique instead of applying to nothing. Snapshot tracking uses weak registry references, so an abandoned runtime cannot
+raster format instead of applying to nothing. Snapshot tracking uses weak registry references, so an abandoned runtime cannot
 keep its identity registry alive or permanently poison later registration after collection. `/three` also re-exports
 `ParagraphLayoutSummary`, `GlyphLayoutInspection`, `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a
 `/three` importer can name what `Text.measure()`, `Text.glyphs()`, and `TextStyle.features` give it.
@@ -352,13 +349,10 @@ one package-private dynamic chunk reached only by explicit `clone()` or by loadi
 Worker transfer test proves every posted clone buffer detaches in the sender, the receiver reconstructs the selected
 format with fetching disabled, and neither realm initializes the shaping engine.
 
-React's `useFont(source, config?)` declares through that same FontFace path, asks the selected Three handle which exact
-format the declaration denotes, enters the shared `suspend-react` resource only while that format is unloaded, and returns
-an independently mounted immutable Font lease. Single-technique
-consumers may import `useBitmap`, `useMsdf`, or `useSlug` from the matching `/react/*` subpath. Each wrapper only builds its
-typed format request and delegates to `useFont`; readiness, canonical source/format identity, and mounted disposal have
-one implementation. Every hook carries Promise-returning `preload()` and declaration `clear()`. Clearing a declaration
-does not invalidate an independently mounted Font or Text lease.
+React `<Text>` consumes the same `FontFace` declaration or selection as imperative Three. It asks the selected Three
+handle which exact format the declaration denotes and enters the shared `suspend-react` resource only while that format
+is unloaded. The selected Text owns an independent immutable Font lease and releases it on unmount. There are no public
+React font-loading hooks or `/react/*` format leaves; applications declare fonts once with `glyph.fontFace()`.
 
 Artifact metrics carry text decoration from bake time (D-246): required `underlinePosition`/`underlineThickness` from
 `post` and `strikeoutPosition`/`strikeoutSize` from `OS/2`, with a conservative derived fallback when a source font
@@ -374,7 +368,7 @@ receives a `kind: 'glyph' | 'decoration'` discriminated context and may keep or 
 material without mutating the glyph draw. `ThreeTextMaterialContextMap` supplies the exact built-in payloads and is the
 augmentation point for a custom Three program's literal format and output types; it does not add an untyped string
 fallback. Only glyph branches carry a raster `format`; `pmndrs.decoration` remains an internal Codec/command-buffer
-technique identifier. Decorated render planners rebuild their gather output; the undecorated retained fast path is unchanged.
+technique identifier. Decorated command-buffer gathers rebuild their output; the undecorated retained fast path is unchanged.
 
 When runtime baking is required, one Worker request normalizes the Unicode ranges, prepares the selected source once,
 and feeds those exact prepared bytes to the shaping bake and every requested Bitmap, MSDF, or Slug bake. The Worker
@@ -391,7 +385,7 @@ restrictions, and storage corruption are transparent misses followed by the same
 ## Retained frame transaction
 
 Every handle owns one anonymous root, and `handle(name)` idempotently selects named sibling roots. Each root owns one Rust
-render planner and one renderer draw root. It may bind to at most one Three `Scene`, discovered from its attached Text
+command-buffer stream and one renderer publication boundary. It may bind to at most one Three `Scene`, discovered from its attached Text
 members by object identity; a root name is stable semantic/customization metadata, not a `Scene.uuid`. A second Scene
 therefore uses another named root. Returned roots are terminal and cannot create deeper roots. `TextGroup` remains freely
 nestable for scene hierarchy, transform/visibility inheritance, material selection, pixel snapping, and render order, but
@@ -422,7 +416,7 @@ Rust publishes one revision containing:
 - physical-buffer allocation and retirement commands;
 - coalesced per-buffer dirty byte ranges;
 - resource bindings;
-- ordered draw commands with technique/program, resource, material, transform, and clip identity;
+- ordered draw commands with raster-format/program, resource, material, transform, and clip identity;
 - optional semantic measurement or inspection sections only when explicitly demanded.
 
 Metric-only style changes refresh retained shaping-run typography before cluster aggregation but reuse the HarfRust glyph
@@ -433,8 +427,8 @@ correct spacing through intermediate animated sizes for Bitmap, MSDF, and Slug.
 
 The Three executor does not infer paragraph layout from GPU records and does not maintain a parallel candidate/current
 target state machine. It applies the Rust command buffer transactionally and retains only renderer resources required by
-future deltas. Portable payload bytes are already shared by `LoadedFont`; Three's current GPU texture realization remains
-render-planner-local. Pooling those immutable device objects above render planners is a Three implementation follow-up, not a core scene,
+future deltas. Portable payload bytes are already shared by immutable `Font` values; Three's current GPU texture realization remains
+root-local. Pooling those immutable device objects above roots is a Three implementation follow-up, not a core scene,
 device, render-pass, or implicit-standalone-batch API.
 
 A paragraph's content box may declare `columns: { count, gap }`, flowing text through side-by-side ordered columns inside
@@ -444,19 +438,19 @@ engine represents; balancing, exclusions, and contour flow remain post-v1.
 
 ## Renderer Codec
 
-Each portable technique registers a schema, Codec-body factory, and cold font compiler through the root package. Three
+Each portable raster format registers a schema, Codec-body factory, and cold font compiler through the root package. Three
 registers only the renderer half—resource realization and material creation—then assembles the complete Three Codec
 program from the portable body. Rust validates and interprets the compiled Codec; it never invokes a JavaScript callback in
 shaping, layout, or packing. Cold resource selection receives explicit `(glyphIndex, strikeIndex)` coordinates; the
 compiler alone lowers them into the strike-major wire table. Three validates declared reserved supplied-geometry
 semantics when a variant registers, then validates every retained payload attribute when a font is bound, before device
-realization. Material contexts retain the discriminated `PortableResource` union rather than erasing validated payloads
+realization. Material contexts retain the discriminated `PortableResource` union rather than erasing typed payloads
 to `unknown`.
 
 CPU reference renderers and allocation diagnostics may pair `compileRasterFont()` with `readCompiledRasterFont()`.
 The authenticated read-only view resolves schema field names, strike rows, selected resources, and portable payloads
-directly from the compiled binding. It does not expose technique-private decoded font data, perform another raster
-decode, or copy the binding's scalar value tables; ordinary renderers continue through their render-planner target.
+directly from the compiled binding. It does not expose raster-format-private decoded font data, perform another raster
+decode, or copy the binding's scalar value tables; ordinary renderers continue through their bound command-buffer view.
 
 Portable resource declarations select `one` or `many` cardinality. Fixed-member groups carry synchronized leaf buffers
 and textures under one retained identity; groups cannot nest, geometry cannot repeat, and every resourceful schema names
@@ -480,12 +474,12 @@ The first-party Codec can select indexed transform batching, direct per-draw tra
 stable transform-table ID to each rendered glyph so compatible paragraphs may collapse into one draw. Direct mode splits
 draws by transform for integrations that prefer ordinary object matrices. Codec programs may use ordered-direct or
 stable-indirect physical storage. Stable draws carry one reserved u32 order buffer; Three validates its draw/primitive
-addressing once, then uses the same logical-to-physical mapping for technique records, transform indices, explicit origin
+addressing once, then uses the same logical-to-physical mapping for raster-format records, transform indices, explicit origin
 queries, and third-party program material contexts. Root `compositing` determines whether Rust must preserve authored
 ordering or may reorder independent work. Ordered-direct remains the first-party default until stable planning meets the
 same tail-latency target.
 
-`materialId` is explicit through the frame ABI and render plan. Three maps it to a `defineTextMaterial()` factory. Material
+`materialId` is explicit through the frame ABI and command buffer. Three maps it to a `defineTextMaterial()` factory. Material
 identity may split draws without forcing a second copy of the canonical glyph buffers.
 
 Bitmap atlas pages within one strike are renderer layers, not independent draw resources. The font binding exposes one
@@ -499,7 +493,7 @@ it; the sampled GPU frame remained a separate 1–5 ms concern.
 
 `createFontStack()` accepts fonts from one runtime in explicit fallback order. Members may use different raster formats.
 The font carries both shaping identity and raster binding, so `Text` has no redundant format property. Rust resolves the
-font for each cluster and partitions the render plan according to the active renderer's supported Codec programs.
+font for each cluster and partitions the command buffer according to the active renderer's supported Codec programs.
 
 This permits an MSDF or Bitmap prose font to fall back to a Slug emoji font while keeping third-party renderers safe: an
 unregistered raster format fails at the Codec boundary instead of producing an unsupported draw.
@@ -510,8 +504,8 @@ selected font binding—not a `Text` format selector—carries the renderer prog
 Raster formats explicitly declare the text effects their portable Codec and shader implement. MSDF supports outline and
 shadow; Bitmap and Slug currently support neither. Three and root-configured integrations validate
 the selected font formats at the call that accepts a style, so an unsupported effect cannot become a malformed or
-silently degraded render plan. The semantic ABI carries effect color, width, offset, and inherited opacity only for
-technique programs that opt in.
+silently degraded command buffer. The semantic ABI carries effect color, width, offset, and inherited opacity only for
+raster programs that opt in.
 
 ## Semantic queries
 
@@ -572,7 +566,7 @@ private planning objects for each renderer to reconstruct. Root services synchro
 destination renderer. The query does not advance the source root's revision or publication generation.
 
 Three's `Text.breakApart()` uses both planner requests and returns the frozen tuple
-`[Glyphs, Decorations | undefined]`. It preserves the source transform, planner-defined batching, fallback techniques,
+`[Glyphs, Decorations | undefined]`. It preserves the source transform, Codec-defined batching, fallback raster formats,
 shared immutable atlas/page leases, and supplied geometry while adding one full affine matrix per drawable record. Its
 local methods mirror `InstancedMesh`; world methods bridge physics state to root-relative storage. Bulk world-space
 callers update the detached root once, invert its world matrix once, convert each body matrix with
@@ -621,7 +615,7 @@ Renderer-facing types that applications can encounter publish from root `@pmndrs
 such as `defineGlyphConfig`, Codec authoring, schema binding, raster-format definition, and resource leases live on
 explicit `@pmndrs/glyph/config/*` leaves. D-306 and D-308 supersede D-249's former public `/core` engine-driving layer. Internal projection,
 identity mapping, planning, settlement, and Wasm transport are package machinery rather than an application or integrator
-API. The explicit `/tsl` and `/typegpu` shader subpaths own technique shader realizations and no scene, runtime, or root.
+API. The explicit `/tsl` and `/typegpu` shader subpaths own raster-format shader realizations and no scene, runtime, or root.
 
 The raw borrowed Rust publication and its typed command tree never cross the integration boundary. The engine projects
 that trusted wire data through the integration's schema and resource resolver, then calls
@@ -866,9 +860,9 @@ suffix-edit 14.01 vs 13.93 ms medians).
 
 The final sequential eight-warmup/31-sample checkpoint uses the unchanged 22,000-target corpus, which resolves to 25,515
 positioned and 21,805 renderable glyphs. Values below are medians in milliseconds for the complete packaged Rust
-transaction and technique-specific render plan; GPU submission is outside this direct benchmark.
+transaction and raster-format-specific command-buffer publication; GPU submission is outside this direct benchmark.
 
-| Technique |  Cold | Font size | Column width | Suffix edit | Local edit | Middle splice |
+| Raster format |  Cold | Font size | Column width | Suffix edit | Local edit | Middle splice |
 | --------- | ----: | --------: | -----------: | ----------: | ---------: | ------------: |
 | Bitmap    | 15.90 |      6.04 |         2.78 |       13.48 |       1.18 |          8.52 |
 | MTSDF     | 16.50 |      6.41 |         2.73 |       13.52 |       1.18 |          8.73 |
@@ -879,7 +873,7 @@ The migration comparison is checked evidence rather than a reconstructed recolle
 `glyph:layout-benchmark` workflow on this Darwin arm64 host. At the same eight-warmup/31-sample cadence its retained
 TypeScript path measured 58.32/12.09/9.15/39.61 ms for cold/font-size/width/suffix-edit medians. The current Bitmap,
 MTSDF, and Slug records all use one byte-identical optimized shaper Wasm and the complete `pmndrs_glyph_engine_update` plus
-technique-specific Rust render plan. The base reports 25,515 positioned glyphs; the current plan reports 21,805
+raster-format-specific Rust command-buffer publication. The base reports 25,515 positioned glyphs; the current publication reports 21,805
 renderable instances from the unchanged 22,000-glyph target because it omits non-rendering glyphs from GPU records.
 
 The exact [TypeScript baseline](../../../apps/benchmarks/fixtures/results/typescript-layout-baseline-90964be0-darwin-arm64.json)
@@ -890,7 +884,7 @@ the benchmark fixture gate. Every comparable median is faster through Rust: Bitm
 size, 3.29× on width, and 2.94× on suffix edit; even the slowest technique for each case remains 3.49×, 1.82×, 3.09×,
 and 2.76× faster. This proves the migration comparison on this machine; it does not close the stricter p95-under-4-ms
 objective. Local-edit p95 remains about 6 ms and high-variance, while width p95 ranges from 4.29 to 4.75 ms across
-techniques.
+raster formats.
 
 The paragraph-scoped synchronous measure (11.17) closes that objective for the explicit measure shape. At the same
 22,000-glyph corpus and cadence, the new `measure-query` lane answers the identical alternating widths as the
@@ -929,7 +923,7 @@ The earlier 51.067 ms figure was the maximum selected as p95 from only 11 sample
 the storage-policy tradeoff without changing the default: stable planning remains optimization/correctness work, and
 chunk-local text storage cannot be claimed as the dominant splice fix while the physical plan has this cost.
 
-Three now consumes stable-indirect plans through one shared record-addressing abstraction rather than technique-specific
+Three now consumes stable-indirect plans through one shared record-addressing abstraction rather than raster-format-specific
 branches. A Rust/Three integration regression proves lifecycle reorder mutates only the order table and preserves physical
 glyph bytes and draw objects. A two-record GPU oracle makes slot zero green and slot one red, then renders logical slot zero
 through `order[0] = 1`: forced WebGL2 and hardware WebGPU both return 16/16 exact red pixels and the same readback hash.
@@ -941,7 +935,7 @@ sorted writes to the requested range reduces stable font-size from 350.136 to 7.
 sequential benchmark high-water marks are 107.56 MiB ordered and 114.25 MiB stable; retained-memory right-sizing remains
 open and neither figure is presented as ordinary application demand.
 
-The first-party Codec declares one allocation strategy for every registered technique. Rust now resolves that uniform
+The first-party Codec declares one allocation strategy for every registered raster format. Rust now resolves that uniform
 strategy once per update instead of looking up a program for every glyph before the selected planner performs its own
 validated compilation. Mixed-strategy Codecs retain the per-glyph discovery path and stop once both strategies are
 observed. A five-warmup/11-sample ordered run measures 6.005 ms font-size, 2.813 ms column-resize, 1.212 ms localized-edit,

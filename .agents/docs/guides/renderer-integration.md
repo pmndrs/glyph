@@ -25,12 +25,12 @@ sources:
   - id: example-webgpu-device
     resource: ../../../packages/glyph-example-renderer/src/webgpu-device.ts
     title: Concrete TypeGPU and WebGPU realization
-  - id: example-typegpu-technique
+  - id: example-typegpu-format
     resource: ../../../packages/glyph-example-raster/src/typegpu.ts
     title: TypeGPU shader realization
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-02T00:00:00Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Integrate a renderer with Glyph
@@ -39,7 +39,7 @@ This guide builds a renderer adapter with `GlyphConfig`, then follows one public
 TypeGPU 0.12 example. The finished adapter:
 
 - uses only public application types from `@pmndrs/glyph`, renderer-neutral helpers from `/config/*`, and explicit
-  technique and `/typegpu` subpaths;
+  raster-format and `/typegpu` subpaths;
 - creates one inferred handle with an anonymous root and idempotent named roots;
 - retains Text state and publishes it through `shape()`;
 - receives an engine-projected, borrowed `CommandBufferView` in `GlyphRenderer.decode()`;
@@ -60,8 +60,8 @@ hidden hook, or second runtime.
 flowchart LR
   App[Application] --> Glyph["@pmndrs/glyph<br/>glyph · FontFace · Font"]
   Adapter[Custom integration] --> Glyph
-  Adapter --> Portable["technique package<br/>portable schema + Codec program"]
-  Device[Host renderer adapter] --> Shader["technique /typegpu<br/>typed shaders"]
+  Adapter --> Portable["raster-format package<br/>portable schema + Codec program"]
+  Device[Host renderer adapter] --> Shader["raster-format /typegpu<br/>typed shaders"]
   Device --> TypeGPU[TypeGPU 0.12]
   Glyph --> Rust[private Rust/Wasm engine]
   Portable --> Glyph
@@ -345,8 +345,8 @@ names, the resource kind, portable payload, singleton companions, previous accep
 import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph/config/glyph';
 
 resolve: ({ format, resourceName, payload }) => {
-  if (format !== techniqueId) {
-    throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${format}"`);
+  if (format !== formatId) {
+    throw new TypeError(`example renderer shader "${formatId}" cannot render "${format}"`);
   }
   return resourceLease(
     Object.freeze({ name: resourceName, resource: payload }),
@@ -536,14 +536,14 @@ export type ExampleGlyphConfig = GlyphConfigFor<
 >;
 
 export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
-  const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
+  const formatId = device?.shader.variant.formatId ?? exampleRendererShader.variant.formatId;
   return defineGlyphConfig({
     schema: ExampleSchema,
     fonts: { default: glyphExample.kind, formats: ExampleFontFormats },
     encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
     resolve: ({ format, resourceName, payload }) => {
-      if (format !== techniqueId) {
-        throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${format}"`);
+      if (format !== formatId) {
+        throw new TypeError(`example renderer shader "${formatId}" cannot render "${format}"`);
       }
       return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () => undefined);
     },
@@ -574,7 +574,7 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
 | Field      | Required | Owns                                                                                          |
 | ---------- | -------- | --------------------------------------------------------------------------------------------- |
 | `schema`   | yes      | Host values created from trusted command meanings; every callback receives the root boundary. |
-| `fonts`    | no       | Handle-relative technique names, default technique, and technique loading.                    |
+| `fonts`    | no       | Handle-relative raster-format names and default raster format.                                |
 | `encode`   | yes      | Codec descriptor for packed command-buffer data.                                              |
 | `resolve`  | yes      | Portable-resource realization and leases.                                                     |
 | `renderer` | yes      | Root-scoped `decode`, transform sync, and retained host-state disposal.                       |
@@ -661,7 +661,7 @@ wrapper can enforce the synchronous Text contract:
 ```ts
 function acquireLoadedFont(selection: ExampleFontFaceSelection) {
   const fonts = context.fonts;
-  if (fonts === undefined) throw new Error('this integration has no configured font techniques');
+  if (fonts === undefined) throw new Error('this integration has no configured raster formats');
   if (!fonts.isLoaded(selection)) {
     throw new Error(`FontFace ${JSON.stringify(selection.family)} is not loaded`);
   }
@@ -683,9 +683,9 @@ console.assert(Inter.isLoaded());
 ```
 
 `Inter.load()` loads every declared format. A generated member such as `Inter.glyphExample.load()` loads only that exact
-declaration. If the main font does not advertise the declared technique/descriptor, loading rejects with a
+declaration. If the main font does not advertise the declared raster format/descriptor, loading rejects with a
 `FontLoadError`; a declaration never fabricates support. An omitted `format` synthesizes no keyed members, and its
-aggregate `load()` discovers the imported techniques advertised by the authoritative main font.
+aggregate `load()` discovers the imported raster formats advertised by the authoritative main font.
 
 The adapter retains the acquired `Font` for its Text and disposes that lease with the Text. Disposing the FontFace
 releases its load record; it does not invalidate independent Font leases held by live Text. A React hook may initiate
@@ -736,7 +736,7 @@ origin.write(originBytes);
 ```
 
 Shaders come from `@pmndrs/glyph-example-raster/typegpu`; the integration adds viewport projection, target format,
-blending, and vertex layouts. This keeps technique math independent of the host target.
+blending, and vertex layouts. This keeps raster-format math independent of the host target.
 
 ## Submit accepted state in the host
 
@@ -859,7 +859,7 @@ abandoned FontFace declarations, never the correctness mechanism.
 ## Verify a new integration
 
 1. **Package boundary:** application types come from `@pmndrs/glyph`; construction helpers come from public
-   `/config/*` leaves; technique and shader code uses its explicit subpaths.
+   `/config/*` leaves; raster-format and shader code uses its explicit subpaths.
 2. **Type inference:** `glyph.handle('name', config)` infers the concrete handle without casts or explicit Glyph generics.
 3. **Codec:** real text produces expected lanes, variants, capabilities, batching, and order.
 4. **Hierarchy:** `DisplayList.children` reaches the renderer in authoritative order with no numeric IDs.

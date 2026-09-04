@@ -327,10 +327,10 @@
             <text class="label" x="540" y="99" text-anchor="middle">@pmndrs/glyph</text>
             <text class="minor" x="540" y="120" text-anchor="middle">complete public config vocabulary</text>
             <rect class="box amber" x="410" y="220" width="260" height="70" />
-            <text class="label" x="540" y="249" text-anchor="middle">portable technique package</text>
+            <text class="label" x="540" y="249" text-anchor="middle">portable raster-format package</text>
             <text class="minor" x="540" y="270" text-anchor="middle">schema · Codec program</text>
             <rect class="box violet" x="795" y="70" width="245" height="70" />
-            <text class="label" x="917" y="99" text-anchor="middle">technique /typegpu</text>
+            <text class="label" x="917" y="99" text-anchor="middle">raster-format /typegpu</text>
             <text class="minor" x="917" y="120" text-anchor="middle">typed shader functions</text>
             <rect class="box violet" x="795" y="220" width="245" height="70" />
             <text class="label" x="917" y="249" text-anchor="middle">host renderer</text>
@@ -422,7 +422,7 @@ if (handle.drawList.draws.length === 0) throw new Error('the renderer produced n
             <path class="edge" d="M75 145H370" marker-end="url(#arrow-b)" />
             <text class="minor" x="222" y="137" text-anchor="middle">glyph.shape()</text>
             <path class="edge" d="M370 200H520" marker-end="url(#arrow-b)" />
-            <text class="minor" x="445" y="192" text-anchor="middle">selected Codec plan</text>
+            <text class="minor" x="445" y="192" text-anchor="middle">Codec command data</text>
             <path class="edge" d="M520 255H680" marker-end="url(#arrow-b)" />
             <text class="minor" x="600" y="247" text-anchor="middle">trusted packed data</text>
             <path class="edge" d="M680 310H850" marker-end="url(#arrow-b)" />
@@ -455,12 +455,12 @@ if (handle.drawList.draws.length === 0) throw new Error('the renderer produced n
             <tr>
               <td><code>schema</code></td>
               <td>yes</td>
-              <td>Host binding types and <code>drawRoot</code>.</td>
+              <td>Host binding types projected within the root boundary.</td>
             </tr>
             <tr>
               <td><code>fonts</code></td>
               <td>no</td>
-              <td>Handle-relative technique map and default.</td>
+              <td>Handle-relative raster-format map and default.</td>
             </tr>
             <tr>
               <td><code>encode</code></td>
@@ -502,14 +502,14 @@ export type ExampleGlyphConfig = GlyphConfigFor&lt;
 &gt;;
 
 export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
-  const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
+  const formatId = device?.shader.variant.formatId ?? exampleRendererShader.variant.formatId;
   return defineGlyphConfig({
     schema: ExampleSchema,
     fonts: { default: glyphExample.kind, formats: ExampleFontFormats },
     encode: ({ ids }) =&gt; ({ descriptor: exampleCodecDescriptor(ids) }),
     resolve: ({ format, resourceName, payload }) =&gt; {
-      if (format !== techniqueId) {
-        throw new TypeError(`example renderer shader "${techniqueId}" cannot render "${format}"`);
+      if (format !== formatId) {
+        throw new TypeError(`example renderer shader "${formatId}" cannot render "${format}"`);
       }
       return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () =&gt; undefined);
     },
@@ -541,7 +541,6 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
         <h3>Schema and type inference</h3>
         <pre><code>export const ExampleSchema: GlyphSchema&lt;ExampleBindings, ExampleRootContext&gt; =
   defineGlyphSchema({
-    drawRoot: () =&gt; undefined,
     program: (_root: ExampleRootContext, program) =&gt; Object.freeze({ kind: 'example-program', program }),
     buffer: (_root, input) =&gt; Object.freeze({ kind: 'example-buffer', input }),
     material: (_root, material) =&gt; material,
@@ -551,11 +550,12 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
     instanceSpan: (_root, input) =&gt; Object.freeze({ kind: 'example-instance-span', input }),
   });</code></pre>
         <p>
-          <code>drawRoot</code> is schema-defined. It can be a scene node, render layer, or <code>undefined</code> as in
-          the offscreen example. The direct helper infers from its argument, but the example still needs the explicit
-          variable annotation <code>GlyphSchema&lt;ExampleBindings, ExampleRootContext&gt;</code> to witness the
-          complete binding relationship. That is the remaining DSL inference gap, not permission to add corrective casts
-          elsewhere.
+          The root recipe supplies its renderer-owned publication <code>boundary</code> once through
+          <code>context.create(...)</code>, and every schema callback receives it as the first argument. It can represent
+          a scene node, render layer, or small semantic object. The direct helper and
+          <code>glyph.handle(name, config)</code> infer inline structural configs. The exported package example names its
+          <code>GlyphSchema&lt;ExampleBindings, ExampleRootContext&gt;</code> boundary so isolated declaration emit can
+          describe the public library signature; it is not annotation ceremony imposed on application code.
         </p>
         <div class="diagram">
           <svg viewBox="0 0 1100 320" role="img" aria-labelledby="types-title types-desc">
@@ -681,10 +681,10 @@ const hudText = hud.createText({ font, text: 'Score: 42' });</code></pre>
 });
 await Inter.load();
 console.assert(Inter.isLoaded());
-await Inter.glyphExample.load(); // exact technique only</code></pre>
+await Inter.glyphExample.load(); // exact raster format only</code></pre>
         <p>
-          The main font must advertise every declared technique or loading rejects. A synchronous Text constructor
-          throws when its selected technique is not loaded. React may suspend on the handle's exact technique operation;
+          The main font must advertise every declared raster format or loading rejects. A synchronous Text constructor
+          throws when its selected raster format is not loaded. React may suspend on the handle's exact format operation;
           its immutable context carries only the selected handle/root and never becomes another Glyph runtime.
         </p>
       </section>
@@ -814,7 +814,7 @@ device.queue.submit([encoder.finish()]);</code></pre>
             </tr>
             <tr>
               <td>Scene-like object</td>
-              <td>Only if the host uses one; bind it through schema and <code>drawRoot</code>.</td>
+              <td>Only if the host uses one; capture it in the root publication boundary.</td>
             </tr>
             <tr>
               <td>Render pass</td>
@@ -891,7 +891,7 @@ device.destroy();</code></pre>
       <section id="verify">
         <h2>Verification checklist</h2>
         <ol>
-          <li>Use only root Glyph imports, technique packages, and explicit shader subpaths.</li>
+          <li>Use only root Glyph imports, raster-format packages, and explicit shader subpaths.</li>
           <li>Infer the concrete handle without casts or explicit Glyph generics.</li>
           <li>Prove Codec lanes, capability selection, batching, and order.</li>
           <li>Receive ordered batches and root instances with no numeric IDs.</li>

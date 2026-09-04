@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:7350ace3ea9d6bdeedc294837660744ed51f5b62fad328b3dc380ed4718fb822'
+source_digest: 'sha256:735a0458b076b088859c490489569a65224074811e8e7dbdc2b644ccc7a9f9f1'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Shared shader input contract
   - id: portable-plan
     resource: ../../../packages/glyph-example-raster/src/portable.ts
-    title: Portable technique schema and Codec-body definition
+    title: Portable raster-format schema and Codec-body definition
   - id: registration
     resource: ../../../packages/glyph-example-raster/src/register.ts
     title: Root-imported renderer-neutral Codec registration
@@ -49,7 +49,7 @@ sources:
     title: Dual-backend product rendering probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-15T15:53:27Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Package reference: `@pmndrs/glyph-example-raster`
@@ -64,7 +64,7 @@ paragraph/local-run render-order
 inheritance, abort behavior, and disposal. Rust owns retained instance storage, dirty-range publication, and overflow handling.
 A source boundary test rejects imports from core internals or the Three first-party raster and baker subpaths.
 
-The technique makes the proof observable by assigning each source-local glyph ID a deterministic color and drawing a framed
+The raster format makes the proof observable by assigning each source-local glyph ID a deterministic color and drawing a framed
 em-relative diagnostic cell at the position produced by core shaping and paragraph layout. Its visual output is deliberately
 diagnostic rather than a text-quality recommendation. The baker accepts both embedded and external artifact/page packaging.
 The external lane authenticates the companion GLB and its separate record payload through the public raster and resource
@@ -90,7 +90,7 @@ and observes retained draw/geometry identity. No test reconstructs the removed T
 
 The package's actual render resource is a small immutable indexed unit quad. It follows the portable GLB-like contract—semantic
 three-component position and two-component UV vertex attributes, typed accessors, indices, topology, and draw range—so an engine can choose supplied
-geometry without importing Three or learning technique-private implementation details. The command-buffer primitive's record span,
+geometry without importing Three or learning raster-format-private implementation details. The command-buffer primitive's record span,
 not the geometry payload, supplies the draw's instance count.
 
 The hardware-browser target uses a public `FontFace`, package runtime baker, and a spread-wrapped `ThreeConfig` whose font

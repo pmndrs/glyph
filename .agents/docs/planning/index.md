@@ -4,22 +4,22 @@
 
 - [Project brief](project-brief.md) — product intent, merged v0, target v1, and later horizon.
 - [Merged v0 runtime and bake API](api-shapes.md) — superseded migration fixture; describes the merged v0 surface deleted by the Rust render-plan cutover.
-- [Three.js text API](three-api.md) — authoritative `FontLoader`, `TextGroup`, and `Text` surface, including late binding, group disposal/rebinding, font leases, retained non-throwing errors, ordering, and render-loop synchronization.
+- [Three.js text API](three-api.md) — authoritative `glyph.fontFace()`, `ThreeConfig`, `TextGroup`, and `Text` surface, including roots, font leases, ordering, and render-loop synchronization.
 - [Planner-assisted detached glyph slices](detached-glyph-slice.md) — synchronous committed-record copies, independent Three.js `Glyphs` and decoration objects, matrix ownership, and first-frame upload invariants.
-- [Core text API](core-api.md) — authoritative application and integration API for fonts, measurement, engines, backends, render planners, render plans, and renderer targets.
+- [Glyph integration API](core-api.md) — authoritative application and integrator API for fonts, measurement, GlyphConfig, Codec command data, CommandBufferView, DisplayList, renderer decode, handles, and roots.
 - [Font and engine ownership plan](font-runtime-ownership.md) — accepted breaking migration from runtime-bound loaded fonts and raw shaper hosts to immutable font assets, engine-owned backends, target-bound render planners, deterministic leases, and renderer-owned device pools.
 - [Rust layout engine contract](rust-layout-engine.md) — engine ABI, Codec execution, and command-buffer publication boundary.
 - [Engine integration contract](engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
 - [Raster technique and engine resource API](raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
 - [Session handoff](session-handoff.md) — the decisions, corrections, and open questions from the API hardening session, including why measurement is two calls and what they should be named.
-- [Example renderer](example-renderer.md) — why a second engine consumer exists, what it proves about `/core`, and how it divides work with the TypeGPU shader subpath.
+- [Example renderer](example-renderer.md) — why a non-Three consumer exists, what it proves about the public GlyphConfig contract, and how it divides work with the TypeGPU shader subpath.
 - [Renderer integration guide](../guides/renderer-integration.md) — how to implement a custom engine through one inferred `GlyphConfig` using the same public contract as Three.
-- [TypeGPU raster programs and text engine](typegpu-api.md) — complete direct TypeGPU API for typed technique shaders, programs, variants, caller-owned render passes, transforms, synchronization, and disposal.
+- [TypeGPU raster programs and text engine](typegpu-api.md) — superseded direct-engine proposal; current TypeGPU evidence lives in the GlyphConfig example renderer and explicit shader leaves.
 - [TypeGPU-first shader authority](typegpu-first-shader-authority.md) — exploratory package shape and falsifiable proof ladder for sharing complete raster kernels with direct WebGPU hosts, Three.js, and gpucat without changing core.
-- [Three material authority for text draws](three-material-authority.md) — **work in progress.** Fixes the Rust `material_id` route and shared-storage/draw-split contract while leaving the exact Three material-factory types for a later design pass.
+- [Three material authority for text draws](three-material-authority.md) — superseded design record; the current discriminated material context is documented in the Three.js text API.
 - [Merged v0 raster and baker plugin guide](raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
 - [Architecture](architecture.md) — system ownership, import boundaries, and runtime flow.
-- [Renderer-neutral core, batching, and engine integration](engine-integration-boundary.md) — WIP extraction and proof plan for the batched core API, Three.js migration, direct TypeGPU engine, and Wayfare adapter.
+- [Renderer-neutral core, batching, and engine integration](engine-integration-boundary.md) — superseded extraction plan retained for design history; current integrations use GlyphConfig and renderer decode.
 - [External gpucat integration fitness plan](gpucat-integration.md) — public-surface mapping, external-package boundary, ordering/lifecycle plan, and remaining shader-reuse proof for gpucat.
 - [Canonical roadmap](../roadmap/roadmap.md) — authoritative implementation order and exit gates.
 - [uikit integration](uikit-integration.md) — third-party retained-layout integration boundary.

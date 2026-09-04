@@ -32,7 +32,7 @@ sources:
     title: Three.js Object3D
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-15T15:53:27Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Three.js text API
@@ -80,9 +80,10 @@ glyph.shape(); // one semantic flush publishes every dirty root
 renderer.render(scene, camera); // Three traverses and actually submits those meshes
 ```
 
-Each `WebGPURenderer` or `WebGLRenderer` is constructed with its own canvas/backend policy in normal Three code. Text
-instances do not create canvases, and a handle is not bound to one renderer or scene. Independent text branches from one
-handle can live in different scenes. A single `Object3D` still has only one parent, per Three's ordinary hierarchy rules.
+Each `WebGPURenderer` or `WebGLRenderer` is constructed with its own canvas and rendering backend in normal Three code.
+Text instances do not create canvases, and a handle is not bound to one renderer. One anonymous or named Glyph root may
+attach to at most one `THREE.Scene`; use distinct named roots for distinct scenes. A single `Object3D` still has only one
+parent, per Three's ordinary hierarchy rules.
 
 ## Load a font
 
@@ -118,8 +119,9 @@ const label = three.createText({
 scene.add(label);
 ```
 
-A standalone `Text` owns a private publication boundary of one. It binds lazily on an explicit `measure()`/`glyphs()` query or
-ordinary scene traversal; construction does not shape or allocate renderer buffers. A query may run while detached.
+A standalone `Text` belongs to the anonymous or named root that created it. It binds lazily on an explicit
+`measure()`/`glyphs()` query or ordinary scene traversal; construction does not shape or allocate renderer buffers. A
+query may run while detached, and it does not create another publication boundary.
 
 `Text` accepts either a plain string with explicit `spans`, or a formatted value built with `txt` and `span`. Span values
 may override font selection, text style, and material.
@@ -155,7 +157,7 @@ const dense = glyph.handle(
 
 Capacity policy controls the instance arena:
 
-| Policy  | Behavior                                                                                   |
+| Capacity mode | Behavior                                                                                   |
 | ------- | ------------------------------------------------------------------------------------------ |
 | `grow`  | Grow retained storage to fit the group.                                                    |
 | `chunk` | Use bounded chunks when the group exceeds the initial size.                                |
@@ -180,17 +182,17 @@ label.constraints = { width: { mode: 'exact', size: 500 } };
 label.set({ text: 'Final value', style: { color: '#ffffff' } });
 ```
 
-Setters change desired state. The nearest `TextGroup` applies all pending descendant changes together on its next
+Setters change desired state. The owning root gathers all pending descendant changes on its next
 `updateMatrixWorld()` traversal. Reassigning a value that normalizes to the current state is a no-op. Transform-only
 changes update the transform buffer and do not reshape or recompose text.
 
 Call `glyph.shape()` to synchronously publish all dirty roots in one Rust/Wasm crossing instead of crossing once per
-TextGroup or named root. Three scene traversal also participates in publication before draw-list construction. If no
+TextGroup or named root. Three scene traversal also participates in publication before display-list realization. If no
 semantics are pending, `updateMatrixWorld()` uses only the cheap transform synchronizer. Traversal retains an error on
 `Text`/`TextGroup`; explicit `glyph.shape()` throws a publication failure at the call that requested it.
 
-One group traversal performs at most one mutating `pmndrs_glyph_engine_update` transaction for that group's pending
-values. An earlier `measure()` query uses the non-publishing paragraph measurement call and retains a speculative batch
+One root traversal contributes at most one entry to the mutating `pmndrs_glyph_engine_update_batch` transaction for that
+root's pending values. An earlier `measure()` query uses the non-publishing paragraph measurement call and retains a speculative batch
 candidate; the traversal adopts matching work rather than repeating it.
 
 Editor-style changes go through the same assignment. `label.text = next` states the string the paragraph now holds, and
@@ -305,7 +307,7 @@ The complete field semantics are defined by the [core layout-query reference](co
 ```ts
 const material = defineTextMaterial((context) => {
   const value = context.createDefaultMaterial();
-  // Customize the technique-specific TSL graph or material properties.
+  // Customize the raster-format-specific TSL graph or material properties.
   return value;
 });
 
@@ -319,8 +321,8 @@ Material creation runs while Three holds borrowed plan-backed attributes. It mus
 or update text; the coordinator rejects such reentrancy before another Wasm call can detach those views.
 
 `ThreeTextMaterialContext` is a closed discriminated union on `kind`. A glyph branch also carries the concrete
-`pmndrs.bitmap`, `pmndrs.msdf`, or `pmndrs.slug` technique. The decoration branch does not pretend that decoration is a
-raster technique. Every branch provides its concrete shader, the final policy-selected position node, and
+`pmndrs.bitmap`, `pmndrs.msdf`, or `pmndrs.slug` raster format. The decoration branch does not pretend that decoration is a
+raster format. Every branch provides its concrete shader, the final Codec-selected position node, and
 `createDefaultMaterial()`, so decoration can keep the built-in material or override it explicitly:
 
 ```ts
@@ -379,7 +381,7 @@ label.visible = true;
 ```
 
 The planner emits a complete checkpoint for the selected committed stable glyph IDs. Three imports it through its normal
-plan executor, preserving fallback techniques, atlas/resource relationships, supplied geometry, batching, and draw
+command-buffer executor, preserving fallback raster formats, atlas/resource relationships, supplied geometry, batching, and draw
 ordering. It does not reconstruct one child `Text` per glyph and it does not install mutable overrides on the live
 paragraph. The source continues shaping normally; later source publications cannot mutate the detached copy.
 
@@ -434,7 +436,7 @@ are moved into another group.
 
 ## React Three Fiber
 
-`@pmndrs/glyph/react` exports `GlyphProvider`, `<Text>`, `<TextGroup>`, and `useFont`. Ordinary R3F uses one lazily
+`@pmndrs/glyph/react` exports `GlyphProvider`, `<Text>`, and `<TextGroup>`. Ordinary R3F uses one lazily
 initialized built-in Three handle without configuration at each component:
 
 ```tsx

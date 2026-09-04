@@ -3,7 +3,7 @@ type: Research Concept
 title: Raster technique contract and single-authority cleanup
 description: Defines one authoritative, colocated declaration per raster technique — schema, shader interface, binding, data origin, and policy program — with package subpaths as the reasoning and tree-shaking boundaries.
 documentation_type: explanation
-status: draft
+status: deprecated
 tags: [planning, raster, technique, policy, tsl, typegpu, boundaries]
 sources:
   - id: raster-technique-api
@@ -31,11 +31,15 @@ sources:
     resource: ../../../packages/glyph/src/three/engine-plan-target.ts
     title: Three command-buffer executor
 generated:
-  by: anthropic-claude/fable-5
-  at: '2026-08-12T00:00:00Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Raster technique contract and single-authority cleanup
+
+> **Historical proposal — superseded.** Public raster extensibility now uses `RasterFormat`, `RasterCodec`, and exact
+> `/config/*`, `/raster/*`, `/tsl/*`, or `/typegpu/*` leaves. The former Policy and renderer-program vocabulary below is
+> retained only as design history. Use the [portable raster-format implementation report](../guides/technique-implementation-report.md).
 
 A raster technique is the unit of extensibility this library promises: Bitmap, MSDF, and Slug are the first-party
 proofs, `glyph-example-raster` is the external proof, and TypeGPU integrations are the next consumer. Today a

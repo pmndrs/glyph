@@ -4,7 +4,7 @@ title: Renderer-neutral core and engine integration
 description: Implementation and proof plan for technique-declared paragraph batches, ordered font stacks, synchronized updates, core-owned glyph batching, and thin engine targets.
 documentation_type: explanation
 tags: [planning, api, shaping, batching, threejs, typegpu, wayfare]
-status: draft
+status: deprecated
 sources:
   - id: core-api
     resource: core-api.md
@@ -40,11 +40,16 @@ sources:
     resource: https://github.com/AlexJWayne/typegpu-shader-canvas
     title: Raw TypeGPU proof target
 generated:
-  by: anthropic-claude/opus-5
-  at: '2026-08-07T13:26:50Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Renderer-neutral core and engine integration
+
+> **Historical implementation plan — superseded.** The public backend, planner, target, and configurable projection
+> described below were replaced by `GlyphConfig`, Codec `encode`, the internal trusted projection to
+> `CommandBufferView`/`DisplayList`, renderer `decode`, and anonymous or named roots. Use the
+> [current Glyph integration API](core-api.md) and [renderer integration guide](../guides/renderer-integration.md).
 
 ## Outcome
 

@@ -3,6 +3,7 @@ type: API Reference
 title: Merged v0 runtime and bake API fixture
 description: Records the merged v0 package, loader, baker, shaper, paragraph, raster, and cache interfaces for migration and regression comparison while the target v1 API is built.
 tags: [api, loader, baker, shaping, paragraph, raster]
+status: deprecated
 sources:
   - id: 'citation-1'
     resource: 'https://reactnative.dev/docs/text'
@@ -19,8 +20,8 @@ sources:
   - id: 'benchmark-workload-catalog'
     resource: '../../../apps/benchmarks/src/workloads/catalog.ts'
     title: 'Typed benchmark workload catalog'
-  - id: 'raster-technique-comparison'
-    resource: '../../../apps/benchmarks/src/surfaces/conformance/scenes/raster-technique-comparison.ts'
+  - id: 'raster-format-comparison'
+    resource: '../../../apps/benchmarks/src/surfaces/conformance/scenes/raster-format-comparison.ts'
     title: 'Retained MSDF and Slug comparison scene'
   - id: 'core-api'
     resource: 'core-api.md'
@@ -31,7 +32,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-15T15:53:27Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 > Historical merged-v0 fixture. Names such as `RasterRuntime`, `RasterModule`, and the TypeScript paragraph target below

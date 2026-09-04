@@ -11,7 +11,7 @@ okf_version: '0.2'
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
 - [Merged v0 runtime and bake API](planning/api-shapes.md) — superseded migration fixture; it describes the merged v0 surface that the Rust render-plan cutover deleted.
 - [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
-- [Core text API](planning/core-api.md) — historical application and integration API superseded by the config-owned handle contract.
+- [Glyph integration API](planning/core-api.md) — current root application vocabulary and renderer-neutral GlyphConfig contract.
 - [Font and engine ownership plan](planning/font-runtime-ownership.md) — historical ownership analysis that led to immutable fonts and config-owned handle roots.
 - [Rust layout engine contract](planning/rust-layout-engine.md) — engine ABI, Codec execution, and command-buffer publication contract.
 - [Engine integration contract](planning/engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
@@ -27,7 +27,7 @@ okf_version: '0.2'
 ## Architecture and data contracts
 
 - [Architecture](planning/architecture.md) — ownership, loading, shaping, paragraph, and raster boundaries.
-- [Renderer-neutral core and engine plan](planning/engine-integration-boundary.md) — WIP extraction sequence and proof gates for Three.js and Wayfare.
+- [Renderer-neutral core and engine plan](planning/engine-integration-boundary.md) — historical extraction plan superseded by the GlyphConfig and CommandBufferView implementation.
 - [Shaping data contract V0](planning/shaping-data-contract.md) — retained SFNT profile, Wasm ABI, validation, and conformance.
 - [Raster data contract V0](planning/raster-data-contract.md) — bitmap, MSDF, and Slug records and resources.
 - [glTF extension drafts](planning/extensions/index.md) — `PMNDRS_font` and raster companion schemas.

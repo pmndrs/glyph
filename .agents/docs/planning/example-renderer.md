@@ -27,7 +27,7 @@ sources:
     title: Public package-boundary test
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-02T00:00:00Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Example renderer
@@ -45,7 +45,7 @@ view agree.
 
 The package supplies a complete `GlyphConfig`:
 
-- `schema` turns trusted meanings into stable renderer-owned objects and selects `drawRoot`;
+- `schema` turns trusted meanings into stable renderer-owned objects within the root's publication boundary;
 - `encode` creates the Codec descriptor that defines packed buffers, capabilities, batching, transforms, and order;
 - `resolve` returns exactly-once leases over portable raster resources;
 - `renderer` creates one root-scoped `GlyphRenderer` whose `decode(view)` stages accepted host state;
@@ -120,7 +120,7 @@ Font lease and releases it with its controller.
 ## Rules
 
 - Import integration contracts from `@pmndrs/glyph`, never a removed `/core` entry or private file.
-- Import shader implementations only from an explicit technique shader subpath.
+- Import shader implementations only from an explicit raster-format shader subpath.
 - Keep the package independent of Three and R3F.
 - Let `glyph.handle()` own internal engine installation and root publication plumbing.
 - Treat `CommandBufferView` as borrowed synchronous data.

@@ -5,7 +5,7 @@ description: Proves the root GlyphConfig integration surface through a real Type
 resource: ../../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:c78af511257c2c10b1a8c6f5cd3aa9de7981c07075dac5d16d7992ad10579aab'
+source_digest: 'sha256:ecd2eecd9b4f94fbebdc852194a4d6fe464cd472b9d3c80aa37a2bae3977127d'
 tags: [package, glyph-config, codec, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -43,7 +43,7 @@ sources:
     title: Real font, resource, geometry, and non-empty draw acceptance
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-28T20:20:47Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Package reference: `@pmndrs/glyph-example-renderer`
@@ -54,7 +54,7 @@ resource realization, borrowed `CommandBufferView`, and concrete TypeGPU/WebGPU 
 The package is a standing consumer proof. Production source imports only `@pmndrs/glyph`, the example raster package, and
 the raster's explicit `/typegpu` shader subpath—never `internal/`, `generated/`, a removed `/core` subpath, `/three`, or
 Three itself. Its Codec supplies its own system lane, capability set, allocation mode, transform mode, and program
-namespace while reusing the technique's portable Codec body. The package root exposes a custom `source` condition for
+namespace while reusing the raster format's portable Codec body. The package root exposes a custom `source` condition for
 opted-in workspace tools; default consumers resolve built ESM and declarations.
 
 The ordinary proof begins with `await glyph.init()` and `glyph.handle(name, defineExampleConfig(device))`. Its seven-field
@@ -66,7 +66,8 @@ Rust-authored order. Numeric IDs and raw plan tables never reach the renderer.
 The exported factory names one `ExampleGlyphConfig` return boundary because TypeScript `--isolatedDeclarations` cannot
 emit the type of a nontrivial exported call expression. That alias derives the bindings and root boundary from
 `ExampleSchema` and names `ExampleFontFormats`; every DSL callback and the resulting handle/root/Text types infer without
-casts or repeated callback annotations.
+casts or repeated callback annotations. This is an emitted-library signature requirement, not annotation ceremony for an
+application's inline structural config.
 
 The package's `ExampleRootImplementation` receives only constrained `GlyphRootServices` plus `GlyphHandleFonts` and uses
 them to construct adapter `ExampleText` objects with a private immutable Font lease. Semantic mutations invalidate that root; the application publishes all dirty roots through the
@@ -79,7 +80,7 @@ root instances, and instance spans. Candidate resources, retained buffers, patch
 local maps; `commit()` swaps them atomically, while `discard()` leaves the previous accepted device state untouched. Only
 accepted renderer-owned state survives after the borrowed view expires.
 
-`RecordingExampleRendererDevice` is the deterministic CPU oracle. It reads already-bound technique, program, variant,
+`RecordingExampleRendererDevice` is the deterministic CPU oracle. It reads already-bound raster format, program, variant,
 named buffers, geometry, resources, ordered batches/root instances, and instance spans before one commit changes accepted
 state. It validates only renderer and user/config requirements; it does not revalidate trusted Rust hierarchy semantics.
 Rejected candidates discard staging and leave accepted state untouched.
@@ -99,4 +100,4 @@ hardware lab additionally proves recovery on a second handle. Glyph's package-pr
 publication ownership, and worker-transfer coverage without exposing those mechanisms to integrators.
 
 See [Example renderer](../planning/example-renderer.md) for why the package exists and how it divides
-work with the technique-owned `/typegpu` shader subpath.
+work with the raster-format-owned `/typegpu` shader subpath.

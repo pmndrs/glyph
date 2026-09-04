@@ -29,7 +29,7 @@ sources:
     title: Renderer integration guide
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-02T00:00:00Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Glyph integration API
@@ -64,12 +64,12 @@ therefore always attached to a root.
 ## GlyphConfig
 
 `defineGlyphConfig()` preserves the relationship among schema bindings, Codec, portable resources, renderer result,
-boundary, root extension, font techniques, and config extension fields.
+boundary, root extension, and font formats.
 
 | Field      | Required | Contract                                                                                |
 | ---------- | -------- | --------------------------------------------------------------------------------------- |
-| `schema`   | yes      | Binds trusted meanings to renderer-owned objects and defines `drawRoot`.                |
-| `fonts`    | no       | Declares handle-relative technique keys, a default key, and optional technique loading. |
+| `schema`   | yes      | Binds trusted meanings to renderer-owned objects within the root boundary.              |
+| `fonts`    | no       | Declares handle-relative raster-format keys and the default key.                         |
 | `encode`   | yes      | Selects the Codec that defines packed command-buffer data.                              |
 | `resolve`  | yes      | Creates or updates leased renderer resources from portable payloads.                    |
 | `renderer` | yes      | Creates a root-scoped decoder, transform synchronizer, and disposer.                    |
@@ -84,8 +84,8 @@ import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph/config/glyph';
 const config = defineGlyphConfig({
   schema: ExampleSchema,
   encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
-  resolve: ({ technique, resourceName, payload }) => {
-    if (technique !== techniqueId) throw new TypeError(`unsupported technique ${technique}`);
+  resolve: ({ format, resourceName, payload }) => {
+    if (format !== formatId) throw new TypeError(`unsupported raster format ${format}`);
     return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () => undefined);
   },
   renderer: () => ({
@@ -113,11 +113,11 @@ Changing record layout, batching, or ordering belongs in the Codec. It is not a 
 ## Schema
 
 The direct `defineGlyphSchema(schema)` helper checks and freezes the callback table while preserving its argument types.
-The current example still uses an explicit variable annotation as the complete binding witness:
+The exported package example names its schema boundary explicitly so isolated declaration emit can describe it; an
+application's inline config still infers structurally at `glyph.handle(name, config)`:
 
 ```ts
 const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = defineGlyphSchema({
-  drawRoot: () => undefined,
   program: (_root: ExampleRootContext, program) => Object.freeze({ kind: 'example-program', program }),
   buffer: (_root, input) => Object.freeze({ kind: 'example-buffer', input }),
   material: (_root, material) => material,
@@ -130,7 +130,6 @@ const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = defineGl
 
 | Callback       | Result                                                       |
 | -------------- | ------------------------------------------------------------ |
-| `drawRoot`     | Renderer root associated with one Glyph root boundary.       |
 | `program`      | Renderer program or pipeline selector.                       |
 | `buffer`       | Stable renderer buffer binding.                              |
 | `material`     | Renderer material or paint binding.                          |
@@ -139,8 +138,9 @@ const ExampleSchema: GlyphSchema<ExampleBindings, ExampleRootContext> = defineGl
 | `instance`     | Ordered root instance object.                                |
 | `instanceSpan` | Bound glyph, decoration, inline-object, clip, or Codec span. |
 
-`drawRoot` is renderer-defined. Three uses an Object3D hierarchy; a render graph may use a layer or bucket; a renderer
-without a scene graph may use `undefined`.
+The root recipe supplies the renderer-owned publication `boundary` once through `context.create(...)`. Three uses an
+`Object3D`; a render graph may use a layer or bucket; a renderer without a scene graph may use a small semantic object.
+Every schema callback receives that boundary as its first argument.
 
 ## Trusted projection and CommandBufferView
 
@@ -189,7 +189,7 @@ records into its render graph.
 
 ## Resolve and resource leases
 
-`resolve(context)` receives the selected technique, resource name and kind, portable payload, companion resources,
+`resolve(context)` receives the selected raster format, resource name and kind, portable payload, companion resources,
 previous accepted resource, and an abort signal. It returns `ResourceLease<Value>`.
 
 The selected `RasterResourceId` is authoritative: equal IDs mean equal format, schema role, companion set, metadata, and
@@ -211,16 +211,16 @@ Candidate discard, resource retirement, root disposal, and handle disposal relea
 - `context.create(extension, { boundary, defaultRenderer?, dispose? })` to finalize the root.
 
 An adapter Text owns desired state and privately holds a `GlyphTextController`. Complete state snapshots flow through
-`controller.update()`. `services.shape()` publishes semantic changes; `services.syncTransforms()` is the cheap
-transform-only path. TextGroup remains adapter hierarchy and inheritance inside a root, not a publication boundary.
+`controller.update()`. The top-level `glyph.shape()` publishes semantic changes; `services.syncTransforms()` is the
+cheap transform-only path. TextGroup remains adapter hierarchy and inheritance inside a root, not a publication boundary.
 
 ## Fonts
 
-Immutable `Font<Technique>` values remain the renderer-neutral ownership model. `glyph.fontFace()` is the only
+Immutable `Font<RasterFormat>` values remain the renderer-neutral ownership model. `glyph.fontFace()` is the only
 application loading declaration; a configured Text internally acquires an independent immutable Font lease from its
 loaded selection. `createFontStack()` creates an ordered immutable fallback selection from loaded Fonts.
 
-When `GlyphConfig.fonts` is present, the handle selects and binds a loaded FontFace technique for Text. Loading remains
+When `GlyphConfig.fonts` is present, the handle selects and binds a loaded FontFace raster format for Text. Loading remains
 owned by the declaration itself:
 
 ```ts
@@ -234,8 +234,8 @@ if (!Inter.isLoaded()) throw new Error('font did not load');
 ```
 
 Root construction receives synchronous `isLoaded`, promise-returning `load`, independent-lease `acquire`, and borrowed
-`peek` access for the exact technique selected by that handle. Text creation throws for an unloaded selection. React may
-suspend on the same stable internal technique-load promise.
+`peek` access for the exact raster format selected by that handle. Text creation throws for an unloaded selection. React
+may suspend on the same stable internal format-load promise.
 
 FontFace data crosses workers or other JavaScript realms only through an explicit snapshot:
 

@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:3305a0e1b880cff7a7dbf30ec04ee968353819fa761d37676c03ba9961cd957c'
+source_digest: 'sha256:091b44edb39f7455f7e77e05fdc5b169a45a11ae9735a1c78035fb3185f1a103'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -59,8 +59,8 @@ sources:
   - id: icon-grid-evidence
     resource: ../../../apps/benchmarks/fixtures/results/icon-grid-retained-evidence-chromium149.json
     title: Retained complete icon-grid traversal evidence
-  - id: raster-technique-compare
-    resource: ../../../apps/benchmarks/src/surfaces/conformance/scenes/raster-technique-comparison.ts
+  - id: raster-format-compare
+    resource: ../../../apps/benchmarks/src/surfaces/conformance/scenes/raster-format-comparison.ts
     title: Surface-owned realtime MSDF and Slug GPU comparison
   - id: low-level-raster-reference
     resource: ../../../apps/benchmarks/src/benchmark/low-level/raster/source-outline-reference.ts
@@ -205,7 +205,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5
-  at: '2026-08-24T03:12:27Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -299,18 +299,18 @@ Bitmap, MTSDF, and Slug therefore exercise the same named bindings and retained 
 without publishing internal decoded Font data. A fresh matrix after the move rendered all seven workloads visibly for
 Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per case.
 
-The technique-generic comparison workload layer has moved off that harness path. `ComparisonWorkloadEntry` holds
-`Text<AnyRasterTechnique>`, and every workload factory receives the canonical `Font` the shared Glyph graph produced,
+The raster-format-generic comparison workload layer has moved off that harness path. `ComparisonWorkloadEntry` holds
+the concrete `Text<RasterFormatMetadata>` values supplied by its scene entry, and every workload factory receives the canonical `Font` the shared Glyph graph produced,
 so no comparison scene names or loads a raster module. The workload boundary exposes only the common raster-format
 capabilities its consumers need; each concrete font type remains intact at the loading boundary. The shared Rust root and
 renderer Codec derive each draw's raster format from the host-owned font binding.
 
 Batching is a per-workload policy on the definition rather than a host-wide rule. Text ladder, Zoom text, Icon grid,
 Off-axis / 3D, Dynamic layout, and Paint & effects mount under one shared `TextGroup`, so every paragraph in the workload
-enters one Rust frame transaction and shared render plan; compatible policy packets may share physical storage and one
-draw. Icon grid's recycled icon and label Texts share that session across two font fixtures because both load through
+enters one root publication and shared command-buffer update; compatible Codec packets may share physical storage and one
+draw. Icon grid's recycled icon and label Texts share that root across two font fixtures because both load through
 the one registry-scoped runtime. Paragraph stress stays standalone: it is a single `Text` holding a large repeated-ipsum
-body, already a session of one, and keeping it standalone holds both adapter paths under test. The group takes a `grow`
+body, already a root of one, and keeping it standalone holds both adapter paths under test. The group takes a `grow`
 capacity so its retained staging and output regions settle for the workload rather than repeatedly growing.
 
 Batching shares preparation and GPU resources, not draws. Target-v1 emits one mesh per packed glyph run and a run never
@@ -601,10 +601,10 @@ visible pixels, transforms, effects, and technique-specific resources.
 
 The React reconciliation target inspects renderer-owned batches from the R3F `Scene`, not from its retained `Text`
 placeholder. This preserves the public ownership contract: React retains desired state and hierarchy on `Text`, while
-the selected handle root owns the sibling `drawRoot` and its physical meshes.
+the selected handle root owns the sibling publication object and its physical meshes.
 
 Advanced Shaping advances each authored frame through one complete `Scene` traversal. Updating a retained `Text`
-directly is only the cheap host-transform path; the root `drawRoot` traversal owns the single global `glyph.shape()`
+directly is only the cheap host-transform path; the root publication-object traversal owns the single global `glyph.shape()`
 publication and renderer synchronization boundary.
 
 The [benchmark plan](../planning/benchmark-plan.md) owns target admission, correctness-before-timing, and product-E2E requirements.[^benchmark-plan]

@@ -3,7 +3,7 @@ type: Research Concept
 title: Three material authority for text draws
 description: Defines user-owned material factories carried from text and span properties through numeric Rust render-plan material identities.
 documentation_type: reference
-status: stable
+status: deprecated
 tags: [planning, threejs, tsl, materials, render-plan]
 sources:
   - id: three-api
@@ -26,10 +26,14 @@ sources:
     title: Three command-buffer executor and material realization
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-15T15:53:27Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Three material authority for text draws
+
+> **Historical design record — superseded.** The current public material discriminator is `kind: 'glyph' |
+> 'decoration'`; glyph branches carry `format`, while the internal Codec technique identity is not a raster format.
+> Use the [current Three.js text API](three-api.md).
 
 Applications may supply a material factory at batch, text, or span scope. `material` is one cascaded rendering property;
 the nearest authored value wins. It replaces the former generic `renderVariant` name and the unimplemented `TextEffect`

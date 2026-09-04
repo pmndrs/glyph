@@ -1,19 +1,19 @@
 ---
 type: Explanation
 title: Portable raster-format implementation report
-description: Explains the ownership, API, and evidence for reusable technique data, Codec programs, raster decoders, shader variants, bakers, and renderer integration.
+description: Explains the ownership, API, and evidence for reusable raster-format data, Codec programs, raster decoders, shader variants, bakers, and renderer integration.
 documentation_type: explanation
-tags: [technique, raster, codec, baker, renderer, glyph-config]
+tags: [raster-format, raster, codec, baker, renderer, glyph-config]
 sources:
   - id: renderer-guide
     resource: renderer-integration.md
     title: Current renderer integration guide
   - id: portable-plan
     resource: ../../../packages/glyph-example-raster/src/portable.ts
-    title: External portable technique schema and Codec body
+    title: External portable raster-format schema and Codec body
   - id: registration
     resource: ../../../packages/glyph-example-raster/src/register.ts
-    title: Renderer-neutral technique registration
+    title: Renderer-neutral raster Codec registration
   - id: raster
     resource: ../../../packages/glyph-example-raster/src/raster.ts
     title: External raster decoder
@@ -34,13 +34,13 @@ sources:
     title: End-to-end renderer acceptance
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-02T00:00:00Z'
+  at: '2026-09-04T00:13:53Z'
 ---
 
 # Portable raster-format implementation report
 
-Glyph separates reusable technique data from renderer implementation without making either side Three-specific. A
-technique package owns its raster decoder, physical schema, portable Codec expression body, immutable resource payloads,
+Glyph separates reusable raster-format data from renderer implementation without making either side Three-specific. A
+raster-format package owns its raster decoder, physical schema, portable Codec expression body, immutable resource payloads,
 baker, and optional shader-language subpaths. A renderer integration owns system lanes, Codec assembly, shader selection,
 resource realization, materials or pipelines, host roots, and eventual submission.
 
@@ -87,7 +87,7 @@ offered synchronously to `GlyphRenderer.decode()`.
 | Submission        | None                                            | Publishes ordered display-list updates                    | Commits host state; host renders or submits it |
 
 There is no Three.js code in `glyph-example-raster`. Its `/tsl` and `/typegpu` entries are explicit shader-language
-subpaths; importing the main technique entry registers only renderer-neutral portable data.
+subpaths; importing the main raster-format entry registers only renderer-neutral portable data.
 
 ## 1. Implement the raster decoder
 
@@ -129,7 +129,7 @@ export const glyphExample = defineRasterFormat({
 `RasterFormat` carries no renderer object. Validate user-controlled artifact framing and payload lengths before data
 enters the retained font. Resource type is inferred later where the portable font compiler calls `retain()`.
 
-## 2. Define one physical technique schema
+## 2. Define one physical Codec technique schema
 
 The schema is the source of truth shared by Codec authoring and shader variants. Its helpers use explicit config leaves:
 
@@ -216,7 +216,7 @@ export const glyphExampleCodecDefinition: RasterCodec<typeof glyphExample, typeo
 };
 ```
 
-The `codecBody` member is the technique expression body compiled into a renderer's Codec program. `compileFont()` runs
+The `codecBody` member is the Codec technique expression body compiled into a renderer's Codec program. `compileFont()` runs
 for a font binding, not once per frame or glyph;
 its result is portable binding data and leased resource payloads.
 
@@ -292,7 +292,7 @@ Codec ordering:
 ```ts
 export const exampleTypeGpuVariant = Object.freeze({
   language: 'typegpu',
-  techniqueId: glyphExampleSchema.technique,
+  formatId: glyphExample.id,
   geometry: glyphExampleSchema.render.geometry,
   buffers: glyphExampleSchema.buffers,
   resources: glyphExampleSchema.resources,
@@ -350,15 +350,22 @@ renderer result, boundary, and root API together:
 ```ts
 import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph/config/glyph';
 
-export type ExampleGlyphConfig = GlyphConfigFor<typeof ExampleSchema, ExampleRoot, ExampleDrawList>;
+export type ExampleGlyphConfig = GlyphConfigFor<
+  typeof ExampleSchema,
+  ExampleRoot,
+  ExampleDrawList,
+  Codec,
+  ExampleFontFormats
+>;
 
 export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyphConfig {
-  const techniqueId = device?.shader.variant.techniqueId ?? exampleRendererShader.variant.techniqueId;
+  const formatId = device?.shader.variant.formatId ?? exampleRendererShader.variant.formatId;
   const config = defineGlyphConfig({
     schema: ExampleSchema,
+    fonts: { default: glyphExample.kind, formats: ExampleFontFormats },
     encode: ({ ids }) => ({ descriptor: exampleCodecDescriptor(ids) }),
-    resolve: ({ technique, resourceName, payload }) => {
-      if (technique !== techniqueId) throw new TypeError(`unsupported technique ${technique}`);
+    resolve: ({ format, resourceName, payload }) => {
+      if (format !== formatId) throw new TypeError(`unsupported raster format ${format}`);
       return resourceLease(Object.freeze({ name: resourceName, resource: payload }), () => undefined);
     },
     renderer: () => {
@@ -371,8 +378,12 @@ export function defineExampleConfig(device?: ExampleRendererDevice): ExampleGlyp
     },
     root: {
       create: (context) => {
-        const extension = new ExampleRootImplementation(context.services);
-        return context.create(extension, { boundary: Object.freeze({ name: context.name }) });
+        if (context.fonts === undefined) throw new TypeError('example GlyphConfig must declare font formats');
+        const extension = new ExampleRootImplementation(context.fonts, context.services);
+        return context.create(extension, {
+          boundary: Object.freeze({ name: context.name }),
+          shape: { accepted: (drawList) => extension.accept(drawList) },
+        });
       },
     },
   });
