@@ -28,6 +28,7 @@
     "dist/three/detached-object.d.ts",
     "dist/three/engine-plan-target.d.ts",
     "dist/three/transform-synchronizer.d.ts",
-    "dist/tsl/slug-shaders/tsl-compat.d.ts"
+    "dist/tsl/slug-shaders/tsl-compat.d.ts",
+    "dist/tsl/slug-shaders/index.d.ts"
   ]
 }

@@ -1,7 +1,18 @@
 import * as TSL from 'three/tsl';
 import type { DataTexture, Node } from 'three/webgpu';
+import * as t3 from '@typegpu/three';
+import tgpu, { d, std } from 'typegpu';
 
-import { slugDilate, slugDilateMatrix, slugRender, type SlugRenderOptions } from './slug-shaders/index.js';
+import { SlugShaderGlyph, slugRenderWithOptions, type SlugShaderPage } from '../typegpu/slug-shaders/slug-render.js';
+import {
+  slugCurveTexelSlot,
+  slugCurveWidthAccessor,
+  slugHeaderTexelSlot,
+  slugHeaderWidthAccessor,
+  slugReferenceTexelSlot,
+  slugReferenceWidthAccessor,
+} from '../typegpu/slug-shaders/slug-texture.js';
+import { slugDilate, slugDilateMatrix } from './slug-shaders/slug-dilate.js';
 
 /**
  * One glyph instance's canonical Slug fields, already resolved to nodes. The address and count fields locate the
@@ -141,22 +152,35 @@ export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugSha
     renderCoordinate.assign(dilated.textureCoordinate);
     return TSL.vec3(dilated.position.x, dilated.position.y, 0);
   })();
-  const coverage: Node<'float'> = TSL.Fn(() =>
-    slugRender(
-      resources.page,
-      {
-        curveBaseTexel: instance.curveBaseTexel,
-        horizontalHeaderBase: instance.horizontalHeaderBase,
-        verticalHeaderBase: instance.verticalHeaderBase,
-        referenceBase: instance.referenceBase,
-        horizontalBandCount: instance.horizontalBandCount,
-        verticalBandCount: instance.verticalBandCount,
-        bandTransform: instance.bandTransform,
-      },
-      renderCoordinate,
-      renderOptions(resources.fillRule),
-    ),
-  )();
+  const page = shaderPage(resources.page);
+  const specializedSlugRender = tgpu
+    .fn(slugRenderWithOptions)
+    .with(slugCurveWidthAccessor, d.u32(page.curveWidth))
+    .with(slugHeaderWidthAccessor, d.u32(page.headerWidth))
+    .with(slugReferenceWidthAccessor, d.u32(page.referenceWidth))
+    .with(slugCurveTexelSlot, page.loadCurve)
+    .with(slugHeaderTexelSlot, page.loadHeader)
+    .with(slugReferenceTexelSlot, page.loadReference);
+  const rule = renderOptions(resources.fillRule);
+  const coverage = t3.toTSL(() => {
+    'use gpu';
+    return specializedSlugRender(
+      SlugShaderGlyph({
+        curveBaseTexel: t3.fromTSL(instance.curveBaseTexel, d.u32).$,
+        horizontalHeaderBase: t3.fromTSL(instance.horizontalHeaderBase, d.u32).$,
+        verticalHeaderBase: t3.fromTSL(instance.verticalHeaderBase, d.u32).$,
+        referenceBase: t3.fromTSL(instance.referenceBase, d.u32).$,
+        horizontalBandCount: t3.fromTSL(instance.horizontalBandCount, d.u32).$,
+        verticalBandCount: t3.fromTSL(instance.verticalBandCount, d.u32).$,
+        bandTransform: t3.fromTSL(instance.bandTransform, d.vec4f).$,
+      }),
+      t3.fromTSL(renderCoordinate, d.vec2f).$,
+      t3.fromTSL(rule.evenOdd, d.bool).$,
+      t3.fromTSL(rule.weightBoost, d.bool).$,
+      t3.fromTSL(rule.stemDarken, d.f32).$,
+      t3.fromTSL(rule.thicken, d.f32).$,
+    );
+  }) as Node<'float'>;
 
   return {
     position,
@@ -167,11 +191,34 @@ export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugSha
   };
 }
 
-function renderOptions(rule: TslSlugFillRule | undefined): SlugRenderOptions {
+function renderOptions(rule: TslSlugFillRule | undefined): Required<TslSlugFillRule> {
   return {
     evenOdd: rule?.evenOdd ?? TSL.bool(false),
     weightBoost: rule?.weightBoost ?? TSL.bool(false),
-    ...(rule?.stemDarken === undefined ? {} : { stemDarken: rule.stemDarken }),
-    ...(rule?.thicken === undefined ? {} : { thicken: rule.thicken }),
+    stemDarken: rule?.stemDarken ?? TSL.float(0),
+    thicken: rule?.thicken ?? TSL.float(0),
+  };
+}
+
+function shaderPage(resources: TslSlugPageResources): SlugShaderPage {
+  const curveTexture = t3.fromTSL(resources.curveTexture, d.texture2d(d.f32));
+  const headerTexture = t3.fromTSL(resources.headerTexture, d.texture2d(d.u32));
+  const referenceTexture = t3.fromTSL(resources.referenceTexture, d.texture2d(d.u32));
+  return {
+    curveWidth: resources.curveWidth,
+    headerWidth: resources.headerWidth,
+    referenceWidth: resources.referenceWidth,
+    loadCurve: (coords: d.v2i) => {
+      'use gpu';
+      return std.textureLoad(curveTexture.$, coords, 0);
+    },
+    loadHeader: (coords: d.v2i) => {
+      'use gpu';
+      return std.textureLoad(headerTexture.$, coords, 0);
+    },
+    loadReference: (coords: d.v2i) => {
+      'use gpu';
+      return std.textureLoad(referenceTexture.$, coords, 0);
+    },
   };
 }

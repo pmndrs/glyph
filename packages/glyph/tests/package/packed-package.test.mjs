@@ -80,7 +80,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
 
   for (const specifier of [
     '@pmndrs/glyph/tsl/packed-color',
-    '@pmndrs/glyph/tsl/slug-shaders/slug-render',
+    '@pmndrs/glyph/typegpu/slug-shaders/slug-render',
     '@pmndrs/glyph/typegpu/bitmap-reference',
     '@pmndrs/glyph/three/material',
     '@pmndrs/glyph/react/bitmap',

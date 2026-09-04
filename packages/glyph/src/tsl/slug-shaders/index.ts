@@ -1,12 +1,36 @@
-/** Internal Slug TSL primitives. Adapted from three-flatland Slug at 2935a89f (MIT). */
-export { calcCoverage } from './calc-coverage.js';
-export { calcRootCode } from './calc-root-code.js';
+/**
+ * Internal Slug shaders. Adapted from three-flatland Slug at 2935a89f (MIT).
+ *
+ * The renderer-independent algorithm lives under `/typegpu`; this directory contains
+ * only the Three/TSL adapter.
+ */
+export {
+  calcCoverage,
+  calcRootCode,
+  slugBandCurveCount,
+  slugBandIndex,
+  slugBandReferenceOffset,
+  slugHorizontalCurveContribution,
+  slugPixelsPerEm,
+  slugReferenceFromPair,
+  slugThickenFactor,
+  slugVerticalCurveContribution,
+  solveHorizontalPolynomial,
+  solveVerticalPolynomial,
+} from '../../typegpu/slug-shaders/core/index.js';
 export { slugDilate, slugDilateMatrix } from './slug-dilate.js';
 export {
   MAX_SAFE_SLUG_BAND_CURVES,
   slugRender,
-  type SlugRenderOptions,
-  type SlugShaderGlyph,
+  slugRenderWithOptions,
+  SlugShaderGlyph,
   type SlugShaderPage,
-} from './slug-render.js';
-export { solveHorizontalPolynomial, solveVerticalPolynomial } from './solve-quadratic.js';
+} from '../../typegpu/slug-shaders/slug-render.js';
+export {
+  slugCurveTexelSlot,
+  slugCurveWidthAccessor,
+  slugHeaderTexelSlot,
+  slugHeaderWidthAccessor,
+  slugReferenceTexelSlot,
+  slugReferenceWidthAccessor,
+} from '../../typegpu/slug-shaders/slug-texture.js';

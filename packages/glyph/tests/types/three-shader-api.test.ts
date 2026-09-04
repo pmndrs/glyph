@@ -2,7 +2,7 @@ import { mul, vec3 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 
-import { defineTextMaterial } from '../../src/three.js';
+import { bitmapShader as threeBitmapShader, defineTextMaterial } from '../../src/three.js';
 import {
   bitmapShader,
   msdfShader,
@@ -23,6 +23,7 @@ declare const slugInstance: TslSlugInstanceNodes;
 declare const slugResources: TslSlugShaderResources;
 
 const bitmapOutput = bitmapShader(bitmapInstance, bitmapResources);
+const threeBitmapOutput = threeBitmapShader(bitmapInstance, bitmapResources);
 const mtsdfOutput = msdfShader(mtsdfInstance, mtsdfResources);
 const slugOutput = slugShader(slugInstance, slugResources);
 
@@ -66,6 +67,7 @@ slugShader({ ...slugInstance, curveBaseTexel: slugOutput.coverage }, slugResourc
 defineTextMaterial(() => ({}));
 
 void bitmapCoverage;
+void threeBitmapOutput;
 void mtsdfOutlineCoverage;
 void slugCoverage;
 void material;

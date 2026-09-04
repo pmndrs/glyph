@@ -27,7 +27,7 @@ import {
 } from '../../dist/typegpu/bitmap-reference.js';
 
 /**
- * Bitmap parity between the `/tsl` and `/typegpu` realizations of the technique.
+ * Bitmap authority across the `/tsl` adapter and `/typegpu` implementation.
  *
  * The two sides cannot execute against each other without a GPU, so the pin stands on
  * extractions and mirrors instead of prose:
@@ -35,9 +35,8 @@ import {
  * 1. The device-free TSL extraction compiles the canonical `/tsl` graph to the WGSL a
  *    WebGPU run executes, and the shipped TypeGPU stages resolve to WGSL through the
  *    metadata the build embeds. Each source is extracted here, at test time, from built
- *    artifacts, and each must carry the same per-step operation chains: atlas
- *    addressing, quad placement with its y flip, clamped nearest-texel coverage fetch,
- *    paint alpha scaled by coverage, and reciprocal-ordered snapping.
+ *    artifacts. The TSL program must call the same TypeGPU helpers as the direct
+ *    stages rather than carrying a second native implementation.
  * 2. Every CPU-callable shader function is compared against its CPU reference mirror,
  *    so the mirrors cannot silently drift from what ships.
  */
@@ -64,10 +63,9 @@ const gpu = {
 };
 
 test('atlas addressing matches the TSL realization', () => {
-  // TSL inlines `(atlasOrigin.x + (uv.x * atlasExtent.x))` per component; both components.
   const tslFlat = flatten(tsl.plain.fragment);
-  assert.match(tslFlat, /\.x\+\([A-Za-z0-9_]*\.x\*[A-Za-z0-9_]*\.x\)\)/);
-  assert.match(tslFlat, /\.y\+\([A-Za-z0-9_]*\.y\*[A-Za-z0-9_]*\.y\)\)/);
+  assert.match(tslFlat, /fnbitmapAtlasUv\(/);
+  assert.match(tslFlat, /returnbitmapAtlasUv\(/);
 
   const gpuFlat = flatten(gpu.vertex);
   assert.match(gpuFlat, /\(uvOrigin\.x\+\(quadUv\.x\*uvSize\.x\)\)/);
@@ -76,8 +74,8 @@ test('atlas addressing matches the TSL realization', () => {
 
 test('quad placement matches the TSL realization, including the y flip', () => {
   const tslFlat = flatten(tsl.plain.vertex);
-  assert.match(tslFlat, /\.x\+\([A-Za-z0-9_]*\.x\*[A-Za-z0-9_]*\.x\)/);
-  assert.match(tslFlat, /-\([A-Za-z0-9_]*\.y\+\([A-Za-z0-9_]*\.y\*[A-Za-z0-9_]*\.y\)\)\),0\.0\)/);
+  assert.match(tslFlat, /fnbitmapQuadPosition\(/);
+  assert.match(tslFlat, /-\(\(origin\.y\+\(quadPosition\.y\*size\.y\)\)\),0f\)/);
 
   const gpuFlat = flatten(gpu.vertex);
   assert.match(gpuFlat, /\(origin\.x\+\(quadPosition\.x\*size\.x\)\)/);
@@ -85,31 +83,35 @@ test('quad placement matches the TSL realization, including the y flip', () => {
 });
 
 test('coverage is an exact clamped texel fetch on both sides', () => {
-  // Three compiles data-texture reads to textureLoad over clamped integer texel
-  // coordinates: clamp-to-edge, scale by dimensions, floor, clamp to bounds.
   const tslFetch = flatten(tsl.plain.fragment);
-  assert.match(tslFetch, /textureDimensions\(nodeUniform0,u32\(0\)\)/);
-  assert.match(tslFetch, /clamp\(floor\(/);
-  assert.match(tslFetch, /textureLoad\(nodeUniform0,/);
+  assert.match(tslFetch, /fnbitmapPageTexelCoordinate\(/);
+  assert.match(tslFetch, /textureDimensions\(/);
+  assert.match(tslFetch, /floor\(/);
+  assert.match(tslFetch, /clamp\(flooredCoord/);
+  assert.match(tslFetch, /textureLoad\(/);
 
   const gpuFetch = flatten(gpu.fragment);
   assert.match(gpuFetch, /textureDimensions\(page,0\)/);
   assert.match(gpuFetch, /floor\(/);
-  assert.match(gpuFetch, /textureLoad\(page,boundedCoord,pageLayer,0\)\.x/);
+  assert.match(
+    gpuFetch,
+    /textureLoad\(page,vec2u\(u32\(texelCoordinate\.x\),u32\(texelCoordinate\.y\)\),pageLayer,0\)\.x/,
+  );
 });
 
 test('paint composition scales alpha by coverage identically', () => {
-  // TSL: DiffuseColor.w = (DiffuseColor.w * (paint.w * coverage.x)) — the inner product is ours.
-  assert.match(flatten(tsl.plain.fragment), /=\([A-Za-z]*\.w\*\([A-Za-z0-9]*\.w\*[A-Za-z0-9]*\.x\)\)/);
+  const tslPaint = flatten(tsl.plain.fragment);
+  assert.match(tslPaint, /fnbitmapPaint\(/);
+  assert.match(tslPaint, /\(color\.a\*coverage\)/);
   assert.match(flatten(gpu.fragment), /\(color\.a\*coverage\)/);
 });
 
 test('pixel snapping rounds projected axes onto whole physical pixels identically', () => {
-  // TSL emits, per axis: round((clip*(1/w)+1)*(size*0.5))*(1/size)*2-1)*w — reciprocals included.
   const tslSnap = flatten(tsl.snapped.vertex);
+  assert.match(tslSnap, /fnsnapClipAxis\(/);
   assert.match(tslSnap, /round\(/);
-  assert.match(tslSnap, /\*\(1\.0\/[A-Za-z0-9_]*\.w\)\)/);
-  assert.match(tslSnap, /\*\(1\.0\/object\.nodeUniform4\.x\)\)\*2\.0\)-1\.0\)\*[A-Za-z0-9_]*\.w\)/);
+  assert.match(tslSnap, /\(clipAxis\*\(1f\/clipW\)\)/);
+  assert.match(tslSnap, /\(round\(physicalPosition\)\*\(1f\/physicalSize\)\)/);
 
   // The TypeGPU helper computes the identical chain, reciprocals included.
   const gpuSnap = flatten(gpu.snapped);

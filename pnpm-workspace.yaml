@@ -3,6 +3,11 @@ packages:
   - packages/*
 
 minimumReleaseAgeExclude:
+  - '@typegpu/gl@0.12.3'
+  - '@typegpu/three@0.12.1'
+  - tinyest-for-wgsl@0.4.0
   - typegpu@0.12.3
+  - unplugin-typegpu@0.12.2
+  - tinyest@0.3.3
 
 onlyBuiltDependencies: []

@@ -179,6 +179,9 @@ test('every shipped Bitmap stage resolves to WGSL without consumer-side tooling'
   // to for data textures — so no sampler is declared and no filtered sample appears.
   assert.match(fragmentWgsl, /fn bitmapPageCoverage\(/);
   assert.match(fragmentWgsl, /textureDimensions\(page, 0\)/);
-  assert.match(fragmentWgsl, /textureLoad\(page, boundedCoord, pageLayer, 0\)\.x/);
+  assert.match(
+    fragmentWgsl,
+    /textureLoad\(page, vec2u\(u32\(texelCoordinate\.x\), u32\(texelCoordinate\.y\)\), pageLayer, 0\)\.x/,
+  );
   assert.doesNotMatch(fragmentWgsl, /textureSample|sampler/);
 });

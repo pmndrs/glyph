@@ -1,12 +1,11 @@
-import * as TSL from 'three/tsl';
+import * as t3 from '@typegpu/three';
+import { d } from 'typegpu';
 import type { Node } from 'three/webgpu';
 
-import { unpackSrgbRgba } from './packed-color.js';
+import { decorationPaint, decorationPosition } from '../typegpu/decoration-shader.js';
 
 export interface TslDecorationInstanceNodes {
-  /** Decoration rectangle: inline start, block start, inline extent, block extent. */
   readonly rect: Node<'vec4'>;
-  /** Packed decoration lanes: x carries little-endian RGBA color, y carries flags and line style. */
   readonly packed: Node<'uvec2'>;
 }
 
@@ -16,27 +15,19 @@ export interface TslDecorationShaderOutput {
   readonly opacity: Node<'float'>;
 }
 
-/**
- * Builds the canonical decoration node graph: a solid quad covering the record's
- * rectangle, colored by the packed decoration paint. The graph reads `positionLocal`
- * from the decoration program's unit quad spanning `[0, 1]` with the origin at the upper-left
- * corner, matching the glyph raster programs. Only solid lines reach this graph: the public
- * boundary rejects other line styles, and `packed.y` retains the style bits for the
- * later patterned-paint implementation.
- *
- * The packed bytes are sRGB-encoded — the same wire encoding whose glyph counterpart
- * the Rust gather decodes through its sRGB-to-linear table — so the color channels pass
- * through the sRGB EOTF into the renderer's linear working space. Alpha stays linear.
- */
+/** Adapt Three nodes to the canonical TypeGPU decoration function. */
 export function decorationShader(instance: TslDecorationInstanceNodes): TslDecorationShaderOutput {
-  const color = unpackSrgbRgba(instance.packed.x);
+  const position = t3.toTSL(() => {
+    'use gpu';
+    return decorationPosition(t3.fromTSL(instance.rect, d.vec4f).$, t3.positionLocal.$);
+  }) as Node<'vec3'>;
+  const paint = t3.toTSL(() => {
+    'use gpu';
+    return decorationPaint(t3.fromTSL(instance.packed, d.vec2u).$);
+  }) as Node<'vec4'>;
   return {
-    position: TSL.vec3(
-      instance.rect.x.add(TSL.positionLocal.x.mul(instance.rect.z)),
-      instance.rect.y.add(TSL.positionLocal.y.mul(instance.rect.w)).negate(),
-      0,
-    ),
-    color: color.rgb,
-    opacity: color.a,
+    position,
+    color: paint.rgb,
+    opacity: paint.a,
   };
 }

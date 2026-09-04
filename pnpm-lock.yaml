@@ -44,6 +44,12 @@ importers:
       '@react-three/fiber':
         specifier: 10.0.0-alpha.3
         version: 10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+      '@typegpu/gl':
+        specifier: ^0.12.3
+        version: 0.12.3(typegpu@0.12.3)
+      '@typegpu/three':
+        specifier: ^0.12.1
+        version: 0.12.1(@typegpu/gl@0.12.3(typegpu@0.12.3))(three@0.185.1)(typegpu@0.12.3)
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -74,6 +80,9 @@ importers:
       tw-animate-css:
         specifier: 1.4.0
         version: 1.4.0
+      typegpu:
+        specifier: 0.12.3
+        version: 0.12.3
       unicode-segmenter:
         specifier: 0.15.0
         version: 0.15.0
@@ -224,6 +233,12 @@ importers:
       '@react-three/test-renderer':
         specifier: 10.0.0-alpha.3
         version: 10.0.0-alpha.3(@react-three/fiber@10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)
+      '@typegpu/gl':
+        specifier: ^0.12.3
+        version: 0.12.3(typegpu@0.12.3)
+      '@typegpu/three':
+        specifier: ^0.12.1
+        version: 0.12.1(@typegpu/gl@0.12.3(typegpu@0.12.3))(three@0.185.1)(typegpu@0.12.3)
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
@@ -1314,6 +1329,18 @@ packages:
 
   '@tybys/wasm-util@0.10.3':
     resolution: {integrity: sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==}
+
+  '@typegpu/gl@0.12.3':
+    resolution: {integrity: sha512-/0QITHrJ1sIfGi6GqexSfe6tQ0AxRVUZlXRKfuE8OJwqEGq4vzSrGVByDRAI07A80s/IMMcz6Q2C34iKzGdpNg==}
+    peerDependencies:
+      typegpu: ^0.12.4
+
+  '@typegpu/three@0.12.1':
+    resolution: {integrity: sha512-F1eUHgQ3QFBloamPzZFT2czDa48ogNo81UFcZm4cukqBeYwsPmGcJSivm6gkgjlUmhdJd7GwiOVqYKlrPyKyZA==}
+    peerDependencies:
+      '@typegpu/gl': ^0.12.2
+      three: '>0.126.0'
+      typegpu: ^0.12.2
 
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
@@ -3237,6 +3264,10 @@ packages:
     resolution: {integrity: sha512-1wqSt97RLezWzeogLSVXHr+E3jpYO8jxyaK2AIdJeGoZZTCubwNxQ9IqU5gbQpJVcxlbPugPAsII+m9/gqpPSA==}
     engines: {node: '>=12.20.0'}
 
+  tinyest@0.3.3:
+    resolution: {integrity: sha512-LUDiIzyDUQ1mGo8Bam9c7Dubid6Psx14zMzGNwwvOEmNs03FWNUtOrHVXd+TcCorzogQ24Rk0fcfdZ+9rGr1Fw==}
+    engines: {node: '>=12.20.0'}
+
   tinyexec@1.2.4:
     resolution: {integrity: sha512-SHf/r48b7vOrjve9PxJo3MN5v5yuyjHvdUcrQffT3WXMUfnGmHDVbC4k3sHJaJTgZCwpUplIaAo5ANtMyp3YHg==}
     engines: {node: '>=18'}
@@ -4421,6 +4452,17 @@ snapshots:
     dependencies:
       tslib: 2.8.1
     optional: true
+
+  '@typegpu/gl@0.12.3(typegpu@0.12.3)':
+    dependencies:
+      tinyest: 0.3.3
+      typegpu: 0.12.3
+
+  '@typegpu/three@0.12.1(@typegpu/gl@0.12.3(typegpu@0.12.3))(three@0.185.1)(typegpu@0.12.3)':
+    dependencies:
+      '@typegpu/gl': 0.12.3(typegpu@0.12.3)
+      three: 0.185.1
+      typegpu: 0.12.3
 
   '@types/babel__core@7.20.5':
     dependencies:
@@ -6126,6 +6168,8 @@ snapshots:
       tinyest: 0.3.2
 
   tinyest@0.3.2: {}
+
+  tinyest@0.3.3: {}
 
   tinyexec@1.2.4: {}
 

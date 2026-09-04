@@ -60,3 +60,24 @@ export type {
 // `measure()`, `glyphs()`, caret helpers, and detached measurements return these.
 export type { LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary } from './layout.js';
 export type { GlyphCaret, GlyphKey } from './glyph-placement.js';
+// The Three integration consumes the same TypeGPU-backed node adapters published by `/tsl`.
+export {
+  bitmapShader,
+  decorationShader,
+  msdfShader,
+  slugShader,
+  type TslBitmapInstanceNodes,
+  type TslBitmapShaderOptions,
+  type TslBitmapShaderOutput,
+  type TslBitmapShaderResources,
+  type TslDecorationInstanceNodes,
+  type TslDecorationShaderOutput,
+  type TslMsdfInstanceNodes,
+  type TslMsdfShaderOutput,
+  type TslMsdfShaderResources,
+  type TslSlugFillRule,
+  type TslSlugInstanceNodes,
+  type TslSlugPageResources,
+  type TslSlugShaderOutput,
+  type TslSlugShaderResources,
+} from './tsl.js';

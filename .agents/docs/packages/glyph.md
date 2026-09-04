@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:2ddb1659b4cec883cc2f49f07e4f955b235804712f3ae1ef5c16fb629a066c96'
+source_digest: 'sha256:b9b19d7019879af15ab6c644f0c20726a26caad298823b67120d8f23222832d0'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -53,6 +53,12 @@ sources:
   - id: tsl-shaders
     resource: ../../../packages/glyph/src/tsl.ts
     title: Raster-format shader library layer
+  - id: slug-shader-core
+    resource: ../../../packages/glyph/src/typegpu/slug-shaders/core
+    title: Host-agnostic TypeGPU Slug shader core
+  - id: slug-shader-host
+    resource: ../../../packages/glyph/src/tsl/slug-shader.ts
+    title: TypeGPU-to-TSL Slug shader host
   - id: three-api
     resource: ../../../packages/glyph/src/three.ts
     title: Three.js public exports
@@ -173,19 +179,19 @@ config helpers.
 
 ## Public package surfaces
 
-| Subpath                      | Purpose                                                                                                                           |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing FontFace/font/raster contracts, fallback stacks, formatting helpers, and layout results. |
-| `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, and portable-resource helpers for integration authors.                |
-| `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, material factories, and Codec registration.                            |
-| `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`/`<TextGroup>`, and generic `useFont`, reconciled through React Three Fiber.                       |
-| `@pmndrs/glyph/react/*`      | Typed `useBitmap`, `useMsdf`, and `useSlug` convenience hooks on their exact format leaves.                                      |
-| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                      |
-| `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                         |
-| `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-format contracts.                                                     |
-| `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party raster-format interfaces; no scene integration.                              |
-| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party raster-format interfaces; no scene integration or engine driving.        |
-| `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                  |
+| Subpath                      | Purpose                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@pmndrs/glyph`              | Root `glyph` runtime plus application-facing FontFace/font/raster contracts, fallback stacks, formatting helpers, and layout results.      |
+| `@pmndrs/glyph/config/*`     | Renderer-neutral GlyphConfig, Codec, schema, raster-format, and portable-resource helpers for integration authors.                         |
+| `@pmndrs/glyph/three`        | Built-in `ThreeConfig`, handle-created `Text`/`TextGroup`, material factories, Codec registration, and TypeGPU-backed TSL shader adapters. |
+| `@pmndrs/glyph/react`        | `GlyphProvider`, React `<Text>`/`<TextGroup>`, and generic `useFont`, reconciled through React Three Fiber.                                |
+| `@pmndrs/glyph/react/*`      | Typed `useBitmap`, `useMsdf`, and `useSlug` convenience hooks on their exact format leaves.                                                |
+| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                               |
+| `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                                  |
+| `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-format contracts.                                                              |
+| `@pmndrs/glyph/tsl`          | TSL adapters over the canonical TypeGPU raster-format shaders; no scene integration.                                                       |
+| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU algorithms, schemas, slots, and accessors for every first-party raster format; no scene integration or engine.           |
+| `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                           |
 
 The three renderer-neutral raster leaves retain portable Codec-registration side effects under tree shaking. Built-in
 Three material realization imports its TSL shader implementations directly rather than routing through package
@@ -206,6 +212,22 @@ are removed. TypeGPU is a later adapter stack built against the Codec command bu
 the removed batch model. The exception is the `@pmndrs/glyph/typegpu` shader library, which publishes the same raster-format
 realizations as `/tsl` as typed TypeGPU functions for any WebGPU host; `typegpu` is an optional peer and the root entry
 has no static edge to it.
+
+The analytic Slug fill algorithm lives in `src/typegpu/slug-shaders/core` as TypeGPU shader functions over plain values,
+and nothing in that directory imports a renderer.[^slug-shader-core] The stable q-form solver, root-eligibility table,
+per-curve coverage and antialiasing weight, band header and reference bit layout, screen-space scale, thickening,
+weighted blend, and row-based vertex dilation are expressed once. A vertical band is the horizontal band in the
+transposed frame with the opposite winding sense, so both axes share one curve evaluator and quadratic solver.
+
+The neighboring TypeGPU modules own page texture reads, grid addressing, band traversal, and the sorted-reference
+terminator. The Three.js host supplies textures and node-valued glyph fields through `@typegpu/three`, while retaining
+native TSL only for the writable inter-stage varying and the matrix-compatible dilation path. A device-free package test
+compiles the staged Slug graph through Three's WGSL and GLSL node builders and guards unique shared-function declarations,
+both bounded band loops and terminators, and cross-backend builtin compatibility.
+
+`typegpu`, `@typegpu/three`, and `@typegpu/gl` are optional peers because their runtime identities must be shared with the
+consumer, like Three.js and React. Bitmap- and MSDF-only consumers therefore do not install the Slug bridge runtimes, and
+package-size measurements externalize those peer graphs while retaining the package's emitted shader metadata.
 
 The package-owned `glyph` executable is available through `pnpm exec`; its `bake` command supports both project discovery
 and a direct known-font mode. Its stable packaged shim delegates to the built Node CLI, so workspace installs can link the
@@ -1070,3 +1092,5 @@ Before the foundation stack is publishable:
 The query/candidate-adoption API and the two publishing-feature stacks remain follow-on work after this foundation merge.
 They must reuse retained Rust paragraph state and the same render-plan architecture rather than reintroducing a second
 layout path.
+
+[^slug-shader-core]: The directory is the single renderer-independent expression of the analytic Slug fill algorithm.
