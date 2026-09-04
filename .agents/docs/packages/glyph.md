@@ -1048,6 +1048,42 @@ JavaScript and optimized Wasm compressed independently, as browsers transfer the
 keeps source-shaped declarations and private maintenance emit, with tsdown producing compact ESM and retaining tree-shaking annotations in TypeGPU shader modules. Explicit
 package exports remain authoritative for source/type/import conditions and Wasm assets.
 
+### Bidi class lookup: two-stage trie (D-341)
+
+`bidi_class` is called once per character on every analysis. It searched 1,267
+`(u32, u32, BidiClass)` tuples, which pad to 12 bytes, so each of roughly eleven probes strided
+three cache lines. It now indexes a two-stage code-point trie — an 8,704-entry stage-1 index over
+184 deduplicated 128-code-point blocks — in two array reads.
+
+Both implementations compiled into one binary and run over identical inputs, best of nine:
+
+| corpus | binary search | trie | |
+| --- | --- | --- | --- |
+| latin | 6.59 ns | 1.18 ns | 5.6x |
+| cjk | 6.78 ns | 1.17 ns | 5.8x |
+| mixed script | 7.32 ns | 1.22 ns | 6.0x |
+
+Artifact effect, same toolchain and `wasm-opt` pipeline: 1,187,062 -> 1,202,878 raw
+(+15,816), 458,121 -> 455,261 gzip (-2,853), 354,829 -> 360,228 Brotli (+5,399). Brotli was
+already compressing the monotonic range table well and does not gain what gzip gains. The growth
+is confined to the data section (220,350 -> 237,110) while the code section shrinks
+(966,819 -> 963,087) because the search loop is gone.
+
+Cold start is unchanged. Compile and instantiate medians are indistinguishable across four
+repeated and order-reversed runs of 60 samples: compile minima cluster at 0.134-0.149 ms for both
+artifacts, and instantiate holds at ~0.06 ms despite 16,760 additional data bytes, because data
+segments are memcpy'd into linear memory rather than validated and compiled. An initial single run
+suggested an 18% compile improvement; repetition showed the sign flips with run order, so the
+honest reading is flat.
+
+End-to-end this is worth about 0.8% of `text_update` on a 22k-glyph paragraph, below that
+benchmark's noise floor, because bidi lookup is roughly one percent of a shaping-dominated
+pipeline. The per-lookup figure is the claim.
+
+`line_break` (18.56 ns -> 1.32 ns, 14.1x) and `script` (15.78 -> 1.32, 11.9x) measure larger wins
+on the same structure and remain open; `SCRIPT_EXTENSION_OFFSETS` is excluded because it is
+already directly indexed and has no search to remove.
+
 A same-host comparison against the original pre-cleanup build covers the export reduction, root format move, and core naming.
 Browser core moves from 85,612 to 85,829 B under gzip; Three moves from 133,725 to 133,711 B;
 direct TypeGPU moves from 44,014 to 42,011 B; the experimental Three/TypeGPU graph moves from
