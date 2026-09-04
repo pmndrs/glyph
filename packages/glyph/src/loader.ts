@@ -41,7 +41,6 @@ import { normalizeUnicodeRanges } from './internal/font-selection.js';
 import { canonicalJson, deriveRasterKey } from './internal/raster-identity.js';
 import type { RuntimeBakeRaster, RuntimeBakeUnicodeRange } from './internal/runtime-bake-protocol.js';
 import { workerRasterKinds } from './internal/runtime-bake-protocol.js';
-import { DEV } from './internal/dev.js';
 import {
   type RasterFormat,
   type RasterFormatId,

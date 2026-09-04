@@ -12,11 +12,6 @@ import type {
   InstanceIdentity,
   InstanceSpanIdentity,
   SemanticIdentity,
-  TransformIdentity,
-  TypedBuffer,
-  TypedMaterial,
-  TypedProgram,
-  TypedResource,
 } from '../internal/typed-command-identity.js';
 
 export type {

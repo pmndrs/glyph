@@ -454,12 +454,12 @@ function compileRegisteredRasterFont<Format extends RasterFormatMetadata, Schema
         },
       });
     },
-    compile(input: RasterFontBinding<Schema['binding']>) {
+    compile(binding: RasterFontBinding<Schema['binding']>) {
       assertActive();
       try {
         if (compileStarted) throw new Error('raster codec font compiler already attempted a binding');
         compileStarted = true;
-        const result = compileFont(codec, glyphCount, identities, resources, declaredResources, input);
+        const result = compileFont(codec, glyphCount, identities, resources, declaredResources, binding);
         compiled = result;
         compiledRasterFonts.add(result);
         return result;
