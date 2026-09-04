@@ -58,6 +58,39 @@ performance question on this target either.
 
 ## Confirmed defects
 
+### R0 — Three bakers hold `&mut WasmState` across a host callback
+**High. Verified by executable repro.** `bitmap-baker/src/lib.rs:85`,
+`mtsdf-baker/src/artifact.rs:231`, `slug-baker/src/artifact.rs:159`.
+
+`pmndrs_glyph_bake_progress` is a module import declared in each crate's `progress.rs`, called
+per glyph from inside the closure that holds the module's only `&mut WasmState`. The JS side
+(`src/bakers/{bitmap,msdf,slug}.ts`) implements that import by invoking `request.onProgress` —
+arbitrary user code. Wasm-to-JS calls are synchronous on the same stack, so that user callback can
+call straight back into an export, and `with_state` then hands out a second `&mut WasmState` while
+the first is live.
+
+A minimal module reproducing the exact shape reaches depth 2 in `bake()` with no async, no timer,
+and no DOM event — purely `wasm -> import -> JS -> export`. Two live `&mut` to one address is UB
+immediately; concretely, `bake` holds `source: &[u8]` borrowed out of `state.allocations`, so a
+reentrant call that frees that pointer, or merely pushes to `allocations` and reallocates the
+`Vec`, leaves the outer frame reading freed memory.
+
+The `SAFETY` comment on `with_state` names single-threadedness, which is true and irrelevant:
+single-threaded code re-enters perfectly well. The comment on the import calls the host function
+"synchronous", which is precisely what makes this reachable.
+
+`font-baker` and `shaper` are unaffected only because they have no progress import — not because
+they mitigate it differently. No crate guards reentrancy.
+
+The guard belongs in the shared boundary rather than three times over: `with_state`, `allocate`,
+`deallocate`, `owned_bytes`, and `panic` are copy-pasted across five crates and `owned_bytes` has
+already drifted into three variants of the guest-range validator.
+
+```rust
+static ENTERED: AtomicBool = AtomicBool::new(false);
+if ENTERED.swap(true, Ordering::Acquire) { return STATUS_REENTRANT; }
+```
+
 ### R1 — `StablePlanCompiler::abort()` can discard committed batches
 **High impact, low likelihood.** `stable_plan.rs:575`, `state.rs:1468`, `wasm.rs:1144`.
 
