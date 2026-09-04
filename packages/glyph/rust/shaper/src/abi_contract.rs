@@ -1900,7 +1900,7 @@ pub fn json() -> String {
             "disposeFont": "pmndrs_glyph_shaper_dispose_font",
             "fontCount": "pmndrs_glyph_shaper_font_count",
             "retainedFontBytes": "pmndrs_glyph_shaper_retained_font_bytes",
-            "planCount": "pmndrs_glyph_shaper_plan_count",
+            "shapePlanCount": "pmndrs_glyph_shaper_shape_plan_count",
             "registerFontStack": "pmndrs_glyph_engine_register_font_stack",
             "disposeFontStack": "pmndrs_glyph_engine_dispose_font_stack",
             "fontStackCount": "pmndrs_glyph_engine_font_stack_count",

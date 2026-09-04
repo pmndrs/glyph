@@ -21,7 +21,7 @@ export interface RuntimeShaperOptions {
 export interface RuntimeShaperMemoryReport {
   readonly fontCount: number;
   readonly retainedFontBytes: number;
-  readonly planCount: number;
+  readonly shapePlanCount: number;
   readonly wasmMemoryBytes: number;
 }
 
@@ -58,7 +58,7 @@ interface ShaperExports {
   readonly disposeFont: (handle: number) => number;
   readonly fontCount: () => number;
   readonly retainedFontBytes: () => number;
-  readonly planCount: () => number;
+  readonly shapePlanCount: () => number;
   readonly registerFontBinding: (
     bindingHandle: number,
     shapingFontHandle: number,
@@ -199,7 +199,7 @@ class RuntimeShaperImpl implements RuntimeShaper {
     return {
       fontCount: this.#exports.fontCount(),
       retainedFontBytes: this.#exports.retainedFontBytes(),
-      planCount: this.#exports.planCount(),
+      shapePlanCount: this.#exports.shapePlanCount(),
       wasmMemoryBytes: this.#exports.memory.buffer.byteLength,
     };
   }
@@ -263,7 +263,7 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       disposeFont: exportedFunction(instance, functions.disposeFont),
       fontCount: exportedFunction(instance, functions.fontCount),
       retainedFontBytes: exportedFunction(instance, functions.retainedFontBytes),
-      planCount: exportedFunction(instance, functions.planCount),
+      shapePlanCount: exportedFunction(instance, functions.shapePlanCount),
       registerFontBinding: exportedFunction(instance, functions.registerFontBinding),
       disposeFontBinding: exportedFunction(instance, functions.disposeFontBinding),
       fontBindingCount: exportedFunction(instance, functions.fontBindingCount),

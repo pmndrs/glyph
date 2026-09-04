@@ -57,7 +57,7 @@ test('the shaper registers only the exact shaping views retained from the valida
   assert.deepEqual(initial, {
     fontCount: 0,
     retainedFontBytes: 0,
-    planCount: 0,
+    shapePlanCount: 0,
     wasmMemoryBytes: initial.wasmMemoryBytes,
   });
   shaper.registerFont(font);
@@ -68,7 +68,7 @@ test('the shaper registers only the exact shaping views retained from the valida
   assert.equal(expectedBytes, 171_056);
   assert.equal(shaper.memoryReport().fontCount, 1);
   assert.equal(shaper.memoryReport().retainedFontBytes, expectedBytes);
-  assert.equal(shaper.memoryReport().planCount, 0);
+  assert.equal(shaper.memoryReport().shapePlanCount, 0);
 
   shaper.registerFont(font);
   assert.equal(shaper.memoryReport().retainedFontBytes, expectedBytes);
@@ -161,7 +161,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
     text: [0x61, 0x62, 0x63, 0x64],
     geometry: true,
   });
-  assert.equal(fn.planCount(), 0);
+  assert.equal(fn.shapePlanCount(), 0);
   let requestPointer = fn.requestPointer(29);
   new Uint8Array(memory.buffer, requestPointer, initialUpdate.byteLength).set(initialUpdate);
   let resultPointer = fn.textUpdate(29, requestPointer, initialUpdate.byteLength);
@@ -172,7 +172,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   for (const field of ['resourceCount', 'bufferCount', 'patchCount', 'primitiveCount', 'drawCount']) {
     assert.ok(result.getUint32(abi.layouts.engineResult[field], true) > 0, `${field} must be nonempty`);
   }
-  assert.equal(fn.planCount(), 1, 'text_update must shape retained runs through HarfRust');
+  assert.equal(fn.shapePlanCount(), 1, 'text_update must shape retained runs through HarfRust');
 
   const warmUpdate = engineStyleUpdateBytes(abi, {
     rootId: 29,
@@ -209,7 +209,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
   assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.invalidRequest);
   assert.equal(result.getUint32(abi.layouts.engineResult.engineRevision, true), 2);
-  assert.equal(fn.planCount(), 1, 'an aborted update must not perform another shape');
+  assert.equal(fn.shapePlanCount(), 1, 'an aborted update must not perform another shape');
   assert.equal(fn.disposeRoot(29), abi.status.ok);
   assert.equal(fn.disposeCodec(23), abi.status.ok);
 
@@ -278,7 +278,7 @@ test('text_update advances missing clusters through an ordered font stack', asyn
     'the fallback glyph must retain its own raster format in the Rust render plan',
   );
   assert.equal(
-    fn.planCount(),
+    fn.shapePlanCount(),
     2,
     'Inter must shape .notdef before the Devanagari cluster advances to the fallback font',
   );

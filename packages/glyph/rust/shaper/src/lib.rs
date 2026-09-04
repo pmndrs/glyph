@@ -359,7 +359,7 @@ impl ShaperRegistry {
             .unwrap_or(u32::MAX)
     }
 
-    pub fn plan_count(&self) -> u32 {
+    pub fn shape_plan_count(&self) -> u32 {
         self.fonts
             .iter()
             .map(|font| u32::try_from(font.plans.len()).unwrap_or(u32::MAX))

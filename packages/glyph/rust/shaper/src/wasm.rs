@@ -121,8 +121,8 @@ pub extern "C" fn pmndrs_glyph_shaper_retained_font_bytes() -> u32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_shaper_plan_count() -> u32 {
-    with_state(|state| state.registry.plan_count())
+pub extern "C" fn pmndrs_glyph_shaper_shape_plan_count() -> u32 {
+    with_state(|state| state.registry.shape_plan_count())
 }
 
 #[unsafe(no_mangle)]
