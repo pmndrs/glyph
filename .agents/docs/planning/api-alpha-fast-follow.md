@@ -1,7 +1,7 @@
 ---
 type: Implementation Plan
-title: Glyph alpha fast-follow implementation brief
-description: Disposable execution prompt for the deferred Rust audit and TypeScript production-review findings after the GlyphConfig API lands.
+title: Glyph alpha merge and fast-follow handoff
+description: Disposable next-agent prompt for closing the GlyphConfig pull request and implementing the deferred Rust and TypeScript production-review findings.
 documentation_type: explanation
 tags: [glyph, alpha, fast-follow, rust, typescript, review, cleanup]
 status: draft
@@ -29,26 +29,51 @@ sources:
     title: Rust audit measurements and inference boundary
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-09-04T04:17:45Z'
+  at: '2026-09-04T05:11:00Z'
 ---
 
-# Glyph alpha fast-follow implementation brief
+# Glyph alpha merge and fast-follow handoff
 
 This file is disposable execution state, not permanent architecture. Delete
 `.agents/docs/planning/api-alpha-fast-follow.md`, remove its planning-index entry, and add a completion entry to the OKF
 log after every accepted item below is implemented and verified. Do not retain this file as historical guidance.
 
-PR #148 should land the coherent GlyphConfig API before this broader work begins. None of the review findings below are
-accepted merely because a reviewer reported them. Re-locate every symbol and validate every claim against remote `main`
-after #148 merges. Present the validated findings, proposed edits, and verification plan to the maintainer and wait for
-approval before changing production code.
+PR #148 should land the coherent GlyphConfig API before the broader fast-follow work begins. None of the review findings
+below are accepted merely because a reviewer reported them. Re-locate every symbol and validate every claim against
+remote `main` after #148 merges. Present the validated findings, proposed edits, and verification plan to the maintainer
+and wait for approval before changing production code.
 
 ## Prompt for the implementation agent
 
 ```text
-Continue the production-readiness work after pmndrs/glyph PR #148 has merged. Start from the current remote default
-branch. Do not resurrect any pre-GlyphConfig API, public loader, backend, Policy, planner, decoder-factory, session,
-FontLibrary, or renderer-specific core path. The application API remains glyph.init(), glyph.fontFace(), FontFace.load(),
+Finish the pmndrs/glyph alpha release work around PR #148, then execute its approved fast follows. First inspect the PR
+and remote default branch rather than assuming whether #148 is still open or has merged.
+
+If #148 is still open, finish only these merge checks:
+
+1. Confirm the branch is clean, synchronized with origin, and all three CI checks are green. At commit
+   90d8909cf82c4f51b407c5221e3f57d8ae070a09, Static checks, Package size report, and Check were green.
+2. Confirm the canonical local `mise exec -- pnpm check` evidence. It completed successfully outside the sandbox at the
+   commit above; its Playwright Chromium launch requires macOS Mach bootstrap permission. Do not treat that sandbox
+   denial as a product failure.
+3. Keep the already-running Portless benchmark available at
+   https://glyph-config-api.glyph-benchmarks.localhost:1355/ for the maintainer's final manual pass. Do not launch a
+   duplicate server when the hostname is already owned by the existing process.
+4. Read the current PR body before editing it. Remove the stale sentence that calls the PR a draft, mention the optional
+   Glyph-only error fallback and caller-controlled `dismiss`, and add `Closes #113` because the public Three bounding-box
+   behavior and regression tests now prove that issue. Do not claim to close #101, #121, or #154. #121 tracks rich-text
+   draw coalescing; #154 tracks long-paragraph reflow cost.
+5. If the final manual benchmark is accepted and no diff changes, do not rerun hours of already-green evidence. Leave
+   merging to the maintainer unless explicitly asked to merge.
+
+The pre-merge evidence already recorded for this exact branch includes the 54-cell Bitmap/MTSDF/Slug WebGPU/WebGL2
+presentation pass, the hardware WebGPU performance pass with zero slow frames, package-size generation and checking,
+Knip classification, improved Fallow mild/weak duplication measurements, OKF 0/0/0 validation, and green CI. Preserve
+that evidence; rerun a gate only when a subsequent change can invalidate it.
+
+After #148 merges, start the production-readiness fast follow from the current remote default branch. Do not resurrect
+any pre-GlyphConfig API, public loader, backend, Policy, planner, decoder-factory, session, FontLibrary, or
+renderer-specific core path. The application API remains glyph.init(), glyph.fontFace(), FontFace.load(),
 glyph.handle(name, GlyphConfig), glyph.shape(), Text, TextGroup, roots, Codec encode, the trusted internal projection,
 CommandBufferView, DisplayList, and renderer decode. Integrators must have the same public GlyphConfig/config-leaf tools
 used by Three and the example renderer.
