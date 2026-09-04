@@ -1514,6 +1514,12 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
     6,
   );
   assert.deepEqual(realizedTechniques.sort(), [bitmap.id, slug.id].sort());
+  const inspection = label.glyphs();
+  assert.equal(new Set(inspection.glyphFontSlots).size, 2, 'the fallback paragraph must retain both resolved fonts');
+  assert.ok(
+    inspection.glyphFontSlots.every((slot) => slot < inspection.fontHandles.length),
+    'every package-produced glyph font slot must resolve through the published font table',
+  );
   assert.deepEqual(
     draws
       .map(

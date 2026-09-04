@@ -232,8 +232,7 @@ export function createGlyphPlacements(
   const glyphs: GlyphPlacement[] = [];
   const keyCounts = new Map<string, number>();
   for (let index = 0; index < glyphCount; index += 1) {
-    const fontHandle = layout.fontHandles[layout.glyphFontSlots[index]!];
-    if (fontHandle === undefined) throw new TypeError('paragraph layout references a missing font slot');
+    const fontHandle = layout.fontHandles[layout.glyphFontSlots[index]!]!;
     const cluster = layout.clusters[index]!;
     const base = `${fontHandle}:${layout.glyphIds[index]!}:${cluster}`;
     const occurrence = keyCounts.get(base) ?? 0;
