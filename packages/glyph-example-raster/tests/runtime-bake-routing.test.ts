@@ -52,7 +52,7 @@ test('the example raster format bakes host-side while the Worker plan stays firs
                 role: 'font',
                 id: baked.id,
                 bytes: Uint8Array.from(baked.bytes).buffer,
-                sha256: baked.sha256,
+                fingerprint: baked.fingerprint,
               },
             ],
             report: {},

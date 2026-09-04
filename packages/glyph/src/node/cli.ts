@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 import type { RasterBakePlan } from '../bake.js';
 import type { UnicodeRange } from '../font-baker/index.js';
 import { normalizeUnicodeRanges } from '../internal/font-selection.js';
-import { resolveRasterBakePlan } from '../internal/raster-bake-plan.js';
+import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import {
   bakeFont,
   bakeProject,
@@ -434,9 +434,8 @@ async function bakeDirect(
   options: DirectBakeArguments,
   io: { readonly stdout: { write(text: string): unknown } },
 ): Promise<NodeFontBakeReport | undefined> {
-  const plans = await directRasterPlans(options);
+  const { plans, resolved } = await directRasterPlans(options);
   if (!options.check && !options.force) {
-    const resolved = await Promise.all(plans.map(resolveRasterBakePlan));
     const freshness = await fontIsUpToDate({
       output: options.output,
       input: options.input,
@@ -485,28 +484,47 @@ type DirectRasterBakePlan =
   | RasterBakePlan<typeof import('../bakers/msdf.js').msdfBaker>
   | RasterBakePlan<typeof import('../bakers/slug.js').slugBaker>;
 
-async function directRasterPlans(options: DirectBakeArguments): Promise<DirectRasterBakePlan[]> {
+interface DirectRasterPlans {
+  readonly plans: DirectRasterBakePlan[];
+  readonly resolved: readonly ResolvedRasterBakePlan[];
+}
+
+/**
+ * Each plan is resolved where its baker type is still concrete. `resolveRasterBakePlan` infers one
+ * baker module per call, so mapping it across the mixed-format array would collapse to whichever
+ * format happened to come first.
+ */
+async function directRasterPlans(options: DirectBakeArguments): Promise<DirectRasterPlans> {
   const packaging = { artifact: options.split ? 'external' : 'embedded' } as const;
-  const rasters: DirectRasterBakePlan[] = [];
+  const plans: DirectRasterBakePlan[] = [];
+  const resolutions: Promise<ResolvedRasterBakePlan>[] = [];
   // Naming no format is not a request for a font that cannot render; it is not having chosen.
   if (options.bitmapStrikes === undefined && !options.msdf && !options.slug) {
     const { msdfBaker } = await import('../bakers/msdf.js');
-    rasters.push({ baker: msdfBaker, packaging, options: undefined });
-    return rasters;
+    const plan = { baker: msdfBaker, packaging, options: undefined };
+    plans.push(plan);
+    resolutions.push(resolveRasterBakePlan(plan));
+    return { plans, resolved: await Promise.all(resolutions) };
   }
   if (options.bitmapStrikes !== undefined) {
     const { bitmapBaker } = await import('../bakers/bitmap.js');
-    rasters.push({ baker: bitmapBaker, packaging, options: { strikes: options.bitmapStrikes } });
+    const plan = { baker: bitmapBaker, packaging, options: { strikes: options.bitmapStrikes } };
+    plans.push(plan);
+    resolutions.push(resolveRasterBakePlan(plan));
   }
   if (options.msdf) {
     const { msdfBaker } = await import('../bakers/msdf.js');
-    rasters.push({ baker: msdfBaker, packaging, options: options.msdfOptions });
+    const plan = { baker: msdfBaker, packaging, options: options.msdfOptions };
+    plans.push(plan);
+    resolutions.push(resolveRasterBakePlan(plan));
   }
   if (options.slug) {
     const { slugBaker } = await import('../bakers/slug.js');
-    rasters.push({ baker: slugBaker, packaging, options: undefined });
+    const plan = { baker: slugBaker, packaging, options: undefined };
+    plans.push(plan);
+    resolutions.push(resolveRasterBakePlan(plan));
   }
-  return rasters;
+  return { plans, resolved: await Promise.all(resolutions) };
 }
 
 /**

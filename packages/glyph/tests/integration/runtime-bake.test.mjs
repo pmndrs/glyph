@@ -500,8 +500,8 @@ test('external techniques bake through their own declared baker, never the Worke
 
 test('runtime technique artifacts are rejected when bytes contradict their stamp', async () => {
   const { source, artifact } = await fixturePromise;
-  const { defineRasterTechnique } = await import('@pmndrs/glyph');
-  const external = defineRasterTechnique({
+  const { defineRasterFormat } = await import('@pmndrs/glyph/config/raster-format');
+  const external = defineRasterFormat({
     id: 'test.invalid-runtime-fingerprint',
     kind: 'testInvalidFingerprint',
     extension: 'TEST_invalid_runtime_fingerprint',
@@ -542,10 +542,10 @@ test('runtime technique artifacts are rejected when bytes contradict their stamp
         source: `data:font/ttf;base64,${Buffer.from(source).toString('base64')}`,
         runtimeBake: () => Promise.resolve(new Uint8Array(artifact)),
       },
-      [{ technique: external }],
+      [external],
     ),
     (error) =>
-      error?.code === 'INVALID_RASTER_ASSET' &&
+      error?.reason === 'INVALID_RASTER_ASSET' &&
       error.message === 'runtime raster bytes do not match their stamped fingerprint',
   );
 });

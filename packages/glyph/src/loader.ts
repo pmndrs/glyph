@@ -15,7 +15,7 @@ import {
   type ImmutableFontVariant,
 } from './loaded-font.js';
 import type { SerializedFontFace } from './font-face-transfer.js';
-import { readBufferViews, readRuntimeFontArtifact } from './internal/font-artifact-reader.js';
+import { readBufferViews, readRuntimeFontArtifact, type RuntimeFontArtifact } from './internal/font-artifact-reader.js';
 import { readGlb, type ParsedGlb } from './internal/glb-reader.js';
 import type { FontHandle, FontKey, RasterHandle, RasterKey, Fingerprint } from './identity.js';
 import {
@@ -285,7 +285,7 @@ export class FontRegistry {
     const existing = this.#fontsByFingerprint.get(shapingFingerprint);
     if (existing !== undefined) {
       existing.assertActive();
-      assertMatchingShapingShape(existing, validated);
+      assertMatchingShapingShape(existing, artifact);
       mergeRasterSources(existing, binaryBytes, document, views, references, context.artifactUrl, context.fetch);
       mergeSourceContext(existing, sourceFingerprint, context);
       return existing;
@@ -1185,7 +1185,8 @@ class FontFaceSourceNode {
       if (source.reference.source.type === 'external' && source.artifactBytes === undefined) return false;
     }
     for (const resource of serialized.resources) {
-      if (!registered.resources.has(rasterResourceIdentity(resource.artifactFingerprint, resource.byteLength))) return false;
+      if (!registered.resources.has(rasterResourceIdentity(resource.artifactFingerprint, resource.byteLength)))
+        return false;
     }
     return true;
   }
@@ -1939,13 +1940,11 @@ class RegisteredRasterImpl implements RegisteredRaster {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#resourceLoads.clear();
     this.#owner.removeRaster(this);
   }
 
   disposeFromOwner(): void {
     this.#disposed = true;
-    this.#resourceLoads.clear();
   }
 
   #assertActive(): void {
@@ -2010,6 +2009,10 @@ function mergeRegisteredFontAcquisition(target: RegisteredFont, candidate: Regis
   for (const [identity, resource] of candidateData.resources) {
     if (!targetData.resources.has(identity)) targetData.resources.set(identity, resource);
   }
+}
+
+function rasterResourceIdentity(artifactFingerprint: string, byteLength: number): string {
+  return `${artifactFingerprint}:${byteLength}`;
 }
 
 function retainRasterArtifactData(
@@ -2228,7 +2231,7 @@ function generatedRasterExtension(
     version: reference.version,
   });
   if (candidate.fingerprint !== expected) {
-    throw new FontLoadError(
+    throw new GlyphFontError(
       'RASTER_RECIPROCAL_IDENTITY',
       `runtime raster fingerprint ${String(candidate.fingerprint)} does not match this font's ${expected}; rebake this font's rasters`,
     );
@@ -2666,10 +2669,10 @@ function declaredFontFaceIndex(provenance: Readonly<Record<string, unknown>>): n
   return fontFaceIndex;
 }
 
-function assertMatchingShapingShape(existing: RegisteredFontImpl, candidate: ValidatedFontArtifact): void {
+function assertMatchingShapingShape(existing: RegisteredFontImpl, candidate: RuntimeFontArtifact): void {
   const current = getRegisteredFontData(existing);
   if (
-    existing.glyphCount !== candidate.glyphCount ||
+    existing.glyphCount !== candidate.extension.metrics.glyphCount ||
     current.shapingSfnt.byteLength !== candidate.shapingSfnt.byteLength ||
     current.glyphExtents.byteLength !== candidate.glyphExtents.byteLength ||
     current.glyphExtentsAvailability.byteLength !== candidate.glyphExtentsAvailability.byteLength
