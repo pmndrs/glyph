@@ -5,6 +5,8 @@ import { EastAsianWidth } from '@cto.af/linebreak';
 import { LineBreak, names } from '@cto.af/linebreak/lib/LineBreak.js';
 import { resolve } from '@cto.af/linebreak/lib/state.js';
 
+import { emitCodePointTrie } from './support/code-point-trie.mjs';
+
 const require = createRequire(import.meta.url);
 const output = new URL('../rust/shaper/src/generated/line_break_data.rs', import.meta.url);
 const check = process.argv.includes('--check');
@@ -25,14 +27,15 @@ for (let codePoint = 0; codePoint < values.length; codePoint += 1) {
     (extendedPictographic.has(codePoint) && unassigned.has(codePoint) ? 1 << 11 : 0);
 }
 
-const endValues = [];
-let start = 0;
-for (let codePoint = 1; codePoint <= values.length; codePoint += 1) {
-  if (codePoint === values.length || values[codePoint] !== values[start]) {
-    endValues.push(codePoint, values[start]);
-    start = codePoint;
-  }
-}
+// Two-stage trie rather than sorted ranges: `properties` is called per character on every
+// analysis, and this is deliberately larger raw and smaller over the wire. See D-341.
+const trie = emitCodePointTrie({
+  prefix: 'LINE_BREAK',
+  valueAt: (codePoint) => values[codePoint],
+  shift: 8,
+  valueType: 'u32',
+  describe: 'Line-break property bits.',
+});
 
 const constants = Object.entries(names)
   .sort((left, right) => left[1] - right[1])
@@ -49,9 +52,7 @@ pub const UNASSIGNED_EXTENDED_PICTOGRAPHIC: u32 = 1 << 11;
 
 ${constants}
 
-pub const LINE_BREAK_END_VALUES: &[u32] = &[
-${wrapped(endValues)}
-];
+${trie}
 `;
 
 if (check) {
@@ -72,12 +73,4 @@ if (check) {
 
 function codePointSet(path) {
   return new Set(require(`@unicode/unicode-17.0.0/${path}/code-points.js`));
-}
-
-function wrapped(entries) {
-  const lines = [];
-  for (let index = 0; index < entries.length; index += 24) {
-    lines.push(`    ${entries.slice(index, index + 24).join(', ')},`);
-  }
-  return lines.join('\n');
 }

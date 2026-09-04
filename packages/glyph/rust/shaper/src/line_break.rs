@@ -496,21 +496,16 @@ impl<'a> BreakState<'a> {
 }
 
 fn properties(code_point: u32) -> Option<u32> {
+    // Two-stage trie: two reads instead of a binary probe per call. This is the hottest of the
+    // three property lookups, running per character on every line-break pass. See D-341.
     if code_point > 0x10_ffff {
         return None;
     }
-    let values = generated::LINE_BREAK_END_VALUES;
-    let mut low = 0usize;
-    let mut high = values.len() / 2;
-    while low < high {
-        let middle = low + (high - low) / 2;
-        if code_point >= values[middle * 2] {
-            low = middle + 1;
-        } else {
-            high = middle;
-        }
-    }
-    values.get(low.checked_mul(2)?.checked_add(1)?).copied()
+    const SHIFT: usize = generated::LINE_BREAK_BLOCK_SHIFT;
+    let code_point = code_point as usize;
+    let block = usize::from(generated::LINE_BREAK_STAGE1[code_point >> SHIFT]);
+    let slot = (block << SHIFT) | (code_point & ((1 << SHIFT) - 1));
+    Some(generated::LINE_BREAK_VALUES[usize::from(generated::LINE_BREAK_STAGE2[slot])])
 }
 
 fn is_one_of(class: i16, values: &[u8]) -> bool {
