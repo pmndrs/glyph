@@ -7,8 +7,8 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use pmndrs_glyph_slug_core::{
-    BuildError, Cubic, GlyphGeometry, Point, Quadratic, build_glyph_geometry, cubic_to_quadratics,
-    line_to_quadratic,
+    BuildError, Cubic, GlyphGeometry, MAX_CUBIC_SUBDIVISIONS, Point, Quadratic,
+    build_glyph_geometry, cubic_to_quadratics_into, line_to_quadratic,
 };
 use skrifa::{
     FontRef, GlyphId, MetadataProvider,
@@ -33,10 +33,14 @@ impl From<BuildError> for FontOutlineError {
 }
 
 /// Resolve and normalize one font-local glyph into Slug's quadratic geometry.
+///
+/// `cubic_subdivisions` only reaches CFF sources, whose cubics are fitted with
+/// that many quadratics each; TrueType outlines are already quadratic and ignore it.
 pub fn font_glyph_geometry(
     font: &FontRef<'_>,
     glyph_id: GlyphId,
     band_count: u16,
+    cubic_subdivisions: u8,
 ) -> Result<Option<GlyphGeometry>, FontOutlineError> {
     let units_per_em = font
         .metrics(Size::unscaled(), LocationRef::default())
@@ -47,7 +51,7 @@ pub fn font_glyph_geometry(
     let Some(glyph) = font.outline_glyphs().get(glyph_id) else {
         return Ok(None);
     };
-    let mut collector = Collector::new(units_per_em);
+    let mut collector = Collector::new(units_per_em, cubic_subdivisions);
     glyph
         .draw(
             DrawSettings::unhinted(Size::unscaled(), LocationRef::default()),
@@ -70,6 +74,7 @@ pub fn glyph_count(font: &FontRef<'_>) -> Result<u16, skrifa::raw::ReadError> {
 
 struct Collector {
     units_per_em: f32,
+    cubic_subdivisions: u8,
     curves: Vec<Quadratic>,
     contour_starts: Vec<u16>,
     first: Option<Point>,
@@ -78,9 +83,10 @@ struct Collector {
 }
 
 impl Collector {
-    fn new(units_per_em: f32) -> Self {
+    fn new(units_per_em: f32, cubic_subdivisions: u8) -> Self {
         Self {
             units_per_em,
+            cubic_subdivisions,
             curves: Vec::new(),
             contour_starts: Vec::new(),
             first: None,
@@ -184,17 +190,26 @@ impl OutlinePen for Collector {
             self.failure = Some(FontOutlineError::InvalidContour);
             return;
         };
-        if !self.reserve_curve(2) {
+        let mut converted = [Quadratic {
+            p0: start,
+            p1: start,
+            p2: start,
+        }; MAX_CUBIC_SUBDIVISIONS];
+        let written = cubic_to_quadratics_into(
+            Cubic {
+                p0: start,
+                p1: self.normalized(first_control_x, first_control_y),
+                p2: self.normalized(second_control_x, second_control_y),
+                p3: self.normalized(x, y),
+            },
+            self.cubic_subdivisions,
+            &mut converted,
+        );
+        if !self.reserve_curve(written) {
             return;
         }
-        let converted = cubic_to_quadratics(Cubic {
-            p0: start,
-            p1: self.normalized(first_control_x, first_control_y),
-            p2: self.normalized(second_control_x, second_control_y),
-            p3: self.normalized(x, y),
-        });
-        self.curves.extend_from_slice(&converted);
-        self.current = Some(converted[1].p2);
+        self.curves.extend_from_slice(&converted[..written]);
+        self.current = Some(converted[written - 1].p2);
     }
 
     fn close(&mut self) {
@@ -213,7 +228,7 @@ impl OutlinePen for Collector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pmndrs_glyph_slug_core::DEFAULT_BAND_COUNT;
+    use pmndrs_glyph_slug_core::{DEFAULT_BAND_COUNT, DEFAULT_CUBIC_SUBDIVISIONS};
 
     const INTER: &[u8] = include_bytes!(
         "../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf"
@@ -226,9 +241,14 @@ mod tests {
     fn reads_complete_inter_identity_and_geometry() {
         let font = FontRef::new(INTER).unwrap();
         assert_eq!(glyph_count(&font).unwrap(), 2937);
-        let geometry = font_glyph_geometry(&font, GlyphId::new(43), DEFAULT_BAND_COUNT)
-            .unwrap()
-            .expect("Inter H outline");
+        let geometry = font_glyph_geometry(
+            &font,
+            GlyphId::new(43),
+            DEFAULT_BAND_COUNT,
+            DEFAULT_CUBIC_SUBDIVISIONS,
+        )
+        .unwrap()
+        .expect("Inter H outline");
         assert!(!geometry.curves.is_empty());
         assert_eq!(geometry.bands.horizontal.len(), 16);
         assert_eq!(geometry.bands.vertical.len(), 16);
@@ -240,9 +260,14 @@ mod tests {
         let font = FontRef::new(DANCING_SCRIPT).unwrap();
         let geometry = (0..glyph_count(&font).unwrap())
             .find_map(|raw_id| {
-                font_glyph_geometry(&font, GlyphId::new(u32::from(raw_id)), DEFAULT_BAND_COUNT)
-                    .unwrap()
-                    .filter(|geometry| geometry.curves.len() > 12)
+                font_glyph_geometry(
+                    &font,
+                    GlyphId::new(u32::from(raw_id)),
+                    DEFAULT_BAND_COUNT,
+                    DEFAULT_CUBIC_SUBDIVISIONS,
+                )
+                .unwrap()
+                .filter(|geometry| geometry.curves.len() > 12)
             })
             .expect("one non-trivial CFF outline");
         assert!(geometry.curves.iter().all(|curve| {

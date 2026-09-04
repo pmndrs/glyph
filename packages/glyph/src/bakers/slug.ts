@@ -16,6 +16,7 @@ import {
   SLUG_FORMAT_VERSION,
   SLUG_KIND,
   slugDescriptor,
+  type SlugOptions,
   type SlugDescriptor,
 } from '../internal/slug-contract.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
@@ -24,7 +25,7 @@ import type { Fingerprint, RasterKey } from '../identity.js';
 
 export { slugBakerAbi } from '../generated/slug-baker-abi.js';
 
-export type SlugBakerOptions = undefined;
+export type SlugBakerOptions = SlugOptions | undefined;
 
 export interface SlugBakerRequest {
   readonly sourceFingerprint: Fingerprint;

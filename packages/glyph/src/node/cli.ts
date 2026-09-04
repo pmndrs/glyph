@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import type { MsdfOptions } from '../internal/msdf-contract.js';
+import type { SlugOptions } from '../internal/slug-contract.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -249,6 +250,7 @@ interface DirectBakeArguments {
   readonly msdf: boolean;
   readonly msdfOptions?: MsdfOptions;
   readonly slug: boolean;
+  readonly slugOptions?: SlugOptions;
   readonly unicodeRanges?: readonly UnicodeRange[];
   readonly check: boolean;
   readonly split: boolean;
@@ -292,6 +294,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   let msdf = false;
   let msdfOptions: MsdfOptions | undefined;
   let slug = false;
+  let slugOptions: SlugOptions | undefined;
   let unicodeRanges: readonly UnicodeRange[] | undefined;
   let check = false;
   let json = false;
@@ -332,7 +335,13 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
         msdfOptions = parseMsdfOptions(argv[++index]!);
       }
     } else if (argument === '--slug') {
+      if (slug) throw new TypeError('--slug may be provided only once');
       slug = true;
+      // Optional settings follow the flag exactly as --msdf's do.
+      const nextSlugArgument = argv[index + 1];
+      if (nextSlugArgument !== undefined && !nextSlugArgument.startsWith('-')) {
+        slugOptions = parseSlugOptions(argv[++index]!);
+      }
     } else if (argument === '--unicodes') {
       if (unicodeRanges !== undefined) throw new TypeError('--unicodes may be provided only once');
       unicodeRanges = parseUnicodeSet(valueAfter(argv, ++index, argument));
@@ -384,6 +393,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
             msdf,
             ...(msdfOptions === undefined ? {} : { msdfOptions }),
             slug,
+            ...(slugOptions === undefined ? {} : { slugOptions }),
             ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
             check,
             split,
@@ -520,7 +530,7 @@ async function directRasterPlans(options: DirectBakeArguments): Promise<DirectRa
   }
   if (options.slug) {
     const { slugBaker } = await import('../bakers/slug.js');
-    const plan = { baker: slugBaker, packaging, options: undefined };
+    const plan = { baker: slugBaker, packaging, options: options.slugOptions };
     plans.push(plan);
     resolutions.push(resolveRasterBakePlan(plan));
   }
@@ -548,6 +558,30 @@ function parseMsdfOptions(value: string): MsdfOptions {
     else throw new TypeError(`Unknown --msdf setting: ${key}`);
   }
   return options;
+}
+
+function parseSlugOptions(value: string): SlugOptions {
+  const options: { cubicSubdivisions?: number } = {};
+  for (const entry of value.split(',')) {
+    const separator = entry.indexOf('=');
+    if (separator < 1) {
+      throw new TypeError(`--slug settings must be key=value pairs: ${entry}`);
+    }
+    const key = entry.slice(0, separator).trim();
+    const raw = entry.slice(separator + 1).trim();
+    if (key === 'cubic-subdivisions') {
+      options.cubicSubdivisions = boundedInteger(raw, 'cubic-subdivisions', '--slug', 1, 16);
+    } else throw new TypeError(`Unknown --slug setting: ${key}`);
+  }
+  return options;
+}
+
+function boundedInteger(value: string, label: string, flag: string, low: number, high: number): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < low || parsed > high) {
+    throw new TypeError(`${flag} ${label} must be an integer from ${low} to ${high}: ${value}`);
+  }
+  return parsed;
 }
 
 function positiveInteger(value: string, label: string): number {
@@ -645,7 +679,9 @@ Raster options:
   --msdf [settings]      Embed the MSDF raster, optionally configured
                         Settings: em-size (default 64), pixel-range (default 8)
                         Example: --msdf em-size=32,pixel-range=6
-  --slug                 Embed the default Slug raster
+  --slug [settings]      Embed the Slug raster, optionally configured
+                        Settings: cubic-subdivisions (default 4, CFF sources only)
+                        Example: --slug cubic-subdivisions=8
                         With none selected, MSDF is baked
 
 Packaging options:

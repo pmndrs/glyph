@@ -41,6 +41,13 @@ impl Point {
     fn midpoint(self, other: Self) -> Self {
         Self::new((self.x + other.x) * 0.5, (self.y + other.y) * 0.5)
     }
+
+    fn lerp(self, other: Self, t: f32) -> Self {
+        Self::new(
+            self.x + (other.x - self.x) * t,
+            self.y + (other.y - self.y) * t,
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -316,10 +323,47 @@ pub fn line_to_quadratic(start: Point, end: Point, units_per_em: f32) -> Quadrat
     }
 }
 
-/// Port of the legacy fixed cubic conversion: split once and fit two quadratics.
-pub fn cubic_to_quadratics(cubic: Cubic) -> [Quadratic; 2] {
-    let (first, second) = split_cubic(cubic);
-    [fit_quadratic(first), fit_quadratic(second)]
+/// Quadratics fitted per cubic unless a descriptor asks otherwise.
+///
+/// Four, not the legacy two. Only CFF sources reach this code, and no shipped
+/// artifact contains CFF-derived curves today because subsetting drops the
+/// `CFF ` table outright, so raising the rate rewrites nothing that exists.
+/// Two left a quarter of Dancing Script's cubics more than half a font unit off
+/// the true curve, worst case 8.32 units — 1.7px on a 200px glyph, and Slug is
+/// resolution independent, so that grows with the render size. Four brings the
+/// worst case to 1.15 units for twice the curves.
+pub const DEFAULT_CUBIC_SUBDIVISIONS: u8 = 4;
+/// Most quadratics one cubic may become, and so the scratch width a caller needs.
+pub const MAX_CUBIC_SUBDIVISIONS: usize = 16;
+
+/// Split `cubic` into `subdivisions` equal-parameter pieces, midpoint-fit a
+/// quadratic to each, and write them into `out`, returning how many were written.
+///
+/// Only CFF sources reach this: TrueType outlines are already quadratic. The
+/// rate is a straight accuracy-for-payload trade, since Slug ships these curves
+/// to the GPU. Measured over Dancing Script's 9,468 cubics, the worst deviation
+/// from the true curve falls 8.32 -> 1.15 -> 0.14 font units at 2, 4, and 8
+/// subdivisions, against a payload that grows in proportion.
+pub fn cubic_to_quadratics_into(
+    cubic: Cubic,
+    subdivisions: u8,
+    out: &mut [Quadratic; MAX_CUBIC_SUBDIVISIONS],
+) -> usize {
+    let count = (subdivisions as usize).clamp(1, MAX_CUBIC_SUBDIVISIONS);
+    let mut rest = cubic;
+    for (index, slot) in out.iter_mut().enumerate().take(count) {
+        // Peel one equal-parameter piece off the front, so the tail keeps the
+        // exact remaining curve rather than accumulating a rescaled parameter.
+        let remaining = count - index;
+        if remaining == 1 {
+            *slot = fit_quadratic(rest);
+        } else {
+            let (head, tail) = split_cubic_at(rest, 1.0 / remaining as f32);
+            *slot = fit_quadratic(head);
+            rest = tail;
+        }
+    }
+    count
 }
 
 fn fit_quadratic(cubic: Cubic) -> Quadratic {
@@ -333,13 +377,23 @@ fn fit_quadratic(cubic: Cubic) -> Quadratic {
     }
 }
 
-fn split_cubic(cubic: Cubic) -> (Cubic, Cubic) {
-    let m01 = cubic.p0.midpoint(cubic.p1);
-    let m12 = cubic.p1.midpoint(cubic.p2);
-    let m23 = cubic.p2.midpoint(cubic.p3);
-    let m012 = m01.midpoint(m12);
-    let m123 = m12.midpoint(m23);
-    let middle = m012.midpoint(m123);
+fn split_cubic_at(cubic: Cubic, t: f32) -> (Cubic, Cubic) {
+    // de Casteljau. The half split keeps the original midpoint arithmetic:
+    // `(a + b) * 0.5` and `a + (b - a) * 0.5` are not bit-identical in f32, so a
+    // rate of two still reproduces the legacy payload exactly.
+    let cut = |a: Point, b: Point| {
+        if t == 0.5 {
+            a.midpoint(b)
+        } else {
+            a.lerp(b, t)
+        }
+    };
+    let m01 = cut(cubic.p0, cubic.p1);
+    let m12 = cut(cubic.p1, cubic.p2);
+    let m23 = cut(cubic.p2, cubic.p3);
+    let m012 = cut(m01, m12);
+    let m123 = cut(m12, m23);
+    let middle = cut(m012, m123);
     (
         Cubic {
             p0: cubic.p0,
@@ -423,17 +477,117 @@ mod tests {
         assert_ne!(diagonal.p1, Point::new(0.5, 0.5));
     }
 
+    const ZERO_QUADRATIC: Quadratic = Quadratic {
+        p0: Point::new(0.0, 0.0),
+        p1: Point::new(0.0, 0.0),
+        p2: Point::new(0.0, 0.0),
+    };
+    const SAMPLE_CUBIC: Cubic = Cubic {
+        p0: Point::new(0.0, 0.0),
+        p1: Point::new(0.0, 1.0),
+        p2: Point::new(1.0, 1.0),
+        p3: Point::new(1.0, 0.0),
+    };
+
     #[test]
     fn fixed_cubic_conversion_is_continuous() {
-        let converted = cubic_to_quadratics(Cubic {
-            p0: Point::new(0.0, 0.0),
-            p1: Point::new(0.0, 1.0),
-            p2: Point::new(1.0, 1.0),
-            p3: Point::new(1.0, 0.0),
-        });
+        // The legacy rate, named outright: the midpoint split it depends on is
+        // kept bit-exact, so this must stay pinned to 2 rather than the default.
+        let mut converted = [ZERO_QUADRATIC; MAX_CUBIC_SUBDIVISIONS];
+        let written = cubic_to_quadratics_into(SAMPLE_CUBIC, 2, &mut converted);
+        assert_eq!(written, 2);
         assert_eq!(converted[0].p0, Point::new(0.0, 0.0));
         assert_eq!(converted[0].p2, converted[1].p0);
         assert_eq!(converted[1].p2, Point::new(1.0, 0.0));
+    }
+
+    #[test]
+    fn every_subdivision_rate_stays_continuous_and_spans_the_cubic() {
+        for rate in 1..=MAX_CUBIC_SUBDIVISIONS as u8 {
+            let mut converted = [ZERO_QUADRATIC; MAX_CUBIC_SUBDIVISIONS];
+            let written = cubic_to_quadratics_into(SAMPLE_CUBIC, rate, &mut converted);
+            assert_eq!(
+                written,
+                usize::from(rate),
+                "rate {rate} writes one quadratic each"
+            );
+            assert_eq!(
+                converted[0].p0, SAMPLE_CUBIC.p0,
+                "rate {rate} keeps the start"
+            );
+            assert_eq!(
+                converted[written - 1].p2,
+                SAMPLE_CUBIC.p3,
+                "rate {rate} keeps the end"
+            );
+            for pair in converted[..written].windows(2) {
+                assert_eq!(pair[0].p2, pair[1].p0, "rate {rate} joins without a gap");
+            }
+        }
+    }
+
+    #[test]
+    fn a_rate_outside_the_supported_range_is_clamped_rather_than_panicking() {
+        let mut converted = [ZERO_QUADRATIC; MAX_CUBIC_SUBDIVISIONS];
+        assert_eq!(cubic_to_quadratics_into(SAMPLE_CUBIC, 0, &mut converted), 1);
+        assert_eq!(
+            cubic_to_quadratics_into(SAMPLE_CUBIC, u8::MAX, &mut converted),
+            MAX_CUBIC_SUBDIVISIONS
+        );
+    }
+
+    #[test]
+    fn raising_the_rate_moves_the_fit_closer_to_the_true_cubic() {
+        // Sample the cubic and take the nearest point on the fitted chain. The
+        // error must fall monotonically as the rate rises, which is the whole
+        // reason the knob exists.
+        let error_at = |rate: u8| -> f32 {
+            let mut converted = [ZERO_QUADRATIC; MAX_CUBIC_SUBDIVISIONS];
+            let written = cubic_to_quadratics_into(SAMPLE_CUBIC, rate, &mut converted);
+            let mut worst = 0.0_f32;
+            for step in 0..=64 {
+                let t = step as f32 / 64.0;
+                let want = cubic_point(SAMPLE_CUBIC, t);
+                let mut nearest = f32::MAX;
+                for quadratic in &converted[..written] {
+                    for probe in 0..=64 {
+                        let u = probe as f32 / 64.0;
+                        let got = quadratic_point(*quadratic, u);
+                        let distance = ((want.x - got.x).powi(2) + (want.y - got.y).powi(2)).sqrt();
+                        if distance < nearest {
+                            nearest = distance;
+                        }
+                    }
+                }
+                if nearest > worst {
+                    worst = nearest;
+                }
+            }
+            worst
+        };
+        let (two, four, eight) = (error_at(2), error_at(4), error_at(8));
+        assert!(four < two, "four subdivisions beat two: {four} vs {two}");
+        assert!(
+            eight < four,
+            "eight subdivisions beat four: {eight} vs {four}"
+        );
+    }
+
+    fn cubic_point(cubic: Cubic, t: f32) -> Point {
+        let m = 1.0 - t;
+        let (a, b, c, d) = (m * m * m, 3.0 * m * m * t, 3.0 * m * t * t, t * t * t);
+        Point::new(
+            a * cubic.p0.x + b * cubic.p1.x + c * cubic.p2.x + d * cubic.p3.x,
+            a * cubic.p0.y + b * cubic.p1.y + c * cubic.p2.y + d * cubic.p3.y,
+        )
+    }
+
+    fn quadratic_point(quadratic: Quadratic, t: f32) -> Point {
+        let m = 1.0 - t;
+        Point::new(
+            m * m * quadratic.p0.x + 2.0 * m * t * quadratic.p1.x + t * t * quadratic.p2.x,
+            m * m * quadratic.p0.y + 2.0 * m * t * quadratic.p1.y + t * t * quadratic.p2.y,
+        )
     }
 
     #[test]

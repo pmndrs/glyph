@@ -193,7 +193,8 @@ function runtimeMsdfDescriptor(value: JsonValue): MsdfDescriptor {
 function runtimeSlugDescriptor(value: JsonValue): SlugDescriptor {
   const record = jsonRecord(value, 'Slug');
   if (record.generatorVersion !== SLUG_GENERATOR_VERSION) throw new TypeError('invalid runtime Slug descriptor');
-  const descriptor = slugDescriptor();
+  const cubicSubdivisions = optionalNumber(record.cubicSubdivisions, 'Slug cubic subdivisions');
+  const descriptor = slugDescriptor(cubicSubdivisions === undefined ? undefined : { cubicSubdivisions });
   assertCanonicalDescriptor(value, descriptor, 'Slug');
   return descriptor;
 }

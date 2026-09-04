@@ -5,6 +5,7 @@ import {
   SLUG_KIND,
   slugDescriptor,
   type SlugDescriptor,
+  type SlugOptions,
 } from '../internal/slug-contract.js';
 import {
   defineRasterFormat,
@@ -23,7 +24,10 @@ export {
   SLUG_PLANE_UNITS_PER_EM,
   slugDescriptor,
   slugDescriptorRasterKey,
+  SLUG_CUBIC_SUBDIVISIONS,
+  SLUG_MAX_CUBIC_SUBDIVISIONS,
   type SlugDescriptor,
+  type SlugOptions,
 } from '../internal/slug-contract.js';
 
 const ABSENT_PAGE = 0xffff;
@@ -50,26 +54,31 @@ export interface SlugData {
 }
 
 /** Renderer-neutral Slug identity, decoding, and ownership. */
-export const slug: RasterFormat<RasterFormatId & 'pmndrs.slug', typeof SLUG_KIND, undefined, SlugDescriptor, SlugData> =
-  defineRasterFormat({
-    id: 'pmndrs.slug',
-    kind: SLUG_KIND,
-    extension: SLUG_EXTENSION,
-    version: SLUG_FORMAT_VERSION,
-    textEffects: [],
-    runtimeBaker: () => import('../runtime-bakers/slug.js'),
-    descriptor(): SlugDescriptor {
-      return slugDescriptor();
-    },
-    async decode(font, raster, signal): Promise<SlugData> {
-      signal?.throwIfAborted();
-      const { decodeSlugData } = await import('./internal/slug-decoder.js');
-      const data = await decodeSlugData(font, raster, signal);
-      signal?.throwIfAborted();
-      return data;
-    },
-    dispose() {},
-  });
+export const slug: RasterFormat<
+  RasterFormatId & 'pmndrs.slug',
+  typeof SLUG_KIND,
+  SlugOptions | undefined,
+  SlugDescriptor,
+  SlugData
+> = defineRasterFormat({
+  id: 'pmndrs.slug',
+  kind: SLUG_KIND,
+  extension: SLUG_EXTENSION,
+  version: SLUG_FORMAT_VERSION,
+  textEffects: [],
+  runtimeBaker: () => import('../runtime-bakers/slug.js'),
+  descriptor(options: SlugOptions | undefined): SlugDescriptor {
+    return slugDescriptor(options);
+  },
+  async decode(font, raster, signal): Promise<SlugData> {
+    signal?.throwIfAborted();
+    const { decodeSlugData } = await import('./internal/slug-decoder.js');
+    const data = await decodeSlugData(font, raster, signal);
+    signal?.throwIfAborted();
+    return data;
+  },
+  dispose() {},
+});
 
 import { f32, techniqueProgram, u32 } from '../config/codec-program.js';
 import { id, type CodecBufferId } from '../config/codec.js';

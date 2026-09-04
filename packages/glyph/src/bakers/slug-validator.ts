@@ -48,6 +48,7 @@ import {
   SLUG_GENERATOR_VERSION,
   SLUG_GLYPH_RECORD_STRIDE,
   SLUG_PLANE_UNITS_PER_EM,
+  SLUG_MAX_CUBIC_SUBDIVISIONS,
   slugDescriptorRasterKey,
   type SlugDescriptor,
 } from '../internal/slug-contract.js';
@@ -274,15 +275,26 @@ async function validateSlugSemantics(
 
 async function validateContext(context: SlugArtifactValidationContext): Promise<void> {
   const descriptor = requireNonArrayObject(context.descriptor, '/descriptor');
+  const cubicSubdivisions = Object.hasOwn(descriptor, 'cubicSubdivisions') ? descriptor.cubicSubdivisions : undefined;
   if (
-    Object.keys(descriptor).length !== 1 ||
+    Object.keys(descriptor).length !== (cubicSubdivisions === undefined ? 1 : 2) ||
     !Object.hasOwn(descriptor, 'generatorVersion') ||
-    descriptor.generatorVersion !== SLUG_GENERATOR_VERSION
+    descriptor.generatorVersion !== SLUG_GENERATOR_VERSION ||
+    (cubicSubdivisions !== undefined &&
+      (typeof cubicSubdivisions !== 'number' ||
+        !Number.isSafeInteger(cubicSubdivisions) ||
+        cubicSubdivisions < 1 ||
+        cubicSubdivisions > SLUG_MAX_CUBIC_SUBDIVISIONS))
   ) {
-    fail('SLUG_DESCRIPTOR', 'descriptor does not match the fixed Slug generator', '/descriptor');
+    fail('SLUG_DESCRIPTOR', 'descriptor does not match the Slug generator', '/descriptor');
   }
-  if (context.rasterKey !== slugDescriptorRasterKey()) {
-    fail('RASTER_KEY', 'expected raster key does not match the fixed descriptor', '/rasterKey');
+  // Re-derive from the descriptor that arrived, so a configured rate validates
+  // against its own key rather than the default one.
+  const expectedRasterKey = slugDescriptorRasterKey(
+    cubicSubdivisions === undefined ? undefined : { cubicSubdivisions: cubicSubdivisions as number },
+  );
+  if (context.rasterKey !== expectedRasterKey) {
+    fail('RASTER_KEY', 'expected raster key does not match the descriptor', '/rasterKey');
   }
   if (!isFingerprint(context.shapingFingerprint)) {
     fail(
