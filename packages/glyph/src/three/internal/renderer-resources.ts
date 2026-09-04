@@ -1,5 +1,9 @@
+import type * as THREE from 'three/webgpu';
+
 import type { Codec } from '../../config/glyph.js';
 import type { CodecIdFactory } from '../../config/codec.js';
+import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../config/resources.js';
+import type { TslSlugPageResources } from '../../tsl.js';
 import type { ThreeCodec } from '../handle.js';
 import type { ThreeTextMaterial } from '../material.js';
 import {
@@ -12,13 +16,18 @@ interface DisposableThreeRenderResource {
   dispose(): void;
 }
 
-interface RetainedThreeRenderResource {
-  readonly resource: DisposableThreeRenderResource;
+interface RetainedThreeRenderResource<Resource extends DisposableThreeRenderResource> {
+  readonly resource: Resource;
   references: number;
 }
 
 export interface ThreeRenderResourceLease<Resource extends DisposableThreeRenderResource> {
   readonly resource: Resource;
+  dispose(): void;
+}
+
+export interface RetainedSlugPage extends TslSlugPageResources {
+  readonly byteLength: number;
   dispose(): void;
 }
 
@@ -67,7 +76,8 @@ export function threeCodecResources(codec: ThreeCodec): ThreeRendererResources {
 export class ThreeRendererResources {
   readonly programs: ReadonlyMap<string, CompiledThreeRasterProgram>;
   readonly material: ThreeTextMaterial | undefined;
-  readonly #renderResources = new Map<object, RetainedThreeRenderResource>();
+  readonly #textureArrays = new Map<PortableTextureArrayPayload, RetainedThreeRenderResource<THREE.DataArrayTexture>>();
+  readonly #slugPages = new Map<PortableResourceGroupPayload, RetainedThreeRenderResource<RetainedSlugPage>>();
   #disposed = false;
 
   constructor(programs: ReadonlyMap<string, CompiledThreeRasterProgram>, material: ThreeTextMaterial | undefined) {
@@ -79,52 +89,77 @@ export class ThreeRendererResources {
     return this.programs.get(techniqueId);
   }
 
-  acquireRenderResource<Resource extends DisposableThreeRenderResource>(
-    key: object,
-    create: () => Resource,
-  ): ThreeRenderResourceLease<Resource> {
+  acquireTextureArrayResource(
+    key: PortableTextureArrayPayload,
+    create: () => THREE.DataArrayTexture,
+  ): ThreeRenderResourceLease<THREE.DataArrayTexture> {
     this.#assertActive();
-    let retained = this.#renderResources.get(key);
-    if (retained === undefined) {
-      retained = { resource: create(), references: 0 };
-      this.#renderResources.set(key, retained);
-    }
-    retained.references += 1;
-    let disposed = false;
-    const exact = retained;
-    return Object.freeze({
-      resource: exact.resource as Resource,
-      dispose: () => {
-        if (disposed) return;
-        disposed = true;
-        exact.references -= 1;
-        if (exact.references !== 0 || this.#renderResources.get(key) !== exact) return;
-        this.#renderResources.delete(key);
-        exact.resource.dispose();
-      },
-    });
+    return acquireRenderResource(this.#textureArrays, key, create);
+  }
+
+  acquireSlugPageResource(
+    key: PortableResourceGroupPayload,
+    create: () => RetainedSlugPage,
+  ): ThreeRenderResourceLease<RetainedSlugPage> {
+    this.#assertActive();
+    return acquireRenderResource(this.#slugPages, key, create);
   }
 
   get sharedRenderResourceCount(): number {
-    return this.#renderResources.size;
+    return this.#textureArrays.size + this.#slugPages.size;
   }
 
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    let failure: unknown;
-    for (const retained of this.#renderResources.values()) {
-      try {
-        retained.resource.dispose();
-      } catch (error) {
-        failure ??= error;
-      }
-    }
-    this.#renderResources.clear();
+    const textureFailure = disposeRenderResources(this.#textureArrays);
+    const slugFailure = disposeRenderResources(this.#slugPages);
+    const failure = textureFailure ?? slugFailure;
     if (failure !== undefined) throw failure;
   }
 
   #assertActive(): void {
     if (this.#disposed) throw new Error('Three renderer resources have been disposed');
   }
+}
+
+function acquireRenderResource<Key extends object, Resource extends DisposableThreeRenderResource>(
+  resources: Map<Key, RetainedThreeRenderResource<Resource>>,
+  key: Key,
+  create: () => Resource,
+): ThreeRenderResourceLease<Resource> {
+  let retained = resources.get(key);
+  if (retained === undefined) {
+    retained = { resource: create(), references: 0 };
+    resources.set(key, retained);
+  }
+  retained.references += 1;
+  let disposed = false;
+  const exact = retained;
+  return Object.freeze({
+    resource: exact.resource,
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      exact.references -= 1;
+      if (exact.references !== 0 || resources.get(key) !== exact) return;
+      resources.delete(key);
+      exact.resource.dispose();
+    },
+  });
+}
+
+function disposeRenderResources<Key extends object, Resource extends DisposableThreeRenderResource>(
+  resources: Map<Key, RetainedThreeRenderResource<Resource>>,
+): unknown {
+  let failure: unknown;
+  for (const retained of resources.values()) {
+    try {
+      retained.resource.dispose();
+    } catch (error) {
+      failure ??= error;
+    }
+  }
+  resources.clear();
+  return failure;
 }

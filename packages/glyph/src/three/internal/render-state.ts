@@ -1,7 +1,6 @@
 import type * as THREE from 'three/webgpu';
 
-import type { TslSlugPageResources } from '../../tsl.js';
-import type { ThreeRenderResourceLease, ThreeRendererResources } from './renderer-resources.js';
+import type { RetainedSlugPage, ThreeRenderResourceLease, ThreeRendererResources } from './renderer-resources.js';
 import type { ThreeGlyphGeometrySource } from '../glyph-measurement.js';
 import type { ThreeBufferBinding, ThreeResolvedResourceBinding } from '../handle.js';
 import type { RetainedBuffer, StagedBufferMutations } from './host-buffer.js';
@@ -12,11 +11,6 @@ export type ThreeHostResource = ThreeResolvedResourceBinding &
 export interface RetainedResource {
   readonly binding: ThreeResolvedResourceBinding;
   readonly resolved: ThreeHostResource;
-}
-
-export interface RetainedSlugPage extends TslSlugPageResources {
-  readonly byteLength: number;
-  dispose(): void;
 }
 
 export type RetainedTextureLease = ThreeRenderResourceLease<THREE.DataArrayTexture>;

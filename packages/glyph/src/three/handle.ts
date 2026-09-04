@@ -78,7 +78,7 @@ export interface ThreePortableResource {
   readonly resources: ReadonlyMap<string, PortableResource>;
 }
 
-export interface ThreeResolvedResourceBinding extends ThreePortableResource {}
+export type ThreeResolvedResourceBinding = ThreePortableResource;
 
 /** Renderer-facing material selection after Text/TextGroup scene properties have been resolved. */
 export interface ThreeMaterialBinding {
@@ -122,7 +122,7 @@ export interface ThreeFontFormats {
 }
 
 /** Exact public Codec value created once for one Three handle. */
-export interface ThreeCodec extends Codec {}
+export type ThreeCodec = Codec;
 
 export const ThreeFontFormats: ThreeFontFormats = Object.freeze({ bitmap, msdf, slug });
 

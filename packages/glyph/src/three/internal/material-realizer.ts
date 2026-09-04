@@ -12,7 +12,7 @@ import { bitmapShader } from '../../tsl/bitmap-shader.js';
 import { decorationShader } from '../../tsl/decoration-shader.js';
 import { msdfShader } from '../../tsl/msdf-shader.js';
 import { slugShader } from '../../tsl/slug-shader.js';
-import type { ThreeRendererResources } from './renderer-resources.js';
+import type { RetainedSlugPage, ThreeRendererResources } from './renderer-resources.js';
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
 import type { ThreeRasterProgramBuffer } from '../raster-program.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
@@ -33,7 +33,6 @@ import type {
   PreparationContext,
   RecordAddressing,
   RetainedResource,
-  RetainedSlugPage,
   ThreeHostResource,
   TransformRealization,
 } from './render-state.js';
@@ -412,7 +411,7 @@ export class ThreeMaterialRealizer {
     const textures = kind === 'bitmap' ? this.#context.bitmapTextures : this.#context.msdfAtlases;
     let lease = textures.get(binding);
     if (lease !== undefined) return lease.resource;
-    lease = this.#coordinator.acquireRenderResource(data, () => {
+    lease = this.#coordinator.acquireTextureArrayResource(data, () => {
       const texture = new THREE.DataArrayTexture(data.bytes, data.width, data.height, data.layers);
       texture.format = kind === 'bitmap' ? THREE.RedFormat : THREE.RGBAFormat;
       texture.type = THREE.UnsignedByteType;
@@ -432,7 +431,7 @@ export class ThreeMaterialRealizer {
   #slugPage(binding: ThreeResolvedResourceBinding, data: PortableResourceGroupPayload): RetainedSlugPage {
     let lease = this.#context.slugPages.get(binding);
     if (lease !== undefined) return lease.resource;
-    lease = this.#coordinator.acquireRenderResource(data, () => {
+    lease = this.#coordinator.acquireSlugPageResource(data, () => {
       const curves = textureMember(data, 'curves', 'rgba16float', 'Slug');
       const headers = textureMember(data, 'headers', 'r32uint', 'Slug');
       const references = textureMember(data, 'references', 'r32uint', 'Slug');
