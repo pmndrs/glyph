@@ -1691,6 +1691,49 @@ mod tests {
     }
 
     #[test]
+    fn ordered_compositing_splits_a_draw_at_every_interleaved_resource() {
+        let codec = codec();
+        let mut compiler = OrderedPlanCompiler::default();
+        let a1 = glyph(1, 1);
+        let a2 = glyph(2, 1);
+        let mut b = glyph(3, 1);
+        b.resource_id = 12;
+        b.resource_reference = 100;
+        let a3 = glyph(4, 1);
+        let glyphs = [a1, a2, b, a3];
+        compiler
+            .prepare(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &glyphs,
+                    semantic_change_masks: &[],
+                    f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
+                    u32_fields: &[],
+                    order_independent: false,
+                },
+                true,
+                1,
+            )
+            .unwrap();
+        let plan = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+
+        // Three draws for one face change, against two under independent compositing.
+        // A stacked paragraph pays this at every face boundary.
+        assert_eq!(plan.draws.len(), 3);
+        assert_eq!(plan.primitives.len(), 3);
+        assert_eq!(plan.primitives[0].resource_id, 11);
+        assert_eq!(plan.primitives[0].record_count, 2);
+        assert_eq!(plan.primitives[1].resource_id, 12);
+        assert_eq!(plan.primitives[1].record_count, 1);
+        assert_eq!(plan.primitives[2].resource_id, 11);
+        assert_eq!(plan.primitives[2].record_count, 1);
+        assert!(plan_layout(plan).is_ok());
+    }
+
+    #[test]
     fn independent_compositing_flattens_paint_layers_and_preserves_layer_order() {
         let codec = codec();
         let mut compiler = OrderedPlanCompiler::default();
