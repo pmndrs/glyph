@@ -509,7 +509,8 @@ export const textShaperAbi = {
       "order": 8,
       "paragraphId": 4,
       "reserved0": 2,
-      "size": 12
+      "segment": 12,
+      "size": 16
     },
     "enginePatch": {
       "alignment": 4,

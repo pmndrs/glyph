@@ -84,6 +84,8 @@ pub struct LayoutGlyph {
 #[derive(Clone, Copy)]
 pub struct LayoutPlanInput<'a> {
     pub transform_id: u32,
+    /// Batch segment every record gathered from this paragraph occupies.
+    pub segment: u32,
     pub glyphs: &'a [LayoutGlyph],
     pub(crate) semantic_glyphs: &'a [SemanticGlyph],
     pub semantic_change_masks: &'a [u16],
@@ -536,7 +538,7 @@ impl CodecGatherWorkspace {
             self.sources
                 .push(GatherSource::new(glyph.stable_id, Some(selected)));
             self.glyphs.push(planned);
-            self.segments.push(DEFAULT_BATCH_SEGMENT);
+            self.segments.push(input.segment);
             self.semantic_change_masks.push(
                 input
                     .semantic_change_masks
@@ -564,6 +566,7 @@ impl CodecGatherWorkspace {
         capability_set: CapabilitySetId,
         decorations: &[super::positioning::DecorationRecord],
         transform_id: u32,
+        segment: u32,
         content_revision: u32,
         pass: DecorationPass,
     ) -> Result<bool, GatherError> {
@@ -613,7 +616,7 @@ impl CodecGatherWorkspace {
                 };
                 field.push(value)?;
             }
-            self.segments.push(DEFAULT_BATCH_SEGMENT);
+            self.segments.push(segment);
             self.glyphs.push(PlanGlyph {
                 stable_id,
                 content_revision,
@@ -1152,6 +1155,7 @@ mod tests {
         let foreground = [0xff20_4080];
         let input = LayoutPlanInput {
             transform_id: 1,
+            segment: 0,
             glyphs: &glyphs,
             semantic_glyphs: &semantic_glyphs,
             semantic_change_masks: &[],
@@ -1204,6 +1208,7 @@ mod tests {
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
+                    segment: 0,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
@@ -1274,6 +1279,7 @@ mod tests {
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
+                    segment: 0,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
@@ -1299,6 +1305,7 @@ mod tests {
                     CAPABILITY,
                     LayoutPlanInput {
                         transform_id: 1,
+                        segment: 0,
                         glyphs: &changed_glyphs,
                         semantic_glyphs: &[],
                         semantic_change_masks: &[0, 1],
@@ -1328,6 +1335,7 @@ mod tests {
                     CAPABILITY,
                     LayoutPlanInput {
                         transform_id: 1,
+                        segment: 0,
                         glyphs: &changed_topology,
                         semantic_glyphs: &[],
                         semantic_change_masks: &[
@@ -1349,6 +1357,7 @@ mod tests {
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
+                    segment: 0,
                     glyphs: &changed_topology,
                     semantic_glyphs: &[],
                     semantic_change_masks: &[0, crate::engine::positioning::ALL_SEMANTIC_CHANGES],
@@ -1381,6 +1390,7 @@ mod tests {
         for input in [
             LayoutPlanInput {
                 transform_id: 1,
+                segment: 0,
                 glyphs: &first,
                 semantic_glyphs: &[],
                 semantic_change_masks: &[],
@@ -1389,6 +1399,7 @@ mod tests {
             },
             LayoutPlanInput {
                 transform_id: 2,
+                segment: 0,
                 glyphs: &second,
                 semantic_glyphs: &[],
                 semantic_change_masks: &[],
@@ -1443,6 +1454,7 @@ mod tests {
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
+                    segment: 0,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
@@ -1464,6 +1476,7 @@ mod tests {
                     CAPABILITY,
                     LayoutPlanInput {
                         transform_id: 1,
+                        segment: 0,
                         glyphs: &revised,
                         semantic_glyphs: &[],
                         semantic_change_masks: &[0, 1],
@@ -1524,6 +1537,7 @@ mod tests {
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
+                    segment: 0,
                     glyphs: &[glyph],
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
@@ -1544,6 +1558,7 @@ mod tests {
                     CAPABILITY,
                     LayoutPlanInput {
                         transform_id: 1,
+                        segment: 0,
                         glyphs: &[glyph],
                         semantic_glyphs: &[],
                         semantic_change_masks: &[1 << 4],
@@ -1573,6 +1588,7 @@ mod tests {
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
+                    segment: 0,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
@@ -1589,6 +1605,7 @@ mod tests {
                 CapabilitySetId(2),
                 LayoutPlanInput {
                     transform_id: 1,
+                    segment: 0,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
@@ -1605,6 +1622,7 @@ mod tests {
                 CAPABILITY,
                 LayoutPlanInput {
                     transform_id: 1,
+                    segment: 0,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
                     semantic_change_masks: &[],
@@ -1637,6 +1655,7 @@ mod tests {
         let kinds_after: Vec<u32> = (0..after.len()).map(|index| index as u32 + 100).collect();
         let initial = LayoutPlanInput {
             transform_id: 1,
+            segment: 0,
             glyphs: before,
             semantic_glyphs: &[],
             semantic_change_masks: &[],
@@ -1645,6 +1664,7 @@ mod tests {
         };
         let edited = LayoutPlanInput {
             transform_id: 1,
+            segment: 0,
             glyphs: after,
             semantic_glyphs: &[],
             semantic_change_masks: masks,
@@ -1756,6 +1776,7 @@ mod tests {
         let gathered = |masks: &[u16]| {
             let input = LayoutPlanInput {
                 transform_id: 1,
+                segment: 0,
                 glyphs: &glyphs,
                 semantic_glyphs: &[],
                 semantic_change_masks: masks,
@@ -1934,6 +1955,7 @@ mod tests {
             let semantic_u32: [&[u32]; 1] = [&kinds];
             let input = LayoutPlanInput {
                 transform_id,
+                segment: 0,
                 glyphs,
                 semantic_glyphs: &[],
                 semantic_change_masks: masks,
@@ -2358,6 +2380,7 @@ mod tests {
                     CAPABILITY,
                     &[record],
                     3,
+                    0,
                     5,
                     DecorationPass::Under
                 )
@@ -2394,6 +2417,7 @@ mod tests {
                     CAPABILITY,
                     &[line_through],
                     3,
+                    0,
                     5,
                     DecorationPass::Under
                 )
@@ -2407,6 +2431,7 @@ mod tests {
                     CAPABILITY,
                     &[line_through],
                     3,
+                    0,
                     5,
                     DecorationPass::Over
                 )
@@ -2421,7 +2446,15 @@ mod tests {
         plain_workspace.begin(&plain, 4).unwrap();
         assert!(
             !plain_workspace
-                .append_decorations(&plain, CAPABILITY, &[record], 3, 5, DecorationPass::Under)
+                .append_decorations(
+                    &plain,
+                    CAPABILITY,
+                    &[record],
+                    3,
+                    0,
+                    5,
+                    DecorationPass::Under
+                )
                 .unwrap()
         );
         assert_eq!(plain_workspace.view().glyphs.len(), 0);
@@ -2470,6 +2503,7 @@ mod tests {
                         CAPABILITY,
                         &[underline, line_through],
                         3,
+                        0,
                         5,
                         DecorationPass::Under,
                     )
@@ -2481,6 +2515,7 @@ mod tests {
                     CAPABILITY,
                     LayoutPlanInput {
                         transform_id: 3,
+                        segment: 0,
                         glyphs: &glyphs,
                         semantic_glyphs: &[],
                         semantic_change_masks: &[],
@@ -2497,6 +2532,7 @@ mod tests {
                         CAPABILITY,
                         &[underline, line_through],
                         3,
+                        0,
                         5,
                         DecorationPass::Over,
                     )
