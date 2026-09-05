@@ -17,11 +17,7 @@ pub enum PlanDrawError {
 /// Paint layer is the primary key; encounter order remains deterministic within a layer.
 #[inline]
 pub fn independent_draw_sort_key(draw: &DrawRecord) -> u64 {
-    // The batch segment is planner-private and must never order draws: it says what may merge,
-    // not what draws first. Sorting the raw key would let a segmentation decision reorder the
-    // page, so the paint layer is masked out of it here.
-    (u64::from(super::codec_gather::depth_key_paint(draw.depth_key)) << 32)
-        | u64::from(draw.order_token)
+    (u64::from(draw.depth_key) << 32) | u64::from(draw.order_token)
 }
 
 #[derive(Clone, Copy)]
@@ -102,7 +98,7 @@ pub fn push_glyph_draw(
         program_variant: emission.glyph.program_variant,
         material_id: emission.material_id,
         clip_id: emission.glyph.clip_id,
-        depth_key: super::codec_gather::depth_key_paint(emission.glyph.depth_key),
+        depth_key: emission.glyph.depth_key,
         transform_id: emission.transform_id,
         primitive_start,
         primitive_count: 1,

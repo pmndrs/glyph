@@ -58,43 +58,9 @@ pub const DEFAULT_GATHER_RECORD_CAPACITY: usize = 32_768;
 
 /// Canonical paint layers emitted into the renderer-neutral display list. Independent
 /// compositing may batch within one layer, but must preserve this under/text/over ordering.
-///
-/// The layer occupies the low [`PAINT_BITS`] of `depth_key`; the high bits carry the batch
-/// segment that keeps one paragraph's glyphs from merging with another's. `OVER` sits at the top
-/// of the paint field rather than the top of the word, so an authored depth can never collide with
-/// it and the segment still has room above.
 pub const PAINT_LAYER_UNDER_DECORATION: u32 = 0;
 pub const PAINT_LAYER_GLYPH: u32 = 1;
-pub const PAINT_LAYER_OVER_DECORATION: u32 = 0xFF;
-
-/// Width of the paint-layer field inside `depth_key`.
-pub const PAINT_BITS: u32 = 8;
-/// Mask selecting the paint layer out of a packed `depth_key`.
-pub const PAINT_MASK: u32 = (1 << PAINT_BITS) - 1;
-/// Largest batch segment a plan can address.
-pub const BATCH_SEGMENT_MAX: u32 = u32::MAX >> PAINT_BITS;
-
-/// Packs a paint layer and a batch segment into one `depth_key`.
-///
-/// Batch equality is the segmentation: two glyphs in different segments never share a `BatchKey`,
-/// so they never merge, while the paint layer keeps its ordering meaning inside the segment.
-#[inline]
-pub const fn pack_depth_key(paint: u32, batch: u32) -> u32 {
-    (batch << PAINT_BITS) | (paint & PAINT_MASK)
-}
-
-/// The paint layer a packed `depth_key` names. Every consumer outside batch-key equality wants
-/// this rather than the raw value, because the segment is planner-private.
-#[inline]
-pub const fn depth_key_paint(depth_key: u32) -> u32 {
-    depth_key & PAINT_MASK
-}
-
-/// The batch segment a packed `depth_key` names.
-#[inline]
-pub const fn depth_key_batch(depth_key: u32) -> u32 {
-    depth_key >> PAINT_BITS
-}
+pub const PAINT_LAYER_OVER_DECORATION: u32 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LayoutGlyph {
@@ -2411,7 +2377,7 @@ mod tests {
         );
         let view = workspace.view();
         assert_eq!(view.glyphs.len(), 2);
-        assert_eq!(view.glyphs[1].depth_key, PAINT_LAYER_OVER_DECORATION);
+        assert_eq!(view.glyphs[1].depth_key, 2);
 
         let plain = codec();
         let mut plain_workspace = CodecGatherWorkspace::default();
