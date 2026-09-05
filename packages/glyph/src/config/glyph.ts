@@ -452,10 +452,9 @@ export interface GlyphTextController<Format extends RasterFormatMetadata, Materi
   dispose(): void;
 }
 
-/** Optional semantic products and compositing contract for the next `shape()` publication. */
+/** Optional semantic products for the next `shape()` publication. */
 export interface GlyphShapeOptions {
   readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection' | 'all';
-  readonly compositing?: 'ordered' | 'independent';
 }
 
 /** Core-owned shaping/publication services scoped to exactly one anonymous or named root. */

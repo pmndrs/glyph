@@ -238,7 +238,6 @@ export interface RetainedText {
 /** Optional semantic views to cache while compiling the next publication. */
 export interface RenderPlannerPublishOptions {
   readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection' | 'all';
-  readonly compositing?: 'ordered' | 'independent';
 }
 
 /** One retained-text planner staged only through the engine-wide shape batch. */
@@ -876,7 +875,6 @@ class RenderPlannerImpl {
       consumedRevision: checkpointGeneration === this.#acceptedCheckpointGeneration ? this.#revision : 0,
       acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
       semanticViewMask: options.semanticViewMask,
-      compositingIndependent: options.compositingIndependent,
       limits: this.#limits,
       paragraphMutations,
       textMutations,
@@ -1306,7 +1304,6 @@ class GuardedPlanReader implements BorrowedRenderPlan {
 
 interface NormalizedPublishOptions {
   readonly semanticViewMask: number;
-  readonly compositingIndependent: boolean;
 }
 
 function normalizePublishOptions(value: RenderPlannerPublishOptions | undefined): NormalizedPublishOptions {
@@ -1324,13 +1321,8 @@ function normalizePublishOptions(value: RenderPlannerPublishOptions | undefined)
             ? masks.measurement | masks.layoutInspection
             : -1;
   if (semanticViewMask < 0) throw new TypeError('semanticViews is not supported');
-  const compositing = value?.compositing ?? 'ordered';
-  if (compositing !== 'ordered' && compositing !== 'independent') {
-    throw new TypeError('compositing must be "ordered" or "independent"');
-  }
   return {
     semanticViewMask,
-    compositingIndependent: compositing === 'independent',
   };
 }
 

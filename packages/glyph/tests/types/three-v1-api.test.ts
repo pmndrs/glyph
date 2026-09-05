@@ -147,11 +147,11 @@ const label = three.createText({
 const labels = three.createTextGroup({ pixelSnapping: true });
 // @ts-expect-error TextGroup material mutation has one property surface, not a duplicate setter method.
 labels.setMaterial(undefined);
-const independentThree = glyph.handle(
-  'three:independent-type-fixture',
-  defineThreeConfig({ compositing: 'independent', capacity: { size: 4_096, policy: 'chunk' } }),
+const capacityThree = glyph.handle(
+  'three:capacity-type-fixture',
+  defineThreeConfig({ capacity: { size: 4_096, policy: 'chunk' } }),
 );
-independentThree.createText({ font: bitmapFont, text: 'Config-owned root policy' });
+capacityThree.createText({ font: bitmapFont, text: 'Config-owned root policy' });
 // @ts-expect-error Capacity is immutable config policy, not mutable root state.
 three.setCapacity({ size: 4_096, policy: 'chunk' });
 // @ts-expect-error Compositing is immutable config policy, not mutable root state.
