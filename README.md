@@ -74,7 +74,7 @@ An outer `Text` is a retained paragraph and a Three `Object3D`. A nested `Text` 
 
 `TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text semantics and lazily owns an implicit batch of one.
 
-`defineThreeConfig({ compositing: 'ordered' })` preserves authored draw order and is the default. Use `independent` only when overlapping text does not depend on blending order as it lets the planner reorder compatible work into fewer draws.
+A `Text` always batches its own spans, so one paragraph mixing faces or sizes collapses into as few draws as its resources allow. Draw order inside a paragraph is shaping's, not the caller's: it is deterministic but not a promise. Order between paragraphs is stated by grouping them.
 
 `GlyphProvider` is optional. Use it only to select a named/custom root for a subtree or to declare scoped string FontFace
 aliases. Its handle and FontFace table are immutable for the lifetime of that provider:

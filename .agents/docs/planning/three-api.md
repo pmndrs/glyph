@@ -55,7 +55,7 @@ const three = glyph.handle('main', ThreeConfig);
 Import only the RasterFormat modules an application names explicitly. `ThreeConfig` already supports its built-in
 Bitmap, MSDF, and Slug formats and realizes their Three materials.
 
-`ThreeConfig` is the built-in config value. `defineThreeConfig({ transformMode, allocationMode, capacity, compositing })`
+`ThreeConfig` is the built-in config value. `defineThreeConfig({ transformMode, allocationMode, capacity })`
 creates an immutable variant. Several named Three handles may coexist over the same loaded FontFace data while owning
 independent roots and renderer state.
 
@@ -137,12 +137,12 @@ scene.add(group);
 
 All descendant `Text` objects under the group participate in its retained hierarchy and nearest root publication.
 Compatible Bitmap, MSDF, and Slug records may share backing storage while the command buffer emits the draw boundaries
-required by raster, font resource, material, clipping, and compositing policy.
+required by raster, font resource, material, and clipping policy.
 
-`compositing: 'ordered'` preserves authored draw order. `independent` allows Rust to reorder compatible work when the
-application asserts that blending order is irrelevant.
+A `Text` always batches its own spans; draw order inside one paragraph is deterministic but never promised, so no
+policy states it. Order between paragraphs is a grouping question, not a root one.
 
-Capacity and compositing belong to `defineThreeConfig()`, not mutable TextGroup or handle methods. The policy controls
+Capacity belongs to `defineThreeConfig()`, not mutable TextGroup or handle methods. The policy controls
 every anonymous or named root created by that handle:
 
 ```ts
@@ -150,7 +150,6 @@ const dense = glyph.handle(
   'dense',
   defineThreeConfig({
     capacity: { size: 16_384, policy: 'chunk' },
-    compositing: 'independent',
   }),
 );
 ```
@@ -168,7 +167,7 @@ an engine failure: traversal leaves the last complete draw live, `commitState()`
 reports the desired paragraph. Shortening the text or increasing capacity is checked again on the next traversal, so
 recovery does not depend on a latch or unrelated input churn (D-282).
 
-`ThreeConfig` defaults every root to 4,096-glyph chunks and ordered compositing. To use another immutable policy, create
+`ThreeConfig` defaults every root to 4,096-glyph chunks. To use another immutable policy, create
 another handle from another config.
 
 ## Update retained values

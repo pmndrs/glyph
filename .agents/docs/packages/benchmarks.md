@@ -451,8 +451,8 @@ Paragraph Stress can opt into Chrome User Timing with `?textTimings=1`. Its reta
 property staging, Rust update plus demanded measurement, clean publication, renderer submission, and the package's
 internal Three phases. The production path performs no timing calls while the option is absent. The workload now asks
 for layout metrics before explicit scene publication, so the semantic mask shares the pending mutation and the later
-matrix traversal sees clean Rust state. Icon Grid constructs its batch with independent compositing; other workloads
-retain ordered semantics.
+matrix traversal sees clean Rust state. Every workload now shares one root, because a paragraph batches its own spans
+and no workload states a compositing mode.
 
 An identical direct Chromium 149/WebGPU/DPR-2 Paragraph Stress comparison retained 11,510 glyphs, one draw, and 64
 authored reflows in every case. The committed baseline measured 14.295 ms median reflow; measurement piggyback alone on
