@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:214014ef7e460d150d270a4acefe9be9819a8761a8af9f423da1299ba862c019'
+source_digest: 'sha256:b928f48380b8902e9ca3037c27ed366534c70666d3e598bc6df0f594a82f70cf'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -404,7 +404,7 @@ command-buffer stream and one renderer publication boundary. It may bind to at m
 members by object identity; a root name is stable semantic/customization metadata, not a `Scene.uuid`. A second Scene
 therefore uses another named root. Returned roots are terminal and cannot create deeper roots. `TextGroup` remains freely
 nestable for scene hierarchy, transform/visibility inheritance, material selection, pixel snapping, and render order, but
-does not create another planner or publication stream. Capacity and compositing are immutable `ThreeConfig` policy shared
+does not create another planner or publication stream. Capacity is immutable `ThreeConfig` policy shared
 by the anonymous and named roots of one handle; selecting different policy means creating another handle from
 `defineThreeConfig(...)`, not mutating a live root. Per-root, group, Text, and span material selection remains retained
 scene state because it describes authored presentation rather than renderer policy. A traversal sends only changed
@@ -490,9 +490,8 @@ stable transform-table ID to each rendered glyph so compatible paragraphs may co
 draws by transform for integrations that prefer ordinary object matrices. Codec programs may use ordered-direct or
 stable-indirect physical storage. Stable draws carry one reserved u32 order buffer; Three validates its draw/primitive
 addressing once, then uses the same logical-to-physical mapping for raster-format records, transform indices, explicit origin
-queries, and third-party program material contexts. Root `compositing` determines whether Rust must preserve authored
-ordering or may reorder independent work. Ordered-direct remains the first-party default until stable planning meets the
-same tail-latency target.
+queries, and third-party program material contexts. A paragraph always batches its own spans, so no root policy states
+draw order. Ordered-direct remains the first-party default until stable planning meets the same tail-latency target.
 
 `materialId` is explicit through the frame ABI and command buffer. Three maps it to a `defineTextMaterial()` factory. Material
 identity may split draws without forcing a second copy of the canonical glyph buffers.
