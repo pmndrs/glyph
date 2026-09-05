@@ -168,6 +168,10 @@ fn selection_key(selected: SelectedGlyphBinding) -> u32 {
 #[derive(Default)]
 pub struct CodecGatherWorkspace {
     glyphs: Vec<PlanGlyph>,
+    /// Batch segment per gathered glyph, or empty while nothing asks paragraphs to stay apart.
+    /// Kept beside the glyph record rather than inside it: `PlanGlyph` is one cache line, and its
+    /// only spare room is `depth_key`, which the renderer reads.
+    segments: Vec<u32>,
     sources: Vec<GatherSource>,
     semantic_change_masks: Vec<u16>,
     f32_fields: Vec<AlignedField<f32>>,
@@ -188,6 +192,7 @@ struct AlignedField<T> {
 
 pub struct GatheredPlanInput<'a> {
     glyphs: &'a [PlanGlyph],
+    segments: &'a [u32],
     semantic_change_masks: &'a [u16],
     f32_fields: [&'a [f32]; MAX_REGISTERS],
     u32_fields: [&'a [u32]; MAX_REGISTERS],
@@ -645,6 +650,7 @@ impl CodecGatherWorkspace {
         }
         GatheredPlanInput {
             glyphs: &self.glyphs,
+            segments: &self.segments,
             semantic_change_masks: &self.semantic_change_masks,
             f32_fields,
             u32_fields,
@@ -846,6 +852,7 @@ impl GatheredPlanInput<'_> {
             semantic_change_masks: self.semantic_change_masks,
             f32_fields: &self.f32_fields[..self.f32_field_count],
             u32_fields: &self.u32_fields[..self.u32_field_count],
+            segments: self.segments,
             order_independent: false,
         }
     }

@@ -1332,7 +1332,10 @@ impl TextEngine {
                 }
                 let gathered = gather.view();
                 let mut plan_input = gathered.plan_input();
-                plan_input.order_independent = request.compositing_independent;
+                // A Text always batches: draw order inside one paragraph is shaping's
+                // business, deterministic and never promised. Paragraphs stay apart through
+                // their batch segment rather than by refusing to batch at all.
+                plan_input.order_independent = true;
                 planner
                     .plan
                     .prepare(

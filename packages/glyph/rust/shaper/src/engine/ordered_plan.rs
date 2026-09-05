@@ -13,7 +13,9 @@ use super::{
         TechniqueId, ValidatedCodec,
     },
     plan_draw::{GlyphDraw, independent_draw_sort_key, push_glyph_draw},
-    plan_input::{draw_fields_compatible, draw_span_compatible, indexed_span_bounds, span_bounds},
+    plan_input::{
+        draw_fields_compatible, draw_span_compatible, indexed_span_bounds, segment_at, span_bounds,
+    },
     plan_packing::{
         MAX_PHYSICAL_BUFFERS, PendingAllocation, PhysicalBufferState, RangeJob, RecordRange,
         align_record_range, align_up, apply_writes, buffer_record_alignment,
@@ -35,12 +37,13 @@ use super::render_plan::PRIMITIVE_DECORATION;
 #[cfg(test)]
 use super::render_plan::PRIMITIVE_GLYPH;
 
-pub use super::plan_input::{PlanGlyph as OrderedGlyph, PlanInput as OrderedPlanInput};
+pub use super::plan_input::{PlanGlyph, PlanInput};
 
 const NONE: u32 = u32::MAX;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct BatchKey {
+    segment: u32,
     technique: TechniqueId,
     program_variant: u16,
     program_id: u32,
@@ -85,7 +88,7 @@ struct PrepareContext<'a> {
     codec: &'a ValidatedCodec,
     capability_set: CapabilitySetId,
     capability: &'a super::codec::CapabilitySet,
-    input: OrderedPlanInput<'a>,
+    input: PlanInput<'a>,
     checkpoint: bool,
     publication_generation: u32,
 }
@@ -141,7 +144,7 @@ impl OrderedPlanCompiler {
         &mut self,
         codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
-        input: OrderedPlanInput<'_>,
+        input: PlanInput<'_>,
         checkpoint: bool,
         publication_generation: u32,
     ) -> Result<(), OrderedPlanError> {
@@ -159,7 +162,7 @@ impl OrderedPlanCompiler {
         &mut self,
         codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
-        input: OrderedPlanInput<'_>,
+        input: PlanInput<'_>,
         checkpoint: bool,
         publication_generation: u32,
     ) -> Result<(), OrderedPlanError> {
@@ -177,7 +180,7 @@ impl OrderedPlanCompiler {
         &mut self,
         codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
-        input: OrderedPlanInput<'_>,
+        input: PlanInput<'_>,
         checkpoint: bool,
         publication_generation: u32,
         strict_strategy: bool,
@@ -383,7 +386,7 @@ impl OrderedPlanCompiler {
         &mut self,
         codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
-        input: OrderedPlanInput<'_>,
+        input: PlanInput<'_>,
         strict_strategy: bool,
     ) -> Result<(), OrderedPlanError> {
         reserve(&mut self.input_batches, input.glyphs.len())?;
@@ -422,7 +425,7 @@ impl OrderedPlanCompiler {
                     return Err(OrderedPlanError::InvalidResource);
                 }
             }
-            let key = batch_key(program, glyph);
+            let key = batch_key(program, glyph, segment_at(input.segments, input_index));
             let batch_index = match self
                 .pending_batches
                 .iter()
@@ -468,7 +471,7 @@ impl OrderedPlanCompiler {
         &mut self,
         codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
-        input: OrderedPlanInput<'_>,
+        input: PlanInput<'_>,
     ) -> Result<bool, OrderedPlanError> {
         if self.codec_fingerprint != codec.fingerprint()
             || self.capability_set != capability_set.0
@@ -488,7 +491,7 @@ impl OrderedPlanCompiler {
             let Some(batch) = self.batches.get(batch_index).copied() else {
                 return Ok(false);
             };
-            if !batch_key_matches(batch.key, glyph) {
+            if !batch_key_matches(batch.key, glyph, segment_at(input.segments, input_index)) {
                 return Ok(false);
             }
             let slot = self.input_slots[input_index];
@@ -555,10 +558,7 @@ impl OrderedPlanCompiler {
         Ok(true)
     }
 
-    fn layout_pending_instances(
-        &mut self,
-        input: OrderedPlanInput<'_>,
-    ) -> Result<(), OrderedPlanError> {
+    fn layout_pending_instances(&mut self, input: PlanInput<'_>) -> Result<(), OrderedPlanError> {
         reserve(&mut self.batch_cursors, self.pending_batches.len())?;
         let mut cursor = 0_u32;
         for batch in &mut self.pending_batches {
@@ -760,7 +760,7 @@ impl OrderedPlanCompiler {
         codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         capability: &super::codec::CapabilitySet,
-        input: OrderedPlanInput<'_>,
+        input: PlanInput<'_>,
         program: &super::codec::ProgramDescriptor,
         prior: Option<BatchState>,
         pending: PendingBatch,
@@ -1219,7 +1219,7 @@ impl OrderedPlanCompiler {
     #[allow(clippy::too_many_arguments)]
     fn same_draw_span(
         &self,
-        glyphs: &[OrderedGlyph],
+        glyphs: &[PlanGlyph],
         start: usize,
         next: usize,
         batch_index: usize,
@@ -1399,8 +1399,13 @@ fn range(start: u32, count: u32) -> Result<core::ops::Range<usize>, OrderedPlanE
     Ok(start as usize..end as usize)
 }
 
-fn batch_key(program: &super::codec::ProgramDescriptor, glyph: OrderedGlyph) -> BatchKey {
+fn batch_key(
+    program: &super::codec::ProgramDescriptor,
+    glyph: PlanGlyph,
+    segment: u32,
+) -> BatchKey {
     BatchKey {
+        segment,
         technique: glyph.technique,
         program_variant: glyph.program_variant,
         program_id: program.id.0,
@@ -1427,8 +1432,9 @@ fn batch_key(program: &super::codec::ProgramDescriptor, glyph: OrderedGlyph) -> 
     }
 }
 
-fn batch_key_matches(key: BatchKey, glyph: OrderedGlyph) -> bool {
-    key.technique == glyph.technique
+fn batch_key_matches(key: BatchKey, glyph: PlanGlyph, segment: u32) -> bool {
+    key.segment == segment
+        && key.technique == glyph.technique
         && key.program_variant == glyph.program_variant
         && key.resource_id == glyph.resource_id
         && key.resource_generation == glyph.resource_generation
@@ -1510,11 +1516,12 @@ mod tests {
             .prepare(
                 &codec,
                 CAPABILITY,
-                OrderedPlanInput {
+                PlanInput {
                     glyphs: &[block_changed],
                     semantic_change_masks: &[1 << 1],
                     f32_fields: &[&[1.0]],
                     u32_fields: &[],
+                    segments: &[],
                     order_independent: false,
                 },
                 false,
@@ -1534,11 +1541,12 @@ mod tests {
             .prepare(
                 &codec,
                 CAPABILITY,
-                OrderedPlanInput {
+                PlanInput {
                     glyphs: &[glyph(1, 3)],
                     semantic_change_masks: &[1],
                     f32_fields: &[&[2.0]],
                     u32_fields: &[],
+                    segments: &[],
                     order_independent: false,
                 },
                 false,
@@ -1664,11 +1672,12 @@ mod tests {
             .prepare(
                 &codec,
                 CAPABILITY,
-                OrderedPlanInput {
+                PlanInput {
                     glyphs: &glyphs,
                     semantic_change_masks: &[],
                     f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
                     u32_fields: &[],
+                    segments: &[],
                     order_independent: true,
                 },
                 true,
@@ -1691,6 +1700,75 @@ mod tests {
     }
 
     #[test]
+    fn a_batch_segment_keeps_two_paragraphs_addressable() {
+        let codec = codec();
+        let mut compiler = OrderedPlanCompiler::default();
+        // One face throughout, so every physical batch field agrees: only the segment separates
+        // these, which is what a TextGroup asking to keep its paragraphs in declared order buys.
+        let glyphs = [glyph(1, 1), glyph(2, 1), glyph(3, 1), glyph(4, 1)];
+        compiler
+            .prepare(
+                &codec,
+                CAPABILITY,
+                PlanInput {
+                    glyphs: &glyphs,
+                    semantic_change_masks: &[],
+                    f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
+                    u32_fields: &[],
+                    segments: &[7, 7, 9, 9],
+                    order_independent: true,
+                },
+                true,
+                1,
+            )
+            .unwrap();
+        let plan = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+
+        // Sharing a segment is what collapses a label grid to one draw, so two segments must cost
+        // exactly one extra draw and no more.
+        assert_eq!(plan.draws.len(), 2);
+        assert_eq!(plan.primitives[0].record_count, 2);
+        assert_eq!(plan.primitives[1].record_count, 2);
+        // A segment says what may merge, never what draws first: declared order still decides.
+        assert_eq!(plan.draws[0].order_token, 0);
+        assert_eq!(plan.draws[1].order_token, 2);
+        assert!(plan_layout(plan).is_ok());
+    }
+
+    #[test]
+    fn no_segments_batch_every_paragraph_into_one_draw() {
+        let codec = codec();
+        let mut compiler = OrderedPlanCompiler::default();
+        let glyphs = [glyph(1, 1), glyph(2, 1), glyph(3, 1), glyph(4, 1)];
+        compiler
+            .prepare(
+                &codec,
+                CAPABILITY,
+                PlanInput {
+                    glyphs: &glyphs,
+                    semantic_change_masks: &[],
+                    f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
+                    u32_fields: &[],
+                    segments: &[],
+                    order_independent: true,
+                },
+                true,
+                1,
+            )
+            .unwrap();
+        let plan = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+
+        // The default, and the one that matters most: an unsegmented plan is one draw.
+        assert_eq!(plan.draws.len(), 1);
+        assert_eq!(plan.primitives[0].record_count, 4);
+        assert!(plan_layout(plan).is_ok());
+    }
+
+    #[test]
     fn ordered_compositing_splits_a_draw_at_every_interleaved_resource() {
         let codec = codec();
         let mut compiler = OrderedPlanCompiler::default();
@@ -1705,11 +1783,12 @@ mod tests {
             .prepare(
                 &codec,
                 CAPABILITY,
-                OrderedPlanInput {
+                PlanInput {
                     glyphs: &glyphs,
                     semantic_change_masks: &[],
                     f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
                     u32_fields: &[],
+                    segments: &[],
                     order_independent: false,
                 },
                 true,
@@ -1750,11 +1829,12 @@ mod tests {
             .prepare(
                 &codec,
                 CAPABILITY,
-                OrderedPlanInput {
+                PlanInput {
                     glyphs: &glyphs,
                     semantic_change_masks: &[],
                     f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
                     u32_fields: &[],
+                    segments: &[],
                     order_independent: true,
                 },
                 true,
@@ -1958,7 +2038,7 @@ mod tests {
     fn prepare(
         compiler: &mut OrderedPlanCompiler,
         codec: &ValidatedCodec,
-        glyphs: &[OrderedGlyph],
+        glyphs: &[PlanGlyph],
         x: &[f32],
         checkpoint: bool,
     ) {
@@ -1966,11 +2046,12 @@ mod tests {
             .prepare(
                 codec,
                 CAPABILITY,
-                OrderedPlanInput {
+                PlanInput {
                     glyphs,
                     semantic_change_masks: &[],
                     f32_fields: &[x],
                     u32_fields: &[],
+                    segments: &[],
                     order_independent: false,
                 },
                 checkpoint,
@@ -1979,8 +2060,8 @@ mod tests {
             .unwrap();
     }
 
-    fn glyph(stable_id: u32, content_revision: u32) -> OrderedGlyph {
-        OrderedGlyph {
+    fn glyph(stable_id: u32, content_revision: u32) -> PlanGlyph {
+        PlanGlyph {
             stable_id,
             content_revision,
             technique: TECHNIQUE,
@@ -2007,8 +2088,8 @@ mod tests {
 
     const DECORATION_TECHNIQUE: TechniqueId = TechniqueId(99);
 
-    fn decoration_row(stable_id: u32) -> OrderedGlyph {
-        OrderedGlyph {
+    fn decoration_row(stable_id: u32) -> PlanGlyph {
+        PlanGlyph {
             stable_id,
             content_revision: 1,
             technique: DECORATION_TECHNIQUE,
