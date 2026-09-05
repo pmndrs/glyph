@@ -1734,6 +1734,54 @@ mod tests {
     }
 
     #[test]
+    fn independent_compositing_never_merges_across_batch_segments() {
+        use super::super::codec_gather::{PAINT_LAYER_GLYPH, pack_depth_key};
+
+        let codec = codec();
+        let mut compiler = OrderedPlanCompiler::default();
+        // One face throughout, so nothing physical separates these glyphs: only the segment does.
+        let mut first_a = glyph(1, 1);
+        first_a.depth_key = pack_depth_key(PAINT_LAYER_GLYPH, 0);
+        let mut first_b = glyph(2, 1);
+        first_b.depth_key = pack_depth_key(PAINT_LAYER_GLYPH, 0);
+        let mut second_a = glyph(3, 1);
+        second_a.depth_key = pack_depth_key(PAINT_LAYER_GLYPH, 1);
+        let mut second_b = glyph(4, 1);
+        second_b.depth_key = pack_depth_key(PAINT_LAYER_GLYPH, 1);
+        let glyphs = [first_a, first_b, second_a, second_b];
+        compiler
+            .prepare(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &glyphs,
+                    semantic_change_masks: &[],
+                    f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                true,
+                1,
+            )
+            .unwrap();
+        let plan = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+
+        // Without segmentation these four share every batch field and collapse to one draw.
+        assert_eq!(plan.draws.len(), 2);
+        assert_eq!(plan.primitives[0].record_count, 2);
+        assert_eq!(plan.primitives[1].record_count, 2);
+        // The segment says what may merge, never what draws first: both draws report the paint
+        // layer alone, and the earlier segment still sorts first through its order token.
+        assert_eq!(plan.draws[0].depth_key, PAINT_LAYER_GLYPH);
+        assert_eq!(plan.draws[1].depth_key, PAINT_LAYER_GLYPH);
+        assert_eq!(plan.draws[0].order_token, 0);
+        assert_eq!(plan.draws[1].order_token, 2);
+        assert!(plan_layout(plan).is_ok());
+    }
+
+    #[test]
     fn independent_compositing_flattens_paint_layers_and_preserves_layer_order() {
         let codec = codec();
         let mut compiler = OrderedPlanCompiler::default();
