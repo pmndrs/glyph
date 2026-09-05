@@ -198,12 +198,21 @@ export type RetainedTextInlineObjectInput = Omit<
 export interface RenderPlannerLimits extends PlannerFrameLimits {}
 
 /** Initial desired state for one retained text instance. */
+/** The segment every paragraph shares until a caller asks for its siblings to be kept apart. */
+const DEFAULT_BATCH_SEGMENT = 0;
+
 export interface RetainedTextOptions {
   readonly font: HandleFontStackBinding;
   readonly text: RetainedTextInput;
   readonly material?: HandleMaterialBinding;
   readonly transform?: HandleTransformBinding;
   readonly order?: number;
+  /**
+   * Batch segment this paragraph occupies. Paragraphs sharing a segment may merge their draws;
+   * paragraphs in different segments stay individually addressable, which is what lets a caller
+   * order siblings. Sharing is the default because it is what collapses many labels to one draw.
+   */
+  readonly segment?: number;
   readonly rasterPixelRatio?: number;
   /** Text shaping and presentation properties inherited by inline spans. */
   readonly style?: TextStyle;
@@ -838,6 +847,7 @@ class RenderPlannerImpl {
           opcode: 'upsert' as const,
           paragraphId: state.paragraphId,
           order: state.desired.source.order ?? state.ordinal - 1,
+          segment: state.desired.source.segment ?? DEFAULT_BATCH_SEGMENT,
         })),
     ];
     const textMutations = [...this.#texts].flatMap((state) => {
@@ -1127,6 +1137,7 @@ class RenderPlannerImpl {
           opcode: 'upsert' as const,
           paragraphId: state.paragraphId,
           order: state.desired.source.order ?? state.ordinal - 1,
+          segment: state.desired.source.segment ?? DEFAULT_BATCH_SEGMENT,
         })),
     ];
   }

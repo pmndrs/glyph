@@ -28,7 +28,13 @@ export interface PlannerFrameLimits {
 }
 
 export type PlannerParagraphMutation =
-  | { readonly opcode: 'upsert'; readonly paragraphId: ParagraphId; readonly order: number }
+  | {
+      readonly opcode: 'upsert';
+      readonly paragraphId: ParagraphId;
+      readonly order: number;
+      /** Batch segment this paragraph occupies; paragraphs sharing one may merge their draws. */
+      readonly segment: number;
+    }
   | { readonly opcode: 'remove'; readonly paragraphId: ParagraphId };
 
 export interface PlannerTextMutation {
@@ -356,6 +362,7 @@ function writeParagraphMutations(
     view.setUint32(offset + layout.paragraphId, u32(mutation.paragraphId, 'paragraph ID'), true);
     if (mutation.opcode === 'upsert') {
       view.setUint32(offset + layout.order, u32(mutation.order, 'paragraph order'), true);
+      view.setUint32(offset + layout.segment, u32(mutation.segment, 'paragraph batch segment'), true);
     }
   }
 }
