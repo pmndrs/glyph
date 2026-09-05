@@ -15,7 +15,9 @@ use super::{
         ValidatedCodec,
     },
     plan_draw::{GlyphDraw, independent_draw_sort_key, push_glyph_draw},
-    plan_input::{draw_fields_compatible, draw_span_compatible, indexed_span_bounds, span_bounds},
+    plan_input::{
+        draw_fields_compatible, draw_span_compatible, indexed_span_bounds, segment_at, span_bounds,
+    },
     plan_packing::{
         MAX_PHYSICAL_BUFFERS, PendingAllocation, PhysicalBufferState, RangeJob, RecordRange,
         align_record_range, align_up, apply_writes, buffer_record_alignment,
@@ -69,6 +71,7 @@ impl From<ChunkedOrderError> for StablePlanError {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct BatchKey {
+    segment: u32,
     technique: TechniqueId,
     program_variant: u16,
     program_id: u32,
@@ -372,6 +375,7 @@ impl StablePlanCompiler {
                 }
             }
             let key = BatchKey {
+                segment: segment_at(input.segments, input_index),
                 technique: glyph.technique,
                 program_variant: glyph.program_variant,
                 program_id: program.id.0,
@@ -1870,6 +1874,7 @@ mod tests {
                     semantic_change_masks: &[1 << 1],
                     f32_fields: &[&[1.0]],
                     u32_fields: &[],
+                    segments: &[],
                     order_independent: false,
                 },
                 false,
@@ -1895,6 +1900,7 @@ mod tests {
                     semantic_change_masks: &[1],
                     f32_fields: &[&[2.0]],
                     u32_fields: &[],
+                    segments: &[],
                     order_independent: false,
                 },
                 false,
@@ -2082,6 +2088,7 @@ mod tests {
                     semantic_change_masks: &[],
                     f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
                     u32_fields: &[],
+                    segments: &[],
                     order_independent: true,
                 },
                 true,
@@ -2126,6 +2133,7 @@ mod tests {
                     semantic_change_masks: &[],
                     f32_fields: &[&[1.0, 2.0, 3.0, 4.0]],
                     u32_fields: &[],
+                    segments: &[],
                     order_independent: true,
                 },
                 true,
@@ -2285,6 +2293,7 @@ mod tests {
                     semantic_change_masks: &[],
                     f32_fields: &[x],
                     u32_fields: &[],
+                    segments: &[],
                     order_independent: false,
                 },
                 checkpoint,
