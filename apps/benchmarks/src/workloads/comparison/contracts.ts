@@ -8,6 +8,7 @@ import type { ComparisonWorkloadEntry, WorkloadFont } from '../shared/scene-entr
 /** The comparison workloads that share the retained benchmark render host. */
 export type ComparisonWorkloadId =
   | 'text-ladder'
+  | 'billboard-labels'
   | 'zoom-text'
   | 'icon-grid'
   | 'off-axis-3d'
@@ -89,6 +90,8 @@ export interface ComparisonWorkloadDefinition {
     scratch: ComparisonWorkloadAnimationScratch,
     onError: (error: unknown) => void,
     onReflow: (duration: number) => void,
+    /** The host's camera, for a workload that billboards or orders by depth. */
+    camera?: THREE.OrthographicCamera | THREE.PerspectiveCamera,
   ): void;
   applyRetainedConfiguration(
     entries: readonly ComparisonWorkloadEntry[],

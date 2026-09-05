@@ -33,6 +33,14 @@ const workloads = [
   },
   { id: 'icon-grid', label: 'Icon grid', fontSize: 64, layoutWidthRatio: 0.82, amount: 50, camera: 'orthographic' },
   {
+    id: 'billboard-labels',
+    label: 'Billboard labels',
+    fontSize: 18,
+    layoutWidthRatio: 0.82,
+    amount: 50,
+    camera: 'perspective',
+  },
+  {
     id: 'off-axis-3d',
     label: 'Off-axis / 3D',
     fontSize: 96,
