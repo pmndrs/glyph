@@ -12,7 +12,7 @@ use super::{
         SEMANTIC_F32_SHADOW_OFFSET_X_EM, SEMANTIC_F32_SHADOW_OFFSET_Y_EM, SEMANTIC_U32_CLUSTER_ID,
         SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_OUTLINE_RGBA, SEMANTIC_U32_SHADOW_RGBA,
     },
-    plan_input::{PlanGlyph, PlanInput},
+    plan_input::{DEFAULT_BATCH_SEGMENT, PlanGlyph, PlanInput},
     positioning::{ALL_SEMANTIC_CHANGES, SemanticGlyph},
 };
 
@@ -432,6 +432,7 @@ impl CodecGatherWorkspace {
 
     pub fn truncate_to_retained_prefix(&mut self) {
         self.glyphs.truncate(self.retained_cursor);
+        self.segments.truncate(self.retained_cursor);
         self.sources.truncate(self.retained_source_cursor);
         self.semantic_change_masks.truncate(self.retained_cursor);
         for field in &mut self.f32_fields {
@@ -535,6 +536,7 @@ impl CodecGatherWorkspace {
             self.sources
                 .push(GatherSource::new(glyph.stable_id, Some(selected)));
             self.glyphs.push(planned);
+            self.segments.push(DEFAULT_BATCH_SEGMENT);
             self.semantic_change_masks.push(
                 input
                     .semantic_change_masks
@@ -611,6 +613,7 @@ impl CodecGatherWorkspace {
                 };
                 field.push(value)?;
             }
+            self.segments.push(DEFAULT_BATCH_SEGMENT);
             self.glyphs.push(PlanGlyph {
                 stable_id,
                 content_revision,
@@ -761,6 +764,7 @@ impl CodecGatherWorkspace {
         self.retained_cursor = 0;
         self.retained_source_cursor = 0;
         self.glyphs.clear();
+        self.segments.clear();
         self.sources.clear();
         self.semantic_change_masks.clear();
         for field in &mut self.f32_fields {
@@ -847,6 +851,13 @@ impl<T: Copy + Default> AlignedField<T> {
 
 impl GatheredPlanInput<'_> {
     pub fn plan_input(&self) -> PlanInput<'_> {
+        // A short array would silently give its missing suffix segment zero, merging unrelated
+        // paragraphs and hiding the misalignment that caused it. The gather owns both vectors, so
+        // this is a producer proof rather than a guard against a caller.
+        debug_assert!(
+            self.segments.is_empty() || self.segments.len() == self.glyphs.len(),
+            "batch segments must be empty or parallel to gathered glyph records"
+        );
         PlanInput {
             glyphs: self.glyphs,
             semantic_change_masks: self.semantic_change_masks,
@@ -1674,6 +1685,25 @@ mod tests {
             incremental_input.glyphs.len(),
             fresh_input.glyphs.len(),
             "{label}: record count"
+        );
+        // A segment array that drifts from its records is the failure this lifecycle exists to
+        // prevent: a retained rebuild leaving stale suffix entries at the indices the planner
+        // consumes, so replacement glyphs inherit the segments of paragraphs that no longer own
+        // them. Reaching this through every scenario the helper drives is what makes the
+        // incremental path answerable rather than assumed.
+        assert_eq!(
+            incremental_input.segments.len(),
+            incremental_input.glyphs.len(),
+            "{label}: incremental segments parallel to records"
+        );
+        assert_eq!(
+            fresh_input.segments.len(),
+            fresh_input.glyphs.len(),
+            "{label}: fresh segments parallel to records"
+        );
+        assert_eq!(
+            incremental_input.segments, fresh_input.segments,
+            "{label}: incremental segments match a fresh gather"
         );
         for (slot, (incremental_glyph, fresh_glyph)) in incremental_input
             .glyphs

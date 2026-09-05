@@ -41,6 +41,12 @@ pub struct PlanInput<'a> {
     pub segments: &'a [u32],
 }
 
+/// The segment every record shares until a caller asks for its paragraphs to be kept apart.
+///
+/// Sharing is the default because it is what collapses a grid of hundreds of labels into a single
+/// draw. A segment is spent only where sibling paragraphs must stay individually addressable.
+pub const DEFAULT_BATCH_SEGMENT: u32 = 0;
+
 /// The segment one glyph belongs to. An absent array means a plan that never segments, which is
 /// the common case and the one that batches hardest.
 #[inline]
