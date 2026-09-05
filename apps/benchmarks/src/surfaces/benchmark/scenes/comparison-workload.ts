@@ -1241,6 +1241,7 @@ function animateEntries(
   scratch: ComparisonWorkloadAnimationScratch,
   onError: (error: unknown) => void,
   onReflow: (duration: number) => void,
+  camera?: THREE.OrthographicCamera | THREE.PerspectiveCamera,
 ): void {
   comparisonWorkloadDefinition(configuration.workload).animate(
     entries,
@@ -1252,6 +1253,7 @@ function animateEntries(
     scratch,
     onError,
     onReflow,
+    camera,
   );
 }
 
