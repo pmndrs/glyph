@@ -77,8 +77,6 @@ export type TextUpdate<Format extends RasterFormatMetadata> = Partial<TextBasePr
 /** Publication controls owned by every anonymous or named Three root. */
 export interface ThreeRootOptions {
   readonly capacity?: GlyphBufferCapacity;
-  /** Allows Rust to reorder compatible draws when the root does not require compositing order. */
-  readonly compositing?: 'ordered' | 'independent';
 }
 
 /** Construction options for one Three scene-hierarchy parent. */
@@ -247,7 +245,6 @@ export class ThreeRootHost {
   #needsInitialTransformSync = false;
   readonly #renderMemberScratch: Text<RasterFormatMetadata>[] = [];
   #capacity: GlyphBufferCapacity;
-  #compositing: 'ordered' | 'independent';
   #material: ThreeTextMaterial | undefined;
   #nextTextOrder = 0;
   #disposed = false;
@@ -277,7 +274,6 @@ export class ThreeRootHost {
       options.capacity ?? { size: 4_096, policy: 'chunk' },
       'Three root capacity',
     );
-    this.#compositing = normalizeThreeRootCompositing(options.compositing, 'Three root compositing');
     this.#renderObject = new ThreePublicationObject((worldMatricesCurrent) =>
       this.#commitTraversal(worldMatricesCurrent),
     );
@@ -594,7 +590,7 @@ export class ThreeRootHost {
   }
 
   #rootBinding(): ThreeRootPublication {
-    this.#binding ??= new ThreeRootPublication(this.#capacity, this.#compositing, this);
+    this.#binding ??= new ThreeRootPublication(this.#capacity, this);
     return this.#binding;
   }
 
@@ -1157,17 +1153,15 @@ class ThreeRootPublication {
   readonly #inspections = new Map<Text<RasterFormatMetadata>, CanonicalInspection>();
   readonly #materialBindings = new ThreeMaterialBindingCache();
   #capacity: GlyphBufferCapacity;
-  #compositing: 'ordered' | 'independent';
   #rendererUpdateRejected = false;
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #materialInvalidated = false;
   #disposed = false;
 
-  constructor(capacity: GlyphBufferCapacity, compositing: 'ordered' | 'independent', root: ThreeRootHost) {
+  constructor(capacity: GlyphBufferCapacity, root: ThreeRootHost) {
     this.#services = root.services;
     this.#root = root;
     this.#capacity = capacity;
-    this.#compositing = compositing;
     this.#target = root.renderer;
   }
 
@@ -1327,7 +1321,7 @@ class ThreeRootPublication {
       return false;
     }
     this.#capacityExceeded = undefined;
-    return Object.freeze({ semanticViews: 'measurement', compositing: this.#compositing });
+    return Object.freeze({ semanticViews: 'measurement' });
   }
 
   acceptShape(): void {
@@ -1630,16 +1624,6 @@ function assertPairedSurrogates(text: string): void {
     }
     throw new RangeError(`text offset ${index} is an unpaired ${high ? 'high' : 'low'} surrogate`);
   }
-}
-
-/** @internal Validate one root-owned compositing input at its user boundary. */
-export function normalizeThreeRootCompositing(
-  value: ThreeRootOptions['compositing'],
-  label: string,
-): 'ordered' | 'independent' {
-  if (value === undefined || value === 'ordered') return 'ordered';
-  if (value === 'independent') return value;
-  throw new TypeError(`${label} must be ordered or independent`);
 }
 
 function normalizePixelSnapping(value: boolean | undefined): boolean {
