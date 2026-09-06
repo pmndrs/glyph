@@ -1901,6 +1901,7 @@ function instrumentNextGlyphEngine() {
           reserved0: view.getUint16(record + mutation.reserved0, true),
           paragraphId: view.getUint32(record + mutation.paragraphId, true),
           order: view.getUint32(record + mutation.order, true),
+          segment: view.getUint32(record + mutation.segment, true),
         };
       });
     },
