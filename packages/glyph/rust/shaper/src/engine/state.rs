@@ -229,9 +229,6 @@ struct RetainedParagraph {
     id: u32,
     order: u32,
     pending_order: Option<u32>,
-    /// Batch segment this paragraph occupies. Paragraphs sharing one may merge their draws.
-    segment: u32,
-    pending_segment: Option<u32>,
     pending_remove: bool,
     created: bool,
     positioned_changed: bool,
@@ -735,7 +732,6 @@ impl TextEngine {
                 capability_set,
                 LayoutPlanInput {
                     transform_id: paragraph_id,
-                    segment: super::plan_input::DEFAULT_BATCH_SEGMENT,
                     glyphs: &glyphs,
                     semantic_glyphs: &semantic_glyphs,
                     semantic_change_masks: &[],
@@ -807,7 +803,6 @@ impl TextEngine {
                 capability_set,
                 positioned.decorations(),
                 paragraph_id,
-                super::plan_input::DEFAULT_BATCH_SEGMENT,
                 content_revision,
                 super::codec_gather::DecorationPass::Under,
             )
@@ -818,7 +813,6 @@ impl TextEngine {
                 capability_set,
                 positioned.decorations(),
                 paragraph_id,
-                super::plan_input::DEFAULT_BATCH_SEGMENT,
                 content_revision,
                 super::codec_gather::DecorationPass::Over,
             )
@@ -1338,10 +1332,7 @@ impl TextEngine {
                 }
                 let gathered = gather.view();
                 let mut plan_input = gathered.plan_input();
-                // A Text always batches: draw order inside one paragraph is shaping's
-                // business, deterministic and never promised. Paragraphs stay apart through
-                // their batch segment rather than by refusing to batch at all.
-                plan_input.order_independent = true;
+                plan_input.order_independent = request.compositing_independent;
                 planner
                     .plan
                     .prepare(
@@ -1751,10 +1742,6 @@ fn append_planner_gather(
         };
         let input = LayoutPlanInput {
             transform_id: ordered.id,
-            // The gather runs inside the update that stated this segment, before the commit
-            // settles it, which is exactly how `active_order` already resolves a pending order.
-            // Reading the committed field here would plan the previous grouping.
-            segment: paragraph.pending_segment.unwrap_or(paragraph.segment),
             glyphs: positioned.glyphs(),
             semantic_glyphs: positioned.semantic_glyphs(),
             semantic_change_masks,
@@ -1773,7 +1760,6 @@ fn append_planner_gather(
                 capability_set,
                 positioned.decorations(),
                 ordered.id,
-                paragraph.pending_segment.unwrap_or(paragraph.segment),
                 planner.revision.engine.max(1),
                 super::codec_gather::DecorationPass::Under,
             )
@@ -1803,7 +1789,6 @@ fn append_planner_gather(
                 capability_set,
                 positioned.decorations(),
                 ordered.id,
-                paragraph.pending_segment.unwrap_or(paragraph.segment),
                 planner.revision.engine.max(1),
                 super::codec_gather::DecorationPass::Over,
             )
@@ -1904,8 +1889,7 @@ impl PlannerState {
                     super::semantic_wire::ParagraphMutation::Upsert {
                         paragraph_id,
                         order,
-                        segment,
-                    } => self.prepare_upsert(paragraph_id, order, segment)?,
+                    } => self.prepare_upsert(paragraph_id, order)?,
                     super::semantic_wire::ParagraphMutation::Remove { paragraph_id } => {
                         self.paragraph_mut(paragraph_id)
                             .ok_or(EngineError::InvalidRequest)?
@@ -1916,7 +1900,7 @@ impl PlannerState {
             if let Some(paragraph_id) = implicit_paragraph
                 && self.paragraph(paragraph_id).is_none()
             {
-                self.prepare_upsert(paragraph_id, 0, super::plan_input::DEFAULT_BATCH_SEGMENT)?;
+                self.prepare_upsert(paragraph_id, 0)?;
             }
 
             self.pending_ordered_paragraphs.clear();
@@ -1964,14 +1948,13 @@ impl PlannerState {
         result
     }
 
-    fn prepare_upsert(&mut self, id: u32, order: u32, segment: u32) -> Result<(), EngineError> {
+    fn prepare_upsert(&mut self, id: u32, order: u32) -> Result<(), EngineError> {
         match self
             .paragraphs
             .binary_search_by_key(&id, |paragraph| paragraph.id)
         {
             Ok(index) => {
                 self.paragraphs[index].pending_order = Some(order);
-                self.paragraphs[index].pending_segment = Some(segment);
                 Ok(())
             }
             Err(index) => {
@@ -1990,8 +1973,6 @@ impl PlannerState {
                         id,
                         order,
                         pending_order: Some(order),
-                        segment,
-                        pending_segment: Some(segment),
                         pending_remove: false,
                         created: true,
                         positioned_changed: false,
@@ -2037,7 +2018,6 @@ impl PlannerState {
             } else {
                 let paragraph = &mut self.paragraphs[index];
                 paragraph.pending_order = None;
-                paragraph.pending_segment = None;
                 paragraph.pending_remove = false;
                 paragraph.positioned_changed = false;
                 index += 1;
@@ -2065,9 +2045,6 @@ impl PlannerState {
                 }
             } else {
                 let paragraph = &mut self.paragraphs[index];
-                if let Some(segment) = paragraph.pending_segment.take() {
-                    paragraph.segment = segment;
-                }
                 if let Some(order) = paragraph.pending_order.take() {
                     paragraph.order = order;
                 }
@@ -4192,11 +4169,11 @@ fn speculative_lifecycle_fingerprint(
             super::semantic_wire::ParagraphMutation::Upsert {
                 paragraph_id,
                 order,
-                segment,
             } => {
-                if planner.paragraph(paragraph_id).is_some_and(|paragraph| {
-                    !paragraph.created && paragraph.order == order && paragraph.segment == segment
-                }) {
+                if planner
+                    .paragraph(paragraph_id)
+                    .is_some_and(|paragraph| !paragraph.created && paragraph.order == order)
+                {
                     continue;
                 }
                 (1_u64, paragraph_id, order)

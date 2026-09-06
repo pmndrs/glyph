@@ -51,7 +51,7 @@ test('production frame compiler preserves the established benchmark request byte
       maxInlineObjects: 1,
       maxSlotsPerBand: 1,
     },
-    paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 0, segment: 0 }],
+    paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 0 }],
     textMutations: [{ paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 0, insert: text }],
     styleMutations: [
       {
@@ -132,7 +132,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
       maxSlotsPerBand: 3,
       maxOutputBytes: 1_048_576,
     },
-    paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 2, segment: 0 }],
+    paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 2 }],
     textMutations: [{ paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 0, insert: 'hello' }],
     styleMutations: [
       {
@@ -332,12 +332,7 @@ test('style payloads stay in per-record order when several paragraphs carry lang
       maxSlotsPerBand: 8,
       maxOutputBytes: 1_048_576,
     },
-    paragraphMutations: paragraphIds.map((paragraphId, order) => ({
-      opcode: 'upsert',
-      paragraphId,
-      order,
-      segment: 0,
-    })),
+    paragraphMutations: paragraphIds.map((paragraphId, order) => ({ opcode: 'upsert', paragraphId, order })),
     styleMutations: paragraphIds.map(styleMutation),
   });
 

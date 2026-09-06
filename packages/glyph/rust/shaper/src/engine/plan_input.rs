@@ -31,30 +31,6 @@ pub struct PlanInput<'a> {
     pub u32_fields: &'a [&'a [u32]],
     /// The caller guarantees that reordering compatible draws cannot change compositing.
     pub order_independent: bool,
-    /// Batch segment per glyph, parallel to `glyphs`, or empty when every glyph shares one.
-    ///
-    /// Two glyphs in different segments never share a batch, so they never merge. This is what
-    /// keeps one group's paragraphs individually addressable while another group's collapse into
-    /// a single draw. It rides alongside the glyph record rather than inside it: `PlanGlyph` is
-    /// exactly one cache line, and `depth_key` — the only field with room to spare — is read by
-    /// the renderer, so a segment hidden there would reach the wire and the public draw surface.
-    pub segments: &'a [u32],
-}
-
-/// The segment every record shares until a caller asks for its paragraphs to be kept apart.
-///
-/// Sharing is the default because it is what collapses a grid of hundreds of labels into a single
-/// draw. A segment is spent only where sibling paragraphs must stay individually addressable.
-pub const DEFAULT_BATCH_SEGMENT: u32 = 0;
-
-/// The segment one glyph belongs to. An absent array means a plan that never segments, which is
-/// the common case and the one that batches hardest.
-#[inline]
-pub fn segment_at(segments: &[u32], index: usize) -> u32 {
-    match segments.get(index) {
-        Some(segment) => *segment,
-        None => 0,
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
