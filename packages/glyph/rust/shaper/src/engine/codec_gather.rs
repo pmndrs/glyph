@@ -168,6 +168,13 @@ fn selection_key(selected: SelectedGlyphBinding) -> u32 {
 #[derive(Default)]
 pub struct CodecGatherWorkspace {
     glyphs: Vec<PlanGlyph>,
+    /// Where each gathered paragraph's records begin, in the order they were gathered.
+    ///
+    /// A resequenced paragraph moves no glyph and changes no position, so the work it owes is a
+    /// permutation of instance placement. Knowing each paragraph's extent is what lets that happen
+    /// without gathering again. These index records for reordering only: they never reach a batch
+    /// key, so they cannot separate a draw.
+    paragraph_starts: Vec<u32>,
     sources: Vec<GatherSource>,
     semantic_change_masks: Vec<u16>,
     f32_fields: Vec<AlignedField<f32>>,
@@ -223,6 +230,19 @@ impl CodecGatherWorkspace {
         reserve_fields(&mut self.u32_fields, u32_fields, record_capacity)?;
         self.reserve_records(record_capacity)?;
         Ok(())
+    }
+
+    /// Marks where the next paragraph's records begin.
+    ///
+    /// Called once per paragraph as the planner walks its published order, so the extents describe
+    /// the sequence this gather produced rather than the one a later update may want.
+    pub fn begin_paragraph(&mut self) {
+        self.paragraph_starts.push(self.glyphs.len() as u32);
+    }
+
+    /// Each gathered paragraph's first record, in gather order.
+    pub fn paragraph_starts(&self) -> &[u32] {
+        &self.paragraph_starts
     }
 
     pub fn gather<'binding>(
@@ -755,6 +775,7 @@ impl CodecGatherWorkspace {
         self.retained_cursor = 0;
         self.retained_source_cursor = 0;
         self.glyphs.clear();
+        self.paragraph_starts.clear();
         self.sources.clear();
         self.semantic_change_masks.clear();
         for field in &mut self.f32_fields {

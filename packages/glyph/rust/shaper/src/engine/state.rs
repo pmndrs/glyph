@@ -221,6 +221,12 @@ struct PlannerState {
     order_sort_scratch: Vec<(u64, u32)>,
     lifecycle_prepared: bool,
     lifecycle_changed: bool,
+    /// Whether this update only resequenced paragraphs that already existed.
+    ///
+    /// A reorder moves no glyph and changes no position, so the work it owes is a permutation of
+    /// instance placement rather than a gather. Folding it into `lifecycle_changed` would make it
+    /// indistinguishable from a creation or removal, which is what forces the maximal pass.
+    lifecycle_reordered_only: bool,
     compositing_independent: bool,
     pending_compositing_independent: bool,
 }
@@ -1729,6 +1735,7 @@ fn append_planner_gather(
 ) -> Result<(), EngineError> {
     let mut retaining = retained;
     for ordered in planner.active_order() {
+        gather.begin_paragraph();
         let paragraph = planner
             .paragraph(ordered.id)
             .ok_or(EngineError::InvalidRequest)?;
@@ -1940,6 +1947,23 @@ impl PlannerState {
                 return Err(EngineError::InvalidRequest);
             }
             self.lifecycle_changed = self.pending_ordered_paragraphs != self.ordered_paragraphs;
+            // A permutation of the same identities: every paragraph that was published still is,
+            // and none arrived or left. Anything else is a membership change the gather owns.
+            self.lifecycle_reordered_only = self.lifecycle_changed && {
+                let mut before: Vec<u32> = self
+                    .ordered_paragraphs
+                    .iter()
+                    .map(|entry| entry.id)
+                    .collect();
+                let mut after: Vec<u32> = self
+                    .pending_ordered_paragraphs
+                    .iter()
+                    .map(|entry| entry.id)
+                    .collect();
+                before.sort_unstable();
+                after.sort_unstable();
+                before == after
+            };
             Ok(())
         })();
         if result.is_err() {
@@ -2026,6 +2050,7 @@ impl PlannerState {
         self.pending_ordered_paragraphs.clear();
         self.lifecycle_prepared = false;
         self.lifecycle_changed = false;
+        self.lifecycle_reordered_only = false;
     }
 
     fn commit_paragraphs(&mut self) {
