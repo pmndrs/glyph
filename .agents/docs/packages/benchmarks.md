@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:01758eef65eeefaf8c3060d44cb4f2145f709ec04c1e74ba9528c5e6da780952'
+source_digest: 'sha256:8481456d4a6070e1a9aa4a3e4a87640706e3d27f3573a6d8d4d9eb93ea707007'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -451,8 +451,8 @@ Paragraph Stress can opt into Chrome User Timing with `?textTimings=1`. Its reta
 property staging, Rust update plus demanded measurement, clean publication, renderer submission, and the package's
 internal Three phases. The production path performs no timing calls while the option is absent. The workload now asks
 for layout metrics before explicit scene publication, so the semantic mask shares the pending mutation and the later
-matrix traversal sees clean Rust state. Icon Grid constructs its batch with independent compositing; other workloads
-retain ordered semantics.
+matrix traversal sees clean Rust state. Every workload now shares one root, because a paragraph batches its own spans
+and no workload states a compositing mode.
 
 An identical direct Chromium 149/WebGPU/DPR-2 Paragraph Stress comparison retained 11,510 glyphs, one draw, and 64
 authored reflows in every case. The committed baseline measured 14.295 ms median reflow; measurement piggyback alone on

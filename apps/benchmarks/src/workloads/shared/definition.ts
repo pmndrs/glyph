@@ -142,6 +142,14 @@ export const perspectiveAmountControl = {
   step: 1,
 } as const satisfies WorkloadRange;
 
+export const labelDensityAmountControl = {
+  label: 'Label density',
+  maximum: 100,
+  minimum: 0,
+  scale: 'linear',
+  step: 1,
+} as const satisfies WorkloadRange;
+
 export const reflowAmountControl = {
   label: 'Reflow amplitude',
   maximum: 100,
