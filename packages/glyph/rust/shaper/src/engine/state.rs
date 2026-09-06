@@ -1751,7 +1751,10 @@ fn append_planner_gather(
         };
         let input = LayoutPlanInput {
             transform_id: ordered.id,
-            segment: paragraph.segment,
+            // The gather runs inside the update that stated this segment, before the commit
+            // settles it, which is exactly how `active_order` already resolves a pending order.
+            // Reading the committed field here would plan the previous grouping.
+            segment: paragraph.pending_segment.unwrap_or(paragraph.segment),
             glyphs: positioned.glyphs(),
             semantic_glyphs: positioned.semantic_glyphs(),
             semantic_change_masks,
@@ -1770,7 +1773,7 @@ fn append_planner_gather(
                 capability_set,
                 positioned.decorations(),
                 ordered.id,
-                paragraph.segment,
+                paragraph.pending_segment.unwrap_or(paragraph.segment),
                 planner.revision.engine.max(1),
                 super::codec_gather::DecorationPass::Under,
             )
@@ -1800,7 +1803,7 @@ fn append_planner_gather(
                 capability_set,
                 positioned.decorations(),
                 ordered.id,
-                paragraph.segment,
+                paragraph.pending_segment.unwrap_or(paragraph.segment),
                 planner.revision.engine.max(1),
                 super::codec_gather::DecorationPass::Over,
             )
