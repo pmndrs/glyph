@@ -243,9 +243,6 @@ struct EngineParagraphMutationRecord {
     reserved0: u16,
     paragraph_id: u32,
     order: u32,
-    /// Batch segment this paragraph occupies. Paragraphs sharing one may merge their draws;
-    /// paragraphs in different segments stay individually addressable.
-    segment: u32,
 }
 
 #[repr(C)]
@@ -1098,11 +1095,6 @@ field_offset!(
     ENGINE_PARAGRAPH_MUTATION_ORDER,
     EngineParagraphMutationRecord,
     order
-);
-field_offset!(
-    ENGINE_PARAGRAPH_MUTATION_SEGMENT,
-    EngineParagraphMutationRecord,
-    segment
 );
 field_offset!(
     ENGINE_TEXT_MUTATION_OPCODE,
@@ -2105,8 +2097,7 @@ pub fn json() -> String {
                 "flags": ENGINE_PARAGRAPH_MUTATION_FLAGS,
                 "reserved0": ENGINE_PARAGRAPH_MUTATION_RESERVED0,
                 "paragraphId": ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID,
-                "order": ENGINE_PARAGRAPH_MUTATION_ORDER,
-                "segment": ENGINE_PARAGRAPH_MUTATION_SEGMENT
+                "order": ENGINE_PARAGRAPH_MUTATION_ORDER
             },
             "engineTextMutation": {
                 "size": ENGINE_TEXT_MUTATION_RECORD_SIZE,

@@ -85,15 +85,6 @@ export interface TextGroupOptions {
   readonly material?: ThreeTextMaterial;
   /** Snap Bitmap vertices to physical pixels. */
   readonly pixelSnapping?: boolean;
-  /**
-   * Whether these paragraphs keep their declared order against each other.
-   *
-   * `batched`, the default, lets them merge into as few draws as their resources allow, which is
-   * what collapses a grid of hundreds of labels into one. `ordered` keeps each paragraph
-   * individually addressable so it can be placed in the draw order, at the cost of a draw per
-   * paragraph. Order inside any one paragraph is shaping's either way.
-   */
-  readonly compositing?: 'ordered' | 'batched';
 }
 
 /** Observable publication state of one Three text instance. */
@@ -1024,7 +1015,6 @@ export class TextGroup extends THREE.Object3D {
     };
   }
   readonly #pixelSnapping: boolean | undefined;
-  readonly #compositing: 'ordered' | 'batched' | undefined;
   readonly #root: ThreeRootHost;
   #material: ThreeTextMaterial | undefined;
   readonly #texts: Text<RasterFormatMetadata>[] = [];
@@ -1049,7 +1039,6 @@ export class TextGroup extends THREE.Object3D {
     }
     this.#pixelSnapping =
       options.pixelSnapping === undefined ? undefined : normalizePixelSnapping(options.pixelSnapping);
-    this.#compositing = normalizeTextGroupCompositing(options.compositing);
     this.#root = host;
     this.#material = options.material;
     if (options.renderOrder !== undefined) {
@@ -1068,10 +1057,6 @@ export class TextGroup extends THREE.Object3D {
   }
   get pixelSnapping(): boolean | undefined {
     return this.#pixelSnapping;
-  }
-  /** Compositing this group states, or `undefined` when it defers to an outer group. */
-  get compositing(): 'ordered' | 'batched' | undefined {
-    return this.#compositing;
   }
   get disposed(): boolean {
     return this.#disposed;
@@ -1150,7 +1135,6 @@ interface BoundTextEntry {
 
 interface TextPresentation {
   readonly group: TextGroup | undefined;
-  readonly compositing: 'ordered' | 'batched';
   readonly material: ThreeTextMaterial | undefined;
   readonly pixelSnapping: boolean;
   readonly renderOrder: number;
@@ -1466,11 +1450,6 @@ function coreTextState(
     text: Object.freeze({ text: desired.text, spans: Object.freeze(spans) }),
     transform,
     order,
-    // A paragraph that shares the default segment may merge with its siblings. One whose group
-    // asked to stay ordered takes a segment of its own, which is what keeps it individually
-    // addressable in the draw order. Publication order is already unique per Text, and zero is
-    // reserved for sharing, so it is offset by one rather than reused directly.
-    segment: presentation.compositing === 'ordered' ? order + 1 : 0,
     material,
     ...(desired.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: desired.rasterPixelRatio }),
     style: desired.style,
@@ -1633,12 +1612,6 @@ function assertSpansNest<Format extends RasterFormatMetadata>(spans: readonly Te
   }
 }
 
-/** @internal Validate one group-owned compositing input at its user boundary. */
-function normalizeTextGroupCompositing(value: TextGroupOptions['compositing']): 'ordered' | 'batched' | undefined {
-  if (value === undefined || value === 'ordered' || value === 'batched') return value;
-  throw new TypeError('TextGroup compositing must be ordered or batched');
-}
-
 function assertPairedSurrogates(text: string): void {
   for (let index = 0; index < text.length; index += 1) {
     const unit = text.charCodeAt(index);
@@ -1697,7 +1670,6 @@ function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresenta
   let group: TextGroup | undefined;
   let material: ThreeTextMaterial | undefined;
   let pixelSnapping: boolean | undefined;
-  let compositing: 'ordered' | 'batched' | undefined;
   let renderOrder: number | undefined;
   let parent = text.parent;
   while (parent !== null) {
@@ -1712,16 +1684,12 @@ function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresenta
       group ??= parent;
       material ??= parent.material;
       pixelSnapping ??= parent.pixelSnapping;
-      compositing ??= parent.compositing;
       renderOrder ??= statedTextGroupRenderOrder(parent);
     }
     parent = parent.parent;
   }
   const resolved: TextPresentation = {
     group,
-    // Sharing is the default, and the one that matters most: paragraphs nobody grouped, and
-    // groups that state nothing, merge into as few draws as their resources allow.
-    compositing: compositing ?? 'batched',
     material,
     pixelSnapping: pixelSnapping ?? text.pixelSnapping,
     renderOrder: renderOrder ?? text.renderOrder,
@@ -1747,7 +1715,6 @@ function statedTextGroupRenderOrder(group: TextGroup): number | undefined {
 function sameTextPresentation(left: TextPresentation, right: TextPresentation): boolean {
   return (
     left.group === right.group &&
-    left.compositing === right.compositing &&
     left.material === right.material &&
     left.pixelSnapping === right.pixelSnapping &&
     left.renderOrder === right.renderOrder
