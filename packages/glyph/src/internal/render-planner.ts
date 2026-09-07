@@ -245,6 +245,8 @@ export interface RenderPlanner {
   readonly disposed: boolean;
   /** Creates one retained text instance in this planner. */
   createText(options: RetainedTextOptions): RetainedText;
+  /** Reassigns every live retained text to its zero-based position as one transaction. */
+  reorderTexts(texts: readonly RetainedText[]): void;
   /** Disposes every retained text instance and releases this planner. */
   dispose(): void;
 }
@@ -314,6 +316,7 @@ interface RetainedTextState {
   geometryRevision: number;
   published: boolean;
   dirty: boolean;
+  semanticDirty: boolean;
   removed: boolean;
   disposed: boolean;
   desiredReleased: boolean;
@@ -400,7 +403,8 @@ class RenderPlannerImpl {
   #liveRegionCount = 0;
   #liveExclusionCount = 0;
   #liveInlineObjectCount = 0;
-  #dirtyTextCount = 0;
+  #pendingParagraphCount = 0;
+  #pendingContentCount = 0;
   #pendingStyleCount = 0;
   #nextTextOrdinal = 1;
   #engineRevision = 0;
@@ -509,6 +513,7 @@ class RenderPlannerImpl {
       geometryRevision: 0,
       published: false,
       dirty: true,
+      semanticDirty: true,
       removed: false,
       disposed: false,
       desiredReleased: false,
@@ -532,14 +537,60 @@ class RenderPlannerImpl {
     return text;
   }
 
+  reorderTexts(texts: readonly RetainedText[]): void {
+    this.#assertMutable();
+    if (!Array.isArray(texts)) throw new TypeError('retained text order must be an array');
+    if (texts.length !== this.#liveTextCount) {
+      throw new RangeError('retained text order must contain every live text exactly once');
+    }
+    const states: RetainedTextState[] = [];
+    const seen = new Set<RetainedTextState>();
+    let newlyPending = 0;
+    for (const text of texts) {
+      const owned = textStates.get(text);
+      if (owned?.planner !== this || owned.state.disposed || owned.state.removed) {
+        throw new TypeError('retained text order contains a text not owned by this planner');
+      }
+      if (seen.has(owned.state)) throw new TypeError('retained text order contains a duplicate text');
+      seen.add(owned.state);
+      states.push(owned.state);
+      if (owned.state.metrics.order !== states.length - 1 && !owned.state.dirty) newlyPending += 1;
+    }
+    if (states.every((state, order) => state.metrics.order === order)) return;
+    if (this.#removed.size + this.#pendingParagraphCount + newlyPending > this.#limits.maxParagraphs * 2) {
+      throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
+    }
+    const nextStructureRevision = checkedNextStructureRevision(this.#structureRevision);
+    this.#textsByOrder.clear();
+    for (const [order, state] of states.entries()) this.#textsByOrder.set(order, state);
+    for (const [order, state] of states.entries()) {
+      if (state.metrics.order === order) continue;
+      if (!state.dirty) this.#pendingParagraphCount += 1;
+      state.metrics = { ...state.metrics, order };
+      state.dirty = true;
+    }
+    this.#structureRevision = nextStructureRevision;
+    this.#dirtyListener?.();
+  }
+
   /** @internal */
   _updateText(state: RetainedTextState, update: RetainedTextUpdate): void {
     this.#assertMutable();
     if (state.disposed) throw new Error('text engine text has been disposed');
     if (!isNonArrayObject(update)) throw new TypeError('text engine text update must be an object');
-    const source: RetainedTextOptions = Object.freeze({ ...state.desired.source, ...update });
+    const source: RetainedTextOptions = Object.freeze({
+      ...state.desired.source,
+      order: state.metrics.order,
+      ...update,
+    });
     const desired = resolveTextOptions(this.#handleState, source);
-    const candidate = { ...state, desired, metrics: retainedTextMetrics(desired, state.ordinal), dirty: true };
+    const candidate = {
+      ...state,
+      desired,
+      metrics: retainedTextMetrics(desired, state.ordinal),
+      dirty: true,
+      semanticDirty: true,
+    };
     try {
       this.#validateAggregateLimits(candidate, state);
     } catch (error) {
@@ -553,6 +604,7 @@ class RenderPlannerImpl {
     state.desired = desired;
     state.metrics = candidate.metrics;
     state.dirty = true;
+    state.semanticDirty = true;
     state.measurement = undefined;
     state.inspection = undefined;
     if (previousOrder !== nextOrder) {
@@ -742,7 +794,8 @@ class RenderPlannerImpl {
     this.#liveRegionCount = 0;
     this.#liveExclusionCount = 0;
     this.#liveInlineObjectCount = 0;
-    this.#dirtyTextCount = 0;
+    this.#pendingParagraphCount = 0;
+    this.#pendingContentCount = 0;
     this.#pendingStyleCount = 0;
     attempt(() => this.#codec.dispose());
     this.#handleState._detachPlanner(this);
@@ -837,11 +890,13 @@ class RenderPlannerImpl {
         .map((state) => ({
           opcode: 'upsert' as const,
           paragraphId: state.paragraphId,
-          order: state.desired.source.order ?? state.ordinal - 1,
+          order: state.metrics.order,
         })),
     ];
-    const textMutations = [...this.#texts].flatMap((state) => {
-      if (state.removed || !state.dirty) return [];
+    const contentStates = [...this.#texts]
+      .filter((state) => !state.removed && state.semanticDirty)
+      .sort((left, right) => left.metrics.order - right.metrics.order);
+    const textMutations = contentStates.flatMap((state) => {
       const mutation = minimalTextMutation(state.publishedText, state.desired.text);
       return mutation === undefined ? [] : [{ paragraphId: state.paragraphId, ...mutation }];
     });
@@ -850,8 +905,7 @@ class RenderPlannerImpl {
     const regions: PlannerRegion[] = [];
     const exclusions: PlannerExclusion[] = [];
     const inlineObjects: PlannerInlineObject[] = [];
-    for (const state of this.#texts) {
-      if (state.removed || !state.dirty) continue;
+    for (const state of contentStates) {
       const styles = compileStyles(this.#handleState, state);
       styleMutations.push(...styles);
       for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
@@ -875,6 +929,9 @@ class RenderPlannerImpl {
       consumedRevision: checkpointGeneration === this.#acceptedCheckpointGeneration ? this.#revision : 0,
       acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
       semanticViewMask: options.semanticViewMask,
+      // One Text owns one deterministic paragraph. Its compatible spans may always coalesce;
+      // callers express ordering between paragraphs through the Three scene adapter.
+      compositingIndependent: true,
       limits: this.#limits,
       paragraphMutations,
       textMutations,
@@ -899,7 +956,8 @@ class RenderPlannerImpl {
       this.#liveExclusionCount - (previous?.exclusionCount ?? 0) + candidate.metrics.exclusionCount;
     const inlineObjectCount =
       this.#liveInlineObjectCount - (previous?.inlineObjectCount ?? 0) + candidate.metrics.inlineObjectCount;
-    const dirtyTextCount = this.#dirtyTextCount - Number(replacing?.dirty ?? false) + 1;
+    const pendingParagraphCount = this.#pendingParagraphCount - Number(replacing?.dirty ?? false) + 1;
+    const pendingContentCount = this.#pendingContentCount - Number(replacing?.semanticDirty ?? false) + 1;
     const pendingStyleCount =
       this.#pendingStyleCount -
       (replacing?.dirty ? pendingStyleMutationCount(replacing) : 0) +
@@ -921,10 +979,10 @@ class RenderPlannerImpl {
     }
     const maxLines = candidate.desired.source.layout?.maxLines ?? Math.max(1, candidate.desired.text.length);
     if (maxLines > this.#limits.maxLines) throw new RangeError('retained text maxLines exceeds limits.maxLines');
-    if (this.#removed.size + dirtyTextCount > this.#limits.maxParagraphs) {
+    if (this.#removed.size + pendingParagraphCount > this.#limits.maxParagraphs * 2) {
       throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
     }
-    if (dirtyTextCount > this.#limits.maxClusters) {
+    if (pendingContentCount > this.#limits.maxClusters) {
       throw new RangeError('pending text mutations exceed limits.maxClusters');
     }
     if (pendingStyleCount > this.#limits.maxClusters) {
@@ -939,7 +997,8 @@ class RenderPlannerImpl {
     this.#liveRegionCount += state.metrics.regionCount;
     this.#liveExclusionCount += state.metrics.exclusionCount;
     this.#liveInlineObjectCount += state.metrics.inlineObjectCount;
-    this.#dirtyTextCount += Number(state.dirty);
+    this.#pendingParagraphCount += Number(state.dirty);
+    this.#pendingContentCount += Number(state.semanticDirty);
     if (state.dirty) this.#pendingStyleCount += pendingStyleMutationCount(state);
   }
 
@@ -952,9 +1011,11 @@ class RenderPlannerImpl {
     this.#liveRegionCount += metrics.regionCount - state.metrics.regionCount;
     this.#liveExclusionCount += metrics.exclusionCount - state.metrics.exclusionCount;
     this.#liveInlineObjectCount += metrics.inlineObjectCount - state.metrics.inlineObjectCount;
+    const hadPendingContent = state.semanticDirty;
     if (state.dirty) this.#pendingStyleCount -= pendingStyleMutationCount(state);
-    const candidate = { ...state, metrics, dirty: true };
-    this.#dirtyTextCount += Number(!state.dirty);
+    const candidate = { ...state, metrics, dirty: true, semanticDirty: true };
+    this.#pendingParagraphCount += Number(!state.dirty);
+    this.#pendingContentCount += Number(!hadPendingContent);
     this.#pendingStyleCount += pendingStyleMutationCount(candidate);
   }
 
@@ -965,7 +1026,8 @@ class RenderPlannerImpl {
     this.#liveRegionCount -= state.metrics.regionCount;
     this.#liveExclusionCount -= state.metrics.exclusionCount;
     this.#liveInlineObjectCount -= state.metrics.inlineObjectCount;
-    this.#dirtyTextCount -= Number(state.dirty);
+    this.#pendingParagraphCount -= Number(state.dirty);
+    this.#pendingContentCount -= Number(state.semanticDirty);
     if (state.dirty) this.#pendingStyleCount -= pendingStyleMutationCount(state);
   }
 
@@ -987,12 +1049,16 @@ class RenderPlannerImpl {
         state.committed = state.desired;
       }
       state.published = true;
-      state.publishedText = state.desired.text;
-      state.geometryRevision += 1;
-      this.#dirtyTextCount -= 1;
+      if (state.semanticDirty) {
+        state.publishedText = state.desired.text;
+        state.geometryRevision += 1;
+      }
+      this.#pendingParagraphCount -= 1;
+      this.#pendingContentCount -= Number(state.semanticDirty);
       this.#pendingStyleCount -= pendingStyleMutationCount(state);
-      state.publishedStyleCount = compiledStyleCount(state);
+      if (state.semanticDirty) state.publishedStyleCount = compiledStyleCount(state);
       state.dirty = false;
+      state.semanticDirty = false;
     }
   }
 
@@ -1126,7 +1192,7 @@ class RenderPlannerImpl {
         .map((state) => ({
           opcode: 'upsert' as const,
           paragraphId: state.paragraphId,
-          order: state.desired.source.order ?? state.ordinal - 1,
+          order: state.metrics.order,
         })),
     ];
   }
@@ -1178,7 +1244,7 @@ class RenderPlannerImpl {
 
   #isDirty(): boolean {
     return (
-      this.#dirtyTextCount !== 0 ||
+      this.#pendingParagraphCount !== 0 ||
       this.#removed.size !== 0 ||
       this.#checkpointGeneration !== this.#acceptedCheckpointGeneration
     );
@@ -1616,6 +1682,7 @@ function retainedTextMetrics(desired: ResolvedTextOptions, ordinal: number): Ret
 }
 
 function pendingStyleMutationCount(state: RetainedTextState): number {
+  if (!state.semanticDirty) return 0;
   return state.metrics.styleCount + Math.max(0, state.publishedStyleCount - state.metrics.styleCount);
 }
 

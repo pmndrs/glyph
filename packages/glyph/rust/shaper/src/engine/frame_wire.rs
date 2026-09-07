@@ -77,7 +77,9 @@ pub(crate) fn parse_update_request(bytes: &[u8], root_id: u32) -> Result<UpdateR
         return Err(STATUS_INVALID_REQUEST);
     }
     let paragraph_mutation_count = read_u32(bytes, ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT)?;
-    if paragraph_mutation_count > limits.max_paragraphs {
+    // One frame may remove every previous paragraph and upsert every survivor. The final live set
+    // remains bounded by max_paragraphs after lifecycle validation.
+    if paragraph_mutation_count > limits.max_paragraphs.saturating_mul(2) {
         return Err(STATUS_INVALID_REQUEST);
     }
     let paragraph_mutations = parse_paragraph_mutations(

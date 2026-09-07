@@ -462,6 +462,10 @@ export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererRes
   createText<Format extends RasterFormatMetadata>(
     state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']>;
+  /** Republishes every live paragraph in one collision-free ordering transaction. */
+  reorderTexts(
+    texts: readonly GlyphTextController<RasterFormatMetadata, Bindings['materialInput'], Bindings['transformInput']>[],
+  ): void;
   /** Schedules root-owned semantic or presentation state for the next top-level `glyph.shape()`. */
   invalidate(): void;
   syncTransforms(): void;

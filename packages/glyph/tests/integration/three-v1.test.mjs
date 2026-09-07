@@ -33,6 +33,10 @@ const amiriFontUrl = new URL(
   '../../../../apps/benchmarks/fixtures/rendering/amiri-bitmap-16.font.glb',
   import.meta.url,
 );
+const sourceSerifFontUrl = new URL(
+  '../../../../apps/benchmarks/fixtures/rendering/source-serif-4-bitmap-16.font.glb',
+  import.meta.url,
+);
 const iconSlugFontUrl = new URL(
   '../../../../apps/benchmarks/fixtures/rendering/font-awesome-free-6.7.2-slug.font.glb.gz',
   import.meta.url,
@@ -323,6 +327,52 @@ test('one Three root binds one Scene and exposes its semantic name to material f
     root.dispose();
     font.dispose();
   }
+});
+
+test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Three draw order', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup({ renderOrder: 4 });
+  const labels = ['A', 'B', 'C'].map((text) => three.createText({ font, text }));
+  group.add(...labels);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  const groupedSequence = () => {
+    const draws = rootDraws(scene).filter((draw) => draw.renderOrder === 4);
+    assert.equal(draws.length, 1, 'one group shares one compatible draw');
+    const attribute = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const start = draws[0].userData.pmndrsGlyphRunStart;
+    return Array.from(attribute.array.subarray(start, start + draws[0].geometry.instanceCount));
+  };
+
+  const authored = groupedSequence();
+  labels[0].renderOrder = 2;
+  labels[1].renderOrder = 1;
+  labels[2].renderOrder = 0;
+  instrumentedGlyph.reset();
+  scene.updateMatrixWorld(true);
+  assert.deepEqual(groupedSequence(), [...authored].reverse());
+  assert.equal(instrumentedGlyph.crossings, 1, 'one paragraph-order transaction crosses into Rust');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'order-only publication reuses measurements');
+
+  const loose = three.createText({ font, text: 'D' });
+  loose.renderOrder = 9;
+  scene.add(loose);
+  scene.updateMatrixWorld(true);
+  assert.deepEqual(
+    rootDraws(scene)
+      .map((draw) => draw.renderOrder)
+      .sort((left, right) => left - right),
+    [4, 10],
+    'standalone Text renderOrder remains the mesh-level base (plus deterministic draw offset)',
+  );
+
+  loose.dispose();
+  group.dispose();
+  for (const label of labels) label.dispose();
+  font.dispose();
 });
 
 test('a root releases its renderer publication when its final Text is disposed', async (t) => {
@@ -1571,6 +1621,72 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
   latin.dispose();
   icon.dispose();
   fontDomain.dispose();
+});
+
+test('explicit line height follows the font-stack primary across fallback scripts', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const fontDomain = createThreeFontDomain();
+  const [primary, fallback] = await Promise.all([
+    fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] })),
+    fontDomain.loadFont({ baked: dataUrl(await readFile(amiriFontUrl)) }, bitmap({ strikes: [16] })),
+  ]);
+  const scene = new THREE.Scene();
+  const label = three.createText({
+    font: createFontStack(primary, fallback),
+    style: { fontSize: 10, lineHeight: 0.92 },
+    text: 'Latin',
+  });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+
+  const latin = label.measure().lines[0];
+  label.text = 'مرحبا';
+  scene.updateMatrixWorld(true);
+  const arabic = label.measure().lines[0];
+
+  assert.ok(latin !== undefined && arabic !== undefined);
+  assert.ok(Math.abs(latin.lineHeight - 9.2) < 1e-4, 'lineHeight below 1 is authoritative');
+  assert.ok(
+    Math.abs(arabic.lineHeight - latin.lineHeight) < 1e-4,
+    'fallback glyph metrics cannot change the authored line box',
+  );
+
+  label.dispose();
+  primary.dispose();
+  fallback.dispose();
+  fontDomain.dispose();
+});
+
+test('one Text coalesces interleaved font spans without crossing decoration paint layers', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const [latin, serif] = await Promise.all([
+    loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] })),
+    loadFont({ baked: dataUrl(await readFile(sourceSerifFontUrl)) }, bitmap({ strikes: [16] })),
+  ]);
+  const latinSpan = textSpan(latin);
+  const serifSpan = textSpan(serif);
+  const label = three.createText({
+    font: latin,
+    text: txt`${latinSpan`A`}${serifSpan`B`}${latinSpan`C`}`,
+    style: { decoration: { underline: true, lineThrough: true } },
+  });
+  const scene = new THREE.Scene();
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+
+  const draws = rootDraws(scene);
+  const depthKeys = draws.map((draw) => draw.userData.pmndrsGlyphDepthKey);
+  assert.equal(
+    depthKeys.filter((depth) => depth === 1).length,
+    2,
+    'the repeated Latin resource and intervening serif resource become one draw each',
+  );
+  assert.ok(depthKeys.indexOf(0) < depthKeys.indexOf(1), 'under decorations precede glyph draws');
+  assert.ok(depthKeys.lastIndexOf(2) > depthKeys.lastIndexOf(1), 'over decorations follow glyph draws');
+
+  label.dispose();
+  latin.dispose();
+  serif.dispose();
 });
 
 test('one Three root realizes two public Text objects as one indexed Rust draw', async (t) => {

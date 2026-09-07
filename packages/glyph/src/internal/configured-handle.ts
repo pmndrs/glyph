@@ -481,6 +481,20 @@ class ConfiguredRootServices<
     return new ConfiguredTextController(planner, this, state);
   }
 
+  reorderTexts(
+    texts: readonly GlyphTextController<RasterFormatMetadata, Bindings['materialInput'], Bindings['transformInput']>[],
+  ): void {
+    const planner = this.#requiredPlanner();
+    planner.reorderTexts(
+      texts.map((text) => {
+        if (!(text instanceof ConfiguredTextController) || !text.belongsTo(this)) {
+          throw new TypeError('reorderTexts accepts only live texts created by this root');
+        }
+        return text._plannerText;
+      }),
+    );
+  }
+
   invalidate(): void {
     this.#requiredPlanner();
     this.#forceShape = true;
@@ -755,6 +769,12 @@ class ConfiguredTextController<
 > implements GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']> {
   readonly #services: ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>;
   readonly #text: RetainedText;
+
+  /** @internal The planner text this controller owns, for root-wide reordering. */
+  get _plannerText(): RetainedText {
+    return this.#text;
+  }
+
   #bound: BoundTextState;
   #disposed = false;
 

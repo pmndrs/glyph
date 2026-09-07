@@ -236,7 +236,6 @@ export class ThreeRootHost {
   readonly #resources: ThreeRendererResources;
   readonly #renderer: ThreeCommandBufferRenderer;
   readonly #texts = new Set<THREE.Object3D>();
-  readonly #textOrders = new WeakMap<THREE.Object3D, number>();
   readonly #renderObject: ThreePublicationObject;
   readonly #materialRootContext: ThreeRootContext;
   #publicRoot: ThreeRoot | undefined;
@@ -246,7 +245,6 @@ export class ThreeRootHost {
   readonly #renderMemberScratch: Text<RasterFormatMetadata>[] = [];
   #capacity: GlyphBufferCapacity;
   #material: ThreeTextMaterial | undefined;
-  #nextTextOrder = 0;
   #disposed = false;
 
   get handle(): import('./schema.js').ThreeHandle {
@@ -428,11 +426,6 @@ export class ThreeRootHost {
   /** @internal Register one retained leaf with this publication root. */
   register(text: THREE.Object3D): void {
     this.#assertActive();
-    if (!this.#textOrders.has(text)) {
-      if (this.#nextTextOrder > 0xffff_ffff) throw new RangeError('Three root text orders are exhausted');
-      this.#textOrders.set(text, this.#nextTextOrder);
-      this.#nextTextOrder += 1;
-    }
     this.#texts.add(text);
     try {
       this.#rootBinding().reconcile(this.members());
@@ -458,13 +451,6 @@ export class ThreeRootHost {
       this.#renderObject.removeFromParent();
       this.#scene = undefined;
     }
-  }
-
-  /** @internal Stable semantic order assigned once for one Text lifetime. */
-  publicationOrder(text: THREE.Object3D): number {
-    const order = this.#textOrders.get(text);
-    if (order === undefined) throw new Error('Text does not belong to this Three root');
-    return order;
   }
 
   /** @internal Invalidate inherited material state after a TextGroup change. */
@@ -554,7 +540,12 @@ export class ThreeRootHost {
   #commitTraversal(worldMatricesCurrent: boolean): void {
     if (this.#disposed) return;
     const texts = this.#renderMembers();
-    if (this.#binding?.needsReconcile(texts) === true) this.#services.invalidate();
+    try {
+      if (this.#binding?.needsReconcile(texts) === true) this.#services.invalidate();
+    } catch (error) {
+      this.#reportError(error, texts);
+      return;
+    }
     try {
       glyph.shape();
     } catch {
@@ -1137,6 +1128,7 @@ interface TextPresentation {
   readonly group: TextGroup | undefined;
   readonly material: ThreeTextMaterial | undefined;
   readonly pixelSnapping: boolean;
+  /** Three's render order for the draw mesh, stated by the Text or its nearest TextGroup. */
   readonly renderOrder: number;
 }
 
@@ -1156,6 +1148,7 @@ class ThreeRootPublication {
   #rendererUpdateRejected = false;
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #materialInvalidated = false;
+  #measurementPending = false;
   #disposed = false;
 
   constructor(capacity: GlyphBufferCapacity, root: ThreeRootHost) {
@@ -1183,10 +1176,31 @@ class ThreeRootPublication {
 
   reconcile(texts: readonly Text<RasterFormatMetadata>[]): void {
     this.#assertActive();
-    const ordered = orderedTexts(texts, this.#root);
+    const ordered = orderedTexts(texts);
     const desired = new Set(ordered.map(({ text }) => text));
     for (const text of [...this.#entries.keys()]) {
       if (!desired.has(text)) this.removeText(text);
+    }
+    const temporaryBase = Math.max(
+      ordered.length,
+      1 + Math.max(-1, ...[...this.#entries.values()].map((entry) => entry.stagedOrder)),
+    );
+    for (const [index, { text, presentation }] of ordered.entries()) {
+      if (this.#entries.has(text)) continue;
+      this.#stage(
+        text,
+        reconciler.desired(text),
+        reconciler.desiredRevision(text),
+        temporaryBase + index,
+        presentation,
+      );
+    }
+    if (ordered.some(({ order, text }) => this.#entries.get(text)?.stagedOrder !== order)) {
+      this.#services.reorderTexts(ordered.map(({ text }) => this.#entries.get(text)!.handle));
+      for (const { order, text } of ordered) {
+        const entry = this.#entries.get(text);
+        if (entry !== undefined) entry.stagedOrder = order;
+      }
     }
     for (const { order, text, presentation } of ordered) {
       const entry = this.#entries.get(text);
@@ -1194,7 +1208,6 @@ class ThreeRootPublication {
       if (
         entry === undefined ||
         entry.stagedRevision !== revision ||
-        entry.stagedOrder !== order ||
         !sameTextPresentation(entry.stagedPresentation, presentation) ||
         this.#materialInvalidated
       ) {
@@ -1208,13 +1221,13 @@ class ThreeRootPublication {
   needsReconcile(texts: readonly Text<RasterFormatMetadata>[]): boolean {
     this.#assertActive();
     if (this.#materialInvalidated || texts.length !== this.#entries.size) return true;
-    for (const text of texts) {
+    for (const { order, text, presentation } of orderedTexts(texts)) {
       const entry = this.#entries.get(text);
       if (
         entry === undefined ||
         entry.stagedRevision !== reconciler.desiredRevision(text) ||
-        entry.stagedOrder !== this.#root.publicationOrder(text) ||
-        !sameTextPresentation(entry.stagedPresentation, resolveTextPresentation(text))
+        entry.stagedOrder !== order ||
+        !sameTextPresentation(entry.stagedPresentation, presentation)
       ) {
         return true;
       }
@@ -1285,8 +1298,9 @@ class ThreeRootPublication {
 
   glyphRenderOrderBase(text: Text<RasterFormatMetadata>, stableIds: Uint32Array): number {
     this.#assertActive();
-    if (!this.#entries.has(text)) throw new Error('cannot inspect draw order for an unbound text paragraph');
-    return this.#target.renderOrderBaseForGlyphs(stableIds) ?? text.renderOrder;
+    const entry = this.#entries.get(text);
+    if (entry === undefined) throw new Error('cannot inspect draw order for an unbound text paragraph');
+    return this.#target.renderOrderBaseForGlyphs(stableIds) ?? entry.stagedPresentation.renderOrder;
   }
 
   copyGlyphs(
@@ -1321,7 +1335,7 @@ class ThreeRootPublication {
       return false;
     }
     this.#capacityExceeded = undefined;
-    return Object.freeze({ semanticViews: 'measurement' });
+    return Object.freeze({ semanticViews: this.#measurementPending ? 'measurement' : 'none' });
   }
 
   acceptShape(): void {
@@ -1333,6 +1347,7 @@ class ThreeRootPublication {
       reconciler.markCommitted(text);
       reconciler.publishMeasurement(text, entry.handle.measure());
     }
+    this.#measurementPending = false;
   }
 
   rejectShape(): void {
@@ -1392,6 +1407,7 @@ class ThreeRootPublication {
       previous.stagedOrder = order;
       previous.stagedPresentation = presentation;
     }
+    this.#measurementPending = true;
     this.#inspections.delete(text);
   }
 
@@ -1656,13 +1672,52 @@ function collectTextTree(object: THREE.Object3D, result: Text<RasterFormatMetada
 
 function orderedTexts(
   texts: readonly Text<RasterFormatMetadata>[],
-  root: ThreeRootHost,
 ): readonly Readonly<{ order: number; text: Text<RasterFormatMetadata>; presentation: TextPresentation }>[] {
-  return texts.map((text) => ({
-    order: root.publicationOrder(text),
+  // Root membership is a Set whose insertion order is the stable publication order. Filtering
+  // disposed/detached members preserves that order, so the active sequence only needs dense ranks.
+  const entries = texts.map((text, order) => ({
+    order,
     text,
     presentation: resolveTextPresentation(text),
   }));
+  let hasGroupedRank = false;
+  for (const entry of entries) {
+    if (entry.presentation.group === undefined) continue;
+    if (!Number.isFinite(entry.text.renderOrder)) throw new RangeError('Text renderOrder must be finite');
+    hasGroupedRank ||= entry.text.renderOrder !== 0;
+  }
+  if (!hasGroupedRank) return entries;
+  const lastRank = new Map<TextGroup, number>();
+  let needsReorder = false;
+  for (const entry of entries) {
+    const group = entry.presentation.group;
+    if (group === undefined) continue;
+    const previous = lastRank.get(group);
+    needsReorder ||= previous !== undefined && entry.text.renderOrder < previous;
+    lastRank.set(group, entry.text.renderOrder);
+  }
+  if (!needsReorder) return entries;
+  const grouped = new Map<TextGroup, typeof entries>();
+  for (const entry of entries) {
+    const group = entry.presentation.group;
+    if (group === undefined) continue;
+    const members = grouped.get(group);
+    if (members === undefined) grouped.set(group, [entry]);
+    else members.push(entry);
+  }
+  for (const members of grouped.values()) {
+    members.sort((left, right) => left.text.renderOrder - right.text.renderOrder || left.order - right.order);
+  }
+  const cursors = new Map<TextGroup, number>();
+  return entries.map((entry, order) => {
+    const group = entry.presentation.group;
+    if (group === undefined) return { order, text: entry.text, presentation: entry.presentation };
+    const cursor = cursors.get(group) ?? 0;
+    const ranked = grouped.get(group)?.[cursor];
+    if (ranked === undefined) throw new Error('TextGroup paragraph order is unavailable');
+    cursors.set(group, cursor + 1);
+    return { order, text: ranked.text, presentation: ranked.presentation };
+  });
 }
 
 function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresentation {
@@ -1694,6 +1749,7 @@ function resolveTextPresentation(text: Text<RasterFormatMetadata>): TextPresenta
     pixelSnapping: pixelSnapping ?? text.pixelSnapping,
     renderOrder: renderOrder ?? text.renderOrder,
   };
+  if (!Number.isFinite(resolved.renderOrder)) throw new RangeError('Text renderOrder must be finite');
   const cached = textPresentations.get(text);
   if (cached !== undefined && sameTextPresentation(cached, resolved)) return cached;
   const presentation = Object.freeze(resolved);
