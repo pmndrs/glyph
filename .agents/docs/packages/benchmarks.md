@@ -420,7 +420,7 @@ GitHub CI uses the Ubuntu runner's rolling system Chromium as a deliberate compa
 
 The canonical package-size lane measures the initial public JavaScript graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and representative font artifacts without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated; Core JS externalizes the package's declared Three.js, React, and R3F peers, and package-owned Wasm URLs are externalized from JavaScript measurements regardless of their owning package. The graph gate also requires runtime baking and explicit FontFace transfer reconstruction to remain dynamically reachable while excluding both implementations from the initial Core and Three closures. The detailed record retains its measurement platform, architecture, SHA-256 payload identities, and reviewed raw/minified/gzip/Brotli ceilings because those fields enforce reproducibility and detect internal regressions. The human summary is deliberately smaller: the benchmark UI and Size Limit pull-request comment use one fail-closed projection containing only gzip for Core JS, Shaper Wasm, Three.js adapter JS, Inter plus Font Awesome across Bitmap, MTSDF, and Slug, and each optional validator, runtime-bake, font-baker, and raster-baker JS/Wasm payload. It publishes neither arithmetic runtime/delivery totals nor alternate compression columns. This keeps each displayed number attributable to one emitted payload and avoids presenting external peers or a chosen font combination as a universal application total. The inspector's runtime and resource cards remain separate workload telemetry rather than inputs to the pull-request size summary.
 
-The current Darwin arm64 record reports a 392,902 minified / 96,179 gzip / 79,790 Brotli peer-externalized browser graph. The validator, runtime-bake host, runtime-bake Worker, font-baker host, font-baker Wasm, and shaper Wasm report 584,611 minified, 14,305 minified, 35,150 minified, 7,949 minified, 1,081,312 raw, and 1,197,117 raw bytes respectively. Their gzip sizes are 137,620, 5,545, 10,437, 2,476, 388,915, and 467,328 bytes. Bitmap, MTSDF, and Slug baker hosts measure 4,772, 5,523, and 4,113 gzip bytes; their Wasm modules measure 233,803, 218,568, and 185,598 gzip bytes. Static Node project discovery is excluded from the direct font-baker host graph, and dynamic raster modules are excluded from the initial Worker graph because each has its own independently visible row. Bitmap-only and MTSDF-only size entries inspect their initial module closures and fail if Slug runtime, shader, baker, or runtime-baker modules enter either graph. Paragraph layout hashes and the Codec composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probes no longer maintain parallel digest logic.
+The current Darwin arm64 record reports a 318,898 minified / 80,416 gzip / 67,065 Brotli peer-externalized browser graph. The validator, runtime-bake host, runtime-bake Worker, font-baker host, font-baker Wasm, and shaper Wasm report 584,223 minified, 13,994 minified, 47,571 minified, 8,274 minified, 1,073,628 raw, and 1,195,483 raw bytes respectively. Their gzip sizes are 137,957, 6,089, 13,242, 2,610, 386,250, and 465,801 bytes. A fresh same-host exact-main comparison puts the candidate browser core at +0.60% raw/+0.87% gzip, shaper Wasm at +0.93% raw/+1.18% gzip, and Three adapter at +0.51% raw/+0.72% gzip. Those three release-facing payloads remain inside their reviewed ceilings, but the positive deltas are reported rather than called free. Several small optional host graphs move by larger percentages: the runtime-bake Worker is +6.71% raw/+7.61% gzip and the Slug baker host is +5.34%/+6.32%; their absolute deltas and ceilings remain independently visible in the generated record. Bitmap, MTSDF, and Slug baker hosts measure 4,876, 5,597, and 4,411 gzip bytes; their Wasm modules measure 231,072, 215,539, and 183,643 gzip bytes. Static Node project discovery is excluded from the direct font-baker host graph, and dynamic raster modules are excluded from the initial Worker graph because each has its own independently visible row. Bitmap-only and MTSDF-only size entries inspect their initial module closures and fail if Slug runtime, shader, baker, or runtime-baker modules enter either graph. Paragraph layout hashes and the Codec composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probes no longer maintain parallel digest logic.
 
 The local Worker-queue Vitexec probe authenticates every output and reports observations rather than asserting machine-sensitive timing. Two Chromium runs measured a three-font queued burst at 30.8–32.0 ms and three separately initialized sequential Workers at 68.3–88.6 ms. The correctness suite separately proves one active post, FIFO completion, queued cancellation, and active-cancellation recovery without timers. The combined live lane runs its performance observation before interaction and conformance probes so accumulated renderer work cannot contaminate cold/steady telemetry.
 
@@ -442,10 +442,19 @@ Grouped workload changes reuse one `TextGroup` and replace its children in one r
 second set of session arenas while the outgoing command buffer is live. Stale stats no longer erase an update failure,
 and non-abort failures reach the browser console. Draw/glyph telemetry traverses the realized batch root once because
 Rust-planned meshes are siblings of authored entry nodes; the complete performance sweep rejects every zero-glyph or
-zero-draw cell. The current 27-cell WebGPU sweep completes every Bitmap/MTSDF/Slug transition. It also makes the remaining
-Icon Grid gap explicit: 2,926–3,021 glyphs currently produce 476 draws and 30.8–47.0 RAF FPS even though median submit is
-0.27–0.76 ms and median GPU work is 0.57–2.02 ms. That is batching-policy evidence, not a shaping-performance result or
-an accepted release cost.[^presentation-framerate-sweep]
+zero-draw cell. The complete 60-cell correctness sweep covers all ten workloads in Bitmap/MTSDF/Slug on WebGPU and
+forced WebGL2. Icon Grid retains two draws, Rich Text retains five draws instead of 36, Editorial retains three, Camera
+Billboard retains one, and the other workloads remain within their established 1–3 draw topology. Camera Billboard
+computes distance ranks in TypeScript and passes them as child `Text.renderOrder`; no benchmark adapter sorts paragraphs
+or glyph records before the Rust publication.[^presentation-framerate-sweep]
+
+Against isolated runs of exact remote main on the same Chromium 149/Apple GPU host, the ordinary 27 common cells measured
+−2.0% mean/+3.0% median CPU and +1.4% mean/+2.1% median GPU, within run noise. Repeated Icon Grid pairs disagreed on
+direction: one candidate run improved CPU by 4.7–15.8%, while the final immediate pair was 0.025–0.080 ms slower; the
+largest final GPU difference was 0.054 ms. The evidence supports flat retained two-draw behavior, not a directional Icon
+Grid speedup. Rich Text improved by 80.3–94.4% CPU and up to 15.9% GPU while reducing 36 draws to five. Camera Billboard,
+which exists only on the stacked candidate, averaged 0.485 ms CPU across Bitmap/MTSDF/Slug and retained one draw. These
+are same-host observations, not portable budgets.
 
 Paragraph Stress can opt into Chrome User Timing with `?textTimings=1`. Its retained update is split into authored
 property staging, Rust update plus demanded measurement, clean publication, renderer submission, and the package's
@@ -454,12 +463,13 @@ for layout metrics before explicit scene publication, so the semantic mask share
 matrix traversal sees clean Rust state. Every workload now shares one root, because a paragraph batches its own spans
 and no workload states a compositing mode.
 
-An identical direct Chromium 149/WebGPU/DPR-2 Paragraph Stress comparison retained 11,510 glyphs, one draw, and 64
-authored reflows in every case. The committed baseline measured 14.295 ms median reflow; measurement piggyback alone on
-that baseline measured 13.615 ms; adding semantic dirty tiers while retaining the same old Rust measured 7.450 ms; the
-complete candidate measured 6.885 ms. These telemetry histories contain 13–16 settled samples and establish direction
-and isolation, not a portable frame-time gate. A normal phase capture attributes most changed-frame CPU time to the
-single Rust `pmndrs_glyph_engine_update`; TypeScript preparation, semantic readback, plan application, and renderer submit are smaller.
+Two direct Chromium 149/WebGPU/DPR-2 Paragraph Stress comparisons retained 11,510 glyphs and one draw in every case.
+Candidate/main retained-update medians were 0.665/0.795 and 0.750/0.785 ms; update-plus-measure medians were 0.510/0.580
+and 0.565/0.605 ms. The latest renderer-submit medians were 0.370/0.390 ms. One short candidate retained-update history
+contained a 2.510-ms p95 outlier versus main's 1.655 ms, while the longer isolated pair improved p95; medians and repeated
+direction therefore establish no regression and lower common-case CPU, not a portable tail guarantee. A normal phase
+capture attributes most changed-frame CPU time to the single Rust
+`pmndrs_glyph_engine_update`; TypeScript preparation, semantic readback, plan application, and renderer submit are smaller.
 A symbol-preserving diagnostic did not provide honest finer Rust attribution because LTO inlines most warm work into the
 export, so internal phase timers are required before claiming a particular Rust loop is dominant.
 
@@ -585,11 +595,15 @@ current captured corpus is pure LTR Latin and therefore resolves to the same all
 synthetic short-run sequence and is the run's only non-uniform input. On the recorded Darwin arm64 Node run, the
 production one-block SIMD scan reduced the captured
 25,515-glyph median from 0.00828 ms scalar to 0.00128 ms and the 100,602-glyph median from 0.03262 ms to 0.00484 ms;
-the uniform lane necessarily reproduced it within timing noise. The adversarial mixed lane regressed from 0.01062 ms to
-0.04718 ms and from 0.04286 ms to 0.18971 ms respectively. Production therefore uses the conservative one-block scan
-for the measured LTR workload, retains scalar as the correctness oracle and tail, and records the mixed-direction cost
-explicitly rather than presenting the synthetic lane as representative. These host-local measurements are admission
-evidence, not a portability claim; a natural bidi-bearing corpus remains required before making a broader claim.
+the uniform lane necessarily reproduced it within timing noise. The adversarial mixed lane originally regressed from
+0.01062 ms to 0.04718 ms and from 0.04286 ms to 0.18971 ms respectively. Production now checks a four-level scalar
+prefix before entering the Wasm SIMD scan. The final 100,602-glyph browser run measured the mixed lane at 0.0406 ms for
+both explicit SIMD and compiler-auto variants, the uniform lane at 0.003125 ms explicit versus 0.03125 ms auto, and the
+representative policy codec at 1.350 ms explicit versus 3.3625 ms auto. Native scalar/auto/explicit hashes and browser
+aligned/unaligned hashes remain identical, with no warm memory growth. The prefix is compiled only for the Wasm SIMD
+feature, so native scalar and auto-vectorized artifacts keep their original loop. These host-local measurements are
+admission evidence, not a portability claim; a natural bidi-bearing corpus remains required before making a broader
+claim.
 
 The bake-host report separates the consumer phases without timing conformance work. Each offline sample creates a fresh Wasm baker and records initialization plus first bake as cold, then records a second bake on that instance as warm. Each isolated Chromium context queues two requests onto one Worker: first completion contains Worker/Wasm startup plus its bake, while the interval to second completion is the warm reused-instance bake. Three captured arm64/Chromium 149 samples preserve complete artifact parity; medians were 4.16 ms cold / 2.94 ms warm offline and 21.70 ms cold / 3.50 ms warm in the Worker. These are observations, not cross-host thresholds.
 

@@ -39,6 +39,17 @@ impl<T> Staged<T> {
         }
     }
 
+    /// Mutates a derived cache on whichever complete value is active. Callers may
+    /// not change semantic lanes through this access; it exists for lazy indexes
+    /// whose contents are a pure function of the active stage.
+    pub(crate) fn active_mut(&mut self) -> &mut T {
+        if self.prepared {
+            &mut self.pending
+        } else {
+            &mut self.committed
+        }
+    }
+
     /// The last committed value, ignoring anything in flight. Used where a stage must
     /// compare against what the retained plan already published — the equivalence proofs — and
     /// nowhere else.

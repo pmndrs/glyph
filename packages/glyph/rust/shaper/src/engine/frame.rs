@@ -113,6 +113,7 @@ pub(crate) struct UpdateRequest<'a> {
     pub compositing_independent: bool,
     pub limits: UpdateLimits,
     pub paragraph_mutations: super::semantic_wire::ParagraphMutationBatch<'a>,
+    pub paragraph_order_mutations: super::semantic_wire::ParagraphOrderMutationBatch<'a>,
     pub text_mutations: super::semantic_wire::TextMutationBatch<'a>,
     pub style_mutations: super::semantic_wire::StyleMutationBatch<'a>,
     pub geometry: super::semantic_wire::GeometryBatch<'a>,

@@ -444,7 +444,9 @@ engine-free side path. Camera motion does not republish text. Text, nested `Text
 visibility, reparenting, and manual matrix changes patch only affected renderer-local slots and do not enter Wasm.
 Within a `TextGroup`, each child `Text.renderOrder` ranks that paragraph's instances in the shared batch while the nearest
 `TextGroup.renderOrder` remains the Three draw-mesh order. Changing only a child rank publishes one transactional
-paragraph permutation without resending text, styles, geometry, measurement, or per-glyph records. An ungrouped
+16-byte `(paragraph_id, scope, rank)` sideband record and lets Rust apply the paragraph permutation without resending
+text, styles, geometry, measurement, or per-glyph records. Ordinary content updates retain the 12-byte lifecycle record
+and omit the sideband when scope and rank are unchanged. An ungrouped
 `Text.renderOrder` retains ordinary Three draw-mesh meaning. Paragraph rank is deliberately absent from glyph storage and
 draw keys: compatible spans and grouped paragraphs therefore coalesce by resource, material, and fixed paint layer, with
 under-decoration, glyph, and over-decoration layers preserving CSS paint order.
@@ -1083,6 +1085,39 @@ integration sequence drives adopt → relayout → adopt across the equivalence 
 (−89%), the published classes are unchanged, and every other lane is neutral over two interleaved rounds. The
 lane median and p95 are order statistics over the published classes and move little; what changed is that a
 third of resize frames now cost a third of a millisecond.
+
+The completing reflow pass keeps shaped-word composition data beside the retained cluster lanes. Only a paragraph whose
+active geometry requests word wrapping lazily builds the sidecar. Sparse prose records one 12-byte
+`(cluster_end, advance_units, space_units)` entry per legal word break plus its terminal segment; a paragraph with at
+least one break per two clusters stays on the existing cluster/chunk path when advances are nonnegative, so ordinary
+dense CJK never pays a sidecar record per character. Paragraphs shorter than one 64-cluster layout chunk also stay on
+the allocation-free scalar path, so ordinary labels never construct the word index. A rare dense stream containing a negative advance keeps the sidecar
+so its presence remains a pure optimization and cannot change the selected break. Word fitting consumes complete shaped segments before testing the width, including the same word-space
+shrink budget used by justification. This fixes the case where an early positive glyph advance followed by a negative
+shaping adjustment incorrectly pushed a word to the next line even though the completed word fit. It does not reshape
+or split a previously shaped word.
+
+The legal stream begins with Unicode 17 UAX #14 opportunities, discards any optional opportunity that falls inside a
+UAX #29 extended grapheme, and intersects the result with HarfRust unsafe-to-break shaping boundaries. The default has
+no dictionary segmentation, language-specific hyphenation, or locale tailoring. Optional language-resource imports,
+including a versioned linear-memory ABI that can move language tables out of the default Wasm payload, are tracked in
+[#163](https://github.com/pmndrs/glyph/issues/163); no renderer adapter may become a second layout implementation.
+
+After composition, start-aligned lines whose semantic range, fragment order, indent, baseline, transform, clip, slot
+origin, and final-line state are unchanged copy their committed positioned SoA slices even when a wider slot changes
+only its unused end. Retained lines copy their indexed decoration slice with their glyph and semantic slices; a changed
+slot start invalidates reuse because it changes the published semantic line extent. Nontrivial bidi, center/end
+alignment, justification changes, boundary reshaping, and any changed line geometry take the full positioning path. At 22,000 glyphs and 101 widening updates, the final candidate measured
+1.858/4.849 ms median/p95 versus exact remote main's 2.991/5.256 ms. The dedicated measurement query measured
+0.327/0.455 ms versus 0.517/0.711 ms. Two browser Paragraph Stress A/B pairs retained 11,510 glyphs in one draw: the
+candidate/main retained-update medians were 0.665/0.795 and 0.750/0.785 ms, while update-plus-measure medians were
+0.510/0.580 and 0.565/0.605 ms. These machine-local observations establish repeated direction and a lower common-case
+cost; width reflow remains above the sub-1-ms interactive target and is still the last post-shaping performance frontier.
+
+Large `measure()` and `glyphs()` queries also reserve against the smaller of the active slot's cached capacity and the
+required capacity reported by the failing inactive A/B result slot. Each retry must strictly grow the actual failing slot
+or return the typed engine error. This fixes alternating large inspection queries without an arbitrary retry count and
+without changing normal publication or cached-query work.
 
 Two follow-ups from the closing audit are tracked in [the integer layout-units plan](../planning/integer-layout-units.md)
 as slice 6 so they cannot silently lapse: the integer pen (layout decisions resolve in F26.6 while the

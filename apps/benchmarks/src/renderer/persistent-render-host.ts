@@ -26,6 +26,8 @@ export interface PersistentRenderViewport {
 export interface PersistentRenderSceneContext {
   readonly renderer: PersistentRenderSceneRenderer;
   readonly rendererInitMs: number;
+  /** Starts a fresh telemetry window after a retained scene changes benchmark identity. */
+  readonly resetTelemetry: () => void;
   readonly signal: AbortSignal;
   readonly viewport: PersistentRenderViewport;
 }
@@ -144,6 +146,10 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
       latestTelemetry = snapshot;
       for (const listener of listeners) listener(snapshot);
     };
+    const resetTelemetry = (): void => {
+      telemetry.reset();
+      latestTelemetry = undefined;
+    };
 
     const deactivate = async (record: ActiveScene, reason: PersistentRenderSceneDeactivation): Promise<void> => {
       record.controller.abort();
@@ -168,6 +174,7 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
             frameId,
             renderer: borrowedRenderer,
             rendererInitMs,
+            resetTelemetry,
             signal: current.controller.signal,
             timestamp,
             viewport,
@@ -226,6 +233,7 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
             await scene.activate({
               renderer: borrowedRenderer,
               rendererInitMs,
+              resetTelemetry,
               signal: controller.signal,
               viewport: activationViewport,
             });
@@ -235,6 +243,7 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
               throw supersededError();
             }
             if (viewport !== activationViewport) scene.resize?.(viewport);
+            resetTelemetry();
             activeScene = request;
           } catch (error) {
             if (!sceneDeactivated) {
@@ -300,6 +309,7 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
             return await job({
               renderer: borrowedRenderer,
               rendererInitMs,
+              resetTelemetry,
               signal: controller.signal,
               viewport,
             });

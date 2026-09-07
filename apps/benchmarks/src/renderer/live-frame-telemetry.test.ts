@@ -38,4 +38,24 @@ describe('live frame telemetry', () => {
       gpuHistoryLength: 4,
     });
   });
+
+  it('resets scene-local histories without reusing delayed GPU frame identities', () => {
+    const telemetry = createLiveFrameTelemetry({ capacity: 4, refreshRateHz: 60, reportIntervalMs: 1 });
+    const staleFrame = telemetry.beginFrame(0);
+    telemetry.endFrame(staleFrame, 100);
+
+    telemetry.reset();
+    expect(telemetry.recordGpu(staleFrame, 100)).toBe(false);
+
+    const freshFrame = telemetry.beginFrame(16);
+    telemetry.recordGpu(freshFrame, 2);
+    const snapshot = telemetry.endFrame(freshFrame, 3);
+    expect(freshFrame).toBeGreaterThan(staleFrame);
+    expect(snapshot).toMatchObject({
+      frameCount: 2,
+      medianSubmitMs: 3,
+      medianGpuMs: 2,
+      submitHistoryLength: 1,
+    });
+  });
 });

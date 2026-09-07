@@ -248,7 +248,9 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     const requestRevision = ++locationRequestRevisionRef.current;
     requestedLocationRef.current = value;
     const entersAdvancedShaping = value.workload === 'advanced-shaping' && previous.workload !== 'advanced-shaping';
-    const nextAdvancedShapingState = entersAdvancedShaping ? initialAdvancedShapingState('manual') : undefined;
+    const nextAdvancedShapingState = entersAdvancedShaping
+      ? initialAdvancedShapingState(presentationPlayback.current === undefined ? 'manual' : 'auto')
+      : undefined;
     const sceneFontFixture =
       value.workload === 'advanced-shaping'
         ? nextAdvancedShapingState === undefined

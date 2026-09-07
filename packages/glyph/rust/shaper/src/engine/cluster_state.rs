@@ -31,18 +31,31 @@ const NO_SOURCE_RUN: u32 = u32::MAX;
 /// Cluster count per chunk summary (D-245).
 pub(crate) const LAYOUT_CHUNK: usize = 64;
 
+/// One cumulative word-wrap opportunity. Sparse prose uses this cold sidecar
+/// to fit whole shaped words rather than retesting every cluster; dense break
+/// scripts stay on the cluster/chunk path so CJK does not pay a record per
+/// character.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WordBreakRecord {
+    pub cluster_end: u32,
+    pub advance_units: i32,
+    pub space_units: i32,
+}
+
 fn summarize_unit_chunks(
     units: &[i64],
     flags: &[u8],
     chunk_advance_sums: &mut Vec<i64>,
     chunk_space_sums: &mut Vec<i64>,
     chunk_flags_or: &mut Vec<u8>,
-) {
+) -> bool {
+    let mut has_negative_advance = false;
     for (advances, flags) in units.chunks(LAYOUT_CHUNK).zip(flags.chunks(LAYOUT_CHUNK)) {
         let advance_sum = sum_advance_units(advances);
         let mut space_sum = 0_i64;
         let mut flags_or = 0_u8;
         for (advance, flag) in advances.iter().zip(flags) {
+            has_negative_advance |= *advance < 0;
             space_sum =
                 space_sum.saturating_add(*advance & -i64::from((*flag & CLUSTER_SPACE) >> 4));
             flags_or |= *flag;
@@ -51,6 +64,7 @@ fn summarize_unit_chunks(
         chunk_space_sums.push(space_sum);
         chunk_flags_or.push(flags_or);
     }
+    has_negative_advance
 }
 
 #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
@@ -105,6 +119,9 @@ pub(crate) struct ClusterArena {
     pub chunk_advance_sums: Vec<i64>,
     pub chunk_space_sums: Vec<i64>,
     pub chunk_flags_or: Vec<u8>,
+    pub word_breaks: Vec<WordBreakRecord>,
+    pub(crate) word_breaks_valid: bool,
+    pub(crate) has_negative_advance: bool,
     /// Per-cluster `units_per_em` of the owning shaped font (0 while unshaped),
     /// resolved once at cluster build. Positioning derives its scale from the
     /// CURRENT style's font size and this column, so font-size-only style changes
@@ -502,13 +519,101 @@ impl ClusterArena {
         reserve(&mut self.chunk_advance_sums, chunk_count)?;
         reserve(&mut self.chunk_space_sums, chunk_count)?;
         reserve(&mut self.chunk_flags_or, chunk_count)?;
-        summarize_unit_chunks(
+        self.has_negative_advance = summarize_unit_chunks(
             &self.advance_units,
             &self.flags,
             &mut self.chunk_advance_sums,
             &mut self.chunk_space_sums,
             &mut self.chunk_flags_or,
         );
+        self.word_breaks.clear();
+        self.word_breaks_valid = false;
+        Ok(())
+    }
+
+    /// Lazily derives the sparse word index only when active geometry needs word
+    /// wrapping. Once valid, width-only reflow reuses it without another scan.
+    pub(crate) fn ensure_word_breaks(&mut self) -> Result<(), EngineError> {
+        if self.word_breaks_valid {
+            return Ok(());
+        }
+        self.word_breaks.clear();
+        // A sidecar cannot amortize its construction below one layout chunk:
+        // the scalar compositor already consumes the complete shaped segment
+        // without allocating, while short-label batches would otherwise build
+        // thousands of one- or two-record vectors every content update.
+        if self.flags.len() < LAYOUT_CHUNK {
+            self.word_breaks_valid = true;
+            return Ok(());
+        }
+        let mut opportunity_count = 0usize;
+        for &flags in &self.flags {
+            opportunity_count += usize::from(
+                flags & (CLUSTER_ALLOWED_BREAK | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) != 0,
+            );
+        }
+        // At one opportunity per two clusters or denser, the record stream
+        // would rival the source lanes and performs no less work than the
+        // existing chunk/scalar path (the usual CJK and character-like case).
+        // Negative advances need the complete-segment kernel below; materialize
+        // its index even for dense text so this heuristic cannot change layout.
+        if !self.has_negative_advance && opportunity_count.saturating_mul(2) >= self.flags.len() {
+            self.word_breaks_valid = true;
+            return Ok(());
+        }
+        reserve(&mut self.word_breaks, opportunity_count.saturating_add(1))?;
+        let mut advance_units = 0_i64;
+        let mut space_units = 0_i64;
+        for (index, (&advance, &flags)) in self.advance_units.iter().zip(&self.flags).enumerate() {
+            advance_units = advance_units.saturating_add(advance);
+            if flags & CLUSTER_SPACE != 0 {
+                space_units = space_units.saturating_add(advance);
+            }
+            if flags & (CLUSTER_ALLOWED_BREAK | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) != 0 {
+                let Ok(segment_advance) = i32::try_from(advance_units) else {
+                    self.word_breaks.clear();
+                    self.word_breaks_valid = true;
+                    return Ok(());
+                };
+                let Ok(segment_space) = i32::try_from(space_units) else {
+                    self.word_breaks.clear();
+                    self.word_breaks_valid = true;
+                    return Ok(());
+                };
+                self.word_breaks.push(WordBreakRecord {
+                    cluster_end: u32::try_from(index + 1)
+                        .map_err(|_| EngineError::ResultTooLarge)?,
+                    advance_units: segment_advance,
+                    space_units: segment_space,
+                });
+                advance_units = 0;
+                space_units = 0;
+            }
+        }
+        let count = self.advance_units.len();
+        if count > 0
+            && self
+                .word_breaks
+                .last()
+                .is_none_or(|record| record.cluster_end as usize != count)
+        {
+            let Ok(segment_advance) = i32::try_from(advance_units) else {
+                self.word_breaks.clear();
+                self.word_breaks_valid = true;
+                return Ok(());
+            };
+            let Ok(segment_space) = i32::try_from(space_units) else {
+                self.word_breaks.clear();
+                self.word_breaks_valid = true;
+                return Ok(());
+            };
+            self.word_breaks.push(WordBreakRecord {
+                cluster_end: u32::try_from(count).map_err(|_| EngineError::ResultTooLarge)?,
+                advance_units: segment_advance,
+                space_units: segment_space,
+            });
+        }
+        self.word_breaks_valid = true;
         Ok(())
     }
 
@@ -810,6 +915,9 @@ impl ClusterArena {
         self.chunk_advance_sums.clear();
         self.chunk_space_sums.clear();
         self.chunk_flags_or.clear();
+        self.word_breaks.clear();
+        self.word_breaks_valid = false;
+        self.has_negative_advance = false;
         self.units_per_em.clear();
         self.flags.clear();
         self.style_indexes.clear();
@@ -1944,6 +2052,7 @@ mod tests {
         assert_lane!(chunk_advance_sums);
         assert_lane!(chunk_space_sums);
         assert_lane!(chunk_flags_or);
+        assert_lane!(word_breaks);
         assert_lane!(units_per_em);
         assert_lane!(flags);
         assert_lane!(style_indexes);
@@ -2015,6 +2124,16 @@ mod tests {
     }
 
     #[test]
+    fn intrinsic_word_width_uses_the_complete_shaped_segment() {
+        let mut clusters = intrinsic_fixture();
+        clusters.advances[0] = 10.0;
+        clusters.advances[1] = -4.0;
+        let widths = clusters.intrinsic_widths(WRAP_WORD);
+        assert_eq!(widths.min_content_width, 9.0);
+        assert_eq!(widths.max_content_width, 27.0);
+    }
+
+    #[test]
     fn character_wrap_takes_every_safe_boundary_and_none_wraps_never() {
         let mut clusters = intrinsic_fixture();
         for flag in clusters.flags.iter_mut() {
@@ -2063,5 +2182,57 @@ mod tests {
             arena.chunk_flags_or,
             [CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE, CLUSTER_ALLOWED_BREAK]
         );
+    }
+
+    #[test]
+    fn word_break_stream_is_compact_and_only_materialized_for_sparse_breaks() {
+        assert_eq!(core::mem::size_of::<WordBreakRecord>(), 12);
+
+        let mut sparse = ClusterArena {
+            advances: vec![1.0; LAYOUT_CHUNK * 2],
+            flags: vec![0; LAYOUT_CHUNK * 2],
+            ..ClusterArena::default()
+        };
+        sparse.flags[2] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        sparse.flags[6] = CLUSTER_ALLOWED_BREAK;
+        sparse.refresh_layout_units().unwrap();
+        assert!(
+            sparse.word_breaks.is_empty(),
+            "layout-unit refresh does not eagerly build word indexes"
+        );
+        sparse.ensure_word_breaks().unwrap();
+        assert_eq!(sparse.word_breaks.len(), 3);
+        assert_eq!(sparse.word_breaks[0].cluster_end, 3);
+        assert_eq!(sparse.word_breaks[0].advance_units, 3 * 65_536);
+        assert_eq!(sparse.word_breaks[0].space_units, 65_536);
+        assert_eq!(sparse.word_breaks[1].cluster_end, 7);
+        assert_eq!(sparse.word_breaks[1].advance_units, 4 * 65_536);
+        assert_eq!(sparse.word_breaks[2].cluster_end, (LAYOUT_CHUNK * 2) as u32);
+        assert_eq!(
+            sparse.word_breaks[2].advance_units,
+            (LAYOUT_CHUNK * 2 - 7) as i32 * 65_536
+        );
+
+        let mut short = ClusterArena {
+            advances: vec![1.0; LAYOUT_CHUNK - 1],
+            flags: vec![0; LAYOUT_CHUNK - 1],
+            ..ClusterArena::default()
+        };
+        short.flags[2] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        short.refresh_layout_units().unwrap();
+        short.ensure_word_breaks().unwrap();
+        assert!(
+            short.word_breaks.is_empty(),
+            "sub-chunk labels stay on the allocation-free scalar compositor"
+        );
+
+        let mut dense = ClusterArena {
+            advances: vec![1.0; 4],
+            flags: vec![CLUSTER_ALLOWED_BREAK; 4],
+            ..ClusterArena::default()
+        };
+        dense.refresh_layout_units().unwrap();
+        dense.ensure_word_breaks().unwrap();
+        assert!(dense.word_breaks.is_empty());
     }
 }

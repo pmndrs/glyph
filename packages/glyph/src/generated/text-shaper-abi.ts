@@ -511,6 +511,13 @@ export const textShaperAbi = {
       "reserved0": 2,
       "size": 12
     },
+    "engineParagraphOrderMutation": {
+      "alignment": 8,
+      "orderRank": 8,
+      "orderScope": 4,
+      "paragraphId": 0,
+      "size": 16
+    },
     "enginePatch": {
       "alignment": 4,
       "bufferGeneration": 8,
@@ -746,11 +753,13 @@ export const textShaperAbi = {
       "maxSlotsPerBand": 60,
       "paragraphMutationCount": 132,
       "paragraphMutationsOffset": 128,
+      "paragraphOrderMutationCount": 140,
+      "paragraphOrderMutationsOffset": 136,
       "regionCount": 96,
       "regionsOffset": 92,
       "rootId": 8,
       "semanticViewMask": 36,
-      "size": 136,
+      "size": 144,
       "styleMutationCount": 80,
       "styleMutationsOffset": 76,
       "textMutationCount": 72,

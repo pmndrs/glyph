@@ -226,6 +226,8 @@ struct EngineUpdateRequestHeader {
     max_paragraphs: u32,
     paragraph_mutations_offset: u32,
     paragraph_mutation_count: u32,
+    paragraph_order_mutations_offset: u32,
+    paragraph_order_mutation_count: u32,
 }
 
 #[repr(C)]
@@ -243,6 +245,13 @@ struct EngineParagraphMutationRecord {
     reserved0: u16,
     paragraph_id: u32,
     order: u32,
+}
+
+#[repr(C)]
+struct EngineParagraphOrderMutationRecord {
+    paragraph_id: u32,
+    order_scope: u32,
+    order_rank: f64,
 }
 
 #[repr(C)]
@@ -514,6 +523,11 @@ layout!(
     ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE,
     ENGINE_PARAGRAPH_MUTATION_RECORD_ALIGNMENT,
     EngineParagraphMutationRecord
+);
+layout!(
+    ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE,
+    ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_ALIGNMENT,
+    EngineParagraphOrderMutationRecord
 );
 layout!(
     ENGINE_TEXT_MUTATION_RECORD_SIZE,
@@ -1072,6 +1086,16 @@ field_offset!(
     paragraph_mutation_count
 );
 field_offset!(
+    ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATIONS_OFFSET,
+    EngineUpdateRequestHeader,
+    paragraph_order_mutations_offset
+);
+field_offset!(
+    ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATION_COUNT,
+    EngineUpdateRequestHeader,
+    paragraph_order_mutation_count
+);
+field_offset!(
     ENGINE_PARAGRAPH_MUTATION_OPCODE,
     EngineParagraphMutationRecord,
     opcode
@@ -1095,6 +1119,21 @@ field_offset!(
     ENGINE_PARAGRAPH_MUTATION_ORDER,
     EngineParagraphMutationRecord,
     order
+);
+field_offset!(
+    ENGINE_PARAGRAPH_ORDER_MUTATION_PARAGRAPH_ID,
+    EngineParagraphOrderMutationRecord,
+    paragraph_id
+);
+field_offset!(
+    ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_SCOPE,
+    EngineParagraphOrderMutationRecord,
+    order_scope
+);
+field_offset!(
+    ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_RANK,
+    EngineParagraphOrderMutationRecord,
+    order_rank
 );
 field_offset!(
     ENGINE_TEXT_MUTATION_OPCODE,
@@ -2080,7 +2119,9 @@ pub fn json() -> String {
                 "codecParametersLength": ENGINE_UPDATE_CODEC_PARAMETERS_LENGTH,
                 "maxParagraphs": ENGINE_UPDATE_MAX_PARAGRAPHS,
                 "paragraphMutationsOffset": ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET,
-                "paragraphMutationCount": ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT
+                "paragraphMutationCount": ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT,
+                "paragraphOrderMutationsOffset": ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATIONS_OFFSET,
+                "paragraphOrderMutationCount": ENGINE_UPDATE_PARAGRAPH_ORDER_MUTATION_COUNT
             },
             "engineUpdateBatchEntry": {
                 "size": ENGINE_UPDATE_BATCH_ENTRY_SIZE,
@@ -2098,6 +2139,13 @@ pub fn json() -> String {
                 "reserved0": ENGINE_PARAGRAPH_MUTATION_RESERVED0,
                 "paragraphId": ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID,
                 "order": ENGINE_PARAGRAPH_MUTATION_ORDER
+            },
+            "engineParagraphOrderMutation": {
+                "size": ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE,
+                "alignment": ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_ALIGNMENT,
+                "paragraphId": ENGINE_PARAGRAPH_ORDER_MUTATION_PARAGRAPH_ID,
+                "orderScope": ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_SCOPE,
+                "orderRank": ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_RANK
             },
             "engineTextMutation": {
                 "size": ENGINE_TEXT_MUTATION_RECORD_SIZE,

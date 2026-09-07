@@ -238,6 +238,19 @@ pub(crate) fn layout_next_line_integer(
     wrap: u8,
     word_space_shrink: f64,
 ) -> Result<Option<ComposedLine>, EngineError> {
+    if wrap == WRAP_WORD && !clusters.word_breaks.is_empty() {
+        return layout_next_word_line_indexed(clusters, cursor, max_width_units, word_space_shrink);
+    }
+    layout_next_line_integer_scalar(clusters, cursor, max_width_units, wrap, word_space_shrink)
+}
+
+fn layout_next_line_integer_scalar(
+    clusters: &ClusterArena,
+    cursor: &mut LineCursor,
+    max_width_units: Option<i64>,
+    wrap: u8,
+    word_space_shrink: f64,
+) -> Result<Option<ComposedLine>, EngineError> {
     if max_width_units.is_some_and(|units| units < 0)
         || !(0.0..1.0).contains(&word_space_shrink)
         || !matches!(wrap, WRAP_NONE | WRAP_WORD | WRAP_CHARACTER)
@@ -290,6 +303,7 @@ pub(crate) fn layout_next_line_integer(
     // candidate. Exactness holds because integer chunk sums equal the per-cluster
     // sums.
     let chunk_summaries = wrap == WRAP_WORD
+        && !clusters.has_negative_advance
         && clusters.chunk_flags_or.len() == count.div_ceil(super::cluster_state::LAYOUT_CHUNK);
     let mut pending_allowed: Option<(usize, i64)> = None;
     let mut pending_safe: Option<(usize, i64)> = None;
@@ -346,19 +360,43 @@ pub(crate) fn layout_next_line_integer(
         // space becomes interior, charged by the next non-space cluster's own test.
         // Testing it would refuse words the line has room for, and did.
         let cluster_is_space = flags & CLUSTER_SPACE != 0;
-        // A required break ends the line here, so the spaces already accumulated behind it
-        // hang exactly as they would at a soft wrap and must not be charged. Any other
-        // cluster continues the line, making those spaces interior and chargeable.
-        let hanging_units = if required_break {
+        let next_trailing_space_units = if cluster_is_space {
+            trailing_space_units.saturating_add(cluster_advance)
+        } else if required_break {
+            // A hard-break control does not make the spaces immediately before it
+            // interior. They still terminate this line and hang from its measure.
             trailing_space_units
         } else {
             0
         };
-        if wrap != WRAP_NONE
-            && !cluster_is_space
+        let word_segment_end = wrap == WRAP_WORD
+            && (flags & CLUSTER_ALLOWED_BREAK != 0 || required_break || index + 1 == count);
+        // Word wrapping evaluates only a completed shaped segment. Its terminating
+        // spaces hang and are removed from both visible advance and shrink budget,
+        // exactly like the indexed fitter. Character wrap retains its per-cluster
+        // overflow test.
+        let hanging_units = if wrap == WRAP_WORD && word_segment_end {
+            next_trailing_space_units
+        } else if required_break {
+            trailing_space_units
+        } else {
+            0
+        };
+        let visible_space_units = if wrap == WRAP_WORD {
+            next_space_units.saturating_sub(hanging_units)
+        } else {
+            next_space_units
+        };
+        let tests_overflow = match wrap {
+            WRAP_WORD => word_segment_end,
+            WRAP_CHARACTER => !cluster_is_space,
+            WRAP_NONE => false,
+            _ => unreachable!(),
+        };
+        if tests_overflow
             && max_width_units.is_some_and(|units| {
                 next_advance.saturating_sub(hanging_units).saturating_sub(
-                    super::layout_units::apply_ratio(next_space_units, word_space_shrink),
+                    super::layout_units::apply_ratio(visible_space_units, word_space_shrink),
                 ) > units
             })
             && index > line_start
@@ -383,7 +421,10 @@ pub(crate) fn layout_next_line_integer(
                 selected_advance = last_safe_advance;
             } else {
                 advance = next_advance;
-                if required_break || index + 1 == count {
+                if (wrap == WRAP_WORD && word_segment_end) || required_break || index + 1 == count {
+                    // The first complete word has no earlier legal fallback. Keep
+                    // that word intact and let it overflow, instead of carrying an
+                    // already-overfull prefix through every later opportunity.
                     selected_end = index + 1;
                     selected_advance = advance;
                     break;
@@ -395,11 +436,7 @@ pub(crate) fn layout_next_line_integer(
         }
         advance = next_advance;
         space_units = next_space_units;
-        trailing_space_units = if cluster_is_space {
-            trailing_space_units.saturating_add(cluster_advance)
-        } else {
-            0
-        };
+        trailing_space_units = next_trailing_space_units;
         if required_break {
             selected_end = index + 1;
             selected_advance = advance;
@@ -467,6 +504,131 @@ pub(crate) fn layout_next_line_integer(
     }))
 }
 
+fn layout_next_word_line_indexed(
+    clusters: &ClusterArena,
+    cursor: &mut LineCursor,
+    max_width_units: Option<i64>,
+    word_space_shrink: f64,
+) -> Result<Option<ComposedLine>, EngineError> {
+    if max_width_units.is_some_and(|units| units < 0) || !(0.0..1.0).contains(&word_space_shrink) {
+        return Err(EngineError::InvalidRequest);
+    }
+    let count = clusters.starts.len();
+    if cursor.cluster > count || clusters.advance_units.len() != count {
+        return Err(EngineError::InvalidRequest);
+    }
+    if cursor.trailing_empty || cursor.cluster == count {
+        return layout_next_line_integer_scalar(
+            clusters,
+            cursor,
+            max_width_units,
+            WRAP_WORD,
+            word_space_shrink,
+        );
+    }
+    let line_start = cursor.cluster;
+    let first_break = clusters
+        .word_breaks
+        .partition_point(|record| record.cluster_end as usize <= line_start);
+    if first_break == 0 {
+        if line_start != 0 {
+            return layout_next_line_integer_scalar(
+                clusters,
+                cursor,
+                max_width_units,
+                WRAP_WORD,
+                word_space_shrink,
+            );
+        }
+    } else {
+        let previous = clusters.word_breaks[first_break - 1];
+        if previous.cluster_end as usize != line_start {
+            return layout_next_line_integer_scalar(
+                clusters,
+                cursor,
+                max_width_units,
+                WRAP_WORD,
+                word_space_shrink,
+            );
+        }
+    }
+    let mut selected = None;
+    let mut line_advance = 0_i64;
+    let mut line_spaces = 0_i64;
+    for index in first_break..clusters.word_breaks.len() {
+        let record = clusters.word_breaks[index];
+        let end = usize::try_from(record.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        let next_advance = line_advance.saturating_add(i64::from(record.advance_units));
+        let next_spaces = line_spaces.saturating_add(i64::from(record.space_units));
+        let trailing = trailing_space_units(clusters, line_start, end);
+        let visible_advance = next_advance.saturating_sub(trailing);
+        let visible_spaces = next_spaces.saturating_sub(trailing);
+        let effective = visible_advance.saturating_sub(super::layout_units::apply_ratio(
+            visible_spaces,
+            word_space_shrink,
+        ));
+        if max_width_units.is_some_and(|width| effective > width) {
+            if index == first_break {
+                return layout_next_line_integer_scalar(
+                    clusters,
+                    cursor,
+                    max_width_units,
+                    WRAP_WORD,
+                    word_space_shrink,
+                );
+            }
+            break;
+        }
+        line_advance = next_advance;
+        line_spaces = next_spaces;
+        selected = Some((record, line_advance));
+        if clusters.flags[end - 1] & (CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) != 0
+            || end == count
+        {
+            break;
+        }
+    }
+    let (record, full_advance) = selected.ok_or(EngineError::InvalidRequest)?;
+    let selected_end =
+        usize::try_from(record.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+    if selected_end <= line_start || selected_end > count {
+        return Err(EngineError::InvalidRequest);
+    }
+    let last = selected_end - 1;
+    let hard_break = clusters.flags[last] & CLUSTER_HARD_BREAK != 0;
+    let hung_units = trailing_space_units(clusters, line_start, selected_end);
+    let selected_advance = full_advance.saturating_sub(hung_units);
+    let text_start = clusters.starts[line_start];
+    let text_end = if hard_break {
+        clusters.starts[last]
+    } else {
+        clusters.ends[last]
+    };
+    cursor.cluster = selected_end;
+    cursor.trailing_empty = selected_end == count && hard_break;
+    Ok(Some(ComposedLine {
+        cluster_start: u32::try_from(line_start).map_err(|_| EngineError::ResultTooLarge)?,
+        cluster_end: record.cluster_end,
+        text_start,
+        text_end,
+        advance: scaled_from_layout_units(selected_advance),
+        hung_advance: scaled_from_layout_units(hung_units),
+        hard_break,
+    }))
+}
+
+fn trailing_space_units(clusters: &ClusterArena, start: usize, mut end: usize) -> i64 {
+    if end > start && clusters.flags[end - 1] & CLUSTER_HARD_BREAK != 0 {
+        end -= 1;
+    }
+    let mut trailing = 0_i64;
+    while end > start && clusters.flags[end - 1] & CLUSTER_SPACE != 0 {
+        trailing = trailing.saturating_add(clusters.advance_units[end - 1]);
+        end -= 1;
+    }
+    trailing
+}
+
 /// Resolves the deferred break candidate inside a fully consumed chunk: the LAST
 /// cluster carrying `flag`, with the exact prefix advance the scalar loop would have
 /// recorded there. Allowed breaks break after their cluster; safe breaks break
@@ -503,6 +665,7 @@ fn resolve_last_flagged(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::cluster_state::WordBreakRecord;
     use alloc::vec;
 
     fn make_clusters(advances: &[f64], flags: &[u8]) -> ClusterArena {
@@ -531,6 +694,7 @@ mod tests {
             *advance = scaled_from_layout_units(clusters.advance_units[index]);
         }
         clusters.refresh_layout_units().unwrap();
+        clusters.ensure_word_breaks().unwrap();
         clusters
     }
 
@@ -675,6 +839,68 @@ mod tests {
     }
 
     #[test]
+    fn an_oversized_sparse_word_index_falls_back_to_the_exact_scalar_fit() {
+        use super::super::layout_units::layout_units_from_scaled;
+
+        let mut flags = [0_u8; 8];
+        flags[2] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        flags[7] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        let clusters =
+            make_quantized_clusters(&[32_768.0, 1.0, 1.0, 2.0, 3.0, 4.0, 5.0, 1.0], &flags);
+        assert!(
+            clusters.word_breaks.is_empty(),
+            "a word advance outside the compact i32 sidecar domain selects the scalar kernel",
+        );
+        for width in [1.0_f64, 32_767.0, 32_768.0, 32_769.0, 32_770.0, 32_786.0] {
+            let width_units = layout_units_from_scaled(width);
+            assert_eq!(
+                fit_all_integer(&clusters, Some(width_units), WRAP_WORD, 0.0),
+                fit_all(
+                    &clusters,
+                    scaled_from_layout_units(width_units),
+                    WRAP_WORD,
+                    0.0,
+                ),
+                "width {width}",
+            );
+        }
+    }
+
+    #[test]
+    fn an_oversized_negative_stream_cannot_take_the_monotonic_chunk_path() {
+        use super::super::{cluster_state::LAYOUT_CHUNK, layout_units::layout_units_from_scaled};
+
+        let mut advances = vec![0.0; LAYOUT_CHUNK];
+        let mut flags = vec![0; LAYOUT_CHUNK];
+        advances[10] = 32_768.0;
+        flags[10] = CLUSTER_ALLOWED_BREAK;
+        advances[20] = -32_768.0;
+        flags[20] = CLUSTER_ALLOWED_BREAK;
+        flags[LAYOUT_CHUNK - 1] = CLUSTER_ALLOWED_BREAK;
+        let mut clusters = make_clusters(&advances, &flags);
+        clusters.ensure_word_breaks().unwrap();
+        assert!(
+            clusters.word_breaks.is_empty(),
+            "the first segment exceeds the i32 sidecar domain"
+        );
+        assert!(clusters.has_negative_advance);
+
+        let line = layout_next_line_integer(
+            &clusters,
+            &mut LineCursor::default(),
+            Some(layout_units_from_scaled(1.0)),
+            WRAP_WORD,
+            0.0,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            line.cluster_end, 11,
+            "the later negative segment cannot pull an overflowing word back"
+        );
+    }
+
+    #[test]
     fn integer_shrink_matches_f64_shrink_for_odd_units_and_non_dyadic_ratios() {
         use super::super::layout_units::{LAYOUT_UNITS_PER_PIXEL, layout_units_from_scaled};
         // The Sol review's counterexample: one-unit spaces at width 65,536 units with a
@@ -773,6 +999,58 @@ mod tests {
             .unwrap();
         assert_eq!(line.cluster_end, 10);
         assert_eq!(line.advance, 10.0);
+    }
+
+    #[test]
+    fn word_fit_waits_for_the_shaped_word_before_breaking() {
+        // The second word has an early positive cluster followed by a negative
+        // shaped adjustment. Its completed advance fits exactly after the
+        // declared space compression; breaking at the early crossing leaves
+        // avoidable whitespace and disagrees with word-level composition.
+        let mut flags = [CLUSTER_SAFE_BEFORE; 8];
+        flags[4] |= CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        let mut clusters = make_quantized_clusters(&[1.0, 1.0, 1.0, 1.0, 1.0, 6.0, -4.0, 1.0], &flags);
+        clusters.word_breaks = vec![
+            WordBreakRecord {
+                cluster_end: 5,
+                advance_units: 5 * 65_536,
+                space_units: 65_536,
+            },
+            WordBreakRecord {
+                cluster_end: 8,
+                advance_units: 3 * 65_536,
+                space_units: 0,
+            },
+        ];
+        assert!(!clusters.word_breaks.is_empty());
+        let mut cursor = LineCursor::default();
+        let line = layout_next_line_integer(
+            &clusters,
+            &mut cursor,
+            Some(super::super::layout_units::layout_units_from_scaled(7.5)),
+            WRAP_WORD,
+            0.5,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(line.cluster_end, 8);
+        assert_eq!(line.advance, 8.0);
+        let mut scalar_clusters = clusters;
+        scalar_clusters.word_breaks.clear();
+        let mut scalar_cursor = LineCursor::default();
+        let scalar = layout_next_line_integer(
+            &scalar_clusters,
+            &mut scalar_cursor,
+            Some(super::super::layout_units::layout_units_from_scaled(7.5)),
+            WRAP_WORD,
+            0.5,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            scalar, line,
+            "the sparse index is only an optimization and cannot select a different break",
+        );
     }
 
     #[test]

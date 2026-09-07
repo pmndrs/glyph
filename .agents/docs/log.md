@@ -14,6 +14,47 @@
 
 ## 2026-09-07
 
+- **Completed the scoped maintainability pass** — Strict TypeScript, Oxlint, Oxfmt, Rustfmt, and Clippy checks cover the
+  touched Glyph and benchmark boundaries. Camera-rank updates no longer allocate temporary paragraph-order objects,
+  the telemetry ring owns one shared index calculation, and scalar word fitting explicitly disables monotonic chunk
+  skips for the rare negative-advance/sidecar-overflow case. The review deliberately keeps paragraph scratch records
+  separate from the 64-byte glyph record, keeps renderer reconciliation loops allocation-free, and rejects broader
+  abstraction or scope-ID recycling without a measured failure mode.
+
+- **Closed the final Opus review findings** — The second read-only review found an unstated group leaking child paragraph
+  ranks into Three material keys, retained lines dropping decoration records, scalar word fallback disagreeing with the
+  sparse index on negative advances, an end-aligned semantic-extent reuse hole, and an extreme tight-line-height clamp.
+  Focused regressions now keep default groups in one draw, copy per-line decoration slices, make both word fitters select
+  the same completed shaped segment, invalidate moved slot starts, and preserve an authored 0.5-em line box. The timed
+  demo observer also records attribute old values so batched DOM mutations cannot hide a language-case transition.
+
+- **Opened optional language-resource follow-up** — [#163](https://github.com/pmndrs/glyph/issues/163) specifies
+  explicit language selection, dynamically imported dictionary/hyphenation data, a versioned bounds-checked Wasm
+  linear-memory ABI, deterministic baseline fallback, and package-size/hot-path gates. Baseline word wrapping remains
+  Unicode UAX #14 constrained by grapheme and shaping safety; it does not pretend to provide locale tailoring.
+
+- **Repaired the complete timed Presentation proof** — Exact remote main and the candidate both exposed a state race:
+  timed playback initialized Advanced Shaping as automatic, then the location transition overwrote it with manual mode,
+  repeating only the first CJK case. Playback-aware initialization now preserves auto mode, and the probe records DOM
+  mutations across the whole scene rather than polling short cases sequentially. WebGPU and forced WebGL2 both render
+  every advanced case and complete the ten-scene retained-canvas sequence.
+
+- **Completed retained word flow and width-only positioning reuse** — Sparse prose now retains one 12-byte cumulative
+  record per word opportunity while dense CJK stays on the existing cluster/chunk path. Whole shaped words, including
+  negative positioning adjustments and shrinkable spaces, are evaluated before a break. Unchanged start-aligned lines
+  reuse their committed positioned SoA slices; the 22,000-glyph 500-update A/B moved from 0.314/4.417 to
+  0.171/3.058 ms median/p95 against exact remote main without changing output.
+
+- **Closed benchmark and query evidence gaps** — Scene-local telemetry resets retained globally unique frame IDs and
+  fixed wrapped-ring extrema/copy indexing. All 60 backend/technique/workload cells preserve their expected topology,
+  all 24 mutation live probes reach a visible frame, and Paragraph Stress remains one draw with flat-or-better measured
+  CPU/GPU work. Large alternating glyph-inspection queries now grow the capacity reported by the actual failing A/B slot.
+
+- **Made justification consume completed shaped words** — Editorial non-final lines now reach the exact column edge
+  under the same word-space shrink contract used during fitting, while final lines remain ragged. The regression covers
+  a shaped word whose early positive advance is canceled by a later negative adjustment instead of moving that fitting
+  word to the next line.
+
 - **Recovered paragraph batching without rank-packed glyph keys** — Compatible spans and grouped paragraphs again
   coalesce by resource, material, and fixed paint layer. `Text.renderOrder` ranks paragraphs only inside a `TextGroup`,
   while group and standalone Text render order remain Three draw-mesh state. Rank-only changes publish one lifecycle

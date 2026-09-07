@@ -75,6 +75,7 @@ const cases = [
   'font-size',
   'column-resize',
   'measure-query',
+  'adopt-measure-query',
   'suffix-edit',
   'localized-edit',
   'localized-splice',
@@ -167,16 +168,22 @@ function measureWarm(name) {
         ...common,
         geometry: { ...baseGeometry, width: 420 + index * 7, revision },
       });
-    } else if (name === 'measure-query') {
+    } else if (name === 'measure-query' || name === 'adopt-measure-query') {
       bytes = updateBytes({
         ...common,
         geometry: { ...baseGeometry, width: 420 + index * 7, revision },
       });
-      new DataView(bytes.buffer).setUint32(
+      const queryBytes = bytes.slice();
+      new DataView(queryBytes.buffer).setUint32(
         abi.layouts.engineUpdateRequest.semanticViewMask,
         abi.engine.semanticViewMasks.measurement,
         true,
       );
+      if (name === 'adopt-measure-query') {
+        execute(queryBytes, index < options.warmup, `adopt-measure-query.prepare[${index}]`, 1);
+      } else {
+        bytes = queryBytes;
+      }
     } else if (name === 'suffix-edit') {
       const nextLength = utf16.length - index;
       const deleteCount = suffixLength - nextLength;
@@ -398,6 +405,9 @@ function printReport(caseReports) {
     'measure-query answers the same alternating widths through the paragraph-scoped synchronous measure: no gather, plan, or publication.',
   );
   console.log(
+    'adopt-measure-query times only adoption, gather, plan compilation, and publication after the same measure query prepared flow and positioning.',
+  );
+  console.log(
     'publish-measurement and publish-inspection isolate semantic-sidecar overhead against the otherwise identical no-op publication.',
   );
   console.log(
@@ -456,6 +466,7 @@ function parseArguments(arguments_) {
         'font-size',
         'column-resize',
         'measure-query',
+        'adopt-measure-query',
         'suffix-edit',
         'localized-edit',
         'localized-splice',

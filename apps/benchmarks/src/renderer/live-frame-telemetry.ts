@@ -42,6 +42,8 @@ export interface LiveFrameTelemetrySnapshot {
 
 export interface LiveFrameTelemetry {
   readonly gpuTimingSupported: boolean;
+  /** Starts a fresh scene-local sample window while preserving globally unique frame IDs. */
+  reset(): void;
   beginFrame(timestampMs: number): number;
   endFrame(frameId: number, durationMs: number): LiveFrameTelemetrySnapshot | undefined;
   recordGpu(frameId: number, durationMs: number): boolean;
@@ -88,6 +90,25 @@ export function createLiveFrameTelemetry(options?: {
 
   return {
     gpuTimingSupported,
+    reset() {
+      frameTimestampHistory.fill(0);
+      frameDurationHistory.fill(Number.NaN);
+      frameIds.fill(0);
+      pendingGpuFrames.fill(0);
+      submitHistory.fill(Number.NaN);
+      reportFrames.fill(0);
+      reportFramesPerSecond.fill(0);
+      fpsHistory.fill(Number.NaN);
+      gpuHistory.fill(Number.NaN);
+      historyCursor.length = 0;
+      historyCursor.nextIndex = frameCount % capacity;
+      lastFrameTimestamp = undefined;
+      smoothedFrameDurationMs = undefined;
+      reportedAt = undefined;
+      reportedFrame = frameCount;
+      latestSnapshot = undefined;
+      latestGpuMs = undefined;
+    },
     beginFrame(timestampMs) {
       if (!Number.isFinite(timestampMs)) throw new RangeError('frame timestamp must be finite');
       frameCount += 1;
@@ -273,7 +294,7 @@ function snapshot(options: {
 
 function historyMinimum(history: Float32Array, length: number, nextIndex: number): number {
   let minimum = Number.POSITIVE_INFINITY;
-  const start = length === history.length ? nextIndex : 0;
+  const start = historyStart(length, nextIndex, history.length);
   for (let index = 0; index < length; index += 1) {
     const value = history[(start + index) % history.length] ?? Number.NaN;
     if (Number.isFinite(value)) minimum = Math.min(minimum, value);
@@ -283,7 +304,7 @@ function historyMinimum(history: Float32Array, length: number, nextIndex: number
 
 function historyMaximum(history: Float32Array, length: number, nextIndex: number): number {
   let maximum = Number.NEGATIVE_INFINITY;
-  const start = length === history.length ? nextIndex : 0;
+  const start = historyStart(length, nextIndex, history.length);
   for (let index = 0; index < length; index += 1) {
     const value = history[(start + index) % history.length] ?? Number.NaN;
     if (Number.isFinite(value)) maximum = Math.max(maximum, value);
@@ -293,7 +314,7 @@ function historyMaximum(history: Float32Array, length: number, nextIndex: number
 
 function copyFiniteHistory(source: Float32Array, target: Float32Array, length: number, nextIndex: number): number {
   let copied = 0;
-  const start = length === source.length ? nextIndex : 0;
+  const start = historyStart(length, nextIndex, source.length);
   for (let index = 0; index < length; index += 1) {
     const value = source[(start + index) % source.length] ?? Number.NaN;
     if (!Number.isFinite(value)) continue;
@@ -301,6 +322,10 @@ function copyFiniteHistory(source: Float32Array, target: Float32Array, length: n
     copied += 1;
   }
   return copied;
+}
+
+function historyStart(length: number, nextIndex: number, capacity: number): number {
+  return (nextIndex - length + capacity) % capacity;
 }
 
 /** Selects the nearest-rank quantile in place without sorting or allocating a prefix view. */

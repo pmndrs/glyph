@@ -751,6 +751,7 @@ async function createComparisonWorkloadRuntime(
       const fontSizeChanged = next.fontSize !== configuration.fontSize;
       if (comparisonWorkloadUpdateKind(configuration, next, contentWidthChanged) === 'rebuild') {
         await commit(next);
+        persistentContext.resetTelemetry();
         return;
       }
       if (contentWidthChanged || fontSizeChanged) {

@@ -139,8 +139,20 @@ All descendant `Text` objects under the group participate in its retained hierar
 Compatible Bitmap, MSDF, and Slug records may share backing storage while the command buffer emits the draw boundaries
 required by raster, font resource, material, and clipping policy.
 
-A `Text` always batches its own spans; draw order inside one paragraph is deterministic but never promised, so no
-policy states it. Order between paragraphs is a grouping question, not a root one.
+A `Text` always batches its own spans. Inside a `TextGroup`, each child `Text.renderOrder` is the stable paragraph rank;
+the adapter sends changed ranks and group-owned scope identities through a separate order sideband, while the ordinary
+12-byte paragraph mutation retains only lifecycle identity and authored root order. Rust atomically permutes
+only that scope's paragraphs into its existing root slots. Rust validates the complete final permutation in one
+transaction; the adapter neither pre-sorts nor incrementally rejects rank swaps. Authored semantic traversal remains
+separate from ranked draw traversal. The nearest
+`TextGroup.renderOrder` remains the ordinary Three draw-mesh order of the shared publication object, and an ungrouped
+`Text.renderOrder` remains the ordinary Three draw-mesh order of that Text's publication object. Applications such as
+camera-facing label systems may calculate child ranks from camera distance in TypeScript, but the portable engine owns
+applying those ranks to paragraph order, decoration paint layers, and coalesced glyph batches.
+
+Draw order inside one paragraph follows the engine's fixed under-decoration, glyph-ink, and over-decoration paint layers.
+Paragraph rank is not stored per glyph and is not a draw-key field, so multiple fonts, colors, and decorations can still
+coalesce wherever their actual resource, material, and paint-layer keys agree.
 
 Capacity belongs to `defineThreeConfig()`, not mutable TextGroup or handle methods. The policy controls
 every anonymous or named root created by that handle:

@@ -27,6 +27,7 @@ import {
   type PlannerFrameLimits,
   type PlannerInlineObject,
   type PlannerParagraphMutation,
+  type PlannerParagraphOrderMutation,
   type PlannerRegion,
   type PlannerStyleMutation,
 } from './frame-wire.js';
@@ -224,6 +225,8 @@ export type RetainedTextUpdate = Partial<Omit<RetainedTextOptions, 'font'>> & {
 export interface RetainedText {
   readonly disposed: boolean;
   update(update: RetainedTextUpdate): void;
+  /** Repositions this paragraph without invalidating its semantic or measured state. */
+  updateOrder(order: number, orderScope: number, orderRank: number): void;
   /** Returns aggregate metrics; a cache miss may synchronously incur font and measure lookup work. */
   measure(): ParagraphLayoutSummary;
   /** Returns caller-owned columns; a cache miss may synchronously incur glyph lookup and positioning work. */
@@ -245,8 +248,6 @@ export interface RenderPlanner {
   readonly disposed: boolean;
   /** Creates one retained text instance in this planner. */
   createText(options: RetainedTextOptions): RetainedText;
-  /** Reassigns every live retained text to its zero-based position as one transaction. */
-  reorderTexts(texts: readonly RetainedText[]): void;
   /** Disposes every retained text instance and releases this planner. */
   dispose(): void;
 }
@@ -317,6 +318,9 @@ interface RetainedTextState {
   published: boolean;
   dirty: boolean;
   semanticDirty: boolean;
+  orderScope: number;
+  orderRank: number;
+  orderDirty: boolean;
   removed: boolean;
   disposed: boolean;
   desiredReleased: boolean;
@@ -332,6 +336,11 @@ interface RetainedTextMetrics {
   readonly exclusionCount: number;
   readonly inlineObjectCount: number;
 }
+
+type RetainedTextLimitState = Pick<
+  RetainedTextState,
+  'desired' | 'metrics' | 'dirty' | 'semanticDirty' | 'publishedStyleCount'
+>;
 
 interface PendingPublication {
   readonly publication: PlanPublication;
@@ -397,7 +406,6 @@ class RenderPlannerImpl {
   readonly #texts = new Set<RetainedTextState>();
   readonly #removed = new Set<RetainedTextState>();
   readonly #measured = new Map<RetainedTextState, ResolvedTextOptions>();
-  readonly #textsByOrder = new Map<number, RetainedTextState>();
   #liveTextCount = 0;
   #liveStyleCount = 0;
   #liveRegionCount = 0;
@@ -514,6 +522,9 @@ class RenderPlannerImpl {
       published: false,
       dirty: true,
       semanticDirty: true,
+      orderScope: 0,
+      orderRank: 0,
+      orderDirty: false,
       removed: false,
       disposed: false,
       desiredReleased: false,
@@ -537,42 +548,6 @@ class RenderPlannerImpl {
     return text;
   }
 
-  reorderTexts(texts: readonly RetainedText[]): void {
-    this.#assertMutable();
-    if (!Array.isArray(texts)) throw new TypeError('retained text order must be an array');
-    if (texts.length !== this.#liveTextCount) {
-      throw new RangeError('retained text order must contain every live text exactly once');
-    }
-    const states: RetainedTextState[] = [];
-    const seen = new Set<RetainedTextState>();
-    let newlyPending = 0;
-    for (const text of texts) {
-      const owned = textStates.get(text);
-      if (owned?.planner !== this || owned.state.disposed || owned.state.removed) {
-        throw new TypeError('retained text order contains a text not owned by this planner');
-      }
-      if (seen.has(owned.state)) throw new TypeError('retained text order contains a duplicate text');
-      seen.add(owned.state);
-      states.push(owned.state);
-      if (owned.state.metrics.order !== states.length - 1 && !owned.state.dirty) newlyPending += 1;
-    }
-    if (states.every((state, order) => state.metrics.order === order)) return;
-    if (this.#removed.size + this.#pendingParagraphCount + newlyPending > this.#limits.maxParagraphs * 2) {
-      throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
-    }
-    const nextStructureRevision = checkedNextStructureRevision(this.#structureRevision);
-    this.#textsByOrder.clear();
-    for (const [order, state] of states.entries()) this.#textsByOrder.set(order, state);
-    for (const [order, state] of states.entries()) {
-      if (state.metrics.order === order) continue;
-      if (!state.dirty) this.#pendingParagraphCount += 1;
-      state.metrics = { ...state.metrics, order };
-      state.dirty = true;
-    }
-    this.#structureRevision = nextStructureRevision;
-    this.#dirtyListener?.();
-  }
-
   /** @internal */
   _updateText(state: RetainedTextState, update: RetainedTextUpdate): void {
     this.#assertMutable();
@@ -584,12 +559,13 @@ class RenderPlannerImpl {
       ...update,
     });
     const desired = resolveTextOptions(this.#handleState, source);
-    const candidate = {
-      ...state,
+    const metrics = retainedTextMetrics(desired, state.ordinal);
+    const candidate: RetainedTextLimitState = {
       desired,
-      metrics: retainedTextMetrics(desired, state.ordinal),
+      metrics,
       dirty: true,
       semanticDirty: true,
+      publishedStyleCount: state.publishedStyleCount,
     };
     try {
       this.#validateAggregateLimits(candidate, state);
@@ -610,6 +586,30 @@ class RenderPlannerImpl {
     if (previousOrder !== nextOrder) {
       this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
     }
+    this.#dirtyListener?.();
+  }
+
+  /** @internal */
+  _updateTextOrder(state: RetainedTextState, order: number, orderScope: number, orderRank: number): void {
+    this.#assertMutable();
+    if (state.disposed) throw new Error('text engine text has been disposed');
+    uint32(order, 'text order');
+    uint32(orderScope, 'text order scope');
+    if (!Number.isFinite(orderRank)) throw new RangeError('text order rank must be finite');
+    if (state.metrics.order === order && state.orderScope === orderScope && Object.is(state.orderRank, orderRank)) {
+      return;
+    }
+    if (!state.dirty && this.#removed.size + this.#pendingParagraphCount + 1 > this.#limits.maxParagraphs * 2) {
+      throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
+    }
+    if (!state.dirty) this.#pendingParagraphCount += 1;
+    const scopedOrderChanged = state.orderScope !== orderScope || !Object.is(state.orderRank, orderRank);
+    state.metrics = { ...state.metrics, order };
+    state.orderScope = orderScope;
+    state.orderRank = orderRank;
+    state.dirty = true;
+    state.orderDirty = state.orderDirty || scopedOrderChanged;
+    this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
     this.#dirtyListener?.();
   }
 
@@ -788,7 +788,6 @@ class RenderPlannerImpl {
     }
     this.#texts.clear();
     this.#removed.clear();
-    this.#textsByOrder.clear();
     this.#liveTextCount = 0;
     this.#liveStyleCount = 0;
     this.#liveRegionCount = 0;
@@ -850,6 +849,7 @@ class RenderPlannerImpl {
         : textShaperAbi.engine.semanticViewMasks.measurement,
       limits: this.#limits,
       paragraphMutations: this.#measurementParagraphMutations(),
+      paragraphOrderMutations: this.#measurementParagraphOrderMutations(),
       textMutations: textChanged
         ? [
             {
@@ -893,9 +893,17 @@ class RenderPlannerImpl {
           order: state.metrics.order,
         })),
     ];
-    const contentStates = [...this.#texts]
-      .filter((state) => !state.removed && state.semanticDirty)
-      .sort((left, right) => left.metrics.order - right.metrics.order);
+    const paragraphOrderMutations = [...this.#texts]
+      .filter((state) => !state.removed && state.orderDirty)
+      .map((state) => ({
+        paragraphId: state.paragraphId,
+        orderScope: state.orderScope,
+        orderRank: state.orderRank,
+      }));
+    // Content mutations are keyed by paragraph id; presentation order is an
+    // independent Rust lifecycle input. Preserve retained insertion order here
+    // so adapters never pay a second paragraph sort on content updates.
+    const contentStates = [...this.#texts].filter((state) => !state.removed && state.semanticDirty);
     const textMutations = contentStates.flatMap((state) => {
       const mutation = minimalTextMutation(state.publishedText, state.desired.text);
       return mutation === undefined ? [] : [{ paragraphId: state.paragraphId, ...mutation }];
@@ -934,6 +942,7 @@ class RenderPlannerImpl {
       compositingIndependent: true,
       limits: this.#limits,
       paragraphMutations,
+      paragraphOrderMutations,
       textMutations,
       styleMutations,
       constraints,
@@ -943,11 +952,7 @@ class RenderPlannerImpl {
     });
   }
 
-  #validateAggregateLimits(candidate: RetainedTextState, replacing?: RetainedTextState): void {
-    const owner = this.#textsByOrder.get(candidate.metrics.order);
-    if (owner !== undefined && owner !== replacing) {
-      throw new RangeError(`retained text order ${candidate.metrics.order} is already in use`);
-    }
+  #validateAggregateLimits(candidate: RetainedTextLimitState, replacing?: RetainedTextState): void {
     const previous = replacing?.metrics;
     const liveTextCount = this.#liveTextCount + (replacing === undefined ? 1 : 0);
     const liveStyleCount = this.#liveStyleCount - (previous?.styleCount ?? 0) + candidate.metrics.styleCount;
@@ -991,7 +996,6 @@ class RenderPlannerImpl {
   }
 
   #addLiveState(state: RetainedTextState): void {
-    this.#textsByOrder.set(state.metrics.order, state);
     this.#liveTextCount += 1;
     this.#liveStyleCount += state.metrics.styleCount;
     this.#liveRegionCount += state.metrics.regionCount;
@@ -1003,10 +1007,6 @@ class RenderPlannerImpl {
   }
 
   #replaceLiveState(state: RetainedTextState, metrics: RetainedTextMetrics): void {
-    if (state.metrics.order !== metrics.order) {
-      this.#textsByOrder.delete(state.metrics.order);
-      this.#textsByOrder.set(metrics.order, state);
-    }
     this.#liveStyleCount += metrics.styleCount - state.metrics.styleCount;
     this.#liveRegionCount += metrics.regionCount - state.metrics.regionCount;
     this.#liveExclusionCount += metrics.exclusionCount - state.metrics.exclusionCount;
@@ -1020,7 +1020,6 @@ class RenderPlannerImpl {
   }
 
   #removeLiveState(state: RetainedTextState): void {
-    this.#textsByOrder.delete(state.metrics.order);
     this.#liveTextCount -= 1;
     this.#liveStyleCount -= state.metrics.styleCount;
     this.#liveRegionCount -= state.metrics.regionCount;
@@ -1059,6 +1058,7 @@ class RenderPlannerImpl {
       if (state.semanticDirty) state.publishedStyleCount = compiledStyleCount(state);
       state.dirty = false;
       state.semanticDirty = false;
+      state.orderDirty = false;
     }
   }
 
@@ -1197,6 +1197,16 @@ class RenderPlannerImpl {
     ];
   }
 
+  #measurementParagraphOrderMutations(): PlannerParagraphOrderMutation[] {
+    return [...this.#texts]
+      .filter((state) => !state.removed)
+      .map((state) => ({
+        paragraphId: state.paragraphId,
+        orderScope: state.orderScope,
+        orderRank: state.orderRank,
+      }));
+  }
+
   #adoptMeasuredBindings(state: RetainedTextState): void {
     if (this.#measuredStructureRevision !== this.#structureRevision) this.#clearMeasuredBindings();
     const previous = this.#measured.get(state);
@@ -1280,6 +1290,10 @@ class RetainedTextImpl implements RetainedText {
 
   update(update: RetainedTextUpdate): void {
     this.#planner._updateText(this.#state, update);
+  }
+
+  updateOrder(order: number, orderScope: number, orderRank: number): void {
+    this.#planner._updateTextOrder(this.#state, order, orderScope, orderRank);
   }
 
   measure(): ParagraphLayoutSummary {
@@ -1681,7 +1695,7 @@ function retainedTextMetrics(desired: ResolvedTextOptions, ordinal: number): Ret
   };
 }
 
-function pendingStyleMutationCount(state: RetainedTextState): number {
+function pendingStyleMutationCount(state: RetainedTextLimitState): number {
   if (!state.semanticDirty) return 0;
   return state.metrics.styleCount + Math.max(0, state.publishedStyleCount - state.metrics.styleCount);
 }

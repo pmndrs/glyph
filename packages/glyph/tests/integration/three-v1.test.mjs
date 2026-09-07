@@ -356,6 +356,22 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   assert.deepEqual(groupedSequence(), [...authored].reverse());
   assert.equal(instrumentedGlyph.crossings, 1, 'one paragraph-order transaction crosses into Rust');
   assert.equal(instrumentedGlyph.measureCrossings, 0, 'order-only publication reuses measurements');
+  const rankedMutations = instrumentedGlyph.latestParagraphMutations();
+  assert.deepEqual(
+    rankedMutations.map(({ order }) => order),
+    [0, 1],
+  );
+  const orderMutations = instrumentedGlyph.latestParagraphOrderMutations();
+  assert.equal(new Set(orderMutations.map(({ orderScope }) => orderScope)).size, 1);
+  assert.ok(orderMutations[0].orderScope > 0);
+  assert.deepEqual(
+    orderMutations.map(({ orderRank }) => orderRank),
+    [2, 1],
+    'the adapter publishes only changed data-only ranks in stable order and leaves the permutation to Rust',
+  );
+  instrumentedGlyph.reset();
+  scene.updateMatrixWorld(true);
+  assert.equal(instrumentedGlyph.crossings, 0, 'an unchanged ranked group does no sorting or Wasm work');
 
   const loose = three.createText({ font, text: 'D' });
   loose.renderOrder = 9;
@@ -372,6 +388,94 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   loose.dispose();
   group.dispose();
   for (const label of labels) label.dispose();
+  font.dispose();
+});
+
+test('an unstated TextGroup keeps child paragraph ranks out of Three material keys', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const labels = ['A', 'B', 'C'].map((text, rank) => {
+    const label = three.createText({ font, text });
+    label.renderOrder = 2 - rank;
+    return label;
+  });
+  group.add(...labels);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  const draws = rootDraws(scene);
+  assert.equal(draws.length, 1, 'default group presentation remains one compatible draw');
+  assert.equal(draws[0].renderOrder, 0, 'the group retains Three default draw order');
+
+  for (const label of labels) label.dispose();
+  group.dispose();
+  font.dispose();
+});
+
+test('Rust ranks interleaved TextGroup scopes only within their stable root slots', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const firstGroup = three.createTextGroup({ renderOrder: 4 });
+  const secondGroup = three.createTextGroup({ renderOrder: 4 });
+  const firstA = three.createText({ font, text: 'A' });
+  const secondA = three.createText({ font, text: 'B' });
+  const firstB = three.createText({ font, text: 'C' });
+  const secondB = three.createText({ font, text: 'D' });
+  firstGroup.add(firstA, firstB);
+  secondGroup.add(secondA, secondB);
+  scene.add(firstGroup, secondGroup);
+  scene.updateMatrixWorld(true);
+
+  const sequence = () => {
+    const draws = rootDraws(scene).filter((draw) => draw.renderOrder === 4);
+    assert.equal(draws.length, 1, 'equal group presentation remains one compatible draw');
+    const attribute = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id));
+    const start = draws[0].userData.pmndrsGlyphRunStart;
+    return Array.from(attribute.array.subarray(start, start + draws[0].geometry.instanceCount));
+  };
+  const authored = sequence();
+  firstA.renderOrder = 1;
+  firstA.text = 'AA';
+  firstB.renderOrder = 0;
+  scene.updateMatrixWorld(true);
+  assert.deepEqual(
+    sequence(),
+    [authored[2], authored[1], authored[0], authored[0], authored[3]],
+    'rank and semantic mutations share one atomic frame while scoped ranks only permute their own slots',
+  );
+  instrumentedGlyph.reset();
+  firstA.text = 'E';
+  firstB.text = 'F';
+  scene.updateMatrixWorld(true);
+  assert.equal(firstGroup.error, undefined);
+  assert.deepEqual(
+    instrumentedGlyph.latestParagraphOrderMutations(),
+    [],
+    'content-only edits do not republish unchanged paragraph ranks',
+  );
+  assert.deepEqual(
+    sequence(),
+    [authored[2], authored[1], authored[0], authored[3]],
+    'later semantic records stay in authored order after the ranked render order commits',
+  );
+
+  firstGroup.remove(firstA);
+  scene.updateMatrixWorld(true);
+  firstGroup.add(firstA);
+  scene.updateMatrixWorld(true);
+  assert.equal(firstGroup.error, undefined);
+  assert.deepEqual(
+    sequence(),
+    [authored[2], authored[1], authored[0], authored[3]],
+    'detach and reattach preserves the root membership slots used by scoped permutation',
+  );
+
+  for (const text of [firstA, secondA, firstB, secondB]) text.dispose();
+  firstGroup.dispose();
+  secondGroup.dispose();
   font.dispose();
 });
 
@@ -2020,6 +2124,22 @@ function instrumentNextGlyphEngine() {
         };
       });
     },
+    latestParagraphOrderMutations() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const mutation = abi.layouts.engineParagraphOrderMutation;
+      const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+      const offset = view.getUint32(request.paragraphOrderMutationsOffset, true);
+      const count = view.getUint32(request.paragraphOrderMutationCount, true);
+      return Array.from({ length: count }, (_recordValue, index) => {
+        const record = offset + index * mutation.size;
+        return {
+          paragraphId: view.getUint32(record + mutation.paragraphId, true),
+          orderScope: view.getUint32(record + mutation.orderScope, true),
+          orderRank: view.getFloat64(record + mutation.orderRank, true),
+        };
+      });
+    },
     latestConstraints() {
       assert.ok(latestRequest, 'a text update request must have been captured');
       const request = abi.layouts.engineUpdateRequest;
@@ -2260,6 +2380,37 @@ test('multi-page Bitmap strikes remain one ordered texture-array draw', async (t
     draws[0].geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.page.id)),
     'the Bitmap plan must publish a page-layer stream',
   );
+
+  group.dispose();
+  label.dispose();
+  font.dispose();
+  fontDomain.dispose();
+});
+
+test('large inspection queries grow the inactive A/B result slot to the reported requirement', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 8_192, policy: 'grow' } }));
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(densityFontUrl)) },
+    bitmap({ strikes: [16, 32] }),
+  );
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({
+    font,
+    text: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 !?.,;:'.repeat(100),
+    style: { fontSize: 16 },
+    constraints: { width: { mode: 'exact', size: 600 } },
+    layout: { wrap: 'word' },
+  });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+
+  assert.equal(group.error, undefined);
+  const inspection = label.glyphs();
+  assert.ok(inspection.glyphCount > 6_000);
+  assert.equal(inspection.glyphIds.length, inspection.glyphCount);
 
   group.dispose();
   label.dispose();

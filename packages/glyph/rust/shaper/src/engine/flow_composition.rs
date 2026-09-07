@@ -907,8 +907,11 @@ fn extents_for_cluster(
     };
     let shift = f64::from(style.baseline_shift);
     Ok(LineExtents {
-        above: (ascent + leading * 0.5 + shift).max(0.0),
-        below: (descent + leading * 0.5 - shift).max(0.0),
+        // Negative half-leading may put either glyph-metric side outside the
+        // authored line box. Preserve it: clamping a side independently makes
+        // sufficiently tight explicit line heights taller than requested.
+        above: ascent + leading * 0.5 + shift,
+        below: descent + leading * 0.5 - shift,
     })
 }
 
@@ -1187,6 +1190,37 @@ mod tests {
         assert!((extents.height() - 9.2).abs() < 1e-5);
         assert!((extents.above - 7.6).abs() < 1e-5);
         assert!((extents.below - 1.6).abs() < 1e-5);
+
+        let mut tight_style = style;
+        tight_style.line_height = 0.5;
+        let tight = extents_for_cluster(
+            &clusters,
+            &[StyleSegment {
+                text_start: 0,
+                text_end: 1,
+                style: tight_style,
+            }],
+            0,
+            |handle| match handle {
+                1 => Some(FontMetrics {
+                    units_per_em: 1_000,
+                    ascender: 800,
+                    descender: -200,
+                    line_gap: 360,
+                    underline_position: -100,
+                    underline_thickness: 50,
+                    strikeout_position: 300,
+                    strikeout_size: 50,
+                }),
+                2 => panic!("selected fallback metrics must not determine the line box"),
+                _ => None,
+            },
+            |stack| (stack == 7).then_some(1),
+        )
+        .unwrap();
+        assert!((tight.height() - 5.0).abs() < 1e-5);
+        assert!((tight.above - 5.5).abs() < 1e-5);
+        assert!((tight.below + 0.5).abs() < 1e-5);
     }
 
     fn plain_geometry(constraint: FlowConstraint) -> FlowGeometryArena {

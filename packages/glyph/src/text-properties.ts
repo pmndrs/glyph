@@ -55,6 +55,7 @@ export interface ParagraphLayout {
   readonly justify?: {
     readonly minWordSpaceRatio?: number;
     readonly maxWordSpaceRatio?: number;
+    /** Maximum extra advance per inter-cluster gap, in paragraph-local units. */
     readonly letterSpaceExpansion?: number;
   };
   /** Whether the final and hard-broken lines also justify. Defaults to 'auto'. */

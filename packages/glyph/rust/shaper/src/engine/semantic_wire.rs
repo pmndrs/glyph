@@ -22,7 +22,7 @@ use crate::{
         TEXT_MUTATION_REPLACE_UTF16, UpdateLimits, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD,
         WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
     },
-    wire::{array, read_f32, read_u16, read_u32},
+    wire::{array, read_f32, read_f64, read_u16, read_u32},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,10 +30,27 @@ pub(crate) struct ParagraphMutationBatch<'a> {
     records: &'a [u8],
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum ParagraphMutation {
-    Upsert { paragraph_id: u32, order: u32 },
-    Remove { paragraph_id: u32 },
+    Upsert {
+        paragraph_id: u32,
+        order: u32,
+    },
+    Remove {
+        paragraph_id: u32,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ParagraphOrderMutationBatch<'a> {
+    records: &'a [u8],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ParagraphOrderMutation {
+    pub paragraph_id: u32,
+    pub scope: u32,
+    pub rank: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -454,6 +471,29 @@ impl<'a> ParagraphMutationBatch<'a> {
     }
 }
 
+impl<'a> ParagraphOrderMutationBatch<'a> {
+    pub(crate) const fn empty() -> Self {
+        Self { records: &[] }
+    }
+
+    pub(crate) fn len(self) -> usize {
+        self.records.len() / abi::ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE as usize
+    }
+
+    pub(crate) fn get(self, index: usize) -> Option<ParagraphOrderMutation> {
+        let record = record_at(
+            self.records,
+            abi::ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE,
+            index,
+        )?;
+        Some(ParagraphOrderMutation {
+            paragraph_id: read_u32(record, abi::ENGINE_PARAGRAPH_ORDER_MUTATION_PARAGRAPH_ID).ok()?,
+            scope: read_u32(record, abi::ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_SCOPE).ok()?,
+            rank: read_f64(record, abi::ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_RANK).ok()?,
+        })
+    }
+}
+
 impl<'a> TextMutationBatch<'a> {
     pub(crate) const fn empty() -> Self {
         Self {
@@ -754,6 +794,31 @@ pub(crate) fn parse_paragraph_mutations(
         abi::ENGINE_PARAGRAPH_MUTATION_RECORD_ALIGNMENT,
     )?;
     Ok(ParagraphMutationBatch { records })
+}
+
+pub(crate) fn parse_paragraph_order_mutations(
+    request: &[u8],
+    offset: u32,
+    count: u32,
+) -> Result<ParagraphOrderMutationBatch<'_>, u32> {
+    if count == 0 {
+        return if offset == 0 {
+            Ok(ParagraphOrderMutationBatch::empty())
+        } else {
+            Err(STATUS_INVALID_REQUEST)
+        };
+    }
+    if offset < ENGINE_UPDATE_REQUEST_HEADER_SIZE {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let records = array(
+        request,
+        offset,
+        count,
+        abi::ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE,
+        abi::ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_ALIGNMENT,
+    )?;
+    Ok(ParagraphOrderMutationBatch { records })
 }
 
 pub(crate) fn parse_text_mutations(

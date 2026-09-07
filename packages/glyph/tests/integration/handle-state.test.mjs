@@ -5,7 +5,7 @@ import test from 'node:test';
 import { FontRegistry } from '../../dist/loader.js';
 import { createGlyphEngine, createGlyphHandleState } from '../../dist/glyph-engine.js';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
-import { GlyphHandleState } from '../../dist/internal/handle-state.js';
+import { GlyphHandleState, PlanTransport } from '../../dist/internal/handle-state.js';
 import { id } from '../../dist/config/codec.js';
 import { assertGlyphId, permanentGlyphId } from '../../dist/internal/glyph-id.js';
 import { threeCodecBytes } from '../../dist/three/codec.js';
@@ -15,6 +15,53 @@ import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const THREE_CODEC_HANDLE = permanentGlyphId('codec', 'test.text-engine-handle-state/three');
+
+test('measurement growth compares both asymmetric A/B result capacities', () => {
+  const memory = { buffer: new ArrayBuffer(2_048) };
+  const resultPointer = 512;
+  const requestPointer = 64;
+  const layout = textShaperAbi.layouts.engineResult;
+  let grown = false;
+  let reserves = 0;
+  const writeHeader = (status, requiredCapacity, inactiveCapacity) => {
+    const header = new DataView(memory.buffer, resultPointer, layout.size);
+    new Uint8Array(memory.buffer, resultPointer, layout.size).fill(0);
+    header.setUint32(layout.byteLength, layout.size, true);
+    header.setUint32(layout.status, status, true);
+    header.setUint32(layout.requestCapacity, 64, true);
+    header.setUint32(layout.resultCapacity, inactiveCapacity, true);
+    header.setUint32(layout.requiredResultCapacity, requiredCapacity, true);
+  };
+  const exports = {
+    memory,
+    requestCapacity: () => 64,
+    requestPointer: () => requestPointer,
+    reserveRoot: (_handle, _requestCapacity, resultCapacity) => {
+      reserves += 1;
+      grown = resultCapacity >= 100;
+      return textShaperAbi.status.ok;
+    },
+    measureParagraph: () => {
+      if (!grown) writeHeader(textShaperAbi.status.resultTooLarge, 100, 500);
+      else writeHeader(textShaperAbi.status.ok, 0, 500);
+      return resultPointer;
+    },
+  };
+  const transport = new PlanTransport(
+    exports,
+    1,
+    64,
+    8,
+    0,
+    () => undefined,
+    () => undefined,
+  );
+  const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/asymmetric-query');
+
+  const result = transport.measureParagraph(new Uint8Array([1]), paragraph);
+  assert.equal(result.bytes.byteLength, layout.size);
+  assert.equal(reserves, 1, 'the smaller active slot must trigger one strict growth');
+});
 
 test('a glyph engine owns every configured-handle state it creates', async () => {
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(wasmUrl) });

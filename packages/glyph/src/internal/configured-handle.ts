@@ -392,6 +392,8 @@ class ConfiguredRootServices<
     Bindings['transformInput'],
     { readonly canonical: HandleTransformBinding; references: number }
   >();
+  readonly #paragraphOrderScopes = new WeakMap<object, number>();
+  #nextParagraphOrderScope = 1;
   #planner: RenderPlanner | undefined;
   #target: GlyphPlanTarget<Bindings, RendererResult> | undefined;
   #shapeRegistration: GlyphShapeRegistration | undefined;
@@ -479,20 +481,6 @@ class ConfiguredRootServices<
   ): GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']> {
     const planner = this.#requiredPlanner();
     return new ConfiguredTextController(planner, this, state);
-  }
-
-  reorderTexts(
-    texts: readonly GlyphTextController<RasterFormatMetadata, Bindings['materialInput'], Bindings['transformInput']>[],
-  ): void {
-    const planner = this.#requiredPlanner();
-    planner.reorderTexts(
-      texts.map((text) => {
-        if (!(text instanceof ConfiguredTextController) || !text.belongsTo(this)) {
-          throw new TypeError('reorderTexts accepts only live texts created by this root');
-        }
-        return text._plannerText;
-      }),
-    );
   }
 
   invalidate(): void {
@@ -593,6 +581,23 @@ class ConfiguredRootServices<
       for (const lease of leases.reverse()) lease.dispose();
       throw error;
     }
+  }
+
+  bindParagraphOrderScope(scopeObject: object | undefined): number {
+    if (scopeObject === undefined) return 0;
+    if (typeof scopeObject !== 'object' || scopeObject === null) {
+      throw new TypeError('paragraph order scope must be an object');
+    }
+    let scope = this.#paragraphOrderScopes.get(scopeObject);
+    if (scope === undefined) {
+      if (this.#nextParagraphOrderScope > 0xffff_ffff) {
+        throw new RangeError('paragraph order scopes are exhausted');
+      }
+      scope = this.#nextParagraphOrderScope;
+      this.#nextParagraphOrderScope += 1;
+      this.#paragraphOrderScopes.set(scopeObject, scope);
+    }
+    return scope;
   }
 
   assertTextCall(): void {
@@ -760,6 +765,11 @@ interface BoundTextState {
   readonly leases: readonly { dispose(): void }[];
 }
 
+function normalizeParagraphOrderRank(rank: number): number {
+  if (!Number.isFinite(rank)) throw new RangeError('paragraph order rank must be finite');
+  return rank === 0 ? 0 : rank;
+}
+
 class ConfiguredTextController<
   Format extends RasterFormatMetadata,
   Bindings extends GlyphBindingSet,
@@ -769,11 +779,6 @@ class ConfiguredTextController<
 > implements GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']> {
   readonly #services: ConfiguredRootServices<Bindings, RendererResult, Boundary, CodecValue>;
   readonly #text: RetainedText;
-
-  /** @internal The planner text this controller owns, for root-wide reordering. */
-  get _plannerText(): RetainedText {
-    return this.#text;
-  }
 
   #bound: BoundTextState;
   #disposed = false;
@@ -810,6 +815,13 @@ class ConfiguredTextController<
     const previous = this.#bound;
     this.#bound = next;
     this.#disposeLeases(previous.leases);
+  }
+
+  updateParagraphOrder(order: number, scope: object | undefined, rank: number): void {
+    this.#assertActive();
+    this.#services.assertTextCall();
+    const orderRank = normalizeParagraphOrderRank(rank);
+    this.#text.updateOrder(order, this.#services.bindParagraphOrderScope(scope), orderRank);
   }
 
   measure() {

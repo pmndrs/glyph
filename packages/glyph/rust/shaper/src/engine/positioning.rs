@@ -121,6 +121,8 @@ pub(crate) struct PositionedGlyphArena {
     glyphs: Vec<LayoutGlyph>,
     line_glyph_starts: Vec<u32>,
     line_glyph_counts: Vec<u32>,
+    line_decoration_starts: Vec<u32>,
+    line_decoration_counts: Vec<u32>,
     semantic_glyphs: Vec<SemanticGlyph>,
     semantic_line_glyph_starts: Vec<u32>,
     semantic_line_glyph_counts: Vec<u32>,
@@ -185,6 +187,7 @@ impl PositionedGlyphArena {
         &mut self,
         previous: &Self,
         flow: &FlowLayoutArena,
+        retained_flow: Option<&FlowLayoutArena>,
         text: &[u16],
         clusters: &ClusterArena,
         runs: &[ShapingRun],
@@ -194,6 +197,7 @@ impl PositionedGlyphArena {
         identity_index: &mut IdentityIndex,
         next_content_revision: &mut u32,
         typography_for: impl Fn(u32) -> ThreadTypography + Copy,
+        retained_typography_for: impl Fn(u32) -> ThreadTypography + Copy,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
@@ -212,10 +216,13 @@ impl PositionedGlyphArena {
         }
         reserve(&mut self.line_glyph_starts, flow.lines.len())?;
         reserve(&mut self.line_glyph_counts, flow.lines.len())?;
+        reserve(&mut self.line_decoration_starts, flow.lines.len())?;
+        reserve(&mut self.line_decoration_counts, flow.lines.len())?;
         reserve(&mut self.semantic_line_glyph_starts, flow.lines.len())?;
         reserve(&mut self.semantic_line_glyph_counts, flow.lines.len())?;
         reserve(&mut self.semantic_line_inline_extents, flow.lines.len())?;
         let visually_ltr = is_trivially_ltr(bidi, runs);
+        let mut retained_line_cursor = 0usize;
         for (line_index, line) in flow.lines.iter().copied().enumerate() {
             if flow
                 .recomposed_line_range()
@@ -224,7 +231,25 @@ impl PositionedGlyphArena {
                 self.append_retained_line(previous, line_index)?;
                 continue;
             }
+            if let Some(previous_flow) = retained_flow
+                && let Some(previous_line_index) = equivalent_retained_line(
+                    flow,
+                    line_index,
+                    line,
+                    previous_flow,
+                    &mut retained_line_cursor,
+                    clusters,
+                    bidi,
+                    visually_ltr,
+                    typography_for(line.flow_thread_id),
+                    retained_typography_for(line.flow_thread_id),
+                )?
+            {
+                self.append_retained_line(previous, previous_line_index)?;
+                continue;
+            }
             let line_glyph_start = self.glyphs.len();
+            let line_decoration_start = self.decorations.len();
             let semantic_line_start = self.semantic_glyphs.len();
             let fragments = line_fragments(flow, line)?;
             if fragments.is_empty() {
@@ -232,6 +257,11 @@ impl PositionedGlyphArena {
                     u32::try_from(line_glyph_start).map_err(|_| EngineError::ResultTooLarge)?,
                 );
                 self.line_glyph_counts.push(0);
+                self.line_decoration_starts.push(
+                    u32::try_from(line_decoration_start)
+                        .map_err(|_| EngineError::ResultTooLarge)?,
+                );
+                self.line_decoration_counts.push(0);
                 self.semantic_line_glyph_starts.push(
                     u32::try_from(semantic_line_start).map_err(|_| EngineError::ResultTooLarge)?,
                 );
@@ -320,6 +350,13 @@ impl PositionedGlyphArena {
                 u32::try_from(self.glyphs.len().saturating_sub(line_glyph_start))
                     .map_err(|_| EngineError::ResultTooLarge)?,
             );
+            self.line_decoration_starts.push(
+                u32::try_from(line_decoration_start).map_err(|_| EngineError::ResultTooLarge)?,
+            );
+            self.line_decoration_counts.push(
+                u32::try_from(self.decorations.len().saturating_sub(line_decoration_start))
+                    .map_err(|_| EngineError::ResultTooLarge)?,
+            );
         }
         self.recomposed_glyphs = flow
             .recomposed_line_range()
@@ -361,6 +398,23 @@ impl PositionedGlyphArena {
         let glyph_end = glyph_start
             .checked_add(glyph_count)
             .ok_or(EngineError::InvalidRequest)?;
+        let decoration_start = usize::try_from(
+            *previous
+                .line_decoration_starts
+                .get(line_index)
+                .ok_or(EngineError::InvalidRequest)?,
+        )
+        .map_err(|_| EngineError::InvalidRequest)?;
+        let decoration_count = usize::try_from(
+            *previous
+                .line_decoration_counts
+                .get(line_index)
+                .ok_or(EngineError::InvalidRequest)?,
+        )
+        .map_err(|_| EngineError::InvalidRequest)?;
+        let decoration_end = decoration_start
+            .checked_add(decoration_count)
+            .ok_or(EngineError::InvalidRequest)?;
         let semantic_start = usize::try_from(
             *previous
                 .semantic_line_glyph_starts
@@ -382,6 +436,16 @@ impl PositionedGlyphArena {
             .push(u32::try_from(self.glyphs.len()).map_err(|_| EngineError::ResultTooLarge)?);
         self.line_glyph_counts
             .push(u32::try_from(glyph_count).map_err(|_| EngineError::ResultTooLarge)?);
+        self.line_decoration_starts
+            .push(u32::try_from(self.decorations.len()).map_err(|_| EngineError::ResultTooLarge)?);
+        self.line_decoration_counts
+            .push(u32::try_from(decoration_count).map_err(|_| EngineError::ResultTooLarge)?);
+        self.decorations.extend_from_slice(
+            previous
+                .decorations
+                .get(decoration_start..decoration_end)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
         let next_semantic_start = self.semantic_glyphs.len();
         for previous_glyph in previous
             .glyphs
@@ -475,6 +539,8 @@ impl PositionedGlyphArena {
         self.glyphs.clear();
         self.line_glyph_starts.clear();
         self.line_glyph_counts.clear();
+        self.line_decoration_starts.clear();
+        self.line_decoration_counts.clear();
         self.semantic_glyphs.clear();
         self.semantic_line_glyph_starts.clear();
         self.semantic_line_glyph_counts.clear();
@@ -1415,6 +1481,107 @@ fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragme
         .ok_or(EngineError::InvalidRequest)
 }
 
+// Each argument is one independently compared positioning input. Packing them
+// into a context would hide the proof boundary without reducing caller state.
+#[allow(clippy::too_many_arguments)]
+fn equivalent_retained_line(
+    flow: &FlowLayoutArena,
+    line_index: usize,
+    line: FlowLine,
+    previous: &FlowLayoutArena,
+    cursor: &mut usize,
+    clusters: &ClusterArena,
+    bidi: &BidiAnalysis,
+    visually_ltr: bool,
+    typography: ThreadTypography,
+    previous_typography: ThreadTypography,
+) -> Result<Option<usize>, EngineError> {
+    // The retained fast path is intentionally narrower than positioning. A nontrivial
+    // bidi line needs its resolved visual cluster levels to decide whether hung spaces
+    // lead; those scratch levels are built only by the full positioning path.
+    if !visually_ltr {
+        return Ok(None);
+    }
+    let fragments = line_fragments(flow, line)?;
+    let Some(first) = fragments.first() else {
+        return Ok(None);
+    };
+    let cluster_start = first.line.cluster_start;
+    while let Some(previous_line) = previous.lines.get(*cursor).copied() {
+        let previous_fragments = line_fragments(previous, previous_line)?;
+        let Some(previous_first) = previous_fragments.first() else {
+            *cursor += 1;
+            continue;
+        };
+        if previous_line.flow_thread_id != line.flow_thread_id
+            || previous_first.line.cluster_start < cluster_start
+        {
+            *cursor += 1;
+            continue;
+        }
+        if previous_first.line.cluster_start > cluster_start {
+            return Ok(None);
+        }
+        let previous_index = *cursor;
+        *cursor += 1;
+        if previous_line.region_id != line.region_id
+            || previous_line.transform_index != line.transform_index
+            || previous_line.clip_id != line.clip_id
+            || previous_line.align != line.align
+            || previous_line.block_start.to_bits() != line.block_start.to_bits()
+            || previous_line.baseline.to_bits() != line.baseline.to_bits()
+            || previous_line.height.to_bits() != line.height.to_bits()
+            || fragments.len() != previous_fragments.len()
+        {
+            return Ok(None);
+        }
+        let final_line = flow
+            .lines
+            .get(line_index + 1)
+            .is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
+        let previous_final_line = previous
+            .lines
+            .get(previous_index + 1)
+            .is_none_or(|next| next.flow_thread_id != previous_line.flow_thread_id);
+        if final_line != previous_final_line {
+            return Ok(None);
+        }
+        let inputs = |source_line: FlowLine,
+                      fragment: &FlowFragment,
+                      typography: ThreadTypography,
+                      final_line: bool| {
+            let indent = if fragment.line.cluster_start == 0 {
+                typography.first_line_indent
+            } else {
+                0.0
+            };
+            let (distribution, origin) = fragment_pen(
+                source_line,
+                *fragment,
+                final_line,
+                clusters,
+                usize::try_from(fragment.line.cluster_start).unwrap_or(0),
+                usize::try_from(fragment.line.cluster_end).unwrap_or(0),
+                indent,
+                typography.justify,
+                paragraph_level_at(bidi, fragment.line.text_start),
+                false,
+            );
+            (distribution, origin.to_bits(), indent.to_bits())
+        };
+        let same = fragments.iter().zip(previous_fragments).all(|(next, old)| {
+            next.line == old.line
+                && next.slot_start.to_bits() == old.slot_start.to_bits()
+                && next.boundary_index == super::flow_composition::NO_BOUNDARY
+                && old.boundary_index == super::flow_composition::NO_BOUNDARY
+                && inputs(line, next, typography, final_line)
+                    == inputs(previous_line, old, previous_typography, previous_final_line)
+        });
+        return Ok(same.then_some(previous_index));
+    }
+    Ok(None)
+}
+
 fn is_trivially_ltr(bidi: &BidiAnalysis, runs: &[ShapingRun]) -> bool {
     bidi.levels.iter().all(|level| level & 1 == 0)
         && runs.iter().all(|run| !run.style.bidi_override)
@@ -1967,6 +2134,21 @@ mod tests {
 
     fn assert_layout_plan_producer_invariants(arena: &PositionedGlyphArena) {
         let glyph_count = arena.glyphs.len();
+        assert_eq!(
+            arena.line_decoration_starts.len(),
+            arena.line_glyph_starts.len()
+        );
+        assert_eq!(
+            arena.line_decoration_counts.len(),
+            arena.line_glyph_counts.len()
+        );
+        for (&start, &count) in arena
+            .line_decoration_starts
+            .iter()
+            .zip(&arena.line_decoration_counts)
+        {
+            assert!((start as usize).saturating_add(count as usize) <= arena.decorations.len());
+        }
         assert_eq!(arena.semantic_change_masks.len(), glyph_count);
         for (index, field) in arena.semantic_f32.iter().enumerate() {
             assert!(
@@ -2177,11 +2359,88 @@ mod tests {
             &arena(ALIGN_START, 17.0),
             &arena(ALIGN_START, 25.0)
         ));
+        let mut cursor = 0;
+        assert_eq!(
+            equivalent_retained_line(
+                &arena(ALIGN_START, 17.0),
+                0,
+                arena(ALIGN_START, 17.0).lines[0],
+                &arena(ALIGN_START, 25.0),
+                &mut cursor,
+                &clusters,
+                &bidi,
+                true,
+                typography(0),
+                typography(0),
+            )
+            .unwrap(),
+            Some(0),
+        );
+        let mut cursor = 0;
+        assert_eq!(
+            equivalent_retained_line(
+                &arena(ALIGN_START, 17.0),
+                0,
+                arena(ALIGN_START, 17.0).lines[0],
+                &arena(ALIGN_START, 25.0),
+                &mut cursor,
+                &clusters,
+                &bidi,
+                false,
+                typography(0),
+                typography(0),
+            )
+            .unwrap(),
+            None,
+            "nontrivial bidi takes the full positioning path"
+        );
+        let indented = ThreadTypography {
+            first_line_indent: 2.0,
+            justify: JustifyControls::default(),
+        };
+        let mut cursor = 0;
+        assert_eq!(
+            equivalent_retained_line(
+                &arena(ALIGN_START, 17.0),
+                0,
+                arena(ALIGN_START, 17.0).lines[0],
+                &arena(ALIGN_START, 17.0),
+                &mut cursor,
+                &clusters,
+                &bidi,
+                true,
+                indented,
+                typography(0),
+            )
+            .unwrap(),
+            None,
+            "a changed first-line indent cannot reuse positioned glyphs"
+        );
         // End alignment derives the pen origin from the slot end: not a no-op.
         assert!(!equivalent(
             &arena(ALIGN_END, 17.0),
             &arena(ALIGN_END, 25.0)
         ));
+        let mut shifted_start = arena(ALIGN_END, 17.0);
+        shifted_start.fragments[0].slot_start = -2.0;
+        let mut cursor = 0;
+        assert_eq!(
+            equivalent_retained_line(
+                &shifted_start,
+                0,
+                shifted_start.lines[0],
+                &arena(ALIGN_END, 17.0),
+                &mut cursor,
+                &clusters,
+                &bidi,
+                true,
+                typography(0),
+                typography(0),
+            )
+            .unwrap(),
+            None,
+            "a moved slot start changes the published semantic line extent",
+        );
         assert!(!equivalent(
             &arena(ALIGN_CENTER, 17.0),
             &arena(ALIGN_CENTER, 25.0)
@@ -2213,6 +2472,24 @@ mod tests {
             &arena(ALIGN_JUSTIFY, 17.0),
             &arena(ALIGN_JUSTIFY, 17.0)
         ));
+        let mut cursor = 0;
+        assert_eq!(
+            equivalent_retained_line(
+                &arena(ALIGN_JUSTIFY, 17.0),
+                0,
+                arena(ALIGN_JUSTIFY, 17.0).lines[0],
+                &arena(ALIGN_JUSTIFY, 17.0),
+                &mut cursor,
+                &clusters,
+                &bidi,
+                true,
+                justified(0),
+                typography(0),
+            )
+            .unwrap(),
+            None,
+            "changed justification controls cannot reuse a prior distribution"
+        );
         // A boundary-bearing fragment always takes the full path.
         let mut with_boundary = arena(ALIGN_START, 17.0);
         with_boundary.fragments[0].boundary_index = 0;
@@ -2492,6 +2769,7 @@ mod tests {
             .build(
                 &PositionedGlyphArena::default(),
                 &flow,
+                None,
                 &text,
                 &clusters,
                 &runs,
@@ -2500,6 +2778,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
                 extents,
@@ -2630,6 +2909,7 @@ mod tests {
             .build(
                 &PositionedGlyphArena::default(),
                 &flow,
+                None,
                 &text,
                 &clusters,
                 &runs,
@@ -2638,6 +2918,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
                 extents,
@@ -2668,6 +2949,31 @@ mod tests {
         // OS/2 strikeout position 300 above the baseline: 8.0 - 3.0.
         assert_eq!(line_through.block_start, 5.0);
         assert_eq!(line_through.block_extent, 0.5);
+        let expected_decorations = active.decorations.clone();
+        let mut retained = PositionedGlyphArena::default();
+        retained
+            .build(
+                &active,
+                &flow,
+                Some(&flow),
+                &text,
+                &clusters,
+                &runs,
+                &BoundaryShapeArena::default(),
+                &styles,
+                &bidi,
+                &mut index,
+                &mut next_revision,
+                |_| ThreadTypography::default(),
+                |_| ThreadTypography::default(),
+                metrics,
+                extents,
+            )
+            .unwrap();
+        assert_eq!(
+            retained.decorations, expected_decorations,
+            "a retained positioned line keeps every decoration record",
+        );
         // Undecorated rebuilds emit none.
         let mut plain = PositionedGlyphArena::default();
         let plain_styles = [StyleSegment {
@@ -2679,6 +2985,7 @@ mod tests {
             .build(
                 &PositionedGlyphArena::default(),
                 &flow,
+                None,
                 &text,
                 &clusters,
                 &runs,
@@ -2687,6 +2994,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
                 extents,
@@ -2871,6 +3179,7 @@ mod tests {
             .build(
                 &PositionedGlyphArena::default(),
                 &flow,
+                None,
                 &text,
                 &clusters,
                 &runs,
@@ -2879,6 +3188,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
                 extents,
@@ -3010,6 +3320,7 @@ mod tests {
             .build(
                 &PositionedGlyphArena::default(),
                 &flow,
+                None,
                 &text,
                 &clusters,
                 &runs,
@@ -3018,6 +3329,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
                 extents,
@@ -3045,6 +3357,7 @@ mod tests {
             .build(
                 &active,
                 &flow,
+                None,
                 &text,
                 &clusters,
                 &runs,
@@ -3053,6 +3366,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
                 extents,
@@ -3069,6 +3383,7 @@ mod tests {
             .build(
                 &active,
                 &flow,
+                None,
                 &text,
                 &clusters,
                 &runs,
@@ -3077,6 +3392,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| ThreadTypography::default(),
                 |_| ThreadTypography::default(),
                 metrics,
                 extents,

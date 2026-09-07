@@ -447,6 +447,8 @@ export interface GlyphTextState<Format extends RasterFormatMetadata, MaterialInp
 export interface GlyphTextController<Format extends RasterFormatMetadata, MaterialInput, TransformInput> {
   readonly disposed: boolean;
   update(state: GlyphTextState<Format, MaterialInput, TransformInput>): void;
+  /** Changes only this paragraph's root slot and scoped rank; shaping, layout, and measurement remain reusable. */
+  updateParagraphOrder(order: number, scope: object | undefined, rank: number): void;
   measure(): ParagraphLayoutSummary;
   inspect(): GlyphLayoutInspection;
   dispose(): void;
@@ -462,10 +464,6 @@ export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererRes
   createText<Format extends RasterFormatMetadata>(
     state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']>;
-  /** Republishes every live paragraph in one collision-free ordering transaction. */
-  reorderTexts(
-    texts: readonly GlyphTextController<RasterFormatMetadata, Bindings['materialInput'], Bindings['transformInput']>[],
-  ): void;
   /** Schedules root-owned semantic or presentation state for the next top-level `glyph.shape()`. */
   invalidate(): void;
   syncTransforms(): void;
