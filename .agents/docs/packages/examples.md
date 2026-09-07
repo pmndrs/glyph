@@ -5,7 +5,7 @@ description: Demonstrates matching public imperative Three.js and React Three Fi
 resource: ../../../apps/r3f-hello-world
 workspace_package: '@pmndrs/glyph-examples'
 documentation_type: reference
-source_digest: 'sha256:104e998617fa651bec492485f897ec9fabdc01130e5d4061bcc525ed60b50a2d'
+source_digest: 'sha256:b845c6fe1c0870569ebe7126ea0d7a71ed5b845a1d1d1c130cfd6d36cdb0e0a3'
 tags: [package, example, three, react, react-three-fiber, vite]
 sources:
   - id: manifest
