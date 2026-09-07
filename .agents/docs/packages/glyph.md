@@ -644,6 +644,26 @@ memory from roughly 2.07 GB to the 4.29 GB address ceiling in 17 updates. The co
 and settles near 105 MB for that deliberately larger 8,000-glyph fixture. This regression also guards against forwarding
 aggregate glyph capacity as one paragraph's text reservation.
 
+The configured-root text prewarm is 64 UTF-16 units and applies to one reusable spare paragraph, not every retained Text.
+Active paragraph lanes grow from their actual content and retain their high-water capacity; publication therefore does
+not rescan every Text or attempt to resize an already-consumed spare. A 100-root cold probe measured 224.00 KiB per root
+at 64 units versus 686.08 KiB at the former 256-unit default, excluding the equal command buffers. The smaller default
+keeps more than four times the observed 9–14-unit label headroom while preserving unbounded correctness through ordinary
+arena growth.
+
+Retained publication tracks lifecycle, text, style, and geometry invalidation independently. The shared configured Text
+controller derives partial updates from each adapter's complete desired state; adapters and renderers do not implement
+wire diffing. A plain string replacement reuses its normalized font, transform, material, style, layout, and constraint
+ownership. Equal-length content emits only the minimal scalar-aligned text record; length changes additionally republish
+root-style coverage. A font-size or paint-only update emits only its style record while Rust remains authoritative for
+shaping and layout invalidation. These cases do not republish paragraph membership, scoped order, constraints, regions,
+exclusions, or inline-object records. Rust limits
+implicit paragraph inference to an empty planner, so a content batch may address several existing paragraphs without
+dummy lifecycle upserts. An omitted authored `maxLines` is encoded with Rust's existing zero sentinel for the root limit,
+so ordinary geometry no longer depends on string length. In the 684-label workload this reduces the request from 209,448
+to 23,400 bytes and the fresh
+same-machine remote-main A/B from 24.24–25.87 ms to 11.01–11.93 ms median while retaining one draw and 5,362 glyphs.
+
 Bitmap vertex pixel snapping is an explicit immutable Three/R3F option and defaults off. The unsnapped graph uses the
 ordinary model-view-projection position so shared-root or camera animation preserves subpixel movement; callers targeting
 a pixel-art presentation can opt in without changing shaping, layout, or render-plan records.

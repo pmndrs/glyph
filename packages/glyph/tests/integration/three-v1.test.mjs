@@ -356,10 +356,10 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   assert.deepEqual(groupedSequence(), [...authored].reverse());
   assert.equal(instrumentedGlyph.crossings, 1, 'one paragraph-order transaction crosses into Rust');
   assert.equal(instrumentedGlyph.measureCrossings, 0, 'order-only publication reuses measurements');
-  const rankedMutations = instrumentedGlyph.latestParagraphMutations();
   assert.deepEqual(
-    rankedMutations.map(({ order }) => order),
-    [0, 1],
+    instrumentedGlyph.latestParagraphMutations(),
+    [],
+    'scoped rank updates do not republish unchanged base lifecycle order',
   );
   const orderMutations = instrumentedGlyph.latestParagraphOrderMutations();
   assert.equal(new Set(orderMutations.map(({ orderScope }) => orderScope)).size, 1);
@@ -455,6 +455,20 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
     instrumentedGlyph.latestParagraphOrderMutations(),
     [],
     'content-only edits do not republish unchanged paragraph ranks',
+  );
+  assert.deepEqual(
+    instrumentedGlyph.latestRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 2,
+      style: 1,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'variable-length content edits publish text and root-style coverage without unchanged lifecycle or geometry',
   );
   assert.deepEqual(
     sequence(),
@@ -1882,6 +1896,20 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
     [{ start: 1, deleteCount: 1, insert: 'Y' }],
     'declarative assignment must serialize its smallest scalar-aligned replacement',
   );
+  assert.deepEqual(
+    instrumented.latestRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 1,
+      style: 0,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'equal-length plain content publishes no unchanged retained state',
+  );
 
   left.text = 'AZ';
   left.text = 'Z';
@@ -1951,12 +1979,42 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   );
   nestedParent.visible = true;
   scene.updateMatrixWorld();
+  instrumented.reset();
   right.style = { ...right.style, color: '#00ff00' };
   scene.updateMatrixWorld();
+  assert.deepEqual(
+    instrumented.latestRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
+      style: 1,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'paint-only style updates publish no unchanged lifecycle, text, or geometry',
+  );
 
+  instrumented.reset();
   right.style = { ...right.style, fontSize: 20 };
   scene.updateMatrixWorld();
   assert.equal(right.glyphs().glyphFontSizes[0], 20);
+  assert.deepEqual(
+    instrumented.latestRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
+      style: 1,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'font-size updates publish only style while Rust derives shaping and layout invalidation',
+  );
 
   instrumented.reset();
   left.text = 'ABC';
@@ -2100,6 +2158,21 @@ function instrumentNextGlyphEngine() {
         request.acknowledgedPublicationGeneration,
         true,
       );
+    },
+    latestRequestCounts() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+      return {
+        paragraph: view.getUint32(request.paragraphMutationCount, true),
+        paragraphOrder: view.getUint32(request.paragraphOrderMutationCount, true),
+        text: view.getUint32(request.textMutationCount, true),
+        style: view.getUint32(request.styleMutationCount, true),
+        constraint: view.getUint32(request.constraintCount, true),
+        region: view.getUint32(request.regionCount, true),
+        exclusion: view.getUint32(request.exclusionCount, true),
+        inlineObject: view.getUint32(request.inlineObjectCount, true),
+      };
     },
     reset() {
       crossings = 0;

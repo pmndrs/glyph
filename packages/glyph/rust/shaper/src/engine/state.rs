@@ -1880,17 +1880,15 @@ impl PlannerState {
                     super::semantic_wire::ParagraphMutation::Upsert {
                         paragraph_id,
                         order,
-                    } => {
-                        match self.paragraph(paragraph_id) {
-                            Some(paragraph) => {
-                                placement_changes += usize::from(paragraph.placement.order != order);
-                            }
-                            None => {
-                                creates += 1;
-                                placement_changes += 1;
-                            }
+                    } => match self.paragraph(paragraph_id) {
+                        Some(paragraph) => {
+                            placement_changes += usize::from(paragraph.placement.order != order);
                         }
-                    }
+                        None => {
+                            creates += 1;
+                            placement_changes += 1;
+                        }
+                    },
                     super::semantic_wire::ParagraphMutation::Remove { paragraph_id } => {
                         if self.paragraph(paragraph_id).is_none() {
                             return Err(EngineError::InvalidRequest);
@@ -1906,12 +1904,14 @@ impl PlannerState {
                 if !mutation.rank.is_finite() {
                     return Err(EngineError::InvalidRequest);
                 }
-                placement_changes += self.paragraph(mutation.paragraph_id).map_or(1, |paragraph| {
-                    usize::from(
-                        paragraph.placement.scope != mutation.scope
-                            || paragraph.placement.rank != mutation.rank,
-                    )
-                });
+                placement_changes += self
+                    .paragraph(mutation.paragraph_id)
+                    .map_or(1, |paragraph| {
+                        usize::from(
+                            paragraph.placement.scope != mutation.scope
+                                || paragraph.placement.rank != mutation.rank,
+                        )
+                    });
             }
             if placement_changes == 0 && removals == 0 {
                 return Ok(());
@@ -4419,11 +4419,14 @@ fn speculative_lifecycle_fingerprint(
         if !mutation.rank.is_finite() {
             return Err(EngineError::InvalidRequest);
         }
-        if planner.paragraph(mutation.paragraph_id).is_some_and(|paragraph| {
-            !paragraph.created
-                && paragraph.placement.scope == mutation.scope
-                && paragraph.placement.rank == mutation.rank
-        }) {
+        if planner
+            .paragraph(mutation.paragraph_id)
+            .is_some_and(|paragraph| {
+                !paragraph.created
+                    && paragraph.placement.scope == mutation.scope
+                    && paragraph.placement.rank == mutation.rank
+            })
+        {
             continue;
         }
         if !mixed {
@@ -4443,6 +4446,7 @@ fn speculative_lifecycle_fingerprint(
         }
     }
     if request.paragraph_mutations.len() == 0
+        && planner.paragraphs.is_empty()
         && let Some(paragraph_id) = request_semantic_paragraph_id(request)?
         && !planner
             .paragraph(paragraph_id)
@@ -4606,8 +4610,8 @@ mod tests {
                 STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16,
             },
             semantic_wire::{
-                parse_paragraph_mutations, parse_paragraph_order_mutations,
-                parse_style_mutations, parse_text_mutations,
+                parse_paragraph_mutations, parse_paragraph_order_mutations, parse_style_mutations,
+                parse_text_mutations,
             },
         },
         wire::write_u32,
@@ -5744,6 +5748,57 @@ mod tests {
     }
 
     #[test]
+    fn existing_paragraphs_accept_content_only_mutations_without_lifecycle_upserts() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 8).unwrap();
+
+        let lifecycle = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+        ]);
+        let initial_text = paragraph_text_mutation_bytes(&[(1, 0, 0, &[0x61]), (2, 0, 0, &[0x62])]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        initial.text_mutations =
+            parse_text_mutations(&initial_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let replacement = paragraph_text_mutation_bytes(&[(1, 0, 1, &[0x63]), (2, 0, 1, &[0x64])]);
+        let mut next = update(1, 1, 1);
+        next.limits.max_paragraphs = 2;
+        next.text_mutations =
+            parse_text_mutations(&replacement, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let prepared = engine.prepare_update(next, 2).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let planner = engine.planners.get(&4).unwrap();
+        assert_eq!(
+            planner.paragraph(1).unwrap().state.text.committed().units,
+            [0x63]
+        );
+        assert_eq!(
+            planner.paragraph(2).unwrap().state.text.committed().units,
+            [0x64]
+        );
+        assert_eq!(
+            planner
+                .ordered_paragraphs
+                .iter()
+                .map(|paragraph| paragraph.id)
+                .collect::<Vec<_>>(),
+            [1, 2],
+            "content-only mutations must not imply lifecycle reordering"
+        );
+    }
+
+    #[test]
     fn a_later_paragraph_failure_rolls_back_every_child_and_lifecycle_change() {
         let mut engine = TextEngine::default();
         engine
@@ -6172,7 +6227,8 @@ mod tests {
         let mut bytes = vec![
             0;
             record_offset
-                + records.len() * abi::ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE as usize
+                + records.len()
+                    * abi::ENGINE_PARAGRAPH_ORDER_MUTATION_RECORD_SIZE as usize
         ];
         for (index, &(paragraph_id, scope, rank)) in records.iter().enumerate() {
             let start =
@@ -6184,7 +6240,11 @@ mod tests {
                 abi::ENGINE_PARAGRAPH_ORDER_MUTATION_PARAGRAPH_ID,
                 paragraph_id,
             );
-            write_u32(record, abi::ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_SCOPE, scope);
+            write_u32(
+                record,
+                abi::ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_SCOPE,
+                scope,
+            );
             record[abi::ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_RANK
                 ..abi::ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_RANK + 8]
                 .copy_from_slice(&rank.to_le_bytes());

@@ -664,8 +664,8 @@ fn resolve_last_flagged(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::cluster_state::WordBreakRecord;
+    use super::*;
     use alloc::vec;
 
     fn make_clusters(advances: &[f64], flags: &[u8]) -> ClusterArena {
@@ -1009,7 +1009,8 @@ mod tests {
         // avoidable whitespace and disagrees with word-level composition.
         let mut flags = [CLUSTER_SAFE_BEFORE; 8];
         flags[4] |= CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
-        let mut clusters = make_quantized_clusters(&[1.0, 1.0, 1.0, 1.0, 1.0, 6.0, -4.0, 1.0], &flags);
+        let mut clusters =
+            make_quantized_clusters(&[1.0, 1.0, 1.0, 1.0, 1.0, 6.0, -4.0, 1.0], &flags);
         clusters.word_breaks = vec![
             WordBreakRecord {
                 cluster_end: 5,

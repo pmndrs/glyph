@@ -42,6 +42,7 @@ import type {
   RetainedFormattedText,
   RetainedText,
   RetainedTextOptions,
+  RetainedTextUpdate,
   StagedRenderPlanner,
 } from './render-planner.js';
 import { observeRenderPlannerDirty, stageRenderPlanner } from './render-planner.js';
@@ -441,7 +442,7 @@ class ConfiguredRootServices<
         limits: commands?.limits ?? DEFAULT_LIMITS,
         requestCapacity: commands?.requestBytes ?? 64 * 1024,
         resultCapacity: commands?.resultBytes ?? 256 * 1024,
-        textCapacity: commands?.textUnits ?? 256,
+        textCapacity: commands?.textUnits ?? 64,
       });
       registration = registerGlyphShapeParticipant(this.#engine, {
         stage: () => this.#stageShape(),
@@ -781,6 +782,7 @@ class ConfiguredTextController<
   readonly #text: RetainedText;
 
   #bound: BoundTextState;
+  #state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>;
   #disposed = false;
 
   constructor(
@@ -789,6 +791,7 @@ class ConfiguredTextController<
     state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ) {
     this.#services = services;
+    this.#state = state;
     this.#bound = services.bind(state);
     try {
       this.#text = planner.createText(this.#bound.options);
@@ -805,15 +808,30 @@ class ConfiguredTextController<
   update(state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>): void {
     this.#assertActive();
     this.#services.assertTextCall();
+    const reusableUpdate = reusablePlainTextUpdate(this.#state, state);
+    if (reusableUpdate !== undefined) {
+      this.#text.update(reusableUpdate);
+      this.#state = state;
+      return;
+    }
     const next = this.#services.bind(state);
     try {
-      this.#text.update(next.options);
+      this.#text.update({
+        ...next.options,
+        material: next.options.material,
+        order: next.options.order,
+        rasterPixelRatio: next.options.rasterPixelRatio,
+        style: next.options.style,
+        layout: next.options.layout,
+        constraints: next.options.constraints,
+      });
     } catch (error) {
       this.#disposeLeases(next.leases);
       throw error;
     }
     const previous = this.#bound;
     this.#bound = next;
+    this.#state = state;
     this.#disposeLeases(previous.leases);
   }
 
@@ -867,4 +885,38 @@ class ConfiguredTextController<
   #assertActive(): void {
     if (this.#disposed) throw new Error('Glyph Text controller has been disposed');
   }
+}
+
+function reusablePlainTextUpdate<Format extends RasterFormatMetadata, MaterialInput, TransformInput>(
+  previous: GlyphTextState<Format, MaterialInput, TransformInput>,
+  next: GlyphTextState<Format, MaterialInput, TransformInput>,
+): RetainedTextUpdate | undefined {
+  if (
+    typeof previous.text !== 'string' ||
+    typeof next.text !== 'string' ||
+    previous.font !== next.font ||
+    previous.transform !== next.transform ||
+    previous.material !== next.material
+  ) {
+    return undefined;
+  }
+  const update: { -readonly [Key in keyof RetainedTextUpdate]: RetainedTextUpdate[Key] } = {};
+  if (previous.text !== next.text) update.text = next.text;
+  if (previous.order !== next.order) update.order = next.order;
+  if (previous.rasterPixelRatio !== next.rasterPixelRatio) update.rasterPixelRatio = next.rasterPixelRatio;
+  if (!equalOptionalRecord(previous.style, next.style)) update.style = next.style;
+  if (!equalOptionalRecord(previous.layout, next.layout)) update.layout = next.layout;
+  if (!equalOptionalRecord(previous.constraints, next.constraints)) update.constraints = next.constraints;
+  return update;
+}
+
+function equalOptionalRecord(previous: object | undefined, next: object | undefined): boolean {
+  if (previous === next) return true;
+  if (previous === undefined || next === undefined) return false;
+  const previousKeys = Reflect.ownKeys(previous);
+  const nextKeys = Reflect.ownKeys(next);
+  if (previousKeys.length !== nextKeys.length) return false;
+  return previousKeys.every(
+    (key) => Object.hasOwn(next, key) && Object.is(Reflect.get(previous, key), Reflect.get(next, key)),
+  );
 }

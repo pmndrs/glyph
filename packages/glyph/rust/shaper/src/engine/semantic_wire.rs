@@ -32,13 +32,8 @@ pub(crate) struct ParagraphMutationBatch<'a> {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum ParagraphMutation {
-    Upsert {
-        paragraph_id: u32,
-        order: u32,
-    },
-    Remove {
-        paragraph_id: u32,
-    },
+    Upsert { paragraph_id: u32, order: u32 },
+    Remove { paragraph_id: u32 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -487,7 +482,8 @@ impl<'a> ParagraphOrderMutationBatch<'a> {
             index,
         )?;
         Some(ParagraphOrderMutation {
-            paragraph_id: read_u32(record, abi::ENGINE_PARAGRAPH_ORDER_MUTATION_PARAGRAPH_ID).ok()?,
+            paragraph_id: read_u32(record, abi::ENGINE_PARAGRAPH_ORDER_MUTATION_PARAGRAPH_ID)
+                .ok()?,
             scope: read_u32(record, abi::ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_SCOPE).ok()?,
             rank: read_f64(record, abi::ENGINE_PARAGRAPH_ORDER_MUTATION_ORDER_RANK).ok()?,
         })

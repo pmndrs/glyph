@@ -105,6 +105,8 @@ interface DesiredTextState<Format extends RasterFormatMetadata> {
   readonly material?: ThreeTextMaterial;
 }
 
+const emptyTextSpans: readonly never[] = Object.freeze([]);
+
 interface TextReconciler {
   desired<Format extends RasterFormatMetadata>(text: Text<Format>): DesiredTextState<Format>;
   desiredRevision(text: Text<RasterFormatMetadata>): number;
@@ -783,9 +785,12 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       throw new TypeError('Text update must be an object');
     }
     assertNoRawSpans(update, 'Text update');
-    const normalizedUpdate = replacedContent(update);
-    if (Reflect.ownKeys(normalizedUpdate).length === 0) return;
-    const next = normalizeDesired({ ...this.#desired, ...normalizedUpdate } as TextProperties<Format>, this.#desired);
+    const updateKeys = Reflect.ownKeys(update);
+    if (updateKeys.length === 0) return;
+    const next =
+      updateKeys.length === 1 && updateKeys[0] === 'text' && typeof update.text === 'string'
+        ? replaceDesiredString(this.#desired, update.text)
+        : normalizeDesired({ ...this.#desired, ...replacedContent(update) } as TextProperties<Format>, this.#desired);
     const nextRevision = checkedNextRevision(this.#desiredRevision);
     this.#binding?.stageUpdate(this.#root.member(this), next, nextRevision);
     this.#desired = next;
@@ -1482,7 +1487,7 @@ function coreTextState(
   });
   return {
     font: desired.font,
-    text: Object.freeze({ text: desired.text, spans: Object.freeze(spans) }),
+    text: spans.length === 0 ? desired.text : Object.freeze({ text: desired.text, spans: Object.freeze(spans) }),
     transform,
     order,
     material,
@@ -1573,6 +1578,19 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     constraints: Object.freeze(constraints),
     ...(rasterPixelRatio === undefined ? {} : { rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
+  });
+}
+
+function replaceDesiredString<Format extends RasterFormatMetadata>(
+  previous: DesiredTextState<Format>,
+  text: string,
+): DesiredTextState<Format> {
+  assertPairedSurrogates(text);
+  assertTextStyleFeatureRanges(previous.style, 0, text.length, 'Text style');
+  return Object.freeze({
+    ...previous,
+    text,
+    spans: emptyTextSpans,
   });
 }
 

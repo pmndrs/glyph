@@ -48,14 +48,13 @@ export function compileEngineGeometry(
   layout: ParagraphLayout | undefined,
   constraints: Constraints | undefined,
   regionStart: number,
-  textLength: number,
 ): { readonly constraint: PlannerConstraint; readonly regions: readonly PlannerRegion[] } {
   const width = axis(constraints?.width);
   const height = axis(constraints?.height);
   const columns = normalizedColumns(layout, constraints);
   const inlineEnd = width.mode === 'unconstrained' ? 0x01_00_00_00 : width.size;
   const blockEnd = height.mode === 'unconstrained' ? 0x01_00_00_00 : height.size;
-  const maxLines = layout?.maxLines ?? Math.max(1, textLength);
+  const maxLines = layout?.maxLines ?? 0;
   const columnWidth = (inlineEnd - columns.gap * (columns.count - 1)) / columns.count;
   if (columns.count > 1 && columnWidth <= 0) {
     throw new RangeError('layout columns and gap leave no positive column measure');

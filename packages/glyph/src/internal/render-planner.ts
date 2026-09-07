@@ -217,8 +217,18 @@ export interface RetainedTextOptions {
 }
 
 /** Partial desired-state replacement for one retained text instance. */
-export type RetainedTextUpdate = Partial<Omit<RetainedTextOptions, 'font'>> & {
+export type RetainedTextUpdate = {
   readonly font?: HandleFontStackBinding;
+  readonly text?: RetainedTextInput;
+  readonly material?: HandleMaterialBinding | undefined;
+  readonly transform?: HandleTransformBinding | undefined;
+  readonly order?: number | undefined;
+  readonly rasterPixelRatio?: number | undefined;
+  readonly style?: TextStyle | undefined;
+  readonly layout?: ParagraphLayout | undefined;
+  readonly constraints?: Constraints | undefined;
+  readonly flow?: RetainedTextFlowInput | undefined;
+  readonly inlineObjects?: readonly RetainedTextInlineObjectInput[] | undefined;
 };
 
 /** One planner-owned retained text instance. */
@@ -318,6 +328,9 @@ interface RetainedTextState {
   published: boolean;
   dirty: boolean;
   semanticDirty: boolean;
+  lifecycleDirty: boolean;
+  styleDirty: boolean;
+  geometryDirty: boolean;
   orderScope: number;
   orderRank: number;
   orderDirty: boolean;
@@ -339,7 +352,7 @@ interface RetainedTextMetrics {
 
 type RetainedTextLimitState = Pick<
   RetainedTextState,
-  'desired' | 'metrics' | 'dirty' | 'semanticDirty' | 'publishedStyleCount'
+  'desired' | 'metrics' | 'dirty' | 'semanticDirty' | 'styleDirty' | 'publishedStyleCount'
 >;
 
 interface PendingPublication {
@@ -422,7 +435,6 @@ class RenderPlannerImpl {
   #acceptedCheckpointGeneration = 0;
   #structureRevision = 0;
   #measuredStructureRevision = -1;
-  #textCapacity: number;
   #disposed = false;
   #stagedBatch: StagedBatchPublication | undefined;
   #stagedRequestLength = 0;
@@ -439,7 +451,6 @@ class RenderPlannerImpl {
     if (measurementOnly) assertMeasurementPlanOptions(options);
     else assertRenderPlannerOptions(options);
     this.#limits = snapshotLimits(options.limits);
-    this.#textCapacity = options.textCapacity;
     const codec = handleState._retainInstalledCodec(options.codec);
     if (measurementOnly) {
       try {
@@ -522,6 +533,9 @@ class RenderPlannerImpl {
       published: false,
       dirty: true,
       semanticDirty: true,
+      lifecycleDirty: true,
+      styleDirty: true,
+      geometryDirty: true,
       orderScope: 0,
       orderRank: 0,
       orderDirty: false,
@@ -553,18 +567,26 @@ class RenderPlannerImpl {
     this.#assertMutable();
     if (state.disposed) throw new Error('text engine text has been disposed');
     if (!isNonArrayObject(update)) throw new TypeError('text engine text update must be an object');
-    const source: RetainedTextOptions = Object.freeze({
-      ...state.desired.source,
-      order: state.metrics.order,
-      ...update,
-    });
-    const desired = resolveTextOptions(this.#handleState, source);
+    const textOnly = textOnlyUpdate(update, state.desired);
+    const desired =
+      textOnly === undefined
+        ? resolveTextOptions(
+            this.#handleState,
+            mergeRetainedTextOptions(state.desired.source, state.metrics.order, update),
+          )
+        : forkResolvedTextWithText(state.desired, textOnly, state.metrics.order);
     const metrics = retainedTextMetrics(desired, state.ordinal);
+    const styleDirty =
+      state.styleDirty ||
+      desired.text.length !== state.desired.text.length ||
+      updateChangesStyle(update, state.desired, desired);
+    const geometryDirty = state.geometryDirty || updateChangesGeometry(update);
     const candidate: RetainedTextLimitState = {
       desired,
       metrics,
       dirty: true,
       semanticDirty: true,
+      styleDirty,
       publishedStyleCount: state.publishedStyleCount,
     };
     try {
@@ -575,12 +597,15 @@ class RenderPlannerImpl {
     }
     const previousOrder = state.metrics.order;
     const nextOrder = candidate.metrics.order;
-    this.#replaceLiveState(state, candidate.metrics);
+    this.#replaceLiveState(state, candidate.metrics, styleDirty);
     releaseResolvedText(state.desired);
     state.desired = desired;
     state.metrics = candidate.metrics;
     state.dirty = true;
     state.semanticDirty = true;
+    state.lifecycleDirty = state.lifecycleDirty || previousOrder !== nextOrder;
+    state.styleDirty = styleDirty;
+    state.geometryDirty = geometryDirty;
     state.measurement = undefined;
     state.inspection = undefined;
     if (previousOrder !== nextOrder) {
@@ -603,11 +628,13 @@ class RenderPlannerImpl {
       throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
     }
     if (!state.dirty) this.#pendingParagraphCount += 1;
+    const lifecycleOrderChanged = state.metrics.order !== order;
     const scopedOrderChanged = state.orderScope !== orderScope || !Object.is(state.orderRank, orderRank);
     state.metrics = { ...state.metrics, order };
     state.orderScope = orderScope;
     state.orderRank = orderRank;
     state.dirty = true;
+    state.lifecycleDirty = state.lifecycleDirty || lifecycleOrderChanged;
     state.orderDirty = state.orderDirty || scopedOrderChanged;
     this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
     this.#dirtyListener?.();
@@ -694,7 +721,6 @@ class RenderPlannerImpl {
     }
     if (this.#stagedBatch !== undefined) throw new Error('render planner is already staged');
     if (!force && !this.#isDirty()) return undefined;
-    this.#ensureTextCapacity();
     const checkpointGeneration = this.#checkpointGeneration;
     const frame = this.#compileFrame(options, checkpointGeneration);
     this.#stagedRequestLength = this.#transport.stageUpdate(frame);
@@ -825,7 +851,6 @@ class RenderPlannerImpl {
   #queryText(state: RetainedTextState, inspection: true): GlyphLayoutInspection;
   #queryText(state: RetainedTextState, inspection: boolean): ParagraphLayoutSummary | GlyphLayoutInspection {
     this.#assertTextQueryable(state);
-    this.#ensureTextCapacity();
     const styles = compileStyles(this.#handleState, state);
     const styleMutations: PlannerStyleMutation[] = [...styles];
     for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
@@ -886,7 +911,7 @@ class RenderPlannerImpl {
     const paragraphMutations = [
       ...[...this.#removed].map((state) => ({ opcode: 'remove' as const, paragraphId: state.paragraphId })),
       ...[...this.#texts]
-        .filter((state) => !state.removed && state.dirty)
+        .filter((state) => !state.removed && state.lifecycleDirty)
         .map((state) => ({
           opcode: 'upsert' as const,
           paragraphId: state.paragraphId,
@@ -914,20 +939,24 @@ class RenderPlannerImpl {
     const exclusions: PlannerExclusion[] = [];
     const inlineObjects: PlannerInlineObject[] = [];
     for (const state of contentStates) {
-      const styles = compileStyles(this.#handleState, state);
-      styleMutations.push(...styles);
-      for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
-        styleMutations.push({
-          opcode: 'remove',
-          paragraphId: state.paragraphId,
-          styleId: engineStyleId(this.#handleState.id, state.paragraphId, index),
-        });
+      if (state.styleDirty) {
+        const styles = compileStyles(this.#handleState, state);
+        styleMutations.push(...styles);
+        for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
+          styleMutations.push({
+            opcode: 'remove',
+            paragraphId: state.paragraphId,
+            styleId: engineStyleId(this.#handleState.id, state.paragraphId, index),
+          });
+        }
       }
-      const geometry = compileGeometry(this.#handleState, state, regions.length, exclusions.length);
-      constraints.push(geometry.constraint);
-      regions.push(...geometry.regions);
-      exclusions.push(...geometry.exclusions);
-      inlineObjects.push(...compileInlineObjects(this.#handleState, state));
+      if (state.geometryDirty) {
+        const geometry = compileGeometry(this.#handleState, state, regions.length, exclusions.length);
+        constraints.push(geometry.constraint);
+        regions.push(...geometry.regions);
+        exclusions.push(...geometry.exclusions);
+        inlineObjects.push(...compileInlineObjects(this.#handleState, state));
+      }
     }
     return compilePlannerFrameUpdate({
       rootId: this.#transport.handle,
@@ -982,7 +1011,7 @@ class RenderPlannerImpl {
     if (inlineObjectCount > this.#limits.maxInlineObjects) {
       throw new RangeError('retained inline objects exceed limits.maxInlineObjects');
     }
-    const maxLines = candidate.desired.source.layout?.maxLines ?? Math.max(1, candidate.desired.text.length);
+    const maxLines = candidate.desired.source.layout?.maxLines ?? 0;
     if (maxLines > this.#limits.maxLines) throw new RangeError('retained text maxLines exceeds limits.maxLines');
     if (this.#removed.size + pendingParagraphCount > this.#limits.maxParagraphs * 2) {
       throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
@@ -1006,14 +1035,14 @@ class RenderPlannerImpl {
     if (state.dirty) this.#pendingStyleCount += pendingStyleMutationCount(state);
   }
 
-  #replaceLiveState(state: RetainedTextState, metrics: RetainedTextMetrics): void {
+  #replaceLiveState(state: RetainedTextState, metrics: RetainedTextMetrics, styleDirty: boolean): void {
     this.#liveStyleCount += metrics.styleCount - state.metrics.styleCount;
     this.#liveRegionCount += metrics.regionCount - state.metrics.regionCount;
     this.#liveExclusionCount += metrics.exclusionCount - state.metrics.exclusionCount;
     this.#liveInlineObjectCount += metrics.inlineObjectCount - state.metrics.inlineObjectCount;
     const hadPendingContent = state.semanticDirty;
     if (state.dirty) this.#pendingStyleCount -= pendingStyleMutationCount(state);
-    const candidate = { ...state, metrics, dirty: true, semanticDirty: true };
+    const candidate = { ...state, metrics, dirty: true, semanticDirty: true, styleDirty };
     this.#pendingParagraphCount += Number(!state.dirty);
     this.#pendingContentCount += Number(!hadPendingContent);
     this.#pendingStyleCount += pendingStyleMutationCount(candidate);
@@ -1050,14 +1079,17 @@ class RenderPlannerImpl {
       state.published = true;
       if (state.semanticDirty) {
         state.publishedText = state.desired.text;
-        state.geometryRevision += 1;
       }
+      if (state.geometryDirty) state.geometryRevision += 1;
       this.#pendingParagraphCount -= 1;
       this.#pendingContentCount -= Number(state.semanticDirty);
       this.#pendingStyleCount -= pendingStyleMutationCount(state);
-      if (state.semanticDirty) state.publishedStyleCount = compiledStyleCount(state);
+      if (state.styleDirty) state.publishedStyleCount = compiledStyleCount(state);
       state.dirty = false;
       state.semanticDirty = false;
+      state.lifecycleDirty = false;
+      state.styleDirty = false;
+      state.geometryDirty = false;
       state.orderDirty = false;
     }
   }
@@ -1258,16 +1290,6 @@ class RenderPlannerImpl {
       this.#removed.size !== 0 ||
       this.#checkpointGeneration !== this.#acceptedCheckpointGeneration
     );
-  }
-
-  #ensureTextCapacity(): void {
-    let required = 1;
-    for (const state of this.#texts) {
-      if (!state.removed) required = Math.max(required, state.desired.text.length);
-    }
-    if (required <= this.#textCapacity) return;
-    this.#transport._reserveText(required);
-    this.#textCapacity = required;
   }
 
   #assertActive(): void {
@@ -1641,6 +1663,72 @@ function validateTextScalarOptions(value: RetainedTextOptions): void {
   }
 }
 
+function mergeRetainedTextOptions(
+  previous: RetainedTextOptions,
+  order: number,
+  update: RetainedTextUpdate,
+): RetainedTextOptions {
+  const merged = { ...previous, order, ...update };
+  return Object.freeze({
+    font: merged.font,
+    text: merged.text,
+    ...(merged.material === undefined ? {} : { material: merged.material }),
+    ...(merged.transform === undefined ? {} : { transform: merged.transform }),
+    ...(merged.order === undefined ? {} : { order: merged.order }),
+    ...(merged.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: merged.rasterPixelRatio }),
+    ...(merged.style === undefined ? {} : { style: merged.style }),
+    ...(merged.layout === undefined ? {} : { layout: merged.layout }),
+    ...(merged.constraints === undefined ? {} : { constraints: merged.constraints }),
+    ...(merged.flow === undefined ? {} : { flow: merged.flow }),
+    ...(merged.inlineObjects === undefined ? {} : { inlineObjects: merged.inlineObjects }),
+  });
+}
+
+function textOnlyUpdate(update: RetainedTextUpdate, previous: ResolvedTextOptions): string | undefined {
+  const keys = Reflect.ownKeys(update);
+  if (keys.length !== 1 || keys[0] !== 'text' || typeof update.text !== 'string' || previous.spans.length !== 0) {
+    return undefined;
+  }
+  validateInlineObjects(previous.source.inlineObjects, update.text.length);
+  assertTextStyleFeatureRanges(previous.source.style ?? {}, 0, update.text.length, 'text style');
+  return update.text;
+}
+
+function updateChangesStyle(
+  update: RetainedTextUpdate,
+  previous: ResolvedTextOptions,
+  desired: ResolvedTextOptions,
+): boolean {
+  return (
+    Object.hasOwn(update, 'font') ||
+    Object.hasOwn(update, 'material') ||
+    Object.hasOwn(update, 'rasterPixelRatio') ||
+    Object.hasOwn(update, 'style') ||
+    (Object.hasOwn(update, 'text') && (previous.spans.length !== 0 || desired.spans.length !== 0))
+  );
+}
+
+function updateChangesGeometry(update: RetainedTextUpdate): boolean {
+  return (
+    Object.hasOwn(update, 'transform') ||
+    Object.hasOwn(update, 'layout') ||
+    Object.hasOwn(update, 'constraints') ||
+    Object.hasOwn(update, 'flow') ||
+    Object.hasOwn(update, 'inlineObjects')
+  );
+}
+
+function forkResolvedTextWithText(previous: ResolvedTextOptions, text: string, order: number): ResolvedTextOptions {
+  return shareResolvedText(
+    {
+      ...previous,
+      source: Object.freeze({ ...previous.source, text, order }),
+      text,
+    },
+    previous,
+  );
+}
+
 function compileStyles(handleState: GlyphHandleState, state: RetainedTextState): readonly PlannerStyleMutation[] {
   const desired = state.desired;
   const source = desired.source;
@@ -1719,7 +1807,6 @@ function compileGeometry(
     state.desired.source.layout,
     state.desired.source.constraints,
     regionStart,
-    state.desired.text.length,
   );
   const flow = state.desired.source.flow;
   if (flow === undefined) return { ...ordinary, exclusions: [] };
@@ -1765,24 +1852,61 @@ function compileInlineObjects(handleState: GlyphHandleState, state: RetainedText
   }));
 }
 
-const resolvedTextReferences = new WeakMap<ResolvedTextOptions, { references: number }>();
+interface ResolvedTextOwnership {
+  references: number;
+  readonly leases: readonly { dispose(): void }[];
+}
+
+interface ResolvedTextReference {
+  references: number;
+  readonly ownership: ResolvedTextOwnership;
+}
+
+const resolvedTextReferences = new WeakMap<ResolvedTextOptions, ResolvedTextReference>();
 
 function ownResolvedText(value: ResolvedTextOptions): ResolvedTextOptions {
-  resolvedTextReferences.set(value, { references: 1 });
+  resolvedTextReferences.set(value, {
+    references: 1,
+    ownership: {
+      references: 1,
+      leases: resolvedTextLeases(value),
+    },
+  });
+  return value;
+}
+
+function shareResolvedText(value: ResolvedTextOptions, source: ResolvedTextOptions): ResolvedTextOptions {
+  const ownership = resolvedTextReferences.get(source)!.ownership;
+  ownership.references += 1;
+  resolvedTextReferences.set(value, { references: 1, ownership });
   return value;
 }
 
 function retainResolvedText(value: ResolvedTextOptions): void {
   const retained = resolvedTextReferences.get(value)!;
   retained.references += 1;
+  retained.ownership.references += 1;
 }
 
 function releaseResolvedText(value: ResolvedTextOptions): void {
   const retained = resolvedTextReferences.get(value)!;
   retained.references -= 1;
-  if (retained.references !== 0) return;
-  resolvedTextReferences.delete(value);
-  const leases: Array<{ dispose(): void }> = [
+  retained.ownership.references -= 1;
+  if (retained.references === 0) resolvedTextReferences.delete(value);
+  if (retained.ownership.references !== 0) return;
+  let failure: unknown;
+  for (const lease of [...retained.ownership.leases].reverse()) {
+    try {
+      lease.dispose();
+    } catch (error) {
+      failure ??= error;
+    }
+  }
+  if (failure !== undefined) throw failure;
+}
+
+function resolvedTextLeases(value: ResolvedTextOptions): readonly { dispose(): void }[] {
+  return [
     value.font,
     ...(value.material === undefined ? [] : [value.material]),
     value.transform,
@@ -1794,15 +1918,6 @@ function releaseResolvedText(value: ResolvedTextOptions): void {
       ...(span.material === undefined ? [] : [span.material]),
     ]),
   ];
-  let failure: unknown;
-  for (const lease of leases.reverse()) {
-    try {
-      lease.dispose();
-    } catch (error) {
-      failure ??= error;
-    }
-  }
-  if (failure !== undefined) throw failure;
 }
 
 function assertRenderPlannerOptions(value: unknown): asserts value is RenderPlannerOptions {
