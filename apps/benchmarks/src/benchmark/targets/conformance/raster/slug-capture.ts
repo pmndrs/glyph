@@ -621,7 +621,8 @@ async function createFlatSlugConformanceResources({
       layout: { wrap: 'word', align: 'start' },
       style: {
         fontSize: sceneOptions?.fontSize ?? 64 / dpr,
-        lineHeight: 1.2,
+        // Sampling conformance uses natural line metrics; the paragraph contracts own
+        // explicit tight line-height behavior independently of this pixel oracle.
         language: specimen.language,
         direction: specimen.direction,
         color: '#ffffff',

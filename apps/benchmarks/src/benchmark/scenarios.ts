@@ -352,7 +352,7 @@ const RICH_TEXT_SPAN_EVIDENCE = {
   hash: 'd666d3ac',
   glyphCount: 175,
   renderedGlyphCount: 149,
-  drawCount: 7,
+  drawCount: 3,
   fontHandleCount: 3,
   distinctFontSizeCount: 4,
   spanCount: 8,
