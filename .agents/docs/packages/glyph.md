@@ -442,6 +442,12 @@ Three's ordinary scene traversal owns world-matrix composition. The root observe
 publishes semantic changes once at its renderer-owned draw node, and patches root-relative transforms through a separate
 engine-free side path. Camera motion does not republish text. Text, nested `TextGroup`, and other ancestor motion,
 visibility, reparenting, and manual matrix changes patch only affected renderer-local slots and do not enter Wasm.
+Within a `TextGroup`, each child `Text.renderOrder` ranks that paragraph's instances in the shared batch while the nearest
+`TextGroup.renderOrder` remains the Three draw-mesh order. Changing only a child rank publishes one transactional
+paragraph permutation without resending text, styles, geometry, measurement, or per-glyph records. An ungrouped
+`Text.renderOrder` retains ordinary Three draw-mesh meaning. Paragraph rank is deliberately absent from glyph storage and
+draw keys: compatible spans and grouped paragraphs therefore coalesce by resource, material, and fixed paint layer, with
+under-decoration, glyph, and over-decoration layers preserving CSS paint order.
 Each traversed Text reports only its own current Scene. When that Scene and the renderer-owned draw object are unchanged,
 observation returns without allocating or scanning sibling Text instances. A full membership scan is reserved for an
 actual Scene transition or a detached draw object, including recovery after a host clears and reattaches the authored
@@ -461,6 +467,10 @@ result. Font size, letter spacing, word spacing, line height, and baseline chang
 positioning without treating glyph identities as newly shaped content. A public optimized-Wasm regression doubles a
 paragraph's font size and proves its retained inline advance doubles; the live Paragraph Stress scene additionally keeps
 correct spacing through intermediate animated sizes for Bitmap, MSDF, and Slug.
+Line boxes resolve vertical metrics from the font stack's primary face rather than the fallback face selected for an
+individual cluster. Natural line height retains nonnegative font leading; an explicit `lineHeight` is authoritative and
+may produce negative half-leading, so values below one em remain effective and mixed-script fallback cannot introduce
+line-to-line leading jitter.
 
 The Three executor does not infer paragraph layout from GPU records and does not maintain a parallel candidate/current
 target state machine. It applies the Rust command buffer transactionally and retains only renderer resources required by
