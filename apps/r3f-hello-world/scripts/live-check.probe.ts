@@ -47,7 +47,10 @@ async function waitForFormat(
       selected !== undefined && 'commitState' in selected && typeof selected.commitState === 'function'
         ? selected.commitState()
         : undefined;
-    if (selected?.visible === true && commit?.status === 'committed' && counts.draws === 7 && counts.records === 47) {
+    // The Slug world span and the three TextGroup labels share one compatible draw even
+    // though their Text nodes have different scene parents. The selected world paragraph
+    // still contributes two resource-partitioned draws (Latin plus the icon font).
+    if (selected?.visible === true && commit?.status === 'committed' && counts.draws === 6 && counts.records === 47) {
       return { draws: 2, records: 11 };
     }
     await nextFrame();
