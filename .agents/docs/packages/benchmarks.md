@@ -445,8 +445,9 @@ Rust-planned meshes are siblings of authored entry nodes; the complete performan
 zero-draw cell. The complete 60-cell correctness sweep covers all ten workloads in Bitmap/MTSDF/Slug on WebGPU and
 forced WebGL2. Icon Grid retains two draws, Rich Text retains five draws instead of 36, Editorial retains three, Camera
 Billboard retains one, and the other workloads remain within their established 1–3 draw topology. Camera Billboard
-computes distance ranks in TypeScript and passes them as child `Text.renderOrder`; no benchmark adapter sorts paragraphs
-or glyph records before the Rust publication.[^presentation-framerate-sweep]
+receives the host's active perspective camera on every animation frame, computes distance ranks in TypeScript, and
+passes them as child `Text.renderOrder`; a focused regression proves the orbit and a depth-crossing rank reversal. No
+benchmark adapter sorts paragraphs or glyph records before the Rust publication.[^presentation-framerate-sweep]
 
 Against isolated runs of exact remote main on the same Chromium 149/Apple GPU host, the ordinary 27 common cells measured
 −2.0% mean/+3.0% median CPU and +1.4% mean/+2.1% median GPU, within run noise. Repeated Icon Grid pairs disagreed on

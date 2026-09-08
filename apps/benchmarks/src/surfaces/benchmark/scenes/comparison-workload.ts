@@ -882,6 +882,7 @@ async function createComparisonWorkloadRuntime(
             workloadAnimationScratch,
             onError,
             recordReflow,
+            camera,
           );
         }
         if (renderScene && !fontFixtureCommitting) {
@@ -900,6 +901,7 @@ async function createComparisonWorkloadRuntime(
               workloadAnimationScratch,
               onError,
               recordReflow,
+              camera,
             );
           }
           const started = performance.now();
