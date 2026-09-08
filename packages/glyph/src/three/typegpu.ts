@@ -1,6 +1,6 @@
 export * from '../three.js';
 import { createThreeConfig } from './internal/define-config.js';
-import type { ThreeConfigOptions, ThreeGlyphConfig } from './handle.js';
+import type { ThreeConfigOptions, ThreeGlyphConfig } from './schema.js';
 import { bitmapShader } from './typegpu/internal/bitmap-shader.js';
 export * from './typegpu/internal/bitmap-shader.js';
 import { decorationShader } from './typegpu/internal/decoration-shader.js';

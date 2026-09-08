@@ -1,4 +1,4 @@
-import type { bitmapShader, decorationShader, msdfShader, slugShader } from '../../tsl.js';
+import type { bitmapShader, decorationShader, msdfShader, slugShader } from '../../shaders/tsl/index.js';
 
 export interface ThreeShaderSet {
   readonly bitmapShader: typeof bitmapShader;

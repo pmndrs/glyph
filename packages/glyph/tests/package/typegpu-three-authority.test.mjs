@@ -12,7 +12,7 @@ import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 import { bitmapShader, decorationShader, msdfShader } from '../../dist/three/typegpu.js';
-import { msdfPosition } from '../../dist/shaders/msdf-shader.js';
+import { msdfPosition } from '../../dist/shaders/typegpu/msdf-shader.js';
 import { compileNodeMaterialBackends } from '../support/node-material-shaders.mjs';
 
 test('MTSDF placement converts downward paragraph y to upward Three y', () => {

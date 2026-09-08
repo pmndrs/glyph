@@ -1,3 +1,7 @@
+import { bitmapShader, decorationShader, msdfShader, slugShader } from './shaders/tsl/index.js';
+import type { ThreeConfigOptions, ThreeGlyphConfig } from './three/schema.js';
+import { createThreeConfig } from './three/internal/define-config.js';
+
 export type { FontSelection } from './loaded-font.js';
 export type { GlyphBufferCapacity, PropertyList } from './text-properties.js';
 export { Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
@@ -22,9 +26,7 @@ export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.j
 export { Text, TextGroup } from './three/text.js';
 export type { ThreeRoot } from './three/text.js';
 export {
-  ThreeConfig,
   ThreeFontFormats,
-  defineThreeConfig,
   type ThreeBatchBinding,
   type ThreeBindings,
   type ThreeBufferBinding,
@@ -39,7 +41,7 @@ export {
   type ThreeProgramBinding,
   type ThreeResolvedMaterialBinding,
   type ThreeResolvedResourceBinding,
-} from './three/handle.js';
+} from './three/schema.js';
 export type {
   StandaloneTextProperties,
   TextCommitState,
@@ -60,3 +62,11 @@ export type {
 // `measure()`, `glyphs()`, caret helpers, and detached measurements return these.
 export type { LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary } from './layout.js';
 export type { GlyphCaret, GlyphKey } from './glyph-placement.js';
+
+/** Creates a Three config using the stable TSL shader implementation. */
+export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphConfig {
+  return createThreeConfig(options, { bitmapShader, decorationShader, msdfShader, slugShader });
+}
+
+/** Built-in indexed/ordered Three adapter. Spreading it preserves hooks without shared handle state. */
+export const ThreeConfig: ThreeGlyphConfig = defineThreeConfig();

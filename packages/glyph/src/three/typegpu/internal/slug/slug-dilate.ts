@@ -5,7 +5,7 @@ import type { Node } from 'three/webgpu';
 import {
   slugDilate as dilate,
   slugDilateMatrix as dilateMatrix,
-} from '../../../../shaders/slug-shaders/core/dilate.js';
+} from '../../../../shaders/typegpu/slug/core/dilate.js';
 
 export interface SlugDilationNodes {
   readonly position: Node<'vec2'>;

@@ -12,14 +12,14 @@ import {
   snapClipAxis,
   TypeGpuBitmapInstance,
   TypeGpuBitmapVertexInput,
-} from '../../dist/shaders/bitmap-shader.js';
+} from '../../dist/shaders/typegpu/bitmap-shader.js';
 import {
   referenceBitmapAtlasUv,
   referenceBitmapPaint,
   referenceBitmapQuadPosition,
   referenceProjectClipPosition,
   referenceSnappedClipPosition,
-} from '../../dist/shaders/bitmap-reference.js';
+} from '../../dist/shaders/typegpu/bitmap-reference.js';
 
 const IDENTITY_COLUMN_MAJOR = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 /** A non-trivial column-major projection-like matrix with f32-exact entries only. */

@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:106ef6890259513d0d57091e55403cd3c852302e38cd862a99dac1ea565d8766'
+source_digest: 'sha256:a04730918b9a06aa63cb7d61081ae9c7d78512baeb92398d24573352efb75cd6'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -617,8 +617,13 @@ The [benchmark plan](../planning/benchmark-plan.md) owns target admission, corre
 
 [^slug-outline-research]: The planning concept keeps rejected outline evidence separate from the current benchmark capability contract.
 
-The workflow index also discovers `apps/typegpu-hello-world/scripts`, exposing `typegpu:dev` and `typegpu:live-check`. Shader-size entries import the renderer-free `/shaders/tsl` and `/shaders/typegpu` entries.
+The workflow index also discovers `apps/typegpu-hello-world/scripts`, exposing `typegpu:dev` and `typegpu:live-check`.
 
 The `benchmark:v1-bitmap` workflow accepts `--typegpu` to run its WebGPU and WebGL2 proofs with `/three/typegpu`. Benchmark URLs may select that config with `shaders=typegpu`; the default remains native TSL through `/three`.
 
-`benchmark:unit` runs Vitest without rebuilding runtime packages and accepts test-file filters. Package-size evidence now classifies the aggregate TypeGPU shader library separately from the higher-level direct renderer and gates every Bitmap, MSDF, Slug, and decoration leaf. With optional peers external, the aggregate measures 98,320 raw / 96,077 minified / 13,866 gzip / 11,739 Brotli; the direct renderer measures 221,915 / 219,089 / 41,480 / 35,052. Leaf measurements are Bitmap 17,808 raw, MSDF 23,691, Slug 41,751, and decoration 6,072, so a tree-shaking regression fails at its own boundary rather than being hidden in one overloaded `/typegpu` number.
+`benchmark:unit` runs Vitest without rebuilding runtime packages and accepts test-file filters. Package-size evidence gates
+the three application-facing renderer boundaries rather than maintaining a second matrix for their shader modules:
+native `/three`, optional TypeGPU-backed `/three/typegpu`, and direct `/typegpu`. With optional peers external,
+`/three/typegpu` measures 609,736 raw / 596,546 minified / 136,568 gzip / 112,065 Brotli, while `/typegpu` measures
+221,958 / 219,098 / 41,382 / 35,132. Package and graph tests separately prove every shader barrel resolves,
+tree-shakes, preserves optional peer isolation, and cannot expose private deep implementation paths.

@@ -49,8 +49,9 @@ test('the published contract is ESM-only', async () => {
     './shaders/tsl/decoration',
     './shaders/typegpu',
     './shaders/typegpu/bitmap',
-    './shaders/tsl/*',
-    './shaders/typegpu/*',
+    './shaders/typegpu/msdf',
+    './shaders/typegpu/slug',
+    './shaders/typegpu/decoration',
     './three/*',
     './three/typegpu',
     './react/*',
@@ -64,6 +65,8 @@ test('the published contract is ESM-only', async () => {
     './generated/*',
     './font-baker/*',
     './three/internal/*',
+    './three/handle',
+    './three/schema',
     './three/typegpu/internal/*',
     './three/decorations',
     './three/frame-error',
@@ -73,8 +76,9 @@ test('the published contract is ESM-only', async () => {
     './three/text',
     './raster/internal/*',
     './shaders/tsl/internal/*',
+    './shaders/tsl/slug/internal/*',
     './shaders/typegpu/internal/*',
-    './shaders/tsl/slug-shaders/tsl-compat',
+    './shaders/typegpu/slug/internal/*',
   ]) {
     assert.equal(manifest.exports[blocked], null, `${blocked} must remain package-private`);
   }
@@ -108,6 +112,8 @@ test('the published contract is ESM-only', async () => {
     './tsl/*',
     './shaders',
     './shaders/*',
+    './shaders/tsl/*',
+    './shaders/typegpu/*',
   ]) {
     assert.ok(!(removed in manifest.exports), `${removed} is deliberately unpublished and must stay unpublished`);
   }
@@ -205,11 +211,15 @@ test('generic raster baker construction lives only on the dedicated baker subpat
 test('stable Three and TSL imports do not load the experimental TypeGPU bridge', async () => {
   const stable = await readJavaScriptModuleClosure([
     new URL('../../dist/three.js', import.meta.url),
-    new URL('../../dist/tsl.js', import.meta.url),
+    new URL('../../dist/shaders/tsl/index.js', import.meta.url),
   ]);
   for (const specifier of stable.staticImports) {
     assert.doesNotMatch(specifier, /^(?:typegpu|@typegpu\/)/);
   }
   const experimental = await readJavaScriptModuleClosure([new URL('../../dist/three/typegpu.js', import.meta.url)]);
   assert.ok(experimental.staticImports.has('@typegpu/three'));
+  assert.ok(
+    experimental.paths.every((path) => !path.includes('/dist/shaders/tsl/')),
+    'the TypeGPU-backed Three entry must not load the native TSL shader realization',
+  );
 });

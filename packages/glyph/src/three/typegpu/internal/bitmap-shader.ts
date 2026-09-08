@@ -9,7 +9,7 @@ import {
   bitmapPageTexelCoordinate,
   bitmapQuadPosition,
   snapClipAxis,
-} from '../../../shaders/bitmap-shader.js';
+} from '../../../shaders/typegpu/bitmap-shader.js';
 
 const modelViewProjection = TSL.modelViewProjection as Node<'vec4'>;
 

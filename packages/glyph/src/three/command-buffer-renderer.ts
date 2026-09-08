@@ -7,7 +7,7 @@ import {
   type PreparedRendererCommit,
 } from '../config/glyph.js';
 import type { ThreeGlyphGeometrySource } from './glyph-measurement.js';
-import type { ThreeBindings, ThreeBufferBinding, ThreeResolvedResourceBinding } from './handle.js';
+import type { ThreeBindings, ThreeBufferBinding, ThreeResolvedResourceBinding } from './schema.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import type { ThreeRootContext } from './material.js';
 import { ThreeTransformSynchronizer, type ThreeTransformState } from './transform-synchronizer.js';

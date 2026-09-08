@@ -11,17 +11,17 @@ import type { CodecBufferId, PortableResource, PortableLeafResource } from '../.
 import { bitmapSchema } from '../../raster/bitmap.js';
 import { msdfSchema } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug.js';
-import { bitmapFragment, bitmapQuadPosition, bitmapAtlasUv } from '../../shaders/bitmap-shader.js';
+import { bitmapFragment, bitmapQuadPosition, bitmapAtlasUv } from '../../shaders/typegpu/bitmap-shader.js';
 import {
   msdfFragment,
   msdfVertex,
   msdfSampleSlot,
   msdfAtlasSizeAccessor,
   msdfPixelRangeAccessor,
-} from '../../shaders/msdf-shader.js';
-import { decorationPaint } from '../../shaders/decoration-shader.js';
-import { slugRender, SlugShaderGlyph } from '../../shaders/slug-shaders/slug-render.js';
-import { slugDilate } from '../../shaders/slug-shaders/core/dilate.js';
+} from '../../shaders/typegpu/msdf-shader.js';
+import { decorationPaint } from '../../shaders/typegpu/decoration-shader.js';
+import { slugRender, SlugShaderGlyph } from '../../shaders/typegpu/slug/slug-render.js';
+import { slugDilate } from '../../shaders/typegpu/slug/core/dilate.js';
 import {
   slugCurveTexelSlot,
   slugHeaderTexelSlot,
@@ -29,9 +29,9 @@ import {
   slugCurveWidthAccessor,
   slugHeaderWidthAccessor,
   slugReferenceWidthAccessor,
-} from '../../shaders/slug-shaders/slug-texture.js';
+} from '../../shaders/typegpu/slug/slug-texture.js';
 import type { TypeGpuConfigOptions, TypeGpuPositionTransform, TypeGpuColorTransform } from '../config.js';
-import { bitmapPageAccessor } from '../../shaders/bitmap-shader.js';
+import { bitmapPageAccessor } from '../../shaders/typegpu/bitmap-shader.js';
 
 export interface Draw {
   draw(pass: TgpuRenderPass | GPURenderPassEncoder, bindGroups: readonly TgpuBindGroup[]): void;

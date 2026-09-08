@@ -1,4 +1,4 @@
-/** Internal Slug TSL primitives. Adapted from three-flatland Slug at 2935a89f (MIT). */
+/** Reusable Slug TSL primitives. Adapted from three-flatland Slug at 2935a89f (MIT). */
 export { calcCoverage } from './calc-coverage.js';
 export { calcRootCode } from './calc-root-code.js';
 export { slugDilate, slugDilateMatrix } from './slug-dilate.js';

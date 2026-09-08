@@ -10,15 +10,15 @@
     "types": ["node"]
   },
   "files": [
-    "src/tsl/slug-shader.ts",
-    "src/tsl/slug-shaders/index.ts",
-    "src/tsl/slug-shaders/slug-dilate.ts",
-    "src/shaders/slug-shaders/core/index.ts",
-    "src/shaders/slug-shaders/slug-band.ts",
-    "src/shaders/slug-shaders/slug-render.ts",
-    "src/shaders/slug-shaders/slug-texture.ts",
+    "src/shaders/tsl/slug/index.ts",
+    "src/shaders/tsl/slug/slug-dilate.ts",
+    "src/shaders/typegpu/slug/core/index.ts",
+    "src/shaders/typegpu/slug/index.ts",
+    "src/shaders/typegpu/slug/slug-band.ts",
+    "src/shaders/typegpu/slug/slug-render.ts",
+    "src/shaders/typegpu/slug/slug-texture.ts",
     "tests/types/tsl-scalar-operations.test.ts",
     "src/three/typegpu/internal/slug-shader.ts",
-    "src/three/typegpu/internal/slug-shaders/slug-dilate.ts"
+    "src/three/typegpu/internal/slug/slug-dilate.ts"
   ]
 }

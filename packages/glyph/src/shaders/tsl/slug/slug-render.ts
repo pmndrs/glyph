@@ -8,7 +8,7 @@ import { add, div, float, max, mul, sub } from 'three/tsl';
 import { calcCoverage } from './calc-coverage.js';
 import { evaluateBand, type SlugShaderGlyph } from './slug-band.js';
 import type { SlugShaderPage } from './slug-texture.js';
-import { vec2Fwidth } from './tsl-compat.js';
+import { vec2Fwidth } from './internal/three-compat.js';
 
 export { MAX_SAFE_SLUG_BAND_CURVES, type SlugShaderPage } from './slug-texture.js';
 export type { SlugShaderGlyph } from './slug-band.js';

@@ -69,14 +69,7 @@
           "error",
           {
             "paths": ["three", "@react-three/fiber"],
-            "patterns": [
-              "three/src/*",
-              "three/addons/*",
-              "three/examples/*",
-              "**/generated/**",
-              "**/core/**",
-              "**/tsl/**"
-            ]
+            "patterns": ["three/src/*", "three/addons/*", "three/examples/*", "**/generated/**", "**/core/**"]
           }
         ]
       }
@@ -101,19 +94,28 @@
       }
     },
     {
-      "files": ["src/tsl/**", "src/tsl.ts", "src/three/typegpu/internal/**"],
+      "files": ["src/shaders/tsl/**", "src/three/typegpu/internal/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",
           {
             "paths": ["three", "@react-three/fiber"],
-            "patterns": ["three/src/*", "three/addons/*", "three/examples/*", "**/internal/**", "**/generated/**"]
+            "patterns": [
+              "three/src/*",
+              "three/addons/*",
+              "three/examples/*",
+              "../internal/**",
+              "../../internal/**",
+              "../../../internal/**",
+              "../../../../internal/**",
+              "**/generated/**"
+            ]
           }
         ]
       }
     },
     {
-      "files": ["src/shaders/**", "src/shaders.ts"],
+      "files": ["src/shaders/typegpu/**"],
       "rules": {
         "eslint/no-restricted-imports": [
           "error",

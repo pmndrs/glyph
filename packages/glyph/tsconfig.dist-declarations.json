@@ -19,8 +19,7 @@
     "dist/runtime-bake.d.ts",
     "dist/three.d.ts",
     "dist/three/*.d.ts",
-    "dist/tsl.d.ts",
-    "dist/tsl/**/*.d.ts"
+    "dist/shaders/tsl/**/*.d.ts"
   ],
   "exclude": [
     "dist/bakers/*-validator.d.ts",
@@ -28,8 +27,7 @@
     "dist/three/detached-object.d.ts",
     "dist/three/engine-plan-target.d.ts",
     "dist/three/transform-synchronizer.d.ts",
-    "dist/tsl/slug-shaders/tsl-compat.d.ts",
-    "dist/tsl/slug-shaders/index.d.ts",
+    "dist/shaders/tsl/slug/internal/*.d.ts",
     "dist/three/typegpu.d.ts"
   ]
 }

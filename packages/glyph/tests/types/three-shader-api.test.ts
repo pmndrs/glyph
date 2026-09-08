@@ -13,7 +13,7 @@ import {
   type TslMsdfShaderResources,
   type TslSlugInstanceNodes,
   type TslSlugShaderResources,
-} from '../../src/tsl.js';
+} from '../../src/shaders/tsl/index.js';
 
 declare const bitmapInstance: TslBitmapInstanceNodes;
 declare const bitmapResources: TslBitmapShaderResources;

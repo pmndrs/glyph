@@ -3,9 +3,9 @@ import type * as THREE from 'three/webgpu';
 import type { Codec } from '../../config/glyph.js';
 import type { CodecIdFactory } from '../../config/codec.js';
 import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../config/resources.js';
-import type { TslSlugPageResources } from '../../tsl.js';
+import type { TslSlugPageResources } from '../../shaders/tsl/index.js';
 import type { ThreeShaderSet } from './shader-set.js';
-import type { ThreeCodec } from '../handle.js';
+import type { ThreeCodec } from '../schema.js';
 import type { ThreeTextMaterial } from '../material.js';
 import {
   compiledThreeRasterPrograms,

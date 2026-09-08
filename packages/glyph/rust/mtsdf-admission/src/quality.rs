@@ -6,7 +6,7 @@
 //! the same outline, compared against the exact coverage the production fragment shader
 //! reconstructs from the generated field.
 //!
-//! The reconstruction mirrors `packages/glyph/src/tsl/msdf-shader.ts`:
+//! The reconstruction mirrors `packages/glyph/src/shaders/tsl/msdf-shader.ts`:
 //!
 //! ```text
 //! coverage = clamp((median3(rgb) - 0.5) * pixelRange * zoom + 0.5, 0, 1)

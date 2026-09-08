@@ -26,7 +26,7 @@ export {
   TypeGpuBitmapPageLayout,
   TypeGpuBitmapVertexInput,
   TypeGpuBitmapVertexOutput,
-} from './shaders/bitmap-shader.js';
+} from './bitmap-shader.js';
 export {
   MsdfCompositeInput,
   MsdfCoverageInput,
@@ -49,7 +49,7 @@ export {
   TypeGpuMsdfVertexInput,
   TypeGpuMsdfVertexOutput,
   type MsdfRenderInput as TypeGpuMsdfRenderInput,
-} from './shaders/msdf-shader.js';
+} from './msdf-shader.js';
 export {
   calcCoverage as slugCoverage,
   calcRootCode as slugRootCode,
@@ -65,14 +65,14 @@ export {
   slugVerticalCurveContribution,
   solveHorizontalPolynomial as solveSlugHorizontalPolynomial,
   solveVerticalPolynomial as solveSlugVerticalPolynomial,
-} from './shaders/slug-shaders/core/index.js';
+} from './slug/core/index.js';
 export {
   MAX_SAFE_SLUG_BAND_CURVES,
   slugRender,
   slugRenderWithOptions,
   SlugShaderGlyph,
   type SlugShaderPage,
-} from './shaders/slug-shaders/slug-render.js';
+} from './slug/slug-render.js';
 export {
   slugCurveTexelSlot,
   slugCurveWidthAccessor,
@@ -80,11 +80,11 @@ export {
   slugHeaderWidthAccessor,
   slugReferenceTexelSlot,
   slugReferenceWidthAccessor,
-} from './shaders/slug-shaders/slug-texture.js';
+} from './slug/slug-texture.js';
 export {
   decorationPaint,
   decorationPosition,
   decorationShader,
   TypeGpuDecorationInput,
   TypeGpuDecorationOutput,
-} from './shaders/decoration-shader.js';
+} from './decoration-shader.js';

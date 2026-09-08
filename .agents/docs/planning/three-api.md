@@ -19,8 +19,8 @@ sources:
     resource: ../../../packages/glyph/src/three/text.ts
     title: Current Three.js Text lifecycle
   - id: current-config
-    resource: ../../../packages/glyph/src/three/handle.ts
-    title: Current ThreeConfig and handle lifecycle
+    resource: ../../../packages/glyph/src/three/schema.ts
+    title: Current Three bindings, schema, and config types
   - id: current-react
     resource: ../../../packages/glyph/src/react.ts
     title: Current R3F handle injection
@@ -158,10 +158,10 @@ const dense = glyph.handle(
 Capacity policy controls the instance arena:
 
 | Capacity mode | Behavior                                                                                   |
-| ------- | ------------------------------------------------------------------------------------------ |
-| `grow`  | Grow retained storage to fit the group.                                                    |
-| `chunk` | Use bounded chunks when the group exceeds the initial size.                                |
-| `fixed` | Keep the last accepted draw while desired text exceeds the declared pre-shape slot budget. |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| `grow`        | Grow retained storage to fit the group.                                                    |
+| `chunk`       | Use bounded chunks when the group exceeds the initial size.                                |
+| `fixed`       | Keep the last accepted draw while desired text exceeds the declared pre-shape slot budget. |
 
 `fixed` uses UTF-16 text length as a conservative pre-shape slot bound. Exceeding it is a requested renderer policy, not
 an engine failure: traversal leaves the last complete draw live, `commitState()` stays `pending`, and `measure()` still

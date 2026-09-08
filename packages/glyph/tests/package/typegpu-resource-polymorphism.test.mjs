@@ -19,7 +19,7 @@ import {
   slugReferenceWidthAccessor,
   slugRenderWithOptions,
   SlugShaderGlyph,
-} from '../../dist/shaders.js';
+} from '../../dist/shaders/typegpu/index.js';
 
 test('Bitmap coverage can come from a consumer function without a texture binding', () => {
   const coverage = tgpu.fn([d.vec2f, d.u32], d.f32)`(coordinate, layer) {

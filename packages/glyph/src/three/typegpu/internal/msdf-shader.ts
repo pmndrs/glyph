@@ -11,8 +11,8 @@ import {
   msdfComposite,
   msdfCoverage,
   msdfPosition,
-} from '../../../shaders/msdf-shader.js';
-import { decorationPaint } from '../../../shaders/decoration-shader.js';
+} from '../../../shaders/typegpu/msdf-shader.js';
+import { decorationPaint } from '../../../shaders/typegpu/decoration-shader.js';
 
 export interface TslMsdfInstanceNodes {
   readonly origin: Node<'vec2'>;

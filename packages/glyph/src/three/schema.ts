@@ -19,8 +19,6 @@ import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug.js';
 import type { ThreeAllocationMode, ThreeTransformMode } from './codec.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
-import { bitmapShader, decorationShader, msdfShader, slugShader } from '../tsl.js';
-import { createThreeConfig } from './internal/define-config.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRoot, ThreeRootOptions } from './text.js';
 
@@ -128,11 +126,3 @@ export const ThreeSchema: GlyphSchema<ThreeBindings, ThreePublicationBoundary> =
 });
 
 export type ThreeGlyphConfig = GlyphConfigFor<typeof ThreeSchema, ThreeRoot, void, ThreeCodec, ThreeFontFormats>;
-
-/** Creates a Three config using the stable TSL shader implementation. */
-export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphConfig {
-  return createThreeConfig(options, { bitmapShader, decorationShader, msdfShader, slugShader });
-}
-
-/** Built-in indexed/ordered Three adapter. Spreading it preserves hooks without shared handle state. */
-export const ThreeConfig: ThreeGlyphConfig = defineThreeConfig();

@@ -7,7 +7,7 @@ import type {
   ThreeBufferBinding,
   ThreeInstanceBinding,
   ThreeInstanceSpanBinding,
-} from '../handle.js';
+} from '../schema.js';
 import { threeSystemBuffers } from '../codec.js';
 import { createGeometrySource, realizeGeometry, resolveDrawGeometry } from './geometry.js';
 import { transformAttribute, type RetainedBuffer, type ThreeBufferBindingId } from './host-buffer.js';
