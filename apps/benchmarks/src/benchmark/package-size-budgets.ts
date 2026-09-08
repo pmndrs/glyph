@@ -17,12 +17,12 @@ export const packageSizeBudgets = {
     brotliBytes: 10_200,
   },
   // `/typegpu` is the higher-level direct renderer over all three first-party formats. With optional peers external,
-  // it measures 221,958 raw / 219,098 minified / 41,382 gzip / 35,132 Brotli.
+  // it measures 225,879 raw / 222,963 minified / 42,571 gzip / 36,048 Brotli on the complete paragraph stack.
   'typegpu-direct-renderer-js': {
     rawBytes: 227_000,
     minifiedBytes: 224_000,
-    gzipBytes: 42_500,
-    brotliBytes: 36_000,
+    gzipBytes: 43_000,
+    brotliBytes: 36_500,
   },
   'font-validator-js': {
     // The current tsdown graph is 734,377 raw / 584,675 minified / 138,073 gzip / 113,039 Brotli. Keep a small
@@ -92,10 +92,11 @@ export const packageSizeBudgets = {
   },
   // `/three/typegpu` is the complete optional TypeGPU-backed Three integration. Its shader
   // functions are priced here rather than as a second matrix of implementation-level leaves.
-  // With peers external it measures 609,736 raw / 596,546 minified / 136,568 gzip / 112,065 Brotli.
+  // With peers external it measures 618,195 raw / 604,898 minified / 138,827 gzip / 113,683 Brotli on the complete
+  // paragraph stack.
   'three-typegpu-runtime-js': {
-    rawBytes: 616_000,
-    minifiedBytes: 603_000,
+    rawBytes: 620_000,
+    minifiedBytes: 606_000,
     gzipBytes: 139_000,
     brotliBytes: 114_000,
   },
