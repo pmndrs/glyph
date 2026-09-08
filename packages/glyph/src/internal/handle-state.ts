@@ -1307,18 +1307,20 @@ export class PlanTransport {
   }
 
   /** Answers one paragraph-scoped synchronous measurement without publishing. Result bytes ride the inactive output slot and stay readable only until the next call into this Wasm module; engine revisions, publication generation, and renderer fence are untouched. */
-  measureParagraph(request: Uint8Array, paragraphId: ParagraphId): PlanPublication {
+  measureParagraph(request: Uint8Array, paragraphId: ParagraphId, maxOutputBytes: number): PlanPublication {
     this.#assertActive();
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {
       throw new TypeError('paragraph measure request must be a nonempty Uint8Array');
     }
     assertGlyphId(paragraphId, 'paragraph', 'paragraph id');
+    maxOutputBytes = uint32(maxOutputBytes, 'paragraph measure max output bytes');
     this.#invalidate();
     const requestLength = uint32(request.byteLength, 'paragraph measure byte length');
     const initialMemoryBuffer = this.#exports.memory.buffer;
     if (requestLength > this.#requestCapacity || requestLength > this.#exports.requestCapacity(this.#handle)) {
       this.reserve(requestLength, this.#resultCapacity);
     }
+    let canRepairResultCapacity = true;
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
       if (requestPointer === 0) throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
@@ -1334,11 +1336,17 @@ export class PlanTransport {
       const status = header.getUint32(layout.status, true);
       const requiredResultCapacity = header.getUint32(layout.requiredResultCapacity, true);
       const availableResultCapacity = Math.min(this.#resultCapacity, header.getUint32(layout.resultCapacity, true));
-      if (status === textShaperAbi.status.resultTooLarge && requiredResultCapacity > availableResultCapacity) {
+      if (
+        status === textShaperAbi.status.resultTooLarge &&
+        canRepairResultCapacity &&
+        requiredResultCapacity <= maxOutputBytes &&
+        requiredResultCapacity > availableResultCapacity
+      ) {
         // The header describes the inactive query slot while the last successful answer
         // describes the active slot. Rust gates queries on the smaller A/B capacity, so
         // their minimum is the exact grow/no-grow boundary. Every retry grows both slots
         // beyond that boundary; otherwise the typed error wins.
+        canRepairResultCapacity = false;
         this.reserve(requestLength, requiredResultCapacity);
         continue;
       }

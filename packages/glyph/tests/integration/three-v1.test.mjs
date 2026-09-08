@@ -2456,6 +2456,39 @@ test('layout queries do not retain unrelated detached Texts', async (t) => {
   font.dispose();
 });
 
+test('synchronous Three scene events cannot replace a live member traversal with query members', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const firstScene = new THREE.Scene();
+  const secondScene = new THREE.Scene();
+  const attached = three.createText({ font, text: 'attached live member' });
+  const detached = three.createText({ font, text: 'detached query member' });
+  firstScene.add(attached, detached);
+  firstScene.updateMatrixWorld(true);
+  firstScene.remove(detached);
+  secondScene.add(attached);
+  attached.text = 'moved attached live member';
+  let nestedQueries = 0;
+  const queryDuringRootAttachment = (event) => {
+    if (!event.child?.name.startsWith('@pmndrs/glyph:')) return;
+    nestedQueries += 1;
+    detached.measure();
+  };
+  secondScene.addEventListener('childadded', queryDuringRootAttachment);
+
+  try {
+    glyph.shape();
+    assert.equal(nestedQueries, 1, 'renderer root attachment must exercise the synchronous query reentry');
+    assert.equal(attached.bound, true);
+    assert.equal(detached.bound, false, 'the outer live traversal must remove the query-only detached member');
+  } finally {
+    secondScene.removeEventListener('childadded', queryDuringRootAttachment);
+    attached.dispose();
+    detached.dispose();
+    font.dispose();
+  }
+});
+
 test('Bitmap strike changes fully initialize a replacement indexed batch', async (t) => {
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();

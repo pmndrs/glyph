@@ -891,7 +891,7 @@ class RenderPlannerImpl {
       exclusions: geometry.exclusions,
       inlineObjects: compileInlineObjects(this.#handleState, state),
     });
-    const publication = this.#transport.measureParagraph(request, state.paragraphId);
+    const publication = this.#transport.measureParagraph(request, state.paragraphId, this.#limits.maxOutputBytes);
     if (inspection) {
       const layout = readPlannerLayouts(publication).get(state.paragraphId);
       if (layout === undefined) throw new Error('text engine returned no layout inspection for retained text');

@@ -499,7 +499,8 @@ export class ThreeRootHost {
 
   /** @internal Render-active members plus the one Text whose detached layout is being queried. */
   queryMembers(text: Text<RasterFormatMetadata>): readonly Text<RasterFormatMetadata>[] {
-    const members = this.#renderMembers();
+    // Queries may reenter from synchronous Three event listeners while a live traversal borrows the shared scratch.
+    const members = this.#renderMembers([]);
     if (nearestScene(text) === undefined) members.push(text);
     return members;
   }
@@ -637,8 +638,7 @@ export class ThreeRootHost {
     return scene !== undefined;
   }
 
-  #renderMembers(): Text<RasterFormatMetadata>[] {
-    const members = this.#renderMemberScratch;
+  #renderMembers(members: Text<RasterFormatMetadata>[] = this.#renderMemberScratch): Text<RasterFormatMetadata>[] {
     members.length = 0;
     for (const text of this.#texts) {
       if (text instanceof Text && !text.disposed && nearestScene(text) !== undefined) members.push(text);

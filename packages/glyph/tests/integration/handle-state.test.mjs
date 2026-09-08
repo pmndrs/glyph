@@ -58,9 +58,106 @@ test('measurement growth compares both asymmetric A/B result capacities', () => 
   );
   const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/asymmetric-query');
 
-  const result = transport.measureParagraph(new Uint8Array([1]), paragraph);
+  const result = transport.measureParagraph(new Uint8Array([1]), paragraph, 1_000);
   assert.equal(result.bytes.byteLength, layout.size);
   assert.equal(reserves, 1, 'the smaller active slot must trigger one strict growth');
+});
+
+test('measurement growth permits at most one bounded capacity repair', () => {
+  const memory = { buffer: new ArrayBuffer(2_048) };
+  const resultPointer = 512;
+  const layout = textShaperAbi.layouts.engineResult;
+  let calls = 0;
+  let reserves = 0;
+  const exports = {
+    memory,
+    requestCapacity: () => 64,
+    requestPointer: () => 64,
+    reserveRoot: () => {
+      reserves += 1;
+      return textShaperAbi.status.ok;
+    },
+    measureParagraph: () => {
+      calls += 1;
+      const requiredCapacity = 100 + calls;
+      const header = new DataView(memory.buffer, resultPointer, layout.size);
+      new Uint8Array(memory.buffer, resultPointer, layout.size).fill(0);
+      header.setUint32(layout.byteLength, layout.size, true);
+      header.setUint32(layout.status, textShaperAbi.status.resultTooLarge, true);
+      header.setUint32(layout.requestCapacity, 64, true);
+      header.setUint32(layout.resultCapacity, requiredCapacity - 1, true);
+      header.setUint32(layout.requiredResultCapacity, requiredCapacity, true);
+      return resultPointer;
+    },
+  };
+  const transport = new PlanTransport(
+    exports,
+    1,
+    64,
+    8,
+    0,
+    () => undefined,
+    () => undefined,
+  );
+  const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/bounded-query-growth');
+
+  assert.throws(
+    () => transport.measureParagraph(new Uint8Array([1]), paragraph, 1_000),
+    (error) => {
+      assert.equal(error.statusCode, 'result-too-large');
+      return true;
+    },
+  );
+  assert.equal(calls, 2, 'one repair permits exactly one retry');
+  assert.equal(reserves, 1, 'a second capacity watermark must not trigger another reserve');
+});
+
+test('measurement growth rejects capacity beyond the authored output limit without reserving', () => {
+  const memory = { buffer: new ArrayBuffer(2_048) };
+  const resultPointer = 512;
+  const layout = textShaperAbi.layouts.engineResult;
+  let calls = 0;
+  let reserves = 0;
+  const exports = {
+    memory,
+    requestCapacity: () => 64,
+    requestPointer: () => 64,
+    reserveRoot: () => {
+      reserves += 1;
+      return textShaperAbi.status.ok;
+    },
+    measureParagraph: () => {
+      calls += 1;
+      const header = new DataView(memory.buffer, resultPointer, layout.size);
+      new Uint8Array(memory.buffer, resultPointer, layout.size).fill(0);
+      header.setUint32(layout.byteLength, layout.size, true);
+      header.setUint32(layout.status, textShaperAbi.status.resultTooLarge, true);
+      header.setUint32(layout.requestCapacity, 64, true);
+      header.setUint32(layout.resultCapacity, 8, true);
+      header.setUint32(layout.requiredResultCapacity, 101, true);
+      return resultPointer;
+    },
+  };
+  const transport = new PlanTransport(
+    exports,
+    1,
+    64,
+    8,
+    0,
+    () => undefined,
+    () => undefined,
+  );
+  const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/over-limit-query-growth');
+
+  assert.throws(
+    () => transport.measureParagraph(new Uint8Array([1]), paragraph, 100),
+    (error) => {
+      assert.equal(error.statusCode, 'result-too-large');
+      return true;
+    },
+  );
+  assert.equal(calls, 1);
+  assert.equal(reserves, 0, 'an over-limit watermark must not grow either A/B result slot');
 });
 
 test('a glyph engine owns every configured-handle state it creates', async () => {
