@@ -12,6 +12,11 @@
   `/three`, `/three/typegpu`, and direct `/typegpu`; shader barrels retain package-resolution, graph-isolation, and
   tree-shaking proofs without a redundant per-technique size matrix. No shader algorithm changed.
 
+- **Pinned the paragraph-batching and TypeGPU recovery** — A disposable implementation plan now records the exact PR
+  #46 merged-main baseline, the #128-to-#161 stack order and authorship-preserving rebase procedure, already-checkpointed
+  fixes, validated correctness findings, resize-performance attribution, TypeGPU export and optional-peer gates, final
+  adversarial review, maintainer benchmark approval, and the conditions for deleting the plan after landing.
+
 ## 2026-09-07
 
 - **Closed the adversarial retained-transaction review** — Rust now indexes semantic input sections by paragraph ID
