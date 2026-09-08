@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:a8f7c09ec1bf522156089477c4acf7fa75a4d1b470dcd7a3941551c6e8edeaa2'
+source_digest: 'sha256:3846c5ae7d1338eb16e51f35b5cb305f11aeb5d7e969dfd59cc1721cbb919e76'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -291,8 +291,9 @@ splits into that asynchronous `load` and a synchronous transactional `commit`. N
 debounces, or defers, because such a queue drops shaping work during continuous animation: the framerate stays pinned
 while the presented paragraph lags the state the surface is already rendering from, which is how an expensive reshape
 stays invisible until someone watches a workload. `probe:live-update-latency` measures that directly from the presented
-canvas, and its typewriter observation opens on the very task that pauses a full-speed reveal, so every further distinct
-frame is the harness still catching up rather than new content.
+canvas through stable `/three`; setting `PROBE_SHADERS=typegpu` repeats the same live-update scenarios through experimental
+`/three/typegpu`, and `PROBE_BACKEND=webgl2` selects the fallback renderer. Its typewriter observation opens on the very task
+that pauses a full-speed reveal, so every further distinct frame is the harness still catching up rather than new content.
 
 The benchmark-only font asset module is the sole test-instrumentation exception to the application FontFace path. It calls
 Glyph's private loader to inject the harness fetch transport, byte limits, gzip accounting, and runtime-bake timings, then

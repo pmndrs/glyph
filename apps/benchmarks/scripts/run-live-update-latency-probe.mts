@@ -1,4 +1,4 @@
-/* @workflow { "name": "probe:live-update-latency", "summary": "Measures input-to-visible-frame latency and verifies retained reflow for live text, font-size, layout-width, and viewport changes per raster format.", "requirements": "Playwright Chromium with WebGPU. Set PROBE_BACKEND=webgl2 to measure the fallback backend.", "writes": "stdout only" } */
+/* @workflow { "name": "probe:live-update-latency", "summary": "Measures input-to-visible-frame latency and verifies retained reflow for live text, font-size, layout-width, and viewport changes per raster format.", "requirements": "Playwright Chromium with WebGPU. Set PROBE_BACKEND=webgl2 for fallback rendering or PROBE_SHADERS=typegpu for /three/typegpu.", "writes": "stdout only" } */
 import { fileURLToPath } from 'node:url';
 import type { Browser, Page } from 'playwright';
 import { createServer } from 'vite';
@@ -55,6 +55,8 @@ interface ScenarioResult extends Scenario {
 }
 
 const backend = process.env.PROBE_BACKEND === 'webgl2' ? 'webgl2' : 'webgpu';
+const shaders = probeShaders(process.env.PROBE_SHADERS);
+const shaderQuery = shaders === 'typegpu' ? '&shaders=typegpu' : '';
 const observationWindowMs = 500;
 const stepCount = 4;
 /** Reveal tick of the mixed-direction case that sits inside its Arabic run, where an insertion reorders the line. */
@@ -106,7 +108,7 @@ report(results);
 async function openWorkload(page: Page, technique: RasterFormatName, workload: Scenario['workload']): Promise<void> {
   const url =
     `http://127.0.0.1:${port}/?mode=benchmark&technique=${technique}` +
-    `&backend=${backend}&delivery=baked&dpr=1&font=inter&workload=${workload}`;
+    `&backend=${backend}&delivery=baked&dpr=1&font=inter&workload=${workload}${shaderQuery}`;
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('canvas[data-configured-renderer-active="true"]') !== null, {
     timeout: 180_000,
@@ -324,7 +326,9 @@ function installCanvasProbe(): void {
 }
 
 function report(all: readonly ScenarioResult[]): void {
-  process.stdout.write(`backend=${backend} window=${String(observationWindowMs)}ms steps=${String(stepCount)}\n`);
+  process.stdout.write(
+    `backend=${backend} shaders=${shaders} window=${String(observationWindowMs)}ms steps=${String(stepCount)}\n`,
+  );
   process.stdout.write(
     'technique change        frames-to-visible  latency-ms        distinct-frames  idle  fps    transitioned  matched/target\n',
   );
@@ -343,6 +347,12 @@ function report(all: readonly ScenarioResult[]): void {
         `${result.matchedGlyphs ?? 'n/a'}/${result.targetGlyphs ?? 'n/a'}\n`,
     );
   }
+}
+
+function probeShaders(value: string | undefined): 'tsl' | 'typegpu' {
+  if (value === undefined || value === 'tsl') return 'tsl';
+  if (value === 'typegpu') return value;
+  throw new RangeError(`PROBE_SHADERS must be tsl or typegpu; received ${value}`);
 }
 
 function median(values: readonly number[]): number {
