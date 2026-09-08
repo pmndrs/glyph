@@ -1290,7 +1290,8 @@ class ThreeRootPublication {
 
   measurement(text: Text<RasterFormatMetadata>): ParagraphLayoutSummary {
     this.#assertActive();
-    this.reconcile(this.#root.queryMembers(text));
+    const texts = this.#root.queryMembers(text);
+    if (this.needsReconcile(texts)) this.reconcile(texts);
     const entry = this.#entries.get(text);
     if (entry === undefined) throw new Error('Text is not retained by this batch');
     const measurement = entry.handle.measure();
@@ -1300,7 +1301,8 @@ class ThreeRootPublication {
 
   inspection(text: Text<RasterFormatMetadata>): GlyphLayoutInspection {
     this.#assertActive();
-    this.reconcile(this.#root.queryMembers(text));
+    const texts = this.#root.queryMembers(text);
+    if (this.needsReconcile(texts)) this.reconcile(texts);
     const entry = this.#entries.get(text);
     if (entry === undefined) throw new Error('Text is not retained by this batch');
     const inspection = entry.handle.inspect();
