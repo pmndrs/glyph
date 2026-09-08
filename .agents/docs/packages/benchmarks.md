@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:b0d488f3c7f40e38ab9c717fe3ec4127610eb281c9f935c310c33f69b7b9f6c6'
+source_digest: 'sha256:f17babae247c0d20ad0dba0c8baba670e8de37c9513a9f5f363a7ea377979056'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -464,6 +464,10 @@ for unused loopback ports, so browser workflows can run alongside the maintainer
 Billboard receives the host's active perspective camera on every animation frame, computes distance ranks in TypeScript, and
 passes them as child `Text.renderOrder`; a focused regression proves the orbit and a depth-crossing rank reversal. No
 benchmark adapter sorts paragraphs or glyph records before the Rust publication.[^presentation-framerate-sweep]
+
+Rich Text derives publication eligibility from an unscaled 60 Hz logical clock inside its rAF hook. High-refresh frames
+that remain in the same tick do no work, delayed frames publish only the latest state once, and `animationSpeed` continues
+to scale emphasis and tint progression without changing the publication budget.
 
 One aggregate CPU sweep could not serve as an A/B: exact remote main retained its 1,024-frame telemetry ring across
 workload replacement, while the candidate reset scene-local telemetry. The accepted comparison instead ran seven

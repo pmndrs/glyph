@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { richTextComposition, richTextParagraphCount, richTextSpanNames } from './scene';
+import { nextRichTextPublicationTick, richTextComposition, richTextParagraphCount, richTextSpanNames } from './scene';
 
 const BODY = 16;
 
@@ -34,3 +34,35 @@ describe('rich text composition', () => {
     expect(() => richTextParagraphCount(101)).toThrow(RangeError);
   });
 });
+
+describe('rich text mutation cadence', () => {
+  it('publishes the same 60 logical ticks from 60 Hz and 120 Hz rAF timestamps', () => {
+    expect(collectMutationTicks(60)).toEqual(Array.from({ length: 60 }, (_, tick) => tick));
+    expect(collectMutationTicks(120)).toEqual(Array.from({ length: 60 }, (_, tick) => tick));
+  });
+
+  it('publishes no ticks while animation is disabled', () => {
+    expect(nextRichTextPublicationTick(false, 0, undefined)).toBeUndefined();
+    expect(nextRichTextPublicationTick(false, 1_000, 12)).toBeUndefined();
+  });
+
+  it('skips duplicate ticks and jumps to the latest tick once after a delayed rAF', () => {
+    expect(nextRichTextPublicationTick(true, 0, undefined)).toBe(0);
+    expect(nextRichTextPublicationTick(true, 8, 0)).toBeUndefined();
+    expect(nextRichTextPublicationTick(true, 100, 0)).toBe(6);
+    expect(nextRichTextPublicationTick(true, 110, 6)).toBeUndefined();
+  });
+});
+
+function collectMutationTicks(refreshRate: 60 | 120): readonly number[] {
+  const ticks: number[] = [];
+  let previousTick: number | undefined;
+  for (let frame = 0; frame < refreshRate; frame += 1) {
+    const elapsedMs = (frame * 1_000) / refreshRate;
+    const tick = nextRichTextPublicationTick(true, elapsedMs, previousTick);
+    if (tick === undefined) continue;
+    ticks.push(tick);
+    previousTick = tick;
+  }
+  return ticks;
+}

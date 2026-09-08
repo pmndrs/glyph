@@ -125,8 +125,9 @@ export function assertRichTextSpans(
 const RICH_TEXT_PARAGRAPH_GAP = 18;
 const RICH_TEXT_MINIMUM_PARAGRAPHS = 1;
 const RICH_TEXT_MAXIMUM_PARAGRAPHS = 6;
-/** Reshapes on a fixed cadence, not every frame: this workload measures composed reflow cost, which must stay comparable across technique/backend lanes rather than scale with frame rate. */
-const RICH_TEXT_RESHAPE_INTERVAL_MS = 125;
+const RICH_TEXT_MUTATIONS_PER_SECOND = 60;
+const RICH_TEXT_EMPHASIS_CYCLE_TICKS = RICH_TEXT_MUTATIONS_PER_SECOND * 4;
+const RICH_TEXT_TINT_CYCLE_TICKS = RICH_TEXT_MUTATIONS_PER_SECOND * 12;
 
 export function richTextParagraphCount(amount: number): number {
   if (!Number.isFinite(amount) || amount < 0 || amount > 100) {
@@ -139,14 +140,14 @@ export function richTextParagraphCount(amount: number): number {
 /** Per-paragraph emphasis phase, so a stack reflows at staggered offsets instead of in lockstep. */
 export function richTextEmphasisScale(index: number, count: number, elapsedMs: number): number {
   assertParagraphIndex(index, count);
-  const step = Math.floor(elapsedMs / RICH_TEXT_RESHAPE_INTERVAL_MS);
-  return 1 + 0.45 * (1 + Math.sin((step / 32 + index / count) * Math.PI * 2));
+  const step = richTextLogicalMutationTick(elapsedMs);
+  return 1 + 0.45 * (1 + Math.sin((step / RICH_TEXT_EMPHASIS_CYCLE_TICKS + index / count) * Math.PI * 2));
 }
 
 export function richTextTintColor(index: number, count: number, elapsedMs: number): string {
   assertParagraphIndex(index, count);
-  const step = Math.floor(elapsedMs / RICH_TEXT_RESHAPE_INTERVAL_MS);
-  const hue = (((step / 96 + index / count) % 1) + 1) % 1;
+  const step = richTextLogicalMutationTick(elapsedMs);
+  const hue = (((step / RICH_TEXT_TINT_CYCLE_TICKS + index / count) % 1) + 1) % 1;
   const channel = (offset: number): number => {
     const value = (offset + hue * 12) % 12;
     return 0.55 - 0.42 * Math.max(-1, Math.min(value - 3, 9 - value, 1));
@@ -162,6 +163,23 @@ function assertParagraphIndex(index: number, count: number): void {
   if (!Number.isSafeInteger(index) || index < 0 || index >= count) {
     throw new RangeError('rich text paragraph index must address the paragraph stack');
   }
+}
+
+/** Returns the latest eligible 60 Hz tick, or `undefined` when this rAF must not publish. */
+export function nextRichTextPublicationTick(
+  animationEnabled: boolean,
+  elapsedMs: number,
+  previousTick: number | undefined,
+): number | undefined {
+  if (!animationEnabled) return undefined;
+  const tick = richTextLogicalMutationTick(elapsedMs);
+  return tick === previousTick ? undefined : tick;
+}
+
+function richTextLogicalMutationTick(elapsedMs: number): number {
+  const tick = (elapsedMs * RICH_TEXT_MUTATIONS_PER_SECOND) / 1_000;
+  const boundaryTolerance = Number.EPSILON * Math.max(1, Math.abs(tick));
+  return Math.floor(tick + boundaryTolerance);
 }
 
 export const richTextWorkload = {
@@ -302,14 +320,14 @@ export function animateRichTextEntries(
   configuration: Pick<ComparisonWorkloadConfiguration, 'animationEnabled' | 'animationSpeed' | 'fontSize'>,
   elapsedMs: number,
 ): void {
-  if (!configuration.animationEnabled || entries.length === 0) return;
-  const scaled = elapsedMs * (0.25 + configuration.animationSpeed * 0.0175);
-  const reshapeFrame = Math.floor(scaled / RICH_TEXT_RESHAPE_INTERVAL_MS);
+  if (entries.length === 0) return;
   const first = entries[0]!;
-  if (first.lastPaintFrame === reshapeFrame) return;
+  const publicationTick = nextRichTextPublicationTick(configuration.animationEnabled, elapsedMs, first.lastPaintFrame);
+  if (publicationTick === undefined) return;
+  const scaled = elapsedMs * (0.25 + configuration.animationSpeed * 0.0175);
   const started = performance.now();
   for (const [index, entry] of entries.entries()) {
-    entry.lastPaintFrame = reshapeFrame;
+    entry.lastPaintFrame = publicationTick;
     const literal = richTextLiteral(
       retainedCompanionFonts(entry),
       richTextComposition(configuration.fontSize, {

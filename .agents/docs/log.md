@@ -2,6 +2,10 @@
 
 ## 2026-09-08
 
+- **Made Rich Text mutation load refresh-rate independent** — Its rAF hook now publishes at most one latest-state update
+  per 60 Hz logical tick. Animation speed still scales the composed emphasis and tint phase, 120 Hz duplicate frames and
+  disabled animation add no work, and delayed frames never replay missed ticks.
+
 - **Corrected the post-TypeGPU integration boundary** — Published renderer-free shader realizations as the explicit
   `/shaders/tsl` and `/shaders/typegpu` siblings, retained `/three/typegpu` as the isolated Three experiment, and kept
   `/typegpu` as the narrower direct renderer. Packed-consumer builds now prove the root and stable Three entry never
