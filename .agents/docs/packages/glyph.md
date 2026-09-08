@@ -657,7 +657,9 @@ wire diffing. Three owns deeply frozen normalized style, layout, and constraint 
 full-field reassignment is value-equal; mutating nested caller input followed by the required field reassignment therefore
 cannot rewrite history or suppress an update. A plain string replacement reuses its normalized font, transform,
 material, style, layout, and constraint
-ownership. Equal-length content emits only the minimal scalar-aligned text record; length changes additionally republish
+ownership. When those already-owned field identities return through a content-only update, normalization skips their
+merge, validation, deep comparison, and clone; an actual full-field reassignment still takes the validating snapshot path.
+Equal-length content emits only the minimal scalar-aligned text record; length changes additionally republish
 root-style coverage. A font-size or paint-only update emits only its style record while Rust remains authoritative for
 shaping and layout invalidation. These cases do not republish paragraph membership, scoped order, constraints, regions,
 exclusions, or inline-object records; assigning an already-plain string to itself does not advance desired state or cross

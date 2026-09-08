@@ -10,11 +10,11 @@
       "label": "GlyphConfig integration DSL",
       "status": "measured",
       "format": "javascript",
-      "sha256": "91b67aff70cb9b0e131e15a7166b4cadc505267b87520f61311a0667d1d4cecc",
-      "rawBytes": 41449,
-      "minifiedBytes": 41158,
-      "gzipBytes": 10908,
-      "brotliBytes": 9612
+      "sha256": "b4a0fdfddecb3842dc2efdcd78e2c985a5d882bb77cbcfea9f1d49e7078a8cc7",
+      "rawBytes": 41610,
+      "minifiedBytes": 41319,
+      "gzipBytes": 10938,
+      "brotliBytes": 9652
     },
     {
       "id": "typegpu-direct-renderer-js",
@@ -32,11 +32,11 @@
       "label": "Core JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "ed968a146457a9876ae4fb0dd6937ba0c26b8d510e83fb4911f6e389d73f4bc9",
-      "rawBytes": 326939,
-      "minifiedBytes": 318913,
-      "gzipBytes": 80421,
-      "brotliBytes": 67034
+      "sha256": "480e15fdca9fe5ca3fa8af177b40fddab76056ca9fa86fcf130e307af1bde02a",
+      "rawBytes": 330866,
+      "minifiedBytes": 322809,
+      "gzipBytes": 81358,
+      "brotliBytes": 67664
     },
     {
       "id": "text-shaper-wasm",

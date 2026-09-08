@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { forwardedWorkflowArguments, workflowCommandArguments } from './workflow-arguments.mts';
 import { hasVitexecFailure } from './workflow-output.mts';
 
 const execute = promisify(execFile);
@@ -31,4 +32,23 @@ test('treats Vitexec browser and injected-module errors as workflow failures', (
   assert.equal(hasVitexecFailure('logs:\n[log] presentation-ready'), false);
   assert.equal(hasVitexecFailure('logs:\n[error] injected probe failed'), true);
   assert.equal(hasVitexecFailure('logs:\n[page error] renderer failed'), true);
+});
+
+test('forwards runner options in the position each runner parses', () => {
+  assert.deepEqual(forwardedWorkflowArguments(['--', '--cpu-profile', '/tmp/profile.cpuprofile']), [
+    '--cpu-profile',
+    '/tmp/profile.cpuprofile',
+  ]);
+  assert.deepEqual(workflowCommandArguments('node', 'probe.mts', ['--fixed'], ['--samples', '7']), [
+    'probe.mts',
+    '--fixed',
+    '--samples',
+    '7',
+  ]);
+  assert.deepEqual(workflowCommandArguments('vitexec', 'probe.ts', ['--gpu'], ['--cpu-profile', '/tmp/profile']), [
+    '--gpu',
+    '--cpu-profile',
+    '/tmp/profile',
+    'probe.ts',
+  ]);
 });

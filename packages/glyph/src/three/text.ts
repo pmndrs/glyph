@@ -1536,13 +1536,18 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   if (typeof properties !== 'object' || properties === null || Array.isArray(properties)) {
     throw new TypeError('Text properties are required');
   }
-  const style = mergePropertyList(properties.style, 'Text style');
-  const layout = mergePropertyList(properties.layout, 'Text layout');
-  const constraints = mergePropertyList(properties.constraints, 'Text constraints');
-  assertTextStyle(style, 'Text style');
-  assertParagraphLayout(layout, 'Text layout');
-  assertConstraints(constraints, 'Text constraints');
-  normalizedColumns(layout, constraints);
+  const styleReused = previous !== undefined && properties.style === previous.style;
+  const layoutReused = previous !== undefined && properties.layout === previous.layout;
+  const constraintsReused = previous !== undefined && properties.constraints === previous.constraints;
+  const style = styleReused ? previous.style : mergePropertyList(properties.style, 'Text style');
+  const layout = layoutReused ? previous.layout : mergePropertyList(properties.layout, 'Text layout');
+  const constraints = constraintsReused
+    ? previous.constraints
+    : mergePropertyList(properties.constraints, 'Text constraints');
+  if (!styleReused) assertTextStyle(style, 'Text style');
+  if (!layoutReused) assertParagraphLayout(layout, 'Text layout');
+  if (!constraintsReused) assertConstraints(constraints, 'Text constraints');
+  if (!layoutReused || !constraintsReused) normalizedColumns(layout, constraints);
   const formatted = typeof properties.text === 'string' ? undefined : properties.text;
   if (formatted !== undefined && !isFormattedText(formatted)) throw new TypeError('Text content is invalid');
   const text = formatted?.text ?? (properties.text as string);
@@ -1582,9 +1587,11 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     font: properties.font,
     text,
     spans,
-    style: reuseOrSnapshotTextProperty(previous?.style, style, 'Text style'),
-    layout: reuseOrSnapshotTextProperty(previous?.layout, layout, 'Text layout'),
-    constraints: reuseOrSnapshotTextProperty(previous?.constraints, constraints, 'Text constraints'),
+    style: styleReused ? style : reuseOrSnapshotTextProperty(previous?.style, style, 'Text style'),
+    layout: layoutReused ? layout : reuseOrSnapshotTextProperty(previous?.layout, layout, 'Text layout'),
+    constraints: constraintsReused
+      ? constraints
+      : reuseOrSnapshotTextProperty(previous?.constraints, constraints, 'Text constraints'),
     ...(rasterPixelRatio === undefined ? {} : { rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
   });

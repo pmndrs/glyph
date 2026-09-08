@@ -14,6 +14,13 @@
 
 ## 2026-09-07
 
+- **Corrected retained-performance attribution** — Content-only Three updates now recognize the already-owned normalized
+  style, layout, and constraint identities before merge, validation, deep comparison, or cloning; actual full-field
+  reassignments retain deep snapshot validation. The specialized runner now strips pnpm's option delimiter and places
+  forwarded Vitexec options before the injected module, with a focused argv-order contract. An aggregate main comparison
+  was rejected because main retained its telemetry ring across workload replacement; fresh-page profiles instead show
+  Off-axis / 3D, Dynamic Layout, and Paint & Effects flat or faster on the candidate.
+
 - **Activated the camera-ranked label proof** — The presentation host now forwards its active workload camera into
   every frame hook, allowing Camera Billboard to orbit, face the camera, and rewrite child `Text.renderOrder` ranks as
   depth crosses. Its reusable rank records remove per-label frame allocation. A focused regression proves both camera
