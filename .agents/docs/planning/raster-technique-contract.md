@@ -38,7 +38,7 @@ generated:
 # Raster technique contract and single-authority cleanup
 
 > **Historical proposal — superseded.** Public raster extensibility now uses `RasterFormat`, `RasterCodec`, and exact
-> `/config/*`, `/raster/*`, `/tsl/*`, or `/shaders/*` leaves. The former Policy and renderer-program vocabulary below is
+> `/config/*`, `/raster/*`, `/shaders/tsl/*`, or `/shaders/typegpu/*` leaves. The former Policy and renderer-program vocabulary below is
 > retained only as design history. Use the [portable raster-format implementation report](../guides/technique-implementation-report.md).
 
 A raster technique is the unit of extensibility this library promises: Bitmap, MSDF, and Slug are the first-party

@@ -803,7 +803,7 @@ Deliver:
 - exact package-graph, deterministic, Worker, lifecycle, browser, GPU, allocation, size, documentation, and OKF evidence.
 
 The first-party direct TypeGPU application path now renders bitmap, MSDF, and Slug with `defineTypeGpuConfig` and
-caller-owned passes, using the shared `/shaders` functions. The [hello-world app](../../../apps/typegpu-hello-world/README.md)
+caller-owned passes, using the shared `/shaders/typegpu` functions. The [hello-world app](../../../apps/typegpu-hello-world/README.md)
 and `typegpu:live-check` prove rendering and retained updates. Milestone 11.8 remains in progress because its external
 host/program-reuse gates extend beyond this 2D adapter.
 
@@ -818,8 +818,8 @@ decoders. Target-v1 `/raster/bitmap`, `/raster/mtsdf`, and `/raster/slug` now au
 Three, omit absent records, select stable physical bindings, and write typed canonical positive-down instance storage.
 Bitmap partitions by strike/page, MTSDF by a font atlas array, and Slug by its raw curve/header/reference page.
 
-Items 11.1 through 11.7 are closed. `/tsl` publishes the stable native technique shaders; `/three/typegpu` publishes the
-experimental adapters over `/shaders`. Per D-345, the stable and experimental Three configs remain separate while parity
+Items 11.1 through 11.7 are closed. `/shaders/tsl` publishes the stable native technique shaders; `/three/typegpu` publishes the
+experimental adapters over `/shaders/typegpu`. Per D-345 and D-346, the stable and experimental Three configs remain separate while parity
 testing continues. Programs resolve through a registry keyed by the
 technique's stable identifier, which restores the third-party extension boundary that identity comparison had closed. The
 benchmark drives the whole surface: every technique lane, the live scenes, and the comparison workloads run through

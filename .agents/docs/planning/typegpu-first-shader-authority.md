@@ -404,7 +404,7 @@ WebGPU building blocks and confirms a WebGPU-only Three bridge; it does not yet 
 Implement Gate 0 before building a TypeGPU engine. Until then:
 
 - native TSL remains the flagship Three implementation;
-- `@pmndrs/glyph/shaders` is the package-owned WebGPU shader/program subpath with an optional direct encoder;
+- `@pmndrs/glyph/shaders/typegpu` is the package-owned WebGPU shader/program subpath with an optional direct encoder;
 - `@pmndrs/glyph/three/typegpu` is an isolated package-owned experiment;
 - gpucat remains an external public-API fitness test;
 - no TypeGPU, Three, or gpucat type enters core.

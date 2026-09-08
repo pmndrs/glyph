@@ -159,3 +159,57 @@ test('stable and experimental handles retain independent shader selection in one
   assert.equal(remaining.length, 1);
   assert.doesNotMatch(compileNodeMaterialBackends(remaining[0], { scene }).webgpu.vertex, /fn bitmapQuadPosition\(/);
 });
+
+test('stable and experimental Three configs share the custom material override contract', async (t) => {
+  const font = glyph.fontFace(
+    new Blob([
+      await readFile(
+        new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url),
+      ),
+    ]),
+    { format: bitmap({ strikes: [16] }) },
+  );
+  await font.load();
+  t.after(() => font.dispose());
+  const contracts = [];
+
+  for (const [name, config] of [
+    ['stable', stableThree.ThreeConfig],
+    ['experimental', experimentalThree.ThreeConfig],
+  ]) {
+    const handle = await createThreeTestHandle(t, config);
+    const seen = [];
+    const material = stableThree.defineTextMaterial((context) => {
+      const realized = context.createDefaultMaterial();
+      if (context.kind === 'glyph') {
+        realized.colorNode = TSL.vec3(context.shader.color.r, 0, context.shader.color.b);
+        seen.push({ kind: context.format, shader: Object.keys(context.shader).sort() });
+      } else {
+        realized.colorNode = context.shader.color.mul(0.5);
+        seen.push({ kind: context.kind, shader: Object.keys(context.shader).sort() });
+      }
+      return realized;
+    });
+    const scene = new THREE.Scene();
+    const label = handle.createText({
+      font,
+      material,
+      text: name,
+      style: { decoration: { underline: true, color: '#ff0088' } },
+    });
+    scene.add(label);
+    scene.updateMatrixWorld();
+
+    assert.equal(label.error, undefined);
+    const draws = [];
+    scene.traverse((object) => {
+      if (object.isMesh) draws.push(object);
+    });
+    assert.equal(draws.length, 2, `${name} config must realize separate glyph and decoration draws`);
+    assert.equal(new Set(draws.map((draw) => draw.material)).size, 2);
+    contracts.push(seen.sort((left, right) => left.kind.localeCompare(right.kind)));
+    label.dispose();
+  }
+
+  assert.deepEqual(contracts[1], contracts[0]);
+});

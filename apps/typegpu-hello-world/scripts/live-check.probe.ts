@@ -1,7 +1,7 @@
 import { glyph } from '@pmndrs/glyph';
 import { defineTypeGpuConfig, type TypeGpuDraw } from '@pmndrs/glyph/typegpu';
 import tgpu, { common, d, std } from 'typegpu';
-import { MsdfCoverageInput, msdfCoverage } from '@pmndrs/glyph/shaders/msdf';
+import { MsdfCoverageInput, msdfCoverage } from '@pmndrs/glyph/shaders/typegpu/msdf';
 import { ready } from '/src/main.ts';
 
 const app = await ready;

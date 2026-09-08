@@ -1,5 +1,15 @@
 # pmndrs/glyph documentation update log
 
+## 2026-09-08
+
+- **Corrected the post-TypeGPU integration boundary** — Published renderer-free shader realizations as the explicit
+  `/shaders/tsl` and `/shaders/typegpu` siblings, retained `/three/typegpu` as the isolated Three experiment, and kept
+  `/typegpu` as the narrower direct renderer. Packed-consumer builds now prove the root and stable Three entry never
+  request optional TypeGPU peers, while TypeGPU entries declare and require them. Focused Bitmap-plus-decoration evidence
+  holds the custom-material contract equal across both Three configs. Package-size gates separately measure the native
+  TSL library, the aggregate and per-technique TypeGPU shader graphs, and the direct renderer, correcting the merged
+  aggregate graph's stale 30 KB classification without changing shader algorithms.
+
 ## 2026-09-04
 
 - **Captured the disposable alpha fast-follow** — Recorded the deferred Rust audit and remaining TypeScript

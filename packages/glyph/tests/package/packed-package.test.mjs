@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { build } from 'vite';
 
 // `/react` reaches R3F's client-only WebGPU entry, which needs a browser global to import at all.
 import '../support/browser-globals.mjs';
@@ -57,6 +58,10 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     'package.json',
     'src',
   ]);
+  for (const peer of ['typegpu', '@typegpu/gl', '@typegpu/three']) {
+    assert.ok(manifest.peerDependencies[peer], `${peer} must be a declared peer`);
+    assert.equal(manifest.peerDependenciesMeta[peer]?.optional, true, `${peer} must remain optional`);
+  }
   assert.equal(
     await readFile(join(installedDirectory, 'LICENSE'), 'utf8'),
     await readFile(join(packageDirectory, '..', '..', 'LICENSE'), 'utf8'),
@@ -79,9 +84,9 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   }
 
   for (const specifier of [
-    '@pmndrs/glyph/tsl/packed-color',
-    '@pmndrs/glyph/shaders/slug-shaders/slug-render',
-    '@pmndrs/glyph/shaders/bitmap-reference',
+    '@pmndrs/glyph/shaders/tsl/packed-color',
+    '@pmndrs/glyph/shaders/typegpu/slug-shaders/slug-render',
+    '@pmndrs/glyph/shaders/typegpu/bitmap-reference',
     '@pmndrs/glyph/three/material',
     '@pmndrs/glyph/three/typegpu',
     '@pmndrs/glyph/react/bitmap',
@@ -96,6 +101,26 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     const imported = await import(resolved);
     assert.ok(Object.keys(imported).length > 0, `${specifier} must expose its public leaf`);
   }
+
+  const stableConsumer = join(temporaryDirectory, 'consumer', 'stable.mjs');
+  await writeFile(
+    stableConsumer,
+    "export { glyph } from '@pmndrs/glyph';\nexport { ThreeConfig } from '@pmndrs/glyph/three';\n",
+  );
+  assert.deepEqual(await buildPackedConsumer(stableConsumer, true), []);
+
+  const typeGpuConsumer = join(temporaryDirectory, 'consumer', 'typegpu.mjs');
+  await writeFile(
+    typeGpuConsumer,
+    [
+      "export * from '@pmndrs/glyph/shaders/typegpu/bitmap';",
+      "export { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';",
+      "export { ThreeConfig } from '@pmndrs/glyph/three/typegpu';",
+      '',
+    ].join('\n'),
+  );
+  await assert.rejects(buildPackedConsumer(typeGpuConsumer, true), /requires optional TypeGPU peer/);
+  assert.deepEqual(await buildPackedConsumer(typeGpuConsumer, false), ['@typegpu/three', 'typegpu']);
 
   for (const subpath of ['./text-shaper.wasm', './bitmap-baker.wasm', './mtsdf-baker.wasm', './slug-baker.wasm']) {
     const specifier = `@pmndrs/glyph${subpath.slice(1)}`;
@@ -126,6 +151,10 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     '@pmndrs/glyph/font-baker/validator',
     '@pmndrs/glyph/loader',
     '@pmndrs/glyph/config/font-library',
+    '@pmndrs/glyph/tsl',
+    '@pmndrs/glyph/tsl/bitmap',
+    '@pmndrs/glyph/shaders',
+    '@pmndrs/glyph/shaders/bitmap',
     '@pmndrs/glyph/three/font-loader',
     '@pmndrs/glyph/three/loader',
     '@pmndrs/glyph/three/command-buffer-renderer',
@@ -139,7 +168,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     '@pmndrs/glyph/three/text',
     '@pmndrs/glyph/three/engine-plan-target',
     '@pmndrs/glyph/raster/internal/bitmap-decoder',
-    '@pmndrs/glyph/tsl/slug-shaders/tsl-compat',
+    '@pmndrs/glyph/shaders/tsl/slug-shaders/tsl-compat',
   ]) {
     assert.throws(
       () => import.meta.resolve(removed, consumerEntry),
@@ -172,3 +201,33 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   assert.notEqual(commonJs.status, 0);
   assert.match(commonJs.stderr, /ERR_PACKAGE_PATH_NOT_EXPORTED|ERR_REQUIRE_ESM/);
 });
+
+async function buildPackedConsumer(entry, forbidTypeGpuPeers) {
+  const typeGpuPeers = new Set();
+  await build({
+    configFile: false,
+    logLevel: 'silent',
+    root: dirname(entry),
+    build: {
+      lib: { entry, formats: ['es'], fileName: 'entry' },
+      write: false,
+      rollupOptions: {
+        external(id) {
+          if (/^(?:typegpu(?:\/|$)|@typegpu\/)/.test(id)) {
+            if (forbidTypeGpuPeers) throw new Error(`requires optional TypeGPU peer ${id}`);
+            typeGpuPeers.add(
+              id
+                .split('/')
+                .slice(0, id.startsWith('@') ? 2 : 1)
+                .join('/'),
+            );
+            return true;
+          }
+          if (id === '@pmndrs/glyph' || id.startsWith('@pmndrs/glyph/')) return false;
+          return !id.startsWith('.') && !id.startsWith('/') && !id.startsWith('\0');
+        },
+      },
+    },
+  });
+  return [...typeGpuPeers].sort();
+}

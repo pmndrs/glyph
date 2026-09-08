@@ -41,7 +41,8 @@ Use `text.update(...)` followed by `glyph.shape()` for text, font, style, or lay
 return engine results synchronously. `handle('overlay')` creates an independent named text root with its own draw call.
 Dispose text and handles before destroying the caller-owned TypeGPU root. Disposing a handle leaves that root usable.
 
-Bitmap, MSDF (including outline and shadow), and Slug use the functions published at `@pmndrs/glyph/shaders`.
+Bitmap, MSDF (including outline and shadow), and Slug use the functions published at
+`@pmndrs/glyph/shaders/typegpu`.
 The adapter defaults to unlit 2D text and supports custom GPU position and color transforms. Rich spans, decoration
 lines, and custom raster programs remain integration work. It does not depend on Three.js.
 
