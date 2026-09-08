@@ -17,14 +17,14 @@ import {
   TypeGpuBitmapFragmentInput,
   TypeGpuBitmapInstance,
   TypeGpuBitmapVertexInput,
-} from '../../dist/shaders/bitmap-shader.js';
+} from '../../dist/shaders/typegpu/bitmap-shader.js';
 import {
   referenceBitmapAtlasUv,
   referenceBitmapPaint,
   referenceBitmapQuadPosition,
   referenceProjectClipPosition,
   referenceSnapClipAxis,
-} from '../../dist/shaders/bitmap-reference.js';
+} from '../../dist/shaders/typegpu/bitmap-reference.js';
 
 /**
  * Bitmap authority across the `/three/typegpu` adapter and `/typegpu` implementation.

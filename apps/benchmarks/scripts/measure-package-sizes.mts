@@ -377,76 +377,11 @@ const glyphConfig = await measureJavaScript(
     excludedInitial: [
       '/packages/glyph/dist/react',
       '/packages/glyph/dist/three',
-      '/packages/glyph/dist/tsl',
+      '/packages/glyph/dist/shaders/tsl',
       '/packages/glyph/dist/three/',
-      '/packages/glyph/dist/tsl/',
+      '/packages/glyph/dist/shaders/tsl/',
     ],
   },
-);
-const tslSubpath = await measureJavaScript(
-  'tsl-shader-library-js',
-  'TSL technique shader library JS',
-  new URL('../size-entries/text-tsl.ts', import.meta.url),
-  false,
-  true,
-  true,
-  {
-    // The shader library must not pull the Three scene integration or React.
-    expectedDynamic: [],
-    excludedInitial: ['/packages/glyph/dist/react', '/packages/glyph/dist/three'],
-  },
-);
-const typegpuSubpath = await measureJavaScript(
-  'typegpu-shader-library-js',
-  'TypeGPU technique shader JS',
-  new URL('../size-entries/text-typegpu.ts', import.meta.url),
-  false,
-  true,
-  true,
-  {
-    // The TypeGPU shader library must not pull the renderer integrations or React;
-    // the `typegpu` runtime itself is an optional peer and stays outside the graph.
-    expectedDynamic: [],
-    excludedInitial: [
-      '/packages/glyph/dist/react',
-      '/packages/glyph/dist/three',
-      '/packages/glyph/dist/tsl',
-      '/packages/glyph/dist/three/',
-      '/packages/glyph/dist/tsl/',
-    ],
-  },
-);
-const typegpuBitmapShader = await measureJavaScript(
-  'typegpu-bitmap-shader-js',
-  'TypeGPU Bitmap shader JS',
-  new URL('../size-entries/text-typegpu-bitmap.ts', import.meta.url),
-  false,
-  true,
-  true,
-);
-const typegpuMsdfShader = await measureJavaScript(
-  'typegpu-msdf-shader-js',
-  'TypeGPU MSDF shader JS',
-  new URL('../size-entries/text-typegpu-msdf.ts', import.meta.url),
-  false,
-  true,
-  true,
-);
-const typegpuSlugShader = await measureJavaScript(
-  'typegpu-slug-shader-js',
-  'TypeGPU Slug shader JS',
-  new URL('../size-entries/text-typegpu-slug.ts', import.meta.url),
-  false,
-  true,
-  true,
-);
-const typegpuDecorationShader = await measureJavaScript(
-  'typegpu-decoration-shader-js',
-  'TypeGPU decoration shader JS',
-  new URL('../size-entries/text-typegpu-decoration.ts', import.meta.url),
-  false,
-  true,
-  true,
 );
 const typegpuIntegration = await measureJavaScript(
   'typegpu-direct-renderer-js',
@@ -460,9 +395,9 @@ const typegpuIntegration = await measureJavaScript(
     excludedInitial: [
       '/packages/glyph/dist/react',
       '/packages/glyph/dist/three',
-      '/packages/glyph/dist/tsl',
+      '/packages/glyph/dist/shaders/tsl',
       '/packages/glyph/dist/three/',
-      '/packages/glyph/dist/tsl/',
+      '/packages/glyph/dist/shaders/tsl/',
     ],
   },
 );
@@ -481,6 +416,25 @@ const threeRuntime = await measureJavaScript(
       '/packages/glyph/dist/runtime-bake',
       '/packages/glyph/dist/internal/font-face-transfer-runtime',
       '/packages/glyph/dist/font-baker/validator',
+      '/node_modules/ajv/',
+      '/node_modules/gltf-validator/',
+    ],
+  },
+);
+const threeTypeGpuRuntime = await measureJavaScript(
+  'three-typegpu-runtime-js',
+  'Three.js + TypeGPU adapter JS',
+  new URL('../size-entries/three-typegpu-runtime.ts', import.meta.url),
+  false,
+  true,
+  true,
+  {
+    expectedDynamic: ['/packages/glyph/dist/runtime-bake', '/packages/glyph/dist/internal/font-face-transfer-runtime'],
+    excludedInitial: [
+      '/packages/glyph/dist/runtime-bake',
+      '/packages/glyph/dist/internal/font-face-transfer-runtime',
+      '/packages/glyph/dist/font-baker/validator',
+      '/packages/glyph/dist/shaders/tsl',
       '/node_modules/ajv/',
       '/node_modules/gltf-validator/',
     ],
@@ -525,16 +479,11 @@ const iconsSlug = await measureFontAsset(
 
 const entries: SizeEntry[] = [
   glyphConfig,
-  tslSubpath,
-  typegpuSubpath,
-  typegpuBitmapShader,
-  typegpuMsdfShader,
-  typegpuSlugShader,
-  typegpuDecorationShader,
   typegpuIntegration,
   coreJavaScript,
   textShaperWasm,
   threeRuntime,
+  threeTypeGpuRuntime,
   interBitmap,
   interMsdf,
   interSlug,

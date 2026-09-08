@@ -18,7 +18,7 @@ const rustCrates = [
 export async function runGlyphCheck(): Promise<void> {
   await runGlyphTest();
   await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.json', '--noEmit']);
-  await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.slug-tsl.json', '--noEmit']);
+  await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.slug-shaders.json', '--noEmit']);
   // Emitted public declarations must survive strict consumers: stripInternal can orphan a
   // symbol that source-level checks never see. Peer-bound React and TypeGPU leaves are
   // exercised separately against dist with dependency declaration checking disabled: the

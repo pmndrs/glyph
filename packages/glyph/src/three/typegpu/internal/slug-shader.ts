@@ -7,7 +7,7 @@ import {
   SlugShaderGlyph,
   slugRenderWithOptions,
   type SlugShaderPage,
-} from '../../../shaders/slug-shaders/slug-render.js';
+} from '../../../shaders/typegpu/slug/slug-render.js';
 import {
   slugCurveTexelSlot,
   slugCurveWidthAccessor,
@@ -15,8 +15,8 @@ import {
   slugHeaderWidthAccessor,
   slugReferenceTexelSlot,
   slugReferenceWidthAccessor,
-} from '../../../shaders/slug-shaders/slug-texture.js';
-import { slugDilate, slugDilateMatrix } from './slug-shaders/slug-dilate.js';
+} from '../../../shaders/typegpu/slug/slug-texture.js';
+import { slugDilate, slugDilateMatrix } from './slug/slug-dilate.js';
 
 /**
  * One glyph instance's canonical Slug fields, already resolved to nodes. The address and count fields locate the

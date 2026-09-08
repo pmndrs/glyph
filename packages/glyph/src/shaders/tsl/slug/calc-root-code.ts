@@ -4,7 +4,7 @@
  */
 import type { Node } from 'three/webgpu';
 import { lessThan, uint } from 'three/tsl';
-import { uintBitAnd, uintBitOr, uintShiftLeft, uintShiftRight } from './tsl-compat.js';
+import { uintBitAnd, uintBitOr, uintShiftLeft, uintShiftRight } from './internal/three-compat.js';
 
 /**
  * Calculate root eligibility from the signs of three control-point coordinates.

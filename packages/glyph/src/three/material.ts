@@ -5,7 +5,7 @@ import type {
   TslDecorationShaderOutput,
   TslMsdfShaderOutput,
   TslSlugShaderOutput,
-} from '../tsl.js';
+} from '../shaders/tsl/index.js';
 
 /** Stable publication-root metadata supplied to every Three material factory. */
 export interface ThreeRootContext {

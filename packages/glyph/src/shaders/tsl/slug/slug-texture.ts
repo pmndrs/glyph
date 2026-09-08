@@ -1,6 +1,6 @@
 import type { DataTexture, Node } from 'three/webgpu';
 import { float, int, ivec2, min, textureLoad, uint, vec2 } from 'three/tsl';
-import { intDiv, intMod, loadUvec4, uintAdd, uintBitAnd, uintMul, uintShiftRight } from './tsl-compat.js';
+import { intDiv, intMod, loadUvec4, uintAdd, uintBitAnd, uintMul, uintShiftRight } from './internal/three-compat.js';
 
 const HEADER_REFERENCE_MASK = 0xffff;
 const HEADER_COUNT_SHIFT = 16;

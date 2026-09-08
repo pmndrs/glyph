@@ -30,7 +30,7 @@ import {
   loadReference,
   type SlugShaderPage,
 } from './slug-texture.js';
-import { intLessThan, uintAdd, uintBitAnd, vec2Sub, whileLoop } from './tsl-compat.js';
+import { intLessThan, uintAdd, uintBitAnd, vec2Sub, whileLoop } from './internal/three-compat.js';
 
 export interface SlugShaderGlyph {
   readonly curveBaseTexel: Node<'uint'>;

@@ -1,7 +1,7 @@
 /**
  * Renderer-neutral TypeGPU entry point for the analytic Slug fill.
  *
- * This module only wires TSL nodes into the host-agnostic core: the fragment scale,
+ * This module only wires TypeGPU values into the host-agnostic core: the fragment scale,
  * the thickening factor, and the final weighted blend are all portable core calls.
  */
 import { d } from 'typegpu';

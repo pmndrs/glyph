@@ -1,7 +1,7 @@
 import * as TSL from 'three/tsl';
 import type { DataTexture, Node } from 'three/webgpu';
 
-import { slugDilate, slugDilateMatrix, slugRender, type SlugRenderOptions } from './slug-shaders/index.js';
+import { slugDilate, slugDilateMatrix, slugRender, type SlugRenderOptions } from './primitives.js';
 
 /**
  * One glyph instance's canonical Slug fields, already resolved to nodes. The address and count fields locate the

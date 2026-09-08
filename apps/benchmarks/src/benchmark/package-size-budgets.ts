@@ -16,49 +16,8 @@ export const packageSizeBudgets = {
     gzipBytes: 11_500,
     brotliBytes: 10_200,
   },
-  // `/shaders/tsl` measures 13,850 raw / 13,152 minified / 4,041 gzip / 3,585 Brotli.
-  'tsl-shader-library-js': {
-    rawBytes: 14_200,
-    minifiedBytes: 13_500,
-    gzipBytes: 4_150,
-    brotliBytes: 3_700,
-  },
-  // `/shaders/typegpu` is the complete Bitmap, MSDF, Slug, and decoration library, not the direct renderer.
-  // Its optional peer runtimes stay external; the package-owned graph measures
-  // 98,320 raw / 96,077 minified / 13,866 gzip / 11,739 Brotli.
-  'typegpu-shader-library-js': {
-    rawBytes: 101_000,
-    minifiedBytes: 99_000,
-    gzipBytes: 14_300,
-    brotliBytes: 12_100,
-  },
-  // Per-technique entries protect the tree-shakeable leaves independently of the aggregate barrel.
-  'typegpu-bitmap-shader-js': {
-    rawBytes: 18_500,
-    minifiedBytes: 18_400,
-    gzipBytes: 3_250,
-    brotliBytes: 2_850,
-  },
-  'typegpu-msdf-shader-js': {
-    rawBytes: 24_500,
-    minifiedBytes: 24_200,
-    gzipBytes: 4_200,
-    brotliBytes: 3_750,
-  },
-  'typegpu-slug-shader-js': {
-    rawBytes: 43_000,
-    minifiedBytes: 42_000,
-    gzipBytes: 6_500,
-    brotliBytes: 5_750,
-  },
-  'typegpu-decoration-shader-js': {
-    rawBytes: 6_400,
-    minifiedBytes: 6_400,
-    gzipBytes: 1_500,
-    brotliBytes: 1_350,
-  },
   // `/typegpu` is the higher-level direct renderer over all three first-party formats. With optional peers external,
-  // it measures 221,915 raw / 219,089 minified / 41,480 gzip / 35,052 Brotli.
+  // it measures 221,958 raw / 219,098 minified / 41,382 gzip / 35,132 Brotli.
   'typegpu-direct-renderer-js': {
     rawBytes: 227_000,
     minifiedBytes: 224_000,
@@ -118,7 +77,7 @@ export const packageSizeBudgets = {
     gzipBytes: 468_000,
     brotliBytes: 368_000,
   },
-  // Three realization plus the root graph measures 520,663 raw / 509,451 minified / 127,281 gzip / 104,932 Brotli
+  // Three realization plus the root graph measures 501,283 raw / 489,958 minified / 123,383 gzip / 101,597 Brotli
   // after tsdown shared-chunk bundling and the single-graph font-loader consolidation. The old raw ceiling described
   // unbundled tsc output and no longer measured the published graph; these ceilings track the actual consumer graph.
   'three-runtime-js': {
@@ -126,6 +85,15 @@ export const packageSizeBudgets = {
     minifiedBytes: 512_000,
     gzipBytes: 128_000,
     brotliBytes: 106_000,
+  },
+  // `/three/typegpu` is the complete optional TypeGPU-backed Three integration. Its shader
+  // functions are priced here rather than as a second matrix of implementation-level leaves.
+  // With peers external it measures 609,736 raw / 596,546 minified / 136,568 gzip / 112,065 Brotli.
+  'three-typegpu-runtime-js': {
+    rawBytes: 616_000,
+    minifiedBytes: 603_000,
+    gzipBytes: 139_000,
+    brotliBytes: 114_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,

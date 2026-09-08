@@ -24,7 +24,7 @@ sources:
     resource: ../../../packages/glyph/src/discovery.ts
     title: Current static defineFont discovery
   - id: current-three-engine
-    resource: ../../../packages/glyph/src/three/handle.ts
+    resource: ../../../packages/glyph/src/three/schema.ts
     title: Current Three.js configured handle
   - id: renderer-guide
     resource: ../guides/renderer-integration.md

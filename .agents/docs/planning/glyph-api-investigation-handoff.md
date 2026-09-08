@@ -10,7 +10,7 @@ sources:
     resource: ../../../packages/glyph/src/three/text.ts
     title: Current Three Text and TextGroup lifecycle
   - id: current-three-domain
-    resource: ../../../packages/glyph/src/three/handle.ts
+    resource: ../../../packages/glyph/src/three/schema.ts
     title: Current Three configured handle and roots
   - id: current-three-coordinator
     resource: ../../../packages/glyph/src/internal/configured-handle.ts
@@ -325,16 +325,16 @@ flowchart TD
 
 Evidence in the current source:
 
-| Location                                                 | Current behavior                                                                                                                         |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Historical `three/engine-domain.ts`                      | The removed implementation used loader/text domain leases and initialized fonts before `Text` construction.                              |
-| Historical `three/engine-domain.ts`                      | The removed implementation asynchronously created one `GlyphEngine` and coordinator.                                                     |
-| Historical `three/engine-coordinator.ts`                 | The removed implementation associated `Object3D` values with opaque transform bindings through a `WeakMap`.                              |
-| `packages/glyph/src/three/text.ts:184-204`               | `Text` acquires a domain, binds its transform and fonts, and retains desired state.                                                      |
-| `packages/glyph/src/three/text.ts:461-480`               | A standalone `Text.updateMatrixWorld()` reconciles and synchronizes its implicit one-text binding.                                       |
-| `packages/glyph/src/three/text.ts:639-668`               | `TextGroup.updateMatrixWorld()` collects descendant text, reconciles one group binding, and synchronizes it.                             |
-| `packages/glyph/src/three/text.ts:708-756`               | A `ThreeTextBatchBinding` owns a planner and a `ThreeTextRenderPlanExecutor`; the target is created through the planner target callback. |
-| `packages/glyph/src/three/text.ts:894-925`               | `synchronize()` skips publication when only transforms changed; otherwise it publishes, marks text committed, and syncs transforms.      |
+| Location                                                      | Current behavior                                                                                                                         |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Historical `three/engine-domain.ts`                           | The removed implementation used loader/text domain leases and initialized fonts before `Text` construction.                              |
+| Historical `three/engine-domain.ts`                           | The removed implementation asynchronously created one `GlyphEngine` and coordinator.                                                     |
+| Historical `three/engine-coordinator.ts`                      | The removed implementation associated `Object3D` values with opaque transform bindings through a `WeakMap`.                              |
+| `packages/glyph/src/three/text.ts:184-204`                    | `Text` acquires a domain, binds its transform and fonts, and retains desired state.                                                      |
+| `packages/glyph/src/three/text.ts:461-480`                    | A standalone `Text.updateMatrixWorld()` reconciles and synchronizes its implicit one-text binding.                                       |
+| `packages/glyph/src/three/text.ts:639-668`                    | `TextGroup.updateMatrixWorld()` collects descendant text, reconciles one group binding, and synchronizes it.                             |
+| `packages/glyph/src/three/text.ts:708-756`                    | A `ThreeTextBatchBinding` owns a planner and a `ThreeTextRenderPlanExecutor`; the target is created through the planner target callback. |
+| `packages/glyph/src/three/text.ts:894-925`                    | `synchronize()` skips publication when only transforms changed; otherwise it publishes, marks text committed, and syncs transforms.      |
 | `packages/glyph/src/three/command-buffer-renderer.ts:250-310` | The target accepts a plan candidate and performs preparation/commit through the coordinator.                                             |
 | `packages/glyph/src/three/command-buffer-renderer.ts:384-430` | `syncTransforms()` updates retained Three transforms and storage attributes without crossing into Wasm.                                  |
 

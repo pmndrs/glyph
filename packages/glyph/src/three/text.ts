@@ -34,7 +34,7 @@ import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '
 import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../config/glyph.js';
 import { ThreeCommandBufferRenderer } from './command-buffer-renderer.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
-import type { ThreeBindings, ThreeMaterialBinding } from './handle.js';
+import type { ThreeBindings, ThreeMaterialBinding } from './schema.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import {
@@ -148,7 +148,7 @@ class ThreePublicationObject extends THREE.Object3D {
 
 /** Public terminal root selected from a Three handle. */
 export interface ThreeRoot extends GlyphRoot {
-  readonly handle: import('./handle.js').ThreeHandle;
+  readonly handle: import('./schema.js').ThreeHandle;
   readonly textCount: number;
   readonly gpuBytes: number;
   material: ThreeTextMaterial | undefined;
@@ -185,7 +185,7 @@ class ThreePublicRoot implements ThreeRoot {
     return this.#host.name;
   }
 
-  get handle(): import('./handle.js').ThreeHandle {
+  get handle(): import('./schema.js').ThreeHandle {
     return this.#host.handle;
   }
 
@@ -252,7 +252,7 @@ export class ThreeRootHost {
   #nextTextOrder = 0;
   #disposed = false;
 
-  get handle(): import('./handle.js').ThreeHandle {
+  get handle(): import('./schema.js').ThreeHandle {
     if (this.#publicRoot === undefined) throw new Error('Three root public identity has not been bound');
     return this.#publicRoot.handle;
   }

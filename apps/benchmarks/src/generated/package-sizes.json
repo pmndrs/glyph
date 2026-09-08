@@ -17,81 +17,15 @@
       "brotliBytes": 9599
     },
     {
-      "id": "tsl-shader-library-js",
-      "label": "TSL technique shader library JS",
-      "status": "measured",
-      "format": "javascript",
-      "sha256": "18f7c58553926a9ce03bb40e74e24eadce3c65deb10ab2cfebf122c286071486",
-      "rawBytes": 13850,
-      "minifiedBytes": 13152,
-      "gzipBytes": 4041,
-      "brotliBytes": 3585
-    },
-    {
-      "id": "typegpu-shader-library-js",
-      "label": "TypeGPU technique shader JS",
-      "status": "measured",
-      "format": "javascript",
-      "sha256": "515950a404b8bf9cdf3c963e3229711b98543e81d4433d768a64df13a3b108a0",
-      "rawBytes": 98320,
-      "minifiedBytes": 96077,
-      "gzipBytes": 13866,
-      "brotliBytes": 11739
-    },
-    {
-      "id": "typegpu-bitmap-shader-js",
-      "label": "TypeGPU Bitmap shader JS",
-      "status": "measured",
-      "format": "javascript",
-      "sha256": "5fa804bfe37e9780f3e8749bf153d25aea693fca3cf2a1a350db60b792127d7e",
-      "rawBytes": 17808,
-      "minifiedBytes": 17728,
-      "gzipBytes": 3089,
-      "brotliBytes": 2705
-    },
-    {
-      "id": "typegpu-msdf-shader-js",
-      "label": "TypeGPU MSDF shader JS",
-      "status": "measured",
-      "format": "javascript",
-      "sha256": "69b103fc7d708e5976fb2507adcffbd46aca4d846c0d7acc973dbb5d8c00b416",
-      "rawBytes": 23691,
-      "minifiedBytes": 23396,
-      "gzipBytes": 4025,
-      "brotliBytes": 3554
-    },
-    {
-      "id": "typegpu-slug-shader-js",
-      "label": "TypeGPU Slug shader JS",
-      "status": "measured",
-      "format": "javascript",
-      "sha256": "886f868d2d12434246586d3645884fd540539cb6f8623e20660b2fd8af56c145",
-      "rawBytes": 41751,
-      "minifiedBytes": 40895,
-      "gzipBytes": 6186,
-      "brotliBytes": 5442
-    },
-    {
-      "id": "typegpu-decoration-shader-js",
-      "label": "TypeGPU decoration shader JS",
-      "status": "measured",
-      "format": "javascript",
-      "sha256": "b93b0118cbe2f8afba5d4d4b6040b8b15c49fdbe47b76a680bb601170b654f14",
-      "rawBytes": 6072,
-      "minifiedBytes": 6058,
-      "gzipBytes": 1408,
-      "brotliBytes": 1265
-    },
-    {
       "id": "typegpu-direct-renderer-js",
       "label": "TypeGPU direct renderer JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "1aea51c8ad977215db20bd6b4c76abe4cb10c5675f063ee7224f07c69e87ca7a",
-      "rawBytes": 221915,
-      "minifiedBytes": 219089,
-      "gzipBytes": 41480,
-      "brotliBytes": 35052
+      "sha256": "81518301d285ac461fb7230bd5975e443faa4e3c7aac3af2855e49e3ca836a5f",
+      "rawBytes": 221958,
+      "minifiedBytes": 219098,
+      "gzipBytes": 41382,
+      "brotliBytes": 35132
     },
     {
       "id": "browser-core",
@@ -120,11 +54,22 @@
       "label": "Three.js adapter JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "a381a641fbadc6cf2db7719ee4e33c045b31824457b97728e5046ef9390057b4",
-      "rawBytes": 501202,
-      "minifiedBytes": 489944,
+      "sha256": "cb332fb4300f46df912815afd9b16829b2f07a57e123256e67216ee736b27be0",
+      "rawBytes": 501283,
+      "minifiedBytes": 489958,
       "gzipBytes": 123383,
-      "brotliBytes": 101627
+      "brotliBytes": 101597
+    },
+    {
+      "id": "three-typegpu-runtime-js",
+      "label": "Three.js + TypeGPU adapter JS",
+      "status": "measured",
+      "format": "javascript",
+      "sha256": "7bf0f234d16e4121560cba2413b1c04eefbb61751df4cc9ff8e1b20d549e9e03",
+      "rawBytes": 609736,
+      "minifiedBytes": 596546,
+      "gzipBytes": 136568,
+      "brotliBytes": 112065
     },
     {
       "id": "font-inter-bitmap-16-32",

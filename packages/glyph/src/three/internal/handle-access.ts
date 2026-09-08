@@ -1,6 +1,6 @@
 import type { Font } from '../../font.js';
 import type { FontFaceSelection, FontFaceRasterOf } from '../../font-face.js';
-import type { ThreeHandle } from '../handle.js';
+import type { ThreeHandle } from '../schema.js';
 import { threeRootHost, type ThreeRoot } from '../text.js';
 
 /** Resolve the anonymous public root fronted by a Three handle. */

@@ -11,13 +11,13 @@ export {
   type TslBitmapShaderOptions,
   type TslBitmapShaderOutput,
   type TslBitmapShaderResources,
-} from './tsl/bitmap-shader.js';
+} from './bitmap-shader.js';
 export {
   msdfShader,
   type TslMsdfInstanceNodes,
   type TslMsdfShaderOutput,
   type TslMsdfShaderResources,
-} from './tsl/msdf-shader.js';
+} from './msdf-shader.js';
 export {
   slugShader,
   type TslSlugFillRule,
@@ -25,9 +25,9 @@ export {
   type TslSlugPageResources,
   type TslSlugShaderOutput,
   type TslSlugShaderResources,
-} from './tsl/slug-shader.js';
+} from './slug/index.js';
 export {
   decorationShader,
   type TslDecorationInstanceNodes,
   type TslDecorationShaderOutput,
-} from './tsl/decoration-shader.js';
+} from './decoration-shader.js';

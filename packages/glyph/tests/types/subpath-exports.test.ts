@@ -5,7 +5,7 @@ import { useBitmap } from '@pmndrs/glyph/react/bitmap';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { defineTextMaterial } from '@pmndrs/glyph/three/material';
 import { unpackSrgbRgba } from '@pmndrs/glyph/shaders/tsl/packed-color';
-import { slugRender } from '@pmndrs/glyph/shaders/typegpu/slug-shaders/slug-render';
+import { slugRender } from '@pmndrs/glyph/shaders/typegpu/slug';
 import { referenceBitmapAtlasUv } from '@pmndrs/glyph/shaders/typegpu/bitmap-reference';
 
 void defineGlyphConfig;

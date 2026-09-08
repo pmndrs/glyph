@@ -17,7 +17,7 @@ import {
   type ThreeGlyphConfig,
   type ThreeBindings,
   type ThreeCodec,
-} from '../handle.js';
+} from '../schema.js';
 import type { ThreeShaderSet } from './shader-set.js';
 
 /** Creates a pure Three config descriptor; every handle still owns independent mutable state. */

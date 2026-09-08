@@ -12,7 +12,7 @@ import type { RetainedSlugPage, ThreeRendererResources } from './renderer-resour
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
 import type { ThreeRasterProgramBuffer } from '../raster-program.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
-import type { ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../handle.js';
+import type { ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../schema.js';
 import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
 import {
   dataTexture,

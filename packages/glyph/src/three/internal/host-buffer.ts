@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 
 import type { CodecBufferId, CodecScalarType } from '../../config/codec.js';
-import type { ThreeBufferBinding } from '../handle.js';
+import type { ThreeBufferBinding } from '../schema.js';
 
 export type ScalarArray = Float32Array | Uint32Array | Uint16Array;
 

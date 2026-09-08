@@ -244,7 +244,9 @@ test('TypeGPU application and shader entrypoints have separate dependency bounda
     [...closure.staticImports].some((value) => /^(three|@typegpu\/three|@react-three|react)(\/|$)/.test(value)),
     false,
   );
-  const shaderClosure = await readJavaScriptModuleClosure([new URL('../../dist/shaders.js', import.meta.url)]);
+  const shaderClosure = await readJavaScriptModuleClosure([
+    new URL('../../dist/shaders/typegpu/index.js', import.meta.url),
+  ]);
   assert.equal(
     shaderClosure.paths.some((value) => /\/(glyph|font|shaper|typegpu\/config)\.js$/.test(value)),
     false,

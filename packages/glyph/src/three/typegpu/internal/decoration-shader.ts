@@ -2,7 +2,7 @@ import * as t3 from '@typegpu/three';
 import { d } from 'typegpu';
 import type { Node } from 'three/webgpu';
 
-import { decorationPaint, decorationPosition } from '../../../shaders/decoration-shader.js';
+import { decorationPaint, decorationPosition } from '../../../shaders/typegpu/decoration-shader.js';
 
 export interface TslDecorationInstanceNodes {
   readonly rect: Node<'vec4'>;

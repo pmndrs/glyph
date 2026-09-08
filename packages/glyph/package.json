@@ -44,71 +44,104 @@
     },
     "./shaders/tsl": {
       "types": {
-        "source": "./src/tsl.ts",
-        "default": "./dist/tsl.d.ts"
+        "source": "./src/shaders/tsl/index.ts",
+        "default": "./dist/shaders/tsl/index.d.ts"
       },
-      "source": "./src/tsl.ts",
-      "import": "./dist/tsl.js"
+      "source": "./src/shaders/tsl/index.ts",
+      "import": "./dist/shaders/tsl/index.js"
     },
     "./shaders/tsl/bitmap": {
       "types": {
-        "source": "./src/tsl/bitmap-shader.ts",
-        "default": "./dist/tsl/bitmap-shader.d.ts"
+        "source": "./src/shaders/tsl/bitmap-shader.ts",
+        "default": "./dist/shaders/tsl/bitmap-shader.d.ts"
       },
-      "source": "./src/tsl/bitmap-shader.ts",
-      "import": "./dist/tsl/bitmap-shader.js"
+      "source": "./src/shaders/tsl/bitmap-shader.ts",
+      "import": "./dist/shaders/tsl/bitmap-shader.js"
     },
     "./shaders/tsl/msdf": {
       "types": {
-        "source": "./src/tsl/msdf-shader.ts",
-        "default": "./dist/tsl/msdf-shader.d.ts"
+        "source": "./src/shaders/tsl/msdf-shader.ts",
+        "default": "./dist/shaders/tsl/msdf-shader.d.ts"
       },
-      "source": "./src/tsl/msdf-shader.ts",
-      "import": "./dist/tsl/msdf-shader.js"
+      "source": "./src/shaders/tsl/msdf-shader.ts",
+      "import": "./dist/shaders/tsl/msdf-shader.js"
     },
     "./shaders/tsl/slug": {
       "types": {
-        "source": "./src/tsl/slug-shader.ts",
-        "default": "./dist/tsl/slug-shader.d.ts"
+        "source": "./src/shaders/tsl/slug/index.ts",
+        "default": "./dist/shaders/tsl/slug/index.d.ts"
       },
-      "source": "./src/tsl/slug-shader.ts",
-      "import": "./dist/tsl/slug-shader.js"
+      "source": "./src/shaders/tsl/slug/index.ts",
+      "import": "./dist/shaders/tsl/slug/index.js"
     },
     "./shaders/tsl/decoration": {
       "types": {
-        "source": "./src/tsl/decoration-shader.ts",
-        "default": "./dist/tsl/decoration-shader.d.ts"
+        "source": "./src/shaders/tsl/decoration-shader.ts",
+        "default": "./dist/shaders/tsl/decoration-shader.d.ts"
       },
-      "source": "./src/tsl/decoration-shader.ts",
-      "import": "./dist/tsl/decoration-shader.js"
+      "source": "./src/shaders/tsl/decoration-shader.ts",
+      "import": "./dist/shaders/tsl/decoration-shader.js"
     },
-    "./shaders/tsl/slug-shaders/tsl-compat": null,
-    "./shaders/tsl/internal/*": null,
-    "./shaders/tsl/*": {
+    "./shaders/tsl/packed-color": {
       "types": {
-        "source": "./src/tsl/*.ts",
-        "default": "./dist/tsl/*.d.ts"
+        "source": "./src/shaders/tsl/packed-color.ts",
+        "default": "./dist/shaders/tsl/packed-color.d.ts"
       },
-      "source": "./src/tsl/*.ts",
-      "import": "./dist/tsl/*.js"
+      "source": "./src/shaders/tsl/packed-color.ts",
+      "import": "./dist/shaders/tsl/packed-color.js"
+    },
+    "./shaders/tsl/internal/*": null,
+    "./shaders/tsl/slug/internal/*": null,
+    "./shaders/typegpu": {
+      "types": {
+        "source": "./src/shaders/typegpu/index.ts",
+        "default": "./dist/shaders/typegpu/index.d.ts"
+      },
+      "source": "./src/shaders/typegpu/index.ts",
+      "import": "./dist/shaders/typegpu/index.js"
     },
     "./shaders/typegpu/bitmap": {
       "types": {
-        "source": "./src/shaders/bitmap-shader.ts",
-        "default": "./dist/shaders/bitmap-shader.d.ts"
+        "source": "./src/shaders/typegpu/bitmap-shader.ts",
+        "default": "./dist/shaders/typegpu/bitmap-shader.d.ts"
       },
-      "source": "./src/shaders/bitmap-shader.ts",
-      "import": "./dist/shaders/bitmap-shader.js"
+      "source": "./src/shaders/typegpu/bitmap-shader.ts",
+      "import": "./dist/shaders/typegpu/bitmap-shader.js"
+    },
+    "./shaders/typegpu/bitmap-reference": {
+      "types": {
+        "source": "./src/shaders/typegpu/bitmap-reference.ts",
+        "default": "./dist/shaders/typegpu/bitmap-reference.d.ts"
+      },
+      "source": "./src/shaders/typegpu/bitmap-reference.ts",
+      "import": "./dist/shaders/typegpu/bitmap-reference.js"
+    },
+    "./shaders/typegpu/msdf": {
+      "types": {
+        "source": "./src/shaders/typegpu/msdf-shader.ts",
+        "default": "./dist/shaders/typegpu/msdf-shader.d.ts"
+      },
+      "source": "./src/shaders/typegpu/msdf-shader.ts",
+      "import": "./dist/shaders/typegpu/msdf-shader.js"
+    },
+    "./shaders/typegpu/slug": {
+      "types": {
+        "source": "./src/shaders/typegpu/slug/index.ts",
+        "default": "./dist/shaders/typegpu/slug/index.d.ts"
+      },
+      "source": "./src/shaders/typegpu/slug/index.ts",
+      "import": "./dist/shaders/typegpu/slug/index.js"
+    },
+    "./shaders/typegpu/decoration": {
+      "types": {
+        "source": "./src/shaders/typegpu/decoration-shader.ts",
+        "default": "./dist/shaders/typegpu/decoration-shader.d.ts"
+      },
+      "source": "./src/shaders/typegpu/decoration-shader.ts",
+      "import": "./dist/shaders/typegpu/decoration-shader.js"
     },
     "./shaders/typegpu/internal/*": null,
-    "./shaders/typegpu/*": {
-      "types": {
-        "source": "./src/shaders/*.ts",
-        "default": "./dist/shaders/*.d.ts"
-      },
-      "source": "./src/shaders/*.ts",
-      "import": "./dist/shaders/*.js"
-    },
+    "./shaders/typegpu/slug/internal/*": null,
     "./three": {
       "types": {
         "source": "./src/three.ts",
@@ -118,6 +151,8 @@
       "import": "./dist/three.js"
     },
     "./three/internal/*": null,
+    "./three/handle": null,
+    "./three/schema": null,
     "./three/plan-program-registry": null,
     "./three/codec": null,
     "./three/command-buffer-renderer": null,
@@ -256,14 +291,6 @@
     "./slug-baker.wasm": "./dist/slug-baker.wasm",
     "./font-baker.wasm": "./dist/font-baker.wasm",
     "./package.json": "./package.json",
-    "./shaders/typegpu": {
-      "types": {
-        "source": "./src/shaders.ts",
-        "default": "./dist/shaders.d.ts"
-      },
-      "source": "./src/shaders.ts",
-      "import": "./dist/shaders.js"
-    },
     "./typegpu": {
       "types": {
         "source": "./src/typegpu.ts",
@@ -271,30 +298,6 @@
       },
       "source": "./src/typegpu.ts",
       "import": "./dist/typegpu.js"
-    },
-    "./shaders/typegpu/msdf": {
-      "types": {
-        "source": "./src/shaders/msdf-shader.ts",
-        "default": "./dist/shaders/msdf-shader.d.ts"
-      },
-      "source": "./src/shaders/msdf-shader.ts",
-      "import": "./dist/shaders/msdf-shader.js"
-    },
-    "./shaders/typegpu/slug": {
-      "types": {
-        "source": "./src/shaders/slug-shaders/slug-render.ts",
-        "default": "./dist/shaders/slug-shaders/slug-render.d.ts"
-      },
-      "source": "./src/shaders/slug-shaders/slug-render.ts",
-      "import": "./dist/shaders/slug-shaders/slug-render.js"
-    },
-    "./shaders/typegpu/decoration": {
-      "types": {
-        "source": "./src/shaders/decoration-shader.ts",
-        "default": "./dist/shaders/decoration-shader.d.ts"
-      },
-      "source": "./src/shaders/decoration-shader.ts",
-      "import": "./dist/shaders/decoration-shader.js"
     },
     "./three/typegpu": {
       "types": {
