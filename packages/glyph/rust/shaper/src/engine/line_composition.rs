@@ -293,6 +293,8 @@ fn layout_next_line_integer_scalar(
     let mut trailing_space_units = 0_i64;
     let mut last_safe = None;
     let mut last_safe_advance = 0_i64;
+    let mut first_safe = None;
+    let mut first_safe_advance = 0_i64;
     let mut selected_end = count;
     let mut selected_advance = 0_i64;
     // Chunk-64 fast path (D-245, word wrap only): a chunk whose summary fits in
@@ -341,9 +343,22 @@ fn layout_next_line_integer_scalar(
         }
         let flags = clusters.flags[index];
         if index > line_start && flags & CLUSTER_SAFE_BEFORE != 0 {
-            last_safe = Some(index);
-            last_safe_advance = advance;
-            pending_safe = None;
+            if first_safe.is_none() {
+                first_safe = Some(index);
+                first_safe_advance = advance;
+            }
+            let fits = wrap != WRAP_WORD
+                || max_width_units.is_none_or(|units| {
+                    advance.saturating_sub(super::layout_units::apply_ratio(
+                        space_units,
+                        word_space_shrink,
+                    )) <= units
+                });
+            if fits {
+                last_safe = Some(index);
+                last_safe_advance = advance;
+                pending_safe = None;
+            }
         }
         let required_break = flags & CLUSTER_REQUIRED_BREAK != 0;
         let cluster_advance = clusters.advance_units[index];
@@ -419,6 +434,12 @@ fn layout_next_line_integer_scalar(
             } else if let Some(end) = last_safe.filter(|end| *end > line_start) {
                 selected_end = end;
                 selected_advance = last_safe_advance;
+            } else if let Some(end) = first_safe.filter(|end| *end > line_start) {
+                // No shaping-safe boundary fits (for example, the first glyph
+                // cluster itself is wider than the measure). Break at the first
+                // available boundary so unavoidable overflow stays minimal.
+                selected_end = end;
+                selected_advance = first_safe_advance;
             } else {
                 advance = next_advance;
                 if (wrap == WRAP_WORD && word_segment_end) || required_break || index + 1 == count {
@@ -741,7 +762,7 @@ mod tests {
             let letters = 2 + (word * 7) % 5;
             for letter in 0..letters {
                 advances.push(7.31 + f64::from((word * 13 + letter * 3) % 17) * 0.373);
-                flags.push(0);
+                flags.push(CLUSTER_SAFE_BEFORE);
             }
             advances.push(3.17);
             flags.push(CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE);
@@ -785,7 +806,7 @@ mod tests {
         while advances.len() < 24 * LAYOUT_CHUNK {
             for letter in 0..2 + (word % 6) {
                 advances.push(4.0 + f64::from((word * 11 + letter * 7) % 13) * 0.417);
-                flags.push(0);
+                flags.push(CLUSTER_SAFE_BEFORE);
             }
             advances.push(2.75);
             flags.push(CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE);
@@ -1051,6 +1072,54 @@ mod tests {
         assert_eq!(
             scalar, line,
             "the sparse index is only an optimization and cannot select a different break",
+        );
+    }
+
+    #[test]
+    fn overlong_word_uses_the_last_safe_boundary_inside_the_measure() {
+        let mut flags = vec![CLUSTER_SAFE_BEFORE; 81];
+        flags[80] |= CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        let clusters = make_quantized_clusters(&vec![1.0; 81], &flags);
+        assert!(!clusters.word_breaks.is_empty());
+        let expected = ComposedLine {
+            cluster_start: 0,
+            cluster_end: 10,
+            text_start: 0,
+            text_end: 10,
+            advance: 10.0,
+            hung_advance: 0.0,
+            hard_break: false,
+        };
+
+        let mut indexed = LineCursor::default();
+        assert_eq!(
+            layout_next_line_integer(&clusters, &mut indexed, Some(10 * 65_536), WRAP_WORD, 0.0)
+                .unwrap()
+                .unwrap(),
+            expected,
+        );
+
+        let mut scalar_clusters = clusters;
+        scalar_clusters.word_breaks.clear();
+        let mut integer_scalar = LineCursor::default();
+        assert_eq!(
+            layout_next_line_integer(
+                &scalar_clusters,
+                &mut integer_scalar,
+                Some(10 * 65_536),
+                WRAP_WORD,
+                0.0,
+            )
+            .unwrap()
+            .unwrap(),
+            expected,
+        );
+        let mut reference = LineCursor::default();
+        assert_eq!(
+            layout_next_line(&scalar_clusters, &mut reference, 10.0, WRAP_WORD, 0.0)
+                .unwrap()
+                .unwrap(),
+            expected,
         );
     }
 
