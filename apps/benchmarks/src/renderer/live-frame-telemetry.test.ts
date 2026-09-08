@@ -63,6 +63,26 @@ describe('live frame telemetry', () => {
     });
   });
 
+  it('preserves the last published history while a reset scene starts its own window', () => {
+    const telemetry = createLiveFrameTelemetry({ capacity: 4, refreshRateHz: 60, reportIntervalMs: 1 });
+    const oldFrame = telemetry.beginFrame(0);
+    const oldSnapshot = telemetry.endFrame(oldFrame, 7)!;
+    const oldTimestamps = oldSnapshot.frameTimestampHistory;
+    const oldSubmitHistory = oldSnapshot.submitHistory;
+
+    telemetry.reset();
+    const freshFrame = telemetry.beginFrame(16);
+    const freshSnapshot = telemetry.endFrame(freshFrame, 3)!;
+
+    expect(freshSnapshot.frameTimestampHistory).not.toBe(oldTimestamps);
+    expect(freshSnapshot.submitHistory).not.toBe(oldSubmitHistory);
+    expect(oldSnapshot.submitHistoryLength).toBe(1);
+    expect(oldSubmitHistory[0]).toBe(7);
+    expect(freshSnapshot.submitHistoryLength).toBe(1);
+    expect(freshSnapshot.submitHistoryCursor.nextIndex).toBe(1);
+    expect(freshSnapshot.submitHistory[0]).toBe(3);
+  });
+
   it('captures exact post-start CPU frames and finite GPU query completions', async () => {
     const telemetry = createLiveFrameTelemetry({ capacity: 2, refreshRateHz: 60, reportIntervalMs: 1 });
     const warmupFrame = telemetry.beginFrame(0);
